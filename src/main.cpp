@@ -39,7 +39,54 @@ struct Options {
   bool compileOnly = false;
   unsigned optLevel = 2;
   bool keepTemps = false;
+  bool dumpTokens = false;
 };
+
+/// Write the token stream in the format `selfhost/lexer.pas` also writes, so
+/// the two lexers can be compared on real input. The format carries every
+/// decision a lexer makes — the kind, the position, and the spelling or value
+/// — and nothing else, so a disagreement is a disagreement about lexing.
+///
+/// A real literal prints as its *source text* rather than its converted value.
+/// Comparing converted doubles would be comparing two languages' float
+/// formatting, which is not what this is testing.
+void dumpTokens(const std::vector<ap::Token> &tokens,
+                const ap::Diagnostics &diags) {
+  // Errors first and on stdout, not stderr: the Pascal lexer reports as it
+  // goes, so one stream holding both is what the two can be compared on.
+  for (const ap::Diagnostic &d : diags.all())
+    std::printf("%d %d error %s\n", d.line, d.col, d.message.c_str());
+  for (const ap::Token &t : tokens) {
+    std::printf("%d %d ", t.line, t.col);
+    switch (t.kind) {
+    case ap::Tok::Eof:     std::printf("eof\n"); break;
+    case ap::Tok::Ident:   std::printf("ident %s\n", t.text.c_str()); break;
+    case ap::Tok::IntLit:
+      // A literal too large for the integer type has already been reported,
+      // and the value left behind is an accident of a 64-bit conversion the
+      // Pascal lexer cannot have — it detects the overflow while accumulating,
+      // because this compiler traps rather than wrapping. Neither accident is
+      // worth comparing, so both sides print the same placeholder.
+      if (t.intVal > ap::kMaxInt)
+        std::printf("int ?\n");
+      else
+        std::printf("int %lld\n", t.intVal);
+      break;
+    case ap::Tok::RealLit: std::printf("real %s\n", t.text.c_str()); break;
+    case ap::Tok::StrLit:  std::printf("str [%s]\n", t.text.c_str()); break;
+    default: {
+      // tokenName spells a reserved word as 'begin' and an operator as ':=';
+      // the quotes come off here, and the category says which it was.
+      std::string n = ap::tokenName(t.kind);
+      if (n.size() >= 2 && n.front() == '\'' && n.back() == '\'')
+        n = n.substr(1, n.size() - 2);
+      bool word = !n.empty() && n[0] >= 'a' && n[0] <= 'z';
+      std::printf("%s %s\n", word ? "kw" : "op", n.c_str());
+      break;
+    }
+    }
+  }
+}
 
 void usage() {
   std::fprintf(stderr,
@@ -79,6 +126,8 @@ bool parseArgs(int argc, char **argv, Options &opt) {
       opt.compileOnly = true;
     } else if (a == "--keep-temps") {
       opt.keepTemps = true;
+    } else if (a == "--dump-tokens") {
+      opt.dumpTokens = true;
     } else if (a.size() == 3 && a.rfind("-O", 0) == 0 && a[2] >= '0' &&
                a[2] <= '3') {
       opt.optLevel = static_cast<unsigned>(a[2] - '0');
@@ -187,6 +236,10 @@ int main(int argc, char **argv) {
   ap::Diagnostics diags(opt.input);
   ap::Lexer lexer(buffer.str(), diags);
   std::vector<ap::Token> tokens = lexer.tokenize();
+  if (opt.dumpTokens) {
+    dumpTokens(tokens, diags);
+    return 0;
+  }
   if (diags.hasErrors()) {
     diags.print();
     return 1;

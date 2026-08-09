@@ -22,6 +22,9 @@ public:
   void print() const;
 
   const std::string &filename() const { return file_; }
+  /// For `--dump-tokens`, which writes the lexer's diagnostics into the same
+  /// stream as its tokens so one comparison covers both.
+  const std::vector<Diagnostic> &all() const { return diags_; }
 
 private:
   std::string file_;

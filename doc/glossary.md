@@ -228,6 +228,18 @@ stopped by a runtime check. A non-zero exit is then required. Source paths are
 rewritten to `<source>`, so diagnostics can be pinned without depending on where
 the checkout lives.
 
+**Differential test.** Comparing the stage-1 component against the stage-0 one
+it is a port of, rather than against a recorded expectation. `selfhost-lexer`
+diffs `selfhost/lexer.pas`'s token stream against `pascalc --dump-tokens` over
+every Pascal source in the tree. A golden file would pin the port to whatever
+it did the day it was written; the C++ component is the specification, so the
+test says "these two agree" instead of "this has not changed" (ADR-0022).
+
+**Torture file.** `selfhost/torture.pas` — deliberately not a valid program,
+carrying the lexical error paths and corner cases that valid test programs
+never reach. It exists because real programs are valid by construction, so
+without it the error paths would never be compared.
+
 **Globbed at configure time.** Cases are registered by a `file(GLOB)` in
 `CMakeLists.txt`, so adding a `.pas`/`.out` pair requires re-running `cmake`. A
 green bar that never ran the new case is not a green bar.

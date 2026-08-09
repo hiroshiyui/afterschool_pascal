@@ -101,9 +101,10 @@ and running against the compiler as it stands.
 
 Nothing in the language is now blocking. In rough order:
 
-1. **Port the lexer.** Smallest self-contained stage, exercises strings and text
-   files immediately, and its output can be diffed against the C++ lexer's on
-   every file in `tests/`.
+1. ~~**Port the lexer.**~~ **Done** (ADR-0022) — `selfhost/lexer.pas`, checked
+   against the C++ lexer on every Pascal source in the tree by
+   `selfhost/difftest.sh`, which runs under ctest. 34 files, ~15 700 tokens,
+   agreeing token for token, the Pascal lexer's own source included.
 2. **Port the parser and the AST.** The AST is where the bootstrap constraints
    were paying rent all along — the `NK` tag becomes a variant record's tag and
    `as<T>()` becomes the `case` that reads it.
@@ -118,7 +119,20 @@ Nothing in the language is now blocking. In rough order:
 **Differential testing is the checkpoint**, and it comes before stage 1 is
 declared working: once both compilers exist, they should produce equivalent IR
 for every file in `tests/`. A disagreement is a bug in one of them, found
-cheaply, rather than a byte mismatch at stage 3 with nothing to bisect.
+cheaply, rather than a byte mismatch at stage 3 with nothing to bisect. The
+lexer already works this way, and each later component extends the same harness
+rather than inventing its own.
+
+Three things the lexer port learned, which the next components will meet again
+(ADR-0022):
+
+- ISO's file model gives **one** character of lookahead and the lexer needs
+  **three**, so a window over the buffer variable is unavoidable.
+- The overflow check must precede the multiply: this compiler traps rather than
+  wrapping (ADR-0014), so the C++ habit of converting in a wider type and
+  comparing afterwards is not available to its own source.
+- Pascal has no early return and no way to discard a function result, which
+  changes how guards and character-consuming helpers are shaped.
 
 ## Known limitations
 

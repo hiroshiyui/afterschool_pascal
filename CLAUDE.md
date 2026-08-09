@@ -19,6 +19,7 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
 tests/run_test.sh build/bin/pascalc tests/control.pas   # same case, without ctest
+selfhost/difftest.sh build/bin/pascalc   # the Pascal lexer against the C++ one
 
 build/bin/pascalc tests/hello.pas -o /tmp/hello && /tmp/hello
 build/bin/pascalc -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
@@ -220,6 +221,20 @@ where `width < 0` / `prec < 0` mean "not given".
 Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 `ast.h` → `parser.cpp` → `sema.cpp` → `codegen.cpp` → a `tests/` pair, plus
 `runtime/pasrt.c` if it needs library support.
+
+`selfhost/` is the stage-1 compiler, written in Afterschool Pascal. The lexer
+is done (ADR-0022). **It is checked against `src/lexer.cpp`, not against a
+golden file** — `pascalc --dump-tokens` and `selfhost/lexer.pas` write the same
+format and `selfhost/difftest.sh` diffs them over every `.pas` in the tree,
+under ctest as `selfhost-lexer`. If you change what the C++ lexer produces, the
+Pascal one changes in the same commit or the test goes red — that is the point
+of it, not an inconvenience.
+
+- `selfhost/torture.pas` is deliberately **not** a valid program: it carries the
+  error paths and lexical corner cases a valid program never reaches. Add to it
+  when a lexical rule changes.
+- ISO 7185 has no include mechanism, so the finished compiler is **one source
+  file**. `selfhost/lexer.pas` is written to be pasted into it.
 
 ## Pascal semantics already encoded (keep them)
 

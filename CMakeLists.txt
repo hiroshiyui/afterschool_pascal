@@ -53,6 +53,15 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
+# Stage 1, checked against stage 0: the Pascal lexer must produce the same
+# tokens as the C++ one for every Pascal source in the tree. The roadmap makes
+# this the checkpoint that comes *before* stage 1 is declared working — a
+# disagreement here is bisectable, the same disagreement at stage 3 is two
+# binaries differing by a byte.
+add_test(NAME selfhost-lexer
+         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh $<TARGET_FILE:pascalc>)
+set_tests_properties(selfhost-lexer PROPERTIES TIMEOUT 600)
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)
