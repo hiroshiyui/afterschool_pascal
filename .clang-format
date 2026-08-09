@@ -1,0 +1,15 @@
+# Plain LLVM style — the same style the LLVM headers this project builds against
+# use, so there is nothing project-specific to remember.
+#
+# The existing sources are NOT fully formatted to it: several dispatch tables in
+# type.h, lexer.cpp and codegen.cpp are hand-aligned into columns, which
+# clang-format collapses. Rather than reflow 3000 lines at once, the convention
+# is incremental — format only what you touch:
+#
+#     git clang-format            # stages nothing, reformats your pending diff
+#     git clang-format HEAD~1     # ...or the last commit's lines
+#
+# A whole-tree `clang-format -i src/*.cpp src/*.h runtime/*.c` is a fine one-time
+# cleanup, but it should land as its own `style:` commit with nothing else in it.
+BasedOnStyle: LLVM
+AllowShortCaseLabelsOnASingleLine: true
