@@ -21,3 +21,4 @@ the alternatives that were rejected and why.
 | [0010](0010-short-circuit-boolean-operators.md) | Boolean operators short-circuit | Accepted |
 | [0011](0011-golden-stdout-tests.md) | Test by comparing program stdout | Accepted |
 | [0012](0012-character-strings-for-self-hosting.md) | How the self-hosted source handles strings | Proposed |
+| [0013](0013-formal-verification-of-the-lowering.md) | Formal verification of the lowering | Accepted |

@@ -19,27 +19,34 @@ When performing a project-wide code review, always follow these steps:
    - *Implementation-defined choices* should match what a Turbo/FPC user expects: `maxint` = 2147483647, `TRUE`/`FALSE`, natural integer width.
    - Cite the clause when a review comment turns on the standard's wording.
 
-4. **Generated-code correctness** — the failure mode that tests catch late:
+4. **Formal verification** (`verify/`, ADR-0013) — a change to arithmetic, conversion, or comparison lowering is incomplete without it:
+   - **Did `lowering.py` change with `codegen.cpp`?** This is the first thing to check and the easiest to miss. The proofs reason about the model, so a changed lowering with an unchanged model means the suite is now proving things about a compiler that no longer exists — and it stays green while doing it. Treat a lowering change with no model change as a **High** finding unless the operation genuinely has no rule.
+   - **Does new arithmetic arrive with a rule?** New operators, builtins, or conversions should be added to `rules.py` with their ISO clause. "Tested" is not the bar here; the existing operators are proved for all inputs.
+   - **Is the specification still a property rather than a computation?** A new `iso.py` entry that computes the answer the way the compiler does makes its proof circular and the circularity invisible. This is the single most damaging mistake possible in that directory.
+   - **Did a `KNOWN_GAP` get fixed without being reclassified?** The runner fails in that case by design; confirm the catalogue was updated in the same change rather than the rule being deleted.
+   - **Is a new `BOUNDED` rule justified?** Bounded width is for claims the solver genuinely cannot discharge at 32 bits. Confirm `FULL` was tried and timed out, rather than bounded being chosen for speed.
+
+5. **Generated-code correctness** — the failure mode that tests catch late:
    - Every new codegen path should be read once at `-O0` (`pascalc -O0 --emit-llvm f.pas -o /dev/stdout`). `verifyModule` catches malformed IR, not *wrong* IR.
    - Signed vs unsigned comparison: `integer` compares signed, `char`/`boolean` unsigned. An `ICmpSLT` on a `char` is a real bug.
    - Integer width: `integer` is `i32`, but the runtime takes `i64` — check the `SExt` is present.
    - Basic-block hygiene: every block ends in exactly one terminator, and `b_.SetInsertPoint` is restored after any helper that creates blocks (`guardNonZero` and the short-circuit path both do).
    - φ nodes must name the block the value actually arrived from — `GetInsertBlock()` *after* emitting the operand, not the block you started in.
 
-5. **Correctness and logic** — Review for:
+6. **Correctness and logic** — Review for:
    - Null `Type*` or unresolved `Symbol*` reaching codegen — Sema's invariant (ADR-0008) says it cannot happen, so a new node kind added to Sema but not annotated is a latent crash.
    - Unchecked `std::stoll`/`strtod` overflow on literals; the lexer checks `ERANGE` and should keep doing so.
    - Signed overflow in constant folding (`evalConst` negation of the most negative integer).
    - `slots_` lookups with `operator[]` on a symbol that was never allocated — inserts null and crashes later.
 
-6. **Code smells** — Flag:
+7. **Code smells** — Flag:
    - Duplicated dispatch that should be a table entry (the keyword map and `tokenName` are the pattern to follow).
    - Functions over ~60 lines without justification; large `switch`es over `NK` or `Tok` are the accepted exception.
    - Magic numbers — field-width sentinels, `maxint`, type sizes should be named.
    - A `default:` in a `switch` over `NK`/`Tok`/`TypeKind` that hides missing cases: prefer exhaustive switches so adding an enumerator produces a warning.
    - Dead code and stale commented-out blocks.
 
-7. **Test coverage** — Verify:
+8. **Test coverage** — Verify:
    - Each new language feature has a `tests/name.pas` + `tests/name.out` pair (ADR-0011), and the pair asserts *semantics*, not instruction selection.
    - A new test requires re-running `cmake` to register — confirm the reviewer actually ran it.
    - Diagnostics are part of the interface: a change to an error message or a new error condition should come with a case, once the negative-test form exists (noted as a gap in ADR-0011 — if the change adds errors, say so).
@@ -56,17 +63,17 @@ When performing a project-wide code review, always follow these steps:
    - **Confirm the diff is covered, not just the totals.** Cross-check the `#####` lines in `src/<changed>.cpp.gcov` against the lines this change added — every new production line should be executed by some test. A high file percentage hides one untested new branch.
    - **Read totals in context:** `main.cpp`'s object-emission and linking paths are exercised by every test but its error branches are not, and diagnostic paths in `sema.cpp` are uncovered until negative tests exist. Judge `lexer/parser/sema/codegen` on their own.
    - **When a finding is "extract a helper", prefer the independently-testable version** — pulling inline logic into a named function is a net coverage win even if the call site stays uncovered. Note the trade-off in the finding.
-   - **State the coverage delta** for touched files in the report (step 10), and raise new uncovered code as a **Tests** finding with the concrete `.pas` case to add.
+   - **State the coverage delta** for touched files in the report (step 11), and raise new uncovered code as a **Tests** finding with the concrete `.pas` case to add.
 
-8. **Documentation quality** — Confirm:
+9. **Documentation quality** — Confirm:
    - New non-obvious behaviour carries a comment naming the ISO clause or the reason (the `mod` adjustment and the `for` limit-then-step both do).
    - `README.md`'s accepted-language list and `CLAUDE.md` still describe reality.
    - A decision that constrains future work got an ADR, and existing ADRs were not edited — they are superseded, not revised (ADR-0001).
 
-9. **Code style** — Confirm:
+10. **Code style** — Confirm:
    - **Formatting is incremental, so check the diff and not the tree.** `.clang-format` is plain LLVM style, but the existing sources are not fully conformant — several dispatch tables are hand-aligned into columns that clang-format collapses. Run `git clang-format HEAD~1` (or `git clang-format` against pending work) and confirm it produces no changes for the lines this change touched. A whole-tree `clang-format --dry-run --Werror` will report hundreds of pre-existing violations; do not report those as findings, and do not let a change bundle a tree-wide reflow with real work — that belongs in its own `style:` commit.
    - The build is warning-free. There is no `-Werror` gate yet; if the change adds warnings, that is a finding.
    - No `printf`/`iostream` output from the compiler except through `Diagnostics` (user-facing errors) or the driver's explicit `fprintf(stderr, "pascalc: ...")`.
    - `clang-tidy` is **not installed**; skip it or `apt install clang-tidy-21`.
 
-10. **Report findings** — Present all identified issues grouped by category: Bootstrap Constraints, Conformance, Generated Code, Correctness, Code Smell, Tests, Documentation, Style. Assign each a severity of **Critical**, **High**, **Medium**, or **Low**. For every finding, include the file path and line number, a clear description, and a concrete recommendation for how to fix it.
+11. **Report findings** — Present all identified issues grouped by category: Bootstrap Constraints, Conformance, Verification, Generated Code, Correctness, Code Smell, Tests, Documentation, Style. Assign each a severity of **Critical**, **High**, **Medium**, or **Low**. For every finding, include the file path and line number, a clear description, and a concrete recommendation for how to fix it.

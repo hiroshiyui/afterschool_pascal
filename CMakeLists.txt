@@ -40,6 +40,19 @@ endif()
 
 # ---- Tests ----
 enable_testing()
+
+# Formal verification of the lowering rules (verify/). Skips rather than fails
+# when z3 is absent, so a checkout without it still builds and tests green.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+  add_test(NAME verify-lowering
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/verify/verify.py
+                   --pascalc $<TARGET_FILE:pascalc>)
+  set_tests_properties(verify-lowering PROPERTIES
+                       SKIP_RETURN_CODE 77
+                       TIMEOUT 900)
+endif()
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)

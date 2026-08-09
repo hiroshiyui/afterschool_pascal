@@ -97,3 +97,31 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 short-circuit; `/` is always real division; `for` evaluates its limit once and
 tests `= limit` before stepping so the last iteration cannot overflow; `div`/`mod`
 by zero call `pas_runtime_error`; a one-character string literal is a `char`.
+
+Most of these are not merely tested — they are **proved** in `verify/` for every
+input. Changing one breaks a theorem, not a sample.
+
+## Formal verification (`verify/`)
+
+`verify/verify.py` proves each lowering rule against a property-style statement
+of ISO 7185 using Z3, then cross-checks the real binary at the adversarial
+points. It runs under `ctest` and skips when z3 is missing
+(`pip install z3-solver`). ADR-0013 has the rationale; `verify/README.md` has the
+mechanics.
+
+Three things to know before touching it:
+
+- **`lowering.py` is a model of `codegen.cpp` and must be maintained with it.**
+  A drifted model keeps passing and proves nothing. When you change a lowering,
+  change the model in the same commit.
+- **Specifications state properties, never computations.** Writing `iso.py` so it
+  computes the answer the way the compiler does would make every proof circular
+  and the circularity invisible.
+- **A `KNOWN_GAP` that starts holding fails the build.** That is intentional: it
+  means the compiler was fixed and the catalogue is now describing a compiler
+  that no longer exists. Flip it to `MUST_HOLD` in the same change.
+
+New arithmetic, conversion, or comparison lowering should arrive with a rule.
+The four gaps currently catalogued (`chr` range, `INT_MIN div -1`, `succ(maxint)`,
+`sqr` overflow) are open language-design questions about what an ISO error
+condition should *do* — not merely bugs to squash.

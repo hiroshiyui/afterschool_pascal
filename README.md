@@ -75,6 +75,32 @@ Two deliberate constraints, both there for the bootstrap:
   compiler written in Pascal cannot call LLVM's C++ API. Emitting IR text is the
   backend that survives the rewrite.
 
+## Verified, not just tested
+
+A compiler is the one program whose bugs are inherited by everything it builds,
+and a miscompilation is silent — the source is right, the test is right, the
+answer is wrong. So the arithmetic the compiler emits is **proved** correct
+rather than sampled:
+
+```sh
+pip install z3-solver
+python3 verify/verify.py --pascalc build/bin/pascalc
+```
+
+For each construct, `verify/` states what ISO 7185 requires of the result as a
+*property*, models what the compiler emits, and asks Z3 whether any input makes
+the two disagree. Eleven rules are currently established — the non-negative
+`mod`, truncating `div`, `odd` on negative values, ordinal `char` comparison, the
+exact integer-to-real widening, and the `for` loop's inability to overflow — most
+of them for all 2³² inputs. Four known gaps are catalogued with the
+counterexample that demonstrates each.
+
+The proofs are paired with a cross-check that compiles and runs real Pascal at
+the adversarial points, at both `-O0` and `-O2`, because a proof about a model of
+the compiler is only worth what keeps it tied to the compiler. See
+[ADR-0013](doc/adr/0013-formal-verification-of-the-lowering.md) for what this
+does and does not establish.
+
 ## Decisions
 
 `doc/adr/` records the architecture decisions and what each one costs — why the
