@@ -238,6 +238,44 @@ def _round_traps_exactly_out_of_range(w):
     return z3.BoolVal(True), low.traps_fp_to_int(rounded) == error
 
 
+def _index_traps_exactly_out_of_bounds(w):
+    """The check fires on exactly the subscripts ISO calls an error — for every
+    array, not merely for the ones a test happens to declare, because the
+    bounds are symbolic here too."""
+    i = low.integer("i", w)
+    lo, hi = low.integer("lo", w), low.integer("hi", w)
+    pre = z3.And(lo <= hi,  # Sema rejects an empty index at compile time
+                 iso.in_integer_range(lo, low.maxint(w)),
+                 iso.in_integer_range(hi, low.maxint(w)),
+                 iso.in_integer_range(i, low.maxint(w)))
+    claim = low.traps_index(i, lo, hi) == z3.Not(
+        iso.index_is_in_bounds(i, lo, hi))
+    return pre, claim
+
+
+def _accepted_index_selects_the_right_element(w):
+    """The claim that lets `emitAddress` subtract without a check: wherever the
+    bounds test passes, `i - lo` is exact and lands inside the array.
+
+    This is the array counterpart of `negation-cannot-overflow` — a rule whose
+    job is to justify a check the compiler deliberately does *not* emit.
+    """
+    i = low.integer("i", w)
+    lo, hi = low.integer("lo", w), low.integer("hi", w)
+    pre = z3.And(lo <= hi,
+                 iso.in_integer_range(lo, low.maxint(w)),
+                 iso.in_integer_range(hi, low.maxint(w)),
+                 iso.in_integer_range(i, low.maxint(w)),
+                 # Sema rejects a wider index range than this, and the
+                 # counterexample that made it do so is why the conjunct is
+                 # here: without it the subtraction really can wrap.
+                 iso.index_span_is_representable(lo, hi, low.maxint(w)),
+                 z3.Not(low.traps_index(i, lo, hi)))
+    claim = iso.offset_selects_the_right_element(i, lo, hi,
+                                                 low.index_offset(i, lo))
+    return pre, claim
+
+
 ALL = [
     Rule("mod-satisfies-iso", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — 0 <= i mod j < j, and j divides (i - r)",
@@ -325,4 +363,13 @@ ALL = [
     Rule("round-traps-exactly-out-of-range", MUST_HOLD,
          "ISO 7185 §6.6.6.3 — round(x) is an error outside the integer type",
          "codegen.cpp Builtin::Round", _round_traps_exactly_out_of_range),
+
+    Rule("index-traps-exactly-out-of-bounds", MUST_HOLD,
+         "ISO 7185 §6.5.3.2 — a subscript outside the index type is an error",
+         "codegen.cpp emitAddress, NK::Index",
+         _index_traps_exactly_out_of_bounds),
+    Rule("accepted-index-selects-the-right-element", MUST_HOLD,
+         "why the offset subtraction needs no overflow check of its own",
+         "codegen.cpp emitAddress, NK::Index",
+         _accepted_index_selects_the_right_element),
 ]

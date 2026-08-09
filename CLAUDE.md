@@ -69,6 +69,34 @@ Sema mirrors this: `Symbol` carries `level`, `owner`, and `frameIndex`, and
 function's own name writes `resultVar`; *reading* the name is a recursive call
 (ISO 7185 §6.8.2.2), so there is no way to read a function's result back.
 
+**Structured types and designators** (ADR-0017). `Type` is a flat struct with a
+`TypeKind` tag; simple types are shared singletons and every array or record
+*type-denoter* allocates one, owned by `Sema::types_`. Two structured types are
+the same only when they are the same object — ISO 7185 §6.4.5 name equivalence
+— so `assignable` compares them with `==`. Packed char arrays are the standard's
+own exception and compare by length instead.
+
+- A designator is `VarRef` with `IndexExpr` and `FieldExpr` wrapped around it.
+  `CodeGen::emitAddress` is the single path to an address; `emitLoad` reads
+  through it. An array or a record has no register form, so a designator of one
+  yields its *address* and assignment becomes a memcpy.
+- Every subscript is bounds-checked before the offset is computed, and the
+  offset subtraction is unchecked because the check has already made it sound.
+  `verify/rules.py` proves both halves of that sentence.
+- A structured parameter always travels as an address: a `var` parameter binds
+  to it, a value parameter is copied by the callee's prologue. `paramType`
+  differs from `slotType` for exactly this reason.
+- A string literal is typed `packed array [1..n] of char` in Sema, not given a
+  type of its own, so `write`, assignment, comparison, and argument passing need
+  no literal-shaped special case.
+- `with` binds the record's address into a hidden frame slot of kind
+  `VarParam`, so the designator is evaluated once and the binding is
+  per-invocation. A bare name that is a field of an open `with` resolves to
+  that binding plus `VarRef::withField`.
+- The data layout is set on the module *before* codegen (`main.cpp` builds the
+  TargetMachine first), because the size of a record decides what a whole-
+  variable assignment copies.
+
 ## Decisions
 
 `doc/adr/` holds the architecture decision records. Read them before undoing
@@ -100,7 +128,10 @@ holds the three-stage plan and the dependency ordering.
 ones the parser rejects. `src/parser.cpp` is recursive descent shaped like the
 ISO grammar (`expression` → `simple-expression` → `term` → `factor`) — note a
 leading sign binds to the whole *term*, so `-7 mod 3` is `-(7 mod 3)`.
-`src/sema.cpp` owns scopes, type rules, and constant folding. `runtime/pasrt.c`
+`src/sema.cpp` owns scopes, type rules, type-denoter resolution, and constant
+folding. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
+declaration group shares one — which is what makes `a, b: array [1..3] of
+integer` the *same* type rather than two alike ones. `runtime/pasrt.c`
 holds anything not expressible in IR — formatted output and runtime checks —
 where `width < 0` / `prec < 0` mean "not given".
 
@@ -114,6 +145,9 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 short-circuit; `/` is always real division; `for` evaluates its limit once and
 tests `= limit` before stepping so the last iteration cannot overflow; a
 one-character string literal is a `char`.
+
+An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
+array's own bounds optimises the check away.
 
 **ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
 through `checkedArith` and stop the program on overflow rather than wrapping —
@@ -152,8 +186,15 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 25 rules, 21 of them for every
+The catalogue currently has **no known gaps** — 27 rules, 23 of them for every
 32-bit input — so any gap that appears is something this change introduced.
+
+A rule may also state why a check is *unnecessary* (`negation-cannot-overflow`,
+`accepted-index-selects-the-right-element`). Those are the ones that pay: the
+index rule failed on first run and made Sema reject arrays spanning more than
+`maxint` values. When a rule's precondition names a restriction the compiler
+enforces, the check and the assumption are the same statement written twice, and
+neither can drift without the other failing.
 
 For floating-point rules, state the specification inside FP theory
 (`fpRoundToIntegral`, `fpLEQ`) rather than via `fpToReal`: mixing FP and Real

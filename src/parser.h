@@ -33,9 +33,15 @@ private:
 
   std::unique_ptr<Block> parseBlock();
   void parseConstPart(Block &block);
+  void parseTypePart(Block &block);
   void parseVarPart(Block &block);
   std::unique_ptr<ProcDecl> parseProcOrFunc(bool isFunction);
   void parseFormalParameters(ProcDecl &decl);
+
+  TypeExprPtr parseTypeExpr();
+  TypeExprPtr parseArrayType(bool packed);
+  TypeExprPtr parseRecordType(bool packed);
+  std::vector<DeclName> parseNameList(const char *what);
 
   StmtPtr parseStatement();
   std::unique_ptr<Compound> parseCompound();
@@ -44,7 +50,11 @@ private:
   StmtPtr parseRepeat();
   StmtPtr parseFor();
   StmtPtr parseIdentStatement();
+  StmtPtr parseWith();
   StmtPtr parseWrite(bool newline);
+
+  /// Apply any `[...]` and `.field` selectors following a designator's base.
+  ExprPtr parseSelectors(ExprPtr base);
 
   ExprPtr parseExpr();
   ExprPtr parseSimpleExpr();

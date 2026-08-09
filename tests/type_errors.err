@@ -1,0 +1,12 @@
+<source>:19:16: error: this array has too many elements: an index range may span at most maxint values
+<source>:21:1: error: a function cannot return vector; use a var parameter
+<source>:30:3: error: cannot assign array [1..3] of integer to a variable of type vector
+<source>:31:3: error: cannot assign vector to a variable of type integer
+<source>:32:3: error: cannot assign record a, b end to a variable of type integer
+<source>:33:13: error: cannot subscript a value of type integer
+<source>:34:9: error: 'missing' is not a field of record a, b end
+<source>:35:9: error: cannot select a field of a value of type integer
+<source>:36:8: error: operator '=' needs comparable operands, found record a, b end and record a, b end
+<source>:37:11: error: a value of type vector cannot be written
+<source>:38:15: error: argument 1 of 'takesvector' is vector, but the value is array [1..3] of integer
+<source>:39:8: error: 'with' needs a record variable, found integer

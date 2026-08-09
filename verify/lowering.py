@@ -126,6 +126,27 @@ def traps_chr(i):
     return z3.Or(i < 0, i > 255)
 
 
+def traps_index(i, lo, hi):
+    """`emitAddress`, NK::Index: the subscript is compared against both bounds
+    before anything is computed from it.
+
+        outside = CreateOr(CreateICmpSLT(idx, lo), CreateICmpSGT(idx, hi))
+    """
+    return z3.Or(i < lo, i > hi)
+
+
+def index_offset(i, lo):
+    """`emitAddress`, NK::Index: the element offset, a plain subtraction with
+    no overflow check.
+
+        offset = CreateSub(idx, lo)
+
+    The omission is deliberate, and is the thing the index rules are about: the
+    subtraction runs only where the bounds check has already passed.
+    """
+    return i - lo
+
+
 def traps_fp_to_int(x):
     """`checkedFPToInt`: ordered comparisons against the two exactly
     representable powers of two just outside the integer range. Ordered means a

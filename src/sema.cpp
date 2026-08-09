@@ -51,7 +51,7 @@ const std::unordered_map<std::string, Builtin> &builtins() {
   return m;
 }
 
-Type *namedType(const std::string &name) {
+Type *builtinType(const std::string &name) {
   if (name == "integer") return ty::Int();
   if (name == "real")    return ty::Real();
   if (name == "boolean") return ty::Bool();
@@ -109,6 +109,178 @@ Symbol *Sema::addFrameVar(const std::string &name, SymKind kind, Type *type,
   return s;
 }
 
+/// A frame slot with no name: nothing can refer to it by spelling, but it is
+/// an ordinary frame variable in every other respect, so it is per-invocation.
+Symbol *Sema::addHiddenVar(const std::string &name, SymKind kind, Type *type,
+                           Symbol *owner) {
+  Symbol *s = newSymbol();
+  s->name = name;
+  s->kind = kind;
+  s->type = type;
+  s->level = owner->level;
+  s->owner = owner;
+  s->frameIndex = static_cast<int>(owner->frameVars.size());
+  owner->frameVars.push_back(s);
+  return s;
+}
+
+// -------------------------------------------------------------------- types
+
+Type *Sema::newType(TypeKind kind) {
+  types_.push_back(std::make_unique<Type>(kind));
+  return types_.back().get();
+}
+
+Type *Sema::stringType(long long length) {
+  auto it = stringTypes_.find(length);
+  if (it != stringTypes_.end())
+    return it->second;
+  Type *t = newType(TypeKind::Array);
+  t->elem = ty::Char();
+  t->indexType = ty::Int();
+  t->lo = 1;
+  t->hi = length;
+  t->packed = true;
+  stringTypes_[length] = t;
+  return t;
+}
+
+bool Sema::evalBound(Expr *e, Type *&type, long long &value) {
+  checkExpr(e);
+  Symbol out;
+  if (!evalConst(e, out) || !out.type)
+    return false;
+  if (out.type->isInteger()) {
+    type = ty::Int();
+    value = out.intVal;
+    return true;
+  }
+  if (out.type->isChar()) {
+    type = ty::Char();
+    value = static_cast<unsigned char>(out.charVal);
+    return true;
+  }
+  if (out.type->isBoolean()) {
+    type = ty::Bool();
+    value = out.boolVal ? 1 : 0;
+    return true;
+  }
+  return false;
+}
+
+/// `array [a, b] of T` abbreviates `array [a] of array [b] of T`
+/// (ISO 7185 §6.4.3.2), so dimension `dim` wraps everything after it.
+Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
+  IndexRange &range = denoter.dims[dim];
+
+  Type *loType = nullptr;
+  Type *hiType = nullptr;
+  long long lo = 0, hi = 0;
+  bool ok = true;
+  if (!evalBound(range.lo.get(), loType, lo)) {
+    diags_.error(range.line, range.col,
+                 "the lower bound of an array index must be an ordinal "
+                 "constant");
+    ok = false;
+  }
+  if (!evalBound(range.hi.get(), hiType, hi)) {
+    diags_.error(range.line, range.col,
+                 "the upper bound of an array index must be an ordinal "
+                 "constant");
+    ok = false;
+  }
+  if (ok && loType != hiType) {
+    diags_.error(range.line, range.col,
+                 std::string("the bounds of an array index must have the same "
+                             "type, found ") +
+                     loType->name() + " and " + hiType->name());
+    ok = false;
+  }
+  if (ok && hi < lo) {
+    diags_.error(range.line, range.col,
+                 "an array index cannot be empty: the upper bound is below "
+                 "the lower bound");
+    ok = false;
+  }
+  // A subscript is lowered to `i - lo` in the integer type, which is sound
+  // only while that difference is a value of the type. Rejecting the array is
+  // what makes the rule `accepted-index-selects-the-right-element` true, so
+  // this bound is load-bearing rather than arbitrary — see verify/rules.py.
+  if (ok && hi - lo >= kMaxInt) {
+    diags_.error(range.line, range.col,
+                 "this array has too many elements: an index range may span "
+                 "at most maxint values");
+    ok = false;
+  }
+  if (!ok) {
+    loType = ty::Int();
+    lo = 0;
+    hi = 0;
+  }
+
+  Type *t = newType(TypeKind::Array);
+  t->indexType = loType;
+  t->lo = lo;
+  t->hi = hi;
+  t->packed = denoter.packed;
+  t->elem = dim + 1 < denoter.dims.size() ? resolveArray(denoter, dim + 1)
+                                          : resolveType(*denoter.elem);
+  return t;
+}
+
+Type *Sema::resolveRecord(TypeExpr &denoter) {
+  Type *t = newType(TypeKind::Record);
+  t->packed = denoter.packed;
+  for (FieldGroup &group : denoter.fields) {
+    Type *fieldType = resolveType(*group.type);
+    for (DeclName &n : group.names) {
+      if (t->findField(n.name)) {
+        diags_.error(n.line, n.col,
+                     "'" + n.name + "' is already a field of this record");
+        continue;
+      }
+      Field f;
+      f.name = n.name;
+      f.type = fieldType;
+      f.index = static_cast<int>(t->fields.size());
+      f.line = n.line;
+      f.col = n.col;
+      t->fields.push_back(std::move(f));
+    }
+  }
+  return t;
+}
+
+Type *Sema::resolveType(TypeExpr &denoter) {
+  if (denoter.resolved)
+    return denoter.resolved;
+
+  Type *t = nullptr;
+  switch (denoter.kind) {
+  case TEK::Named:
+    if ((t = builtinType(denoter.name)) == nullptr) {
+      Symbol *sym = lookup(denoter.name);
+      if (sym && sym->kind == SymKind::Type) {
+        t = sym->type;
+      } else {
+        diags_.error(denoter.line, denoter.col,
+                     "unknown type '" + denoter.name + "'");
+        t = ty::Int();
+      }
+    }
+    break;
+  case TEK::Array:
+    t = resolveArray(denoter, 0);
+    break;
+  case TEK::Record:
+    t = resolveRecord(denoter);
+    break;
+  }
+
+  denoter.resolved = t;
+  return t;
+}
+
 void Sema::installPredefined() {
   Symbol *t = declare("true", SymKind::Const, 0, 0);
   t->type = ty::Bool();
@@ -123,12 +295,56 @@ void Sema::installPredefined() {
   m->intVal = kMaxInt;
 }
 
+/// ISO 7185 §6.4.5 makes two structured types the same only when one type
+/// identifier denotes both, so they compare by identity here — two separately
+/// written `array [1..3] of integer` denoters are different types.
+///
+/// String types are the documented exception (§6.4.5): packed char arrays of
+/// equal length are compatible however they were written, which is what lets a
+/// literal be assigned to one and two of them be compared.
 bool Sema::assignable(Type *to, Type *from) const {
   if (!to || !from)
     return true; // an earlier error already reported
+  if (to == from)
+    return true;
+  if (to->isStructured() || from->isStructured())
+    return to->isCharArray() && from->isCharArray() &&
+           to->length() == from->length();
   if (to->kind == from->kind)
     return true;
   return to->isReal() && from->isInteger();
+}
+
+Symbol *Sema::lookupWithField(const std::string &name, int &fieldIndex) const {
+  // A `with` scope sits inside every enclosing one, so its fields are looked
+  // at first and shadow declarations of the same name further out.
+  for (auto it = withStack_.rbegin(); it != withStack_.rend(); ++it) {
+    if (const Field *f = (*it)->type->findField(name)) {
+      fieldIndex = f->index;
+      return *it;
+    }
+  }
+  return nullptr;
+}
+
+bool Sema::isDesignator(Expr *e) const {
+  if (auto *v = as<VarRef>(e))
+    return v->sym && (v->sym->isVariable() || v->withField >= 0);
+  if (auto *i = as<IndexExpr>(e))
+    return isDesignator(i->base.get());
+  if (auto *f = as<FieldExpr>(e))
+    return isDesignator(f->base.get());
+  return false;
+}
+
+Symbol *Sema::baseSymbol(Expr *e) const {
+  if (auto *v = as<VarRef>(e))
+    return v->sym;
+  if (auto *i = as<IndexExpr>(e))
+    return baseSymbol(i->base.get());
+  if (auto *f = as<FieldExpr>(e))
+    return baseSymbol(f->base.get());
+  return nullptr;
 }
 
 // ------------------------------------------------------------------- driver
@@ -171,13 +387,24 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     s->boolVal = value.boolVal;
   }
 
-  for (auto &v : block.vars) {
-    Type *t = namedType(v.typeName);
-    if (!t) {
-      diags_.error(v.line, v.col, "unknown type '" + v.typeName + "'");
-      t = ty::Int();
-    }
-    addFrameVar(v.name, SymKind::Var, t, owner, v.line, v.col);
+  // A type name is visible to the definitions after it, so each is declared as
+  // it is resolved rather than all at the end.
+  for (auto &t : block.types) {
+    Type *resolved = resolveType(*t.type);
+    Symbol *s = declare(t.name, SymKind::Type, t.line, t.col);
+    if (s->type)
+      continue; // a duplicate: keep the first definition
+    s->type = resolved;
+    if (resolved->alias.empty())
+      resolved->alias = t.name;
+  }
+
+  for (auto &group : block.vars) {
+    // One denoter for the whole group, so `a, b: array [1..3] of integer`
+    // makes a and b the same type and lets `a := b` through.
+    Type *t = resolveType(*group.type);
+    for (auto &n : group.names)
+      addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
   }
 
   // Headings first, then bodies. Declaring every heading in this block before
@@ -210,7 +437,7 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
   if (existing) {
     // ISO 7185 §6.6.1: the full declaration of a forward-declared procedure
     // repeats the name only, so the parameters are already known.
-    if (!decl.params.empty() || !decl.returnTypeName.empty())
+    if (!decl.params.empty() || decl.returnType)
       diags_.error(decl.line, decl.col,
                    "the parameters of '" + decl.name +
                        "' were already given in its forward declaration");
@@ -228,42 +455,40 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
   decl.sym = sym;
 
   if (decl.isFunction) {
-    if (decl.returnTypeName.empty()) {
+    if (!decl.returnType) {
       diags_.error(decl.line, decl.col,
                    "function '" + decl.name + "' needs a result type");
       sym->type = ty::Int();
-    } else if ((sym->type = namedType(decl.returnTypeName)) == nullptr) {
-      diags_.error(decl.line, decl.col,
-                   "unknown result type '" + decl.returnTypeName + "'");
-      sym->type = ty::Int();
+    } else {
+      sym->type = resolveType(*decl.returnType);
+      // ISO 7185 §6.6.2: a function returns a simple type, which is what lets
+      // the result travel in a register and be read back with a plain load.
+      if (sym->type->isStructured()) {
+        diags_.error(decl.line, decl.col,
+                     "a function cannot return " + sym->type->name() +
+                         "; use a var parameter");
+        sym->type = ty::Int();
+      }
     }
   }
 
   // Parameters belong to the procedure's own frame, so they are created here
   // but only made visible once its body is entered.
   pushScope();
-  for (auto &p : decl.params) {
-    Type *t = namedType(p.typeName);
-    if (!t) {
-      diags_.error(p.line, p.col, "unknown parameter type '" + p.typeName + "'");
-      t = ty::Int();
+  for (auto &group : decl.params) {
+    Type *t = resolveType(*group.type);
+    for (auto &n : group.names) {
+      Symbol *ps = addFrameVar(n.name,
+                               group.byRef ? SymKind::VarParam : SymKind::Param,
+                               t, sym, n.line, n.col);
+      sym->params.push_back(ps);
     }
-    Symbol *ps = addFrameVar(p.name, p.byRef ? SymKind::VarParam
-                                             : SymKind::Param,
-                             t, sym, p.line, p.col);
-    sym->params.push_back(ps);
   }
   if (sym->kind == SymKind::Func) {
     // The result lives in the frame like a local; assigning to the function
     // name writes here, and the epilogue returns it.
-    sym->resultVar = newSymbol();
-    sym->resultVar->name = decl.name + "$result";
-    sym->resultVar->kind = SymKind::Var;
-    sym->resultVar->type = sym->type;
-    sym->resultVar->level = sym->level;
-    sym->resultVar->owner = sym;
-    sym->resultVar->frameIndex = static_cast<int>(sym->frameVars.size());
-    sym->frameVars.push_back(sym->resultVar);
+    sym->resultVar =
+        addHiddenVar(decl.name + "$result", SymKind::Var, sym->type, sym);
   }
   popScope();
 }
@@ -352,31 +577,39 @@ void Sema::checkStmt(Stmt *s) {
   if (auto *a = as<Assign>(s)) {
     // Assigning to a function's own name sets its result (ISO 7185 §6.8.2.2),
     // so it is redirected before the target is otherwise resolved. Reading the
-    // name, by contrast, is a recursive call — see checkExpr.
-    Symbol *named = lookup(a->target->name);
-    if (named && named->kind == SymKind::Func) {
-      a->target->sym = named->resultVar;
-      a->target->type = named->type;
-      checkExpr(a->value.get());
-      if (!named->resultVar)
-        diags_.error(a->line, a->col, "'" + a->target->name +
-                                          "' is not a function with a result");
-      else if (!assignable(a->target->type, a->value->type))
-        diags_.error(a->line, a->col,
-                     std::string("cannot assign ") + a->value->type->name() +
-                         " to a result of type " + a->target->type->name());
-      return;
+    // name, by contrast, is a recursive call — see checkExpr. Only a bare name
+    // can mean this; a function result has no fields to select.
+    if (auto *ref = as<VarRef>(a->target.get())) {
+      Symbol *named = lookup(ref->name);
+      if (named && named->kind == SymKind::Func) {
+        ref->sym = named->resultVar;
+        ref->type = named->type;
+        checkExpr(a->value.get());
+        if (!named->resultVar)
+          diags_.error(a->line, a->col,
+                       "'" + ref->name + "' is not a function with a result");
+        else if (!assignable(ref->type, a->value->type))
+          diags_.error(a->line, a->col,
+                       "cannot assign " + a->value->type->name() +
+                           " to a result of type " + ref->type->name());
+        return;
+      }
     }
 
     checkExpr(a->target.get());
     checkExpr(a->value.get());
-    if (a->target->sym && !a->target->sym->isVariable())
-      diags_.error(a->line, a->col,
-                   "cannot assign to '" + a->target->name + "'");
+    if (!isDesignator(a->target.get()))
+      diags_.error(a->target->line, a->target->col,
+                   "the left side of an assignment must be a variable");
     else if (!assignable(a->target->type, a->value->type))
       diags_.error(a->line, a->col,
-                   std::string("cannot assign ") + a->value->type->name() +
+                   "cannot assign " + a->value->type->name() +
                        " to a variable of type " + a->target->type->name());
+    return;
+  }
+
+  if (auto *w = as<WithStmt>(s)) {
+    checkWith(w);
     return;
   }
 
@@ -384,9 +617,13 @@ void Sema::checkStmt(Stmt *s) {
     for (auto &arg : w->args) {
       checkExpr(arg.value.get());
       Type *t = arg.value->type;
-      if (t && t->kind == TypeKind::Void)
+      // ISO 7185 §6.9.3: write takes an integer, real, boolean, char, or a
+      // packed array of char — which is why a string literal can be written
+      // and an array of anything else cannot.
+      if (t && (t->kind == TypeKind::Void ||
+                (t->isStructured() && !t->isCharArray())))
         diags_.error(arg.value->line, arg.value->col,
-                     "this expression has no value to write");
+                     "a value of type " + t->name() + " cannot be written");
       if (arg.width) {
         checkExpr(arg.width.get());
         if (arg.width->type && !arg.width->type->isInteger())
@@ -453,7 +690,13 @@ void Sema::checkStmt(Stmt *s) {
 
   if (auto *f = as<ForStmt>(s)) {
     checkExpr(f->var.get());
-    if (f->var->sym && f->var->sym->kind != SymKind::Var)
+    // ISO 7185 §6.8.3.9 requires an entire variable declared in this block, so
+    // a field reached through an enclosing `with` will not do either.
+    if (f->var->withField >= 0)
+      diags_.error(f->var->line, f->var->col,
+                   "the control variable of a for statement cannot be a field "
+                   "of a with statement");
+    else if (f->var->sym && f->var->sym->kind != SymKind::Var)
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be a variable");
     if (f->var->type && !(f->var->type->isInteger() || f->var->type->isChar()))
@@ -481,9 +724,69 @@ void Sema::checkExpr(Expr *e) {
   if (as<IntLit>(e))  { e->type = ty::Int();  return; }
   if (as<RealLit>(e)) { e->type = ty::Real(); return; }
   if (as<CharLit>(e)) { e->type = ty::Char(); return; }
-  if (as<StrLit>(e))  { e->type = ty::Str();  return; }
+
+  if (auto *s = as<StrLit>(e)) {
+    // ISO 7185 §6.4.3.2: a string literal *is* a packed array of char. Giving
+    // it that type rather than a type of its own is what makes assignment,
+    // comparison and parameter passing work with no special cases anywhere.
+    if (s->value.empty()) {
+      diags_.error(s->line, s->col, "a string literal cannot be empty");
+      s->type = stringType(1);
+      return;
+    }
+    s->type = stringType(static_cast<long long>(s->value.size()));
+    return;
+  }
+
+  if (auto *idx = as<IndexExpr>(e)) {
+    checkExpr(idx->base.get());
+    checkExpr(idx->index.get());
+    Type *base = idx->base->type;
+    if (!base || !base->isArray()) {
+      if (base)
+        diags_.error(idx->line, idx->col,
+                     "cannot subscript a value of type " + base->name());
+      e->type = ty::Int();
+      return;
+    }
+    if (idx->index->type && !assignable(base->indexType, idx->index->type))
+      diags_.error(idx->index->line, idx->index->col,
+                   "this array is indexed by " + base->indexType->name() +
+                       ", but the subscript is " + idx->index->type->name());
+    e->type = base->elem;
+    return;
+  }
+
+  if (auto *fld = as<FieldExpr>(e)) {
+    checkExpr(fld->base.get());
+    Type *base = fld->base->type;
+    if (!base || !base->isRecord()) {
+      if (base)
+        diags_.error(fld->line, fld->col,
+                     "cannot select a field of a value of type " +
+                         base->name());
+      e->type = ty::Int();
+      return;
+    }
+    const Field *f = base->findField(fld->field);
+    if (!f) {
+      diags_.error(fld->line, fld->col,
+                   "'" + fld->field + "' is not a field of " + base->name());
+      e->type = ty::Int();
+      return;
+    }
+    fld->index = f->index;
+    e->type = f->type;
+    return;
+  }
 
   if (auto *v = as<VarRef>(e)) {
+    // A `with` scope is inside every enclosing one, so its fields win.
+    if (Symbol *binding = lookupWithField(v->name, v->withField)) {
+      v->sym = binding;
+      v->type = binding->type->fields[v->withField].type;
+      return;
+    }
     v->sym = lookup(v->name);
     if (!v->sym) {
       diags_.error(v->line, v->col, "undeclared identifier '" + v->name + "'");
@@ -493,6 +796,12 @@ void Sema::checkExpr(Expr *e) {
     if (v->sym->kind == SymKind::Proc) {
       diags_.error(v->line, v->col,
                    "'" + v->name + "' is a procedure and has no value");
+      v->type = ty::Int();
+      return;
+    }
+    if (v->sym->kind == SymKind::Type) {
+      diags_.error(v->line, v->col,
+                   "'" + v->name + "' is a type and has no value");
       v->type = ty::Int();
       return;
     }
@@ -587,15 +896,54 @@ void Sema::checkBinary(Binary *b) {
     return;
 
   default: // relational
-    if (l->isString() || r->isString())
-      diags_.error(b->line, b->col,
-                   "string comparison is not supported yet");
-    else if (!(l->isNumeric() && r->isNumeric()) && l->kind != r->kind)
+    // ISO 7185 §6.7.2.5 gives the string types the full set of relational
+    // operators, comparing character by character; every other structured
+    // type has none at all.
+    if (l->isCharArray() && r->isCharArray()) {
+      if (l->length() != r->length())
+        diags_.error(b->line, b->col,
+                     "strings of different lengths cannot be compared: " +
+                         l->name() + " and " + r->name());
+    } else if (l->isStructured() || r->isStructured()) {
+      bad("comparable");
+    } else if (!(l->isNumeric() && r->isNumeric()) && l->kind != r->kind) {
       bad("compatible");
+    }
     b->type = ty::Bool();
     return;
   }
   (void)isRelational;
+}
+
+/// `with r do S` makes the fields of r visible as bare names throughout S.
+/// The record is designated once, so the binding holds its address and any
+/// subscripts in the designator are evaluated a single time.
+void Sema::checkWith(WithStmt *w) {
+  checkExpr(w->record.get());
+  Type *t = w->record->type;
+
+  if (!isDesignator(w->record.get())) {
+    diags_.error(w->record->line, w->record->col,
+                 "'with' needs a record variable");
+    checkStmt(w->body.get());
+    return;
+  }
+  if (!t || !t->isRecord()) {
+    diags_.error(w->record->line, w->record->col,
+                 "'with' needs a record variable, found " +
+                     (t ? t->name() : std::string("nothing")));
+    checkStmt(w->body.get());
+    return;
+  }
+
+  // The binding is a frame slot holding a pointer — the same shape as a `var`
+  // parameter — so a `with` inside a recursive procedure binds the record of
+  // the invocation it is running in.
+  w->binding = addHiddenVar("with$" + t->name(), SymKind::VarParam, t, current_);
+
+  withStack_.push_back(w->binding);
+  checkStmt(w->body.get());
+  withStack_.pop_back();
 }
 
 /// Check an argument list against a callable's parameters. A `var` parameter
@@ -619,26 +967,33 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
     Expr *a = args[i].get();
 
     if (p->kind == SymKind::VarParam) {
-      auto *ref = as<VarRef>(a);
-      if (!ref || !ref->sym || !ref->sym->isVariable()) {
+      if (!isDesignator(a)) {
         diags_.error(a->line, a->col,
                      "argument " + std::to_string(i + 1) + " of '" +
                          callee->name +
                          "' is a var parameter and needs a variable");
         continue;
       }
-      // No implicit conversion is possible through a reference.
-      if (ref->type && p->type && ref->type->kind != p->type->kind)
+      // No implicit conversion is possible through a reference, so the types
+      // must be the same rather than merely assignment-compatible.
+      if (a->type && p->type && a->type != p->type)
         diags_.error(a->line, a->col,
-                     std::string("var parameter '") + p->name + "' is " +
-                         p->type->name() + ", but the argument is " +
-                         ref->type->name());
+                     "var parameter '" + p->name + "' is " + p->type->name() +
+                         ", but the argument is " + a->type->name());
       continue;
     }
 
-    if (!assignable(p->type, a->type))
+    // A structured value parameter is a copy, so it needs something to copy
+    // from: a designator, or a string literal.
+    if (p->type && p->type->isStructured() && !isDesignator(a) &&
+        !is<StrLit>(a))
       diags_.error(a->line, a->col,
-                   std::string("argument ") + std::to_string(i + 1) + " of '" +
+                   "argument " + std::to_string(i + 1) + " of '" +
+                       callee->name + "' is " + p->type->name() +
+                       " and needs a variable");
+    else if (!assignable(p->type, a->type))
+      diags_.error(a->line, a->col,
+                   "argument " + std::to_string(i + 1) + " of '" +
                        callee->name + "' is " + p->type->name() +
                        ", but the value is " + a->type->name());
   }

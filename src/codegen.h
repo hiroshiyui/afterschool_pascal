@@ -27,9 +27,15 @@ namespace ap {
 /// passing it explicitly.
 class CodeGen {
 public:
-  CodeGen(llvm::LLVMContext &ctx, const Sema &sema, const std::string &fileName)
+  /// The data layout is needed during emission, not just after it: the size of
+  /// a record or an array decides how much a whole-variable assignment copies.
+  CodeGen(llvm::LLVMContext &ctx, const Sema &sema, const std::string &fileName,
+          const llvm::DataLayout &layout, const llvm::Triple &triple)
       : ctx_(ctx), sema_(sema),
-        mod_(std::make_unique<llvm::Module>(fileName, ctx)), b_(ctx) {}
+        mod_(std::make_unique<llvm::Module>(fileName, ctx)), b_(ctx) {
+    mod_->setDataLayout(layout);
+    mod_->setTargetTriple(triple);
+  }
 
   std::unique_ptr<llvm::Module> run(Program &prog);
 
@@ -42,7 +48,14 @@ private:
   llvm::Type *i1() { return llvm::Type::getInt1Ty(ctx_); }
   llvm::Type *f64() { return llvm::Type::getDoubleTy(ctx_); }
   llvm::Type *ptr() { return llvm::PointerType::getUnqual(ctx_); }
+  /// The type of a variable's field in its activation record.
   llvm::Type *slotType(const Symbol *v);
+  /// The type of a parameter in the LLVM function signature. It differs from
+  /// the slot type for anything passed by address rather than by value.
+  llvm::Type *paramType(const Symbol *v);
+  /// True if this parameter arrives as an address the callee copies from.
+  static bool passedByAddress(const Symbol *v);
+  uint64_t sizeOf(Type *t);
 
   llvm::FunctionCallee rt(const char *name, llvm::Type *ret,
                           llvm::ArrayRef<llvm::Type *> params);
@@ -61,8 +74,17 @@ private:
 
   /// The activation record `levels` deep in the static chain from here.
   llvm::Value *frameAt(int level);
+  /// The variable's field in its activation record, without following it.
+  llvm::Value *frameSlot(Symbol *v);
   /// The address of a variable, wherever in the chain it lives.
   llvm::Value *addressOf(Symbol *v);
+  /// The address a designator denotes — a name, a subscript, or a field.
+  /// This is the one path by which anything is read or written.
+  llvm::Value *emitAddress(Expr *e);
+  /// The value a designator holds, loaded from the address it denotes.
+  llvm::Value *emitLoad(Expr *e);
+  /// Copy a whole array or record from the value expression into `dst`.
+  void emitCopy(llvm::Value *dst, Type *type, Expr *src);
   /// The frame to pass as a callee's static link.
   llvm::Value *staticLinkFor(Symbol *callee);
   llvm::Value *emitUserCall(Symbol *callee, std::vector<ExprPtr> &args);
@@ -75,6 +97,7 @@ private:
   void emitWhile(WhileStmt *s);
   void emitRepeat(RepeatStmt *s);
   void emitFor(ForStmt *s);
+  void emitWith(WithStmt *s);
 
   // expressions
   llvm::Value *emitExpr(Expr *e);
@@ -88,7 +111,10 @@ private:
   /// Convert a value of type `from` for storage in a slot of type `to`.
   llvm::Value *convertFor(llvm::Value *v, Type *from, Type *to);
 
-  void emitTrapIf(llvm::Value *condition, const char *message);
+  /// Compare two equal-length strings through the runtime helper.
+  llvm::Value *emitStringCompare(Binary *e);
+
+  void emitTrapIf(llvm::Value *condition, const std::string &message);
   llvm::Value *checkedArith(unsigned intrinsicId, llvm::Value *l,
                             llvm::Value *r, const char *message);
   llvm::Value *checkedFPToInt(llvm::Value *x, const char *message);
@@ -102,6 +128,9 @@ private:
 
   std::unordered_map<const Symbol *, llvm::StructType *> frameTypes_;
   std::unordered_map<const Symbol *, llvm::Function *> functions_;
+  /// One LLVM type per Pascal type, so a record keeps a single struct type
+  /// however many variables have it.
+  std::unordered_map<const Type *, llvm::Type *> typeCache_;
 
   // State for the procedure currently being emitted.
   llvm::Function *curFn_ = nullptr;

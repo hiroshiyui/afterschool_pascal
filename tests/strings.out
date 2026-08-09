@@ -1,0 +1,9 @@
+[begin   ][end     ][program ][var     ]
+a = begin    rank 1
+b = a: TRUE
+begin < end: TRUE
+end < begin: FALSE
+var = var:   TRUE
+unknown:     0
+char: beg
+modified: Begin    still equal: FALSE

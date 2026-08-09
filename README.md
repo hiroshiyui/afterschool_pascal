@@ -31,31 +31,46 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
 somewhere else.
 
-## What the compiler accepts today (milestone 2)
+## What the compiler accepts today (milestone 3)
 
 ```
-program-header, const part, var part, compound statement
+program-header, const part, type part, var part, compound statement
 types      integer  real  boolean  char
+           array [lo..hi] of T, multi-dimensional, any ordinal index
+           record, nested to any depth, packed
+           packed array [1..n] of char — the string types
 routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations
 statements := , if/then/else, while, repeat/until, for/to/downto,
-           begin/end, procedure call, write, writeln
+           begin/end, with, procedure call, write, writeln
 operators  + - * / div mod, and or not (short-circuiting),
-           = <> < <= > >=
+           = <> < <= > >=  (including on strings)
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
            trunc round
 literals   integers, reals, 'strings', '' escapes, { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
 ```
 
+Arrays and records assign whole (`b := a` copies every component), pass as
+value parameters by copy and as `var` parameters by reference, and nest freely
+in each other. A string literal has the type ISO 7185 gives it — `packed array
+[1..n] of char` — so it assigns to, compares with, and passes as a variable of
+that type with no special case anywhere.
+
+Two types are the same only when one type identifier denotes both, as
+ISO 7185 §6.4.5 requires, so two separately written `array [1..3] of integer`
+are different types. See
+[ADR-0017](doc/adr/0017-structured-types-use-name-equivalence.md).
+
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form (`5.0E-01` style);
 with a width and a fraction length it comes out fixed-point.
 
-**Errors are detected, not ignored.** ISO 7185 calls integer overflow, `chr` of
-a non-ordinal, `succ` past the end of a type, and `trunc` of a real too large
-*errors*; this compiler stops the program with a message rather than letting it
-wrap or produce an arbitrary value:
+**Errors are detected, not ignored.** ISO 7185 calls integer overflow, an array
+subscript outside its bounds, `chr` of a non-ordinal, `succ` past the end of a
+type, and `trunc` of a real too large *errors*; this compiler stops the program
+with a message rather than letting it wrap, read past the array, or produce an
+arbitrary value:
 
 ```
 $ pascalc overflow.pas && ./overflow
@@ -68,8 +83,8 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: arrays, records, sets, pointers, files, `case`, `with`,
-`goto`, subranges, enumerations, procedural parameters.
+Not accepted yet: sets, pointers, files, `case`, `goto`, subranges,
+enumerations, variant parts of records, procedural parameters.
 
 ## How it fits together
 
@@ -108,15 +123,22 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Twenty-five rules are currently established — the non-negative
-`mod`, truncating `div`, `odd` on negative values, ordinal `char` comparison, the
-exact integer-to-real widening, and the `for` loop's inability to overflow —
-twenty-one of them for all 2³² inputs.
+the two disagree. Twenty-seven rules are currently established — the
+non-negative `mod`, truncating `div`, `odd` on negative values, ordinal `char`
+comparison, the exact integer-to-real widening, the `for` loop's inability to
+overflow, and an array subscript's inability to leave its bounds — twenty-three
+of them for all 2³² inputs.
 
 Each runtime check is proved to fire *exactly* when ISO says the operation is in
 error. Both directions matter: trapping always would satisfy "never produces a
 wrong answer", and never trapping would satisfy "never rejects a valid program".
 There are currently **no known gaps**.
+
+Some rules exist to justify a check the compiler deliberately does *not* emit —
+the `for` loop's step, unary negation, and an array's offset subtraction. The
+last of those failed the first time it was run, on an array whose bounds span
+more than `maxint` values, and the compiler now rejects such an array at compile
+time. Proving why a check is unnecessary is how you find out that it isn't.
 
 The proofs are paired with a cross-check that compiles and runs real Pascal at
 the adversarial points, at both `-O0` and `-O2`, because a proof about a model of
@@ -149,9 +171,11 @@ written in. In dependency order:
 
 1. ~~**Procedures and functions**~~ — done: nested to any depth, value and
    `var` parameters, `forward`, implemented with static links (ADR-0016).
-2. **Arrays and records** — static arrays, `packed`, nested records, `with`.
-   Token tables and AST nodes live here.
-3. **Enumerations, subranges, `case`** — the node-kind tag itself wants these.
+2. ~~**Arrays and records**~~ — done: static arrays of any ordinal index,
+   `packed`, nested records, `with`, bounds-checked subscripts (ADR-0017).
+   Variant parts wait for `case`.
+3. **Enumerations, subranges, `case`** — the node-kind tag itself wants these,
+   and a record's variant part cannot be written without them.
 4. **Pointers and `new`/`dispose`** — the AST is a heap-allocated tree.
 5. **Text files** — `reset`, `rewrite`, `read`, `readln`, `eof`, `eoln`, so the
    compiler can read source and write `.ll`.

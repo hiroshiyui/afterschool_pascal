@@ -12,6 +12,7 @@ namespace ap {
 
 enum class SymKind {
   Const,
+  Type,     // a name introduced by the type part
   Var,      // a local or global variable
   Param,    // a value parameter — a local initialised from the argument
   VarParam, // a `var` parameter — the frame slot holds a pointer
@@ -81,21 +82,52 @@ private:
   void checkProcBody(ProcDecl &decl);
   Symbol *addFrameVar(const std::string &name, SymKind kind, Type *type,
                       Symbol *owner, int line, int col);
+  /// A frame slot with no name in any scope — a function result or a `with`
+  /// binding. It is still an ordinary frame variable, so recursion works.
+  Symbol *addHiddenVar(const std::string &name, SymKind kind, Type *type,
+                       Symbol *owner);
+
+  // --- types ---------------------------------------------------------------
+  Type *newType(TypeKind kind);
+  /// Turn a type-denoter into a Type, reporting anything it cannot make sense
+  /// of. Never returns null: on error it yields integer so checking continues.
+  Type *resolveType(TypeExpr &denoter);
+  Type *resolveArray(TypeExpr &denoter, size_t dim);
+  Type *resolveRecord(TypeExpr &denoter);
+  /// The `packed array [1..n] of char` that ISO 7185 §6.4.3.2 gives a string
+  /// literal. Cached by length so two literals of a length share one type.
+  Type *stringType(long long length);
+  /// Evaluate an array bound, requiring an ordinal constant.
+  bool evalBound(Expr *e, Type *&type, long long &value);
 
   void checkStmt(Stmt *s);
   void checkExpr(Expr *e);
   void checkBinary(Binary *b);
   void checkCall(Call *c);
+  void checkWith(WithStmt *w);
   void checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                       int col);
   bool evalConst(Expr *e, Symbol &out);
 
+  /// True if `e` denotes a variable — a name, or one with subscripts and
+  /// fields applied. Assignment targets and `var` arguments must be one.
+  bool isDesignator(Expr *e) const;
+  /// The variable a designator ultimately reaches into, or null.
+  Symbol *baseSymbol(Expr *e) const;
+
   /// True if a value of `from` may be assigned to / compared with `to`.
   bool assignable(Type *to, Type *from) const;
 
+  /// The field of an enclosing `with` this name refers to, if any.
+  Symbol *lookupWithField(const std::string &name, int &fieldIndex) const;
+
   Diagnostics &diags_;
   std::vector<std::unique_ptr<Symbol>> owned_;
+  std::vector<std::unique_ptr<Type>> types_;
+  std::unordered_map<long long, Type *> stringTypes_;
   std::vector<std::unordered_map<std::string, Symbol *>> scopes_;
+  /// The bindings of the `with` statements currently open, innermost last.
+  std::vector<Symbol *> withStack_;
   Symbol *program_ = nullptr;
   Symbol *current_ = nullptr; // the procedure whose body is being checked
 };

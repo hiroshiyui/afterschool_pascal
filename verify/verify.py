@@ -147,6 +147,8 @@ DIV_MOD_POINTS = [
     (2147483647, 2), (-2147483647, 3), (7, 7), (1, 2147483647),
 ]
 ODD_POINTS = [-3, -4, 0, 1, 2147483647, -2147483647]
+# Both ends of the index range, both sides of zero, and zero itself.
+INDEX_POINTS = [-3, -2, -1, 0, 1, 2, 3]
 
 
 def iso_div(i, j):
@@ -162,7 +164,13 @@ def iso_mod(i, j):
 
 
 def build_crosscheck_program():
-    lines = ["program Crosscheck(output);", "var i, j: integer;", "begin"]
+    # The array is indexed from a negative lower bound so that the offset
+    # subtraction the index rules are about is actually exercised: with a lower
+    # bound of 1 a wrong `i - lo` is off by a constant and easy to miss.
+    lines = ["program Crosscheck(output);",
+             "var i, j: integer;",
+             "    a: array [-3..3] of integer;",
+             "begin"]
     expected = []
 
     for i, j in DIV_MOD_POINTS:
@@ -185,6 +193,13 @@ def build_crosscheck_program():
     expected.append("A")
     lines.append("  writeln('a' < 'b');")
     expected.append("TRUE")
+
+    # Every element of an array whose bounds straddle zero, written through one
+    # index expression and read back through another.
+    lines.append("  for i := -3 to 3 do a[i] := i * i;")
+    for k in INDEX_POINTS:
+        lines.append(f"  i := {k}; writeln(a[i]);")
+        expected.append(str(k * k))
 
     lines.append("end.")
     return "\n".join(lines) + "\n", expected

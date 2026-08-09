@@ -17,10 +17,43 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   case TypeKind::Real:    return f64();
   case TypeKind::Boolean: return i1();
   case TypeKind::Char:    return i8();
-  case TypeKind::String:  return ptr();
   case TypeKind::Void:    return llvm::Type::getVoidTy(ctx_);
+  case TypeKind::Array:
+  case TypeKind::Record:
+    break;
   }
-  return i32();
+
+  auto cached = typeCache_.find(t);
+  if (cached != typeCache_.end())
+    return cached->second;
+
+  llvm::Type *result;
+  if (t->isArray()) {
+    // The bounds are folded away here: an index is lowered to an offset from
+    // the lower bound, so the LLVM type only needs the extent.
+    result = ArrayType::get(llvmType(t->elem),
+                            static_cast<uint64_t>(t->length()));
+  } else {
+    SmallVector<llvm::Type *, 8> fields;
+    for (const Field &f : t->fields)
+      fields.push_back(llvmType(f.type));
+    // `packed` is left to the implementation by ISO 7185 §6.4.3.1, and the
+    // natural layout is what the ABI and the optimiser both expect.
+    result = StructType::create(ctx_, fields, "rec." + t->name());
+  }
+  typeCache_[t] = result;
+  return result;
+}
+
+uint64_t CodeGen::sizeOf(ap::Type *t) {
+  return mod_->getDataLayout().getTypeAllocSize(llvmType(t));
+}
+
+/// Arrays and records are passed as addresses whichever way they are declared:
+/// a `var` parameter binds to the caller's variable, and a value parameter is
+/// copied out of the caller's variable by the callee's prologue.
+bool CodeGen::passedByAddress(const Symbol *v) {
+  return v->kind == SymKind::VarParam || (v->type && v->type->isStructured());
 }
 
 FunctionCallee CodeGen::rt(const char *name, llvm::Type *ret,
@@ -50,7 +83,7 @@ llvm::Value *CodeGen::intrinsicCall(unsigned id,
   return b_.CreateCall(fn, args);
 }
 
-void CodeGen::emitTrapIf(llvm::Value *condition, const char *message) {
+void CodeGen::emitTrapIf(llvm::Value *condition, const std::string &message) {
   BasicBlock *trap = BasicBlock::Create(ctx_, "trap", curFn_);
   BasicBlock *cont = BasicBlock::Create(ctx_, "cont", curFn_);
   b_.CreateCondBr(condition, trap, cont);
@@ -107,8 +140,13 @@ llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
 
 llvm::Type *CodeGen::slotType(const Symbol *v) {
   // A `var` parameter's slot holds the address of the caller's variable, not
-  // a copy of its value.
+  // a copy of its value. Everything else — including a structured value
+  // parameter, which the prologue copies in — holds the value itself.
   return v->kind == SymKind::VarParam ? ptr() : llvmType(v->type);
+}
+
+llvm::Type *CodeGen::paramType(const Symbol *v) {
+  return passedByAddress(v) ? ptr() : llvmType(v->type);
 }
 
 StructType *CodeGen::buildFrameType(Symbol *proc) {
@@ -132,7 +170,7 @@ void CodeGen::declareProcs(Block &block) {
     SmallVector<llvm::Type *, 8> params;
     params.push_back(ptr()); // the static link
     for (const Symbol *p : sym->params)
-      params.push_back(slotType(p));
+      params.push_back(paramType(p));
 
     llvm::Type *ret =
         sym->kind == SymKind::Func ? llvmType(sym->type)
@@ -169,8 +207,17 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
     ++arg;
     for (const Symbol *p : proc->params) {
       arg->setName(p->name);
-      b_.CreateStore(&*arg, b_.CreateStructGEP(frameTy, curFrame_,
-                                               1 + p->frameIndex, p->name));
+      llvm::Value *slot =
+          b_.CreateStructGEP(frameTy, curFrame_, 1 + p->frameIndex, p->name);
+      if (p->kind != SymKind::VarParam && p->type->isStructured()) {
+        // A structured value parameter arrives as the caller's address; the
+        // copy that makes it a *value* parameter is made here, once, so the
+        // callee can write to it without the caller seeing the change.
+        Align align = mod_->getDataLayout().getABITypeAlign(llvmType(p->type));
+        b_.CreateMemCpy(slot, align, &*arg, align, sizeOf(p->type));
+      } else {
+        b_.CreateStore(&*arg, slot);
+      }
       ++arg;
     }
   }
@@ -223,14 +270,92 @@ llvm::Value *CodeGen::frameAt(int level) {
   return frame;
 }
 
-llvm::Value *CodeGen::addressOf(Symbol *v) {
+llvm::Value *CodeGen::frameSlot(Symbol *v) {
   llvm::Value *frame = frameAt(v->level);
   StructType *frameTy = frameTypes_[v->owner];
-  llvm::Value *slot =
-      b_.CreateStructGEP(frameTy, frame, 1 + v->frameIndex, v->name);
+  return b_.CreateStructGEP(frameTy, frame, 1 + v->frameIndex, v->name);
+}
+
+llvm::Value *CodeGen::addressOf(Symbol *v) {
+  llvm::Value *slot = frameSlot(v);
+  // A `var` parameter — and the binding of a `with` — holds an address, so the
+  // variable it stands for is one load further on.
   if (v->kind == SymKind::VarParam)
     slot = b_.CreateLoad(ptr(), slot, v->name + ".ref");
   return slot;
+}
+
+/// Every read and every write goes through here, so a subscript is bounds
+/// checked exactly once however it is used.
+llvm::Value *CodeGen::emitAddress(Expr *e) {
+  switch (e->kind) {
+  case NK::VarRef: {
+    auto *v = static_cast<VarRef *>(e);
+    llvm::Value *base = addressOf(v->sym);
+    if (v->withField < 0)
+      return base;
+    // The name was a field of an enclosing `with`, and `sym` is that
+    // statement's binding — the record's address, taken once on entry.
+    return b_.CreateStructGEP(llvmType(v->sym->type), base, v->withField,
+                              v->name);
+  }
+
+  case NK::Field: {
+    auto *f = static_cast<FieldExpr *>(e);
+    return b_.CreateStructGEP(llvmType(f->base->type),
+                              emitAddress(f->base.get()), f->index, f->field);
+  }
+
+  case NK::Index: {
+    auto *ix = static_cast<IndexExpr *>(e);
+    ap::Type *arr = ix->base->type;
+    llvm::Value *base = emitAddress(ix->base.get());
+    llvm::Value *idx = emitExpr(ix->index.get());
+
+    // char and boolean subscripts are narrower than i32; widening is exact
+    // because their ordinals are non-negative.
+    if (idx->getType() != i32())
+      idx = b_.CreateZExt(idx, i32(), "idx.wide");
+
+    // ISO 7185 §6.5.3.2 makes an index outside the bounds an error. The check
+    // comes first, so the subtraction below cannot overflow: afterwards
+    // lo <= i <= hi, and both bounds are values of the index type.
+    llvm::Value *lo = ConstantInt::getSigned(i32(), arr->lo);
+    llvm::Value *hi = ConstantInt::getSigned(i32(), arr->hi);
+    llvm::Value *outside =
+        b_.CreateOr(b_.CreateICmpSLT(idx, lo, "idx.lt"),
+                    b_.CreateICmpSGT(idx, hi, "idx.gt"), "idx.bad");
+    emitTrapIf(outside, "array index out of bounds (" +
+                            std::to_string(arr->lo) + ".." +
+                            std::to_string(arr->hi) + ")");
+
+    llvm::Value *offset = b_.CreateSub(idx, lo, "idx.off");
+    return b_.CreateGEP(llvmType(arr), base,
+                        {ConstantInt::get(i32(), 0), offset}, "elem");
+  }
+
+  case NK::StrLit:
+    // A literal is a packed array of char, so it needs an address like any
+    // other value of that type.
+    return b_.CreateGlobalString(static_cast<StrLit *>(e)->value, "str");
+
+  default:
+    return nullptr; // Sema has already required a designator
+  }
+}
+
+/// The value a designator holds. An array or a record has no register form, so
+/// what it yields is its address; everything else is loaded from that address.
+llvm::Value *CodeGen::emitLoad(Expr *e) {
+  llvm::Value *addr = emitAddress(e);
+  if (e->type->isStructured())
+    return addr;
+  return b_.CreateLoad(llvmType(e->type), addr, "val");
+}
+
+void CodeGen::emitCopy(llvm::Value *dst, ap::Type *type, Expr *src) {
+  Align align = mod_->getDataLayout().getABITypeAlign(llvmType(type));
+  b_.CreateMemCpy(dst, align, emitAddress(src), align, sizeOf(type));
 }
 
 llvm::Value *CodeGen::staticLinkFor(Symbol *callee) {
@@ -246,9 +371,11 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
 
   for (size_t i = 0; i < args.size(); ++i) {
     const Symbol *p = callee->params[i];
-    if (p->kind == SymKind::VarParam) {
-      // Bound to the variable itself; Sema has already required one.
-      argv.push_back(addressOf(static_cast<VarRef *>(args[i].get())->sym));
+    if (passedByAddress(p)) {
+      // A `var` parameter binds to the variable itself; a structured value
+      // parameter is copied from it by the callee. Either way what travels is
+      // an address, and Sema has already required something that has one.
+      argv.push_back(emitAddress(args[i].get()));
     } else {
       llvm::Value *v = emitExpr(args[i].get());
       argv.push_back(convertFor(v, args[i]->type, p->type));
@@ -296,6 +423,7 @@ void CodeGen::emitStmt(Stmt *s) {
   case NK::While:   emitWhile(static_cast<WhileStmt *>(s)); return;
   case NK::Repeat:  emitRepeat(static_cast<RepeatStmt *>(s)); return;
   case NK::For:     emitFor(static_cast<ForStmt *>(s)); return;
+  case NK::With:    emitWith(static_cast<WithStmt *>(s)); return;
   case NK::ProcCall: {
     auto *call = static_cast<ProcCallStmt *>(s);
     emitUserCall(call->sym, call->args);
@@ -307,9 +435,23 @@ void CodeGen::emitStmt(Stmt *s) {
 }
 
 void CodeGen::emitAssign(Assign *s) {
+  llvm::Value *dst = emitAddress(s->target.get());
+  // A whole array or record is copied; ISO 7185 §6.8.2.2 makes assignment of a
+  // structured value a copy of every component, not a sharing of storage.
+  if (s->target->type->isStructured()) {
+    emitCopy(dst, s->target->type, s->value.get());
+    return;
+  }
   llvm::Value *v = emitExpr(s->value.get());
-  v = convertFor(v, s->value->type, s->target->type);
-  b_.CreateStore(v, addressOf(s->target->sym));
+  b_.CreateStore(convertFor(v, s->value->type, s->target->type), dst);
+}
+
+/// The record is designated once and its address kept for the body, so a
+/// subscript in the designator is evaluated a single time (ISO 7185 §6.8.3.10)
+/// and cannot see a change the body makes to the subscript's variable.
+void CodeGen::emitWith(WithStmt *s) {
+  b_.CreateStore(emitAddress(s->record.get()), frameSlot(s->binding));
+  emitStmt(s->body.get());
 }
 
 void CodeGen::emitWrite(WriteStmt *s) {
@@ -320,15 +462,13 @@ void CodeGen::emitWrite(WriteStmt *s) {
     llvm::Value *width = arg.width ? emitExpr(arg.width.get()) : noWidth;
     llvm::Value *prec = arg.prec ? emitExpr(arg.prec.get()) : noWidth;
 
-    // A string literal is passed as its address plus its length; nothing else
-    // in milestone 1 produces a string value.
-    if (arg.value->type->isString()) {
-      auto *lit = static_cast<StrLit *>(arg.value.get());
-      llvm::Value *text = b_.CreateGlobalString(lit->value, "str");
-      b_.CreateCall(rt("pas_write_str", voidTy, {ptr(), i32(), i32()}),
-                    {text,
-                     ConstantInt::get(i32(), lit->value.size()),
-                     width});
+    // A packed array of char is written as its address plus its length —
+    // which covers a string literal, since that is what a literal's type is.
+    if (arg.value->type->isCharArray()) {
+      b_.CreateCall(
+          rt("pas_write_str", voidTy, {ptr(), i32(), i32()}),
+          {emitAddress(arg.value.get()),
+           ConstantInt::get(i32(), arg.value->type->length()), width});
       continue;
     }
 
@@ -411,7 +551,7 @@ void CodeGen::emitRepeat(RepeatStmt *s) {
 }
 
 void CodeGen::emitFor(ForStmt *s) {
-  llvm::Value *slot = addressOf(s->var->sym);
+  llvm::Value *slot = emitAddress(s->var.get());
   llvm::Type *varTy = llvmType(s->var->type);
 
   llvm::Value *from = convertFor(emitExpr(s->from.get()), s->from->type,
@@ -476,15 +616,18 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
   case NK::CharLit:
     return ConstantInt::get(i8(), static_cast<CharLit *>(e)->value);
   case NK::StrLit:
-    return b_.CreateGlobalString(static_cast<StrLit *>(e)->value, "str");
+    return emitAddress(e);
   case NK::VarRef: {
     auto *v = static_cast<VarRef *>(e);
-    if (v->sym->kind == SymKind::Const)
+    if (v->withField < 0 && v->sym->kind == SymKind::Const)
       return emitConst(*v->sym);
-    if (v->sym->kind == SymKind::Func)
+    if (v->withField < 0 && v->sym->kind == SymKind::Func)
       return emitUserCall(v->sym, noArgs_); // a parameterless call by name
-    return b_.CreateLoad(llvmType(v->type), addressOf(v->sym), v->name);
+    return emitLoad(e);
   }
+  case NK::Index:
+  case NK::Field:
+    return emitLoad(e);
   case NK::Binary: return emitBinary(static_cast<Binary *>(e));
   case NK::Unary:  return emitUnary(static_cast<Unary *>(e));
   case NK::Call:   return emitCall(static_cast<Call *>(e));
@@ -519,6 +662,11 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
     phi->addIncoming(rhs, rhsEnd);
     return phi;
   }
+
+  // Strings compare through the runtime rather than in registers, and must be
+  // caught before the operands are evaluated: an array has no register form.
+  if (e->lhs->type->isCharArray() && e->rhs->type->isCharArray())
+    return emitStringCompare(e);
 
   llvm::Value *l = emitExpr(e->lhs.get());
   llvm::Value *r = emitExpr(e->rhs.get());
@@ -600,6 +748,28 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
     default:        return sign ? b_.CreateICmpSGE(l, r, "cmp") : b_.CreateICmpUGE(l, r, "cmp");
     }
   }
+  }
+}
+
+/// ISO 7185 §6.7.2.5 orders equal-length strings by their first differing
+/// character, which is what the runtime helper reports; the operator then only
+/// has to say what it wants of the sign.
+llvm::Value *CodeGen::emitStringCompare(Binary *e) {
+  llvm::Value *lhs = emitAddress(e->lhs.get());
+  llvm::Value *rhs = emitAddress(e->rhs.get());
+  llvm::Value *len = ConstantInt::get(i32(), e->lhs->type->length());
+  llvm::Value *cmp =
+      b_.CreateCall(rt("pas_str_compare", i32(), {ptr(), ptr(), i32()}),
+                    {lhs, rhs, len}, "strcmp");
+  llvm::Value *zero = ConstantInt::get(i32(), 0);
+
+  switch (e->op) {
+  case BinOp::Eq: return b_.CreateICmpEQ(cmp, zero, "streq");
+  case BinOp::Ne: return b_.CreateICmpNE(cmp, zero, "strne");
+  case BinOp::Lt: return b_.CreateICmpSLT(cmp, zero, "strlt");
+  case BinOp::Le: return b_.CreateICmpSLE(cmp, zero, "strle");
+  case BinOp::Gt: return b_.CreateICmpSGT(cmp, zero, "strgt");
+  default:        return b_.CreateICmpSGE(cmp, zero, "strge");
   }
 }
 

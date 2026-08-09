@@ -25,3 +25,4 @@ the alternatives that were rejected and why.
 | [0014](0014-iso-error-conditions-trap-at-run-time.md) | ISO error conditions trap at run time | Accepted |
 | [0015](0015-real-to-integer-conversions-are-range-checked.md) | Real-to-integer conversions are range-checked | Accepted |
 | [0016](0016-nested-procedures-use-static-links.md) | Nested procedures use static links | Accepted |
+| [0017](0017-structured-types-use-name-equivalence.md) | Structured types are identified by name, and every subscript is checked | Accepted |

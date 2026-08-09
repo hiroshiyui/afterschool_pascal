@@ -72,12 +72,14 @@ std::unique_ptr<Block> Parser::parseBlock() {
   for (;;) {
     if (check(Tok::KwConst)) {
       parseConstPart(*block);
+    } else if (check(Tok::KwType)) {
+      parseTypePart(*block);
     } else if (check(Tok::KwVar)) {
       parseVarPart(*block);
     } else if (check(Tok::KwProcedure) || check(Tok::KwFunction)) {
       bool isFunction = check(Tok::KwFunction);
       block->procs.push_back(parseProcOrFunc(isFunction));
-    } else if (check(Tok::KwType) || check(Tok::KwLabel)) {
+    } else if (check(Tok::KwLabel)) {
       errorAtCur(std::string(tokenName(cur().kind)) +
                  " declarations are not supported yet");
       bail();
@@ -115,8 +117,7 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
       errorAtCur("expected the result type of the function");
       bail();
     }
-    decl->returnTypeName = cur().text;
-    ++pos_;
+    decl->returnType = parseTypeExpr();
   }
   expect(Tok::Semi, "after the heading of a procedure or function");
 
@@ -132,41 +133,135 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
 }
 
 /// formal-parameters = '(' group (';' group)* ')'
-/// group            = 'var'? ident-list ':' type-ident
+/// group            = 'var'? ident-list ':' type-denoter
+///
+/// ISO 7185 §6.6.3.1 restricts a parameter's type to a type *identifier*, so
+/// an array parameter needs a named type. That is a real restriction, not an
+/// omission here: it is what makes a formal and an actual parameter the same
+/// type rather than two structurally identical ones.
 void Parser::parseFormalParameters(ProcDecl &decl) {
   expect(Tok::LParen, "");
   do {
-    bool byRef = accept(Tok::KwVar);
-
-    std::vector<ParamDecl> group;
-    do {
-      if (!check(Tok::Ident)) {
-        errorAtCur("expected a parameter name");
-        bail();
-      }
-      ParamDecl p;
-      p.name = cur().text;
-      p.byRef = byRef;
-      p.line = cur().line;
-      p.col = cur().col;
-      ++pos_;
-      group.push_back(std::move(p));
-    } while (accept(Tok::Comma));
-
+    ParamGroup group;
+    group.byRef = accept(Tok::KwVar);
+    group.names = parseNameList("a parameter name");
     expect(Tok::Colon, "in a parameter list");
     if (!check(Tok::Ident)) {
-      errorAtCur("expected a parameter type");
+      errorAtCur("a parameter's type must be a type name");
       bail();
     }
-    std::string typeName = cur().text;
-    ++pos_;
-
-    for (auto &p : group) {
-      p.typeName = typeName;
-      decl.params.push_back(std::move(p));
-    }
+    group.type = parseTypeExpr();
+    decl.params.push_back(std::move(group));
   } while (accept(Tok::Semi));
   expect(Tok::RParen, "after the parameter list");
+}
+
+std::vector<DeclName> Parser::parseNameList(const char *what) {
+  std::vector<DeclName> names;
+  do {
+    if (!check(Tok::Ident)) {
+      errorAtCur(std::string("expected ") + what);
+      bail();
+    }
+    names.push_back({cur().text, cur().line, cur().col});
+    ++pos_;
+  } while (accept(Tok::Comma));
+  return names;
+}
+
+// -------------------------------------------------------------- type denoters
+
+/// type-denoter = type-identifier | 'packed'? (array-type | record-type)
+TypeExprPtr Parser::parseTypeExpr() {
+  bool packed = accept(Tok::KwPacked);
+
+  if (check(Tok::KwArray))
+    return parseArrayType(packed);
+  if (check(Tok::KwRecord))
+    return parseRecordType(packed);
+
+  if (packed) {
+    errorAtCur("'packed' applies only to an array, record, set or file type");
+    bail();
+  }
+  if (check(Tok::KwSet) || check(Tok::KwFile) || check(Tok::Caret)) {
+    errorAtCur(std::string(tokenName(cur().kind)) + " types are not supported yet");
+    bail();
+  }
+  if (!check(Tok::Ident)) {
+    errorAtCur(std::string("expected a type, found ") + tokenName(cur().kind));
+    bail();
+  }
+
+  auto t = std::make_unique<TypeExpr>();
+  t->kind = TEK::Named;
+  t->line = cur().line;
+  t->col = cur().col;
+  t->name = cur().text;
+  ++pos_;
+  return t;
+}
+
+/// array-type = 'array' '[' index (',' index)* ']' 'of' type-denoter
+/// index      = constant '..' constant
+///
+/// Several indices are the abbreviation of ISO 7185 §6.4.3.2 — `array [a, b]
+/// of T` means `array [a] of array [b] of T` — so the dimensions are kept in
+/// one node here and nested by Sema.
+TypeExprPtr Parser::parseArrayType(bool packed) {
+  auto t = std::make_unique<TypeExpr>();
+  t->kind = TEK::Array;
+  t->packed = packed;
+  t->line = cur().line;
+  t->col = cur().col;
+  expect(Tok::KwArray, "");
+  expect(Tok::LBracket, "after 'array'");
+
+  do {
+    IndexRange dim;
+    dim.line = cur().line;
+    dim.col = cur().col;
+    dim.lo = parseExpr();
+    expect(Tok::DotDot, "between the bounds of an array index");
+    dim.hi = parseExpr();
+    t->dims.push_back(std::move(dim));
+  } while (accept(Tok::Comma));
+
+  expect(Tok::RBracket, "after the index type of an array");
+  expect(Tok::KwOf, "after the index type of an array");
+  t->elem = parseTypeExpr();
+  return t;
+}
+
+/// record-type = 'record' field-list 'end'
+/// field-list  = group (';' group)*
+/// group       = ident-list ':' type-denoter
+TypeExprPtr Parser::parseRecordType(bool packed) {
+  auto t = std::make_unique<TypeExpr>();
+  t->kind = TEK::Record;
+  t->packed = packed;
+  t->line = cur().line;
+  t->col = cur().col;
+  expect(Tok::KwRecord, "");
+
+  while (!check(Tok::KwEnd)) {
+    if (check(Tok::KwCase)) {
+      // A variant part needs a tag of an enumerated or subrange type, which
+      // arrives with `case` itself; see README's dependency order.
+      errorAtCur("variant parts of a record are not supported yet");
+      bail();
+    }
+    FieldGroup group;
+    group.names = parseNameList("a field name");
+    expect(Tok::Colon, "in a record field list");
+    group.type = parseTypeExpr();
+    t->fields.push_back(std::move(group));
+    if (!accept(Tok::Semi))
+      break;
+  }
+
+  expect(Tok::KwEnd, "at the end of a record type");
+  return t;
 }
 
 void Parser::parseConstPart(Block &prog) {
@@ -188,36 +283,34 @@ void Parser::parseConstPart(Block &prog) {
   } while (check(Tok::Ident));
 }
 
-void Parser::parseVarPart(Block &prog) {
-  expect(Tok::KwVar, "");
+void Parser::parseTypePart(Block &prog) {
+  expect(Tok::KwType, "");
   do {
-    std::vector<VarDecl> group;
-    do {
-      if (!check(Tok::Ident)) {
-        errorAtCur("expected a variable name");
-        bail();
-      }
-      VarDecl d;
-      d.name = cur().text;
-      d.line = cur().line;
-      d.col = cur().col;
-      ++pos_;
-      group.push_back(std::move(d));
-    } while (accept(Tok::Comma));
-
-    expect(Tok::Colon, "in a variable declaration");
     if (!check(Tok::Ident)) {
       errorAtCur("expected a type name");
       bail();
     }
-    std::string typeName = cur().text;
+    TypeDecl d;
+    d.name = cur().text;
+    d.line = cur().line;
+    d.col = cur().col;
     ++pos_;
-    expect(Tok::Semi, "after a variable declaration");
+    expect(Tok::Eq, "in a type definition");
+    d.type = parseTypeExpr();
+    expect(Tok::Semi, "after a type definition");
+    prog.types.push_back(std::move(d));
+  } while (check(Tok::Ident));
+}
 
-    for (auto &d : group) {
-      d.typeName = typeName;
-      prog.vars.push_back(std::move(d));
-    }
+void Parser::parseVarPart(Block &prog) {
+  expect(Tok::KwVar, "");
+  do {
+    VarDecl group;
+    group.names = parseNameList("a variable name");
+    expect(Tok::Colon, "in a variable declaration");
+    group.type = parseTypeExpr();
+    expect(Tok::Semi, "after a variable declaration");
+    prog.vars.push_back(std::move(group));
   } while (check(Tok::Ident));
 }
 
@@ -246,12 +339,12 @@ StmtPtr Parser::parseStatement() {
   case Tok::KwWhile:  return parseWhile();
   case Tok::KwRepeat: return parseRepeat();
   case Tok::KwFor:    return parseFor();
+  case Tok::KwWith:   return parseWith();
   case Tok::Ident:    return parseIdentStatement();
   case Tok::KwEnd:
   case Tok::Semi:
     return makeNode<EmptyStmt>(cur());
   case Tok::KwCase:
-  case Tok::KwWith:
   case Tok::KwGoto:
     errorAtCur(std::string(tokenName(cur().kind)) +
                " statements are not supported yet");
@@ -322,6 +415,36 @@ StmtPtr Parser::parseFor() {
   return s;
 }
 
+/// `with a, b do S` abbreviates `with a do with b do S` (ISO 7185 §6.8.3.10),
+/// so the list is nested here and every later stage sees one record at a time.
+StmtPtr Parser::parseWith() {
+  const Token &at = cur();
+  expect(Tok::KwWith, "");
+
+  std::vector<ExprPtr> records;
+  do {
+    if (!check(Tok::Ident)) {
+      errorAtCur("expected a record variable after 'with'");
+      bail();
+    }
+    auto ref = makeNode<VarRef>(cur());
+    ref->name = cur().text;
+    ++pos_;
+    records.push_back(parseSelectors(std::move(ref)));
+  } while (accept(Tok::Comma));
+
+  expect(Tok::KwDo, "in a with statement");
+  StmtPtr body = parseStatement();
+
+  for (size_t i = records.size(); i-- > 0;) {
+    auto w = makeNode<WithStmt>(at);
+    w->record = std::move(records[i]);
+    w->body = std::move(body);
+    body = std::move(w);
+  }
+  return body;
+}
+
 StmtPtr Parser::parseIdentStatement() {
   const Token &id = cur();
   if (id.text == "write")
@@ -329,11 +452,17 @@ StmtPtr Parser::parseIdentStatement() {
   if (id.text == "writeln")
     return parseWrite(true);
 
-  if (peek().kind == Tok::Assign) {
+  // A statement starting with a designator is an assignment; one starting with
+  // a bare name or a name and arguments is a procedure call. The selectors are
+  // what tell the two apart, because only a designator can carry them.
+  if (peek().kind == Tok::Assign || peek().kind == Tok::LBracket ||
+      peek().kind == Tok::Period) {
     auto s = makeNode<Assign>(id);
-    s->target = makeNode<VarRef>(id);
-    s->target->name = id.text;
-    pos_ += 2; // identifier and ':='
+    auto ref = makeNode<VarRef>(id);
+    ref->name = id.text;
+    ++pos_;
+    s->target = parseSelectors(std::move(ref));
+    expect(Tok::Assign, "in an assignment");
     s->value = parseExpr();
     return s;
   }
@@ -378,6 +507,38 @@ StmtPtr Parser::parseWrite(bool newline) {
 }
 
 // --------------------------------------------------------------- expressions
+
+/// designator = name selector*
+/// selector   = '[' expression (',' expression)* ']' | '.' field-name
+ExprPtr Parser::parseSelectors(ExprPtr base) {
+  for (;;) {
+    if (check(Tok::LBracket)) {
+      ++pos_;
+      do {
+        auto idx = makeNode<IndexExpr>(cur());
+        idx->base = std::move(base);
+        idx->index = parseExpr();
+        base = std::move(idx);
+      } while (accept(Tok::Comma)); // `a[i, j]` is `a[i][j]`
+      expect(Tok::RBracket, "after a subscript");
+      continue;
+    }
+    if (check(Tok::Period)) {
+      auto fld = makeNode<FieldExpr>(cur());
+      ++pos_;
+      if (!check(Tok::Ident)) {
+        errorAtCur("expected a field name after '.'");
+        bail();
+      }
+      fld->base = std::move(base);
+      fld->field = cur().text;
+      ++pos_;
+      base = std::move(fld);
+      continue;
+    }
+    return base;
+  }
+}
 
 ExprPtr Parser::parseExpr() {
   ExprPtr lhs = parseSimpleExpr();
@@ -517,7 +678,9 @@ ExprPtr Parser::parseFactor() {
     auto ref = makeNode<VarRef>(t);
     ref->name = t.text;
     ++pos_;
-    return ref;
+    // Only a variable takes selectors: a function result is a simple type in
+    // ISO 7185 §6.6.2, so `f(x)[i]` cannot arise.
+    return parseSelectors(std::move(ref));
   }
   default:
     errorAtCur(std::string("expected an expression, found ") +

@@ -126,7 +126,10 @@ void optimize(llvm::Module &mod, unsigned level) {
   mpm.run(mod, mam);
 }
 
-bool emitObject(llvm::Module &mod, const std::string &path) {
+/// The target machine is built before code generation, not after it: codegen
+/// needs the data layout to know how large a record or an array is, and the
+/// optimiser needs it to make anything of the copies that produces.
+std::unique_ptr<llvm::TargetMachine> createHostTargetMachine() {
   llvm::InitializeNativeTarget();
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
@@ -136,16 +139,17 @@ bool emitObject(llvm::Module &mod, const std::string &path) {
   const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple, err);
   if (!target) {
     std::fprintf(stderr, "pascalc: %s\n", err.c_str());
-    return false;
+    return nullptr;
   }
 
   llvm::TargetOptions options;
-  std::unique_ptr<llvm::TargetMachine> tm(target->createTargetMachine(
+  return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
       triple, "generic", "", options, llvm::Reloc::PIC_));
+}
 
-  mod.setTargetTriple(triple);
-  mod.setDataLayout(tm->createDataLayout());
-
+bool emitObject(llvm::Module &mod, llvm::TargetMachine &tmRef,
+                const std::string &path) {
+  llvm::TargetMachine *tm = &tmRef;
   std::error_code ec;
   llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
   if (ec) {
@@ -208,8 +212,13 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  std::unique_ptr<llvm::TargetMachine> tm = createHostTargetMachine();
+  if (!tm)
+    return 1;
+
   llvm::LLVMContext ctx;
-  ap::CodeGen cg(ctx, sema, opt.input);
+  ap::CodeGen cg(ctx, sema, opt.input, tm->createDataLayout(),
+                 tm->getTargetTriple());
   std::unique_ptr<llvm::Module> mod = cg.run(*program);
   if (!mod) {
     std::fprintf(stderr, "pascalc: internal error: generated invalid IR\n");
@@ -235,7 +244,7 @@ int main(int argc, char **argv) {
   std::string objPath =
       opt.compileOnly ? (opt.output.empty() ? base + ".o" : opt.output)
                       : base + ".o";
-  if (!emitObject(*mod, objPath))
+  if (!emitObject(*mod, *tm, objPath))
     return 1;
   if (opt.compileOnly)
     return 0;

@@ -2,3 +2,5 @@ build/
 *.o
 *.ll
 *.s
+__pycache__/
+*.pyc

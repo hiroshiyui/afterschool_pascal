@@ -46,6 +46,14 @@ void pas_write_str(const char *s, int len, int width) {
   else printf("%*.*s", width, len, s);
 }
 
+/* Compare two strings of equal length, character by character, as ISO 7185
+ * §6.7.2.5 defines the relational operators on the string types. memcmp is
+ * exactly this ordering because char is unsigned here and every Pascal char
+ * has an ordinal in 0..255. */
+int pas_str_compare(const char *a, const char *b, int len) {
+  return memcmp(a, b, (size_t)len);
+}
+
 void pas_writeln(void) { putchar('\n'); }
 
 void pas_runtime_error(const char *msg) {

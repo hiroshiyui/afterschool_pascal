@@ -15,9 +15,9 @@ struct Symbol;
 /// variant record is exactly what that version will use.
 enum class NK {
   // expressions
-  IntLit, RealLit, CharLit, StrLit, VarRef, Binary, Unary, Call,
+  IntLit, RealLit, CharLit, StrLit, VarRef, Index, Field, Binary, Unary, Call,
   // statements
-  Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall,
+  Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall, With,
 };
 
 struct Node {
@@ -85,6 +85,29 @@ struct VarRef : Expr {
   VarRef() : Expr(NodeKind) {}
   std::string name;
   Symbol *sym = nullptr; // filled in by Sema
+  /// When the name resolved to a field of an enclosing `with`, `sym` is the
+  /// hidden variable holding that record's address and this is the field's
+  /// position in it. -1 when the name is an ordinary variable.
+  int withField = -1;
+};
+
+/// `base[index]`. One subscript per node, so `a[i, j]` is two of them — which
+/// is exactly what ISO 7185 §6.5.3.2 says that abbreviation means.
+struct IndexExpr : Expr {
+  static constexpr NK NodeKind = NK::Index;
+  IndexExpr() : Expr(NodeKind) {}
+  ExprPtr base;
+  ExprPtr index;
+};
+
+/// `base.field`. Sema resolves the name to a position, so codegen indexes by
+/// number and never looks at the spelling.
+struct FieldExpr : Expr {
+  static constexpr NK NodeKind = NK::Field;
+  FieldExpr() : Expr(NodeKind) {}
+  ExprPtr base;
+  std::string field;
+  int index = 0; // filled in by Sema
 };
 
 struct Binary : Expr {
@@ -125,7 +148,7 @@ struct EmptyStmt : Stmt {
 struct Assign : Stmt {
   static constexpr NK NodeKind = NK::Assign;
   Assign() : Stmt(NodeKind) {}
-  std::unique_ptr<VarRef> target;
+  ExprPtr target; // a designator: a name, possibly with subscripts and fields
   ExprPtr value;
 };
 
@@ -180,6 +203,18 @@ struct ForStmt : Stmt {
   StmtPtr body;
 };
 
+/// `with r do S` — inside S the fields of r are visible as bare names. The
+/// record designator is evaluated once (ISO 7185 §6.8.3.10), so `binding` is a
+/// hidden frame slot holding its address for the duration of the body.
+/// `with a, b do S` is parsed as `with a do with b do S`.
+struct WithStmt : Stmt {
+  static constexpr NK NodeKind = NK::With;
+  WithStmt() : Stmt(NodeKind) {}
+  ExprPtr record;
+  StmtPtr body;
+  Symbol *binding = nullptr; // filled in by Sema
+};
+
 struct ProcCallStmt : Stmt {
   static constexpr NK NodeKind = NK::ProcCall;
   ProcCallStmt() : Stmt(NodeKind) {}
@@ -196,17 +231,65 @@ struct ConstDecl {
   int line = 0, col = 0;
 };
 
-struct VarDecl {
+/// One name in a declaration, carrying where it was written so a duplicate or
+/// a bad type can be reported against the name rather than the group.
+struct DeclName {
   std::string name;
-  std::string typeName;
   int line = 0, col = 0;
 };
 
-struct ParamDecl {
-  std::string name;
-  std::string typeName;
-  bool byRef = false; // a `var` parameter, passed by reference
+struct TypeExpr;
+using TypeExprPtr = std::unique_ptr<TypeExpr>;
+
+/// One dimension of an array type — `lo..hi`, both constant expressions.
+struct IndexRange {
+  ExprPtr lo, hi;
   int line = 0, col = 0;
+};
+
+/// A group of record fields sharing one type-denoter.
+struct FieldGroup {
+  std::vector<DeclName> names;
+  TypeExprPtr type;
+};
+
+enum class TEK { Named, Array, Record };
+
+/// A type-denoter: what follows ':' in a declaration or '=' in the type part.
+/// Deliberately not an Expr — a type is not a value, and keeping them apart is
+/// what stops `a[i]` and `array[i]` from sharing a code path.
+struct TypeExpr {
+  TEK kind = TEK::Named;
+  int line = 0, col = 0;
+
+  std::string name;               // Named
+  bool packed = false;            // Array, Record
+  std::vector<IndexRange> dims;   // Array — several is the `[a, b]` shorthand
+  TypeExprPtr elem;               // Array: the component type
+  std::vector<FieldGroup> fields; // Record
+
+  Type *resolved = nullptr; // filled in by Sema
+};
+
+struct TypeDecl {
+  std::string name;
+  TypeExprPtr type;
+  int line = 0, col = 0;
+};
+
+/// A group of variables sharing one type-denoter. They share it in the AST as
+/// well as in the source, which is what makes them the *same* type under
+/// ISO 7185 §6.4.5 rather than two structurally identical ones.
+struct VarDecl {
+  std::vector<DeclName> names;
+  TypeExprPtr type;
+};
+
+/// A group of parameters sharing one type-denoter and one passing mode.
+struct ParamGroup {
+  std::vector<DeclName> names;
+  TypeExprPtr type;
+  bool byRef = false; // a `var` parameter, passed by reference
 };
 
 struct Block;
@@ -217,8 +300,8 @@ struct Block;
 struct ProcDecl {
   std::string name;
   bool isFunction = false;
-  std::vector<ParamDecl> params;
-  std::string returnTypeName; // empty in the completion of a forward function
+  std::vector<ParamGroup> params;
+  TypeExprPtr returnType; // null in the completion of a forward function
   std::unique_ptr<Block> body; // null for a forward declaration
   bool isForward = false;
   int line = 0, col = 0;
@@ -229,6 +312,7 @@ struct ProcDecl {
 /// of every procedure alike, which is what makes nesting fall out for free.
 struct Block {
   std::vector<ConstDecl> consts;
+  std::vector<TypeDecl> types;
   std::vector<VarDecl> vars;
   std::vector<std::unique_ptr<ProcDecl>> procs;
   std::unique_ptr<Compound> body;

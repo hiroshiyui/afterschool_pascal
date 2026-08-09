@@ -88,6 +88,34 @@ def truncation_is_an_integer_value(x, maxint):
                   z3.fpGEQ(truncated, z3.fpNeg(limit)))
 
 
+def index_is_in_bounds(i, lo, hi):
+    """ISO 7185 §6.5.3.2 — a subscript must be a value of the index type, which
+    for `array [lo..hi]` means lo <= i <= hi. Stated over the wide domain so
+    the claim is about the mathematical value rather than the machine one."""
+    return z3.And(wide(i) >= wide(lo), wide(i) <= wide(hi))
+
+
+def offset_selects_the_right_element(i, lo, hi, offset):
+    """The component `a[i]` denotes is the one `offset` elements from the start
+    of the array, and that element exists.
+
+    Stated as facts about the *mathematical* offset — that it equals i - lo and
+    lies in 0..hi-lo — rather than by recomputing what the compiler computes.
+    The first says the address is the right one; the rest say it is inside the
+    array. Everything is in the wide domain, so the specification cannot wrap
+    where the implementation would.
+    """
+    I, LO, HI, OFF = wide(i), wide(lo), wide(hi), wide(offset)
+    return z3.And(OFF == I - LO, OFF >= 0, OFF <= HI - LO)
+
+
+def index_span_is_representable(lo, hi, maxint):
+    """The condition Sema enforces on an array's index range: the distance
+    between the bounds must itself be a value of the integer type, since the
+    lowering subtracts them. Without it, `i - lo` can wrap."""
+    return wide(hi) - wide(lo) < z3.BitVecVal(maxint, wide(lo).size())
+
+
 def in_char_range(i):
     """chr(i) is defined only where i is the ordinal of some char (0..255)."""
     I = wide(i)
