@@ -169,10 +169,13 @@ def build_crosscheck_program():
     # bound of 1 a wrong `i - lo` is off by a constant and easy to miss.
     lines = ["program Crosscheck(output);",
              "type colour = (red, green, blue);",
+             "     link = ^cell;",
+             "     cell = record value: integer; next: link end;",
              "var i, j: integer;",
              "    a: array [-3..3] of integer;",
              "    c: colour;",
              "    d: 1..9;",
+             "    head, p: link;",
              "begin"]
     expected = []
 
@@ -227,6 +230,22 @@ def build_crosscheck_program():
     lines.append("    end;")
     lines.append("  writeln;")
     expected.append("abbc")
+
+    # A heap-allocated list, walked and given back. There is no SMT rule for
+    # any of this — see ADR-0019 on why — so the cross-check is the whole of
+    # what the verifier says about pointers.
+    lines.append("  head := nil; j := 0;")
+    lines.append("  for i := 1 to 5 do")
+    lines.append("    begin new(p); p^.value := i * i; p^.next := head;")
+    lines.append("          head := p end;")
+    lines.append("  p := head;")
+    lines.append("  while p <> nil do begin j := j + p^.value; p := p^.next end;")
+    lines.append("  writeln(j);")
+    expected.append(str(sum(i * i for i in range(1, 6))))
+    lines.append("  while head <> nil do")
+    lines.append("    begin p := head; head := head^.next; dispose(p) end;")
+    lines.append("  writeln(head = nil);")
+    expected.append("TRUE")
 
     lines.append("end.")
     return "\n".join(lines) + "\n", expected

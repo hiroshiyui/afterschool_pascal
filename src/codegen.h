@@ -108,6 +108,7 @@ private:
   void emitFor(ForStmt *s);
   void emitWith(WithStmt *s);
   void emitCase(CaseStmt *s);
+  void emitStdProc(ProcCallStmt *s);
   /// Trap unless the value is in `target`'s subrange. A no-op for every other
   /// type, so it can be applied wherever a value is stored.
   llvm::Value *checkedForSubrange(llvm::Value *v, Type *target);

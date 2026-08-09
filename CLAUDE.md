@@ -120,6 +120,23 @@ the distinction asks `isSubrange()`.
   `[n x i8]`) or a `real` inside a variant would be misaligned. `Field::variant`
   says which arm a field belongs to; `fieldAddress` handles both.
 
+**Pointers** (ADR-0019). A pointer's domain is a type *identifier* and may name
+a type defined later in the same type part — the language's only forward
+reference, and what makes a recursive type possible. `resolvePointer` records a
+`PendingPointer` when the name is not yet known and
+`resolvePendingPointers()` completes them at the end of the type part.
+
+- `ty::Nil()` is a pointer with a null domain: assignable to any pointer,
+  nothing assignable to it. Two named pointer types stay as distinct as any
+  other named types, so ADR-0017 needed no exception.
+- Every `NK::Deref` traps on nil, and `dispose` stores nil back into the
+  variable. Use-after-dispose through another pointer is **not** detected —
+  don't let a comment or a doc imply otherwise.
+- Opaque pointers make every pointer type `ptr()`, so recursion needs nothing
+  from codegen.
+- There is deliberately **no SMT rule** for pointers; a nil-check rule would be
+  a tautology. They are covered by the cross-check and by an ASan run.
+
 ## Decisions
 
 `doc/adr/` holds the architecture decision records. Read them before undoing
@@ -171,7 +188,8 @@ one-character string literal is a `char`.
 
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
 array's own bounds optimises the check away. Storing outside a subrange traps,
-and so does a `case` whose selector matches no label (ADR-0018).
+and so does a `case` whose selector matches no label (ADR-0018), and a
+dereference of `nil` (ADR-0019).
 
 **ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
 through `checkedArith` and stop the program on overflow rather than wrapping —
@@ -212,6 +230,10 @@ Three things to know before touching it:
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
 The catalogue currently has **no known gaps** — 29 rules, 25 of them for every
 32-bit input — so any gap that appears is something this change introduced.
+
+Don't add a rule that restates the lowering. A check whose ISO condition *is*
+the emitted test (the nil check) proves nothing and dilutes what "no known gaps"
+means. Cross-check or sanitiser-check those instead, and say which in the ADR.
 
 Keep bounds **symbolic** where the lowering treats them symbolically. The array,
 subrange and `succ` rules quantify over the bounds as well as the value, so they

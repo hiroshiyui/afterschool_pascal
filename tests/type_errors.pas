@@ -7,6 +7,10 @@ program TypeErrors(output);
 
 type
   vector = array [1..3] of integer;
+  link = ^cell;
+  cell = record value: integer end;
+  other = ^cell;                { a distinct type denoting the same domain }
+  dangling = ^nosuchtype;       { the domain never arrives }
 
 var
   v: vector;
@@ -14,6 +18,8 @@ var
   r: record a, b: integer end;
   s: record a, b: integer end;
   n: integer;
+  p: link;
+  q: other;
   { A subscript is lowered to `i - lo`, so the span has to be a value of the
     integer type; verify/rules.py proves the check is what makes that sound. }
   huge: array [-2000000000..2000000000] of integer;
@@ -36,5 +42,13 @@ begin
   if r = s then n := 1;         { records have no relational operators }
   writeln(v);                   { only a packed array of char can be written }
   TakesVector(w);               { the argument is not that type }
-  with n do n := 1              { with needs a record }
+  with n do n := 1;             { with needs a record }
+
+  p := q;                       { two distinct pointer types }
+  n := n^;                      { an integer cannot be dereferenced }
+  p := p + p;                   { pointers have no arithmetic }
+  if p < q then n := 1;         { and no ordering }
+  writeln(p);                   { and no external spelling }
+  new(n);                       { new needs a pointer }
+  new(p, 1)                     { the variant-selecting form }
 end.

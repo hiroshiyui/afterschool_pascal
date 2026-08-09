@@ -11,7 +11,7 @@ namespace ap {
 inline constexpr int kMaxInt = 2147483647;
 
 enum class TypeKind {
-  Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record
+  Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer
 };
 
 struct Type;
@@ -46,8 +46,11 @@ struct Type {
 
   explicit Type(TypeKind k) : kind(k) {}
 
-  // --- array ---------------------------------------------------------------
-  Type *elem = nullptr;      // component type
+  // --- array, pointer ------------------------------------------------------
+  /// Array: the component type. Pointer: the domain — what it points at, null
+  /// only for `nil` itself, which belongs to every pointer type. Sharing the
+  /// field is how a variant record would do it, which is where this is going.
+  Type *elem = nullptr;
   Type *indexType = nullptr; // the ordinal type of a subscript
   bool packed = false;
 
@@ -82,6 +85,9 @@ struct Type {
   bool isSubrange() const { return kind == TypeKind::Subrange; }
   bool isArray() const { return kind == TypeKind::Array; }
   bool isRecord() const { return kind == TypeKind::Record; }
+  bool isPointer() const { return kind == TypeKind::Pointer; }
+  /// `nil`, which is a value of every pointer type and of no other.
+  bool isNil() const { return isPointer() && elem == nullptr; }
 
   /// Arrays and records live in memory and are copied wholesale; simple types
   /// live in registers. The distinction drives assignment, parameter passing,
@@ -173,6 +179,11 @@ struct Type {
     }
     case TypeKind::Subrange:
       return ordinalName(host, lo) + ".." + ordinalName(host, hi);
+    // ISO 7185 §6.4.4 makes a pointer's domain a type *identifier*, so the
+    // recursion here always stops at a name — which is what lets a type point
+    // at itself without this looping forever.
+    case TypeKind::Pointer:
+      return elem ? "^" + elem->name() : "nil";
     case TypeKind::Record: {
       // An anonymous record is named by its fields, which is the only thing
       // that distinguishes it from any other anonymous record.
@@ -227,6 +238,11 @@ inline Type *Real() { return get(TypeKind::Real); }
 inline Type *Bool() { return get(TypeKind::Boolean); }
 inline Type *Char() { return get(TypeKind::Char); }
 inline Type *Void() { return get(TypeKind::Void); }
+/// The type of `nil`: a pointer with no domain, assignable to any pointer.
+inline Type *Nil() {
+  static Type n{TypeKind::Pointer};
+  return &n;
+}
 } // namespace ty
 
 } // namespace ap

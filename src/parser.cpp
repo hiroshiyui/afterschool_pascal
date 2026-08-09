@@ -204,9 +204,28 @@ TypeExprPtr Parser::parseTypeExpr() {
     errorAtCur("'packed' applies only to an array, record, set or file type");
     bail();
   }
-  if (check(Tok::KwSet) || check(Tok::KwFile) || check(Tok::Caret)) {
+  if (check(Tok::KwSet) || check(Tok::KwFile)) {
     errorAtCur(std::string(tokenName(cur().kind)) + " types are not supported yet");
     bail();
+  }
+
+  // pointer-type = '^' type-identifier. ISO 7185 §6.4.4 requires a type
+  // *identifier* rather than a type-denoter, and that restriction is what
+  // makes a recursive type possible: the name may be one defined later in the
+  // same type part, so `node = record next: ^node end` closes the loop.
+  if (check(Tok::Caret)) {
+    auto t = std::make_unique<TypeExpr>();
+    t->kind = TEK::Pointer;
+    t->line = cur().line;
+    t->col = cur().col;
+    ++pos_;
+    if (!check(Tok::Ident)) {
+      errorAtCur("the domain of a pointer type must be a type name");
+      bail();
+    }
+    t->name = cur().text;
+    ++pos_;
+    return t;
   }
 
   if (check(Tok::LParen))
@@ -582,7 +601,7 @@ StmtPtr Parser::parseIdentStatement() {
   // a bare name or a name and arguments is a procedure call. The selectors are
   // what tell the two apart, because only a designator can carry them.
   if (peek().kind == Tok::Assign || peek().kind == Tok::LBracket ||
-      peek().kind == Tok::Period) {
+      peek().kind == Tok::Period || peek().kind == Tok::Caret) {
     auto s = makeNode<Assign>(id);
     auto ref = makeNode<VarRef>(id);
     ref->name = id.text;
@@ -647,6 +666,13 @@ ExprPtr Parser::parseSelectors(ExprPtr base) {
         base = std::move(idx);
       } while (accept(Tok::Comma)); // `a[i, j]` is `a[i][j]`
       expect(Tok::RBracket, "after a subscript");
+      continue;
+    }
+    if (check(Tok::Caret)) {
+      auto deref = makeNode<DerefExpr>(cur());
+      ++pos_;
+      deref->base = std::move(base);
+      base = std::move(deref);
       continue;
     }
     if (check(Tok::Period)) {
@@ -761,6 +787,11 @@ ExprPtr Parser::parseFactor() {
     }
     auto n = makeNode<StrLit>(t);
     n->value = t.text;
+    ++pos_;
+    return n;
+  }
+  case Tok::KwNil: {
+    auto n = makeNode<NilLit>(t);
     ++pos_;
     return n;
   }

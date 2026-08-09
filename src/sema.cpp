@@ -176,6 +176,39 @@ Type *Sema::resolveEnum(TypeExpr &denoter) {
   return t;
 }
 
+/// A pointer's domain is a type identifier, and it may be one defined later in
+/// the same type part — the language's only forward reference, and the reason
+/// a record can contain a pointer to itself.
+Type *Sema::resolvePointer(TypeExpr &denoter) {
+  Type *t = newType(TypeKind::Pointer);
+  if (Type *builtin = builtinType(denoter.name)) {
+    t->elem = builtin;
+    return t;
+  }
+  Symbol *sym = lookup(denoter.name);
+  if (sym && sym->kind == SymKind::Type) {
+    t->elem = sym->type;
+    return t;
+  }
+  // Not yet — it may arrive before the type part ends.
+  pendingPointers_.push_back({t, denoter.name, denoter.line, denoter.col});
+  return t;
+}
+
+void Sema::resolvePendingPointers() {
+  for (PendingPointer &p : pendingPointers_) {
+    Symbol *sym = lookup(p.domain);
+    if (sym && sym->kind == SymKind::Type) {
+      p.pointer->elem = sym->type;
+      continue;
+    }
+    diags_.error(p.line, p.col,
+                 "unknown type '" + p.domain + "' as the domain of a pointer");
+    p.pointer->elem = ty::Int(); // keep the tree checkable
+  }
+  pendingPointers_.clear();
+}
+
 Type *Sema::resolveSubrange(TypeExpr &denoter) {
   Type *loType = nullptr;
   Type *hiType = nullptr;
@@ -365,6 +398,9 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   case TEK::Record:
     t = resolveRecord(denoter);
     break;
+  case TEK::Pointer:
+    t = resolvePointer(denoter);
+    break;
   }
 
   denoter.resolved = t;
@@ -400,6 +436,12 @@ bool Sema::assignable(Type *to, Type *from) const {
   if (to->isStructured() || from->isStructured())
     return to->isCharArray() && from->isCharArray() &&
            to->length() == from->length();
+
+  // `nil` is a value of every pointer type; two named pointer types are
+  // otherwise as distinct as any other named types (the `to == from` above).
+  if (to->isPointer() || from->isPointer())
+    return (to->isPointer() && from->isNil()) ||
+           (from->isPointer() && to->isNil());
 
   // A subrange is compatible with its host type and with any other subrange of
   // it (ISO 7185 §6.4.5), so compatibility is decided on the base. Whether the
@@ -437,6 +479,10 @@ bool Sema::isDesignator(Expr *e) const {
     return isDesignator(i->base.get());
   if (auto *f = as<FieldExpr>(e))
     return isDesignator(f->base.get());
+  // What a pointer points at is a variable however the pointer was obtained,
+  // so a dereference is a designator even when its base is not.
+  if (is<DerefExpr>(e))
+    return true;
   return false;
 }
 
@@ -501,6 +547,9 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     if (resolved->alias.empty())
       resolved->alias = t.name;
   }
+  // Every name in the type part is now visible, so the pointers that named one
+  // before it existed can be completed.
+  resolvePendingPointers();
 
   for (auto &group : block.vars) {
     // One denoter for the whole group, so `a, b: array [1..3] of integer`
@@ -755,6 +804,12 @@ void Sema::checkStmt(Stmt *s) {
 
   if (auto *p = as<ProcCallStmt>(s)) {
     Symbol *sym = lookup(p->name);
+    // A user-declared procedure of the same name wins, exactly as it does for
+    // the required functions in checkCall.
+    if (!sym && (p->name == "new" || p->name == "dispose")) {
+      checkStdProc(p);
+      return;
+    }
     if (!sym) {
       diags_.error(p->line, p->col, "unknown procedure '" + p->name + "'");
       return;
@@ -863,6 +918,26 @@ void Sema::checkExpr(Expr *e) {
       diags_.error(idx->index->line, idx->index->col,
                    "this array is indexed by " + base->indexType->name() +
                        ", but the subscript is " + idx->index->type->name());
+    e->type = base->elem;
+    return;
+  }
+
+  if (as<NilLit>(e)) {
+    e->type = ty::Nil();
+    return;
+  }
+
+  if (auto *d = as<DerefExpr>(e)) {
+    checkExpr(d->base.get());
+    Type *base = d->base->type;
+    if (!base || !base->isPointer() || base->isNil()) {
+      if (base)
+        diags_.error(d->line, d->col,
+                     "only a pointer can be dereferenced, found " +
+                         base->name());
+      e->type = ty::Int();
+      return;
+    }
     e->type = base->elem;
     return;
   }
@@ -1014,6 +1089,16 @@ void Sema::checkBinary(Binary *b) {
         diags_.error(b->line, b->col,
                      "strings of different lengths cannot be compared: " +
                          l->name() + " and " + r->name());
+    } else if (l->isPointer() || r->isPointer()) {
+      // ISO 7185 §6.7.2.5: pointers compare only for equality. There is no
+      // ordering on them — a heap address is not a value the program may
+      // reason about beyond identity.
+      if (b->op != BinOp::Eq && b->op != BinOp::Ne)
+        diags_.error(b->line, b->col,
+                     std::string("pointers can only be compared with = and "
+                                 "<>, not with '") + opName(b->op) + "'");
+      else if (!assignable(l, r) && !assignable(r, l))
+        bad("compatible");
     } else if (l->isStructured() || r->isStructured()) {
       bad("comparable");
     } else if (!(l->isNumeric() && r->isNumeric()) &&
@@ -1026,6 +1111,37 @@ void Sema::checkBinary(Binary *b) {
     return;
   }
   (void)isRelational;
+}
+
+/// `new(p)` and `dispose(p)` bind a pointer variable to fresh storage and give
+/// it back. Both take the pointer itself — not what it points at — so the
+/// argument has to be a variable, the same requirement a `var` parameter makes.
+void Sema::checkStdProc(ProcCallStmt *p) {
+  p->standard = p->name == "new" ? StdProc::New : StdProc::Dispose;
+
+  for (auto &a : p->args)
+    checkExpr(a.get());
+
+  if (p->args.size() != 1) {
+    // ISO 7185 §6.6.5.3 also allows `new(p, c1, ...)` to allocate only the
+    // storage some variants need. Rejecting it is honest: this compiler always
+    // allocates the whole record, which is safe but is not that feature.
+    diags_.error(p->line, p->col,
+                 "'" + p->name + "' takes exactly one argument in this "
+                 "compiler; the variant-selecting form is not supported");
+    return;
+  }
+
+  Expr *a = p->args[0].get();
+  if (!isDesignator(a)) {
+    diags_.error(a->line, a->col,
+                 "'" + p->name + "' needs a pointer variable");
+    return;
+  }
+  if (a->type && (!a->type->isPointer() || a->type->isNil()))
+    diags_.error(a->line, a->col,
+                 "'" + p->name + "' needs a pointer variable, found " +
+                     a->type->name());
 }
 
 /// ISO 7185 §6.8.3.5: the selector is an ordinal expression, every label is a

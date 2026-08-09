@@ -31,7 +31,7 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
 somewhere else.
 
-## What the compiler accepts today (milestone 4)
+## What the compiler accepts today (milestone 5)
 
 ```
 program-header, const part, type part, var part, compound statement
@@ -41,6 +41,7 @@ types      integer  real  boolean  char
            array [ordinal-type] of T, multi-dimensional, any ordinal index
            record, nested to any depth, packed, with variant parts
            packed array [1..n] of char — the string types
+           ^T — pointers, including to a type defined later
 routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations
 statements := , if/then/else, while, repeat/until, for/to/downto,
@@ -49,7 +50,9 @@ operators  + - * / div mod, and or not (short-circuiting),
            = <> < <= > >=  (including on strings)
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
            trunc round
-literals   integers, reals, 'strings', '' escapes, { } and (* *) comments
+procedures new, dispose
+literals   integers, reals, 'strings', '' escapes, nil,
+           { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
 ```
 
@@ -71,16 +74,32 @@ ISO 7185 §6.4.5 requires, so two separately written `array [1..3] of integer`
 are different types. See
 [ADR-0017](doc/adr/0017-structured-types-use-name-equivalence.md).
 
+A pointer's domain may name a type defined *later* in the same type part —
+the only forward reference in the language, and what lets a record contain a
+pointer to itself:
+
+```pascal
+type
+  link = ^cell;                          { cell arrives on the next line }
+  cell = record value: integer; next: link end;
+```
+
+Every dereference is checked against `nil`, and `dispose(p)` sets `p` to nil so
+the commonest use-after-dispose becomes that same check. Use-after-dispose
+through a *second* pointer to the same storage is not detected, and nothing here
+claims it is — see
+[ADR-0019](doc/adr/0019-pointers-and-the-only-forward-reference.md).
+
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form (`5.0E-01` style);
 with a width and a fraction length it comes out fixed-point.
 
 **Errors are detected, not ignored.** ISO 7185 calls integer overflow, an array
 subscript outside its bounds, a value stored outside a subrange, a `case` whose
-selector matches no label, `chr` of a non-ordinal, `succ` past the end of a
-type, and `trunc` of a real too large *errors*; this compiler stops the program
-with a message rather than letting it wrap, read past the array, or produce an
-arbitrary value:
+selector matches no label, a dereference of `nil`, `chr` of a non-ordinal,
+`succ` past the end of a type, and `trunc` of a real too large *errors*; this
+compiler stops the program with a message rather than letting it wrap, read
+past the array, or produce an arbitrary value:
 
 ```
 $ pascalc overflow.pas && ./overflow
@@ -93,8 +112,8 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: sets, pointers, files, `goto`, procedural parameters, and a
-variant part nested inside another variant.
+Not accepted yet: sets, files, `goto`, procedural parameters, and a variant
+part nested inside another variant.
 
 ## How it fits together
 
@@ -154,6 +173,13 @@ last of those failed the first time it was run, on an array whose bounds span
 more than `maxint` values, and the compiler now rejects such an array at compile
 time. Proving why a check is unnecessary is how you find out that it isn't.
 
+Not everything gets a rule. Pointer safety is not an arithmetic-lowering
+question, and a rule saying "the nil check fires exactly when the pointer is
+nil" would be the same sentence written twice — it would pass at once and prove
+nothing while making the count look better. Pointers are covered by the
+cross-check and by a run under AddressSanitizer instead, and ADR-0019 says so
+plainly rather than inflating the catalogue.
+
 The proofs are paired with a cross-check that compiles and runs real Pascal at
 the adversarial points, at both `-O0` and `-O2`, because a proof about a model of
 the compiler is only worth what keeps it tied to the compiler. See
@@ -191,7 +217,9 @@ written in. In dependency order:
 3. ~~**Enumerations, subranges, `case`**~~ — done, together with the variant
    records they unlock (ADR-0018). An AST node is now expressible: the tag is
    an enumeration and the node is a variant record.
-4. **Pointers and `new`/`dispose`** — the AST is a heap-allocated tree.
+4. ~~**Pointers and `new`/`dispose`**~~ — done, with the forward-referenced
+   pointer domain that makes a recursive type possible (ADR-0019). The AST can
+   now be a heap-allocated tree rather than an array of nodes.
 5. **Text files** — `reset`, `rewrite`, `read`, `readln`, `eof`, `eoln`, so the
    compiler can read source and write `.ll`.
 6. **Character strings.** ISO 7185 offers only `packed array [1..n] of char`,

@@ -1,0 +1,7 @@
+empty: 0 head = nil: TRUE
+length: 3
+list:  3  2  1
+shared: 99 same cell: TRUE
+after dispose: 0
+tree = 20
+released

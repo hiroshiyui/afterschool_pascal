@@ -22,6 +22,9 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   // the type it is a subrange of, and differs only in what it accepts.
   case TypeKind::Enum:     return i32();
   case TypeKind::Subrange: return llvmType(t->host);
+  // Opaque pointers make every pointer type the same LLVM type, so a
+  // recursive Pascal type needs no forward declaration here.
+  case TypeKind::Pointer:  return ptr();
   case TypeKind::Array:
   case TypeKind::Record:
     break;
@@ -418,6 +421,18 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
                         {ConstantInt::get(i32(), 0), offset}, "elem");
   }
 
+  case NK::Deref: {
+    auto *d = static_cast<DerefExpr *>(e);
+    // The pointer's *value* is the address of the variable it denotes.
+    llvm::Value *target = emitExpr(d->base.get());
+    // ISO 7185 §6.5.4 makes it an error to dereference nil. Nothing can
+    // detect a pointer to storage already disposed of, but this much is
+    // cheap and catches the common mistake.
+    emitTrapIf(b_.CreateIsNull(target, "isnil"),
+               "dereference of nil");
+    return target;
+  }
+
   case NK::StrLit:
     // A literal is a packed array of char, so it needs an address like any
     // other value of that type.
@@ -512,7 +527,10 @@ void CodeGen::emitStmt(Stmt *s) {
   case NK::Case:    emitCase(static_cast<CaseStmt *>(s)); return;
   case NK::ProcCall: {
     auto *call = static_cast<ProcCallStmt *>(s);
-    emitUserCall(call->sym, call->args);
+    if (call->standard != StdProc::None)
+      emitStdProc(call);
+    else
+      emitUserCall(call->sym, call->args);
     return;
   }
   default:
@@ -531,6 +549,30 @@ void CodeGen::emitAssign(Assign *s) {
   llvm::Value *v = emitExpr(s->value.get());
   v = convertFor(v, s->value->type, s->target->type);
   b_.CreateStore(checkedForSubrange(v, s->target->type), dst);
+}
+
+/// `new(p)` gives p the address of fresh storage for one variable of its
+/// domain; `dispose(p)` gives that storage back. The size is a compile-time
+/// constant because the domain type is.
+void CodeGen::emitStdProc(ProcCallStmt *s) {
+  Expr *arg = s->args[0].get();
+  llvm::Value *slot = emitAddress(arg);
+
+  if (s->standard == StdProc::New) {
+    llvm::Value *size = ConstantInt::get(i64(), sizeOf(arg->type->elem));
+    llvm::Value *block =
+        b_.CreateCall(rt("pas_new", ptr(), {i64()}), {size}, "new");
+    b_.CreateStore(block, slot);
+    return;
+  }
+
+  llvm::Value *block = b_.CreateLoad(ptr(), slot, "old");
+  b_.CreateCall(rt("pas_dispose", llvm::Type::getVoidTy(ctx_), {ptr()}),
+                {block});
+  // ISO 7185 §6.6.5.3 leaves the pointer undefined afterwards. Setting it to
+  // nil makes the next dereference trap instead of reading freed storage —
+  // a stricter choice than the standard requires, and a cheap one.
+  b_.CreateStore(ConstantPointerNull::get(cast<PointerType>(ptr())), slot);
 }
 
 /// ISO 7185 §6.8.3.5 has no `else` arm, so the default is an error rather than
@@ -752,6 +794,10 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     return ConstantInt::get(i8(), static_cast<CharLit *>(e)->value);
   case NK::StrLit:
     return emitAddress(e);
+  case NK::NilLit:
+    return ConstantPointerNull::get(cast<PointerType>(ptr()));
+  case NK::Deref:
+    return emitLoad(e);
   case NK::VarRef: {
     auto *v = static_cast<VarRef *>(e);
     if (!v->withField && v->sym->kind == SymKind::Const)
@@ -872,7 +918,12 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
       default:        return b_.CreateFCmpOGE(l, r, "cmp");
       }
     }
-    // char and boolean compare as unsigned ordinals, integer as signed
+    // Pointers compare only for equality, which needs no predicate choice.
+    if (lt->isPointer() || rt_->isPointer())
+      return e->op == BinOp::Eq ? b_.CreateICmpEQ(l, r, "cmp")
+                                : b_.CreateICmpNE(l, r, "cmp");
+    // char, boolean and enumerations compare as unsigned ordinals; integer,
+    // the only one with negative values, as signed.
     bool sign = lt->isInteger();
     switch (e->op) {
     case BinOp::Eq: return b_.CreateICmpEQ(l, r, "cmp");

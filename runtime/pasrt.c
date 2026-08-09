@@ -54,6 +54,22 @@ int pas_str_compare(const char *a, const char *b, int len) {
   return memcmp(a, b, (size_t)len);
 }
 
+/* `new` and `dispose`. The storage is zeroed: ISO 7185 leaves a fresh
+ * variable undefined, so a program may not rely on this, but a deterministic
+ * value makes a program that does rely on it fail the same way every run
+ * instead of differently on each. */
+void *pas_new(long long size) {
+  void *p = calloc(1, size > 0 ? (size_t)size : 1);
+  if (!p) {
+    fflush(stdout);
+    fprintf(stderr, "runtime error: out of memory in new\n");
+    exit(1);
+  }
+  return p;
+}
+
+void pas_dispose(void *p) { free(p); }
+
 void pas_writeln(void) { putchar('\n'); }
 
 void pas_runtime_error(const char *msg) {

@@ -96,6 +96,10 @@ private:
   Type *resolveRecord(TypeExpr &denoter);
   Type *resolveEnum(TypeExpr &denoter);
   Type *resolveSubrange(TypeExpr &denoter);
+  Type *resolvePointer(TypeExpr &denoter);
+  /// Fill in the domains of pointers that named a type not yet defined, and
+  /// report any that never were. Run at the end of each type part.
+  void resolvePendingPointers();
   /// Resolve the variant part of a record that has one.
   void resolveVariants(TypeExpr &denoter, Type *record);
   /// Add a field to `into`, reporting a name already used anywhere in `record`.
@@ -115,6 +119,9 @@ private:
   void checkCall(Call *c);
   void checkWith(WithStmt *w);
   void checkCase(CaseStmt *c);
+  /// `new` and `dispose`, which are procedures rather than functions and so
+  /// never reach checkCall.
+  void checkStdProc(ProcCallStmt *p);
   void checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                       int col);
   bool evalConst(Expr *e, Symbol &out);
@@ -131,9 +138,19 @@ private:
   /// The field of an enclosing `with` this name refers to, if any.
   Symbol *lookupWithField(const std::string &name, const Field *&field) const;
 
+  /// A pointer type whose domain named a type not yet defined. ISO 7185
+  /// §6.4.4 allows exactly this, and it is the only forward reference in the
+  /// language — without it no type could contain a pointer to itself.
+  struct PendingPointer {
+    Type *pointer;
+    std::string domain;
+    int line = 0, col = 0;
+  };
+
   Diagnostics &diags_;
   std::vector<std::unique_ptr<Symbol>> owned_;
   std::vector<std::unique_ptr<Type>> types_;
+  std::vector<PendingPointer> pendingPointers_;
   std::unordered_map<long long, Type *> stringTypes_;
   std::vector<std::unordered_map<std::string, Symbol *>> scopes_;
   /// The bindings of the `with` statements currently open, innermost last.

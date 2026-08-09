@@ -27,3 +27,4 @@ the alternatives that were rejected and why.
 | [0016](0016-nested-procedures-use-static-links.md) | Nested procedures use static links | Accepted |
 | [0017](0017-structured-types-use-name-equivalence.md) | Structured types are identified by name, and every subscript is checked | Accepted |
 | [0018](0018-ordinal-types-and-variant-records.md) | Enumerations and subranges are ordinal types, and variants share storage | Accepted |
+| [0019](0019-pointers-and-the-only-forward-reference.md) | Pointers, and the language's only forward reference | Accepted |

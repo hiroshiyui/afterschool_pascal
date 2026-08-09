@@ -15,7 +15,8 @@ struct Symbol;
 /// variant record is exactly what that version will use.
 enum class NK {
   // expressions
-  IntLit, RealLit, CharLit, StrLit, VarRef, Index, Field, Binary, Unary, Call,
+  IntLit, RealLit, CharLit, StrLit, NilLit, VarRef, Index, Field, Deref,
+  Binary, Unary, Call,
   // statements
   Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall, With, Case,
 };
@@ -80,6 +81,12 @@ struct StrLit : Expr {
   std::string value;
 };
 
+/// `nil` — a value of every pointer type, which is why it has no domain.
+struct NilLit : Expr {
+  static constexpr NK NodeKind = NK::NilLit;
+  NilLit() : Expr(NodeKind) {}
+};
+
 struct VarRef : Expr {
   static constexpr NK NodeKind = NK::VarRef;
   VarRef() : Expr(NodeKind) {}
@@ -108,6 +115,14 @@ struct FieldExpr : Expr {
   ExprPtr base;
   std::string field;
   const Field *resolved = nullptr; // filled in by Sema
+};
+
+/// `base^` — the variable a pointer points at. A designator like any other,
+/// so it takes subscripts and fields after it: `p^.next^.value`.
+struct DerefExpr : Expr {
+  static constexpr NK NodeKind = NK::Deref;
+  DerefExpr() : Expr(NodeKind) {}
+  ExprPtr base;
 };
 
 struct Binary : Expr {
@@ -232,11 +247,16 @@ struct CaseStmt : Stmt {
   std::vector<CaseArm> arms;
 };
 
+/// The standard procedures the compiler knows intrinsically, as `Builtin` does
+/// for the required functions.
+enum class StdProc { None, New, Dispose };
+
 struct ProcCallStmt : Stmt {
   static constexpr NK NodeKind = NK::ProcCall;
   ProcCallStmt() : Stmt(NodeKind) {}
   std::string name;
-  Symbol *sym = nullptr; // filled in by Sema
+  Symbol *sym = nullptr;          // filled in by Sema, for a user procedure
+  StdProc standard = StdProc::None; // set instead, for new/dispose
   std::vector<ExprPtr> args;
 };
 
@@ -271,7 +291,7 @@ struct VariantArm {
   int line = 0, col = 0;
 };
 
-enum class TEK { Named, Enum, Subrange, Array, Record };
+enum class TEK { Named, Enum, Subrange, Array, Record, Pointer };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is
@@ -280,7 +300,7 @@ struct TypeExpr {
   TEK kind = TEK::Named;
   int line = 0, col = 0;
 
-  std::string name;               // Named
+  std::string name;               // Named, and the domain of a Pointer
   bool packed = false;            // Array, Record
   /// Array: one ordinal type per index. ISO 7185 §6.4.3.2 makes the index an
   /// ordinal *type*, which is why `array [1..3]` and `array [color]` are the
