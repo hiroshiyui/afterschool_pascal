@@ -51,8 +51,8 @@ llvm::Value *CodeGen::intrinsicCall(unsigned id,
 }
 
 void CodeGen::emitTrapIf(llvm::Value *condition, const char *message) {
-  BasicBlock *trap = BasicBlock::Create(ctx_, "trap", main_);
-  BasicBlock *cont = BasicBlock::Create(ctx_, "cont", main_);
+  BasicBlock *trap = BasicBlock::Create(ctx_, "trap", curFn_);
+  BasicBlock *cont = BasicBlock::Create(ctx_, "cont", curFn_);
   b_.CreateCondBr(condition, trap, cont);
 
   b_.SetInsertPoint(trap);
@@ -105,21 +105,173 @@ llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
 
 // ------------------------------------------------------------------- driver
 
-std::unique_ptr<Module> CodeGen::run(Program &prog) {
-  FunctionType *mainTy = FunctionType::get(i32(), false);
-  main_ = Function::Create(mainTy, Function::ExternalLinkage, "main",
-                           mod_.get());
-  BasicBlock *entry = BasicBlock::Create(ctx_, "entry", main_);
+llvm::Type *CodeGen::slotType(const Symbol *v) {
+  // A `var` parameter's slot holds the address of the caller's variable, not
+  // a copy of its value.
+  return v->kind == SymKind::VarParam ? ptr() : llvmType(v->type);
+}
+
+StructType *CodeGen::buildFrameType(Symbol *proc) {
+  SmallVector<llvm::Type *, 8> fields;
+  fields.push_back(ptr()); // field 0: the static link
+  for (const Symbol *v : proc->frameVars)
+    fields.push_back(slotType(v));
+  StructType *ty = StructType::create(ctx_, fields, "frame." + proc->name);
+  frameTypes_[proc] = ty;
+  return ty;
+}
+
+void CodeGen::declareProcs(Block &block) {
+  for (auto &decl : block.procs) {
+    Symbol *sym = decl->sym;
+    if (!sym || functions_.count(sym))
+      continue; // a forward declaration already created it
+
+    buildFrameType(sym);
+
+    SmallVector<llvm::Type *, 8> params;
+    params.push_back(ptr()); // the static link
+    for (const Symbol *p : sym->params)
+      params.push_back(slotType(p));
+
+    llvm::Type *ret =
+        sym->kind == SymKind::Func ? llvmType(sym->type)
+                                   : llvm::Type::getVoidTy(ctx_);
+    // Names are mangled with a counter because nesting allows two procedures
+    // of the same name in different parents.
+    std::string name = "p." + sym->name + "." + std::to_string(nextId_++);
+    functions_[sym] = Function::Create(FunctionType::get(ret, params, false),
+                                       Function::InternalLinkage, name,
+                                       mod_.get());
+  }
+  for (auto &decl : block.procs)
+    if (decl->body)
+      declareProcs(*decl->body);
+}
+
+void CodeGen::enterFrame(Symbol *proc, Function *fn) {
+  curFn_ = fn;
+  curProc_ = proc;
+  BasicBlock *entry = BasicBlock::Create(ctx_, "entry", fn);
   b_.SetInsertPoint(entry);
 
-  for (const Symbol *v : sema_.variables()) {
-    llvm::Value *slot = b_.CreateAlloca(llvmType(v->type), nullptr, v->name);
-    slots_[v] = slot;
+  StructType *frameTy = frameTypes_[proc];
+  curFrame_ = b_.CreateAlloca(frameTy, nullptr, "frame");
+
+  auto arg = fn->arg_begin();
+  if (proc->level == 0) {
+    // The program has no enclosing block, so its static link is never followed.
+    b_.CreateStore(ConstantPointerNull::get(cast<PointerType>(ptr())),
+                   b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
+  } else {
+    arg->setName("static.link");
+    b_.CreateStore(&*arg, b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
+    ++arg;
+    for (const Symbol *p : proc->params) {
+      arg->setName(p->name);
+      b_.CreateStore(&*arg, b_.CreateStructGEP(frameTy, curFrame_,
+                                               1 + p->frameIndex, p->name));
+      ++arg;
+    }
+  }
+}
+
+void CodeGen::emitProcBody(ProcDecl &decl) {
+  Symbol *sym = decl.sym;
+  Function *fn = functions_[sym];
+
+  // Save the enclosing procedure's state: emission is recursive, because a
+  // procedure's body contains the declarations of the ones nested in it.
+  Function *savedFn = curFn_;
+  llvm::Value *savedFrame = curFrame_;
+  Symbol *savedProc = curProc_;
+  auto savedIP = b_.saveIP();
+
+  enterFrame(sym, fn);
+  emitStmt(decl.body->body.get());
+
+  if (sym->kind == SymKind::Func) {
+    llvm::Value *slot = b_.CreateStructGEP(
+        frameTypes_[sym], curFrame_, 1 + sym->resultVar->frameIndex, "result");
+    b_.CreateRet(b_.CreateLoad(llvmType(sym->type), slot, "result.val"));
+  } else {
+    b_.CreateRetVoid();
   }
 
-  emitStmt(prog.body.get());
+  curFn_ = savedFn;
+  curFrame_ = savedFrame;
+  curProc_ = savedProc;
+  b_.restoreIP(savedIP);
+}
 
+void CodeGen::emitProcs(Block &block) {
+  for (auto &decl : block.procs) {
+    if (!decl->body)
+      continue; // a forward heading; the real one comes later
+    emitProcBody(*decl);
+    emitProcs(*decl->body);
+  }
+}
+
+llvm::Value *CodeGen::frameAt(int level) {
+  llvm::Value *frame = curFrame_;
+  // The static link is field 0 of every frame, so it sits at offset zero and
+  // can be loaded straight from the frame pointer without knowing which
+  // procedure's struct type this level has.
+  for (int l = curProc_->level; l > level; --l)
+    frame = b_.CreateLoad(ptr(), frame, "up");
+  return frame;
+}
+
+llvm::Value *CodeGen::addressOf(Symbol *v) {
+  llvm::Value *frame = frameAt(v->level);
+  StructType *frameTy = frameTypes_[v->owner];
+  llvm::Value *slot =
+      b_.CreateStructGEP(frameTy, frame, 1 + v->frameIndex, v->name);
+  if (v->kind == SymKind::VarParam)
+    slot = b_.CreateLoad(ptr(), slot, v->name + ".ref");
+  return slot;
+}
+
+llvm::Value *CodeGen::staticLinkFor(Symbol *callee) {
+  // A callee declared at level L runs with the frame at level L-1 as its
+  // enclosing scope — which for a recursive call is the caller's own parent,
+  // not the caller.
+  return frameAt(callee->level - 1);
+}
+
+llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
+  SmallVector<llvm::Value *, 8> argv;
+  argv.push_back(staticLinkFor(callee));
+
+  for (size_t i = 0; i < args.size(); ++i) {
+    const Symbol *p = callee->params[i];
+    if (p->kind == SymKind::VarParam) {
+      // Bound to the variable itself; Sema has already required one.
+      argv.push_back(addressOf(static_cast<VarRef *>(args[i].get())->sym));
+    } else {
+      llvm::Value *v = emitExpr(args[i].get());
+      argv.push_back(convertFor(v, args[i]->type, p->type));
+    }
+  }
+  return b_.CreateCall(functions_[callee], argv,
+                       callee->kind == SymKind::Func ? "call" : "");
+}
+
+std::unique_ptr<Module> CodeGen::run(Program &prog) {
+  Symbol *programSym = sema_.programSymbol();
+  buildFrameType(programSym);
+  declareProcs(*prog.block);
+
+  FunctionType *mainTy = FunctionType::get(i32(), false);
+  Function *mainFn =
+      Function::Create(mainTy, Function::ExternalLinkage, "main", mod_.get());
+
+  enterFrame(programSym, mainFn);
+  emitStmt(prog.block->body.get());
   b_.CreateRet(ConstantInt::get(i32(), 0));
+
+  emitProcs(*prog.block);
 
   if (verifyModule(*mod_, &errs()))
     return nullptr;
@@ -144,6 +296,11 @@ void CodeGen::emitStmt(Stmt *s) {
   case NK::While:   emitWhile(static_cast<WhileStmt *>(s)); return;
   case NK::Repeat:  emitRepeat(static_cast<RepeatStmt *>(s)); return;
   case NK::For:     emitFor(static_cast<ForStmt *>(s)); return;
+  case NK::ProcCall: {
+    auto *call = static_cast<ProcCallStmt *>(s);
+    emitUserCall(call->sym, call->args);
+    return;
+  }
   default:
     return; // expression kinds never appear as statements
   }
@@ -152,7 +309,7 @@ void CodeGen::emitStmt(Stmt *s) {
 void CodeGen::emitAssign(Assign *s) {
   llvm::Value *v = emitExpr(s->value.get());
   v = convertFor(v, s->value->type, s->target->type);
-  b_.CreateStore(v, slots_[s->target->sym]);
+  b_.CreateStore(v, addressOf(s->target->sym));
 }
 
 void CodeGen::emitWrite(WriteStmt *s) {
@@ -203,10 +360,10 @@ void CodeGen::emitWrite(WriteStmt *s) {
 
 void CodeGen::emitIf(IfStmt *s) {
   llvm::Value *cond = emitExpr(s->cond.get());
-  BasicBlock *thenBB = BasicBlock::Create(ctx_, "then", main_);
+  BasicBlock *thenBB = BasicBlock::Create(ctx_, "then", curFn_);
   BasicBlock *elseBB =
-      s->elseBranch ? BasicBlock::Create(ctx_, "else", main_) : nullptr;
-  BasicBlock *endBB = BasicBlock::Create(ctx_, "endif", main_);
+      s->elseBranch ? BasicBlock::Create(ctx_, "else", curFn_) : nullptr;
+  BasicBlock *endBB = BasicBlock::Create(ctx_, "endif", curFn_);
 
   b_.CreateCondBr(cond, thenBB, elseBB ? elseBB : endBB);
 
@@ -224,9 +381,9 @@ void CodeGen::emitIf(IfStmt *s) {
 }
 
 void CodeGen::emitWhile(WhileStmt *s) {
-  BasicBlock *condBB = BasicBlock::Create(ctx_, "while.cond", main_);
-  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "while.body", main_);
-  BasicBlock *endBB = BasicBlock::Create(ctx_, "while.end", main_);
+  BasicBlock *condBB = BasicBlock::Create(ctx_, "while.cond", curFn_);
+  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "while.body", curFn_);
+  BasicBlock *endBB = BasicBlock::Create(ctx_, "while.end", curFn_);
 
   b_.CreateBr(condBB);
   b_.SetInsertPoint(condBB);
@@ -240,8 +397,8 @@ void CodeGen::emitWhile(WhileStmt *s) {
 }
 
 void CodeGen::emitRepeat(RepeatStmt *s) {
-  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "repeat.body", main_);
-  BasicBlock *endBB = BasicBlock::Create(ctx_, "repeat.end", main_);
+  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "repeat.body", curFn_);
+  BasicBlock *endBB = BasicBlock::Create(ctx_, "repeat.end", curFn_);
 
   b_.CreateBr(bodyBB);
   b_.SetInsertPoint(bodyBB);
@@ -254,7 +411,7 @@ void CodeGen::emitRepeat(RepeatStmt *s) {
 }
 
 void CodeGen::emitFor(ForStmt *s) {
-  llvm::Value *slot = slots_[s->var->sym];
+  llvm::Value *slot = addressOf(s->var->sym);
   llvm::Type *varTy = llvmType(s->var->type);
 
   llvm::Value *from = convertFor(emitExpr(s->from.get()), s->from->type,
@@ -266,10 +423,10 @@ void CodeGen::emitFor(ForStmt *s) {
   b_.CreateStore(to, limit);
   b_.CreateStore(from, slot);
 
-  BasicBlock *condBB = BasicBlock::Create(ctx_, "for.cond", main_);
-  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "for.body", main_);
-  BasicBlock *stepBB = BasicBlock::Create(ctx_, "for.step", main_);
-  BasicBlock *endBB = BasicBlock::Create(ctx_, "for.end", main_);
+  BasicBlock *condBB = BasicBlock::Create(ctx_, "for.cond", curFn_);
+  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "for.body", curFn_);
+  BasicBlock *stepBB = BasicBlock::Create(ctx_, "for.step", curFn_);
+  BasicBlock *endBB = BasicBlock::Create(ctx_, "for.end", curFn_);
 
   b_.CreateBr(condBB);
   b_.SetInsertPoint(condBB);
@@ -324,7 +481,9 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     auto *v = static_cast<VarRef *>(e);
     if (v->sym->kind == SymKind::Const)
       return emitConst(*v->sym);
-    return b_.CreateLoad(llvmType(v->type), slots_[v->sym], v->name);
+    if (v->sym->kind == SymKind::Func)
+      return emitUserCall(v->sym, noArgs_); // a parameterless call by name
+    return b_.CreateLoad(llvmType(v->type), addressOf(v->sym), v->name);
   }
   case NK::Binary: return emitBinary(static_cast<Binary *>(e));
   case NK::Unary:  return emitUnary(static_cast<Unary *>(e));
@@ -341,8 +500,8 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
     bool isAnd = e->op == BinOp::And;
     llvm::Value *lhs = emitExpr(e->lhs.get());
     BasicBlock *lhsBB = b_.GetInsertBlock();
-    BasicBlock *rhsBB = BasicBlock::Create(ctx_, isAnd ? "and.rhs" : "or.rhs", main_);
-    BasicBlock *endBB = BasicBlock::Create(ctx_, isAnd ? "and.end" : "or.end", main_);
+    BasicBlock *rhsBB = BasicBlock::Create(ctx_, isAnd ? "and.rhs" : "or.rhs", curFn_);
+    BasicBlock *endBB = BasicBlock::Create(ctx_, isAnd ? "and.end" : "or.end", curFn_);
 
     if (isAnd)
       b_.CreateCondBr(lhs, rhsBB, endBB);
@@ -460,6 +619,9 @@ llvm::Value *CodeGen::emitUnary(Unary *e) {
 }
 
 llvm::Value *CodeGen::emitCall(Call *e) {
+  if (e->sym)
+    return emitUserCall(e->sym, e->args);
+
   llvm::Value *a = emitExpr(e->args[0].get());
   ap::Type *at = e->args[0]->type;
 

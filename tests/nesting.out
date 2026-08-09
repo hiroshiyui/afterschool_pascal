@@ -1,0 +1,6 @@
+inner: top=100 a=7 b=14 c=12 d=120 e=13
+middle: b=27
+outer: b=27
+ 3 2 1 0 0 1 2 3
+inner top=7
+global top=100

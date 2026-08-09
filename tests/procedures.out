@@ -1,0 +1,9 @@
+--- procedures ---
+5! = 120
+swapped: 8 3
+bumped: 18
+0 even=TRUE odd=FALSE
+1 even=FALSE odd=TRUE
+2 even=TRUE odd=FALSE
+3 even=FALSE odd=TRUE
+answer = 42

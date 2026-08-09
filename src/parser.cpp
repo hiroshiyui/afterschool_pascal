@@ -55,30 +55,121 @@ std::unique_ptr<Program> Parser::parseProgram() {
   }
   expect(Tok::Semi, "after the program header");
 
-  for (;;) {
-    if (check(Tok::KwConst))
-      parseConstPart(*prog);
-    else if (check(Tok::KwVar))
-      parseVarPart(*prog);
-    else
-      break;
-  }
-
-  if (check(Tok::KwType) || check(Tok::KwLabel) || check(Tok::KwProcedure) ||
-      check(Tok::KwFunction)) {
-    errorAtCur(std::string(tokenName(cur().kind)) +
-               " declarations are not supported yet");
-    bail();
-  }
-
-  prog->body = parseCompound();
+  prog->block = parseBlock();
   expect(Tok::Period, "after the final 'end'");
   if (!check(Tok::Eof))
     errorAtCur("trailing text after the end of the program");
   return prog;
 }
 
-void Parser::parseConstPart(Program &prog) {
+/// block = const-part? var-part? (procedure | function)* statement-part
+///
+/// The same production serves the program and every procedure, so nesting
+/// needs no extra machinery here.
+std::unique_ptr<Block> Parser::parseBlock() {
+  auto block = std::make_unique<Block>();
+
+  for (;;) {
+    if (check(Tok::KwConst)) {
+      parseConstPart(*block);
+    } else if (check(Tok::KwVar)) {
+      parseVarPart(*block);
+    } else if (check(Tok::KwProcedure) || check(Tok::KwFunction)) {
+      bool isFunction = check(Tok::KwFunction);
+      block->procs.push_back(parseProcOrFunc(isFunction));
+    } else if (check(Tok::KwType) || check(Tok::KwLabel)) {
+      errorAtCur(std::string(tokenName(cur().kind)) +
+                 " declarations are not supported yet");
+      bail();
+    } else {
+      break;
+    }
+  }
+
+  block->body = parseCompound();
+  return block;
+}
+
+std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
+  auto decl = std::make_unique<ProcDecl>();
+  decl->isFunction = isFunction;
+  decl->line = cur().line;
+  decl->col = cur().col;
+  ++pos_; // 'procedure' / 'function'
+
+  if (!check(Tok::Ident)) {
+    errorAtCur(isFunction ? "expected the function name"
+                          : "expected the procedure name");
+    bail();
+  }
+  decl->name = cur().text;
+  ++pos_;
+
+  if (check(Tok::LParen))
+    parseFormalParameters(*decl);
+
+  // The completion of a forward declaration repeats the name alone (ISO 7185
+  // §6.6.1), so both the parameters and the result type may be absent here.
+  if (isFunction && accept(Tok::Colon)) {
+    if (!check(Tok::Ident)) {
+      errorAtCur("expected the result type of the function");
+      bail();
+    }
+    decl->returnTypeName = cur().text;
+    ++pos_;
+  }
+  expect(Tok::Semi, "after the heading of a procedure or function");
+
+  // `forward` is not a reserved word; it is an identifier in this position.
+  if (check(Tok::Ident) && cur().text == "forward") {
+    ++pos_;
+    decl->isForward = true;
+  } else {
+    decl->body = parseBlock();
+  }
+  expect(Tok::Semi, "after the body of a procedure or function");
+  return decl;
+}
+
+/// formal-parameters = '(' group (';' group)* ')'
+/// group            = 'var'? ident-list ':' type-ident
+void Parser::parseFormalParameters(ProcDecl &decl) {
+  expect(Tok::LParen, "");
+  do {
+    bool byRef = accept(Tok::KwVar);
+
+    std::vector<ParamDecl> group;
+    do {
+      if (!check(Tok::Ident)) {
+        errorAtCur("expected a parameter name");
+        bail();
+      }
+      ParamDecl p;
+      p.name = cur().text;
+      p.byRef = byRef;
+      p.line = cur().line;
+      p.col = cur().col;
+      ++pos_;
+      group.push_back(std::move(p));
+    } while (accept(Tok::Comma));
+
+    expect(Tok::Colon, "in a parameter list");
+    if (!check(Tok::Ident)) {
+      errorAtCur("expected a parameter type");
+      bail();
+    }
+    std::string typeName = cur().text;
+    ++pos_;
+
+    for (auto &p : group) {
+      p.typeName = typeName;
+      decl.params.push_back(std::move(p));
+    }
+  } while (accept(Tok::Semi));
+  expect(Tok::RParen, "after the parameter list");
+}
+
+void Parser::parseConstPart(Block &prog) {
   expect(Tok::KwConst, "");
   do {
     if (!check(Tok::Ident)) {
@@ -97,7 +188,7 @@ void Parser::parseConstPart(Program &prog) {
   } while (check(Tok::Ident));
 }
 
-void Parser::parseVarPart(Program &prog) {
+void Parser::parseVarPart(Block &prog) {
   expect(Tok::KwVar, "");
   do {
     std::vector<VarDecl> group;
@@ -247,8 +338,20 @@ StmtPtr Parser::parseIdentStatement() {
     return s;
   }
 
-  errorAtCur("unknown procedure '" + id.text + "'");
-  bail();
+  // Anything else beginning with an identifier is a procedure call. A
+  // parameterless call is just the name — Pascal has no empty argument list.
+  auto s = makeNode<ProcCallStmt>(id);
+  s->name = id.text;
+  ++pos_;
+  if (accept(Tok::LParen)) {
+    if (!check(Tok::RParen)) {
+      do {
+        s->args.push_back(parseExpr());
+      } while (accept(Tok::Comma));
+    }
+    expect(Tok::RParen, "after the arguments of a procedure call");
+  }
+  return s;
 }
 
 StmtPtr Parser::parseWrite(bool newline) {

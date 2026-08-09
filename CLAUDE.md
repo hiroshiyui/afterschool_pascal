@@ -47,10 +47,27 @@ Errors: the parser throws `ap::ParseAbort` (the only exception in the codebase)
 when it cannot make progress; Sema and the lexer instead accumulate into
 `Diagnostics` so one run reports many errors.
 
-`Sema::variables()` gives codegen the declaration-ordered variable list; it
-allocas one slot per symbol into `main`'s entry block and keeps the mapping in
-`slots_`. There is no separate lvalue path yet — assignment writes straight to a
-slot.
+**Activation records and static links** (ADR-0016). Every procedure — and the
+program itself, at level 0 — gets a frame struct alloca'd in its entry block.
+Field 0 is the static link to the enclosing block's frame; locals, value
+parameters, `var` parameters, and the function result are the remaining fields.
+
+- `frameAt(level)` walks the chain; `addressOf(sym)` walks then indexes. All
+  variable access goes through `addressOf`, so there is no separate global path.
+- Calling a procedure at level `L` passes the frame at level `L-1` as a hidden
+  first argument. For a *recursive* call that is the caller's parent, not the
+  caller — the one place this is easy to get subtly wrong.
+- A `var` parameter's frame slot holds a pointer; `addressOf` dereferences it.
+- The link is field 0 at offset 0, so intermediate hops load it without knowing
+  the struct type at that level. Only the final index needs the target's type.
+- `tests/nesting.pas` pins the case that distinguishes a correct implementation:
+  a nested procedure inside a *recursive* one must see the locals of the
+  invocation it was called from.
+
+Sema mirrors this: `Symbol` carries `level`, `owner`, and `frameIndex`, and
+`Symbol::frameVars` is the frame layout codegen consumes. Assigning to a
+function's own name writes `resultVar`; *reading* the name is a recursive call
+(ISO 7185 §6.8.2.2), so there is no way to read a function's result back.
 
 ## Decisions
 

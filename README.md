@@ -31,13 +31,15 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
 somewhere else.
 
-## What the compiler accepts today (milestone 1)
+## What the compiler accepts today (milestone 2)
 
 ```
 program-header, const part, var part, compound statement
 types      integer  real  boolean  char
+routines   procedures and functions, nested to any depth, recursive,
+           value and var parameters, forward declarations
 statements := , if/then/else, while, repeat/until, for/to/downto,
-           begin/end, write, writeln
+           begin/end, procedure call, write, writeln
 operators  + - * / div mod, and or not (short-circuiting),
            = <> < <= > >=
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
@@ -66,8 +68,8 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: procedures and functions of your own, arrays, records, sets,
-pointers, files, `case`, `with`, `goto`, subranges, enumerations.
+Not accepted yet: arrays, records, sets, pointers, files, `case`, `with`,
+`goto`, subranges, enumerations, procedural parameters.
 
 ## How it fits together
 
@@ -145,8 +147,8 @@ stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 b
 Reaching stage 1 means the accepted language has to cover what a compiler is
 written in. In dependency order:
 
-1. **Procedures and functions** — nested, value and `var` parameters, `forward`.
-   Needs a real activation record and static links.
+1. ~~**Procedures and functions**~~ — done: nested to any depth, value and
+   `var` parameters, `forward`, implemented with static links (ADR-0016).
 2. **Arrays and records** — static arrays, `packed`, nested records, `with`.
    Token tables and AST nodes live here.
 3. **Enumerations, subranges, `case`** — the node-kind tag itself wants these.

@@ -31,8 +31,11 @@ private:
   [[noreturn]] void bail();
   void errorAtCur(const std::string &msg);
 
-  void parseConstPart(Program &prog);
-  void parseVarPart(Program &prog);
+  std::unique_ptr<Block> parseBlock();
+  void parseConstPart(Block &block);
+  void parseVarPart(Block &block);
+  std::unique_ptr<ProcDecl> parseProcOrFunc(bool isFunction);
+  void parseFormalParameters(ProcDecl &decl);
 
   StmtPtr parseStatement();
   std::unique_ptr<Compound> parseCompound();

@@ -17,7 +17,7 @@ enum class NK {
   // expressions
   IntLit, RealLit, CharLit, StrLit, VarRef, Binary, Unary, Call,
   // statements
-  Empty, Assign, Write, Compound, If, While, Repeat, For,
+  Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall,
 };
 
 struct Node {
@@ -106,6 +106,7 @@ struct Call : Expr {
   Call() : Expr(NodeKind) {}
   std::string name;
   Builtin builtin = Builtin::None; // filled in by Sema
+  Symbol *sym = nullptr;           // set instead, for a user-defined function
   std::vector<ExprPtr> args;
 };
 
@@ -179,6 +180,14 @@ struct ForStmt : Stmt {
   StmtPtr body;
 };
 
+struct ProcCallStmt : Stmt {
+  static constexpr NK NodeKind = NK::ProcCall;
+  ProcCallStmt() : Stmt(NodeKind) {}
+  std::string name;
+  Symbol *sym = nullptr; // filled in by Sema
+  std::vector<ExprPtr> args;
+};
+
 // --------------------------------------------------------------- declarations
 
 struct ConstDecl {
@@ -193,11 +202,41 @@ struct VarDecl {
   int line = 0, col = 0;
 };
 
-struct Program {
+struct ParamDecl {
   std::string name;
+  std::string typeName;
+  bool byRef = false; // a `var` parameter, passed by reference
+  int line = 0, col = 0;
+};
+
+struct Block;
+
+/// A procedure or a function; `returnTypeName` is empty for a procedure.
+/// A `forward` declaration has no body, and the later full declaration
+/// re-uses the same Symbol.
+struct ProcDecl {
+  std::string name;
+  bool isFunction = false;
+  std::vector<ParamDecl> params;
+  std::string returnTypeName; // empty in the completion of a forward function
+  std::unique_ptr<Block> body; // null for a forward declaration
+  bool isForward = false;
+  int line = 0, col = 0;
+  Symbol *sym = nullptr; // filled in by Sema
+};
+
+/// The declaration part plus the statement part — the body of the program and
+/// of every procedure alike, which is what makes nesting fall out for free.
+struct Block {
   std::vector<ConstDecl> consts;
   std::vector<VarDecl> vars;
+  std::vector<std::unique_ptr<ProcDecl>> procs;
   std::unique_ptr<Compound> body;
+};
+
+struct Program {
+  std::string name;
+  std::unique_ptr<Block> block;
 };
 
 } // namespace ap
