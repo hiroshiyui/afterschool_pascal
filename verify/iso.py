@@ -66,6 +66,28 @@ def is_exact_square(i, squared):
     return wide(squared) == wide(i) * wide(i)
 
 
+def truncation_is_an_integer_value(x, maxint):
+    """ISO 7185 §6.6.6.2 — trunc(x) is defined only when the truncated value is
+    a value of the integer type.
+
+    Stated as a property of the *truncated* value — it must lie in
+    -maxint..maxint — which is what §6.6.6.2 actually says. The compiler instead
+    tests the *argument* against the two powers of two just outside the range,
+    so proving the two coincide is a real theorem rather than a restatement:
+    the subtle part is precisely whether bounding x by ±2^31 is equivalent to
+    bounding trunc(x) by ±maxint.
+
+    A NaN or an infinity truncates to nothing in the type, and the leading
+    `finite` conjunct is what says so.
+    """
+    finite = z3.And(z3.Not(z3.fpIsNaN(x)), z3.Not(z3.fpIsInf(x)))
+    truncated = z3.fpRoundToIntegral(z3.RTZ(), x)
+    limit = z3.FPVal(float(maxint), z3.Float64())
+    return z3.And(finite,
+                  z3.fpLEQ(truncated, limit),
+                  z3.fpGEQ(truncated, z3.fpNeg(limit)))
+
+
 def in_char_range(i):
     """chr(i) is defined only where i is the ordinal of some char (0..255)."""
     I = wide(i)

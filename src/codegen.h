@@ -64,6 +64,8 @@ private:
   /// Integer arithmetic that reports overflow instead of wrapping or poisoning.
   llvm::Value *checkedArith(unsigned intrinsicId, llvm::Value *l,
                             llvm::Value *r, const char *message);
+  /// Real-to-integer conversion that reports an out-of-range value or a NaN.
+  llvm::Value *checkedFPToInt(llvm::Value *x, const char *message);
   llvm::Value *guardNonZero(llvm::Value *divisor, const char *message);
   llvm::Value *intrinsicCall(unsigned id, llvm::ArrayRef<llvm::Value *> args);
 

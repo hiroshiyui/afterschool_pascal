@@ -84,6 +84,19 @@ llvm::Value *CodeGen::checkedArith(unsigned intrinsicId, llvm::Value *l,
   return result;
 }
 
+llvm::Value *CodeGen::checkedFPToInt(llvm::Value *x, const char *message) {
+  // ISO 7185 §6.6.6.2: trunc and round are errors unless the result is a value
+  // of the integer type. The bounds are the exactly-representable powers of two
+  // just outside the range, and the comparisons are *ordered*, so a NaN fails
+  // both and traps rather than converting to something unspecified.
+  llvm::Value *lo = ConstantFP::get(f64(), -2147483648.0);
+  llvm::Value *hi = ConstantFP::get(f64(), 2147483648.0);
+  llvm::Value *inRange = b_.CreateAnd(b_.CreateFCmpOGT(x, lo, "gt.lo"),
+                                      b_.CreateFCmpOLT(x, hi, "lt.hi"));
+  emitTrapIf(b_.CreateNot(inRange, "fp.bad"), message);
+  return b_.CreateFPToSI(x, i32(), "toint");
+}
+
 llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
   emitTrapIf(b_.CreateICmpEQ(divisor, ConstantInt::get(i32(), 0), "iszero"),
              message);
@@ -508,10 +521,12 @@ llvm::Value *CodeGen::emitCall(Call *e) {
   case Builtin::ArcTan:
     return libm("atan");
   case Builtin::Trunc:
-    return b_.CreateFPToSI(toReal(a, at), i32(), "trunc");
+    return checkedFPToInt(toReal(a, at), "trunc: value out of integer range");
   case Builtin::Round:
-    return b_.CreateFPToSI(intrinsicCall(Intrinsic::round, {toReal(a, at)}),
-                           i32(), "round");
+    // llvm.round rounds halfway cases away from zero, which is what ISO 7185
+    // §6.6.6.3 asks for; the range check then applies to the rounded value.
+    return checkedFPToInt(intrinsicCall(Intrinsic::round, {toReal(a, at)}),
+                          "round: value out of integer range");
   default:
     return ConstantInt::get(i32(), 0);
   }

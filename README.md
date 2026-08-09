@@ -51,8 +51,9 @@ A real written without a width comes out in floating form (`5.0E-01` style);
 with a width and a fraction length it comes out fixed-point.
 
 **Errors are detected, not ignored.** ISO 7185 calls integer overflow, `chr` of
-a non-ordinal, and `succ` past the end of a type *errors*; this compiler stops
-the program with a message rather than letting it wrap:
+a non-ordinal, `succ` past the end of a type, and `trunc` of a real too large
+*errors*; this compiler stops the program with a message rather than letting it
+wrap or produce an arbitrary value:
 
 ```
 $ pascalc overflow.pas && ./overflow
@@ -62,7 +63,8 @@ runtime error: integer overflow in sqr
 The integer type is `-maxint..maxint`, which is narrower than the machine word
 it lives in — so `2147483648` is rejected at compile time rather than silently
 becoming `-2147483648`. See
-[ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md).
+[ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
+[ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
 Not accepted yet: procedures and functions of your own, arrays, records, sets,
 pointers, files, `case`, `with`, `goto`, subranges, enumerations.
@@ -104,12 +106,15 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Twenty-two rules are currently established — the non-negative
+the two disagree. Twenty-five rules are currently established — the non-negative
 `mod`, truncating `div`, `odd` on negative values, ordinal `char` comparison, the
-exact integer-to-real widening, the `for` loop's inability to overflow, and that
-each runtime check fires *exactly* when ISO says the operation is in error —
-eighteen of them for all 2³² inputs. One known gap remains, catalogued with the
-counterexample that demonstrates it.
+exact integer-to-real widening, and the `for` loop's inability to overflow —
+twenty-one of them for all 2³² inputs.
+
+Each runtime check is proved to fire *exactly* when ISO says the operation is in
+error. Both directions matter: trapping always would satisfy "never produces a
+wrong answer", and never trapping would satisfy "never rejects a valid program".
+There are currently **no known gaps**.
 
 The proofs are paired with a cross-check that compiles and runs real Pascal at
 the adversarial points, at both `-O0` and `-O2`, because a proof about a model of

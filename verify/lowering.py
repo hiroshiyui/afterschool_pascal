@@ -126,6 +126,20 @@ def traps_chr(i):
     return z3.Or(i < 0, i > 255)
 
 
+def traps_fp_to_int(x):
+    """`checkedFPToInt`: ordered comparisons against the two exactly
+    representable powers of two just outside the integer range. Ordered means a
+    NaN fails both and therefore traps."""
+    lo = z3.FPVal(-2147483648.0, z3.Float64())
+    hi = z3.FPVal(2147483648.0, z3.Float64())
+    return z3.Not(z3.And(z3.fpGT(x, lo), z3.fpLT(x, hi)))
+
+
+def round_to_nearest_away(x):
+    """`Builtin::Round`: llvm.round, which takes halfway cases away from zero."""
+    return z3.fpRoundToIntegral(z3.RNA(), x)
+
+
 def traps_succ_int(i, width=INT_BITS):
     """`Builtin::Succ` on integer: equality with maxint."""
     return i == maxint(width)

@@ -214,17 +214,28 @@ def _negation_cannot_overflow(w):
     return pre, claim
 
 
-# --- known gaps -------------------------------------------------------------
-
-
-def _trunc_out_of_range(w):
-    """ISO 7185 §6.6.6.2 — trunc(x) is an error when the result is not a value
-    of the integer type. The lowering is a bare fptosi, which is poison out of
-    range rather than a diagnosed error."""
+def _trunc_traps_exactly_out_of_range(w):
+    """ISO 7185 §6.6.6.2 — trunc(x) is an error when the truncated value is not
+    a value of the integer type."""
     x = low.real("x")
-    pre = x > z3.FPVal(2.0 ** 31, z3.Float64())
-    claim = z3.BoolVal(False)  # nothing is claimed; expect the witness
-    return pre, claim
+    error = z3.Not(iso.truncation_is_an_integer_value(x, low.maxint()))
+    return z3.BoolVal(True), low.traps_fp_to_int(x) == error
+
+
+def _trunc_traps_on_nan_and_infinity(w):
+    """The case a range check written with unordered comparisons would miss."""
+    x = low.real("x")
+    pre = z3.Or(z3.fpIsNaN(x), z3.fpIsInf(x))
+    return pre, low.traps_fp_to_int(x)
+
+
+def _round_traps_exactly_out_of_range(w):
+    """round(x) applies the same range test to the rounded value, so a real just
+    below maxint + 0.5 is accepted and one just above is an error."""
+    x = low.real("x")
+    rounded = low.round_to_nearest_away(x)
+    error = z3.Not(iso.truncation_is_an_integer_value(rounded, low.maxint()))
+    return z3.BoolVal(True), low.traps_fp_to_int(rounded) == error
 
 
 ALL = [
@@ -304,11 +315,14 @@ ALL = [
          "why UnOp::Neg needs no check: INT_MIN is not a value of the type",
          "codegen.cpp emitUnary", _negation_cannot_overflow),
 
-    Rule("trunc-out-of-range", KNOWN_GAP,
-         "ISO 7185 §6.6.6.2 — trunc(x) is an error when the result is not an "
-         "integer value",
-         "codegen.cpp Builtin::Trunc", _trunc_out_of_range,
-         note="A bare fptosi, which is poison out of range rather than a "
-              "diagnosed error. The real-to-integer conversions are the "
-              "remaining unchecked class."),
+    Rule("trunc-traps-exactly-out-of-range", MUST_HOLD,
+         "ISO 7185 §6.6.6.2 — trunc(x) is an error outside the integer type",
+         "codegen.cpp checkedFPToInt", _trunc_traps_exactly_out_of_range),
+    Rule("trunc-traps-on-nan-and-infinity", MUST_HOLD,
+         "a NaN or an infinity has no integer value",
+         "codegen.cpp checkedFPToInt (ordered comparisons)",
+         _trunc_traps_on_nan_and_infinity),
+    Rule("round-traps-exactly-out-of-range", MUST_HOLD,
+         "ISO 7185 §6.6.6.3 — round(x) is an error outside the integer type",
+         "codegen.cpp Builtin::Round", _round_traps_exactly_out_of_range),
 ]

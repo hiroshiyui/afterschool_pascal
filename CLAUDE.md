@@ -98,12 +98,13 @@ short-circuit; `/` is always real division; `for` evaluates its limit once and
 tests `= limit` before stepping so the last iteration cannot overflow; a
 one-character string literal is a `char`.
 
-**ISO error conditions trap** (ADR-0014). Integer `+ - *` and `sqr` go through
-`checkedArith` and stop the program on overflow rather than wrapping — they
-carry no `nsw`. `chr` outside 0..255, `succ`/`pred` at the ends of their type,
-`div` by zero, and `INT_MIN div -1` all reach `pas_runtime_error` (stderr, exit
-1). The integer type is **-maxint..maxint**, narrower than the `i32` behind it,
-so `INT_MIN` is not a value of the type and a literal above `maxint` is a
+**ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
+through `checkedArith` and stop the program on overflow rather than wrapping —
+they carry no `nsw`. `chr` outside 0..255, `succ`/`pred` at the ends of their
+type, `div` by zero, `INT_MIN div -1`, and `trunc`/`round` of a real outside the
+integer range (or of a NaN) all reach `pas_runtime_error` (stderr, exit 1).
+The integer type is **-maxint..maxint**, narrower than the `i32` behind it, so
+`INT_MIN` is not a value of the type and a literal above `maxint` is a
 compile-time error.
 
 A check is omitted only where its absence is *proved* sound — the `for` step and
@@ -134,6 +135,10 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The four gaps currently catalogued (`chr` range, `INT_MIN div -1`, `succ(maxint)`,
-`sqr` overflow) are open language-design questions about what an ISO error
-condition should *do* — not merely bugs to squash.
+The catalogue currently has **no known gaps** — 25 rules, 21 of them for every
+32-bit input — so any gap that appears is something this change introduced.
+
+For floating-point rules, state the specification inside FP theory
+(`fpRoundToIntegral`, `fpLEQ`) rather than via `fpToReal`: mixing FP and Real
+does not solve in practice, and the same property expressed FP-internally proves
+in under a second (ADR-0015).
