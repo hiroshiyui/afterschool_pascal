@@ -290,29 +290,44 @@ the Pascal source rather than growing the language it is written in.
 
 ## Stage 1, in progress
 
-`selfhost/` holds the compiler being written in its own language. The lexer is
-done and is checked against the C++ one on every Pascal source in the tree —
-34 files, about 15 700 tokens, compared token for token:
+`selfhost/` holds the compiler being written in its own language. The lexer and
+the parser are done, and each is checked against the C++ one it was ported
+from, on every Pascal source in the tree — 166 files, compared token for token
+and node for node:
 
 ```sh
-selfhost/difftest.sh build/bin/pascalc     # also runs under ctest
+selfhost/difftest.sh build/bin/pascalc --tokens   # both also run under ctest
+selfhost/difftest.sh build/bin/pascalc --ast
 ```
 
-Both write the same format, so the comparison is a plain diff:
+Each pair writes the same format, so the comparison is a plain diff:
 
 ```
 $ build/bin/pascalc --dump-tokens tests/hello.pas | head -3
 1 1 kw program
 1 9 ident hello
 1 14 op (
+
+$ build/bin/pascalc --dump-ast tests/hello.pas | head -4
+program hello
+  params
+    name output @1:15
+  block
 ```
 
 That is the checkpoint rather than a convenience. A disagreement between the
-two lexers is bisectable now; the same disagreement discovered at stage 3 is
-two compiler binaries differing by a byte. The corpus includes the Pascal
-lexer's own source, and `selfhost/torture.pas` covers the error paths a valid
-program never reaches. See
-[ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md).
+two is bisectable now; the same disagreement discovered at stage 3 is two
+compiler binaries differing by a byte. The corpus includes the Pascal sources
+themselves, `selfhost/torture.pas` covers the lexical error paths a valid
+program never reaches, and `selfhost/badparse/` does the same for the parser's
+— one file per message, because the parser stops at its first error. See
+[ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md) and
+[ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md).
+
+The AST is where the bootstrap constraints paid off: the `NK` tag of
+[ADR-0005](doc/adr/0005-tag-dispatched-ast-without-cpp-rtti.md) became a
+variant record's tag and `as<T>()` became the `case` that reads it, with no
+`dynamic_cast` to replace and nothing to redesign.
 
 Backend for the Pascal-hosted compiler: emit textual LLVM IR and hand it to
 `llc`/`clang`. That needs nothing but file output. Binding the LLVM-C API from

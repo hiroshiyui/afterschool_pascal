@@ -20,6 +20,7 @@ target_include_directories(pasrt PUBLIC runtime)
 # ---- The compiler itself ----
 add_executable(pascalc
   src/main.cpp
+  src/astdump.cpp
   src/diag.cpp
   src/lexer.cpp
   src/parser.cpp
@@ -53,14 +54,20 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
-# Stage 1, checked against stage 0: the Pascal lexer must produce the same
-# tokens as the C++ one for every Pascal source in the tree. The roadmap makes
-# this the checkpoint that comes *before* stage 1 is declared working — a
-# disagreement here is bisectable, the same disagreement at stage 3 is two
-# binaries differing by a byte.
+# Stage 1, checked against stage 0: each Pascal component must produce the same
+# output as the C++ one it was ported from, for every Pascal source in the
+# tree. The roadmap makes this the checkpoint that comes *before* stage 1 is
+# declared working — a disagreement here is bisectable, the same disagreement
+# at stage 3 is two binaries differing by a byte.
 add_test(NAME selfhost-lexer
-         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh $<TARGET_FILE:pascalc>)
+         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh
+                 $<TARGET_FILE:pascalc> --tokens)
 set_tests_properties(selfhost-lexer PROPERTIES TIMEOUT 600)
+
+add_test(NAME selfhost-parser
+         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh
+                 $<TARGET_FILE:pascalc> --ast)
+set_tests_properties(selfhost-parser PROPERTIES TIMEOUT 900)
 
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})

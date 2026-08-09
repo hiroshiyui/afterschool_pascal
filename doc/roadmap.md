@@ -47,9 +47,9 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 33 ctest cases — 32 Pascal programs plus the
-verification run — and 31 SMT rules, 27 of them for all 2³² inputs, with no
-known gaps.
+Alongside the language, 35 ctest cases — 32 Pascal programs, the verification
+run, and the two differential tests — and 31 SMT rules, 27 of them for all 2³²
+inputs, with no known gaps.
 
 ## Item 5 — text files (done)
 
@@ -103,11 +103,13 @@ Nothing in the language is now blocking. In rough order:
 
 1. ~~**Port the lexer.**~~ **Done** (ADR-0022) — `selfhost/lexer.pas`, checked
    against the C++ lexer on every Pascal source in the tree by
-   `selfhost/difftest.sh`, which runs under ctest. 34 files, ~15 700 tokens,
-   agreeing token for token, the Pascal lexer's own source included.
-2. **Port the parser and the AST.** The AST is where the bootstrap constraints
-   were paying rent all along — the `NK` tag becomes a variant record's tag and
-   `as<T>()` becomes the `case` that reads it.
+   `selfhost/difftest.sh`, which runs under ctest.
+2. ~~**Port the parser and the AST.**~~ **Done** (ADR-0023) —
+   `selfhost/parser.pas`, checked against the C++ parser by the same harness
+   with `--ast`. The bootstrap constraints paid: the `NK` tag became a variant
+   record's tag and `as<T>()` became the `case` that reads it, with no
+   cleverness needed. 166 files agree node for node, the parser's own 1800
+   lines included.
 3. **Port Sema**, including the type arena. `Type` is already shaped for a
    variant record: a pointer's domain deliberately shares `elem` with an array's
    component type.
@@ -120,8 +122,16 @@ Nothing in the language is now blocking. In rough order:
 declared working: once both compilers exist, they should produce equivalent IR
 for every file in `tests/`. A disagreement is a bug in one of them, found
 cheaply, rather than a byte mismatch at stage 3 with nothing to bisect. The
-lexer already works this way, and each later component extends the same harness
-rather than inventing its own.
+lexer and the parser already work this way, and each later component extends
+the same harness rather than inventing its own — `difftest.sh` takes the
+component as an argument for exactly that reason.
+
+The harness is only worth what its corpus reaches, and that has to be
+*counted*, not assumed. Twice now a whole branch was found uncompared: no file
+contained a tab, so the lexer's control-character class was never exercised
+(ADR-0022), and no file produced a parser diagnostic, so all 43 message
+contexts and 61 token spellings were unchecked (ADR-0023). Both were found by
+mutating the Pascal source and noticing that nothing went red.
 
 Three things the lexer port learned, which the next components will meet again
 (ADR-0022):
@@ -133,6 +143,19 @@ Three things the lexer port learned, which the next components will meet again
   comparing afterwards is not available to its own source.
 - Pascal has no early return and no way to discard a function result, which
   changes how guards and character-consuming helpers are shaped.
+
+Four more from the parser (ADR-0023):
+
+- **A vector becomes a sibling list**, and the one place it shows is where the
+  C++ walks a vector *backwards* (`with a, b do S`), which a list cannot.
+- **The one exception becomes a flag.** No exceptions, and no `goto` in this
+  compiler, so `aborted` is tested by every loop — where a forgotten test is an
+  infinite loop rather than a wrong answer.
+- **Field identifiers must be distinct across every variant** (§6.4.3.3), so
+  the arms of the node type cannot all call their operand `base`.
+- **Reading a function's own name is a call** (§6.8.2.2), so a node under
+  construction cannot live in the result variable. `f^.field := v` compiles and
+  recurses forever; only `new(f)` is caught.
 
 ## Known limitations
 

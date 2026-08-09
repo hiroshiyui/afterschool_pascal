@@ -1,0 +1,3 @@
+program p;
+type a = array 1..3] of integer;
+begin end.

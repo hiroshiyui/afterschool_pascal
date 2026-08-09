@@ -72,6 +72,10 @@ struct RealLit : Expr {
   static constexpr NK NodeKind = NK::RealLit;
   RealLit() : Expr(NodeKind) {}
   double value = 0;
+  /// The literal as it was written. Kept beside the value because `--dump-ast`
+  /// compares the two parsers on it: comparing converted doubles would compare
+  /// two languages' float formatting rather than their parsing (ADR-0022).
+  std::string text;
 };
 
 struct CharLit : Expr {

@@ -31,3 +31,4 @@ the alternatives that were rejected and why.
 | [0020](0020-the-parser-bounds-tree-depth.md) | The parser bounds tree depth, for every walker at once | Accepted |
 | [0021](0021-text-files-keep-the-buffer-variable.md) | Text files keep the buffer variable, and program parameters name them | Accepted |
 | [0022](0022-the-lexer-port-is-checked-differentially.md) | The lexer port is checked differentially, not by golden output | Accepted |
+| [0023](0023-the-ast-is-a-variant-record-and-a-sibling-list.md) | The AST is a variant record and a sibling list, and the parser port is checked the same way | Accepted |

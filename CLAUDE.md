@@ -211,6 +211,9 @@ The parser bounds the depth of the tree it builds at 1000 levels (ADR-0020);
 the spine-building loops count their iterations toward the same limit, because
 an operator chain is flat for the parser but deep for Sema, CodeGen and the
 destructor — a call-depth-only limit would miss it.
+`src/astdump.cpp` writes the tree in the format `selfhost/parser.pas` also
+writes; it is the specification of that format, so change it and the Pascal
+side together.
 `src/sema.cpp` owns scopes, type rules, type-denoter resolution, and constant
 folding. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of
@@ -223,18 +226,31 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 `runtime/pasrt.c` if it needs library support.
 
 `selfhost/` is the stage-1 compiler, written in Afterschool Pascal. The lexer
-is done (ADR-0022). **It is checked against `src/lexer.cpp`, not against a
-golden file** — `pascalc --dump-tokens` and `selfhost/lexer.pas` write the same
-format and `selfhost/difftest.sh` diffs them over every `.pas` in the tree,
-under ctest as `selfhost-lexer`. If you change what the C++ lexer produces, the
-Pascal one changes in the same commit or the test goes red — that is the point
-of it, not an inconvenience.
+(ADR-0022) and the parser (ADR-0023) are done. **They are checked against
+`src/lexer.cpp` and `src/parser.cpp`, not against golden files** —
+`pascalc --dump-tokens` / `--dump-ast` and the Pascal sources write the same
+formats, and `selfhost/difftest.sh <pascalc> --tokens|--ast` diffs them over
+every `.pas` in the tree, under ctest as `selfhost-lexer` and
+`selfhost-parser`. If you change what a C++ stage produces, the Pascal one
+changes in the same commit or the test goes red — that is the point of it, not
+an inconvenience.
 
+- `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
+  and prints `@line:col` only where the tree really records a position. It
+  prints diagnostics first and the tree only when there were none, because the
+  Pascal parser has no exception to unwind with and builds nothing after it
+  gives up.
 - `selfhost/torture.pas` is deliberately **not** a valid program: it carries the
   error paths and lexical corner cases a valid program never reaches. Add to it
   when a lexical rule changes.
+- `selfhost/badparse/` is its parser equivalent, spread over one file per
+  message because the parser stops at its first error. A file per diagnostic
+  and a file per arm of the token-name table. Add one when you add a message,
+  and don't assume the corpus reaches a branch — **count it**. Twice a whole
+  branch was found uncompared (no file had a tab; no file had a parse error).
 - ISO 7185 has no include mechanism, so the finished compiler is **one source
-  file**. `selfhost/lexer.pas` is written to be pasted into it.
+  file**. Both are written to be pasted into it, and the AST in `parser.pas` is
+  what Sema will be written against.
 
 ## Pascal semantics already encoded (keep them)
 

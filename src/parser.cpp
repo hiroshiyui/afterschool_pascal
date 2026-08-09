@@ -844,6 +844,7 @@ ExprPtr Parser::parseFactor() {
   case Tok::RealLit: {
     auto n = makeNode<RealLit>(t);
     n->value = t.realVal;
+    n->text = t.text;
     ++pos_;
     return n;
   }

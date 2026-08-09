@@ -4,7 +4,8 @@
 //   pascalc -o out hello.pas     choose the executable name
 //   pascalc --emit-llvm hello.pas   write hello.ll and stop
 //   pascalc -c hello.pas         write hello.o and stop
-//   pascalc --ast hello.pas      (reserved) dump the parse for debugging
+//   pascalc --dump-tokens hello.pas   the token stream, for selfhost/difftest.sh
+//   pascalc --dump-ast hello.pas      the parse tree, likewise
 
 #include <cstdio>
 #include <cstdlib>
@@ -24,6 +25,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 
+#include "astdump.h"
 #include "codegen.h"
 #include "diag.h"
 #include "lexer.h"
@@ -40,7 +42,16 @@ struct Options {
   unsigned optLevel = 2;
   bool keepTemps = false;
   bool dumpTokens = false;
+  bool dumpAst = false;
 };
+
+/// Diagnostics into the same stream as the dump, and before it. The Pascal
+/// side reports as it goes and cannot buffer a tree it never built, so one
+/// stream carrying errors first is what the two can be compared on.
+void dumpDiagnostics(const ap::Diagnostics &diags) {
+  for (const ap::Diagnostic &d : diags.all())
+    std::printf("%d %d error %s\n", d.line, d.col, d.message.c_str());
+}
 
 /// Write the token stream in the format `selfhost/lexer.pas` also writes, so
 /// the two lexers can be compared on real input. The format carries every
@@ -54,8 +65,7 @@ void dumpTokens(const std::vector<ap::Token> &tokens,
                 const ap::Diagnostics &diags) {
   // Errors first and on stdout, not stderr: the Pascal lexer reports as it
   // goes, so one stream holding both is what the two can be compared on.
-  for (const ap::Diagnostic &d : diags.all())
-    std::printf("%d %d error %s\n", d.line, d.col, d.message.c_str());
+  dumpDiagnostics(diags);
   for (const ap::Token &t : tokens) {
     std::printf("%d %d ", t.line, t.col);
     switch (t.kind) {
@@ -96,7 +106,9 @@ void usage() {
                "  --emit-llvm   write LLVM IR (.ll) instead of an executable\n"
                "  -c            write an object file (.o) and stop\n"
                "  -O0..-O3      optimisation level (default -O2)\n"
-               "  --keep-temps  do not delete the intermediate object file\n");
+               "  --keep-temps  do not delete the intermediate object file\n"
+               "  --dump-tokens write the token stream and stop\n"
+               "  --dump-ast    write the parse tree and stop\n");
 }
 
 std::string stripExtension(const std::string &path) {
@@ -128,6 +140,8 @@ bool parseArgs(int argc, char **argv, Options &opt) {
       opt.keepTemps = true;
     } else if (a == "--dump-tokens") {
       opt.dumpTokens = true;
+    } else if (a == "--dump-ast") {
+      opt.dumpAst = true;
     } else if (a.size() == 3 && a.rfind("-O", 0) == 0 && a[2] >= '0' &&
                a[2] <= '3') {
       opt.optLevel = static_cast<unsigned>(a[2] - '0');
@@ -240,6 +254,26 @@ int main(int argc, char **argv) {
     dumpTokens(tokens, diags);
     return 0;
   }
+  // The parse tree, in the format selfhost/parser.pas also writes. Errors
+  // first, then the tree — and the tree only when there were none, because the
+  // Pascal parser has no exception to unwind with and builds nothing after it
+  // gives up. Always exit 0: what is being compared is the text, so a non-zero
+  // status from here means the compiler itself failed.
+  if (opt.dumpAst) {
+    std::unique_ptr<ap::Program> parsed;
+    if (!diags.hasErrors()) {
+      try {
+        ap::Parser parser(std::move(tokens), diags);
+        parsed = parser.parseProgram();
+      } catch (const ap::ParseAbort &) {
+      }
+    }
+    dumpDiagnostics(diags);
+    if (parsed && !diags.hasErrors())
+      ap::dumpAst(*parsed);
+    return 0;
+  }
+
   if (diags.hasErrors()) {
     diags.print();
     return 1;

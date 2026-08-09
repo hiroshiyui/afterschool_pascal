@@ -1,0 +1,3 @@
+program p;
+type t integer;
+begin end.
