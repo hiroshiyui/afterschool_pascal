@@ -1,0 +1,23 @@
+# Architecture Decision Records
+
+Each file records one decision, why it was taken, and what it costs. They are
+immutable once accepted: a decision that stops being right gets a new record
+that supersedes the old one, rather than an edit.
+
+Format is Michael Nygard's: Context, Decision, Consequences, and where useful
+the alternatives that were rejected and why.
+
+| # | Decision | Status |
+| --- | --- | --- |
+| [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
+| [0002](0002-target-iso-7185-standard-pascal.md) | Target ISO 7185 Standard Pascal | Accepted |
+| [0003](0003-llvm-backend-via-cpp-api.md) | Compile through LLVM, driven by the C++ API | Accepted |
+| [0004](0004-self-hosting-is-the-near-term-goal.md) | Self-hosting is the near-term goal | Accepted |
+| [0005](0005-tag-dispatched-ast-without-cpp-rtti.md) | Tag-dispatched AST instead of C++ RTTI | Accepted |
+| [0006](0006-textual-llvm-ir-as-a-first-class-output.md) | Textual LLVM IR is a first-class output | Accepted |
+| [0007](0007-c-runtime-library-for-io.md) | Formatted I/O lives in a C runtime library | Accepted |
+| [0008](0008-sema-hands-codegen-a-fully-annotated-tree.md) | Sema hands CodeGen a fully annotated tree | Accepted |
+| [0009](0009-link-by-invoking-clang.md) | Link by invoking `clang` | Accepted |
+| [0010](0010-short-circuit-boolean-operators.md) | Boolean operators short-circuit | Accepted |
+| [0011](0011-golden-stdout-tests.md) | Test by comparing program stdout | Accepted |
+| [0012](0012-character-strings-for-self-hosting.md) | How the self-hosted source handles strings | Proposed |

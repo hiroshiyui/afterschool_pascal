@@ -52,6 +52,13 @@ allocas one slot per symbol into `main`'s entry block and keeps the mapping in
 `slots_`. There is no separate lvalue path yet — assignment writes straight to a
 slot.
 
+## Decisions
+
+`doc/adr/` holds the architecture decision records. Read them before undoing
+something that looks over-complicated — most of the odd-looking choices here are
+load-bearing for the bootstrap, and each record says what it costs. Add a record
+when a choice constrains future work or deviates from the standard.
+
 ## Bootstrap constraints (do not casually violate)
 
 1. **No C++ RTTI in the AST.** `ast.h` tags nodes with `NK` and casts via

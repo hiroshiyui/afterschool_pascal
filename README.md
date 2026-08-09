@@ -75,6 +75,14 @@ Two deliberate constraints, both there for the bootstrap:
   compiler written in Pascal cannot call LLVM's C++ API. Emitting IR text is the
   backend that survives the rewrite.
 
+## Decisions
+
+`doc/adr/` records the architecture decisions and what each one costs — why the
+AST avoids C++ RTTI, why textual IR is a supported output, why `and` and `or`
+short-circuit, and what is still open. Start with
+[ADR-0004](doc/adr/0004-self-hosting-is-the-near-term-goal.md) if you only read
+one.
+
 ## Bootstrap plan
 
 The classic three-stage build. Stage 0 is the C++ compiler in this repository;
