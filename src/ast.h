@@ -17,7 +17,7 @@ enum class NK {
   // expressions
   IntLit, RealLit, CharLit, StrLit, VarRef, Index, Field, Binary, Unary, Call,
   // statements
-  Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall, With,
+  Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall, With, Case,
 };
 
 struct Node {
@@ -86,9 +86,9 @@ struct VarRef : Expr {
   std::string name;
   Symbol *sym = nullptr; // filled in by Sema
   /// When the name resolved to a field of an enclosing `with`, `sym` is the
-  /// hidden variable holding that record's address and this is the field's
-  /// position in it. -1 when the name is an ordinary variable.
-  int withField = -1;
+  /// hidden variable holding that record's address and this is the field it
+  /// selects. Null when the name is an ordinary variable.
+  const Field *withField = nullptr;
 };
 
 /// `base[index]`. One subscript per node, so `a[i, j]` is two of them — which
@@ -100,14 +100,14 @@ struct IndexExpr : Expr {
   ExprPtr index;
 };
 
-/// `base.field`. Sema resolves the name to a position, so codegen indexes by
-/// number and never looks at the spelling.
+/// `base.field`. Sema resolves the name to the field itself, so codegen
+/// indexes by position and never looks at the spelling.
 struct FieldExpr : Expr {
   static constexpr NK NodeKind = NK::Field;
   FieldExpr() : Expr(NodeKind) {}
   ExprPtr base;
   std::string field;
-  int index = 0; // filled in by Sema
+  const Field *resolved = nullptr; // filled in by Sema
 };
 
 struct Binary : Expr {
@@ -215,6 +215,23 @@ struct WithStmt : Stmt {
   Symbol *binding = nullptr; // filled in by Sema
 };
 
+/// One arm of a case statement: the constants that select it, and what to do.
+struct CaseArm {
+  std::vector<ExprPtr> labels;
+  std::vector<long long> values; // filled in by Sema
+  StmtPtr body;
+  int line = 0, col = 0;
+};
+
+/// ISO 7185 §6.8.3.5 has no `else`: if no label matches the selector, the
+/// program is in error, so the default arm traps rather than falling through.
+struct CaseStmt : Stmt {
+  static constexpr NK NodeKind = NK::Case;
+  CaseStmt() : Stmt(NodeKind) {}
+  ExprPtr selector;
+  std::vector<CaseArm> arms;
+};
+
 struct ProcCallStmt : Stmt {
   static constexpr NK NodeKind = NK::ProcCall;
   ProcCallStmt() : Stmt(NodeKind) {}
@@ -241,19 +258,20 @@ struct DeclName {
 struct TypeExpr;
 using TypeExprPtr = std::unique_ptr<TypeExpr>;
 
-/// One dimension of an array type — `lo..hi`, both constant expressions.
-struct IndexRange {
-  ExprPtr lo, hi;
-  int line = 0, col = 0;
-};
-
 /// A group of record fields sharing one type-denoter.
 struct FieldGroup {
   std::vector<DeclName> names;
   TypeExprPtr type;
 };
 
-enum class TEK { Named, Array, Record };
+/// One arm of a record's variant part: `labels : (fields)`.
+struct VariantArm {
+  std::vector<ExprPtr> labels;
+  std::vector<FieldGroup> fields;
+  int line = 0, col = 0;
+};
+
+enum class TEK { Named, Enum, Subrange, Array, Record };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is
@@ -264,9 +282,22 @@ struct TypeExpr {
 
   std::string name;               // Named
   bool packed = false;            // Array, Record
-  std::vector<IndexRange> dims;   // Array — several is the `[a, b]` shorthand
+  /// Array: one ordinal type per index. ISO 7185 §6.4.3.2 makes the index an
+  /// ordinal *type*, which is why `array [1..3]` and `array [color]` are the
+  /// same construct rather than two — and several of them is the `[a, b]`
+  /// shorthand for an array of arrays.
+  std::vector<TypeExprPtr> dims;
   TypeExprPtr elem;               // Array: the component type
-  std::vector<FieldGroup> fields; // Record
+  std::vector<FieldGroup> fields; // Record: the fixed part
+  std::vector<DeclName> constants;// Enum
+  ExprPtr lo, hi;                 // Subrange
+
+  // Record: the variant part, if there is one. `tagName` is empty when the tag
+  // has no field of its own (ISO 7185 §6.4.3.3 allows `case T of`).
+  std::string tagName;
+  TypeExprPtr tagType;
+  std::vector<VariantArm> variants;
+  int tagLine = 0, tagCol = 0;
 
   Type *resolved = nullptr; // filled in by Sema
 };

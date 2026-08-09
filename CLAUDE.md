@@ -97,6 +97,29 @@ own exception and compare by length instead.
   TargetMachine first), because the size of a record decides what a whole-
   variable assignment copies.
 
+**Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
+the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the
+rest all answer for the base — so `1..9` *is* an integer everywhere except
+where its bounds matter. That is what let subranges reach arithmetic,
+comparison, `write`, indexing and parameter passing with no edits. Code needing
+the distinction asks `isSubrange()`.
+
+- Two enumerated types are never compatible however alike they look, so
+  `assignable` requires identity for them and must not fall through to the
+  kind comparison.
+- `ordinalLo()`/`ordinalHi()` give a type's first and last values. `succ`/`pred`
+  trap at *those*, not at `maxint` — an enumeration ends at its last constant.
+- `checkedForSubrange` is applied where a value *enters* a variable
+  (assignment, value parameter, both `for` bounds) and is a no-op for every
+  other type, so call sites need no conditional. Nothing between the `for`
+  bounds needs a check because the loop never leaves them.
+- `case` is an LLVM switch whose default traps: ISO 7185 §6.8.3.5 has no `else`
+  and none is invented.
+- A variant part is one block of shared storage with each arm a struct laid
+  over it. The block's element type carries the alignment (`[k x i64]`, not
+  `[n x i8]`) or a `real` inside a variant would be misaligned. `Field::variant`
+  says which arm a field belongs to; `fieldAddress` handles both.
+
 ## Decisions
 
 `doc/adr/` holds the architecture decision records. Read them before undoing
@@ -147,7 +170,8 @@ tests `= limit` before stepping so the last iteration cannot overflow; a
 one-character string literal is a `char`.
 
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
-array's own bounds optimises the check away.
+array's own bounds optimises the check away. Storing outside a subrange traps,
+and so does a `case` whose selector matches no label (ADR-0018).
 
 **ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
 through `checkedArith` and stop the program on overflow rather than wrapping —
@@ -186,8 +210,14 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 27 rules, 23 of them for every
+The catalogue currently has **no known gaps** — 29 rules, 25 of them for every
 32-bit input — so any gap that appears is something this change introduced.
+
+Keep bounds **symbolic** where the lowering treats them symbolically. The array,
+subrange and `succ` rules quantify over the bounds as well as the value, so they
+say something about every array and every enumeration rather than about a
+sampled one; the integer-only `succ` rule they replaced could not have caught
+the generalisation because it had `maxint` written into it.
 
 A rule may also state why a check is *unnecessary* (`negation-cannot-overflow`,
 `accepted-index-selects-the-right-element`). Those are the ones that pay: the

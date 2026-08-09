@@ -41,6 +41,11 @@ private:
   TypeExprPtr parseTypeExpr();
   TypeExprPtr parseArrayType(bool packed);
   TypeExprPtr parseRecordType(bool packed);
+  TypeExprPtr parseEnumType();
+  void parseVariantPart(TypeExpr &record);
+  /// True if what follows begins a subrange rather than a type name — that is,
+  /// a constant followed by '..'.
+  bool looksLikeSubrange() const;
   std::vector<DeclName> parseNameList(const char *what);
 
   StmtPtr parseStatement();
@@ -49,6 +54,7 @@ private:
   StmtPtr parseWhile();
   StmtPtr parseRepeat();
   StmtPtr parseFor();
+  StmtPtr parseCase();
   StmtPtr parseIdentStatement();
   StmtPtr parseWith();
   StmtPtr parseWrite(bool newline);

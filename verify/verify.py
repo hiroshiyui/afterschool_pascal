@@ -168,8 +168,11 @@ def build_crosscheck_program():
     # subtraction the index rules are about is actually exercised: with a lower
     # bound of 1 a wrong `i - lo` is off by a constant and easy to miss.
     lines = ["program Crosscheck(output);",
+             "type colour = (red, green, blue);",
              "var i, j: integer;",
              "    a: array [-3..3] of integer;",
+             "    c: colour;",
+             "    d: 1..9;",
              "begin"]
     expected = []
 
@@ -200,6 +203,30 @@ def build_crosscheck_program():
     for k in INDEX_POINTS:
         lines.append(f"  i := {k}; writeln(a[i]);")
         expected.append(str(k * k))
+
+    # An enumeration's ordinals, its ordering, and succ/pred at both ends of
+    # the range that exists — the places the generalised bounds are load-bearing.
+    lines.append("  for c := red to blue do write(ord(c));")
+    lines.append("  writeln;")
+    expected.append("012")
+    lines.append("  writeln(succ(red) = green, pred(blue) = green, red < blue);")
+    expected.append("TRUETRUETRUE")
+
+    # A subrange accepts its own bounds and every value between them.
+    lines.append("  j := 0;")
+    lines.append("  for i := 1 to 9 do begin d := i; j := j + ord(d) end;")
+    lines.append("  writeln(j);")
+    expected.append("45")
+
+    # Every arm of a case, selected in turn.
+    lines.append("  for i := 1 to 4 do")
+    lines.append("    case i of")
+    lines.append("      1: write('a');")
+    lines.append("      2, 3: write('b');")
+    lines.append("      4: write('c')")
+    lines.append("    end;")
+    lines.append("  writeln;")
+    expected.append("abbc")
 
     lines.append("end.")
     return "\n".join(lines) + "\n", expected

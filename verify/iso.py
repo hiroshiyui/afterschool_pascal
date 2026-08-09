@@ -116,6 +116,26 @@ def index_span_is_representable(lo, hi, maxint):
     return wide(hi) - wide(lo) < z3.BitVecVal(maxint, wide(lo).size())
 
 
+def is_a_value_of_the_subrange(v, lo, hi):
+    """ISO 7185 §6.4.2.4 — the values of `lo..hi` are exactly those of the host
+    type from lo to hi inclusive, and §6.4.6 makes storing anything else an
+    error."""
+    return z3.And(wide(v) >= wide(lo), wide(v) <= wide(hi))
+
+
+def has_a_successor_in(i, lo, hi):
+    """ISO 7185 §6.6.6.4 — succ(x) exists when x is not the last value of its
+    own ordinal type. Stated over the type's own bounds rather than the machine
+    type's, which is the whole difference an enumeration makes."""
+    return z3.And(wide(i) >= wide(lo), wide(i) < wide(hi))
+
+
+def successor_of(i, result):
+    """The successor's ordinal is one greater — checked in the wide domain, so
+    a lowering that wrapped at the end of the machine type would be caught."""
+    return wide(result) == wide(i) + 1
+
+
 def in_char_range(i):
     """chr(i) is defined only where i is the ordinal of some char (0..255)."""
     I = wide(i)

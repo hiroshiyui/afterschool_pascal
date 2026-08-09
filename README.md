@@ -31,18 +31,20 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
 somewhere else.
 
-## What the compiler accepts today (milestone 3)
+## What the compiler accepts today (milestone 4)
 
 ```
 program-header, const part, type part, var part, compound statement
 types      integer  real  boolean  char
-           array [lo..hi] of T, multi-dimensional, any ordinal index
-           record, nested to any depth, packed
+           (red, green, blue) — enumerations
+           lo..hi — subranges of any ordinal type, range-checked on store
+           array [ordinal-type] of T, multi-dimensional, any ordinal index
+           record, nested to any depth, packed, with variant parts
            packed array [1..n] of char — the string types
 routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations
 statements := , if/then/else, while, repeat/until, for/to/downto,
-           begin/end, with, procedure call, write, writeln
+           begin/end, case, with, procedure call, write, writeln
 operators  + - * / div mod, and or not (short-circuiting),
            = <> < <= > >=  (including on strings)
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
@@ -50,6 +52,13 @@ functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
 literals   integers, reals, 'strings', '' escapes, { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
 ```
+
+Enumerations and subranges are ordinal types like `char`: they index arrays,
+drive `for` loops, answer `ord`/`succ`/`pred`, and select `case` arms. `succ`
+runs out at the end of its own type — at `blue`, or at 9 for a `1..9` — not at
+`maxint`. A record may have a variant part, tagged or not, which is what makes
+a tag-plus-variant AST node expressible. See
+[ADR-0018](doc/adr/0018-ordinal-types-and-variant-records.md).
 
 Arrays and records assign whole (`b := a` copies every component), pass as
 value parameters by copy and as `var` parameters by reference, and nest freely
@@ -67,7 +76,8 @@ A real written without a width comes out in floating form (`5.0E-01` style);
 with a width and a fraction length it comes out fixed-point.
 
 **Errors are detected, not ignored.** ISO 7185 calls integer overflow, an array
-subscript outside its bounds, `chr` of a non-ordinal, `succ` past the end of a
+subscript outside its bounds, a value stored outside a subrange, a `case` whose
+selector matches no label, `chr` of a non-ordinal, `succ` past the end of a
 type, and `trunc` of a real too large *errors*; this compiler stops the program
 with a message rather than letting it wrap, read past the array, or produce an
 arbitrary value:
@@ -83,8 +93,8 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: sets, pointers, files, `case`, `goto`, subranges,
-enumerations, variant parts of records, procedural parameters.
+Not accepted yet: sets, pointers, files, `goto`, procedural parameters, and a
+variant part nested inside another variant.
 
 ## How it fits together
 
@@ -123,11 +133,15 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Twenty-seven rules are currently established — the
+the two disagree. Twenty-nine rules are currently established — the
 non-negative `mod`, truncating `div`, `odd` on negative values, ordinal `char`
 comparison, the exact integer-to-real widening, the `for` loop's inability to
-overflow, and an array subscript's inability to leave its bounds — twenty-three
-of them for all 2³² inputs.
+overflow, an array subscript's inability to leave its bounds, and a subrange's
+inability to hold a value outside it — twenty-five of them for all 2³² inputs.
+
+Several rules keep their bounds *symbolic*, so they are theorems about every
+array, every subrange and every enumeration rather than about the ones a test
+happens to declare.
 
 Each runtime check is proved to fire *exactly* when ISO says the operation is in
 error. Both directions matter: trapping always would satisfy "never produces a
@@ -174,8 +188,9 @@ written in. In dependency order:
 2. ~~**Arrays and records**~~ — done: static arrays of any ordinal index,
    `packed`, nested records, `with`, bounds-checked subscripts (ADR-0017).
    Variant parts wait for `case`.
-3. **Enumerations, subranges, `case`** — the node-kind tag itself wants these,
-   and a record's variant part cannot be written without them.
+3. ~~**Enumerations, subranges, `case`**~~ — done, together with the variant
+   records they unlock (ADR-0018). An AST node is now expressible: the tag is
+   an enumeration and the node is a variant record.
 4. **Pointers and `new`/`dispose`** — the AST is a heap-allocated tree.
 5. **Text files** — `reset`, `rewrite`, `read`, `readln`, `eof`, `eoln`, so the
    compiler can read source and write `.ll`.

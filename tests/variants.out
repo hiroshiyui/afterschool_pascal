@@ -1,0 +1,5 @@
+((3 + 4) * -(5)) = -35
+nodes built: 6  root line: 15
+copied lhs: 1  original now: 99
+as real: 2.50
+as integer: 42

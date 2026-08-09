@@ -18,6 +18,10 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   case TypeKind::Boolean: return i1();
   case TypeKind::Char:    return i8();
   case TypeKind::Void:    return llvm::Type::getVoidTy(ctx_);
+  // An enumeration is its ordinal number; a subrange is represented exactly as
+  // the type it is a subrange of, and differs only in what it accepts.
+  case TypeKind::Enum:     return i32();
+  case TypeKind::Subrange: return llvmType(t->host);
   case TypeKind::Array:
   case TypeKind::Record:
     break;
@@ -37,12 +41,54 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
     SmallVector<llvm::Type *, 8> fields;
     for (const Field &f : t->fields)
       fields.push_back(llvmType(f.type));
+    // A named struct is created before the variant part is measured, because
+    // measuring needs a module with a data layout and this one is it.
+    StructType *rec = StructType::create(ctx_, "rec." + t->name());
+    typeCache_[t] = rec;
+    if (!t->variants.empty())
+      fields.push_back(variantStorageType(t));
     // `packed` is left to the implementation by ISO 7185 §6.4.3.1, and the
     // natural layout is what the ABI and the optimiser both expect.
-    result = StructType::create(ctx_, fields, "rec." + t->name());
+    rec->setBody(fields);
+    return rec;
   }
   typeCache_[t] = result;
   return result;
+}
+
+/// LLVM has no union, so the variant part is one block of storage big enough
+/// and aligned well enough for every arm, and each arm is a struct laid over
+/// it. The element type carries the alignment: `[k x i64]` is 8-aligned where
+/// `[n x i8]` would be 1-aligned and would misalign a real inside a variant.
+llvm::Type *CodeGen::variantStorageType(ap::Type *record) {
+  uint64_t size = 0;
+  uint64_t align = 1;
+  for (size_t i = 0; i < record->variants.size(); ++i) {
+    llvm::Type *arm = variantType(record, static_cast<int>(i));
+    size = std::max(size, mod_->getDataLayout().getTypeAllocSize(arm).getFixedValue());
+    align = std::max(align,
+                     mod_->getDataLayout().getABITypeAlign(arm).value());
+  }
+  if (size == 0)
+    return ArrayType::get(i8(), 0); // every arm is empty
+  llvm::Type *unit = llvm::IntegerType::get(ctx_, align * 8);
+  return ArrayType::get(unit, (size + align - 1) / align);
+}
+
+/// The struct one arm of a variant part lays over the shared storage.
+llvm::StructType *CodeGen::variantType(ap::Type *record, int variant) {
+  auto key = std::make_pair(record, variant);
+  auto cached = variantTypes_.find(key);
+  if (cached != variantTypes_.end())
+    return cached->second;
+
+  SmallVector<llvm::Type *, 8> fields;
+  for (const Field &f : record->variants[variant].fields)
+    fields.push_back(llvmType(f.type));
+  StructType *ty = StructType::create(
+      ctx_, fields, "var." + record->name() + "." + std::to_string(variant));
+  variantTypes_[key] = ty;
+  return ty;
 }
 
 uint64_t CodeGen::sizeOf(ap::Type *t) {
@@ -128,6 +174,32 @@ llvm::Value *CodeGen::checkedFPToInt(llvm::Value *x, const char *message) {
                                       b_.CreateFCmpOLT(x, hi, "lt.hi"));
   emitTrapIf(b_.CreateNot(inRange, "fp.bad"), message);
   return b_.CreateFPToSI(x, i32(), "toint");
+}
+
+/// ISO 7185 §6.4.6 makes it an error to store a value outside a subrange's
+/// bounds, so every place a value enters a subrange variable goes through
+/// here. A subrange covering its whole host type needs no check at all, which
+/// is what keeps `1..maxint` from paying for one.
+llvm::Value *CodeGen::checkedForSubrange(llvm::Value *v, ap::Type *target) {
+  if (!target || !target->isSubrange())
+    return v;
+  const ap::Type *host = target->base();
+  if (target->lo <= host->ordinalLo() && target->hi >= host->ordinalHi())
+    return v;
+
+  llvm::Type *ty = v->getType();
+  bool sign = target->isSignedOrdinal();
+  auto constant = [&](long long value) -> llvm::Value * {
+    return sign ? ConstantInt::getSigned(ty, value)
+                : ConstantInt::get(ty, static_cast<uint64_t>(value));
+  };
+  llvm::Value *below = sign ? b_.CreateICmpSLT(v, constant(target->lo))
+                            : b_.CreateICmpULT(v, constant(target->lo));
+  llvm::Value *above = sign ? b_.CreateICmpSGT(v, constant(target->hi))
+                            : b_.CreateICmpUGT(v, constant(target->hi));
+  emitTrapIf(b_.CreateOr(below, above, "range.bad"),
+             "value out of range (" + target->name() + ")");
+  return v;
 }
 
 llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
@@ -285,6 +357,20 @@ llvm::Value *CodeGen::addressOf(Symbol *v) {
   return slot;
 }
 
+/// A field of the fixed part is one index into the record. A field of a
+/// variant is two: to the shared storage, then into the arm laid over it.
+llvm::Value *CodeGen::fieldAddress(llvm::Value *record, ap::Type *type,
+                                   const Field *field) {
+  StructType *recTy = cast<StructType>(llvmType(type));
+  if (field->variant < 0)
+    return b_.CreateStructGEP(recTy, record, field->index, field->name);
+
+  llvm::Value *storage = b_.CreateStructGEP(
+      recTy, record, static_cast<unsigned>(type->fields.size()), "variant");
+  return b_.CreateStructGEP(variantType(type, field->variant), storage,
+                            field->index, field->name);
+}
+
 /// Every read and every write goes through here, so a subscript is bounds
 /// checked exactly once however it is used.
 llvm::Value *CodeGen::emitAddress(Expr *e) {
@@ -292,18 +378,16 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
   case NK::VarRef: {
     auto *v = static_cast<VarRef *>(e);
     llvm::Value *base = addressOf(v->sym);
-    if (v->withField < 0)
+    if (!v->withField)
       return base;
     // The name was a field of an enclosing `with`, and `sym` is that
     // statement's binding — the record's address, taken once on entry.
-    return b_.CreateStructGEP(llvmType(v->sym->type), base, v->withField,
-                              v->name);
+    return fieldAddress(base, v->sym->type, v->withField);
   }
 
   case NK::Field: {
     auto *f = static_cast<FieldExpr *>(e);
-    return b_.CreateStructGEP(llvmType(f->base->type),
-                              emitAddress(f->base.get()), f->index, f->field);
+    return fieldAddress(emitAddress(f->base.get()), f->base->type, f->resolved);
   }
 
   case NK::Index: {
@@ -378,7 +462,8 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
       argv.push_back(emitAddress(args[i].get()));
     } else {
       llvm::Value *v = emitExpr(args[i].get());
-      argv.push_back(convertFor(v, args[i]->type, p->type));
+      v = convertFor(v, args[i]->type, p->type);
+      argv.push_back(checkedForSubrange(v, p->type));
     }
   }
   return b_.CreateCall(functions_[callee], argv,
@@ -424,6 +509,7 @@ void CodeGen::emitStmt(Stmt *s) {
   case NK::Repeat:  emitRepeat(static_cast<RepeatStmt *>(s)); return;
   case NK::For:     emitFor(static_cast<ForStmt *>(s)); return;
   case NK::With:    emitWith(static_cast<WithStmt *>(s)); return;
+  case NK::Case:    emitCase(static_cast<CaseStmt *>(s)); return;
   case NK::ProcCall: {
     auto *call = static_cast<ProcCallStmt *>(s);
     emitUserCall(call->sym, call->args);
@@ -443,7 +529,46 @@ void CodeGen::emitAssign(Assign *s) {
     return;
   }
   llvm::Value *v = emitExpr(s->value.get());
-  b_.CreateStore(convertFor(v, s->value->type, s->target->type), dst);
+  v = convertFor(v, s->value->type, s->target->type);
+  b_.CreateStore(checkedForSubrange(v, s->target->type), dst);
+}
+
+/// ISO 7185 §6.8.3.5 has no `else` arm, so the default is an error rather than
+/// a way out: a selector matching no label stops the program. That maps onto a
+/// switch exactly, and the jump table survives optimisation.
+void CodeGen::emitCase(CaseStmt *s) {
+  llvm::Value *selector = emitExpr(s->selector.get());
+  // The switch wants a single integer type; a char or boolean selector is
+  // widened, and its labels with it.
+  if (selector->getType() != i32())
+    selector = b_.CreateZExt(selector, i32(), "case.sel");
+
+  BasicBlock *defaultBB = BasicBlock::Create(ctx_, "case.none", curFn_);
+  BasicBlock *endBB = BasicBlock::Create(ctx_, "case.end", curFn_);
+
+  unsigned labels = 0;
+  for (const CaseArm &arm : s->arms)
+    labels += static_cast<unsigned>(arm.values.size());
+  SwitchInst *sw = b_.CreateSwitch(selector, defaultBB, labels);
+
+  for (const CaseArm &arm : s->arms) {
+    BasicBlock *armBB = BasicBlock::Create(ctx_, "case.arm", curFn_);
+    for (long long value : arm.values)
+      sw->addCase(cast<ConstantInt>(ConstantInt::getSigned(i32(), value)),
+                  armBB);
+    b_.SetInsertPoint(armBB);
+    emitStmt(arm.body.get());
+    b_.CreateBr(endBB);
+  }
+
+  b_.SetInsertPoint(defaultBB);
+  llvm::Value *msg =
+      b_.CreateGlobalString("case: no label matches the selector", "errmsg");
+  b_.CreateCall(rt("pas_runtime_error", llvm::Type::getVoidTy(ctx_), {ptr()}),
+                {msg});
+  b_.CreateUnreachable();
+
+  b_.SetInsertPoint(endBB);
 }
 
 /// The record is designated once and its address kept for the body, so a
@@ -473,7 +598,7 @@ void CodeGen::emitWrite(WriteStmt *s) {
     }
 
     llvm::Value *v = emitExpr(arg.value.get());
-    switch (arg.value->type->kind) {
+    switch (arg.value->type->base()->kind) {
     case TypeKind::Integer:
       b_.CreateCall(rt("pas_write_int", voidTy, {i64(), i32()}),
                     {b_.CreateSExt(v, i64()), width});
@@ -554,10 +679,14 @@ void CodeGen::emitFor(ForStmt *s) {
   llvm::Value *slot = emitAddress(s->var.get());
   llvm::Type *varTy = llvmType(s->var->type);
 
-  llvm::Value *from = convertFor(emitExpr(s->from.get()), s->from->type,
-                                 s->var->type);
-  llvm::Value *to = convertFor(emitExpr(s->to.get()), s->to->type,
-                               s->var->type);
+  // Both bounds are checked against the control variable's type, and nothing
+  // between them needs checking: the loop never leaves [from, to].
+  llvm::Value *from = checkedForSubrange(
+      convertFor(emitExpr(s->from.get()), s->from->type, s->var->type),
+      s->var->type);
+  llvm::Value *to = checkedForSubrange(
+      convertFor(emitExpr(s->to.get()), s->to->type, s->var->type),
+      s->var->type);
   // The limit is evaluated exactly once, as ISO 7185 requires.
   llvm::Value *limit = b_.CreateAlloca(varTy, nullptr, "for.limit");
   b_.CreateStore(to, limit);
@@ -572,10 +701,13 @@ void CodeGen::emitFor(ForStmt *s) {
   b_.SetInsertPoint(condBB);
   llvm::Value *cur = b_.CreateLoad(varTy, slot, "for.cur");
   llvm::Value *lim = b_.CreateLoad(varTy, limit, "for.lim");
-  bool isChar = s->var->type->isChar();
+  // Integer is the only ordinal with negative values; char, boolean and
+  // enumerations all order as unsigned.
+  bool unsignedOrdinal = !s->var->type->isInteger();
   llvm::Value *test =
-      s->downto ? (isChar ? b_.CreateICmpUGE(cur, lim) : b_.CreateICmpSGE(cur, lim))
-                : (isChar ? b_.CreateICmpULE(cur, lim) : b_.CreateICmpSLE(cur, lim));
+      s->downto
+          ? (unsignedOrdinal ? b_.CreateICmpUGE(cur, lim) : b_.CreateICmpSGE(cur, lim))
+          : (unsignedOrdinal ? b_.CreateICmpULE(cur, lim) : b_.CreateICmpSLE(cur, lim));
   b_.CreateCondBr(test, bodyBB, endBB);
 
   b_.SetInsertPoint(bodyBB);
@@ -598,11 +730,14 @@ void CodeGen::emitFor(ForStmt *s) {
 // --------------------------------------------------------------- expressions
 
 llvm::Value *CodeGen::emitConst(const Symbol &sym) {
-  switch (sym.type->kind) {
+  switch (sym.type->base()->kind) {
   case TypeKind::Integer: return ConstantInt::getSigned(i32(), sym.intVal);
   case TypeKind::Real:    return ConstantFP::get(f64(), sym.realVal);
   case TypeKind::Boolean: return ConstantInt::get(i1(), sym.boolVal);
   case TypeKind::Char:    return ConstantInt::get(i8(), sym.charVal);
+  // An enumeration constant is its ordinal number, which Sema assigned in
+  // declaration order.
+  case TypeKind::Enum:    return ConstantInt::get(i32(), sym.intVal);
   default:                return ConstantInt::get(i32(), 0);
   }
 }
@@ -619,9 +754,9 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     return emitAddress(e);
   case NK::VarRef: {
     auto *v = static_cast<VarRef *>(e);
-    if (v->withField < 0 && v->sym->kind == SymKind::Const)
+    if (!v->withField && v->sym->kind == SymKind::Const)
       return emitConst(*v->sym);
-    if (v->withField < 0 && v->sym->kind == SymKind::Func)
+    if (!v->withField && v->sym->kind == SymKind::Func)
       return emitUserCall(v->sym, noArgs_); // a parameterless call by name
     return emitLoad(e);
   }
@@ -827,16 +962,19 @@ llvm::Value *CodeGen::emitCall(Call *e) {
   }
   case Builtin::Succ:
   case Builtin::Pred: {
-    // succ and pred are errors at the ends of the ordinal type (§6.6.6.4).
+    // succ and pred are errors at the ends of the ordinal type (§6.6.6.4), and
+    // which type that is decides where the ends are: `blue` for an
+    // enumeration, 9 for a subrange 1..9, maxint for an integer.
     bool up = e->builtin == Builtin::Succ;
-    llvm::Value *limit;
-    if (at->isChar())
-      limit = ConstantInt::get(i8(), up ? 255 : 0);
-    else
-      limit = ConstantInt::getSigned(i32(), up ? kMaxInt : -kMaxInt);
+    long long end = up ? at->ordinalHi() : at->ordinalLo();
+    llvm::Value *limit = at->isSignedOrdinal()
+                             ? ConstantInt::getSigned(a->getType(), end)
+                             : ConstantInt::get(a->getType(),
+                                                static_cast<uint64_t>(end));
     emitTrapIf(b_.CreateICmpEQ(a, limit, "ordinal.end"),
-               up ? "succ: no successor exists"
-                  : "pred: no predecessor exists");
+               std::string(up ? "succ" : "pred") + ": " +
+                   Type::ordinalName(at, end) + " has no " +
+                   (up ? "successor" : "predecessor") + " in " + at->name());
     llvm::Value *one = ConstantInt::get(a->getType(), 1);
     return up ? b_.CreateAdd(a, one, "succ") : b_.CreateSub(a, one, "pred");
   }

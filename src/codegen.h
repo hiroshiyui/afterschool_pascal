@@ -1,7 +1,9 @@
 #pragma once
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -56,6 +58,10 @@ private:
   /// True if this parameter arrives as an address the callee copies from.
   static bool passedByAddress(const Symbol *v);
   uint64_t sizeOf(Type *t);
+  /// The shared storage a record's variant arms are laid over.
+  llvm::Type *variantStorageType(Type *record);
+  /// The struct one arm of a variant part lays over that storage.
+  llvm::StructType *variantType(Type *record, int variant);
 
   llvm::FunctionCallee rt(const char *name, llvm::Type *ret,
                           llvm::ArrayRef<llvm::Type *> params);
@@ -78,6 +84,9 @@ private:
   llvm::Value *frameSlot(Symbol *v);
   /// The address of a variable, wherever in the chain it lives.
   llvm::Value *addressOf(Symbol *v);
+  /// The address of one field of a record, fixed part or variant alike.
+  llvm::Value *fieldAddress(llvm::Value *record, Type *type,
+                            const Field *field);
   /// The address a designator denotes — a name, a subscript, or a field.
   /// This is the one path by which anything is read or written.
   llvm::Value *emitAddress(Expr *e);
@@ -98,6 +107,10 @@ private:
   void emitRepeat(RepeatStmt *s);
   void emitFor(ForStmt *s);
   void emitWith(WithStmt *s);
+  void emitCase(CaseStmt *s);
+  /// Trap unless the value is in `target`'s subrange. A no-op for every other
+  /// type, so it can be applied wherever a value is stored.
+  llvm::Value *checkedForSubrange(llvm::Value *v, Type *target);
 
   // expressions
   llvm::Value *emitExpr(Expr *e);
@@ -131,6 +144,9 @@ private:
   /// One LLVM type per Pascal type, so a record keeps a single struct type
   /// however many variables have it.
   std::unordered_map<const Type *, llvm::Type *> typeCache_;
+  /// One struct per (record, variant arm), keyed the same way a field names
+  /// the arm it belongs to.
+  std::map<std::pair<const Type *, int>, llvm::StructType *> variantTypes_;
 
   // State for the procedure currently being emitted.
   llvm::Function *curFn_ = nullptr;

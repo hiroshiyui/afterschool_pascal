@@ -276,6 +276,46 @@ def _accepted_index_selects_the_right_element(w):
     return pre, claim
 
 
+def _subrange_traps_exactly_outside(w):
+    """The store check fires on exactly the values ISO calls an error, for
+    every subrange — the bounds are symbolic, so this is one theorem about all
+    subranges rather than a sample of some."""
+    v = low.integer("v", w)
+    lo, hi = low.integer("lo", w), low.integer("hi", w)
+    pre = z3.And(lo <= hi,  # Sema rejects an empty subrange at compile time
+                 iso.in_integer_range(lo, low.maxint(w)),
+                 iso.in_integer_range(hi, low.maxint(w)),
+                 iso.in_integer_range(v, low.maxint(w)))
+    claim = low.traps_subrange_store(v, lo, hi) == z3.Not(
+        iso.is_a_value_of_the_subrange(v, lo, hi))
+    return pre, claim
+
+
+def _succ_traps_exactly_at_the_end_of_its_type(w):
+    """succ over an arbitrary ordinal type, not just integer: it traps exactly
+    at the type's last value, and elsewhere gives the next one.
+
+    The bounds are symbolic, so an enumeration ending at 4 and a subrange
+    ending at 9 are both covered — the case the old integer-only rule could
+    not see, because it hard-coded maxint as the end.
+    """
+    i = low.integer("i", w)
+    lo, hi = low.integer("lo", w), low.integer("hi", w)
+    pre = z3.And(lo <= hi,
+                 iso.in_integer_range(lo, low.maxint(w)),
+                 iso.in_integer_range(hi, low.maxint(w)),
+                 iso.is_a_value_of_the_subrange(i, lo, hi))
+    traps = low.succ_traps_at(i, hi)
+    claim = z3.And(
+        traps == z3.Not(iso.has_a_successor_in(i, lo, hi)),
+        # and where it does not trap, the result is right and still in the type
+        z3.Implies(z3.Not(traps),
+                   z3.And(iso.successor_of(i, low.succ_int(i)),
+                          iso.is_a_value_of_the_subrange(low.succ_int(i),
+                                                         lo, hi))))
+    return pre, claim
+
+
 ALL = [
     Rule("mod-satisfies-iso", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — 0 <= i mod j < j, and j divides (i - r)",
@@ -372,4 +412,12 @@ ALL = [
          "why the offset subtraction needs no overflow check of its own",
          "codegen.cpp emitAddress, NK::Index",
          _accepted_index_selects_the_right_element),
+
+    Rule("subrange-traps-exactly-outside-its-bounds", MUST_HOLD,
+         "ISO 7185 §6.4.6 — storing a value outside a subrange is an error",
+         "codegen.cpp checkedForSubrange", _subrange_traps_exactly_outside),
+    Rule("succ-traps-exactly-at-the-end-of-its-type", MUST_HOLD,
+         "ISO 7185 §6.6.6.4 — succ over any ordinal type, not just integer",
+         "codegen.cpp Builtin::Succ",
+         _succ_traps_exactly_at_the_end_of_its_type),
 ]

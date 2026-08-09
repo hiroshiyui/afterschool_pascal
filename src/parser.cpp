@@ -171,7 +171,27 @@ std::vector<DeclName> Parser::parseNameList(const char *what) {
 
 // -------------------------------------------------------------- type denoters
 
-/// type-denoter = type-identifier | 'packed'? (array-type | record-type)
+/// A constant followed by '..' is a subrange; a bare identifier is a type
+/// name. The two only diverge at the '..', so this is the one place the type
+/// grammar needs to look past the current token.
+bool Parser::looksLikeSubrange() const {
+  size_t i = pos_;
+  if (toks_[i].kind == Tok::Plus || toks_[i].kind == Tok::Minus)
+    ++i;
+  switch (toks_[i].kind) {
+  case Tok::Ident:
+  case Tok::IntLit:
+  case Tok::StrLit:
+    break;
+  default:
+    return false;
+  }
+  ++i;
+  return i < toks_.size() && toks_[i].kind == Tok::DotDot;
+}
+
+/// type-denoter  = 'packed'? structured-type | ordinal-type | type-identifier
+/// ordinal-type  = enumerated-type | subrange-type
 TypeExprPtr Parser::parseTypeExpr() {
   bool packed = accept(Tok::KwPacked);
 
@@ -188,6 +208,21 @@ TypeExprPtr Parser::parseTypeExpr() {
     errorAtCur(std::string(tokenName(cur().kind)) + " types are not supported yet");
     bail();
   }
+
+  if (check(Tok::LParen))
+    return parseEnumType();
+
+  if (looksLikeSubrange()) {
+    auto t = std::make_unique<TypeExpr>();
+    t->kind = TEK::Subrange;
+    t->line = cur().line;
+    t->col = cur().col;
+    t->lo = parseExpr();
+    expect(Tok::DotDot, "between the bounds of a subrange");
+    t->hi = parseExpr();
+    return t;
+  }
+
   if (!check(Tok::Ident)) {
     errorAtCur(std::string("expected a type, found ") + tokenName(cur().kind));
     bail();
@@ -202,12 +237,24 @@ TypeExprPtr Parser::parseTypeExpr() {
   return t;
 }
 
-/// array-type = 'array' '[' index (',' index)* ']' 'of' type-denoter
-/// index      = constant '..' constant
+/// enumerated-type = '(' identifier-list ')'
+TypeExprPtr Parser::parseEnumType() {
+  auto t = std::make_unique<TypeExpr>();
+  t->kind = TEK::Enum;
+  t->line = cur().line;
+  t->col = cur().col;
+  expect(Tok::LParen, "");
+  t->constants = parseNameList("an enumeration constant");
+  expect(Tok::RParen, "after the constants of an enumerated type");
+  return t;
+}
+
+/// array-type = 'array' '[' ordinal-type (',' ordinal-type)* ']' 'of' type
 ///
-/// Several indices are the abbreviation of ISO 7185 §6.4.3.2 — `array [a, b]
-/// of T` means `array [a] of array [b] of T` — so the dimensions are kept in
-/// one node here and nested by Sema.
+/// The index is a *type*, so `array [1..3]`, `array [color]` and
+/// `array [char]` are one construct. Several indices are the abbreviation of
+/// ISO 7185 §6.4.3.2 — `array [a, b] of T` means `array [a] of array [b] of T`
+/// — so they are kept in one node here and nested by Sema.
 TypeExprPtr Parser::parseArrayType(bool packed) {
   auto t = std::make_unique<TypeExpr>();
   t->kind = TEK::Array;
@@ -218,13 +265,7 @@ TypeExprPtr Parser::parseArrayType(bool packed) {
   expect(Tok::LBracket, "after 'array'");
 
   do {
-    IndexRange dim;
-    dim.line = cur().line;
-    dim.col = cur().col;
-    dim.lo = parseExpr();
-    expect(Tok::DotDot, "between the bounds of an array index");
-    dim.hi = parseExpr();
-    t->dims.push_back(std::move(dim));
+    t->dims.push_back(parseTypeExpr());
   } while (accept(Tok::Comma));
 
   expect(Tok::RBracket, "after the index type of an array");
@@ -234,7 +275,7 @@ TypeExprPtr Parser::parseArrayType(bool packed) {
 }
 
 /// record-type = 'record' field-list 'end'
-/// field-list  = group (';' group)*
+/// field-list  = group (';' group)* (';' variant-part)?
 /// group       = ident-list ':' type-denoter
 TypeExprPtr Parser::parseRecordType(bool packed) {
   auto t = std::make_unique<TypeExpr>();
@@ -246,10 +287,8 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
 
   while (!check(Tok::KwEnd)) {
     if (check(Tok::KwCase)) {
-      // A variant part needs a tag of an enumerated or subrange type, which
-      // arrives with `case` itself; see README's dependency order.
-      errorAtCur("variant parts of a record are not supported yet");
-      bail();
+      parseVariantPart(*t);
+      break; // the variant part is last (ISO 7185 §6.4.3.3)
     }
     FieldGroup group;
     group.names = parseNameList("a field name");
@@ -262,6 +301,62 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
 
   expect(Tok::KwEnd, "at the end of a record type");
   return t;
+}
+
+/// variant-part = 'case' (identifier ':')? type-identifier 'of' variant
+///                (';' variant)*
+/// variant      = constant (',' constant)* ':' '(' field-list ')'
+///
+/// The tag may be a real field or exist only as a type (§6.4.3.3). The two are
+/// told apart by the ':' — `case kind: nodekind of` names a field,
+/// `case nodekind of` does not.
+void Parser::parseVariantPart(TypeExpr &record) {
+  expect(Tok::KwCase, "");
+  record.tagLine = cur().line;
+  record.tagCol = cur().col;
+
+  if (check(Tok::Ident) && peek().kind == Tok::Colon) {
+    record.tagName = cur().text;
+    pos_ += 2; // the name and the ':'
+  }
+  if (!check(Tok::Ident)) {
+    errorAtCur("the tag of a variant part must be a type name");
+    bail();
+  }
+  record.tagType = parseTypeExpr();
+  expect(Tok::KwOf, "after the tag of a variant part");
+
+  while (!check(Tok::KwEnd)) {
+    VariantArm arm;
+    arm.line = cur().line;
+    arm.col = cur().col;
+    do {
+      arm.labels.push_back(parseExpr());
+    } while (accept(Tok::Comma));
+
+    expect(Tok::Colon, "after the labels of a variant");
+    expect(Tok::LParen, "before the fields of a variant");
+    while (!check(Tok::RParen)) {
+      if (check(Tok::KwCase)) {
+        // A variant inside a variant is legal Pascal and nothing in the
+        // bootstrap needs one; rejecting it keeps the gap visible.
+        errorAtCur("a variant part inside a variant is not supported yet");
+        bail();
+      }
+      FieldGroup group;
+      group.names = parseNameList("a field name");
+      expect(Tok::Colon, "in the fields of a variant");
+      group.type = parseTypeExpr();
+      arm.fields.push_back(std::move(group));
+      if (!accept(Tok::Semi))
+        break;
+    }
+    expect(Tok::RParen, "after the fields of a variant");
+    record.variants.push_back(std::move(arm));
+
+    if (!accept(Tok::Semi))
+      break;
+  }
 }
 
 void Parser::parseConstPart(Block &prog) {
@@ -340,11 +435,11 @@ StmtPtr Parser::parseStatement() {
   case Tok::KwRepeat: return parseRepeat();
   case Tok::KwFor:    return parseFor();
   case Tok::KwWith:   return parseWith();
+  case Tok::KwCase:   return parseCase();
   case Tok::Ident:    return parseIdentStatement();
   case Tok::KwEnd:
   case Tok::Semi:
     return makeNode<EmptyStmt>(cur());
-  case Tok::KwCase:
   case Tok::KwGoto:
     errorAtCur(std::string(tokenName(cur().kind)) +
                " statements are not supported yet");
@@ -412,6 +507,37 @@ StmtPtr Parser::parseFor() {
   s->to = parseExpr();
   expect(Tok::KwDo, "in a for statement");
   s->body = parseStatement();
+  return s;
+}
+
+/// case-statement = 'case' expression 'of' arm (';' arm)* ';'? 'end'
+/// arm            = constant (',' constant)* ':' statement
+///
+/// ISO 7185 §6.8.3.5 has no `else` or `otherwise` arm, and none is invented
+/// here: a selector matching no label is an error the program stops on.
+StmtPtr Parser::parseCase() {
+  auto s = makeNode<CaseStmt>(cur());
+  expect(Tok::KwCase, "");
+  s->selector = parseExpr();
+  expect(Tok::KwOf, "after the selector of a case statement");
+
+  while (!check(Tok::KwEnd)) {
+    CaseArm arm;
+    arm.line = cur().line;
+    arm.col = cur().col;
+    do {
+      arm.labels.push_back(parseExpr());
+    } while (accept(Tok::Comma));
+
+    expect(Tok::Colon, "after the labels of a case arm");
+    arm.body = parseStatement();
+    s->arms.push_back(std::move(arm));
+
+    if (!accept(Tok::Semi))
+      break;
+  }
+
+  expect(Tok::KwEnd, "at the end of a case statement");
   return s;
 }
 

@@ -1,0 +1,14 @@
+<source>:14:13: error: a subrange cannot be empty: 1 is below 9
+<source>:15:13: error: the bounds of a subrange must have the same type, found integer and char
+<source>:16:13: error: the bounds of a subrange must be ordinal constants
+<source>:17:14: error: 'red' is already declared in this block
+<source>:21:10: error: the tag of a variant part must be an ordinal type, found real
+<source>:28:7: error: the tag value red already selects an earlier variant
+<source>:29:15: error: 'x' is already a field of this record
+<source>:39:3: error: cannot assign weekday to a variable of type colour
+<source>:40:3: error: cannot assign colour to a variable of type weekday
+<source>:41:11: error: a value of type colour cannot be written
+<source>:42:3: error: cannot assign colour to a variable of type digit
+<source>:44:8: error: the selector of a case statement must be an ordinal type, found real
+<source>:51:5: error: the label red appears twice in this case statement
+<source>:52:5: error: this case selects on colour, but the label is weekday

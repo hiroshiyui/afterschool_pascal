@@ -1,4 +1,4 @@
-<source>:19:16: error: this array has too many elements: an index range may span at most maxint values
+<source>:19:16: error: this array has too many elements: an index type may span at most maxint values
 <source>:21:1: error: a function cannot return vector; use a var parameter
 <source>:30:3: error: cannot assign array [1..3] of integer to a variable of type vector
 <source>:31:3: error: cannot assign vector to a variable of type integer

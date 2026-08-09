@@ -147,6 +147,24 @@ def index_offset(i, lo):
     return i - lo
 
 
+def traps_subrange_store(v, lo, hi):
+    """`checkedForSubrange`: both bounds, compared with the signed predicates
+    an integer subrange uses.
+
+        below = CreateICmpSLT(v, lo)
+        above = CreateICmpSGT(v, hi)
+        emitTrapIf(CreateOr(below, above))
+    """
+    return z3.Or(v < lo, v > hi)
+
+
+def succ_traps_at(i, end):
+    """`Builtin::Succ`, generalised to any ordinal type: equality with the last
+    value of *that* type, which for an enumeration or a subrange is not
+    maxint. The addition afterwards is a bare CreateAdd."""
+    return i == end
+
+
 def traps_fp_to_int(x):
     """`checkedFPToInt`: ordered comparisons against the two exactly
     representable powers of two just outside the integer range. Ordered means a

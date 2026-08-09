@@ -145,87 +145,120 @@ Type *Sema::stringType(long long length) {
   return t;
 }
 
-bool Sema::evalBound(Expr *e, Type *&type, long long &value) {
+bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
   checkExpr(e);
   Symbol out;
-  if (!evalConst(e, out) || !out.type)
+  if (!evalConst(e, out) || !out.type || !out.type->isOrdinal())
     return false;
-  if (out.type->isInteger()) {
-    type = ty::Int();
-    value = out.intVal;
-    return true;
-  }
-  if (out.type->isChar()) {
-    type = ty::Char();
+  type = out.type;
+  if (out.type->isChar())
     value = static_cast<unsigned char>(out.charVal);
-    return true;
-  }
-  if (out.type->isBoolean()) {
-    type = ty::Bool();
+  else if (out.type->base()->kind == TypeKind::Boolean)
     value = out.boolVal ? 1 : 0;
-    return true;
+  else
+    value = out.intVal; // integer, and the ordinal of an enumeration constant
+  return true;
+}
+
+/// An enumerated type also *declares* its constants, into whatever scope the
+/// type itself appears in (ISO 7185 §6.4.2.3) — which is why this is done here
+/// rather than by the declaration part that happens to contain it.
+Type *Sema::resolveEnum(TypeExpr &denoter) {
+  Type *t = newType(TypeKind::Enum);
+  for (DeclName &n : denoter.constants) {
+    Symbol *s = declare(n.name, SymKind::Const, n.line, n.col);
+    if (s->type)
+      continue; // already declared: keep the first
+    s->type = t;
+    s->intVal = static_cast<long long>(t->enumNames.size());
+    t->enumNames.push_back(n.name);
   }
-  return false;
+  return t;
+}
+
+Type *Sema::resolveSubrange(TypeExpr &denoter) {
+  Type *loType = nullptr;
+  Type *hiType = nullptr;
+  long long lo = 0, hi = 0;
+  bool ok = true;
+
+  if (!evalOrdinal(denoter.lo.get(), loType, lo) ||
+      !evalOrdinal(denoter.hi.get(), hiType, hi)) {
+    diags_.error(denoter.line, denoter.col,
+                 "the bounds of a subrange must be ordinal constants");
+    ok = false;
+  } else if (loType->base() != hiType->base()) {
+    diags_.error(denoter.line, denoter.col,
+                 "the bounds of a subrange must have the same type, found " +
+                     loType->name() + " and " + hiType->name());
+    ok = false;
+  } else if (hi < lo) {
+    diags_.error(denoter.line, denoter.col,
+                 "a subrange cannot be empty: " + Type::ordinalName(loType, hi) +
+                     " is below " + Type::ordinalName(loType, lo));
+    ok = false;
+  }
+
+  Type *t = newType(TypeKind::Subrange);
+  t->host = ok ? loType->base() : ty::Int();
+  t->lo = ok ? lo : 0;
+  t->hi = ok ? hi : 0;
+  return t;
 }
 
 /// `array [a, b] of T` abbreviates `array [a] of array [b] of T`
 /// (ISO 7185 §6.4.3.2), so dimension `dim` wraps everything after it.
 Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
-  IndexRange &range = denoter.dims[dim];
+  TypeExpr &indexDenoter = *denoter.dims[dim];
+  Type *index = resolveType(indexDenoter);
 
-  Type *loType = nullptr;
-  Type *hiType = nullptr;
-  long long lo = 0, hi = 0;
-  bool ok = true;
-  if (!evalBound(range.lo.get(), loType, lo)) {
-    diags_.error(range.line, range.col,
-                 "the lower bound of an array index must be an ordinal "
-                 "constant");
-    ok = false;
-  }
-  if (!evalBound(range.hi.get(), hiType, hi)) {
-    diags_.error(range.line, range.col,
-                 "the upper bound of an array index must be an ordinal "
-                 "constant");
-    ok = false;
-  }
-  if (ok && loType != hiType) {
-    diags_.error(range.line, range.col,
-                 std::string("the bounds of an array index must have the same "
-                             "type, found ") +
-                     loType->name() + " and " + hiType->name());
-    ok = false;
-  }
-  if (ok && hi < lo) {
-    diags_.error(range.line, range.col,
-                 "an array index cannot be empty: the upper bound is below "
-                 "the lower bound");
-    ok = false;
+  if (!index->isOrdinal()) {
+    diags_.error(indexDenoter.line, indexDenoter.col,
+                 "an array index must be an ordinal type, found " +
+                     index->name());
+    index = newType(TypeKind::Subrange);
+    index->host = ty::Int();
   }
   // A subscript is lowered to `i - lo` in the integer type, which is sound
   // only while that difference is a value of the type. Rejecting the array is
   // what makes the rule `accepted-index-selects-the-right-element` true, so
   // this bound is load-bearing rather than arbitrary — see verify/rules.py.
-  if (ok && hi - lo >= kMaxInt) {
-    diags_.error(range.line, range.col,
-                 "this array has too many elements: an index range may span "
+  else if (index->ordinalHi() - index->ordinalLo() >= kMaxInt) {
+    diags_.error(indexDenoter.line, indexDenoter.col,
+                 "this array has too many elements: an index type may span "
                  "at most maxint values");
-    ok = false;
-  }
-  if (!ok) {
-    loType = ty::Int();
-    lo = 0;
-    hi = 0;
+    index = newType(TypeKind::Subrange);
+    index->host = ty::Int();
   }
 
   Type *t = newType(TypeKind::Array);
-  t->indexType = loType;
-  t->lo = lo;
-  t->hi = hi;
+  t->indexType = index;
+  t->lo = index->ordinalLo();
+  t->hi = index->ordinalHi();
   t->packed = denoter.packed;
   t->elem = dim + 1 < denoter.dims.size() ? resolveArray(denoter, dim + 1)
                                           : resolveType(*denoter.elem);
   return t;
+}
+
+/// ISO 7185 §6.4.3.3 requires every field name in a record to be distinct,
+/// across the fixed part and every variant alike — which is what lets one flat
+/// lookup answer where a name lives.
+void Sema::addField(Type *record, std::vector<Field> &into,
+                    const DeclName &name, Type *type, int variant) {
+  if (record->findField(name.name)) {
+    diags_.error(name.line, name.col,
+                 "'" + name.name + "' is already a field of this record");
+    return;
+  }
+  Field f;
+  f.name = name.name;
+  f.type = type;
+  f.index = static_cast<int>(into.size());
+  f.variant = variant;
+  f.line = name.line;
+  f.col = name.col;
+  into.push_back(std::move(f));
 }
 
 Type *Sema::resolveRecord(TypeExpr &denoter) {
@@ -233,22 +266,73 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
   t->packed = denoter.packed;
   for (FieldGroup &group : denoter.fields) {
     Type *fieldType = resolveType(*group.type);
-    for (DeclName &n : group.names) {
-      if (t->findField(n.name)) {
-        diags_.error(n.line, n.col,
-                     "'" + n.name + "' is already a field of this record");
+    for (DeclName &n : group.names)
+      addField(t, t->fields, n, fieldType, -1);
+  }
+  if (denoter.tagType)
+    resolveVariants(denoter, t);
+  return t;
+}
+
+void Sema::resolveVariants(TypeExpr &denoter, Type *record) {
+  Type *tag = resolveType(*denoter.tagType);
+  if (!tag->isOrdinal()) {
+    diags_.error(denoter.tagLine, denoter.tagCol,
+                 "the tag of a variant part must be an ordinal type, found " +
+                     tag->name());
+    return;
+  }
+  record->tagType = tag;
+
+  // A named tag is an ordinary field of the fixed part; a tagless variant part
+  // has the type but no storage for it (ISO 7185 §6.4.3.3).
+  if (!denoter.tagName.empty()) {
+    record->tagField = static_cast<int>(record->fields.size());
+    addField(record, record->fields,
+             {denoter.tagName, denoter.tagLine, denoter.tagCol}, tag, -1);
+  }
+
+  std::unordered_map<long long, int> claimed; // tag value -> variant that owns it
+  for (VariantArm &arm : denoter.variants) {
+    Variant v;
+    v.line = arm.line;
+    v.col = arm.col;
+    int index = static_cast<int>(record->variants.size());
+
+    for (ExprPtr &label : arm.labels) {
+      Type *labelType = nullptr;
+      long long value = 0;
+      if (!evalOrdinal(label.get(), labelType, value)) {
+        diags_.error(label->line, label->col,
+                     "a variant's label must be an ordinal constant");
         continue;
       }
-      Field f;
-      f.name = n.name;
-      f.type = fieldType;
-      f.index = static_cast<int>(t->fields.size());
-      f.line = n.line;
-      f.col = n.col;
-      t->fields.push_back(std::move(f));
+      if (labelType->base() != tag->base()) {
+        diags_.error(label->line, label->col,
+                     "this variant's tag is " + tag->name() +
+                         ", but the label is " + labelType->name());
+        continue;
+      }
+      auto seen = claimed.find(value);
+      if (seen != claimed.end()) {
+        diags_.error(label->line, label->col,
+                     "the tag value " + Type::ordinalName(tag, value) +
+                         " already selects an earlier variant");
+        continue;
+      }
+      claimed[value] = index;
+      v.labels.push_back(value);
+    }
+
+    // The fields are pushed into the arm, so each variant is numbered from
+    // zero and codegen can index it as a struct of its own.
+    record->variants.push_back(std::move(v));
+    for (FieldGroup &group : arm.fields) {
+      Type *fieldType = resolveType(*group.type);
+      for (DeclName &n : group.names)
+        addField(record, record->variants[index].fields, n, fieldType, index);
     }
   }
-  return t;
 }
 
 Type *Sema::resolveType(TypeExpr &denoter) {
@@ -268,6 +352,12 @@ Type *Sema::resolveType(TypeExpr &denoter) {
         t = ty::Int();
       }
     }
+    break;
+  case TEK::Enum:
+    t = resolveEnum(denoter);
+    break;
+  case TEK::Subrange:
+    t = resolveSubrange(denoter);
     break;
   case TEK::Array:
     t = resolveArray(denoter, 0);
@@ -310,17 +400,30 @@ bool Sema::assignable(Type *to, Type *from) const {
   if (to->isStructured() || from->isStructured())
     return to->isCharArray() && from->isCharArray() &&
            to->length() == from->length();
-  if (to->kind == from->kind)
+
+  // A subrange is compatible with its host type and with any other subrange of
+  // it (ISO 7185 §6.4.5), so compatibility is decided on the base. Whether the
+  // *value* fits is a run-time question, checked where it is stored.
+  const Type *tb = to->base();
+  const Type *fb = from->base();
+  if (tb == fb)
+    return true;
+  // Two enumerated types are never compatible, however alike they look, so
+  // they must not fall through to the kind comparison below.
+  if (tb->isEnum() || fb->isEnum())
+    return false;
+  if (tb->kind == fb->kind)
     return true;
   return to->isReal() && from->isInteger();
 }
 
-Symbol *Sema::lookupWithField(const std::string &name, int &fieldIndex) const {
+Symbol *Sema::lookupWithField(const std::string &name,
+                              const Field *&field) const {
   // A `with` scope sits inside every enclosing one, so its fields are looked
   // at first and shadow declarations of the same name further out.
   for (auto it = withStack_.rbegin(); it != withStack_.rend(); ++it) {
     if (const Field *f = (*it)->type->findField(name)) {
-      fieldIndex = f->index;
+      field = f;
       return *it;
     }
   }
@@ -329,7 +432,7 @@ Symbol *Sema::lookupWithField(const std::string &name, int &fieldIndex) const {
 
 bool Sema::isDesignator(Expr *e) const {
   if (auto *v = as<VarRef>(e))
-    return v->sym && (v->sym->isVariable() || v->withField >= 0);
+    return v->sym && (v->sym->isVariable() || v->withField);
   if (auto *i = as<IndexExpr>(e))
     return isDesignator(i->base.get());
   if (auto *f = as<FieldExpr>(e))
@@ -613,15 +716,22 @@ void Sema::checkStmt(Stmt *s) {
     return;
   }
 
+  if (auto *c = as<CaseStmt>(s)) {
+    checkCase(c);
+    return;
+  }
+
   if (auto *w = as<WriteStmt>(s)) {
     for (auto &arg : w->args) {
       checkExpr(arg.value.get());
       Type *t = arg.value->type;
-      // ISO 7185 §6.9.3: write takes an integer, real, boolean, char, or a
-      // packed array of char — which is why a string literal can be written
-      // and an array of anything else cannot.
-      if (t && (t->kind == TypeKind::Void ||
-                (t->isStructured() && !t->isCharArray())))
+      // ISO 7185 §6.9.3 lists exactly what write accepts: an integer, a real,
+      // a boolean, a char, or a packed array of char. An enumeration is not on
+      // the list — the standard gives no spelling for its constants at run
+      // time — and neither is any other structured type.
+      bool writable = t && (t->isInteger() || t->isReal() || t->isBoolean() ||
+                            t->isChar() || t->isCharArray());
+      if (t && !writable)
         diags_.error(arg.value->line, arg.value->col,
                      "a value of type " + t->name() + " cannot be written");
       if (arg.width) {
@@ -692,14 +802,14 @@ void Sema::checkStmt(Stmt *s) {
     checkExpr(f->var.get());
     // ISO 7185 §6.8.3.9 requires an entire variable declared in this block, so
     // a field reached through an enclosing `with` will not do either.
-    if (f->var->withField >= 0)
+    if (f->var->withField)
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement cannot be a field "
                    "of a with statement");
     else if (f->var->sym && f->var->sym->kind != SymKind::Var)
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be a variable");
-    if (f->var->type && !(f->var->type->isInteger() || f->var->type->isChar()))
+    if (f->var->type && !f->var->type->isOrdinal())
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be an "
                    "ordinal type");
@@ -775,7 +885,7 @@ void Sema::checkExpr(Expr *e) {
       e->type = ty::Int();
       return;
     }
-    fld->index = f->index;
+    fld->resolved = f;
     e->type = f->type;
     return;
   }
@@ -784,7 +894,7 @@ void Sema::checkExpr(Expr *e) {
     // A `with` scope is inside every enclosing one, so its fields win.
     if (Symbol *binding = lookupWithField(v->name, v->withField)) {
       v->sym = binding;
-      v->type = binding->type->fields[v->withField].type;
+      v->type = v->withField->type;
       return;
     }
     v->sym = lookup(v->name);
@@ -906,13 +1016,60 @@ void Sema::checkBinary(Binary *b) {
                          l->name() + " and " + r->name());
     } else if (l->isStructured() || r->isStructured()) {
       bad("comparable");
-    } else if (!(l->isNumeric() && r->isNumeric()) && l->kind != r->kind) {
+    } else if (!(l->isNumeric() && r->isNumeric()) &&
+               !assignable(l, r) && !assignable(r, l)) {
+      // Compatibility is decided the same way it is for assignment, so a
+      // subrange compares with its host type and with its siblings.
       bad("compatible");
     }
     b->type = ty::Bool();
     return;
   }
   (void)isRelational;
+}
+
+/// ISO 7185 §6.8.3.5: the selector is an ordinal expression, every label is a
+/// constant of a compatible type, and no value may appear twice. There is no
+/// `else` arm, so a value matching nothing is an error at run time — which is
+/// exactly the shape of an LLVM switch with a trapping default.
+void Sema::checkCase(CaseStmt *c) {
+  checkExpr(c->selector.get());
+  Type *sel = c->selector->type;
+  if (sel && !sel->isOrdinal()) {
+    diags_.error(c->selector->line, c->selector->col,
+                 "the selector of a case statement must be an ordinal type, "
+                 "found " + sel->name());
+    sel = nullptr;
+  }
+
+  std::unordered_map<long long, bool> seen;
+  for (CaseArm &arm : c->arms) {
+    for (ExprPtr &label : arm.labels) {
+      Type *labelType = nullptr;
+      long long value = 0;
+      if (!evalOrdinal(label.get(), labelType, value)) {
+        diags_.error(label->line, label->col,
+                     "a case label must be an ordinal constant");
+        continue;
+      }
+      if (sel && !assignable(sel, labelType)) {
+        diags_.error(label->line, label->col,
+                     "this case selects on " + sel->name() +
+                         ", but the label is " + labelType->name());
+        continue;
+      }
+      if (seen.count(value)) {
+        diags_.error(label->line, label->col,
+                     "the label " + Type::ordinalName(sel ? sel : labelType,
+                                                      value) +
+                         " appears twice in this case statement");
+        continue;
+      }
+      seen[value] = true;
+      arm.values.push_back(value);
+    }
+    checkStmt(arm.body.get());
+  }
 }
 
 /// `with r do S` makes the fields of r visible as bare names throughout S.
@@ -1053,7 +1210,7 @@ void Sema::checkCall(Call *c) {
     c->type = ty::Bool();
     return;
   case Builtin::Ord:
-    require(a->isInteger() || a->isChar() || a->isBoolean(), "an ordinal");
+    require(a->isOrdinal(), "an ordinal");
     c->type = ty::Int();
     return;
   case Builtin::Chr:
@@ -1062,8 +1219,11 @@ void Sema::checkCall(Call *c) {
     return;
   case Builtin::Succ:
   case Builtin::Pred:
-    require(a->isInteger() || a->isChar(), "an ordinal");
-    c->type = a->isChar() ? ty::Char() : ty::Int();
+    // ISO 7185 §6.6.6.4 defines succ over any ordinal type and gives the
+    // result that same type, so succ runs out at the end of *this* type —
+    // at `blue` for an enumeration, at 9 for a subrange 1..9.
+    require(a->isOrdinal(), "an ordinal");
+    c->type = a;
     return;
   case Builtin::Trunc:
   case Builtin::Round:

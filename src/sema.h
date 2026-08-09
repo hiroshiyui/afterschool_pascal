@@ -94,17 +94,27 @@ private:
   Type *resolveType(TypeExpr &denoter);
   Type *resolveArray(TypeExpr &denoter, size_t dim);
   Type *resolveRecord(TypeExpr &denoter);
+  Type *resolveEnum(TypeExpr &denoter);
+  Type *resolveSubrange(TypeExpr &denoter);
+  /// Resolve the variant part of a record that has one.
+  void resolveVariants(TypeExpr &denoter, Type *record);
+  /// Add a field to `into`, reporting a name already used anywhere in `record`.
+  void addField(Type *record, std::vector<Field> &into, const DeclName &name,
+                Type *type, int variant);
   /// The `packed array [1..n] of char` that ISO 7185 §6.4.3.2 gives a string
   /// literal. Cached by length so two literals of a length share one type.
   Type *stringType(long long length);
-  /// Evaluate an array bound, requiring an ordinal constant.
-  bool evalBound(Expr *e, Type *&type, long long &value);
+  /// Evaluate a constant that must be ordinal — a subrange bound, a case
+  /// label, a variant's tag value. Reports the type it was written as, so a
+  /// mismatch can be named rather than silently coerced.
+  bool evalOrdinal(Expr *e, Type *&type, long long &value);
 
   void checkStmt(Stmt *s);
   void checkExpr(Expr *e);
   void checkBinary(Binary *b);
   void checkCall(Call *c);
   void checkWith(WithStmt *w);
+  void checkCase(CaseStmt *c);
   void checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                       int col);
   bool evalConst(Expr *e, Symbol &out);
@@ -119,7 +129,7 @@ private:
   bool assignable(Type *to, Type *from) const;
 
   /// The field of an enclosing `with` this name refers to, if any.
-  Symbol *lookupWithField(const std::string &name, int &fieldIndex) const;
+  Symbol *lookupWithField(const std::string &name, const Field *&field) const;
 
   Diagnostics &diags_;
   std::vector<std::unique_ptr<Symbol>> owned_;
