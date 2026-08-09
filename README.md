@@ -50,6 +50,20 @@ Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form (`5.0E-01` style);
 with a width and a fraction length it comes out fixed-point.
 
+**Errors are detected, not ignored.** ISO 7185 calls integer overflow, `chr` of
+a non-ordinal, and `succ` past the end of a type *errors*; this compiler stops
+the program with a message rather than letting it wrap:
+
+```
+$ pascalc overflow.pas && ./overflow
+runtime error: integer overflow in sqr
+```
+
+The integer type is `-maxint..maxint`, which is narrower than the machine word
+it lives in — so `2147483648` is rejected at compile time rather than silently
+becoming `-2147483648`. See
+[ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md).
+
 Not accepted yet: procedures and functions of your own, arrays, records, sets,
 pointers, files, `case`, `with`, `goto`, subranges, enumerations.
 
@@ -64,7 +78,8 @@ pointers, files, `case`, `with`, `goto`, subranges, enumerations.
 | `src/codegen.cpp` | AST to LLVM IR via `IRBuilder`; `main` is the program body |
 | `src/main.cpp` | driver: optimisation pipeline, object emission, linking |
 | `runtime/pasrt.c` | formatted output and runtime checks |
-| `tests/` | one `.pas` per case with its expected stdout in `.out` |
+| `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
+| `verify/` | SMT proofs that the lowering means what ISO 7185 says |
 
 Two deliberate constraints, both there for the bootstrap:
 
@@ -89,11 +104,12 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Eleven rules are currently established — the non-negative
+the two disagree. Twenty-two rules are currently established — the non-negative
 `mod`, truncating `div`, `odd` on negative values, ordinal `char` comparison, the
-exact integer-to-real widening, and the `for` loop's inability to overflow — most
-of them for all 2³² inputs. Four known gaps are catalogued with the
-counterexample that demonstrates each.
+exact integer-to-real widening, the `for` loop's inability to overflow, and that
+each runtime check fires *exactly* when ISO says the operation is in error —
+eighteen of them for all 2³² inputs. One known gap remains, catalogued with the
+counterexample that demonstrates it.
 
 The proofs are paired with a cross-check that compiles and runs real Pascal at
 the adversarial points, at both `-O0` and `-O2`, because a proof about a model of
@@ -147,6 +163,15 @@ for every file in `tests/`.
 
 ## Adding a test
 
-Drop `tests/name.pas` and `tests/name.out` (expected stdout) into `tests/`, then
-re-run CMake so the case is registered. `tests/run_test.sh` compiles, runs, and
-diffs.
+Drop `tests/name.pas` plus its expectation into `tests/`, then re-run CMake so
+the case is registered — the suite is globbed at configure time.
+
+* `name.out` — expected stdout. The program must compile and exit 0.
+* `name.err` — expected stderr, for a program that is *supposed* to fail: one
+  that should be rejected at compile time, or that should stop on a runtime
+  error. A non-zero exit is then required, and `name.out` (if present) is
+  compared against whatever was written before the failure.
+
+`tests/run_test.sh` compiles, runs, and diffs. Source paths are rewritten to
+`<source>` in stderr, so diagnostics can be pinned without depending on where
+the checkout lives.

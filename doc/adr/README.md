@@ -22,3 +22,4 @@ the alternatives that were rejected and why.
 | [0011](0011-golden-stdout-tests.md) | Test by comparing program stdout | Accepted |
 | [0012](0012-character-strings-for-self-hosting.md) | How the self-hosted source handles strings | Proposed |
 | [0013](0013-formal-verification-of-the-lowering.md) | Formal verification of the lowering | Accepted |
+| [0014](0014-iso-error-conditions-trap-at-run-time.md) | ISO error conditions trap at run time | Accepted |

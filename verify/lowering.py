@@ -69,8 +69,70 @@ def idiv(i, j):
 
 
 def sqr_int(i):
-    """`Builtin::Sqr` on integer: CreateNSWMul(a, a)."""
+    """`Builtin::Sqr` on integer: goes through `checkedArith` like `*`."""
     return i * i
+
+
+# --- the runtime checks -----------------------------------------------------
+#
+# ISO 7185 makes overflow and out-of-range ordinals *errors*, so the lowering
+# emits a test and a call to pas_runtime_error rather than wrapping. Each
+# `traps_*` predicate below is exactly the condition `CodeGen` branches on; the
+# rules then prove that condition coincides with the ISO error condition.
+
+
+def _no_signed_add_overflow(l, r):
+    # Z3's *NoUnderflow / *NoOverflow pair split the two directions, and only
+    # one of each pair takes a signedness flag — the other is signed-only.
+    return z3.And(z3.BVAddNoOverflow(l, r, signed=True),
+                  z3.BVAddNoUnderflow(l, r))
+
+
+def _no_signed_sub_overflow(l, r):
+    return z3.And(z3.BVSubNoOverflow(l, r),
+                  z3.BVSubNoUnderflow(l, r, signed=True))
+
+
+def _no_signed_mul_overflow(l, r):
+    return z3.And(z3.BVMulNoOverflow(l, r, signed=True),
+                  z3.BVMulNoUnderflow(l, r))
+
+
+def _is_int_min(v):
+    return v == z3.BitVecVal(int_min(v.size()), v.size())
+
+
+def traps_add(l, r):
+    """`checkedArith(sadd_with_overflow, ...)`: the intrinsic's overflow bit,
+    or a result of INT_MIN (which fits the word but not the Pascal type)."""
+    return z3.Or(z3.Not(_no_signed_add_overflow(l, r)), _is_int_min(l + r))
+
+
+def traps_sub(l, r):
+    return z3.Or(z3.Not(_no_signed_sub_overflow(l, r)), _is_int_min(l - r))
+
+
+def traps_mul(l, r):
+    return z3.Or(z3.Not(_no_signed_mul_overflow(l, r)), _is_int_min(l * r))
+
+
+def traps_div(i, j):
+    """`BinOp::IntDiv`: the zero guard, plus the explicit INT_MIN / -1 test."""
+    return z3.Or(j == 0, z3.And(_is_int_min(i), j == -1))
+
+
+def traps_chr(i):
+    """`Builtin::Chr`: i < 0 or i > 255, checked before the truncation."""
+    return z3.Or(i < 0, i > 255)
+
+
+def traps_succ_int(i, width=INT_BITS):
+    """`Builtin::Succ` on integer: equality with maxint."""
+    return i == maxint(width)
+
+
+def traps_pred_int(i, width=INT_BITS):
+    return i == -maxint(width)
 
 
 def odd(i):

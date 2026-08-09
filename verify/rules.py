@@ -128,42 +128,102 @@ def _for_downto_step_cannot_underflow(w):
     return pre, claim
 
 
-# --- known gaps -------------------------------------------------------------
+# --- the runtime checks -----------------------------------------------------
+#
+# Each of these proves a *biconditional*: the compiler traps exactly when ISO
+# says the operation is in error. One direction alone would be worthless —
+# trapping always would satisfy "never produces a wrong answer", and never
+# trapping would satisfy "never rejects a valid program".
 
 
-def _chr_rejects_out_of_range(w):
-    """ISO 7185 §6.6.6.4: chr(i) is an error unless i is a char ordinal. The
-    lowering is a bare truncation, so an out-of-range argument silently aliases
-    onto a valid character instead of being diagnosed."""
+def _chr_traps_exactly_out_of_range(w):
+    """ISO 7185 §6.6.6.4 — chr(i) is an error unless i is a char ordinal."""
     i = low.integer("i", w)
-    pre = z3.Not(iso.in_char_range(i))
-    claim = low.ordinal_of_char(low.chr_of_integer(i), w) == i
+    return z3.BoolVal(True), low.traps_chr(i) == z3.Not(iso.in_char_range(i))
+
+
+def _chr_correct_when_it_does_not_trap(w):
+    i = low.integer("i", w)
+    pre = z3.Not(low.traps_chr(i))
+    return pre, low.ordinal_of_char(low.chr_of_integer(i), w) == i
+
+
+def _div_traps_exactly_on_error(w):
+    """The error conditions for div are a zero divisor and the one quotient
+    that has no representable value."""
+    i, j = low.integer("i", w), low.integer("j", w)
+    error = z3.Or(j == 0, z3.And(i == low.int_min(w), j == -1))
+    return z3.BoolVal(True), low.traps_div(i, j) == error
+
+
+def _succ_traps_exactly_at_maxint(w):
+    """ISO 7185 §6.6.6.4 — succ(x) is an error when x has no successor in its
+    type, which for integer means maxint."""
+    i = low.integer("i", w)
+    error = z3.Not(iso.in_integer_range(low.succ_int(i), low.maxint(w)))
+    return z3.BoolVal(True), low.traps_succ_int(i, w) == error
+
+
+def _pred_traps_exactly_at_minimum(w):
+    i = low.integer("i", w)
+    error = z3.Not(iso.in_integer_range(low.pred_int(i), low.maxint(w)))
+    return z3.BoolVal(True), low.traps_pred_int(i, w) == error
+
+
+def _add_traps_exactly_on_overflow(w):
+    """The sum is in error exactly when its exact value leaves -maxint..maxint."""
+    l, r = low.integer("l", w), low.integer("r", w)
+    exact = iso.wide(l) + iso.wide(r)
+    error = z3.Not(iso.in_integer_range_wide(exact, low.maxint(w)))
+    return z3.BoolVal(True), low.traps_add(l, r) == error
+
+
+def _sub_traps_exactly_on_overflow(w):
+    l, r = low.integer("l", w), low.integer("r", w)
+    exact = iso.wide(l) - iso.wide(r)
+    error = z3.Not(iso.in_integer_range_wide(exact, low.maxint(w)))
+    return z3.BoolVal(True), low.traps_sub(l, r) == error
+
+
+def _mul_traps_exactly_on_overflow(w):
+    l, r = low.integer("l", w), low.integer("r", w)
+    exact = iso.wide(l) * iso.wide(r)
+    error = z3.Not(iso.in_integer_range_wide(exact, low.maxint(w)))
+    return z3.BoolVal(True), low.traps_mul(l, r) == error
+
+
+def _add_exact_when_it_does_not_trap(w):
+    l, r = low.integer("l", w), low.integer("r", w)
+    pre = z3.Not(low.traps_add(l, r))
+    return pre, iso.wide(l + r) == iso.wide(l) + iso.wide(r)
+
+
+def _mul_exact_when_it_does_not_trap(w):
+    l, r = low.integer("l", w), low.integer("r", w)
+    pre = z3.Not(low.traps_mul(l, r))
+    return pre, iso.wide(l * r) == iso.wide(l) * iso.wide(r)
+
+
+def _negation_cannot_overflow(w):
+    """`UnOp::Neg` is emitted as an unchecked `nsw` negation. That is only sound
+    because INT_MIN is not a value of the Pascal integer type — so this proves
+    the omission of a check rather than the presence of one."""
+    i = low.integer("i", w)
+    pre = iso.in_integer_range(i, low.maxint(w))
+    claim = iso.in_integer_range(-i, low.maxint(w))
     return pre, claim
 
 
-def _div_overflow_is_unguarded(w):
-    """INT_MIN div -1 has no representable result; LLVM's sdiv calls it
-    undefined behaviour, and the compiler guards only against a zero divisor."""
-    i, j = low.integer("i", w), low.integer("j", w)
-    pre = z3.And(i == low.int_min(w), j == -1)
-    return pre, z3.BoolVal(False)  # nothing is claimed; expect the witness
+# --- known gaps -------------------------------------------------------------
 
 
-def _succ_overflows_silently(w):
-    """succ(maxint) is an error in ISO 7185; the lowering is a bare add with no
-    check, so it wraps to a negative value."""
-    i = low.integer("i", w)
-    return i == low.maxint(w), iso.in_integer_range(low.succ_int(i),
-                                                    low.maxint(w))
-
-
-def _sqr_overflows_silently(w):
-    """sqr(i) is emitted with `nsw`, so on overflow the result is poison and the
-    optimiser may assume it cannot happen. ISO calls the overflow an error."""
-    i = low.integer("i", w)
-    pre = i > 0
-    claim = z3.Implies(z3.Not(iso.is_exact_square(i, low.sqr_int(i))),
-                       z3.BoolVal(False))
+def _trunc_out_of_range(w):
+    """ISO 7185 §6.6.6.2 — trunc(x) is an error when the result is not a value
+    of the integer type. The lowering is a bare fptosi, which is poison out of
+    range rather than a diagnosed error."""
+    x = low.real("x")
+    pre = x > z3.FPVal(2.0 ** 31, z3.Float64())
+    claim = z3.BoolVal(False)  # nothing is claimed; expect the witness
     return pre, claim
 
 
@@ -203,25 +263,52 @@ ALL = [
          "the limit-then-step design claim in emitFor, downto direction",
          "codegen.cpp CodeGen::emitFor", _for_downto_step_cannot_underflow),
 
-    Rule("chr-rejects-out-of-range", KNOWN_GAP,
+    # The runtime checks: each proves the compiler traps *exactly* when ISO
+    # says the operation is in error, in both directions.
+    Rule("chr-traps-exactly-out-of-range", MUST_HOLD,
          "ISO 7185 §6.6.6.4 — chr(i) is an error outside the char ordinals",
-         "codegen.cpp Builtin::Chr", _chr_rejects_out_of_range,
-         note="chr is a bare truncation, so an out-of-range argument aliases "
-              "onto a valid character instead of being diagnosed."),
-    Rule("div-min-by-minus-one", KNOWN_GAP,
-         "no representable result; LLVM's sdiv calls this undefined",
-         "codegen.cpp BinOp::IntDiv (guardNonZero checks only j = 0)",
-         _div_overflow_is_unguarded,
-         note="The divisor guard catches zero but not the INT_MIN / -1 "
-              "overflow, which is undefined behaviour in the emitted IR."),
-    Rule("succ-at-maxint", KNOWN_GAP,
-         "ISO 7185 §6.6.6.4 — succ(maxint) is an error",
-         "codegen.cpp Builtin::Succ", _succ_overflows_silently,
-         note="succ and pred are a bare add and sub with no range check, so "
-              "they wrap instead of reporting an error."),
-    Rule("sqr-overflow", KNOWN_GAP,
+         "codegen.cpp Builtin::Chr", _chr_traps_exactly_out_of_range),
+    Rule("chr-correct-when-accepted", MUST_HOLD,
+         "ISO 7185 §6.6.6.4 — an accepted chr(i) has ordinal i",
+         "codegen.cpp Builtin::Chr", _chr_correct_when_it_does_not_trap),
+    Rule("div-traps-exactly-on-error", MUST_HOLD,
+         "a zero divisor, and the one quotient with no representable value",
+         "codegen.cpp BinOp::IntDiv", _div_traps_exactly_on_error),
+    Rule("succ-traps-exactly-at-maxint", MUST_HOLD,
+         "ISO 7185 §6.6.6.4 — succ(x) is an error when x has no successor",
+         "codegen.cpp Builtin::Succ", _succ_traps_exactly_at_maxint),
+    Rule("pred-traps-exactly-at-minimum", MUST_HOLD,
+         "ISO 7185 §6.6.6.4 — pred(x) is an error when x has no predecessor",
+         "codegen.cpp Builtin::Pred", _pred_traps_exactly_at_minimum),
+    Rule("add-traps-exactly-on-overflow", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — arithmetic overflow is an error",
-         "codegen.cpp Builtin::Sqr", _sqr_overflows_silently,
-         note="Emitted with nsw, so an overflowing square is poison rather "
-              "than a diagnosed error."),
+         "codegen.cpp checkedArith(sadd_with_overflow)",
+         _add_traps_exactly_on_overflow),
+    Rule("sub-traps-exactly-on-overflow", MUST_HOLD,
+         "ISO 7185 §6.7.2.2 — arithmetic overflow is an error",
+         "codegen.cpp checkedArith(ssub_with_overflow)",
+         _sub_traps_exactly_on_overflow),
+    Rule("mul-traps-exactly-on-overflow", MUST_HOLD,
+         "ISO 7185 §6.7.2.2 — arithmetic overflow is an error (also sqr)",
+         "codegen.cpp checkedArith(smul_with_overflow)",
+         _mul_traps_exactly_on_overflow, widths=BOUNDED),
+    Rule("add-exact-when-accepted", MUST_HOLD,
+         "an accepted sum equals the mathematical sum",
+         "codegen.cpp checkedArith(sadd_with_overflow)",
+         _add_exact_when_it_does_not_trap),
+    Rule("mul-exact-when-accepted", MUST_HOLD,
+         "an accepted product equals the mathematical product",
+         "codegen.cpp checkedArith(smul_with_overflow)",
+         _mul_exact_when_it_does_not_trap, widths=BOUNDED),
+    Rule("negation-cannot-overflow", MUST_HOLD,
+         "why UnOp::Neg needs no check: INT_MIN is not a value of the type",
+         "codegen.cpp emitUnary", _negation_cannot_overflow),
+
+    Rule("trunc-out-of-range", KNOWN_GAP,
+         "ISO 7185 §6.6.6.2 — trunc(x) is an error when the result is not an "
+         "integer value",
+         "codegen.cpp Builtin::Trunc", _trunc_out_of_range,
+         note="A bare fptosi, which is poison out of range rather than a "
+              "diagnosed error. The real-to-integer conversions are the "
+              "remaining unchecked class."),
 ]

@@ -50,12 +50,10 @@ llvm::Value *CodeGen::intrinsicCall(unsigned id,
   return b_.CreateCall(fn, args);
 }
 
-llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
-  llvm::Value *isZero =
-      b_.CreateICmpEQ(divisor, ConstantInt::get(i32(), 0), "iszero");
-  BasicBlock *trap = BasicBlock::Create(ctx_, "divzero", main_);
-  BasicBlock *cont = BasicBlock::Create(ctx_, "divok", main_);
-  b_.CreateCondBr(isZero, trap, cont);
+void CodeGen::emitTrapIf(llvm::Value *condition, const char *message) {
+  BasicBlock *trap = BasicBlock::Create(ctx_, "trap", main_);
+  BasicBlock *cont = BasicBlock::Create(ctx_, "cont", main_);
+  b_.CreateCondBr(condition, trap, cont);
 
   b_.SetInsertPoint(trap);
   llvm::Value *msg = b_.CreateGlobalString(message, "errmsg");
@@ -64,6 +62,31 @@ llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
   b_.CreateUnreachable();
 
   b_.SetInsertPoint(cont);
+}
+
+llvm::Value *CodeGen::checkedArith(unsigned intrinsicId, llvm::Value *l,
+                                   llvm::Value *r, const char *message) {
+  // ISO 7185 §6.7.2.2 makes arithmetic overflow an error, so the result is
+  // computed with an overflow-reporting intrinsic and checked, rather than
+  // emitted with `nsw` (which would make an overflowing result poison and let
+  // the optimiser assume it never happens).
+  Function *fn = Intrinsic::getOrInsertDeclaration(
+      mod_.get(), static_cast<Intrinsic::ID>(intrinsicId), {i32()});
+  llvm::Value *pair = b_.CreateCall(fn, {l, r}, "arith");
+  llvm::Value *result = b_.CreateExtractValue(pair, 0, "arith.val");
+  llvm::Value *overflowed = b_.CreateExtractValue(pair, 1, "arith.ovf");
+
+  // The integer type is -maxint..maxint (§6.4.2.2), so a result of INT_MIN is
+  // out of range even though it fits the machine word.
+  llvm::Value *isIntMin = b_.CreateICmpEQ(
+      result, ConstantInt::getSigned(i32(), INT32_MIN), "arith.min");
+  emitTrapIf(b_.CreateOr(overflowed, isIntMin, "arith.bad"), message);
+  return result;
+}
+
+llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
+  emitTrapIf(b_.CreateICmpEQ(divisor, ConstantInt::get(i32(), 0), "iszero"),
+             message);
   return divisor;
 }
 
@@ -344,18 +367,31 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
       }
     }
     switch (e->op) {
-    case BinOp::Add: return b_.CreateNSWAdd(l, r, "add");
-    case BinOp::Sub: return b_.CreateNSWSub(l, r, "sub");
-    default:         return b_.CreateNSWMul(l, r, "mul");
+    case BinOp::Add:
+      return checkedArith(Intrinsic::sadd_with_overflow, l, r,
+                          "integer overflow in +");
+    case BinOp::Sub:
+      return checkedArith(Intrinsic::ssub_with_overflow, l, r,
+                          "integer overflow in -");
+    default:
+      return checkedArith(Intrinsic::smul_with_overflow, l, r,
+                          "integer overflow in *");
     }
   }
 
   case BinOp::RealDiv:
     return b_.CreateFDiv(toReal(l, lt), toReal(r, rt_), "div");
 
-  case BinOp::IntDiv:
+  case BinOp::IntDiv: {
     r = guardNonZero(r, "division by zero");
+    // maxint div -1 is representable, but INT_MIN div -1 is not; LLVM calls it
+    // undefined rather than wrapping, so it has to be excluded explicitly.
+    llvm::Value *badPair = b_.CreateAnd(
+        b_.CreateICmpEQ(l, ConstantInt::getSigned(i32(), INT32_MIN)),
+        b_.CreateICmpEQ(r, ConstantInt::getSigned(i32(), -1)), "div.ovf");
+    emitTrapIf(badPair, "integer overflow in div");
     return b_.CreateSDiv(l, r, "idiv");
+  }
 
   case BinOp::Mod: {
     r = guardNonZero(r, "mod by zero");
@@ -426,7 +462,8 @@ llvm::Value *CodeGen::emitCall(Call *e) {
   case Builtin::Sqr:
     if (at->isReal())
       return b_.CreateFMul(a, a, "sqr");
-    return b_.CreateNSWMul(a, a, "sqr");
+    return checkedArith(Intrinsic::smul_with_overflow, a, a,
+                        "integer overflow in sqr");
   case Builtin::Odd:
     return b_.CreateICmpNE(b_.CreateAnd(a, ConstantInt::get(i32(), 1)),
                            ConstantInt::get(i32(), 0), "odd");
@@ -434,12 +471,30 @@ llvm::Value *CodeGen::emitCall(Call *e) {
     if (at->isInteger())
       return a;
     return b_.CreateZExt(a, i32(), "ord");
-  case Builtin::Chr:
+  case Builtin::Chr: {
+    // ISO 7185 §6.6.6.4: chr(i) is an error unless i is the ordinal of some
+    // char, so the truncation must be guarded rather than allowed to alias.
+    llvm::Value *tooSmall = b_.CreateICmpSLT(a, ConstantInt::get(i32(), 0));
+    llvm::Value *tooLarge = b_.CreateICmpSGT(a, ConstantInt::get(i32(), 255));
+    emitTrapIf(b_.CreateOr(tooSmall, tooLarge, "chr.bad"),
+               "chr: argument is not a character ordinal");
     return b_.CreateTrunc(a, i8(), "chr");
+  }
   case Builtin::Succ:
-    return b_.CreateAdd(a, ConstantInt::get(a->getType(), 1), "succ");
-  case Builtin::Pred:
-    return b_.CreateSub(a, ConstantInt::get(a->getType(), 1), "pred");
+  case Builtin::Pred: {
+    // succ and pred are errors at the ends of the ordinal type (§6.6.6.4).
+    bool up = e->builtin == Builtin::Succ;
+    llvm::Value *limit;
+    if (at->isChar())
+      limit = ConstantInt::get(i8(), up ? 255 : 0);
+    else
+      limit = ConstantInt::getSigned(i32(), up ? kMaxInt : -kMaxInt);
+    emitTrapIf(b_.CreateICmpEQ(a, limit, "ordinal.end"),
+               up ? "succ: no successor exists"
+                  : "pred: no predecessor exists");
+    llvm::Value *one = ConstantInt::get(a->getType(), 1);
+    return up ? b_.CreateAdd(a, one, "succ") : b_.CreateSub(a, one, "pred");
+  }
   case Builtin::Sqrt:
     return intrinsicCall(Intrinsic::sqrt, {toReal(a, at)});
   case Builtin::Sin:

@@ -3,7 +3,10 @@
 #include <cctype>
 #include <cerrno>
 #include <cstdlib>
+#include <string>
 #include <unordered_map>
+
+#include "type.h"
 
 namespace ap {
 
@@ -209,8 +212,13 @@ Token Lexer::lexNumber() {
   } else {
     errno = 0;
     t.intVal = std::strtoll(text.c_str(), nullptr, 10);
-    if (errno == ERANGE)
-      diags_.error(sl, sc, "integer literal out of range: " + text);
+    // The integer type is -maxint..maxint (ISO 7185 §6.4.2.2). A literal is
+    // always unsigned here — a leading '-' is a separate operator — so the
+    // bound is maxint, and -2147483648 is out of range even though it fits an
+    // i32. Without this, the value silently truncated to INT_MIN.
+    if (errno == ERANGE || t.intVal > kMaxInt)
+      diags_.error(sl, sc, "integer literal out of range (maxint is " +
+                               std::to_string(kMaxInt) + "): " + text);
   }
   return t;
 }

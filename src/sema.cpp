@@ -93,7 +93,7 @@ void Sema::installPredefined() {
 
   Symbol *m = declare("maxint", SymKind::Const, 0, 0);
   m->type = ty::Int();
-  m->intVal = INT32_MAX;
+  m->intVal = kMaxInt;
 }
 
 bool Sema::assignable(Type *to, Type *from) const {

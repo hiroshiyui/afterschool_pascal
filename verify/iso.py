@@ -76,5 +76,10 @@ def in_integer_range(x, maxint):
     """ISO 7185 §6.4.2.2 — the integer type is -maxint..maxint. Note this is
     *narrower* than the machine type the compiler uses: at 32 bits, -2147483648
     is representable in an i32 but is not a value of the Pascal type."""
-    X = wide(x)
-    return z3.And(X >= -maxint, X <= maxint)
+    return in_integer_range_wide(wide(x), maxint)
+
+
+def in_integer_range_wide(x, maxint):
+    """As `in_integer_range`, for a value already in the wide spec domain."""
+    limit = z3.BitVecVal(maxint, x.size())
+    return z3.And(x >= -limit, x <= limit)

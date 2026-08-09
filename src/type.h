@@ -2,6 +2,12 @@
 
 namespace ap {
 
+/// ISO 7185 §6.4.2.2 — the integer type is the range -maxint..maxint. Note
+/// this is narrower than the i32 the compiler represents it with: INT_MIN fits
+/// the machine word but is not a value of the Pascal type, and arithmetic that
+/// would produce it is an error.
+inline constexpr int kMaxInt = 2147483647;
+
 enum class TypeKind { Void, Integer, Real, Boolean, Char, String };
 
 struct Type {

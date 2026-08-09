@@ -95,8 +95,20 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 
 `mod` yields a non-negative result (not C's truncating remainder); `and`/`or`
 short-circuit; `/` is always real division; `for` evaluates its limit once and
-tests `= limit` before stepping so the last iteration cannot overflow; `div`/`mod`
-by zero call `pas_runtime_error`; a one-character string literal is a `char`.
+tests `= limit` before stepping so the last iteration cannot overflow; a
+one-character string literal is a `char`.
+
+**ISO error conditions trap** (ADR-0014). Integer `+ - *` and `sqr` go through
+`checkedArith` and stop the program on overflow rather than wrapping — they
+carry no `nsw`. `chr` outside 0..255, `succ`/`pred` at the ends of their type,
+`div` by zero, and `INT_MIN div -1` all reach `pas_runtime_error` (stderr, exit
+1). The integer type is **-maxint..maxint**, narrower than the `i32` behind it,
+so `INT_MIN` is not a value of the type and a literal above `maxint` is a
+compile-time error.
+
+A check is omitted only where its absence is *proved* sound — the `for` step and
+unary negation are unchecked, and `verify/` carries the theorems saying they
+cannot overflow. Don't add a check there, and don't remove one elsewhere.
 
 Most of these are not merely tested — they are **proved** in `verify/` for every
 input. Changing one breaks a theorem, not a sample.

@@ -58,6 +58,12 @@ private:
   /// Convert a value of type `from` for storage in a slot of type `to`.
   llvm::Value *convertFor(llvm::Value *v, Type *from, Type *to);
 
+  /// Branch to the runtime's error reporter when `condition` holds, and carry
+  /// on in a fresh block when it does not.
+  void emitTrapIf(llvm::Value *condition, const char *message);
+  /// Integer arithmetic that reports overflow instead of wrapping or poisoning.
+  llvm::Value *checkedArith(unsigned intrinsicId, llvm::Value *l,
+                            llvm::Value *r, const char *message);
   llvm::Value *guardNonZero(llvm::Value *divisor, const char *message);
   llvm::Value *intrinsicCall(unsigned id, llvm::ArrayRef<llvm::Value *> args);
 
