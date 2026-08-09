@@ -194,6 +194,10 @@ short-circuit, and what is still open. Start with
 [ADR-0004](doc/adr/0004-self-hosting-is-the-near-term-goal.md) if you only read
 one.
 
+[doc/glossary.md](doc/glossary.md) defines the terms this codebase uses in a
+specific sense — ordinal, designator, type-denoter, static link, tautological
+rule — and says which decision governs each.
+
 ## Bootstrap plan
 
 The classic three-stage build. Stage 0 is the C++ compiler in this repository;
@@ -234,6 +238,10 @@ Pascal is possible later but is not on the critical path.
 A useful checkpoint before stage 1 is *differential testing*: once the C++
 compiler and the Pascal compiler both exist, they should produce equivalent IR
 for every file in `tests/`.
+
+[doc/roadmap.md](doc/roadmap.md) expands this: what items 5 and 6 actually
+involve, the order the stage-1 source gets ported in, and the known limitations
+— including the ones that are deliberate.
 
 ## Adding a test
 
