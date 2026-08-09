@@ -221,8 +221,15 @@ struct Type {
     const Type *b = t ? t->base() : nullptr;
     if (!b)
       return std::to_string(value);
-    if (b->kind == TypeKind::Char)
-      return "'" + std::string(1, static_cast<char>(value)) + "'";
+    // A printable character is written as itself; anything else is written as
+    // chr(n). Not cosmetic: a diagnostic is printed with %s, so a char of
+    // value 0 written literally would truncate the message at that point —
+    // `array [` and nothing more.
+    if (b->kind == TypeKind::Char) {
+      if (value >= 32 && value < 127)
+        return "'" + std::string(1, static_cast<char>(value)) + "'";
+      return "chr(" + std::to_string(value) + ")";
+    }
     if (b->kind == TypeKind::Boolean)
       return value ? "true" : "false";
     if (b->kind == TypeKind::Enum && value >= 0 &&

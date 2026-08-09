@@ -59,15 +59,10 @@ endif()
 # tree. The roadmap makes this the checkpoint that comes *before* stage 1 is
 # declared working — a disagreement here is bisectable, the same disagreement
 # at stage 3 is two binaries differing by a byte.
-add_test(NAME selfhost-lexer
+add_test(NAME selfhost-compiler
          COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh
-                 $<TARGET_FILE:pascalc> --tokens)
-set_tests_properties(selfhost-lexer PROPERTIES TIMEOUT 600)
-
-add_test(NAME selfhost-parser
-         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh
-                 $<TARGET_FILE:pascalc> --ast)
-set_tests_properties(selfhost-parser PROPERTIES TIMEOUT 900)
+                 $<TARGET_FILE:pascalc>)
+set_tests_properties(selfhost-compiler PROPERTIES TIMEOUT 1800)
 
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})

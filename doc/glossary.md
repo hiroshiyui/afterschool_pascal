@@ -228,19 +228,22 @@ stopped by a runtime check. A non-zero exit is then required. Source paths are
 rewritten to `<source>`, so diagnostics can be pinned without depending on where
 the checkout lives.
 
-**Differential test.** Comparing the stage-1 component against the stage-0 one
+**Differential test.** Comparing the stage-1 compiler against the stage-0 one
 it is a port of, rather than against a recorded expectation.
-`selfhost/difftest.sh <pascalc> --tokens|--ast` diffs `selfhost/lexer.pas` and
-`selfhost/parser.pas` against `pascalc --dump-tokens` and `--dump-ast` over
-every Pascal source in the tree, as `selfhost-lexer` and `selfhost-parser`. A
-golden file would pin the port to whatever it did the day it was written; the
-C++ component is the specification, so the test says "these two agree" instead
-of "this has not changed" (ADR-0022, ADR-0023).
+`selfhost/difftest.sh <pascalc>` diffs `selfhost/compiler.pas` against
+`pascalc --dump-all` over every Pascal source in the tree, as
+`selfhost-compiler`. A golden file would pin the port to whatever it did the
+day it was written; the C++ compiler is the specification, so the test says
+"these two agree" instead of "this has not changed" (ADR-0022 to ADR-0024).
 
-**AST dump.** `pascalc --dump-ast`: the parse tree as one node per line, taken
-*before Sema* so it carries only what the parser decided, with `@line:col`
-printed only where the tree actually records a position. `src/astdump.cpp` is
-the specification of the format and `selfhost/parser.pas` reproduces it.
+**AST dump / Sema dump.** `--dump-ast` is the parse tree as one node per line,
+taken *before Sema*, with `@line:col` printed only where the tree actually
+records a position. `--dump-sema` is the same tree through the same walker,
+plus what Sema alone knows: the frame layouts, the type of every expression,
+the frame slot every name resolved to, and every record's field and variant
+numbering. `--dump-all` writes both with the token stream, in three sections,
+and is what the differential test compares. `src/astdump.cpp` is the
+specification of the format and `selfhost/compiler.pas` reproduces it.
 
 **Torture file.** `selfhost/torture.pas` — deliberately not a valid program,
 carrying the lexical error paths and corner cases that valid test programs
@@ -256,7 +259,7 @@ Pascal source and noticing nothing goes red — which is how the missing tab
 discovered. Count what the corpus reaches; do not assume it.
 
 **Sibling list.** What a `std::vector<...Ptr>` in `ast.h` becomes in
-`selfhost/parser.pas`: every node carries `next`, and a list is a head pointer
+`selfhost/compiler.pas`: every node carries `next`, and a list is a head pointer
 plus a tail for appending. Cheaper than a growable array, and every walker
 reads these strictly in order anyway (ADR-0023).
 

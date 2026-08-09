@@ -43,14 +43,26 @@ struct Options {
   bool keepTemps = false;
   bool dumpTokens = false;
   bool dumpAst = false;
+  bool dumpSema = false;
+  /// All three at once, with section headers. This is what
+  /// `selfhost/difftest.sh` compares, because the Pascal side is one program
+  /// that runs all three stages — ISO 7185 has no include mechanism, so there
+  /// is one source file and therefore one binary to ask.
+  bool dumpAll = false;
 };
 
 /// Diagnostics into the same stream as the dump, and before it. The Pascal
 /// side reports as it goes and cannot buffer a tree it never built, so one
 /// stream carrying errors first is what the two can be compared on.
-void dumpDiagnostics(const ap::Diagnostics &diags) {
-  for (const ap::Diagnostic &d : diags.all())
-    std::printf("%d %d error %s\n", d.line, d.col, d.message.c_str());
+/// Each diagnostic is shown once, in the section whose stage produced it —
+/// which is how the Pascal side behaves, because it reports as it goes and has
+/// nothing to reprint. Returns the new watermark.
+size_t dumpDiagnostics(const ap::Diagnostics &diags, size_t from) {
+  const std::vector<ap::Diagnostic> &all = diags.all();
+  for (size_t i = from; i < all.size(); ++i)
+    std::printf("%d %d error %s\n", all[i].line, all[i].col,
+                all[i].message.c_str());
+  return all.size();
 }
 
 /// Write the token stream in the format `selfhost/lexer.pas` also writes, so
@@ -61,11 +73,9 @@ void dumpDiagnostics(const ap::Diagnostics &diags) {
 /// A real literal prints as its *source text* rather than its converted value.
 /// Comparing converted doubles would be comparing two languages' float
 /// formatting, which is not what this is testing.
-void dumpTokens(const std::vector<ap::Token> &tokens,
-                const ap::Diagnostics &diags) {
+void dumpTokens(const std::vector<ap::Token> &tokens) {
   // Errors first and on stdout, not stderr: the Pascal lexer reports as it
   // goes, so one stream holding both is what the two can be compared on.
-  dumpDiagnostics(diags);
   for (const ap::Token &t : tokens) {
     std::printf("%d %d ", t.line, t.col);
     switch (t.kind) {
@@ -142,6 +152,11 @@ bool parseArgs(int argc, char **argv, Options &opt) {
       opt.dumpTokens = true;
     } else if (a == "--dump-ast") {
       opt.dumpAst = true;
+    } else if (a == "--dump-sema") {
+      opt.dumpSema = true;
+    } else if (a == "--dump-all") {
+      opt.dumpTokens = opt.dumpAst = opt.dumpSema = true;
+      opt.dumpAll = true;
     } else if (a.size() == 3 && a.rfind("-O", 0) == 0 && a[2] >= '0' &&
                a[2] <= '3') {
       opt.optLevel = static_cast<unsigned>(a[2] - '0');
@@ -250,27 +265,48 @@ int main(int argc, char **argv) {
   ap::Diagnostics diags(opt.input);
   ap::Lexer lexer(buffer.str(), diags);
   std::vector<ap::Token> tokens = lexer.tokenize();
-  if (opt.dumpTokens) {
-    dumpTokens(tokens, diags);
-    return 0;
-  }
-  // The parse tree, in the format selfhost/parser.pas also writes. Errors
-  // first, then the tree — and the tree only when there were none, because the
-  // Pascal parser has no exception to unwind with and builds nothing after it
-  // gives up. Always exit 0: what is being compared is the text, so a non-zero
-  // status from here means the compiler itself failed.
-  if (opt.dumpAst) {
-    std::unique_ptr<ap::Program> parsed;
-    if (!diags.hasErrors()) {
-      try {
-        ap::Parser parser(std::move(tokens), diags);
-        parsed = parser.parseProgram();
-      } catch (const ap::ParseAbort &) {
+  // The dumps `selfhost/compiler.pas` is compared against. Each section prints
+  // the diagnostics known at that point and then its own output, and the
+  // output only when there were none — the Pascal side has no exception to
+  // unwind with and builds nothing after it gives up, so "diagnostics, or a
+  // result, never both" is a rule both can follow. Always exit 0: what is
+  // compared is the text, so a non-zero status here means the compiler failed.
+  if (opt.dumpTokens || opt.dumpAst || opt.dumpSema) {
+    if (opt.dumpAll)
+      std::printf("=== tokens\n");
+    size_t shown = 0;
+    if (opt.dumpTokens) {
+      shown = dumpDiagnostics(diags, shown);
+      dumpTokens(tokens);
+    }
+
+    if (opt.dumpAst || opt.dumpSema) {
+      std::unique_ptr<ap::Program> parsed;
+      if (!diags.hasErrors()) {
+        try {
+          ap::Parser parser(std::move(tokens), diags);
+          parsed = parser.parseProgram();
+        } catch (const ap::ParseAbort &) {
+        }
+      }
+      if (opt.dumpAll)
+        std::printf("=== ast\n");
+      if (opt.dumpAst) {
+        shown = dumpDiagnostics(diags, shown);
+        if (parsed && !diags.hasErrors())
+          ap::dumpAst(*parsed);
+      }
+      if (opt.dumpSema) {
+        ap::Sema sema(diags);
+        if (parsed && !diags.hasErrors())
+          sema.run(*parsed);
+        if (opt.dumpAll)
+          std::printf("=== sema\n");
+        shown = dumpDiagnostics(diags, shown);
+        if (parsed && !diags.hasErrors())
+          ap::dumpSema(*parsed, sema);
       }
     }
-    dumpDiagnostics(diags);
-    if (parsed && !diags.hasErrors())
-      ap::dumpAst(*parsed);
     return 0;
   }
 

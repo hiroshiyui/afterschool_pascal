@@ -2,7 +2,7 @@
 # Differential test: a stage-1 component against the stage-0 one it was ported
 # from, on every Pascal source in the repository.
 #
-#   difftest.sh <path-to-pascalc> --tokens|--ast [files...]
+#   difftest.sh <path-to-pascalc> [files...]
 #
 # The roadmap makes this the checkpoint that comes *before* stage 1 is declared
 # working. A disagreement here is a bug in one of the two implementations,
@@ -10,29 +10,29 @@
 # byte mismatch between two compiler binaries with nothing to compare but their
 # output.
 #
-# Both sides write the same format — see `pascalc --dump-tokens` /
-# `--dump-ast` against selfhost/lexer.pas and selfhost/parser.pas — so the
-# comparison is a plain diff. The Pascal side is itself compiled by the
-# compiler under test, so this also checks that the compiler can build a
-# program of that size and shape.
+# Both sides write the same format — `pascalc --dump-all` against
+# selfhost/compiler.pas — so the comparison is a plain diff. ISO 7185 has no
+# include mechanism, so the Pascal side is one program covering every stage
+# ported so far, and it dumps all of them in one pass; there is no mode to
+# select because there is no separate binary to select it on.
+#
+# The Pascal side is itself compiled by the compiler under test, so this also
+# checks that the compiler can still build a program of that size and shape.
 set -u
 
 pascalc=$1
-mode=${2:-}
-shift 2 || { echo "usage: difftest.sh <pascalc> --tokens|--ast [files...]" >&2; exit 2; }
+shift || { echo "usage: difftest.sh <pascalc> [files...]" >&2; exit 2; }
 
-case "$mode" in
-  --tokens) component=lexer;  flag=--dump-tokens; what="token for token" ;;
-  --ast)    component=parser; flag=--dump-ast;    what="node for node" ;;
-  *) echo "difftest.sh: mode must be --tokens or --ast, not '$mode'" >&2; exit 2 ;;
-esac
+component=compiler
+flag=--dump-all
+what="stage for stage"
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$here")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-if ! "$pascalc" "$here/$component.pas" -o "$work/stage1" 2>"$work/build.err"; then
+if ! "$pascalc" "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
   echo "--- the Pascal $component did not compile ---" >&2
   cat "$work/build.err" >&2
   exit 1
@@ -59,7 +59,7 @@ for f in "${files[@]}"; do
   # A bug can be a *loop* rather than a wrong answer — a scanner that
   # recognises no character consumes none and never advances. That is a
   # failure like any other, so it is bounded here instead of hanging the run.
-  timeout 60 "$work/stage1" "$f" >"$work/pas.txt" 2>"$work/pas.err"
+  timeout 120 "$work/stage1" "$f" >"$work/pas.txt" 2>"$work/pas.err"
   status=$?
   checked=$((checked + 1))
   if [[ $status -eq 124 ]]; then

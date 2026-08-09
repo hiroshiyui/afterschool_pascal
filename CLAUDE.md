@@ -19,7 +19,7 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
 tests/run_test.sh build/bin/pascalc tests/control.pas   # same case, without ctest
-selfhost/difftest.sh build/bin/pascalc   # the Pascal lexer against the C++ one
+selfhost/difftest.sh build/bin/pascalc   # the Pascal compiler against the C++ one
 
 build/bin/pascalc tests/hello.pas -o /tmp/hello && /tmp/hello
 build/bin/pascalc -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
@@ -211,9 +211,9 @@ The parser bounds the depth of the tree it builds at 1000 levels (ADR-0020);
 the spine-building loops count their iterations toward the same limit, because
 an operator chain is flat for the parser but deep for Sema, CodeGen and the
 destructor — a call-depth-only limit would miss it.
-`src/astdump.cpp` writes the tree in the format `selfhost/parser.pas` also
-writes; it is the specification of that format, so change it and the Pascal
-side together.
+`src/astdump.cpp` writes the tree in the format `selfhost/compiler.pas` also
+writes, before and after Sema; it is the specification of that format, so
+change it and the Pascal side together.
 `src/sema.cpp` owns scopes, type rules, type-denoter resolution, and constant
 folding. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of
@@ -225,32 +225,42 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 `ast.h` → `parser.cpp` → `sema.cpp` → `codegen.cpp` → a `tests/` pair, plus
 `runtime/pasrt.c` if it needs library support.
 
-`selfhost/` is the stage-1 compiler, written in Afterschool Pascal. The lexer
-(ADR-0022) and the parser (ADR-0023) are done. **They are checked against
-`src/lexer.cpp` and `src/parser.cpp`, not against golden files** —
-`pascalc --dump-tokens` / `--dump-ast` and the Pascal sources write the same
-formats, and `selfhost/difftest.sh <pascalc> --tokens|--ast` diffs them over
-every `.pas` in the tree, under ctest as `selfhost-lexer` and
-`selfhost-parser`. If you change what a C++ stage produces, the Pascal one
-changes in the same commit or the test goes red — that is the point of it, not
-an inconvenience.
+`selfhost/compiler.pas` is the stage-1 compiler, written in Afterschool Pascal.
+The lexer (ADR-0022), the parser (ADR-0023) and Sema (ADR-0024) are done. **It
+is one source file** — ISO 7185 has no include mechanism, so each component is
+merged in as it is ported rather than kept as a program of its own, and later
+ones join it the same way.
 
+**It is checked against `src/`, not against golden files.** `pascalc
+--dump-all` and `selfhost/compiler.pas` write the same three sections
+(`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh <pascalc>`
+diffs them over every `.pas` in the tree, under ctest as `selfhost-compiler`.
+If you change what a C++ stage produces, the Pascal one changes in the same
+commit or the test goes red — that is the point of it, not an inconvenience.
+
+- There is **no mode argument** because there is no second binary: the Pascal
+  program runs every stage and dumps all of them. Each section reports what its
+  own stage found and shows its result only when nothing was found — a stage
+  that failed has nothing to show, and the stages after it do not run.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
-  and prints `@line:col` only where the tree really records a position. It
-  prints diagnostics first and the tree only when there were none, because the
-  Pascal parser has no exception to unwind with and builds nothing after it
-  gives up.
+  and prints `@line:col` only where the tree really records a position.
+  `--dump-sema` walks the same tree through the same walker with an `annotate`
+  flag, adding the frame layouts, the type of every expression, the frame slot
+  every name resolved to, and every record's field/variant numbering. Sharing
+  the walker is deliberate: the shape is then the same question asked twice.
 - `selfhost/torture.pas` is deliberately **not** a valid program: it carries the
   error paths and lexical corner cases a valid program never reaches. Add to it
   when a lexical rule changes.
 - `selfhost/badparse/` is its parser equivalent, spread over one file per
-  message because the parser stops at its first error. A file per diagnostic
-  and a file per arm of the token-name table. Add one when you add a message,
-  and don't assume the corpus reaches a branch — **count it**. Twice a whole
-  branch was found uncompared (no file had a tab; no file had a parse error).
-- ISO 7185 has no include mechanism, so the finished compiler is **one source
-  file**. Both are written to be pasted into it, and the AST in `parser.pas` is
-  what Sema will be written against.
+  message because the parser stops at its first error. `selfhost/badsema/` is
+  Sema's, and is only eight files because Sema *accumulates* errors rather than
+  bailing. Add to them when you add a message, and don't assume the corpus
+  reaches a branch — **count it**. Three times now a whole branch was found
+  uncompared (no file had a tab; no file had a parse error; Sema reached 48 of
+  its 85 messages), each time because a mutation survived a green suite.
+- ISO 7185 has no include mechanism, so the compiler **is** one source file
+  already: `selfhost/compiler.pas` is what each later component is merged into,
+  and its AST is what CodeGen will be written against.
 
 ## Pascal semantics already encoded (keep them)
 

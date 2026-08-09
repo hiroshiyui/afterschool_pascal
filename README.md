@@ -290,17 +290,17 @@ the Pascal source rather than growing the language it is written in.
 
 ## Stage 1, in progress
 
-`selfhost/` holds the compiler being written in its own language. The lexer and
-the parser are done, and each is checked against the C++ one it was ported
-from, on every Pascal source in the tree — 166 files, compared token for token
-and node for node:
+`selfhost/compiler.pas` is the compiler being written in its own language: the
+lexer, the parser and Sema, in **one source file**, because ISO 7185 has no
+include mechanism and the finished compiler is one source. It is checked
+against the C++ stages it was ported from, on every Pascal source in the tree —
+173 files, compared stage for stage:
 
 ```sh
-selfhost/difftest.sh build/bin/pascalc --tokens   # both also run under ctest
-selfhost/difftest.sh build/bin/pascalc --ast
+selfhost/difftest.sh build/bin/pascalc     # also runs under ctest
 ```
 
-Each pair writes the same format, so the comparison is a plain diff:
+Both write the same three sections, so the comparison is a plain diff:
 
 ```
 $ build/bin/pascalc --dump-tokens tests/hello.pas | head -3
@@ -308,21 +308,25 @@ $ build/bin/pascalc --dump-tokens tests/hello.pas | head -3
 1 9 ident hello
 1 14 op (
 
-$ build/bin/pascalc --dump-ast tests/hello.pas | head -4
+$ build/bin/pascalc --dump-sema tests/hello.pas | head -6
 program hello
   params
     name output @1:15
-  block
+  frames
+    frame hello level 0
+      var output #0 : text (stdout 0)
 ```
 
 That is the checkpoint rather than a convenience. A disagreement between the
 two is bisectable now; the same disagreement discovered at stage 3 is two
-compiler binaries differing by a byte. The corpus includes the Pascal sources
-themselves, `selfhost/torture.pas` covers the lexical error paths a valid
-program never reaches, and `selfhost/badparse/` does the same for the parser's
-— one file per message, because the parser stops at its first error. See
-[ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md) and
-[ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md).
+compiler binaries differing by a byte. The corpus includes the Pascal compiler's
+own source, and three directories cover the error paths a valid program never
+reaches: `selfhost/torture.pas` for the lexer, `selfhost/badparse/` for the
+parser (one file per message, because the parser stops at its first error) and
+`selfhost/badsema/` for Sema (eight files, because Sema accumulates). See
+[ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md),
+[ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md) and
+[ADR-0024](doc/adr/0024-the-stage-1-compiler-becomes-one-source-file.md).
 
 The AST is where the bootstrap constraints paid off: the `NK` tag of
 [ADR-0005](doc/adr/0005-tag-dispatched-ast-without-cpp-rtti.md) became a

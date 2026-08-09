@@ -1431,7 +1431,13 @@ void Sema::checkWith(WithStmt *w) {
   // The binding is a frame slot holding a pointer — the same shape as a `var`
   // parameter — so a `with` inside a recursive procedure binds the record of
   // the invocation it is running in.
-  w->binding = addHiddenVar("with$" + t->name(), SymKind::VarParam, t, current_);
+  // Named by its slot rather than by its record's type. The spelling reaches
+  // nothing but an IR label, and building it from a type name would be the one
+  // string-valued function ADR-0012 measured as avoidable — the Pascal-hosted
+  // Sema would need a whole second, string-building copy of Type::name() for
+  // this line alone.
+  w->binding = addHiddenVar("with$" + std::to_string(current_->frameVars.size()),
+                            SymKind::VarParam, t, current_);
 
   withStack_.push_back(w->binding);
   checkStmt(w->body.get());

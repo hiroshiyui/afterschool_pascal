@@ -35,6 +35,61 @@ const char *unOpName(UnOp op) {
   return "?";
 }
 
+const char *symKindName(SymKind k) {
+  switch (k) {
+  case SymKind::Const:    return "const";
+  case SymKind::Type:     return "type";
+  case SymKind::Var:      return "var";
+  case SymKind::Param:    return "param";
+  case SymKind::VarParam: return "varparam";
+  case SymKind::Proc:     return "proc";
+  case SymKind::Func:     return "func";
+  }
+  return "?";
+}
+
+const char *bindingName(FileBinding b) {
+  switch (b) {
+  case FileBinding::Internal:       return "internal";
+  case FileBinding::StandardInput:  return "stdin";
+  case FileBinding::StandardOutput: return "stdout";
+  case FileBinding::Argument:       return "arg";
+  }
+  return "?";
+}
+
+/// What a name resolved to. A variable is named by the frame that holds it and
+/// its slot in it, because that pair is what codegen actually uses — printing
+/// the spelling again would compare nothing Sema decided.
+///
+/// A constant prints its value, which is how constant folding is compared: a
+/// real one prints only its type, for the reason ADR-0022 gives about
+/// comparing two languages' float formatting.
+std::string symRef(const Symbol *s) {
+  if (!s)
+    return "?";
+  switch (s->kind) {
+  case SymKind::Const:
+    if (!s->type)
+      return "const ?";
+    if (s->type->isReal())
+      return "const real";
+    if (s->type->isChar())
+      return "const " + std::to_string(static_cast<unsigned char>(s->charVal));
+    if (s->type->base()->kind == TypeKind::Boolean)
+      return std::string("const ") + (s->boolVal ? "true" : "false");
+    return "const " + std::to_string(s->intVal);
+  case SymKind::Type:
+    return "type";
+  case SymKind::Proc:
+  case SymKind::Func:
+    return std::string(symKindName(s->kind)) + " " + s->name;
+  default:
+    return (s->owner ? s->owner->name : std::string("?")) + "/" +
+           std::to_string(s->frameIndex);
+  }
+}
+
 /// The format, written once here so both parsers can be held to it:
 ///
 ///   * one node per line, two spaces of indentation per level;
@@ -50,6 +105,9 @@ const char *unOpName(UnOp op) {
 /// before Sema, so there is nothing to print but what the parser built.
 struct Dumper {
   int level = 0;
+  /// False for `--dump-ast`, true for `--dump-sema`. The walk is identical
+  /// either way; only the annotations appear.
+  bool annotate = false;
 
   void pad() {
     for (int i = 0; i < level; ++i)
@@ -63,39 +121,80 @@ struct Dumper {
     pad();
     std::printf("%s @%d:%d\n", tag.c_str(), line, col);
   }
+  /// A child that Sema may or may not have supplied — the file of a read or a
+  /// write. The marker says which, so "absent" and "present" cannot be
+  /// confused for one another.
+  void optionalChild(const char *tag, Expr *e) {
+    if (!e) {
+      pad();
+      std::printf("no-%s\n", tag);
+      return;
+    }
+    mark(tag);
+    ++level;
+    expr(e);
+    --level;
+  }
+  /// An expression, which after Sema carries a type and possibly a resolution.
+  void headExpr(const std::string &tag, Expr *e, const std::string &to = "") {
+    pad();
+    std::printf("%s @%d:%d", tag.c_str(), e->line, e->col);
+    if (annotate) {
+      if (!to.empty())
+        std::printf(" -> %s", to.c_str());
+      std::printf(" : %s", e->type ? e->type->name().c_str() : "?");
+    }
+    std::printf("\n");
+  }
+  /// A type-denoter, which after Sema names the type it produced.
+  void headType(const std::string &tag, TypeExpr *t) {
+    pad();
+    std::printf("%s @%d:%d", tag.c_str(), t->line, t->col);
+    if (annotate)
+      std::printf(" = %s", t->resolved ? t->resolved->name().c_str() : "?");
+    std::printf("\n");
+  }
 
   // ------------------------------------------------------------ expressions
 
   void expr(Expr *e) {
     switch (e->kind) {
     case NK::IntLit:
-      head("int " + std::to_string(as<IntLit>(e)->value), e->line, e->col);
+      headExpr("int " + std::to_string(as<IntLit>(e)->value), e);
       break;
     case NK::RealLit:
       // The literal as written, not its value. Comparing converted doubles
       // would be comparing two languages' float formatting, which is the same
       // reason --dump-tokens prints the text (ADR-0022).
-      head("real " + as<RealLit>(e)->text, e->line, e->col);
+      headExpr("real " + as<RealLit>(e)->text, e);
       break;
     case NK::CharLit:
       // As an ordinal: a char literal may be a quote, a bracket, or a byte
       // with no printable form, and a number has none of those problems.
-      head("char " + std::to_string(static_cast<unsigned char>(
-                         as<CharLit>(e)->value)),
-           e->line, e->col);
+      headExpr("char " + std::to_string(static_cast<unsigned char>(
+                             as<CharLit>(e)->value)),
+               e);
       break;
     case NK::StrLit:
-      head("str [" + as<StrLit>(e)->value + "]", e->line, e->col);
+      headExpr("str [" + as<StrLit>(e)->value + "]", e);
       break;
     case NK::NilLit:
-      head("nil", e->line, e->col);
+      headExpr("nil", e);
       break;
-    case NK::VarRef:
-      head("var " + as<VarRef>(e)->name, e->line, e->col);
+    case NK::VarRef: {
+      VarRef *n = as<VarRef>(e);
+      // A name reached through an open `with` resolves to the hidden binding
+      // *plus* the field it selects, so both halves are printed.
+      std::string to = symRef(n->sym);
+      if (n->withField)
+        to += " field #" + std::to_string(n->withField->index) + "/" +
+              std::to_string(n->withField->variant);
+      headExpr("var " + n->name, e, to);
       break;
+    }
     case NK::Index: {
       IndexExpr *n = as<IndexExpr>(e);
-      head("index", e->line, e->col);
+      headExpr("index", e);
       ++level;
       expr(n->base.get());
       expr(n->index.get());
@@ -104,21 +203,24 @@ struct Dumper {
     }
     case NK::Field: {
       FieldExpr *n = as<FieldExpr>(e);
-      head("field " + n->field, e->line, e->col);
+      headExpr("field " + n->field, e,
+               n->resolved ? "#" + std::to_string(n->resolved->index) + "/" +
+                                 std::to_string(n->resolved->variant)
+                           : "?");
       ++level;
       expr(n->base.get());
       --level;
       break;
     }
     case NK::Deref:
-      head("deref", e->line, e->col);
+      headExpr("deref", e);
       ++level;
       expr(as<DerefExpr>(e)->base.get());
       --level;
       break;
     case NK::Binary: {
       Binary *n = as<Binary>(e);
-      head(std::string("binary ") + binOpName(n->op), e->line, e->col);
+      headExpr(std::string("binary ") + binOpName(n->op), e);
       ++level;
       expr(n->lhs.get());
       expr(n->rhs.get());
@@ -127,7 +229,7 @@ struct Dumper {
     }
     case NK::Unary: {
       Unary *n = as<Unary>(e);
-      head(std::string("unary ") + unOpName(n->op), e->line, e->col);
+      headExpr(std::string("unary ") + unOpName(n->op), e);
       ++level;
       expr(n->operand.get());
       --level;
@@ -135,7 +237,13 @@ struct Dumper {
     }
     case NK::Call: {
       Call *n = as<Call>(e);
-      head("call " + n->name, e->line, e->col);
+      // Sema decides whether a call is a required function or a user one; the
+      // two are told apart here because nothing else in the tree says which.
+      std::string to = n->builtin != Builtin::None
+                           ? "builtin " + std::to_string(
+                                              static_cast<int>(n->builtin))
+                           : symRef(n->sym);
+      headExpr("call " + n->name, e, to);
       ++level;
       mark("args");
       ++level;
@@ -145,7 +253,7 @@ struct Dumper {
       break;
     }
     default:
-      head("?expr", e->line, e->col);
+      headExpr("?expr", e);
       break;
     }
   }
@@ -170,6 +278,11 @@ struct Dumper {
       WriteStmt *n = as<WriteStmt>(s);
       head(n->newline ? "writeln" : "write", s->line, s->col);
       ++level;
+      // Sema moves a leading file argument out of the list and supplies
+      // `output` when there was none, so after it the tree has a shape the
+      // parser never built. That change is the thing worth comparing.
+      if (annotate)
+        optionalChild("file", n->file.get());
       for (WriteArg &a : n->args) {
         // The flags say which optional parts follow, so a missing width and a
         // missing precision cannot be confused for each other.
@@ -190,6 +303,8 @@ struct Dumper {
       ReadStmt *n = as<ReadStmt>(s);
       head(n->newline ? "readln" : "read", s->line, s->col);
       ++level;
+      if (annotate)
+        optionalChild("file", n->file.get());
       mark("args");
       ++level;
       for (ExprPtr &a : n->args)
@@ -276,6 +391,15 @@ struct Dumper {
         for (ExprPtr &l : arm.labels)
           expr(l.get());
         --level;
+        // The folded label values: this is where constant folding of an
+        // ordinal is compared, and a label the checker rejected leaves a gap.
+        if (annotate) {
+          pad();
+          std::printf("values");
+          for (long long v : arm.values)
+            std::printf(" %lld", v);
+          std::printf("\n");
+        }
         mark("body");
         ++level;
         stmt(arm.body.get());
@@ -286,7 +410,13 @@ struct Dumper {
     }
     case NK::ProcCall: {
       ProcCallStmt *n = as<ProcCallStmt>(s);
-      head("proccall " + n->name, s->line, s->col);
+      std::string tag = "proccall " + n->name;
+      if (annotate)
+        tag += n->standard != StdProc::None
+                   ? " -> standard " +
+                         std::to_string(static_cast<int>(n->standard))
+                   : " -> " + symRef(n->sym);
+      head(tag, s->line, s->col);
       ++level;
       mark("args");
       ++level;
@@ -325,36 +455,68 @@ struct Dumper {
     level -= 2;
   }
 
+  /// The layout Sema gave a record: which struct each field lives in and at
+  /// what position, and which tag values select each variant. Codegen indexes
+  /// by exactly these numbers, so they are what a record type *is*.
+  void recordLayout(Type *r) {
+    mark("layout");
+    ++level;
+    for (const Field &f : r->fields) {
+      pad();
+      std::printf("field %s #%d/%d : %s\n", f.name.c_str(), f.index, f.variant,
+                  f.type ? f.type->name().c_str() : "?");
+    }
+    if (r->tagField >= 0) {
+      pad();
+      std::printf("tagfield #%d\n", r->tagField);
+    }
+    for (size_t i = 0; i < r->variants.size(); ++i) {
+      pad();
+      std::printf("variant %d labels", static_cast<int>(i));
+      for (long long v : r->variants[i].labels)
+        std::printf(" %lld", v);
+      std::printf("\n");
+      ++level;
+      for (const Field &f : r->variants[i].fields) {
+        pad();
+        std::printf("field %s #%d/%d : %s\n", f.name.c_str(), f.index,
+                    f.variant, f.type ? f.type->name().c_str() : "?");
+      }
+      --level;
+    }
+    --level;
+  }
+
   void typeExpr(TypeExpr *t) {
     const char *pk = t->packed ? " packed" : "";
     switch (t->kind) {
     case TEK::Named:
-      head("named " + t->name, t->line, t->col);
+      headType("named " + t->name, t);
       break;
     case TEK::Pointer:
-      head("pointer " + t->name, t->line, t->col);
+      headType("pointer " + t->name, t);
       break;
     case TEK::Enum:
-      head("enum", t->line, t->col);
+      headType("enum", t);
       ++level;
       names(t->constants);
       --level;
       break;
     case TEK::Subrange:
-      head("subrange", t->line, t->col);
+      headType("subrange", t);
       ++level;
       expr(t->lo.get());
       expr(t->hi.get());
       --level;
       break;
     case TEK::File:
-      head(std::string("file") + pk, t->line, t->col);
+      headType(std::string("file") + pk, t);
       ++level;
       typeExpr(t->elem.get());
       --level;
       break;
     case TEK::Array:
-      head(std::string("array") + pk, t->line, t->col);
+      headType(std::string("array") + pk, t);
       ++level;
       mark("dims");
       ++level;
@@ -367,8 +529,10 @@ struct Dumper {
       level -= 2;
       break;
     case TEK::Record:
-      head(std::string("record") + pk, t->line, t->col);
+      headType(std::string("record") + pk, t);
       ++level;
+      if (annotate && t->resolved && t->resolved->isRecord())
+        recordLayout(t->resolved);
       mark("fields");
       ++level;
       for (FieldGroup &f : t->fields)
@@ -428,6 +592,37 @@ struct Dumper {
     --level;
   }
 
+  /// One activation record: what ADR-0016 says codegen lays out, in the order
+  /// it lays it out. The slot numbers are the whole point — a name resolving
+  /// to the right symbol but the wrong slot is a bug this catches.
+  void frame(Symbol *s) {
+    pad();
+    if (!s) {
+      std::printf("frame ?\n");
+      return;
+    }
+    std::printf("frame %s level %d\n", s->name.c_str(), s->level);
+    ++level;
+    for (Symbol *v : s->frameVars) {
+      pad();
+      std::printf("%s %s #%d : %s", symKindName(v->kind), v->name.c_str(),
+                  v->frameIndex, v->type ? v->type->name().c_str() : "?");
+      // How a file reaches the world outside the program (ISO 7185 §6.10).
+      if (v->type && v->type->isFile())
+        std::printf(" (%s %d)", bindingName(v->fileBinding), v->fileArg);
+      std::printf("\n");
+    }
+    --level;
+  }
+
+  void frames(Block &b) {
+    for (std::unique_ptr<ProcDecl> &p : b.procs) {
+      frame(p->sym);
+      if (p->body)
+        frames(*p->body);
+    }
+  }
+
   void block(Block &b) {
     mark("block");
     ++level;
@@ -476,6 +671,26 @@ void dumpAst(Program &program) {
   d.level = 2;
   for (const DeclName &p : program.params)
     d.head("name " + p.name, p.line, p.col);
+  d.level = 1;
+  d.block(*program.block);
+}
+
+void dumpSema(Program &program, Sema &sema) {
+  Dumper d;
+  d.annotate = true;
+  std::printf("program %s\n", program.name.c_str());
+  d.level = 1;
+  d.mark("params");
+  d.level = 2;
+  for (const DeclName &p : program.params)
+    d.head("name " + p.name, p.line, p.col);
+  d.level = 1;
+  d.mark("frames");
+  d.level = 2;
+  // The program's own frame first: at level 0 it holds what another language
+  // would call the globals, which is ADR-0016's point.
+  d.frame(sema.programSymbol());
+  d.frames(*program.block);
   d.level = 1;
   d.block(*program.block);
 }
