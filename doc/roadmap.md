@@ -25,7 +25,7 @@ The stage-2 ≡ stage-3 comparison is the whole point: stage 2 is built by a
 compiler that was itself built by C++, stage 3 by one built by Pascal. If the
 bytes match, the Pascal source is a fixed point and stage 0 can be retired.
 
-## Where stage 0 is now (milestone 5)
+## Where stage 0 is now (milestone 6)
 
 | # | Feature | State | Record |
 | --- | --- | --- | --- |
@@ -33,67 +33,73 @@ bytes match, the Pascal source is a fixed point and stage 0 can be retired.
 | 2 | Arrays and records | **done** — any ordinal index, multi-dimensional, `packed`, nested, `with`, bounds-checked | [ADR-0017](adr/0017-structured-types-use-name-equivalence.md) |
 | 3 | Enumerations, subranges, `case` | **done**, with the variant records they unlock | [ADR-0018](adr/0018-ordinal-types-and-variant-records.md) |
 | 4 | Pointers, `new`/`dispose` | **done**, with the forward-referenced domain that makes a recursive type possible | [ADR-0019](adr/0019-pointers-and-the-only-forward-reference.md) |
-| 5 | Text files | **next** | — |
-| 6 | Character strings | open question | [ADR-0012](adr/0012-character-strings-for-self-hosting.md) (Proposed) |
+| 5 | Text files | **done** — `reset`, `rewrite`, `read`, `readln`, `eof`, `eoln`, and the buffer variable with `get`/`put` | [ADR-0021](adr/0021-text-files-keep-the-buffer-variable.md) |
+| 6 | Character strings | **decided** — a length-plus-buffer record, no extension | [ADR-0012](adr/0012-character-strings-for-self-hosting.md) |
 
 Items 1–4 mean the AST of a self-hosted compiler is now *expressible*: the node
 kind is an enumeration, the node is a variant record, and the tree is heap
 allocated through a recursive pointer type. `tests/pointers.pas` builds exactly
-that shape as a proof by construction.
+that shape as a proof by construction. Item 5 means it can now read its input
+and write its output, so **every structural prerequisite for stage 1 is in
+place**.
 
-Alongside the language, 25 ctest cases — 24 Pascal programs plus the
-verification run — and 29 SMT rules, 25 of them for all 2³² inputs, with no
+Item 6 is a decision rather than a feature, and it is now made, so **the
+language is finished for bootstrap purposes**: what remains is writing the
+Pascal, not growing what it is written in.
+
+Alongside the language, 33 ctest cases — 32 Pascal programs plus the
+verification run — and 31 SMT rules, 27 of them for all 2³² inputs, with no
 known gaps.
 
-## Item 5 — text files
+## Item 5 — text files (done)
 
-`reset`, `rewrite`, `read`, `readln`, `write` to a file, `eof`, `eoln`, and the
-`file of char` type behind `text`. This is the last *structural* item: without
-it the compiler cannot read its input or write its output, and with it the
-stage-1 source can be written.
+Delivered as ADR-0021. The two decisions worth remembering:
 
-What makes it more than plumbing:
+- **The buffer variable is real.** `f^`, `get` and `put` exist, and `read` and
+  `write` are derived from them in the runtime the way ISO 7185 §6.6.5.2
+  derives them. The apparently redundant primitive is one character of
+  lookahead, which is exactly what the lexer at the head of the port is written
+  against.
+- **Program parameters bind to the command line**, in the order written, with
+  `input` and `output` as the standard streams. §6.10 leaves the binding to the
+  implementation, so this is the kind of choice that becomes folklore unless it
+  is written down.
 
-- **`text` is a file *variable*, not a handle.** ISO gives a file variable a
-  buffer variable `f^` and defines `read` in terms of it. `get`/`put` and `f^`
-  are the primitive operations; `read` and `write` are defined on top. Whether
-  to implement the primitives honestly or to define only the derived forms is
-  the first decision, and the answer affects what a Pascal-hosted lexer can be
-  written against.
-- **`program P(input, output)`** — the program parameters finally have to mean
-  something. Today they are parsed and ignored.
-- **`eoln` and the line structure.** ISO's file model has lines terminated by a
-  component that reads as a space; the mapping onto a POSIX byte stream is where
-  most Pascal implementations quietly differ from the standard, and the
-  difference should be recorded rather than absorbed.
-- **Runtime, not IR.** Almost all of it belongs in `runtime/pasrt.c` behind the
-  ADR-0007 boundary, and almost none of it wants an SMT rule — file behaviour is
-  a state property, not an arithmetic lowering. Expect this item to be carried
-  by golden tests plus a sanitiser run, the same way pointers were.
+Two SMT rules came with it, both about `pas_read_int`'s digit accumulator —
+the one place the file code computes a number that could be computed wrongly.
+Everything else about files is a state property and is covered by tests, one of
+which (`files_scratch.pas`, three thousand scratch files) fails by exhausting
+the descriptor table if block exit ever stops closing files.
 
-## Item 6 — character strings
+## Item 6 — character strings (decided)
 
-The one place ADR-0002 (conform to ISO 7185) and ADR-0004 (self-host) genuinely
-conflict. ISO has no string type: only string literals and
-`packed array [1..n] of char`, where the length is part of the type, so a
-procedure taking a name cannot take a longer one.
+Settled as ADR-0012: a length-plus-buffer record in strict ISO Pascal, no
+extension, ADR-0002's conformance untouched.
 
-A compiler is unusually string-heavy — identifiers, keyword tables, literals
-lifted from the source, diagnostics, and under ADR-0006 the whole emitted IR as
-generated text.
+What settled it was measuring the existing compiler rather than reasoning about
+the language. The record's own earlier warning — that strict ISO would cost
+"every line that touches text" — turned out to be **wrong**:
 
-[ADR-0012](adr/0012-character-strings-for-self-hosting.md) lays out the three
-options (a length-plus-buffer record, a documented `string` extension, or
-ISO 10206 strings) and currently *recommends* the first without deciding. It is
-still `Proposed` on purpose: the requirement should come from real stage-1 code
-rather than from a guess.
+- A compiler *reads text in and writes text out*; it rarely manipulates it. Of
+  164 string concatenations in the C++ source, nearly all build a diagnostic or
+  an LLVM label, and both are written — so in Pascal they become `write` calls
+  and need no string to exist at all.
+- Exactly one function returns a built-up string (`Type::name()`), and its
+  Pascal form writes directly instead, which is what a text-emitting backend
+  wants anyway.
+- Diagnostics are never sorted, so a message can be written the moment it is
+  produced and never stored.
+- What must be stored is bounded and small: identifiers, the literals of the
+  program being compiled, and about sixty padded entries in fixed tables.
 
-**This has to be settled before the stage-1 source is written, not during.**
-Nothing before item 5 depends on the answer; everything after it does.
+`tests/bootstrap_strings.pas` is the evidence rather than an illustration —
+the record, the lexer's accumulate-a-word loop, keyword matching against padded
+literals, a symbol table interning by comparison, and IR emission — compiling
+and running against the compiler as it stands.
 
-## After item 6: writing stage 1
+## Next: writing stage 1
 
-In rough order, once the language is sufficient:
+Nothing in the language is now blocking. In rough order:
 
 1. **Port the lexer.** Smallest self-contained stage, exercises strings and text
    files immediately, and its output can be diffed against the C++ lexer's on
@@ -136,6 +142,15 @@ surprises.
 - **Use-after-dispose through a second pointer is undetected.** `dispose(p)`
   sets `p` to nil, which converts the common form into the nil trap, and that is
   all it does. No proof in this repository claims more.
+- **`readln` at an unterminated last line** stops rather than failing, where
+  ISO calls reading past end-of-file an error. Files whose last line has no
+  terminator are common enough to be worth the deviation; `readln` with nothing
+  left at all still fails (ADR-0021).
+- **Characters are bytes, and the locale is never consulted.** `char` is
+  0..255, so UTF-8 passes through unchanged but a multi-byte character is
+  several `char` values. That is a deliberate non-decision: encoding is the
+  program's business. It does mean a Pascal-hosted lexer sees bytes, which is
+  fine while the language it lexes is ASCII.
 - **Not implemented at all:** sets, `goto`, procedural and functional
   parameters, and non-text files. None of them is on the path to stage 1. Sets
   would be the most useful of the four for a compiler (character classes,

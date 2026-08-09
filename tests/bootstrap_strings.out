@@ -1,0 +1,5 @@
+words 13 keywords 5 distinct identifiers 4
+@spin = global i32 0, align 4
+@count = global i32 1, align 4
+@total = global i32 2, align 4
+@limit = global i32 3, align 4

@@ -91,6 +91,7 @@ private:
   StmtPtr parseIdentStatement();
   StmtPtr parseWith();
   StmtPtr parseWrite(bool newline);
+  StmtPtr parseRead(bool newline);
 
   /// Apply any `[...]` and `.field` selectors following a designator's base.
   ExprPtr parseSelectors(ExprPtr base);

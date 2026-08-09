@@ -20,10 +20,19 @@ enum class SymKind {
   Func,
 };
 
+/// How a file variable reaches something outside the program. ISO 7185 §6.10
+/// makes only a *program parameter* external; every other file variable is a
+/// scratch file with no name, which is what `Internal` means.
+enum class FileBinding { Internal, StandardInput, StandardOutput, Argument };
+
 struct Symbol {
   std::string name;
   SymKind kind = SymKind::Var;
   Type *type = nullptr;
+
+  // --- file variables -------------------------------------------------------
+  FileBinding fileBinding = FileBinding::Internal;
+  int fileArg = 0; // which command-line argument, when Argument
 
   // Value of a constant, in whichever field its type selects.
   long long intVal = 0;
@@ -97,6 +106,7 @@ private:
   Type *resolveEnum(TypeExpr &denoter);
   Type *resolveSubrange(TypeExpr &denoter);
   Type *resolvePointer(TypeExpr &denoter);
+  Type *resolveFile(TypeExpr &denoter);
   /// Fill in the domains of pointers that named a type not yet defined, and
   /// report any that never were. Run at the end of each type part.
   void resolvePendingPointers();
@@ -113,7 +123,18 @@ private:
   /// mismatch can be named rather than silently coerced.
   bool evalOrdinal(Expr *e, Type *&type, long long &value);
 
+  /// Give the program parameters their meaning: `input` and `output` are the
+  /// standard files, and every other one must be a file variable the program
+  /// block declares, bound to a command-line argument.
+  void bindProgramParameters();
+  /// A reference to `input` or `output` for a read or write that named no
+  /// file. Reports if that parameter was not declared, because ISO 7185 §6.10
+  /// makes using a standard file without listing it an error.
+  ExprPtr standardFileRef(bool input, int line, int col);
+
   void checkStmt(Stmt *s);
+  void checkWrite(WriteStmt *w);
+  void checkRead(ReadStmt *r);
   void checkExpr(Expr *e);
   void checkBinary(Binary *b);
   void checkCall(Call *c);
@@ -157,6 +178,10 @@ private:
   std::vector<Symbol *> withStack_;
   Symbol *program_ = nullptr;
   Symbol *current_ = nullptr; // the procedure whose body is being checked
+  Program *prog_ = nullptr;   // for the parameter list, while the program is checked
+  /// The standard files, when the program parameters name them.
+  Symbol *stdInput_ = nullptr;
+  Symbol *stdOutput_ = nullptr;
 };
 
 } // namespace ap

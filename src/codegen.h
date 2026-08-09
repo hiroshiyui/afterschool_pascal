@@ -102,6 +102,12 @@ private:
   void emitStmt(Stmt *s);
   void emitAssign(Assign *s);
   void emitWrite(WriteStmt *s);
+  void emitRead(ReadStmt *s);
+  /// Open the file variables a frame declares, and close them when it exits.
+  /// ISO 7185 ties a file's lifetime to the block that declares it, so this is
+  /// the block's own prologue and epilogue rather than anything global.
+  void initFiles(Symbol *proc);
+  void closeFiles(Symbol *proc);
   void emitIf(IfStmt *s);
   void emitWhile(WhileStmt *s);
   void emitRepeat(RepeatStmt *s);

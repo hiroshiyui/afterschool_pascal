@@ -153,3 +153,17 @@ def in_integer_range_wide(x, maxint):
     """As `in_integer_range`, for a value already in the wide spec domain."""
     limit = z3.BitVecVal(maxint, x.size())
     return z3.And(x >= -limit, x <= limit)
+
+
+def the_number_the_digits_denote(previous, digit):
+    """ISO 7185 §6.9.1 — reading a number reads a sequence of digits, and the
+    value is what those digits denote in decimal.
+
+    Stated as the mathematical relation between the value before a digit and
+    the value after it, over a domain wide enough that it cannot itself
+    overflow. The runtime's accumulator is 64 bits and this is 128, which is
+    the point: the specification has room to be wrong where the implementation
+    would silently wrap."""
+    P = z3.ZeroExt(64, previous)
+    D = z3.ZeroExt(124, digit)
+    return P * z3.BitVecVal(10, 128) + D

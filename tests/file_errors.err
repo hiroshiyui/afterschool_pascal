@@ -1,0 +1,15 @@
+<source>:16:11: error: only a text file is supported: the component type of a file must be char, found integer
+<source>:1:28: error: the program parameter 'missing' is not declared as a variable in the program block
+<source>:18:19: error: a file parameter must be a var parameter
+<source>:22:1: error: a function cannot return text; use a var parameter
+<source>:27:3: error: a file variable cannot be assigned to; use reset, rewrite and the buffer variable
+<source>:28:8: error: file variables cannot be compared
+<source>:29:11: error: a value of type rec cannot be read
+<source>:30:3: error: 'input' must be listed as a program parameter to use it
+<source>:30:10: error: read needs a variable, not a value
+<source>:31:9: error: 'reset' needs a file variable, found integer
+<source>:32:7: error: 'get' needs a file variable, found integer
+<source>:33:3: error: 'put' takes exactly one file variable
+<source>:34:11: error: operator '+' needs numeric operands, found char and integer
+<source>:35:7: error: 'new' needs a pointer variable, found text
+<source>:36:14: error: a value of type rec cannot be written

@@ -46,7 +46,8 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       {"sin", Builtin::Sin},     {"cos", Builtin::Cos},
       {"ln", Builtin::Ln},       {"exp", Builtin::Exp},
       {"arctan", Builtin::ArcTan}, {"trunc", Builtin::Trunc},
-      {"round", Builtin::Round},
+      {"round", Builtin::Round}, {"eof", Builtin::Eof},
+      {"eoln", Builtin::Eoln},
   };
   return m;
 }
@@ -56,6 +57,7 @@ Type *builtinType(const std::string &name) {
   if (name == "real")    return ty::Real();
   if (name == "boolean") return ty::Bool();
   if (name == "char")    return ty::Char();
+  if (name == "text")    return ty::Text();
   return nullptr;
 }
 
@@ -192,6 +194,25 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
   }
   // Not yet — it may arrive before the type part ends.
   pendingPointers_.push_back({t, denoter.name, denoter.line, denoter.col});
+  return t;
+}
+
+/// `file of T`. Only a text file — `file of char` — is implemented: a typed
+/// file writes the machine representation of a component, which is a decision
+/// about an external format this compiler has not made and does not need to
+/// reach stage 1. Accepting the syntax and rejecting the component gives a
+/// better diagnostic than treating `file` as an unknown type name.
+Type *Sema::resolveFile(TypeExpr &denoter) {
+  Type *t = newType(TypeKind::File);
+  Type *component = denoter.elem ? resolveType(*denoter.elem) : ty::Char();
+  if (!component->isChar()) {
+    diags_.error(denoter.line, denoter.col,
+                 "only a text file is supported: the component type of a file "
+                 "must be char, found " + component->name());
+    component = ty::Char();
+  }
+  t->elem = component;
+  t->packed = denoter.packed;
   return t;
 }
 
@@ -401,6 +422,9 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   case TEK::Pointer:
     t = resolvePointer(denoter);
     break;
+  case TEK::File:
+    t = resolveFile(denoter);
+    break;
   }
 
   denoter.resolved = t;
@@ -431,6 +455,13 @@ void Sema::installPredefined() {
 bool Sema::assignable(Type *to, Type *from) const {
   if (!to || !from)
     return true; // an earlier error already reported
+  // A file is never assignable, not even to itself: ISO 7185 §6.8.2.2 excludes
+  // a file type from assignment, and §6.7.2.5 gives it no relational operators
+  // either. Both questions arrive here, so both are answered by this line —
+  // which is also why `isStructured()` deliberately excludes files, since that
+  // predicate is what grants a whole-variable copy.
+  if (to->isFile() || from->isFile())
+    return false;
   if (to == from)
     return true;
   if (to->isStructured() || from->isStructured())
@@ -508,11 +539,76 @@ void Sema::run(Program &prog) {
   program_->level = 0;
   program_->defined = true;
   current_ = program_;
+  prog_ = &prog;
 
   pushScope();
+  // `input` and `output` are declared by the program header rather than by the
+  // block, so they exist before the declarations are seen. Declaring them only
+  // when they are listed is what makes using `write` without `output` in the
+  // header the error ISO 7185 §6.10 says it is.
+  for (DeclName &p : prog.params) {
+    if (p.name == "input" && !stdInput_) {
+      stdInput_ = addFrameVar(p.name, SymKind::Var, ty::Text(), program_,
+                              p.line, p.col);
+      stdInput_->fileBinding = FileBinding::StandardInput;
+    } else if (p.name == "output" && !stdOutput_) {
+      stdOutput_ = addFrameVar(p.name, SymKind::Var, ty::Text(), program_,
+                               p.line, p.col);
+      stdOutput_->fileBinding = FileBinding::StandardOutput;
+    }
+  }
   checkBlock(*prog.block, program_);
   popScope();
   popScope();
+}
+
+void Sema::bindProgramParameters() {
+  if (!prog_)
+    return;
+  // argv[0] is the program itself, so the first file parameter is argv[1].
+  int argIndex = 1;
+  for (DeclName &p : prog_->params) {
+    Symbol *s = lookup(p.name);
+    if (!s || !s->isVariable()) {
+      diags_.error(p.line, p.col,
+                   "the program parameter '" + p.name +
+                       "' is not declared as a variable in the program block");
+      continue;
+    }
+    if (s == stdInput_ || s == stdOutput_)
+      continue; // bound by the header itself
+    if (!s->type || !s->type->isFile()) {
+      diags_.error(p.line, p.col,
+                   "a program parameter must be a file variable, but '" +
+                       p.name + "' is " +
+                       (s->type ? s->type->name() : std::string("untyped")));
+      continue;
+    }
+    s->fileBinding = FileBinding::Argument;
+    s->fileArg = argIndex++;
+  }
+}
+
+/// The file a `read` or `write` acts on when it named none. The reference is
+/// synthesised rather than left for codegen to work out: ADR-0008 has codegen
+/// never resolving a name, so the defaulted file arrives as an ordinary
+/// resolved VarRef like any other.
+ExprPtr Sema::standardFileRef(bool input, int line, int col) {
+  Symbol *file = input ? stdInput_ : stdOutput_;
+  const char *name = input ? "input" : "output";
+  if (!file) {
+    diags_.error(line, col,
+                 std::string("'") + name +
+                     "' must be listed as a program parameter to use it");
+    return nullptr;
+  }
+  auto ref = std::make_unique<VarRef>();
+  ref->line = line;
+  ref->col = col;
+  ref->name = name;
+  ref->sym = file;
+  ref->type = file->type;
+  return ref;
 }
 
 /// A block is the declaration part followed by the statement part, and is the
@@ -558,6 +654,12 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     for (auto &n : group.names)
       addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
   }
+
+  // The variables exist now, so the program header's parameters can be matched
+  // against them — before the statements, so a use of an unbound file is
+  // reported after the reason it is unbound rather than before it.
+  if (owner == program_)
+    bindProgramParameters();
 
   // Headings first, then bodies. Declaring every heading in this block before
   // checking any body would let a procedure call one declared after it without
@@ -615,7 +717,7 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
       sym->type = resolveType(*decl.returnType);
       // ISO 7185 §6.6.2: a function returns a simple type, which is what lets
       // the result travel in a register and be read back with a plain load.
-      if (sym->type->isStructured()) {
+      if (sym->type->isMemory()) {
         diags_.error(decl.line, decl.col,
                      "a function cannot return " + sym->type->name() +
                          "; use a var parameter");
@@ -629,6 +731,12 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
   pushScope();
   for (auto &group : decl.params) {
     Type *t = resolveType(*group.type);
+    // ISO 7185 §6.6.3.3: a file may only be passed by reference. A value
+    // parameter is a copy, and a file has no copy — the position, the buffer
+    // and the operating system's handle are one object, not a value.
+    if (t->isFile() && !group.byRef && !group.names.empty())
+      diags_.error(group.names[0].line, group.names[0].col,
+                   "a file parameter must be a var parameter");
     for (auto &n : group.names) {
       Symbol *ps = addFrameVar(n.name,
                                group.byRef ? SymKind::VarParam : SymKind::Param,
@@ -753,6 +861,12 @@ void Sema::checkStmt(Stmt *s) {
     if (!isDesignator(a->target.get()))
       diags_.error(a->target->line, a->target->col,
                    "the left side of an assignment must be a variable");
+    // Without this the message would read "cannot assign text to a variable of
+    // type text", which describes the rule accurately and explains nothing.
+    else if (a->target->type && a->target->type->isFile())
+      diags_.error(a->line, a->col,
+                   "a file variable cannot be assigned to; use reset, rewrite "
+                   "and the buffer variable");
     else if (!assignable(a->target->type, a->value->type))
       diags_.error(a->line, a->col,
                    "cannot assign " + a->value->type->name() +
@@ -771,34 +885,12 @@ void Sema::checkStmt(Stmt *s) {
   }
 
   if (auto *w = as<WriteStmt>(s)) {
-    for (auto &arg : w->args) {
-      checkExpr(arg.value.get());
-      Type *t = arg.value->type;
-      // ISO 7185 §6.9.3 lists exactly what write accepts: an integer, a real,
-      // a boolean, a char, or a packed array of char. An enumeration is not on
-      // the list — the standard gives no spelling for its constants at run
-      // time — and neither is any other structured type.
-      bool writable = t && (t->isInteger() || t->isReal() || t->isBoolean() ||
-                            t->isChar() || t->isCharArray());
-      if (t && !writable)
-        diags_.error(arg.value->line, arg.value->col,
-                     "a value of type " + t->name() + " cannot be written");
-      if (arg.width) {
-        checkExpr(arg.width.get());
-        if (arg.width->type && !arg.width->type->isInteger())
-          diags_.error(arg.width->line, arg.width->col,
-                       "a field width must be an integer");
-      }
-      if (arg.prec) {
-        checkExpr(arg.prec.get());
-        if (arg.prec->type && !arg.prec->type->isInteger())
-          diags_.error(arg.prec->line, arg.prec->col,
-                       "a fraction length must be an integer");
-        if (t && !t->isReal())
-          diags_.error(arg.prec->line, arg.prec->col,
-                       "only real values take a fraction length");
-      }
-    }
+    checkWrite(w);
+    return;
+  }
+
+  if (auto *r = as<ReadStmt>(s)) {
+    checkRead(r);
     return;
   }
 
@@ -806,7 +898,9 @@ void Sema::checkStmt(Stmt *s) {
     Symbol *sym = lookup(p->name);
     // A user-declared procedure of the same name wins, exactly as it does for
     // the required functions in checkCall.
-    if (!sym && (p->name == "new" || p->name == "dispose")) {
+    if (!sym && (p->name == "new" || p->name == "dispose" ||
+                 p->name == "reset" || p->name == "rewrite" ||
+                 p->name == "get" || p->name == "put")) {
       checkStdProc(p);
       return;
     }
@@ -930,6 +1024,14 @@ void Sema::checkExpr(Expr *e) {
   if (auto *d = as<DerefExpr>(e)) {
     checkExpr(d->base.get());
     Type *base = d->base->type;
+    // `f^` on a file is the buffer variable (ISO 7185 §6.5.5), not a
+    // dereference: one component of the file, which for a text file is the
+    // character the file is positioned at. The syntax is shared, so this is
+    // the one place the two meanings part.
+    if (base && base->isFile()) {
+      e->type = base->elem ? base->elem : ty::Char();
+      return;
+    }
     if (!base || !base->isPointer() || base->isNil()) {
       if (base)
         diags_.error(d->line, d->col,
@@ -1099,7 +1201,11 @@ void Sema::checkBinary(Binary *b) {
                                  "<>, not with '") + opName(b->op) + "'");
       else if (!assignable(l, r) && !assignable(r, l))
         bad("compatible");
-    } else if (l->isStructured() || r->isStructured()) {
+    } else if (l->isFile() || r->isFile()) {
+      // §6.7.2.5 gives a file no relational operators at all, and naming the
+      // types would just repeat "text and text" back at the programmer.
+      diags_.error(b->line, b->col, "file variables cannot be compared");
+    } else if (l->isMemory() || r->isMemory()) {
       bad("comparable");
     } else if (!(l->isNumeric() && r->isNumeric()) &&
                !assignable(l, r) && !assignable(r, l)) {
@@ -1116,7 +1222,120 @@ void Sema::checkBinary(Binary *b) {
 /// `new(p)` and `dispose(p)` bind a pointer variable to fresh storage and give
 /// it back. Both take the pointer itself — not what it points at — so the
 /// argument has to be a variable, the same requirement a `var` parameter makes.
+/// ISO 7185 §6.9.3. The first argument may be a file variable, which says
+/// where to write rather than what to write; without one the file is `output`.
+/// A width never follows a file, so the leading argument is a file exactly when
+/// it has a file type and no width — and if a program does write `f:8`, the
+/// file falls through to the value list and is rejected there as unwritable.
+void Sema::checkWrite(WriteStmt *w) {
+  for (auto &arg : w->args) {
+    checkExpr(arg.value.get());
+    if (arg.width)
+      checkExpr(arg.width.get());
+    if (arg.prec)
+      checkExpr(arg.prec.get());
+  }
+
+  if (!w->args.empty() && !w->args[0].width && w->args[0].value->type &&
+      w->args[0].value->type->isFile()) {
+    if (!isDesignator(w->args[0].value.get()))
+      diags_.error(w->args[0].value->line, w->args[0].value->col,
+                   "the file written to must be a variable");
+    w->file = std::move(w->args[0].value);
+    w->args.erase(w->args.begin());
+  } else {
+    w->file = standardFileRef(false, w->line, w->col);
+  }
+
+  if (w->args.empty() && !w->newline)
+    diags_.error(w->line, w->col, "write needs something to write");
+
+  for (auto &arg : w->args) {
+    Type *t = arg.value->type;
+    // ISO 7185 §6.9.3 lists exactly what write accepts: an integer, a real,
+    // a boolean, a char, or a packed array of char. An enumeration is not on
+    // the list — the standard gives no spelling for its constants at run
+    // time — and neither is any other structured type.
+    bool writable = t && (t->isInteger() || t->isReal() || t->isBoolean() ||
+                          t->isChar() || t->isCharArray());
+    if (t && !writable)
+      diags_.error(arg.value->line, arg.value->col,
+                   "a value of type " + t->name() + " cannot be written");
+    if (arg.width && arg.width->type && !arg.width->type->isInteger())
+      diags_.error(arg.width->line, arg.width->col,
+                   "a field width must be an integer");
+    if (arg.prec) {
+      if (arg.prec->type && !arg.prec->type->isInteger())
+        diags_.error(arg.prec->line, arg.prec->col,
+                     "a fraction length must be an integer");
+      if (t && !t->isReal())
+        diags_.error(arg.prec->line, arg.prec->col,
+                     "only real values take a fraction length");
+    }
+  }
+}
+
+/// ISO 7185 §6.9.1. Like write, the first argument may be the file; every
+/// other one is a *variable* to store into, so each has to be a designator.
+/// `read` reads a char, an integer or a real — a text file has no other
+/// external representation to read.
+void Sema::checkRead(ReadStmt *r) {
+  for (auto &a : r->args)
+    checkExpr(a.get());
+
+  if (!r->args.empty() && r->args[0]->type && r->args[0]->type->isFile()) {
+    if (!isDesignator(r->args[0].get()))
+      diags_.error(r->args[0]->line, r->args[0]->col,
+                   "the file read from must be a variable");
+    r->file = std::move(r->args[0]);
+    r->args.erase(r->args.begin());
+  } else {
+    r->file = standardFileRef(true, r->line, r->col);
+  }
+
+  // `read` must be given somewhere to put what it reads; `readln` may be
+  // written alone, and then it only finishes the line.
+  if (r->args.empty() && !r->newline)
+    diags_.error(r->line, r->col, "read needs a variable to read into");
+
+  for (auto &a : r->args) {
+    if (!isDesignator(a.get())) {
+      diags_.error(a->line, a->col, "read needs a variable, not a value");
+      continue;
+    }
+    Type *t = a->type;
+    if (t && !(t->isInteger() || t->isReal() || t->isChar()))
+      diags_.error(a->line, a->col,
+                   "a value of type " + t->name() + " cannot be read");
+  }
+}
+
 void Sema::checkStdProc(ProcCallStmt *p) {
+  // The file primitives. ISO 7185 §6.6.5.2 defines read and write in terms of
+  // get, put and the buffer variable, and this compiler keeps them rather than
+  // providing only the derived forms — one character of lookahead is what a
+  // lexer, the first thing the self-hosted compiler needs, is written against.
+  if (p->name == "reset" || p->name == "rewrite" || p->name == "get" ||
+      p->name == "put") {
+    p->standard = p->name == "reset"     ? StdProc::Reset
+                  : p->name == "rewrite" ? StdProc::Rewrite
+                  : p->name == "get"     ? StdProc::Get
+                                         : StdProc::Put;
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    if (p->args.size() != 1) {
+      diags_.error(p->line, p->col,
+                   "'" + p->name + "' takes exactly one file variable");
+      return;
+    }
+    Expr *a = p->args[0].get();
+    if (!isDesignator(a) || (a->type && !a->type->isFile()))
+      diags_.error(a->line, a->col,
+                   "'" + p->name + "' needs a file variable" +
+                       (a->type ? ", found " + a->type->name() : ""));
+    return;
+  }
+
   p->standard = p->name == "new" ? StdProc::New : StdProc::Dispose;
 
   for (auto &a : p->args)
@@ -1300,6 +1519,30 @@ void Sema::checkCall(Call *c) {
 
   for (auto &a : c->args)
     checkExpr(a.get());
+
+  // `eof` and `eoln` are the only required functions whose argument may be
+  // left out, and the only ones taking a file (ISO 7185 §6.6.6.5). The default
+  // is supplied here rather than in codegen, so that by the time the tree is
+  // handed on, both forms look the same.
+  if (c->builtin == Builtin::Eof || c->builtin == Builtin::Eoln) {
+    c->type = ty::Bool();
+    if (c->args.empty()) {
+      if (ExprPtr def = standardFileRef(true, c->line, c->col))
+        c->args.push_back(std::move(def));
+      return;
+    }
+    if (c->args.size() != 1) {
+      diags_.error(c->line, c->col,
+                   "'" + c->name + "' takes one file, or none at all");
+      return;
+    }
+    Expr *a = c->args[0].get();
+    if (!isDesignator(a) || (a->type && !a->type->isFile()))
+      diags_.error(a->line, a->col,
+                   "'" + c->name + "' needs a file variable" +
+                       (a->type ? ", found " + a->type->name() : ""));
+    return;
+  }
 
   if (c->args.size() != 1) {
     diags_.error(c->line, c->col,

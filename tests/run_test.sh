@@ -11,6 +11,15 @@
 #              A non-zero exit is then required, and name.out (if present) is
 #              compared against whatever was written before the failure.
 #
+# Two more inputs, for the text-file tests:
+#
+#   name.in    fed to the program's standard input. Without it stdin is
+#              /dev/null, so a program that reads sees end-of-file at once
+#              rather than waiting for a terminal that is not there.
+#   arguments  two writable scratch paths are always passed, so a program
+#              whose header names external files has somewhere to put them.
+#              A program that names none simply ignores them.
+#
 # The source path is rewritten to <source> in stderr so diagnostics can be
 # compared without depending on where the checkout lives.
 set -u
@@ -19,7 +28,9 @@ pascalc=$1
 source_file=$2
 expected_out="${source_file%.pas}.out"
 expected_err="${source_file%.pas}.err"
+stdin_file="${source_file%.pas}.in"
 name=$(basename "${source_file%.pas}")
+[[ -f $stdin_file ]] || stdin_file=/dev/null
 
 if [[ ! -f $expected_out && ! -f $expected_err ]]; then
   echo "missing expected-output file: $expected_out or $expected_err" >&2
@@ -41,7 +52,8 @@ if [[ ! -f $expected_err ]]; then
     cat "$work/compile.err" >&2
     exit 1
   fi
-  "$work/$name" >"$work/actual" 2>&1
+  "$work/$name" "$work/file1" "$work/file2" \
+      <"$stdin_file" >"$work/actual" 2>&1
   status=$?
   if [[ $status -ne 0 ]]; then
     echo "--- $name: program exited with status $status ---" >&2
@@ -67,7 +79,8 @@ if [[ $compile_status -ne 0 ]]; then
   exit 0
 fi
 
-"$work/$name" >"$work/actual" 2>"$work/actual.err"
+"$work/$name" "$work/file1" "$work/file2" \
+    <"$stdin_file" >"$work/actual" 2>"$work/actual.err"
 status=$?
 if [[ $status -eq 0 ]]; then
   echo "--- $name: expected a failure, but the program succeeded ---" >&2

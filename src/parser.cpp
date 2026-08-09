@@ -49,14 +49,17 @@ std::unique_ptr<Program> Parser::parseProgram() {
   prog->name = cur().text;
   ++pos_;
 
-  // The program parameter list (input, output) is accepted and ignored:
-  // standard output is always available.
+  // The program parameters. `input` and `output` name the standard files;
+  // any other one must be a file variable the block declares, and is bound to
+  // a command-line argument (ISO 7185 §6.10 leaves the binding to the
+  // implementation).
   if (accept(Tok::LParen)) {
     do {
       if (!check(Tok::Ident)) {
         errorAtCur("expected a program parameter name");
         bail();
       }
+      prog->params.push_back({cur().text, cur().line, cur().col});
       ++pos_;
     } while (accept(Tok::Comma));
     expect(Tok::RParen, "after the program parameters");
@@ -204,6 +207,17 @@ TypeExprPtr Parser::parseTypeExpr() {
   Depth depth(*this); // array-of-array and record fields recurse through here
   bool packed = accept(Tok::KwPacked);
 
+  if (check(Tok::KwFile)) {
+    auto t = std::make_unique<TypeExpr>();
+    t->kind = TEK::File;
+    t->packed = packed;
+    t->line = cur().line;
+    t->col = cur().col;
+    ++pos_;
+    expect(Tok::KwOf, "after 'file'");
+    t->elem = parseTypeExpr();
+    return t;
+  }
   if (check(Tok::KwArray))
     return parseArrayType(packed);
   if (check(Tok::KwRecord))
@@ -608,6 +622,10 @@ StmtPtr Parser::parseIdentStatement() {
     return parseWrite(false);
   if (id.text == "writeln")
     return parseWrite(true);
+  if (id.text == "read")
+    return parseRead(false);
+  if (id.text == "readln")
+    return parseRead(true);
 
   // A statement starting with a designator is an assignment; one starting with
   // a bare name or a name and arguments is a procedure call. The selectors are
@@ -659,6 +677,25 @@ StmtPtr Parser::parseWrite(bool newline) {
       } while (accept(Tok::Comma));
     }
     expect(Tok::RParen, "after the arguments of write");
+  }
+  return s;
+}
+
+/// read/readln. The arguments are variables to store into, and the first may
+/// be a file instead — Sema sorts that out, because telling them apart needs
+/// the types. `readln` alone, with no list at all, finishes the current line.
+StmtPtr Parser::parseRead(bool newline) {
+  auto s = makeNode<ReadStmt>(cur());
+  s->newline = newline;
+  ++pos_; // 'read' / 'readln'
+
+  if (accept(Tok::LParen)) {
+    if (!check(Tok::RParen)) {
+      do {
+        s->args.push_back(parseExpr());
+      } while (accept(Tok::Comma));
+    }
+    expect(Tok::RParen, "after the arguments of read");
   }
   return s;
 }
@@ -853,6 +890,16 @@ ExprPtr Parser::parseFactor() {
     return e;
   }
   case Tok::Ident: {
+    // `eof` and `eoln` are the only functions ISO 7185 lets a program call
+    // with no argument list at all — the file then defaults to `input`
+    // (§6.6.6.5). A bare name is otherwise a variable or a parameterless call,
+    // so this is decided here, where the absence of '(' is visible.
+    if ((t.text == "eof" || t.text == "eoln") && peek().kind != Tok::LParen) {
+      auto call = makeNode<Call>(t);
+      call->name = t.text;
+      ++pos_;
+      return call;
+    }
     if (peek().kind == Tok::LParen) {
       auto call = makeNode<Call>(t);
       call->name = t.text;

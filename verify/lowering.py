@@ -223,6 +223,31 @@ def real_to_int_trunc(x, width=INT_BITS):
     return z3.fpToSBV(z3.RTZ(), x, z3.BitVecSort(width))
 
 
+# --- reading a number -------------------------------------------------------
+
+# `pas_read_int` accumulates decimal digits in a 64-bit accumulator and checks
+# the running value against maxint after each one:
+#
+#     value = value * 10 + (c - '0');
+#     if (value > 2147483647LL) pas_runtime_error(...);
+#
+# Two things are being modelled: the arithmetic itself, and the fact that the
+# check is applied *after* the multiply-add rather than before it.
+
+ACC_BITS = 64
+
+
+def read_accumulate(acc, digit):
+    """One step of the accumulation, in the 64-bit accumulator the runtime
+    actually uses."""
+    return acc * z3.BitVecVal(10, ACC_BITS) + z3.ZeroExt(ACC_BITS - 4, digit)
+
+
+def read_traps(acc, maxint):
+    """The check that follows each digit."""
+    return acc > z3.BitVecVal(maxint, ACC_BITS)
+
+
 # --- comparisons ------------------------------------------------------------
 
 

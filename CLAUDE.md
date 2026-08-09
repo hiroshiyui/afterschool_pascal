@@ -137,6 +137,35 @@ reference, and what makes a recursive type possible. `resolvePointer` records a
 - There is deliberately **no SMT rule** for pointers; a nil-check rule would be
   a tautology. They are covered by the cross-check and by an ASan run.
 
+**Text files** (ADR-0021). A file variable's storage is *opaque to the
+compiler*: codegen alloca's `PAS_FILE_SIZE` bytes in the frame and only ever
+passes their address, and `struct pas_file` is private to `runtime/pasrt.c`.
+The size lives in `runtime/pasrt.h`, included by `codegen.cpp`, so the two
+cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
+
+- The buffer variable `f^` is real, and `read`/`write` are *derived* from
+  `get`/`put` in the runtime, as ISO 7185 §6.6.5.2 defines them. This is
+  deliberate and load-bearing: `f^` is one character of lookahead, which is
+  what a lexer — the first component of the self-hosted compiler — is written
+  against. Don't "simplify" it into direct `getc` calls.
+- `f^` shares `NK::Deref` with pointer dereference; Sema parts the two on the
+  base type, and codegen calls `pas_buffer` for a file.
+- A file is **not** `isStructured()` — that predicate grants whole-variable
+  copying, which a file must never have. `isMemory()` is the one that means
+  "travels by address". Assignment, comparison, value parameters and function
+  results are all refused for files.
+- Program parameters bind to command-line arguments in order; `input`/`output`
+  are the standard streams, declared *only* when the header lists them, so
+  using `write` without `output` is the error §6.10 says it is.
+- Standard input is opened but not read until the program first asks, or every
+  program listing `input` would block before its first statement.
+- A block exit closes the files the block declared. Pascal has no early
+  return, so the single exit point each body already has is the epilogue.
+- Only `text` is implemented; `file of T` parses and is rejected for any
+  component but `char`.
+- `char` is a byte, ordinal 0..255, and nothing consults the locale. UTF-8
+  passes through as bytes; a multi-byte character is several `char` values.
+
 ## Decisions
 
 `doc/adr/` holds the architecture decision records. Read them before undoing
@@ -160,7 +189,16 @@ when a choice constrains future work or deviates from the standard.
 
 Feature priority follows what a compiler is written in (procedures, records,
 pointers, text files, a usable string type), not ISO chapter order. README.md
-holds the three-stage plan and the dependency ordering.
+holds the three-stage plan and the dependency ordering; `doc/roadmap.md`
+tracks it.
+
+**All six bootstrap items are now settled**, so the language is finished for
+bootstrap purposes — a new feature needs a reason beyond "the standard has it".
+Strings are the length-plus-buffer record of ADR-0012, not an extension:
+`tests/bootstrap_strings.pas` is the working evidence and the regression test
+for it. Don't add a `string` type without new evidence from real stage-1 code,
+because measuring the C++ compiler is what showed the extension was
+unnecessary — nearly all its string building feeds text that is written out.
 
 ## Where things live
 
@@ -232,7 +270,7 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 29 rules, 25 of them for every
+The catalogue currently has **no known gaps** — 31 rules, 27 of them for every
 32-bit input — so any gap that appears is something this change introduced.
 
 Don't add a rule that restates the lowering. A check whose ISO condition *is*

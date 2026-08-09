@@ -5,6 +5,10 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/raw_ostream.h"
 
+// The size of a file variable's storage, so the compiler and the runtime
+// cannot disagree about it.
+#include "../runtime/pasrt.h"
+
 namespace ap {
 
 using namespace llvm;
@@ -25,6 +29,13 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   // Opaque pointers make every pointer type the same LLVM type, so a
   // recursive Pascal type needs no forward declaration here.
   case TypeKind::Pointer:  return ptr();
+  // A file variable is an opaque block of storage the runtime owns. Its
+  // contents are private to runtime/pasrt.c — the compiler only ever passes
+  // its address — so all that is needed here is the size, which comes from the
+  // header both sides share. The element type is i64 so the block carries the
+  // alignment a struct full of pointers needs.
+  case TypeKind::File:
+    return ArrayType::get(i64(), PAS_FILE_SIZE / 8);
   case TypeKind::Array:
   case TypeKind::Record:
     break;
@@ -100,9 +111,11 @@ uint64_t CodeGen::sizeOf(ap::Type *t) {
 
 /// Arrays and records are passed as addresses whichever way they are declared:
 /// a `var` parameter binds to the caller's variable, and a value parameter is
-/// copied out of the caller's variable by the callee's prologue.
+/// copied out of the caller's variable by the callee's prologue. A file is
+/// always a `var` parameter (Sema rejects any other kind), so it arrives as an
+/// address too — but it is never copied.
 bool CodeGen::passedByAddress(const Symbol *v) {
-  return v->kind == SymKind::VarParam || (v->type && v->type->isStructured());
+  return v->kind == SymKind::VarParam || (v->type && v->type->isMemory());
 }
 
 FunctionCallee CodeGen::rt(const char *name, llvm::Type *ret,
@@ -276,6 +289,10 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
     // The program has no enclosing block, so its static link is never followed.
     b_.CreateStore(ConstantPointerNull::get(cast<PointerType>(ptr())),
                    b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
+    // Hand the command line to the runtime before any file is opened: it is
+    // where `reset` looks for the name of an external file.
+    b_.CreateCall(rt("pas_args", llvm::Type::getVoidTy(ctx_), {i32(), ptr()}),
+                  {fn->getArg(0), fn->getArg(1)});
   } else {
     arg->setName("static.link");
     b_.CreateStore(&*arg, b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
@@ -296,6 +313,47 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
       ++arg;
     }
   }
+
+  initFiles(proc);
+}
+
+/// Every file variable the frame holds starts closed, and knows how `reset`
+/// and `rewrite` will find the external file it stands for. The standard
+/// files are opened here — ISO 7185 §6.10 has `input` reset and `output`
+/// rewritten before the program body runs — but no character is read until
+/// the program asks for one, or a program that never reads would hang waiting
+/// for a terminal.
+void CodeGen::initFiles(Symbol *proc) {
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+  for (Symbol *v : proc->frameVars) {
+    if (!v->type || !v->type->isFile() || v->kind == SymKind::VarParam)
+      continue; // a var parameter is someone else's file
+    int binding = PAS_BIND_INTERNAL;
+    switch (v->fileBinding) {
+    case FileBinding::StandardInput:  binding = PAS_BIND_INPUT; break;
+    case FileBinding::StandardOutput: binding = PAS_BIND_OUTPUT; break;
+    case FileBinding::Argument:       binding = PAS_BIND_ARG; break;
+    case FileBinding::Internal:       binding = PAS_BIND_INTERNAL; break;
+    }
+    b_.CreateCall(
+        rt("pas_file_init", voidTy, {ptr(), i32(), i32(), ptr()}),
+        {addressOf(v), ConstantInt::get(i32(), binding),
+         ConstantInt::get(i32(), v->fileArg),
+         b_.CreateGlobalString(v->name, "file.name")});
+  }
+}
+
+/// A block exit closes the files the block declared, which is ISO 7185's rule
+/// and also the only thing that flushes a file written to inside a procedure.
+/// Pascal has no early return, so the single exit point each body ends with is
+/// the whole of the epilogue.
+void CodeGen::closeFiles(Symbol *proc) {
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+  for (Symbol *v : proc->frameVars) {
+    if (!v->type || !v->type->isFile() || v->kind == SymKind::VarParam)
+      continue;
+    b_.CreateCall(rt("pas_file_done", voidTy, {ptr()}), {addressOf(v)});
+  }
 }
 
 void CodeGen::emitProcBody(ProcDecl &decl) {
@@ -311,6 +369,7 @@ void CodeGen::emitProcBody(ProcDecl &decl) {
 
   enterFrame(sym, fn);
   emitStmt(decl.body->body.get());
+  closeFiles(sym);
 
   if (sym->kind == SymKind::Func) {
     llvm::Value *slot = b_.CreateStructGEP(
@@ -423,6 +482,12 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
 
   case NK::Deref: {
     auto *d = static_cast<DerefExpr *>(e);
+    // `f^` on a file is the buffer variable, not a dereference: the runtime
+    // owns it, so it hands back its address — and fetches the character it
+    // holds first, which is where the lookahead actually happens.
+    if (d->base->type && d->base->type->isFile())
+      return b_.CreateCall(rt("pas_buffer", ptr(), {ptr()}),
+                           {emitAddress(d->base.get())}, "buf");
     // The pointer's *value* is the address of the variable it denotes.
     llvm::Value *target = emitExpr(d->base.get());
     // ISO 7185 §6.5.4 makes it an error to dereference nil. Nothing can
@@ -447,7 +512,7 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
 /// what it yields is its address; everything else is loaded from that address.
 llvm::Value *CodeGen::emitLoad(Expr *e) {
   llvm::Value *addr = emitAddress(e);
-  if (e->type->isStructured())
+  if (e->type->isMemory())
     return addr;
   return b_.CreateLoad(llvmType(e->type), addr, "val");
 }
@@ -490,12 +555,18 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   buildFrameType(programSym);
   declareProcs(*prog.block);
 
-  FunctionType *mainTy = FunctionType::get(i32(), false);
+  // main takes the command line, because ISO 7185 §6.10 leaves it to the
+  // implementation to say how a program parameter names an external file and
+  // this one binds them to the arguments, in the order they are written.
+  FunctionType *mainTy = FunctionType::get(i32(), {i32(), ptr()}, false);
   Function *mainFn =
       Function::Create(mainTy, Function::ExternalLinkage, "main", mod_.get());
+  mainFn->getArg(0)->setName("argc");
+  mainFn->getArg(1)->setName("argv");
 
   enterFrame(programSym, mainFn);
   emitStmt(prog.block->body.get());
+  closeFiles(programSym);
   b_.CreateRet(ConstantInt::get(i32(), 0));
 
   emitProcs(*prog.block);
@@ -519,6 +590,7 @@ void CodeGen::emitStmt(Stmt *s) {
     return;
   case NK::Assign:  emitAssign(static_cast<Assign *>(s)); return;
   case NK::Write:   emitWrite(static_cast<WriteStmt *>(s)); return;
+  case NK::Read:    emitRead(static_cast<ReadStmt *>(s)); return;
   case NK::If:      emitIf(static_cast<IfStmt *>(s)); return;
   case NK::While:   emitWhile(static_cast<WhileStmt *>(s)); return;
   case NK::Repeat:  emitRepeat(static_cast<RepeatStmt *>(s)); return;
@@ -557,6 +629,21 @@ void CodeGen::emitAssign(Assign *s) {
 void CodeGen::emitStdProc(ProcCallStmt *s) {
   Expr *arg = s->args[0].get();
   llvm::Value *slot = emitAddress(arg);
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+
+  // The file primitives are one runtime call each on the file's address.
+  const char *fileOp = nullptr;
+  switch (s->standard) {
+  case StdProc::Reset:   fileOp = "pas_reset"; break;
+  case StdProc::Rewrite: fileOp = "pas_rewrite"; break;
+  case StdProc::Get:     fileOp = "pas_get"; break;
+  case StdProc::Put:     fileOp = "pas_put"; break;
+  default: break;
+  }
+  if (fileOp) {
+    b_.CreateCall(rt(fileOp, voidTy, {ptr()}), {slot});
+    return;
+  }
 
   if (s->standard == StdProc::New) {
     llvm::Value *size = ConstantInt::get(i64(), sizeOf(arg->type->elem));
@@ -625,6 +712,11 @@ void CodeGen::emitWrite(WriteStmt *s) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   llvm::Value *noWidth = ConstantInt::getSigned(i32(), -1);
 
+  // Sema has always put a file here — the one that was written, or `output`.
+  if (!s->file)
+    return; // the program parameter was missing; the error is already reported
+  llvm::Value *file = emitAddress(s->file.get());
+
   for (auto &arg : s->args) {
     llvm::Value *width = arg.width ? emitExpr(arg.width.get()) : noWidth;
     llvm::Value *prec = arg.prec ? emitExpr(arg.prec.get()) : noWidth;
@@ -633,8 +725,8 @@ void CodeGen::emitWrite(WriteStmt *s) {
     // which covers a string literal, since that is what a literal's type is.
     if (arg.value->type->isCharArray()) {
       b_.CreateCall(
-          rt("pas_write_str", voidTy, {ptr(), i32(), i32()}),
-          {emitAddress(arg.value.get()),
+          rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
+          {file, emitAddress(arg.value.get()),
            ConstantInt::get(i32(), arg.value->type->length()), width});
       continue;
     }
@@ -642,19 +734,20 @@ void CodeGen::emitWrite(WriteStmt *s) {
     llvm::Value *v = emitExpr(arg.value.get());
     switch (arg.value->type->base()->kind) {
     case TypeKind::Integer:
-      b_.CreateCall(rt("pas_write_int", voidTy, {i64(), i32()}),
-                    {b_.CreateSExt(v, i64()), width});
+      b_.CreateCall(rt("pas_write_int", voidTy, {ptr(), i64(), i32()}),
+                    {file, b_.CreateSExt(v, i64()), width});
       break;
     case TypeKind::Real:
-      b_.CreateCall(rt("pas_write_real", voidTy, {f64(), i32(), i32()}),
-                    {v, width, prec});
+      b_.CreateCall(rt("pas_write_real", voidTy, {ptr(), f64(), i32(), i32()}),
+                    {file, v, width, prec});
       break;
     case TypeKind::Boolean:
-      b_.CreateCall(rt("pas_write_bool", voidTy, {i32(), i32()}),
-                    {b_.CreateZExt(v, i32()), width});
+      b_.CreateCall(rt("pas_write_bool", voidTy, {ptr(), i32(), i32()}),
+                    {file, b_.CreateZExt(v, i32()), width});
       break;
     case TypeKind::Char:
-      b_.CreateCall(rt("pas_write_char", voidTy, {i8(), i32()}), {v, width});
+      b_.CreateCall(rt("pas_write_char", voidTy, {ptr(), i8(), i32()}),
+                    {file, v, width});
       break;
     default:
       break;
@@ -662,7 +755,41 @@ void CodeGen::emitWrite(WriteStmt *s) {
   }
 
   if (s->newline)
-    b_.CreateCall(rt("pas_writeln", voidTy, {}), {});
+    b_.CreateCall(rt("pas_writeln", voidTy, {ptr()}), {file});
+}
+
+/// read/readln. Each variable is filled by the runtime call its type selects,
+/// and `readln` then finishes the line — which is what makes `readln(x)` one
+/// statement rather than two.
+void CodeGen::emitRead(ReadStmt *s) {
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+  if (!s->file)
+    return;
+  llvm::Value *file = emitAddress(s->file.get());
+
+  for (auto &a : s->args) {
+    llvm::Value *slot = emitAddress(a.get());
+    ap::Type *t = a->type;
+    llvm::Value *v = nullptr;
+    if (t->isChar()) {
+      v = b_.CreateCall(rt("pas_read_char", i8(), {ptr()}), {file}, "ch");
+    } else if (t->isReal()) {
+      v = b_.CreateCall(rt("pas_read_real", f64(), {ptr()}), {file}, "num");
+    } else {
+      // The runtime returns i64 and has already rejected anything outside
+      // -maxint..maxint, so the truncation here cannot lose a valid value.
+      llvm::Value *wide =
+          b_.CreateCall(rt("pas_read_int", i64(), {ptr()}), {file}, "num");
+      v = b_.CreateTrunc(wide, i32(), "num.i32");
+      // Reading into a subrange variable is a store like any other, so it is
+      // checked like any other (ADR-0018).
+      v = checkedForSubrange(v, t);
+    }
+    b_.CreateStore(v, slot);
+  }
+
+  if (s->newline)
+    b_.CreateCall(rt("pas_readln", voidTy, {ptr()}), {file});
 }
 
 void CodeGen::emitIf(IfStmt *s) {
@@ -977,6 +1104,17 @@ llvm::Value *CodeGen::emitUnary(Unary *e) {
 llvm::Value *CodeGen::emitCall(Call *e) {
   if (e->sym)
     return emitUserCall(e->sym, e->args);
+
+  // The file enquiries take the file's address, not its value, and Sema has
+  // already supplied `input` where the program left the argument out.
+  if (e->builtin == Builtin::Eof || e->builtin == Builtin::Eoln) {
+    if (e->args.empty())
+      return ConstantInt::get(i1(), 0); // the parameter was missing: reported
+    llvm::Value *file = emitAddress(e->args[0].get());
+    const char *fn = e->builtin == Builtin::Eof ? "pas_eof" : "pas_eoln";
+    return b_.CreateTrunc(b_.CreateCall(rt(fn, i32(), {ptr()}), {file}, "eof"),
+                          i1(), "eof.b");
+  }
 
   llvm::Value *a = emitExpr(e->args[0].get());
   ap::Type *at = e->args[0]->type;

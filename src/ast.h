@@ -18,7 +18,8 @@ enum class NK {
   IntLit, RealLit, CharLit, StrLit, NilLit, VarRef, Index, Field, Deref,
   Binary, Unary, Call,
   // statements
-  Empty, Assign, Write, Compound, If, While, Repeat, For, ProcCall, With, Case,
+  Empty, Assign, Write, Read, Compound, If, While, Repeat, For, ProcCall, With,
+  Case,
 };
 
 struct Node {
@@ -49,6 +50,10 @@ enum class UnOp { Pos, Neg, Not };
 enum class Builtin {
   None, Abs, Sqr, Odd, Ord, Chr, Succ, Pred,
   Sqrt, Sin, Cos, Ln, Exp, ArcTan, Trunc, Round,
+  // The file enquiries. Both take a file, and both default to `input` when
+  // written without one (ISO 7185 §6.6.6.5), so they are the only builtins
+  // that may appear with no argument list at all.
+  Eof, Eoln,
 };
 
 struct Expr : Node {
@@ -179,6 +184,23 @@ struct WriteStmt : Stmt {
   WriteStmt() : Stmt(NodeKind) {}
   std::vector<WriteArg> args;
   bool newline = false;
+  /// The file written to. ISO 7185 §6.9.3 lets the first argument be a file
+  /// variable, in which case it is not written but written *to*; Sema moves it
+  /// here and leaves `args` holding only the values. Null means `output`,
+  /// which Sema then resolves to the program parameter of that name.
+  ExprPtr file;
+};
+
+/// `read` and `readln`. Kept apart from ProcCallStmt for the same reason
+/// WriteStmt is: the first argument may be a file rather than a value, and
+/// every remaining argument is a variable to store into, not an expression to
+/// evaluate.
+struct ReadStmt : Stmt {
+  static constexpr NK NodeKind = NK::Read;
+  ReadStmt() : Stmt(NodeKind) {}
+  std::vector<ExprPtr> args;
+  bool newline = false; // readln: finish the line after the last variable
+  ExprPtr file;         // null means `input`
 };
 
 struct Compound : Stmt {
@@ -249,7 +271,10 @@ struct CaseStmt : Stmt {
 
 /// The standard procedures the compiler knows intrinsically, as `Builtin` does
 /// for the required functions.
-enum class StdProc { None, New, Dispose };
+/// The standard procedures that are not statements of their own. `read` and
+/// `readln` are ReadStmt, and `write`/`writeln` are WriteStmt, because their
+/// argument lists are not ordinary expression lists.
+enum class StdProc { None, New, Dispose, Reset, Rewrite, Get, Put };
 
 struct ProcCallStmt : Stmt {
   static constexpr NK NodeKind = NK::ProcCall;
@@ -291,7 +316,7 @@ struct VariantArm {
   int line = 0, col = 0;
 };
 
-enum class TEK { Named, Enum, Subrange, Array, Record, Pointer };
+enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is
@@ -307,7 +332,7 @@ struct TypeExpr {
   /// same construct rather than two — and several of them is the `[a, b]`
   /// shorthand for an array of arrays.
   std::vector<TypeExprPtr> dims;
-  TypeExprPtr elem;               // Array: the component type
+  TypeExprPtr elem;               // Array or File: the component type
   std::vector<FieldGroup> fields; // Record: the fixed part
   std::vector<DeclName> constants;// Enum
   ExprPtr lo, hi;                 // Subrange
@@ -371,6 +396,12 @@ struct Block {
 
 struct Program {
   std::string name;
+  /// The program parameters. ISO 7185 §6.10 makes these the program's only
+  /// connection to the world outside it: `input` and `output` are the standard
+  /// files, and every other one names a file variable the block must declare.
+  /// They were accepted and ignored until text files existed to give them a
+  /// meaning.
+  std::vector<DeclName> params;
   std::unique_ptr<Block> block;
 };
 

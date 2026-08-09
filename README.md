@@ -31,7 +31,7 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
 somewhere else.
 
-## What the compiler accepts today (milestone 5)
+## What the compiler accepts today (milestone 6)
 
 ```
 program-header, const part, type part, var part, compound statement
@@ -42,15 +42,17 @@ types      integer  real  boolean  char
            record, nested to any depth, packed, with variant parts
            packed array [1..n] of char — the string types
            ^T — pointers, including to a type defined later
+           text — text files, with the buffer variable f^
 routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations
 statements := , if/then/else, while, repeat/until, for/to/downto,
-           begin/end, case, with, procedure call, write, writeln
+           begin/end, case, with, procedure call,
+           write, writeln, read, readln
 operators  + - * / div mod, and or not (short-circuiting),
            = <> < <= > >=  (including on strings)
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
-           trunc round
-procedures new, dispose
+           trunc round eof eoln
+procedures new, dispose, reset, rewrite, get, put
 literals   integers, reals, 'strings', '' escapes, nil,
            { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
@@ -90,6 +92,43 @@ through a *second* pointer to the same storage is not detected, and nothing here
 claims it is — see
 [ADR-0019](doc/adr/0019-pointers-and-the-only-forward-reference.md).
 
+A text file has a **buffer variable** `f^` — one character of lookahead — and
+ISO's primitives `get` and `put` are what `read` and `write` are built from,
+here as in the standard. That is the operation a lexer is written against, and
+a lexer is the first thing the self-hosted compiler needs:
+
+```pascal
+program Copy(input, output, src, dst);
+var src, dst: text; c: char;
+begin
+  reset(src); rewrite(dst);            { src and dst are argv[1] and argv[2] }
+  while not eof(src) do begin
+    while not eoln(src) do begin
+      c := src^;                       { look at the next character... }
+      get(src);                        { ...and only now consume it }
+      write(dst, c)
+    end;
+    readln(src); writeln(dst)
+  end
+end.
+```
+
+Program parameters are the program's only connection to the outside world, as
+ISO 7185 §6.10 has it: `input` and `output` are the standard streams, and every
+other one names a file variable bound to a command-line argument, in the order
+written. A file variable that is *not* a program parameter is a scratch file
+with no external name. Files are closed when the block declaring them exits,
+which is the standard's own rule and needs no `close`. Using `write` without
+`output` in the program header is an error, because §6.10 says it is. See
+[ADR-0021](doc/adr/0021-text-files-keep-the-buffer-variable.md).
+
+**Characters are bytes.** `char` is one octet with an ordinal of 0..255, and
+nothing in the compiler or the runtime consults the locale — `write` emits the
+bytes it is given and `read` returns the bytes it finds. UTF-8 text therefore
+passes through unchanged, but a multi-byte character is several `char` values:
+`é` is two, `日` is three. Encoding is the program's business, not the
+language's.
+
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form (`5.0E-01` style);
 with a width and a fraction length it comes out fixed-point.
@@ -112,8 +151,9 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: sets, files, `goto`, procedural parameters, and a variant
-part nested inside another variant. One implementation limit: nesting deeper
+Not accepted yet: sets, `goto`, procedural parameters, files of anything but
+`char`, and a variant part nested inside another variant. One implementation
+limit: nesting deeper
 than 1000 levels — parentheses, statements, type denoters, or the depth of the
 *tree* an operator chain builds — is a compile-time error rather than a stack
 overflow, in the parser or in any walk after it. See
@@ -156,11 +196,13 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Twenty-nine rules are currently established — the
+the two disagree. Thirty-one rules are currently established — the
 non-negative `mod`, truncating `div`, `odd` on negative values, ordinal `char`
 comparison, the exact integer-to-real widening, the `for` loop's inability to
-overflow, an array subscript's inability to leave its bounds, and a subrange's
-inability to hold a value outside it — twenty-five of them for all 2³² inputs.
+overflow, an array subscript's inability to leave its bounds, a subrange's
+inability to hold a value outside it, and the digit accumulator in `read`
+being unable to wrap before its check sees it — twenty-seven of them for all
+2³² inputs.
 
 Several rules keep their bounds *symbolic*, so they are theorems about every
 array, every subrange and every enumeration rather than about the ones a test
@@ -182,7 +224,12 @@ question, and a rule saying "the nil check fires exactly when the pointer is
 nil" would be the same sentence written twice — it would pass at once and prove
 nothing while making the count look better. Pointers are covered by the
 cross-check and by a run under AddressSanitizer instead, and ADR-0019 says so
-plainly rather than inflating the catalogue.
+plainly rather than inflating the catalogue. The same reasoning keeps `eof`,
+`eoln` and the buffer variable out: they are state properties of a stream. What
+they get instead is a test that can actually fail — `files_scratch.pas` opens
+three thousand scratch files, which exhausts the descriptor table if a block
+exit ever stops closing them, and that was checked against a deliberately
+broken runtime.
 
 The proofs are paired with a cross-check that compiles and runs real Pascal at
 the adversarial points, at both `-O0` and `-O2`, because a proof about a model of
@@ -228,12 +275,18 @@ written in. In dependency order:
 4. ~~**Pointers and `new`/`dispose`**~~ — done, with the forward-referenced
    pointer domain that makes a recursive type possible (ADR-0019). The AST can
    now be a heap-allocated tree rather than an array of nodes.
-5. **Text files** — `reset`, `rewrite`, `read`, `readln`, `eof`, `eoln`, so the
-   compiler can read source and write `.ll`.
-6. **Character strings.** ISO 7185 offers only `packed array [1..n] of char`,
-   which is painful for a compiler that manipulates identifiers. This is the one
-   place a documented non-standard extension is likely worth it; the decision is
-   still open.
+5. ~~**Text files**~~ — done: `reset`, `rewrite`, `read`, `readln`, `eof`,
+   `eoln`, and the buffer variable with `get`/`put` that a lexer wants
+   (ADR-0021). The compiler can now read source and write `.ll`.
+6. ~~**Character strings**~~ — decided: a length-plus-buffer record in strict
+   ISO Pascal, no extension (ADR-0012). Measuring the existing compiler settled
+   it: a compiler reads text in and writes text out rather than manipulating
+   it, so nearly every concatenation becomes a `write` and the only strings
+   that must be *stored* are identifiers and about sixty padded table entries.
+   `tests/bootstrap_strings.pas` is the working evidence.
+
+**Every prerequisite for stage 1 is now in place**, and what remains is writing
+the Pascal source rather than growing the language it is written in.
 
 Backend for the Pascal-hosted compiler: emit textual LLVM IR and hand it to
 `llc`/`clang`. That needs nothing but file output. Binding the LLVM-C API from
@@ -257,6 +310,10 @@ the case is registered — the suite is globbed at configure time.
   that should be rejected at compile time, or that should stop on a runtime
   error. A non-zero exit is then required, and `name.out` (if present) is
   compared against whatever was written before the failure.
+* `name.in` — fed to the program's standard input. Without it stdin is
+  `/dev/null`, so a program that reads sees end-of-file rather than waiting for
+  a terminal. Two writable scratch paths are always passed as arguments, so a
+  program whose header names external files has somewhere to put them.
 
 `tests/run_test.sh` compiles, runs, and diffs. Source paths are rewritten to
 `<source>` in stderr, so diagnostics can be pinned without depending on where

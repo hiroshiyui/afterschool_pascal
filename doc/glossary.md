@@ -30,10 +30,23 @@ its bounds matter, and code needing the distinction asks `isSubrange()`.
 **Host type.** The ordinal type a subrange is carved from. `1..9`'s host is
 `integer`; `green..blue`'s host is the enumeration.
 
+**Memory type** (`isMemory()`). Anything whose value never occupies a register
+and is reached through its address: arrays, records, and files. Distinct from
+`isStructured()`, which is arrays and records only — that predicate is what
+*grants a whole-variable copy*, and a file must never have one. Keeping the two
+apart is what makes assignment, comparison and value parameters refuse files
+without a special case at each site (ADR-0021).
+
 **Packed.** ISO's request that a structured type be stored compactly. Here it
 changes nothing about layout — it is honoured only where the standard makes it
 *semantic*: `packed array [1..n] of char` is the string type, and two of them
 compare and assign by length rather than by identity.
+
+**`str` (the bootstrap string).** Not a language feature: the
+`record len; ch: packed array [1..n] of char end` convention the stage-1 source
+uses, since ISO has no string type (ADR-0012). Its one cost is that a literal
+must be *padded* to a fixed width to be passed to a procedure, which is why the
+keyword tables in the Pascal source will read `'begin       '`.
 
 **String type.** `packed array [1..n] of char`, and nothing else. A string
 literal is given this type in Sema rather than a type of its own, so `write`,
@@ -59,6 +72,23 @@ when one type identifier denotes both. Implemented as pointer identity —
 not a denoter, and allows it to name a type defined later in the same type part
 — the language's only forward reference, and what makes a recursive type
 possible (ADR-0019).
+
+**Buffer variable.** `f^` — the component of a file the file is positioned at,
+and one character of lookahead for a text file. ISO defines `get`, `put` and
+`f^` as the primitives and *derives* `read` and `write` from them; this
+compiler keeps that structure rather than providing only the derived forms,
+because lookahead is what a lexer is written against (ADR-0021). It shares
+`NK::Deref` with pointer dereference, and the two part on the base type.
+
+**Program parameter.** A name in `program P(...)`. ISO 7185 §6.10 makes these
+the program's only connection to anything outside it: `input` and `output` are
+the standard streams, and every other one must be a file variable the block
+declares. This compiler binds those to command-line arguments in the order
+written — a choice the standard leaves open.
+
+**Internal (scratch) file.** A file variable that is *not* a program
+parameter, so it has no external name: a temporary the program writes and reads
+back within the run.
 
 **Variant part.** The `case tag: T of` arm list at the end of a record. Modelled
 as one block of shared storage with each arm a struct laid over it; the block's
@@ -187,7 +217,10 @@ the cross-check and an AddressSanitizer run instead (ADR-0019).
 ## Build and test
 
 **Golden test.** `tests/name.pas` plus `name.out`, the expected stdout of a
-program that must compile and exit 0 (ADR-0011).
+program that must compile and exit 0 (ADR-0011). An optional `name.in` is fed
+to its standard input; without one stdin is `/dev/null`, so a reading program
+sees end-of-file rather than hanging. Two writable scratch paths are always
+passed as arguments.
 
 **Expected-failure test.** `tests/name.pas` plus `name.err`, the expected
 stderr of a program that is *supposed* to fail — rejected at compile time, or

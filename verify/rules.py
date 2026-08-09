@@ -276,6 +276,50 @@ def _accepted_index_selects_the_right_element(w):
     return pre, claim
 
 
+def _read_accumulator_cannot_overflow(w):
+    """The accumulator in `pas_read_int` is 64 bits and the check that guards
+    it fires only *after* a digit has been folded in, so the multiply-add has
+    to be shown incapable of wrapping before the check can see it.
+
+    This is the read counterpart of `negation-cannot-overflow`: a rule whose
+    job is to justify a check the runtime deliberately does not emit. The
+    precondition is the loop invariant — the previous digit left a value the
+    check accepted — which is the same statement the check itself makes, so
+    the two cannot drift apart.
+    """
+    acc = z3.BitVec("acc", low.ACC_BITS)
+    digit = z3.BitVec("digit", 4)
+    pre = z3.And(acc >= 0,
+                 z3.Not(low.read_traps(acc, low.maxint(w))),  # the invariant
+                 z3.ULE(digit, 9))
+    stepped = low.read_accumulate(acc, digit)
+    # The 64-bit step agrees with the exact one, which is what "did not wrap"
+    # means: it is stated by comparison with the wider domain rather than by
+    # asserting a bound, so it cannot be true by construction.
+    claim = z3.ZeroExt(64, stepped) == iso.the_number_the_digits_denote(acc,
+                                                                       digit)
+    return pre, claim
+
+
+def _read_traps_exactly_outside(w):
+    """The check fires on exactly the digit sequences whose value is not a
+    value of the integer type. Both directions matter as usual: a runtime that
+    rejected every number would satisfy "never reads a wrong value"."""
+    acc = z3.BitVec("acc", low.ACC_BITS)
+    digit = z3.BitVec("digit", 4)
+    pre = z3.And(acc >= 0,
+                 z3.Not(low.read_traps(acc, low.maxint(w))),
+                 z3.ULE(digit, 9))
+    stepped = low.read_accumulate(acc, digit)
+    exact = iso.the_number_the_digits_denote(acc, digit)
+    # A magnitude is what is accumulated; the sign is applied afterwards, and
+    # the integer type is symmetric, so "in the type" is the same test either
+    # way round.
+    claim = low.read_traps(stepped, low.maxint(w)) == z3.Not(
+        iso.in_integer_range_wide(exact, low.maxint(w)))
+    return pre, claim
+
+
 def _subrange_traps_exactly_outside(w):
     """The store check fires on exactly the values ISO calls an error, for
     every subrange — the bounds are symbolic, so this is one theorem about all
@@ -412,6 +456,15 @@ ALL = [
          "why the offset subtraction needs no overflow check of its own",
          "codegen.cpp emitAddress, NK::Index",
          _accepted_index_selects_the_right_element),
+
+    Rule("read-accumulator-cannot-overflow", MUST_HOLD,
+         "why `value * 10 + digit` in pas_read_int needs no check of its own",
+         "runtime/pasrt.c pas_read_int",
+         _read_accumulator_cannot_overflow),
+    Rule("read-traps-exactly-outside-the-integer-type", MUST_HOLD,
+         "ISO 7185 §6.9.1 with §6.4.2.2 — a number read must be a value of the "
+         "integer type",
+         "runtime/pasrt.c pas_read_int", _read_traps_exactly_outside),
 
     Rule("subrange-traps-exactly-outside-its-bounds", MUST_HOLD,
          "ISO 7185 §6.4.6 — storing a value outside a subrange is an error",

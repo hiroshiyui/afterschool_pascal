@@ -20,7 +20,7 @@ the alternatives that were rejected and why.
 | [0009](0009-link-by-invoking-clang.md) | Link by invoking `clang` | Accepted |
 | [0010](0010-short-circuit-boolean-operators.md) | Boolean operators short-circuit | Accepted |
 | [0011](0011-golden-stdout-tests.md) | Test by comparing program stdout | Accepted |
-| [0012](0012-character-strings-for-self-hosting.md) | How the self-hosted source handles strings | Proposed |
+| [0012](0012-character-strings-for-self-hosting.md) | How the self-hosted source handles strings | Accepted |
 | [0013](0013-formal-verification-of-the-lowering.md) | Formal verification of the lowering | Accepted |
 | [0014](0014-iso-error-conditions-trap-at-run-time.md) | ISO error conditions trap at run time | Accepted |
 | [0015](0015-real-to-integer-conversions-are-range-checked.md) | Real-to-integer conversions are range-checked | Accepted |
@@ -29,3 +29,4 @@ the alternatives that were rejected and why.
 | [0018](0018-ordinal-types-and-variant-records.md) | Enumerations and subranges are ordinal types, and variants share storage | Accepted |
 | [0019](0019-pointers-and-the-only-forward-reference.md) | Pointers, and the language's only forward reference | Accepted |
 | [0020](0020-the-parser-bounds-tree-depth.md) | The parser bounds tree depth, for every walker at once | Accepted |
+| [0021](0021-text-files-keep-the-buffer-variable.md) | Text files keep the buffer variable, and program parameters name them | Accepted |

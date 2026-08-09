@@ -11,7 +11,8 @@ namespace ap {
 inline constexpr int kMaxInt = 2147483647;
 
 enum class TypeKind {
-  Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer
+  Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer,
+  File
 };
 
 struct Type;
@@ -46,10 +47,11 @@ struct Type {
 
   explicit Type(TypeKind k) : kind(k) {}
 
-  // --- array, pointer ------------------------------------------------------
+  // --- array, pointer, file ------------------------------------------------
   /// Array: the component type. Pointer: the domain — what it points at, null
-  /// only for `nil` itself, which belongs to every pointer type. Sharing the
-  /// field is how a variant record would do it, which is where this is going.
+  /// only for `nil` itself, which belongs to every pointer type. File: the
+  /// component type, which is `char` for a text file. Sharing the field is how
+  /// a variant record would do it, which is where this is going.
   Type *elem = nullptr;
   Type *indexType = nullptr; // the ordinal type of a subscript
   bool packed = false;
@@ -86,13 +88,24 @@ struct Type {
   bool isArray() const { return kind == TypeKind::Array; }
   bool isRecord() const { return kind == TypeKind::Record; }
   bool isPointer() const { return kind == TypeKind::Pointer; }
+  bool isFile() const { return kind == TypeKind::File; }
   /// `nil`, which is a value of every pointer type and of no other.
   bool isNil() const { return isPointer() && elem == nullptr; }
 
   /// Arrays and records live in memory and are copied wholesale; simple types
   /// live in registers. The distinction drives assignment, parameter passing,
   /// and whether an expression may be loaded at all.
+  ///
+  /// A file is *not* structured. It also lives in memory, but it may never be
+  /// copied — ISO 7185 §6.6.3.3 bars it from being a value parameter and there
+  /// is no assignment between file variables — so grouping it here would grant
+  /// it exactly the operations it must not have. `isFile()` is asked for
+  /// separately wherever an address is what travels.
   bool isStructured() const { return isArray() || isRecord(); }
+
+  /// True for anything whose value never occupies a register: it is reached
+  /// through its address, and a parameter of it arrives as one.
+  bool isMemory() const { return isStructured() || isFile(); }
 
   /// The type a subrange is a subrange of; every other type is its own base.
   /// Assignment compatibility, arithmetic, and the machine representation are
@@ -184,6 +197,8 @@ struct Type {
     // at itself without this looping forever.
     case TypeKind::Pointer:
       return elem ? "^" + elem->name() : "nil";
+    case TypeKind::File:
+      return elem && elem->isChar() ? "text" : "file";
     case TypeKind::Record: {
       // An anonymous record is named by its fields, which is the only thing
       // that distinguishes it from any other anonymous record.
@@ -242,6 +257,19 @@ inline Type *Void() { return get(TypeKind::Void); }
 inline Type *Nil() {
   static Type n{TypeKind::Pointer};
   return &n;
+}
+/// `text`, the predefined file of char (ISO 7185 §6.4.3.5). A singleton like
+/// the other predefined types, so every variable declared `text` has the same
+/// type — a `file of char` written out longhand is a different one, exactly as
+/// ADR-0017's name equivalence says it should be.
+inline Type *Text() {
+  static Type t = [] {
+    Type f{TypeKind::File};
+    f.elem = Char();
+    f.alias = "text";
+    return f;
+  }();
+  return &t;
 }
 } // namespace ty
 
