@@ -119,11 +119,14 @@ cheaply, rather than a byte mismatch at stage 3 with nothing to bisect.
 Things that are wrong or absent today, listed so they are not rediscovered as
 surprises.
 
-- **Deep nesting crashes the parser.** Recursive descent with no depth limit
-  segfaults on pathological input — roughly 50 000 nested parentheses does it.
-  Sema and CodeGen recurse over the same tree, so a fix has to bound the depth
-  in the parser *and* survive the two walks that follow, not just return a
-  diagnostic from `factor`.
+- **Nesting deeper than 1000 levels is rejected** (ADR-0020). The limit bounds
+  the *tree*, not the parser's call depth — the distinction matters because a
+  30 000-term `a+b+c+...` chain parses iteratively and used to segfault in
+  *Sema*, two stages after the parser survived it. The bound protects all four
+  recursive walkers (parser, Sema, CodeGen, the AST destructor) with an order
+  of magnitude of headroom against the tightest measured crash point, ~19 000
+  levels on an 8 MiB stack. The cost: legal machine-generated programs with
+  chains beyond 1000 terms are refused.
 - **A variant part nested inside a variant is rejected.** Deliberate, and
   documented in ADR-0018. ISO allows it; nothing the compiler's own source needs
   requires it.

@@ -31,6 +31,39 @@ private:
   [[noreturn]] void bail();
   void errorAtCur(const std::string &msg);
 
+  /// The deepest tree this parser will build. Every stage after the parser —
+  /// Sema, CodeGen, and the AST's own destructor — recurses over the tree, so
+  /// the parser is where depth is bounded once for all of them (ADR-0020).
+  /// The measured crash points are above 19000 on an 8 MiB stack; 1000 leaves
+  /// more than an order of magnitude of headroom for every walker.
+  static constexpr int kMaxDepth = 1000;
+
+  /// One level of nesting in the tree under construction. Recursive
+  /// productions hold one of these per call; the iterative operator and
+  /// selector loops call bump() per iteration, because a chain like
+  /// `a+b+c+...` is built by a loop yet is as deep for the tree's walkers as
+  /// parentheses would be — bounding call depth alone would miss it.
+  class Depth {
+  public:
+    /// A recursive production: entering it is itself one level.
+    explicit Depth(Parser &p) : p_(p), count_(1) { p_.enterLevel(); }
+    /// A production that only *hosts* a spine-building loop: entering it is
+    /// free — the recursion below it is already counted by parseFactor — and
+    /// only its bump()s are levels.
+    enum class Spine { Loop };
+    Depth(Parser &p, Spine) : p_(p), count_(0) {}
+    ~Depth() { p_.depth_ -= count_; }
+    void bump() {
+      ++count_;
+      p_.enterLevel();
+    }
+
+  private:
+    Parser &p_;
+    int count_;
+  };
+  void enterLevel();
+
   std::unique_ptr<Block> parseBlock();
   void parseConstPart(Block &block);
   void parseTypePart(Block &block);
@@ -77,6 +110,7 @@ private:
   std::vector<Token> toks_;
   Diagnostics &diags_;
   size_t pos_ = 0;
+  int depth_ = 0;
 };
 
 } // namespace ap

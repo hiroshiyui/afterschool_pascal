@@ -168,6 +168,10 @@ holds the three-stage plan and the dependency ordering.
 ones the parser rejects. `src/parser.cpp` is recursive descent shaped like the
 ISO grammar (`expression` → `simple-expression` → `term` → `factor`) — note a
 leading sign binds to the whole *term*, so `-7 mod 3` is `-(7 mod 3)`.
+The parser bounds the depth of the tree it builds at 1000 levels (ADR-0020);
+the spine-building loops count their iterations toward the same limit, because
+an operator chain is flat for the parser but deep for Sema, CodeGen and the
+destructor — a call-depth-only limit would miss it.
 `src/sema.cpp` owns scopes, type rules, type-denoter resolution, and constant
 folding. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of

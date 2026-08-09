@@ -20,6 +20,14 @@ void Parser::errorAtCur(const std::string &msg) {
 
 void Parser::bail() { throw ParseAbort{}; }
 
+void Parser::enterLevel() {
+  if (++depth_ > kMaxDepth) {
+    errorAtCur("nesting is too deep: this compiler accepts " +
+               std::to_string(kMaxDepth) + " levels");
+    bail();
+  }
+}
+
 bool Parser::expect(Tok k, const char *context) {
   if (accept(k))
     return true;
@@ -193,6 +201,7 @@ bool Parser::looksLikeSubrange() const {
 /// type-denoter  = 'packed'? structured-type | ordinal-type | type-identifier
 /// ordinal-type  = enumerated-type | subrange-type
 TypeExprPtr Parser::parseTypeExpr() {
+  Depth depth(*this); // array-of-array and record fields recurse through here
   bool packed = accept(Tok::KwPacked);
 
   if (check(Tok::KwArray))
@@ -447,6 +456,9 @@ std::unique_ptr<Compound> Parser::parseCompound() {
 }
 
 StmtPtr Parser::parseStatement() {
+  // Every statement-in-statement cycle — begin/end, if, while, for, with,
+  // case — passes through here, so one guard covers them all.
+  Depth depth(*this);
   switch (cur().kind) {
   case Tok::KwBegin:  return parseCompound();
   case Tok::KwIf:     return parseIf();
@@ -656,10 +668,15 @@ StmtPtr Parser::parseWrite(bool newline) {
 /// designator = name selector*
 /// selector   = '[' expression (',' expression)* ']' | '.' field-name
 ExprPtr Parser::parseSelectors(ExprPtr base) {
+  // A selector chain — `a[i][j]`, `p^.next^.next` — is a spine like an
+  // operator chain, built by this loop rather than by recursion; each
+  // selector wraps the designator one level deeper for the tree's walkers.
+  Depth depth(*this, Depth::Spine::Loop);
   for (;;) {
     if (check(Tok::LBracket)) {
       ++pos_;
       do {
+        depth.bump();
         auto idx = makeNode<IndexExpr>(cur());
         idx->base = std::move(base);
         idx->index = parseExpr();
@@ -669,6 +686,7 @@ ExprPtr Parser::parseSelectors(ExprPtr base) {
       continue;
     }
     if (check(Tok::Caret)) {
+      depth.bump();
       auto deref = makeNode<DerefExpr>(cur());
       ++pos_;
       deref->base = std::move(base);
@@ -676,6 +694,7 @@ ExprPtr Parser::parseSelectors(ExprPtr base) {
       continue;
     }
     if (check(Tok::Period)) {
+      depth.bump();
       auto fld = makeNode<FieldExpr>(cur());
       ++pos_;
       if (!check(Tok::Ident)) {
@@ -713,6 +732,12 @@ ExprPtr Parser::parseExpr() {
 }
 
 ExprPtr Parser::parseSimpleExpr() {
+  // The operator loops below build a left spine: `a+b+c+...` costs the
+  // parser no recursion at all, but the tree it leaves is as deep as the
+  // chain is long, and Sema, CodeGen and the destructor all recurse down it.
+  // Counting each iteration as a level is what makes the depth limit a bound
+  // on the *tree* rather than on this parser's own stack (ADR-0020).
+  Depth depth(*this, Depth::Spine::Loop);
   ExprPtr result;
   if (check(Tok::Plus) || check(Tok::Minus)) {
     auto un = makeNode<Unary>(cur());
@@ -732,6 +757,7 @@ ExprPtr Parser::parseSimpleExpr() {
     case Tok::KwOr:  op = BinOp::Or; break;
     default:         return result;
     }
+    depth.bump();
     auto bin = makeNode<Binary>(cur());
     ++pos_;
     bin->op = op;
@@ -742,6 +768,8 @@ ExprPtr Parser::parseSimpleExpr() {
 }
 
 ExprPtr Parser::parseTerm() {
+  // see parseSimpleExpr: `a*b*c*...` is a spine too
+  Depth depth(*this, Depth::Spine::Loop);
   ExprPtr result = parseFactor();
   for (;;) {
     BinOp op;
@@ -753,6 +781,7 @@ ExprPtr Parser::parseTerm() {
     case Tok::KwAnd: op = BinOp::And; break;
     default:         return result;
     }
+    depth.bump();
     auto bin = makeNode<Binary>(cur());
     ++pos_;
     bin->op = op;
@@ -763,6 +792,10 @@ ExprPtr Parser::parseTerm() {
 }
 
 ExprPtr Parser::parseFactor() {
+  // Every way an expression nests inside an expression — parentheses, `not`,
+  // a unary sign, a call's arguments — passes through here exactly once per
+  // level, so this one guard bounds the whole expression grammar's recursion.
+  Depth depth(*this);
   const Token &t = cur();
   switch (t.kind) {
   case Tok::IntLit: {

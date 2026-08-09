@@ -113,7 +113,11 @@ becoming `-2147483648`. See
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
 Not accepted yet: sets, files, `goto`, procedural parameters, and a variant
-part nested inside another variant.
+part nested inside another variant. One implementation limit: nesting deeper
+than 1000 levels — parentheses, statements, type denoters, or the depth of the
+*tree* an operator chain builds — is a compile-time error rather than a stack
+overflow, in the parser or in any walk after it. See
+[ADR-0020](doc/adr/0020-the-parser-bounds-tree-depth.md).
 
 ## How it fits together
 
