@@ -464,9 +464,12 @@ commit or the test goes red — that is the point of it, not an inconvenience.
   message because the parser stops at its first error. `selfhost/badsema/` is
   Sema's, and is only thirteen files because Sema *accumulates* errors rather than
   bailing. Add to them when you add a message, and don't assume the corpus
-  reaches a branch — **count it**. Three times now a whole branch was found
-  uncompared (no file had a tab; no file had a parse error; Sema reached 48 of
-  its 85 messages), each time because a mutation survived a green suite.
+  reaches a branch — **count it**. Every time anyone has, something turned out
+  to be uncompared: no file had a tab, no file had a parse error, Sema reached
+  48 of its 85 messages, and then sets, congruity, non-text files and the
+  non-local goto each had mutations survive a green suite (ADR-0022 to -0024,
+  -0028, -0030 to -0032). Don't look for a running total — the records
+  disagree, because they are immutable and the count moved on without them.
 **CodeGen is the exception, and had to be** (ADR-0025). Two backends' assembler
 text is not comparable — the C++ builds an `llvm::Module` and LLVM's printer is
 not a specification — so it is checked by *running* what it produces against the

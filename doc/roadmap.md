@@ -29,7 +29,7 @@ The stage-2 ≡ stage-3 comparison is the whole point: stage 2 is built by a
 compiler that was itself built by C++, stage 3 by one built by Pascal. If the
 bytes match, the Pascal source is a fixed point and stage 0 can be retired.
 
-## Where stage 0 is now (milestone 6)
+## The six bootstrap items (all done)
 
 | # | Feature | State | Record |
 | --- | --- | --- | --- |
@@ -101,9 +101,9 @@ the record, the lexer's accumulate-a-word loop, keyword matching against padded
 literals, a symbol table interning by comparison, and IR emission — compiling
 and running against the compiler as it stands.
 
-## Next: writing stage 1
+## Stage 1 (done)
 
-Nothing in the language is now blocking. In rough order:
+Nothing in the language was blocking, and these went in this order:
 
 1. ~~**Port the lexer.**~~ **Done** (ADR-0022) — checked against the C++ lexer
    on every Pascal source in the tree by `selfhost/difftest.sh`, under ctest.
@@ -113,8 +113,8 @@ Nothing in the language is now blocking. In rough order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`. 173
-   files agree stage for stage.
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 207
+   files agree stage for stage today.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
    and `clang` assembles and links it. Binding the LLVM-C API from Pascal
@@ -132,13 +132,20 @@ LLVM's printer is not a specification — so it is checked against the golden
 output of the programs it builds instead, and then against itself.
 
 The harness is only worth what its corpus reaches, and that has to be
-*counted*, not assumed. Twice now a whole branch was found uncompared: no file
-contained a tab, so the lexer's control-character class was never exercised
-(ADR-0022), and no file produced a parser diagnostic, so all 43 message
-contexts and 61 token spellings were unchecked (ADR-0023). Sema reached 48 of
-its 85 messages before `badsema/` was written, and three mutations survived the
-suite until the corpus was extended (ADR-0024). Every one of these was found by
-mutating the Pascal source and noticing that nothing went red.
+*counted*, not assumed. **Every time it has been counted, something turned out
+to be uncompared.** No file contained a tab, so the lexer's control-character
+class was never exercised (ADR-0022). No file produced a parser diagnostic, so
+all 43 message contexts and 61 token spellings were unchecked (ADR-0023). Sema
+reached 48 of its 85 messages before `badsema/` was written (ADR-0024). Then
+sets (ADR-0028), congruity (ADR-0030), non-text files (ADR-0031) and the
+non-local goto (ADR-0032) each had mutations survive a green suite until their
+corpus was extended. Every one was found by mutating the source and noticing
+that nothing went red.
+
+Those records disagree about *which* time it was — two of them say "the fourth"
+and two say "the sixth". That is what a running tally across records that are
+immutable once accepted does, and it is why the count is not kept here either:
+the number was never the point, and the list above is.
 
 Three things the lexer port learned, which the next components will meet again
 (ADR-0022):
@@ -241,9 +248,10 @@ surprises.
 
 ## Beyond self-hosting
 
-Stage 3 compares equal, so this is now the live section. The order is settled:
+Stage 3 compares equal, so this is the live section. The order was settled as
 **finish base ISO 7185 first, and only then take on ISO/IEC 10206:1991
-(Extended Pascal).**
+(Extended Pascal)** — and the first half of that is done, so the second has
+begun (ADR-0033).
 
 That ordering is what decides whether a feature is in scope. Anything ISO 7185
 has is worth adding on conformance grounds alone, even where nothing in this
