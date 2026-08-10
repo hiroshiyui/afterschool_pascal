@@ -291,8 +291,11 @@ stage-1 compiler is such a program.
   ADR-0018's "ISO 7185 has no `else` and none is invented": the standard has
   one now, and the lowering is unchanged — an otherwise-part is what the
   default block of the same switch holds.
-- **`otherwise` in a variant part.** The same word in a record's `case`, which
-  touches the variant layout of ADR-0018 and ADR-0026 rather than the statement.
+- ~~**`otherwise` in a variant part.**~~ Done (ADR-0034). The same word in a
+  record's `case`, and it turned out to touch neither the variant layout of
+  ADR-0018 nor the paths of ADR-0026: the completer is an arm with no labels,
+  and nothing in the layout ever reads a label. The one place that does is
+  `new(p, c)`, where an unclaimed tag value now selects it.
 - **Case-constant ranges**, non-decimal literals (`16#ff`), `pow` and `**`,
   `and_then`/`or_else` — small, independent, and each reserving its own
   word-symbols as it lands.

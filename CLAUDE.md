@@ -365,7 +365,10 @@ in one language or the other, and the standard is a property of the source.
 - **`tests/extended/` is the Extended Pascal corpus**, and the directory is
   what tells every harness which flag to use. `run_test.sh` (via CMake),
   `difftest.sh` and `irtest.sh` each derive it from the path, so the two
-  compilers cannot be told different things about one file.
+  compilers cannot be told different things about one file. The glob is
+  **unanchored** on purpose: a file named on the command line arrives relative,
+  and `*/tests/extended/*` quietly called it ISO 7185 — which compares two
+  identical rejections and passes (ADR-0034).
 - **The stage-1 compiler reads the standard from a file** — a third program
   parameter, one word. ISO 7185 gives a program no access to its command line
   beyond its program parameters, and those are files; `compiler.pas` cannot
@@ -379,10 +382,20 @@ in one language or the other, and the standard is a property of the source.
   lowering is unchanged: an otherwise-part is *what the default block holds*.
   A case with no otherwise-part still traps, and `tests/trap_case.pas` is what
   says so.
+- **The same word ends a variant part** (ADR-0034): `otherwise (fields)` is the
+  arm every tag value the labelled arms leave selects. It is an arm with no
+  labels — numbered, pathed and laid out like the rest — so **codegen is
+  untouched**, because nothing in the layout ever reads a label. The one place
+  that does is `new(p, c)`, where an unclaimed value now selects the completer
+  instead of being an error. Nothing may follow it, and the flag is not "the
+  label list is empty": a label that fails to evaluate is dropped, and a
+  diagnostic must not turn a broken arm into the completer.
 - Telling `otherwise` the construct from `otherwise` the constant is one token
-  of lookahead: a case label is followed by `:`, `,` or `..`, and an
-  otherwise-part is not. `tests/iso_identifiers.pas` pins the legal ISO 7185
-  program that depends on it. **Anything the standard does not
+  of lookahead, and it is a *different* token in each place: a case label is
+  followed by `:`, `,` or `..` and an otherwise-part is not, while the variant
+  completer is followed by `(` and a variant's label list is not.
+  `tests/iso_identifiers.pas` pins both legal ISO 7185 programs that depend on
+  it. **Anything the standard does not
 have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.
