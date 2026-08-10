@@ -416,6 +416,30 @@ in one language or the other, and the standard is a property of the source.
     rather than emitted IR. They establish the *design* (the check fires on
     exactly the powers that leave the type) and cannot see the runtime drift
     away from the model, so the trap programs are not redundant with them.
+- **A discriminated schema produces an ordinary type** (ADR-0039). §6.4.7's
+  schema is a mapping from discriminant tuples to types; §6.4.8's
+  `vector(3)` selects one. The whole feature lives in the parser and Sema —
+  codegen gained one line, for `v.n`, and `verify/` gained nothing.
+  - **A schema keeps its syntax, not a type.** `Symbol::schemaBody` is the
+    type-denoter, re-resolved once per distinct tuple with the discriminants
+    bound as ordinary constants. By the time `array [1..n] of real` is
+    resolved, `n` *is* a constant — which is why no existing resolver changed.
+    The resolution cache is cleared **before** each production; a schema that
+    kept the first one would hand the same type to every tuple.
+  - **§6.4.8's identity rule is an intern table**, keyed by (schema, tuple).
+    Both halves matter: distinct tuples are distinct types, *and* one tuple is
+    one type however often it is written. `assignable` gained no case at all,
+    which is the test of whether it was encoded in the right place.
+  - A produced type **names itself** `vector(3)`, or two productions differing
+    only in a discriminant the body never mentions print identically.
+  - **Discriminants must be constants**, and schematic formal parameters are
+    not implemented. Both are stated deferrals, not oversights — the ADR's
+    "What this does not do" lists all five.
+  - Refused, and neither is in the standard's words: an **enumerated type in a
+    schema body** (its constants would be declared once per tuple, into a
+    scope that dies with the production), and a schema **naming itself**
+    outside a pointer domain (§6.4.7 does require this; without it the
+    production recurses forever).
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
@@ -487,8 +511,10 @@ destructor — a call-depth-only limit would miss it.
 `src/astdump.cpp` writes the tree in the format `selfhost/compiler.pas` also
 writes, before and after Sema; it is the specification of that format, so
 change it and the Pascal side together.
-`src/sema.cpp` owns scopes, type rules, type-denoter resolution, and constant
-folding. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
+`src/sema.cpp` owns scopes, type rules, type-denoter resolution, constant
+folding, and — since ADR-0039 — the schema intern table, which is the one place
+a type's *identity* is decided by something other than the denoter that built
+it. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of
 integer` the *same* type rather than two alike ones. `runtime/pasrt.c`
 holds anything not expressible in IR — formatted output and runtime checks —

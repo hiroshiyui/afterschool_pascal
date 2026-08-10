@@ -240,11 +240,18 @@ operators  x ** y and x pow y — exponentiation, binding tighter than * and
            a and then b, a or else b — the short-circuit operators, which
            evaluate the right operand only when the left has not settled
            the answer. Each is one word-symbol written as two words
+types      vector(n: integer) = array [1..n] of real — a schema, and
+           vector(3) a type produced from it. Two productions with the same
+           discriminants are the same type and two with different ones are
+           not, whatever they look like; v.n is the value a type was
+           produced with. The discriminants must be constants for now
 words      otherwise and pow are reserved; `and then` and `or else` reserve
            nothing new, because both of their words already are
 ```
 
-Not accepted yet: schemata (parameterised types), the `string` type, modules,
+Not accepted yet: schematic formal parameters and discriminants that are not
+constants (`procedure p(var v: vector)`, `var s: vector(n)`), the `string` type,
+modules,
 `protected` parameters, initial-state specifiers
 (`value`), binding (`bind`/`unbind`), direct-access files, and complex
 numbers. A word-symbol is reserved only when the feature needing it

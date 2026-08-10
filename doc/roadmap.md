@@ -329,8 +329,20 @@ was never written down.
   already reserved in ISO 7185. It was indeed small, but not for the reason
   written here: the parser change was trivial and the *lexical* question — what
   may sit between the two words — was the one that needed deciding.
-- **Schemata**, the core of the standard: parameterised types, and what
-  `string(n)` is built on. Everything larger composes with it.
+- **Schemata** (ADR-0039) — *the discriminated half is done*. `vector(n:
+  integer) = array [1..n] of real` and `vector(3)` work, and §6.4.8's identity
+  rule — one tuple one type, distinct tuples distinct types — is an intern
+  table rather than a comparison, so `assignable` gained no case at all. A
+  discriminated schema produces an *ordinary* type, which is why codegen
+  needed one line (for `v.n`) and the proof rules needed none.
+
+  Two halves are left, and each is a record of its own:
+  - **A schematic formal parameter**, `procedure p(var v: vector)`. The bounds
+    come from the actual, so they have to travel: a descriptor beside the
+    address, the shape ADR-0030 already uses for a procedural parameter.
+  - **Discriminants that are not constants**, `var s: vector(n)` — §6.2.3.2
+    evaluates them when the block is entered, which means a variable whose
+    size is not known until then. This is the one `string(n)` needs.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. Its *finding* has not — a compiler reads text in and writes text out
