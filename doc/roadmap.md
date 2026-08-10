@@ -322,9 +322,13 @@ was never written down.
   overflow because it *is* repeated multiplication, and the proof rules reach
   into `runtime/pasrt.c` for the first time to say the check fires exactly when
   the exact power leaves the type.
-- **`and_then`/`or_else`** — the short-circuit spellings, and the next small
-  one. `and`/`or` already short-circuit here, so this is two word-symbols and a
-  parser change rather than a lowering.
+- ~~**`and_then`/`or_else`**~~ Done (ADR-0038), and **the standard spells them
+  `and then` and `or else`** — two words apiece, no underscore. Each is one
+  word-symbol per §6.1.2, so the lexer joins two tokens rather than looking a
+  spelling up, and the feature reserves nothing: all four of its words are
+  already reserved in ISO 7185. It was indeed small, but not for the reason
+  written here: the parser change was trivial and the *lexical* question — what
+  may sit between the two words — was the one that needed deciding.
 - **Schemata**, the core of the standard: parameterised types, and what
   `string(n)` is built on. Everything larger composes with it.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the

@@ -416,6 +416,27 @@ in one language or the other, and the standard is a property of the source.
     rather than emitted IR. They establish the *design* (the check fires on
     exactly the powers that leave the type) and cannot see the runtime drift
     away from the model, so the trap programs are not redundant with them.
+- **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
+  short-circuit operators `and then` and `or else` — one word-symbol apiece,
+  written as two words. Not `and_then`: there is no underscore in the standard,
+  and the roadmap, README and ADR-0033 all said otherwise before this landed.
+  - The lexer **joins two tokens**; nothing is added to either keyword table,
+    so the feature reserves **nothing** — all four words are already reserved
+    in ISO 7185. It is the first Extended Pascal feature costing that language
+    nothing lexically.
+  - The join is across **any separator**, so a comment or a line break may sit
+    between the words. §6.1.10's "no separators shall occur within tokens"
+    cannot be applied literally to a token whose reference representation
+    contains a space. The leniency cannot change a valid program's meaning:
+    `then` cannot begin a factor and `else` cannot begin a term, so the pair
+    has no other reading.
+  - `AndThen`/`OrElse` are **their own BinOps** although they lower to the very
+    same short-circuit code ADR-0010 already gave `and` and `or`. The standard
+    only *permits* short-circuiting `and` and *requires* it here; one node for
+    both would throw that away. The consequence is that **no program's output
+    distinguishes them** — the AST dump and a diagnostic are the only two
+    places, which is why `tests/extended/shortcircuit_errors.pas` is the
+    load-bearing half of the pair rather than a companion to it.
 - **A non-decimal literal is lexical and nothing else** (ADR-0036). `16#ff` reaches the
   parser as an integer literal, so no later rule knows it was written that way.
   Two things the code says and a reader might undo: the extended-digit sequence

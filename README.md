@@ -237,11 +237,15 @@ operators  x ** y and x pow y — exponentiation, binding tighter than * and
            looser than not. ** always yields a real; pow takes an integer
            exponent and yields the type of its left operand, so 2 pow 3 is
            the integer 8 and 2 ** 3 is 8.0
-words      otherwise and pow are reserved
+           a and then b, a or else b — the short-circuit operators, which
+           evaluate the right operand only when the left has not settled
+           the answer. Each is one word-symbol written as two words
+words      otherwise and pow are reserved; `and then` and `or else` reserve
+           nothing new, because both of their words already are
 ```
 
 Not accepted yet: schemata (parameterised types), the `string` type, modules,
-`and_then`/`or_else`, `protected` parameters, initial-state specifiers
+`protected` parameters, initial-state specifiers
 (`value`), binding (`bind`/`unbind`), direct-access files, and complex
 numbers. A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
