@@ -1088,11 +1088,26 @@ begin
     AddSimple(sl, sc, k)
 end;
 
+{ The value of an extended digit: ISO/IEC 10206:1991 6.1.5 makes a letter one,
+  and letter case is no more significant here than it is in an identifier. -1
+  is "not one at all". }
+function ExtendedDigit(c: char): integer;
+begin
+  if IsDigit(c) then
+    ExtendedDigit := ord(c) - ord('0')
+  else if (c >= 'a') and (c <= 'z') then
+    ExtendedDigit := ord(c) - ord('a') + 10
+  else if (c >= 'A') and (c <= 'Z') then
+    ExtendedDigit := ord(c) - ord('A') + 10
+  else
+    ExtendedDigit := -1
+end;
+
 procedure LexNumber;
 var
-  sl, sc, digit, digitAt: integer;
-  text: str;
-  isReal, overflow: boolean;
+  sl, sc, digit, digitAt, base, i: integer;
+  text, digits: str;
+  isReal, overflow, bad: boolean;
   value: integer;
   sign: char;
 begin
@@ -1115,6 +1130,72 @@ begin
       else
         value := value * 10 + digit
   end;
+
+  { ISO/IEC 10206:1991 6.1.5: `base#extended-digits`. The digit sequence just
+    scanned was the base, and what follows is never real -- only an
+    unsigned-integer has this form. }
+  if Peek(0) = '#' then begin
+    base := value;
+    if overflow then base := 0;
+    StrAppend(text, Peek(0));
+    Advance;
+    if langStd = stdIso7185 then begin
+      ErrorAt(sl, sc);
+      write('a non-decimal literal is an Extended Pascal feature; ');
+      writeln('compile with --std=extended')
+    end;
+    { The digit sequence is maximal: `16#ffand` is one ill-formed number rather
+      than a number and a word-symbol, because an extended digit *is* a
+      letter. }
+    StrClear(digits);
+    while (not AtEof) and IsAlnum(Peek(0)) do begin
+      StrAppend(digits, Peek(0));
+      StrAppend(text, Peek(0));
+      Advance
+    end;
+
+    value := 0;
+    overflow := false;
+    bad := false;
+    if (base < 2) or (base > 36) then begin
+      ErrorAt(sl, sc);
+      write('the base of a non-decimal literal must be between 2 and 36, ');
+      writeln('found ', base:1);
+      bad := true
+    end
+    else if digits.len = 0 then begin
+      ErrorAt(sl, sc);
+      writeln('expected at least one digit after ''#''');
+      bad := true
+    end;
+    i := 1;
+    while (i <= digits.len) and not bad do begin
+      digit := ExtendedDigit(digits.ch[i]);
+      if (digit < 0) or (digit >= base) then begin
+        ErrorAt(sl, sc);
+        writeln('''', digits.ch[i], ''' is not a digit of base ', base:1);
+        bad := true
+      end
+      else if not overflow then
+        { the check before the multiply, as above: this compiler traps on
+          integer overflow rather than wrapping (ADR-0014) }
+        if value > (maxint - digit) div base then
+          overflow := true
+        else
+          value := value * base + digit;
+      i := i + 1
+    end;
+    if overflow then begin
+      ErrorAt(sl, sc);
+      write('integer literal out of range (maxint is ', maxint:1, '): ');
+      for i := 1 to text.len do
+        write(text.ch[i]);
+      writeln
+    end;
+    if bad then value := 0;
+    AddInt(sl, sc, value, overflow)
+  end
+  else begin
 
   isReal := false;
   { A '.' begins a fraction only when a digit follows; otherwise it is the
@@ -1161,6 +1242,8 @@ begin
       writeln
     end;
     AddInt(sl, sc, value, overflow)
+  end
+
   end
 end;
 

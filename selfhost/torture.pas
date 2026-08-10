@@ -61,6 +61,13 @@ begin
   writeln('unterminated
   );
 
+  { A non-decimal literal is Extended Pascal's, so under ISO 7185 every one of
+    these is refused -- and refused *as* one, so the base and the digits are
+    still checked and the whole extended-digit sequence is still consumed. }
+  x := 16#ff;
+  x := 1#0;
+  x := 16#fg;
+
   { an unexpected character }
   x := x @ 1;
   x := x $ 1;

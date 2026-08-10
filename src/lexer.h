@@ -28,6 +28,10 @@ private:
   void skipTriviaAndComments();
   Token lexIdentOrKeyword();
   Token lexNumber();
+  /// `base#digits` — ISO/IEC 10206:1991 §6.1.5's extended number, entered with
+  /// the base already scanned. Never real: only an unsigned-integer has this
+  /// form, so no fraction or exponent is looked for afterwards.
+  Token lexExtendedNumber(const std::string &baseText, int sl, int sc);
   Token lexString();
   Token make(Tok kind, int line, int col) const;
 

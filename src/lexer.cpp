@@ -200,6 +200,12 @@ Token Lexer::lexNumber() {
   while (!eof() && std::isdigit(static_cast<unsigned char>(peek())))
     text += advance();
 
+  // ISO/IEC 10206:1991 §6.1.5: `base#extended-digits`. The digit sequence just
+  // scanned was the base, and what follows is never real — only an
+  // unsigned-integer has this form.
+  if (peek() == '#')
+    return lexExtendedNumber(text, sl, sc);
+
   bool isReal = false;
   // A '.' only starts a fraction if a digit follows; otherwise it is the
   // program-terminating period or a subrange '..'.
@@ -237,6 +243,76 @@ Token Lexer::lexNumber() {
       diags_.error(sl, sc, "integer literal out of range (maxint is " +
                                std::to_string(kMaxInt) + "): " + text);
   }
+  return t;
+}
+
+/// The value of an extended digit: ISO/IEC 10206:1991 §6.1.5 makes a letter one,
+/// and letter case is no more significant here than it is in an identifier.
+static int extendedDigit(char c) {
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'z')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'Z')
+    return c - 'A' + 10;
+  return -1;
+}
+
+Token Lexer::lexExtendedNumber(const std::string &baseText, int sl, int sc) {
+  std::string text = baseText;
+  text += advance(); // '#'
+
+  if (std_ == Std::Iso7185)
+    diags_.error(sl, sc, "a non-decimal literal is an Extended Pascal feature; "
+                         "compile with --std=extended");
+
+  // The digit sequence is maximal: `16#ffand` is one ill-formed number rather
+  // than a number and a word-symbol, because an extended digit *is* a letter.
+  std::string digits;
+  while (!eof() && std::isalnum(static_cast<unsigned char>(peek())))
+    digits += advance();
+  text += digits;
+
+  Token t = make(Tok::IntLit, sl, sc);
+  t.text = text;
+
+  errno = 0;
+  long long base = std::strtoll(baseText.c_str(), nullptr, 10);
+  if (errno == ERANGE || base < 2 || base > 36) {
+    diags_.error(sl, sc, "the base of a non-decimal literal must be between 2 "
+                         "and 36, found " + baseText);
+    return t;
+  }
+  if (digits.empty()) {
+    diags_.error(sl, sc, "expected at least one digit after '#'");
+    return t;
+  }
+
+  // Accumulated rather than converted, because the bound to check is maxint
+  // and not what a 64-bit conversion happens to survive — the Pascal lexer has
+  // no wider type to overflow into, and both must agree on where a literal
+  // stops being one.
+  long long value = 0;
+  bool overflowed = false;
+  for (char c : digits) {
+    int d = extendedDigit(c);
+    if (d < 0 || d >= base) {
+      diags_.error(sl, sc, std::string("'") + c + "' is not a digit of base " +
+                               std::to_string(base));
+      return t;
+    }
+    if (!overflowed) {
+      value = value * base + d;
+      overflowed = value > kMaxInt;
+    }
+  }
+  // The overflowing value is kept rather than zeroed: the dump prints `int ?`
+  // for anything above maxint, and that is what the Pascal lexer — which has
+  // no wider type and stops accumulating — prints from its own flag.
+  t.intVal = value;
+  if (overflowed)
+    diags_.error(sl, sc, "integer literal out of range (maxint is " +
+                             std::to_string(kMaxInt) + "): " + text);
   return t;
 }
 

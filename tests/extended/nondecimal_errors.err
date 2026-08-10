@@ -1,0 +1,8 @@
+<source>:9:14: error: the base of a non-decimal literal must be between 2 and 36, found 1
+<source>:10:15: error: the base of a non-decimal literal must be between 2 and 36, found 0
+<source>:11:12: error: the base of a non-decimal literal must be between 2 and 36, found 37
+<source>:13:13: error: expected at least one digit after '#'
+<source>:15:12: error: 'g' is not a digit of base 16
+<source>:16:15: error: '2' is not a digit of base 2
+<source>:19:11: error: 'n' is not a digit of base 16
+<source>:21:14: error: integer literal out of range (maxint is 2147483647): 16#ffffffff
