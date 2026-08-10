@@ -300,8 +300,15 @@ stage-1 compiler is such a program.
   constant may appear, in a case statement and in a variant alike, because
   Extended Pascal generalised the constant *list* and both name it. A range is
   tested rather than expanded, so `1..maxint` costs two comparisons.
-- **Non-decimal literals** (`16#ff`), `pow` and `**`, `and_then`/`or_else` —
-  small, independent, and each reserving its own word-symbols as it lands.
+- ~~**Non-decimal literals.**~~ Done. `base#extended-digits` for any base in
+  2..36, with letters as the digits above nine (§6.1.5). Purely lexical: what
+  the parser receives is an integer literal, so no rule anywhere later knows
+  the difference. No ADR — it decides nothing a future feature has to live
+  with. The one thing worth remembering is in the code: the overflow is caught
+  *while accumulating*, because the Pascal lexer has no wider type to convert
+  in and then compare.
+- **`pow` and `**`, `and_then`/`or_else`** — small, independent, and each
+  reserving its own word-symbols as it lands.
 - **Schemata**, the core of the standard: parameterised types, and what
   `string(n)` is built on. Everything larger composes with it.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
