@@ -296,9 +296,12 @@ stage-1 compiler is such a program.
   ADR-0018 nor the paths of ADR-0026: the completer is an arm with no labels,
   and nothing in the layout ever reads a label. The one place that does is
   `new(p, c)`, where an unclaimed tag value now selects it.
-- **Case-constant ranges**, non-decimal literals (`16#ff`), `pow` and `**`,
-  `and_then`/`or_else` — small, independent, and each reserving its own
-  word-symbols as it lands.
+- ~~**Case-constant ranges.**~~ Done (ADR-0035). `1..9` wherever a case
+  constant may appear, in a case statement and in a variant alike, because
+  Extended Pascal generalised the constant *list* and both name it. A range is
+  tested rather than expanded, so `1..maxint` costs two comparisons.
+- **Non-decimal literals** (`16#ff`), `pow` and `**`, `and_then`/`or_else` —
+  small, independent, and each reserving its own word-symbols as it lands.
 - **Schemata**, the core of the standard: parameterised types, and what
   `string(n)` is built on. Everything larger composes with it.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the

@@ -229,16 +229,18 @@ rule, not a limitation of this compiler.
 statements case ... otherwise <statements> end — the default arm
 types      case ... otherwise (fields) in a record — the variant no label
            claims
+labels     1..9, 'a'..'z' — a range wherever a case constant may appear,
+           in a case statement and in a variant alike
 words      otherwise is reserved
 ```
 
-Not accepted yet: schemata (parameterised types), the `string` type,
-modules, case-constant ranges, non-decimal literals, `pow` and `**`,
-`and_then`/`or_else`, `protected` parameters, initial-state specifiers
-(`value`), binding (`bind`/`unbind`), direct-access files, and complex numbers. A word-symbol is reserved only when the feature
-needing it lands, so until the list above is complete `--std=extended` accepts
-some programs a conforming processor would reject. `doc/roadmap.md` has the
-order and the reasoning.
+Not accepted yet: schemata (parameterised types), the `string` type, modules,
+non-decimal literals, `pow` and `**`, `and_then`/`or_else`, `protected`
+parameters, initial-state specifiers (`value`), binding (`bind`/`unbind`),
+direct-access files, and complex numbers. A word-symbol is reserved only when
+the feature needing it lands, so until the list above is complete
+`--std=extended` accepts some programs a conforming processor would reject.
+`doc/roadmap.md` has the order and the reasoning.
 
 ## How it fits together
 

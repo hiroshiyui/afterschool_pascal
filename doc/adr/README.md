@@ -43,3 +43,4 @@ the alternatives that were rejected and why.
 | [0032](0032-a-non-local-goto-is-a-jump-record-in-the-target-frame.md) | A non-local `goto` is a jump record in the target's frame | Accepted |
 | [0033](0033-extended-pascal-is-a-second-language-behind-std.md) | Extended Pascal is a second language, selected by `--std` | Accepted |
 | [0034](0034-the-variant-part-completer-is-an-arm-with-no-labels.md) | The variant-part-completer is an arm with no labels | Accepted |
+| [0035](0035-a-case-range-is-tested-not-enumerated.md) | A case range is tested, not enumerated | Accepted |

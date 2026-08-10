@@ -390,6 +390,14 @@ in one language or the other, and the standard is a property of the source.
   instead of being an error. Nothing may follow it, and the flag is not "the
   label list is empty": a label that fails to evaluate is dropped, and a
   diagnostic must not turn a broken arm into the completer.
+- **A case label is an interval** (ADR-0035). Extended Pascal generalised the
+  case-constant-*list*, and both the case statement and a variant name it, so
+  `1..9` is legal in either. Sema folds every label to a `LabelRange`, a single
+  constant being `lo = hi`, and "this label appears twice" is interval overlap.
+  Codegen **tests a range and switches on a constant**: `1..maxint` is a legal
+  label list and two billion switch cases, so the cost is the number of ranges
+  written, never the number of values they cover. Every arm's block is therefore
+  created before the switch, because a range test names it first.
 - Telling `otherwise` the construct from `otherwise` the constant is one token
   of lookahead, and it is a *different* token in each place: a case label is
   followed by `:`, `,` or `..` and an otherwise-part is not, while the variant
