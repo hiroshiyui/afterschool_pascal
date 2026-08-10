@@ -4,7 +4,9 @@ Date: 2026-08-09
 
 ## Status
 
-Accepted
+Accepted. One note in it has since been retired *by the standard* rather than
+overturned: `case` had no default arm because ISO 7185 has none, and ISO/IEC
+10206:1991 does — see ADR-0033. Everything else here stands unchanged.
 
 ## Context
 

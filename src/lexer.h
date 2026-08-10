@@ -7,8 +7,13 @@
 
 namespace ap {
 
-/// Hand-written scanner for ISO 7185 Pascal. Identifiers and reserved words
-/// are case-insensitive, so every spelling is folded to lower case.
+/// Hand-written scanner. Identifiers and reserved words are case-insensitive,
+/// so every spelling is folded to lower case.
+///
+/// It knows the word-symbols of both standards and the `Std` decides which are
+/// reserved: ISO/IEC 10206:1991 reserves spellings — `otherwise`, `value`,
+/// `only` — that a valid ISO 7185 program may use as identifiers, so this is
+/// the one place the two languages actually differ in their lexis (ADR-0033).
 class Lexer {
 public:
   Lexer(std::string source, Diagnostics &diags, Std std = Std::Iso7185)

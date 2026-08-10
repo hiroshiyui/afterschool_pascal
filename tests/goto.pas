@@ -1,8 +1,9 @@
 program Jumps(output);
 { ISO 7185 6.1.6, 6.8.1 and 6.8.2.4: the label declaration part, a labelled
-  statement, and `goto`. Only a goto within one block is implemented, which is
-  what a program uses goto for anyway -- escaping a loop nest, and retrying
-  from the top (ADR-0029). }
+  statement, and `goto` within one block -- which is what a program uses goto
+  for anyway: escaping a loop nest, and retrying from the top (ADR-0029).
+  The goto that *leaves* a block is a different lowering and has its own pair,
+  tests/goto_nonlocal.pas (ADR-0032). }
 
 label 1, 2, 3, 4, 5, 6, 7;
 

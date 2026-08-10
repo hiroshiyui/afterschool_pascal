@@ -12,9 +12,14 @@ namespace ap {
 /// into a plain "compilation failed" once diagnostics have been printed.
 struct ParseAbort {};
 
-/// Recursive-descent parser following the ISO 7185 grammar. Milestone 1
-/// implements the program header, the constant and variable parts, and the
-/// full statement/expression grammar minus sets, pointers and records.
+/// Recursive-descent parser shaped like the ISO 7185 grammar, so a production
+/// and the function that reads it have the same name and the same nesting —
+/// `expression` calls `simpleExpression` calls `term` calls `factor`.
+///
+/// It also reads the constructs ISO/IEC 10206:1991 adds, under `--std`. The
+/// standard reaches the parser for one purpose only: to say that an Extended
+/// Pascal construct *is* one, rather than reporting the syntax error its
+/// spelling causes under ISO 7185 (ADR-0033).
 class Parser {
 public:
   Parser(std::vector<Token> tokens, Diagnostics &diags,

@@ -18,16 +18,20 @@ cmake --build build -j
 
 ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
-tests/run_test.sh build/bin/pascalc tests/control.pas   # same case, without ctest
+tests/run_test.sh build/bin/pascalc tests/control.pas iso7185   # without ctest
+tests/run_test.sh build/bin/pascalc tests/extended/otherwise.pas extended
 selfhost/difftest.sh build/bin/pascalc   # the Pascal compiler against the C++ one
 selfhost/irtest.sh build/bin/pascalc     # what the Pascal compiler *builds*, and stage 2 = stage 3
 
 build/bin/pascalc tests/hello.pas -o /tmp/hello && /tmp/hello
 build/bin/pascalc -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
+build/bin/pascalc --std=extended prog.pas   # ISO/IEC 10206:1991 instead
 ```
 
 Adding `tests/foo.pas` + `tests/foo.out` requires **re-running `cmake`** — cases
-are registered by a `file(GLOB)` at configure time.
+are registered by a `file(GLOB)` at configure time, and `tests/` and
+`tests/extended/` are globbed separately because they are compiled under
+different standards.
 
 `pascalc` shells out to `clang` to link, and finds `libpasrt.a` through the
 build path baked in as `APASCAL_RUNTIME_DIR`; `AFTERSCHOOL_PASCAL_RUNTIME`
@@ -394,8 +398,9 @@ decision being overturned on taste.
 
 ## Where things live
 
-`src/lexer.cpp` case-folds identifiers and knows every ISO reserved word, even
-ones the parser rejects. `src/parser.cpp` is recursive descent shaped like the
+`src/lexer.cpp` case-folds identifiers and knows every reserved word of both
+standards, even ones the parser rejects — which of them are *reserved* is the
+one thing `--std` decides in the lexis (ADR-0033). `src/parser.cpp` is recursive descent shaped like the
 ISO grammar (`expression` → `simple-expression` → `term` → `factor`) — note a
 leading sign binds to the whole *term*, so `-7 mod 3` is `-(7 mod 3)`.
 The parser bounds the depth of the tree it builds at 1000 levels (ADR-0020);
@@ -423,11 +428,14 @@ itself and stage 2 equals stage 3. **It is one source file** — ISO 7185 has no
 include mechanism, so each component was merged in as it was ported rather than
 kept as a program of its own.
 
-It takes two program parameters: `compiler.pas <source> <ircode>`. The dumps go
-to standard output; the IR goes to the second file, because it is the
-compiler's *product* rather than a dump and has to be assembled. It is written
-on every run, which is what keeps `difftest.sh` exercising the code generator on
-all 207 files even though it compares none of it.
+It takes three program parameters: `compiler.pas <source> <ircode> <options>`.
+The dumps go to standard output; the IR goes to the second file, because it is
+the compiler's *product* rather than a dump and has to be assembled. It is
+written on every run, which is what keeps `difftest.sh` exercising the code
+generator on all 207 files even though it compares none of it. The third holds
+one word, the standard to compile for — ISO 7185 gives a program no access to
+its command line beyond its program parameters, and those are files, so there
+is no `--std` flag to take (ADR-0033).
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc
@@ -437,8 +445,10 @@ diffs them over every `.pas` in the tree, under ctest as `selfhost-compiler`.
 If you change what a C++ stage produces, the Pascal one changes in the same
 commit or the test goes red — that is the point of it, not an inconvenience.
 
-- There is **no mode argument** because there is no second binary: the Pascal
-  program runs every stage and dumps all of them. Each section reports what its
+- There is **no mode argument for the dumps** because there is no second
+  binary: the Pascal program runs every stage and dumps all of them. The one
+  thing it *is* told is the standard, and that arrives as a file rather than an
+  argument for the reason above. Each section reports what its
   own stage found and shows its result only when nothing was found — a stage
   that failed has nothing to show, and the stages after it do not run.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
@@ -505,9 +515,10 @@ legal. `tests/empty_statements.pas` pins it.
 
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
 array's own bounds optimises the check away. Storing outside a subrange traps,
-and so does a `case` whose selector matches no label (ADR-0018), a dereference
-of `nil` (ADR-0019), and a set whose members are not values of the target's
-base type (ADR-0028).
+and so does a `case` whose selector matches no label (ADR-0018) — unless it has
+an Extended Pascal `otherwise`, which is the only thing that gives that arm
+something to do (ADR-0033) — a dereference of `nil` (ADR-0019), and a set whose
+members are not values of the target's base type (ADR-0028).
 
 **ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
 through `checkedArith` and stop the program on overflow rather than wrapping —
