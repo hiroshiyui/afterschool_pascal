@@ -46,3 +46,4 @@ the alternatives that were rejected and why.
 | [0035](0035-a-case-range-is-tested-not-enumerated.md) | A case range is tested, not enumerated | Accepted |
 | [0036](0036-a-non-decimal-literal-is-lexical-and-nothing-else.md) | A non-decimal literal is lexical and nothing else | Accepted |
 | [0037](0037-exponentiation-is-two-operators-and-a-precedence-level.md) | Exponentiation is two operators, and a precedence level of its own | Accepted |
+| [0038](0038-a-word-symbol-may-be-two-words.md) | A word-symbol may be two words | Accepted |

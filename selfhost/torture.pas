@@ -33,6 +33,7 @@ var
   BEGINNING: integer;       { starts with a keyword but is not one }
   ends: integer;            { 'end' plus a letter }
   x: real;
+  b: boolean;
 
 begin
   { operators, including every two-character one and its one-character
@@ -73,6 +74,16 @@ begin
     string -- so it is scanned as one token and refused, rather than becoming
     a `*` and whatever the next token would then be. }
   x := 2 ** 3;
+
+  { §6.1.2's two-word word-symbols are refused the same way and for the same
+    reason: `and` followed by `then` is not a sentence of ISO 7185 either, so
+    joining them costs that language nothing and buys one diagnostic instead
+    of a complaint about `then` where a factor was wanted. The join is at the
+    token level, so the separator between the words is any separator at all. }
+  b := b and then b;
+  b := b or else b;
+  b := b and
+       { including a comment } then b;
 
   { an unexpected character }
   x := x @ 1;

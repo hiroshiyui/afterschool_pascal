@@ -47,6 +47,12 @@ enum class BinOp {
   // while `pow` takes an integer right operand and yields the type of its
   // left one — so `2 pow 3` is the integer 8 and `2 ** 3` is 8.0.
   Exp, Pow,
+  // ISO/IEC 10206:1991 §6.8.3.3's short-circuit operators. This compiler
+  // already evaluates `and` and `or` that way (ADR-0010), so they lower
+  // identically — but the standard only *permits* that for `and` and `or`
+  // while *requiring* it here, and a tree that spelled both as `And` would
+  // have thrown away the one fact that says which.
+  AndThen, OrElse,
   // `in` is a relational operator in ISO 7185 §6.7.2.4 and sits at the same
   // precedence as `=` and `<`, which is why it belongs here and not with the
   // adding operators despite taking a set on only one side.

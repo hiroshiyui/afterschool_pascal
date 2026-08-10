@@ -1408,9 +1408,13 @@ llvm::Value *CodeGen::emitSetBinary(Binary *e, llvm::Value *l,
 
 llvm::Value *CodeGen::emitBinary(Binary *e) {
   // `and` and `or` short-circuit, which is what makes guarded tests such as
-  // `while (i <= n) and (a[i] <> x)` safe to write.
-  if (e->op == BinOp::And || e->op == BinOp::Or) {
-    bool isAnd = e->op == BinOp::And;
+  // `while (i <= n) and (a[i] <> x)` safe to write. Extended Pascal's
+  // `and then` and `or else` (§6.8.3.3) *require* that, so the one lowering
+  // serves all four — the difference between them is a promise to the
+  // programmer, not a difference in the code.
+  if (e->op == BinOp::And || e->op == BinOp::Or || e->op == BinOp::AndThen ||
+      e->op == BinOp::OrElse) {
+    bool isAnd = e->op == BinOp::And || e->op == BinOp::AndThen;
     llvm::Value *lhs = emitExpr(e->lhs.get());
     BasicBlock *lhsBB = b_.GetInsertBlock();
     BasicBlock *rhsBB = BasicBlock::Create(ctx_, isAnd ? "and.rhs" : "or.rhs", curFn_);

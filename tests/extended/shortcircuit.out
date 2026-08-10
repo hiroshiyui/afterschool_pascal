@@ -1,0 +1,9 @@
+nil was not dereferenced
+zero was not divided by
+and then: 1 operand, FALSE
+or else:  1 operand, TRUE
+and then: 2 operands, FALSE
+precedence: 1 operand, TRUE
+mixed: TRUE
+separators between the two words
+and the if still has its own then

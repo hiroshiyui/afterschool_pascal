@@ -19,6 +19,8 @@ const char *opName(BinOp op) {
   case BinOp::Or: return "or";
   case BinOp::Exp: return "**";
   case BinOp::Pow: return "pow";
+  case BinOp::AndThen: return "and then";
+  case BinOp::OrElse: return "or else";
   case BinOp::Eq: return "=";
   case BinOp::Ne: return "<>";
   case BinOp::Lt: return "<";
@@ -1702,8 +1704,12 @@ void Sema::checkBinary(Binary *b) {
     b->type = ty::Int();
     return;
 
+  // §6.8.3.3 gives all four the same operands and the same result; they part
+  // company only over whether the right one is *evaluated*.
   case BinOp::And:
   case BinOp::Or:
+  case BinOp::AndThen:
+  case BinOp::OrElse:
     if (!l->isBoolean() || !r->isBoolean())
       bad("boolean");
     b->type = ty::Bool();

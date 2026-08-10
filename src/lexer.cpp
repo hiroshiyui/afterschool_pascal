@@ -76,6 +76,8 @@ const char *tokenName(Tok t) {
   case Tok::KwOtherwise: return "'otherwise'";
   case Tok::KwPow: return "'pow'";
   case Tok::StarStar: return "'**'";
+  case Tok::KwAndThen: return "'and then'";
+  case Tok::KwOrElse: return "'or else'";
   }
   return "token";
 }
@@ -356,7 +358,40 @@ std::vector<Token> Lexer::tokenize() {
     int sl = line_, sc = col_;
 
     if (std::isalpha(static_cast<unsigned char>(c)) || c == '_') {
-      out.push_back(lexIdentOrKeyword());
+      Token word = lexIdentOrKeyword();
+      // ISO/IEC 10206:1991 §6.1.2's two two-word word-symbols. Nothing looks
+      // them up: `and`, `or`, `then` and `else` are already reserved in both
+      // standards, so this feature reserves no new spelling at all — the
+      // operator is a *pair* of tokens the lexer joins.
+      //
+      // The join is at the token level, so separators between the words are
+      // whatever separates any two tokens. §6.1.10's "no separators shall
+      // occur within tokens" cannot be read literally against a token whose
+      // own reference representation contains a space, and the strict reading
+      // would forbid a line break in the middle of an operator. The leniency
+      // is safe rather than merely convenient: `and` followed by `then` has no
+      // other meaning in either language, because `then` cannot begin a factor
+      // and `else` cannot begin a term.
+      Tok joined = Tok::Eof;
+      if (!out.empty() && out.back().kind == Tok::KwAnd &&
+          word.kind == Tok::KwThen)
+        joined = Tok::KwAndThen;
+      else if (!out.empty() && out.back().kind == Tok::KwOr &&
+               word.kind == Tok::KwElse)
+        joined = Tok::KwOrElse;
+      if (joined != Tok::Eof) {
+        // The operator starts where its first word does.
+        Token op = make(joined, out.back().line, out.back().col);
+        op.text = joined == Tok::KwAndThen ? "and then" : "or else";
+        if (std_ == Std::Iso7185)
+          diags_.error(op.line, op.col,
+                       std::string(tokenName(joined)) +
+                           " is an Extended Pascal operator; compile with "
+                           "--std=extended");
+        out.back() = op;
+        continue;
+      }
+      out.push_back(std::move(word));
       continue;
     }
     if (std::isdigit(static_cast<unsigned char>(c))) {

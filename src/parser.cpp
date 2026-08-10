@@ -962,6 +962,8 @@ ExprPtr Parser::parseSimpleExpr() {
     case Tok::Plus:  op = BinOp::Add; break;
     case Tok::Minus: op = BinOp::Sub; break;
     case Tok::KwOr:  op = BinOp::Or; break;
+    // and `or else` among the adding-operators, beside `or`
+    case Tok::KwOrElse: op = BinOp::OrElse; break;
     default:         return result;
     }
     depth.bump();
@@ -986,6 +988,8 @@ ExprPtr Parser::parseTerm() {
     case Tok::KwDiv: op = BinOp::IntDiv; break;
     case Tok::KwMod: op = BinOp::Mod; break;
     case Tok::KwAnd: op = BinOp::And; break;
+    // §6.8.3.1 puts `and then` among the multiplying-operators, beside `and`
+    case Tok::KwAndThen: op = BinOp::AndThen; break;
     default:         return result;
     }
     depth.bump();

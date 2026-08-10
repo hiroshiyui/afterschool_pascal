@@ -102,7 +102,13 @@ type
     { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
       under both standards and refused under ISO 7185, where no valid program
       can hold two adjacent stars outside a comment or a string anyway. }
-    tkStarStar);
+    tkStarStar,
+    { 6.1.2 spells the short-circuit operators as *two words with a separator
+      between them* -- `and then` and `or else` are each one word-symbol, not
+      a pair. They reserve nothing new, because both halves are already
+      word-symbols of ISO 7185, and the scanner builds them by joining two
+      tokens rather than by looking a spelling up. }
+    tkAndThen, tkOrElse);
 
   { Which standard the source is written in. ISO 7185 is the default: the whole
     test corpus, and this compiler's own source, are written in it -- and this
@@ -145,8 +151,13 @@ type
     They differ in more than spelling: `**` converts both operands to real and
     yields a real, while `pow` takes an integer right operand and yields the
     type of its left one -- so `2 pow 3` is the integer 8 and `2 ** 3` is 8.0. }
+  { opAndThen and opOrElse are 6.8.3.3's short-circuit operators. This compiler
+    already evaluates `and` and `or` that way (ADR-0010), so they lower
+    identically -- but the standard only *permits* that for `and` and `or`
+    while *requiring* it here, and a tree spelling both as opAnd would have
+    thrown away the one fact that says which. }
   binaryOp = (opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-              opExp, opPow,
+              opExp, opPow, opAndThen, opOrElse,
               opEq, opNe, opLt, opLe, opGt, opGe, opIn);
   unaryOp = (opPos, opNeg, opNot);
 
@@ -1082,7 +1093,7 @@ begin
 end;
 
 procedure LexIdentOrKeyword;
-var sl, sc: integer; text: str; k: tokenKind;
+var sl, sc: integer; text: str; k, joined: tokenKind;
 begin
   sl := line;
   sc := col;
@@ -1092,7 +1103,40 @@ begin
     Advance
   end;
   k := LookupKeyword(text);
-  if k = tkIdent then
+
+  { ISO/IEC 10206:1991 6.1.2's two two-word word-symbols. Nothing looks them
+    up: `and`, `or`, `then` and `else` are already reserved in both standards,
+    so this feature reserves no new spelling at all -- the operator is a *pair*
+    of tokens joined here.
+
+    The join is at the token level, so what separates the two words is what
+    separates any two tokens. 6.1.10's "no separators shall occur within
+    tokens" cannot be read literally against a token whose own reference
+    representation contains a space, and the strict reading would forbid a
+    line break in the middle of an operator. The leniency is safe rather than
+    merely convenient: `and` followed by `then` has no other meaning in either
+    language, because `then` cannot begin a factor and `else` cannot begin a
+    term. }
+  joined := tkEof;
+  if tokCount > 0 then begin
+    if (tok[tokCount].kind = tkAnd) and (k = tkThen) then
+      joined := tkAndThen
+    else if (tok[tokCount].kind = tkOr) and (k = tkElse) then
+      joined := tkOrElse
+  end;
+
+  if joined <> tkEof then begin
+    { the operator starts where its first word does, which is where the token
+      being rewritten already is }
+    tok[tokCount].kind := joined;
+    if langStd = stdIso7185 then begin
+      ErrorAt(tok[tokCount].line, tok[tokCount].col);
+      if joined = tkAndThen then write('''and then''')
+      else write('''or else''');
+      writeln(' is an Extended Pascal operator; compile with --std=extended')
+    end
+  end
+  else if k = tkIdent then
     AddText(sl, sc, tkIdent, PoolAdd(text), text.len)
   else
     AddSimple(sl, sc, k)
@@ -1445,7 +1489,9 @@ begin
     tkWith:      write('''with''');
     tkOtherwise: write('''otherwise''');
     tkPow:       write('''pow''');
-    tkStarStar:  write('''**''')
+    tkStarStar:  write('''**''');
+    tkAndThen:   write('''and then''');
+    tkOrElse:    write('''or else''')
   end
 end;
 
@@ -1469,7 +1515,8 @@ begin
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
-    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow: write('?')
+    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow,
+    tkAndThen, tkOrElse: write('?')
   end
 end;
 
@@ -2356,6 +2403,8 @@ begin
     else if Check(tkDiv) then op := opIntDiv
     else if Check(tkMod) then op := opMod
     else if Check(tkAnd) then op := opAnd
+    { 6.8.3.1 puts `and then` among the multiplying-operators, beside `and` }
+    else if Check(tkAndThen) then op := opAndThen
     else done := true;
     if not done then begin
       levels := levels + 1;
@@ -2398,6 +2447,8 @@ begin
     if Check(tkPlus) then op := opAdd
     else if Check(tkMinus) then op := opSub
     else if Check(tkOr) then op := opOr
+    { and `or else` among the adding-operators, beside `or` }
+    else if Check(tkOrElse) then op := opOrElse
     else done := true;
     if not done then begin
       levels := levels + 1;
@@ -4882,6 +4933,8 @@ begin
     opOr:      write('or');
     opExp:     write('**');
     opPow:     write('pow');
+    opAndThen: write('and then');
+    opOrElse:  write('or else');
     opEq:      write('=');
     opNe:      write('<>');
     opLt:      write('<');
@@ -5046,7 +5099,9 @@ begin
         b^.ntype := intType
       end;
 
-      opAnd, opOr: begin
+      { 6.8.3.3 gives all four the same operands and the same result; they
+        part company only over whether the right one is *evaluated*. }
+      opAnd, opOr, opAndThen, opOrElse: begin
         if not IsBoolean(l) or not IsBoolean(r) then
           BadOperands(b, l, r, 'boolean     ');
         b^.ntype := boolType
@@ -6849,6 +6904,8 @@ begin
     opOr:      write('or');
     opExp:     write('exp');
     opPow:     write('pow');
+    opAndThen: write('andthen');
+    opOrElse:  write('orelse');
     opEq:      write('eq');
     opNe:      write('ne');
     opLt:      write('lt');
@@ -7830,7 +7887,11 @@ begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
-      end
+      end;
+      { the two-word word-symbols are in no keyword table -- nothing looks
+        them up -- so their spelling is written out here }
+      tkAndThen: writeln('kw and then');
+      tkOrElse: writeln('kw or else')
     end
   end
 end;
@@ -8949,7 +9010,7 @@ begin
     { `l <= r` is "l has nothing r lacks", and `l >= r` is the same question
       with the operands the other way round. }
     opLe, opGe, opLt, opGt, opRealDiv, opIntDiv, opMod, opAnd, opOr, opIn,
-    opExp, opPow:
+    opExp, opPow, opAndThen, opOrElse:
     begin
       OpInt(-1, ones);
       if e^.bnOp = opGe then begin notR := l; left := r end
@@ -9170,7 +9231,7 @@ begin
     opGt: write(ircode, 'icmp sgt i32 ');
     opGe: write(ircode, 'icmp sge i32 ');
     opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-            opExp, opPow:
+            opExp, opPow, opAndThen, opOrElse:
       write(ircode, 'icmp eq i32 ')
   end;
   PutOp(cmp);
@@ -9257,11 +9318,14 @@ begin
 end;
 
 { `and` and `or` short-circuit, which is what makes a guarded test such as
-  `while (i <= n) and (a[i] <> x)` safe to write (ADR-0010). }
+  `while (i <= n) and (a[i] <> x)` safe to write (ADR-0010). Extended Pascal's
+  `and then` and `or else` (6.8.3.3) *require* that, so the one lowering serves
+  all four -- the difference between them is a promise to the programmer, not
+  a difference in the code. }
 procedure EmitShortCircuit(e: nodePtr; var v: str);
 var lhs, rhs: str; isAnd: boolean; rhsB, endB, lhsEnd, rhsEnd: integer;
 begin
-  isAnd := e^.bnOp = opAnd;
+  isAnd := (e^.bnOp = opAnd) or (e^.bnOp = opAndThen);
   EmitExpr(e^.bnLhs, lhs);
   lhsEnd := curBlock;
   rhsB := NewBlock;
@@ -9291,7 +9355,8 @@ procedure EmitBinary(e: nodePtr; var v: str);
 var l, r, rem, neg, adj, bad, m1, m2: str;
     lt, rt: typePtr; msg: integer; sign, useFloat: boolean;
 begin
-  if (e^.bnOp = opAnd) or (e^.bnOp = opOr) then
+  if (e^.bnOp = opAnd) or (e^.bnOp = opOr) or (e^.bnOp = opAndThen)
+     or (e^.bnOp = opOrElse) then
     EmitShortCircuit(e, v)
   { `x in s` is the one operator whose operands are of different kinds, so it
     is taken before the two are evaluated alike. }
@@ -9466,7 +9531,7 @@ begin
             opGt: write(ircode, 'fcmp ogt double ');
             opGe: write(ircode, 'fcmp oge double ');
             opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-            opExp, opPow:
+            opExp, opPow, opAndThen, opOrElse:
               write(ircode, 'fcmp oeq double ')
           end
         end
@@ -9488,7 +9553,7 @@ begin
             opGe: if sign then write(ircode, 'icmp sge ')
                   else write(ircode, 'icmp uge ');
             opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-            opExp, opPow:
+            opExp, opPow, opAndThen, opOrElse:
               write(ircode, 'icmp eq ')
           end;
           if IsPointer(lt) and IsPointer(rt) then write(ircode, 'ptr')

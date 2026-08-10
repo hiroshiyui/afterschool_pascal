@@ -1,0 +1,6 @@
+<source>:12:10: error: operator 'and then' needs boolean operands, found integer and boolean
+<source>:13:10: error: operator 'and then' needs boolean operands, found boolean and integer
+<source>:14:10: error: operator 'or else' needs boolean operands, found integer and boolean
+<source>:15:10: error: operator 'or else' needs boolean operands, found boolean and set of 1..9
+<source>:18:3: error: cannot assign boolean to a variable of type integer
+<source>:25:8: error: 'not' needs a boolean operand, found integer

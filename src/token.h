@@ -35,6 +35,13 @@ enum class Tok {
   // Under ISO 7185 the lexer yields these spellings as identifiers, which is
   // what they are in that language.
   KwOtherwise, KwPow,
+
+  // §6.1.2 spells the short-circuit operators as *two words with a separator
+  // between them* — `and then` and `or else` are each one word-symbol, not a
+  // pair. They therefore reserve nothing new: both halves are already reserved
+  // in ISO 7185, and the lexer builds these by merging two tokens rather than
+  // by looking a spelling up.
+  KwAndThen, KwOrElse,
 };
 
 const char *tokenName(Tok t);
