@@ -20,6 +20,7 @@ ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
 tests/run_test.sh build/bin/pascalc tests/control.pas   # same case, without ctest
 selfhost/difftest.sh build/bin/pascalc   # the Pascal compiler against the C++ one
+selfhost/irtest.sh build/bin/pascalc     # what the Pascal compiler *builds*, and stage 2 = stage 3
 
 build/bin/pascalc tests/hello.pas -o /tmp/hello && /tmp/hello
 build/bin/pascalc -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
@@ -226,12 +227,20 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 `runtime/pasrt.c` if it needs library support.
 
 `selfhost/compiler.pas` is the stage-1 compiler, written in Afterschool Pascal.
-The lexer (ADR-0022), the parser (ADR-0023) and Sema (ADR-0024) are done. **It
-is one source file** — ISO 7185 has no include mechanism, so each component is
-merged in as it is ported rather than kept as a program of its own, and later
-ones join it the same way.
+The lexer (ADR-0022), the parser (ADR-0023), Sema (ADR-0024) and CodeGen
+(ADR-0025) are all done, and **the bootstrap closes**: the compiler compiles
+itself and stage 2 equals stage 3. **It is one source file** — ISO 7185 has no
+include mechanism, so each component was merged in as it was ported rather than
+kept as a program of its own.
 
-**It is checked against `src/`, not against golden files.** `pascalc
+It takes two program parameters: `compiler.pas <source> <ircode>`. The dumps go
+to standard output; the IR goes to the second file, because it is the
+compiler's *product* rather than a dump and has to be assembled. It is written
+on every run, which is what keeps `difftest.sh` exercising the code generator on
+all 175 files even though it compares none of it.
+
+**The first three components are checked against `src/`, not against golden
+files.** `pascalc
 --dump-all` and `selfhost/compiler.pas` write the same three sections
 (`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh <pascalc>`
 diffs them over every `.pas` in the tree, under ctest as `selfhost-compiler`.
@@ -258,9 +267,35 @@ commit or the test goes red — that is the point of it, not an inconvenience.
   reaches a branch — **count it**. Three times now a whole branch was found
   uncompared (no file had a tab; no file had a parse error; Sema reached 48 of
   its 85 messages), each time because a mutation survived a green suite.
-- ISO 7185 has no include mechanism, so the compiler **is** one source file
-  already: `selfhost/compiler.pas` is what each later component is merged into,
-  and its AST is what CodeGen will be written against.
+**CodeGen is the exception, and had to be** (ADR-0025). Two backends' assembler
+text is not comparable — the C++ builds an `llvm::Module` and LLVM's printer is
+not a specification — so it is checked by *running* what it produces against the
+same `tests/*.out` and `tests/*.err` the C++ compiler is held to, and then by
+compiling the compiler with itself twice and requiring the results to match.
+
+- The emitter is **sequential**, with no instruction list: the C++ builder never
+  returns to a block it has left, so the order it emits in is the order text can
+  be printed in. Don't add buffering to "fix" something; if a block needs
+  revisiting, that is a change to the C++ side too.
+- Types print structurally and inline, because opaque pointers make every Pascal
+  type non-recursive once printed. **Activation records are the exception** —
+  one would be spelled at every variable access — so they get a name apiece,
+  emitted before the first function that indexes one.
+- Globals are deferred to the end of the module: a string constant is numbered
+  where it is used and its text written after the last function.
+- **A real literal is carried as its source text all the way into the IR.**
+  LLVM's assembler is the `strtod`. The one adjustment is that LLVM's float
+  syntax needs a decimal point where Pascal's `1e6` has none. Three ADRs
+  deferred a conversion that turned out never to be needed.
+- The layout rules are written out (`LlSize`/`LlAlign`) because there is no
+  `DataLayout` to ask. They are needed in exactly two places — a whole-variable
+  copy's length and the size `new` allocates. `fileSize` must equal
+  `PAS_FILE_SIZE`; `irtest.sh` checks it, because the two files cannot include
+  one another.
+- `WriteTypeName`/`WriteOrdinalName` write through the `Put` sink, which either
+  goes to output or into `msgBuf`. A trap message is a string constant *in the
+  generated program*, so it has to be assembled before it is emitted — and a
+  second copy of those routines would be a copy free to drift.
 
 ## Pascal semantics already encoded (keep them)
 

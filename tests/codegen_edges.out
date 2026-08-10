@@ -1,0 +1,5 @@
+variant copy: 2.5 12345
+padded copy: AB 2.5
+char order: ok
+char loop: 12960
+negative real constant:  -40.5

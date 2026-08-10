@@ -64,6 +64,17 @@ add_test(NAME selfhost-compiler
                  $<TARGET_FILE:pascalc>)
 set_tests_properties(selfhost-compiler PROPERTIES TIMEOUT 1800)
 
+# The code generator cannot be diffed against the C++ one — LLVM's own printer
+# is not a specification — so it is checked by *running* what it produces
+# against the same golden output the C++ compiler is held to, and then by
+# compiling the compiler with itself twice and requiring the two results to be
+# identical. That last comparison is the point of the whole bootstrap
+# (ADR-0004, ADR-0025).
+add_test(NAME selfhost-codegen
+         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/irtest.sh
+                 $<TARGET_FILE:pascalc>)
+set_tests_properties(selfhost-codegen PROPERTIES TIMEOUT 1800)
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)

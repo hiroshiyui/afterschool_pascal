@@ -1,4 +1,4 @@
-program Compile(output, source);
+program Compile(output, source, ircode);
 
 { The self-hosted compiler: stage 1, components 1 to 3 -- the lexer, the parser
   and the AST, and Sema.
@@ -42,6 +42,8 @@ const
   strMax   = 255;    { longest identifier or string literal kept }
   kwWidth  = 9;      { 'procedure', the longest reserved word }
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
+  msgWidth = 16;     { 'packed array [', the longest piece of a type name }
+  textWidth = 40;    { the longest fixed part of a runtime-error message }
   kwCount  = 35;
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
@@ -54,6 +56,11 @@ const
   poolMax  = 400000; { characters of identifier and literal text }
   tokMax   = 90000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
+  { The size of a file variable's storage, which is PAS_FILE_SIZE in
+    runtime/pasrt.h. The C++ code generator includes that header so the two
+    cannot disagree; ISO 7185 has no include mechanism, so this side repeats
+    the number and selfhost/irtest.sh checks that the two still match. }
+  fileSize = 64;
 
 type
   strLen = 0..strMax;
@@ -63,6 +70,12 @@ type
   end;
   kwLit = packed array [1..kwWidth] of char;
   wordLit = packed array [1..wordWidth] of char;
+  { Two more padded-literal widths, for the pieces a runtime-error message is
+    built out of. A trap message is a *string constant in the generated
+    program*, so unlike a diagnostic it cannot be written as it is computed --
+    it has to be assembled first and emitted afterwards. }
+  msgLit = packed array [1..msgWidth] of char;
+  textLit = packed array [1..textWidth] of char;
 
   tokenKind = (
     tkEof, tkIdent, tkInt, tkReal, tkStr,
@@ -197,11 +210,18 @@ type
     binding: fileBinding;
     fileArg: integer;
     { The value of a constant, in whichever field its type selects. A real
-      constant keeps no value: nothing in Sema reads one, and carrying it would
-      mean converting a real literal, which this compiler still defers. }
+      constant keeps its *source text* and a sign, not a converted value: the
+      one place a real is finally needed is the code generator, and what it
+      needs there is a decimal literal to print. See EmitReal. }
     intVal: integer;
     charVal: char;
     boolVal: boolean;
+    realAt, realLen: integer;
+    realNeg: boolean;
+    { The number this procedure's LLVM function is named with. Nesting allows
+      two procedures of the same name in different parents, so the name cannot
+      be the Pascal one. }
+    irId: integer;
     { lexical position: `level` is the nesting depth, and owner/frameIndex say
       which activation record holds this variable and where (ADR-0016) }
     level, frameIndex: integer;
@@ -233,6 +253,25 @@ type
     at, len: integer;
     line, col: integer;
     next: pendingPtr
+  end;
+
+  { A string constant of the generated program: a runtime-error message, an
+    external file's name, or a string literal. A global cannot be written in
+    the middle of a function, so it is numbered where it is used and its text
+    written after the last one. }
+  strConstPtr = ^strConstRec;
+  strConstRec = record
+    id: integer;
+    at, len: integer;
+    next: strConstPtr
+  end;
+
+  { An argument's operand, held until the whole list is known: the call line
+    cannot be written until every argument's instructions have been. }
+  opndPtr = ^opndRec;
+  opndRec = record
+    text: str;
+    next: opndPtr
   end;
 
   nodePtr = ^node;
@@ -275,7 +314,9 @@ type
       nkFor:        (frVar, frFrom, frTo, frBody: nodePtr; frDownto: boolean);
       nkProcCall:   (pcAt, pcLen: integer; pcArgs: nodePtr;
                      pcSym: symPtr; pcStd: stdProcKind);
-      nkWith:       (wtRecord, wtBody: nodePtr);
+      { The hidden frame slot the record's address is bound to. Sema makes
+        it; CodeGen stores through it. }
+      nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
       nkCase:       (csSelector, csArms: nodePtr);
       nkCaseArm:    (caLabels, caBody: nodePtr; caValues, caValueTail: numPtr);
       nkDeclName:   (dnAt, dnLen: integer);
@@ -327,6 +368,10 @@ var
   progAt, progLen: integer;
   progParams, progBlock: nodePtr;
 
+  { --- the character sink (see Put) --- }
+  msgOut: boolean;
+  msgBuf: str;
+
   level: integer;   { the dump's indentation }
   { False while the tree is dumped as the parser left it, true while it is
     dumped as Sema left it. One walker, two formats. }
@@ -346,6 +391,15 @@ var
   programSym, currentProc: symPtr;
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
+  { --- CodeGen --- }
+  ircode: text;             { the second program parameter: where the IR goes }
+  nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
+  curBlock: integer;             { the block being filled, for a phi's label }
+  nextProcId, nextStr: integer;
+  irProc: symPtr;                { the procedure being emitted }
+  irLevel: integer;
+  strHead, strTail: strConstPtr;
+
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
@@ -363,6 +417,54 @@ begin
     s.len := s.len + 1;
     s.ch[s.len] := c
   end
+end;
+
+{ ------------------------------------------------------- the character sink }
+
+{ Where the next character goes. A type name is written by one routine and
+  wanted in two places: straight out, as part of a diagnostic, and *into a
+  buffer*, as part of a runtime-error message the code generator has to store
+  and emit as a string constant. One sink is what keeps a single WriteTypeName
+  serving both -- and a second copy of it would be a copy free to drift, which
+  is the mistake ADR-0024 was written to stop making. }
+procedure Put(c: char);
+begin
+  if msgOut then StrAppend(msgBuf, c) else write(c)
+end;
+
+{ A padded literal, with the padding stripped -- the same convention kwLit and
+  wordLit already use, and for the same reason (ADR-0012). }
+procedure PutLit(w: msgLit);
+var n, k: integer;
+begin
+  n := msgWidth;
+  while (n > 0) and (w[n] = ' ') do
+    n := n - 1;
+  for k := 1 to n do
+    Put(w[k])
+end;
+
+{ An integer, written the way `v:1` writes it. Spelled out rather than left to
+  `write` because the digits may have to land in the buffer instead. }
+procedure PutInt(v: integer);
+var digits: array [1..12] of char; n, k: integer; negative: boolean;
+begin
+  negative := v < 0;
+  n := 0;
+  { -maxint..maxint is symmetric, so negating first cannot overflow. }
+  if negative then v := -v;
+  if v = 0 then begin
+    n := 1;
+    digits[1] := '0'
+  end;
+  while v > 0 do begin
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  end;
+  if negative then Put('-');
+  for k := n downto 1 do
+    Put(digits[k])
 end;
 
 { ------------------------------------------------------- character classes }
@@ -489,7 +591,7 @@ procedure WritePool(at, len: integer);
 var k: integer;
 begin
   for k := at to at + len - 1 do
-    write(pool[k])
+    Put(pool[k])
 end;
 
 { True when a pooled spelling is the given word. The literal is padded because
@@ -1130,8 +1232,9 @@ begin
     nkProcCall: begin n^.pcSym := nil; n^.pcStd := spNone end;
     nkCaseArm: begin n^.caValues := nil; n^.caValueTail := nil end;
     nkProcDecl: n^.pdSym := nil;
+    nkWith: n^.wtBinding := nil;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkIndex, nkDeref, nkBinary, nkUnary,
-    nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkWith,
+    nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkCase, nkWriteArg, nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkConstDecl, nkTypeDecl,
     nkBlock: { nothing of Sema's to clear }
@@ -2631,17 +2734,24 @@ var b: typePtr; p: namePtr; i: integer; done: boolean;
 begin
   if t = nil then b := nil else b := Base(t);
   if b = nil then
-    write(value:1)
+    PutInt(value)
   { A printable character is written as itself; anything else is written as
     chr(n). Not cosmetic: the C++ prints a diagnostic with %s, so a char of
     value 0 written literally would truncate the message at that point. }
   else if b^.kind = tyChar then
-    if (value >= 32) and (value < 127) then
-      write('''', chr(value), '''')
-    else
-      write('chr(', value:1, ')')
+    if (value >= 32) and (value < 127) then begin
+      Put('''');
+      Put(chr(value));
+      Put('''')
+    end
+    else begin
+      PutLit('chr(            ');
+      PutInt(value);
+      Put(')')
+    end
   else if b^.kind = tyBoolean then
-    if value <> 0 then write('true') else write('false')
+    if value <> 0 then PutLit('true            ')
+    else PutLit('false           ')
   else if (b^.kind = tyEnum) and (value >= 0) and (value < EnumCount(b)) then
   begin
     p := b^.enumNames;
@@ -2658,7 +2768,7 @@ begin
       end
   end
   else
-    write(value:1)
+    PutInt(value)
 end;
 
 { A description for diagnostics. A named type reports its name; an anonymous
@@ -2667,31 +2777,31 @@ procedure WriteTypeName;
 var p: namePtr; f: fieldPtr; first: boolean;
 begin
   if t = nil then
-    write('?')
+    Put('?')
   else if t^.aliasLen > 0 then
     WritePool(t^.aliasAt, t^.aliasLen)
   else
     case t^.kind of
-      tyInteger: write('integer');
-      tyReal:    write('real');
-      tyBoolean: write('boolean');
-      tyChar:    write('char');
-      tyVoid:    write('void');
+      tyInteger: PutLit('integer         ');
+      tyReal:    PutLit('real            ');
+      tyBoolean: PutLit('boolean         ');
+      tyChar:    PutLit('char            ');
+      tyVoid:    PutLit('void            ');
       tyEnum: begin
-        write('(');
+        Put('(');
         p := t^.enumNames;
         first := true;
         while p <> nil do begin
-          if not first then write(', ');
+          if not first then begin PutLit(',               '); Put(' ') end;
           WritePool(p^.at, p^.len);
           first := false;
           p := p^.next
         end;
-        write(')')
+        Put(')')
       end;
       tySubrange: begin
         WriteOrdinalName(t^.host, t^.lo);
-        write('..');
+        PutLit('..              ');
         WriteOrdinalName(t^.host, t^.hi)
       end;
       { ISO 7185 6.4.4 makes a pointer's domain a type *identifier*, so the
@@ -2699,34 +2809,38 @@ begin
         itself without this looping forever. }
       tyPointer:
         if t^.elem <> nil then begin
-          write('^');
+          Put('^');
           WriteTypeName(t^.elem)
         end
         else
-          write('nil');
+          PutLit('nil             ');
       tyFile:
-        if IsChar(t^.elem) then write('text') else write('file');
+        if IsChar(t^.elem) then PutLit('text            ')
+        else PutLit('file            ');
       tyRecord: begin
         { An anonymous record is named by its fields, which is the only thing
           that distinguishes it from any other anonymous record. }
-        write('record ');
+        PutLit('record          ');
+        Put(' ');
         f := t^.fields;
         first := true;
         while f <> nil do begin
-          if not first then write(', ');
+          if not first then begin PutLit(',               '); Put(' ') end;
           WritePool(f^.at, f^.len);
           first := false;
           f := f^.next
         end;
-        write(' end')
+        PutLit(' end            ')
       end;
       tyArray: begin
-        if t^.isPacked then write('packed array [') else write('array [');
+        if t^.isPacked then PutLit('packed array [  ')
+        else PutLit('array [         ');
         WriteOrdinalName(t^.indexType, t^.lo);
-        write('..');
+        PutLit('..              ');
         WriteOrdinalName(t^.indexType, t^.hi);
-        write('] of ');
-        if t^.elem <> nil then WriteTypeName(t^.elem) else write('?')
+        PutLit('] of            ');
+        Put(' ');
+        if t^.elem <> nil then WriteTypeName(t^.elem) else Put('?')
       end
     end
 end;
@@ -2746,6 +2860,10 @@ begin
   s^.intVal := 0;
   s^.charVal := chr(0);
   s^.boolVal := false;
+  s^.realAt := 0;
+  s^.realLen := 0;
+  s^.realNeg := false;
+  s^.irId := 0;
   s^.level := 0;
   s^.frameIndex := -1;
   s^.owner := nil;
@@ -2961,11 +3079,14 @@ begin
         res.intVal := e^.intVal;
         ok := true
       end;
-      { A real constant folds, but carries no value: nothing in Sema reads one,
-        and keeping it would mean converting the literal, which this compiler
-        still defers (ADR-0022). }
+      { A real constant folds, carrying the literal's text rather than a
+        converted value. Nothing in Sema reads it; the code generator prints
+        it, and printing is all a textual backend ever needed. }
       nkReal: begin
         res.stype := realType;
+        res.realAt := e^.rlAt;
+        res.realLen := e^.rlLen;
+        res.realNeg := false;
         ok := true
       end;
       nkChar: begin
@@ -2991,8 +3112,12 @@ begin
                 res.intVal := -inner.intVal;
                 ok := true
               end
+              else if IsReal(inner.stype) then begin
+                res.realNeg := not inner.realNeg;
+                ok := true
+              end
               else
-                ok := IsReal(inner.stype)
+                ok := false
             end;
             opNot:
               if IsBoolean(inner.stype) then begin
@@ -4396,6 +4521,7 @@ begin
     InternWithName(currentProc^.frameCount, at, len);
     new(entry);
     entry^.sym := AddHiddenVar(at, len, skVarParam, t, currentProc);
+    w^.wtBinding := entry^.sym;
     entry^.next := withTop;
     withTop := entry;
     CheckStmt(w^.wtBody);
@@ -4727,7 +4853,10 @@ begin
       s^.stype := value.stype;
       s^.intVal := value.intVal;
       s^.charVal := value.charVal;
-      s^.boolVal := value.boolVal
+      s^.boolVal := value.boolVal;
+      s^.realAt := value.realAt;
+      s^.realLen := value.realLen;
+      s^.realNeg := value.realNeg
     end;
     d := d^.next
   end;
@@ -5785,6 +5914,2198 @@ end;
   Each section reports what its own stage found and then shows its result, and
   only when nothing was found -- a stage that failed has nothing to show, and
   the stages after it do not run. }
+{ ========================================================================== }
+{ CodeGen -- the annotated tree, written out as textual LLVM IR.
+
+  ADR-0006 kept the textual backend a first-class output precisely so that this
+  component could exist: a compiler written in Pascal cannot call LLVM's C++
+  API, so what survives the rewrite is the assembler text.
+
+  Three things follow from writing text instead of building a module.
+
+  * The emitter is *sequential*. It works because the C++ builder never returns
+    to a basic block it has left: every SetInsertPoint moves to a block that is
+    then filled to its terminator. So the order the C++ emits instructions in
+    is exactly the order they can be printed in, and no instruction list is
+    needed here at all.
+
+  * A global cannot be written in the middle of a function, so the string
+    constants a program needs -- every runtime-error message, every file name,
+    every string literal -- are given a number when they are used and their
+    text is written after the last function. LLVM resolves the forward
+    reference.
+
+  * Types are printed structurally, inline. A Pascal type can only contain
+    itself through a pointer, and opaque pointers make every pointer `ptr`, so
+    nothing here is recursive and no named type is needed. The activation
+    records are the exception -- one is printed at every variable access, and a
+    frame with forty slots would be forty slots of text each time -- so those
+    get a name apiece, emitted before any function that uses one. }
+{ ========================================================================== }
+
+{ --------------------------------------------------------- the data layout }
+
+{ The C++ asks LLVM's DataLayout; there is no one to ask here, so the rules are
+  written out. They are only needed in two places -- the length of a whole-
+  variable copy and the size `new` allocates -- because a getelementptr names
+  the type it indexes and LLVM does the arithmetic. }
+
+function RoundUp(n, a: integer): integer;
+begin
+  RoundUp := ((n + a - 1) div a) * a
+end;
+
+function LlSize(t: typePtr): integer; forward;
+function LlAlign(t: typePtr): integer; forward;
+
+{ One arm of a variant part, laid out as the struct it is. }
+procedure ArmLayout(v: variantPtr; var size, align: integer);
+var f: fieldPtr; a: integer;
+begin
+  size := 0;
+  align := 1;
+  f := v^.fields;
+  while f <> nil do begin
+    a := LlAlign(f^.ftype);
+    size := RoundUp(size, a) + LlSize(f^.ftype);
+    if a > align then align := a;
+    f := f^.next
+  end;
+  size := RoundUp(size, align)
+end;
+
+{ The shared storage every arm is laid over: big enough for the largest and
+  aligned for the strictest. }
+procedure VariantStorage(t: typePtr; var size, align: integer);
+var v: variantPtr; s, a: integer;
+begin
+  size := 0;
+  align := 1;
+  v := t^.variants;
+  while v <> nil do begin
+    ArmLayout(v, s, a);
+    if s > size then size := s;
+    if a > align then align := a;
+    v := v^.next
+  end;
+  if size = 0 then align := 1 else size := RoundUp(size, align)
+end;
+
+procedure RecordLayout(t: typePtr; var size, align: integer);
+var f: fieldPtr; a, s: integer;
+begin
+  size := 0;
+  align := 1;
+  f := t^.fields;
+  while f <> nil do begin
+    a := LlAlign(f^.ftype);
+    size := RoundUp(size, a) + LlSize(f^.ftype);
+    if a > align then align := a;
+    f := f^.next
+  end;
+  if t^.variants <> nil then begin
+    VariantStorage(t, s, a);
+    size := RoundUp(size, a) + s;
+    if a > align then align := a
+  end;
+  size := RoundUp(size, align)
+end;
+
+function LlAlign;
+var b: typePtr; s, a: integer;
+begin
+  b := Base(t);
+  if b = nil then
+    LlAlign := 1
+  else
+    case b^.kind of
+      tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
+      tyInteger, tyEnum: LlAlign := 4;
+      tyReal, tyPointer, tyFile: LlAlign := 8;
+      tyArray: LlAlign := LlAlign(b^.elem);
+      tyRecord: begin
+        RecordLayout(b, s, a);
+        LlAlign := a
+      end
+    end
+end;
+
+function LlSize;
+var b: typePtr; s, a: integer;
+begin
+  b := Base(t);
+  if b = nil then
+    LlSize := 0
+  else
+    case b^.kind of
+      tyVoid, tySubrange: LlSize := 0;
+      tyBoolean, tyChar: LlSize := 1;
+      tyInteger, tyEnum: LlSize := 4;
+      tyReal, tyPointer: LlSize := 8;
+      tyFile: LlSize := fileSize;
+      tyArray: LlSize := TypeLength(b) * LlSize(b^.elem);
+      tyRecord: begin
+        RecordLayout(b, s, a);
+        LlSize := s
+      end
+    end
+end;
+
+{ ------------------------------------------------------------- LLVM types }
+
+procedure PutLlType(t: typePtr); forward;
+
+procedure PutArmType(v: variantPtr);
+var f: fieldPtr; first: boolean;
+begin
+  write(ircode, '{ ');
+  first := true;
+  f := v^.fields;
+  while f <> nil do begin
+    if not first then write(ircode, ', ');
+    PutLlType(f^.ftype);
+    first := false;
+    f := f^.next
+  end;
+  write(ircode, ' }')
+end;
+
+{ LLVM has no union, so the variant part is one block of storage. The element
+  type is what carries the alignment: [k x i64] is 8-aligned where [n x i8]
+  would be 1-aligned and would misalign a real inside a variant. }
+procedure PutStorageType(t: typePtr);
+var size, align: integer;
+begin
+  VariantStorage(t, size, align);
+  if size = 0 then
+    write(ircode, '[0 x i8]')
+  else
+    write(ircode, '[', size div align:1, ' x i', align * 8:1, ']')
+end;
+
+procedure PutLlType;
+var b: typePtr; f: fieldPtr; first: boolean;
+begin
+  b := Base(t);
+  if b = nil then
+    write(ircode, 'void')
+  else
+    case b^.kind of
+      tyVoid, tySubrange: write(ircode, 'void');
+      { An enumeration is its ordinal number; a subrange is represented exactly
+        as its host, which is what Base already looked through to. }
+      tyInteger, tyEnum: write(ircode, 'i32');
+      tyReal: write(ircode, 'double');
+      tyBoolean: write(ircode, 'i1');
+      tyChar: write(ircode, 'i8');
+      tyPointer: write(ircode, 'ptr');
+      { A file variable is an opaque block of storage the runtime owns; all the
+        compiler needs is its size, and i64 elements give it the alignment a
+        struct full of pointers needs. }
+      tyFile: write(ircode, '[', fileSize div 8:1, ' x i64]');
+      tyArray: begin
+        { The bounds are folded away: an index is lowered to an offset from the
+          lower bound, so the type only needs the extent. }
+        write(ircode, '[', TypeLength(b):1, ' x ');
+        PutLlType(b^.elem);
+        write(ircode, ']')
+      end;
+      tyRecord: begin
+        write(ircode, '{ ');
+        first := true;
+        f := b^.fields;
+        while f <> nil do begin
+          if not first then write(ircode, ', ');
+          PutLlType(f^.ftype);
+          first := false;
+          f := f^.next
+        end;
+        if b^.variants <> nil then begin
+          if not first then write(ircode, ', ');
+          PutStorageType(b)
+        end;
+        write(ircode, ' }')
+      end
+    end
+end;
+
+{ ---------------------------------------------------------------- operands }
+
+{ An operand is its text: `%v7`, `42`, `3.5`, `null`, `@s3`. Keeping it as text
+  is what lets a constant be an operand without an instruction to materialise
+  it, and ISO 7185 6.6.2 forbids a function returning a record, so these are
+  filled through a var parameter rather than returned. }
+
+procedure AppendInt(var s: str; v: integer);
+var digits: array [1..12] of char; n, k: integer; negative: boolean;
+begin
+  negative := v < 0;
+  n := 0;
+  if negative then v := -v;
+  if v = 0 then begin
+    n := 1;
+    digits[1] := '0'
+  end;
+  while v > 0 do begin
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  end;
+  if negative then StrAppend(s, '-');
+  for k := n downto 1 do
+    StrAppend(s, digits[k])
+end;
+
+procedure AppendLit(var s: str; w: msgLit);
+var n, k: integer;
+begin
+  n := msgWidth;
+  while (n > 0) and (w[n] = ' ') do
+    n := n - 1;
+  for k := 1 to n do
+    StrAppend(s, w[k])
+end;
+
+procedure OpInt(n: integer; var v: str);
+begin
+  StrClear(v);
+  AppendInt(v, n)
+end;
+
+procedure OpWord(w: msgLit; var v: str);
+begin
+  StrClear(v);
+  AppendLit(v, w)
+end;
+
+procedure OpReg(r: integer; var v: str);
+begin
+  StrClear(v);
+  StrAppend(v, '%');
+  StrAppend(v, 'v');
+  AppendInt(v, r)
+end;
+
+procedure OpGlobal(id: integer; var v: str);
+begin
+  StrClear(v);
+  StrAppend(v, '@');
+  StrAppend(v, 's');
+  AppendInt(v, id)
+end;
+
+procedure PutOp(var v: str);
+var k: integer;
+begin
+  for k := 1 to v.len do
+    write(ircode, v.ch[k])
+end;
+
+{ Open an instruction line that defines a fresh value: `  %vN = `. }
+procedure Def(var v: str);
+begin
+  nextReg := nextReg + 1;
+  OpReg(nextReg, v);
+  write(ircode, '  ');
+  PutOp(v);
+  write(ircode, ' = ')
+end;
+
+function NewBlock: integer;
+begin
+  nextBlock := nextBlock + 1;
+  NewBlock := nextBlock
+end;
+
+procedure StartBlock(b: integer);
+begin
+  writeln(ircode, 'L', b:1, ':');
+  curBlock := b
+end;
+
+{ ------------------------------------------------------- string constants }
+
+{ A global cannot be written inside a function, so it is numbered here and its
+  text written after the last one. }
+function AddGlobal(at, len: integer): integer;
+var g: strConstPtr;
+begin
+  new(g);
+  nextStr := nextStr + 1;
+  g^.id := nextStr;
+  g^.at := at;
+  g^.len := len;
+  g^.next := nil;
+  if strHead = nil then strHead := g else strTail^.next := g;
+  strTail := g;
+  AddGlobal := nextStr
+end;
+
+{ A runtime-error message is built before it is emitted, so the sink is turned
+  round for the length of the building. }
+procedure MsgStart;
+begin
+  msgOut := true;
+  StrClear(msgBuf)
+end;
+
+procedure MsgText(w: textLit);
+var n, k: integer;
+begin
+  n := textWidth;
+  while (n > 0) and (w[n] = ' ') do
+    n := n - 1;
+  for k := 1 to n do
+    StrAppend(msgBuf, w[k])
+end;
+
+function MsgEnd: integer;
+var at: integer;
+begin
+  msgOut := false;
+  at := PoolAdd(msgBuf);
+  MsgEnd := AddGlobal(at, msgBuf.len)
+end;
+
+procedure PutHex(v: integer);
+var d: integer;
+begin
+  d := v div 16;
+  if d < 10 then write(ircode, chr(ord('0') + d))
+  else write(ircode, chr(ord('A') + d - 10));
+  d := v mod 16;
+  if d < 10 then write(ircode, chr(ord('0') + d))
+  else write(ircode, chr(ord('A') + d - 10))
+end;
+
+procedure EmitGlobals;
+var g: strConstPtr; k: integer; c: char;
+begin
+  g := strHead;
+  while g <> nil do begin
+    write(ircode, '@s', g^.id:1, ' = private unnamed_addr constant [',
+          g^.len + 1:1, ' x i8] c"');
+    for k := g^.at to g^.at + g^.len - 1 do begin
+      c := pool[k];
+      if (c = '"') or (c = '\') or (ord(c) < 32) or (ord(c) >= 127) then begin
+        write(ircode, '\');
+        PutHex(ord(c))
+      end
+      else
+        write(ircode, c)
+    end;
+    writeln(ircode, '\00"');
+    g := g^.next
+  end
+end;
+
+{ -------------------------------------------------------- traps and checks }
+
+procedure EmitTrapIf(var cond: str; msg: integer);
+var t, c: integer;
+begin
+  t := NewBlock;
+  c := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', t:1, ', label %L', c:1);
+  StartBlock(t);
+  writeln(ircode, '  call void @pas_runtime_error(ptr @s', msg:1, ')');
+  writeln(ircode, '  unreachable');
+  StartBlock(c)
+end;
+
+{ ------------------------------------------------------- the static chain }
+
+{ The activation record `levels` deep in the static chain from here. The link
+  is field 0 of every frame, so it sits at offset zero and can be loaded from
+  the frame pointer without knowing which procedure's struct this level has. }
+procedure FrameAt(lev: integer; var v: str);
+var l: integer; cur, nxt: str;
+begin
+  StrClear(cur);
+  StrAppend(cur, '%');
+  AppendLit(cur, 'frame           ');
+  for l := irLevel downto lev + 1 do begin
+    Def(nxt);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(cur);
+    writeln(ircode);
+    cur := nxt
+  end;
+  v := cur
+end;
+
+procedure FrameSlot(s: symPtr; var v: str);
+var f: str;
+begin
+  FrameAt(s^.level, f);
+  Def(v);
+  write(ircode, 'getelementptr inbounds %frame', s^.owner^.irId:1, ', ptr ');
+  PutOp(f);
+  writeln(ircode, ', i32 0, i32 ', 1 + s^.frameIndex:1)
+end;
+
+{ A `var` parameter -- and the binding of a `with` -- holds an address, so the
+  variable it stands for is one load further on. }
+procedure AddressOfSym(s: symPtr; var v: str);
+var slot: str;
+begin
+  FrameSlot(s, slot);
+  if s^.kind = skVarParam then begin
+    Def(v);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(slot);
+    writeln(ircode)
+  end
+  else
+    v := slot
+end;
+
+function VariantAt(t: typePtr; k: integer): variantPtr;
+var v: variantPtr; i: integer;
+begin
+  v := t^.variants;
+  i := 0;
+  while (v <> nil) and (i < k) do begin
+    v := v^.next;
+    i := i + 1
+  end;
+  VariantAt := v
+end;
+
+{ A field of the fixed part is one index into the record. A field of a variant
+  is two: to the shared storage, then into the arm laid over it. }
+procedure FieldAddress(var rec: str; t: typePtr; f: fieldPtr; var v: str);
+var storage: str; arm: variantPtr;
+begin
+  if f^.variant < 0 then begin
+    Def(v);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(t);
+    write(ircode, ', ptr ');
+    PutOp(rec);
+    writeln(ircode, ', i32 0, i32 ', f^.index:1)
+  end
+  else begin
+    Def(storage);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(t);
+    write(ircode, ', ptr ');
+    PutOp(rec);
+    writeln(ircode, ', i32 0, i32 ', FieldCount(t^.fields):1);
+    arm := VariantAt(t, f^.variant);
+    Def(v);
+    write(ircode, 'getelementptr inbounds ');
+    PutArmType(arm);
+    write(ircode, ', ptr ');
+    PutOp(storage);
+    writeln(ircode, ', i32 0, i32 ', f^.index:1)
+  end
+end;
+
+{ ------------------------------------------------------------- conversions }
+
+{ Widen an integer to double where Pascal's implicit conversion applies. }
+procedure ToReal(var v: str; from: typePtr);
+var r: str;
+begin
+  if IsInteger(from) then begin
+    Def(r);
+    write(ircode, 'sitofp i32 ');
+    PutOp(v);
+    writeln(ircode, ' to double');
+    v := r
+  end
+end;
+
+procedure ConvertFor(var v: str; from, toT: typePtr);
+begin
+  if IsReal(toT) then ToReal(v, from)
+end;
+
+{ A real literal reaches the IR as the text it was written with -- which is
+  what a textual backend wanted all along, and why the conversion three records
+  deferred never had to be written. LLVM's assembler is the strtod, and it is
+  the same correctly-rounded conversion the C++ compiler gets from its own.
+  The only adjustment is that LLVM's float syntax needs a decimal point, and
+  Pascal's `1e6` has none. }
+procedure EmitRealText(at, len: integer; negative: boolean; var v: str);
+var k, ePos: integer; hasDot: boolean;
+begin
+  ePos := len + 1;
+  hasDot := false;
+  for k := 1 to len do
+    if (pool[at + k - 1] = 'e') or (pool[at + k - 1] = 'E') then begin
+      if ePos > len then ePos := k
+    end
+    else if pool[at + k - 1] = '.' then
+      hasDot := true;
+
+  StrClear(v);
+  if negative then StrAppend(v, '-');
+  for k := 1 to ePos - 1 do
+    StrAppend(v, pool[at + k - 1]);
+  if not hasDot then begin
+    StrAppend(v, '.');
+    StrAppend(v, '0')
+  end;
+  for k := ePos to len do
+    StrAppend(v, pool[at + k - 1])
+end;
+
+{ ISO 7185 6.4.6 makes it an error to store a value outside a subrange's
+  bounds, so every place a value enters a subrange variable comes through here.
+  A subrange covering its whole host needs no check at all, which is what keeps
+  `1..maxint` from paying for one. }
+procedure CheckedForSubrange(var v: str; target: typePtr);
+var host: typePtr; below, above, bad, lo, hi: str; sign: boolean; msg: integer;
+begin
+  if target <> nil then
+    if target^.kind = tySubrange then begin
+      host := Base(target);
+      if (target^.lo > OrdinalLo(host)) or (target^.hi < OrdinalHi(host)) then
+      begin
+        sign := IsInteger(target);
+        OpInt(target^.lo, lo);
+        OpInt(target^.hi, hi);
+        Def(below);
+        if sign then write(ircode, 'icmp slt ')
+        else write(ircode, 'icmp ult ');
+        PutLlType(target);
+        write(ircode, ' ');
+        PutOp(v);
+        write(ircode, ', ');
+        PutOp(lo);
+        writeln(ircode);
+        Def(above);
+        if sign then write(ircode, 'icmp sgt ')
+        else write(ircode, 'icmp ugt ');
+        PutLlType(target);
+        write(ircode, ' ');
+        PutOp(v);
+        write(ircode, ', ');
+        PutOp(hi);
+        writeln(ircode);
+        Def(bad);
+        write(ircode, 'or i1 ');
+        PutOp(below);
+        write(ircode, ', ');
+        PutOp(above);
+        writeln(ircode);
+
+        MsgStart;
+        MsgText('value out of range (                    ');
+        WriteTypeName(target);
+        Put(')');
+        msg := MsgEnd;
+        EmitTrapIf(bad, msg)
+      end
+    end
+end;
+
+{ ============================== expressions ============================== }
+
+procedure EmitExpr(e: nodePtr; var v: str); forward;
+procedure EmitAddress(e: nodePtr; var v: str); forward;
+procedure EmitStmt(s: nodePtr); forward;
+
+{ The value a designator holds. An array or a record has no register form, so
+  what it yields is its address; everything else is loaded from it. }
+procedure EmitLoad(e: nodePtr; var v: str);
+var addr: str;
+begin
+  EmitAddress(e, addr);
+  if IsMemory(e^.ntype) then
+    v := addr
+  else begin
+    Def(v);
+    write(ircode, 'load ');
+    PutLlType(e^.ntype);
+    write(ircode, ', ptr ');
+    PutOp(addr);
+    writeln(ircode)
+  end
+end;
+
+procedure EmitConst(s: symPtr; var v: str);
+var b: typePtr;
+begin
+  b := Base(s^.stype);
+  if b = nil then
+    OpInt(0, v)
+  else
+    case b^.kind of
+      tyInteger, tyEnum: OpInt(s^.intVal, v);
+      tyReal: EmitRealText(s^.realAt, s^.realLen, s^.realNeg, v);
+      tyBoolean:
+        if s^.boolVal then OpWord('true            ', v)
+        else OpWord('false           ', v);
+      tyChar: OpInt(ord(s^.charVal), v);
+      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile: OpInt(0, v)
+    end
+end;
+
+{ An argument list has to be complete before the call line can be written, so
+  the operands are collected as they are emitted. }
+procedure AppendOpnd(var head, tail: opndPtr; var v: str);
+var o: opndPtr;
+begin
+  new(o);
+  o^.text := v;
+  o^.next := nil;
+  if head = nil then head := o else tail^.next := o;
+  tail := o
+end;
+
+procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
+var link, a: str; head, tail, o: opndPtr; p: symListPtr; arg: nodePtr;
+begin
+  { A callee declared at level L runs with the frame at level L-1 as its
+    enclosing scope -- which for a recursive call is the caller's own parent,
+    not the caller. }
+  FrameAt(callee^.level - 1, link);
+
+  head := nil;
+  tail := nil;
+  arg := args;
+  p := callee^.params;
+  while (arg <> nil) and (p <> nil) do begin
+    if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
+      { A `var` parameter binds to the variable itself; a structured value
+        parameter is copied from it by the callee. Either way an address
+        travels, and Sema has already required something that has one. }
+      EmitAddress(arg, a)
+    else begin
+      EmitExpr(arg, a);
+      ConvertFor(a, arg^.ntype, p^.sym^.stype);
+      CheckedForSubrange(a, p^.sym^.stype)
+    end;
+    AppendOpnd(head, tail, a);
+    arg := arg^.next;
+    p := p^.next
+  end;
+
+  if callee^.kind = skFunc then begin
+    Def(v);
+    write(ircode, 'call ');
+    PutLlType(callee^.stype)
+  end
+  else begin
+    StrClear(v);
+    write(ircode, '  call void')
+  end;
+  write(ircode, ' @p', callee^.irId:1, '(ptr ');
+  PutOp(link);
+  p := callee^.params;
+  o := head;
+  while o <> nil do begin
+    write(ircode, ', ');
+    if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
+      write(ircode, 'ptr')
+    else
+      PutLlType(p^.sym^.stype);
+    write(ircode, ' ');
+    PutOp(o^.text);
+    o := o^.next;
+    p := p^.next
+  end;
+  writeln(ircode, ')')
+end;
+
+{ ISO 7185 6.7.2.5 orders equal-length strings by their first differing
+  character, which is what the runtime helper reports; the operator then only
+  has to say what it wants of the sign. }
+procedure EmitStringCompare(e: nodePtr; var v: str);
+var lhs, rhs, cmp: str;
+begin
+  EmitAddress(e^.bnLhs, lhs);
+  EmitAddress(e^.bnRhs, rhs);
+  Def(cmp);
+  write(ircode, 'call i32 @pas_str_compare(ptr ');
+  PutOp(lhs);
+  write(ircode, ', ptr ');
+  PutOp(rhs);
+  writeln(ircode, ', i32 ', TypeLength(e^.bnLhs^.ntype):1, ')');
+  Def(v);
+  case e^.bnOp of
+    opEq: write(ircode, 'icmp eq i32 ');
+    opNe: write(ircode, 'icmp ne i32 ');
+    opLt: write(ircode, 'icmp slt i32 ');
+    opLe: write(ircode, 'icmp sle i32 ');
+    opGt: write(ircode, 'icmp sgt i32 ');
+    opGe: write(ircode, 'icmp sge i32 ');
+    opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr:
+      write(ircode, 'icmp eq i32 ')
+  end;
+  PutOp(cmp);
+  writeln(ircode, ', 0')
+end;
+
+{ The overflow-reporting form of +, - and *. }
+procedure EmitCheckedArith(which: char; var l, r, v: str; msg: integer);
+var pair, ovf, isMin, bad: str;
+begin
+  Def(pair);
+  write(ircode, 'call { i32, i1 } @llvm.');
+  if which = '+' then write(ircode, 'sadd')
+  else if which = '-' then write(ircode, 'ssub')
+  else write(ircode, 'smul');
+  write(ircode, '.with.overflow.i32(i32 ');
+  PutOp(l);
+  write(ircode, ', i32 ');
+  PutOp(r);
+  writeln(ircode, ')');
+  Def(v);
+  write(ircode, 'extractvalue { i32, i1 } ');
+  PutOp(pair);
+  writeln(ircode, ', 0');
+  Def(ovf);
+  write(ircode, 'extractvalue { i32, i1 } ');
+  PutOp(pair);
+  writeln(ircode, ', 1');
+  { -maxint..maxint is the integer type (6.4.2.2), so a result of INT_MIN is
+    out of range even though it fits the machine word. }
+  Def(isMin);
+  write(ircode, 'icmp eq i32 ');
+  PutOp(v);
+  writeln(ircode, ', -2147483648');
+  Def(bad);
+  write(ircode, 'or i1 ');
+  PutOp(ovf);
+  write(ircode, ', ');
+  PutOp(isMin);
+  writeln(ircode);
+  EmitTrapIf(bad, msg)
+end;
+
+procedure GuardNonZero(var r: str; msg: integer);
+var zero: str;
+begin
+  Def(zero);
+  write(ircode, 'icmp eq i32 ');
+  PutOp(r);
+  writeln(ircode, ', 0');
+  EmitTrapIf(zero, msg)
+end;
+
+{ ISO 7185 6.6.6.2: trunc and round are errors unless the result is a value of
+  the integer type. The bounds are the exactly-representable powers of two just
+  outside the range, and the comparisons are *ordered*, so a NaN fails both and
+  traps rather than converting to something unspecified. }
+procedure CheckedFpToInt(var x, v: str; msg: integer);
+var gt, lt, ok, bad: str;
+begin
+  Def(gt);
+  write(ircode, 'fcmp ogt double ');
+  PutOp(x);
+  writeln(ircode, ', -2147483648.0');
+  Def(lt);
+  write(ircode, 'fcmp olt double ');
+  PutOp(x);
+  writeln(ircode, ', 2147483648.0');
+  Def(ok);
+  write(ircode, 'and i1 ');
+  PutOp(gt);
+  write(ircode, ', ');
+  PutOp(lt);
+  writeln(ircode);
+  Def(bad);
+  write(ircode, 'xor i1 ');
+  PutOp(ok);
+  writeln(ircode, ', true');
+  EmitTrapIf(bad, msg);
+  Def(v);
+  write(ircode, 'fptosi double ');
+  PutOp(x);
+  writeln(ircode, ' to i32')
+end;
+
+{ `and` and `or` short-circuit, which is what makes a guarded test such as
+  `while (i <= n) and (a[i] <> x)` safe to write (ADR-0010). }
+procedure EmitShortCircuit(e: nodePtr; var v: str);
+var lhs, rhs: str; isAnd: boolean; rhsB, endB, lhsEnd, rhsEnd: integer;
+begin
+  isAnd := e^.bnOp = opAnd;
+  EmitExpr(e^.bnLhs, lhs);
+  lhsEnd := curBlock;
+  rhsB := NewBlock;
+  endB := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(lhs);
+  if isAnd then
+    writeln(ircode, ', label %L', rhsB:1, ', label %L', endB:1)
+  else
+    writeln(ircode, ', label %L', endB:1, ', label %L', rhsB:1);
+
+  StartBlock(rhsB);
+  EmitExpr(e^.bnRhs, rhs);
+  rhsEnd := curBlock;
+  writeln(ircode, '  br label %L', endB:1);
+
+  StartBlock(endB);
+  Def(v);
+  write(ircode, 'phi i1 [ ');
+  if isAnd then write(ircode, 'false') else write(ircode, 'true');
+  write(ircode, ', %L', lhsEnd:1, ' ], [ ');
+  PutOp(rhs);
+  writeln(ircode, ', %L', rhsEnd:1, ' ]')
+end;
+
+procedure EmitBinary(e: nodePtr; var v: str);
+var l, r, rem, neg, adj, bad, m1, m2: str;
+    lt, rt: typePtr; msg: integer; sign, useFloat: boolean;
+begin
+  if (e^.bnOp = opAnd) or (e^.bnOp = opOr) then
+    EmitShortCircuit(e, v)
+  { Strings compare through the runtime rather than in registers, and must be
+    caught before the operands are evaluated: an array has no register form. }
+  else if IsCharArray(e^.bnLhs^.ntype) and IsCharArray(e^.bnRhs^.ntype) then
+    EmitStringCompare(e, v)
+  else begin
+    EmitExpr(e^.bnLhs, l);
+    EmitExpr(e^.bnRhs, r);
+    lt := e^.bnLhs^.ntype;
+    rt := e^.bnRhs^.ntype;
+
+    case e^.bnOp of
+      opAdd, opSub, opMul:
+        if IsReal(e^.ntype) then begin
+          ToReal(l, lt);
+          ToReal(r, rt);
+          Def(v);
+          if e^.bnOp = opAdd then write(ircode, 'fadd double ')
+          else if e^.bnOp = opSub then write(ircode, 'fsub double ')
+          else write(ircode, 'fmul double ');
+          PutOp(l);
+          write(ircode, ', ');
+          PutOp(r);
+          writeln(ircode)
+        end
+        else begin
+          MsgStart;
+          MsgText('integer overflow in                     ');
+          Put(' ');
+          if e^.bnOp = opAdd then Put('+')
+          else if e^.bnOp = opSub then Put('-')
+          else Put('*');
+          msg := MsgEnd;
+          if e^.bnOp = opAdd then EmitCheckedArith('+', l, r, v, msg)
+          else if e^.bnOp = opSub then EmitCheckedArith('-', l, r, v, msg)
+          else EmitCheckedArith('*', l, r, v, msg)
+        end;
+
+      opRealDiv: begin
+        ToReal(l, lt);
+        ToReal(r, rt);
+        Def(v);
+        write(ircode, 'fdiv double ');
+        PutOp(l);
+        write(ircode, ', ');
+        PutOp(r);
+        writeln(ircode)
+      end;
+
+      opIntDiv: begin
+        MsgStart;
+        MsgText('division by zero                        ');
+        msg := MsgEnd;
+        GuardNonZero(r, msg);
+        { maxint div -1 is representable, but INT_MIN div -1 is not; LLVM calls
+          it undefined rather than wrapping, so it is excluded explicitly. }
+        Def(m1);
+        write(ircode, 'icmp eq i32 ');
+        PutOp(l);
+        writeln(ircode, ', -2147483648');
+        Def(m2);
+        write(ircode, 'icmp eq i32 ');
+        PutOp(r);
+        writeln(ircode, ', -1');
+        Def(bad);
+        write(ircode, 'and i1 ');
+        PutOp(m1);
+        write(ircode, ', ');
+        PutOp(m2);
+        writeln(ircode);
+        MsgStart;
+        MsgText('integer overflow in div                 ');
+        msg := MsgEnd;
+        EmitTrapIf(bad, msg);
+        Def(v);
+        write(ircode, 'sdiv i32 ');
+        PutOp(l);
+        write(ircode, ', ');
+        PutOp(r);
+        writeln(ircode)
+      end;
+
+      opMod: begin
+        MsgStart;
+        MsgText('mod by zero                             ');
+        msg := MsgEnd;
+        GuardNonZero(r, msg);
+        { ISO 7185 defines i mod j (for j > 0) as a non-negative result, unlike
+          the truncating remainder LLVM gives. }
+        Def(rem);
+        write(ircode, 'srem i32 ');
+        PutOp(l);
+        write(ircode, ', ');
+        PutOp(r);
+        writeln(ircode);
+        Def(neg);
+        write(ircode, 'icmp slt i32 ');
+        PutOp(rem);
+        writeln(ircode, ', 0');
+        Def(adj);
+        write(ircode, 'add i32 ');
+        PutOp(rem);
+        write(ircode, ', ');
+        PutOp(r);
+        writeln(ircode);
+        Def(v);
+        write(ircode, 'select i1 ');
+        PutOp(neg);
+        write(ircode, ', i32 ');
+        PutOp(adj);
+        write(ircode, ', i32 ');
+        PutOp(rem);
+        writeln(ircode)
+      end;
+
+      opEq, opNe, opLt, opLe, opGt, opGe: begin
+        useFloat := IsReal(lt) or IsReal(rt);
+        if useFloat then begin
+          ToReal(l, lt);
+          ToReal(r, rt);
+          Def(v);
+          case e^.bnOp of
+            opEq: write(ircode, 'fcmp oeq double ');
+            opNe: write(ircode, 'fcmp one double ');
+            opLt: write(ircode, 'fcmp olt double ');
+            opLe: write(ircode, 'fcmp ole double ');
+            opGt: write(ircode, 'fcmp ogt double ');
+            opGe: write(ircode, 'fcmp oge double ');
+            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr:
+              write(ircode, 'fcmp oeq double ')
+          end
+        end
+        else begin
+          { char, boolean and enumerations compare as unsigned ordinals;
+            integer, the only one with negative values, as signed. Pointers
+            compare only for equality, which needs no predicate choice. }
+          sign := IsInteger(lt);
+          Def(v);
+          case e^.bnOp of
+            opEq: write(ircode, 'icmp eq ');
+            opNe: write(ircode, 'icmp ne ');
+            opLt: if sign then write(ircode, 'icmp slt ')
+                  else write(ircode, 'icmp ult ');
+            opLe: if sign then write(ircode, 'icmp sle ')
+                  else write(ircode, 'icmp ule ');
+            opGt: if sign then write(ircode, 'icmp sgt ')
+                  else write(ircode, 'icmp ugt ');
+            opGe: if sign then write(ircode, 'icmp sge ')
+                  else write(ircode, 'icmp uge ');
+            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr:
+              write(ircode, 'icmp eq ')
+          end;
+          if IsPointer(lt) and IsPointer(rt) then write(ircode, 'ptr')
+          else if IsPointer(lt) then PutLlType(lt)
+          else PutLlType(rt);
+          write(ircode, ' ')
+        end;
+        PutOp(l);
+        write(ircode, ', ');
+        PutOp(r);
+        writeln(ircode)
+      end
+    end
+  end
+end;
+
+procedure EmitUnary(e: nodePtr; var v: str);
+var a: str;
+begin
+  EmitExpr(e^.unArg, a);
+  case e^.unOp of
+    opPos: begin
+      ConvertFor(a, e^.unArg^.ntype, e^.ntype);
+      v := a
+    end;
+    { Negation is unchecked, and verify/ carries the theorem saying it cannot
+      overflow: -maxint..maxint is symmetric. }
+    opNeg:
+      if IsReal(e^.ntype) then begin
+        ToReal(a, e^.unArg^.ntype);
+        Def(v);
+        write(ircode, 'fneg double ');
+        PutOp(a);
+        writeln(ircode)
+      end
+      else begin
+        Def(v);
+        write(ircode, 'sub nsw i32 0, ');
+        PutOp(a);
+        writeln(ircode)
+      end;
+    opNot: begin
+      Def(v);
+      write(ircode, 'xor i1 ');
+      PutOp(a);
+      writeln(ircode, ', true')
+    end
+  end
+end;
+
+procedure EmitCall(e: nodePtr; var v: str);
+var a, w, lim, tmp: str; at: typePtr; msg, up: integer; isSucc: boolean;
+begin
+  if e^.clSym <> nil then
+    EmitUserCall(e^.clSym, e^.clArgs, v)
+  { The file enquiries take the file's address, not its value, and Sema has
+    already supplied `input` where the program left the argument out. }
+  else if (e^.clBuiltin = biEof) or (e^.clBuiltin = biEoln) then begin
+    if e^.clArgs = nil then
+      OpWord('false           ', v)   { the parameter was missing: reported }
+    else begin
+      EmitAddress(e^.clArgs, a);
+      Def(w);
+      if e^.clBuiltin = biEof then write(ircode, 'call i32 @pas_eof(ptr ')
+      else write(ircode, 'call i32 @pas_eoln(ptr ');
+      PutOp(a);
+      writeln(ircode, ')');
+      Def(v);
+      write(ircode, 'trunc i32 ');
+      PutOp(w);
+      writeln(ircode, ' to i1')
+    end
+  end
+  else begin
+    EmitExpr(e^.clArgs, a);
+    at := e^.clArgs^.ntype;
+    case e^.clBuiltin of
+      biAbs:
+        if IsReal(at) then begin
+          Def(v);
+          write(ircode, 'call double @llvm.fabs.f64(double ');
+          PutOp(a);
+          writeln(ircode, ')')
+        end
+        else begin
+          Def(v);
+          write(ircode, 'call i32 @llvm.abs.i32(i32 ');
+          PutOp(a);
+          writeln(ircode, ', i1 false)')
+        end;
+      biSqr:
+        if IsReal(at) then begin
+          Def(v);
+          write(ircode, 'fmul double ');
+          PutOp(a);
+          write(ircode, ', ');
+          PutOp(a);
+          writeln(ircode)
+        end
+        else begin
+          MsgStart;
+          MsgText('integer overflow in sqr                 ');
+          msg := MsgEnd;
+          EmitCheckedArith('*', a, a, v, msg)
+        end;
+      biOdd: begin
+        Def(w);
+        write(ircode, 'and i32 ');
+        PutOp(a);
+        writeln(ircode, ', 1');
+        Def(v);
+        write(ircode, 'icmp ne i32 ');
+        PutOp(w);
+        writeln(ircode, ', 0')
+      end;
+      biOrd:
+        if IsInteger(at) or IsEnum(at) then
+          v := a
+        else begin
+          Def(v);
+          write(ircode, 'zext ');
+          PutLlType(at);
+          write(ircode, ' ');
+          PutOp(a);
+          writeln(ircode, ' to i32')
+        end;
+      biChr: begin
+        { ISO 7185 6.6.6.4: chr(i) is an error unless i is the ordinal of some
+          char, so the truncation is guarded rather than allowed to alias. }
+        Def(w);
+        write(ircode, 'icmp slt i32 ');
+        PutOp(a);
+        writeln(ircode, ', 0');
+        Def(lim);
+        write(ircode, 'icmp sgt i32 ');
+        PutOp(a);
+        writeln(ircode, ', 255');
+        Def(tmp);
+        write(ircode, 'or i1 ');
+        PutOp(w);
+        write(ircode, ', ');
+        PutOp(lim);
+        writeln(ircode);
+        MsgStart;
+        MsgText('chr: argument is not a character        ');
+        Put(' ');
+        MsgText('ordinal                                 ');
+        msg := MsgEnd;
+        EmitTrapIf(tmp, msg);
+        Def(v);
+        write(ircode, 'trunc i32 ');
+        PutOp(a);
+        writeln(ircode, ' to i8')
+      end;
+      biSucc, biPred: begin
+        { succ and pred are errors at the ends of the ordinal type (6.6.6.4),
+          and which type that is decides where the ends are: `blue` for an
+          enumeration, 9 for a subrange 1..9, maxint for an integer. }
+        isSucc := e^.clBuiltin = biSucc;
+        if isSucc then up := OrdinalHi(at) else up := OrdinalLo(at);
+        OpInt(up, lim);
+        Def(w);
+        write(ircode, 'icmp eq ');
+        PutLlType(at);
+        write(ircode, ' ');
+        PutOp(a);
+        write(ircode, ', ');
+        PutOp(lim);
+        writeln(ircode);
+        MsgStart;
+        if isSucc then MsgText('succ                                    ')
+        else MsgText('pred                                    ');
+        MsgText(':                                       ');
+        Put(' ');
+        WriteOrdinalName(at, up);
+        MsgText(' has no                                 ');
+        Put(' ');
+        if isSucc then MsgText('successor                               ')
+        else MsgText('predecessor                             ');
+        Put(' ');
+        MsgText('in                                      ');
+        Put(' ');
+        WriteTypeName(at);
+        msg := MsgEnd;
+        EmitTrapIf(w, msg);
+        Def(v);
+        if isSucc then write(ircode, 'add ') else write(ircode, 'sub ');
+        PutLlType(at);
+        write(ircode, ' ');
+        PutOp(a);
+        writeln(ircode, ', 1')
+      end;
+      biSqrt, biSin, biCos, biLn, biExp, biArcTan: begin
+        ToReal(a, at);
+        Def(v);
+        case e^.clBuiltin of
+          biSqrt: write(ircode, 'call double @llvm.sqrt.f64(double ');
+          biSin:  write(ircode, 'call double @llvm.sin.f64(double ');
+          biCos:  write(ircode, 'call double @llvm.cos.f64(double ');
+          biLn:   write(ircode, 'call double @llvm.log.f64(double ');
+          biExp:  write(ircode, 'call double @llvm.exp.f64(double ');
+          biArcTan: write(ircode, 'call double @atan(double ');
+          biNone, biAbs, biSqr, biOdd, biOrd, biChr, biSucc, biPred, biTrunc,
+          biRound, biEof, biEoln: write(ircode, 'call double @atan(double ')
+        end;
+        PutOp(a);
+        writeln(ircode, ')')
+      end;
+      biTrunc: begin
+        ToReal(a, at);
+        MsgStart;
+        MsgText('trunc: value out of integer range       ');
+        msg := MsgEnd;
+        CheckedFpToInt(a, v, msg)
+      end;
+      biRound: begin
+        { llvm.round rounds halfway cases away from zero, which is what ISO
+          7185 6.6.6.3 asks for; the range check then applies to the rounded
+          value. }
+        ToReal(a, at);
+        Def(w);
+        write(ircode, 'call double @llvm.round.f64(double ');
+        PutOp(a);
+        writeln(ircode, ')');
+        MsgStart;
+        MsgText('round: value out of integer range       ');
+        msg := MsgEnd;
+        CheckedFpToInt(w, v, msg)
+      end;
+      biNone, biEof, biEoln: OpInt(0, v)
+    end
+  end
+end;
+
+procedure EmitAddress;
+var base, idx, lo, hi, below, above, bad, off, target: str;
+    arr: typePtr; msg: integer;
+begin
+  case e^.kind of
+    nkVar: begin
+      AddressOfSym(e^.vrSym, base);
+      if e^.vrField = nil then
+        v := base
+      else
+        { The name was a field of an enclosing `with`, and vrSym is that
+          statement's binding -- the record's address, taken once on entry. }
+        FieldAddress(base, e^.vrSym^.stype, e^.vrField, v)
+    end;
+
+    nkField: begin
+      EmitAddress(e^.fdBase, base);
+      FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v)
+    end;
+
+    nkIndex: begin
+      arr := e^.ixBase^.ntype;
+      EmitAddress(e^.ixBase, base);
+      EmitExpr(e^.ixIndex, idx);
+      { char and boolean subscripts are narrower than i32; widening is exact
+        because their ordinals are non-negative. }
+      if IsChar(e^.ixIndex^.ntype) or IsBoolean(e^.ixIndex^.ntype) then begin
+        Def(off);
+        write(ircode, 'zext ');
+        PutLlType(e^.ixIndex^.ntype);
+        write(ircode, ' ');
+        PutOp(idx);
+        writeln(ircode, ' to i32');
+        idx := off
+      end;
+      { ISO 7185 6.5.3.2 makes an index outside the bounds an error. The check
+        comes first, so the subtraction below cannot overflow: afterwards
+        lo <= i <= hi, and both bounds are values of the index type. }
+      OpInt(arr^.lo, lo);
+      OpInt(arr^.hi, hi);
+      Def(below);
+      write(ircode, 'icmp slt i32 ');
+      PutOp(idx);
+      write(ircode, ', ');
+      PutOp(lo);
+      writeln(ircode);
+      Def(above);
+      write(ircode, 'icmp sgt i32 ');
+      PutOp(idx);
+      write(ircode, ', ');
+      PutOp(hi);
+      writeln(ircode);
+      Def(bad);
+      write(ircode, 'or i1 ');
+      PutOp(below);
+      write(ircode, ', ');
+      PutOp(above);
+      writeln(ircode);
+      MsgStart;
+      MsgText('array index out of bounds (             ');
+      AppendInt(msgBuf, arr^.lo);
+      MsgText('..                                      ');
+      AppendInt(msgBuf, arr^.hi);
+      Put(')');
+      msg := MsgEnd;
+      EmitTrapIf(bad, msg);
+
+      Def(off);
+      write(ircode, 'sub i32 ');
+      PutOp(idx);
+      write(ircode, ', ');
+      PutOp(lo);
+      writeln(ircode);
+      Def(v);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(arr);
+      write(ircode, ', ptr ');
+      PutOp(base);
+      write(ircode, ', i32 0, i32 ');
+      PutOp(off);
+      writeln(ircode)
+    end;
+
+    nkDeref:
+      { `f^` on a file is the buffer variable, not a dereference: the runtime
+        owns it, so it hands back its address -- and fetches the character it
+        holds first, which is where the lookahead actually happens. }
+      if IsFile(e^.drBase^.ntype) then begin
+        EmitAddress(e^.drBase, base);
+        Def(v);
+        write(ircode, 'call ptr @pas_buffer(ptr ');
+        PutOp(base);
+        writeln(ircode, ')')
+      end
+      else begin
+        { The pointer's *value* is the address of the variable it denotes. }
+        EmitExpr(e^.drBase, target);
+        Def(bad);
+        write(ircode, 'icmp eq ptr ');
+        PutOp(target);
+        writeln(ircode, ', null');
+        MsgStart;
+        MsgText('dereference of nil                      ');
+        msg := MsgEnd;
+        EmitTrapIf(bad, msg);
+        v := target
+      end;
+
+    { A literal is a packed array of char, so it needs an address like any
+      other value of that type. }
+    nkStr: OpGlobal(AddGlobal(e^.stAt, e^.stLen), v);
+
+    nkInt, nkReal, nkChar, nkNil, nkBinary, nkUnary, nkCall,
+    nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
+    nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
+    nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
+    nkPointer, nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+      OpWord('null            ', v)   { Sema has already required a designator }
+  end
+end;
+
+procedure EmitExpr;
+begin
+  case e^.kind of
+    nkInt: OpInt(e^.intVal, v);
+    nkReal: EmitRealText(e^.rlAt, e^.rlLen, false, v);
+    nkChar: OpInt(ord(e^.chVal), v);
+    nkStr: EmitAddress(e, v);
+    nkNil: OpWord('null            ', v);
+    nkDeref, nkIndex, nkField: EmitLoad(e, v);
+    nkVar:
+      if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
+        EmitConst(e^.vrSym, v)
+      else if (e^.vrField = nil) and (e^.vrSym^.kind = skFunc) then
+        EmitUserCall(e^.vrSym, nil, v)   { a parameterless call by name }
+      else
+        EmitLoad(e, v);
+    nkBinary: EmitBinary(e, v);
+    nkUnary: EmitUnary(e, v);
+    nkCall: EmitCall(e, v);
+    nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
+    nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
+    nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
+    nkPointer, nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+      OpInt(0, v)
+  end
+end;
+
+{ ============================== statements =============================== }
+
+procedure EmitCopy(var dst: str; t: typePtr; src: nodePtr);
+var s: str; align: integer;
+begin
+  EmitAddress(src, s);
+  align := LlAlign(t);
+  write(ircode, '  call void @llvm.memcpy.p0.p0.i64(ptr align ', align:1, ' ');
+  PutOp(dst);
+  write(ircode, ', ptr align ', align:1, ' ');
+  PutOp(s);
+  writeln(ircode, ', i64 ', LlSize(t):1, ', i1 false)')
+end;
+
+procedure EmitAssign(s: nodePtr);
+var dst, v: str;
+begin
+  EmitAddress(s^.asTarget, dst);
+  { A whole array or record is copied; ISO 7185 6.8.2.2 makes assignment of a
+    structured value a copy of every component, not a sharing of storage. }
+  if IsStructured(s^.asTarget^.ntype) then
+    EmitCopy(dst, s^.asTarget^.ntype, s^.asValue)
+  else begin
+    EmitExpr(s^.asValue, v);
+    ConvertFor(v, s^.asValue^.ntype, s^.asTarget^.ntype);
+    CheckedForSubrange(v, s^.asTarget^.ntype);
+    write(ircode, '  store ');
+    PutLlType(s^.asTarget^.ntype);
+    write(ircode, ' ');
+    PutOp(v);
+    write(ircode, ', ptr ');
+    PutOp(dst);
+    writeln(ircode)
+  end
+end;
+
+procedure EmitWrite(s: nodePtr);
+var fh, v, width, prec, addr: str; a: nodePtr; b: typePtr;
+begin
+  if s^.wrFile <> nil then begin
+    EmitAddress(s^.wrFile, fh);
+    a := s^.wrArgs;
+    while a <> nil do begin
+      if a^.waWidth <> nil then EmitExpr(a^.waWidth, width)
+      else OpInt(-1, width);
+      if a^.waPrec <> nil then EmitExpr(a^.waPrec, prec)
+      else OpInt(-1, prec);
+
+      { A packed array of char is written as its address plus its length --
+        which covers a string literal, since that is what a literal's type is. }
+      if IsCharArray(a^.waValue^.ntype) then begin
+        EmitAddress(a^.waValue, addr);
+        write(ircode, '  call void @pas_write_str(ptr ');
+        PutOp(fh);
+        write(ircode, ', ptr ');
+        PutOp(addr);
+        write(ircode, ', i32 ', TypeLength(a^.waValue^.ntype):1, ', i32 ');
+        PutOp(width);
+        writeln(ircode, ')')
+      end
+      else begin
+        EmitExpr(a^.waValue, v);
+        b := Base(a^.waValue^.ntype);
+        if b^.kind = tyInteger then begin
+          Def(addr);
+          write(ircode, 'sext i32 ');
+          PutOp(v);
+          writeln(ircode, ' to i64');
+          write(ircode, '  call void @pas_write_int(ptr ');
+          PutOp(fh);
+          write(ircode, ', i64 ');
+          PutOp(addr);
+          write(ircode, ', i32 ');
+          PutOp(width);
+          writeln(ircode, ')')
+        end
+        else if b^.kind = tyReal then begin
+          write(ircode, '  call void @pas_write_real(ptr ');
+          PutOp(fh);
+          write(ircode, ', double ');
+          PutOp(v);
+          write(ircode, ', i32 ');
+          PutOp(width);
+          write(ircode, ', i32 ');
+          PutOp(prec);
+          writeln(ircode, ')')
+        end
+        else if b^.kind = tyBoolean then begin
+          Def(addr);
+          write(ircode, 'zext i1 ');
+          PutOp(v);
+          writeln(ircode, ' to i32');
+          write(ircode, '  call void @pas_write_bool(ptr ');
+          PutOp(fh);
+          write(ircode, ', i32 ');
+          PutOp(addr);
+          write(ircode, ', i32 ');
+          PutOp(width);
+          writeln(ircode, ')')
+        end
+        else if b^.kind = tyChar then begin
+          write(ircode, '  call void @pas_write_char(ptr ');
+          PutOp(fh);
+          write(ircode, ', i8 ');
+          PutOp(v);
+          write(ircode, ', i32 ');
+          PutOp(width);
+          writeln(ircode, ')')
+        end
+      end;
+      a := a^.next
+    end;
+    if s^.wrNewline then begin
+      write(ircode, '  call void @pas_writeln(ptr ');
+      PutOp(fh);
+      writeln(ircode, ')')
+    end
+  end
+end;
+
+{ Each variable is filled by the runtime call its type selects, and `readln`
+  then finishes the line -- which is what makes readln(x) one statement. }
+procedure EmitRead(s: nodePtr);
+var fh, slot, v, wide: str; a: nodePtr; t: typePtr;
+begin
+  if s^.rdFile <> nil then begin
+    EmitAddress(s^.rdFile, fh);
+    a := s^.rdArgs;
+    while a <> nil do begin
+      EmitAddress(a, slot);
+      t := a^.ntype;
+      if IsChar(t) then begin
+        Def(v);
+        write(ircode, 'call i8 @pas_read_char(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')')
+      end
+      else if IsReal(t) then begin
+        Def(v);
+        write(ircode, 'call double @pas_read_real(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')')
+      end
+      else begin
+        { The runtime returns i64 and has already rejected anything outside
+          -maxint..maxint, so this truncation cannot lose a valid value. }
+        Def(wide);
+        write(ircode, 'call i64 @pas_read_int(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        Def(v);
+        write(ircode, 'trunc i64 ');
+        PutOp(wide);
+        writeln(ircode, ' to i32');
+        CheckedForSubrange(v, t)
+      end;
+      write(ircode, '  store ');
+      PutLlType(t);
+      write(ircode, ' ');
+      PutOp(v);
+      write(ircode, ', ptr ');
+      PutOp(slot);
+      writeln(ircode);
+      a := a^.next
+    end;
+    if s^.rdNewline then begin
+      write(ircode, '  call void @pas_readln(ptr ');
+      PutOp(fh);
+      writeln(ircode, ')')
+    end
+  end
+end;
+
+{ `new(p)` gives p the address of fresh storage for one variable of its domain;
+  `dispose(p)` gives it back. The size is a compile-time constant because the
+  domain type is. }
+procedure EmitStdProc(s: nodePtr);
+var slot, block: str;
+begin
+  EmitAddress(s^.pcArgs, slot);
+  case s^.pcStd of
+    spReset, spRewrite, spGet, spPut: begin
+      write(ircode, '  call void @pas_');
+      case s^.pcStd of
+        spReset:   write(ircode, 'reset');
+        spRewrite: write(ircode, 'rewrite');
+        spGet:     write(ircode, 'get');
+        spPut:     write(ircode, 'put');
+        spNone, spNew, spDispose: write(ircode, 'get')
+      end;
+      write(ircode, '(ptr ');
+      PutOp(slot);
+      writeln(ircode, ')')
+    end;
+    spNew: begin
+      Def(block);
+      writeln(ircode, 'call ptr @pas_new(i64 ',
+              LlSize(s^.pcArgs^.ntype^.elem):1, ')');
+      write(ircode, '  store ptr ');
+      PutOp(block);
+      write(ircode, ', ptr ');
+      PutOp(slot);
+      writeln(ircode)
+    end;
+    spDispose: begin
+      Def(block);
+      write(ircode, 'load ptr, ptr ');
+      PutOp(slot);
+      writeln(ircode);
+      write(ircode, '  call void @pas_dispose(ptr ');
+      PutOp(block);
+      writeln(ircode, ')');
+      { ISO 7185 6.6.5.3 leaves the pointer undefined afterwards. Setting it to
+        nil makes the next dereference trap instead of reading freed storage --
+        stricter than the standard requires, and cheap. }
+      write(ircode, '  store ptr null, ptr ');
+      PutOp(slot);
+      writeln(ircode)
+    end;
+    spNone: { not a standard procedure }
+  end
+end;
+
+procedure EmitIf(s: nodePtr);
+var cond: str; thenB, elseB, endB: integer;
+begin
+  EmitExpr(s^.ifCond, cond);
+  thenB := NewBlock;
+  if s^.ifElse <> nil then elseB := NewBlock else elseB := 0;
+  endB := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  write(ircode, ', label %L', thenB:1, ', label %L');
+  if elseB <> 0 then writeln(ircode, elseB:1) else writeln(ircode, endB:1);
+
+  StartBlock(thenB);
+  EmitStmt(s^.ifThen);
+  writeln(ircode, '  br label %L', endB:1);
+
+  if elseB <> 0 then begin
+    StartBlock(elseB);
+    EmitStmt(s^.ifElse);
+    writeln(ircode, '  br label %L', endB:1)
+  end;
+
+  StartBlock(endB)
+end;
+
+procedure EmitWhile(s: nodePtr);
+var cond: str; condB, bodyB, endB: integer;
+begin
+  condB := NewBlock;
+  bodyB := NewBlock;
+  endB := NewBlock;
+  writeln(ircode, '  br label %L', condB:1);
+  StartBlock(condB);
+  EmitExpr(s^.whCond, cond);
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
+
+  StartBlock(bodyB);
+  EmitStmt(s^.whBody);
+  writeln(ircode, '  br label %L', condB:1);
+
+  StartBlock(endB)
+end;
+
+procedure EmitRepeat(s: nodePtr);
+var cond: str; bodyB, endB: integer; sub: nodePtr;
+begin
+  bodyB := NewBlock;
+  endB := NewBlock;
+  writeln(ircode, '  br label %L', bodyB:1);
+  StartBlock(bodyB);
+  sub := s^.rpBody;
+  while sub <> nil do begin
+    EmitStmt(sub);
+    sub := sub^.next
+  end;
+  { repeat runs until the condition becomes true }
+  EmitExpr(s^.rpCond, cond);
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', endB:1, ', label %L', bodyB:1);
+  StartBlock(endB)
+end;
+
+procedure EmitFor(s: nodePtr);
+var slot, from, toV, limit, cur, lim, test, now, lim2, same, next: str;
+    t: typePtr; condB, bodyB, stepB, endB: integer; unsignedOrdinal: boolean;
+begin
+  EmitAddress(s^.frVar, slot);
+  t := s^.frVar^.ntype;
+
+  { Both bounds are checked against the control variable's type, and nothing
+    between them needs checking: the loop never leaves [from, to]. }
+  EmitExpr(s^.frFrom, from);
+  ConvertFor(from, s^.frFrom^.ntype, t);
+  CheckedForSubrange(from, t);
+  EmitExpr(s^.frTo, toV);
+  ConvertFor(toV, s^.frTo^.ntype, t);
+  CheckedForSubrange(toV, t);
+
+  { The limit is evaluated exactly once, as ISO 7185 6.8.3.9 requires. }
+  Def(limit);
+  write(ircode, 'alloca ');
+  PutLlType(t);
+  writeln(ircode);
+  write(ircode, '  store ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(toV);
+  write(ircode, ', ptr ');
+  PutOp(limit);
+  writeln(ircode);
+  write(ircode, '  store ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(from);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+
+  condB := NewBlock;
+  bodyB := NewBlock;
+  stepB := NewBlock;
+  endB := NewBlock;
+  writeln(ircode, '  br label %L', condB:1);
+
+  StartBlock(condB);
+  Def(cur);
+  write(ircode, 'load ');
+  PutLlType(t);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+  Def(lim);
+  write(ircode, 'load ');
+  PutLlType(t);
+  write(ircode, ', ptr ');
+  PutOp(limit);
+  writeln(ircode);
+  { Integer is the only ordinal with negative values; char, boolean and
+    enumerations all order as unsigned. }
+  unsignedOrdinal := not IsInteger(t);
+  Def(test);
+  if s^.frDownto then
+    if unsignedOrdinal then write(ircode, 'icmp uge ')
+    else write(ircode, 'icmp sge ')
+  else
+    if unsignedOrdinal then write(ircode, 'icmp ule ')
+    else write(ircode, 'icmp sle ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(cur);
+  write(ircode, ', ');
+  PutOp(lim);
+  writeln(ircode);
+  write(ircode, '  br i1 ');
+  PutOp(test);
+  writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
+
+  StartBlock(bodyB);
+  EmitStmt(s^.frBody);
+  { Stop before stepping past the limit so the last iteration cannot overflow.
+    verify/ carries the theorem that says the step is therefore unchecked. }
+  Def(now);
+  write(ircode, 'load ');
+  PutLlType(t);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+  Def(lim2);
+  write(ircode, 'load ');
+  PutLlType(t);
+  write(ircode, ', ptr ');
+  PutOp(limit);
+  writeln(ircode);
+  Def(same);
+  write(ircode, 'icmp eq ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(now);
+  write(ircode, ', ');
+  PutOp(lim2);
+  writeln(ircode);
+  write(ircode, '  br i1 ');
+  PutOp(same);
+  writeln(ircode, ', label %L', endB:1, ', label %L', stepB:1);
+
+  StartBlock(stepB);
+  Def(next);
+  if s^.frDownto then write(ircode, 'sub ') else write(ircode, 'add ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(now);
+  writeln(ircode, ', 1');
+  write(ircode, '  store ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(next);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+  writeln(ircode, '  br label %L', condB:1);
+
+  StartBlock(endB)
+end;
+
+{ The record is designated once and its address kept for the body, so a
+  subscript in the designator is evaluated a single time (6.8.3.10) and cannot
+  see a change the body makes to the subscript's variable. }
+procedure EmitWith(s: nodePtr);
+var addr, slot: str;
+begin
+  EmitAddress(s^.wtRecord, addr);
+  FrameSlot(s^.wtBinding, slot);
+  write(ircode, '  store ptr ');
+  PutOp(addr);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+  EmitStmt(s^.wtBody)
+end;
+
+{ ISO 7185 6.8.3.5 has no `else` arm, so the default is an error rather than a
+  way out: a selector matching no label stops the program. That maps onto a
+  switch exactly, and the jump table survives optimisation. }
+procedure EmitCase(s: nodePtr);
+var sel, wide: str; arm: nodePtr; n: numPtr;
+    first, k, count, armB, defaultB, endB, msg: integer;
+begin
+  EmitExpr(s^.csSelector, sel);
+  { The switch wants a single integer type; a char or boolean selector is
+    widened, and its labels with it. }
+  if IsChar(s^.csSelector^.ntype) or IsBoolean(s^.csSelector^.ntype) then begin
+    Def(wide);
+    write(ircode, 'zext ');
+    PutLlType(s^.csSelector^.ntype);
+    write(ircode, ' ');
+    PutOp(sel);
+    writeln(ircode, ' to i32');
+    sel := wide
+  end;
+
+  count := 0;
+  arm := s^.csArms;
+  while arm <> nil do begin
+    count := count + 1;
+    arm := arm^.next
+  end;
+  { The arms' blocks are numbered before the switch is written, because the
+    switch names them all and they are filled afterwards. They are consecutive,
+    so one number is enough to find them again. }
+  first := nextBlock + 1;
+  for k := 1 to count do
+    armB := NewBlock;
+  defaultB := NewBlock;
+  endB := NewBlock;
+
+  write(ircode, '  switch i32 ');
+  PutOp(sel);
+  write(ircode, ', label %L', defaultB:1, ' [');
+  arm := s^.csArms;
+  k := first;
+  while arm <> nil do begin
+    n := arm^.caValues;
+    while n <> nil do begin
+      write(ircode, ' i32 ', n^.value:1, ', label %L', k:1);
+      n := n^.next
+    end;
+    k := k + 1;
+    arm := arm^.next
+  end;
+  writeln(ircode, ' ]');
+
+  arm := s^.csArms;
+  k := first;
+  while arm <> nil do begin
+    StartBlock(k);
+    EmitStmt(arm^.caBody);
+    writeln(ircode, '  br label %L', endB:1);
+    k := k + 1;
+    arm := arm^.next
+  end;
+
+  StartBlock(defaultB);
+  MsgStart;
+  MsgText('case: no label matches the selector     ');
+  msg := MsgEnd;
+  writeln(ircode, '  call void @pas_runtime_error(ptr @s', msg:1, ')');
+  writeln(ircode, '  unreachable');
+
+  StartBlock(endB)
+end;
+
+procedure EmitStmt;
+var sub: nodePtr; v: str;
+begin
+  if s <> nil then
+    case s^.kind of
+      nkEmpty: ;
+      nkCompound: begin
+        sub := s^.cpBody;
+        while sub <> nil do begin
+          EmitStmt(sub);
+          sub := sub^.next
+        end
+      end;
+      nkAssign: EmitAssign(s);
+      nkWrite: EmitWrite(s);
+      nkRead: EmitRead(s);
+      nkIf: EmitIf(s);
+      nkWhile: EmitWhile(s);
+      nkRepeat: EmitRepeat(s);
+      nkFor: EmitFor(s);
+      nkWith: EmitWith(s);
+      nkCase: EmitCase(s);
+      nkProcCall:
+        if s^.pcStd <> spNone then EmitStdProc(s)
+        else if s^.pcSym <> nil then EmitUserCall(s^.pcSym, s^.pcArgs, v);
+      nkInt, nkReal, nkChar, nkStr, nkNil, nkVar, nkIndex, nkField, nkDeref,
+      nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
+      nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock: ;
+    end
+end;
+
+{ ============================== procedures =============================== }
+
+procedure PutSlotType(s: symPtr);
+begin
+  { A `var` parameter's slot holds the address of the caller's variable, not a
+    copy of its value. Everything else -- including a structured value
+    parameter, which the prologue copies in -- holds the value itself. }
+  if s^.kind = skVarParam then write(ircode, 'ptr') else PutLlType(s^.stype)
+end;
+
+procedure EmitFrameType(p: symPtr);
+var l: symListPtr;
+begin
+  p^.irId := nextProcId;
+  nextProcId := nextProcId + 1;
+  write(ircode, '%frame', p^.irId:1, ' = type { ptr');
+  l := p^.frameVars;
+  while l <> nil do begin
+    write(ircode, ', ');
+    PutSlotType(l^.sym);
+    l := l^.next
+  end;
+  writeln(ircode, ' }')
+end;
+
+procedure DeclareProcs(b: nodePtr);
+var d: nodePtr;
+begin
+  d := b^.blProcs;
+  while d <> nil do begin
+    if d^.pdSym <> nil then
+      if d^.pdSym^.irId = 0 then   { a forward declaration already made one }
+        EmitFrameType(d^.pdSym);
+    d := d^.next
+  end;
+  d := b^.blProcs;
+  while d <> nil do begin
+    if d^.pdBody <> nil then DeclareProcs(d^.pdBody);
+    d := d^.next
+  end
+end;
+
+{ Every file variable the frame holds starts closed, and knows how reset and
+  rewrite will find the external file it stands for. The standard files are
+  opened here -- ISO 7185 6.10 has `input` reset and `output` rewritten before
+  the program body runs -- but no character is read until the program asks, or
+  a program that never reads would hang waiting for a terminal. }
+procedure InitFiles(p: symPtr);
+var l: symListPtr; addr: str; binding, name: integer;
+begin
+  l := p^.frameVars;
+  while l <> nil do begin
+    if IsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
+      case l^.sym^.binding of
+        fbInternal:  binding := 0;
+        fbStdInput:  binding := 1;
+        fbStdOutput: binding := 2;
+        fbArgument:  binding := 3
+      end;
+      name := AddGlobal(l^.sym^.at, l^.sym^.len);
+      AddressOfSym(l^.sym, addr);
+      write(ircode, '  call void @pas_file_init(ptr ');
+      PutOp(addr);
+      writeln(ircode, ', i32 ', binding:1, ', i32 ', l^.sym^.fileArg:1,
+              ', ptr @s', name:1, ')')
+    end;
+    l := l^.next
+  end
+end;
+
+{ A block exit closes the files the block declared, which is ISO 7185's rule
+  and also the only thing that flushes a file written to inside a procedure.
+  Pascal has no early return, so the single exit point each body ends with is
+  the whole of the epilogue. }
+procedure CloseFiles(p: symPtr);
+var l: symListPtr; addr: str;
+begin
+  l := p^.frameVars;
+  while l <> nil do begin
+    if IsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
+      AddressOfSym(l^.sym, addr);
+      write(ircode, '  call void @pas_file_done(ptr ');
+      PutOp(addr);
+      writeln(ircode, ')')
+    end;
+    l := l^.next
+  end
+end;
+
+{ The prologue shared by main and every procedure: alloca the frame, store the
+  static link, copy the incoming arguments into their slots. }
+procedure EnterFrame(p: symPtr);
+var l: symListPtr; link, slot, arg: str; k, align: integer;
+begin
+  irProc := p;
+  irLevel := p^.level;
+  nextReg := 0;
+  nextBlock := 0;
+  StartBlock(NewBlock);
+  writeln(ircode, '  %frame = alloca %frame', p^.irId:1);
+  Def(link);
+  writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
+          ', ptr %frame, i32 0, i32 0');
+
+  if p^.level = 0 then begin
+    { The program has no enclosing block, so its static link is never followed.
+      The command line goes to the runtime before any file is opened: it is
+      where `reset` looks for the name of an external file. }
+    write(ircode, '  store ptr null, ptr ');
+    PutOp(link);
+    writeln(ircode);
+    writeln(ircode, '  call void @pas_args(i32 %argc, ptr %argv)')
+  end
+  else begin
+    write(ircode, '  store ptr %link, ptr ');
+    PutOp(link);
+    writeln(ircode);
+    l := p^.params;
+    k := 0;
+    while l <> nil do begin
+      StrClear(arg);
+      StrAppend(arg, '%');
+      StrAppend(arg, 'a');
+      AppendInt(arg, k);
+      Def(slot);
+      writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
+              ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
+      if (l^.sym^.kind <> skVarParam) and IsStructured(l^.sym^.stype) then begin
+        { A structured value parameter arrives as the caller's address; the
+          copy that makes it a *value* parameter is made here, once, so the
+          callee can write to it without the caller seeing the change. }
+        align := LlAlign(l^.sym^.stype);
+        write(ircode, '  call void @llvm.memcpy.p0.p0.i64(ptr align ',
+              align:1, ' ');
+        PutOp(slot);
+        write(ircode, ', ptr align ', align:1, ' ');
+        PutOp(arg);
+        writeln(ircode, ', i64 ', LlSize(l^.sym^.stype):1, ', i1 false)')
+      end
+      else begin
+        write(ircode, '  store ');
+        PutSlotType(l^.sym);
+        write(ircode, ' ');
+        PutOp(arg);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode)
+      end;
+      k := k + 1;
+      l := l^.next
+    end
+  end;
+
+  InitFiles(p)
+end;
+
+procedure EmitProcBody(d: nodePtr);
+var p: symPtr; l: symListPtr; slot, res: str; k: integer;
+begin
+  p := d^.pdSym;
+  writeln(ircode);
+  write(ircode, 'define internal ');
+  if p^.kind = skFunc then PutLlType(p^.stype) else write(ircode, 'void');
+  write(ircode, ' @p', p^.irId:1, '(ptr %link');
+  l := p^.params;
+  k := 0;
+  while l <> nil do begin
+    write(ircode, ', ');
+    if (l^.sym^.kind = skVarParam) or IsMemory(l^.sym^.stype) then
+      write(ircode, 'ptr')
+    else
+      PutLlType(l^.sym^.stype);
+    write(ircode, ' %a', k:1);
+    k := k + 1;
+    l := l^.next
+  end;
+  writeln(ircode, ') {');
+
+  EnterFrame(p);
+  EmitStmt(d^.pdBody^.blBody);
+  CloseFiles(p);
+
+  if p^.kind = skFunc then begin
+    Def(slot);
+    writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
+            ', ptr %frame, i32 0, i32 ', 1 + p^.resultVar^.frameIndex:1);
+    Def(res);
+    write(ircode, 'load ');
+    PutLlType(p^.stype);
+    write(ircode, ', ptr ');
+    PutOp(slot);
+    writeln(ircode);
+    write(ircode, '  ret ');
+    PutLlType(p^.stype);
+    write(ircode, ' ');
+    PutOp(res);
+    writeln(ircode)
+  end
+  else
+    writeln(ircode, '  ret void');
+  writeln(ircode, '}')
+end;
+
+procedure EmitProcs(b: nodePtr);
+var d: nodePtr;
+begin
+  d := b^.blProcs;
+  while d <> nil do begin
+    if d^.pdBody <> nil then begin   { a forward heading has no body of its own }
+      EmitProcBody(d);
+      EmitProcs(d^.pdBody)
+    end;
+    d := d^.next
+  end
+end;
+
+procedure EmitDeclares;
+begin
+  writeln(ircode);
+  writeln(ircode, 'declare void @pas_runtime_error(ptr)');
+  writeln(ircode, 'declare void @pas_args(i32, ptr)');
+  writeln(ircode, 'declare void @pas_file_init(ptr, i32, i32, ptr)');
+  writeln(ircode, 'declare void @pas_file_done(ptr)');
+  writeln(ircode, 'declare void @pas_reset(ptr)');
+  writeln(ircode, 'declare void @pas_rewrite(ptr)');
+  writeln(ircode, 'declare void @pas_get(ptr)');
+  writeln(ircode, 'declare void @pas_put(ptr)');
+  writeln(ircode, 'declare ptr @pas_buffer(ptr)');
+  writeln(ircode, 'declare ptr @pas_new(i64)');
+  writeln(ircode, 'declare void @pas_dispose(ptr)');
+  writeln(ircode, 'declare void @pas_write_int(ptr, i64, i32)');
+  writeln(ircode, 'declare void @pas_write_real(ptr, double, i32, i32)');
+  writeln(ircode, 'declare void @pas_write_bool(ptr, i32, i32)');
+  writeln(ircode, 'declare void @pas_write_char(ptr, i8, i32)');
+  writeln(ircode, 'declare void @pas_write_str(ptr, ptr, i32, i32)');
+  writeln(ircode, 'declare void @pas_writeln(ptr)');
+  writeln(ircode, 'declare i8 @pas_read_char(ptr)');
+  writeln(ircode, 'declare double @pas_read_real(ptr)');
+  writeln(ircode, 'declare i64 @pas_read_int(ptr)');
+  writeln(ircode, 'declare void @pas_readln(ptr)');
+  writeln(ircode, 'declare i32 @pas_eof(ptr)');
+  writeln(ircode, 'declare i32 @pas_eoln(ptr)');
+  writeln(ircode, 'declare i32 @pas_str_compare(ptr, ptr, i32)');
+  writeln(ircode, 'declare { i32, i1 } @llvm.sadd.with.overflow.i32(i32, i32)');
+  writeln(ircode, 'declare { i32, i1 } @llvm.ssub.with.overflow.i32(i32, i32)');
+  writeln(ircode, 'declare { i32, i1 } @llvm.smul.with.overflow.i32(i32, i32)');
+  writeln(ircode, 'declare i32 @llvm.abs.i32(i32, i1)');
+  writeln(ircode, 'declare double @llvm.fabs.f64(double)');
+  writeln(ircode, 'declare double @llvm.sqrt.f64(double)');
+  writeln(ircode, 'declare double @llvm.sin.f64(double)');
+  writeln(ircode, 'declare double @llvm.cos.f64(double)');
+  writeln(ircode, 'declare double @llvm.log.f64(double)');
+  writeln(ircode, 'declare double @llvm.exp.f64(double)');
+  writeln(ircode, 'declare double @llvm.round.f64(double)');
+  writeln(ircode, 'declare double @atan(double)');
+  writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)')
+end;
+
+procedure RunCodeGen;
+begin
+  rewrite(ircode);
+  nextProcId := 1;
+  nextStr := 0;
+  strHead := nil;
+  strTail := nil;
+
+  { The frame types come before any function that indexes one. }
+  EmitFrameType(programSym);
+  DeclareProcs(progBlock);
+
+  { main takes the command line, because ISO 7185 6.10 leaves it to the
+    implementation to say how a program parameter names an external file and
+    this one binds them to the arguments, in the order they are written. }
+  writeln(ircode);
+  writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) {');
+  EnterFrame(programSym);
+  EmitStmt(progBlock^.blBody);
+  CloseFiles(programSym);
+  writeln(ircode, '  ret i32 0');
+  writeln(ircode, '}');
+
+  EmitProcs(progBlock);
+
+  writeln(ircode);
+  EmitGlobals;
+  EmitDeclares
+end;
+
 procedure DumpEverything;
 begin
   writeln('=== tokens');
@@ -5793,7 +8114,7 @@ begin
 
   writeln('=== ast');
   { The C++ driver stops after lexing when the lexer found anything wrong, so a
-    file with a bad token is compared on its diagnostics and not on a tree
+    f with a bad token is compared on its diagnostics and not on a tree
     built from tokens that were never valid. }
   if not errorSeen then begin
     ParseProgram;
@@ -5810,7 +8131,14 @@ begin
       annotate := true;
       DumpProgram
     end
-  end
+  end;
+
+  { The IR is the compiler's *product*, not a dump, so it goes to a file of its
+    own rather than to a fourth section: it has to be assembled and linked, and
+    two backends' assembler text cannot be diffed the way three stages of a
+    tree can (ADR-0025). It is still written on every run, which is what keeps
+    the differential test exercising it on all 173 fs. }
+  if not errorSeen then RunCodeGen
 end;
 
 begin
@@ -5823,6 +8151,8 @@ begin
   aborted := false;
   errorSeen := false;
   annotate := false;
+  msgOut := false;
+  StrClear(msgBuf);
   scopeTop := nil;
   scopeDepth := 0;
   pendingHead := nil;

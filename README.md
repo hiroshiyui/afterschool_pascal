@@ -261,6 +261,10 @@ stage 2   pascalc2 = pascalc1(compiler.pas)
 stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 byte-for-byte
 ```
 
+**This now holds.** The compiler compiles itself, and stage 2 and stage 3 are
+identical — 56 121 lines of IR, byte for byte, checked under `ctest` by
+`selfhost/irtest.sh`.
+
 Reaching stage 1 means the accepted language has to cover what a compiler is
 written in. In dependency order:
 
@@ -285,16 +289,16 @@ written in. In dependency order:
    that must be *stored* are identifiers and about sixty padded table entries.
    `tests/bootstrap_strings.pas` is the working evidence.
 
-**Every prerequisite for stage 1 is now in place**, and what remains is writing
-the Pascal source rather than growing the language it is written in.
+**Every prerequisite for stage 1 is now in place**, and the Pascal source that
+needed them is written.
 
-## Stage 1, in progress
+## Stage 1
 
-`selfhost/compiler.pas` is the compiler being written in its own language: the
-lexer, the parser and Sema, in **one source file**, because ISO 7185 has no
-include mechanism and the finished compiler is one source. It is checked
-against the C++ stages it was ported from, on every Pascal source in the tree —
-173 files, compared stage for stage:
+`selfhost/compiler.pas` is the compiler written in its own language: the lexer,
+the parser, Sema and the code generator, in **one source file**, because ISO
+7185 has no include mechanism and the finished compiler is one source. It is
+checked against the C++ stages it was ported from, on every Pascal source in the
+tree — 175 files, compared stage for stage:
 
 ```sh
 selfhost/difftest.sh build/bin/pascalc     # also runs under ctest
@@ -333,13 +337,29 @@ The AST is where the bootstrap constraints paid off: the `NK` tag of
 variant record's tag and `as<T>()` became the `case` that reads it, with no
 `dynamic_cast` to replace and nothing to redesign.
 
-Backend for the Pascal-hosted compiler: emit textual LLVM IR and hand it to
-`llc`/`clang`. That needs nothing but file output. Binding the LLVM-C API from
-Pascal is possible later but is not on the critical path.
+The code generator is the one component that is **not** diffed, and could not
+be: the C++ backend builds an `llvm::Module` through the API while the Pascal
+one prints assembler text, and LLVM's own printer is not a specification — it
+renumbers, reorders and changes between releases. So it is checked by *running*
+what it produces, against the same golden output the C++ compiler is held to,
+and then by closing the bootstrap:
 
-A useful checkpoint before stage 1 is *differential testing*: once the C++
-compiler and the Pascal compiler both exist, they should produce equivalent IR
-for every file in `tests/`.
+```sh
+selfhost/irtest.sh build/bin/pascalc       # also runs under ctest
+```
+
+That compiles every case in `tests/` with the Pascal compiler, links the IR with
+`clang`, runs it and compares against `tests/*.out` and `tests/*.err`; then
+compiles the compiler with itself twice and requires stage 2 and stage 3 to be
+identical. A compiler that reproduced itself and nothing else would pass that
+last comparison alone, so stage 2 is put through the golden suite too. See
+[ADR-0025](doc/adr/0025-the-code-generator-is-checked-by-running-it.md).
+
+```sh
+build/bin/pascalc selfhost/compiler.pas -o stage1
+./stage1 selfhost/compiler.pas stage2.ll        # source, then where the IR goes
+clang stage2.ll build/lib/libpasrt.a -lm -o stage2
+```
 
 [doc/roadmap.md](doc/roadmap.md) expands this: what items 5 and 6 actually
 involve, the order the stage-1 source gets ported in, and the known limitations

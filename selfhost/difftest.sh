@@ -59,7 +59,11 @@ for f in "${files[@]}"; do
   # A bug can be a *loop* rather than a wrong answer — a scanner that
   # recognises no character consumes none and never advances. That is a
   # failure like any other, so it is bounded here instead of hanging the run.
-  timeout 120 "$work/stage1" "$f" >"$work/pas.txt" 2>"$work/pas.err"
+  # The second argument is where the Pascal compiler writes its IR. Nothing
+  # here compares it -- selfhost/irtest.sh is what runs it -- but generating
+  # it on every file is free coverage: a code generator that crashes or
+  # loops on a corpus file fails here, on the file that did it.
+  timeout 120 "$work/stage1" "$f" "$work/ir.ll" >"$work/pas.txt" 2>"$work/pas.err"
   status=$?
   checked=$((checked + 1))
   if [[ $status -eq 124 ]]; then

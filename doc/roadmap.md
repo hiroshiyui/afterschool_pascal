@@ -17,6 +17,10 @@ stage 2   pascalc2 = pascalc1(compiler.pas)
 stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 byte-for-byte
 ```
 
+**The comparison now holds.** `selfhost/irtest.sh` runs all three stages under
+ctest and requires stage 2 to equal stage 3; they are compared as IR rather than
+as binaries, because IR is what the Pascal compiler emits (ADR-0025).
+
 Stage 0 only has to be good enough to compile the Pascal-written compiler
 *once*. It does not have to be fast, complete, or pleasant — which is why the
 feature list below stops where it does rather than at full ISO coverage.
@@ -47,9 +51,9 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 34 ctest cases — 32 Pascal programs, the verification
-run, and the differential test — and 31 SMT rules, 27 of them for all 2³²
-inputs, with no known gaps.
+Alongside the language, 37 ctest cases — 34 Pascal programs, the verification
+run, the differential test and the bootstrap — and 31 SMT rules, 27 of them for
+all 2³² inputs, with no known gaps.
 
 ## Item 5 — text files (done)
 
@@ -111,18 +115,21 @@ Nothing in the language is now blocking. In rough order:
    has no include mechanism and a third program would have carried a third copy
    of the lexer. It dumps every stage in one pass, against `--dump-all`. 173
    files agree stage for stage.
-4. **Port CodeGen against textual IR.** ADR-0006's path. The C++ backend keeps
-   using the LLVM API; the Pascal one prints `.ll` and hands it to `llc` or
-   `clang`. Binding the LLVM-C API from Pascal is possible later and is not on
-   the critical path.
+4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
+   path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
+   and `clang` assembles and links it. Binding the LLVM-C API from Pascal
+   remains possible and remains off the critical path.
 
-**Differential testing is the checkpoint**, and it comes before stage 1 is
-declared working: once both compilers exist, they should produce equivalent IR
-for every file in `tests/`. A disagreement is a bug in one of them, found
-cheaply, rather than a byte mismatch at stage 3 with nothing to bisect. The
-three components ported so far already work this way, and each later one is
-merged into the same program and dumped in the same pass rather than getting a
-harness of its own.
+**Stage 1 is complete, and the bootstrap closes**: the compiler compiles itself,
+and stage 2 and stage 3 are identical.
+
+**Differential testing was the checkpoint**, and it did come before stage 1 was
+declared working: the first three components are compared against the C++ ones
+stage for stage, on every file in the tree, and each was merged into the same
+program and dumped in the same pass rather than getting a harness of its own.
+The fourth could not be — two backends' assembler text is not comparable, since
+LLVM's printer is not a specification — so it is checked against the golden
+output of the programs it builds instead, and then against itself.
 
 The harness is only worth what its corpus reaches, and that has to be
 *counted*, not assumed. Twice now a whole branch was found uncompared: no file
@@ -156,6 +163,23 @@ Four more from the parser (ADR-0023):
 - **Reading a function's own name is a call** (§6.8.2.2), so a node under
   construction cannot live in the result variable. `f^.field := v` compiles and
   recurses forever; only `new(f)` is caught.
+
+And four from CodeGen (ADR-0025), before four from Sema:
+
+- **The oracle changes when the output stops being a data structure.** A tree
+  can be dumped in a format both sides write; a *program* can only be run.
+- **Writing text instead of building a module made the port smaller.** No
+  instruction list is needed, because the C++ builder never returns to a block
+  it has left; and no named types are needed, because opaque pointers make
+  every Pascal type non-recursive when printed.
+- **The real literal never needed converting.** Carried as source text it goes
+  straight into the IR, and LLVM's assembler is the `strtod` — the same
+  correctly-rounded conversion the C++ side gets from its own. Three records
+  deferred a conversion that turned out to be unnecessary.
+- **The layout rules have to be written out**, because there is no DataLayout to
+  ask. They are needed in only two places, and the one number that cannot be
+  derived — the size of a file variable — is checked against `pasrt.h` by the
+  harness.
 
 And four from Sema (ADR-0024):
 
@@ -215,12 +239,17 @@ surprises.
 Nothing here is scheduled, and none of it should start before stage 3 compares
 equal.
 
-- **Retire stage 0.** Once the Pascal compiler is a fixed point, the C++ source
-  becomes a historical artefact rather than a maintained one.
+- **Retire stage 0.** The Pascal compiler *is* a fixed point now, so this is
+  available — but the C++ compiler is still what builds stage 1, still what the
+  first three components are diffed against, and still the one `verify/` proves.
+  Retiring it means giving up all three, and none of them has a replacement yet.
 - **The rest of ISO 7185**, driven by a conformance suite rather than by what
   the compiler's own source happens to use.
-- **Keep the proofs alive across the port.** `verify/lowering.py` models
-  `codegen.cpp`; when codegen is rewritten in Pascal, the model has to follow it
-  or the catalogue silently starts describing a compiler that no longer exists.
-  This is the single most fragile thing about the bootstrap, and it deserves a
-  decision of its own before the port reaches CodeGen.
+- **Keep the proofs alive across the port.** ADR-0025 made the decision the
+  earlier version of this line asked for: the theorems stay attached to the C++
+  model, and the Pascal generator is tied to it by *behaviour* — the golden
+  files carry the traps and their messages, so a lowering that stopped checking
+  fails `irtest.sh`. What that does not give is a proof for every input, which
+  is what `verify/` gives the C++ one. Re-pointing the model at the Pascal
+  source is the work that retiring stage 0 would require, and it is still the
+  most fragile thing about the bootstrap.

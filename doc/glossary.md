@@ -252,11 +252,26 @@ without it the error paths would never be compared. `selfhost/badparse/` is the
 parser's equivalent, and it is a *directory* because the parser stops at its
 first error, so one file can carry only one message.
 
+**Behavioural test (of a port).** What replaces a differential test when the
+two implementations cannot produce comparable output. `selfhost/irtest.sh`
+compiles every case in `tests/` with the Pascal compiler, links the IR with
+`clang`, runs it, and compares against the *same* `.out`/`.err` the C++ compiler
+is held to. LLVM's own printer is not a specification, so the assembler text of
+two backends cannot be diffed; their programs' behaviour can (ADR-0025).
+
+**Fixed point.** Stage 2 equals stage 3 — the compiler built by a
+C++-built compiler and the compiler built by a Pascal-built one are the same.
+Compared as IR rather than as binaries, because IR is what the Pascal compiler
+emits. Checked by `selfhost/irtest.sh` under `ctest`, together with the golden
+suite, because a compiler that reproduced itself and nothing else would pass the
+comparison alone.
+
 **Coverage gap.** A branch the corpus never reaches, which a differential test
 cannot compare and will silently report as agreement. Found by mutating the
 Pascal source and noticing nothing goes red — which is how the missing tab
-(ADR-0022) and the entirely uncompared parser diagnostics (ADR-0023) were both
-discovered. Count what the corpus reaches; do not assume it.
+(ADR-0022), the entirely uncompared parser diagnostics (ADR-0023), three Sema
+rules (ADR-0024) and five code-generation rules (ADR-0025) were all discovered.
+Count what the corpus reaches; do not assume it.
 
 **Sibling list.** What a `std::vector<...Ptr>` in `ast.h` becomes in
 `selfhost/compiler.pas`: every node carries `next`, and a list is a head pointer
@@ -272,7 +287,7 @@ green bar that never ran the new case is not a green bar.
 **Stage 0 / 1 / 2 / 3.** The classic three-stage build. Stage 0 is the C++
 compiler in this repository; stage 1 is what it produces from the Pascal source;
 stages 2 and 3 are that source compiled by its own output, and must be
-byte-identical. See [roadmap.md](roadmap.md).
+identical. They now are. See [roadmap.md](roadmap.md).
 
 **Bootstrap constraint.** A design choice made to keep the C++ source
 translatable into Pascal — no RTTI in the AST, textual IR as a supported output,
