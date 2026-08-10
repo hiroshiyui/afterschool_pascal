@@ -139,6 +139,12 @@ reference, and what makes a recursive type possible. `resolvePointer` records a
 - Every `NK::Deref` traps on nil, and `dispose` stores nil back into the
   variable. Use-after-dispose through another pointer is **not** detected —
   don't let a comment or a doc imply otherwise.
+- `new(p, c1, ..., cn)` allocates only the selected variants (ADR-0027). Sema
+  folds the tag values into `ProcCallStmt::variantSelection`, a path of the same
+  shape as `Field::variant`, and `selectedSize` trims the *tail* only: the
+  offsets stay the full type's, so `p^.field` is the same getelementptr it
+  always was. ISO's rule that such a variable may not be assigned or passed is
+  **not** enforced — that needs a run-time property.
 - Opaque pointers make every pointer type `ptr()`, so recursion needs nothing
   from codegen.
 - There is deliberately **no SMT rule** for pointers; a nil-check rule would be

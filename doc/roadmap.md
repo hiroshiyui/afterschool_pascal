@@ -51,7 +51,7 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 39 ctest cases — 36 Pascal programs, the verification
+Alongside the language, 40 ctest cases — 37 Pascal programs, the verification
 run, the differential test and the bootstrap — and 31 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
@@ -210,10 +210,11 @@ surprises.
   of magnitude of headroom against the tightest measured crash point, ~19 000
   levels on an 8 MiB stack. The cost: legal machine-generated programs with
   chains beyond 1000 terms are refused.
-- **`new(p, c1, ..., cn)` is rejected.** The variant-selecting form. This
-  compiler always allocates the whole record, which is safe but is not the
-  feature §6.6.5.3 describes (ADR-0019). Nested variant parts (ADR-0026) are
-  what make the form worth having, and they now exist.
+- **A variable created by `new(p, c1, ..., cn)` may still be assigned or
+  passed.** ISO 7185 §6.6.5.3 forbids it, because the unselected variants do
+  not exist; detecting it needs the pointer's *value* to carry which form
+  created it, and nothing tracks that (ADR-0027). Permissive where the standard
+  is restrictive, like the use-after-dispose gap above.
 - **Use-after-dispose through a second pointer is undetected.** `dispose(p)`
   sets `p` to nil, which converts the common form into the nil trap, and that is
   all it does. No proof in this repository claims more.

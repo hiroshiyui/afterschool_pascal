@@ -287,6 +287,10 @@ struct ProcCallStmt : Stmt {
   Symbol *sym = nullptr;          // filled in by Sema, for a user procedure
   StdProc standard = StdProc::None; // set instead, for new/dispose
   std::vector<ExprPtr> args;
+  /// `new(p, c1, ..., cn)`: the arms the tag values select, outermost first,
+  /// as indices into the variant part at each level (ISO 7185 §6.6.5.3). Empty
+  /// for the one-argument form, which allocates the whole record.
+  std::vector<int> variantSelection;
 };
 
 // --------------------------------------------------------------- declarations

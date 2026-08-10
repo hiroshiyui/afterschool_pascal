@@ -58,6 +58,13 @@ private:
   /// True if this parameter arrives as an address the callee copies from.
   static bool passedByAddress(const Symbol *v);
   uint64_t sizeOf(Type *t);
+  /// The bytes a record needs when only the arms `selection` names can be
+  /// stored in it — `new(p, c1, ..., cn)`. The offsets are the full type's, so
+  /// every selected field still lies where the full layout puts it; only the
+  /// tail, which the unselected (possibly larger) arms would have needed, is
+  /// trimmed off.
+  uint64_t selectedSize(Type *record, const std::vector<int> &path,
+                        const std::vector<int> &selection, size_t at);
   /// The arms of the variant part at `path` — the record's own when the path
   /// is empty, otherwise the one nested inside the arm the path names.
   static const std::vector<Variant> &armsAt(Type *record,

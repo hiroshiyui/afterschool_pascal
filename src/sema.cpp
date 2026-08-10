@@ -1362,13 +1362,9 @@ void Sema::checkStdProc(ProcCallStmt *p) {
   for (auto &a : p->args)
     checkExpr(a.get());
 
-  if (p->args.size() != 1) {
-    // ISO 7185 §6.6.5.3 also allows `new(p, c1, ...)` to allocate only the
-    // storage some variants need. Rejecting it is honest: this compiler always
-    // allocates the whole record, which is safe but is not that feature.
+  if (p->args.empty()) {
     diags_.error(p->line, p->col,
-                 "'" + p->name + "' takes exactly one argument in this "
-                 "compiler; the variant-selecting form is not supported");
+                 "'" + p->name + "' needs a pointer variable");
     return;
   }
 
@@ -1378,10 +1374,67 @@ void Sema::checkStdProc(ProcCallStmt *p) {
                  "'" + p->name + "' needs a pointer variable");
     return;
   }
-  if (a->type && (!a->type->isPointer() || a->type->isNil()))
+  if (a->type && (!a->type->isPointer() || a->type->isNil())) {
     diags_.error(a->line, a->col,
                  "'" + p->name + "' needs a pointer variable, found " +
                      a->type->name());
+    return;
+  }
+  if (p->args.size() == 1)
+    return;
+
+  // ISO 7185 §6.6.5.3: `new(p, c1, ..., cn)` creates a variable with the
+  // variants those tag values select, one value per nested variant part,
+  // outermost first. `dispose` takes the same list.
+  Type *domain = a->type ? a->type->elem : nullptr;
+  if (!domain || !domain->isRecord()) {
+    diags_.error(p->args[1]->line, p->args[1]->col,
+                 "tag values are only for a pointer to a record with a "
+                 "variant part");
+    return;
+  }
+
+  const std::vector<Variant> *arms = &domain->variants;
+  Type *tag = domain->tagType;
+  for (size_t i = 1; i < p->args.size(); ++i) {
+    Expr *value = p->args[i].get();
+    if (arms->empty()) {
+      diags_.error(value->line, value->col,
+                   i == 1 ? "this record has no variant part"
+                          : "this record has no more nested variant parts to "
+                            "select");
+      return;
+    }
+    Type *valueType = nullptr;
+    long long v = 0;
+    if (!evalOrdinal(value, valueType, v)) {
+      diags_.error(value->line, value->col,
+                   "a tag value for '" + p->name +
+                       "' must be an ordinal constant");
+      return;
+    }
+    if (tag && valueType && valueType->base() != tag->base()) {
+      diags_.error(value->line, value->col,
+                   "this variant part's tag is " + tag->name() +
+                       ", but the value is " + valueType->name());
+      return;
+    }
+    int chosen = -1;
+    for (size_t k = 0; k < arms->size() && chosen < 0; ++k)
+      for (long long label : (*arms)[k].labels)
+        if (label == v) {
+          chosen = static_cast<int>(k);
+          break;
+        }
+    if (chosen < 0) {
+      diags_.error(value->line, value->col,
+                   "no variant is selected by " + Type::ordinalName(tag, v));
+      return;
+    }
+    p->variantSelection.push_back(chosen);
+    tag = (*arms)[chosen].tagType;
+    arms = &(*arms)[chosen].variants;
+  }
 }
 
 /// ISO 7185 §6.8.3.5: the selector is an ordinal expression, every label is a

@@ -323,8 +323,11 @@ type
       nkWhile:      (whCond, whBody: nodePtr);
       nkRepeat:     (rpBody, rpCond: nodePtr);
       nkFor:        (frVar, frFrom, frTo, frBody: nodePtr; frDownto: boolean);
+      { pcSelect: `new(p, c1, ..., cn)` -- the arms the tag values select,
+        outermost first, as indices into the variant part at each level
+        (ISO 7185 6.6.5.3). nil for the one-argument form. }
       nkProcCall:   (pcAt, pcLen: integer; pcArgs: nodePtr;
-                     pcSym: symPtr; pcStd: stdProcKind);
+                     pcSym: symPtr; pcStd: stdProcKind; pcSelect: numPtr);
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
@@ -1241,7 +1244,11 @@ begin
     nkCall: begin n^.clBuiltin := biNone; n^.clSym := nil end;
     nkWrite: n^.wrFile := nil;
     nkRead: n^.rdFile := nil;
-    nkProcCall: begin n^.pcSym := nil; n^.pcStd := spNone end;
+    nkProcCall: begin
+      n^.pcSym := nil;
+      n^.pcStd := spNone;
+      n^.pcSelect := nil
+    end;
     nkCaseArm: begin n^.caValues := nil; n^.caValueTail := nil end;
     nkProcDecl: n^.pdSym := nil;
     nkWith: n^.wtBinding := nil;
@@ -2747,6 +2754,16 @@ begin TypeLength := t^.hi - t^.lo + 1 end;
 
 { ISO 7185 6.4.3.3 requires every field name in a record to be distinct,
   variants included, so one flat search over all of them is unambiguous. }
+{ The k-th arm of one variant part. }
+function ArmAtIn(v: variantPtr; k: integer): variantPtr;
+begin
+  while k > 0 do begin
+    v := v^.next;
+    k := k - 1
+  end;
+  ArmAtIn := v
+end;
+
 function FindFieldIn(v: variantPtr; at, len: integer): fieldPtr;
 var f, found: fieldPtr;
 begin
@@ -4439,7 +4456,13 @@ end;
   6.6.5.2 defines read and write in terms of get, put and the buffer variable,
   and this compiler keeps them rather than providing only the derived forms. }
 procedure CheckStdProc(p: nodePtr);
-var a: nodePtr; n: integer;
+var
+  a, value: nodePtr;
+  n, v, k, chosen: integer;
+  domain, tag, valueType: typePtr;
+  arms, w: variantPtr;
+  lbl: numPtr;
+  stop: boolean;
 begin
   if PoolIs(p^.pcAt, p^.pcLen, 'reset    ') then p^.pcStd := spReset
   else if PoolIs(p^.pcAt, p^.pcLen, 'rewrite  ') then p^.pcStd := spRewrite
@@ -4484,15 +4507,11 @@ begin
       end
     end
   end
-  else if n <> 1 then begin
-    { ISO 7185 6.6.5.3 also allows `new(p, c1, ...)` to allocate only the
-      storage some variants need. Rejecting it is honest: this compiler always
-      allocates the whole record, which is safe but is not that feature. }
+  else if n = 0 then begin
     ErrorAt(p^.line, p^.col);
     write('''');
     WritePool(p^.pcAt, p^.pcLen);
-    writeln(''' takes exactly one argument in this compiler; the ',
-            'variant-selecting form is not supported')
+    writeln(''' needs a pointer variable')
   end
   else begin
     a := p^.pcArgs;
@@ -4511,12 +4530,86 @@ begin
       WriteTypeName(a^.ntype);
       writeln
     end
+    { ISO 7185 6.6.5.3: `new(p, c1, ..., cn)` creates a variable with the
+      variants those tag values select, one value per nested variant part,
+      outermost first. `dispose` takes the same list. }
+    else if n > 1 then begin
+      if a^.ntype = nil then domain := nil else domain := a^.ntype^.elem;
+      if not IsRecord(domain) then begin
+        ErrorAt(a^.next^.line, a^.next^.col);
+        writeln('tag values are only for a pointer to a record with a ',
+                'variant part')
+      end
+      else begin
+        arms := domain^.variants;
+        tag := domain^.tagType;
+        value := a^.next;
+        stop := false;
+        while (value <> nil) and not stop do begin
+          if arms = nil then begin
+            ErrorAt(value^.line, value^.col);
+            if value = a^.next then
+              writeln('this record has no variant part')
+            else
+              writeln('this record has no more nested variant parts to ',
+                      'select');
+            stop := true
+          end
+          else begin
+            valueType := nil;
+            v := 0;
+            if not EvalOrdinal(value, valueType, v) then begin
+              ErrorAt(value^.line, value^.col);
+              write('a tag value for ''');
+              WritePool(p^.pcAt, p^.pcLen);
+              writeln(''' must be an ordinal constant');
+              stop := true
+            end
+            else if (tag <> nil) and (valueType <> nil) and
+                    (Base(valueType) <> Base(tag)) then begin
+              ErrorAt(value^.line, value^.col);
+              write('this variant part''s tag is ');
+              WriteTypeName(tag);
+              write(', but the value is ');
+              WriteTypeName(valueType);
+              writeln;
+              stop := true
+            end
+            else begin
+              chosen := -1;
+              k := 0;
+              w := arms;
+              while w <> nil do begin
+                lbl := w^.labels;
+                while lbl <> nil do begin
+                  if (lbl^.value = v) and (chosen < 0) then chosen := k;
+                  lbl := lbl^.next
+                end;
+                k := k + 1;
+                w := w^.next
+              end;
+              if chosen < 0 then begin
+                ErrorAt(value^.line, value^.col);
+                write('no variant is selected by ');
+                WriteOrdinalName(tag, v);
+                writeln;
+                stop := true
+              end
+              else begin
+                p^.pcSelect := PathAppend(p^.pcSelect, chosen);
+                w := ArmAtIn(arms, chosen);
+                tag := w^.tagType;
+                arms := w^.variants
+              end
+            end
+          end;
+          if not stop then value := value^.next
+        end
+      end
+    end
   end
 end;
 
-{ ISO 7185 6.8.3.5: the selector is an ordinal expression, every label is a
-  constant of a compatible type, and no value may appear twice. There is no
-  `else` arm, so a value matching nothing is an error at run time. }
 procedure CheckCase(c: nodePtr);
 var
   sel, labelType, named: typePtr;
@@ -5692,13 +5785,20 @@ begin
     nkProcCall: begin
       write('proccall ');
       WritePool(n^.pcAt, n^.pcLen);
-      if annotate then
+      if annotate then begin
         if n^.pcStd <> spNone then
           write(' -> standard ', ord(n^.pcStd):1)
         else begin
           write(' -> ');
           WriteSymRef(n^.pcSym)
         end;
+        { The arms `new(p, c1, ...)` selects, which is what Sema folded the tag
+          values down to and what decides how much is allocated. }
+        if n^.pcSelect <> nil then begin
+          write(' variants ');
+          WriteVariantRef(n^.pcSelect)
+        end
+      end;
       At(n^.line, n^.col);
       level := level + 1;
       Pad;
@@ -6206,6 +6306,38 @@ end;
 procedure RecordLayout(t: typePtr; var size, align: integer);
 begin
   ArmLayoutAt(t, nil, size, align)
+end;
+
+{ The bytes a record needs when only the arms `selection` names can be stored
+  in it -- `new(p, c1, ..., cn)`. The offsets are the full type's, so every
+  selected field still lies where the full layout puts it; only the tail, which
+  the unselected (possibly larger) arms would have needed, is trimmed off. }
+function SelectedSize(rec: typePtr; path, selection: numPtr): integer;
+var f: fieldPtr; size, align, a, ssize, salign: integer;
+begin
+  if (selection = nil) or (ArmsAt(rec, path) = nil) then begin
+    { nothing left to select, or nothing to select from: the whole struct,
+      shared storage and all }
+    ArmLayoutAt(rec, path, size, align);
+    SelectedSize := size
+  end
+  else begin
+    size := 0;
+    align := 1;
+    f := FieldsAt(rec, path);
+    while f <> nil do begin
+      a := LlAlign(f^.ftype);
+      size := RoundUp(size, a) + LlSize(f^.ftype);
+      if a > align then align := a;
+      f := f^.next
+    end;
+    { the storage starts where the full layout puts it, so the fields before it
+      keep their offsets }
+    VariantStorageAt(rec, path, ssize, salign);
+    size := RoundUp(size, salign);
+    SelectedSize := size +
+        SelectedSize(rec, PathAppend(path, selection^.value), selection^.next)
+  end
 end;
 
 function LlAlign;
@@ -7660,9 +7792,15 @@ begin
       writeln(ircode, ')')
     end;
     spNew: begin
+      { ISO 7185 6.6.5.3: with tag values, only the selected variants have to
+        fit. Without them the whole record does. }
       Def(block);
-      writeln(ircode, 'call ptr @pas_new(i64 ',
-              LlSize(s^.pcArgs^.ntype^.elem):1, ')');
+      if s^.pcSelect = nil then
+        writeln(ircode, 'call ptr @pas_new(i64 ',
+                LlSize(s^.pcArgs^.ntype^.elem):1, ')')
+      else
+        writeln(ircode, 'call ptr @pas_new(i64 ',
+                SelectedSize(s^.pcArgs^.ntype^.elem, nil, s^.pcSelect):1, ')');
       write(ircode, '  store ptr ');
       PutOp(block);
       write(ircode, ', ptr ');

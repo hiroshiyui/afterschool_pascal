@@ -150,6 +150,21 @@ uint64_t CodeGen::sizeOf(ap::Type *t) {
   return mod_->getDataLayout().getTypeAllocSize(llvmType(t));
 }
 
+uint64_t CodeGen::selectedSize(ap::Type *record, const std::vector<int> &path,
+                               const std::vector<int> &selection, size_t at) {
+  StructType *self = cast<StructType>(structAt(record, path));
+  const StructLayout *layout = mod_->getDataLayout().getStructLayout(self);
+  // Nothing left to select, or nothing to select from: the whole struct,
+  // shared storage and all.
+  if (at >= selection.size() || armsAt(record, path).empty())
+    return layout->getSizeInBytes();
+  uint64_t storage =
+      layout->getElementOffset(fieldsAt(record, path).size());
+  std::vector<int> sub = path;
+  sub.push_back(selection[at]);
+  return storage + selectedSize(record, sub, selection, at + 1);
+}
+
 /// Arrays and records are passed as addresses whichever way they are declared:
 /// a `var` parameter binds to the caller's variable, and a value parameter is
 /// copied out of the caller's variable by the callee's prologue. A file is
@@ -692,7 +707,12 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
   }
 
   if (s->standard == StdProc::New) {
-    llvm::Value *size = ConstantInt::get(i64(), sizeOf(arg->type->elem));
+    // ISO 7185 §6.6.5.3: with tag values, only the selected variants have to
+    // fit. Without them the whole record does.
+    llvm::Value *size = ConstantInt::get(
+        i64(), s->variantSelection.empty()
+                   ? sizeOf(arg->type->elem)
+                   : selectedSize(arg->type->elem, {}, s->variantSelection, 0));
     llvm::Value *block =
         b_.CreateCall(rt("pas_new", ptr(), {i64()}), {size}, "new");
     b_.CreateStore(block, slot);

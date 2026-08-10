@@ -18,4 +18,4 @@
 <source>:50:8: error: pointers can only be compared with = and <>, not with '<'
 <source>:51:11: error: a value of type link cannot be written
 <source>:52:7: error: 'new' needs a pointer variable, found integer
-<source>:53:3: error: 'new' takes exactly one argument in this compiler; the variant-selecting form is not supported
+<source>:53:10: error: this record has no variant part

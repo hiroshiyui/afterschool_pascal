@@ -50,5 +50,5 @@ begin
   if p < q then n := 1;         { and no ordering }
   writeln(p);                   { and no external spelling }
   new(n);                       { new needs a pointer }
-  new(p, 1)                     { the variant-selecting form }
+  new(p, 1)                     { tag values, but no variant part }
 end.

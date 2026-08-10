@@ -425,11 +425,16 @@ struct Dumper {
     case NK::ProcCall: {
       ProcCallStmt *n = as<ProcCallStmt>(s);
       std::string tag = "proccall " + n->name;
-      if (annotate)
+      if (annotate) {
         tag += n->standard != StdProc::None
                    ? " -> standard " +
                          std::to_string(static_cast<int>(n->standard))
                    : " -> " + symRef(n->sym);
+        // The arms `new(p, c1, ...)` selects, which is what Sema folded the
+        // tag values down to and what decides how much is allocated.
+        if (!n->variantSelection.empty())
+          tag += " variants " + variantRef(n->variantSelection);
+      }
       head(tag, s->line, s->col);
       ++level;
       mark("args");
