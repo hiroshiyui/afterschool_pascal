@@ -1,0 +1,9 @@
+  1  4  9 16 25  sum  55
+x 1 y 10 hue 2
+x 2 y 20 hue 2
+x 3 y 30 hue 2
+read 99, buffer now 2
+abc
+ 7 8 9
+ 1  4
+ (100,1) (200,2)

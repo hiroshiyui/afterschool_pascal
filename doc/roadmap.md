@@ -51,7 +51,7 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 47 ctest cases — 44 Pascal programs, the verification
+Alongside the language, 51 ctest cases — 48 Pascal programs, the verification
 run, the differential test and the bootstrap — and 35 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
@@ -227,9 +227,9 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **Not implemented at all:** non-text files. Sets (ADR-0028), `goto`
-  (ADR-0029) and procedural parameters (ADR-0030) were the first three of this
-  group; this is what is left of ISO 7185, beside the non-local `goto` below.
+- **Not implemented at all:** nothing, beside the non-local `goto` below. Sets
+  (ADR-0028), `goto` (ADR-0029), procedural parameters (ADR-0030) and non-text
+  files (ADR-0031) were this group, and it is now empty.
 - **A `goto` to a label in an enclosing block is refused.** ISO 7185 §6.8.2.4
   allows it and §6.8.1 says where it may land — which *is* checked, so what is
   refused is the lowering rather than the program's shape. It needs the
@@ -270,9 +270,10 @@ Extended Pascal's spelling rather than invented here.
   was *declared* in. It is the first thing here that makes an activation
   record's address outlive the call that made it — safe only because the
   language gives no way to store the pair.
-- **Non-text files.** §6.4.3.5. `file of T` already parses and is rejected for
-  any component but `char`; the runtime's `pas_file` is what has to stop
-  assuming a character.
+- ~~**Non-text files.**~~ Done (ADR-0031): a `file of T` is the text-file
+  machine with the component size and the line structure made into two
+  constants the runtime is told. `text` stays a type of its own, because
+  §6.4.3.5 makes it one and only it has lines.
 
 **Then Extended Pascal.** ISO/IEC 10206:1991 is the target for the second
 stage, not an ad-hoc pile of extensions. The decision most likely to be

@@ -198,11 +198,6 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
   return t;
 }
 
-/// `file of T`. Only a text file — `file of char` — is implemented: a typed
-/// file writes the machine representation of a component, which is a decision
-/// about an external format this compiler has not made and does not need to
-/// reach stage 1. Accepting the syntax and rejecting the component gives a
-/// better diagnostic than treating `file` as an unknown type name.
 /// ISO 7185 §6.4.3.4: a set type is `set of T` for an ordinal T, and the set of
 /// values is the powerset of T's. The standard leaves the size to the
 /// implementation, and this one fixes it at 256 bits — so T's values must lie
@@ -231,13 +226,50 @@ Type *Sema::resolveSet(TypeExpr &denoter) {
   return t;
 }
 
+/// ISO 7185 §6.4.3.5 bars a file from having a file as a component, at any
+/// depth: `file of file of char` and `file of record f: text end` are both out.
+/// The reason is that a file has no value to copy — which is the same fact
+/// that keeps it out of `isStructured()` — so a file inside one could not be
+/// read, written, or positioned. Nothing else about a component is restricted.
+static bool containsFile(Type *t) {
+  if (!t)
+    return false;
+  if (t->isFile())
+    return true;
+  if (t->isArray())
+    return containsFile(t->elem);
+  if (t->isRecord()) {
+    for (const Field &f : t->fields)
+      if (containsFile(f.type))
+        return true;
+    // A variant's fields are components of the record just as the fixed part's
+    // are; only one arm exists at a time, but any of them may be the one.
+    std::vector<const std::vector<Variant> *> pending{&t->variants};
+    while (!pending.empty()) {
+      const std::vector<Variant> *arms = pending.back();
+      pending.pop_back();
+      for (const Variant &v : *arms) {
+        for (const Field &f : v.fields)
+          if (containsFile(f.type))
+            return true;
+        pending.push_back(&v.variants);
+      }
+    }
+  }
+  return false;
+}
+
+/// `file of T`. The component may be any type that is not, and does not
+/// contain, a file. A `text` is *not* what this produces even when T is char:
+/// §6.4.3.5 makes `text` a required type of its own with a line structure, and
+/// `file of char` a plain sequence of characters with none.
 Type *Sema::resolveFile(TypeExpr &denoter) {
   Type *t = newType(TypeKind::File);
   Type *component = denoter.elem ? resolveType(*denoter.elem) : ty::Char();
-  if (!component->isChar()) {
+  if (containsFile(component)) {
     diags_.error(denoter.line, denoter.col,
-                 "only a text file is supported: the component type of a file "
-                 "must be char, found " + component->name());
+                 "the component type of a file must not be, or contain, a "
+                 "file, found " + component->name());
     component = ty::Char();
   }
   t->elem = component;
@@ -1691,6 +1723,30 @@ void Sema::checkWrite(WriteStmt *w) {
   if (w->args.empty() && !w->newline)
     diags_.error(w->line, w->col, "write needs something to write");
 
+  // §6.9.3 is the *text* form of write, and everything it says — the field
+  // width, the external representation of a number, the line `writeln`
+  // finishes — belongs to a text file. On any other file §6.6.5.2's definition
+  // applies instead: `write(f, e)` is `f^ := e; put(f)`, one component of the
+  // file's own type and nothing to format.
+  Type *wf = w->file ? w->file->type : nullptr;
+  if (wf && !wf->isText()) {
+    if (w->newline)
+      diags_.error(w->line, w->col,
+                   "writeln needs a text file, but " + wf->name() +
+                       " has no lines");
+    for (auto &arg : w->args) {
+      if (arg.width)
+        diags_.error(arg.width->line, arg.width->col,
+                     "a field width is only for a text file");
+      if (!assignable(wf->elem, arg.value->type))
+        diags_.error(arg.value->line, arg.value->col,
+                     "a value of type " +
+                         (arg.value->type ? arg.value->type->name() : "?") +
+                         " cannot be written to a " + wf->name());
+    }
+    return;
+  }
+
   for (auto &arg : w->args) {
     Type *t = arg.value->type;
     // ISO 7185 §6.9.3 lists exactly what write accepts: an integer, a real,
@@ -1739,12 +1795,29 @@ void Sema::checkRead(ReadStmt *r) {
   if (r->args.empty() && !r->newline)
     diags_.error(r->line, r->col, "read needs a variable to read into");
 
+  // The counterpart of write's split: on a file that is not a text, §6.6.5.2
+  // makes `read(f, v)` mean `v := f^; get(f)`, so the variable takes the
+  // file's component type and there is no external representation to parse.
+  Type *rf = r->file ? r->file->type : nullptr;
+  bool text = !rf || rf->isText();
+  if (rf && !text && r->newline)
+    diags_.error(r->line, r->col,
+                 "readln needs a text file, but " + rf->name() +
+                     " has no lines");
+
   for (auto &a : r->args) {
     if (!isDesignator(a.get())) {
       diags_.error(a->line, a->col, "read needs a variable, not a value");
       continue;
     }
     Type *t = a->type;
+    if (!text) {
+      if (!assignable(t, rf->elem))
+        diags_.error(a->line, a->col,
+                     "a variable of type " + (t ? t->name() : "?") +
+                         " cannot be read from a " + rf->name());
+      continue;
+    }
     if (t && !(t->isInteger() || t->isReal() || t->isChar()))
       diags_.error(a->line, a->col,
                    "a value of type " + t->name() + " cannot be read");
@@ -2123,6 +2196,12 @@ void Sema::checkCall(Call *c) {
       diags_.error(a->line, a->col,
                    "'" + c->name + "' needs a file variable" +
                        (a->type ? ", found " + a->type->name() : ""));
+    // `eof` asks a question every file can answer; `eoln` asks about a line,
+    // and only a text file has those (ISO 7185 §6.6.6.5).
+    else if (c->builtin == Builtin::Eoln && a->type && !a->type->isText())
+      diags_.error(a->line, a->col,
+                   "'eoln' needs a text file, but " + a->type->name() +
+                       " has no lines");
     return;
   }
 

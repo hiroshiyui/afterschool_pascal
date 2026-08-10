@@ -94,7 +94,19 @@ and one character of lookahead for a text file. ISO defines `get`, `put` and
 `f^` as the primitives and *derives* `read` and `write` from them; this
 compiler keeps that structure rather than providing only the derived forms,
 because lookahead is what a lexer is written against (ADR-0021). It shares
-`NK::Deref` with pointer dereference, and the two part on the base type.
+`NK::Deref` with pointer dereference, and the two part on the base type. On a
+`file of T` it is a whole T, allocated by the runtime so that its size and
+alignment are T's, and it is a designator like any other — `f^.field` and
+`f^[i]` index it (ADR-0031).
+
+**Text file, and `file of T`.** ISO 7185 §6.4.3.5 makes `text` a required type
+of its own, and it is *not* `file of char`: only a text has lines, so only a
+text has `readln`, `writeln`, `eoln`, and an external representation of a
+number to parse. Everything else about the two is identical, including the
+component size, and one flag on the type says which is which. On a `file of T`,
+`read` and `write` mean what §6.6.5.2 derives them to mean — `v := f^; get(f)`
+and `f^ := e; put(f)` — so they carry one component of the file's own type and
+take no field width (ADR-0031).
 
 **Program parameter.** A name in `program P(...)`. ISO 7185 §6.10 makes these
 the program's only connection to anything outside it: `input` and `output` are

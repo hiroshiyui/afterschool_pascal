@@ -71,6 +71,7 @@ struct Type {
   Type *elem = nullptr;
   Type *indexType = nullptr; // the ordinal type of a subscript
   bool packed = false;
+  bool textFile = false; // File: this is `text`, not a `file of char`
 
   /// Array: the index bounds. Subrange: the bounds themselves. Both inclusive.
   long long lo = 0, hi = -1;
@@ -105,6 +106,12 @@ struct Type {
   bool isRecord() const { return kind == TypeKind::Record; }
   bool isPointer() const { return kind == TypeKind::Pointer; }
   bool isFile() const { return kind == TypeKind::File; }
+  /// `text` as against `file of char`. ISO 7185 §6.4.3.5 makes them different
+  /// types and gives only the first one lines: `readln`, `writeln`, `eoln` and
+  /// reading a number all belong to a text file and to nothing else. The two
+  /// are otherwise identical, right down to the component size, so nothing but
+  /// this flag distinguishes them.
+  bool isText() const { return isFile() && textFile; }
   bool isSet() const { return kind == TypeKind::Set; }
   /// The type of a procedural or functional parameter (ISO 7185 §6.6.3.1).
   /// There is no way to *write* one outside a formal parameter list — the type
@@ -236,8 +243,12 @@ struct Type {
     // at itself without this looping forever.
     case TypeKind::Pointer:
       return elem ? "^" + elem->name() : "nil";
+    // `text` names itself; every other file names its component, because a
+    // `file of char` is a different type from a text and a diagnostic that
+    // called them both "text" would be describing the wrong one.
     case TypeKind::File:
-      return elem && elem->isChar() ? "text" : "file";
+      return textFile ? "text"
+                      : "file of " + (elem ? elem->name() : "?");
     // The type of `[]` names no base type because it has none; it is written
     // the way the source writes it.
     case TypeKind::Set:
@@ -330,6 +341,7 @@ inline Type *Text() {
   static Type t = [] {
     Type f{TypeKind::File};
     f.elem = Char();
+    f.textFile = true;
     f.alias = "text";
     return f;
   }();

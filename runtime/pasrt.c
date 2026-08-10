@@ -35,7 +35,13 @@ static void pas_error2(const char *msg, const char *what) {
  *
  * That is not pedantry. The buffer variable is one character of lookahead, and
  * a lexer — the first thing the self-hosted compiler needs — is exactly the
- * program that wants to inspect the next character without consuming it. */
+ * program that wants to inspect the next character without consuming it.
+ *
+ * A `file of T` is the same machine with two constants changed: the component
+ * is `compsize` bytes rather than one, and there is no line structure. The
+ * lookahead becomes "the buffer holds the component the file is positioned
+ * at", which is what `have` already meant — so `get`, `put`, `eof` and the
+ * buffer variable are one implementation with a text branch, not two. */
 
 enum { PAS_CLOSED = 0, PAS_READING = 1, PAS_WRITING = 2 };
 
@@ -44,9 +50,13 @@ struct pas_file {
   int mode;
   int binding;   /* one of the PAS_BIND_* constants */
   int arg;       /* which command-line argument, when binding is PAS_BIND_ARG */
-  int lookahead; /* the raw character, or EOF; meaningful only when `have` */
-  int have;      /* the lookahead has been fetched */
-  char ch;       /* the buffer variable f^, as the program sees it */
+  int lookahead; /* text: the raw character, or EOF; only when `have` */
+  int have;      /* the buffer variable holds the current component */
+  int istext;    /* a `text`, with line structure; not a `file of char` */
+  int compsize;  /* the size of one component in bytes; 1 for a text */
+  int ateof;     /* non-text: the fetch that filled `have` found no component */
+  char ch;       /* the buffer variable of a text file */
+  void *buf;     /* the buffer variable f^: &ch for a text, else allocated */
   const char *name; /* what to call this file in a diagnostic */
 };
 
@@ -84,7 +94,8 @@ static const char *pas_external(struct pas_file *f) {
   return pas_argv[f->arg];
 }
 
-void pas_file_init(void *v, int binding, int arg, const char *name) {
+void pas_file_init(void *v, int binding, int arg, const char *name,
+                   int compsize, int istext) {
   struct pas_file *f = v;
   f->fp = NULL;
   f->mode = PAS_CLOSED;
@@ -92,8 +103,22 @@ void pas_file_init(void *v, int binding, int arg, const char *name) {
   f->arg = arg;
   f->lookahead = EOF;
   f->have = 0;
+  f->istext = istext;
+  f->compsize = compsize > 0 ? compsize : 1;
+  f->ateof = 0;
   f->ch = ' ';
   f->name = name;
+  /* The buffer variable of a text file is the one character `ch` already
+   * there; a `file of T` needs T's worth of storage, and malloc is what
+   * guarantees it is aligned for any T. It is freed when the block that
+   * declared the file exits, which is where pas_file_done is called. */
+  if (istext) {
+    f->buf = &f->ch;
+  } else {
+    f->buf = calloc(1, (size_t)f->compsize);
+    if (!f->buf)
+      pas_runtime_error("out of memory for a file buffer variable");
+  }
   /* ISO 7185 §6.10: `input` is reset and `output` rewritten before the program
    * body runs. The lookahead is deliberately *not* fetched here — a program
    * that never reads must not block waiting for a terminal. */
@@ -110,21 +135,26 @@ void pas_file_init(void *v, int binding, int arg, const char *name) {
  * files are left alone: the process owns them, not the block. */
 void pas_file_done(void *v) {
   struct pas_file *f = v;
-  if (!f->fp)
-    return;
-  if (f->binding == PAS_BIND_INPUT || f->binding == PAS_BIND_OUTPUT) {
-    fflush(f->fp);
-    return;
+  if (f->fp) {
+    if (f->binding == PAS_BIND_INPUT || f->binding == PAS_BIND_OUTPUT) {
+      fflush(f->fp);
+      return; /* the process owns the standard files, and `ch` is not ours */
+    }
+    fclose(f->fp);
+    f->fp = NULL;
+    f->mode = PAS_CLOSED;
   }
-  fclose(f->fp);
-  f->fp = NULL;
-  f->mode = PAS_CLOSED;
+  if (f->buf && f->buf != &f->ch) {
+    free(f->buf);
+    f->buf = NULL;
+  }
 }
 
 void pas_reset(void *v) {
   struct pas_file *f = v;
   f->have = 0;
   f->lookahead = EOF;
+  f->ateof = 0;
   f->ch = ' ';
   switch (f->binding) {
   case PAS_BIND_INPUT:
@@ -137,7 +167,9 @@ void pas_reset(void *v) {
     const char *name = pas_external(f);
     if (f->fp)
       fclose(f->fp);
-    f->fp = fopen(name, "r");
+    /* The component of a `file of T` is T's machine representation, so the
+     * stream must not be translated on a platform that would. */
+    f->fp = fopen(name, f->istext ? "r" : "rb");
     if (!f->fp)
       pas_error2("cannot open for reading: ", name);
     break;
@@ -160,6 +192,7 @@ void pas_rewrite(void *v) {
   struct pas_file *f = v;
   f->have = 0;
   f->lookahead = EOF;
+  f->ateof = 0;
   f->ch = ' ';
   switch (f->binding) {
   case PAS_BIND_INPUT:
@@ -172,7 +205,7 @@ void pas_rewrite(void *v) {
     const char *name = pas_external(f);
     if (f->fp)
       fclose(f->fp);
-    f->fp = fopen(name, "w");
+    f->fp = fopen(name, f->istext ? "w" : "wb");
     if (!f->fp)
       pas_error2("cannot open for writing: ", name);
     break;
@@ -196,8 +229,18 @@ static void pas_fill(struct pas_file *f) {
   if (f->have)
     return;
   pas_check_open(f, PAS_READING, "reading from");
+  if (!f->istext) {
+    /* A partial component at the end is no component at all: the file was not
+     * written by a Pascal program with this component type, and there is
+     * nothing for the buffer variable to hold. */
+    size_t n = fread(f->buf, 1, (size_t)f->compsize, f->fp);
+    f->ateof = n != (size_t)f->compsize;
+    f->have = 1;
+    return;
+  }
   f->lookahead = getc(f->fp);
   f->have = 1;
+  f->ateof = f->lookahead == EOF;
   /* ISO 7185 §6.4.3.5: at the end of a line the buffer variable is a space.
    * The line marker itself is not a character the program can see. */
   f->ch = (f->lookahead == '\n' || f->lookahead == EOF)
@@ -210,9 +253,11 @@ int pas_eof(void *v) {
   if (f->mode == PAS_WRITING)
     return 1; /* §6.6.6.5: eof is true for a file being written */
   pas_fill(f);
-  return f->lookahead == EOF;
+  return f->ateof;
 }
 
+/* Only a text file has lines, so Sema refuses `eoln` on any other — this is
+ * reached only for a text. */
 int pas_eoln(void *v) {
   struct pas_file *f = v;
   pas_fill(f);
@@ -221,40 +266,45 @@ int pas_eoln(void *v) {
   return f->lookahead == '\n';
 }
 
-/* The address of the buffer variable f^. For a file being read the lookahead
+/* The address of the buffer variable f^. For a file being read the component
  * has to be there first; for one being written the program assigns to it and
- * then calls put. */
-char *pas_buffer(void *v) {
+ * then calls put. The address is the same one for the file's whole life, so a
+ * `file of T` whose T is a record hands back somewhere `f^.field` can index. */
+void *pas_buffer(void *v) {
   struct pas_file *f = v;
   if (f->mode == PAS_READING) {
     pas_fill(f);
-    if (f->lookahead == EOF)
+    if (f->ateof)
       pas_runtime_error("the buffer variable is undefined at end of file");
   } else {
     pas_check_open(f, PAS_WRITING, "using the buffer variable of");
   }
-  return &f->ch;
+  return f->buf;
 }
 
 void pas_get(void *v) {
   struct pas_file *f = v;
   pas_fill(f);
-  if (f->lookahead == EOF)
+  if (f->ateof)
     pas_runtime_error("get past the end of the file");
-  f->have = 0; /* the next fill fetches the following character */
+  f->have = 0; /* the next fill fetches the following component */
 }
 
 void pas_put(void *v) {
   struct pas_file *f = v;
   pas_check_open(f, PAS_WRITING, "writing to");
-  putc(f->ch, f->fp);
+  if (f->istext)
+    putc(f->ch, f->fp);
+  else if (fwrite(f->buf, 1, (size_t)f->compsize, f->fp) !=
+           (size_t)f->compsize)
+    pas_runtime_error("cannot write to the file");
 }
 
 /* --- the derived read operations, in terms of the primitives above -------- */
 
 char pas_read_char(void *v) {
   struct pas_file *f = v;
-  char c = *pas_buffer(v); /* c := f^ */
+  char c = *(char *)pas_buffer(v); /* c := f^ */
   pas_get(v);              /* get(f)  */
   (void)f;
   return c;

@@ -44,6 +44,7 @@ types      integer  real  boolean  char
            packed array [1..n] of char — the string types
            ^T — pointers, including to a type defined later
            text — text files, with the buffer variable f^
+           file of T — files of any type that is not, and holds, no file
 routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations,
            procedural and functional parameters, congruity-checked
@@ -136,6 +137,32 @@ which is the standard's own rule and needs no `close`. Using `write` without
 `output` in the program header is an error, because §6.10 says it is. See
 [ADR-0021](doc/adr/0021-text-files-keep-the-buffer-variable.md).
 
+A **`file of T`** is the same thing with the component type changed. It has no
+lines and no external representation of a number, so `readln`, `writeln` and
+`eoln` are all refused on one; what it has instead is `read` and `write` in the
+form ISO 7185 §6.6.5.2 defines for it — `read(f, v)` is `v := f^; get(f)`, and
+`write(f, e)` is `f^ := e; put(f)`. The component may be any type that is not,
+and does not contain, a file:
+
+```pascal
+program Records(output, data);
+type point = record x, y: integer end;
+var data: file of point; p: point;
+begin
+  rewrite(data);
+  p.x := 1; p.y := 2; write(data, p);
+  reset(data);
+  while not eof(data) do begin
+    writeln(data^.x:1, ' ', data^.y:1);   { f^ is a designator with fields }
+    get(data)
+  end
+end.
+```
+
+`text` is **not** `file of char`: §6.4.3.5 makes them different types, and only
+the first has lines. See
+[ADR-0031](doc/adr/0031-a-file-of-t-is-a-text-with-two-constants-changed.md).
+
 **Characters are bytes.** `char` is one octet with an ordinal of 0..255, and
 nothing in the compiler or the runtime consults the locale — `write` emits the
 bytes it is given and `read` returns the bytes it finds. UTF-8 text therefore
@@ -165,11 +192,10 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: files of anything but
-`char`, and a `goto` to a label in an *enclosing* block — the local form is
-implemented and the non-local one is refused rather than miscompiled
-([ADR-0029](doc/adr/0029-goto-is-local-and-checked-by-containment.md)). One
-implementation limit: nesting deeper
+Not accepted yet: a `goto` to a label in an *enclosing* block — the local form
+is implemented and the non-local one is refused rather than miscompiled
+([ADR-0029](doc/adr/0029-goto-is-local-and-checked-by-containment.md)). It is
+the last of ISO 7185. One implementation limit: nesting deeper
 than 1000 levels — parentheses, statements, type denoters, or the depth of the
 *tree* an operator chain builds — is a compile-time error rather than a stack
 overflow, in the parser or in any walk after it. See
@@ -280,7 +306,7 @@ stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 b
 ```
 
 **This now holds.** The compiler compiles itself, and stage 2 and stage 3 are
-identical — 61 577 lines of IR, byte for byte, checked under `ctest` by
+identical — 69 664 lines of IR, byte for byte, checked under `ctest` by
 `selfhost/irtest.sh`.
 
 Reaching stage 1 means the accepted language has to cover what a compiler is
@@ -316,7 +342,7 @@ needed them is written.
 the parser, Sema and the code generator, in **one source file**, because ISO
 7185 has no include mechanism and the finished compiler is one source. It is
 checked against the C++ stages it was ported from, on every Pascal source in the
-tree — 197 files, compared stage for stage:
+tree — 202 files, compared stage for stage:
 
 ```sh
 selfhost/difftest.sh build/bin/pascalc     # also runs under ctest
@@ -345,7 +371,7 @@ compiler binaries differing by a byte. The corpus includes the Pascal compiler's
 own source, and three directories cover the error paths a valid program never
 reaches: `selfhost/torture.pas` for the lexer, `selfhost/badparse/` for the
 parser (one file per message, because the parser stops at its first error) and
-`selfhost/badsema/` for Sema (eight files, because Sema accumulates). See
+`selfhost/badsema/` for Sema (thirteen files, because Sema accumulates). See
 [ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md),
 [ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md) and
 [ADR-0024](doc/adr/0024-the-stage-1-compiler-becomes-one-source-file.md).

@@ -126,6 +126,12 @@ private:
   llvm::Value *emitLoad(Expr *e);
   /// Copy a whole array or record from the value expression into `dst`.
   void emitCopy(llvm::Value *dst, Type *type, Expr *src);
+  void emitCopy(llvm::Value *dst, Type *type, llvm::Value *srcAddr);
+  /// Give the variable at `dst`, of type `type`, the value of `src`. This is
+  /// the whole of what assignment does — the conversion, the range check, and
+  /// the whole-variable copy — and `write` to a file that is not a text needs
+  /// exactly it, because §6.6.5.2 defines that write as `f^ := e`.
+  void emitStore(llvm::Value *dst, Type *type, Expr *src);
   /// The frame to pass as a callee's static link.
   llvm::Value *staticLinkFor(Symbol *callee);
   llvm::Value *emitUserCall(Symbol *callee, std::vector<ExprPtr> &args);

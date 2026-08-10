@@ -4,11 +4,16 @@
  * bytes in the activation record and passes their address to the pas_* calls
  * below. Keeping `struct pas_file` private to the runtime is what lets it
  * change without changing codegen.cpp — but the *size* cannot be private, so
- * it lives here rather than being written out in both places. */
+ * it lives here rather than being written out in both places.
+ *
+ * What the compiler does have to tell the runtime is the *component* type:
+ * `pas_file_init` takes its size in bytes and whether the file is a `text`.
+ * Those two are the whole of the difference between a text file and a
+ * `file of T` — see ADR-0031. */
 #ifndef APASCAL_PASRT_H
 #define APASCAL_PASRT_H
 
-#define PAS_FILE_SIZE 64
+#define PAS_FILE_SIZE 80
 
 /* How reset/rewrite find the external file a file variable stands for.
  * ISO 7185 §6.10 makes the binding implementation-defined; this compiler binds

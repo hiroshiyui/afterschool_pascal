@@ -495,11 +495,18 @@ void CodeGen::initFiles(Symbol *proc) {
     case FileBinding::Argument:       binding = PAS_BIND_ARG; break;
     case FileBinding::Internal:       binding = PAS_BIND_INTERNAL; break;
     }
+    // The component type is the whole of what the runtime needs to know about
+    // a `file of T`: how many bytes one component is, and whether the file has
+    // the line structure only a `text` has.
+    uint64_t comp = v->type->elem ? sizeOf(v->type->elem) : 1;
     b_.CreateCall(
-        rt("pas_file_init", voidTy, {ptr(), i32(), i32(), ptr()}),
+        rt("pas_file_init", voidTy,
+           {ptr(), i32(), i32(), ptr(), i32(), i32()}),
         {addressOf(v), ConstantInt::get(i32(), binding),
          ConstantInt::get(i32(), v->fileArg),
-         b_.CreateGlobalString(v->name, "file.name")});
+         b_.CreateGlobalString(v->name, "file.name"),
+         ConstantInt::get(i32(), comp),
+         ConstantInt::get(i32(), v->type->isText() ? 1 : 0)});
   }
 }
 
@@ -684,8 +691,13 @@ llvm::Value *CodeGen::emitLoad(Expr *e) {
 }
 
 void CodeGen::emitCopy(llvm::Value *dst, ap::Type *type, Expr *src) {
+  emitCopy(dst, type, emitAddress(src));
+}
+
+void CodeGen::emitCopy(llvm::Value *dst, ap::Type *type,
+                       llvm::Value *srcAddr) {
   Align align = mod_->getDataLayout().getABITypeAlign(llvmType(type));
-  b_.CreateMemCpy(dst, align, emitAddress(src), align, sizeOf(type));
+  b_.CreateMemCpy(dst, align, srcAddr, align, sizeOf(type));
 }
 
 llvm::Value *CodeGen::staticLinkFor(Symbol *callee) {
@@ -855,17 +867,21 @@ void CodeGen::emitStmt(Stmt *s) {
   }
 }
 
-void CodeGen::emitAssign(Assign *s) {
-  llvm::Value *dst = emitAddress(s->target.get());
+void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src) {
   // A whole array or record is copied; ISO 7185 §6.8.2.2 makes assignment of a
   // structured value a copy of every component, not a sharing of storage.
-  if (s->target->type->isStructured()) {
-    emitCopy(dst, s->target->type, s->value.get());
+  if (type->isStructured()) {
+    emitCopy(dst, type, src);
     return;
   }
-  llvm::Value *v = emitExpr(s->value.get());
-  v = convertFor(v, s->value->type, s->target->type);
-  b_.CreateStore(checkedForStore(v, s->target->type), dst);
+  llvm::Value *v = emitExpr(src);
+  v = convertFor(v, src->type, type);
+  b_.CreateStore(checkedForStore(v, type), dst);
+}
+
+void CodeGen::emitAssign(Assign *s) {
+  llvm::Value *dst = emitAddress(s->target.get());
+  emitStore(dst, s->target->type, s->value.get());
 }
 
 /// `new(p)` gives p the address of fresh storage for one variable of its
@@ -967,6 +983,20 @@ void CodeGen::emitWrite(WriteStmt *s) {
     return; // the program parameter was missing; the error is already reported
   llvm::Value *file = emitAddress(s->file.get());
 
+  // On a file that is not a text, ISO 7185 §6.6.5.2 defines `write(f, e)` as
+  // `f^ := e; put(f)` — so it is emitted as exactly that, an assignment to the
+  // buffer variable and the primitive. Nothing about formatting applies.
+  if (s->file->type && !s->file->type->isText()) {
+    ap::Type *comp = s->file->type->elem;
+    for (auto &arg : s->args) {
+      llvm::Value *buf = b_.CreateCall(rt("pas_buffer", ptr(), {ptr()}),
+                                       {file}, "buffer");
+      emitStore(buf, comp, arg.value.get());
+      b_.CreateCall(rt("pas_put", voidTy, {ptr()}), {file});
+    }
+    return;
+  }
+
   for (auto &arg : s->args) {
     llvm::Value *width = arg.width ? emitExpr(arg.width.get()) : noWidth;
     llvm::Value *prec = arg.prec ? emitExpr(arg.prec.get()) : noWidth;
@@ -1016,6 +1046,27 @@ void CodeGen::emitRead(ReadStmt *s) {
   if (!s->file)
     return;
   llvm::Value *file = emitAddress(s->file.get());
+
+  // The mirror of emitWrite: on a file that is not a text, §6.6.5.2 makes
+  // `read(f, v)` mean `v := f^; get(f)`. The buffer variable is fetched again
+  // for each variable because `get` invalidates the previous one.
+  if (s->file->type && !s->file->type->isText()) {
+    ap::Type *comp = s->file->type->elem;
+    for (auto &a : s->args) {
+      llvm::Value *dst = emitAddress(a.get());
+      llvm::Value *buf =
+          b_.CreateCall(rt("pas_buffer", ptr(), {ptr()}), {file}, "buffer");
+      if (a->type->isStructured()) {
+        emitCopy(dst, a->type, buf);
+      } else {
+        llvm::Value *v = b_.CreateLoad(llvmType(comp), buf, "component");
+        v = convertFor(v, comp, a->type);
+        b_.CreateStore(checkedForStore(v, a->type), dst);
+      }
+      b_.CreateCall(rt("pas_get", voidTy, {ptr()}), {file});
+    }
+    return;
+  }
 
   for (auto &a : s->args) {
     llvm::Value *slot = emitAddress(a.get());

@@ -60,7 +60,7 @@ const
     runtime/pasrt.h. The C++ code generator includes that header so the two
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
     the number and selfhost/irtest.sh checks that the two still match. }
-  fileSize = 64;
+  fileSize = 80;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
@@ -226,6 +226,11 @@ type
       record would do, which is where the C++ one was going. }
     elem, indexType, host, tagType: typePtr;
     isPacked: boolean;
+    { File: this is `text`, not a `file of char`. ISO 7185 6.4.3.5 makes them
+      different types and gives only the first one lines, so readln, writeln,
+      eoln and reading a number all belong to a text file and to nothing
+      else. Nothing but this flag distinguishes the two. }
+    isText: boolean;
     lo, hi: integer;
     enumNames, enumTail: namePtr;
     fields, fieldTail: fieldPtr;
@@ -2860,6 +2865,7 @@ begin
   t^.host := nil;
   t^.tagType := nil;
   t^.isPacked := false;
+  t^.isText := false;
   t^.lo := 0;
   t^.hi := -1;
   t^.enumNames := nil;
@@ -2938,6 +2944,10 @@ begin IsPointer := (t <> nil) and (t^.kind = tyPointer) end;
 
 function IsFile(t: typePtr): boolean;
 begin IsFile := (t <> nil) and (t^.kind = tyFile) end;
+
+{ `text` as against `file of char`: see typeRec.isText. }
+function IsTextFile(t: typePtr): boolean;
+begin IsTextFile := IsFile(t) and t^.isText end;
 
 { `nil`, which is a value of every pointer type and of no other. }
 function IsNil(t: typePtr): boolean;
@@ -3153,9 +3163,16 @@ begin
         end
         else
           PutLit('nil             ');
+      { `text` names itself; every other file names its component, because a
+        `file of char` is a different type from a text and a diagnostic that
+        called them both "text" would be describing the wrong one. }
       tyFile:
-        if IsChar(t^.elem) then PutLit('text            ')
-        else PutLit('file            ');
+        if t^.isText then PutLit('text            ')
+        else begin
+          PutLit('file of         ');
+          Put(' ');
+          WriteTypeName(t^.elem)
+        end;
       { The type of `[]` names no base type because it has none; it is written
         the way the source writes it. }
       tySet:
@@ -3767,16 +3784,64 @@ begin
   ResolveSet := t
 end;
 
+{ ISO 7185 6.4.3.5 bars a file from having a file as a component, at any
+  depth: `file of file of char` and `file of record f: text end` are both out.
+  The reason is that a file has no value to copy -- the same fact that keeps a
+  file out of IsStructured -- so a file inside one could not be read, written,
+  or positioned. Nothing else about a component is restricted. }
+function ContainsFile(t: typePtr): boolean; forward;
+
+{ A variant's fields are components of the record just as the fixed part's
+  are: only one arm exists at a time, but any of them may be the one. }
+function ArmsContainFile(v: variantPtr): boolean;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  while (v <> nil) and not found do begin
+    f := v^.fields;
+    while (f <> nil) and not found do begin
+      if ContainsFile(f^.ftype) then found := true;
+      f := f^.next
+    end;
+    if not found then
+      if ArmsContainFile(v^.variants) then found := true;
+    v := v^.next
+  end;
+  ArmsContainFile := found
+end;
+
+function ContainsFile;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  if t <> nil then
+    if IsFile(t) then found := true
+    else if IsArray(t) then found := ContainsFile(t^.elem)
+    else if IsRecord(t) then begin
+      f := t^.fields;
+      while (f <> nil) and not found do begin
+        if ContainsFile(f^.ftype) then found := true;
+        f := f^.next
+      end;
+      if not found then found := ArmsContainFile(t^.variants)
+    end;
+  ContainsFile := found
+end;
+
+{ `file of T`. The component may be any type that is not, and does not
+  contain, a file. A `text` is *not* what this produces even when T is char:
+  6.4.3.5 makes `text` a required type of its own with a line structure, and
+  `file of char` a plain sequence of characters with none. }
 function ResolveFile(d: nodePtr): typePtr;
 var t, component: typePtr;
 begin
   t := NewType(tyFile);
   if d^.flElem <> nil then component := ResolveType(d^.flElem)
   else component := charType;
-  if not IsChar(component) then begin
+  if ContainsFile(component) then begin
     ErrorAt(d^.line, d^.col);
-    write('only a text file is supported: the component type of a file must ',
-          'be char, found ');
+    write('the component type of a file must not be, or contain, a file, ',
+          'found ');
     WriteTypeName(component);
     writeln;
     component := charType
@@ -4744,6 +4809,15 @@ begin
             end;
             writeln
           end
+          { `eof` asks a question every file can answer; `eoln` asks about a
+            line, and only a text file has those (6.6.6.5). }
+          else if (c^.clBuiltin = biEoln) and (a^.ntype <> nil) and
+                  not IsTextFile(a^.ntype) then begin
+            ErrorAt(a^.line, a^.col);
+            write('''eoln'' needs a text file, but ');
+            WriteTypeName(a^.ntype);
+            writeln(' has no lines')
+          end
         end
       end
       else if n <> 1 then begin
@@ -4989,7 +5063,7 @@ end;
   file type and no width -- and if a program does write `f:8`, the file falls
   through to the value list and is rejected there as unwritable. }
 procedure CheckWrite(w: nodePtr);
-var a: nodePtr; t: typePtr;
+var a: nodePtr; t, wf: typePtr;
 begin
   a := w^.wrArgs;
   while a <> nil do begin
@@ -5016,6 +5090,38 @@ begin
     writeln('write needs something to write')
   end;
 
+  { 6.9.3 is the *text* form of write, and everything it says -- the field
+    width, the external representation of a number, the line `writeln`
+    finishes -- belongs to a text file. On any other file 6.6.5.2's definition
+    applies instead: `write(f, e)` is `f^ := e; put(f)`, one component of the
+    file's own type and nothing to format. }
+  wf := nil;
+  if w^.wrFile <> nil then wf := w^.wrFile^.ntype;
+  if (wf <> nil) and not IsTextFile(wf) then begin
+    if w^.wrNewline then begin
+      ErrorAt(w^.line, w^.col);
+      write('writeln needs a text file, but ');
+      WriteTypeName(wf);
+      writeln(' has no lines')
+    end;
+    a := w^.wrArgs;
+    while a <> nil do begin
+      if a^.waWidth <> nil then begin
+        ErrorAt(a^.waWidth^.line, a^.waWidth^.col);
+        writeln('a field width is only for a text file')
+      end;
+      if not Assignable(wf^.elem, a^.waValue^.ntype) then begin
+        ErrorAt(a^.waValue^.line, a^.waValue^.col);
+        write('a value of type ');
+        WriteTypeName(a^.waValue^.ntype);
+        write(' cannot be written to a ');
+        WriteTypeName(wf);
+        writeln
+      end;
+      a := a^.next
+    end
+  end
+  else begin
   a := w^.wrArgs;
   while a <> nil do begin
     t := a^.waValue^.ntype;
@@ -5049,12 +5155,13 @@ begin
     end;
     a := a^.next
   end
+  end
 end;
 
 { ISO 7185 6.9.1. Like write, the first argument may be the file; every other
   one is a *variable* to store into, so each has to be a designator. }
 procedure CheckRead(r: nodePtr);
-var a: nodePtr; t: typePtr;
+var a: nodePtr; t, rf: typePtr; text: boolean;
 begin
   a := r^.rdArgs;
   while a <> nil do begin
@@ -5081,11 +5188,34 @@ begin
     writeln('read needs a variable to read into')
   end;
 
+  { The counterpart of write's split: on a file that is not a text, 6.6.5.2
+    makes `read(f, v)` mean `v := f^; get(f)`, so the variable takes the file's
+    component type and there is no external representation to parse. }
+  rf := nil;
+  if r^.rdFile <> nil then rf := r^.rdFile^.ntype;
+  text := (rf = nil) or IsTextFile(rf);
+  if not text and r^.rdNewline then begin
+    ErrorAt(r^.line, r^.col);
+    write('readln needs a text file, but ');
+    WriteTypeName(rf);
+    writeln(' has no lines')
+  end;
+
   a := r^.rdArgs;
   while a <> nil do begin
     if not IsDesignator(a) then begin
       ErrorAt(a^.line, a^.col);
       writeln('read needs a variable, not a value')
+    end
+    else if not text then begin
+      if not Assignable(a^.ntype, rf^.elem) then begin
+        ErrorAt(a^.line, a^.col);
+        write('a variable of type ');
+        WriteTypeName(a^.ntype);
+        write(' cannot be read from a ');
+        WriteTypeName(rf);
+        writeln
+      end
     end
     else begin
       t := a^.ntype;
@@ -6122,6 +6252,7 @@ begin
     as ADR-0017's name equivalence says it should be. }
   textType := NewType(tyFile);
   textType^.elem := charType;
+  textType^.isText := true;
   InternWord('text     ', textType^.aliasAt, textType^.aliasLen);
 
   scopeTop := nil;
@@ -9181,32 +9312,44 @@ end;
 
 { ============================== statements =============================== }
 
-procedure EmitCopy(var dst: str; t: typePtr; src: nodePtr);
-var s: str; align: integer;
+{ Copy one whole array or record from an address already in hand. `read` from
+  a file whose component is structured needs this form: what it copies from is
+  the buffer variable, which is a runtime call rather than a designator. }
+procedure EmitCopyAt(var dst: str; t: typePtr; var src: str);
+var align: integer;
 begin
-  EmitAddress(src, s);
   align := LlAlign(t);
   write(ircode, '  call void @llvm.memcpy.p0.p0.i64(ptr align ', align:1, ' ');
   PutOp(dst);
   write(ircode, ', ptr align ', align:1, ' ');
-  PutOp(s);
+  PutOp(src);
   writeln(ircode, ', i64 ', LlSize(t):1, ', i1 false)')
 end;
 
-procedure EmitAssign(s: nodePtr);
-var dst, v: str;
+procedure EmitCopy(var dst: str; t: typePtr; src: nodePtr);
+var s: str;
 begin
-  EmitAddress(s^.asTarget, dst);
+  EmitAddress(src, s);
+  EmitCopyAt(dst, t, s)
+end;
+
+{ Give the variable at `dst`, of type `t`, the value of `src`. This is the
+  whole of what assignment does -- the conversion, the range check, and the
+  whole-variable copy -- and `write` to a file that is not a text needs exactly
+  it, because 6.6.5.2 defines that write as `f^ := e`. }
+procedure EmitStore(var dst: str; t: typePtr; src: nodePtr);
+var v: str;
+begin
   { A whole array or record is copied; ISO 7185 6.8.2.2 makes assignment of a
     structured value a copy of every component, not a sharing of storage. }
-  if IsStructured(s^.asTarget^.ntype) then
-    EmitCopy(dst, s^.asTarget^.ntype, s^.asValue)
+  if IsStructured(t) then
+    EmitCopy(dst, t, src)
   else begin
-    EmitExpr(s^.asValue, v);
-    ConvertFor(v, s^.asValue^.ntype, s^.asTarget^.ntype);
-    CheckedForStore(v, s^.asTarget^.ntype);
+    EmitExpr(src, v);
+    ConvertFor(v, src^.ntype, t);
+    CheckedForStore(v, t);
     write(ircode, '  store ');
-    PutLlType(s^.asTarget^.ntype);
+    PutLlType(t);
     write(ircode, ' ');
     PutOp(v);
     write(ircode, ', ptr ');
@@ -9215,11 +9358,36 @@ begin
   end
 end;
 
+procedure EmitAssign(s: nodePtr);
+var dst: str;
+begin
+  EmitAddress(s^.asTarget, dst);
+  EmitStore(dst, s^.asTarget^.ntype, s^.asValue)
+end;
+
 procedure EmitWrite(s: nodePtr);
 var fh, v, width, prec, addr: str; a: nodePtr; b: typePtr;
 begin
   if s^.wrFile <> nil then begin
     EmitAddress(s^.wrFile, fh);
+    { On a file that is not a text, ISO 7185 6.6.5.2 defines write(f, e) as
+      f^ := e; put(f) -- so it is emitted as exactly that, an assignment to
+      the buffer variable and the primitive. No formatting applies. }
+    if not IsTextFile(s^.wrFile^.ntype) then begin
+      a := s^.wrArgs;
+      while a <> nil do begin
+        Def(addr);
+        write(ircode, 'call ptr @pas_buffer(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        EmitStore(addr, s^.wrFile^.ntype^.elem, a^.waValue);
+        write(ircode, '  call void @pas_put(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        a := a^.next
+      end
+    end
+    else begin
     a := s^.wrArgs;
     while a <> nil do begin
       if a^.waWidth <> nil then EmitExpr(a^.waWidth, width)
@@ -9296,16 +9464,55 @@ begin
       PutOp(fh);
       writeln(ircode, ')')
     end
+    end
   end
 end;
 
 { Each variable is filled by the runtime call its type selects, and `readln`
   then finishes the line -- which is what makes readln(x) one statement. }
 procedure EmitRead(s: nodePtr);
-var fh, slot, v, wide: str; a: nodePtr; t: typePtr;
+var fh, slot, v, wide, buf: str; a: nodePtr; t, comp: typePtr;
 begin
   if s^.rdFile <> nil then begin
     EmitAddress(s^.rdFile, fh);
+    { The mirror of EmitWrite: on a file that is not a text, 6.6.5.2 makes
+      read(f, v) mean v := f^; get(f). The buffer variable is fetched again
+      for each variable because `get` invalidates the previous one. }
+    if not IsTextFile(s^.rdFile^.ntype) then begin
+      comp := s^.rdFile^.ntype^.elem;
+      a := s^.rdArgs;
+      while a <> nil do begin
+        EmitAddress(a, slot);
+        Def(buf);
+        write(ircode, 'call ptr @pas_buffer(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        if IsStructured(a^.ntype) then
+          EmitCopyAt(slot, a^.ntype, buf)
+        else begin
+          Def(v);
+          write(ircode, 'load ');
+          PutLlType(comp);
+          write(ircode, ', ptr ');
+          PutOp(buf);
+          writeln(ircode);
+          ConvertFor(v, comp, a^.ntype);
+          CheckedForStore(v, a^.ntype);
+          write(ircode, '  store ');
+          PutLlType(a^.ntype);
+          write(ircode, ' ');
+          PutOp(v);
+          write(ircode, ', ptr ');
+          PutOp(slot);
+          writeln(ircode)
+        end;
+        write(ircode, '  call void @pas_get(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        a := a^.next
+      end
+    end
+    else begin
     a := s^.rdArgs;
     while a <> nil do begin
       EmitAddress(a, slot);
@@ -9348,6 +9555,7 @@ begin
       write(ircode, '  call void @pas_readln(ptr ');
       PutOp(fh);
       writeln(ircode, ')')
+    end
     end
   end
 end;
@@ -9820,7 +10028,7 @@ end;
   the program body runs -- but no character is read until the program asks, or
   a program that never reads would hang waiting for a terminal. }
 procedure InitFiles(p: symPtr);
-var l: symListPtr; addr: str; binding, name: integer;
+var l: symListPtr; addr: str; binding, name, comp, istext: integer;
 begin
   l := p^.frameVars;
   while l <> nil do begin
@@ -9833,10 +10041,17 @@ begin
       end;
       name := AddGlobal(l^.sym^.at, l^.sym^.len);
       AddressOfSym(l^.sym, addr);
+      { The component type is the whole of what the runtime needs to know
+        about a `file of T`: how many bytes one component is, and whether the
+        file has the line structure only a `text` has. }
+      comp := 1;
+      if l^.sym^.stype^.elem <> nil then comp := LlSize(l^.sym^.stype^.elem);
+      istext := 0;
+      if l^.sym^.stype^.isText then istext := 1;
       write(ircode, '  call void @pas_file_init(ptr ');
       PutOp(addr);
       writeln(ircode, ', i32 ', binding:1, ', i32 ', l^.sym^.fileArg:1,
-              ', ptr @s', name:1, ')')
+              ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1, ')')
     end;
     l := l^.next
   end
@@ -10015,7 +10230,7 @@ begin
   writeln(ircode);
   writeln(ircode, 'declare void @pas_runtime_error(ptr)');
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
-  writeln(ircode, 'declare void @pas_file_init(ptr, i32, i32, ptr)');
+  writeln(ircode, 'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32)');
   writeln(ircode, 'declare void @pas_file_done(ptr)');
   writeln(ircode, 'declare void @pas_reset(ptr)');
   writeln(ircode, 'declare void @pas_rewrite(ptr)');

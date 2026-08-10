@@ -8,12 +8,22 @@ program FileErrors(output, missing);
 
 type
   rec = record a: integer end;
+  logged = record
+    a: integer;
+    case tagged: boolean of
+      true:  (log: text);      { a variant's field is a component too }
+      false: (b: integer)
+  end;
 
 var
   f, g: text;
   n: integer;
   r: rec;
-  binary: file of integer;      { only text files are implemented }
+  { 6.4.3.5: a file's component may be anything that is not itself a file, at
+    any depth -- a file has no value to copy, so one inside another could not
+    be read, written, or positioned. }
+  nested: file of text;
+  buried: file of array [1..2] of logged;
 
 procedure ByValue(h: text);     { 6.6.3.3: a file must be a var parameter }
 begin

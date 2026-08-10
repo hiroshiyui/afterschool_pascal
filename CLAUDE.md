@@ -254,14 +254,47 @@ cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
   using `write` without `output` is the error §6.10 says it is.
 - Standard input is opened but not read until the program first asks, or every
   program listing `input` would block before its first statement.
-- A block exit closes the files the block declared. Pascal has no early
-  return, so the single exit point each body already has is the epilogue — and
-  a *local* `goto` cannot leave the block, so it does not change that. A
-  non-local one would, which is one of the two reasons ADR-0029 refuses it.
-- Only `text` is implemented; `file of T` parses and is rejected for any
-  component but `char`.
+- A block exit closes the files the block declared, and now also frees the
+  buffer variable a `file of T` allocated. Pascal has no early return, so the
+  single exit point each body already has is the epilogue — and a *local*
+  `goto` cannot leave the block, so it does not change that. A non-local one
+  would, which is one of the reasons ADR-0029 refuses it, and heap storage
+  makes that a leak rather than only an unflushed buffer.
 - `char` is a byte, ordinal 0..255, and nothing consults the locale. UTF-8
   passes through as bytes; a multi-byte character is several `char` values.
+
+**Non-text files** (ADR-0031). A `file of T` is the text-file machine with two
+constants changed: a component is `compsize` bytes rather than one, and there
+is no line structure. `pas_file_init` carries both, and that pair is the whole
+of what the compiler tells the runtime about T — so `get`, `put`, `eof` and the
+buffer variable are one implementation with a text branch each, not two.
+
+- **`text` is not `file of char`.** §6.4.3.5 makes them different types and
+  gives only the first one lines, so `readln`, `writeln` and `eoln` are refused
+  on every other file. One flag on the `Type` says which, set on the `text`
+  singleton and never by `resolveFile`; they are otherwise identical, down to
+  the component size. A diagnostic that called both "text" would be naming the
+  wrong type, which is why `Type::name()` spells the component out.
+- **`read` and `write` on one are emitted as the assignments §6.6.5.2 defines
+  them to be** — `v := f^; get(f)` and `f^ := e; put(f)`. That is what split
+  `emitAssign` into `emitStore`, which is now the whole of what assignment does
+  and is called with the buffer variable as the destination. A component of a
+  `file of 1..9` is range-checked because it is a store like any other, in both
+  directions, and neither check is new code.
+- The buffer variable is fetched **again for each variable** in one `read`,
+  because `get` invalidates the previous one. `tests/typedfiles.pas` pins that
+  with a two-variable read; a mutation hoisting the fetch out of the loop
+  survived a green suite before it was there.
+- **The runtime allocates the buffer**, because its size is T's and its
+  alignment must be T's. It is freed at the block exit that already closes the
+  file. The compiler alloca'ing it would put the component's size back into the
+  compiler's half of an interface whose point is that the storage is opaque.
+- The component may be **any type that is not, and does not contain, a file** —
+  checked through arrays, fields, and every arm of every variant part.
+- A `read` of a structured component is a memcpy, not an aggregate
+  `load`/`store`. LLVM accepts the latter and it behaves identically, so no
+  test defends this; it is ADR-0017's rule that a structured value has no
+  register form, and that rule is what lets both backends share one copy path.
 
 ## Decisions
 
@@ -293,8 +326,8 @@ tracks it.
 bootstrap purposes — and the bar for a new feature has therefore *changed*
 rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
-conformance with ISO 7185. What is left of it is non-text files and the
-non-local half of `goto`. **Anything the standard does not
+conformance with ISO 7185. What is left of it is the non-local half of
+`goto`. **Anything the standard does not
 have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.
@@ -343,7 +376,7 @@ It takes two program parameters: `compiler.pas <source> <ircode>`. The dumps go
 to standard output; the IR goes to the second file, because it is the
 compiler's *product* rather than a dump and has to be assembled. It is written
 on every run, which is what keeps `difftest.sh` exercising the code generator on
-all 197 files even though it compares none of it.
+all 202 files even though it compares none of it.
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc
@@ -368,7 +401,7 @@ commit or the test goes red — that is the point of it, not an inconvenience.
   when a lexical rule changes.
 - `selfhost/badparse/` is its parser equivalent, spread over one file per
   message because the parser stops at its first error. `selfhost/badsema/` is
-  Sema's, and is only eight files because Sema *accumulates* errors rather than
+  Sema's, and is only thirteen files because Sema *accumulates* errors rather than
   bailing. Add to them when you add a message, and don't assume the corpus
   reaches a branch — **count it**. Three times now a whole branch was found
   uncompared (no file had a tab; no file had a parse error; Sema reached 48 of
