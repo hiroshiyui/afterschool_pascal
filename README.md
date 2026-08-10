@@ -345,7 +345,7 @@ stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 b
 ```
 
 **This now holds.** The compiler compiles itself, and stage 2 and stage 3 are
-identical — 70 468 lines of IR, byte for byte, checked under `ctest` by
+identical, byte for byte, checked under `ctest` by
 `selfhost/irtest.sh`.
 
 Reaching stage 1 means the accepted language has to cover what a compiler is
