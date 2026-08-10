@@ -380,6 +380,10 @@ struct FieldGroup {
 /// share a sub-struct between two arms of it (ADR-0023).
 struct VariantArm {
   std::vector<ExprPtr> labels;
+  /// Extended Pascal's variant-part-completer, `otherwise (fields)`: an arm
+  /// with no labels, selected by every tag value the others leave. Empty
+  /// `labels` would say the same thing only in a program with no errors.
+  bool isOtherwise = false;
   std::vector<FieldGroup> fields;
   std::string tagName;
   TypeExprPtr tagType;            // null when this arm has no variant part

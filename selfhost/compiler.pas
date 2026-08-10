@@ -223,6 +223,9 @@ type
     6.4.3.3 makes it: its field-list is a field-list like any other. }
   variantRec = record
     labels: numPtr;
+    { selected by whatever the other arms leave (Extended Pascal's
+      variant-part-completer) }
+    isOtherwise: boolean;
     fields, fieldTail: fieldPtr;
     variants, variantTail: variantPtr;
     tagField: integer;
@@ -422,7 +425,11 @@ type
                      rcTagAt, rcTagLen, rcTagLine, rcTagCol: integer;
                      rcPacked: boolean);
       nkVariantArm: (vaLabels, vaFields, vaTagType, vaVariants: nodePtr;
-                     vaTagAt, vaTagLen, vaTagLine, vaTagCol: integer);
+                     vaTagAt, vaTagLen, vaTagLine, vaTagCol: integer;
+                     { the variant-part-completer of ISO/IEC 10206:1991: an
+                       arm with no labels, selected by whatever the others
+                       leave }
+                     vaOtherwise: boolean);
       nkConstDecl:  (kdAt, kdLen: integer; kdValue: nodePtr);
       nkTypeDecl:   (tdAt, tdLen: integer; tdType: nodePtr);
       nkProcDecl:   (pdAt, pdLen: integer;
@@ -1463,7 +1470,8 @@ begin
       n^.vaTagAt := 0;
       n^.vaTagLen := 0;
       n^.vaTagLine := 0;
-      n^.vaTagCol := 0
+      n^.vaTagCol := 0;
+      n^.vaOtherwise := false
     end;
     nkGoto:    begin
                  n^.gtId := -1;
@@ -1708,7 +1716,8 @@ begin
 end;
 
 { variant-part = 'case' (identifier ':')? type-identifier 'of' variant
-                 (';' variant)*
+                 (';' variant)* (';' completer)?
+  completer    = 'otherwise' '(' field-list ')'      -- Extended Pascal only
 
   The tag may be a real field or exist only as a type (ISO 7185 6.4.3.3). The
   two are told apart by the ':' -- `case kind: nodekind of` names a field,
@@ -1721,7 +1730,7 @@ procedure ParseVariantPart(n: nodePtr; intoArm: boolean);
 var
   head, tail, arm, lh, lt, tagType: nodePtr;
   tagAt, tagLen, tagLine, tagCol: integer;
-  more, moreLabels: boolean;
+  more, moreLabels, completer: boolean;
 begin
   { A variant part may contain variant parts, so this recurses without going
     back through ParseTypeExpr -- which is where the depth guard usually is. }
@@ -1754,16 +1763,35 @@ begin
     arm := NewNode(nkVariantArm, CurLine, CurCol);
     arm^.vaLabels := nil;
     arm^.vaFields := nil;
-    lh := nil;
-    lt := nil;
-    moreLabels := true;
-    while moreLabels and not aborted do begin
-      Append(lh, lt, ParseExpr);
-      moreLabels := Accept(tkComma)
+    { ISO/IEC 10206:1991 6.4.3.3: the variant-list may end with
+      `otherwise (field-list)` -- no labels, and no colon, because it names no
+      constants. }
+    completer := Check(tkOtherwise);
+    if completer then begin
+      pos := pos + 1;
+      arm^.vaOtherwise := true
+    end
+    else begin
+      { Under ISO 7185 `otherwise` is an ordinary identifier and may well name
+        the constant a variant is labelled with. What follows parts them: a
+        label list is followed by ',' or ':', the completer by '('. }
+      if Check(tkIdent) and PoolIs(tok[pos].at, tok[pos].len, 'otherwise') and
+         (PeekKind(1) = tkLParen) then begin
+        ErrorAtCur;
+        write('the ''otherwise'' part of a variant part is an Extended ');
+        writeln('Pascal feature; compile with --std=extended');
+        Bail
+      end;
+      lh := nil;
+      lt := nil;
+      moreLabels := true;
+      while moreLabels and not aborted do begin
+        Append(lh, lt, ParseExpr);
+        moreLabels := Accept(tkComma)
+      end;
+      arm^.vaLabels := lh;
+      Expect(tkColon, ctxVariantLabels)
     end;
-    arm^.vaLabels := lh;
-
-    Expect(tkColon, ctxVariantLabels);
     Expect(tkLParen, ctxVariantOpen);
     arm^.vaFields := ParseFieldGroups(tkRParen, true);
     { An arm's field-list may end with a variant part of its own. }
@@ -1771,7 +1799,9 @@ begin
       if Check(tkCase) then ParseVariantPart(arm, true);
     Expect(tkRParen, ctxVariantClose);
     Append(head, tail, arm);
-    more := Accept(tkSemi)
+    { The completer ends the variant-list, so nothing may follow it -- the same
+      shape as the otherwise-part of a case statement. }
+    if completer then more := false else more := Accept(tkSemi)
   end;
 
   if intoArm then begin
@@ -4163,6 +4193,11 @@ begin
     while arm <> nil do begin
       new(v);
       v^.labels := nil;
+      { An otherwise-arm carries no labels, so the loop below runs zero times
+        for it. It is still an arm in every other respect -- one struct laid
+        over the shared block, numbered like the rest -- which is why the
+        layout is unchanged. }
+      v^.isOtherwise := arm^.vaOtherwise;
       v^.fields := nil;
       v^.fieldTail := nil;
       v^.variants := nil;
@@ -5482,6 +5517,16 @@ begin
                 k := k + 1;
                 w := w^.next
               end;
+              { An otherwise-arm is what every unclaimed value selects, so it
+                answers here too -- the value is a value of the tag type, and
+                that is all the completer asks of it. }
+              k := 0;
+              w := arms;
+              while w <> nil do begin
+                if w^.isOtherwise and (chosen < 0) then chosen := k;
+                k := k + 1;
+                w := w^.next
+              end;
               if chosen < 0 then begin
                 ErrorAt(value^.line, value^.col);
                 write('no variant is selected by ');
@@ -6609,13 +6654,17 @@ begin
     Pad;
     write('variant ');
     WriteVariantRef(here);
-    write(' labels');
-    lbl := v^.labels;
-    while lbl <> nil do begin
-      write(' ', lbl^.value:1);
-      lbl := lbl^.next
+    if v^.isOtherwise then
+      writeln(' otherwise')
+    else begin
+      write(' labels');
+      lbl := v^.labels;
+      while lbl <> nil do begin
+        write(' ', lbl^.value:1);
+        lbl := lbl^.next
+      end;
+      writeln
     end;
-    writeln;
     level := level + 1;
     DumpFieldList(v^.fields);
     if v^.tagField >= 0 then begin
@@ -7208,7 +7257,7 @@ begin
     At(p^.line, p^.col);
     level := level + 1;
     Pad;
-    writeln('labels');
+    if p^.vaOtherwise then writeln('otherwise') else writeln('labels');
     level := level + 1;
     DumpExprList(p^.vaLabels);
     level := level - 1;

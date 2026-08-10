@@ -44,6 +44,8 @@ struct Field {
 /// §6.4.3.3 makes it: its field-list is a field-list like any other.
 struct Variant {
   std::vector<long long> labels;
+  bool isOtherwise = false;    // selected by whatever the other arms leave
+                               // (Extended Pascal's variant-part-completer)
   std::vector<Field> fields;
   std::vector<Variant> variants;
   int tagField = -1;           // index into `fields`, or -1 when the nested

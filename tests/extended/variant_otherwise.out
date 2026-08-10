@@ -1,0 +1,7 @@
+circle   radius 7
+square   side 4
+triangle sides 3, edge 5
+blob     sides 11, perimeter 42
+newsqr   side 2
+newhex   sides 6, perimeter 60
+lastone  sides 0, edge 0

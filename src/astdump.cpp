@@ -589,10 +589,14 @@ struct Dumper {
       const Variant &v = arms[i];
       std::string here = prefix + std::to_string(i);
       pad();
-      std::printf("variant %s labels", here.c_str());
-      for (long long value : v.labels)
-        std::printf(" %lld", value);
-      std::printf("\n");
+      if (v.isOtherwise) {
+        std::printf("variant %s otherwise\n", here.c_str());
+      } else {
+        std::printf("variant %s labels", here.c_str());
+        for (long long value : v.labels)
+          std::printf(" %lld", value);
+        std::printf("\n");
+      }
       ++level;
       fieldList(v.fields);
       if (v.tagField >= 0) {
@@ -631,7 +635,7 @@ struct Dumper {
     for (VariantArm &arm : arms) {
       head("arm", arm.line, arm.col);
       ++level;
-      mark("labels");
+      mark(arm.isOtherwise ? "otherwise" : "labels");
       ++level;
       for (ExprPtr &l : arm.labels)
         expr(l.get());

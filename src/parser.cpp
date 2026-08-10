@@ -427,8 +427,9 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
 }
 
 /// variant-part = 'case' (identifier ':')? type-identifier 'of' variant
-///                (';' variant)*
+///                (';' variant)* (';' completer)?
 /// variant      = constant (',' constant)* ':' '(' field-list ')'
+/// completer    = 'otherwise' '(' field-list ')'      -- Extended Pascal only
 ///
 /// The tag may be a real field or exist only as a type (§6.4.3.3). The two are
 /// told apart by the ':' — `case kind: nodekind of` names a field,
@@ -458,11 +459,27 @@ void Parser::parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
     VariantArm arm;
     arm.line = cur().line;
     arm.col = cur().col;
-    do {
-      arm.labels.push_back(parseExpr());
-    } while (accept(Tok::Comma));
-
-    expect(Tok::Colon, "after the labels of a variant");
+    // ISO/IEC 10206:1991 §6.4.3.3: the variant-list may end with a
+    // variant-part-completer, `otherwise (field-list)` — no labels, and no
+    // colon, because it names no constants.
+    bool completer = accept(Tok::KwOtherwise);
+    if (completer) {
+      arm.isOtherwise = true;
+    } else {
+      // Under ISO 7185 `otherwise` is an ordinary identifier and may well name
+      // the constant a variant is labelled with. What follows parts them: a
+      // label list is followed by ',' or ':', the completer by '('.
+      if (std_ == Std::Iso7185 && check(Tok::Ident) &&
+          cur().text == "otherwise" && check(Tok::LParen, 1)) {
+        errorAtCur("the 'otherwise' part of a variant part is an Extended "
+                   "Pascal feature; compile with --std=extended");
+        bail();
+      }
+      do {
+        arm.labels.push_back(parseExpr());
+      } while (accept(Tok::Comma));
+      expect(Tok::Colon, "after the labels of a variant");
+    }
     expect(Tok::LParen, "before the fields of a variant");
     while (!check(Tok::RParen)) {
       // ISO 7185 §6.4.3.3: a field-list is record-sections followed by an
@@ -484,7 +501,9 @@ void Parser::parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
     expect(Tok::RParen, "after the fields of a variant");
     arms.push_back(std::move(arm));
 
-    if (!accept(Tok::Semi))
+    // The completer ends the variant-list, so nothing may follow it — the same
+    // shape as the otherwise-part of a case statement.
+    if (completer || !accept(Tok::Semi))
       break;
   }
 }

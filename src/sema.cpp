@@ -422,6 +422,10 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
     Variant v;
     v.line = arm.line;
     v.col = arm.col;
+    // An otherwise-arm carries no labels, so nothing below runs for it. It is
+    // still an arm in every other respect — one struct laid over the shared
+    // block, numbered like the rest — which is why the layout is unchanged.
+    v.isOtherwise = arm.isOtherwise;
     int index = static_cast<int>(variants.size());
 
     for (ExprPtr &label : arm.labels) {
@@ -1923,6 +1927,12 @@ void Sema::checkStdProc(ProcCallStmt *p) {
           chosen = static_cast<int>(k);
           break;
         }
+    // An otherwise-arm is what every unclaimed value selects, so it answers
+    // here too — the value is a value of the tag type, and that is all the
+    // completer asks of it.
+    for (size_t k = 0; k < arms->size() && chosen < 0; ++k)
+      if ((*arms)[k].isOtherwise)
+        chosen = static_cast<int>(k);
     if (chosen < 0) {
       diags_.error(value->line, value->col,
                    "no variant is selected by " + Type::ordinalName(tag, v));
