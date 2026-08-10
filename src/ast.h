@@ -420,11 +420,19 @@ struct VarDecl {
   TypeExprPtr type;
 };
 
-/// A group of parameters sharing one type-denoter and one passing mode.
+/// A group of parameters sharing one type-denoter and one passing mode — or,
+/// when `isProc`, a single procedural or functional parameter written as a
+/// heading of its own (ISO 7185 §6.6.3.1). A heading names one identifier, so
+/// that form always has exactly one entry in `names` and uses `params` and
+/// `returnType` in place of `type`.
 struct ParamGroup {
   std::vector<DeclName> names;
   TypeExprPtr type;
   bool byRef = false; // a `var` parameter, passed by reference
+  bool isProc = false;
+  bool isFunction = false; // meaningful only when isProc
+  std::vector<ParamGroup> params;
+  TypeExprPtr returnType;
 };
 
 struct Block;

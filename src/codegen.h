@@ -53,6 +53,19 @@ private:
   /// `or`, intersection is `and`, and membership is one shift (ADR-0028).
   llvm::Type *i256() { return llvm::Type::getIntNTy(ctx_, 256); }
   llvm::Type *ptr() { return llvm::PointerType::getUnqual(ctx_); }
+  /// The value of a procedural or functional parameter: `{code, static link}`.
+  /// It is never formed as an LLVM value — the two halves are stored and loaded
+  /// through their own GEPs, and travel as two separate arguments — so nothing
+  /// here depends on how a struct is passed.
+  llvm::StructType *procPairType() {
+    return llvm::StructType::get(ctx_, {ptr(), ptr()});
+  }
+  /// The signature an indirect call through a procedural parameter uses:
+  /// the static link, then the parameters, exactly as declareProcs builds it
+  /// for a procedure with a body.
+  llvm::FunctionType *procFnType(const Symbol *p);
+  void appendParamTypes(const std::vector<Symbol *> &params,
+                        llvm::SmallVectorImpl<llvm::Type *> &into);
   /// The type of a variable's field in its activation record.
   llvm::Type *slotType(const Symbol *v);
   /// The type of a parameter in the LLVM function signature. It differs from
@@ -116,6 +129,9 @@ private:
   /// The frame to pass as a callee's static link.
   llvm::Value *staticLinkFor(Symbol *callee);
   llvm::Value *emitUserCall(Symbol *callee, std::vector<ExprPtr> &args);
+  /// Push the `{code, link}` pair an actual procedural parameter travels as.
+  void emitProcArgument(Symbol *actual,
+                        llvm::SmallVectorImpl<llvm::Value *> &argv);
 
   // statements
   void emitStmt(Stmt *s);

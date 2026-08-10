@@ -149,6 +149,41 @@ goto resolves to and what codegen branches to.
 - A goto opens a fresh block for what follows it. LLVM tolerates the
   alternative, so no test can see this — don't "simplify" it away.
 
+**Procedural and functional parameters** (ADR-0030). A procedure passed as an
+argument travels as a **pair**: the code, and the static link to call it with —
+the link of the block it was *declared* in, which the caller cannot derive
+because its own static chain says nothing about where the passed procedure
+came from. `tests/procparam.pas` pins the case that distinguishes a correct
+implementation: a nested function passed out of a *recursive* procedure must
+see the locals of the invocation that passed it.
+
+- The pair **never exists as an LLVM value**. It occupies one frame slot of
+  type `{ptr, ptr}`, written and read through its own two getelementptrs, and
+  travels as *two* arguments. Nothing then depends on how a struct is passed,
+  which is what keeps the textual `.ll` backend free of `insertvalue` and of
+  an opinion about the C ABI. `appendParamTypes` is the one place the shape is
+  decided, so a caller and a callee can only agree.
+- Naming a procedure takes its address and `staticLinkFor` it; naming a
+  procedural *parameter* forwards the pair it already holds, so a procedure
+  handed on through three levels still runs in its own scope.
+- **Congruity (§6.6.3.6) is checked on symbols, not on types.** The rule is
+  pairwise over the parameter lists — same count, same passing mode, same type,
+  and congruity again for a procedural parameter of one — which is exactly what
+  `Symbol::params` holds. `assignable` is untouched: a procedural parameter is
+  never assigned, and its `Type` carries only the result type, for diagnostics.
+- **An actual procedural parameter is resolved against its formal.** `f`
+  written as an argument denotes the function; written anywhere else it is a
+  call of it. That is why `checkArguments` checks each argument knowing which
+  parameter it is for, rather than checking them all first — the one place in
+  Sema where an expression's meaning depends on where it sits.
+- The formals *of* a procedural parameter are descriptors: they get no frame
+  slot and no scope, because the frame they will occupy belongs to whatever
+  procedure is eventually passed.
+- This is the first thing here that lets an activation record's address outlive
+  the call that made it. It is safe only because there is no procedure type in
+  the type part, so the pair cannot be stored anywhere — don't add one without
+  answering what that would mean.
+
 **Sets** (ADR-0028). A set is one 256-bit word, a bit per possible member, so a
 base type's values must lie in 0..255 — `set of integer` is refused under the
 latitude ISO 7185 §6.4.3.4 gives, not silently truncated. The consequence that
@@ -258,8 +293,8 @@ tracks it.
 bootstrap purposes — and the bar for a new feature has therefore *changed*
 rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
-conformance with ISO 7185. What is left of it is procedural and functional
-parameters, non-text files, and the non-local half of `goto`. **Anything the standard does not
+conformance with ISO 7185. What is left of it is non-text files and the
+non-local half of `goto`. **Anything the standard does not
 have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.
@@ -308,7 +343,7 @@ It takes two program parameters: `compiler.pas <source> <ircode>`. The dumps go
 to standard output; the IR goes to the second file, because it is the
 compiler's *product* rather than a dump and has to be assembled. It is written
 on every run, which is what keeps `difftest.sh` exercising the code generator on
-all 175 files even though it compares none of it.
+all 197 files even though it compares none of it.
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc

@@ -515,6 +515,11 @@ bool Sema::assignable(Type *to, Type *from) const {
   // predicate is what grants a whole-variable copy.
   if (to->isFile() || from->isFile())
     return false;
+  // A procedural parameter is not a value either: ISO 7185 gives it no
+  // assignment and no operators, and the only place one may travel is another
+  // procedural parameter — which checkProcArgument handles without coming here.
+  if (to->isProc() || from->isProc())
+    return false;
   if (to == from)
     return true;
   // ISO 7185 §6.4.6 makes set compatibility *structural*, not by name: two set
@@ -966,21 +971,7 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
   // Parameters belong to the procedure's own frame, so they are created here
   // but only made visible once its body is entered.
   pushScope();
-  for (auto &group : decl.params) {
-    Type *t = resolveType(*group.type);
-    // ISO 7185 §6.6.3.3: a file may only be passed by reference. A value
-    // parameter is a copy, and a file has no copy — the position, the buffer
-    // and the operating system's handle are one object, not a value.
-    if (t->isFile() && !group.byRef && !group.names.empty())
-      diags_.error(group.names[0].line, group.names[0].col,
-                   "a file parameter must be a var parameter");
-    for (auto &n : group.names) {
-      Symbol *ps = addFrameVar(n.name,
-                               group.byRef ? SymKind::VarParam : SymKind::Param,
-                               t, sym, n.line, n.col);
-      sym->params.push_back(ps);
-    }
-  }
+  buildFormals(decl.params, sym, sym);
   if (sym->kind == SymKind::Func) {
     // The result lives in the frame like a local; assigning to the function
     // name writes here, and the epilogue returns it.
@@ -988,6 +979,100 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
         addHiddenVar(decl.name + "$result", SymKind::Var, sym->type, sym);
   }
   popScope();
+}
+
+/// One parameter of a formal parameter list. A top-level one is a variable of
+/// the procedure's own frame; one belonging to a *procedural* parameter is a
+/// descriptor only — it says how the argument travels and what type it has,
+/// and the frame it will occupy is the frame of whatever procedure is
+/// eventually passed. Hence `frame` being null for those.
+static Symbol *formalSymbol(Symbol *s, const DeclName &n, SymKind kind,
+                            Type *type) {
+  s->name = n.name;
+  s->kind = kind;
+  s->type = type;
+  return s;
+}
+
+void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
+                        Symbol *frame) {
+  for (auto &group : groups) {
+    if (group.isProc) {
+      // ISO 7185 §6.6.3.1 spells a procedural parameter as a heading, so it
+      // declares exactly one name and the parser guarantees it is there.
+      Type *t = newType(TypeKind::Proc);
+      if (group.isFunction) {
+        t->elem = group.returnType ? resolveType(*group.returnType) : ty::Int();
+        // §6.6.2 restricts a function's result type, and a functional
+        // parameter's heading is a function heading — the same rule, so the
+        // same message.
+        if (!t->elem->isOrdinal() && !t->elem->isReal() &&
+            !t->elem->isPointer()) {
+          diags_.error(group.names[0].line, group.names[0].col,
+                       "a function cannot return " + t->elem->name() +
+                           "; use a var parameter");
+          t->elem = ty::Int();
+        }
+      }
+      const DeclName &n = group.names[0];
+      Symbol *ps =
+          frame ? addFrameVar(n.name, SymKind::ProcParam, t, frame, n.line,
+                              n.col)
+                : formalSymbol(newSymbol(), n, SymKind::ProcParam, t);
+      // Its own parameters name no frame and are never looked up: the actual
+      // procedure supplies the names its body uses, and these exist only to be
+      // compared against that procedure's. Two of them sharing a spelling
+      // therefore cannot be ambiguous, so no scope is pushed to catch it.
+      buildFormals(group.params, ps, nullptr);
+      into->params.push_back(ps);
+      continue;
+    }
+
+    Type *t = resolveType(*group.type);
+    // ISO 7185 §6.6.3.3: a file may only be passed by reference. A value
+    // parameter is a copy, and a file has no copy — the position, the buffer
+    // and the operating system's handle are one object, not a value.
+    if (t->isFile() && !group.byRef && !group.names.empty())
+      diags_.error(group.names[0].line, group.names[0].col,
+                   "a file parameter must be a var parameter");
+    SymKind kind = group.byRef ? SymKind::VarParam : SymKind::Param;
+    for (auto &n : group.names) {
+      Symbol *ps =
+          frame ? addFrameVar(n.name, kind, t, frame, n.line, n.col)
+                : formalSymbol(newSymbol(), n, kind, t);
+      into->params.push_back(ps);
+    }
+  }
+}
+
+bool Sema::congruous(Symbol *formal, Symbol *actual) const {
+  if (formal->params.size() != actual->params.size())
+    return false;
+  Type *want = formal->resultType();
+  Type *got = actual->resultType();
+  // A procedure and a function are never congruous however alike their
+  // parameters: one has a result and the other has nowhere to put one.
+  if ((want == nullptr) != (got == nullptr))
+    return false;
+  if (want && want != got)
+    return false;
+
+  for (size_t i = 0; i < formal->params.size(); ++i) {
+    Symbol *f = formal->params[i];
+    Symbol *a = actual->params[i];
+    // The passing mode is part of the congruity: a var parameter binds to a
+    // variable and a value parameter copies one, and the caller emits
+    // different code for each — so the two cannot stand in for one another.
+    if (f->kind != a->kind)
+      return false;
+    if (f->kind == SymKind::ProcParam) {
+      if (!congruous(f, a))
+        return false;
+    } else if (f->type != a->type) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void Sema::checkProcBody(ProcDecl &decl) {
@@ -1160,7 +1245,7 @@ void Sema::checkStmt(Stmt *s) {
       diags_.error(p->line, p->col, "unknown procedure '" + p->name + "'");
       return;
     }
-    if (sym->kind != SymKind::Proc) {
+    if (!sym->isInvocable() || sym->resultType()) {
       diags_.error(p->line, p->col,
                    "'" + p->name + "' is not a procedure");
       return;
@@ -1345,7 +1430,7 @@ void Sema::checkExpr(Expr *e) {
       v->type = ty::Int();
       return;
     }
-    if (v->sym->kind == SymKind::Proc) {
+    if (v->sym->isInvocable() && !v->sym->resultType()) {
       diags_.error(v->line, v->col,
                    "'" + v->name + "' is a procedure and has no value");
       v->type = ty::Int();
@@ -1360,9 +1445,9 @@ void Sema::checkExpr(Expr *e) {
     // A function name used as a value is a call with no arguments — Pascal has
     // no empty argument list, and inside the function's own body this is the
     // recursive call rather than a way to read the result (ISO 7185 §6.8.2.2).
-    if (v->sym->kind == SymKind::Func && v->sym->params.empty())
-      v->type = v->sym->type;
-    else if (v->sym->kind == SymKind::Func)
+    if (v->sym->isInvocable() && v->sym->params.empty())
+      v->type = v->sym->resultType();
+    else if (v->sym->isInvocable())
       diags_.error(v->line, v->col, "'" + v->name + "' needs arguments");
     else
       v->type = v->sym->type;
@@ -1865,8 +1950,18 @@ void Sema::checkWith(WithStmt *w) {
 /// is bound to a variable, not to a value, so the argument has to be one.
 void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                           int col) {
-  for (auto &a : args)
-    checkExpr(a.get());
+  // Checked against the parameter rather than on its own, because an actual
+  // procedural parameter is an identifier and not an expression: `f` there
+  // denotes the function, where checkExpr would read it as a call of it. The
+  // arity is only tested afterwards, so a wrong count still reports whatever
+  // is wrong *inside* each argument as well.
+  for (size_t i = 0; i < args.size(); ++i) {
+    Symbol *p = i < callee->params.size() ? callee->params[i] : nullptr;
+    if (p && p->kind == SymKind::ProcParam)
+      checkProcArgument(p, args[i].get(), callee, i);
+    else
+      checkExpr(args[i].get());
+  }
 
   if (args.size() != callee->params.size()) {
     diags_.error(line, col,
@@ -1880,6 +1975,9 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
   for (size_t i = 0; i < args.size(); ++i) {
     Symbol *p = callee->params[i];
     Expr *a = args[i].get();
+
+    if (p->kind == SymKind::ProcParam)
+      continue; // already bound, above
 
     if (p->kind == SymKind::VarParam) {
       if (!isDesignator(a)) {
@@ -1914,17 +2012,78 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
   }
 }
 
+/// The names ISO 7185 §6.6.5 and §6.6.6 reserve for the required procedures
+/// and functions. They are not symbols — the compiler knows them by name — so
+/// a program that tries to pass one gets "undeclared identifier" unless it is
+/// recognised here, which would be a baffling way to report §6.6.3.7.
+static bool isRequiredName(const std::string &name) {
+  static const char *procs[] = {"new",   "dispose", "reset",  "rewrite",
+                                "get",   "put",     "read",   "readln",
+                                "write", "writeln", "pack",   "unpack"};
+  for (const char *p : procs)
+    if (name == p)
+      return true;
+  return builtins().count(name) != 0;
+}
+
+void Sema::checkProcArgument(Symbol *formal, Expr *a, Symbol *callee,
+                             size_t at) {
+  const std::string where =
+      "argument " + std::to_string(at + 1) + " of '" + callee->name + "'";
+  // Whatever happens below, the argument leaves here with the formal's type:
+  // codegen reads `sym`, and a null type would break the contract that every
+  // expression has one.
+  a->type = formal->type;
+
+  auto *v = as<VarRef>(a);
+  if (!v) {
+    diags_.error(a->line, a->col,
+                 where + " must be the name of a procedure or function");
+    return;
+  }
+
+  Symbol *sym = lookup(v->name);
+  if (!sym) {
+    // ISO 7185 §6.6.3.7: the actual parameter shall not denote a required
+    // procedure or function. There is nothing to pass — `write` takes a
+    // variable number of arguments of types no parameter list can spell, and
+    // `abs` is an instruction rather than a body with an address.
+    if (isRequiredName(v->name))
+      diags_.error(v->line, v->col,
+                   "'" + v->name + "' is a required procedure or function and "
+                   "cannot be passed as a parameter");
+    else
+      diags_.error(v->line, v->col, "undeclared identifier '" + v->name + "'");
+    return;
+  }
+  if (!sym->isInvocable()) {
+    diags_.error(v->line, v->col,
+                 where + " must be the name of a procedure or function, but '" +
+                     v->name + "' is not one");
+    return;
+  }
+  v->sym = sym;
+
+  // ISO 7185 §6.6.3.6. The lists are compared rather than the types, because a
+  // procedural parameter has no type to write down: the heading *is* the type.
+  if (!congruous(formal, sym))
+    diags_.error(v->line, v->col,
+                 "'" + v->name + "' does not match the parameter list of " +
+                     (formal->resultType() ? "functional" : "procedural") +
+                     " parameter '" + formal->name + "'");
+}
+
 void Sema::checkCall(Call *c) {
   // A user-defined function shadows nothing built in: names are resolved in
   // the scope chain first, so a local `abs` would win.
   if (Symbol *sym = lookup(c->name)) {
-    if (sym->kind == SymKind::Func) {
+    if (sym->isInvocable() && sym->resultType()) {
       c->sym = sym;
-      c->type = sym->type;
+      c->type = sym->resultType();
       checkArguments(sym, c->args, c->line, c->col);
       return;
     }
-    if (sym->kind == SymKind::Proc) {
+    if (sym->isInvocable()) {
       diags_.error(c->line, c->col,
                    "'" + c->name + "' is a procedure and returns no value");
       c->type = ty::Int();

@@ -56,6 +56,7 @@ const char *symKindName(SymKind k) {
   case SymKind::Var:      return "var";
   case SymKind::Param:    return "param";
   case SymKind::VarParam: return "varparam";
+  case SymKind::ProcParam: return "procparam";
   case SymKind::Proc:     return "proc";
   case SymKind::Func:     return "func";
   }
@@ -530,6 +531,33 @@ struct Dumper {
     level -= 2;
   }
 
+  /// A formal parameter list. A procedural or functional parameter is a
+  /// heading rather than a type-denoter (ISO 7185 §6.6.3.1), so it prints its
+  /// own parameter list — which is the recursion the grammar has.
+  void paramGroups(std::vector<ParamGroup> &groups) {
+    for (ParamGroup &p : groups) {
+      if (!p.isProc) {
+        group(p.names, p.type.get(), p.byRef ? "group var" : "group");
+        continue;
+      }
+      head(std::string(p.isFunction ? "funcparam " : "procparam ") +
+               p.names[0].name,
+           p.names[0].line, p.names[0].col);
+      ++level;
+      mark("params");
+      ++level;
+      paramGroups(p.params);
+      --level;
+      if (p.returnType) {
+        mark("result");
+        ++level;
+        typeExpr(p.returnType.get());
+        --level;
+      }
+      --level;
+    }
+  }
+
   /// The layout Sema gave a record: which struct each field lives in and at
   /// what position, and which tag values select each variant. Codegen indexes
   /// by exactly these numbers, so they are what a record type *is*.
@@ -681,8 +709,7 @@ struct Dumper {
     ++level;
     mark("params");
     ++level;
-    for (ParamGroup &p : d.params)
-      group(p.names, p.type.get(), p.byRef ? "group var" : "group");
+    paramGroups(d.params);
     --level;
     if (d.returnType) {
       mark("result");

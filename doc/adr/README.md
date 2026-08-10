@@ -38,3 +38,4 @@ the alternatives that were rejected and why.
 | [0027](0027-new-selects-the-variants-it-allocates.md) | `new` selects the variants it allocates | Accepted |
 | [0028](0028-a-set-is-one-256-bit-word.md) | A set is one 256-bit word | Accepted |
 | [0029](0029-goto-is-local-and-checked-by-containment.md) | `goto` is local, and where it may land is a containment test | Accepted |
+| [0030](0030-a-procedural-parameter-is-a-code-and-link-pair.md) | A procedural parameter is a code-and-link pair | Accepted |

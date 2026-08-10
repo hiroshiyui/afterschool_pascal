@@ -16,6 +16,12 @@ enum class SymKind {
   Var,      // a local or global variable
   Param,    // a value parameter — a local initialised from the argument
   VarParam, // a `var` parameter — the frame slot holds a pointer
+  /// A procedural or functional parameter (ISO 7185 §6.6.3.1). The frame slot
+  /// holds a *pair*: the code to call and the static link to call it with — the
+  /// link of the block the actual procedure was declared in, not of the caller.
+  /// `type` is the procedural type and `type->elem` its result, null for a
+  /// procedural parameter as against a functional one.
+  ProcParam,
   Proc,
   Func,
 };
@@ -61,6 +67,20 @@ struct Symbol {
   bool isVariable() const {
     return kind == SymKind::Var || kind == SymKind::Param ||
            kind == SymKind::VarParam;
+  }
+  /// Anything a call statement or a function call may name. A procedural
+  /// parameter is not `isCallable()` — that asks whether this symbol *has* a
+  /// body, which is what forward declarations and duplicate checks want.
+  bool isInvocable() const {
+    return isCallable() || kind == SymKind::ProcParam;
+  }
+  /// The result type of an invocable, null when it is a procedure. A function
+  /// keeps its result in `type`; a functional parameter keeps the procedural
+  /// type there and the result one level in.
+  Type *resultType() const {
+    if (kind == SymKind::ProcParam)
+      return type ? type->elem : nullptr;
+    return kind == SymKind::Func ? type : nullptr;
   }
 };
 
@@ -154,6 +174,22 @@ private:
   void checkStdProc(ProcCallStmt *p);
   void checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                       int col);
+  /// Build the parameter symbols of one formal parameter list. They are
+  /// descriptors rather than variables — a procedural parameter's own
+  /// parameters live in the frame of whatever procedure is eventually passed,
+  /// not in any frame here — so they get no slot and `frame` is null for them.
+  void buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
+                    Symbol *frame);
+  /// ISO 7185 §6.6.3.6: two parameter lists are *congruous* when they have the
+  /// same number of parameters and each corresponding pair is passed the same
+  /// way and has the same type — recursively, for a procedural parameter of a
+  /// procedural parameter. Note "the same type", not "assignment compatible":
+  /// nothing is converted on the way through a procedural parameter.
+  bool congruous(Symbol *formal, Symbol *actual) const;
+  /// Bind the actual parameter of a procedural or functional parameter. It is
+  /// a procedure *identifier* rather than an expression, so it is resolved
+  /// here instead of through checkExpr — which would read `f` as a call.
+  void checkProcArgument(Symbol *formal, Expr *a, Symbol *callee, size_t at);
   bool evalConst(Expr *e, Symbol &out);
 
   /// True if `e` denotes a variable — a name, or one with subscripts and

@@ -12,7 +12,7 @@ inline constexpr int kMaxInt = 2147483647;
 
 enum class TypeKind {
   Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer,
-  File, Set
+  File, Set, Proc
 };
 
 /// ISO 7185 §6.4.3.4 leaves the size of a set to the implementation. This one
@@ -65,8 +65,9 @@ struct Type {
   // --- array, pointer, file ------------------------------------------------
   /// Array: the component type. Pointer: the domain — what it points at, null
   /// only for `nil` itself, which belongs to every pointer type. File: the
-  /// component type, which is `char` for a text file. Sharing the field is how
-  /// a variant record would do it, which is where this is going.
+  /// component type, which is `char` for a text file. Proc: the result type,
+  /// null for a procedural parameter as against a functional one. Sharing the
+  /// field is how a variant record would do it, which is where this is going.
   Type *elem = nullptr;
   Type *indexType = nullptr; // the ordinal type of a subscript
   bool packed = false;
@@ -105,6 +106,11 @@ struct Type {
   bool isPointer() const { return kind == TypeKind::Pointer; }
   bool isFile() const { return kind == TypeKind::File; }
   bool isSet() const { return kind == TypeKind::Set; }
+  /// The type of a procedural or functional parameter (ISO 7185 §6.6.3.1).
+  /// There is no way to *write* one outside a formal parameter list — the type
+  /// part has no procedure type — so no variable ever has this type, and it
+  /// takes part in no operation but being passed on and being called.
+  bool isProc() const { return kind == TypeKind::Proc; }
   /// `[]`, which belongs to every set type — the set-valued counterpart of
   /// `nil`, and null for the same reason: it has no base type of its own.
   bool isEmptySet() const { return isSet() && elem == nullptr; }
@@ -236,6 +242,12 @@ struct Type {
     // the way the source writes it.
     case TypeKind::Set:
       return elem ? "set of " + elem->name() : "[]";
+    // Two procedural parameters differ by their *parameter lists*, and ISO
+    // 7185 §6.6.3.6 compares those pairwise rather than as a whole; the
+    // congruity diagnostic names the parameter that failed, so spelling a
+    // signature out here would say less at more cost.
+    case TypeKind::Proc:
+      return elem ? "function returning " + elem->name() : "procedure";
     case TypeKind::Record: {
       // An anonymous record is named by its fields, which is the only thing
       // that distinguishes it from any other anonymous record.

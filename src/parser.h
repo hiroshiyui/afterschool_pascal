@@ -71,7 +71,13 @@ private:
   void parseTypePart(Block &block);
   void parseVarPart(Block &block);
   std::unique_ptr<ProcDecl> parseProcOrFunc(bool isFunction);
-  void parseFormalParameters(ProcDecl &decl);
+  /// The formal parameter list of a procedure, or of a procedural parameter —
+  /// the same production, which is why it takes the vector rather than the
+  /// declaration (ISO 7185 §6.6.3.1).
+  void parseFormalParameters(std::vector<ParamGroup> &into);
+  /// One `procedure P(...)` or `function F(...): T` written *inside* a formal
+  /// parameter list.
+  void parseProcParam(ParamGroup &group, bool isFunction);
 
   TypeExprPtr parseTypeExpr();
   TypeExprPtr parseArrayType(bool packed);

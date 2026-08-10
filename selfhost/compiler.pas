@@ -117,7 +117,7 @@ type
     ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxParenExpr,
     ctxCallArgs, ctxAfterGoto, ctxLabelStart, ctxAfterLabel, ctxLabelDecl,
-    ctxAfterLabelPart);
+    ctxAfterLabelPart, ctxFuncParamResult);
 
   { `in` is a relational operator (ISO 7185 6.7.2.4) and sits at the same
     precedence as `=`, which is why it belongs here rather than with the
@@ -147,15 +147,26 @@ type
 
   { ------------------------------------------------------- Sema's own types }
 
-  symKind = (skConst, skType, skVar, skParam, skVarParam, skProc, skFunc);
+  { skProcParam is a procedural or functional parameter (ISO 7185 6.6.3.1).
+    Its frame slot holds a *pair*: the code to call, and the static link to
+    call it with -- the link of the block the actual procedure was declared
+    in, not of the caller. `stype` is the procedural type and its `elem` is
+    the result type, nil for a procedural parameter as against a functional
+    one. }
+  symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam,
+             skProc, skFunc);
 
   { How a file variable reaches something outside the program. ISO 7185 6.10
     makes only a *program parameter* external; every other file variable is a
     scratch file with no name, which is what skInternal means. }
   fileBinding = (fbInternal, fbStdInput, fbStdOutput, fbArgument);
 
+  { tyProc is the type of a procedural or functional parameter. There is no
+    way to *write* one outside a formal parameter list -- the type part has no
+    procedure type -- so no variable ever has it, and it takes part in no
+    operation but being passed on and being called. }
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-              tyArray, tyRecord, tyPointer, tyFile, tySet);
+              tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc);
 
   { The required functions of ISO 7185, and the standard procedures that are
     not statements of their own. }
@@ -291,6 +302,12 @@ type
   opndPtr = ^opndRec;
   opndRec = record
     text: str;
+    { How the operand is spelled on the call line. A parameter contributes one
+      operand, except a procedural one, which contributes two -- so the type
+      travels with the operand rather than being re-derived by walking the
+      parameter list a second time. }
+    asPtr: boolean;
+    otype: typePtr;
     next: opndPtr
   end;
 
@@ -355,8 +372,12 @@ type
       nkCaseArm:    (caLabels, caBody: nodePtr; caValues, caValueTail: numPtr);
       nkDeclName:   (dnAt, dnLen: integer);
       { one type-denoter shared by a list of names: a field group, a variable
-        declaration, or a parameter group }
-      nkGroup:      (grNames, grType: nodePtr; grByRef: boolean);
+        declaration, or a parameter group -- or, when grIsProc, a single
+        procedural or functional parameter written as a heading of its own
+        (ISO 7185 6.6.3.1), which uses grParams and grResult in place of
+        grType and always has exactly one name. }
+      nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProc,
+                     grIsFunction: boolean; grParams, grResult: nodePtr);
       nkNamed:      (nmAt, nmLen: integer);
       nkPointer:    (ptAt, ptLen: integer);
       nkEnum:       (enConstants: nodePtr);
@@ -1314,7 +1335,9 @@ begin
     ctxReadArgs:       write('after the arguments of read');
     ctxSubscript:      write('after a subscript');
     ctxParenExpr:      write('after a parenthesised expression');
-    ctxCallArgs:       write('after the arguments of a function call')
+    ctxCallArgs:       write('after the arguments of a function call');
+    ctxFuncParamResult:
+      write('before the result type of a functional parameter')
   end
 end;
 
@@ -1344,6 +1367,12 @@ begin
       n^.pcSelect := nil
     end;
     nkCaseArm: begin n^.caValues := nil; n^.caValueTail := nil end;
+    nkGroup: begin
+      n^.grIsProc := false;
+      n^.grIsFunction := false;
+      n^.grParams := nil;
+      n^.grResult := nil
+    end;
     nkProcDecl: n^.pdSym := nil;
     nkWith: n^.wtBinding := nil;
     nkVariantArm: begin
@@ -1359,7 +1388,7 @@ begin
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
     nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
-    nkCase, nkWriteArg, nkGroup, nkDeclName, nkNamed, nkEnum,
+    nkCase, nkWriteArg, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkConstDecl,
     nkTypeDecl, nkLabelDecl,
     nkBlock: { nothing of Sema's to clear }
@@ -2568,12 +2597,59 @@ end;
 
 { formal-parameters = '(' group (';' group)* ')'
   group             = 'var'? ident-list ':' type-denoter
+                    | 'procedure' ident formal-parameters?
+                    | 'function' ident formal-parameters? ':' type-denoter
 
   ISO 7185 6.6.3.1 restricts a parameter's type to a type *identifier*, so an
   array parameter needs a named type. That is a real restriction, not an
   omission: it is what makes a formal and an actual parameter the same type
-  rather than two structurally identical ones. }
-function ParseFormalParameters: nodePtr;
+  rather than two structurally identical ones.
+
+  The last two forms are a procedural and a functional parameter, and each is
+  spelled as a *heading* rather than as a type -- which is why one group
+  declares one name there, and why this production has to recurse. }
+function ParseFormalParameters: nodePtr; forward;
+
+procedure ParseProcParam(g: nodePtr; isFunction: boolean);
+begin
+  g^.grIsProc := true;
+  g^.grIsFunction := isFunction;
+  pos := pos + 1;   { 'procedure' / 'function' }
+
+  if not Check(tkIdent) then begin
+    ErrorAtCur;
+    if isFunction then
+      writeln('expected the name of the functional parameter')
+    else
+      writeln('expected the name of the procedural parameter');
+    Bail
+  end
+  else begin
+    g^.grNames := NewNode(nkDeclName, CurLine, CurCol);
+    g^.grNames^.dnAt := tok[pos].at;
+    g^.grNames^.dnLen := tok[pos].len;
+    pos := pos + 1
+  end;
+
+  if (not aborted) and Check(tkLParen) then
+    g^.grParams := ParseFormalParameters;
+
+  { A functional parameter's heading carries its result type, and there is no
+    `forward` here to make it optional the way 6.6.1 makes it optional in a
+    declaration -- so unlike ParseProcOrFunc this one insists on it. }
+  if isFunction and not aborted then begin
+    Expect(tkColon, ctxFuncParamResult);
+    if not aborted then
+      if not Check(tkIdent) then begin
+        ErrorAtCur;
+        writeln('the result type of a functional parameter must be a type name');
+        Bail
+      end;
+    g^.grResult := ParseTypeExpr
+  end
+end;
+
+function ParseFormalParameters;
 var head, tail, g: nodePtr; more: boolean;
 begin
   head := nil;
@@ -2584,16 +2660,21 @@ begin
     g := NewNode(nkGroup, CurLine, CurCol);
     g^.grNames := nil;
     g^.grType := nil;
-    g^.grByRef := Accept(tkVar);
-    g^.grNames := ParseNameList(ctxParamList);
-    Expect(tkColon, ctxParamList);
-    if not aborted then
-      if not Check(tkIdent) then begin
-        ErrorAtCur;
-        writeln('a parameter''s type must be a type name');
-        Bail
-      end;
-    g^.grType := ParseTypeExpr;
+    g^.grByRef := false;
+    if Check(tkProcedure) or Check(tkFunction) then
+      ParseProcParam(g, Check(tkFunction))
+    else begin
+      g^.grByRef := Accept(tkVar);
+      g^.grNames := ParseNameList(ctxParamList);
+      Expect(tkColon, ctxParamList);
+      if not aborted then
+        if not Check(tkIdent) then begin
+          ErrorAtCur;
+          writeln('a parameter''s type must be a type name');
+          Bail
+        end;
+      g^.grType := ParseTypeExpr
+    end;
     Append(head, tail, g);
     more := Accept(tkSemi)
   end;
@@ -2865,6 +2946,10 @@ begin IsNil := IsPointer(t) and (t^.elem = nil) end;
 function IsSet(t: typePtr): boolean;
 begin IsSet := (t <> nil) and (t^.kind = tySet) end;
 
+{ The type of a procedural or functional parameter (ISO 7185 6.6.3.1). }
+function IsProcType(t: typePtr): boolean;
+begin IsProcType := (t <> nil) and (t^.kind = tyProc) end;
+
 { `[]`, which belongs to every set type -- the set-valued counterpart of nil,
   and elem-less for the same reason: it has no base type of its own. }
 function IsEmptySet(t: typePtr): boolean;
@@ -3080,6 +3165,19 @@ begin
           Put(' ');
           WriteTypeName(t^.elem)
         end;
+      { Two procedural parameters differ by their *parameter lists*, and ISO
+        7185 6.6.3.6 compares those pairwise rather than as a whole; the
+        congruity diagnostic names the parameter that failed, so spelling a
+        signature out here would say less at more cost. }
+      tyProc:
+        if t^.elem = nil then PutLit('procedure       ')
+        else begin
+          PutLit('function        ');
+          Put(' ');
+          PutLit('returning       ');
+          Put(' ');
+          WriteTypeName(t^.elem)
+        end;
       tyRecord: begin
         { An anonymous record is named by its fields, which is the only thing
           that distinguishes it from any other anonymous record. }
@@ -3248,6 +3346,70 @@ begin
   AddHiddenVar := s
 end;
 
+{ Anything a call statement or a function call may name. A procedural
+  parameter is deliberately not lumped in with skProc/skFunc elsewhere: those
+  two ask whether a symbol *has* a body, which is what forward declarations
+  and duplicate checks want. }
+function IsInvocable(s: symPtr): boolean;
+begin
+  IsInvocable := (s <> nil) and
+                 ((s^.kind = skProc) or (s^.kind = skFunc) or
+                  (s^.kind = skProcParam))
+end;
+
+{ The result type of an invocable, nil when it is a procedure. A function
+  keeps its result in stype; a functional parameter keeps the procedural type
+  there and the result one level in. }
+function ResultTypeOf(s: symPtr): typePtr;
+begin
+  if s = nil then ResultTypeOf := nil
+  else if s^.kind = skProcParam then
+    if s^.stype = nil then ResultTypeOf := nil else ResultTypeOf := s^.stype^.elem
+  else if s^.kind = skFunc then ResultTypeOf := s^.stype
+  else ResultTypeOf := nil
+end;
+
+{ ISO 7185 6.6.3.6: two parameter lists are *congruous* when they have the
+  same number of parameters and each corresponding pair is passed the same way
+  and has the same type -- recursively, for a procedural parameter of a
+  procedural parameter. Note "the same type", not "assignment compatible":
+  nothing is converted on the way through a procedural parameter. }
+function Congruous(formal, actual: symPtr): boolean;
+var f, a: symListPtr; want, got: typePtr; ok: boolean;
+begin
+  want := ResultTypeOf(formal);
+  got := ResultTypeOf(actual);
+  { A procedure and a function are never congruous however alike their
+    parameters: one has a result and the other has nowhere to put one. }
+  if (want = nil) <> (got = nil) then
+    ok := false
+  else if (want <> nil) and (want <> got) then
+    ok := false
+  else begin
+    ok := true;
+    f := formal^.params;
+    a := actual^.params;
+    while ok and (f <> nil) and (a <> nil) do begin
+      { The passing mode is part of the congruity: a var parameter binds to a
+        variable and a value parameter copies one, and the caller emits
+        different code for each -- so the two cannot stand in for one
+        another. }
+      if f^.sym^.kind <> a^.sym^.kind then
+        ok := false
+      else if f^.sym^.kind = skProcParam then
+        ok := Congruous(f^.sym, a^.sym)
+      else if f^.sym^.stype <> a^.sym^.stype then
+        ok := false;
+      if ok then begin
+        f := f^.next;
+        a := a^.next
+      end
+    end;
+    if ok then ok := (f = nil) and (a = nil)
+  end;
+  Congruous := ok
+end;
+
 { ------------------------------------------------- assignment compatibility }
 
 { ISO 7185 6.4.5 makes two structured types the same only when one type
@@ -3262,6 +3424,12 @@ begin
   { A file is never assignable, not even to itself: 6.8.2.2 excludes a file
     type from assignment and 6.7.2.5 gives it no relational operators either. }
   else if IsFile(toT) or IsFile(fromT) then
+    Assignable := false
+  { A procedural parameter is not a value either: ISO 7185 gives it no
+    assignment and no operators, and the only place one may travel is another
+    procedural parameter -- which CheckProcArgument handles without coming
+    here. }
+  else if IsProcType(toT) or IsProcType(fromT) then
     Assignable := false
   else if toT = fromT then
     Assignable := true
@@ -4046,12 +4214,110 @@ begin
   end
 end;
 
+function LookupBuiltin(at, len: integer): builtinKind; forward;
+
+{ The names ISO 7185 6.6.5 and 6.6.6 reserve for the required procedures and
+  functions. They are not symbols -- the compiler knows them by name -- so a
+  program that tries to pass one gets "undeclared identifier" unless it is
+  recognised here, which would be a baffling way to report 6.6.3.7. }
+function IsRequiredName(at, len: integer): boolean;
+begin
+  IsRequiredName :=
+    PoolIs(at, len, 'new      ') or PoolIs(at, len, 'dispose  ') or
+    PoolIs(at, len, 'reset    ') or PoolIs(at, len, 'rewrite  ') or
+    PoolIs(at, len, 'get      ') or PoolIs(at, len, 'put      ') or
+    PoolIs(at, len, 'read     ') or PoolIs(at, len, 'readln   ') or
+    PoolIs(at, len, 'write    ') or PoolIs(at, len, 'writeln  ') or
+    PoolIs(at, len, 'pack     ') or PoolIs(at, len, 'unpack   ') or
+    (LookupBuiltin(at, len) <> biNone)
+end;
+
+{ Bind the actual parameter of a procedural or functional parameter. It is a
+  procedure *identifier* rather than an expression, so it is resolved here
+  instead of through CheckExpr -- which would read `f` as a call of it. }
+procedure CheckProcArgument(formal: symPtr; a: nodePtr; callee: symPtr;
+                            at: integer);
+var sym: symPtr;
+begin
+  { Whatever happens below, the argument leaves here with the formal's type:
+    codegen reads vrSym, and a nil type would break the contract that every
+    expression has one. }
+  a^.ntype := formal^.stype;
+  if a^.kind <> nkVar then begin
+    ErrorAt(a^.line, a^.col);
+    write('argument ', at:1, ' of ''');
+    WritePool(callee^.at, callee^.len);
+    writeln(''' must be the name of a procedure or function')
+  end
+  else begin
+    sym := Lookup(a^.vrAt, a^.vrLen);
+    if sym = nil then begin
+      ErrorAt(a^.line, a^.col);
+      { ISO 7185 6.6.3.7: the actual parameter shall not denote a required
+        procedure or function. There is nothing to pass -- `write` takes a
+        variable number of arguments of types no parameter list can spell,
+        and `abs` is an instruction rather than a body with an address. }
+      if IsRequiredName(a^.vrAt, a^.vrLen) then begin
+        write('''');
+        WritePool(a^.vrAt, a^.vrLen);
+        write(''' is a required procedure or function and ');
+        writeln('cannot be passed as a parameter')
+      end
+      else begin
+        write('undeclared identifier ''');
+        WritePool(a^.vrAt, a^.vrLen);
+        writeln('''')
+      end
+    end
+    else if not IsInvocable(sym) then begin
+      ErrorAt(a^.line, a^.col);
+      write('argument ', at:1, ' of ''');
+      WritePool(callee^.at, callee^.len);
+      write(''' must be the name of a procedure or function, but ''');
+      WritePool(a^.vrAt, a^.vrLen);
+      writeln(''' is not one')
+    end
+    else begin
+      a^.vrSym := sym;
+      { ISO 7185 6.6.3.6. The lists are compared rather than the types,
+        because a procedural parameter has no type to write down: the heading
+        *is* the type. }
+      if not Congruous(formal, sym) then begin
+        ErrorAt(a^.line, a^.col);
+        write('''');
+        WritePool(a^.vrAt, a^.vrLen);
+        write(''' does not match the parameter list of ');
+        if ResultTypeOf(formal) <> nil then write('functional')
+        else write('procedural');
+        write(' parameter ''');
+        WritePool(formal^.at, formal^.len);
+        writeln('''')
+      end
+    end
+  end
+end;
+
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a: nodePtr; p: symListPtr; n, given, i: integer;
 begin
+  { Checked against the parameter rather than on its own, because an actual
+    procedural parameter is an identifier and not an expression: `f` there
+    denotes the function, where CheckExpr would read it as a call of it. The
+    arity is only tested afterwards, so a wrong count still reports whatever
+    is wrong *inside* each argument as well. }
   a := args;
+  p := callee^.params;
+  i := 1;
   while a <> nil do begin
-    CheckExpr(a);
+    if p <> nil then
+      if p^.sym^.kind = skProcParam then
+        CheckProcArgument(p^.sym, a, callee, i)
+      else
+        CheckExpr(a)
+    else
+      CheckExpr(a);
+    if p <> nil then p := p^.next;
+    i := i + 1;
     a := a^.next
   end;
 
@@ -4079,7 +4345,9 @@ begin
     p := callee^.params;
     i := 1;
     while a <> nil do begin
-      if p^.sym^.kind = skVarParam then begin
+      if p^.sym^.kind = skProcParam then
+        { already bound, above }
+      else if p^.sym^.kind = skVarParam then begin
         if not IsDesignator(a) then begin
           ErrorAt(a^.line, a^.col);
           write('argument ', i:1, ' of ''');
@@ -4368,7 +4636,7 @@ begin
     end
 end;
 
-function LookupBuiltin(at, len: integer): builtinKind;
+function LookupBuiltin;
 begin
   if PoolIs(at, len, 'abs      ') then LookupBuiltin := biAbs
   else if PoolIs(at, len, 'sqr      ') then LookupBuiltin := biSqr
@@ -4410,12 +4678,12 @@ begin
   { A user-defined function shadows nothing built in: names are resolved in the
     scope chain first, so a local `abs` would win. }
   sym := Lookup(c^.clAt, c^.clLen);
-  if (sym <> nil) and (sym^.kind = skFunc) then begin
+  if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
-    c^.ntype := sym^.stype;
+    c^.ntype := ResultTypeOf(sym);
     CheckArguments(sym, c^.clArgs, c^.line, c^.col)
   end
-  else if (sym <> nil) and (sym^.kind = skProc) then begin
+  else if IsInvocable(sym) then begin
     ErrorAt(c^.line, c^.col);
     write('''');
     WritePool(c^.clAt, c^.clLen);
@@ -4645,7 +4913,8 @@ begin
             writeln('''');
             e^.ntype := intType
           end
-          else if e^.vrSym^.kind = skProc then begin
+          else if IsInvocable(e^.vrSym) and
+                  (ResultTypeOf(e^.vrSym) = nil) then begin
             ErrorAt(e^.line, e^.col);
             write('''');
             WritePool(e^.vrAt, e^.vrLen);
@@ -4663,9 +4932,9 @@ begin
             Pascal has no empty argument list, and inside the function's own
             body this is the recursive call rather than a way to read the
             result (ISO 7185 6.8.2.2). }
-          else if (e^.vrSym^.kind = skFunc) and (e^.vrSym^.params = nil) then
-            e^.ntype := e^.vrSym^.stype
-          else if e^.vrSym^.kind = skFunc then begin
+          else if IsInvocable(e^.vrSym) and (e^.vrSym^.params = nil) then
+            e^.ntype := ResultTypeOf(e^.vrSym)
+          else if IsInvocable(e^.vrSym) then begin
             ErrorAt(e^.line, e^.col);
             write('''');
             WritePool(e^.vrAt, e^.vrLen);
@@ -5215,7 +5484,7 @@ begin
           WritePool(s^.pcAt, s^.pcLen);
           writeln('''')
         end
-        else if sym^.kind <> skProc then begin
+        else if not IsInvocable(sym) or (ResultTypeOf(sym) <> nil) then begin
           ErrorAt(s^.line, s^.col);
           write('''');
           WritePool(s^.pcAt, s^.pcLen);
@@ -5316,9 +5585,88 @@ end;
 
 { ------------------------------------------------------------ declarations }
 
+{ Build the parameter symbols of one formal parameter list. A top-level one
+  is a variable of the procedure's own frame; one belonging to a *procedural*
+  parameter is a descriptor only -- it says how the argument travels and what
+  type it has, and the frame it will occupy is the frame of whatever procedure
+  is eventually passed. Hence `frame` being nil for those. }
+procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
+var g, n: nodePtr; t: typePtr; ps: symPtr;
+begin
+  g := groups;
+  while g <> nil do begin
+    if g^.grIsProc then begin
+      { ISO 7185 6.6.3.1 spells a procedural parameter as a heading, so it
+        declares exactly one name and the parser guarantees it is there. }
+      t := NewType(tyProc);
+      if g^.grIsFunction then begin
+        if g^.grResult = nil then t^.elem := intType
+        else t^.elem := ResolveType(g^.grResult);
+        { 6.6.2 restricts a function's result type, and a functional
+          parameter's heading is a function heading -- the same rule, so the
+          same message. }
+        if not IsOrdinal(t^.elem) and not IsReal(t^.elem) and
+           not IsPointer(t^.elem) then begin
+          ErrorAt(g^.grNames^.line, g^.grNames^.col);
+          write('a function cannot return ');
+          WriteTypeName(t^.elem);
+          writeln('; use a var parameter');
+          t^.elem := intType
+        end
+      end;
+      n := g^.grNames;
+      if frame <> nil then
+        ps := AddFrameVar(n^.dnAt, n^.dnLen, skProcParam, t, frame, n^.line,
+                          n^.col)
+      else begin
+        ps := NewSymbol;
+        ps^.at := n^.dnAt;
+        ps^.len := n^.dnLen;
+        ps^.kind := skProcParam;
+        ps^.stype := t
+      end;
+      { Its own parameters name no frame and are never looked up: the actual
+        procedure supplies the names its body uses, and these exist only to be
+        compared against that procedure's. Two of them sharing a spelling
+        therefore cannot be ambiguous, so no scope is opened to catch it. }
+      BuildFormals(g^.grParams, ps, nil);
+      AppendSym(into^.params, into^.paramTail, ps)
+    end
+    else begin
+      t := ResolveType(g^.grType);
+      { ISO 7185 6.6.3.3: a file may only be passed by reference. A value
+        parameter is a copy, and a file has no copy -- the position, the buffer
+        and the operating system's handle are one object, not a value. }
+      if IsFile(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+        ErrorAt(g^.grNames^.line, g^.grNames^.col);
+        writeln('a file parameter must be a var parameter')
+      end;
+      n := g^.grNames;
+      while n <> nil do begin
+        if frame <> nil then
+          if g^.grByRef then
+            ps := AddFrameVar(n^.dnAt, n^.dnLen, skVarParam, t, frame, n^.line,
+                              n^.col)
+          else
+            ps := AddFrameVar(n^.dnAt, n^.dnLen, skParam, t, frame, n^.line,
+                              n^.col)
+        else begin
+          ps := NewSymbol;
+          ps^.at := n^.dnAt;
+          ps^.len := n^.dnLen;
+          if g^.grByRef then ps^.kind := skVarParam else ps^.kind := skParam;
+          ps^.stype := t
+        end;
+        AppendSym(into^.params, into^.paramTail, ps);
+        n := n^.next
+      end
+    end;
+    g := g^.next
+  end
+end;
+
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
-var existing, sym, ps: symPtr; g, n: nodePtr; t: typePtr;
-    mark: entryPtr; at, len: integer;
+var existing, sym: symPtr; mark: entryPtr; at, len: integer;
 begin
   existing := LookupInScope(d^.pdAt, d^.pdLen);
   if existing <> nil then
@@ -5375,29 +5723,7 @@ begin
       but only made visible once its body is entered. }
     mark := scopeTop;
     scopeDepth := scopeDepth + 1;
-    g := d^.pdParams;
-    while g <> nil do begin
-      t := ResolveType(g^.grType);
-      { ISO 7185 6.6.3.3: a file may only be passed by reference. A value
-        parameter is a copy, and a file has no copy -- the position, the buffer
-        and the operating system's handle are one object, not a value. }
-      if IsFile(t) and not g^.grByRef and (g^.grNames <> nil) then begin
-        ErrorAt(g^.grNames^.line, g^.grNames^.col);
-        writeln('a file parameter must be a var parameter')
-      end;
-      n := g^.grNames;
-      while n <> nil do begin
-        if g^.grByRef then
-          ps := AddFrameVar(n^.dnAt, n^.dnLen, skVarParam, t, sym, n^.line,
-                            n^.col)
-        else
-          ps := AddFrameVar(n^.dnAt, n^.dnLen, skParam, t, sym, n^.line,
-                            n^.col);
-        AppendSym(sym^.params, sym^.paramTail, ps);
-        n := n^.next
-      end;
-      g := g^.next
-    end;
+    BuildFormals(d^.pdParams, sym, sym);
     if sym^.kind = skFunc then begin
       { The result lives in the frame like a local; assigning to the function
         name writes here, and the epilogue returns it. }
@@ -5883,7 +6209,7 @@ begin
         write('func ');
         WritePool(s^.at, s^.len)
       end;
-      skVar, skParam, skVarParam: begin
+      skVar, skParam, skVarParam, skProcParam: begin
         if s^.owner = nil then write('?') else WritePool(s^.owner^.at, s^.owner^.len);
         write('/', s^.frameIndex:1)
       end
@@ -6058,6 +6384,7 @@ begin
     skVar:      write('var');
     skParam:    write('param');
     skVarParam: write('varparam');
+    skProcParam: write('procparam');
     skProc:     write('proc');
     skFunc:     write('func')
   end
@@ -6515,9 +6842,34 @@ end;
 { A group of names sharing one type-denoter -- record fields, variables and
   parameters are all this shape, and they share it in the AST because they
   share it in the source (ISO 7185 6.4.5). }
+procedure DumpGroupList(n: nodePtr; asVar: boolean); forward;
+
+{ A procedural or functional parameter is a heading rather than a
+  type-denoter (ISO 7185 6.6.3.1), so it prints its own parameter list --
+  which is the recursion the grammar has. }
 procedure DumpGroup(g: nodePtr; asVar: boolean);
 begin
   Pad;
+  if g^.grIsProc then begin
+    if g^.grIsFunction then write('funcparam ') else write('procparam ');
+    WritePool(g^.grNames^.dnAt, g^.grNames^.dnLen);
+    At(g^.grNames^.line, g^.grNames^.col);
+    level := level + 1;
+    Pad;
+    writeln('params');
+    level := level + 1;
+    DumpGroupList(g^.grParams, false);
+    level := level - 1;
+    if g^.grResult <> nil then begin
+      Pad;
+      writeln('result');
+      level := level + 1;
+      DumpTypeExpr(g^.grResult);
+      level := level - 1
+    end;
+    level := level - 1
+  end
+  else begin
   if asVar then
     writeln('var')
   else if g^.grByRef then
@@ -6531,9 +6883,10 @@ begin
   level := level + 1;
   DumpTypeExpr(g^.grType);
   level := level - 2
+  end
 end;
 
-procedure DumpGroupList(n: nodePtr; asVar: boolean);
+procedure DumpGroupList;
 var p: nodePtr;
 begin
   p := n;
@@ -7059,6 +7412,9 @@ begin
       { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
         it takes the largest one that is named, which is i128's. }
       tySet: LlAlign := 16;
+      { A procedural parameter is a pair of pointers: the code, and the static
+        link to call it with. }
+      tyProc: LlAlign := 8;
       tyArray: LlAlign := LlAlign(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -7081,6 +7437,7 @@ begin
       tyReal, tyPointer: LlSize := 8;
       tyFile: LlSize := fileSize;
       tySet: LlSize := setBits div 8;
+      tyProc: LlSize := 16;
       tyArray: LlSize := TypeLength(b) * LlSize(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -7150,6 +7507,11 @@ begin
         per possible member, which is what makes the operators single
         instructions and keeps a set a *value* (ADR-0028). }
       tySet: write(ircode, 'i', setBits:1);
+      { A procedural parameter is a pair: the code to call, and the static link
+        to call it with. Both halves are needed because a procedure passed as
+        an argument carries the scope it was *declared* in, not the one it is
+        called from -- which is the whole difficulty of the feature. }
+      tyProc: write(ircode, '{ ptr, ptr }');
       tyArray: begin
         { The bounds are folded away: an index is lowered to an offset from the
           lower bound, so the type only needs the extent. }
@@ -7582,7 +7944,7 @@ begin
         if s^.boolVal then OpWord('true            ', v)
         else OpWord('false           ', v);
       tyChar: OpInt(ord(s^.charVal), v);
-      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet:
+      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc:
         OpInt(0, v)
     end
 end;
@@ -7957,67 +8319,170 @@ end;
 
 { An argument list has to be complete before the call line can be written, so
   the operands are collected as they are emitted. }
-procedure AppendOpnd(var head, tail: opndPtr; var v: str);
+procedure AppendOpnd(var head, tail: opndPtr; var v: str; asPtr: boolean;
+                     t: typePtr);
 var o: opndPtr;
 begin
   new(o);
   o^.text := v;
+  o^.asPtr := asPtr;
+  o^.otype := t;
   o^.next := nil;
   if head = nil then head := o else tail^.next := o;
   tail := o
 end;
 
-procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
-var link, a: str; head, tail, o: opndPtr; p: symListPtr; arg: nodePtr;
+{ The pair a procedural argument travels as. Naming a procedure with a body
+  takes its address and the frame it was *declared* under; naming a procedural
+  parameter forwards the pair that parameter already holds, so a procedure
+  handed on through three levels still runs in its own scope. }
+procedure EmitProcArgument(actual: symPtr; var head, tail: opndPtr);
+var slot, half, code, link: str;
 begin
-  { A callee declared at level L runs with the frame at level L-1 as its
-    enclosing scope -- which for a recursive call is the caller's own parent,
-    not the caller. }
-  FrameAt(callee^.level - 1, link);
+  if actual^.kind = skProcParam then begin
+    FrameSlot(actual, slot);
+    Def(half);
+    write(ircode, 'getelementptr inbounds { ptr, ptr }, ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 0');
+    Def(code);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    AppendOpnd(head, tail, code, true, nil);
+    Def(half);
+    write(ircode, 'getelementptr inbounds { ptr, ptr }, ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 1');
+    Def(link);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    AppendOpnd(head, tail, link, true, nil)
+  end
+  else begin
+    StrClear(code);
+    StrAppend(code, '@');
+    StrAppend(code, 'p');
+    AppendInt(code, actual^.irId);
+    AppendOpnd(head, tail, code, true, nil);
+    FrameAt(actual^.level - 1, link);
+    AppendOpnd(head, tail, link, true, nil)
+  end
+end;
+
+{ The signature an indirect call through a procedural parameter uses: the
+  static link, then the parameters, exactly as EmitProcBody builds it for a
+  procedure with a body. }
+procedure PutProcSignature(callee: symPtr);
+var p: symListPtr; result: typePtr;
+begin
+  result := ResultTypeOf(callee);
+  if result = nil then write(ircode, 'void') else PutLlType(result);
+  write(ircode, ' (ptr');
+  p := callee^.params;
+  while p <> nil do begin
+    write(ircode, ', ');
+    if (p^.sym^.kind = skVarParam) or (p^.sym^.kind = skProcParam) or
+       IsMemory(p^.sym^.stype) then
+      if p^.sym^.kind = skProcParam then write(ircode, 'ptr, ptr')
+      else write(ircode, 'ptr')
+    else
+      PutLlType(p^.sym^.stype);
+    p := p^.next
+  end;
+  write(ircode, ')')
+end;
+
+procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
+var link, a, slot, half, target: str; head, tail, o: opndPtr;
+    p: symListPtr; arg: nodePtr; result: typePtr;
+begin
+  StrClear(target);
+  if callee^.kind = skProcParam then begin
+    { The link to run under comes out of the pair, not from the static chain:
+      the caller's chain says nothing about where the passed procedure was
+      declared, which is the reason the link had to be carried at all. }
+    FrameSlot(callee, slot);
+    Def(half);
+    write(ircode, 'getelementptr inbounds { ptr, ptr }, ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 0');
+    Def(target);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    Def(half);
+    write(ircode, 'getelementptr inbounds { ptr, ptr }, ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 1');
+    Def(link);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode)
+  end
+  else begin
+    { A callee declared at level L runs with the frame at level L-1 as its
+      enclosing scope -- which for a recursive call is the caller's own
+      parent, not the caller. }
+    FrameAt(callee^.level - 1, link);
+    StrAppend(target, '@');
+    StrAppend(target, 'p');
+    AppendInt(target, callee^.irId)
+  end;
 
   head := nil;
   tail := nil;
   arg := args;
   p := callee^.params;
   while (arg <> nil) and (p <> nil) do begin
-    if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
-      { A `var` parameter binds to the variable itself; a structured value
-        parameter is copied from it by the callee. Either way an address
-        travels, and Sema has already required something that has one. }
-      EmitAddress(arg, a)
+    if p^.sym^.kind = skProcParam then
+      EmitProcArgument(arg^.vrSym, head, tail)
     else begin
-      EmitExpr(arg, a);
-      ConvertFor(a, arg^.ntype, p^.sym^.stype);
-      CheckedForStore(a, p^.sym^.stype)
+      if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
+        { A `var` parameter binds to the variable itself; a structured value
+          parameter is copied from it by the callee. Either way an address
+          travels, and Sema has already required something that has one. }
+        EmitAddress(arg, a)
+      else begin
+        EmitExpr(arg, a);
+        ConvertFor(a, arg^.ntype, p^.sym^.stype);
+        CheckedForStore(a, p^.sym^.stype)
+      end;
+      AppendOpnd(head, tail, a,
+                 (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype),
+                 p^.sym^.stype)
     end;
-    AppendOpnd(head, tail, a);
     arg := arg^.next;
     p := p^.next
   end;
 
-  if callee^.kind = skFunc then begin
+  result := ResultTypeOf(callee);
+  if result <> nil then begin
     Def(v);
-    write(ircode, 'call ');
-    PutLlType(callee^.stype)
+    write(ircode, 'call ')
   end
   else begin
     StrClear(v);
-    write(ircode, '  call void')
+    write(ircode, '  call ')
   end;
-  write(ircode, ' @p', callee^.irId:1, '(ptr ');
+  { An indirect call states the whole signature; a direct one names a function
+    whose signature the module already carries. }
+  if callee^.kind = skProcParam then
+    PutProcSignature(callee)
+  else if result = nil then write(ircode, 'void')
+  else PutLlType(result);
+  write(ircode, ' ');
+  PutOp(target);
+  write(ircode, '(ptr ');
   PutOp(link);
-  p := callee^.params;
   o := head;
   while o <> nil do begin
     write(ircode, ', ');
-    if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
-      write(ircode, 'ptr')
-    else
-      PutLlType(p^.sym^.stype);
+    if o^.asPtr then write(ircode, 'ptr') else PutLlType(o^.otype);
     write(ircode, ' ');
     PutOp(o^.text);
-    o := o^.next;
-    p := p^.next
+    o := o^.next
   end;
   writeln(ircode, ')')
 end;
@@ -8694,8 +9159,11 @@ begin
     nkVar:
       if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
         EmitConst(e^.vrSym, v)
-      else if (e^.vrField = nil) and (e^.vrSym^.kind = skFunc) then
-        EmitUserCall(e^.vrSym, nil, v)   { a parameterless call by name }
+      { A parameterless call written as a bare name -- of a function, or of a
+        functional parameter, which is the same call through a loaded
+        address. }
+      else if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
+        EmitUserCall(e^.vrSym, nil, v)
       else
         EmitLoad(e, v);
     nkSet: EmitSet(e, v);
@@ -9288,6 +9756,32 @@ begin
   if s^.kind = skVarParam then write(ircode, 'ptr') else PutLlType(s^.stype)
 end;
 
+{ The LLVM parameters one Pascal parameter list contributes, after the static
+  link. Every parameter is one argument except a procedural one, which is two
+  -- the code and the link it needs -- so a caller and a callee agree on the
+  shape only by both coming through here. }
+procedure PutParamTypes(p: symListPtr; named: boolean);
+var k: integer;
+begin
+  k := 0;
+  while p <> nil do begin
+    write(ircode, ', ');
+    if p^.sym^.kind = skProcParam then begin
+      write(ircode, 'ptr');
+      if named then write(ircode, ' %a', k:1);
+      k := k + 1;
+      write(ircode, ', ptr')
+    end
+    else if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
+      write(ircode, 'ptr')
+    else
+      PutLlType(p^.sym^.stype);
+    if named then write(ircode, ' %a', k:1);
+    k := k + 1;
+    p := p^.next
+  end
+end;
+
 procedure EmitFrameType(p: symPtr);
 var l: symListPtr;
 begin
@@ -9370,7 +9864,7 @@ end;
 { The prologue shared by main and every procedure: alloca the frame, store the
   static link, copy the incoming arguments into their slots. }
 procedure EnterFrame(p: symPtr);
-var l: symListPtr; link, slot, arg: str; k, align: integer;
+var l: symListPtr; link, slot, arg, half: str; k, align: integer;
 begin
   { A label belongs to exactly one block, so the map is emptied per function.
     Sema numbers labels across the whole program, so a stale entry would never
@@ -9410,7 +9904,35 @@ begin
       Def(slot);
       writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
               ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
-      if (l^.sym^.kind <> skVarParam) and IsStructured(l^.sym^.stype) then begin
+      if l^.sym^.kind = skProcParam then begin
+        { Two arguments, one slot: the pair is assembled here and never exists
+          as a value. }
+        Def(half);
+        write(ircode, 'getelementptr inbounds { ptr, ptr }, ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 0');
+        write(ircode, '  store ptr ');
+        PutOp(arg);
+        write(ircode, ', ptr ');
+        PutOp(half);
+        writeln(ircode);
+        k := k + 1;
+        StrClear(arg);
+        StrAppend(arg, '%');
+        StrAppend(arg, 'a');
+        AppendInt(arg, k);
+        Def(half);
+        write(ircode, 'getelementptr inbounds { ptr, ptr }, ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 1');
+        write(ircode, '  store ptr ');
+        PutOp(arg);
+        write(ircode, ', ptr ');
+        PutOp(half);
+        writeln(ircode)
+      end
+      else if (l^.sym^.kind <> skVarParam) and IsStructured(l^.sym^.stype) then
+      begin
         { A structured value parameter arrives as the caller's address; the
           copy that makes it a *value* parameter is made here, once, so the
           callee can write to it without the caller seeing the change. }
@@ -9440,25 +9962,14 @@ begin
 end;
 
 procedure EmitProcBody(d: nodePtr);
-var p: symPtr; l: symListPtr; slot, res: str; k: integer;
+var p: symPtr; slot, res: str;
 begin
   p := d^.pdSym;
   writeln(ircode);
   write(ircode, 'define internal ');
   if p^.kind = skFunc then PutLlType(p^.stype) else write(ircode, 'void');
   write(ircode, ' @p', p^.irId:1, '(ptr %link');
-  l := p^.params;
-  k := 0;
-  while l <> nil do begin
-    write(ircode, ', ');
-    if (l^.sym^.kind = skVarParam) or IsMemory(l^.sym^.stype) then
-      write(ircode, 'ptr')
-    else
-      PutLlType(l^.sym^.stype);
-    write(ircode, ' %a', k:1);
-    k := k + 1;
-    l := l^.next
-  end;
+  PutParamTypes(p^.params, true);
   writeln(ircode, ') {');
 
   EnterFrame(p);

@@ -45,7 +45,8 @@ types      integer  real  boolean  char
            ^T — pointers, including to a type defined later
            text — text files, with the buffer variable f^
 routines   procedures and functions, nested to any depth, recursive,
-           value and var parameters, forward declarations
+           value and var parameters, forward declarations,
+           procedural and functional parameters, congruity-checked
 statements := , if/then/else, while, repeat/until, for/to/downto,
            begin/end, case, with, procedure call,
            label declarations, labelled statements, goto within a block,
@@ -164,7 +165,7 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: procedural and functional parameters, files of anything but
+Not accepted yet: files of anything but
 `char`, and a `goto` to a label in an *enclosing* block — the local form is
 implemented and the non-local one is refused rather than miscompiled
 ([ADR-0029](doc/adr/0029-goto-is-local-and-checked-by-containment.md)). One
@@ -315,7 +316,7 @@ needed them is written.
 the parser, Sema and the code generator, in **one source file**, because ISO
 7185 has no include mechanism and the finished compiler is one source. It is
 checked against the C++ stages it was ported from, on every Pascal source in the
-tree — 175 files, compared stage for stage:
+tree — 197 files, compared stage for stage:
 
 ```sh
 selfhost/difftest.sh build/bin/pascalc     # also runs under ctest

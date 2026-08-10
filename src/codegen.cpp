@@ -41,6 +41,12 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   // keeps a set a *value* rather than something reached through its address.
   case TypeKind::Set:
     return i256();
+  // A procedural parameter is a pair: the code to call, and the static link to
+  // call it with. Both halves are needed because a procedure passed as an
+  // argument carries the scope it was *declared* in, not the one it is called
+  // from — which is the whole difficulty of the feature.
+  case TypeKind::Proc:
+    return procPairType();
   case TypeKind::Array:
   case TypeKind::Record:
     break;
@@ -353,6 +359,32 @@ llvm::Type *CodeGen::paramType(const Symbol *v) {
   return passedByAddress(v) ? ptr() : llvmType(v->type);
 }
 
+/// The LLVM parameters one Pascal parameter list contributes, after the static
+/// link. Every parameter is one argument except a procedural one, which is two
+/// — the code and the link it needs — so a caller and a callee agree on the
+/// shape only by both coming through here.
+void CodeGen::appendParamTypes(const std::vector<Symbol *> &params,
+                               SmallVectorImpl<llvm::Type *> &into) {
+  for (const Symbol *p : params) {
+    if (p->kind == SymKind::ProcParam) {
+      into.push_back(ptr()); // the code
+      into.push_back(ptr()); // the static link to call it with
+    } else {
+      into.push_back(paramType(p));
+    }
+  }
+}
+
+llvm::FunctionType *CodeGen::procFnType(const Symbol *p) {
+  SmallVector<llvm::Type *, 8> params;
+  params.push_back(ptr()); // the static link
+  appendParamTypes(p->params, params);
+  ap::Type *result = p->type ? p->type->elem : nullptr;
+  return FunctionType::get(result ? llvmType(result)
+                                  : llvm::Type::getVoidTy(ctx_),
+                           params, false);
+}
+
 StructType *CodeGen::buildFrameType(Symbol *proc) {
   SmallVector<llvm::Type *, 8> fields;
   fields.push_back(ptr()); // field 0: the static link
@@ -373,8 +405,7 @@ void CodeGen::declareProcs(Block &block) {
 
     SmallVector<llvm::Type *, 8> params;
     params.push_back(ptr()); // the static link
-    for (const Symbol *p : sym->params)
-      params.push_back(paramType(p));
+    appendParamTypes(sym->params, params);
 
     llvm::Type *ret =
         sym->kind == SymKind::Func ? llvmType(sym->type)
@@ -422,7 +453,15 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
       arg->setName(p->name);
       llvm::Value *slot =
           b_.CreateStructGEP(frameTy, curFrame_, 1 + p->frameIndex, p->name);
-      if (p->kind != SymKind::VarParam && p->type->isStructured()) {
+      if (p->kind == SymKind::ProcParam) {
+        // Two arguments, one slot: the pair is assembled here and never exists
+        // as an LLVM value.
+        StructType *pair = procPairType();
+        b_.CreateStore(&*arg, b_.CreateStructGEP(pair, slot, 0, "code"));
+        ++arg;
+        arg->setName(p->name + ".link");
+        b_.CreateStore(&*arg, b_.CreateStructGEP(pair, slot, 1, "link"));
+      } else if (p->kind != SymKind::VarParam && p->type->isStructured()) {
         // A structured value parameter arrives as the caller's address; the
         // copy that makes it a *value* parameter is made here, once, so the
         // callee can write to it without the caller seeing the change.
@@ -656,13 +695,52 @@ llvm::Value *CodeGen::staticLinkFor(Symbol *callee) {
   return frameAt(callee->level - 1);
 }
 
+/// The pair a procedural argument travels as. Naming a procedure with a body
+/// takes its address and the frame it was *declared* under; naming a
+/// procedural parameter forwards the pair that parameter already holds, so a
+/// procedure handed on through three levels still runs in its own scope.
+void CodeGen::emitProcArgument(Symbol *actual,
+                               SmallVectorImpl<llvm::Value *> &argv) {
+  if (actual->kind == SymKind::ProcParam) {
+    llvm::Value *slot = frameSlot(actual);
+    StructType *pair = procPairType();
+    argv.push_back(b_.CreateLoad(ptr(), b_.CreateStructGEP(pair, slot, 0),
+                                 actual->name + ".code"));
+    argv.push_back(b_.CreateLoad(ptr(), b_.CreateStructGEP(pair, slot, 1),
+                                 actual->name + ".link"));
+    return;
+  }
+  argv.push_back(functions_[actual]);
+  argv.push_back(staticLinkFor(actual));
+}
+
 llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
   SmallVector<llvm::Value *, 8> argv;
-  argv.push_back(staticLinkFor(callee));
+  llvm::Value *target = nullptr;
+  llvm::FunctionType *fnTy = nullptr;
+
+  if (callee->kind == SymKind::ProcParam) {
+    // The link to run under comes out of the pair, not from the static chain:
+    // the caller's chain says nothing about where the passed procedure was
+    // declared, which is the reason the link had to be carried at all.
+    llvm::Value *slot = frameSlot(callee);
+    StructType *pair = procPairType();
+    target = b_.CreateLoad(ptr(), b_.CreateStructGEP(pair, slot, 0),
+                           callee->name + ".code");
+    argv.push_back(b_.CreateLoad(ptr(), b_.CreateStructGEP(pair, slot, 1),
+                                 callee->name + ".link"));
+    fnTy = procFnType(callee);
+  } else {
+    target = functions_[callee];
+    fnTy = functions_[callee]->getFunctionType();
+    argv.push_back(staticLinkFor(callee));
+  }
 
   for (size_t i = 0; i < args.size(); ++i) {
     const Symbol *p = callee->params[i];
-    if (passedByAddress(p)) {
+    if (p->kind == SymKind::ProcParam) {
+      emitProcArgument(static_cast<VarRef *>(args[i].get())->sym, argv);
+    } else if (passedByAddress(p)) {
       // A `var` parameter binds to the variable itself; a structured value
       // parameter is copied from it by the callee. Either way what travels is
       // an address, and Sema has already required something that has one.
@@ -673,8 +751,8 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
       argv.push_back(checkedForStore(v, p->type));
     }
   }
-  return b_.CreateCall(functions_[callee], argv,
-                       callee->kind == SymKind::Func ? "call" : "");
+  return b_.CreateCall(fnTy, target, argv,
+                       fnTy->getReturnType()->isVoidTy() ? "" : "call");
 }
 
 std::unique_ptr<Module> CodeGen::run(Program &prog) {
@@ -1101,8 +1179,10 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     auto *v = static_cast<VarRef *>(e);
     if (!v->withField && v->sym->kind == SymKind::Const)
       return emitConst(*v->sym);
-    if (!v->withField && v->sym->kind == SymKind::Func)
-      return emitUserCall(v->sym, noArgs_); // a parameterless call by name
+    // A parameterless call written as a bare name — of a function, or of a
+    // functional parameter, which is the same call through a loaded address.
+    if (!v->withField && v->sym->isInvocable())
+      return emitUserCall(v->sym, noArgs_);
     return emitLoad(e);
   }
   case NK::Index:

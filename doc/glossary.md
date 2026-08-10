@@ -124,6 +124,21 @@ with one comparison. A block's statement part is deliberately not on the path:
 it is the outermost statement-sequence rather than a statement containing one,
 which is what makes "at the top level of the block" mean "an empty path".
 
+**Procedural / functional parameter.** A parameter that *is* a procedure or a
+function (§6.6.3.1), written as a heading rather than as a type. There is no
+procedure type in the type part, so no variable can have one and the heading is
+the only place the type is spelled.
+
+**Congruity.** ISO 7185 §6.6.3.6's relation between two parameter lists: the
+same number of parameters, each pair passed the same way and of the same type,
+and congruous again where a parameter is itself procedural. It stands in for
+type identity, since a procedural parameter has no type to compare.
+
+**Procedure value.** What a procedural parameter holds: the pair `{code, static
+link}`, where the link is the frame of the block the procedure was *declared*
+in. It occupies one frame slot but travels as two arguments, and never exists
+as a single value (ADR-0030).
+
 **Error condition.** ISO's term for a situation a conforming program must not
 reach — integer overflow, a subscript outside its bounds, a value stored outside
 a subrange, a set carrying a member outside its base type, a `case` matching no

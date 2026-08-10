@@ -51,7 +51,7 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 46 ctest cases — 43 Pascal programs, the verification
+Alongside the language, 47 ctest cases — 44 Pascal programs, the verification
 run, the differential test and the bootstrap — and 35 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
@@ -227,9 +227,9 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **Not implemented at all:** procedural and functional parameters, and
-  non-text files. Sets (ADR-0028) and `goto` (ADR-0029) were the first two of
-  this group; these two are what is left of ISO 7185.
+- **Not implemented at all:** non-text files. Sets (ADR-0028), `goto`
+  (ADR-0029) and procedural parameters (ADR-0030) were the first three of this
+  group; this is what is left of ISO 7185, beside the non-local `goto` below.
 - **A `goto` to a label in an enclosing block is refused.** ISO 7185 §6.8.2.4
   allows it and §6.8.1 says where it may land — which *is* checked, so what is
   refused is the lowering rather than the program's shape. It needs the
@@ -265,10 +265,11 @@ Extended Pascal's spelling rather than invented here.
   What is left is the non-local jump: `setjmp`/`longjmp`, a jump buffer in the
   target's frame, and the abandoned frames' files closed on the way out — the
   last of which is why it is not a small addition.
-- **Procedural and functional parameters.** §6.6.3.1. A procedure passed as an
-  argument travels with the static link of where it was *declared*, so this is
-  the first thing that makes an activation record's address outlive the call
-  that made it.
+- ~~**Procedural and functional parameters.**~~ Done (ADR-0030): the value is
+  the pair `{code, static link}`, so a passed procedure runs in the scope it
+  was *declared* in. It is the first thing here that makes an activation
+  record's address outlive the call that made it — safe only because the
+  language gives no way to store the pair.
 - **Non-text files.** §6.4.3.5. `file of T` already parses and is rejected for
   any component but `char`; the runtime's `pas_file` is what has to stop
   assuming a character.

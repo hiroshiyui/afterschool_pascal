@@ -148,7 +148,7 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
   ++pos_;
 
   if (check(Tok::LParen))
-    parseFormalParameters(*decl);
+    parseFormalParameters(decl->params);
 
   // The completion of a forward declaration repeats the name alone (ISO 7185
   // §6.6.1), so both the parameters and the result type may be absent here.
@@ -174,15 +174,27 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
 
 /// formal-parameters = '(' group (';' group)* ')'
 /// group            = 'var'? ident-list ':' type-denoter
+///                  | 'procedure' ident formal-parameters?
+///                  | 'function' ident formal-parameters? ':' type-denoter
 ///
 /// ISO 7185 §6.6.3.1 restricts a parameter's type to a type *identifier*, so
 /// an array parameter needs a named type. That is a real restriction, not an
 /// omission here: it is what makes a formal and an actual parameter the same
 /// type rather than two structurally identical ones.
-void Parser::parseFormalParameters(ProcDecl &decl) {
+///
+/// The last two forms are a procedural and a functional parameter, and each is
+/// spelled as a *heading* rather than as a type — which is why one group
+/// declares one name there, and why this production has to recurse.
+void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
+  Depth guard(*this);
   expect(Tok::LParen, "");
   do {
     ParamGroup group;
+    if (check(Tok::KwProcedure) || check(Tok::KwFunction)) {
+      parseProcParam(group, check(Tok::KwFunction));
+      into.push_back(std::move(group));
+      continue;
+    }
     group.byRef = accept(Tok::KwVar);
     group.names = parseNameList("a parameter name");
     expect(Tok::Colon, "in a parameter list");
@@ -191,9 +203,38 @@ void Parser::parseFormalParameters(ProcDecl &decl) {
       bail();
     }
     group.type = parseTypeExpr();
-    decl.params.push_back(std::move(group));
+    into.push_back(std::move(group));
   } while (accept(Tok::Semi));
   expect(Tok::RParen, "after the parameter list");
+}
+
+void Parser::parseProcParam(ParamGroup &group, bool isFunction) {
+  group.isProc = true;
+  group.isFunction = isFunction;
+  ++pos_; // 'procedure' / 'function'
+
+  if (!check(Tok::Ident)) {
+    errorAtCur(isFunction ? "expected the name of the functional parameter"
+                          : "expected the name of the procedural parameter");
+    bail();
+  }
+  group.names.push_back({cur().text, cur().line, cur().col});
+  ++pos_;
+
+  if (check(Tok::LParen))
+    parseFormalParameters(group.params);
+
+  // A functional parameter's heading carries its result type, and there is no
+  // `forward` here to make it optional the way §6.6.1 makes it optional in a
+  // declaration — so unlike parseProcOrFunc this one insists on it.
+  if (isFunction) {
+    expect(Tok::Colon, "before the result type of a functional parameter");
+    if (!check(Tok::Ident)) {
+      errorAtCur("the result type of a functional parameter must be a type name");
+      bail();
+    }
+    group.returnType = parseTypeExpr();
+  }
 }
 
 std::vector<DeclName> Parser::parseNameList(const char *what) {
