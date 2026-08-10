@@ -171,6 +171,15 @@ bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
 /// type itself appears in (ISO 7185 §6.4.2.3) — which is why this is done here
 /// rather than by the declaration part that happens to contain it.
 Type *Sema::resolveEnum(TypeExpr &denoter) {
+  // An enumerated type declares its constants into the scope the *type*
+  // appears in, and a schema's body is resolved once per discriminant tuple —
+  // so `s(1)` and `s(2)` would each want to declare them, into a scope that
+  // exists only while the type is being produced. §6.4.7 gives no answer to
+  // that, and silently losing the constants is worse than saying so.
+  if (!producing_.empty())
+    diags_.error(denoter.line, denoter.col,
+                 "a schema's type cannot contain an enumerated type: its "
+                 "constants would be declared once per set of discriminants");
   Type *t = newType(TypeKind::Enum);
   for (DeclName &n : denoter.constants) {
     Symbol *s = declare(n.name, SymKind::Const, n.line, n.col);
@@ -543,6 +552,16 @@ Type *Sema::resolveType(TypeExpr &denoter) {
       Symbol *sym = lookup(denoter.name);
       if (sym && sym->kind == SymKind::Type) {
         t = sym->type;
+      } else if (sym && sym->kind == SymKind::Schema) {
+        // §6.4.8: a schema denotes a type only once its discriminants are
+        // given. The bare name is legal in a parameter-form and nowhere else,
+        // and this compiler does not accept it there yet — so the message
+        // says what is missing rather than that the name is unknown.
+        diags_.error(denoter.line, denoter.col,
+                     "schema '" + denoter.name +
+                         "' needs its discriminants here, as " + denoter.name +
+                         "(...)");
+        t = ty::Int();
       } else {
         diags_.error(denoter.line, denoter.col,
                      "unknown type '" + denoter.name + "'");
@@ -571,9 +590,245 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   case TEK::Set:
     t = resolveSet(denoter);
     break;
+  case TEK::Schema: {
+    Symbol *sym = lookup(denoter.name);
+    if (!sym || sym->kind != SymKind::Schema) {
+      diags_.error(denoter.line, denoter.col,
+                   "unknown schema '" + denoter.name + "'");
+      // The discriminants are still checked, so a mistake in one of them is
+      // reported in the same run as the name that could not be found.
+      for (auto &a : denoter.args)
+        checkExpr(a.get());
+      t = ty::Int();
+    } else {
+      t = produceFromSchema(sym, denoter);
+    }
+    break;
+  }
   }
 
   denoter.resolved = t;
+  return t;
+}
+
+/// Forget every type this denoter and its sub-denoters resolved to, so the
+/// next production of the same schema resolves them again against a different
+/// tuple. Without this a schema would produce one type and hand it out for
+/// every tuple, which is precisely the bug §6.4.8 exists to rule out.
+static void forgetResolved(TypeExpr *denoter) {
+  if (!denoter)
+    return;
+  denoter->resolved = nullptr;
+  for (auto &d : denoter->dims)
+    forgetResolved(d.get());
+  forgetResolved(denoter->elem.get());
+  forgetResolved(denoter->tagType.get());
+  for (auto &g : denoter->fields)
+    forgetResolved(g.type.get());
+  // A variant arm's field-list is a field-list, so its groups and its own
+  // variant part are walked exactly as the record's are (ADR-0026).
+  std::vector<VariantArm *> arms;
+  for (auto &v : denoter->variants)
+    arms.push_back(&v);
+  for (size_t i = 0; i < arms.size(); ++i) {
+    for (auto &g : arms[i]->fields)
+      forgetResolved(g.type.get());
+    forgetResolved(arms[i]->tagType.get());
+    for (auto &v : arms[i]->variants)
+      arms.push_back(&v);
+  }
+}
+
+/// §6.4.7's schema-definition. The formal discriminants are given names and
+/// ordinal types here and values only when a type is produced, so they are
+/// symbols that live outside every scope — a discriminant is not in scope in
+/// the block, only inside the schema's own body and after a `.` on a variable
+/// that possesses one of the schema's types.
+void Sema::declareSchema(TypeDecl &decl) {
+  Symbol *s = declare(decl.name, SymKind::Schema, decl.line, decl.col);
+  if (s->schemaBody)
+    return; // a duplicate: keep the first definition
+  s->schemaBody = decl.type.get();
+
+  for (DiscriminantGroup &g : decl.discriminants) {
+    Type *t = builtinType(g.typeName);
+    if (!t) {
+      Symbol *named = lookup(g.typeName);
+      if (named && named->kind == SymKind::Type)
+        t = named->type;
+    }
+    if (!t) {
+      diags_.error(g.line, g.col, "unknown type '" + g.typeName + "'");
+      t = ty::Int();
+    } else if (!t->isOrdinal()) {
+      // §6.4.7 requires an ordinal-type-name: a discriminant tuple has to be
+      // something two types can be compared on, which a real or a record is
+      // not.
+      diags_.error(g.line, g.col,
+                   "the type of a discriminant must be ordinal, found " +
+                       t->name());
+      t = ty::Int();
+    }
+    for (DeclName &n : g.names) {
+      for (Symbol *seen : s->discriminants)
+        if (seen->name == n.name) {
+          diags_.error(n.line, n.col, "'" + n.name +
+                                          "' is already a discriminant of "
+                                          "schema '" +
+                                          decl.name + "'");
+          break;
+        }
+      Symbol *d = newSymbol();
+      d->name = n.name;
+      d->kind = SymKind::Const;
+      d->type = t;
+      s->discriminants.push_back(d);
+    }
+  }
+  if (s->discriminants.empty())
+    diags_.error(decl.line, decl.col,
+                 "schema '" + decl.name + "' has no discriminants");
+}
+
+Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
+  const std::vector<Symbol *> &formals = schema->discriminants;
+
+  // §6.4.8: the tuple consists of the discriminant-values in textual order,
+  // and each is compatible with the corresponding formal discriminant. A
+  // wrong count is reported once and the type is not produced, because a
+  // partial tuple would name a type the program never asked for.
+  if (denoter.args.size() != formals.size()) {
+    diags_.error(denoter.line, denoter.col,
+                 "schema '" + schema->name + "' has " +
+                     std::to_string(formals.size()) + " discriminant" +
+                     (formals.size() == 1 ? "" : "s") + ", found " +
+                     std::to_string(denoter.args.size()));
+    for (auto &a : denoter.args)
+      checkExpr(a.get());
+    return ty::Int();
+  }
+
+  std::vector<long long> tuple;
+  bool ok = true;
+  for (size_t i = 0; i < denoter.args.size(); ++i) {
+    Type *given = nullptr;
+    long long value = 0;
+    if (!evalOrdinal(denoter.args[i].get(), given, value)) {
+      // A discriminant-value is evaluated when the block is entered (§6.2.3.2),
+      // so the standard allows a variable here and this compiler does not yet.
+      // The message says which of the two it is, because "not a constant" and
+      // "not ordinal" are different mistakes.
+      diags_.error(denoter.args[i]->line, denoter.args[i]->col,
+                   "the discriminants of a schema must be ordinal constants "
+                   "here; '" +
+                       formals[i]->name + "' is not one");
+      ok = false;
+      continue;
+    }
+    if (!assignable(formals[i]->type, given)) {
+      diags_.error(denoter.args[i]->line, denoter.args[i]->col,
+                   "discriminant '" + formals[i]->name + "' of schema '" +
+                       schema->name + "' is " + formals[i]->type->name() +
+                       ", found " + given->name());
+      ok = false;
+      continue;
+    }
+    // §6.4.7's domain is the tuples *allowed* by the formal-discriminant-part,
+    // so a value outside the discriminant's own type is not in the domain and
+    // never reaches a production.
+    if (value < formals[i]->type->ordinalLo() ||
+        value > formals[i]->type->ordinalHi()) {
+      diags_.error(denoter.args[i]->line, denoter.args[i]->col,
+                   "discriminant '" + formals[i]->name + "' is outside " +
+                       formals[i]->type->name());
+      ok = false;
+      continue;
+    }
+    tuple.push_back(value);
+  }
+  if (!ok)
+    return ty::Int();
+
+  auto key = std::make_pair(schema, tuple);
+  auto it = produced_.find(key);
+  if (it != produced_.end())
+    return it->second;
+
+  // §6.4.7: outside the domain of a pointer, a schema-definition may not name
+  // itself. It is checked here rather than at the definition because that is
+  // where the recursion would actually happen — and mutual recursion between
+  // two schemata is the same mistake and is caught by the same test.
+  for (Symbol *busy : producing_)
+    if (busy == schema) {
+      diags_.error(denoter.line, denoter.col,
+                   "schema '" + schema->name +
+                       "' is defined in terms of itself; only the domain of a "
+                       "pointer may name a schema being defined");
+      return ty::Int();
+    }
+
+  // Produce it: the discriminants become ordinary constants for as long as the
+  // body is being resolved, which is what lets `array [1..n] of real` reach
+  // the existing subrange and array code with nothing added to either.
+  pushScope();
+  for (size_t i = 0; i < formals.size(); ++i) {
+    // A discriminant named twice was already reported at the schema; binding
+    // it again here would report it once more at every *use*, and point at
+    // the tuple rather than at the definition that is wrong.
+    bool repeated = false;
+    for (size_t j = 0; j < i; ++j)
+      repeated = repeated || formals[j]->name == formals[i]->name;
+    if (repeated)
+      continue;
+    Symbol *d = declare(formals[i]->name, SymKind::Const, denoter.line,
+                        denoter.col);
+    d->type = formals[i]->type;
+    d->intVal = tuple[i];
+    d->charVal = static_cast<char>(tuple[i]);
+    d->boolVal = tuple[i] != 0;
+  }
+  forgetResolved(schema->schemaBody);
+  producing_.push_back(schema);
+  size_t before = diags_.all().size();
+  Type *t = resolveType(*schema->schemaBody);
+  producing_.pop_back();
+  popScope();
+  // §6.4.7's domain is the tuples for which the body denotes a type at all —
+  // NOTE 2 lists an empty subrange among the ways one can fail. Whatever the
+  // body reported, it reported it against the *schema's* text, which is not
+  // where the reader chose the tuple; this says which choice it was.
+  if (diags_.all().size() != before)
+    diags_.error(denoter.line, denoter.col,
+                 "no type is produced from schema '" + schema->name +
+                     "' with these discriminants");
+
+  // The body is *not* cleared again afterwards, so `--dump-sema` shows the
+  // last type the schema produced rather than a row of `?`. A schema body has
+  // no one type, so either is a half-truth; this one at least says what the
+  // resolution of it looks like, and the next production clears it first.
+
+
+  // A produced type is a type of its own even when the body is a name or a
+  // simple type, so the provenance goes on a copy rather than on the shared
+  // singleton `integer` would hand back.
+  if (t->schema || t == ty::Int() || t == ty::Real() || t == ty::Bool() ||
+      t == ty::Char() || t == ty::Text()) {
+    Type *copy = newType(t->kind);
+    *copy = *t;
+    t = copy;
+  }
+  t->schema = schema;
+  t->tuple = tuple;
+  // A produced type names itself after the schema and the tuple that produced
+  // it. Without this, two productions of one schema print identically — and
+  // §6.4.8's whole point is that they are different types, so a diagnostic
+  // that spelled `paint(red)` and `paint(green)` the same way would be
+  // reporting the rule while hiding the reason.
+  std::string spelled = schema->name + "(";
+  for (size_t i = 0; i < tuple.size(); ++i)
+    spelled += (i ? ", " : "") + Type::ordinalName(formals[i]->type, tuple[i]);
+  t->alias = spelled + ")";
+  produced_[key] = t;
   return t;
 }
 
@@ -672,7 +927,10 @@ bool Sema::isDesignator(Expr *e) const {
   if (auto *i = as<IndexExpr>(e))
     return isDesignator(i->base.get());
   if (auto *f = as<FieldExpr>(e))
-    return isDesignator(f->base.get());
+    // §6.8.4 makes a schema-discriminant a *primary*, not a variable-access:
+    // it is the value the type was produced with, and there is nowhere to
+    // store into. `v.n := 3` would be asking a variable to change its type.
+    return !f->isDiscriminant && isDesignator(f->base.get());
   // What a pointer points at is a variable however the pointer was obtained,
   // so a dereference is a designator even when its base is not.
   if (is<DerefExpr>(e))
@@ -957,6 +1215,13 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
   // A type name is visible to the definitions after it, so each is declared as
   // it is resolved rather than all at the end.
   for (auto &t : block.types) {
+    // §6.4.7: a schema-definition declares a schema, not a type. Its body is
+    // *not* resolved here — it has no discriminant values yet, and resolving
+    // it once would produce the one type every use then shared.
+    if (!t.discriminants.empty()) {
+      declareSchema(t);
+      continue;
+    }
     Type *resolved = resolveType(*t.type);
     Symbol *s = declare(t.name, SymKind::Type, t.line, t.col);
     if (s->type)
@@ -1494,8 +1759,30 @@ void Sema::checkExpr(Expr *e) {
   if (auto *fld = as<FieldExpr>(e)) {
     checkExpr(fld->base.get());
     Type *base = fld->base->type;
+    // §6.8.4: `v.d` where v possesses a type produced from a schema and d is
+    // one of that schema's formal discriminants. It is looked for before the
+    // fields, because a record produced from a schema has both and the
+    // discriminant is not one of them — the name is not in any scope, and this
+    // is the only place it can be written.
+    if (base && base->isSchematic()) {
+      const std::vector<Symbol *> &ds = base->schema->discriminants;
+      for (size_t i = 0; i < ds.size() && i < base->tuple.size(); ++i)
+        if (ds[i]->name == fld->field) {
+          fld->isDiscriminant = true;
+          fld->discValue = base->tuple[i];
+          e->type = ds[i]->type;
+          return;
+        }
+    }
     if (!base || !base->isRecord()) {
-      if (base)
+      if (base && base->isSchematic())
+        // The dot after a schematic variable may select a field or a
+        // discriminant, so saying only that the type has no fields would
+        // describe the wrong half of what was tried.
+        diags_.error(fld->line, fld->col,
+                     "'" + fld->field + "' is not a discriminant of schema '" +
+                         base->schema->name + "'");
+      else if (base)
         diags_.error(fld->line, fld->col,
                      "cannot select a field of a value of type " +
                          base->name());

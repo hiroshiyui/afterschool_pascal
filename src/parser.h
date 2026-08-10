@@ -88,6 +88,9 @@ private:
 
   TypeExprPtr parseTypeExpr();
   TypeExprPtr parseArrayType(bool packed);
+  /// ISO/IEC 10206:1991 §6.4.7's formal-discriminant-part. Separated by ';'
+  /// like a parameter list, unlike the ',' of the actual-discriminant-part.
+  void parseFormalDiscriminants(std::vector<DiscriminantGroup> &out);
   TypeExprPtr parseRecordType(bool packed);
   TypeExprPtr parseEnumType();
   /// The `case T of ...` of a record or of one arm of a variant part. The

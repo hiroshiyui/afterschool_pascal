@@ -1,4 +1,5 @@
 #pragma once
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -13,6 +14,11 @@ namespace ap {
 enum class SymKind {
   Const,
   Type,     // a name introduced by the type part
+  /// ISO/IEC 10206:1991 §6.4.7's schema: a mapping from discriminant tuples to
+  /// types. Not a type — it has no values and nothing possesses it — so it is
+  /// a kind of its own rather than a `Type` with a flag, and naming one where
+  /// a type-denoter is wanted is an error until its discriminants are given.
+  Schema,
   Var,      // a local or global variable
   Param,    // a value parameter — a local initialised from the argument
   VarParam, // a `var` parameter — the frame slot holds a pointer
@@ -67,6 +73,15 @@ struct Symbol {
   /// is the one thing about a block that its own statements do not decide
   /// (ADR-0032). The ids are in declaration order and never repeat.
   std::vector<int> nonLocalLabels;
+
+  // --- schemata (ISO/IEC 10206:1991 §6.4.7) ---------------------------------
+  /// The type-denoter a schema produces its types from. Re-resolved once per
+  /// distinct discriminant tuple, with the discriminants bound to that
+  /// tuple's values — which is why a schema keeps its *syntax* and not a type.
+  TypeExpr *schemaBody = nullptr;
+  /// The formal discriminants, in order. Each carries only a name and an
+  /// ordinal type; they get their values when a type is produced.
+  std::vector<Symbol *> discriminants;
 
   bool isCallable() const {
     return kind == SymKind::Proc || kind == SymKind::Func;
@@ -128,6 +143,13 @@ private:
   /// Turn a type-denoter into a Type, reporting anything it cannot make sense
   /// of. Never returns null: on error it yields integer so checking continues.
   Type *resolveType(TypeExpr &denoter);
+  /// §6.4.7's schema-definition: a name, its formal discriminants, and the
+  /// body kept unresolved until a tuple arrives.
+  void declareSchema(TypeDecl &decl);
+  /// §6.4.8: the type this schema maps the given actual-discriminant-part to.
+  /// Interned, because §6.4.8 makes one tuple denote one type however many
+  /// times it is written.
+  Type *produceFromSchema(Symbol *schema, TypeExpr &denoter);
   Type *resolveArray(TypeExpr &denoter, size_t dim);
   Type *resolveRecord(TypeExpr &denoter);
   Type *resolveEnum(TypeExpr &denoter);
@@ -273,6 +295,16 @@ private:
   std::vector<PendingPointer> pendingPointers_;
   std::unordered_map<long long, Type *> stringTypes_;
   std::vector<std::unordered_map<std::string, Symbol *>> scopes_;
+  /// Every type produced from a schema, keyed by the schema and the tuple.
+  /// §6.4.8 says a type produced with one tuple is distinct from one produced
+  /// with any other and from every type of any other schema — so this map is
+  /// the whole of that rule, and `assignable` needs no case for schemata.
+  std::map<std::pair<Symbol *, std::vector<long long>>, Type *> produced_;
+  /// The schemata whose bodies are being resolved right now. §6.4.7 forbids a
+  /// schema-definition from containing an applied occurrence of its own
+  /// identifier anywhere but the domain of a pointer, and this is that rule:
+  /// without it the production recurses until the stack runs out.
+  std::vector<Symbol *> producing_;
   /// The bindings of the `with` statements currently open, innermost last.
   std::vector<Symbol *> withStack_;
   /// The label declaration parts of the blocks currently open, innermost last,

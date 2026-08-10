@@ -134,6 +134,7 @@ type
   ctxKind = (
     ctxNone, ctxProgramStart, ctxProgramParams, ctxProgramHeader, ctxFinalEnd,
     ctxAfterFile, ctxAfterSet, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
+    ctxSchemaArgs, ctxFormalDisc,
     ctxArrayIndex, ctxRecordEnd, ctxFieldList, ctxVariantTag,
     ctxVariantLabels, ctxVariantOpen, ctxVariantFields, ctxVariantClose,
     ctxConstDef, ctxConstDefEnd, ctxTypeDef, ctxTypeDefEnd, ctxVarDecl,
@@ -177,6 +178,9 @@ type
     { type denoters }
     nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkFile,
     nkSetOf,
+    { ISO/IEC 10206:1991 6.4.8's discriminated-schema. The only type-denoter
+      whose children are expressions rather than denoters. }
+    nkSchema,
     { declarations }
     nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock);
 
@@ -188,8 +192,12 @@ type
     in, not of the caller. `stype` is the procedural type and its `elem` is
     the result type, nil for a procedural parameter as against a functional
     one. }
+  { skSchema is ISO/IEC 10206:1991 6.4.7's schema: a mapping from discriminant
+    tuples to types. It is not a type -- nothing possesses it and it has no
+    values -- so naming one where a type-denoter is wanted is an error until
+    its discriminants are given. }
   symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam,
-             skProc, skFunc);
+             skProc, skFunc, skSchema);
 
   { How a file variable reaches something outside the program. ISO 7185 6.10
     makes only a *program parameter* external; every other file variable is a
@@ -212,6 +220,11 @@ type
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
+  producedPtr = ^producedRec;
+  { Forward, because a schema's symbol holds the *syntax* of its body: a
+    schema-definition has no type until a tuple gives its discriminants
+    values, so what the symbol keeps is a type-denoter (6.4.7). }
+  nodePtr = ^node;
   fieldPtr = ^fieldRec;
   variantPtr = ^variantRec;
   numPtr = ^numRec;
@@ -280,7 +293,13 @@ type
     fields, fieldTail: fieldPtr;
     variants, variantTail: variantPtr;
     tagField: integer;
-    aliasAt, aliasLen: integer
+    aliasAt, aliasLen: integer;
+    { 6.4.7 and 6.4.8: the schema this type was produced from and the tuple it
+      was produced with, nil and empty for every type written out in full.
+      Sema interns by the pair, so "one tuple, one type" needs no rule in
+      Assignable -- two productions with equal tuples *are* the same record. }
+    schema: symPtr;
+    tuple, tupleTail: numPtr
   end;
 
   symbol = record
@@ -315,7 +334,24 @@ type
       is the one thing about a block that its own statements do not decide. }
     nlLabels, nlTail: numPtr;
     resultVar: symPtr;
-    defined: boolean
+    defined: boolean;
+    { 6.4.7: the type-denoter a schema produces its types from, re-resolved
+      once per distinct tuple with the discriminants bound to that tuple's
+      values -- which is why a schema keeps its *syntax* and not a type. The
+      formal discriminants carry only a name and an ordinal type. }
+    schemaBody: nodePtr;
+    discs, discTail: symListPtr
+  end;
+
+  { Every type produced from a schema, keyed by the schema and the tuple.
+    6.4.8 makes a type produced with one tuple distinct from one produced with
+    any other and from every type of any other schema -- so this list is the
+    whole of that rule, and Assignable needs no case for schemata. }
+  producedRec = record
+    schema: symPtr;
+    tuple: numPtr;
+    ty: typePtr;
+    next: producedPtr
   end;
 
   { A name bound in a scope. Kept apart from the symbol it names because the
@@ -365,7 +401,6 @@ type
     next: opndPtr
   end;
 
-  nodePtr = ^node;
   node = record
     line, col: integer;
     { The sibling list that a std::vector<...Ptr> becomes. }
@@ -391,8 +426,14 @@ type
       nkSetMember:  (smLo, smHi: nodePtr);
       nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr);
       nkIndex:      (ixBase, ixIndex: nodePtr);
+      { ISO/IEC 10206:1991 6.8.4's schema-discriminant, `v.n`: the base
+        possesses a type produced from a schema and the name is one of that
+        schema's formal discriminants. It shares its syntax with a field
+        selection and nothing else -- there is no field, and fdResolved stays
+        nil. Sema folds it to the tuple's value. }
       nkField:      (fdBase: nodePtr; fdAt, fdLen: integer;
-                     fdResolved: fieldPtr);
+                     fdResolved: fieldPtr;
+                     fdIsDisc: boolean; fdDiscValue: integer);
       nkDeref:      (drBase: nodePtr);
       nkBinary:     (bnOp: binaryOp; bnLhs, bnRhs: nodePtr);
       nkUnary:      (unOp: unaryOp; unArg: nodePtr);
@@ -442,6 +483,7 @@ type
       nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProc,
                      grIsFunction: boolean; grParams, grResult: nodePtr);
       nkNamed:      (nmAt, nmLen: integer);
+      nkSchema:     (scAt, scLen: integer; scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen: integer);
       nkEnum:       (enConstants: nodePtr);
       nkSubrange:   (sbLo, sbHi: nodePtr);
@@ -458,7 +500,11 @@ type
                        leave }
                      vaOtherwise: boolean);
       nkConstDecl:  (kdAt, kdLen: integer; kdValue: nodePtr);
-      nkTypeDecl:   (tdAt, tdLen: integer; tdType: nodePtr);
+      { tdDiscs is 6.4.7's formal-discriminant-part, and is nil for an
+        ordinary type-definition: a schema is a type-definition that has not
+        been told everything yet. Each entry is an nkGroup whose grType is the
+        nkNamed ordinal type the discriminants possess. }
+      nkTypeDecl:   (tdAt, tdLen: integer; tdType, tdDiscs, tdDiscTail: nodePtr);
       nkProcDecl:   (pdAt, pdLen: integer;
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward: boolean; pdSym: symPtr);
@@ -548,6 +594,7 @@ var
     stops every production, and `errorSeen` decides whether there is a tree to
     print at all. }
   aborted, errorSeen: boolean;
+  errorCount: integer;
 
   progAt, progLen: integer;
   progParams, progBlock: nodePtr;
@@ -572,6 +619,12 @@ var
   stringCache: array [1..strMax] of typePtr;
   { The bindings of the `with` statements currently open, innermost first. }
   withTop: symListPtr;
+  { Every type produced from a schema so far (6.4.8), and the schemata whose
+    bodies are being resolved right now -- 6.4.7 forbids a schema-definition
+    from naming itself outside the domain of a pointer, and without that guard
+    the production recurses until the stack runs out. }
+  producedHead: producedPtr;
+  producingTop: symListPtr;
   programSym, currentProc: symPtr;
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
@@ -760,6 +813,10 @@ end;
 procedure ErrorAt(l, c: integer);
 begin
   errorSeen := true;
+  { Counted as well as flagged: producing a type from a schema needs to know
+    whether *its* resolution reported anything, so that the tuple that chose
+    it can be named too (6.4.7's domain). }
+  errorCount := errorCount + 1;
   write(l:1, ' ', c:1, ' error ')
 end;
 
@@ -1548,6 +1605,8 @@ begin
     ctxLabelDecl:      write('in a label declaration');
     ctxAfterLabelPart: write('after a label declaration');
     ctxSubrangeBounds: write('between the bounds of a subrange');
+    ctxSchemaArgs:     write('after the discriminants of a schema');
+    ctxFormalDisc:     write('in a formal discriminant');
     ctxEnumConstants:  write('after the constants of an enumerated type');
     ctxAfterArray:     write('after ''array''');
     ctxArrayIndex:     write('after the index type of an array');
@@ -1606,7 +1665,11 @@ begin
     not Sema ran, so they are cleared where the node is made. }
   case k of
     nkVar: begin n^.vrSym := nil; n^.vrField := nil end;
-    nkField: n^.fdResolved := nil;
+    nkField: begin
+               n^.fdResolved := nil;
+               n^.fdIsDisc := false;
+               n^.fdDiscValue := 0
+             end;
     nkCall: begin n^.clBuiltin := biNone; n^.clSym := nil end;
     nkWrite: n^.wrFile := nil;
     nkRead: n^.rdFile := nil;
@@ -1644,8 +1707,8 @@ begin
     nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
-    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkConstDecl,
-    nkTypeDecl, nkLabelDecl,
+    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema,
+    nkConstDecl, nkTypeDecl, nkLabelDecl,
     nkBlock: { nothing of Sema's to clear }
   end;
   NewNode := n
@@ -1772,7 +1835,8 @@ begin
         ctxParamList:     write('a parameter name');
         ctxFieldList:     write('a field name');
         ctxVarDecl:       write('a variable name');
-        ctxEnumConstants: write('an enumeration constant')
+        ctxEnumConstants: write('an enumeration constant');
+        ctxFormalDisc:    write('a discriminant name')
       end;
       writeln;
       Bail
@@ -2075,7 +2139,7 @@ end;
 
 { type-denoter = 'packed'? structured-type | ordinal-type | type-identifier }
 function ParseTypeExpr;
-var t: nodePtr; packed_: boolean;
+var t, n: nodePtr; packed_: boolean;
 begin
   EnterLevel;
   t := nil;
@@ -2149,7 +2213,34 @@ begin
       t := NewNode(nkNamed, CurLine, CurCol);
       t^.nmAt := tok[pos].at;
       t^.nmLen := tok[pos].len;
-      pos := pos + 1
+      pos := pos + 1;
+
+      { ISO/IEC 10206:1991 6.4.8: a name followed by an actual-discriminant-
+        part is a discriminated-schema. Nothing else in a type-denoter
+        position can begin with '(' after a name, so no lookahead beyond this
+        token is needed -- and the parser does not care whether the name turns
+        out to denote a schema, which is Sema's question. }
+      if Check(tkLParen) then begin
+        if langStd = stdIso7185 then begin
+          ErrorAtCur;
+          writeln('a discriminated schema is an Extended Pascal feature; ',
+                  'compile with --std=extended');
+          Bail
+        end
+        else begin
+          n := t;
+          t := NewNode(nkSchema, n^.line, n^.col);
+          t^.scAt := n^.nmAt;
+          t^.scLen := n^.nmLen;
+          t^.scArgs := nil;
+          t^.scArgTail := nil;
+          pos := pos + 1;
+          repeat
+            Append(t^.scArgs, t^.scArgTail, ParseExpr)
+          until not Accept(tkComma);
+          Expect(tkRParen, ctxSchemaArgs)
+        end
+      end
     end
   end;
   LeaveLevels(1);
@@ -2930,6 +3021,48 @@ begin
   end
 end;
 
+{ formal-discriminant-part = '(' discriminant-specification
+                              (';' discriminant-specification)* ')'
+  discriminant-specification = identifier-list ':' ordinal-type-name
+
+  The separator is ';' as in a formal parameter list, not the ',' of the
+  actual-discriminant-part that later selects a type from the schema -- which
+  is the standard's own asymmetry (6.4.7 against 6.4.8), and the reason these
+  are two routines rather than one. }
+procedure ParseFormalDiscriminants(var head, tail: nodePtr);
+var g, ty: nodePtr; more: boolean;
+begin
+  Expect(tkLParen, ctxNone);
+  more := true;
+  while more and not aborted do begin
+    g := NewNode(nkGroup, CurLine, CurCol);
+    g^.grNames := nil;
+    g^.grType := nil;
+    g^.grParams := nil;
+    g^.grResult := nil;
+    g^.grByRef := false;
+    g^.grIsProc := false;
+    g^.grIsFunction := false;
+    g^.grNames := ParseNameList(ctxFormalDisc);
+    Expect(tkColon, ctxFormalDisc);
+    if not Check(tkIdent) then begin
+      ErrorAtCur;
+      writeln('the type of a discriminant must be an ordinal type name');
+      Bail
+    end
+    else begin
+      ty := NewNode(nkNamed, CurLine, CurCol);
+      ty^.nmAt := tok[pos].at;
+      ty^.nmLen := tok[pos].len;
+      pos := pos + 1;
+      g^.grType := ty;
+      Append(head, tail, g);
+      more := (not aborted) and Accept(tkSemi)
+    end
+  end;
+  Expect(tkRParen, ctxSchemaArgs)
+end;
+
 procedure ParseTypePart(var head, tail: nodePtr);
 var d: nodePtr; more: boolean;
 begin
@@ -2946,7 +3079,21 @@ begin
       d^.tdAt := tok[pos].at;
       d^.tdLen := tok[pos].len;
       d^.tdType := nil;
+      d^.tdDiscs := nil;
+      d^.tdDiscTail := nil;
       pos := pos + 1;
+      { 6.4.7's schema-definition is a type-definition with a
+        formal-discriminant-part wedged between the name and the '='. One
+        token tells them apart, and it is the same token in both languages. }
+      if Check(tkLParen) then
+        if langStd = stdIso7185 then begin
+          ErrorAtCur;
+          writeln('a schema is an Extended Pascal feature; compile with ',
+                  '--std=extended');
+          Bail
+        end
+        else
+          ParseFormalDiscriminants(d^.tdDiscs, d^.tdDiscTail);
       Expect(tkEq, ctxTypeDef);
       d^.tdType := ParseTypeExpr;
       Expect(tkSemi, ctxTypeDefEnd);
@@ -3252,6 +3399,9 @@ begin
   t^.tagField := -1;
   t^.aliasAt := 0;
   t^.aliasLen := 0;
+  t^.schema := nil;
+  t^.tuple := nil;
+  t^.tupleTail := nil;
   NewType := t
 end;
 
@@ -3873,7 +4023,11 @@ begin
                     ((e^.vrSym^.kind = skVar) or (e^.vrSym^.kind = skParam) or
                      (e^.vrSym^.kind = skVarParam) or (e^.vrField <> nil))
   else if e^.kind = nkIndex then IsDesignator := IsDesignator(e^.ixBase)
-  else if e^.kind = nkField then IsDesignator := IsDesignator(e^.fdBase)
+  { 6.8.4 makes a schema-discriminant a *primary*, not a variable-access: it
+    is the value the type was produced with, and there is nowhere to store
+    into. `v.n := 3` would be asking a variable to change its type. }
+  else if e^.kind = nkField then
+    IsDesignator := (not e^.fdIsDisc) and IsDesignator(e^.fdBase)
   { What a pointer points at is a variable however the pointer was obtained,
     so a dereference is a designator even when its base is not. }
   else if e^.kind = nkDeref then IsDesignator := true
@@ -3902,6 +4056,8 @@ end;
 
 procedure CheckExpr(e: nodePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
+function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
+  forward;
 procedure CheckStmt(s: nodePtr); forward;
 procedure CheckBlock(b: nodePtr; owner: symPtr); forward;
 procedure CheckGoto(s: nodePtr); forward;
@@ -3989,8 +4145,8 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl,
-      nkBlock:
+      nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+      nkProcDecl, nkBlock:
         ok := false
     end;
   EvalConst := ok
@@ -4135,6 +4291,16 @@ end;
 function ResolveEnum(d: nodePtr): typePtr;
 var t: typePtr; n: nodePtr; s: symPtr; e: namePtr;
 begin
+  { An enumerated type declares its constants into the scope the *type*
+    appears in, and a schema's body is resolved once per discriminant tuple --
+    so s(1) and s(2) would each want to declare them, into a scope that exists
+    only while the type is being produced. 6.4.7 gives no answer to that, and
+    silently losing the constants is worse than saying so. }
+  if producingTop <> nil then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('a schema''s type cannot contain an enumerated type: its ',
+            'constants would be declared once per set of discriminants')
+  end;
   t := NewType(tyEnum);
   n := d^.enConstants;
   while n <> nil do begin
@@ -4626,8 +4792,428 @@ begin
   ResolveRecord := t
 end;
 
+
+{ ---------------------------------------------- schemata (6.4.7 and 6.4.8) }
+
+{ A shallow copy, so a production whose body is a shared singleton gets a type
+  of its own to carry its provenance on. Nothing structural is duplicated: the
+  copy is the same type in every way but its identity, which is the one thing
+  6.4.8 needs it to have. }
+function CopyType(src: typePtr): typePtr;
+var t: typePtr;
+begin
+  t := NewType(src^.kind);
+  t^.elem := src^.elem;
+  t^.indexType := src^.indexType;
+  t^.host := src^.host;
+  t^.tagType := src^.tagType;
+  t^.isPacked := src^.isPacked;
+  t^.isText := src^.isText;
+  t^.lo := src^.lo;
+  t^.hi := src^.hi;
+  t^.enumNames := src^.enumNames;
+  t^.enumTail := src^.enumTail;
+  t^.fields := src^.fields;
+  t^.fieldTail := src^.fieldTail;
+  t^.variants := src^.variants;
+  t^.variantTail := src^.variantTail;
+  t^.tagField := src^.tagField;
+  CopyType := t
+end;
+
+procedure ForgetResolved(d: nodePtr); forward;
+
+{ The sibling chain a std::vector of denoters becomes. }
+procedure ForgetList(n: nodePtr);
+begin
+  while n <> nil do begin
+    ForgetResolved(n);
+    n := n^.next
+  end
+end;
+
+procedure ForgetArms(v: nodePtr); forward;
+
+{ Forget every type this denoter and its sub-denoters resolved to, so the next
+  production of the same schema resolves them again against a different tuple.
+  Without this a schema would produce one type and hand it out for every
+  tuple, which is precisely the bug 6.4.8 exists to rule out. }
+procedure ForgetResolved;
+var g: nodePtr;
+begin
+  if d <> nil then begin
+    d^.ntype := nil;
+    case d^.kind of
+      nkArray: begin
+        ForgetList(d^.arDims);
+        ForgetResolved(d^.arElem)
+      end;
+      nkFile:  ForgetResolved(d^.flElem);
+      nkSetOf: ForgetResolved(d^.soElem);
+      nkRecord: begin
+        g := d^.rcFields;
+        while g <> nil do begin
+          ForgetResolved(g^.grType);
+          g := g^.next
+        end;
+        ForgetResolved(d^.rcTagType);
+        ForgetArms(d^.rcVariants)
+      end;
+      nkSchema: ForgetList(d^.scArgs);
+      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
+      nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
+      nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
+      nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
+      nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
+      nkPointer, nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock: ;
+    end
+  end
+end;
+
+{ An arm's field-list is a field-list, so its groups and its own variant part
+  are walked exactly as the record's are (ADR-0026). }
+procedure ForgetArms;
+var g: nodePtr;
+begin
+  while v <> nil do begin
+    g := v^.vaFields;
+    while g <> nil do begin
+      ForgetResolved(g^.grType);
+      g := g^.next
+    end;
+    ForgetResolved(v^.vaTagType);
+    ForgetArms(v^.vaVariants);
+    v := v^.next
+  end
+end;
+
+{ 6.4.7's schema-definition. The formal discriminants are given names and
+  ordinal types here and values only when a type is produced, so they are
+  symbols that live outside every scope -- a discriminant is not in scope in
+  the block, only inside the schema's own body and after a '.' on a variable
+  that possesses one of the schema's types. }
+procedure DeclareSchema(d: nodePtr);
+var s, disc, seen: symPtr; g, n: nodePtr; t: typePtr;
+    p: symListPtr; repeated: boolean;
+begin
+  s := Declare(d^.tdAt, d^.tdLen, skSchema, d^.line, d^.col);
+  if s^.schemaBody = nil then begin
+    s^.schemaBody := d^.tdType;
+    g := d^.tdDiscs;
+    while g <> nil do begin
+      t := BuiltinType(g^.grType^.nmAt, g^.grType^.nmLen);
+      if t = nil then begin
+        seen := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
+        if (seen <> nil) and (seen^.kind = skType) then t := seen^.stype
+      end;
+      if t = nil then begin
+        ErrorAt(g^.line, g^.col);
+        write('unknown type ''');
+        WritePool(g^.grType^.nmAt, g^.grType^.nmLen);
+        writeln('''');
+        t := intType
+      end
+      { 6.4.7 requires an ordinal-type-name: a discriminant tuple has to be
+        something two types can be compared on, which a real or a record is
+        not. }
+      else if not IsOrdinal(t) then begin
+        ErrorAt(g^.line, g^.col);
+        write('the type of a discriminant must be ordinal, found ');
+        WriteTypeName(t);
+        writeln;
+        t := intType
+      end;
+      n := g^.grNames;
+      while n <> nil do begin
+        repeated := false;
+        p := s^.discs;
+        while p <> nil do begin
+          if PoolSame(p^.sym^.at, p^.sym^.len, n^.dnAt, n^.dnLen) then
+            repeated := true;
+          p := p^.next
+        end;
+        if repeated then begin
+          ErrorAt(n^.line, n^.col);
+          write('''');
+          WritePool(n^.dnAt, n^.dnLen);
+          write(''' is already a discriminant of schema ''');
+          WritePool(d^.tdAt, d^.tdLen);
+          writeln('''')
+        end;
+        disc := NewSymbol;
+        disc^.at := n^.dnAt;
+        disc^.len := n^.dnLen;
+        disc^.kind := skConst;
+        disc^.stype := t;
+        AppendSym(s^.discs, s^.discTail, disc);
+        n := n^.next
+      end;
+      g := g^.next
+    end;
+    if s^.discs = nil then begin
+      ErrorAt(d^.line, d^.col);
+      write('schema ''');
+      WritePool(d^.tdAt, d^.tdLen);
+      writeln(''' has no discriminants')
+    end
+  end
+end;
+
+{ True when the two tuples are the same tuple: 6.4.7's "the same number of
+  values and equal values in corresponding positions". }
+function SameTuple(a, b: numPtr): boolean;
+var same: boolean;
+begin
+  same := true;
+  while same and ((a <> nil) or (b <> nil)) do
+    if (a = nil) or (b = nil) then same := false
+    else if a^.value <> b^.value then same := false
+    else begin
+      a := a^.next;
+      b := b^.next
+    end;
+  SameTuple := same
+end;
+
+procedure AppendNum(var head, tail: numPtr; v: integer);
+var n: numPtr;
+begin
+  new(n);
+  n^.value := v;
+  n^.next := nil;
+  if head = nil then head := n else tail^.next := n;
+  tail := n
+end;
+
+{ 6.4.8: the type this schema maps the given actual-discriminant-part to.
+  `dummy` is unused and exists so this and ResolveType can be forward-declared
+  with signatures the C++ side has no counterpart for. }
+function ProduceFromSchema;
+var formals: symListPtr; a, arg: nodePtr; t, given: typePtr;
+    tuple, tupleTail, tv: numPtr; value, count, want, before: integer;
+    ok, repeated, busy: boolean; pr: producedPtr; mark: entryPtr;
+    disc: symPtr; p, q, push: symListPtr;
+begin
+  t := nil;
+  formals := schema^.discs;
+  want := 0;
+  p := formals;
+  while p <> nil do begin
+    want := want + 1;
+    p := p^.next
+  end;
+  count := 0;
+  a := d^.scArgs;
+  while a <> nil do begin
+    count := count + 1;
+    a := a^.next
+  end;
+
+  { 6.4.8: the tuple consists of the discriminant-values in textual order. A
+    wrong count is reported once and the type is not produced, because a
+    partial tuple would name a type the program never asked for. }
+  if count <> want then begin
+    ErrorAt(d^.line, d^.col);
+    write('schema ''');
+    WritePool(d^.scAt, d^.scLen);
+    write(''' has ', want:1, ' discriminant');
+    if want <> 1 then write('s');
+    writeln(', found ', count:1);
+    a := d^.scArgs;
+    while a <> nil do begin
+      CheckExpr(a);
+      a := a^.next
+    end;
+    t := intType
+  end
+  else begin
+    tuple := nil;
+    tupleTail := nil;
+    ok := true;
+    a := d^.scArgs;
+    p := formals;
+    while a <> nil do begin
+      given := nil;
+      value := 0;
+      if not EvalOrdinal(a, given, value) then begin
+        { A discriminant-value is evaluated when the block is entered
+          (6.2.3.2), so the standard allows a variable here and this compiler
+          does not yet. }
+        ErrorAt(a^.line, a^.col);
+        write('the discriminants of a schema must be ordinal constants ',
+              'here; ''');
+        WritePool(p^.sym^.at, p^.sym^.len);
+        writeln(''' is not one');
+        ok := false
+      end
+      else if not Assignable(p^.sym^.stype, given) then begin
+        ErrorAt(a^.line, a^.col);
+        write('discriminant ''');
+        WritePool(p^.sym^.at, p^.sym^.len);
+        write(''' of schema ''');
+        WritePool(d^.scAt, d^.scLen);
+        write(''' is ');
+        WriteTypeName(p^.sym^.stype);
+        write(', found ');
+        WriteTypeName(given);
+        writeln;
+        ok := false
+      end
+      { 6.4.7's domain is the tuples *allowed* by the formal-discriminant-part,
+        so a value outside the discriminant's own type is not in the domain and
+        never reaches a production. }
+      else if (value < OrdinalLo(p^.sym^.stype))
+           or (value > OrdinalHi(p^.sym^.stype)) then begin
+        ErrorAt(a^.line, a^.col);
+        write('discriminant ''');
+        WritePool(p^.sym^.at, p^.sym^.len);
+        write(''' is outside ');
+        WriteTypeName(p^.sym^.stype);
+        writeln;
+        ok := false
+      end
+      else
+        AppendNum(tuple, tupleTail, value);
+      a := a^.next;
+      p := p^.next
+    end;
+
+    if not ok then
+      t := intType
+    else begin
+      pr := producedHead;
+      while (pr <> nil) and (t = nil) do begin
+        if (pr^.schema = schema) and SameTuple(pr^.tuple, tuple) then
+          t := pr^.ty;
+        pr := pr^.next
+      end;
+
+      if t = nil then begin
+        { 6.4.7: outside the domain of a pointer, a schema-definition may not
+          name itself. It is checked here rather than at the definition
+          because that is where the recursion would actually happen -- and
+          mutual recursion between two schemata is the same mistake and is
+          caught by the same test. }
+        busy := false;
+        q := producingTop;
+        while q <> nil do begin
+          if q^.sym = schema then busy := true;
+          q := q^.next
+        end;
+        if busy then begin
+          ErrorAt(d^.line, d^.col);
+          write('schema ''');
+          WritePool(d^.scAt, d^.scLen);
+          writeln(''' is defined in terms of itself; only the domain of a ',
+                  'pointer may name a schema being defined');
+          t := intType
+        end
+        else begin
+          { The discriminants become ordinary constants for as long as the
+            body is being resolved, which is what lets `array [1..n] of real`
+            reach the existing subrange and array code with nothing added to
+            either. }
+          mark := scopeTop;
+          scopeDepth := scopeDepth + 1;
+          p := formals;
+          tv := tuple;
+          while p <> nil do begin
+            repeated := false;
+            q := formals;
+            while q <> p do begin
+              if PoolSame(q^.sym^.at, q^.sym^.len, p^.sym^.at, p^.sym^.len)
+                then repeated := true;
+              q := q^.next
+            end;
+            { A discriminant named twice was already reported at the schema;
+              binding it again would report it once more at every *use*, and
+              point at the tuple rather than at the definition that is wrong. }
+            if not repeated then begin
+              disc := Declare(p^.sym^.at, p^.sym^.len, skConst, d^.line,
+                              d^.col);
+              disc^.stype := p^.sym^.stype;
+              disc^.intVal := tv^.value;
+              disc^.charVal := chr(tv^.value mod 256);
+              disc^.boolVal := tv^.value <> 0
+            end;
+            p := p^.next;
+            tv := tv^.next
+          end;
+
+          ForgetResolved(schema^.schemaBody);
+          new(push);
+          push^.sym := schema;
+          push^.next := producingTop;
+          producingTop := push;
+          before := errorCount;
+          t := ResolveType(schema^.schemaBody);
+          { popped by rebuilding the list without its head }
+          producingTop := producingTop^.next;
+          scopeTop := mark;
+          scopeDepth := scopeDepth - 1;
+
+          { 6.4.7's domain is the tuples for which the body denotes a type at
+            all -- NOTE 2 lists an empty subrange among the ways one can fail.
+            Whatever the body reported, it reported it against the *schema's*
+            text, which is not where the reader chose the tuple; this says
+            which choice it was. }
+          if errorCount <> before then begin
+            ErrorAt(d^.line, d^.col);
+            write('no type is produced from schema ''');
+            WritePool(d^.scAt, d^.scLen);
+            writeln(''' with these discriminants')
+          end;
+
+          { A produced type is a type of its own even when the body is a name
+            or a simple type, so the provenance goes on a copy rather than on
+            the shared singleton `integer` would hand back. }
+          if (t^.schema <> nil) or (t = intType) or (t = realType)
+             or (t = boolType) or (t = charType) or (t = textType) then
+            t := CopyType(t);
+          t^.schema := schema;
+          t^.tuple := tuple;
+          t^.tupleTail := tupleTail;
+
+          { A produced type names itself after the schema and the tuple that
+            produced it. Without this, two productions of one schema print
+            identically -- and 6.4.8's whole point is that they are different
+            types, so a diagnostic spelling `paint(red)` and `paint(green)`
+            the same way would report the rule while hiding the reason. }
+          msgOut := true;
+          StrClear(msgBuf);
+          WritePool(schema^.at, schema^.len);
+          Put('(');
+          p := formals;
+          tv := tuple;
+          while (p <> nil) and (tv <> nil) do begin
+            if p <> formals then begin
+              Put(',');
+              Put(' ')
+            end;
+            WriteOrdinalName(p^.sym^.stype, tv^.value);
+            p := p^.next;
+            tv := tv^.next
+          end;
+          Put(')');
+          msgOut := false;
+          t^.aliasAt := PoolAdd(msgBuf);
+          t^.aliasLen := msgBuf.len;
+
+          new(pr);
+          pr^.schema := schema;
+          pr^.tuple := tuple;
+          pr^.ty := t;
+          pr^.next := producedHead;
+          producedHead := pr
+        end
+      end
+    end
+  end;
+  ProduceFromSchema := t
+end;
+
 function ResolveType;
-var t: typePtr; s: symPtr;
+var t: typePtr; s: symPtr; n: nodePtr;
 begin
   if d^.ntype <> nil then
     ResolveType := d^.ntype
@@ -4640,6 +5226,18 @@ begin
           s := Lookup(d^.nmAt, d^.nmLen);
           if (s <> nil) and (s^.kind = skType) then
             t := s^.stype
+          { 6.4.8: a schema denotes a type only once its discriminants are
+            given, so the message says what is missing rather than that the
+            name is unknown. }
+          else if (s <> nil) and (s^.kind = skSchema) then begin
+            ErrorAt(d^.line, d^.col);
+            write('schema ''');
+            WritePool(d^.nmAt, d^.nmLen);
+            write(''' needs its discriminants here, as ');
+            WritePool(d^.nmAt, d^.nmLen);
+            writeln('(...)');
+            t := intType
+          end
           else begin
             ErrorAt(d^.line, d^.col);
             write('unknown type ''');
@@ -4656,6 +5254,25 @@ begin
       nkPointer:  t := ResolvePointer(d);
       nkFile:     t := ResolveFile(d);
       nkSetOf:    t := ResolveSet(d);
+      nkSchema: begin
+        s := Lookup(d^.scAt, d^.scLen);
+        if (s = nil) or (s^.kind <> skSchema) then begin
+          ErrorAt(d^.line, d^.col);
+          write('unknown schema ''');
+          WritePool(d^.scAt, d^.scLen);
+          writeln('''');
+          { The discriminants are still checked, so a mistake in one of them
+            is reported in the same run as the name that was not found. }
+          n := d^.scArgs;
+          while n <> nil do begin
+            CheckExpr(n);
+            n := n^.next
+          end;
+          t := intType
+        end
+        else
+          t := ProduceFromSchema(s, nil, d)
+      end;
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
       nkVar, nkIndex, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkEmpty, nkAssign, nkWrite, nkRead,
@@ -5361,6 +5978,7 @@ end;
 
 procedure CheckExpr;
 var t, b: typePtr; f: fieldPtr; binding: symPtr;
+    p: symListPtr; tv: numPtr; found: boolean;
 begin
   if e <> nil then
     case e^.kind of
@@ -5435,8 +6053,42 @@ begin
       nkField: begin
         CheckExpr(e^.fdBase);
         b := e^.fdBase^.ntype;
+        { 6.8.4: `v.d` where v possesses a type produced from a schema and d
+          is one of that schema's formal discriminants. Looked for before the
+          fields, because a record produced from a schema has both and the
+          discriminant is not one of them -- the name is in no scope, and this
+          is the only place it can be written. }
+        found := false;
+        if (b <> nil) and (b^.schema <> nil) then begin
+          p := b^.schema^.discs;
+          tv := b^.tuple;
+          while (p <> nil) and (tv <> nil) and not found do begin
+            if PoolSame(p^.sym^.at, p^.sym^.len, e^.fdAt, e^.fdLen) then begin
+              found := true;
+              e^.fdIsDisc := true;
+              e^.fdDiscValue := tv^.value;
+              e^.ntype := p^.sym^.stype
+            end;
+            p := p^.next;
+            tv := tv^.next
+          end
+        end;
+        if found then
+          { the discriminant answered, and e^.ntype is already set }
+        else
         if not IsRecord(b) then begin
-          if b <> nil then begin
+          if (b <> nil) and (b^.schema <> nil) then begin
+            { The dot after a schematic variable may select a field or a
+              discriminant, so saying only that the type has no fields would
+              describe the wrong half of what was tried. }
+            ErrorAt(e^.line, e^.col);
+            write('''');
+            WritePool(e^.fdAt, e^.fdLen);
+            write(''' is not a discriminant of schema ''');
+            WritePool(b^.schema^.at, b^.schema^.len);
+            writeln('''')
+          end
+          else if b <> nil then begin
             ErrorAt(e^.line, e^.col);
             write('cannot select a field of a value of type ');
             WriteTypeName(b);
@@ -5540,8 +6192,8 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl,
-      nkBlock:
+      nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+      nkProcDecl, nkBlock:
         { not an expression }
     end
 end;
@@ -6213,7 +6865,8 @@ begin
       nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+      nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkBlock:
         { not a statement }
     end
 end;
@@ -6657,6 +7310,12 @@ begin
     it is resolved rather than all at the end. }
   d := b^.blTypes;
   while d <> nil do begin
+    { 6.4.7: a schema-definition declares a schema, not a type. Its body is
+      *not* resolved here -- it has no discriminant values yet, and resolving
+      it once would produce the one type every use then shared. }
+    if d^.tdDiscs <> nil then
+      DeclareSchema(d)
+    else begin
     t := ResolveType(d^.tdType);
     s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
     if s^.stype = nil then begin   { a duplicate: keep the first definition }
@@ -6665,6 +7324,7 @@ begin
         t^.aliasAt := d^.tdAt;
         t^.aliasLen := d^.tdLen
       end
+    end
     end;
     d := d^.next
   end;
@@ -7051,7 +7711,8 @@ begin
     skVarParam: write('varparam');
     skProcParam: write('procparam');
     skProc:     write('proc');
-    skFunc:     write('func')
+    skFunc:     write('func');
+    skSchema:   write('schema')
   end
 end;
 
@@ -7223,11 +7884,16 @@ begin
       level := level - 1
     end;
     nkField: begin
-      write('field ');
+      { A schema-discriminant shares this node with a field selection and
+        resolves to neither a field nor an address, so it prints as what it
+        is: the value the base's type was produced with. }
+      if n^.fdIsDisc then write('discriminant ') else write('field ');
       WritePool(n^.fdAt, n^.fdLen);
       WritePos(n^.line, n^.col);
       if annotate then
-        if n^.fdResolved <> nil then begin
+        if n^.fdIsDisc then
+          write(' -> = ', n^.fdDiscValue:1)
+        else if n^.fdResolved <> nil then begin
           write(' -> #', n^.fdResolved^.index:1, '/');
           WriteVariantRef(n^.fdResolved^.variant)
         end
@@ -7657,6 +8323,17 @@ begin
       WritePos(n^.line, n^.col);
       TypeEnd(n)
     end;
+    { A discriminated-schema's children are *expressions*, not denoters: it is
+      the only type-denoter whose subtree holds values rather than types. }
+    nkSchema: begin
+      write('schema ');
+      WritePool(n^.scAt, n^.scLen);
+      WritePos(n^.line, n^.col);
+      TypeEnd(n);
+      level := level + 1;
+      DumpExprList(n^.scArgs);
+      level := level - 1
+    end;
     nkPointer: begin
       write('pointer ');
       WritePool(n^.ptAt, n^.ptLen);
@@ -7775,7 +8452,7 @@ begin
 end;
 
 procedure DumpBlock;
-var p: nodePtr;
+var p, g: nodePtr;
 begin
   Pad;
   writeln('block');
@@ -7812,10 +8489,23 @@ begin
   p := n^.blTypes;
   while p <> nil do begin
     Pad;
-    write('type ');
+    if p^.tdDiscs = nil then write('type ') else write('schema ');
     WritePool(p^.tdAt, p^.tdLen);
     At(p^.line, p^.col);
     level := level + 1;
+    { The formal discriminants come first, in the order that fixes the tuple's
+      positions -- which is the only thing about them a reader could need. }
+    g := p^.tdDiscs;
+    while g <> nil do begin
+      Pad;
+      write('discriminant ');
+      WritePool(g^.grType^.nmAt, g^.grType^.nmLen);
+      writeln;
+      level := level + 1;
+      DumpNames(g^.grNames);
+      level := level - 1;
+      g := g^.next
+    end;
     DumpTypeExpr(p^.tdType);
     level := level - 1;
     p := p^.next
@@ -9905,7 +10595,8 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+    nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+    nkProcDecl, nkBlock:
       OpWord('null            ', v)   { Sema has already required a designator }
   end
 end;
@@ -9918,7 +10609,12 @@ begin
     nkChar: OpInt(ord(e^.chVal), v);
     nkStr: EmitAddress(e, v);
     nkNil: OpWord('null            ', v);
-    nkDeref, nkIndex, nkField: EmitLoad(e, v);
+    nkDeref, nkIndex: EmitLoad(e, v);
+    { A schema-discriminant is the value the type was produced with, so it is
+      a constant here and there is nothing to load (6.8.4). }
+    nkField:
+      if e^.fdIsDisc then OpInt(e^.fdDiscValue, v)
+      else EmitLoad(e, v);
     nkVar:
       if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
         EmitConst(e^.vrSym, v)
@@ -9937,7 +10633,8 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+    nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+    nkProcDecl, nkBlock:
       OpInt(0, v)
   end
 end;
@@ -10650,8 +11347,8 @@ begin
       nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl,
-      nkBlock: ;
+      nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkLabelDecl, nkBlock: ;
     end
 end;
 
@@ -11115,6 +11812,7 @@ begin
   level := 0;
   aborted := false;
   errorSeen := false;
+  errorCount := 0;
   annotate := false;
   msgOut := false;
   StrClear(msgBuf);
@@ -11123,6 +11821,8 @@ begin
   pendingHead := nil;
   pendingTail := nil;
   withTop := nil;
+  producedHead := nil;
+  producingTop := nil;
   stdInput := nil;
   stdOutput := nil;
   for stringIndex := 1 to strMax do

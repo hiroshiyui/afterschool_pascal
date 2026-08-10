@@ -356,6 +356,25 @@ TypeExprPtr Parser::parseTypeExpr() {
   t->col = cur().col;
   t->name = cur().text;
   ++pos_;
+
+  // ISO/IEC 10206:1991 §6.4.8: a name followed by an actual-discriminant-part
+  // is a discriminated-schema. Nothing else in a type-denoter position can
+  // begin with '(' after a name, so no lookahead beyond this token is needed
+  // — and the parser does not care whether the name turns out to denote a
+  // schema, which is Sema's question.
+  if (check(Tok::LParen)) {
+    if (std_ == Std::Iso7185) {
+      errorAtCur("a discriminated schema is an Extended Pascal feature; "
+                 "compile with --std=extended");
+      bail();
+    }
+    t->kind = TEK::Schema;
+    ++pos_;
+    do {
+      t->args.push_back(parseExpr());
+    } while (accept(Tok::Comma));
+    expect(Tok::RParen, "after the discriminants of a schema");
+  }
   return t;
 }
 
@@ -560,11 +579,50 @@ void Parser::parseTypePart(Block &prog) {
     d.line = cur().line;
     d.col = cur().col;
     ++pos_;
+    // §6.4.7's schema-definition is a type-definition with a
+    // formal-discriminant-part wedged between the name and the '='. One token
+    // tells them apart, and it is the same token in both languages: a type
+    // definition has '=' there.
+    if (check(Tok::LParen)) {
+      if (std_ == Std::Iso7185) {
+        errorAtCur("a schema is an Extended Pascal feature; compile with "
+                   "--std=extended");
+        bail();
+      }
+      parseFormalDiscriminants(d.discriminants);
+    }
     expect(Tok::Eq, "in a type definition");
     d.type = parseTypeExpr();
     expect(Tok::Semi, "after a type definition");
     prog.types.push_back(std::move(d));
   } while (check(Tok::Ident));
+}
+
+/// formal-discriminant-part = '(' discriminant-specification
+///                              (';' discriminant-specification)* ')'
+/// discriminant-specification = identifier-list ':' ordinal-type-name
+///
+/// The separator is ';' as in a formal parameter list, not ',' as in the
+/// actual-discriminant-part that later selects a type from the schema — which
+/// is the standard's own asymmetry (§6.4.7 against §6.4.8), and the reason
+/// these are two routines rather than one.
+void Parser::parseFormalDiscriminants(std::vector<DiscriminantGroup> &out) {
+  expect(Tok::LParen, "");
+  do {
+    DiscriminantGroup g;
+    g.line = cur().line;
+    g.col = cur().col;
+    g.names = parseNameList("a discriminant name");
+    expect(Tok::Colon, "in a formal discriminant");
+    if (!check(Tok::Ident)) {
+      errorAtCur("the type of a discriminant must be an ordinal type name");
+      bail();
+    }
+    g.typeName = cur().text;
+    ++pos_;
+    out.push_back(std::move(g));
+  } while (accept(Tok::Semi));
+  expect(Tok::RParen, "after the discriminants of a schema");
 }
 
 void Parser::parseVarPart(Block &prog) {

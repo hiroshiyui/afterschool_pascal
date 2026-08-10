@@ -1,0 +1,7 @@
+0.5 1.0 1.5 
+same tuple, same type: 1.5
+vector(5) ends at 5.0
+grid 2 by 3: 23
+bounded(1,9) holds 9
+buffer(8) holds abcde
+hand(2) is 2

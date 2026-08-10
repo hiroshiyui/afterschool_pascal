@@ -254,10 +254,16 @@ struct Dumper {
     }
     case NK::Field: {
       FieldExpr *n = as<FieldExpr>(e);
-      headExpr("field " + n->field, e,
-               n->resolved ? "#" + std::to_string(n->resolved->index) + "/" +
-                                 variantRef(n->resolved->variant)
-                           : "?");
+      // A schema-discriminant shares this node with a field selection and
+      // resolves to neither a field nor an address, so it prints as what it
+      // is: the value the base's type was produced with.
+      headExpr((n->isDiscriminant ? "discriminant " : "field ") + n->field, e,
+               n->isDiscriminant
+                   ? "= " + std::to_string(n->discValue)
+                   : (n->resolved
+                          ? "#" + std::to_string(n->resolved->index) + "/" +
+                                variantRef(n->resolved->variant)
+                          : "?"));
       ++level;
       expr(n->base.get());
       --level;
@@ -687,6 +693,15 @@ struct Dumper {
     case TEK::Pointer:
       headType("pointer " + t->name, t);
       break;
+    // A discriminated-schema's children are *expressions*, not denoters: it is
+    // the only type-denoter whose subtree holds values rather than types.
+    case TEK::Schema:
+      headType("schema " + t->name, t);
+      ++level;
+      for (ExprPtr &a : t->args)
+        expr(a.get());
+      --level;
+      break;
     case TEK::Enum:
       headType("enum", t);
       ++level;
@@ -818,8 +833,18 @@ struct Dumper {
     mark("types");
     ++level;
     for (TypeDecl &t : b.types) {
-      head("type " + t.name, t.line, t.col);
+      head((t.discriminants.empty() ? "type " : "schema ") + t.name, t.line,
+           t.col);
       ++level;
+      // The formal discriminants come first, in the order that fixes the
+      // tuple's positions — which is the only thing about them a reader of
+      // this dump could need.
+      for (DiscriminantGroup &g : t.discriminants) {
+        mark(("discriminant " + g.typeName).c_str());
+        ++level;
+        names(g.names);
+        --level;
+      }
       typeExpr(t.type.get());
       --level;
     }

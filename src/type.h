@@ -23,6 +23,7 @@ enum class TypeKind {
 inline constexpr int kSetLimit = 255;
 
 struct Type;
+struct Symbol;
 
 /// A folded case-constant: the closed interval [lo, hi]. ISO 7185's single
 /// constant is `lo = hi`, so every user of a label list works one way and a
@@ -101,6 +102,16 @@ struct Type {
 
   /// The identifier a `type` definition gave this, purely for diagnostics.
   std::string alias;
+
+  // --- schemata (ISO/IEC 10206:1991 §6.4.7, §6.4.8) ------------------------
+  /// The schema this type was produced from, and the discriminant tuple it
+  /// was produced with. Null for every type written out in full. Sema interns
+  /// by the pair, so §6.4.8's "one tuple, one type" needs no rule in
+  /// `assignable`: two productions with equal tuples *are* the same object,
+  /// and ADR-0017's identity comparison then says what the standard says.
+  Symbol *schema = nullptr;
+  std::vector<long long> tuple;
+  bool isSchematic() const { return schema != nullptr; }
 
   // These ask what a value *is*, so they look through a subrange to its host:
   // `1..9` is an integer that happens to be range-checked, and every rule

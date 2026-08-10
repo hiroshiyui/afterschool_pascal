@@ -682,6 +682,7 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     return fieldAddress(emitAddress(f->base.get()), f->base->type, f->resolved);
   }
 
+
   case NK::Index: {
     auto *ix = static_cast<IndexExpr *>(e);
     ap::Type *arr = ix->base->type;
@@ -1343,8 +1344,16 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
       return emitUserCall(v->sym, noArgs_);
     return emitLoad(e);
   }
+  case NK::Field: {
+    // A schema-discriminant is the value the type was produced with, so it is
+    // a constant here and there is nothing to load (§6.8.4). The width is the
+    // discriminant's own ordinal type, exactly as a literal of it would be.
+    auto *f = static_cast<FieldExpr *>(e);
+    if (f->isDiscriminant)
+      return ConstantInt::getSigned(llvmType(e->type), f->discValue);
+    return emitLoad(e);
+  }
   case NK::Index:
-  case NK::Field:
     return emitLoad(e);
   case NK::SetLit: return emitSet(static_cast<SetExpr *>(e));
   case NK::Binary: return emitBinary(static_cast<Binary *>(e));

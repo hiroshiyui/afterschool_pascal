@@ -155,6 +155,14 @@ struct FieldExpr : Expr {
   ExprPtr base;
   std::string field;
   const Field *resolved = nullptr; // filled in by Sema
+  /// ISO/IEC 10206:1991 §6.8.4's schema-discriminant, `v.n`: the base
+  /// possesses a type produced from a schema and the name is one of that
+  /// schema's formal discriminants. It shares its syntax with a field
+  /// selection and nothing else — there is no field, and `resolved` stays
+  /// null. Sema folds it to the tuple's value, which is what a discriminated
+  /// type knows about itself.
+  bool isDiscriminant = false;
+  long long discValue = 0;
 };
 
 /// `base^` — the variable a pointer points at. A designator like any other,
@@ -410,7 +418,12 @@ struct VariantArm {
   int line = 0, col = 0;
 };
 
-enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File, Set };
+enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File, Set,
+                 /// ISO/IEC 10206:1991 §6.4.8's discriminated-schema:
+                 /// `schema-name '(' discriminant-value, ... ')'`. It is a
+                 /// type-denoter like any other, and the only one whose
+                 /// spelling contains expressions that are not bounds.
+                 Schema };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is
@@ -430,6 +443,9 @@ struct TypeExpr {
   std::vector<FieldGroup> fields; // Record: the fixed part
   std::vector<DeclName> constants;// Enum
   ExprPtr lo, hi;                 // Subrange
+  /// Schema: the actual-discriminant-part. Empty for every other kind, and
+  /// never empty for this one — §6.4.8's list has at least one value.
+  std::vector<ExprPtr> args;
 
   // Record: the variant part, if there is one. `tagName` is empty when the tag
   // has no field of its own (ISO 7185 §6.4.3.3 allows `case T of`).
@@ -441,9 +457,24 @@ struct TypeExpr {
   Type *resolved = nullptr; // filled in by Sema
 };
 
+/// One `identifier-list ':' ordinal-type-name` of a formal-discriminant-part.
+/// The type is a *name*, not a denoter (§6.4.7), so a discriminant cannot be
+/// declared with an anonymous type — which is what keeps a schema's domain
+/// something a reader can see at a glance.
+struct DiscriminantGroup {
+  std::vector<DeclName> names;
+  std::string typeName;
+  int line = 0, col = 0;
+};
+
+/// A type-definition, or — when `discriminants` is non-empty — ISO/IEC
+/// 10206:1991 §6.4.7's schema-definition. The two share a node because they
+/// share their whole syntax but for the formal-discriminant-part: a schema is
+/// a type-definition that has not been told everything yet.
 struct TypeDecl {
   std::string name;
   TypeExprPtr type;
+  std::vector<DiscriminantGroup> discriminants;
   int line = 0, col = 0;
 };
 
