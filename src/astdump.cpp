@@ -479,6 +479,15 @@ struct Dumper {
         stmt(arm.body.get());
         level -= 2;
       }
+      // Present but empty is not the same as absent: `otherwise` with nothing
+      // after it says "and otherwise do nothing", which does not trap.
+      if (n->hasOtherwise) {
+        mark("otherwise");
+        ++level;
+        for (StmtPtr &st : n->otherwise)
+          stmt(st.get());
+        --level;
+      }
       --level;
       break;
     }

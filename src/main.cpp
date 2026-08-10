@@ -53,6 +53,11 @@ struct Options {
   /// that runs all three stages — ISO 7185 has no include mechanism, so there
   /// is one source file and therefore one binary to ask.
   bool dumpAll = false;
+  /// Which standard to accept. ISO 7185 is the default because the corpus,
+  /// the proofs and the stage-1 compiler are all written in it, and because
+  /// ISO/IEC 10206:1991 reserves words a valid ISO 7185 program may use as
+  /// identifiers (ADR-0033).
+  ap::Std lang = ap::Std::Iso7185;
 };
 
 /// Diagnostics into the same stream as the dump, and before it. The Pascal
@@ -124,7 +129,8 @@ void usage() {
                "  --dump-tokens write the token stream and stop\n"
                "  --dump-ast    write the parse tree and stop\n"
                "  --dump-sema   write the tree Sema annotated and stop\n"
-               "  --dump-all    write all three dumps and stop\n");
+               "  --dump-all    write all three dumps and stop\n"
+               "  --std=<name>  iso7185 (default) or extended\n");
 }
 
 std::string stripExtension(const std::string &path) {
@@ -166,6 +172,19 @@ bool parseArgs(int argc, char **argv, Options &opt) {
     } else if (a.size() == 3 && a.rfind("-O", 0) == 0 && a[2] >= '0' &&
                a[2] <= '3') {
       opt.optLevel = static_cast<unsigned>(a[2] - '0');
+    } else if (a.rfind("--std=", 0) == 0) {
+      std::string name = a.substr(6);
+      if (name == "iso7185") {
+        opt.lang = ap::Std::Iso7185;
+      } else if (name == "extended") {
+        opt.lang = ap::Std::Extended;
+      } else {
+        std::fprintf(stderr,
+                     "pascalc: unknown standard '%s'; "
+                     "expected iso7185 or extended\n",
+                     name.c_str());
+        return false;
+      }
     } else if (a == "-h" || a == "--help") {
       usage();
       std::exit(0);
@@ -269,7 +288,7 @@ int main(int argc, char **argv) {
   buffer << in.rdbuf();
 
   ap::Diagnostics diags(opt.input);
-  ap::Lexer lexer(buffer.str(), diags);
+  ap::Lexer lexer(buffer.str(), diags, opt.lang);
   std::vector<ap::Token> tokens = lexer.tokenize();
   // The dumps `selfhost/compiler.pas` is compared against. Each section prints
   // the diagnostics known at that point and then its own output, and the
@@ -290,7 +309,7 @@ int main(int argc, char **argv) {
       std::unique_ptr<ap::Program> parsed;
       if (!diags.hasErrors()) {
         try {
-          ap::Parser parser(std::move(tokens), diags);
+          ap::Parser parser(std::move(tokens), diags, opt.lang);
           parsed = parser.parseProgram();
         } catch (const ap::ParseAbort &) {
         }
@@ -323,7 +342,7 @@ int main(int argc, char **argv) {
 
   std::unique_ptr<ap::Program> program;
   try {
-    ap::Parser parser(std::move(tokens), diags);
+    ap::Parser parser(std::move(tokens), diags, opt.lang);
     program = parser.parseProgram();
   } catch (const ap::ParseAbort &) {
     diags.print();

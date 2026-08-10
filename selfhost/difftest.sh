@@ -52,10 +52,24 @@ if [[ ${#files[@]} -eq 0 ]]; then
   exit 1
 fi
 
+# Which standard a source is written in is decided by where it lives:
+# tests/extended/ is ISO/IEC 10206:1991, everything else is ISO 7185. Both
+# compilers are told from the same variable so they cannot drift — the C++ one
+# by --std, the Pascal one through a file, because ISO 7185 gives a program no
+# other channel (ADR-0033).
+standard_of() {
+  case $1 in
+    */tests/extended/*) echo extended ;;
+    *)                  echo iso7185 ;;
+  esac
+}
+
 checked=0
 failed=0
 for f in "${files[@]}"; do
-  "$pascalc" "$flag" "$f" >"$work/cpp.txt" 2>"$work/cpp.err"
+  standard=$(standard_of "$f")
+  echo "$standard" >"$work/options"
+  "$pascalc" "--std=$standard" "$flag" "$f" >"$work/cpp.txt" 2>"$work/cpp.err"
   # A bug can be a *loop* rather than a wrong answer — a scanner that
   # recognises no character consumes none and never advances. That is a
   # failure like any other, so it is bounded here instead of hanging the run.
@@ -63,7 +77,8 @@ for f in "${files[@]}"; do
   # here compares it -- selfhost/irtest.sh is what runs it -- but generating
   # it on every file is free coverage: a code generator that crashes or
   # loops on a corpus file fails here, on the file that did it.
-  timeout 120 "$work/stage1" "$f" "$work/ir.ll" >"$work/pas.txt" 2>"$work/pas.err"
+  timeout 120 "$work/stage1" "$f" "$work/ir.ll" "$work/options" \
+      >"$work/pas.txt" 2>"$work/pas.err"
   status=$?
   checked=$((checked + 1))
   if [[ $status -eq 124 ]]; then

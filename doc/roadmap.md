@@ -51,7 +51,7 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 53 ctest cases — 50 Pascal programs, the verification
+Alongside the language, 55 ctest cases — 52 Pascal programs, the verification
 run, the differential test and the bootstrap — and 35 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
@@ -272,13 +272,31 @@ Extended Pascal's spelling rather than invented here.
   constants the runtime is told. `text` stays a type of its own, because
   §6.4.3.5 makes it one and only it has lines.
 
-**Then Extended Pascal.** ISO/IEC 10206:1991 is the target for the second
-stage, not an ad-hoc pile of extensions. The decision most likely to be
-revisited there is ADR-0012's refusal of a `string` type: the reason for
-refusing it was that it would be an invention, and Extended Pascal defines it —
-so the reason expires rather than the decision being overturned on taste.
-Schemata, modules and `otherwise` are in the same position. Until then, keep
-refusing them.
+**Extended Pascal, and it has begun.** ISO/IEC 10206:1991 is the second stage,
+not an ad-hoc pile of extensions. ADR-0033 settled how it arrives: `--std`
+selects the language per source, ISO 7185 stays the default, and
+`tests/extended/` is the corpus. The two are *not* nested — Extended Pascal
+reserves word-symbols a valid ISO 7185 program may use as identifiers, and the
+stage-1 compiler is such a program.
+
+- ~~**`otherwise`.**~~ Done (ADR-0033), in the case statement. It retires
+  ADR-0018's "ISO 7185 has no `else` and none is invented": the standard has
+  one now, and the lowering is unchanged — an otherwise-part is what the
+  default block of the same switch holds.
+- **`otherwise` in a variant part.** The same word in a record's `case`, which
+  touches the variant layout of ADR-0018 and ADR-0026 rather than the statement.
+- **Case-constant ranges**, non-decimal literals (`16#ff`), `pow` and `**`,
+  `and_then`/`or_else` — small, independent, and each reserving its own
+  word-symbols as it lands.
+- **Schemata**, the core of the standard: parameterised types, and what
+  `string(n)` is built on. Everything larger composes with it.
+- **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
+  project had not committed to this standard; it now has, so that reason has
+  expired. Its *finding* has not — a compiler reads text in and writes text out
+  — so this should be settled by measuring stage-1 code again, the way it was
+  settled the first time, and not by taste.
+- **Modules**, `bind`/`unbind`, direct-access files, complex numbers,
+  `protected`, initial-state specifiers. Each needs its own record.
 
 **And the two things that are not features:**
 

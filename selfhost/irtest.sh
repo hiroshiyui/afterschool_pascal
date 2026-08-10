@@ -64,10 +64,21 @@ check_size PAS_JUMP_SIZE jumpSize
 
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>
+standard_of() {
+  case $1 in
+    */tests/extended/*) echo extended ;;
+    *)                  echo iso7185 ;;
+  esac
+}
+
 build() {
   local cc=$1 src=$2 out=$3
   rm -f "$work/ir.ll"
-  timeout 600 "$cc" "$src" "$work/ir.ll" >/dev/null 2>"$work/gen.err" || return 1
+  # The Pascal compiler reads the standard from a file, because ISO 7185 gives
+  # a program no other channel for it (ADR-0033).
+  standard_of "$src" >"$work/options"
+  timeout 600 "$cc" "$src" "$work/ir.ll" "$work/options" \
+      >/dev/null 2>"$work/gen.err" || return 1
   [[ -s $work/ir.ll ]] || return 1
   clang -Wno-override-module "$work/ir.ll" "$runtime" -lm -o "$out" \
       2>"$work/link.err" || return 2
@@ -100,7 +111,8 @@ golden() {
 
     # Rejected by the C++ compiler: a diagnostic, not a program. difftest.sh is
     # what compares those, and it compares all of them.
-    if ! "$pascalc" "$f" -o "$work/ref" >/dev/null 2>&1; then
+    if ! "$pascalc" "--std=$(standard_of "$f")" "$f" -o "$work/ref" \
+           >/dev/null 2>&1; then
       [[ $stage == stage1 ]] && skipped=$((skipped + 1))
       continue
     fi

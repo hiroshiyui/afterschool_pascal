@@ -80,5 +80,17 @@ foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                   $<TARGET_FILE:pascalc> ${t})
+                   $<TARGET_FILE:pascalc> ${t} iso7185)
+endforeach()
+
+# ISO/IEC 10206:1991 cases. They live apart because the standard is a property
+# of the source, not of the case: a program using `otherwise` is not a valid
+# ISO 7185 program, and the directory is what says so to every harness that
+# walks the tree (ADR-0033).
+file(GLOB APASCAL_EXTENDED_TESTS ${CMAKE_SOURCE_DIR}/tests/extended/*.pas)
+foreach(t ${APASCAL_EXTENDED_TESTS})
+  get_filename_component(name ${t} NAME_WE)
+  add_test(NAME ${name}
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+                   $<TARGET_FILE:pascalc> ${t} extended)
 endforeach()

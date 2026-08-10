@@ -73,6 +73,7 @@ const char *tokenName(Tok t) {
   case Tok::KwVar: return "'var'";
   case Tok::KwWhile: return "'while'";
   case Tok::KwWith: return "'with'";
+  case Tok::KwOtherwise: return "'otherwise'";
   }
   return "token";
 }
@@ -98,6 +99,16 @@ const std::unordered_map<std::string, Tok> &keywords() {
       {"type", Tok::KwType},       {"until", Tok::KwUntil},
       {"var", Tok::KwVar},         {"while", Tok::KwWhile},
       {"with", Tok::KwWith},
+  };
+  return kw;
+}
+
+/// The word-symbols ISO/IEC 10206:1991 adds. They are looked up only under
+/// `--std=extended`, because reserving them unconditionally would reject valid
+/// ISO 7185 programs — including this compiler's own stage-1 source.
+const std::unordered_map<std::string, Tok> &extendedKeywords() {
+  static const std::unordered_map<std::string, Tok> kw = {
+      {"otherwise", Tok::KwOtherwise},
   };
   return kw;
 }
@@ -172,7 +183,13 @@ Token Lexer::lexIdentOrKeyword() {
         std::tolower(static_cast<unsigned char>(advance())));
 
   auto it = keywords().find(text);
-  Token t = make(it != keywords().end() ? it->second : Tok::Ident, sl, sc);
+  Tok kind = it != keywords().end() ? it->second : Tok::Ident;
+  if (kind == Tok::Ident && std_ == Std::Extended) {
+    auto ext = extendedKeywords().find(text);
+    if (ext != extendedKeywords().end())
+      kind = ext->second;
+  }
+  Token t = make(kind, sl, sc);
   t.text = std::move(text);
   return t;
 }

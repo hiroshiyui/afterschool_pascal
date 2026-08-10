@@ -11,8 +11,8 @@ namespace ap {
 /// are case-insensitive, so every spelling is folded to lower case.
 class Lexer {
 public:
-  Lexer(std::string source, Diagnostics &diags)
-      : src_(std::move(source)), diags_(diags) {}
+  Lexer(std::string source, Diagnostics &diags, Std std = Std::Iso7185)
+      : src_(std::move(source)), diags_(diags), std_(std) {}
 
   std::vector<Token> tokenize();
 
@@ -28,6 +28,7 @@ private:
 
   std::string src_;
   Diagnostics &diags_;
+  Std std_ = Std::Iso7185;
   size_t pos_ = 0;
   int line_ = 1;
   int col_ = 1;

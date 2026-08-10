@@ -3,6 +3,15 @@
 
 namespace ap {
 
+/// Which standard the source is written in. ISO 7185 is the default, and the
+/// whole test corpus, `verify/` and `selfhost/compiler.pas` are written in it —
+/// so Extended Pascal is not simply switched on. ISO/IEC 10206:1991 adds
+/// word-symbols (`otherwise`, `value`, `only`, …) that a valid ISO 7185
+/// program may use as ordinary identifiers, and this one does: `compiler.pas`
+/// has a record field named `value`. Selecting the language is therefore a
+/// real choice and not a convenience (ADR-0033).
+enum class Std { Iso7185, Extended };
+
 enum class Tok {
   Eof, Ident, IntLit, RealLit, StrLit,
 
@@ -17,6 +26,11 @@ enum class Tok {
   KwEnd, KwFile, KwFor, KwFunction, KwGoto, KwIf, KwIn, KwLabel, KwMod,
   KwNil, KwNot, KwOf, KwOr, KwPacked, KwProcedure, KwProgram, KwRecord,
   KwRepeat, KwSet, KwThen, KwTo, KwType, KwUntil, KwVar, KwWhile, KwWith,
+
+  // ISO/IEC 10206:1991 word-symbols, reserved only under `--std=extended`.
+  // Under ISO 7185 the lexer yields these spellings as identifiers, which is
+  // what they are in that language.
+  KwOtherwise,
 };
 
 const char *tokenName(Tok t);

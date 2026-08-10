@@ -41,3 +41,4 @@ the alternatives that were rejected and why.
 | [0030](0030-a-procedural-parameter-is-a-code-and-link-pair.md) | A procedural parameter is a code-and-link pair | Accepted |
 | [0031](0031-a-file-of-t-is-a-text-with-two-constants-changed.md) | A `file of T` is a text file with two constants changed | Accepted |
 | [0032](0032-a-non-local-goto-is-a-jump-record-in-the-target-frame.md) | A non-local `goto` is a jump record in the target's frame | Accepted |
+| [0033](0033-extended-pascal-is-a-second-language-behind-std.md) | Extended Pascal is a second language, selected by `--std` | Accepted |

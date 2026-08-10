@@ -17,8 +17,9 @@ struct ParseAbort {};
 /// full statement/expression grammar minus sets, pointers and records.
 class Parser {
 public:
-  Parser(std::vector<Token> tokens, Diagnostics &diags)
-      : toks_(std::move(tokens)), diags_(diags) {}
+  Parser(std::vector<Token> tokens, Diagnostics &diags,
+         Std std = Std::Iso7185)
+      : toks_(std::move(tokens)), diags_(diags), std_(std) {}
 
   std::unique_ptr<Program> parseProgram();
 
@@ -26,6 +27,7 @@ private:
   const Token &cur() const { return toks_[pos_]; }
   const Token &peek(int ahead = 1) const;
   bool check(Tok k) const { return cur().kind == k; }
+  bool check(Tok k, int ahead) const { return peek(ahead).kind == k; }
   bool accept(Tok k);
   bool expect(Tok k, const char *context);
   [[noreturn]] void bail();
@@ -123,6 +125,10 @@ private:
 
   std::vector<Token> toks_;
   Diagnostics &diags_;
+  /// Which standard is being parsed. Needed in exactly one place: to say
+  /// that an Extended Pascal construct is one, rather than reporting the
+  /// syntax error its spelling causes under ISO 7185.
+  Std std_ = Std::Iso7185;
   size_t pos_ = 0;
   int depth_ = 0;
 };

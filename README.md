@@ -25,11 +25,19 @@ build/bin/pascalc -o greet hello.pas
 build/bin/pascalc --emit-llvm hello.pas   # -> hello.ll
 build/bin/pascalc -c hello.pas            # -> hello.o
 build/bin/pascalc -O0 hello.pas           # -O0..-O3, default -O2
+build/bin/pascalc --std=extended hello.pas  # ISO/IEC 10206:1991 instead
 ```
 
 The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
 somewhere else.
+
+The language is selected per source. `--std=iso7185` is the default and is
+what everything below describes; `--std=extended` is ISO/IEC 10206:1991, which
+is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`,
+…) that a valid ISO 7185 program may use as ordinary identifiers, and this
+compiler's own stage-1 source does. See
+[ADR-0033](doc/adr/0033-extended-pascal-is-a-second-language-behind-std.md).
 
 ## What the compiler accepts today (milestone 6)
 
@@ -348,7 +356,7 @@ needed them is written.
 the parser, Sema and the code generator, in **one source file**, because ISO
 7185 has no include mechanism and the finished compiler is one source. It is
 checked against the C++ stages it was ported from, on every Pascal source in the
-tree — 204 files, compared stage for stage:
+tree — 207 files, compared stage for stage:
 
 ```sh
 selfhost/difftest.sh build/bin/pascalc     # also runs under ctest

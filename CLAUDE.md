@@ -350,7 +350,35 @@ tracks it.
 bootstrap purposes — and the bar for a new feature has therefore *changed*
 rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
-conformance with ISO 7185, and **that is now complete**. **Anything the standard does not
+conformance with ISO 7185, and **that is now complete**.
+
+**Stage 2 has begun** (ADR-0033). `--std=iso7185` is the default and
+`--std=extended` is ISO/IEC 10206:1991. The two are *not* nested: Extended
+Pascal reserves word-symbols a valid ISO 7185 program may use as identifiers,
+and `selfhost/compiler.pas` has a field named `value` — so a source is written
+in one language or the other, and the standard is a property of the source.
+
+- **`tests/extended/` is the Extended Pascal corpus**, and the directory is
+  what tells every harness which flag to use. `run_test.sh` (via CMake),
+  `difftest.sh` and `irtest.sh` each derive it from the path, so the two
+  compilers cannot be told different things about one file.
+- **The stage-1 compiler reads the standard from a file** — a third program
+  parameter, one word. ISO 7185 gives a program no access to its command line
+  beyond its program parameters, and those are files; `compiler.pas` cannot
+  take a flag. Same constraint as ADR-0024's one source file.
+- **A word-symbol is reserved when the feature needing it lands**, not before.
+  Until the list is complete, `--std=extended` accepts some programs a
+  conforming processor would reject; that is stated, and each feature closes
+  its own part of it.
+- `otherwise` (§case-statement) is the first feature, and it retires ADR-0018's
+  "ISO 7185 has no `else` and none is invented" — the standard has one now. The
+  lowering is unchanged: an otherwise-part is *what the default block holds*.
+  A case with no otherwise-part still traps, and `tests/trap_case.pas` is what
+  says so.
+- Telling `otherwise` the construct from `otherwise` the constant is one token
+  of lookahead: a case label is followed by `:`, `,` or `..`, and an
+  otherwise-part is not. `tests/iso_identifiers.pas` pins the legal ISO 7185
+  program that depends on it. **Anything the standard does not
 have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.
@@ -399,7 +427,7 @@ It takes two program parameters: `compiler.pas <source> <ircode>`. The dumps go
 to standard output; the IR goes to the second file, because it is the
 compiler's *product* rather than a dump and has to be assembled. It is written
 on every run, which is what keeps `difftest.sh` exercising the code generator on
-all 204 files even though it compares none of it.
+all 207 files even though it compares none of it.
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc

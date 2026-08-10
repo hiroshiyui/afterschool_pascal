@@ -167,6 +167,19 @@ label, a dereference of `nil`. This compiler
 *traps*: it stops the program with a message rather than wrapping, reading past
 the array, or producing an arbitrary value (ADR-0014, ADR-0015).
 
+**Standard (`--std`).** Which language a source is written in: `iso7185`, the
+default, or `extended` for ISO/IEC 10206:1991. Not a feature switch — the two
+are not nested, because Extended Pascal reserves word-symbols (`otherwise`,
+`value`, `only`, …) that a valid ISO 7185 program may use as ordinary
+identifiers, and `selfhost/compiler.pas` does. The directory a test lives in
+says which language it is in, and the stage-1 compiler is told through a file
+because ISO 7185 gives a program no other channel (ADR-0033).
+
+**Otherwise-part.** The default arm of a case statement, which ISO 7185 does
+not have and ISO/IEC 10206:1991 does. It is *what the default block of the
+switch holds*: without one that block traps, which is ISO 7185's rule that a
+selector matching no label is an error (ADR-0018).
+
 ## The pipeline
 
 **Stage.** One of Lexer → Parser → Sema → CodeGen → PassBuilder → TargetMachine

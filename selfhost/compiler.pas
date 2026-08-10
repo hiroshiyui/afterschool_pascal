@@ -1,4 +1,4 @@
-program Compile(output, source, ircode);
+program Compile(output, source, ircode, options);
 
 { The self-hosted compiler: stage 1, components 1 to 3 -- the lexer, the parser
   and the AST, and Sema.
@@ -44,7 +44,8 @@ const
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
-  kwCount  = 35;
+  kwCount  = 36;     { 35 word-symbols of ISO 7185, then ISO 10206's }
+  isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
   newline  = 10;
@@ -93,7 +94,17 @@ type
     tkAnd, tkArray, tkBegin, tkCase, tkConst, tkDiv, tkDo, tkDownto, tkElse,
     tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
     tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
-    tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile, tkWith);
+    tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile, tkWith,
+    { ISO/IEC 10206:1991 word-symbols, reserved only under the extended
+      standard. Under ISO 7185 the scanner yields these spellings as
+      identifiers, which is what they are in that language. }
+    tkOtherwise);
+
+  { Which standard the source is written in. ISO 7185 is the default: the whole
+    test corpus, and this compiler's own source, are written in it -- and this
+    file has a record field named `value`, which ISO 10206 reserves. Selecting
+    the language is a real choice and not a convenience (ADR-0033). }
+  stdKind = (stdIso7185, stdExtended);
 
   token = record
     kind: tokenKind;
@@ -376,7 +387,11 @@ type
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
-      nkCase:       (csSelector, csArms: nodePtr);
+      { csHasOtherwise, not `csOtherwise <> nil`: `otherwise` followed by
+        nothing is an empty statement -- a legal way to say "and otherwise do
+        nothing", which is exactly the case that must not trap. }
+      nkCase:       (csSelector, csArms, csOtherwise: nodePtr;
+                     csHasOtherwise: boolean);
       { `goto L` and `L: statement`. Sema resolves the number to the labelled
         statement's own id, which is what codegen branches to -- the number is
         not enough, since two blocks may each declare label 1. }
@@ -528,6 +543,14 @@ var
   stdInput, stdOutput: symPtr;
   { --- CodeGen --- }
   ircode: text;             { the second program parameter: where the IR goes }
+  { The third program parameter: one word, the standard to compile for.
+    ISO 7185 gives a program no access to its command line beyond its program
+    parameters, and those are *files* -- so the stage-1 compiler cannot take a
+    `--std` flag the way the C++ driver does, and reads it from a file instead.
+    The language deciding the interface is the same constraint that made
+    ADR-0024 put the whole compiler in one source file. }
+  options: text;
+  langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   curBlock: integer;             { the block being filled, for a phi's label }
   nextProcId, nextStr: integer;
@@ -916,7 +939,43 @@ begin
   DefineKeyword(32, 'until    ', tkUntil);
   DefineKeyword(33, 'var      ', tkVar);
   DefineKeyword(34, 'while    ', tkWhile);
-  DefineKeyword(35, 'with     ', tkWith)
+  DefineKeyword(35, 'with     ', tkWith);
+  { Beyond isoKwCount: looked up only under the extended standard. }
+  DefineKeyword(36, 'otherwise', tkOtherwise)
+end;
+
+{ A str against a space-padded literal, which is the comparison LookupKeyword
+  does over the keyword table. }
+function StrIsLit(var s: str; word: kwLit): boolean;
+var n, k: integer; same: boolean;
+begin
+  n := kwWidth;
+  while (n > 0) and (word[n] = ' ') do
+    n := n - 1;
+  same := s.len = n;
+  k := 1;
+  while same and (k <= n) do begin
+    same := s.ch[k] = word[k];
+    k := k + 1
+  end;
+  StrIsLit := same
+end;
+
+{ The standard is the first word of the options file. Anything that is not
+  `extended` is ISO 7185, which is the default and what an empty file selects
+  -- the file is written by the test harness rather than typed, so there is no
+  spelling to get wrong and no branch here that no run reaches. }
+procedure ReadOptions;
+var word: str; c: char;
+begin
+  StrClear(word);
+  reset(options);
+  while (not eof(options)) and (not eoln(options)) do begin
+    read(options, c);
+    if c <> ' ' then StrAppend(word, c)
+  end;
+  if StrIsLit(word, 'extended ') then langStd := stdExtended
+  else langStd := stdIso7185
 end;
 
 procedure WriteKwWord(i: integer);
@@ -928,10 +987,13 @@ begin
 end;
 
 function LookupKeyword(var s: str): tokenKind;
-var i, k, n: integer; found: tokenKind; same: boolean;
+var i, k, n, limit: integer; found: tokenKind; same: boolean;
 begin
   found := tkIdent;
-  for i := 1 to kwCount do begin
+  { Reserving ISO 10206's word-symbols unconditionally would reject valid ISO
+    7185 programs -- including this one. }
+  if langStd = stdExtended then limit := kwCount else limit := isoKwCount;
+  for i := 1 to limit do begin
     n := kwWidth;
     while (n > 0) and (kwText[i][n] = ' ') do
       n := n - 1;
@@ -1261,7 +1323,8 @@ begin
     tkUntil:     write('''until''');
     tkVar:       write('''var''');
     tkWhile:     write('''while''');
-    tkWith:      write('''with''')
+    tkWith:      write('''with''');
+    tkOtherwise: write('''otherwise''')
   end
 end;
 
@@ -1285,7 +1348,7 @@ begin
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
-    tkUntil, tkVar, tkWhile, tkWith: write('?')
+    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise: write('?')
   end
 end;
 
@@ -1384,6 +1447,7 @@ begin
       n^.pcStd := spNone;
       n^.pcSelect := nil
     end;
+    nkCase: begin n^.csOtherwise := nil; n^.csHasOtherwise := false end;
     nkCaseArm: begin n^.caValues := nil; n^.caValueTail := nil end;
     nkGroup: begin
       n^.grIsProc := false;
@@ -1410,7 +1474,7 @@ begin
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
     nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
-    nkCase, nkWriteArg, nkDeclName, nkNamed, nkEnum,
+    nkWriteArg, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkConstDecl,
     nkTypeDecl, nkLabelDecl,
     nkBlock: { nothing of Sema's to clear }
@@ -2283,7 +2347,8 @@ end;
   ISO 7185 6.8.3.5 has no `else` or `otherwise` arm, and none is invented
   here: a selector matching no label is an error the program stops on. }
 function ParseCase: nodePtr;
-var s, head, tail, arm, lh, lt: nodePtr; more, moreLabels: boolean;
+var s, head, tail, arm, lh, lt, oh, ot: nodePtr;
+    more, moreLabels, moreStmts: boolean;
 begin
   s := NewNode(nkCase, CurLine, CurCol);
   s^.csSelector := nil;
@@ -2296,6 +2361,35 @@ begin
   tail := nil;
   more := true;
   while more and not aborted and not Check(tkEnd) do begin
+    { ISO/IEC 10206:1991's otherwise-part: what to do when no label matches,
+      in place of the trap ISO 7185 leaves. It is last, so nothing follows it
+      but `end`. }
+    if Check(tkOtherwise) then begin
+      pos := pos + 1;
+      s^.csHasOtherwise := true;
+      oh := nil;
+      ot := nil;
+      moreStmts := true;
+      while moreStmts and not aborted do begin
+        Append(oh, ot, ParseStatement);
+        moreStmts := Accept(tkSemi)
+      end;
+      s^.csOtherwise := oh;
+      more := false
+    end
+    else begin
+    { Under ISO 7185 `otherwise` is an ordinary identifier, so this reads as a
+      case label and fails somewhere unhelpful. It is only the construct if it
+      is not being used as a constant -- `otherwise: s` and `otherwise, 2:` are
+      a label list naming a constant, and stay one. }
+    if Check(tkIdent) and PoolIs(tok[pos].at, tok[pos].len, 'otherwise') and
+       (PeekKind(1) <> tkColon) and (PeekKind(1) <> tkComma) and
+       (PeekKind(1) <> tkDotDot) then begin
+      ErrorAtCur;
+      write('the ''otherwise'' part of a case statement is an Extended ');
+      writeln('Pascal feature; compile with --std=extended');
+      Bail
+    end;
     arm := NewNode(nkCaseArm, CurLine, CurCol);
     arm^.caLabels := nil;
     arm^.caBody := nil;
@@ -2311,6 +2405,7 @@ begin
     arm^.caBody := ParseStatement;
     Append(head, tail, arm);
     more := Accept(tkSemi)
+    end
   end;
   s^.csArms := head;
   Expect(tkEnd, ctxCaseEnd);
@@ -5419,6 +5514,13 @@ var
   seen: boolean;
 begin
   CheckExpr(c^.csSelector);
+  { The otherwise-part is a statement-sequence like any other; nothing about it
+    depends on the selector, because it is what runs when *no* label does. }
+  arm := c^.csOtherwise;
+  while arm <> nil do begin
+    CheckStmt(arm);
+    arm := arm^.next
+  end;
   sel := c^.csSelector^.ntype;
   if (sel <> nil) and not IsOrdinal(sel) then begin
     ErrorAt(c^.csSelector^.line, c^.csSelector^.col);
@@ -6963,6 +7065,19 @@ begin
         level := level - 2;
         p := p^.next
       end;
+      { Present but empty is not the same as absent: `otherwise` with nothing
+        after it says "and otherwise do nothing", which does not trap. }
+      if n^.csHasOtherwise then begin
+        Pad;
+        writeln('otherwise');
+        level := level + 1;
+        p := n^.csOtherwise;
+        while p <> nil do begin
+          DumpStmt(p);
+          p := p^.next
+        end;
+        level := level - 1
+      end;
       level := level - 1
     end;
     nkProcCall: begin
@@ -7348,7 +7463,7 @@ begin
       tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
       tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
       tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile,
-      tkWith: begin
+      tkWith, tkOtherwise: begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
@@ -9976,11 +10091,25 @@ begin
   end;
 
   StartBlock(defaultB);
-  MsgStart;
-  MsgText('case: no label matches the selector     ');
-  msg := MsgEnd;
-  writeln(ircode, '  call void @pas_runtime_error(ptr @s', msg:1, ')');
-  writeln(ircode, '  unreachable');
+  if s^.csHasOtherwise then begin
+    { ISO/IEC 10206:1991: the default arm is a statement-sequence rather than
+      the trap. Everything else about the lowering is unchanged, which is the
+      point -- an `otherwise` is what the default block holds, not a different
+      shape of switch. }
+    arm := s^.csOtherwise;
+    while arm <> nil do begin
+      EmitStmt(arm);
+      arm := arm^.next
+    end;
+    writeln(ircode, '  br label %L', endB:1)
+  end
+  else begin
+    MsgStart;
+    MsgText('case: no label matches the selector     ');
+    msg := MsgEnd;
+    writeln(ircode, '  call void @pas_runtime_error(ptr @s', msg:1, ')');
+    writeln(ircode, '  unreachable')
+  end;
 
   StartBlock(endB)
 end;
@@ -10464,11 +10593,12 @@ begin
     own rather than to a fourth section: it has to be assembled and linked, and
     two backends' assembler text cannot be diffed the way three stages of a
     tree can (ADR-0025). It is still written on every run, which is what keeps
-    the differential test exercising it on all 173 fs. }
+    the differential test exercising it on all 207 files. }
   if not errorSeen then RunCodeGen
 end;
 
 begin
+  ReadOptions;
   InstallKeywords;
   poolLen := 0;
   tokCount := 0;

@@ -674,6 +674,28 @@ StmtPtr Parser::parseCase() {
   expect(Tok::KwOf, "after the selector of a case statement");
 
   while (!check(Tok::KwEnd)) {
+    // ISO/IEC 10206:1991's otherwise-part: what to do when no label matches,
+    // in place of the trap ISO 7185 leaves. It is last, so nothing follows it
+    // but `end`.
+    if (accept(Tok::KwOtherwise)) {
+      s->hasOtherwise = true;
+      do {
+        s->otherwise.push_back(parseStatement());
+      } while (accept(Tok::Semi));
+      break;
+    }
+    // Under ISO 7185 `otherwise` is an ordinary identifier, so this reads as
+    // a case label and fails somewhere unhelpful. It is only the construct if
+    // it is not being used as a constant — `otherwise: s` and `otherwise, 2:`
+    // are a label list naming a constant, and stay one.
+    if (std_ == Std::Iso7185 && check(Tok::Ident) &&
+        cur().text == "otherwise" && !check(Tok::Colon, 1) &&
+        !check(Tok::Comma, 1) && !check(Tok::DotDot, 1)) {
+      errorAtCur("the 'otherwise' part of a case statement is an Extended "
+                 "Pascal feature; compile with --std=extended");
+      bail();
+    }
+
     CaseArm arm;
     arm.line = cur().line;
     arm.col = cur().col;

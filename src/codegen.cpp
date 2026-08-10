@@ -1028,11 +1028,21 @@ void CodeGen::emitCase(CaseStmt *s) {
   }
 
   b_.SetInsertPoint(defaultBB);
-  llvm::Value *msg =
-      b_.CreateGlobalString("case: no label matches the selector", "errmsg");
-  b_.CreateCall(rt("pas_runtime_error", llvm::Type::getVoidTy(ctx_), {ptr()}),
-                {msg});
-  b_.CreateUnreachable();
+  if (s->hasOtherwise) {
+    // ISO/IEC 10206:1991: the default arm is a statement-sequence rather than
+    // the trap. Everything else about the lowering is unchanged, which is the
+    // point — an `otherwise` is what the default block holds, not a different
+    // shape of switch.
+    for (StmtPtr &st : s->otherwise)
+      emitStmt(st.get());
+    b_.CreateBr(endBB);
+  } else {
+    llvm::Value *msg =
+        b_.CreateGlobalString("case: no label matches the selector", "errmsg");
+    b_.CreateCall(rt("pas_runtime_error", llvm::Type::getVoidTy(ctx_), {ptr()}),
+                  {msg});
+    b_.CreateUnreachable();
+  }
 
   b_.SetInsertPoint(endBB);
 }

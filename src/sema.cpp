@@ -1940,6 +1940,10 @@ void Sema::checkStdProc(ProcCallStmt *p) {
 /// exactly the shape of an LLVM switch with a trapping default.
 void Sema::checkCase(CaseStmt *c) {
   checkExpr(c->selector.get());
+  // The otherwise-part is a statement-sequence like any other; nothing about
+  // it depends on the selector, because it is what runs when *no* label does.
+  for (StmtPtr &st : c->otherwise)
+    checkStmt(st.get());
   Type *sel = c->selector->type;
   if (sel && !sel->isOrdinal()) {
     diags_.error(c->selector->line, c->selector->col,

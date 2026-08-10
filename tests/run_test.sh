@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compile one .pas file, run it, and compare against the expected output.
 #
-#   run_test.sh <path-to-pascalc> <path-to-test.pas>
+#   run_test.sh <path-to-pascalc> <path-to-test.pas> [standard]
 #
 # Two forms of expectation:
 #
@@ -26,6 +26,9 @@ set -u
 
 pascalc=$1
 source_file=$2
+# Which standard to compile for; the harness passes it, and it is `iso7185`
+# unless the case lives in tests/extended/.
+standard=${3:-iso7185}
 expected_out="${source_file%.pas}.out"
 expected_err="${source_file%.pas}.err"
 stdin_file="${source_file%.pas}.in"
@@ -52,7 +55,7 @@ run_program() {
     exec "$work/$name" "$work/file1" "$work/file2" <"$stdin_file" )
 }
 
-"$pascalc" "$source_file" -o "$work/$name" 2>"$work/compile.err"
+"$pascalc" "--std=$standard" "$source_file" -o "$work/$name" 2>"$work/compile.err"
 compile_status=$?
 
 if [[ ! -f $expected_err ]]; then

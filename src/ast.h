@@ -312,11 +312,20 @@ struct CaseArm {
 
 /// ISO 7185 §6.8.3.5 has no `else`: if no label matches the selector, the
 /// program is in error, so the default arm traps rather than falling through.
+/// ISO/IEC 10206:1991 adds `otherwise`, which gives that case something to do
+/// — so the trap is what a case statement *without* one still does, and the
+/// two forms differ only in what the default arm holds (ADR-0033).
 struct CaseStmt : Stmt {
   static constexpr NK NodeKind = NK::Case;
   CaseStmt() : Stmt(NodeKind) {}
   ExprPtr selector;
   std::vector<CaseArm> arms;
+  /// The statement-sequence after `otherwise`. `hasOtherwise` and not
+  /// `!otherwise.empty()`, because `otherwise` followed by nothing is an empty
+  /// statement — a legal way to say "and do nothing", which is exactly the
+  /// case that must not trap.
+  bool hasOtherwise = false;
+  std::vector<StmtPtr> otherwise;
 };
 
 /// The standard procedures the compiler knows intrinsically, as `Builtin` does
