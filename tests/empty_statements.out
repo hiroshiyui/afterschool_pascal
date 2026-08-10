@@ -1,0 +1,8 @@
+empty then: taken else
+empty then: nested
+empty else: taken then
+empty then before until: 2
+empty while body before until: 3
+empty loop bodies: ok
+empty with body: 4
+empty case arm: 1

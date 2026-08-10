@@ -2242,7 +2242,11 @@ begin
     else if Check(tkWith) then s := ParseWith
     else if Check(tkCase) then s := ParseCase
     else if Check(tkIdent) then s := ParseIdentStatement
-    else if Check(tkEnd) or Check(tkSemi) then
+    { ISO 7185 6.8.1 makes an empty statement a statement, so every token that
+      can *follow* one also starts one: ';' and 'end' between statements,
+      'else' after a then-branch, 'until' after a repeat body. }
+    else if Check(tkEnd) or Check(tkSemi) or Check(tkElse) or Check(tkUntil)
+    then
       s := NewNode(nkEmpty, CurLine, CurCol)
     else if Check(tkGoto) then begin
       ErrorAtCur;
@@ -3641,31 +3645,28 @@ begin
       writeln(''' is not declared as a variable in the program block')
     end
     { `input` and `output` are bound by the header itself. The C++ writes this
-      as a `continue`; there is no such statement here, and an empty one before
-      `else` is a statement this compiler does not accept, so the condition is
-      folded into the test below instead. }
-    else if (s <> stdInput) and (s <> stdOutput) then
-      if not IsFile(s^.stype) then begin
-        ErrorAt(p^.line, p^.col);
-        write('a program parameter must be a file variable, but ''');
-        WritePool(p^.dnAt, p^.dnLen);
-        write(''' is ');
-        if s^.stype = nil then write('untyped') else WriteTypeName(s^.stype);
-        writeln
-      end
-      else begin
-        s^.binding := fbArgument;
-        s^.fileArg := argIndex;
-        argIndex := argIndex + 1
-      end;
+      as a `continue`, which Pascal has no equivalent of; an empty statement
+      before the `else` is the nearest thing, and ISO 7185 6.8.1 says it is a
+      statement. (This compiler used to reject it, so the condition had to be
+      folded into the next test instead.) }
+    else if (s = stdInput) or (s = stdOutput) then
+    else if not IsFile(s^.stype) then begin
+      ErrorAt(p^.line, p^.col);
+      write('a program parameter must be a file variable, but ''');
+      WritePool(p^.dnAt, p^.dnLen);
+      write(''' is ');
+      if s^.stype = nil then write('untyped') else WriteTypeName(s^.stype);
+      writeln
+    end
+    else begin
+      s^.binding := fbArgument;
+      s^.fileArg := argIndex;
+      argIndex := argIndex + 1
+    end;
     p := p^.next
   end
 end;
 
-{ -------------------------------------------------------------- arguments }
-
-{ Check an argument list against a callable's parameters. A `var` parameter is
-  bound to a variable, not to a value, so the argument has to be one. }
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a: nodePtr; p: symListPtr; n, given, i: integer;
 begin

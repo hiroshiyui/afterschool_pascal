@@ -51,7 +51,7 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 37 ctest cases — 34 Pascal programs, the verification
+Alongside the language, 38 ctest cases — 35 Pascal programs, the verification
 run, the differential test and the bootstrap — and 31 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
@@ -190,6 +190,9 @@ And four from Sema (ADR-0024):
   now a pattern to expect rather than a surprise.
 - **`||` short-circuits, and the C++ relies on it** — a port that evaluated
   both subrange bounds would report a different number of errors.
+- **`continue` has no Pascal equivalent**, and the nearest thing — an empty
+  statement before the `else` — was rejected by this compiler until the
+  conformance fix that followed the port. ISO 7185 §6.8.1 always allowed it.
 - **A string-valued helper is worth designing away.** One hidden name was built
   from a type name; renaming it to use the frame slot removed the only reason
   the Pascal Sema would have needed a string-building `Type::name()`.
@@ -225,10 +228,6 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **An empty statement before `else` is rejected**, though ISO 7185 §6.8.1
-  allows a statement to be empty anywhere. Found while porting Sema, where the
-  C++ writes `continue`; the condition was folded into the following test
-  instead. Nothing needs it, but it is a deviation, not a design choice.
 - **Not implemented at all:** sets, `goto`, procedural and functional
   parameters, and non-text files. None of them is on the path to stage 1. Sets
   would be the most useful of the four for a compiler (character classes,
