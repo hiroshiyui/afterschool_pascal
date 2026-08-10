@@ -44,3 +44,4 @@ the alternatives that were rejected and why.
 | [0033](0033-extended-pascal-is-a-second-language-behind-std.md) | Extended Pascal is a second language, selected by `--std` | Accepted |
 | [0034](0034-the-variant-part-completer-is-an-arm-with-no-labels.md) | The variant-part-completer is an arm with no labels | Accepted |
 | [0035](0035-a-case-range-is-tested-not-enumerated.md) | A case range is tested, not enumerated | Accepted |
+| [0036](0036-a-non-decimal-literal-is-lexical-and-nothing-else.md) | A non-decimal literal is lexical and nothing else | Accepted |

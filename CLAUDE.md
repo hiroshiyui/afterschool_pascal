@@ -390,7 +390,7 @@ in one language or the other, and the standard is a property of the source.
   instead of being an error. Nothing may follow it, and the flag is not "the
   label list is empty": a label that fails to evaluate is dropped, and a
   diagnostic must not turn a broken arm into the completer.
-- **A non-decimal literal is lexical and nothing else.** `16#ff` reaches the
+- **A non-decimal literal is lexical and nothing else** (ADR-0036). `16#ff` reaches the
   parser as an integer literal, so no later rule knows it was written that way.
   Two things the code says and a reader might undo: the extended-digit sequence
   is **maximal** — `16#ffand` is one ill-formed number, not a number and a
