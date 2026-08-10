@@ -75,7 +75,12 @@ private:
   TypeExprPtr parseArrayType(bool packed);
   TypeExprPtr parseRecordType(bool packed);
   TypeExprPtr parseEnumType();
-  void parseVariantPart(TypeExpr &record);
+  /// The `case T of ...` of a record or of one arm of a variant part. The
+  /// pieces are passed separately because both places hold them, and a variant
+  /// record on the Pascal side cannot share a sub-struct between two arms.
+  void parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
+                        std::vector<VariantArm> &arms, int &tagLine,
+                        int &tagCol);
   /// True if what follows begins a subrange rather than a type name — that is,
   /// a constant followed by '..'.
   bool looksLikeSubrange() const;

@@ -58,10 +58,19 @@ private:
   /// True if this parameter arrives as an address the callee copies from.
   static bool passedByAddress(const Symbol *v);
   uint64_t sizeOf(Type *t);
-  /// The shared storage a record's variant arms are laid over.
-  llvm::Type *variantStorageType(Type *record);
-  /// The struct one arm of a variant part lays over that storage.
-  llvm::StructType *variantType(Type *record, int variant);
+  /// The arms of the variant part at `path` — the record's own when the path
+  /// is empty, otherwise the one nested inside the arm the path names.
+  static const std::vector<Variant> &armsAt(Type *record,
+                                            const std::vector<int> &path);
+  /// The fields of the field-list at `path`, which is what `index` indexes.
+  static const std::vector<Field> &fieldsAt(Type *record,
+                                            const std::vector<int> &path);
+  /// The shared storage the arms at `path` are laid over.
+  llvm::Type *variantStorageType(Type *record, const std::vector<int> &path);
+  /// The struct the arm at `path` lays over the storage that holds it.
+  llvm::StructType *variantType(Type *record, const std::vector<int> &path);
+  /// The struct the field-list at `path` is: the record itself when empty.
+  llvm::Type *structAt(Type *record, const std::vector<int> &path);
 
   llvm::FunctionCallee rt(const char *name, llvm::Type *ret,
                           llvm::ArrayRef<llvm::Type *> params);
@@ -151,9 +160,10 @@ private:
   /// One LLVM type per Pascal type, so a record keeps a single struct type
   /// however many variables have it.
   std::unordered_map<const Type *, llvm::Type *> typeCache_;
-  /// One struct per (record, variant arm), keyed the same way a field names
+  /// One struct per (record, path to an arm), keyed the same way a field names
   /// the arm it belongs to.
-  std::map<std::pair<const Type *, int>, llvm::StructType *> variantTypes_;
+  std::map<std::pair<const Type *, std::vector<int>>, llvm::StructType *>
+      variantTypes_;
 
   // State for the procedure currently being emitted.
   llvm::Function *curFn_ = nullptr;

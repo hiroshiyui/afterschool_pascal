@@ -34,3 +34,4 @@ the alternatives that were rejected and why.
 | [0023](0023-the-ast-is-a-variant-record-and-a-sibling-list.md) | The AST is a variant record and a sibling list, and the parser port is checked the same way | Accepted |
 | [0024](0024-the-stage-1-compiler-becomes-one-source-file.md) | The stage-1 compiler becomes one source file, and Sema is checked on the tree it annotates | Accepted |
 | [0025](0025-the-code-generator-is-checked-by-running-it.md) | The code generator is checked by running it, and the bootstrap closes | Accepted |
+| [0026](0026-a-variant-part-may-contain-a-variant-part.md) | A variant part may contain a variant part | Accepted |

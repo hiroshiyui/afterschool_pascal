@@ -103,6 +103,20 @@ std::string symRef(const Symbol *s) {
 /// Every routine prints its own node at the current level and its children one
 /// level deeper. Nothing here prints a type or a symbol: the dump is taken
 /// before Sema, so there is nothing to print but what the parser built.
+/// Where a field lives: `-` is the record's fixed part, `0` is arm 0 of its
+/// variant part, `0.1` is arm 1 of the variant part inside arm 0.
+static std::string variantRef(const std::vector<int> &path) {
+  if (path.empty())
+    return "-";
+  std::string s;
+  for (size_t i = 0; i < path.size(); ++i) {
+    if (i)
+      s += ".";
+    s += std::to_string(path[i]);
+  }
+  return s;
+}
+
 struct Dumper {
   int level = 0;
   /// False for `--dump-ast`, true for `--dump-sema`. The walk is identical
@@ -188,7 +202,7 @@ struct Dumper {
       std::string to = symRef(n->sym);
       if (n->withField)
         to += " field #" + std::to_string(n->withField->index) + "/" +
-              std::to_string(n->withField->variant);
+              variantRef(n->withField->variant);
       headExpr("var " + n->name, e, to);
       break;
     }
@@ -205,7 +219,7 @@ struct Dumper {
       FieldExpr *n = as<FieldExpr>(e);
       headExpr("field " + n->field, e,
                n->resolved ? "#" + std::to_string(n->resolved->index) + "/" +
-                                 std::to_string(n->resolved->variant)
+                                 variantRef(n->resolved->variant)
                            : "?");
       ++level;
       expr(n->base.get());
@@ -458,30 +472,77 @@ struct Dumper {
   /// The layout Sema gave a record: which struct each field lives in and at
   /// what position, and which tag values select each variant. Codegen indexes
   /// by exactly these numbers, so they are what a record type *is*.
+  void fieldList(const std::vector<Field> &fs) {
+    for (const Field &f : fs) {
+      pad();
+      std::printf("field %s #%d/%s : %s\n", f.name.c_str(), f.index,
+                  variantRef(f.variant).c_str(),
+                  f.type ? f.type->name().c_str() : "?");
+    }
+  }
+
+  /// One level of arms and everything nested in them. The name of an arm is
+  /// its path, which is also what a field of it prints as its variant.
+  void armList(const std::vector<Variant> &arms, const std::string &prefix) {
+    for (size_t i = 0; i < arms.size(); ++i) {
+      const Variant &v = arms[i];
+      std::string here = prefix + std::to_string(i);
+      pad();
+      std::printf("variant %s labels", here.c_str());
+      for (long long value : v.labels)
+        std::printf(" %lld", value);
+      std::printf("\n");
+      ++level;
+      fieldList(v.fields);
+      if (v.tagField >= 0) {
+        pad();
+        std::printf("tagfield #%d\n", v.tagField);
+      }
+      armList(v.variants, here + ".");
+      --level;
+    }
+  }
+
   void recordLayout(Type *r) {
     mark("layout");
     ++level;
-    for (const Field &f : r->fields) {
-      pad();
-      std::printf("field %s #%d/%d : %s\n", f.name.c_str(), f.index, f.variant,
-                  f.type ? f.type->name().c_str() : "?");
-    }
+    fieldList(r->fields);
     if (r->tagField >= 0) {
       pad();
       std::printf("tagfield #%d\n", r->tagField);
     }
-    for (size_t i = 0; i < r->variants.size(); ++i) {
-      pad();
-      std::printf("variant %d labels", static_cast<int>(i));
-      for (long long v : r->variants[i].labels)
-        std::printf(" %lld", v);
-      std::printf("\n");
+    armList(r->variants, "");
+    --level;
+  }
+
+  /// A variant part as the parser built it: the tag, and one `arm` per
+  /// variant. An arm's field-list is a field-list like any other, so it may
+  /// end with a variant part of its own and this recurses into it.
+  void variantPart(const std::string &tagName, TypeExpr *tagType,
+                   std::vector<VariantArm> &arms, int tagLine, int tagCol) {
+    // An empty tag name is the `case T of` form, where the tag exists as a
+    // type but not as a field (ISO 7185 §6.4.3.3); '-' says so, and no field
+    // could be spelled that.
+    head("tag " + (tagName.empty() ? std::string("-") : tagName), tagLine,
+         tagCol);
+    ++level;
+    typeExpr(tagType);
+    for (VariantArm &arm : arms) {
+      head("arm", arm.line, arm.col);
       ++level;
-      for (const Field &f : r->variants[i].fields) {
-        pad();
-        std::printf("field %s #%d/%d : %s\n", f.name.c_str(), f.index,
-                    f.variant, f.type ? f.type->name().c_str() : "?");
-      }
+      mark("labels");
+      ++level;
+      for (ExprPtr &l : arm.labels)
+        expr(l.get());
+      --level;
+      mark("fields");
+      ++level;
+      for (FieldGroup &f : arm.fields)
+        group(f.names, f.type.get(), "group");
+      --level;
+      if (arm.tagType)
+        variantPart(arm.tagName, arm.tagType.get(), arm.variants, arm.tagLine,
+                    arm.tagCol);
       --level;
     }
     --level;
@@ -538,30 +599,9 @@ struct Dumper {
       for (FieldGroup &f : t->fields)
         group(f.names, f.type.get(), "group");
       --level;
-      if (t->tagType) {
-        // An empty tag name is the `case T of` form, where the tag exists as a
-        // type but not as a field (ISO 7185 §6.4.3.3); '-' says so, and no
-        // field could be spelled that.
-        head("tag " + (t->tagName.empty() ? std::string("-") : t->tagName),
-             t->tagLine, t->tagCol);
-        ++level;
-        typeExpr(t->tagType.get());
-        for (VariantArm &arm : t->variants) {
-          head("arm", arm.line, arm.col);
-          ++level;
-          mark("labels");
-          ++level;
-          for (ExprPtr &l : arm.labels)
-            expr(l.get());
-          --level;
-          mark("fields");
-          ++level;
-          for (FieldGroup &f : arm.fields)
-            group(f.names, f.type.get(), "group");
-          level -= 2;
-        }
-        --level;
-      }
+      if (t->tagType)
+        variantPart(t->tagName, t->tagType.get(), t->variants, t->tagLine,
+                    t->tagCol);
       --level;
       break;
     }

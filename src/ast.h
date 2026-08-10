@@ -313,10 +313,19 @@ struct FieldGroup {
   TypeExprPtr type;
 };
 
-/// One arm of a record's variant part: `labels : (fields)`.
+/// One arm of a record's variant part: `labels : (fields)`. The fields are a
+/// field-list like any other, so an arm may carry a variant part of its own —
+/// which is the only place the type-denoter grammar is recursive without going
+/// back through TypeExpr. The four tag members repeat TypeExpr's rather than
+/// being factored out, because the Pascal AST is a variant record and cannot
+/// share a sub-struct between two arms of it (ADR-0023).
 struct VariantArm {
   std::vector<ExprPtr> labels;
   std::vector<FieldGroup> fields;
+  std::string tagName;
+  TypeExprPtr tagType;            // null when this arm has no variant part
+  std::vector<VariantArm> variants;
+  int tagLine = 0, tagCol = 0;
   int line = 0, col = 0;
 };
 

@@ -173,14 +173,25 @@ type
   fieldRec = record
     at, len: integer;
     ftype: typePtr;
-    index, variant: integer;
+    index: integer;
+    { Where the field lives, as a path: nil is the record's fixed part, (0) is
+      arm 0 of its variant part, (0, 1) is arm 1 of the variant part inside arm
+      0. ISO 7185 6.4.3.3 puts no limit on the nesting, so a single index could
+      not say where a field is. }
+    variant: numPtr;
     line, col: integer;
     next: fieldPtr
   end;
 
+  { One arm of a variant part. An arm is shaped exactly like a record -- a
+    fixed part and an optional variant part of its own -- because that is what
+    6.4.3.3 makes it: its field-list is a field-list like any other. }
   variantRec = record
     labels: numPtr;
     fields, fieldTail: fieldPtr;
+    variants, variantTail: variantPtr;
+    tagField: integer;
+    tagType: typePtr;
     line, col: integer;
     next: variantPtr
   end;
@@ -332,7 +343,8 @@ type
       nkRecord:     (rcFields, rcTagType, rcVariants: nodePtr;
                      rcTagAt, rcTagLen, rcTagLine, rcTagCol: integer;
                      rcPacked: boolean);
-      nkVariantArm: (vaLabels, vaFields: nodePtr);
+      nkVariantArm: (vaLabels, vaFields, vaTagType, vaVariants: nodePtr;
+                     vaTagAt, vaTagLen, vaTagLine, vaTagCol: integer);
       nkConstDecl:  (kdAt, kdLen: integer; kdValue: nodePtr);
       nkTypeDecl:   (tdAt, tdLen: integer; tdType: nodePtr);
       nkProcDecl:   (pdAt, pdLen: integer;
@@ -1233,9 +1245,17 @@ begin
     nkCaseArm: begin n^.caValues := nil; n^.caValueTail := nil end;
     nkProcDecl: n^.pdSym := nil;
     nkWith: n^.wtBinding := nil;
+    nkVariantArm: begin
+      n^.vaTagType := nil;
+      n^.vaVariants := nil;
+      n^.vaTagAt := 0;
+      n^.vaTagLen := 0;
+      n^.vaTagLine := 0;
+      n^.vaTagCol := 0
+    end;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkIndex, nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
-    nkCase, nkWriteArg, nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum,
+    nkCase, nkWriteArg, nkGroup, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkConstDecl, nkTypeDecl,
     nkBlock: { nothing of Sema's to clear }
   end;
@@ -1446,18 +1466,11 @@ begin
   tail := nil;
   more := true;
   while more and not aborted and not Check(closer) do begin
+    { A variant part ends the field list it belongs to, and the caller parses
+      it -- it is last, whether the field list is a record's or an arm's
+      (ISO 7185 6.4.3.3). }
     if Check(tkCase) then
-      if inVariant then begin
-        { A variant inside a variant is legal Pascal and nothing in the
-          bootstrap needs one; rejecting it keeps the gap visible. }
-        ErrorAtCur;
-        writeln('a variant part inside a variant is not supported yet');
-        Bail
-      end
-      else
-        { the variant part of a record ends its field list, and the caller
-          parses it -- it is last (ISO 7185 6.4.3.3) }
-        more := false
+      more := false
     else begin
       g := NewNode(nkGroup, CurLine, CurCol);
       g^.grByRef := false;
@@ -1480,16 +1493,29 @@ end;
   The tag may be a real field or exist only as a type (ISO 7185 6.4.3.3). The
   two are told apart by the ':' -- `case kind: nodekind of` names a field,
   `case nodekind of` does not. }
-procedure ParseVariantPart(rec: nodePtr);
-var head, tail, arm, lh, lt: nodePtr; more, moreLabels: boolean;
+{ The `case T of ...` of a record or of one arm of a variant part. Both places
+  hold the same four pieces, but a variant record cannot share a sub-struct
+  between two of its arms (ADR-0023), so the destination is chosen at the end
+  rather than passed in. }
+procedure ParseVariantPart(n: nodePtr; intoArm: boolean);
+var
+  head, tail, arm, lh, lt, tagType: nodePtr;
+  tagAt, tagLen, tagLine, tagCol: integer;
+  more, moreLabels: boolean;
 begin
+  { A variant part may contain variant parts, so this recurses without going
+    back through ParseTypeExpr -- which is where the depth guard usually is. }
+  EnterLevel;
   Expect(tkCase, ctxNone);
-  rec^.rcTagLine := CurLine;
-  rec^.rcTagCol := CurCol;
+  tagLine := CurLine;
+  tagCol := CurCol;
+  tagAt := 0;
+  tagLen := 0;
+  tagType := nil;
 
   if Check(tkIdent) and (PeekKind(1) = tkColon) then begin
-    rec^.rcTagAt := tok[pos].at;
-    rec^.rcTagLen := tok[pos].len;
+    tagAt := tok[pos].at;
+    tagLen := tok[pos].len;
     pos := pos + 2
   end;
   if not aborted then
@@ -1498,7 +1524,7 @@ begin
       writeln('the tag of a variant part must be a type name');
       Bail
     end;
-  rec^.rcTagType := ParseTypeExpr;
+  tagType := ParseTypeExpr;
   Expect(tkOf, ctxVariantTag);
 
   head := nil;
@@ -1520,18 +1546,33 @@ begin
     Expect(tkColon, ctxVariantLabels);
     Expect(tkLParen, ctxVariantOpen);
     arm^.vaFields := ParseFieldGroups(tkRParen, true);
+    { An arm's field-list may end with a variant part of its own. }
+    if not aborted then
+      if Check(tkCase) then ParseVariantPart(arm, true);
     Expect(tkRParen, ctxVariantClose);
     Append(head, tail, arm);
     more := Accept(tkSemi)
   end;
-  rec^.rcVariants := head
+
+  if intoArm then begin
+    n^.vaTagAt := tagAt;
+    n^.vaTagLen := tagLen;
+    n^.vaTagLine := tagLine;
+    n^.vaTagCol := tagCol;
+    n^.vaTagType := tagType;
+    n^.vaVariants := head
+  end
+  else begin
+    n^.rcTagAt := tagAt;
+    n^.rcTagLen := tagLen;
+    n^.rcTagLine := tagLine;
+    n^.rcTagCol := tagCol;
+    n^.rcTagType := tagType;
+    n^.rcVariants := head
+  end;
+  LeaveLevels(1)
 end;
 
-{ record-type = 'record' field-list 'end'
-
-  Note the local: reading a function's own name is a recursive call in Pascal
-  (ISO 7185 6.8.2.2), so the node under construction cannot live in the result
-  -- it is built here and assigned once at the end. }
 function ParseRecordType(packed_: boolean): nodePtr;
 var t: nodePtr;
 begin
@@ -1547,7 +1588,7 @@ begin
   Expect(tkRecord, ctxNone);
   t^.rcFields := ParseFieldGroups(tkEnd, false);
   if (not aborted) and Check(tkCase) then
-    ParseVariantPart(t);
+    ParseVariantPart(t, false);
   Expect(tkEnd, ctxRecordEnd);
   ParseRecordType := t
 end;
@@ -2706,8 +2747,24 @@ begin TypeLength := t^.hi - t^.lo + 1 end;
 
 { ISO 7185 6.4.3.3 requires every field name in a record to be distinct,
   variants included, so one flat search over all of them is unambiguous. }
+function FindFieldIn(v: variantPtr; at, len: integer): fieldPtr;
+var f, found: fieldPtr;
+begin
+  found := nil;
+  while (v <> nil) and (found = nil) do begin
+    f := v^.fields;
+    while (f <> nil) and (found = nil) do begin
+      if PoolSame(f^.at, f^.len, at, len) then found := f;
+      f := f^.next
+    end;
+    if found = nil then found := FindFieldIn(v^.variants, at, len);
+    v := v^.next
+  end;
+  FindFieldIn := found
+end;
+
 function FindField(t: typePtr; at, len: integer): fieldPtr;
-var f: fieldPtr; v: variantPtr; found: fieldPtr;
+var f, found: fieldPtr;
 begin
   found := nil;
   f := t^.fields;
@@ -2715,15 +2772,7 @@ begin
     if PoolSame(f^.at, f^.len, at, len) then found := f;
     f := f^.next
   end;
-  v := t^.variants;
-  while (v <> nil) and (found = nil) do begin
-    f := v^.fields;
-    while (f <> nil) and (found = nil) do begin
-      if PoolSame(f^.at, f^.len, at, len) then found := f;
-      f := f^.next
-    end;
-    v := v^.next
-  end;
+  if found = nil then found := FindFieldIn(t^.variants, at, len);
   FindField := found
 end;
 
@@ -3384,7 +3433,7 @@ begin
 end;
 
 procedure AddField(rec: typePtr; var into, tail: fieldPtr; n: nodePtr;
-                   t: typePtr; variant, index: integer);
+                   t: typePtr; variant: numPtr; index: integer);
 var f: fieldPtr;
 begin
   if FindField(rec, n^.dnAt, n^.dnLen) <> nil then begin
@@ -3419,43 +3468,79 @@ begin
   FieldCount := n
 end;
 
-procedure ResolveVariants(d: nodePtr; rec: typePtr);
+{ Where a field lives, extended by one step. The lists are never changed once
+  built, so every field of one field-list shares the same path. }
+function PathAppend(path: numPtr; k: integer): numPtr;
+var head, tail, n, p: numPtr;
+begin
+  head := nil;
+  tail := nil;
+  p := path;
+  while p <> nil do begin
+    new(n);
+    n^.value := p^.value;
+    n^.next := nil;
+    if head = nil then head := n else tail^.next := n;
+    tail := n;
+    p := p^.next
+  end;
+  new(n);
+  n^.value := k;
+  n^.next := nil;
+  if head = nil then head := n else tail^.next := n;
+  PathAppend := head
+end;
+
+{ Resolve one variant part -- a record's, or one nested inside an arm. The
+  containers are passed explicitly because both a typeRec and a variantRec have
+  them, and `path` says where the container sits so a field can record how to
+  reach it (ISO 7185 6.4.3.3 allows any depth of nesting). }
+procedure ResolveVariantPart(tagAt, tagLen, tagLine, tagCol: integer;
+                             tagDenoter, arms: nodePtr; rec: typePtr;
+                             var fields, fieldTail: fieldPtr;
+                             var variants, variantTail: variantPtr;
+                             var tagField: integer; var tagTypeOut: typePtr;
+                             path: numPtr);
 var
   tag, labelType, fieldType: typePtr;
   arm, label_, g, n, tagName: nodePtr;
   v, w: variantPtr;
   num, seen: numPtr;
+  armPath: numPtr;
   index, value: integer;
   claimed: boolean;
 begin
-  tag := ResolveType(d^.rcTagType);
+  tag := ResolveType(tagDenoter);
   if not IsOrdinal(tag) then begin
-    ErrorAt(d^.rcTagLine, d^.rcTagCol);
+    ErrorAt(tagLine, tagCol);
     write('the tag of a variant part must be an ordinal type, found ');
     WriteTypeName(tag);
     writeln
   end
   else begin
-    rec^.tagType := tag;
+    tagTypeOut := tag;
 
-    { A named tag is an ordinary field of the fixed part; a tagless variant
-      part has the type but no storage for it (ISO 7185 6.4.3.3). }
-    if d^.rcTagLen > 0 then begin
-      rec^.tagField := FieldCount(rec^.fields);
-      tagName := NewNode(nkDeclName, d^.rcTagLine, d^.rcTagCol);
-      tagName^.dnAt := d^.rcTagAt;
-      tagName^.dnLen := d^.rcTagLen;
-      AddField(rec, rec^.fields, rec^.fieldTail, tagName, tag, -1,
-               rec^.tagField)
+    { A named tag is an ordinary field of the field-list it heads; a tagless
+      variant part has the type but no storage for it (ISO 7185 6.4.3.3). }
+    if tagLen > 0 then begin
+      tagField := FieldCount(fields);
+      tagName := NewNode(nkDeclName, tagLine, tagCol);
+      tagName^.dnAt := tagAt;
+      tagName^.dnLen := tagLen;
+      AddField(rec, fields, fieldTail, tagName, tag, path, tagField)
     end;
 
     index := 0;
-    arm := d^.rcVariants;
+    arm := arms;
     while arm <> nil do begin
       new(v);
       v^.labels := nil;
       v^.fields := nil;
       v^.fieldTail := nil;
+      v^.variants := nil;
+      v^.variantTail := nil;
+      v^.tagField := -1;
+      v^.tagType := nil;
       v^.line := arm^.line;
       v^.col := arm^.col;
       v^.next := nil;
@@ -3477,9 +3562,9 @@ begin
           writeln
         end
         else begin
-          { has an earlier variant already claimed this tag value? }
+          { has an earlier arm of *this* variant part already claimed it? }
           claimed := false;
-          w := rec^.variants;
+          w := variants;
           while w <> nil do begin
             seen := w^.labels;
             while seen <> nil do begin
@@ -3516,21 +3601,29 @@ begin
 
       { The fields are pushed into the arm, so each variant is numbered from
         zero and codegen can index it as a struct of its own. }
-      if rec^.variants = nil then rec^.variants := v
-      else rec^.variantTail^.next := v;
-      rec^.variantTail := v;
+      if variants = nil then variants := v else variantTail^.next := v;
+      variantTail := v;
 
+      armPath := PathAppend(path, index);
       g := arm^.vaFields;
       while g <> nil do begin
         fieldType := ResolveType(g^.grType);
         n := g^.grNames;
         while n <> nil do begin
-          AddField(rec, v^.fields, v^.fieldTail, n, fieldType, index,
+          AddField(rec, v^.fields, v^.fieldTail, n, fieldType, armPath,
                    FieldCount(v^.fields));
           n := n^.next
         end;
         g := g^.next
       end;
+      { An arm's field-list may end with a variant part of its own, and this is
+        the only recursion in a type-denoter that does not go back through
+        ResolveType. }
+      if arm^.vaTagType <> nil then
+        ResolveVariantPart(arm^.vaTagAt, arm^.vaTagLen, arm^.vaTagLine,
+                           arm^.vaTagCol, arm^.vaTagType, arm^.vaVariants, rec,
+                           v^.fields, v^.fieldTail, v^.variants,
+                           v^.variantTail, v^.tagField, v^.tagType, armPath);
 
       index := index + 1;
       arm := arm^.next
@@ -3548,14 +3641,17 @@ begin
     fieldType := ResolveType(g^.grType);
     n := g^.grNames;
     while n <> nil do begin
-      AddField(t, t^.fields, t^.fieldTail, n, fieldType, -1,
+      AddField(t, t^.fields, t^.fieldTail, n, fieldType, nil,
                FieldCount(t^.fields));
       n := n^.next
     end;
     g := g^.next
   end;
   if d^.rcTagType <> nil then
-    ResolveVariants(d, t);
+    ResolveVariantPart(d^.rcTagAt, d^.rcTagLen, d^.rcTagLine, d^.rcTagCol,
+                       d^.rcTagType, d^.rcVariants, t, t^.fields, t^.fieldTail,
+                       t^.variants, t^.variantTail, t^.tagField, t^.tagType,
+                       nil);
   ResolveRecord := t
 end;
 
@@ -5125,12 +5221,32 @@ begin
   end
 end;
 
+{ Where a field lives: '-' is the record's fixed part, '0' is arm 0 of its
+  variant part, '0.1' is arm 1 of the variant part inside arm 0. }
+procedure WriteVariantRef(path: numPtr);
+var first: boolean;
+begin
+  if path = nil then
+    write('-')
+  else begin
+    first := true;
+    while path <> nil do begin
+      if not first then write('.');
+      write(path^.value:1);
+      first := false;
+      path := path^.next
+    end
+  end
+end;
+
 procedure DumpField(f: fieldPtr);
 begin
   Pad;
   write('field ');
   WritePool(f^.at, f^.len);
-  write(' #', f^.index:1, '/', f^.variant:1, ' : ');
+  write(' #', f^.index:1, '/');
+  WriteVariantRef(f^.variant);
+  write(' : ');
   WriteTypeName(f^.ftype);
   writeln
 end;
@@ -5138,26 +5254,26 @@ end;
 { The layout Sema gave a record: which struct each field lives in and at what
   position, and which tag values select each variant. Codegen indexes by
   exactly these numbers, so they are what a record type *is*. }
-procedure DumpRecordLayout(r: typePtr);
-var f: fieldPtr; v: variantPtr; lbl: numPtr; i: integer;
+procedure DumpFieldList(f: fieldPtr);
 begin
-  Pad;
-  writeln('layout');
-  level := level + 1;
-  f := r^.fields;
   while f <> nil do begin
     DumpField(f);
     f := f^.next
-  end;
-  if r^.tagField >= 0 then begin
-    Pad;
-    writeln('tagfield #', r^.tagField:1)
-  end;
+  end
+end;
+
+{ One level of arms and everything nested in them. The name of an arm is its
+  path, which is also what a field of it prints as its variant. }
+procedure DumpArmList(v: variantPtr; prefix: numPtr);
+var lbl, here: numPtr; i: integer;
+begin
   i := 0;
-  v := r^.variants;
   while v <> nil do begin
+    here := PathAppend(prefix, i);
     Pad;
-    write('variant ', i:1, ' labels');
+    write('variant ');
+    WriteVariantRef(here);
+    write(' labels');
     lbl := v^.labels;
     while lbl <> nil do begin
       write(' ', lbl^.value:1);
@@ -5165,15 +5281,32 @@ begin
     end;
     writeln;
     level := level + 1;
-    f := v^.fields;
-    while f <> nil do begin
-      DumpField(f);
-      f := f^.next
+    DumpFieldList(v^.fields);
+    if v^.tagField >= 0 then begin
+      Pad;
+      writeln('tagfield #', v^.tagField:1)
     end;
+    DumpArmList(v^.variants, here);
     level := level - 1;
     i := i + 1;
     v := v^.next
+  end
+end;
+
+{ The layout Sema gave a record: which struct each field lives in and at what
+  position, and which tag values select each variant. Codegen indexes by
+  exactly these numbers, so they are what a record type *is*. }
+procedure DumpRecordLayout(r: typePtr);
+begin
+  Pad;
+  writeln('layout');
+  level := level + 1;
+  DumpFieldList(r^.fields);
+  if r^.tagField >= 0 then begin
+    Pad;
+    writeln('tagfield #', r^.tagField:1)
   end;
+  DumpArmList(r^.variants, nil);
   level := level - 1
 end;
 
@@ -5299,7 +5432,10 @@ begin
         { A name reached through an open `with` resolves to the hidden binding
           *plus* the field it selects, so both halves are printed. }
         if n^.vrField <> nil then
-          write(' field #', n^.vrField^.index:1, '/', n^.vrField^.variant:1)
+        begin
+          write(' field #', n^.vrField^.index:1, '/');
+          WriteVariantRef(n^.vrField^.variant)
+        end
       end;
       ExprEnd(n)
     end;
@@ -5317,8 +5453,10 @@ begin
       WritePool(n^.fdAt, n^.fdLen);
       WritePos(n^.line, n^.col);
       if annotate then
-        if n^.fdResolved <> nil then
-          write(' -> #', n^.fdResolved^.index:1, '/', n^.fdResolved^.variant:1)
+        if n^.fdResolved <> nil then begin
+          write(' -> #', n^.fdResolved^.index:1, '/');
+          WriteVariantRef(n^.fdResolved^.variant)
+        end
         else
           write(' -> ?');
       ExprEnd(n);
@@ -5620,6 +5758,50 @@ begin
   end
 end;
 
+{ A variant part as the parser built it: the tag, and one `arm` per variant.
+  An arm's field-list is a field-list like any other, so it may end with a
+  variant part of its own and this recurses into it. }
+procedure DumpVariantPart(tagAt, tagLen, tagLine, tagCol: integer;
+                          tagType, arms: nodePtr);
+var p: nodePtr;
+begin
+  { An empty tag name is the `case T of` form, where the tag exists as a type
+    but not as a field (ISO 7185 6.4.3.3); '-' says so, and no field could be
+    spelled that. }
+  Pad;
+  write('tag ');
+  if tagLen = 0 then
+    write('-')
+  else
+    WritePool(tagAt, tagLen);
+  At(tagLine, tagCol);
+  level := level + 1;
+  DumpTypeExpr(tagType);
+  p := arms;
+  while p <> nil do begin
+    Pad;
+    write('arm');
+    At(p^.line, p^.col);
+    level := level + 1;
+    Pad;
+    writeln('labels');
+    level := level + 1;
+    DumpExprList(p^.vaLabels);
+    level := level - 1;
+    Pad;
+    writeln('fields');
+    level := level + 1;
+    DumpGroupList(p^.vaFields, false);
+    level := level - 1;
+    if p^.vaTagType <> nil then
+      DumpVariantPart(p^.vaTagAt, p^.vaTagLen, p^.vaTagLine, p^.vaTagCol,
+                      p^.vaTagType, p^.vaVariants);
+    level := level - 1;
+    p := p^.next
+  end;
+  level := level - 1
+end;
+
 procedure DumpTypeExpr;
 var p: nodePtr;
 begin
@@ -5698,39 +5880,9 @@ begin
       level := level + 1;
       DumpGroupList(n^.rcFields, false);
       level := level - 1;
-      if n^.rcTagType <> nil then begin
-        { An empty tag name is the `case T of` form, where the tag exists as a
-          type but not as a field (ISO 7185 6.4.3.3); '-' says so, and no
-          field could be spelled that. }
-        Pad;
-        write('tag ');
-        if n^.rcTagLen = 0 then
-          write('-')
-        else
-          WritePool(n^.rcTagAt, n^.rcTagLen);
-        At(n^.rcTagLine, n^.rcTagCol);
-        level := level + 1;
-        DumpTypeExpr(n^.rcTagType);
-        p := n^.rcVariants;
-        while p <> nil do begin
-          Pad;
-          write('arm');
-          At(p^.line, p^.col);
-          level := level + 1;
-          Pad;
-          writeln('labels');
-          level := level + 1;
-          DumpExprList(p^.vaLabels);
-          level := level - 1;
-          Pad;
-          writeln('fields');
-          level := level + 1;
-          DumpGroupList(p^.vaFields, false);
-          level := level - 2;
-          p := p^.next
-        end;
-        level := level - 1
-      end;
+      if n^.rcTagType <> nil then
+        DumpVariantPart(n^.rcTagAt, n^.rcTagLen, n^.rcTagLine, n^.rcTagCol,
+                        n^.rcTagType, n^.rcVariants);
       level := level - 1
     end
   end
@@ -5958,58 +6110,102 @@ end;
 
 function LlSize(t: typePtr): integer; forward;
 function LlAlign(t: typePtr): integer; forward;
+procedure ArmLayoutAt(rec: typePtr; path: numPtr;
+                      var size, align: integer); forward;
+procedure VariantStorageAt(rec: typePtr; path: numPtr;
+                           var size, align: integer); forward;
 
-{ One arm of a variant part, laid out as the struct it is. }
-procedure ArmLayout(v: variantPtr; var size, align: integer);
-var f: fieldPtr; a: integer;
+{ The arm a path names. Each step selects an arm of the variant part it is in;
+  a further step goes into the variant part nested inside that arm. }
+function ArmAt(rec: typePtr; path: numPtr): variantPtr;
+var v: variantPtr; k: integer;
+begin
+  v := rec^.variants;
+  while path <> nil do begin
+    k := 0;
+    while k < path^.value do begin
+      v := v^.next;
+      k := k + 1
+    end;
+    if path^.next <> nil then v := v^.variants;
+    path := path^.next
+  end;
+  ArmAt := v
+end;
+
+{ The arms of the variant part at `path`, and the fields of the field-list
+  there. An empty path is the record itself; an arm's field-list is a
+  field-list like any other (ISO 7185 6.4.3.3), which is what makes one pair of
+  functions serve both. }
+function ArmsAt(rec: typePtr; path: numPtr): variantPtr;
+var a: variantPtr;
+begin
+  if path = nil then
+    ArmsAt := rec^.variants
+  else begin
+    a := ArmAt(rec, path);
+    ArmsAt := a^.variants
+  end
+end;
+
+function FieldsAt(rec: typePtr; path: numPtr): fieldPtr;
+var a: variantPtr;
+begin
+  if path = nil then
+    FieldsAt := rec^.fields
+  else begin
+    a := ArmAt(rec, path);
+    FieldsAt := a^.fields
+  end
+end;
+
+{ The struct a field-list is: its own fields, and -- when it ends with a
+  variant part -- the shared storage for that part as a last member. The record
+  and every arm are laid out by this one routine, because they have the same
+  shape. }
+procedure ArmLayoutAt;
+var f: fieldPtr; a, ssize, salign: integer;
 begin
   size := 0;
   align := 1;
-  f := v^.fields;
+  f := FieldsAt(rec, path);
   while f <> nil do begin
     a := LlAlign(f^.ftype);
     size := RoundUp(size, a) + LlSize(f^.ftype);
     if a > align then align := a;
     f := f^.next
   end;
+  if ArmsAt(rec, path) <> nil then begin
+    VariantStorageAt(rec, path, ssize, salign);
+    size := RoundUp(size, salign) + ssize;
+    if salign > align then align := salign
+  end;
   size := RoundUp(size, align)
 end;
 
-{ The shared storage every arm is laid over: big enough for the largest and
-  aligned for the strictest. }
-procedure VariantStorage(t: typePtr; var size, align: integer);
-var v: variantPtr; s, a: integer;
+{ The shared storage every arm at `path` is laid over: big enough for the
+  largest and aligned for the strictest. }
+procedure VariantStorageAt;
+var v: variantPtr; s, a, i: integer; sub: numPtr;
 begin
   size := 0;
   align := 1;
-  v := t^.variants;
+  v := ArmsAt(rec, path);
+  i := 0;
   while v <> nil do begin
-    ArmLayout(v, s, a);
+    sub := PathAppend(path, i);
+    ArmLayoutAt(rec, sub, s, a);
     if s > size then size := s;
     if a > align then align := a;
+    i := i + 1;
     v := v^.next
   end;
   if size = 0 then align := 1 else size := RoundUp(size, align)
 end;
 
 procedure RecordLayout(t: typePtr; var size, align: integer);
-var f: fieldPtr; a, s: integer;
 begin
-  size := 0;
-  align := 1;
-  f := t^.fields;
-  while f <> nil do begin
-    a := LlAlign(f^.ftype);
-    size := RoundUp(size, a) + LlSize(f^.ftype);
-    if a > align then align := a;
-    f := f^.next
-  end;
-  if t^.variants <> nil then begin
-    VariantStorage(t, s, a);
-    size := RoundUp(size, a) + s;
-    if a > align then align := a
-  end;
-  size := RoundUp(size, align)
+  ArmLayoutAt(t, nil, size, align)
 end;
 
 function LlAlign;
@@ -6055,37 +6251,42 @@ end;
 { ------------------------------------------------------------- LLVM types }
 
 procedure PutLlType(t: typePtr); forward;
-
-procedure PutArmType(v: variantPtr);
-var f: fieldPtr; first: boolean;
-begin
-  write(ircode, '{ ');
-  first := true;
-  f := v^.fields;
-  while f <> nil do begin
-    if not first then write(ircode, ', ');
-    PutLlType(f^.ftype);
-    first := false;
-    f := f^.next
-  end;
-  write(ircode, ' }')
-end;
+procedure PutStructAt(rec: typePtr; path: numPtr); forward;
 
 { LLVM has no union, so the variant part is one block of storage. The element
   type is what carries the alignment: [k x i64] is 8-aligned where [n x i8]
   would be 1-aligned and would misalign a real inside a variant. }
-procedure PutStorageType(t: typePtr);
+procedure PutStorageTypeAt(rec: typePtr; path: numPtr);
 var size, align: integer;
 begin
-  VariantStorage(t, size, align);
+  VariantStorageAt(rec, path, size, align);
   if size = 0 then
     write(ircode, '[0 x i8]')
   else
     write(ircode, '[', size div align:1, ' x i', align * 8:1, ']')
 end;
 
+procedure PutStructAt;
+var f: fieldPtr; first: boolean;
+begin
+  write(ircode, '{ ');
+  first := true;
+  f := FieldsAt(rec, path);
+  while f <> nil do begin
+    if not first then write(ircode, ', ');
+    PutLlType(f^.ftype);
+    first := false;
+    f := f^.next
+  end;
+  if ArmsAt(rec, path) <> nil then begin
+    if not first then write(ircode, ', ');
+    PutStorageTypeAt(rec, path)
+  end;
+  write(ircode, ' }')
+end;
+
 procedure PutLlType;
-var b: typePtr; f: fieldPtr; first: boolean;
+var b: typePtr;
 begin
   b := Base(t);
   if b = nil then
@@ -6111,22 +6312,7 @@ begin
         PutLlType(b^.elem);
         write(ircode, ']')
       end;
-      tyRecord: begin
-        write(ircode, '{ ');
-        first := true;
-        f := b^.fields;
-        while f <> nil do begin
-          if not first then write(ircode, ', ');
-          PutLlType(f^.ftype);
-          first := false;
-          f := f^.next
-        end;
-        if b^.variants <> nil then begin
-          if not first then write(ircode, ', ');
-          PutStorageType(b)
-        end;
-        write(ircode, ' }')
-      end
+      tyRecord: PutStructAt(b, nil)
     end
 end;
 
@@ -6363,46 +6549,35 @@ begin
     v := slot
 end;
 
-function VariantAt(t: typePtr; k: integer): variantPtr;
-var v: variantPtr; i: integer;
-begin
-  v := t^.variants;
-  i := 0;
-  while (v <> nil) and (i < k) do begin
-    v := v^.next;
-    i := i + 1
-  end;
-  VariantAt := v
-end;
 
 { A field of the fixed part is one index into the record. A field of a variant
   is two: to the shared storage, then into the arm laid over it. }
+{ Walk down the field's path. At each step the shared storage is the last
+  member of the struct we are in, and the arm laid over it starts at the same
+  address -- so stepping in is one getelementptr, not two. }
 procedure FieldAddress(var rec: str; t: typePtr; f: fieldPtr; var v: str);
-var storage: str; arm: variantPtr;
+var cur, p: str; prefix, step: numPtr;
 begin
-  if f^.variant < 0 then begin
-    Def(v);
+  cur := rec;
+  prefix := nil;
+  step := f^.variant;
+  while step <> nil do begin
+    Def(p);
     write(ircode, 'getelementptr inbounds ');
-    PutLlType(t);
+    PutStructAt(t, prefix);
     write(ircode, ', ptr ');
-    PutOp(rec);
-    writeln(ircode, ', i32 0, i32 ', f^.index:1)
-  end
-  else begin
-    Def(storage);
-    write(ircode, 'getelementptr inbounds ');
-    PutLlType(t);
-    write(ircode, ', ptr ');
-    PutOp(rec);
-    writeln(ircode, ', i32 0, i32 ', FieldCount(t^.fields):1);
-    arm := VariantAt(t, f^.variant);
-    Def(v);
-    write(ircode, 'getelementptr inbounds ');
-    PutArmType(arm);
-    write(ircode, ', ptr ');
-    PutOp(storage);
-    writeln(ircode, ', i32 0, i32 ', f^.index:1)
-  end
+    PutOp(cur);
+    writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(t, prefix)):1);
+    cur := p;
+    prefix := PathAppend(prefix, step^.value);
+    step := step^.next
+  end;
+  Def(v);
+  write(ircode, 'getelementptr inbounds ');
+  PutStructAt(t, prefix);
+  write(ircode, ', ptr ');
+  PutOp(cur);
+  writeln(ircode, ', i32 0, i32 ', f^.index:1)
 end;
 
 { ------------------------------------------------------------- conversions }

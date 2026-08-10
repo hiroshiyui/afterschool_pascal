@@ -19,21 +19,29 @@ struct Type;
 
 /// One field of a record. `index` is the position in the LLVM struct it
 /// belongs to, which is also the declaration order — codegen indexes by it and
-/// never by name. `variant` says which struct that is: the fixed part, or one
-/// arm of the variant part.
+/// never by name. `variant` says which struct that is: empty is the record's
+/// fixed part, `[k]` is arm k of its variant part, `[k, j]` is arm j of the
+/// variant part *inside* arm k, and so on. ISO 7185 §6.4.3.3 puts no limit on
+/// the nesting, so a single index could not say where a field lives.
 struct Field {
   std::string name;
   Type *type = nullptr;
   int index = 0;
-  int variant = -1; // -1: the fixed part; otherwise an index into Type::variants
+  std::vector<int> variant;
   int line = 0, col = 0;
 };
 
-/// One arm of a record's variant part: the tag values that select it, and the
-/// fields that exist while it is selected.
+/// One arm of a variant part: the tag values that select it, and the fields
+/// that exist while it is selected. An arm is shaped exactly like a record —
+/// a fixed part and an optional variant part of its own — because that is what
+/// §6.4.3.3 makes it: its field-list is a field-list like any other.
 struct Variant {
   std::vector<long long> labels;
   std::vector<Field> fields;
+  std::vector<Variant> variants;
+  int tagField = -1;           // index into `fields`, or -1 when the nested
+                               // tag has no field of its own
+  Type *tagType = nullptr;
   int line = 0, col = 0;
 };
 
@@ -166,10 +174,19 @@ struct Type {
     for (const Field &f : fields)
       if (f.name == n)
         return &f;
-    for (const Variant &v : variants)
+    return findFieldIn(variants, n);
+  }
+
+  /// The same search through one level of arms and everything nested in them.
+  static const Field *findFieldIn(const std::vector<Variant> &arms,
+                                  const std::string &n) {
+    for (const Variant &v : arms) {
       for (const Field &f : v.fields)
         if (f.name == n)
           return &f;
+      if (const Field *f = findFieldIn(v.variants, n))
+        return f;
+    }
     return nullptr;
   }
 

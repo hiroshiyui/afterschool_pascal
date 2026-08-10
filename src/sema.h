@@ -110,11 +110,18 @@ private:
   /// Fill in the domains of pointers that named a type not yet defined, and
   /// report any that never were. Run at the end of each type part.
   void resolvePendingPointers();
-  /// Resolve the variant part of a record that has one.
-  void resolveVariants(TypeExpr &denoter, Type *record);
+  /// Resolve one variant part — a record's, or one nested inside an arm. The
+  /// containers are passed explicitly because both a Type and a Variant have
+  /// them, and `path` says where the container sits so a field can record how
+  /// to reach it (ISO 7185 §6.4.3.3 allows any depth of nesting).
+  void resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
+                          std::vector<VariantArm> &arms, int tagLine,
+                          int tagCol, Type *record, std::vector<Field> &fields,
+                          std::vector<Variant> &variants, int &tagField,
+                          Type *&tagTypeOut, std::vector<int> &path);
   /// Add a field to `into`, reporting a name already used anywhere in `record`.
   void addField(Type *record, std::vector<Field> &into, const DeclName &name,
-                Type *type, int variant);
+                Type *type, const std::vector<int> &variant);
   /// The `packed array [1..n] of char` that ISO 7185 §6.4.3.2 gives a string
   /// literal. Cached by length so two literals of a length share one type.
   Type *stringType(long long length);

@@ -60,7 +60,7 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
     StructType *rec = StructType::create(ctx_, "rec." + t->name());
     typeCache_[t] = rec;
     if (!t->variants.empty())
-      fields.push_back(variantStorageType(t));
+      fields.push_back(variantStorageType(t, {}));
     // `packed` is left to the implementation by ISO 7185 §6.4.3.1, and the
     // natural layout is what the ABI and the optimiser both expect.
     rec->setBody(fields);
@@ -74,11 +74,16 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
 /// and aligned well enough for every arm, and each arm is a struct laid over
 /// it. The element type carries the alignment: `[k x i64]` is 8-aligned where
 /// `[n x i8]` would be 1-aligned and would misalign a real inside a variant.
-llvm::Type *CodeGen::variantStorageType(ap::Type *record) {
+llvm::Type *CodeGen::variantStorageType(ap::Type *record,
+                                        const std::vector<int> &path) {
+  const std::vector<Variant> &arms = armsAt(record, path);
   uint64_t size = 0;
   uint64_t align = 1;
-  for (size_t i = 0; i < record->variants.size(); ++i) {
-    llvm::Type *arm = variantType(record, static_cast<int>(i));
+  std::vector<int> armPath = path;
+  for (size_t i = 0; i < arms.size(); ++i) {
+    armPath.push_back(static_cast<int>(i));
+    llvm::Type *arm = variantType(record, armPath);
+    armPath.pop_back();
     size = std::max(size, mod_->getDataLayout().getTypeAllocSize(arm).getFixedValue());
     align = std::max(align,
                      mod_->getDataLayout().getABITypeAlign(arm).value());
@@ -89,20 +94,56 @@ llvm::Type *CodeGen::variantStorageType(ap::Type *record) {
   return ArrayType::get(unit, (size + align - 1) / align);
 }
 
-/// The struct one arm of a variant part lays over the shared storage.
-llvm::StructType *CodeGen::variantType(ap::Type *record, int variant) {
-  auto key = std::make_pair(record, variant);
+/// The arms of the variant part at `path`, and the fields of the field-list
+/// there. An empty path is the record itself; each further index steps into an
+/// arm, whose field-list is a field-list like any other (§6.4.3.3).
+const std::vector<Variant> &CodeGen::armsAt(ap::Type *record,
+                                            const std::vector<int> &path) {
+  const std::vector<Variant> *arms = &record->variants;
+  for (int k : path)
+    arms = &(*arms)[k].variants;
+  return *arms;
+}
+
+const std::vector<Field> &CodeGen::fieldsAt(ap::Type *record,
+                                            const std::vector<int> &path) {
+  if (path.empty())
+    return record->fields;
+  const std::vector<Variant> *arms = &record->variants;
+  for (size_t i = 0; i + 1 < path.size(); ++i)
+    arms = &(*arms)[path[i]].variants;
+  return (*arms)[path.back()].fields;
+}
+
+/// The struct one arm of a variant part lays over the shared storage. An arm
+/// that has a variant part of its own carries the storage for it as a last
+/// member, exactly as the record does.
+llvm::StructType *CodeGen::variantType(ap::Type *record,
+                                       const std::vector<int> &path) {
+  auto key = std::make_pair(static_cast<const ap::Type *>(record), path);
   auto cached = variantTypes_.find(key);
   if (cached != variantTypes_.end())
     return cached->second;
 
-  SmallVector<llvm::Type *, 8> fields;
-  for (const Field &f : record->variants[variant].fields)
-    fields.push_back(llvmType(f.type));
-  StructType *ty = StructType::create(
-      ctx_, fields, "var." + record->name() + "." + std::to_string(variant));
+  std::string name = "var." + record->name();
+  for (int k : path)
+    name += "." + std::to_string(k);
+  // Created empty and cached first, so measuring the nested storage below can
+  // ask for this same arm without recursing forever.
+  StructType *ty = StructType::create(ctx_, name);
   variantTypes_[key] = ty;
+
+  SmallVector<llvm::Type *, 8> fields;
+  for (const Field &f : fieldsAt(record, path))
+    fields.push_back(llvmType(f.type));
+  if (!armsAt(record, path).empty())
+    fields.push_back(variantStorageType(record, path));
+  ty->setBody(fields);
   return ty;
+}
+
+llvm::Type *CodeGen::structAt(ap::Type *record, const std::vector<int> &path) {
+  return path.empty() ? llvmType(record) : variantType(record, path);
 }
 
 uint64_t CodeGen::sizeOf(ap::Type *t) {
@@ -423,13 +464,18 @@ llvm::Value *CodeGen::addressOf(Symbol *v) {
 /// variant is two: to the shared storage, then into the arm laid over it.
 llvm::Value *CodeGen::fieldAddress(llvm::Value *record, ap::Type *type,
                                    const Field *field) {
-  StructType *recTy = cast<StructType>(llvmType(type));
-  if (field->variant < 0)
-    return b_.CreateStructGEP(recTy, record, field->index, field->name);
-
-  llvm::Value *storage = b_.CreateStructGEP(
-      recTy, record, static_cast<unsigned>(type->fields.size()), "variant");
-  return b_.CreateStructGEP(variantType(type, field->variant), storage,
+  // Walk down the field's path. At each step the shared storage is the last
+  // member of the struct we are in, and the arm laid over it starts at the
+  // same address — so stepping in is one GEP, not two.
+  llvm::Value *p = record;
+  std::vector<int> prefix;
+  for (int k : field->variant) {
+    unsigned storage = static_cast<unsigned>(fieldsAt(type, prefix).size());
+    p = b_.CreateStructGEP(cast<StructType>(structAt(type, prefix)), p, storage,
+                           "variant");
+    prefix.push_back(k);
+  }
+  return b_.CreateStructGEP(cast<StructType>(structAt(type, prefix)), p,
                             field->index, field->name);
 }
 

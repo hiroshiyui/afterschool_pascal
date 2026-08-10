@@ -119,8 +119,13 @@ the distinction asks `isSubrange()`.
   and none is invented.
 - A variant part is one block of shared storage with each arm a struct laid
   over it. The block's element type carries the alignment (`[k x i64]`, not
-  `[n x i8]`) or a `real` inside a variant would be misaligned. `Field::variant`
-  says which arm a field belongs to; `fieldAddress` handles both.
+  `[n x i8]`) or a `real` inside a variant would be misaligned. An arm's
+  field-list is a field-list, so **an arm may hold a variant part of its own**
+  (ADR-0026): `Variant` has the same `variants`/`tagField`/`tagType` a record
+  has, `Field::variant` is the *path* to the field's field-list rather than one
+  index, and `fieldsAt`/`armsAt`/`fieldAddress` are keyed by that path.
+  `parseVariantPart` takes its own depth guard, because it is the one recursion
+  in a type-denoter that does not pass through `parseTypeExpr`.
 
 **Pointers** (ADR-0019). A pointer's domain is a type *identifier* and may name
 a type defined later in the same type part — the language's only forward

@@ -299,7 +299,8 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
 /// across the fixed part and every variant alike — which is what lets one flat
 /// lookup answer where a name lives.
 void Sema::addField(Type *record, std::vector<Field> &into,
-                    const DeclName &name, Type *type, int variant) {
+                    const DeclName &name, Type *type,
+                    const std::vector<int> &variant) {
   if (record->findField(name.name)) {
     diags_.error(name.line, name.col,
                  "'" + name.name + "' is already a field of this record");
@@ -321,37 +322,46 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
   for (FieldGroup &group : denoter.fields) {
     Type *fieldType = resolveType(*group.type);
     for (DeclName &n : group.names)
-      addField(t, t->fields, n, fieldType, -1);
+      addField(t, t->fields, n, fieldType, {});
   }
-  if (denoter.tagType)
-    resolveVariants(denoter, t);
+  if (denoter.tagType) {
+    std::vector<int> path;
+    resolveVariantPart(denoter.tagName, denoter.tagType.get(),
+                       denoter.variants, denoter.tagLine,
+                       denoter.tagCol, t, t->fields, t->variants,
+                       t->tagField, t->tagType, path);
+  }
   return t;
 }
 
-void Sema::resolveVariants(TypeExpr &denoter, Type *record) {
-  Type *tag = resolveType(*denoter.tagType);
+void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
+                              std::vector<VariantArm> &arms, int tagLine,
+                              int tagCol, Type *record,
+                              std::vector<Field> &fields,
+                              std::vector<Variant> &variants, int &tagField,
+                              Type *&tagTypeOut, std::vector<int> &path) {
+  Type *tag = resolveType(*tagDenoter);
   if (!tag->isOrdinal()) {
-    diags_.error(denoter.tagLine, denoter.tagCol,
+    diags_.error(tagLine, tagCol,
                  "the tag of a variant part must be an ordinal type, found " +
                      tag->name());
     return;
   }
-  record->tagType = tag;
+  tagTypeOut = tag;
 
-  // A named tag is an ordinary field of the fixed part; a tagless variant part
-  // has the type but no storage for it (ISO 7185 §6.4.3.3).
-  if (!denoter.tagName.empty()) {
-    record->tagField = static_cast<int>(record->fields.size());
-    addField(record, record->fields,
-             {denoter.tagName, denoter.tagLine, denoter.tagCol}, tag, -1);
+  // A named tag is an ordinary field of the field-list it heads; a tagless
+  // variant part has the type but no storage for it (ISO 7185 §6.4.3.3).
+  if (!tagName.empty()) {
+    tagField = static_cast<int>(fields.size());
+    addField(record, fields, {tagName, tagLine, tagCol}, tag, path);
   }
 
   std::unordered_map<long long, int> claimed; // tag value -> variant that owns it
-  for (VariantArm &arm : denoter.variants) {
+  for (VariantArm &arm : arms) {
     Variant v;
     v.line = arm.line;
     v.col = arm.col;
-    int index = static_cast<int>(record->variants.size());
+    int index = static_cast<int>(variants.size());
 
     for (ExprPtr &label : arm.labels) {
       Type *labelType = nullptr;
@@ -380,12 +390,23 @@ void Sema::resolveVariants(TypeExpr &denoter, Type *record) {
 
     // The fields are pushed into the arm, so each variant is numbered from
     // zero and codegen can index it as a struct of its own.
-    record->variants.push_back(std::move(v));
+    variants.push_back(std::move(v));
+    path.push_back(index);
     for (FieldGroup &group : arm.fields) {
       Type *fieldType = resolveType(*group.type);
       for (DeclName &n : group.names)
-        addField(record, record->variants[index].fields, n, fieldType, index);
+        addField(record, variants[index].fields, n, fieldType, path);
     }
+    // An arm's field-list may end with a variant part of its own, and this is
+    // the only recursion in a type-denoter that does not go back through
+    // resolveType.
+    if (arm.tagType)
+      resolveVariantPart(arm.tagName, arm.tagType.get(), arm.variants,
+                         arm.tagLine, arm.tagCol, record,
+                         variants[index].fields, variants[index].variants,
+                         variants[index].tagField, variants[index].tagType,
+                         path);
+    path.pop_back();
   }
 }
 

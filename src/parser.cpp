@@ -329,7 +329,8 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
 
   while (!check(Tok::KwEnd)) {
     if (check(Tok::KwCase)) {
-      parseVariantPart(*t);
+      parseVariantPart(t->tagName, t->tagType, t->variants,
+                       t->tagLine, t->tagCol);
       break; // the variant part is last (ISO 7185 §6.4.3.3)
     }
     FieldGroup group;
@@ -352,20 +353,25 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
 /// The tag may be a real field or exist only as a type (§6.4.3.3). The two are
 /// told apart by the ':' — `case kind: nodekind of` names a field,
 /// `case nodekind of` does not.
-void Parser::parseVariantPart(TypeExpr &record) {
+void Parser::parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
+                              std::vector<VariantArm> &arms, int &tagLine,
+                              int &tagCol) {
+  // A variant part may contain variant parts, so this recurses without going
+  // back through parseTypeExpr — which is where the depth guard usually is.
+  Depth depth(*this);
   expect(Tok::KwCase, "");
-  record.tagLine = cur().line;
-  record.tagCol = cur().col;
+  tagLine = cur().line;
+  tagCol = cur().col;
 
   if (check(Tok::Ident) && peek().kind == Tok::Colon) {
-    record.tagName = cur().text;
+    tagName = cur().text;
     pos_ += 2; // the name and the ':'
   }
   if (!check(Tok::Ident)) {
     errorAtCur("the tag of a variant part must be a type name");
     bail();
   }
-  record.tagType = parseTypeExpr();
+  tagType = parseTypeExpr();
   expect(Tok::KwOf, "after the tag of a variant part");
 
   while (!check(Tok::KwEnd)) {
@@ -379,11 +385,13 @@ void Parser::parseVariantPart(TypeExpr &record) {
     expect(Tok::Colon, "after the labels of a variant");
     expect(Tok::LParen, "before the fields of a variant");
     while (!check(Tok::RParen)) {
+      // ISO 7185 §6.4.3.3: a field-list is record-sections followed by an
+      // optional variant-part, and an arm's field-list is a field-list. So the
+      // variant part, when there is one, is last and closes the arm.
       if (check(Tok::KwCase)) {
-        // A variant inside a variant is legal Pascal and nothing in the
-        // bootstrap needs one; rejecting it keeps the gap visible.
-        errorAtCur("a variant part inside a variant is not supported yet");
-        bail();
+        parseVariantPart(arm.tagName, arm.tagType, arm.variants, arm.tagLine,
+                         arm.tagCol);
+        break;
       }
       FieldGroup group;
       group.names = parseNameList("a field name");
@@ -394,7 +402,7 @@ void Parser::parseVariantPart(TypeExpr &record) {
         break;
     }
     expect(Tok::RParen, "after the fields of a variant");
-    record.variants.push_back(std::move(arm));
+    arms.push_back(std::move(arm));
 
     if (!accept(Tok::Semi))
       break;
