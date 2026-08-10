@@ -65,6 +65,8 @@ private:
   void enterLevel();
 
   std::unique_ptr<Block> parseBlock();
+  void parseLabelPart(Block &block);
+  int parseLabel(const char *where);
   void parseConstPart(Block &block);
   void parseTypePart(Block &block);
   void parseVarPart(Block &block);

@@ -48,6 +48,7 @@ routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations
 statements := , if/then/else, while, repeat/until, for/to/downto,
            begin/end, case, with, procedure call,
+           label declarations, labelled statements, goto within a block,
            write, writeln, read, readln
 operators  + - * / div mod, and or not (short-circuiting),
            = <> < <= > >=  (including on strings),
@@ -163,9 +164,11 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: `goto`, procedural and functional parameters, and files of
-anything but `char`. One implementation
-limit: nesting deeper
+Not accepted yet: procedural and functional parameters, files of anything but
+`char`, and a `goto` to a label in an *enclosing* block — the local form is
+implemented and the non-local one is refused rather than miscompiled
+([ADR-0029](doc/adr/0029-goto-is-local-and-checked-by-containment.md)). One
+implementation limit: nesting deeper
 than 1000 levels — parentheses, statements, type denoters, or the depth of the
 *tree* an operator chain builds — is a compile-time error rather than a stack
 overflow, in the parser or in any walk after it. See

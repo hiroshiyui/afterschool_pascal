@@ -19,7 +19,7 @@ enum class NK {
   Deref, Binary, Unary, Call,
   // statements
   Empty, Assign, Write, Read, Compound, If, While, Repeat, For, ProcCall, With,
-  Case,
+  Case, Goto, Labeled,
 };
 
 struct Node {
@@ -183,6 +183,28 @@ struct Stmt : Node {
   using Node::Node;
 };
 using StmtPtr = std::unique_ptr<Stmt>;
+
+/// `goto L`. ISO 7185 §6.8.2.4. Sema resolves the number to the labelled
+/// statement's `id`, which is what codegen branches to — the number itself is
+/// never used after that, since two blocks may both declare label 1.
+struct GotoStmt : Stmt {
+  static constexpr NK NodeKind = NK::Goto;
+  GotoStmt() : Stmt(NodeKind) {}
+  int label = 0;
+  int id = -1;            // filled in by Sema: the target's unique id
+  Symbol *owner = nullptr; // the procedure whose block declared the label
+};
+
+/// `L: statement`. A labelled statement is a statement, so it may appear
+/// anywhere one may — which is exactly why §6.8.1 has to say which of those
+/// places a `goto` is allowed to reach.
+struct LabeledStmt : Stmt {
+  static constexpr NK NodeKind = NK::Labeled;
+  LabeledStmt() : Stmt(NodeKind) {}
+  int label = 0;
+  int id = -1;            // filled in by Sema
+  StmtPtr body;
+};
 
 struct EmptyStmt : Stmt {
   static constexpr NK NodeKind = NK::Empty;
@@ -423,7 +445,16 @@ struct ProcDecl {
 
 /// The declaration part plus the statement part — the body of the program and
 /// of every procedure alike, which is what makes nesting fall out for free.
+/// One entry of the label declaration part. ISO 7185 §6.1.6 makes a label an
+/// unsigned integer of at most four digits, so the number is what identifies
+/// it and there is no name to intern.
+struct LabelDecl {
+  int number = 0;
+  int line = 0, col = 0;
+};
+
 struct Block {
+  std::vector<LabelDecl> labels;
   std::vector<ConstDecl> consts;
   std::vector<TypeDecl> types;
   std::vector<VarDecl> vars;

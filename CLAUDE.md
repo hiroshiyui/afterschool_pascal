@@ -127,6 +127,28 @@ the distinction asks `isSubrange()`.
   `parseVariantPart` takes its own depth guard, because it is the one recursion
   in a type-denoter that does not pass through `parseTypeExpr`.
 
+**`goto` and labels** (ADR-0029). A label is a *number*, not a name (§6.1.6),
+so it is not a Symbol and does not go in a scope — two blocks may each declare
+label 1. Sema gives every label a program-wide unique id, and that id is what a
+goto resolves to and what codegen branches to.
+
+- **Where a goto may land is a prefix test.** Each labelled statement and each
+  goto records the chain of statements containing it; §6.8.1 is exactly "the
+  label's chain is a prefix of the goto's". That is leaving-but-not-entering,
+  sibling loops, and same-level jumps in one comparison. A block's statement
+  part is deliberately *not* on the chain — it is the outermost sequence, not a
+  statement — which is what makes "top level of the block" mean "empty chain".
+- **A goto is resolved when its block has been walked**, not where it is
+  written: a forward jump has nothing to resolve against yet. One whose label
+  is in an enclosing block is handed *outwards*, because a nested procedure's
+  body is checked before the statements of the block containing it.
+- **Only the local form is implemented.** A non-local goto is refused with a
+  message, after §6.8.1's placement rule has been applied — so both branches
+  are reachable. Doing it needs setjmp/longjmp plus the abandoned frames' files
+  closed, which is what ADR-0021 made a block-exit obligation.
+- A goto opens a fresh block for what follows it. LLVM tolerates the
+  alternative, so no test can see this — don't "simplify" it away.
+
 **Sets** (ADR-0028). A set is one 256-bit word, a bit per possible member, so a
 base type's values must lie in 0..255 — `set of integer` is refused under the
 latitude ISO 7185 §6.4.3.4 gives, not silently truncated. The consequence that
@@ -236,8 +258,8 @@ tracks it.
 bootstrap purposes — and the bar for a new feature has therefore *changed*
 rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
-conformance with ISO 7185. What is left of it is `goto`, procedural and
-functional parameters, and non-text files. **Anything the standard does not
+conformance with ISO 7185. What is left of it is procedural and functional
+parameters, non-text files, and the non-local half of `goto`. **Anything the standard does not
 have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.

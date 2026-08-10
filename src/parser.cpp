@@ -91,9 +91,7 @@ std::unique_ptr<Block> Parser::parseBlock() {
       bool isFunction = check(Tok::KwFunction);
       block->procs.push_back(parseProcOrFunc(isFunction));
     } else if (check(Tok::KwLabel)) {
-      errorAtCur(std::string(tokenName(cur().kind)) +
-                 " declarations are not supported yet");
-      bail();
+      parseLabelPart(*block);
     } else {
       break;
     }
@@ -101,6 +99,37 @@ std::unique_ptr<Block> Parser::parseBlock() {
 
   block->body = parseCompound();
   return block;
+}
+
+/// ISO 7185 §6.1.6: a label is an unsigned integer of at most four digits, so
+/// `0001` and `1` are the same label and `10000` is not one at all. The value
+/// is what identifies it — there is no name here to intern.
+int Parser::parseLabel(const char *where) {
+  if (!check(Tok::IntLit)) {
+    errorAtCur(std::string("expected a label ") + where + ", found " +
+               tokenName(cur().kind));
+    bail();
+  }
+  long long v = cur().intVal;
+  if (v < 0 || v > 9999) {
+    errorAtCur("a label must be an unsigned integer of at most four digits");
+    v = 0;
+  }
+  ++pos_;
+  return static_cast<int>(v);
+}
+
+/// label-declaration-part = 'label' label (',' label)* ';'
+void Parser::parseLabelPart(Block &block) {
+  expect(Tok::KwLabel, "");
+  do {
+    LabelDecl d;
+    d.line = cur().line;
+    d.col = cur().col;
+    d.number = parseLabel("in a label declaration");
+    block.labels.push_back(d);
+  } while (accept(Tok::Comma));
+  expect(Tok::Semi, "after a label declaration");
 }
 
 std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
@@ -510,10 +539,22 @@ StmtPtr Parser::parseStatement() {
   case Tok::KwElse:
   case Tok::KwUntil:
     return makeNode<EmptyStmt>(cur());
-  case Tok::KwGoto:
-    errorAtCur(std::string(tokenName(cur().kind)) +
-               " statements are not supported yet");
-    bail();
+  case Tok::KwGoto: {
+    auto s = makeNode<GotoStmt>(cur());
+    ++pos_;
+    s->label = parseLabel("after 'goto'");
+    return s;
+  }
+  // A statement beginning with an unsigned integer can only be a labelled one:
+  // no expression starts a statement, so the ':' is not in doubt and needs no
+  // lookahead to find.
+  case Tok::IntLit: {
+    auto s = makeNode<LabeledStmt>(cur());
+    s->label = parseLabel("at the start of a labelled statement");
+    expect(Tok::Colon, "after a statement label");
+    s->body = parseStatement();
+    return s;
+  }
   default:
     errorAtCur(std::string("expected a statement, found ") +
                tokenName(cur().kind));

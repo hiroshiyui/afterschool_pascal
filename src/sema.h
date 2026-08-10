@@ -168,6 +168,43 @@ private:
   /// The field of an enclosing `with` this name refers to, if any.
   Symbol *lookupWithField(const std::string &name, const Field *&field) const;
 
+  /// One label of one block's label declaration part. ISO 7185 §6.1.6 makes a
+  /// label a number rather than a name, so it is not a Symbol and does not go
+  /// in a scope: two blocks may both declare label 1, and each means its own.
+  ///
+  /// `path` is the chain of statements that contain the labelled one, which is
+  /// what §6.8.1's restriction is stated over — a goto may reach a label only
+  /// when every statement containing the label also contains the goto. A label
+  /// at the top of a block's statement part has an empty path, and that is
+  /// also the only kind a goto from a *nested block* may reach.
+  struct LabelInfo {
+    int number = 0;
+    int id = -1;
+    bool defined = false;
+    int line = 0, col = 0;
+    int defLine = 0, defCol = 0;
+    std::vector<Stmt *> path;
+    Symbol *owner = nullptr;
+  };
+  /// A goto whose target is not resolved until the whole block has been
+  /// walked: a label may be declared before the statement it labels appears,
+  /// so a forward jump cannot be checked where it is written.
+  struct PendingGoto {
+    GotoStmt *node = nullptr;
+    std::vector<Stmt *> path;
+    /// True once the goto has been handed outwards because its label belongs
+    /// to an enclosing block. The hand-off is what makes the diagnostic
+    /// right: a nested procedure's body is checked *before* the statements of
+    /// the block containing it, so at the time the goto is written the label
+    /// it targets has not been seen yet and looks undeclared.
+    bool fromInnerBlock = false;
+  };
+
+  void checkLabelPart(Block &block, Symbol *owner);
+  void resolveGotos();
+  void checkGoto(GotoStmt *g);
+  void checkLabeled(LabeledStmt *l);
+
   /// A pointer type whose domain named a type not yet defined. ISO 7185
   /// §6.4.4 allows exactly this, and it is the only forward reference in the
   /// language — without it no type could contain a pointer to itself.
@@ -185,6 +222,13 @@ private:
   std::vector<std::unordered_map<std::string, Symbol *>> scopes_;
   /// The bindings of the `with` statements currently open, innermost last.
   std::vector<Symbol *> withStack_;
+  /// The label declaration parts of the blocks currently open, innermost last,
+  /// and the gotos of the innermost one waiting for its statements to be
+  /// walked. `stmtPath_` is the statements containing the one being checked.
+  std::vector<std::vector<LabelInfo>> labelScopes_;
+  std::vector<std::vector<PendingGoto>> gotoScopes_;
+  std::vector<Stmt *> stmtPath_;
+  int nextLabelId_ = 0;
   Symbol *program_ = nullptr;
   Symbol *current_ = nullptr; // the procedure whose body is being checked
   Program *prog_ = nullptr;   // for the parameter list, while the program is checked

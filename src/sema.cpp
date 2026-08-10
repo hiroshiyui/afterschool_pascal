@@ -679,7 +679,162 @@ ExprPtr Sema::standardFileRef(bool input, int line, int col) {
 /// A block is the declaration part followed by the statement part, and is the
 /// same shape for the program and for every procedure. The caller has already
 /// pushed the scope the declarations go into.
+/// The label declaration part. Every label a block declares must be labelling
+/// a statement of that same block by the time it is finished — ISO 7185 §6.1.6
+/// declares them, §6.8.1 requires each to be used, and a label declared and
+/// never placed is the mistake that would otherwise leave a `goto` with
+/// nowhere to land and no message about it.
+void Sema::checkLabelPart(Block &block, Symbol *owner) {
+  labelScopes_.emplace_back();
+  gotoScopes_.emplace_back();
+  for (const LabelDecl &d : block.labels) {
+    bool duplicate = false;
+    for (const LabelInfo &seen : labelScopes_.back())
+      if (seen.number == d.number)
+        duplicate = true;
+    if (duplicate) {
+      diags_.error(d.line, d.col,
+                   "label " + std::to_string(d.number) +
+                       " is declared twice in this block");
+      continue;
+    }
+    LabelInfo info;
+    info.number = d.number;
+    info.id = nextLabelId_++;
+    info.line = d.line;
+    info.col = d.col;
+    info.owner = owner;
+    labelScopes_.back().push_back(info);
+  }
+}
+
+/// A label is legal on a statement only where it was declared, so this is
+/// checked against the innermost block's declarations alone.
+void Sema::checkLabeled(LabeledStmt *l) {
+  LabelInfo *found = nullptr;
+  if (!labelScopes_.empty())
+    for (LabelInfo &info : labelScopes_.back())
+      if (info.number == l->label)
+        found = &info;
+
+  if (!found) {
+    diags_.error(l->line, l->col,
+                 "label " + std::to_string(l->label) +
+                     " is not declared in this block");
+  } else if (found->defined) {
+    diags_.error(l->line, l->col,
+                 "label " + std::to_string(l->label) +
+                     " already labels a statement at line " +
+                     std::to_string(found->defLine));
+  } else {
+    found->defined = true;
+    found->defLine = l->line;
+    found->defCol = l->col;
+    found->path = stmtPath_;
+    l->id = found->id;
+  }
+
+  stmtPath_.push_back(l);
+  checkStmt(l->body.get());
+  stmtPath_.pop_back();
+}
+
+/// The target is not looked for here: a label may be declared before the
+/// statement it labels is written, so a forward jump can only be resolved once
+/// the whole block has been walked.
+void Sema::checkGoto(GotoStmt *g) {
+  if (gotoScopes_.empty())
+    return;
+  gotoScopes_.back().push_back({g, stmtPath_});
+}
+
+/// ISO 7185 §6.8.1 restricts where a goto may land, and the restriction is
+/// what makes the lowering possible as much as what the standard says: a jump
+/// *into* a structured statement would arrive past the loop's initialisation
+/// or the `with` binding it depends on.
+///
+///   - to a label of the same block, the statements containing the label must
+///     all contain the goto — so a jump outward or sideways within one level
+///     is allowed and a jump inward is not;
+///   - to a label of an enclosing block, the label must be at the top level of
+///     that block's statement part, which is the only place a frame that is
+///     still alive can be re-entered.
+void Sema::resolveGotos() {
+  for (const PendingGoto &pending : gotoScopes_.back()) {
+    GotoStmt *g = pending.node;
+    LabelInfo *found = nullptr;
+    size_t depth = labelScopes_.size();
+    while (depth > 0 && !found) {
+      --depth;
+      for (LabelInfo &info : labelScopes_[depth])
+        if (info.number == g->label)
+          found = &info;
+    }
+
+    if (!found) {
+      diags_.error(g->line, g->col,
+                   "label " + std::to_string(g->label) +
+                       " is not declared in this block or any enclosing one");
+      continue;
+    }
+    // The label is somewhere outside: hand the goto to the block that declared
+    // it, whose statements have not been walked yet.
+    if (depth + 1 < labelScopes_.size()) {
+      PendingGoto moved = pending;
+      moved.fromInnerBlock = true;
+      gotoScopes_[depth].push_back(moved);
+      continue;
+    }
+    if (!found->defined) {
+      diags_.error(g->line, g->col,
+                   "label " + std::to_string(g->label) +
+                       " is declared but labels no statement");
+      continue;
+    }
+
+    if (!pending.fromInnerBlock) {
+      bool reachable = found->path.size() <= pending.path.size();
+      for (size_t i = 0; reachable && i < found->path.size(); ++i)
+        reachable = found->path[i] == pending.path[i];
+      if (!reachable) {
+        diags_.error(g->line, g->col,
+                     "label " + std::to_string(g->label) + " is inside a "
+                     "statement this goto is not: a goto may leave a "
+                     "structured statement but not enter one");
+        continue;
+      }
+    } else if (!found->path.empty()) {
+      diags_.error(g->line, g->col,
+                   "label " + std::to_string(g->label) + " is in an enclosing "
+                   "block, so it must label a statement of that block's "
+                   "statement part and not one inside a statement of it");
+      continue;
+    } else {
+      // The placement is legal; the lowering is what is missing. A non-local
+      // goto abandons the activations between here and the target, which
+      // needs the frames unwound and their files closed — see ADR-0029.
+      diags_.error(g->line, g->col,
+                   "a goto to a label in an enclosing block is not "
+                   "implemented; only a goto within one block is");
+      continue;
+    }
+
+    g->id = found->id;
+    g->owner = found->owner;
+  }
+
+  for (const LabelInfo &info : labelScopes_.back())
+    if (!info.defined)
+      diags_.error(info.line, info.col,
+                   "label " + std::to_string(info.number) +
+                       " is declared but labels no statement of this block");
+
+  labelScopes_.pop_back();
+  gotoScopes_.pop_back();
+}
+
 void Sema::checkBlock(Block &block, Symbol *owner) {
+  checkLabelPart(block, owner);
   for (auto &c : block.consts) {
     checkExpr(c.value.get());
     Symbol value;
@@ -743,7 +898,20 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
                        "' was declared forward but never given a body");
   }
 
-  checkStmt(block.body.get());
+  // The statement path is per block: a goto in a nested procedure is not
+  // inside the enclosing block's statements, whatever they are.
+  std::vector<Stmt *> outerPath;
+  outerPath.swap(stmtPath_);
+  // The statement part *is* the block's outermost statement-sequence, so it is
+  // walked without joining the path — a label at the top of it has no
+  // containing statement, which is what ISO 7185 §6.8.1 requires of the target
+  // of a goto from a nested block. A `begin ... end` written *inside* it is an
+  // ordinary statement and does join.
+  if (block.body)
+    for (auto &sub : block.body->body)
+      checkStmt(sub.get());
+  stmtPath_.swap(outerPath);
+  resolveGotos();
 }
 
 void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
@@ -898,8 +1066,23 @@ void Sema::checkStmt(Stmt *s) {
     return;
 
   if (auto *c = as<Compound>(s)) {
+    // A compound statement is a statement-sequence, and §6.8.1 is stated over
+    // those — so it joins the path like any other statement that contains
+    // one, and a goto into a `begin ... end` from outside it is refused.
+    stmtPath_.push_back(c);
     for (auto &sub : c->body)
       checkStmt(sub.get());
+    stmtPath_.pop_back();
+    return;
+  }
+
+  if (auto *g = as<GotoStmt>(s)) {
+    checkGoto(g);
+    return;
+  }
+
+  if (auto *l = as<LabeledStmt>(s)) {
+    checkLabeled(l);
     return;
   }
 
@@ -992,8 +1175,10 @@ void Sema::checkStmt(Stmt *s) {
     if (i->cond->type && !i->cond->type->isBoolean())
       diags_.error(i->cond->line, i->cond->col,
                    "the condition of an if statement must be boolean");
+    stmtPath_.push_back(i);
     checkStmt(i->thenBranch.get());
     checkStmt(i->elseBranch.get());
+    stmtPath_.pop_back();
     return;
   }
 
@@ -1002,13 +1187,17 @@ void Sema::checkStmt(Stmt *s) {
     if (w->cond->type && !w->cond->type->isBoolean())
       diags_.error(w->cond->line, w->cond->col,
                    "the condition of a while statement must be boolean");
+    stmtPath_.push_back(w);
     checkStmt(w->body.get());
+    stmtPath_.pop_back();
     return;
   }
 
   if (auto *r = as<RepeatStmt>(s)) {
+    stmtPath_.push_back(r);
     for (auto &sub : r->body)
       checkStmt(sub.get());
+    stmtPath_.pop_back();
     checkExpr(r->cond.get());
     if (r->cond->type && !r->cond->type->isBoolean())
       diags_.error(r->cond->line, r->cond->col,
@@ -1038,7 +1227,9 @@ void Sema::checkStmt(Stmt *s) {
       diags_.error(f->line, f->col,
                    "the bounds of a for statement must match the type of the "
                    "control variable");
+    stmtPath_.push_back(f);
     checkStmt(f->body.get());
+    stmtPath_.pop_back();
     return;
   }
 }
@@ -1621,7 +1812,9 @@ void Sema::checkCase(CaseStmt *c) {
       seen[value] = true;
       arm.values.push_back(value);
     }
+    stmtPath_.push_back(c);
     checkStmt(arm.body.get());
+    stmtPath_.pop_back();
   }
 }
 
@@ -1635,14 +1828,18 @@ void Sema::checkWith(WithStmt *w) {
   if (!isDesignator(w->record.get())) {
     diags_.error(w->record->line, w->record->col,
                  "'with' needs a record variable");
+    stmtPath_.push_back(w);
     checkStmt(w->body.get());
+    stmtPath_.pop_back();
     return;
   }
   if (!t || !t->isRecord()) {
     diags_.error(w->record->line, w->record->col,
                  "'with' needs a record variable, found " +
                      (t ? t->name() : std::string("nothing")));
+    stmtPath_.push_back(w);
     checkStmt(w->body.get());
+    stmtPath_.pop_back();
     return;
   }
 
@@ -1658,7 +1855,9 @@ void Sema::checkWith(WithStmt *w) {
                             SymKind::VarParam, t, current_);
 
   withStack_.push_back(w->binding);
+  stmtPath_.push_back(w);
   checkStmt(w->body.get());
+  stmtPath_.pop_back();
   withStack_.pop_back();
 }
 

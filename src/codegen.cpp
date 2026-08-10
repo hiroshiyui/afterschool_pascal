@@ -393,6 +393,11 @@ void CodeGen::declareProcs(Block &block) {
 
 void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   curFn_ = fn;
+  // A label belongs to exactly one block, so the map is emptied per function.
+  // Sema numbers labels across the whole program, so a stale entry would never
+  // be *matched* — this bounds what is kept, and is not what makes the block
+  // numbers right.
+  labelBlocks_.clear();
   curProc_ = proc;
   BasicBlock *entry = BasicBlock::Create(ctx_, "entry", fn);
   b_.SetInsertPoint(entry);
@@ -462,7 +467,8 @@ void CodeGen::initFiles(Symbol *proc) {
 /// A block exit closes the files the block declared, which is ISO 7185's rule
 /// and also the only thing that flushes a file written to inside a procedure.
 /// Pascal has no early return, so the single exit point each body ends with is
-/// the whole of the epilogue.
+/// the whole of the epilogue — and a `goto` does not change that, because a
+/// local one cannot leave the block and a non-local one is refused (ADR-0029).
 void CodeGen::closeFiles(Symbol *proc) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   for (Symbol *v : proc->frameVars) {
@@ -699,6 +705,44 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
 
 // ---------------------------------------------------------------- statements
 
+/// The block a label denotes. Created on first mention, which may be either
+/// the labelled statement or a goto to it — a forward jump reaches here before
+/// the statement it targets exists.
+llvm::BasicBlock *CodeGen::labelBlock(int id) {
+  auto found = labelBlocks_.find(id);
+  if (found != labelBlocks_.end())
+    return found->second;
+  BasicBlock *bb =
+      BasicBlock::Create(ctx_, "L" + std::to_string(id), curFn_);
+  labelBlocks_[id] = bb;
+  return bb;
+}
+
+/// A labelled statement is its own basic block, entered by falling into it as
+/// well as by jumping to it — so the preceding code branches there rather than
+/// running on, which is what makes the label a join point rather than a second
+/// entry to the same block.
+void CodeGen::emitLabeled(LabeledStmt *l) {
+  if (l->id < 0) { // Sema reported an undeclared label; emit the body anyway
+    emitStmt(l->body.get());
+    return;
+  }
+  BasicBlock *bb = labelBlock(l->id);
+  b_.CreateBr(bb);
+  b_.SetInsertPoint(bb);
+  emitStmt(l->body.get());
+}
+
+/// Anything written after a goto is unreachable, but it is still *code*: a
+/// statement may follow it in the same sequence, and LLVM requires it to live
+/// in a block of its own rather than after a terminator.
+void CodeGen::emitGoto(GotoStmt *g) {
+  if (g->id < 0)
+    return; // Sema has already reported it
+  b_.CreateBr(labelBlock(g->id));
+  b_.SetInsertPoint(BasicBlock::Create(ctx_, "after.goto", curFn_));
+}
+
 void CodeGen::emitStmt(Stmt *s) {
   if (!s)
     return;
@@ -718,6 +762,8 @@ void CodeGen::emitStmt(Stmt *s) {
   case NK::For:     emitFor(static_cast<ForStmt *>(s)); return;
   case NK::With:    emitWith(static_cast<WithStmt *>(s)); return;
   case NK::Case:    emitCase(static_cast<CaseStmt *>(s)); return;
+  case NK::Goto:    emitGoto(static_cast<GotoStmt *>(s)); return;
+  case NK::Labeled: emitLabeled(static_cast<LabeledStmt *>(s)); return;
   case NK::ProcCall: {
     auto *call = static_cast<ProcCallStmt *>(s);
     if (call->standard != StdProc::None)

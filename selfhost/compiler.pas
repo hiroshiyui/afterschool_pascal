@@ -116,7 +116,8 @@ type
     ctxCompoundStart, ctxCompoundEnd, ctxIf, ctxWhile, ctxRepeatEnd, ctxFor,
     ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxParenExpr,
-    ctxCallArgs);
+    ctxCallArgs, ctxAfterGoto, ctxLabelStart, ctxAfterLabel, ctxLabelDecl,
+    ctxAfterLabelPart);
 
   { `in` is a relational operator (ISO 7185 6.7.2.4) and sits at the same
     precedence as `=`, which is why it belongs here rather than with the
@@ -135,14 +136,14 @@ type
     nkField, nkDeref, nkBinary, nkUnary, nkCall,
     { statements }
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
-    nkFor, nkProcCall, nkWith, nkCase,
+    nkFor, nkProcCall, nkWith, nkCase, nkGoto, nkLabeled,
     { the pieces the C++ side keeps in vectors of plain structs }
     nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName,
     { type denoters }
     nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkFile,
     nkSetOf,
     { declarations }
-    nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock);
+    nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock);
 
   { ------------------------------------------------------- Sema's own types }
 
@@ -345,6 +346,12 @@ type
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
       nkCase:       (csSelector, csArms: nodePtr);
+      { `goto L` and `L: statement`. Sema resolves the number to the labelled
+        statement's own id, which is what codegen branches to -- the number is
+        not enough, since two blocks may each declare label 1. }
+      nkGoto:       (gtLabel, gtId: integer);
+      nkLabeled:    (lbLabel, lbId: integer; lbStmt: nodePtr);
+      nkLabelDecl:  (ldNumber: integer);
       nkCaseArm:    (caLabels, caBody: nodePtr; caValues, caValueTail: numPtr);
       nkDeclName:   (dnAt, dnLen: integer);
       { one type-denoter shared by a list of names: a field group, a variable
@@ -367,8 +374,68 @@ type
       nkProcDecl:   (pdAt, pdLen: integer;
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward: boolean; pdSym: symPtr);
-      nkBlock:      (blConsts, blTypes, blVars, blProcs, blBody: nodePtr)
+      nkBlock:      (blLabels, blConsts, blTypes, blVars, blProcs,
+                     blBody: nodePtr)
   end;
+
+  { The statements containing the one being checked, innermost first. Built by
+    pushing a new cell in front of the current head and never mutated, so two
+    paths *share* their common suffix -- which is what makes the prefix test in
+    ResolveGotos a pointer comparison rather than a walk. }
+  stmtPathPtr = ^stmtPathRec;
+  stmtPathRec = record
+    stmt: nodePtr;
+    depth: integer;
+    next: stmtPathPtr
+  end;
+
+  { One label of one block's label declaration part. ISO 7185 6.1.6 makes a
+    label a number rather than a name, so it is not a symbol and does not go in
+    a scope: two blocks may both declare label 1, and each means its own.
+    `path` is what 6.8.1's restriction is stated over -- a goto may reach a
+    label only when every statement containing the label also contains the
+    goto. }
+  labelInfoPtr = ^labelInfoRec;
+  labelInfoRec = record
+    number, id: integer;
+    isDefined: boolean;
+    line, col, defLine, defCol: integer;
+    path: stmtPathPtr;
+    owner: symPtr;
+    next: labelInfoPtr
+  end;
+
+  { A goto whose target is not resolved until the whole block has been walked:
+    a label may be declared before the statement it labels appears, so a
+    forward jump cannot be checked where it is written. }
+  pendingGotoPtr = ^pendingGotoRec;
+  pendingGotoRec = record
+    gnode: nodePtr;
+    gpath: stmtPathPtr;
+    { True once the goto has been handed outwards because its label belongs to
+      an enclosing block. The hand-off is what makes the diagnostic right: a
+      nested procedure's body is checked *before* the statements of the block
+      containing it, so where the goto is written the label it targets has not
+      been seen yet and looks undeclared. }
+    fromInner: boolean;
+    next: pendingGotoPtr
+  end;
+
+  { The block number each label denotes, by the id Sema gave it. Per function,
+    since a label belongs to exactly one block. }
+  labelBlockPtr = ^labelBlockRec;
+  labelBlockRec = record
+    lid, blk: integer;
+    next: labelBlockPtr
+  end;
+
+  labelScopePtr = ^labelScopeRec;
+  labelScopeRec = record
+    labels, labelTail: labelInfoPtr;
+    gotos, gotoTail: pendingGotoPtr;
+    outer: labelScopePtr
+  end;
+
 
 var
   source: text;
@@ -432,6 +499,11 @@ var
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
   emptySetType: typePtr;
+  { the label declaration parts of the blocks currently open, innermost first }
+  labelScope: labelScopePtr;
+  stmtPath: stmtPathPtr;
+  nextLabelId: integer;
+  labelBlocks: labelBlockPtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
 
 { ------------------------------------------------------------------ strings }
@@ -1200,6 +1272,11 @@ begin
     ctxAfterFile:      write('after ''file''');
     ctxAfterSet:       write('after ''set''');
     ctxSetMembers:     write('after the members of a set');
+    ctxAfterGoto:      write('after ''goto''');
+    ctxLabelStart:     write('at the start of a labelled statement');
+    ctxAfterLabel:     write('after a statement label');
+    ctxLabelDecl:      write('in a label declaration');
+    ctxAfterLabelPart: write('after a label declaration');
     ctxSubrangeBounds: write('between the bounds of a subrange');
     ctxEnumConstants:  write('after the constants of an enumerated type');
     ctxAfterArray:     write('after ''array''');
@@ -1277,12 +1354,14 @@ begin
       n^.vaTagLine := 0;
       n^.vaTagCol := 0
     end;
+    nkGoto:    n^.gtId := -1;
+    nkLabeled: n^.lbId := -1;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
     nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkCase, nkWriteArg, nkGroup, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkConstDecl,
-    nkTypeDecl,
+    nkTypeDecl, nkLabelDecl,
     nkBlock: { nothing of Sema's to clear }
   end;
   NewNode := n
@@ -1617,6 +1696,47 @@ begin
     ParseVariantPart(t, false);
   Expect(tkEnd, ctxRecordEnd);
   ParseRecordType := t
+end;
+
+{ ISO 7185 6.1.6: a label is an unsigned integer of at most four digits, so
+  `0001` and `1` are the same label and `10000` is not one at all. The value is
+  what identifies it -- there is no name here to intern. }
+function ParseLabel(ctx: ctxKind): integer;
+var v: integer;
+begin
+  ParseLabel := 0;
+  if not Check(tkInt) then begin
+    ErrorAtCur;
+    write('expected a label ');
+    WriteContext(ctx);
+    write(', found ');
+    WriteTokenName(tok[pos].kind);
+    writeln;
+    Bail
+  end
+  else begin
+    v := tok[pos].intVal;
+    if (v < 0) or (v > 9999) then begin
+      ErrorAtCur;
+      writeln('a label must be an unsigned integer of at most four digits');
+      v := 0
+    end;
+    pos := pos + 1;
+    ParseLabel := v
+  end
+end;
+
+{ label-declaration-part = 'label' label (',' label)* ';' }
+procedure ParseLabelPart(var head, tail: nodePtr);
+var d: nodePtr;
+begin
+  Expect(tkLabel, ctxNone);
+  repeat
+    d := NewNode(nkLabelDecl, CurLine, CurCol);
+    d^.ldNumber := ParseLabel(ctxLabelDecl);
+    Append(head, tail, d)
+  until not Accept(tkComma) or aborted;
+  Expect(tkSemi, ctxAfterLabelPart)
 end;
 
 { type-denoter = 'packed'? structured-type | ordinal-type | type-identifier }
@@ -2342,10 +2462,19 @@ begin
     then
       s := NewNode(nkEmpty, CurLine, CurCol)
     else if Check(tkGoto) then begin
-      ErrorAtCur;
-      WriteTokenName(tok[pos].kind);
-      writeln(' statements are not supported yet');
-      Bail
+      s := NewNode(nkGoto, CurLine, CurCol);
+      pos := pos + 1;
+      s^.gtLabel := ParseLabel(ctxAfterGoto)
+    end
+    { A statement beginning with an unsigned integer can only be a labelled
+      one: no expression starts a statement, so the ':' is not in doubt and
+      needs no lookahead to find. }
+    else if Check(tkInt) then begin
+      s := NewNode(nkLabeled, CurLine, CurCol);
+      s^.lbStmt := nil;
+      s^.lbLabel := ParseLabel(ctxLabelStart);
+      Expect(tkColon, ctxAfterLabel);
+      s^.lbStmt := ParseStatement
     end
     else begin
       ErrorAtCur;
@@ -2532,9 +2661,10 @@ end;
   The same production serves the program and every procedure, so nesting needs
   no extra machinery here. }
 function ParseBlock;
-var b, ph, pt, ch, ct, th, tt, vh, vt: nodePtr; done: boolean;
+var b, ph, pt, ch, ct, th, tt, vh, vt, lh, lt: nodePtr; done: boolean;
 begin
   b := NewNode(nkBlock, CurLine, CurCol);
+  b^.blLabels := nil;
   b^.blConsts := nil;
   b^.blTypes := nil;
   b^.blVars := nil;
@@ -2544,6 +2674,7 @@ begin
   ch := nil; ct := nil;
   th := nil; tt := nil;
   vh := nil; vt := nil;
+  lh := nil; lt := nil;
 
   done := false;
   while not done and not aborted do begin
@@ -2557,15 +2688,12 @@ begin
       Append(ph, pt, ParseProcOrFunc(false))
     else if Check(tkFunction) then
       Append(ph, pt, ParseProcOrFunc(true))
-    else if Check(tkLabel) then begin
-      ErrorAtCur;
-      WriteTokenName(tok[pos].kind);
-      writeln(' declarations are not supported yet');
-      Bail
-    end
+    else if Check(tkLabel) then
+      ParseLabelPart(lh, lt)
     else
       done := true
   end;
+  b^.blLabels := lh;
   b^.blConsts := ch;
   b^.blTypes := th;
   b^.blVars := vh;
@@ -3214,6 +3342,27 @@ procedure CheckExpr(e: nodePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
 procedure CheckStmt(s: nodePtr); forward;
 procedure CheckBlock(b: nodePtr; owner: symPtr); forward;
+procedure CheckGoto(s: nodePtr); forward;
+procedure CheckLabeled(s: nodePtr); forward;
+
+{ Pushing is a new cell in front of the current head; popping is restoring the
+  saved head, so nothing is ever mutated and two paths share their common
+  suffix. PathDepth is stored rather than counted for the same reason. }
+function PushStmt(p: stmtPathPtr; n: nodePtr): stmtPathPtr;
+var c: stmtPathPtr;
+begin
+  new(c);
+  c^.stmt := n;
+  c^.next := p;
+  if p = nil then c^.depth := 1 else c^.depth := p^.depth + 1;
+  PushStmt := c
+end;
+
+function PathDepth(p: stmtPathPtr): integer;
+begin
+  if p = nil then PathDepth := 0 else PathDepth := p^.depth
+end;
+
 
 function EvalConst(e: nodePtr; var res: symbol): boolean;
 var inner: symbol; ok: boolean;
@@ -4846,6 +4995,7 @@ procedure CheckCase(c: nodePtr);
 var
   sel, labelType, named: typePtr;
   arm, label_: nodePtr;
+  saved: stmtPathPtr;
   seenHead, seenTail, n: numPtr;
   value: integer;
   seen: boolean;
@@ -4910,7 +5060,10 @@ begin
       end;
       label_ := label_^.next
     end;
+    saved := stmtPath;
+    stmtPath := PushStmt(stmtPath, c);
     CheckStmt(arm^.caBody);
+    stmtPath := saved;
     arm := arm^.next
   end
 end;
@@ -4919,22 +5072,27 @@ end;
   record is designated once, so the binding holds its address and any subscripts
   in the designator are evaluated a single time. }
 procedure CheckWith(w: nodePtr);
-var t: typePtr; at, len: integer; entry: symListPtr;
+var t: typePtr; at, len: integer; entry: symListPtr; saved: stmtPathPtr;
 begin
   CheckExpr(w^.wtRecord);
   t := w^.wtRecord^.ntype;
+  saved := stmtPath;
 
   if not IsDesignator(w^.wtRecord) then begin
     ErrorAt(w^.wtRecord^.line, w^.wtRecord^.col);
     writeln('''with'' needs a record variable');
-    CheckStmt(w^.wtBody)
+    stmtPath := PushStmt(stmtPath, w);
+    CheckStmt(w^.wtBody);
+    stmtPath := saved
   end
   else if not IsRecord(t) then begin
     ErrorAt(w^.wtRecord^.line, w^.wtRecord^.col);
     write('''with'' needs a record variable, found ');
     if t = nil then write('nothing') else WriteTypeName(t);
     writeln;
-    CheckStmt(w^.wtBody)
+    stmtPath := PushStmt(stmtPath, w);
+    CheckStmt(w^.wtBody);
+    stmtPath := saved
   end
   else begin
     { The binding is a frame slot holding a pointer -- the same shape as a
@@ -4946,25 +5104,36 @@ begin
     w^.wtBinding := entry^.sym;
     entry^.next := withTop;
     withTop := entry;
+    stmtPath := PushStmt(stmtPath, w);
     CheckStmt(w^.wtBody);
+    stmtPath := saved;
     withTop := withTop^.next
   end
 end;
 
 procedure CheckStmt;
-var sub: nodePtr; sym, named: symPtr;
+var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr;
 begin
   if s <> nil then
     case s^.kind of
       nkEmpty: ;
 
+      { A compound statement is a statement-sequence, and 6.8.1 is stated over
+        those -- so it joins the path like any other statement that contains
+        one, and a goto into a `begin ... end` from outside it is refused. }
       nkCompound: begin
+        saved := stmtPath;
+        stmtPath := PushStmt(stmtPath, s);
         sub := s^.cpBody;
         while sub <> nil do begin
           CheckStmt(sub);
           sub := sub^.next
-        end
+        end;
+        stmtPath := saved
       end;
+
+      nkGoto:    CheckGoto(s);
+      nkLabeled: CheckLabeled(s);
 
       nkAssign: begin
         { Assigning to a function's own name sets its result (ISO 7185
@@ -5065,8 +5234,11 @@ begin
           ErrorAt(s^.ifCond^.line, s^.ifCond^.col);
           writeln('the condition of an if statement must be boolean')
         end;
+        saved := stmtPath;
+        stmtPath := PushStmt(stmtPath, s);
         CheckStmt(s^.ifThen);
-        CheckStmt(s^.ifElse)
+        CheckStmt(s^.ifElse);
+        stmtPath := saved
       end;
 
       nkWhile: begin
@@ -5076,15 +5248,21 @@ begin
           ErrorAt(s^.whCond^.line, s^.whCond^.col);
           writeln('the condition of a while statement must be boolean')
         end;
-        CheckStmt(s^.whBody)
+        saved := stmtPath;
+        stmtPath := PushStmt(stmtPath, s);
+        CheckStmt(s^.whBody);
+        stmtPath := saved
       end;
 
       nkRepeat: begin
+        saved := stmtPath;
+        stmtPath := PushStmt(stmtPath, s);
         sub := s^.rpBody;
         while sub <> nil do begin
           CheckStmt(sub);
           sub := sub^.next
         end;
+        stmtPath := saved;
         CheckExpr(s^.rpCond);
         if (s^.rpCond^.ntype <> nil) and not IsBoolean(s^.rpCond^.ntype) then
         begin
@@ -5121,7 +5299,10 @@ begin
           writeln('the bounds of a for statement must match the type of the ',
                   'control variable')
         end;
-        CheckStmt(s^.frBody)
+        saved := stmtPath;
+        stmtPath := PushStmt(stmtPath, s);
+        CheckStmt(s^.frBody);
+        stmtPath := saved
       end;
 
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
@@ -5262,9 +5443,214 @@ end;
 { A block is the declaration part followed by the statement part, and is the
   same shape for the program and for every procedure. The caller has already
   pushed the scope the declarations go into. }
+{ ------------------------------------------------------------------ labels }
+
+{ The label declaration part. Every label a block declares must be labelling a
+  statement of that same block by the time it is finished -- 6.1.6 declares
+  them and 6.8.1 requires each to be used, and a label declared and never
+  placed is the mistake that would otherwise leave a goto with nowhere to land
+  and no message about it. }
+procedure CheckLabelPart(b: nodePtr; owner: symPtr);
+var sc: labelScopePtr; d: nodePtr; info, seen: labelInfoPtr;
+    duplicate: boolean;
+begin
+  new(sc);
+  sc^.labels := nil;
+  sc^.labelTail := nil;
+  sc^.gotos := nil;
+  sc^.gotoTail := nil;
+  sc^.outer := labelScope;
+  labelScope := sc;
+
+  d := b^.blLabels;
+  while d <> nil do begin
+    duplicate := false;
+    seen := sc^.labels;
+    while seen <> nil do begin
+      if seen^.number = d^.ldNumber then duplicate := true;
+      seen := seen^.next
+    end;
+    if duplicate then begin
+      ErrorAt(d^.line, d^.col);
+      writeln('label ', d^.ldNumber:1, ' is declared twice in this block')
+    end
+    else begin
+      new(info);
+      info^.number := d^.ldNumber;
+      info^.id := nextLabelId;
+      nextLabelId := nextLabelId + 1;
+      info^.isDefined := false;
+      info^.line := d^.line;
+      info^.col := d^.col;
+      info^.defLine := 0;
+      info^.defCol := 0;
+      info^.path := nil;
+      info^.owner := owner;
+      info^.next := nil;
+      if sc^.labels = nil then sc^.labels := info
+      else sc^.labelTail^.next := info;
+      sc^.labelTail := info
+    end;
+    d := d^.next
+  end
+end;
+
+{ A label is legal on a statement only where it was declared, so this is
+  checked against the innermost block's declarations alone. }
+procedure CheckLabeled;
+var found: labelInfoPtr; saved: stmtPathPtr;
+begin
+  found := nil;
+  if labelScope <> nil then begin
+    found := labelScope^.labels;
+    while (found <> nil) and (found^.number <> s^.lbLabel) do
+      found := found^.next
+  end;
+
+  if found = nil then begin
+    ErrorAt(s^.line, s^.col);
+    writeln('label ', s^.lbLabel:1, ' is not declared in this block')
+  end
+  else if found^.isDefined then begin
+    ErrorAt(s^.line, s^.col);
+    writeln('label ', s^.lbLabel:1,
+            ' already labels a statement at line ', found^.defLine:1)
+  end
+  else begin
+    found^.isDefined := true;
+    found^.defLine := s^.line;
+    found^.defCol := s^.col;
+    found^.path := stmtPath;
+    s^.lbId := found^.id
+  end;
+
+  saved := stmtPath;
+  stmtPath := PushStmt(stmtPath, s);
+  CheckStmt(s^.lbStmt);
+  stmtPath := saved
+end;
+
+{ The target is not looked for here: a label may be declared before the
+  statement it labels is written, so a forward jump can only be resolved once
+  the whole block has been walked. }
+procedure CheckGoto;
+var g: pendingGotoPtr;
+begin
+  if labelScope <> nil then begin
+    new(g);
+    g^.gnode := s;
+    g^.gpath := stmtPath;
+    g^.fromInner := false;
+    g^.next := nil;
+    if labelScope^.gotos = nil then labelScope^.gotos := g
+    else labelScope^.gotoTail^.next := g;
+    labelScope^.gotoTail := g
+  end
+end;
+
+{ ISO 7185 6.8.1 restricts where a goto may land, and the restriction is what
+  makes the lowering possible as much as what the standard says: a jump *into*
+  a structured statement would arrive past the loop's initialisation or the
+  `with` binding it depends on.
+
+    - to a label of the same block, the statements containing the label must
+      all contain the goto -- so a jump outward or sideways within one level is
+      allowed and a jump inward is not;
+    - to a label of an enclosing block, the label must be at the top level of
+      that block's statement part, which is the only place a frame that is
+      still alive could be re-entered. }
+procedure ResolveGotos;
+var pending, moved: pendingGotoPtr; found, info: labelInfoPtr;
+    sc, home: labelScopePtr; p: stmtPathPtr; reachable: boolean;
+begin
+  pending := labelScope^.gotos;
+  while pending <> nil do begin
+    found := nil;
+    home := nil;
+    sc := labelScope;
+    while (sc <> nil) and (found = nil) do begin
+      info := sc^.labels;
+      while (info <> nil) and (info^.number <> pending^.gnode^.gtLabel) do
+        info := info^.next;
+      if info <> nil then begin
+        found := info;
+        home := sc
+      end;
+      sc := sc^.outer
+    end;
+
+    if found = nil then begin
+      ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
+      writeln('label ', pending^.gnode^.gtLabel:1,
+              ' is not declared in this block or any enclosing one')
+    end
+    { The label is somewhere outside: hand the goto to the block that declared
+      it, whose statements have not been walked yet. }
+    else if home <> labelScope then begin
+      new(moved);
+      moved^.gnode := pending^.gnode;
+      moved^.gpath := pending^.gpath;
+      moved^.fromInner := true;
+      moved^.next := nil;
+      if home^.gotos = nil then home^.gotos := moved
+      else home^.gotoTail^.next := moved;
+      home^.gotoTail := moved
+    end
+    else if not found^.isDefined then begin
+      ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
+      writeln('label ', pending^.gnode^.gtLabel:1,
+              ' is declared but labels no statement')
+    end
+    else if not pending^.fromInner then begin
+      p := pending^.gpath;
+      while PathDepth(p) > PathDepth(found^.path) do
+        p := p^.next;
+      reachable := p = found^.path;
+      if not reachable then begin
+        ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
+        writeln('label ', pending^.gnode^.gtLabel:1, ' is inside a statement ',
+                'this goto is not: a goto may leave a structured statement ',
+                'but not enter one')
+      end
+      else begin
+        pending^.gnode^.gtId := found^.id
+      end
+    end
+    else if found^.path <> nil then begin
+      ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
+      writeln('label ', pending^.gnode^.gtLabel:1, ' is in an enclosing ',
+              'block, so it must label a statement of that block''s ',
+              'statement part and not one inside a statement of it')
+    end
+    else begin
+      { The placement is legal; the lowering is what is missing. A non-local
+        goto abandons the activations between here and the target, which needs
+        the frames unwound and their files closed -- see ADR-0029. }
+      ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
+      writeln('a goto to a label in an enclosing block is not implemented; ',
+              'only a goto within one block is')
+    end;
+    pending := pending^.next
+  end;
+
+  info := labelScope^.labels;
+  while info <> nil do begin
+    if not info^.isDefined then begin
+      ErrorAt(info^.line, info^.col);
+      writeln('label ', info^.number:1,
+              ' is declared but labels no statement of this block')
+    end;
+    info := info^.next
+  end;
+
+  labelScope := labelScope^.outer
+end;
+
 procedure CheckBlock;
 var d, g, n: nodePtr; s: symPtr; t: typePtr; value: symbol;
+    outerPath: stmtPathPtr;
 begin
+  CheckLabelPart(b, owner);
   d := b^.blConsts;
   while d <> nil do begin
     CheckExpr(d^.kdValue);
@@ -5349,7 +5735,23 @@ begin
     d := d^.next
   end;
 
-  CheckStmt(b^.blBody)
+  { The statement part *is* the block's outermost statement-sequence, so it is
+    walked without joining the path -- a label at the top of it has no
+    containing statement, which is what 6.8.1 requires of the target of a goto
+    from a nested block. A `begin ... end` written *inside* it is an ordinary
+    statement and does join. The path is per block, since a goto in a nested
+    procedure is not inside the enclosing block's statements. }
+  outerPath := stmtPath;
+  stmtPath := nil;
+  if b^.blBody <> nil then begin
+    d := b^.blBody^.cpBody;
+    while d <> nil do begin
+      CheckStmt(d);
+      d := d^.next
+    end
+  end;
+  stmtPath := outerPath;
+  ResolveGotos
 end;
 
 procedure InstallPredefined;
@@ -5385,6 +5787,9 @@ begin
     type. Unlike nil this is not an exception to name equivalence but the
     ordinary rule of 6.4.6 with nothing to compare. }
   emptySetType := NewType(tySet);
+  labelScope := nil;
+  stmtPath := nil;
+  nextLabelId := 0;
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like
     the other predefined types, so every variable declared `text` has the same
     type -- a `file of char` written out longhand is a different one, exactly
@@ -5890,6 +6295,24 @@ begin
       write('empty');
       At(n^.line, n^.col)
     end;
+    { A goto prints the id Sema resolved it to as well as the number: the
+      number alone does not say which label, since two blocks may each declare
+      label 1. }
+    nkGoto: begin
+      write('goto ', n^.gtLabel:1);
+      WritePos(n^.line, n^.col);
+      if annotate then write(' -> #', n^.gtId:1);
+      writeln
+    end;
+    nkLabeled: begin
+      write('label ', n^.lbLabel:1);
+      WritePos(n^.line, n^.col);
+      if annotate then write(' -> #', n^.lbId:1);
+      writeln;
+      level := level + 1;
+      DumpStmt(n^.lbStmt);
+      level := level - 1
+    end;
     nkAssign: begin
       write('assign');
       At(n^.line, n^.col);
@@ -6298,6 +6721,17 @@ begin
   Pad;
   writeln('block');
   level := level + 1;
+  Pad;
+  writeln('labels');
+  level := level + 1;
+  p := n^.blLabels;
+  while p <> nil do begin
+    Pad;
+    write('label ', p^.ldNumber:1);
+    At(p^.line, p^.col);
+    p := p^.next
+  end;
+  level := level - 1;
   Pad;
   writeln('consts');
   level := level + 1;
@@ -6819,6 +7253,25 @@ procedure StartBlock(b: integer);
 begin
   writeln(ircode, 'L', b:1, ':');
   curBlock := b
+end;
+
+{ The block a label denotes. Created on first mention, which may be either the
+  labelled statement or a goto to it -- a forward jump reaches here before the
+  statement it targets exists. }
+function LabelBlock(id: integer): integer;
+var p: labelBlockPtr;
+begin
+  p := labelBlocks;
+  while (p <> nil) and (p^.lid <> id) do
+    p := p^.next;
+  if p = nil then begin
+    new(p);
+    p^.lid := id;
+    p^.blk := NewBlock;
+    p^.next := labelBlocks;
+    labelBlocks := p
+  end;
+  LabelBlock := p^.blk
 end;
 
 { ------------------------------------------------------- string constants }
@@ -8552,6 +9005,34 @@ begin
   StartBlock(endB)
 end;
 
+{ A labelled statement is its own basic block, entered by falling into it as
+  well as by jumping to it -- so the preceding code branches there rather than
+  running on, which is what makes the label a join point rather than a second
+  entry to the same block. }
+procedure EmitLabeled(s: nodePtr);
+var b: integer;
+begin
+  if s^.lbId < 0 then
+    EmitStmt(s^.lbStmt)   { Sema reported it; emit the body anyway }
+  else begin
+    b := LabelBlock(s^.lbId);
+    writeln(ircode, '  br label %L', b:1);
+    StartBlock(b);
+    EmitStmt(s^.lbStmt)
+  end
+end;
+
+{ Anything written after a goto is unreachable, but it is still *code*: a
+  statement may follow it in the same sequence, and LLVM requires it to live in
+  a block of its own rather than after a terminator. }
+procedure EmitGoto(s: nodePtr);
+begin
+  if s^.gtId >= 0 then begin
+    writeln(ircode, '  br label %L', LabelBlock(s^.gtId):1);
+    StartBlock(NewBlock)
+  end
+end;
+
 procedure EmitFor(s: nodePtr);
 var slot, from, toV, limit, cur, lim, test, now, lim2, same, next: str;
     t: typePtr; condB, bodyB, stepB, endB: integer; unsignedOrdinal: boolean;
@@ -8783,6 +9264,8 @@ begin
       nkFor: EmitFor(s);
       nkWith: EmitWith(s);
       nkCase: EmitCase(s);
+      nkGoto: EmitGoto(s);
+      nkLabeled: EmitLabeled(s);
       nkProcCall:
         if s^.pcStd <> spNone then EmitStdProc(s)
         else if s^.pcSym <> nil then EmitUserCall(s^.pcSym, s^.pcArgs, v);
@@ -8790,7 +9273,8 @@ begin
       nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock: ;
+      nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl,
+      nkBlock: ;
     end
 end;
 
@@ -8888,6 +9372,11 @@ end;
 procedure EnterFrame(p: symPtr);
 var l: symListPtr; link, slot, arg: str; k, align: integer;
 begin
+  { A label belongs to exactly one block, so the map is emptied per function.
+    Sema numbers labels across the whole program, so a stale entry would never
+    be *matched* -- this bounds what is kept, and is not what makes the block
+    numbers right. }
+  labelBlocks := nil;
   irProc := p;
   irLevel := p^.level;
   nextReg := 0;

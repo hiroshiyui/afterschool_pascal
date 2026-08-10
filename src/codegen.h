@@ -151,6 +151,12 @@ private:
   // expressions
   llvm::Value *emitExpr(Expr *e);
   llvm::Value *emitBinary(Binary *e);
+  void emitGoto(GotoStmt *g);
+  void emitLabeled(LabeledStmt *l);
+  /// The basic block each label denotes, by the id Sema gave it. Cleared for
+  /// each function, since a label belongs to exactly one block.
+  std::map<int, llvm::BasicBlock *> labelBlocks_;
+  llvm::BasicBlock *labelBlock(int id);
   llvm::Value *emitSet(SetExpr *e);
   llvm::Value *emitSetBinary(Binary *e, llvm::Value *l, llvm::Value *r);
   llvm::Value *emitUnary(Unary *e);

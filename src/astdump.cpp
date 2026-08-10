@@ -298,6 +298,30 @@ struct Dumper {
     case NK::Empty:
       head("empty", s->line, s->col);
       break;
+    // A goto prints the id Sema resolved it to as well as the number: the
+    // number alone does not say which label, since two blocks may each
+    // declare label 1.
+    case NK::Goto: {
+      GotoStmt *n = as<GotoStmt>(s);
+      pad();
+      std::printf("goto %d @%d:%d", n->label, n->line, n->col);
+      if (annotate)
+        std::printf(" -> #%d", n->id);
+      std::printf("\n");
+      break;
+    }
+    case NK::Labeled: {
+      LabeledStmt *n = as<LabeledStmt>(s);
+      pad();
+      std::printf("label %d @%d:%d", n->label, n->line, n->col);
+      if (annotate)
+        std::printf(" -> #%d", n->id);
+      std::printf("\n");
+      ++level;
+      stmt(n->body.get());
+      --level;
+      break;
+    }
     case NK::Assign: {
       Assign *n = as<Assign>(s);
       head("assign", s->line, s->col);
@@ -696,6 +720,11 @@ struct Dumper {
   void block(Block &b) {
     mark("block");
     ++level;
+    mark("labels");
+    ++level;
+    for (LabelDecl &d : b.labels)
+      head("label " + std::to_string(d.number), d.line, d.col);
+    --level;
     mark("consts");
     ++level;
     for (ConstDecl &c : b.consts) {
