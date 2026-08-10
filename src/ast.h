@@ -42,6 +42,11 @@ template <typename T, typename N> bool is(N *n) {
 
 enum class BinOp {
   Add, Sub, Mul, RealDiv, IntDiv, Mod, And, Or,
+  // ISO/IEC 10206:1991 §6.8.3.2's exponentiating operators. They differ in
+  // more than spelling: `**` converts both operands to real and yields a real,
+  // while `pow` takes an integer right operand and yields the type of its
+  // left one — so `2 pow 3` is the integer 8 and `2 ** 3` is 8.0.
+  Exp, Pow,
   // `in` is a relational operator in ISO 7185 §6.7.2.4 and sits at the same
   // precedence as `=` and `<`, which is why it belongs here and not with the
   // adding operators despite taking a set on only one side.

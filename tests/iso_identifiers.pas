@@ -24,6 +24,18 @@ type
 var
   value, module, export: integer;
   r: tagged;
+
+{ `pow` is a word-symbol of the other standard too, and nothing distinguishes
+  this function from any other -- which is the point: reserving a spelling
+  before the feature needing it lands would break programs like this one. }
+function pow(b, e: integer): integer;
+var i, acc: integer;
+begin
+  acc := 1;
+  for i := 1 to e do
+    acc := acc * b;
+  pow := acc
+end;
 begin
   value := 1;
   module := 2;
@@ -36,5 +48,6 @@ begin
   r.which := otherwise;
   r.n := 30;
   writeln('variant labelled otherwise: ', r.n:1);
+  writeln('a function named pow: ', pow(2, 8):1);
   writeln('value=', value:1, ' module=', module:1, ' export=', export:1)
 end.

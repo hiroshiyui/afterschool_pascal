@@ -1,0 +1,9 @@
+<source>:18:10: error: operator 'pow' needs numeric operands, found colour and integer
+<source>:19:10: error: the right operand of 'pow' must be an integer, found colour (use ** for a real exponent)
+<source>:20:10: error: operator '**' needs numeric operands, found boolean and integer
+<source>:21:10: error: operator '**' needs numeric operands, found integer and set of 1..9
+<source>:25:12: error: the right operand of 'pow' must be an integer, found real (use ** for a real exponent)
+<source>:26:10: error: the right operand of 'pow' must be an integer, found real (use ** for a real exponent)
+<source>:33:18: error: operator 'pow' needs numeric operands, found boolean and integer
+<source>:38:3: error: cannot assign real to a variable of type integer
+<source>:41:3: error: cannot assign real to a variable of type integer

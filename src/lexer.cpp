@@ -74,6 +74,8 @@ const char *tokenName(Tok t) {
   case Tok::KwWhile: return "'while'";
   case Tok::KwWith: return "'with'";
   case Tok::KwOtherwise: return "'otherwise'";
+  case Tok::KwPow: return "'pow'";
+  case Tok::StarStar: return "'**'";
   }
   return "token";
 }
@@ -109,6 +111,7 @@ const std::unordered_map<std::string, Tok> &keywords() {
 const std::unordered_map<std::string, Tok> &extendedKeywords() {
   static const std::unordered_map<std::string, Tok> kw = {
       {"otherwise", Tok::KwOtherwise},
+      {"pow", Tok::KwPow},
   };
   return kw;
 }
@@ -369,7 +372,19 @@ std::vector<Token> Lexer::tokenize() {
     switch (c) {
     case '+': out.push_back(make(Tok::Plus, sl, sc)); break;
     case '-': out.push_back(make(Tok::Minus, sl, sc)); break;
-    case '*': out.push_back(make(Tok::Star, sl, sc)); break;
+    case '*':
+      // A comment has already been consumed by the time we get here, so the
+      // only way two stars can be adjacent is the exponentiating-operator.
+      if (peek() == '*') {
+        advance();
+        if (std_ == Std::Iso7185)
+          diags_.error(sl, sc, "'**' is an Extended Pascal operator; compile "
+                               "with --std=extended");
+        out.push_back(make(Tok::StarStar, sl, sc));
+      } else {
+        out.push_back(make(Tok::Star, sl, sc));
+      }
+      break;
     case '/': out.push_back(make(Tok::Slash, sl, sc)); break;
     case ',': out.push_back(make(Tok::Comma, sl, sc)); break;
     case ';': out.push_back(make(Tok::Semi, sl, sc)); break;

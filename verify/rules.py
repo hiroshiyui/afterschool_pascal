@@ -418,6 +418,38 @@ def _set_store_traps_on_any_member_outside_it(w):
     return pre, low.traps_set_store(s, lo, hi, w)
 
 
+# The exponents the `pow` rules are established for. The loop has to be
+# unrolled to be symbolic, so the claim is "for every base, at each of these
+# exponents" rather than for every exponent — and 1 is in the list because a
+# single multiplication is where an off-by-one in the check would hide.
+POW_EXPONENTS = (1, 2, 3, 5)
+
+
+def _pow_traps_exactly_when_the_value_leaves_the_type(e):
+    def build(w):
+        x = low.integer("x", w)
+        value, traps = low.pow_int(x, e, w)
+        exact = iso.the_exact_power(x, e, value.size())
+        # Both directions at once: the trap fires for no base whose exact power
+        # is a value of the type, and for every base whose power is not. The
+        # first half is the one worth having — the check is applied to each
+        # partial product, and a partial product that leaves the type while the
+        # final one comes back would be a spurious trap. (It cannot happen,
+        # because |x| >= 1 whenever the loop runs at all, and that is exactly
+        # what this proves rather than assumes.)
+        return x != 0, traps == z3.Not(iso.in_integer_range_wide(
+            exact, low.maxint(w)))
+    return build
+
+
+def _pow_is_exact_when_it_does_not_trap(e):
+    def build(w):
+        x = low.integer("x", w)
+        value, traps = low.pow_int(x, e, w)
+        exact = iso.the_exact_power(x, e, value.size())
+        return z3.And(x != 0, z3.Not(traps)), value == exact
+    return build
+
 
 ALL = [
     Rule("mod-satisfies-iso", MUST_HOLD,
@@ -548,4 +580,24 @@ ALL = [
          "ISO 7185 §6.4.6 — and every such set is refused, not merely\n          some of them",
          "codegen.cpp checkedForSetBase",
          _set_store_traps_on_any_member_outside_it, widths=SET_WIDTHS),
+]
+
+# Exponentiation is the first thing proved about the *runtime* rather than
+# about emitted IR: `pow` has no instruction behind it, so its loop and its
+# overflow check are C. One pair of rules per exponent, because the loop is
+# unrolled to be made symbolic.
+ALL += [
+    Rule("pow-traps-exactly-when-the-value-leaves-the-type-e%d" % e,
+         MUST_HOLD,
+         "ISO/IEC 10206:1991 §6.8.3.2 with ISO 7185 §6.4.2.2 — a power\n          outside -maxint..maxint is an error, and one inside it is not",
+         "runtime/pasrt.c pas_pow_int",
+         _pow_traps_exactly_when_the_value_leaves_the_type(e),
+         widths=BOUNDED)
+    for e in POW_EXPONENTS
+] + [
+    Rule("pow-is-exact-when-it-does-not-trap-e%d" % e, MUST_HOLD,
+         "ISO/IEC 10206:1991 §6.8.3.2 — x pow y is x * (x pow (y-1))",
+         "runtime/pasrt.c pas_pow_int",
+         _pow_is_exact_when_it_does_not_trap(e), widths=BOUNDED)
+    for e in POW_EXPONENTS
 ]

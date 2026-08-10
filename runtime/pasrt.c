@@ -8,6 +8,7 @@
  *   width < 0  means "no width given"
  *   prec  < 0  means "no precision given"
  */
+#include <math.h>
 #include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,77 @@ static void pas_error2(const char *msg, const char *what) {
   fflush(stdout);
   fprintf(stderr, "runtime error: %s%s\n", msg, what);
   exit(1);
+}
+
+/* ---------------------------------------------------------- exponentiation */
+
+/* ISO/IEC 10206:1991 §6.8.3.2's two exponentiating operators. They are the one
+ * arithmetic operation with no instruction behind it, so the error conditions
+ * the clause states live here rather than being emitted around a call:
+ *
+ *   x ** y and x pow y are an error if x is zero and y <= 0
+ *   x ** y is an error if x is negative
+ *
+ * The integer type is -maxint..maxint (ISO 7185 §6.4.2.2), so `pow` traps on
+ * overflow exactly as `*` does — it *is* repeated multiplication, and a
+ * silently wrapped power would be the one arithmetic operator that wraps. */
+
+#define PAS_MAXINT 2147483647
+
+double pas_pow_real(double x, double y) {
+  if (x == 0.0 && y <= 0.0)
+    pas_runtime_error("**: 0 ** y is an error when y <= 0");
+  /* The clause admits no negative left operand: the value is defined as an
+   * approximation to exp(y*ln(x)), and ln of a negative number is nothing. A
+   * negative base is what `pow` is for, where the exponent is an integer. */
+  if (x < 0.0)
+    pas_runtime_error("**: a negative left operand needs an integer exponent; "
+                      "use pow");
+  if (x == 0.0)
+    return 0.0;
+  if (y == 0.0)
+    return 1.0;
+  return pow(x, y);
+}
+
+double pas_pow_realint(double x, int y) {
+  if (x == 0.0 && y <= 0)
+    pas_runtime_error("pow: 0 pow y is an error when y <= 0");
+  if (x == 0.0)
+    return 0.0;
+  if (y == 0)
+    return 1.0;
+  /* Defined as an approximation to repeated multiplication, and pow() is one —
+   * an exact one for an integral exponent, which repeated multiplication is
+   * not. A negative base is fine here, unlike under `**`. */
+  return pow(x, (double)y);
+}
+
+int pas_pow_int(int x, int y) {
+  long long acc = 1;
+  int i;
+  if (x == 0 && y <= 0)
+    pas_runtime_error("pow: 0 pow y is an error when y <= 0");
+  if (x == 0)
+    return 0;
+  if (y == 0)
+    return 1;
+  if (y < 0) {
+    /* §6.8.3.2 spells the negative case out as (1 div x) pow (-y), and that is
+     * integer division: every base but 1 and -1 gives zero, and zero to a
+     * positive power is zero. Negating y is safe because -maxint..maxint is
+     * symmetric — INT_MIN is not a value of the type. */
+    x = 1 / x;
+    y = -y;
+    if (x == 0)
+      return 0;
+  }
+  for (i = 0; i < y; i++) {
+    acc *= x;
+    if (acc > PAS_MAXINT || acc < -PAS_MAXINT)
+      pas_runtime_error("integer overflow in pow");
+  }
+  return (int)acc;
 }
 
 /* ------------------------------------------------------------------- files */

@@ -44,7 +44,7 @@ const
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
-  kwCount  = 36;     { 35 word-symbols of ISO 7185, then ISO 10206's }
+  kwCount  = 37;     { 35 word-symbols of ISO 7185, then ISO 10206's }
   isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
@@ -98,7 +98,11 @@ type
     { ISO/IEC 10206:1991 word-symbols, reserved only under the extended
       standard. Under ISO 7185 the scanner yields these spellings as
       identifiers, which is what they are in that language. }
-    tkOtherwise);
+    tkOtherwise, tkPow,
+    { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
+      under both standards and refused under ISO 7185, where no valid program
+      can hold two adjacent stars outside a comment or a string anyway. }
+    tkStarStar);
 
   { Which standard the source is written in. ISO 7185 is the default: the whole
     test corpus, and this compiler's own source, are written in it -- and this
@@ -137,7 +141,12 @@ type
   { `in` is a relational operator (ISO 7185 6.7.2.4) and sits at the same
     precedence as `=`, which is why it belongs here rather than with the
     adding operators despite taking a set on only one side. }
+  { opExp and opPow are ISO/IEC 10206:1991 6.8.3.2's exponentiating operators.
+    They differ in more than spelling: `**` converts both operands to real and
+    yields a real, while `pow` takes an integer right operand and yields the
+    type of its left one -- so `2 pow 3` is the integer 8 and `2 ** 3` is 8.0. }
   binaryOp = (opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
+              opExp, opPow,
               opEq, opNe, opLt, opLe, opGt, opGe, opIn);
   unaryOp = (opPos, opNeg, opNot);
 
@@ -955,7 +964,8 @@ begin
   DefineKeyword(34, 'while    ', tkWhile);
   DefineKeyword(35, 'with     ', tkWith);
   { Beyond isoKwCount: looked up only under the extended standard. }
-  DefineKeyword(36, 'otherwise', tkOtherwise)
+  DefineKeyword(36, 'otherwise', tkOtherwise);
+  DefineKeyword(37, 'pow      ', tkPow)
 end;
 
 { A str against a space-padded literal, which is the comparison LookupKeyword
@@ -1293,7 +1303,19 @@ begin
   Advance;
   if c = '+' then AddSimple(sl, sc, tkPlus)
   else if c = '-' then AddSimple(sl, sc, tkMinus)
-  else if c = '*' then AddSimple(sl, sc, tkStar)
+  else if c = '*' then begin
+    { A comment has already been consumed by the time we get here, so the only
+      way two stars can be adjacent is the exponentiating-operator. }
+    if Peek(0) = '*' then begin
+      Advance;
+      if langStd = stdIso7185 then begin
+        ErrorAt(sl, sc);
+        writeln('''**'' is an Extended Pascal operator; compile with --std=extended')
+      end;
+      AddSimple(sl, sc, tkStarStar)
+    end
+    else AddSimple(sl, sc, tkStar)
+  end
   else if c = '/' then AddSimple(sl, sc, tkSlash)
   else if c = ',' then AddSimple(sl, sc, tkComma)
   else if c = ';' then AddSimple(sl, sc, tkSemi)
@@ -1421,7 +1443,9 @@ begin
     tkVar:       write('''var''');
     tkWhile:     write('''while''');
     tkWith:      write('''with''');
-    tkOtherwise: write('''otherwise''')
+    tkOtherwise: write('''otherwise''');
+    tkPow:       write('''pow''');
+    tkStarStar:  write('''**''')
   end
 end;
 
@@ -1440,12 +1464,12 @@ begin
     tkCaret: write('^');      tkEq: write('=');
     tkNotEq: write('<>');     tkLt: write('<');
     tkLe: write('<=');        tkGt: write('>');
-    tkGe: write('>=');
+    tkGe: write('>=');    tkStarStar: write('**');
     tkEof, tkIdent, tkInt, tkReal, tkStr, tkAnd, tkArray, tkBegin, tkCase,
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
-    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise: write('?')
+    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow: write('?')
   end
 end;
 
@@ -1679,6 +1703,7 @@ begin
 end;
 
 function ParseExpr: nodePtr; forward;
+function ParseFactor: nodePtr; forward;
 function ParseTypeExpr: nodePtr; forward;
 function ParseStatement: nodePtr; forward;
 function ParseBlock: nodePtr; forward;
@@ -2145,7 +2170,7 @@ begin
   ParseSelectors := base
 end;
 
-function ParseFactor: nodePtr;
+function ParsePrimary: nodePtr;
 var e, call, m: nodePtr; head, tail, memberTail: nodePtr; more: boolean;
 begin
   { Every way an expression nests inside an expression -- parentheses, `not`,
@@ -2183,12 +2208,19 @@ begin
       pos := pos + 1
     end
     else if Check(tkNot) then begin
+      { `not` is a primary, not a factor: 6.8.1 gives it the highest precedence
+        of all, above `**`, so `not a ** b` exponentiates the negation. Under
+        ISO 7185 a factor *is* a primary and nothing moves. }
       e := NewNode(nkUnary, CurLine, CurCol);
       e^.unOp := opNot;
       pos := pos + 1;
-      e^.unArg := ParseFactor
+      e^.unArg := ParsePrimary
     end
     else if Check(tkMinus) then begin
+      { A sign takes a whole factor, so `-3 ** 2` is -(3 ** 2) -- the rule that
+        already makes `-7 mod 3` be -(7 mod 3). It matters beyond taste here:
+        `**` is an error on a negative left operand, so the other reading turns
+        a legal expression into a runtime error. }
       e := NewNode(nkUnary, CurLine, CurCol);
       e^.unOp := opNeg;
       pos := pos + 1;
@@ -2275,7 +2307,40 @@ begin
     end
   end;
   LeaveLevels(1);
-  ParseFactor := e
+  ParsePrimary := e
+end;
+
+{ factor = primary [ exponentiating-operator primary ] -- ISO/IEC 10206:1991
+  6.8.1's extra precedence level, between `not` and the multiplying operators.
+  The syntax admits *one* operator, so `a ** b ** c` is not a sentence of the
+  language and is diagnosed rather than associated. Under ISO 7185 neither
+  operator can reach here, and a factor is a primary. }
+function ParseFactor;
+var result, bin: nodePtr; op: binaryOp; isExp: boolean;
+begin
+  result := ParsePrimary;
+  isExp := true;
+  if Check(tkStarStar) then op := opExp
+  else if Check(tkPow) then op := opPow
+  else isExp := false;
+  if isExp then begin
+    bin := NewNode(nkBinary, CurLine, CurCol);
+    pos := pos + 1;
+    bin^.bnOp := op;
+    bin^.bnLhs := result;
+    bin^.bnRhs := ParsePrimary;
+    result := bin;
+    { 6.8.1 makes operators of one precedence left associative, but the syntax
+      of a factor admits only one exponentiating-operator -- so `a ** b ** c`
+      has no meaning to fall back on, and saying which parenthesisation is
+      wanted is the caller's business rather than this parser's. }
+    if Check(tkStarStar) or Check(tkPow) then begin
+      ErrorAtCur;
+      writeln('an exponentiating operator cannot follow another: write (a ** b) ** c or a ** (b ** c)');
+      Bail
+    end
+  end;
+  ParseFactor := result
 end;
 
 function ParseTerm: nodePtr;
@@ -4815,6 +4880,8 @@ begin
     opMod:     write('mod');
     opAnd:     write('and');
     opOr:      write('or');
+    opExp:     write('**');
+    opPow:     write('pow');
     opEq:      write('=');
     opNe:      write('<>');
     opLt:      write('<');
@@ -4984,6 +5051,34 @@ begin
           BadOperands(b, l, r, 'boolean     ');
         b^.ntype := boolType
       end;
+
+      { ISO/IEC 10206:1991 6.8.3.2, table 3. `**` is "exponentiation to a real
+        power": an integer operand stands for a real approximation to its
+        value, so the result is real however it was written. `pow` is
+        "exponentiation to an integer power", and its result has the type of
+        its *left* operand -- which is the whole reason the standard has two
+        operators rather than one. }
+      opExp: begin
+        if not IsNumeric(l) or not IsNumeric(r) then
+          BadOperands(b, l, r, 'numeric     ');
+        b^.ntype := realType
+      end;
+
+      opPow:
+        if not IsNumeric(l) then begin
+          BadOperands(b, l, r, 'numeric     ');
+          b^.ntype := intType
+        end
+        else begin
+          if not IsInteger(r) then begin
+            ErrorAt(b^.line, b^.col);
+            write('the right operand of ''pow'' must be an integer, found ');
+            WriteTypeName(r);
+            writeln(' (use ** for a real exponent)')
+          end;
+          if IsReal(l) then b^.ntype := realType
+          else b^.ntype := intType
+        end;
 
       opEq, opNe, opLt, opLe, opGt, opGe: begin
         { ISO 7185 6.7.2.5 gives the string types the full set of relational
@@ -6752,6 +6847,8 @@ begin
     opMod:     write('mod');
     opAnd:     write('and');
     opOr:      write('or');
+    opExp:     write('exp');
+    opPow:     write('pow');
     opEq:      write('eq');
     opNe:      write('ne');
     opLt:      write('lt');
@@ -7720,7 +7817,7 @@ begin
       end;
       tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
       tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
-      tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe: begin
+      tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar: begin
         write('op ');
         WriteOperator(tok[i].kind);
         writeln
@@ -7729,7 +7826,7 @@ begin
       tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
       tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
       tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile,
-      tkWith, tkOtherwise: begin
+      tkWith, tkOtherwise, tkPow: begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
@@ -8851,7 +8948,8 @@ begin
     end;
     { `l <= r` is "l has nothing r lacks", and `l >= r` is the same question
       with the operands the other way round. }
-    opLe, opGe, opLt, opGt, opRealDiv, opIntDiv, opMod, opAnd, opOr, opIn:
+    opLe, opGe, opLt, opGt, opRealDiv, opIntDiv, opMod, opAnd, opOr, opIn,
+    opExp, opPow:
     begin
       OpInt(-1, ones);
       if e^.bnOp = opGe then begin notR := l; left := r end
@@ -9071,7 +9169,8 @@ begin
     opLe: write(ircode, 'icmp sle i32 ');
     opGt: write(ircode, 'icmp sgt i32 ');
     opGe: write(ircode, 'icmp sge i32 ');
-    opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr:
+    opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
+            opExp, opPow:
       write(ircode, 'icmp eq i32 ')
   end;
   PutOp(cmp);
@@ -9252,6 +9351,41 @@ begin
         writeln(ircode)
       end;
 
+      { Exponentiation is the one arithmetic operator with no instruction
+        behind it, so all three forms are runtime calls -- and the error
+        conditions of 6.8.3.2 go with them rather than being emitted as tests
+        around the call. Integer `pow` is where the trap matters most: it is
+        repeated multiplication, and each step is checked exactly as `*` is. }
+      opExp: begin
+        ToReal(l, lt);
+        ToReal(r, rt);
+        Def(v);
+        write(ircode, 'call double @pas_pow_real(double ');
+        PutOp(l);
+        write(ircode, ', double ');
+        PutOp(r);
+        writeln(ircode, ')')
+      end;
+
+      opPow:
+        if IsReal(e^.ntype) then begin
+          ToReal(l, lt);
+          Def(v);
+          write(ircode, 'call double @pas_pow_realint(double ');
+          PutOp(l);
+          write(ircode, ', i32 ');
+          PutOp(r);
+          writeln(ircode, ')')
+        end
+        else begin
+          Def(v);
+          write(ircode, 'call i32 @pas_pow_int(i32 ');
+          PutOp(l);
+          write(ircode, ', i32 ');
+          PutOp(r);
+          writeln(ircode, ')')
+        end;
+
       opIntDiv: begin
         MsgStart;
         MsgText('division by zero                        ');
@@ -9331,7 +9465,8 @@ begin
             opLe: write(ircode, 'fcmp ole double ');
             opGt: write(ircode, 'fcmp ogt double ');
             opGe: write(ircode, 'fcmp oge double ');
-            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr:
+            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
+            opExp, opPow:
               write(ircode, 'fcmp oeq double ')
           end
         end
@@ -9352,7 +9487,8 @@ begin
                   else write(ircode, 'icmp ugt ');
             opGe: if sign then write(ircode, 'icmp sge ')
                   else write(ircode, 'icmp uge ');
-            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr:
+            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
+            opExp, opPow:
               write(ircode, 'icmp eq ')
           end;
           if IsPointer(lt) and IsPointer(rt) then write(ircode, 'ptr')
@@ -10811,6 +10947,9 @@ begin
   writeln(ircode, 'declare i32 @pas_eof(ptr)');
   writeln(ircode, 'declare i32 @pas_eoln(ptr)');
   writeln(ircode, 'declare i32 @pas_str_compare(ptr, ptr, i32)');
+  writeln(ircode, 'declare double @pas_pow_real(double, double)');
+  writeln(ircode, 'declare double @pas_pow_realint(double, i32)');
+  writeln(ircode, 'declare i32 @pas_pow_int(i32, i32)');
   writeln(ircode, 'declare { i32, i1 } @llvm.sadd.with.overflow.i32(i32, i32)');
   writeln(ircode, 'declare { i32, i1 } @llvm.ssub.with.overflow.i32(i32, i32)');
   writeln(ircode, 'declare { i32, i1 } @llvm.smul.with.overflow.i32(i32, i32)');

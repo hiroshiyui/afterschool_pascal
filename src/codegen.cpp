@@ -1501,6 +1501,23 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
   case BinOp::RealDiv:
     return b_.CreateFDiv(toReal(l, lt), toReal(r, rt_), "div");
 
+  // Exponentiation is the one arithmetic operator with no instruction behind
+  // it, so all three forms are runtime calls — and the error conditions of
+  // §6.8.3.2 (a zero base with a non-positive exponent; a negative base under
+  // `**`) go with them, rather than being emitted as tests around the call.
+  // Integer `pow` is where the trap matters most: it is repeated
+  // multiplication, and each step is checked exactly as `*` is.
+  case BinOp::Exp:
+    return b_.CreateCall(rt("pas_pow_real", f64(), {f64(), f64()}),
+                         {toReal(l, lt), toReal(r, rt_)}, "pow");
+
+  case BinOp::Pow:
+    if (e->type->isReal())
+      return b_.CreateCall(rt("pas_pow_realint", f64(), {f64(), i32()}),
+                           {toReal(l, lt), r}, "pow");
+    return b_.CreateCall(rt("pas_pow_int", i32(), {i32(), i32()}), {l, r},
+                         "pow");
+
   case BinOp::IntDiv: {
     r = guardNonZero(r, "division by zero");
     // maxint div -1 is representable, but INT_MIN div -1 is not; LLVM calls it

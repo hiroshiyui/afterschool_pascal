@@ -73,6 +73,53 @@ def sqr_int(i):
     return i * i
 
 
+def pow_int(x, e, width=INT_BITS):
+    """`pas_pow_int` in runtime/pasrt.c, for a concrete positive exponent.
+
+    This is the first model here of something the compiler *calls* rather than
+    emits: exponentiation has no instruction behind it, so `BinOp::Pow` on
+    integers is a call and the loop being modelled is C. The obligation is the
+    same either way — this file mirrors what runs.
+
+        long long acc = 1;
+        for (i = 0; i < y; i++) {
+          acc *= x;
+          if (acc > PAS_MAXINT || acc < -PAS_MAXINT)
+            pas_runtime_error("integer overflow in pow");
+        }
+
+    Two properties of that loop are what the rules are about, and neither is
+    obvious: the accumulator is wider than the type, so a partial product is
+    exact; and the check is applied to every partial product, so it could in
+    principle fire on one whose final product would have been in range.
+
+    Returns (value, traps). The value is only meaningful when it does not trap —
+    the real loop exits at the first check that fires, and the disjunction below
+    says the same thing about whether any of them did.
+    """
+    # Wide enough that the model's own arithmetic is exact for this exponent,
+    # which is what makes the claim about the *check* and not about the
+    # accumulator. The runtime's long long is exact for a different reason: it
+    # stops as soon as a partial product leaves the type, so the next
+    # multiplication is bounded by maxint * maxint.
+    wide = width * (e + 1)
+    acc = z3.BitVecVal(1, wide)
+    xs = z3.SignExt(wide - width, x)
+    hi = z3.BitVecVal(maxint(width), wide)
+    lo = z3.BitVecVal(-maxint(width), wide)
+    traps = z3.BoolVal(False)
+    for _ in range(e):
+        acc = acc * xs
+        traps = z3.Or(traps, z3.Or(acc > hi, acc < lo))
+    return acc, traps
+
+
+def traps_pow_zero_base(x, y):
+    """`pas_pow_int`'s first test, and the same one in `pas_pow_real` and
+    `pas_pow_realint`: a zero base with a non-positive exponent."""
+    return z3.And(x == 0, y <= 0)
+
+
 # --- the runtime checks -----------------------------------------------------
 #
 # ISO 7185 makes overflow and out-of-range ordinals *errors*, so the lowering

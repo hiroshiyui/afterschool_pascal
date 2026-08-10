@@ -17,6 +17,10 @@ enum class Tok {
 
   // punctuation and operators
   Plus, Minus, Star, Slash, Assign, Comma, Semi, Colon, Period, DotDot,
+  // ISO/IEC 10206:1991 §6.8.3.1's other exponentiating-operator. It is lexed
+  // under both standards and refused under ISO 7185, where no valid program
+  // can contain two adjacent stars outside a comment or a string anyway.
+  StarStar,
   LParen, RParen, LBracket, RBracket, Caret,
   Eq, NotEq, Lt, Le, Gt, Ge,
 
@@ -30,7 +34,7 @@ enum class Tok {
   // ISO/IEC 10206:1991 word-symbols, reserved only under `--std=extended`.
   // Under ISO 7185 the lexer yields these spellings as identifiers, which is
   // what they are in that language.
-  KwOtherwise,
+  KwOtherwise, KwPow,
 };
 
 const char *tokenName(Tok t);

@@ -999,6 +999,31 @@ ExprPtr Parser::parseTerm() {
 }
 
 ExprPtr Parser::parseFactor() {
+  ExprPtr result = parsePrimary();
+  BinOp op;
+  switch (cur().kind) {
+  case Tok::StarStar: op = BinOp::Exp; break;
+  case Tok::KwPow:    op = BinOp::Pow; break;
+  default:            return result;
+  }
+  auto bin = makeNode<Binary>(cur());
+  ++pos_;
+  bin->op = op;
+  bin->lhs = std::move(result);
+  bin->rhs = parsePrimary();
+  // §6.8.1 makes operators of one precedence left associative, but the syntax
+  // of a factor admits only one exponentiating-operator — so `a ** b ** c` has
+  // no meaning to fall back on, and saying which parenthesisation is wanted is
+  // the caller's business rather than this parser's.
+  if (check(Tok::StarStar) || check(Tok::KwPow)) {
+    errorAtCur("an exponentiating operator cannot follow another: write "
+               "(a ** b) ** c or a ** (b ** c)");
+    bail();
+  }
+  return bin;
+}
+
+ExprPtr Parser::parsePrimary() {
   // Every way an expression nests inside an expression — parentheses, `not`,
   // a unary sign, a call's arguments — passes through here exactly once per
   // level, so this one guard bounds the whole expression grammar's recursion.
@@ -1037,13 +1062,20 @@ ExprPtr Parser::parseFactor() {
     return n;
   }
   case Tok::KwNot: {
+    // `not` is a primary, not a factor: it binds tighter than `**` (§6.8.1
+    // gives it the highest precedence of all), so `not a ** b` exponentiates
+    // the negation. Under ISO 7185 a factor *is* a primary and nothing moves.
     auto n = makeNode<Unary>(t);
     n->op = UnOp::Not;
     ++pos_;
-    n->operand = parseFactor();
+    n->operand = parsePrimary();
     return n;
   }
   case Tok::Minus: {
+    // A sign takes a whole factor, so `-3 ** 2` is -(3 ** 2) — the same rule
+    // that already makes `-7 mod 3` be -(7 mod 3). It matters here beyond
+    // taste: `**` is an error on a negative left operand, so the other reading
+    // would turn a legal expression into a runtime error.
     auto n = makeNode<Unary>(t);
     n->op = UnOp::Neg;
     ++pos_;

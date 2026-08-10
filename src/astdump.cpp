@@ -29,6 +29,8 @@ const char *binOpName(BinOp op) {
   case BinOp::Mod: return "mod";
   case BinOp::And: return "and";
   case BinOp::Or: return "or";
+  case BinOp::Exp: return "exp";
+  case BinOp::Pow: return "pow";
   case BinOp::Eq: return "eq";
   case BinOp::Ne: return "ne";
   case BinOp::Lt: return "lt";

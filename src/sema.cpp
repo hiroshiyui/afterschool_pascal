@@ -17,6 +17,8 @@ const char *opName(BinOp op) {
   case BinOp::Mod: return "mod";
   case BinOp::And: return "and";
   case BinOp::Or: return "or";
+  case BinOp::Exp: return "**";
+  case BinOp::Pow: return "pow";
   case BinOp::Eq: return "=";
   case BinOp::Ne: return "<>";
   case BinOp::Lt: return "<";
@@ -1705,6 +1707,31 @@ void Sema::checkBinary(Binary *b) {
     if (!l->isBoolean() || !r->isBoolean())
       bad("boolean");
     b->type = ty::Bool();
+    return;
+
+  // ISO/IEC 10206:1991 §6.8.3.2, table 3. `**` is "exponentiation to a real
+  // power": an integer operand stands for a real approximation to its value,
+  // so the result is real however it was written. `pow` is "exponentiation to
+  // an integer power", and its result has the type of its *left* operand —
+  // which is the whole reason the standard has two operators rather than one.
+  case BinOp::Exp:
+    if (!l->isNumeric() || !r->isNumeric())
+      bad("numeric");
+    b->type = ty::Real();
+    return;
+
+  case BinOp::Pow:
+    if (!l->isNumeric()) {
+      bad("numeric");
+      b->type = ty::Int();
+    } else if (!r->isInteger()) {
+      diags_.error(b->line, b->col,
+                   "the right operand of 'pow' must be an integer, found " +
+                       r->name() + " (use ** for a real exponent)");
+      b->type = l->isReal() ? ty::Real() : ty::Int();
+    } else {
+      b->type = l->isReal() ? ty::Real() : ty::Int();
+    }
     return;
 
   default: // relational

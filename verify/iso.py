@@ -169,6 +169,29 @@ def the_number_the_digits_denote(previous, digit):
     return P * z3.BitVecVal(10, 128) + D
 
 
+def the_exact_power(x, e, wide_bits):
+    """ISO/IEC 10206:1991 §6.8.3.2 — `x pow y` for a positive y is
+    x * (x pow (y-1)), with `x pow 0` one.
+
+    The standard states this operator as a recursion rather than as a property,
+    so a specification that refused to compute would have nothing to say. What
+    keeps the rule from being circular is *where* it computes: this evaluates
+    in a domain wide enough that it cannot wrap, and by repeated squaring
+    rather than by the repeated multiplication the runtime performs. The claim
+    is therefore about the checks and the width, which is where an
+    implementation of exponentiation can actually be wrong.
+    """
+    result = z3.BitVecVal(1, wide_bits)
+    base = z3.SignExt(wide_bits - x.size(), x)
+    while e:
+        if e & 1:
+            result = result * base
+        e >>= 1
+        if e:
+            base = base * base
+    return result
+
+
 def is_in_the_set_range(v, lo, hi):
     """ISO 7185 §6.7.1 — `[lo..hi]` denotes the values from lo to hi, and no
     values at all when hi precedes lo. Member positions are ordinals of the

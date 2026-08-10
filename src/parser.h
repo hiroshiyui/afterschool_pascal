@@ -55,7 +55,7 @@ private:
     /// A recursive production: entering it is itself one level.
     explicit Depth(Parser &p) : p_(p), count_(1) { p_.enterLevel(); }
     /// A production that only *hosts* a spine-building loop: entering it is
-    /// free — the recursion below it is already counted by parseFactor — and
+    /// free — the recursion below it is already counted by parsePrimary — and
     /// only its bump()s are levels.
     enum class Spine { Loop };
     Depth(Parser &p, Spine) : p_(p), count_(0) {}
@@ -123,7 +123,13 @@ private:
   ExprPtr parseExpr();
   ExprPtr parseSimpleExpr();
   ExprPtr parseTerm();
+  /// `factor = primary [ exponentiating-operator primary ]` — ISO/IEC
+  /// 10206:1991 §6.8.1's extra precedence level, between `not` and the
+  /// multiplying operators. The syntax admits *one* operator, so `a ** b ** c`
+  /// is not a sentence of the language and is diagnosed rather than associated.
+  /// Under ISO 7185 neither operator can reach here, and a factor is a primary.
   ExprPtr parseFactor();
+  ExprPtr parsePrimary();
 
   template <typename T> std::unique_ptr<T> makeNode(const Token &at) {
     auto n = std::make_unique<T>();

@@ -68,6 +68,12 @@ begin
   x := 1#0;
   x := 16#fg;
 
+  { `**` is Extended Pascal's other exponentiating operator, and there is no
+    valid ISO 7185 program with two adjacent stars outside a comment or a
+    string -- so it is scanned as one token and refused, rather than becoming
+    a `*` and whatever the next token would then be. }
+  x := 2 ** 3;
+
   { an unexpected character }
   x := x @ 1;
   x := x $ 1;

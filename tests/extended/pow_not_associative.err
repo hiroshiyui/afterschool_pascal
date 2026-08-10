@@ -1,0 +1,1 @@
+<source>:18:15: error: an exponentiating operator cannot follow another: write (a ** b) ** c or a ** (b ** c)
