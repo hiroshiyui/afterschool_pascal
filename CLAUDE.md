@@ -467,6 +467,33 @@ in one language or the other, and the standard is a property of the source.
     quantifies over its bounds, so it covers a pair that arrives at run time.
     The span check `resolveArray` cannot make for a dynamic bound was already
     made where the actual's type was produced.
+- **A discriminant may be evaluated when the block is entered** (ADR-0041),
+  which is §6.2.3.2 and the deferral ADR-0039 called the one that mattered.
+  `var s: vector(n)` is ADR-0040's descriptor with the tuple *computed* on
+  entry instead of brought by a caller, so `Symbol::discExprs` is the whole of
+  the difference between the two.
+  - The prologue evaluates the discriminants, stores them, checks them, and
+    `alloca`s the storage they size — in that order, because everything after
+    the store asks the *descriptor* and not the expressions that filled it, and
+    because a discriminant may name a parameter.
+  - **§6.2.3.2's position is the whole of the permission.** `resolveType`
+    withdraws the offer before it recurses, so a non-constant discriminant is
+    refused in a component, a field, a pointer domain and a type definition —
+    including one written *inside a schema body*, which is the case the flag
+    exists for and the one a corpus only has on purpose.
+  - **A tuple is checked where it is chosen.** ADR-0040 argued a schematic
+    formal needed no run-time check because the actual's tuple had been checked
+    when its type was produced; that argument only holds if *every* tuple is,
+    so two checks are made on entry — a discriminant outside its own type
+    (`checkedForStore`, the same words a subrange always uses) and an index
+    range left empty (§6.4.7 NOTE 2, one comparison per dynamic dimension).
+  - **A variable cannot be one of its own discriminants.** Its name is in scope
+    by then — Pascal scopes to the block, not to the point of declaration — so
+    without a word about it `v: vector(v)` compiles and reads an unwritten
+    descriptor.
+  - `var a, b: vector(n)` gives each name its own type, where `var a, b:
+    vector(3)` gives them one. The only place a declaration group does not
+    share a type, and the reason is that each has its own descriptor.
   - Refused, and neither is in the standard's words: an **enumerated type in a
     schema body** (its constants would be declared once per tuple, into a
     scope that dies with the production), and a schema **naming itself**

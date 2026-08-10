@@ -336,16 +336,32 @@ was never written down.
   discriminated schema produces an *ordinary* type, which is why codegen
   needed one line (for `v.n`) and the proof rules needed none.
 
-  Two halves are left, and each is a record of its own:
-  - **A schematic formal parameter**, `procedure p(var v: vector)`. The bounds
-    come from the actual, so they have to travel: a descriptor beside the
-    address, the shape ADR-0030 already uses for a procedural parameter.
-  - **Discriminants that are not constants**, `var s: vector(n)` — §6.2.3.2
-    evaluates them when the block is entered, which means a variable whose
-    size is not known until then. This is the one `string(n)` needs.
+  Two halves were left, and both are now done:
+  - ~~**A schematic formal parameter**~~ Done (ADR-0040). `procedure p(var v:
+    vector)`. The bounds come from the actual, so they travel: a descriptor
+    beside the address, the shape ADR-0030 already uses for a procedural
+    parameter. It is the first array here whose extent is not known at compile
+    time, which is what turned a size into emitted arithmetic. The proof rules
+    needed nothing added, because the array rule was already quantified over
+    its bounds.
+  - ~~**Discriminants that are not constants**~~ Done (ADR-0041). `var s:
+    vector(n)` — §6.2.3.2 evaluates them when the block is entered, so the
+    variable's size is not known until then. It needed almost no new
+    machinery: such a variable is ADR-0040's descriptor with the tuple
+    *computed* on entry rather than brought by a caller. What it did need is
+    the two checks ADR-0040 could argue away — a discriminant outside its own
+    type, and a tuple that leaves an index range empty — because "the tuple
+    was checked where the type was produced" only holds if every tuple is.
+
+  What is left of schemata is smaller than either: a whole-variable assignment
+  between two schematic types (the tuple comparison §6.7.3.3 calls a
+  dynamic-violation), a schema as the domain of a pointer, and a discriminant
+  as a variant-selector.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
-  expired. Its *finding* has not — a compiler reads text in and writes text out
+  expired. It is *buildable* since ADR-0041 — it is a required schema, and
+  schemata are finished enough to carry one — and it is still a decision about
+  the language rather than a missing mechanism. Its *finding* has not — a compiler reads text in and writes text out
   — so this should be settled by measuring stage-1 code again, the way it was
   settled the first time, and not by taste.
 - **Modules**, `bind`/`unbind`, direct-access files, complex numbers,

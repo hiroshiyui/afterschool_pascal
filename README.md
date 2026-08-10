@@ -244,7 +244,9 @@ types      vector(n: integer) = array [1..n] of real — a schema, and
            vector(3) a type produced from it. Two productions with the same
            discriminants are the same type and two with different ones are
            not, whatever they look like; v.n is the value a type was
-           produced with. The discriminants must be constants for now
+           produced with. A discriminant may also be a variable — `vector(n)`
+           in a variable declaration is sized when the block is entered, and
+           the tuple is checked there (§6.2.3.2)
 params     procedure p(var v: vector) — a schematic formal parameter, whose
            bounds come from the actual: one body serves every tuple, and
            v.n reads the tuple the argument brought. A value parameter of
@@ -255,8 +257,8 @@ words      otherwise and pow are reserved; `and then` and `or else` reserve
            nothing new, because both of their words already are
 ```
 
-Not accepted yet: discriminants that are not constants (`var s: vector(n)`),
-a schema as the domain of a pointer, a discriminant as a variant-selector,
+Not accepted yet: assignment between two schematic-typed variables, a schema as
+the domain of a pointer, a discriminant as a variant-selector,
 `type of`, the `string` type,
 modules,
 `protected` parameters, initial-state specifiers
