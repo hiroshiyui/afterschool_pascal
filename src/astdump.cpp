@@ -61,6 +61,8 @@ const char *symKindName(SymKind k) {
   case SymKind::Param:    return "param";
   case SymKind::VarParam: return "varparam";
   case SymKind::ProcParam: return "procparam";
+  case SymKind::Schema:   return "schema";
+  case SymKind::Disc:     return "disc";
   case SymKind::Proc:     return "proc";
   case SymKind::Func:     return "func";
   }
@@ -103,6 +105,12 @@ std::string symRef(const Symbol *s) {
   case SymKind::Proc:
   case SymKind::Func:
     return std::string(symKindName(s->kind)) + " " + s->name;
+  // A discriminant has no slot of its own: it is one field of the descriptor
+  // in the slot of the parameter it belongs to, so it is named by that slot
+  // and its position in the tuple.
+  case SymKind::Disc:
+    return (s->owner ? s->owner->name : std::string("?")) + "/" +
+           std::to_string(s->frameIndex) + "#" + std::to_string(s->discIndex);
   default:
     return (s->owner ? s->owner->name : std::string("?")) + "/" +
            std::to_string(s->frameIndex);
@@ -259,7 +267,8 @@ struct Dumper {
       // is: the value the base's type was produced with.
       headExpr((n->isDiscriminant ? "discriminant " : "field ") + n->field, e,
                n->isDiscriminant
-                   ? "= " + std::to_string(n->discValue)
+                   ? (n->discSym ? symRef(n->discSym)
+                                 : "= " + std::to_string(n->discValue))
                    : (n->resolved
                           ? "#" + std::to_string(n->resolved->index) + "/" +
                                 variantRef(n->resolved->variant)

@@ -163,6 +163,11 @@ struct FieldExpr : Expr {
   /// type knows about itself.
   bool isDiscriminant = false;
   long long discValue = 0;
+  /// ...unless the base is a *schematic formal parameter*, whose type was
+  /// produced with no tuple at all: then the value arrives with the actual and
+  /// this is the `Disc` symbol that reads it out of the descriptor. Exactly
+  /// one of the two is how a discriminant answers.
+  Symbol *discSym = nullptr;
 };
 
 /// `base^` — the variable a pointer points at. A designator like any other,

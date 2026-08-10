@@ -196,7 +196,13 @@ type
     tuples to types. It is not a type -- nothing possesses it and it has no
     values -- so naming one where a type-denoter is wanted is an error until
     its discriminants are given. }
-  symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam,
+  { skDisc is one formal discriminant of a *schematic formal parameter*, as
+    seen from inside the block (6.7.3.2). It has storage -- the slot of the
+    parameter it belongs to holds the address and then the tuple -- but it is
+    not a variable: nothing may assign to it, and it is in scope only while
+    the parameter's type is being resolved. Afterwards `v.n` is the only way
+    to name it, which is what 6.8.4 makes a primary. }
+  symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam, skDisc,
              skProc, skFunc, skSchema);
 
   { How a file variable reaches something outside the program. ISO 7185 6.10
@@ -299,7 +305,13 @@ type
       Sema interns by the pair, so "one tuple, one type" needs no rule in
       Assignable -- two productions with equal tuples *are* the same record. }
     schema: symPtr;
-    tuple, tupleTail: numPtr
+    tuple, tupleTail: numPtr;
+    { 6.7.3.2 and 6.7.3.3: a bound that is not known until the block is
+      entered -- the discriminant the source wrote there, whose value arrives
+      with the actual. lo/hi are then not the bound and nothing reads them.
+      Nil for every bound written as a constant, which is every bound outside
+      a schematic formal parameter. }
+    loDisc, hiDisc: symPtr
   end;
 
   symbol = record
@@ -340,7 +352,19 @@ type
       values -- which is why a schema keeps its *syntax* and not a type. The
       formal discriminants carry only a name and an ordinal type. }
     schemaBody: nodePtr;
-    discs, discTail: symListPtr
+    discs, discTail: symListPtr;
+    { 6.7.3.2 and 6.7.3.3: the schema a formal parameter was written as the
+      bare name of. Its type is then produced *generically* -- the
+      discriminants become skDisc symbols reading this parameter's descriptor
+      rather than constants -- so one compiled body serves every tuple an
+      actual may bring. discSyms are those symbols, in the schema's order, and
+      their storage is inside this parameter's frame slot after the address.
+      discIndex is which of them a skDisc is; paramSection is which
+      formal-parameter-section declared a parameter, because 6.7.3.3 requires
+      every actual in one section to bring the same tuple. }
+    paramSchema: symPtr;
+    discSyms, discSymTail: symListPtr;
+    discIndex, paramSection: integer
   end;
 
   { Every type produced from a schema, keyed by the schema and the tuple.
@@ -433,7 +457,13 @@ type
         nil. Sema folds it to the tuple's value. }
       nkField:      (fdBase: nodePtr; fdAt, fdLen: integer;
                      fdResolved: fieldPtr;
-                     fdIsDisc: boolean; fdDiscValue: integer);
+                     fdIsDisc: boolean; fdDiscValue: integer;
+                     { ...unless the base is a schematic formal parameter,
+                       whose type was produced with no tuple at all: then the
+                       value arrives with the actual and this is the skDisc
+                       symbol that reads it out of the descriptor. Exactly one
+                       of the two is how a discriminant answers. }
+                     fdDiscSym: symPtr);
       nkDeref:      (drBase: nodePtr);
       nkBinary:     (bnOp: binaryOp; bnLhs, bnRhs: nodePtr);
       nkUnary:      (unOp: unaryOp; unArg: nodePtr);
@@ -625,6 +655,10 @@ var
     the production recurses until the stack runs out. }
   producedHead: producedPtr;
   producingTop: symListPtr;
+  { Not nil while a schema body is being resolved *generically*, for the
+    schematic formal parameter it belongs to. It is what tells the subrange
+    resolver that a bound naming a discriminant is a bound and not a mistake. }
+  genericFor: symPtr;
   programSym, currentProc: symPtr;
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
@@ -1668,7 +1702,8 @@ begin
     nkField: begin
                n^.fdResolved := nil;
                n^.fdIsDisc := false;
-               n^.fdDiscValue := 0
+               n^.fdDiscValue := 0;
+               n^.fdDiscSym := nil
              end;
     nkCall: begin n^.clBuiltin := biNone; n^.clSym := nil end;
     nkWrite: n^.wrFile := nil;
@@ -3402,6 +3437,8 @@ begin
   t^.schema := nil;
   t^.tuple := nil;
   t^.tupleTail := nil;
+  t^.loDisc := nil;
+  t^.hiDisc := nil;
   NewType := t
 end;
 
@@ -3647,6 +3684,14 @@ end;
 
 { A description for diagnostics. A named type reports its name; an anonymous
   one is spelled out the way the source would have written it. }
+{ How a bound is written when it may be dynamic: a constant as itself, and a
+  discriminant as its own name. }
+procedure WriteBoundName(t: typePtr; disc: symPtr; value: integer);
+begin
+  if disc = nil then WriteOrdinalName(t, value)
+  else WritePool(disc^.at, disc^.len)
+end;
+
 procedure WriteTypeName;
 var p: namePtr; f: fieldPtr; first: boolean;
 begin
@@ -3674,9 +3719,9 @@ begin
         Put(')')
       end;
       tySubrange: begin
-        WriteOrdinalName(t^.host, t^.lo);
+        WriteBoundName(t^.host, t^.loDisc, t^.lo);
         PutLit('..              ');
-        WriteOrdinalName(t^.host, t^.hi)
+        WriteBoundName(t^.host, t^.hiDisc, t^.hi)
       end;
       { ISO 7185 6.4.4 makes a pointer's domain a type *identifier*, so the
         recursion always stops at a name -- which is what lets a type point at
@@ -3738,9 +3783,9 @@ begin
       tyArray: begin
         if t^.isPacked then PutLit('packed array [  ')
         else PutLit('array [         ');
-        WriteOrdinalName(t^.indexType, t^.lo);
+        WriteBoundName(t^.indexType, t^.loDisc, t^.lo);
         PutLit('..              ');
-        WriteOrdinalName(t^.indexType, t^.hi);
+        WriteBoundName(t^.indexType, t^.hiDisc, t^.hi);
         PutLit('] of            ');
         Put(' ');
         if t^.elem <> nil then WriteTypeName(t^.elem) else Put('?')
@@ -3779,6 +3824,14 @@ begin
   s^.nlTail := nil;
   s^.resultVar := nil;
   s^.defined := false;
+  s^.schemaBody := nil;
+  s^.discs := nil;
+  s^.discTail := nil;
+  s^.paramSchema := nil;
+  s^.discSyms := nil;
+  s^.discSymTail := nil;
+  s^.discIndex := -1;
+  s^.paramSection := 0;
   NewSymbol := s
 end;
 
@@ -3942,6 +3995,13 @@ begin
         ok := false
       else if f^.sym^.kind = skProcParam then
         ok := Congruous(f^.sym, a^.sym)
+      { A schematic formal's type belongs to that one parameter and is never
+        equal to another's, so congruity asks the question 6.7.3.3 asks: the
+        same schema, with the tuple left to the actual as it always is. }
+      else if (f^.sym^.paramSchema <> nil) or (a^.sym^.paramSchema <> nil) then
+      begin
+        if f^.sym^.paramSchema <> a^.sym^.paramSchema then ok := false
+      end
       else if f^.sym^.stype <> a^.sym^.stype then
         ok := false;
       if ok then begin
@@ -4174,6 +4234,33 @@ begin
       value := res.intVal;   { integer, and the ordinal of an enum constant }
     EvalOrdinal := true
   end
+end;
+
+{ A bound of a schema body being resolved for a schematic formal parameter. It
+  is a constant, or one of the discriminants the descriptor holds. There is
+  deliberately no third form: ISO 7185 has no constant-expression -- a bound is
+  a sign and a number or an identifier, everywhere in the language -- so `n - 1`
+  is not something a bound may be here or anywhere else. When 6.3's
+  constant-expression lands it will land for every bound at once, and the
+  descriptor already holds what such an expression would be computed from. }
+function EvalBound(e: nodePtr; var t: typePtr; var value: integer;
+                   var disc: symPtr): boolean;
+begin
+  disc := nil;
+  if EvalOrdinal(e, t, value) then
+    EvalBound := true
+  { EvalOrdinal has checked the expression already, so the name is resolved
+    whether or not it folded to a value. }
+  else if (e^.kind = nkVar) and (e^.vrSym <> nil) then
+    if e^.vrSym^.kind = skDisc then begin
+      disc := e^.vrSym;
+      t := e^.vrSym^.stype;
+      value := 0;
+      EvalBound := true
+    end
+    else EvalBound := false
+  else
+    EvalBound := false
 end;
 
 { One entry of a case-constant-list, folded to the closed interval it denotes.
@@ -4475,12 +4562,67 @@ begin
 end;
 
 function ResolveSubrange(d: nodePtr): typePtr;
-var t, loType, hiType: typePtr; lo, hi: integer; ok: boolean;
+var t, loType, hiType: typePtr; lo, hi: integer; ok, dynamic: boolean;
+    loDisc, hiDisc: symPtr;
 begin
   loType := nil;
   hiType := nil;
   lo := 0;
   hi := 0;
+  loDisc := nil;
+  hiDisc := nil;
+  dynamic := false;
+  { A schematic formal parameter's bounds arrive with the actual, so inside
+    one -- and nowhere else -- a bound may name a discriminant. Everything the
+    subrange means is otherwise unchanged, which is why this is one call
+    swapped for another rather than a second resolver. }
+  if genericFor <> nil then begin
+    ok := EvalBound(d^.sbLo, loType, lo, loDisc);
+    if ok then ok := EvalBound(d^.sbHi, hiType, hi, hiDisc);
+    if not ok then begin
+      ErrorAt(d^.line, d^.col);
+      writeln('the bounds of a subrange in a schematic formal parameter ',
+              'must be ordinal constants or discriminants')
+    end
+    else if Base(loType) <> Base(hiType) then begin
+      ErrorAt(d^.line, d^.col);
+      write('the bounds of a subrange must have the same type, found ');
+      WriteTypeName(loType);
+      write(' and ');
+      WriteTypeName(hiType);
+      writeln;
+      ok := false
+    end;
+    dynamic := ok and ((loDisc <> nil) or (hiDisc <> nil));
+    { An empty subrange is still an error, but only where both ends are known.
+      Where one is not, the tuple that produced the *actual's* type was checked
+      when it was produced -- so a dynamic range cannot be empty, and there is
+      nothing left for a run-time check to catch. }
+    if ok and (not dynamic) and (hi < lo) then begin
+      ErrorAt(d^.line, d^.col);
+      write('a subrange cannot be empty: ');
+      WriteOrdinalName(loType, hi);
+      write(' is below ');
+      WriteOrdinalName(loType, lo);
+      writeln;
+      ok := false
+    end;
+    t := NewType(tySubrange);
+    if ok then begin
+      t^.host := Base(loType);
+      t^.lo := lo;
+      t^.hi := hi;
+      t^.loDisc := loDisc;
+      t^.hiDisc := hiDisc
+    end
+    else begin
+      t^.host := intType;
+      t^.lo := 0;
+      t^.hi := 0
+    end;
+    ResolveSubrange := t
+  end
+  else begin
   { The C++ writes this as one `||`, which short-circuits: when the lower bound
     is not a constant the upper one is never even checked. Mirrored here,
     because a stage that reports a different number of errors is a stage that
@@ -4522,6 +4664,7 @@ begin
     t^.hi := 0
   end;
   ResolveSubrange := t
+  end
 end;
 
 { `array [a, b] of T` abbreviates `array [a] of array [b] of T`
@@ -4548,7 +4691,12 @@ begin
     same move the lexer's overflow check had to make (ADR-0022). With lo above
     zero the span cannot reach maxint at all; otherwise maxint + lo is in
     range, and hi - lo >= maxint exactly when hi >= maxint + lo. }
-  else if (OrdinalLo(index) <= 0) and
+  { A dynamic index type has no span to measure here. It does not need one:
+    the array the actual brings was produced from constants and checked when it
+    was produced, so `i - lo` is a value of the type for every array that can
+    reach a schematic formal parameter. }
+  else if (index^.loDisc = nil) and (index^.hiDisc = nil) and
+          (OrdinalLo(index) <= 0) and
           (OrdinalHi(index) >= maxint + OrdinalLo(index)) then begin
     ErrorAt(dim^.line, dim^.col);
     writeln('this array has too many elements: an index type may span at ',
@@ -4561,6 +4709,11 @@ begin
   t^.indexType := index;
   t^.lo := OrdinalLo(index);
   t^.hi := OrdinalHi(index);
+  { An array is bounded by its index type, dynamically or not, so a dynamic
+    bound travels one step outwards here and codegen never looks at the index
+    type again. }
+  t^.loDisc := index^.loDisc;
+  t^.hiDisc := index^.hiDisc;
   t^.isPacked := d^.arPacked;
   if dim^.next <> nil then
     t^.elem := ResolveArray(d, dim^.next)
@@ -4818,6 +4971,8 @@ begin
   t^.variants := src^.variants;
   t^.variantTail := src^.variantTail;
   t^.tagField := src^.tagField;
+  t^.loDisc := src^.loDisc;
+  t^.hiDisc := src^.hiDisc;
   CopyType := t
 end;
 
@@ -4985,13 +5140,26 @@ begin
   tail := n
 end;
 
+{ Whether this schema's body is being resolved right now, at any depth. }
+function SchemaIsBusy(schema: symPtr): boolean;
+var q: symListPtr; busy: boolean;
+begin
+  busy := false;
+  q := producingTop;
+  while q <> nil do begin
+    if q^.sym = schema then busy := true;
+    q := q^.next
+  end;
+  SchemaIsBusy := busy
+end;
+
 { 6.4.8: the type this schema maps the given actual-discriminant-part to.
   `dummy` is unused and exists so this and ResolveType can be forward-declared
   with signatures the C++ side has no counterpart for. }
 function ProduceFromSchema;
 var formals: symListPtr; a, arg: nodePtr; t, given: typePtr;
     tuple, tupleTail, tv: numPtr; value, count, want, before: integer;
-    ok, repeated, busy: boolean; pr: producedPtr; mark: entryPtr;
+    ok, repeated: boolean; pr: producedPtr; mark: entryPtr;
     disc: symPtr; p, q, push: symListPtr;
 begin
   t := nil;
@@ -5024,6 +5192,20 @@ begin
       CheckExpr(a);
       a := a^.next
     end;
+    t := intType
+  end
+  { 6.4.7: outside the domain of a pointer, a schema-definition may not name
+    itself. It is checked here rather than at the definition because that is
+    where the recursion would actually happen -- and mutual recursion between
+    two schemata is the same mistake and is caught by the same test. It comes
+    before the tuple because a schema resolved *generically* has discriminants
+    that are not constants, and reporting that instead would name a symptom. }
+  else if SchemaIsBusy(schema) then begin
+    ErrorAt(d^.line, d^.col);
+    write('schema ''');
+    WritePool(d^.scAt, d^.scLen);
+    writeln(''' is defined in terms of itself; only the domain of a ',
+            'pointer may name a schema being defined');
     t := intType
   end
   else begin
@@ -5089,26 +5271,7 @@ begin
       end;
 
       if t = nil then begin
-        { 6.4.7: outside the domain of a pointer, a schema-definition may not
-          name itself. It is checked here rather than at the definition
-          because that is where the recursion would actually happen -- and
-          mutual recursion between two schemata is the same mistake and is
-          caught by the same test. }
-        busy := false;
-        q := producingTop;
-        while q <> nil do begin
-          if q^.sym = schema then busy := true;
-          q := q^.next
-        end;
-        if busy then begin
-          ErrorAt(d^.line, d^.col);
-          write('schema ''');
-          WritePool(d^.scAt, d^.scLen);
-          writeln(''' is defined in terms of itself; only the domain of a ',
-                  'pointer may name a schema being defined');
-          t := intType
-        end
-        else begin
+        begin
           { The discriminants become ordinary constants for as long as the
             body is being resolved, which is what lets `array [1..n] of real`
             reach the existing subrange and array code with nothing added to
@@ -5210,6 +5373,187 @@ begin
     end
   end;
   ProduceFromSchema := t
+end;
+
+function StaticThroughout(t: typePtr): boolean; forward;
+
+{ The same question through every arm of a variant part, at every depth. }
+function StaticVariants(v: variantPtr): boolean;
+var f: fieldPtr; ok: boolean;
+begin
+  ok := true;
+  while v <> nil do begin
+    f := v^.fields;
+    while f <> nil do begin
+      if not StaticThroughout(f^.ftype) then ok := false;
+      f := f^.next
+    end;
+    if not StaticVariants(v^.variants) then ok := false;
+    v := v^.next
+  end;
+  StaticVariants := ok
+end;
+
+{ True when no bound anywhere inside this type depends on a discriminant. A
+  pointer stops the walk: ISO 7185 6.4.4 makes its domain a type *identifier*,
+  which is a type of the enclosing block and never generic. }
+function StaticThroughout;
+var f: fieldPtr; ok: boolean;
+begin
+  if t = nil then
+    StaticThroughout := true
+  else if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then
+    StaticThroughout := false
+  else
+    case t^.kind of
+      tyArray:
+        StaticThroughout := StaticThroughout(t^.indexType)
+                        and StaticThroughout(t^.elem);
+      tySet, tyFile: StaticThroughout := StaticThroughout(t^.elem);
+      tyRecord: begin
+        ok := true;
+        f := t^.fields;
+        while f <> nil do begin
+          if not StaticThroughout(f^.ftype) then ok := false;
+          f := f^.next
+        end;
+        if not StaticVariants(t^.variants) then ok := false;
+        StaticThroughout := ok
+      end;
+      tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
+      tyPointer, tyProc: StaticThroughout := true
+    end
+end;
+
+{ This type's size is not known until the block is entered: an array of
+  dynamically-bounded arrays has a dynamic extent at every level. Only arrays
+  reach this -- a schematic formal whose dynamic part is anywhere else is
+  refused, because a record field after one would sit at an offset nothing
+  could compute. }
+function DynamicExtent(t: typePtr): boolean;
+begin
+  if t = nil then DynamicExtent := false
+  else if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then DynamicExtent := true
+  else if t^.kind = tyArray then DynamicExtent := DynamicExtent(t^.elem)
+  else DynamicExtent := false
+end;
+
+{ The type of a schematic formal parameter: produced from a schema, but with no
+  tuple -- the tuple arrives with the actual, in the descriptor that travels
+  beside its address. A schema with no discriminants is refused, so an empty
+  tuple cannot mean anything else. }
+function IsGeneric(t: typePtr): boolean;
+begin
+  IsGeneric := (t <> nil) and (t^.schema <> nil) and (t^.tuple = nil)
+end;
+
+{ 6.7.3.2 and 6.7.3.3's parameter-form written as a bare schema-name. The body
+  is resolved once, with each discriminant bound to an skDisc symbol that reads
+  this parameter's descriptor rather than to a value -- so `1..n` comes out as
+  "the value of n", and one compiled body serves every tuple.
+
+  The result belongs to this one parameter and is deliberately not interned:
+  two parameters of one schema read two descriptors, so they cannot share a
+  type however alike they look. }
+function SchematicFormal(schema, param: symPtr; d: nodePtr): typePtr;
+var t, comp: typePtr; p, q, push: symListPtr; disc: symPtr;
+    mark: entryPtr; before, k: integer; repeated: boolean;
+begin
+  t := nil;
+  { No self-reference guard here. 6.4.7's rule is enforced where the recursion
+    would happen -- in the production the body reaches -- and a parameter-form
+    is never resolved inside one, so a second copy of the check would be
+    unreachable. Mutation testing is what said so. }
+  if schema^.discs = nil then
+    t := intType      { already reported at the schema-definition }
+  else begin
+    mark := scopeTop;
+    scopeDepth := scopeDepth + 1;
+    param^.discSyms := nil;
+    param^.discSymTail := nil;
+    p := schema^.discs;
+    k := 0;
+    while p <> nil do begin
+      disc := NewSymbol;
+      disc^.at := p^.sym^.at;
+      disc^.len := p^.sym^.len;
+      disc^.kind := skDisc;
+      disc^.stype := p^.sym^.stype;
+      { The discriminant lives in the parameter's own frame slot, after the
+        address, so it is reached exactly as the parameter is and a recursive
+        procedure sees the descriptor of the invocation it is running in. }
+      disc^.owner := param^.owner;
+      disc^.level := param^.level;
+      disc^.frameIndex := param^.frameIndex;
+      disc^.discIndex := k;
+      AppendSym(param^.discSyms, param^.discSymTail, disc);
+      { A discriminant named twice was reported at the schema; binding it again
+        here would report it once more at every parameter that names it. }
+      repeated := false;
+      q := schema^.discs;
+      while q <> p do begin
+        if PoolSame(q^.sym^.at, q^.sym^.len, p^.sym^.at, p^.sym^.len) then
+          repeated := true;
+        q := q^.next
+      end;
+      if not repeated then Bind(disc^.at, disc^.len, disc);
+      k := k + 1;
+      p := p^.next
+    end;
+
+    ForgetResolved(schema^.schemaBody);
+    new(push);
+    push^.sym := schema;
+    push^.next := producingTop;
+    producingTop := push;
+    genericFor := param;
+    before := errorCount;
+    t := ResolveType(schema^.schemaBody);
+    genericFor := nil;
+    producingTop := producingTop^.next;
+    scopeTop := mark;
+    scopeDepth := scopeDepth - 1;
+
+    if errorCount <> before then begin
+      ErrorAt(d^.line, d^.col);
+      write('no type is produced from schema ''');
+      WritePool(d^.nmAt, d^.nmLen);
+      writeln(''' for this parameter');
+      t := intType
+    end
+    else begin
+      { What a descriptor can describe: an array, and arrays inside it. A
+        record field after a dynamically-bounded one would sit at an offset
+        nothing can compute, and a set or a file has a size the runtime is
+        told once -- so a discriminant is allowed in an index type and nowhere
+        else. }
+      comp := t;
+      while (comp^.kind = tyArray) and DynamicExtent(comp) do
+        comp := comp^.elem;
+      if not StaticThroughout(comp) then begin
+        ErrorAt(d^.line, d^.col);
+        write('schema ''');
+        WritePool(d^.nmAt, d^.nmLen);
+        writeln(''' cannot be a parameter form: its discriminants have to ',
+                'bound an array, because that is the only size a descriptor ',
+                'can describe');
+        t := intType
+      end
+      else begin
+        { A produced type is a type of its own, so a body that resolved to a
+          shared singleton is copied before its provenance is written on it. }
+        if (t^.schema <> nil) or (t = intType) or (t = realType)
+           or (t = boolType) or (t = charType) or (t = textType) then
+          t := CopyType(t);
+        t^.schema := schema;
+        { no tuple to name it by; the actual brings that }
+        t^.aliasAt := schema^.at;
+        t^.aliasLen := schema^.len;
+        param^.paramSchema := schema
+      end
+    end
+  end;
+  SchematicFormal := t
 end;
 
 function ResolveType;
@@ -5437,7 +5781,7 @@ begin
 end;
 
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
-var a: nodePtr; p: symListPtr; n, given, i: integer;
+var a, b: nodePtr; p, q: symListPtr; n, given, i: integer;
 begin
   { Checked against the parameter rather than on its own, because an actual
     procedural parameter is an identifier and not an expression: `f` there
@@ -5486,6 +5830,32 @@ begin
     while a <> nil do begin
       if p^.sym^.kind = skProcParam then
         { already bound, above }
+      { 6.7.3.2 and 6.7.3.3: a schematic formal parameter's type is decided by
+        the actual, so the actual has only to be produced from the same schema
+        -- whatever tuple it was produced with. It must be a variable either
+        way, because a value parameter of a size not known until now is copied
+        out of one rather than evaluated into one. }
+      else if p^.sym^.paramSchema <> nil then begin
+        if not IsDesignator(a) then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' needs a variable produced from schema ''');
+          WritePool(p^.sym^.paramSchema^.at, p^.sym^.paramSchema^.len);
+          writeln('''')
+        end
+        else if (a^.ntype = nil) or (a^.ntype^.schema <> p^.sym^.paramSchema)
+        then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' must be produced from schema ''');
+          WritePool(p^.sym^.paramSchema^.at, p^.sym^.paramSchema^.len);
+          write(''', but the argument is ');
+          WriteTypeName(a^.ntype);
+          writeln
+        end
+      end
       else if p^.sym^.kind = skVarParam then begin
         if not IsDesignator(a) then begin
           ErrorAt(a^.line, a^.col);
@@ -5529,6 +5899,43 @@ begin
         writeln
       end;
       i := i + 1;
+      p := p^.next;
+      a := a^.next
+    end;
+
+    { 6.7.3.3: one formal-parameter-section is one parameter-form, so every
+      actual corresponding to it brings the same tuple -- `var a, b: vector`
+      takes two vectors of one length, not two vectors. The standard calls a
+      mismatch a dynamic-violation; every tuple this compiler can write is
+      already known here, so it is reported before the program runs. }
+    a := args;
+    p := callee^.params;
+    while a <> nil do begin
+      if p^.sym^.paramSchema <> nil then
+        if (a^.ntype <> nil) and not IsGeneric(a^.ntype) then begin
+          b := args;
+          q := callee^.params;
+          while b <> a do begin
+            if (q^.sym^.paramSchema = p^.sym^.paramSchema) and
+               (q^.sym^.paramSection = p^.sym^.paramSection) and
+               (b^.ntype <> nil) then
+              if not IsGeneric(b^.ntype) and (b^.ntype <> a^.ntype) then begin
+                ErrorAt(a^.line, a^.col);
+                write('''');
+                WritePool(q^.sym^.at, q^.sym^.len);
+                write(''' and ''');
+                WritePool(p^.sym^.at, p^.sym^.len);
+                write(''' are one parameter form, so their arguments are one ',
+                      'type: found ');
+                WriteTypeName(b^.ntype);
+                write(' and ');
+                WriteTypeName(a^.ntype);
+                writeln
+              end;
+            b := b^.next;
+            q := q^.next
+          end
+        end;
       p := p^.next;
       a := a^.next
     end
@@ -5978,7 +6385,7 @@ end;
 
 procedure CheckExpr;
 var t, b: typePtr; f: fieldPtr; binding: symPtr;
-    p: symListPtr; tv: numPtr; found: boolean;
+    p, ds: symListPtr; tv: numPtr; found: boolean;
 begin
   if e <> nil then
     case e^.kind of
@@ -6060,17 +6467,37 @@ begin
           is the only place it can be written. }
         found := false;
         if (b <> nil) and (b^.schema <> nil) then begin
+          { A schematic formal parameter has no tuple: its discriminants are in
+            the descriptor the actual brought, and the parameter is what says
+            which descriptor. Everything else has folded them already. }
+          if IsGeneric(b) and (e^.fdBase^.kind = nkVar) then
+            ds := e^.fdBase^.vrSym^.discSyms
+          else
+            ds := nil;
           p := b^.schema^.discs;
           tv := b^.tuple;
-          while (p <> nil) and (tv <> nil) and not found do begin
-            if PoolSame(p^.sym^.at, p^.sym^.len, e^.fdAt, e^.fdLen) then begin
-              found := true;
-              e^.fdIsDisc := true;
-              e^.fdDiscValue := tv^.value;
-              e^.ntype := p^.sym^.stype
-            end;
-            p := p^.next;
-            tv := tv^.next
+          while (p <> nil) and not found do begin
+            if PoolSame(p^.sym^.at, p^.sym^.len, e^.fdAt, e^.fdLen) then
+              if IsGeneric(b) then begin
+                if ds <> nil then begin
+                  found := true;
+                  e^.fdIsDisc := true;
+                  e^.fdDiscSym := ds^.sym;
+                  e^.ntype := p^.sym^.stype
+                end;
+                p := nil
+              end
+              else if tv <> nil then begin
+                found := true;
+                e^.fdIsDisc := true;
+                e^.fdDiscValue := tv^.value;
+                e^.ntype := p^.sym^.stype
+              end;
+            if p <> nil then begin
+              p := p^.next;
+              if tv <> nil then tv := tv^.next;
+              if ds <> nil then ds := ds^.next
+            end
           end
         end;
         if found then
@@ -6879,10 +7306,12 @@ end;
   type it has, and the frame it will occupy is the frame of whatever procedure
   is eventually passed. Hence `frame` being nil for those. }
 procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
-var g, n: nodePtr; t: typePtr; ps: symPtr;
+var g, n: nodePtr; t: typePtr; ps, schema, named: symPtr; section: integer;
 begin
   g := groups;
+  section := 0;
   while g <> nil do begin
+    section := section + 1;
     if g^.grIsProc then begin
       { ISO 7185 6.6.3.1 spells a procedural parameter as a heading, so it
         declares exactly one name and the parser guarantees it is there. }
@@ -6921,6 +7350,47 @@ begin
       AppendSym(into^.params, into^.paramTail, ps)
     end
     else begin
+      { 6.7.3.2 and 6.7.3.3: a parameter-form may be a bare schema-name, and
+        then the type is not one type -- the tuple arrives with the actual.
+        Each name needs its symbol *first*, because the discriminants are
+        resolved against the descriptor that symbol's frame slot holds. }
+      schema := nil;
+      if g^.grType <> nil then
+        if g^.grType^.kind = nkNamed then begin
+          named := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
+          if named <> nil then
+            if named^.kind = skSchema then schema := named
+        end;
+      if schema <> nil then begin
+        n := g^.grNames;
+        while n <> nil do begin
+          if frame <> nil then
+            if g^.grByRef then
+              ps := AddFrameVar(n^.dnAt, n^.dnLen, skVarParam, intType, frame,
+                                n^.line, n^.col)
+            else
+              ps := AddFrameVar(n^.dnAt, n^.dnLen, skParam, intType, frame,
+                                n^.line, n^.col)
+          else begin
+            ps := NewSymbol;
+            ps^.at := n^.dnAt;
+            ps^.len := n^.dnLen;
+            if g^.grByRef then ps^.kind := skVarParam
+            else ps^.kind := skParam;
+            ps^.stype := intType
+          end;
+          ps^.paramSection := section;
+          ps^.stype := SchematicFormal(schema, ps, g^.grType);
+          { The denoter keeps the last of them, the way a schema body keeps its
+            last production (ADR-0039): one parameter-form has as many types as
+            it has names, and showing one of them says more than showing
+            none. }
+          g^.grType^.ntype := ps^.stype;
+          AppendSym(into^.params, into^.paramTail, ps);
+          n := n^.next
+        end
+      end
+      else begin
       t := ResolveType(g^.grType);
       { ISO 7185 6.6.3.3: a file may only be passed by reference. A value
         parameter is a copy, and a file has no copy -- the position, the buffer
@@ -6945,8 +7415,10 @@ begin
           if g^.grByRef then ps^.kind := skVarParam else ps^.kind := skParam;
           ps^.stype := t
         end;
+        ps^.paramSection := section;
         AppendSym(into^.params, into^.paramTail, ps);
         n := n^.next
+      end
       end
     end;
     g := g^.next
@@ -7526,7 +7998,15 @@ begin
       skVar, skParam, skVarParam, skProcParam: begin
         if s^.owner = nil then write('?') else WritePool(s^.owner^.at, s^.owner^.len);
         write('/', s^.frameIndex:1)
-      end
+      end;
+      { A discriminant has no slot of its own: it is one field of the
+        descriptor in the slot of the parameter it belongs to, so it is named
+        by that slot and its position in the tuple. }
+      skDisc: begin
+        if s^.owner = nil then write('?') else WritePool(s^.owner^.at, s^.owner^.len);
+        write('/', s^.frameIndex:1, '#', s^.discIndex:1)
+      end;
+      skSchema: write('schema')
     end
 end;
 
@@ -7710,6 +8190,7 @@ begin
     skParam:    write('param');
     skVarParam: write('varparam');
     skProcParam: write('procparam');
+    skDisc:     write('disc');
     skProc:     write('proc');
     skFunc:     write('func');
     skSchema:   write('schema')
@@ -7892,7 +8373,12 @@ begin
       WritePos(n^.line, n^.col);
       if annotate then
         if n^.fdIsDisc then
-          write(' -> = ', n^.fdDiscValue:1)
+          if n^.fdDiscSym <> nil then begin
+            write(' -> ');
+            WriteSymRef(n^.fdDiscSym)
+          end
+          else
+            write(' -> = ', n^.fdDiscValue:1)
         else if n^.fdResolved <> nil then begin
           write(' -> #', n^.fdResolved^.index:1, '/');
           WriteVariantRef(n^.fdResolved^.variant)
@@ -9128,6 +9614,26 @@ begin
   StartBlock(c)
 end;
 
+{ The same shape, for a trap whose message cannot be written here: the runtime
+  formats it out of values only the running program has. }
+procedure EmitTrapIndex(var cond, lo, hi: str);
+var t, c: integer;
+begin
+  t := NewBlock;
+  c := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', t:1, ', label %L', c:1);
+  StartBlock(t);
+  write(ircode, '  call void @pas_index_error(i32 ');
+  PutOp(lo);
+  write(ircode, ', i32 ');
+  PutOp(hi);
+  writeln(ircode, ')');
+  writeln(ircode, '  unreachable');
+  StartBlock(c)
+end;
+
 { ------------------------------------------------------- the static chain }
 
 { The activation record `levels` deep in the static chain from here. The link
@@ -9169,20 +9675,169 @@ begin
   writeln(ircode, ', i32 0, i32 ', 1 + s^.frameIndex:1)
 end;
 
-{ A `var` parameter -- and the binding of a `with` -- holds an address, so the
-  variable it stands for is one load further on. }
-procedure AddressOfSym(s: symPtr; var v: str);
-var slot: str;
+{ The descriptor a schematic formal parameter travels as: the address of the
+  actual, and then its tuple, one discriminant per field in the schema's own
+  order. Like the procedural pair it never exists as a value -- the parts are
+  stored and loaded through their own getelementptrs and travel as separate
+  arguments -- so a caller and a callee agree by both coming through here
+  (ADR-0030's shape, and for the same reason). }
+procedure PutDescType(param: symPtr);
+var p: symListPtr;
 begin
-  FrameSlot(s, slot);
-  if s^.kind = skVarParam then begin
+  write(ircode, '{ ptr');
+  p := param^.paramSchema^.discs;
+  while p <> nil do begin
+    write(ircode, ', ');
+    PutLlType(p^.sym^.stype);
+    p := p^.next
+  end;
+  write(ircode, ' }')
+end;
+
+{ The arguments one schematic formal parameter contributes: the address, and
+  then the tuple, so the descriptor is assembled by the callee and never passed
+  as a struct. }
+procedure PutDescParamTypes(s: symPtr; named: boolean; var k: integer);
+var p: symListPtr;
+begin
+  write(ircode, 'ptr');
+  if named then write(ircode, ' %a', k:1);
+  k := k + 1;
+  p := s^.paramSchema^.discs;
+  while p <> nil do begin
+    write(ircode, ', ');
+    PutLlType(p^.sym^.stype);
+    if named then write(ircode, ' %a', k:1);
+    k := k + 1;
+    p := p^.next
+  end
+end;
+
+{ The frame variable at this index, which is what a discriminant's frameIndex
+  names: the parameter whose slot holds the descriptor it is a field of. }
+function FrameVarAt(p: symPtr; idx: integer): symPtr;
+var l: symListPtr; k: integer;
+begin
+  l := p^.frameVars;
+  k := 0;
+  while (l <> nil) and (k < idx) do begin
+    l := l^.next;
+    k := k + 1
+  end;
+  if l = nil then FrameVarAt := nil else FrameVarAt := l^.sym
+end;
+
+procedure AddressOfSym(s: symPtr; var v: str);
+var slot: str; param: symPtr;
+begin
+  { A discriminant lives inside the descriptor of the parameter it belongs to,
+    so it is reached through that parameter's slot -- which means the walk up
+    the static chain is the one every enclosing variable makes, and a recursive
+    procedure sees the tuple of the invocation it is running in. }
+  if s^.kind = skDisc then begin
+    param := FrameVarAt(s^.owner, s^.frameIndex);
+    FrameSlot(s, slot);
     Def(v);
-    write(ircode, 'load ptr, ptr ');
+    write(ircode, 'getelementptr inbounds ');
+    PutDescType(param);
+    write(ircode, ', ptr ');
     PutOp(slot);
+    writeln(ircode, ', i32 0, i32 ', 1 + s^.discIndex:1)
+  end
+  else begin
+    FrameSlot(s, slot);
+    { A schematic formal parameter's slot is its descriptor, and the variable is
+      at the address its first field holds -- for a `var` parameter the actual,
+      and for a value parameter the prologue's copy of it. A `var` parameter --
+      and the binding of a `with` -- likewise holds an address, so the variable
+      it stands for is one load further on. }
+    if s^.paramSchema <> nil then begin
+      Def(v);
+      write(ircode, 'getelementptr inbounds ');
+      PutDescType(s);
+      write(ircode, ', ptr ');
+      PutOp(slot);
+      writeln(ircode, ', i32 0, i32 0');
+      slot := v;
+      Def(v);
+      write(ircode, 'load ptr, ptr ');
+      PutOp(slot);
+      writeln(ircode)
+    end
+    else if s^.kind = skVarParam then begin
+      Def(v);
+      write(ircode, 'load ptr, ptr ');
+      PutOp(slot);
+      writeln(ircode)
+    end
+    else
+      v := slot
+  end
+end;
+
+{ A bound of an array: a constant where the source wrote one, and otherwise the
+  discriminant it names, read out of the descriptor. }
+procedure BoundValue(t: typePtr; high: boolean; var v: str);
+var disc: symPtr; addr, raw: str;
+begin
+  if high then disc := t^.hiDisc else disc := t^.loDisc;
+  if disc = nil then
+    if high then OpInt(t^.hi, v) else OpInt(t^.lo, v)
+  else begin
+    AddressOfSym(disc, addr);
+    Def(raw);
+    write(ircode, 'load ');
+    PutLlType(disc^.stype);
+    write(ircode, ', ptr ');
+    PutOp(addr);
+    writeln(ircode);
+    { A discriminant may be of any ordinal type, and the index arithmetic is
+      done in the integer type as it always is. }
+    if IsChar(disc^.stype) or IsBoolean(disc^.stype) then begin
+      Def(v);
+      write(ircode, 'zext ');
+      PutLlType(disc^.stype);
+      write(ircode, ' ');
+      PutOp(raw);
+      writeln(ircode, ' to i32')
+    end
+    else
+      v := raw
+  end
+end;
+
+{ The bytes a value of this type occupies, as a *value* rather than a constant:
+  an array whose bounds arrive with the actual has a size only the descriptor
+  can answer. }
+procedure DynSize(t: typePtr; var v: str);
+var lo, hi, extent, count, inner: str;
+begin
+  if not DynamicExtent(t) then
+    OpInt(LlSize(t), v)
+  else begin
+    { (hi - lo + 1) components, each of whatever one component costs. The count
+      cannot be negative: the tuple that produced the actual's type was checked
+      when it was produced, so an empty range never reaches here. }
+    BoundValue(t, false, lo);
+    BoundValue(t, true, hi);
+    Def(extent);
+    write(ircode, 'sub i32 ');
+    PutOp(hi);
+    write(ircode, ', ');
+    PutOp(lo);
+    writeln(ircode);
+    Def(count);
+    write(ircode, 'add i32 ');
+    PutOp(extent);
+    writeln(ircode, ', 1');
+    DynSize(t^.elem, inner);
+    Def(v);
+    write(ircode, 'mul i32 ');
+    PutOp(count);
+    write(ircode, ', ');
+    PutOp(inner);
     writeln(ircode)
   end
-  else
-    v := slot
 end;
 
 
@@ -9786,15 +10441,18 @@ end;
   static link, then the parameters, exactly as EmitProcBody builds it for a
   procedure with a body. }
 procedure PutProcSignature(callee: symPtr);
-var p: symListPtr; result: typePtr;
+var p: symListPtr; result: typePtr; k: integer;
 begin
   result := ResultTypeOf(callee);
   if result = nil then write(ircode, 'void') else PutLlType(result);
   write(ircode, ' (ptr');
   p := callee^.params;
+  k := 0;
   while p <> nil do begin
     write(ircode, ', ');
-    if (p^.sym^.kind = skVarParam) or (p^.sym^.kind = skProcParam) or
+    if p^.sym^.paramSchema <> nil then
+      PutDescParamTypes(p^.sym, false, k)
+    else if (p^.sym^.kind = skVarParam) or (p^.sym^.kind = skProcParam) or
        IsMemory(p^.sym^.stype) then
       if p^.sym^.kind = skProcParam then write(ircode, 'ptr, ptr')
       else write(ircode, 'ptr')
@@ -9807,7 +10465,7 @@ end;
 
 procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
 var link, a, slot, half, target: str; head, tail, o: opndPtr;
-    p: symListPtr; arg: nodePtr; result: typePtr;
+    p, ds, dp: symListPtr; arg: nodePtr; result: typePtr; tv: numPtr;
 begin
   StrClear(target);
   if callee^.kind = skProcParam then begin
@@ -9849,6 +10507,43 @@ begin
   while (arg <> nil) and (p <> nil) do begin
     if p^.sym^.kind = skProcParam then
       EmitProcArgument(arg^.vrSym, head, tail)
+    { The address, then the tuple the actual was produced with -- constants
+      where the actual is an ordinary variable, and the caller's own descriptor
+      where it is itself a schematic formal, which is how a schematic array is
+      handed on through any number of blocks. }
+    else if p^.sym^.paramSchema <> nil then begin
+      EmitAddress(arg, a);
+      AppendOpnd(head, tail, a, true, nil);
+      { A generic type belongs to one parameter, so an actual possessing one
+        *is* that parameter: nothing else can be given the type, and a
+        subscript of it would already have yielded the component. }
+      if IsGeneric(arg^.ntype) and (arg^.kind = nkVar) then
+        ds := arg^.vrSym^.discSyms
+      else
+        ds := nil;
+      dp := p^.sym^.paramSchema^.discs;
+      tv := arg^.ntype^.tuple;
+      while dp <> nil do begin
+        if ds <> nil then begin
+          AddressOfSym(ds^.sym, half);
+          Def(a);
+          write(ircode, 'load ');
+          PutLlType(dp^.sym^.stype);
+          write(ircode, ', ptr ');
+          PutOp(half);
+          writeln(ircode);
+          ds := ds^.next
+        end
+        else if tv <> nil then begin
+          OpInt(tv^.value, a);
+          tv := tv^.next
+        end
+        else
+          OpInt(0, a);
+        AppendOpnd(head, tail, a, false, dp^.sym^.stype);
+        dp := dp^.next
+      end
+    end
     else begin
       if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
         { A `var` parameter binds to the variable itself; a structured value
@@ -10479,7 +11174,7 @@ begin
 end;
 
 procedure EmitAddress;
-var base, idx, lo, hi, below, above, bad, off, target: str;
+var base, idx, lo, hi, below, above, bad, off, target, stride, byte: str;
     arr: typePtr; msg: integer;
 begin
   case e^.kind of
@@ -10516,8 +11211,8 @@ begin
       { ISO 7185 6.5.3.2 makes an index outside the bounds an error. The check
         comes first, so the subtraction below cannot overflow: afterwards
         lo <= i <= hi, and both bounds are values of the index type. }
-      OpInt(arr^.lo, lo);
-      OpInt(arr^.hi, hi);
+      BoundValue(arr, false, lo);
+      BoundValue(arr, true, hi);
       Def(below);
       write(ircode, 'icmp slt i32 ');
       PutOp(idx);
@@ -10536,14 +11231,20 @@ begin
       write(ircode, ', ');
       PutOp(above);
       writeln(ircode);
-      MsgStart;
-      MsgText('array index out of bounds (             ');
-      AppendInt(msgBuf, arr^.lo);
-      MsgText('..                                      ');
-      AppendInt(msgBuf, arr^.hi);
-      Put(')');
-      msg := MsgEnd;
-      EmitTrapIf(bad, msg);
+      { The message names the bounds, so a schematic array's has to be built
+        where the bounds are known -- which is at run time, in the runtime. }
+      if (arr^.loDisc <> nil) or (arr^.hiDisc <> nil) then
+        EmitTrapIndex(bad, lo, hi)
+      else begin
+        MsgStart;
+        MsgText('array index out of bounds (             ');
+        AppendInt(msgBuf, arr^.lo);
+        MsgText('..                                      ');
+        AppendInt(msgBuf, arr^.hi);
+        Put(')');
+        msg := MsgEnd;
+        EmitTrapIf(bad, msg)
+      end;
 
       Def(off);
       write(ircode, 'sub i32 ');
@@ -10551,14 +11252,35 @@ begin
       write(ircode, ', ');
       PutOp(lo);
       writeln(ircode);
-      Def(v);
-      write(ircode, 'getelementptr inbounds ');
-      PutLlType(arr);
-      write(ircode, ', ptr ');
-      PutOp(base);
-      write(ircode, ', i32 0, i32 ');
-      PutOp(off);
-      writeln(ircode)
+      { An array whose extent is not known until the block is entered has no
+        LLVM array type to index: the component's size is what the descriptor
+        answers, so the address is computed in bytes. The arithmetic is the
+        same `(i - lo) * stride` the two-index getelementptr stands for. }
+      if DynamicExtent(arr) then begin
+        DynSize(arr^.elem, stride);
+        Def(byte);
+        write(ircode, 'mul i32 ');
+        PutOp(off);
+        write(ircode, ', ');
+        PutOp(stride);
+        writeln(ircode);
+        Def(v);
+        write(ircode, 'getelementptr inbounds i8, ptr ');
+        PutOp(base);
+        write(ircode, ', i32 ');
+        PutOp(byte);
+        writeln(ircode)
+      end
+      else begin
+        Def(v);
+        write(ircode, 'getelementptr inbounds ');
+        PutLlType(arr);
+        write(ircode, ', ptr ');
+        PutOp(base);
+        write(ircode, ', i32 0, i32 ');
+        PutOp(off);
+        writeln(ircode)
+      end
     end;
 
     nkDeref:
@@ -10602,6 +11324,7 @@ begin
 end;
 
 procedure EmitExpr;
+var addr: str;
 begin
   case e^.kind of
     nkInt: OpInt(e^.intVal, v);
@@ -10613,7 +11336,19 @@ begin
     { A schema-discriminant is the value the type was produced with, so it is
       a constant here and there is nothing to load (6.8.4). }
     nkField:
-      if e^.fdIsDisc then OpInt(e^.fdDiscValue, v)
+      { ...unless the base is a schematic formal parameter, whose type was
+        produced with no tuple: then it is one field of the descriptor the
+        actual brought, and reading it is a load like any other. }
+      if e^.fdDiscSym <> nil then begin
+        AddressOfSym(e^.fdDiscSym, addr);
+        Def(v);
+        write(ircode, 'load ');
+        PutLlType(e^.ntype);
+        write(ircode, ', ptr ');
+        PutOp(addr);
+        writeln(ircode)
+      end
+      else if e^.fdIsDisc then OpInt(e^.fdDiscValue, v)
       else EmitLoad(e, v);
     nkVar:
       if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
@@ -11356,10 +12091,14 @@ end;
 
 procedure PutSlotType(s: symPtr);
 begin
-  { A `var` parameter's slot holds the address of the caller's variable, not a
-    copy of its value. Everything else -- including a structured value
-    parameter, which the prologue copies in -- holds the value itself. }
-  if s^.kind = skVarParam then write(ircode, 'ptr') else PutLlType(s^.stype)
+  { A schematic formal parameter's slot holds the whole descriptor: the
+    address, and the tuple that says how far the thing at it reaches. A `var`
+    parameter's slot holds the address of the caller's variable, not a copy of
+    its value. Everything else -- including a structured value parameter, which
+    the prologue copies in -- holds the value itself. }
+  if s^.paramSchema <> nil then PutDescType(s)
+  else if s^.kind = skVarParam then write(ircode, 'ptr')
+  else PutLlType(s^.stype)
 end;
 
 { The LLVM parameters one Pascal parameter list contributes, after the static
@@ -11372,18 +12111,22 @@ begin
   k := 0;
   while p <> nil do begin
     write(ircode, ', ');
-    if p^.sym^.kind = skProcParam then begin
-      write(ircode, 'ptr');
+    if p^.sym^.paramSchema <> nil then
+      PutDescParamTypes(p^.sym, named, k)
+    else begin
+      if p^.sym^.kind = skProcParam then begin
+        write(ircode, 'ptr');
+        if named then write(ircode, ' %a', k:1);
+        k := k + 1;
+        write(ircode, ', ptr')
+      end
+      else if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
+        write(ircode, 'ptr')
+      else
+        PutLlType(p^.sym^.stype);
       if named then write(ircode, ' %a', k:1);
-      k := k + 1;
-      write(ircode, ', ptr')
-    end
-    else if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
-      write(ircode, 'ptr')
-    else
-      PutLlType(p^.sym^.stype);
-    if named then write(ircode, ' %a', k:1);
-    k := k + 1;
+      k := k + 1
+    end;
     p := p^.next
   end
 end;
@@ -11530,7 +12273,8 @@ end;
 { The prologue shared by main and every procedure: alloca the frame, store the
   static link, copy the incoming arguments into their slots. }
 procedure EnterFrame(p: symPtr);
-var l: symListPtr; link, slot, arg, half: str; k, align: integer;
+var l, d: symListPtr; link, slot, arg, half, actual, size, copy: str;
+    k, align: integer; comp: typePtr;
 begin
   { A label belongs to exactly one block, so the map is emptied per function.
     Sema numbers labels across the whole program, so a stale entry would never
@@ -11570,7 +12314,72 @@ begin
       Def(slot);
       writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
               ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
-      if l^.sym^.kind = skProcParam then begin
+      if l^.sym^.paramSchema <> nil then begin
+        { The tuple is stored first, because everything about the size of what
+          the address points at is asked of it -- including, for a value
+          parameter, how much to copy. }
+        actual := arg;
+        d := l^.sym^.discSyms;
+        while d <> nil do begin
+          k := k + 1;
+          StrClear(arg);
+          StrAppend(arg, '%');
+          StrAppend(arg, 'a');
+          AppendInt(arg, k);
+          Def(half);
+          write(ircode, 'getelementptr inbounds ');
+          PutDescType(l^.sym);
+          write(ircode, ', ptr ');
+          PutOp(slot);
+          writeln(ircode, ', i32 0, i32 ', 1 + d^.sym^.discIndex:1);
+          write(ircode, '  store ');
+          PutLlType(d^.sym^.stype);
+          write(ircode, ' ');
+          PutOp(arg);
+          write(ircode, ', ptr ');
+          PutOp(half);
+          writeln(ircode);
+          d := d^.next
+        end;
+        Def(half);
+        write(ircode, 'getelementptr inbounds ');
+        PutDescType(l^.sym);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 0');
+        write(ircode, '  store ptr ');
+        PutOp(actual);
+        write(ircode, ', ptr ');
+        PutOp(half);
+        writeln(ircode);
+        if l^.sym^.kind <> skVarParam then begin
+          { A value parameter is a copy, and this one's size is not known until
+            the tuple is in place -- so the storage is claimed here rather than
+            in the frame, and dies with the activation as the frame does. }
+          comp := l^.sym^.stype;
+          while comp^.kind = tyArray do comp := comp^.elem;
+          align := LlAlign(comp);
+          DynSize(l^.sym^.stype, size);
+          Def(copy);
+          write(ircode, 'alloca i8, i32 ');
+          PutOp(size);
+          writeln(ircode, ', align ', align:1);
+          write(ircode, '  call void @llvm.memcpy.p0.p0.i32(ptr align ',
+                align:1, ' ');
+          PutOp(copy);
+          write(ircode, ', ptr align ', align:1, ' ');
+          PutOp(actual);
+          write(ircode, ', i32 ');
+          PutOp(size);
+          writeln(ircode, ', i1 false)');
+          write(ircode, '  store ptr ');
+          PutOp(copy);
+          write(ircode, ', ptr ');
+          PutOp(half);
+          writeln(ircode)
+        end
+      end
+      else if l^.sym^.kind = skProcParam then begin
         { Two arguments, one slot: the pair is assembled here and never exists
           as a value. }
         Def(half);
@@ -11724,7 +12533,12 @@ begin
   writeln(ircode, 'declare double @llvm.exp.f64(double)');
   writeln(ircode, 'declare double @llvm.round.f64(double)');
   writeln(ircode, 'declare double @atan(double)');
-  writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)')
+  writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)');
+  { A schematic formal parameter's copy has a length only the descriptor knows,
+    and the message for a subscript outside its bounds names bounds the
+    compiler never had. }
+  writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i32(ptr, ptr, i32, i1)');
+  writeln(ircode, 'declare void @pas_index_error(i32, i32)')
 end;
 
 procedure RunCodeGen;
@@ -11823,6 +12637,7 @@ begin
   withTop := nil;
   producedHead := nil;
   producingTop := nil;
+  genericFor := nil;
   stdInput := nil;
   stdOutput := nil;
   for stringIndex := 1 to strMax do

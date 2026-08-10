@@ -59,9 +59,13 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   llvm::Type *result;
   if (t->isArray()) {
     // The bounds are folded away here: an index is lowered to an offset from
-    // the lower bound, so the LLVM type only needs the extent.
-    result = ArrayType::get(llvmType(t->elem),
-                            static_cast<uint64_t>(t->length()));
+    // the lower bound, so the LLVM type only needs the extent. An array whose
+    // extent arrives with the actual has none to state, and nothing asks: its
+    // addresses are computed in bytes and its size comes from `dynSize`, so
+    // this stands only where a type is needed to name the component.
+    result = ArrayType::get(
+        llvmType(t->elem),
+        t->dynamicExtent() ? 0 : static_cast<uint64_t>(t->length()));
   } else {
     SmallVector<llvm::Type *, 8> fields;
     for (const Field &f : t->fields)
@@ -213,14 +217,24 @@ llvm::Value *CodeGen::intrinsicCall(unsigned id,
 }
 
 void CodeGen::emitTrapIf(llvm::Value *condition, const std::string &message) {
+  emitTrapCall(condition,
+               rt("pas_runtime_error", llvm::Type::getVoidTy(ctx_), {ptr()}),
+               {b_.CreateGlobalString(message, "errmsg")});
+}
+
+/// The same shape, for a trap whose message cannot be written here: the
+/// runtime formats it out of values only the running program has. Note the
+/// arguments are computed *before* the branch, because they are the bounds
+/// that were compared and they are in scope there.
+void CodeGen::emitTrapCall(llvm::Value *condition, FunctionCallee fn,
+                           ArrayRef<llvm::Value *> args) {
+  SmallVector<llvm::Value *, 4> saved(args.begin(), args.end());
   BasicBlock *trap = BasicBlock::Create(ctx_, "trap", curFn_);
   BasicBlock *cont = BasicBlock::Create(ctx_, "cont", curFn_);
   b_.CreateCondBr(condition, trap, cont);
 
   b_.SetInsertPoint(trap);
-  llvm::Value *msg = b_.CreateGlobalString(message, "errmsg");
-  b_.CreateCall(rt("pas_runtime_error", llvm::Type::getVoidTy(ctx_), {ptr()}),
-                {msg});
+  b_.CreateCall(fn, saved);
   b_.CreateUnreachable();
 
   b_.SetInsertPoint(cont);
@@ -348,7 +362,46 @@ llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
 
 // ------------------------------------------------------------------- driver
 
+StructType *CodeGen::descriptorType(const Symbol *param) {
+  SmallVector<llvm::Type *, 4> fields;
+  fields.push_back(ptr()); // the actual's address
+  for (const Symbol *d : param->paramSchema->discriminants)
+    fields.push_back(llvmType(d->type));
+  return StructType::get(ctx_, fields);
+}
+
+/// A bound of an array: a constant where the source wrote one, and otherwise
+/// the discriminant it names, read out of the descriptor.
+llvm::Value *CodeGen::boundValue(ap::Type *t, bool high) {
+  Symbol *disc = high ? t->hiDisc : t->loDisc;
+  if (!disc)
+    return ConstantInt::getSigned(i32(), high ? t->hi : t->lo);
+  llvm::Value *v = b_.CreateLoad(llvmType(disc->type), addressOf(disc),
+                                 disc->name);
+  // A discriminant may be of any ordinal type, and the index arithmetic is
+  // done in the integer type as it always is.
+  if (v->getType() != i32())
+    v = b_.CreateZExt(v, i32(), "disc.wide");
+  return v;
+}
+
+llvm::Value *CodeGen::dynSize(ap::Type *t) {
+  if (!t->dynamicExtent())
+    return ConstantInt::get(i32(), sizeOf(t));
+  // (hi - lo + 1) components, each of whatever one component costs. The count
+  // cannot be negative: the tuple that produced the actual's type was checked
+  // when it was produced, so an empty range never reaches here.
+  llvm::Value *count = b_.CreateAdd(
+      b_.CreateSub(boundValue(t, true), boundValue(t, false), "extent"),
+      ConstantInt::get(i32(), 1), "count");
+  return b_.CreateMul(count, dynSize(t->elem), "size");
+}
+
 llvm::Type *CodeGen::slotType(const Symbol *v) {
+  // A schematic formal parameter's slot holds the whole descriptor: the
+  // address, and the tuple that says how far the thing at it reaches.
+  if (v->paramSchema)
+    return descriptorType(v);
   // A `var` parameter's slot holds the address of the caller's variable, not
   // a copy of its value. Everything else — including a structured value
   // parameter, which the prologue copies in — holds the value itself.
@@ -369,6 +422,13 @@ void CodeGen::appendParamTypes(const std::vector<Symbol *> &params,
     if (p->kind == SymKind::ProcParam) {
       into.push_back(ptr()); // the code
       into.push_back(ptr()); // the static link to call it with
+    } else if (p->paramSchema) {
+      // The address, and then the tuple: one argument per discriminant, so
+      // the descriptor is assembled by the callee and never passed as a
+      // struct.
+      into.push_back(ptr());
+      for (const Symbol *d : p->paramSchema->discriminants)
+        into.push_back(llvmType(d->type));
     } else {
       into.push_back(paramType(p));
     }
@@ -460,7 +520,35 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
       arg->setName(p->name);
       llvm::Value *slot =
           b_.CreateStructGEP(frameTy, curFrame_, 1 + p->frameIndex, p->name);
-      if (p->kind == SymKind::ProcParam) {
+      if (p->paramSchema) {
+        // The tuple is stored first, because everything about the size of
+        // what the address points at is asked of it — including, for a value
+        // parameter, how much to copy.
+        StructType *desc = descriptorType(p);
+        llvm::Value *actual = &*arg;
+        for (size_t k = 0; k < p->discSyms.size(); ++k) {
+          ++arg;
+          arg->setName(p->name + "." + p->discSyms[k]->name);
+          b_.CreateStore(&*arg, b_.CreateStructGEP(desc, slot, 1 + unsigned(k),
+                                                   p->discSyms[k]->name));
+        }
+        b_.CreateStore(actual, b_.CreateStructGEP(desc, slot, 0, "actual"));
+        if (p->kind != SymKind::VarParam) {
+          // A value parameter is a copy, and this one's size is not known
+          // until the tuple is in place — so the storage is claimed here
+          // rather than in the frame, and dies with the activation as the
+          // frame does.
+          ap::Type *comp = p->type;
+          while (comp->isArray())
+            comp = comp->elem;
+          Align align = mod_->getDataLayout().getABITypeAlign(llvmType(comp));
+          llvm::Value *size = dynSize(p->type);
+          AllocaInst *copy = b_.CreateAlloca(i8(), size, p->name + ".copy");
+          copy->setAlignment(align);
+          b_.CreateMemCpy(copy, align, actual, align, size);
+          b_.CreateStore(copy, b_.CreateStructGEP(desc, slot, 0, "actual"));
+        }
+      } else if (p->kind == SymKind::ProcParam) {
         // Two arguments, one slot: the pair is assembled here and never exists
         // as an LLVM value.
         StructType *pair = procPairType();
@@ -636,7 +724,22 @@ llvm::Value *CodeGen::frameSlot(Symbol *v) {
 }
 
 llvm::Value *CodeGen::addressOf(Symbol *v) {
+  // A discriminant lives inside the descriptor of the parameter it belongs
+  // to, so it is reached through that parameter's slot — which means the
+  // walk up the static chain is the same one every enclosing variable makes,
+  // and a recursive procedure sees the tuple of the invocation it is running.
+  if (v->kind == SymKind::Disc) {
+    Symbol *param = v->owner->frameVars[v->frameIndex];
+    return b_.CreateStructGEP(descriptorType(param), frameSlot(v),
+                              1 + unsigned(v->discIndex), v->name);
+  }
   llvm::Value *slot = frameSlot(v);
+  // A schematic formal parameter's slot is its descriptor, and the variable
+  // is at the address the descriptor's first field holds — for a `var`
+  // parameter the actual, and for a value parameter the prologue's copy of it.
+  if (v->paramSchema)
+    return b_.CreateLoad(ptr(), b_.CreateStructGEP(descriptorType(v), slot, 0),
+                         v->name + ".ref");
   // A `var` parameter — and the binding of a `with` — holds an address, so the
   // variable it stands for is one load further on.
   if (v->kind == SymKind::VarParam)
@@ -697,16 +800,31 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     // ISO 7185 §6.5.3.2 makes an index outside the bounds an error. The check
     // comes first, so the subtraction below cannot overflow: afterwards
     // lo <= i <= hi, and both bounds are values of the index type.
-    llvm::Value *lo = ConstantInt::getSigned(i32(), arr->lo);
-    llvm::Value *hi = ConstantInt::getSigned(i32(), arr->hi);
+    llvm::Value *lo = boundValue(arr, false);
+    llvm::Value *hi = boundValue(arr, true);
     llvm::Value *outside =
         b_.CreateOr(b_.CreateICmpSLT(idx, lo, "idx.lt"),
                     b_.CreateICmpSGT(idx, hi, "idx.gt"), "idx.bad");
-    emitTrapIf(outside, "array index out of bounds (" +
-                            std::to_string(arr->lo) + ".." +
-                            std::to_string(arr->hi) + ")");
+    // The message names the bounds, so a schematic array's has to be built
+    // where the bounds are known — which is at run time, in the runtime.
+    if (arr->dynamicBounds())
+      emitTrapCall(outside, rt("pas_index_error",
+                               llvm::Type::getVoidTy(ctx_), {i32(), i32()}),
+                   {lo, hi});
+    else
+      emitTrapIf(outside, "array index out of bounds (" +
+                              std::to_string(arr->lo) + ".." +
+                              std::to_string(arr->hi) + ")");
 
     llvm::Value *offset = b_.CreateSub(idx, lo, "idx.off");
+    // An array whose extent is not known until the block is entered has no
+    // LLVM array type to index: the component's size is what the descriptor
+    // answers, so the address is computed in bytes. The arithmetic is the
+    // same `(i - lo) * stride` the two-index GEP stands for.
+    if (arr->dynamicExtent())
+      return b_.CreateGEP(i8(), base,
+                          {b_.CreateMul(offset, dynSize(arr->elem), "byte")},
+                          "elem");
     return b_.CreateGEP(llvmType(arr), base,
                         {ConstantInt::get(i32(), 0), offset}, "elem");
   }
@@ -810,6 +928,29 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
     const Symbol *p = callee->params[i];
     if (p->kind == SymKind::ProcParam) {
       emitProcArgument(static_cast<VarRef *>(args[i].get())->sym, argv);
+    } else if (p->paramSchema) {
+      // The address, then the tuple the actual was produced with — constants
+      // where the actual is an ordinary variable, and the caller's own
+      // descriptor where it is itself a schematic formal, which is how a
+      // schematic array is handed on through any number of blocks.
+      argv.push_back(emitAddress(args[i].get()));
+      ap::Type *actual = args[i]->type;
+      // A generic type belongs to one parameter, so an actual possessing one
+      // *is* that parameter: nothing else can be given the type, and a
+      // subscript of it would already have yielded the component.
+      Symbol *from = nullptr;
+      if (actual->isGeneric())
+        if (auto *v = as<VarRef>(args[i].get()))
+          from = v->sym;
+      for (size_t k = 0; k < p->paramSchema->discriminants.size(); ++k) {
+        llvm::Type *want = llvmType(p->paramSchema->discriminants[k]->type);
+        if (from && k < from->discSyms.size())
+          argv.push_back(b_.CreateLoad(want, addressOf(from->discSyms[k]),
+                                       from->discSyms[k]->name));
+        else
+          argv.push_back(ConstantInt::getSigned(
+              want, k < actual->tuple.size() ? actual->tuple[k] : 0));
+      }
     } else if (passedByAddress(p)) {
       // A `var` parameter binds to the variable itself; a structured value
       // parameter is copied from it by the callee. Either way what travels is
@@ -1349,6 +1490,12 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     // a constant here and there is nothing to load (§6.8.4). The width is the
     // discriminant's own ordinal type, exactly as a literal of it would be.
     auto *f = static_cast<FieldExpr *>(e);
+    // ...unless the base is a schematic formal parameter, whose type was
+    // produced with no tuple: then it is one field of the descriptor the
+    // actual brought, and reading it is a load like any other.
+    if (f->discSym)
+      return b_.CreateLoad(llvmType(e->type), addressOf(f->discSym),
+                           f->discSym->name);
     if (f->isDiscriminant)
       return ConstantInt::getSigned(llvmType(e->type), f->discValue);
     return emitLoad(e);

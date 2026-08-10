@@ -64,6 +64,20 @@ private:
   llvm::StructType *procPairType() {
     return llvm::StructType::get(ctx_, {ptr(), ptr()});
   }
+  /// The descriptor a schematic formal parameter travels as: the address of
+  /// the actual, and then its tuple, one discriminant per field in the
+  /// schema's own order. Like the procedural pair it never exists as an LLVM
+  /// value — the parts are stored and loaded through their own GEPs and travel
+  /// as separate arguments — so a caller and a callee agree by both coming
+  /// through here (ADR-0030's shape, and for the same reason).
+  llvm::StructType *descriptorType(const Symbol *param);
+  /// The bytes a value of this type occupies, as a *value* rather than a
+  /// constant: an array whose bounds arrive with the actual has a size only
+  /// the descriptor can answer.
+  llvm::Value *dynSize(Type *t);
+  /// The two bounds of an array, either of which may come from a descriptor.
+  llvm::Value *boundValue(Type *t, bool high);
+
   /// The storage a block that a non-local `goto` can reach carries in its
   /// activation record. Opaque, like a file variable, and i64-element for the
   /// same reason: the alignment has to be a machine word's whatever the
@@ -211,6 +225,8 @@ private:
   llvm::Value *emitStringCompare(Binary *e);
 
   void emitTrapIf(llvm::Value *condition, const std::string &message);
+  void emitTrapCall(llvm::Value *condition, llvm::FunctionCallee fn,
+                    llvm::ArrayRef<llvm::Value *> args);
   llvm::Value *checkedArith(unsigned intrinsicId, llvm::Value *l,
                             llvm::Value *r, const char *message);
   llvm::Value *checkedFPToInt(llvm::Value *x, const char *message);

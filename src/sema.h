@@ -28,6 +28,13 @@ enum class SymKind {
   /// `type` is the procedural type and `type->elem` its result, null for a
   /// procedural parameter as against a functional one.
   ProcParam,
+  /// One formal discriminant of a *schematic formal parameter*, as seen from
+  /// inside the block (ISO/IEC 10206:1991 §6.7.3.2). It has storage — the slot
+  /// of the parameter it belongs to holds the address and then the tuple — but
+  /// it is not a variable: nothing may assign to it, and it is in scope only
+  /// while the parameter's type is being resolved. Afterwards `v.n` is the
+  /// only way to name it, which is what §6.8.4 makes a primary.
+  Disc,
   Proc,
   Func,
 };
@@ -82,6 +89,23 @@ struct Symbol {
   /// The formal discriminants, in order. Each carries only a name and an
   /// ordinal type; they get their values when a type is produced.
   std::vector<Symbol *> discriminants;
+
+  // --- schematic formal parameters (§6.7.3.2, §6.7.3.3) --------------------
+  /// The schema a formal parameter was written as the bare name of. Its type
+  /// is then produced *generically*: the discriminants become `Disc` symbols
+  /// reading this parameter's descriptor rather than constants, so one body
+  /// serves every tuple an actual may bring. Null for every ordinary
+  /// parameter, and it is what decides the shape the parameter travels in.
+  Symbol *paramSchema = nullptr;
+  /// The `Disc` symbols of this parameter, in the schema's own order. Their
+  /// storage is inside this parameter's frame slot, after the address.
+  std::vector<Symbol *> discSyms;
+  /// Which discriminant of `owner`'s parameter this is, for a `Disc`.
+  int discIndex = -1;
+  /// Which formal-parameter-section declared this parameter. §6.7.3.3 requires
+  /// every actual in one section to bring the same tuple, so the section has
+  /// to be recoverable at the call.
+  int paramSection = 0;
 
   bool isCallable() const {
     return kind == SymKind::Proc || kind == SymKind::Func;
@@ -150,6 +174,20 @@ private:
   /// Interned, because §6.4.8 makes one tuple denote one type however many
   /// times it is written.
   Type *produceFromSchema(Symbol *schema, TypeExpr &denoter);
+  /// §6.7.3.2/§6.7.3.3's parameter-form written as a bare schema-name: the
+  /// body resolved once, with the discriminants bound to `param`'s descriptor
+  /// instead of to values. The result belongs to that one parameter, so it is
+  /// deliberately *not* interned — two parameters read two descriptors.
+  Type *schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter);
+  /// A bound inside a schema body being resolved generically: a constant, a
+  /// discriminant, or a discriminant with a constant added to or taken from
+  /// it. Anything else is refused, because a bound is re-evaluated on entry
+  /// and this is the whole of what the descriptor can answer.
+  bool evalBound(Expr *e, Type *&type, long long &value, Symbol *&disc);
+  /// True when nothing inside this type depends on a discriminant. Arrays are
+  /// where a dynamic bound is allowed; this asks about everywhere else.
+  bool staticThroughout(Type *t) const;
+  bool staticVariants(const std::vector<Variant> &arms) const;
   Type *resolveArray(TypeExpr &denoter, size_t dim);
   Type *resolveRecord(TypeExpr &denoter);
   Type *resolveEnum(TypeExpr &denoter);
@@ -305,6 +343,10 @@ private:
   /// identifier anywhere but the domain of a pointer, and this is that rule:
   /// without it the production recurses until the stack runs out.
   std::vector<Symbol *> producing_;
+  /// Non-null while a schema body is being resolved *generically*, for the
+  /// schematic formal parameter it belongs to. It is what tells the subrange
+  /// resolver that a bound naming a discriminant is a bound and not a mistake.
+  Symbol *genericFor_ = nullptr;
   /// The bindings of the `with` statements currently open, innermost last.
   std::vector<Symbol *> withStack_;
   /// The label declaration parts of the blocks currently open, innermost last,

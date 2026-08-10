@@ -48,3 +48,4 @@ the alternatives that were rejected and why.
 | [0037](0037-exponentiation-is-two-operators-and-a-precedence-level.md) | Exponentiation is two operators, and a precedence level of its own | Accepted |
 | [0038](0038-a-word-symbol-may-be-two-words.md) | A word-symbol may be two words | Accepted |
 | [0039](0039-a-discriminated-schema-produces-an-ordinary-type.md) | A discriminated schema produces an ordinary type | Accepted |
+| [0040](0040-a-schematic-formal-parameter-carries-its-discriminants.md) | A schematic formal parameter carries its discriminants beside the address | Accepted |

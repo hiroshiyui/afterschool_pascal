@@ -22,6 +22,17 @@ void pas_runtime_error(const char *msg) {
   exit(1);
 }
 
+/// The same message the compiler writes for an array whose bounds it knows,
+/// for one whose bounds arrive with the actual (ISO/IEC 10206:1991 §6.7.3.3).
+/// A schematic formal parameter is compiled once for every tuple, so the text
+/// cannot be a constant in the generated program and is built here instead.
+void pas_index_error(int lo, int hi) {
+  fflush(stdout);
+  fprintf(stderr, "runtime error: array index out of bounds (%d..%d)\n", lo,
+          hi);
+  exit(1);
+}
+
 static void pas_error2(const char *msg, const char *what) {
   fflush(stdout);
   fprintf(stderr, "runtime error: %s%s\n", msg, what);

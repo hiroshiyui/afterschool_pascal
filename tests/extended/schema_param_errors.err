@@ -1,0 +1,11 @@
+<source>:38:4: error: the left side of an assignment must be a variable
+<source>:40:9: error: 'bogus' is not a discriminant of schema 'vector'
+<source>:46:27: error: schema 'boxed' cannot be a parameter form: its discriminants have to bound an array, because that is the only size a descriptor can describe
+<source>:49:29: error: schema 'sized' cannot be a parameter form: its discriminants have to bound an array, because that is the only size a descriptor can describe
+<source>:14:41: error: schema 'selfish' is defined in terms of itself; only the domain of a pointer may name a schema being defined
+<source>:52:28: error: no type is produced from schema 'selfish' for this parameter
+<source>:70:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is real
+<source>:71:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is other(3)
+<source>:73:8: error: argument 1 of 'good' needs a variable produced from schema 'vector'
+<source>:75:11: error: 'a' and 'b' are one parameter form, so their arguments are one type: found vector(3) and vector(4)
+<source>:78:11: error: 'takesother' does not match the parameter list of procedural parameter 'p'

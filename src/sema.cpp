@@ -304,11 +304,84 @@ void Sema::resolvePendingPointers() {
   pendingPointers_.clear();
 }
 
+/// How a bound is written in a diagnostic. A dynamic one has no value to
+/// print, so it prints the discriminant it names — which is what the source
+/// wrote, and the only thing that distinguishes two dimensions of one
+/// schematic array.
+std::string Type::boundName(const Type *t, const Symbol *disc,
+                            long long value) {
+  return disc ? disc->name : ordinalName(t, value);
+}
+
+/// A bound of a schema body being resolved for a schematic formal parameter.
+/// It is a constant, or one of the discriminants the descriptor holds. There
+/// is deliberately no third form: ISO 7185 has no constant-expression — a
+/// bound is a sign and a number or an identifier, everywhere in the language —
+/// so `n - 1` is not something a bound may be here or anywhere else. When
+/// §6.3's constant-expression lands it will land for every bound at once, and
+/// the descriptor already holds what such an expression would be computed from.
+bool Sema::evalBound(Expr *e, Type *&type, long long &value, Symbol *&disc) {
+  disc = nullptr;
+  if (evalOrdinal(e, type, value))
+    return true;
+  // evalOrdinal has checked the expression already, so the name is resolved
+  // whether or not it folded to a value.
+  if (auto *v = as<VarRef>(e))
+    if (v->sym && v->sym->kind == SymKind::Disc) {
+      disc = v->sym;
+      type = v->sym->type;
+      value = 0;
+      return true;
+    }
+  return false;
+}
+
 Type *Sema::resolveSubrange(TypeExpr &denoter) {
   Type *loType = nullptr;
   Type *hiType = nullptr;
   long long lo = 0, hi = 0;
+  Symbol *loDisc = nullptr, *hiDisc = nullptr;
   bool ok = true;
+
+  // A schematic formal parameter's bounds arrive with the actual, so inside
+  // one — and nowhere else — a bound may name a discriminant. Everything the
+  // subrange means is otherwise unchanged, which is why this is one call
+  // swapped for another rather than a second resolver.
+  if (genericFor_) {
+    if (!evalBound(denoter.lo.get(), loType, lo, loDisc) ||
+        !evalBound(denoter.hi.get(), hiType, hi, hiDisc)) {
+      diags_.error(denoter.line, denoter.col,
+                   "the bounds of a subrange in a schematic formal "
+                   "parameter must be ordinal constants or discriminants");
+      ok = false;
+    } else if (loType->base() != hiType->base()) {
+      diags_.error(denoter.line, denoter.col,
+                   "the bounds of a subrange must have the same type, found " +
+                       loType->name() + " and " + hiType->name());
+      ok = false;
+    }
+    bool dynamic = ok && (loDisc || hiDisc);
+    // An empty subrange is still an error, but only where both ends are known.
+    // Where one is not, the tuple that produced the *actual's* type was
+    // checked when it was produced — so a dynamic range cannot be empty, and
+    // there is nothing left for a run-time check to catch.
+    if (ok && !dynamic && hi < lo) {
+      diags_.error(denoter.line, denoter.col,
+                   "a subrange cannot be empty: " +
+                       Type::ordinalName(loType, hi) + " is below " +
+                       Type::ordinalName(loType, lo));
+      ok = false;
+    }
+    Type *t = newType(TypeKind::Subrange);
+    t->host = ok ? loType->base() : ty::Int();
+    t->lo = ok ? lo : 0;
+    t->hi = ok ? hi : 0;
+    if (ok) {
+      t->loDisc = loDisc;
+      t->hiDisc = hiDisc;
+    }
+    return t;
+  }
 
   if (!evalOrdinal(denoter.lo.get(), loType, lo) ||
       !evalOrdinal(denoter.hi.get(), hiType, hi)) {
@@ -351,7 +424,12 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   // only while that difference is a value of the type. Rejecting the array is
   // what makes the rule `accepted-index-selects-the-right-element` true, so
   // this bound is load-bearing rather than arbitrary — see verify/rules.py.
-  else if (index->ordinalHi() - index->ordinalLo() >= kMaxInt) {
+  // A dynamic index type has no span to measure here. It does not need one:
+  // the array the actual brings was produced from constants and checked when
+  // it was produced, so the difference `i - lo` is a value of the type for
+  // every array that can reach a schematic formal parameter.
+  else if (!index->dynamicBounds() &&
+           index->ordinalHi() - index->ordinalLo() >= kMaxInt) {
     diags_.error(indexDenoter.line, indexDenoter.col,
                  "this array has too many elements: an index type may span "
                  "at most maxint values");
@@ -363,6 +441,11 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   t->indexType = index;
   t->lo = index->ordinalLo();
   t->hi = index->ordinalHi();
+  // An array is bounded by its index type, dynamically or not, so a dynamic
+  // bound travels one step outwards here and codegen never looks at the index
+  // type again.
+  t->loDisc = index->loDisc;
+  t->hiDisc = index->hiDisc;
   t->packed = denoter.packed;
   t->elem = dim + 1 < denoter.dims.size() ? resolveArray(denoter, dim + 1)
                                           : resolveType(*denoter.elem);
@@ -708,6 +791,21 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
     return ty::Int();
   }
 
+  // §6.4.7: outside the domain of a pointer, a schema-definition may not name
+  // itself. It is checked here rather than at the definition because that is
+  // where the recursion would actually happen — and mutual recursion between
+  // two schemata is the same mistake and is caught by the same test. It comes
+  // before the tuple because a schema resolved *generically* has discriminants
+  // that are not constants, and reporting that instead would name a symptom.
+  for (Symbol *busy : producing_)
+    if (busy == schema) {
+      diags_.error(denoter.line, denoter.col,
+                   "schema '" + schema->name +
+                       "' is defined in terms of itself; only the domain of a "
+                       "pointer may name a schema being defined");
+      return ty::Int();
+    }
+
   std::vector<long long> tuple;
   bool ok = true;
   for (size_t i = 0; i < denoter.args.size(); ++i) {
@@ -753,19 +851,6 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
   auto it = produced_.find(key);
   if (it != produced_.end())
     return it->second;
-
-  // §6.4.7: outside the domain of a pointer, a schema-definition may not name
-  // itself. It is checked here rather than at the definition because that is
-  // where the recursion would actually happen — and mutual recursion between
-  // two schemata is the same mistake and is caught by the same test.
-  for (Symbol *busy : producing_)
-    if (busy == schema) {
-      diags_.error(denoter.line, denoter.col,
-                   "schema '" + schema->name +
-                       "' is defined in terms of itself; only the domain of a "
-                       "pointer may name a schema being defined");
-      return ty::Int();
-    }
 
   // Produce it: the discriminants become ordinary constants for as long as the
   // body is being resolved, which is what lets `array [1..n] of real` reach
@@ -829,6 +914,129 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
     spelled += (i ? ", " : "") + Type::ordinalName(formals[i]->type, tuple[i]);
   t->alias = spelled + ")";
   produced_[key] = t;
+  return t;
+}
+
+/// True when no bound anywhere inside this type depends on a discriminant.
+/// A pointer stops the walk: ISO 7185 §6.4.4 makes its domain a type
+/// *identifier*, which is a type of the enclosing block and never generic.
+bool Sema::staticThroughout(Type *t) const {
+  if (!t)
+    return true;
+  if (t->dynamicBounds())
+    return false;
+  switch (t->kind) {
+  case TypeKind::Array:
+    return staticThroughout(t->indexType) && staticThroughout(t->elem);
+  case TypeKind::Set:
+  case TypeKind::File:
+    return staticThroughout(t->elem);
+  case TypeKind::Record:
+    for (const Field &f : t->fields)
+      if (!staticThroughout(f.type))
+        return false;
+    return staticVariants(t->variants);
+  default:
+    return true;
+  }
+}
+
+/// The same question through every arm of a variant part, at every depth.
+bool Sema::staticVariants(const std::vector<Variant> &arms) const {
+  for (const Variant &v : arms) {
+    for (const Field &f : v.fields)
+      if (!staticThroughout(f.type))
+        return false;
+    if (!staticVariants(v.variants))
+      return false;
+  }
+  return true;
+}
+
+/// §6.7.3.2 and §6.7.3.3's parameter-form written as a bare schema-name. The
+/// body is resolved once, with each discriminant bound to a `Disc` symbol that
+/// reads this parameter's descriptor rather than to a value — so `1..n` comes
+/// out as "the value of n", and one compiled body serves every tuple.
+///
+/// The result belongs to this one parameter and is deliberately not interned:
+/// two parameters of one schema read two descriptors, so they cannot share a
+/// type however alike they look.
+Type *Sema::schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter) {
+  const std::vector<Symbol *> &formals = schema->discriminants;
+  if (formals.empty())
+    return ty::Int(); // already reported at the schema-definition
+
+  // No self-reference guard here. §6.4.7's rule is enforced where the
+  // recursion would happen — in the production the body reaches — and a
+  // parameter-form is never resolved inside one, so a second copy of the
+  // check would be unreachable. Mutation testing is what said so.
+  pushScope();
+  param->discSyms.clear();
+  for (size_t i = 0; i < formals.size(); ++i) {
+    Symbol *d = newSymbol();
+    d->name = formals[i]->name;
+    d->kind = SymKind::Disc;
+    d->type = formals[i]->type;
+    // The discriminant lives in the parameter's own frame slot, after the
+    // address, so it is reached exactly as the parameter is and a recursive
+    // procedure sees the descriptor of the invocation it is running in.
+    d->owner = param->owner;
+    d->level = param->level;
+    d->frameIndex = param->frameIndex;
+    d->discIndex = static_cast<int>(i);
+    param->discSyms.push_back(d);
+    // A discriminant named twice was reported at the schema; binding it again
+    // here would report it once more at every parameter that names the schema.
+    bool repeated = false;
+    for (size_t j = 0; j < i; ++j)
+      repeated = repeated || formals[j]->name == formals[i]->name;
+    if (!repeated)
+      scopes_.back()[d->name] = d;
+  }
+
+  forgetResolved(schema->schemaBody);
+  producing_.push_back(schema);
+  Symbol *savedGeneric = genericFor_;
+  genericFor_ = param;
+  size_t before = diags_.all().size();
+  Type *t = resolveType(*schema->schemaBody);
+  genericFor_ = savedGeneric;
+  producing_.pop_back();
+  popScope();
+  if (diags_.all().size() != before) {
+    diags_.error(denoter.line, denoter.col,
+                 "no type is produced from schema '" + schema->name +
+                     "' for this parameter");
+    return ty::Int();
+  }
+
+  // What a descriptor can describe: an array, and arrays inside it. A record
+  // field after a dynamically-bounded one would sit at an offset nothing can
+  // compute, and a set or a file has a size the runtime is told once — so a
+  // discriminant is allowed in an index type and nowhere else.
+  Type *comp = t;
+  while (comp->isArray() && comp->dynamicExtent())
+    comp = comp->elem;
+  if (!staticThroughout(comp)) {
+    diags_.error(denoter.line, denoter.col,
+                 "schema '" + schema->name +
+                     "' cannot be a parameter form: its discriminants have to "
+                     "bound an array, because that is the only size a "
+                     "descriptor can describe");
+    return ty::Int();
+  }
+
+  // A produced type is a type of its own, so a body that resolved to a shared
+  // singleton is copied before its provenance is written on it.
+  if (t->schema || t == ty::Int() || t == ty::Real() || t == ty::Bool() ||
+      t == ty::Char() || t == ty::Text()) {
+    Type *copy = newType(t->kind);
+    *copy = *t;
+    t = copy;
+  }
+  t->schema = schema;
+  t->alias = schema->name; // no tuple to name it by; the actual brings that
+  param->paramSchema = schema;
   return t;
 }
 
@@ -1358,8 +1566,10 @@ static Symbol *formalSymbol(Symbol *s, const DeclName &n, SymKind kind,
 
 void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
                         Symbol *frame) {
+  int section = 0;
   for (auto &group : groups) {
     if (group.isProc) {
+      ++section;
       // ISO 7185 §6.6.3.1 spells a procedural parameter as a heading, so it
       // declares exactly one name and the parser guarantees it is there.
       Type *t = newType(TypeKind::Proc);
@@ -1390,6 +1600,35 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
       continue;
     }
 
+    SymKind kind = group.byRef ? SymKind::VarParam : SymKind::Param;
+    ++section;
+
+    // §6.7.3.2/§6.7.3.3: a parameter-form may be a bare schema-name, and then
+    // the type is not one type — the tuple arrives with the actual. Each name
+    // needs its symbol *first*, because the discriminants are resolved against
+    // the descriptor that symbol's frame slot holds.
+    Symbol *schema = nullptr;
+    if (group.type && group.type->kind == TEK::Named) {
+      Symbol *named = lookup(group.type->name);
+      if (named && named->kind == SymKind::Schema)
+        schema = named;
+    }
+    if (schema) {
+      for (auto &n : group.names) {
+        Symbol *ps = frame ? addFrameVar(n.name, kind, ty::Int(), frame, n.line,
+                                         n.col)
+                           : formalSymbol(newSymbol(), n, kind, ty::Int());
+        ps->paramSection = section;
+        ps->type = schematicFormal(schema, ps, *group.type);
+        // The denoter keeps the last of them, the way a schema body keeps its
+        // last production (ADR-0039): one parameter-form has as many types as
+        // it has names, and showing one of them says more than showing none.
+        group.type->resolved = ps->type;
+        into->params.push_back(ps);
+      }
+      continue;
+    }
+
     Type *t = resolveType(*group.type);
     // ISO 7185 §6.6.3.3: a file may only be passed by reference. A value
     // parameter is a copy, and a file has no copy — the position, the buffer
@@ -1397,11 +1636,11 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
     if (t->isFile() && !group.byRef && !group.names.empty())
       diags_.error(group.names[0].line, group.names[0].col,
                    "a file parameter must be a var parameter");
-    SymKind kind = group.byRef ? SymKind::VarParam : SymKind::Param;
     for (auto &n : group.names) {
       Symbol *ps =
           frame ? addFrameVar(n.name, kind, t, frame, n.line, n.col)
                 : formalSymbol(newSymbol(), n, kind, t);
+      ps->paramSection = section;
       into->params.push_back(ps);
     }
   }
@@ -1429,6 +1668,12 @@ bool Sema::congruous(Symbol *formal, Symbol *actual) const {
       return false;
     if (f->kind == SymKind::ProcParam) {
       if (!congruous(f, a))
+        return false;
+    } else if (f->paramSchema || a->paramSchema) {
+      // A schematic formal's type belongs to that one parameter and is never
+      // equal to another's, so congruity asks the question §6.7.3.3 asks: the
+      // same schema, with the tuple left to the actual as it always is.
+      if (f->paramSchema != a->paramSchema)
         return false;
     } else if (f->type != a->type) {
       return false;
@@ -1766,10 +2011,19 @@ void Sema::checkExpr(Expr *e) {
     // is the only place it can be written.
     if (base && base->isSchematic()) {
       const std::vector<Symbol *> &ds = base->schema->discriminants;
-      for (size_t i = 0; i < ds.size() && i < base->tuple.size(); ++i)
+      // A schematic formal parameter has no tuple: its discriminants are in
+      // the descriptor the actual brought, and the parameter is what says
+      // which descriptor. Everything else has folded them already.
+      Symbol *param = base->isGeneric() ? baseSymbol(fld->base.get()) : nullptr;
+      for (size_t i = 0; i < ds.size(); ++i)
         if (ds[i]->name == fld->field) {
+          if (base->isGeneric() && (!param || i >= param->discSyms.size()))
+            break;
           fld->isDiscriminant = true;
-          fld->discValue = base->tuple[i];
+          if (base->isGeneric())
+            fld->discSym = param->discSyms[i];
+          else if (i < base->tuple.size())
+            fld->discValue = base->tuple[i];
           e->type = ds[i]->type;
           return;
         }
@@ -2442,6 +2696,26 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
     if (p->kind == SymKind::ProcParam)
       continue; // already bound, above
 
+    // §6.7.3.2 and §6.7.3.3: a schematic formal parameter's type is decided by
+    // the actual, so the actual has only to be produced from the same schema —
+    // whatever tuple it was produced with. It must be a variable either way,
+    // because a value parameter of a size not known until now is copied out of
+    // one rather than evaluated into one.
+    if (p->paramSchema) {
+      if (!isDesignator(a))
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name + "' needs a variable produced from "
+                         "schema '" + p->paramSchema->name + "'");
+      else if (!a->type || a->type->schema != p->paramSchema)
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name + "' must be produced from schema '" +
+                         p->paramSchema->name + "', but the argument is " +
+                         (a->type ? a->type->name() : std::string("untyped")));
+      continue;
+    }
+
     if (p->kind == SymKind::VarParam) {
       if (!isDesignator(a)) {
         diags_.error(a->line, a->col,
@@ -2472,6 +2746,29 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                    "argument " + std::to_string(i + 1) + " of '" +
                        callee->name + "' is " + p->type->name() +
                        ", but the value is " + a->type->name());
+  }
+
+  // §6.7.3.3: one formal-parameter-section is one parameter-form, so every
+  // actual corresponding to it brings the same tuple — `var a, b: vector`
+  // takes two vectors of one length, not two vectors. The standard calls a
+  // mismatch a dynamic-violation; every tuple this compiler can write is
+  // already known here, so it is reported before the program runs.
+  for (size_t i = 0; i < args.size(); ++i) {
+    Symbol *p = callee->params[i];
+    if (!p->paramSchema || !args[i]->type || args[i]->type->isGeneric())
+      continue;
+    for (size_t j = 0; j < i; ++j) {
+      Symbol *q = callee->params[j];
+      if (q->paramSchema != p->paramSchema ||
+          q->paramSection != p->paramSection || !args[j]->type ||
+          args[j]->type->isGeneric() || args[j]->type == args[i]->type)
+        continue;
+      diags_.error(args[i]->line, args[i]->col,
+                   "'" + q->name + "' and '" + p->name +
+                       "' are one parameter form, so their arguments are one "
+                       "type: found " + args[j]->type->name() + " and " +
+                       args[i]->type->name());
+    }
   }
 }
 

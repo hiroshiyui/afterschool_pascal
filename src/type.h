@@ -113,6 +113,30 @@ struct Type {
   std::vector<long long> tuple;
   bool isSchematic() const { return schema != nullptr; }
 
+  // --- schematic formal parameters (§6.7.3.2, §6.7.3.3) --------------------
+  /// A bound that is not known until the block is entered: the discriminant
+  /// the source wrote there, whose value arrives with the actual. `lo`/`hi`
+  /// are then not the bound and nothing reads them. Null for every bound
+  /// written as a constant, which is every bound outside a schematic formal.
+  Symbol *loDisc = nullptr, *hiDisc = nullptr;
+
+  /// The type of a schematic formal parameter: produced from a schema, but
+  /// with no tuple — the tuple arrives with the actual, in the descriptor that
+  /// travels beside its address. A schema with no discriminants is refused, so
+  /// an empty tuple cannot mean anything else.
+  bool isGeneric() const { return schema && tuple.empty(); }
+
+  /// This type's own bounds are not known until run time.
+  bool dynamicBounds() const { return loDisc || hiDisc; }
+
+  /// ...and neither is its size: an array of dynamically-bounded arrays has a
+  /// dynamic extent at every level. Only arrays reach this — a schematic
+  /// formal whose dynamic part is anywhere else is refused, because a record
+  /// field after one would sit at an offset nothing could compute.
+  bool dynamicExtent() const {
+    return dynamicBounds() || (isArray() && elem && elem->dynamicExtent());
+  }
+
   // These ask what a value *is*, so they look through a subrange to its host:
   // `1..9` is an integer that happens to be range-checked, and every rule
   // about integers applies to it unchanged.
@@ -258,7 +282,7 @@ struct Type {
       return s + ")";
     }
     case TypeKind::Subrange:
-      return ordinalName(host, lo) + ".." + ordinalName(host, hi);
+      return boundName(host, loDisc, lo) + ".." + boundName(host, hiDisc, hi);
     // ISO 7185 §6.4.4 makes a pointer's domain a type *identifier*, so the
     // recursion here always stops at a name — which is what lets a type point
     // at itself without this looping forever.
@@ -292,9 +316,15 @@ struct Type {
       break;
     }
     std::string s = packed ? "packed array [" : "array [";
-    s += ordinalName(indexType, lo) + ".." + ordinalName(indexType, hi);
+    s += boundName(indexType, loDisc, lo) + ".." + boundName(indexType, hiDisc, hi);
     return s + "] of " + (elem ? elem->name() : "?");
   }
+
+  /// How a bound is written when it may be dynamic: a constant as itself, and
+  /// a discriminant as its own name. Defined out of line because a `Symbol` is
+  /// incomplete here.
+  static std::string boundName(const Type *t, const Symbol *disc,
+                               long long value);
 
   /// How a value of an ordinal type is written in source: `7`, `'a'`, `true`,
   /// or an enumeration constant's own name.
