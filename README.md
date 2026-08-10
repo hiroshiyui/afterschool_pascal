@@ -245,12 +245,19 @@ types      vector(n: integer) = array [1..n] of real — a schema, and
            discriminants are the same type and two with different ones are
            not, whatever they look like; v.n is the value a type was
            produced with. The discriminants must be constants for now
+params     procedure p(var v: vector) — a schematic formal parameter, whose
+           bounds come from the actual: one body serves every tuple, and
+           v.n reads the tuple the argument brought. A value parameter of
+           one is copied on entry, at whatever size the tuple says. The
+           discriminants may bound an array of the schema's type and
+           nothing further in
 words      otherwise and pow are reserved; `and then` and `or else` reserve
            nothing new, because both of their words already are
 ```
 
-Not accepted yet: schematic formal parameters and discriminants that are not
-constants (`procedure p(var v: vector)`, `var s: vector(n)`), the `string` type,
+Not accepted yet: discriminants that are not constants (`var s: vector(n)`),
+a schema as the domain of a pointer, a discriminant as a variant-selector,
+`type of`, the `string` type,
 modules,
 `protected` parameters, initial-state specifiers
 (`value`), binding (`bind`/`unbind`), direct-access files, and complex

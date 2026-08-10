@@ -432,9 +432,41 @@ in one language or the other, and the standard is a property of the source.
     which is the test of whether it was encoded in the right place.
   - A produced type **names itself** `vector(3)`, or two productions differing
     only in a discriminant the body never mentions print identically.
-  - **Discriminants must be constants**, and schematic formal parameters are
-    not implemented. Both are stated deferrals, not oversights — the ADR's
-    "What this does not do" lists all five.
+  - **Discriminants must be constants.** A stated deferral, not an
+    oversight — the ADR's "What this does not do" lists all five.
+- **A schematic formal parameter carries its discriminants beside the address**
+  (ADR-0040), which is the other half of §6.4.7's summary: `procedure p(var v:
+  vector)` takes a vector of any length, and one compiled body serves every
+  tuple.
+  - The parameter's frame slot is `{ptr, d1, ..., dn}` and it travels as
+    **n+1 arguments** — ADR-0030's shape for a procedural parameter's pair, for
+    the same reason: nothing depends on how a struct is passed.
+  - A discriminant is a **symbol with storage** (`SymKind::Disc`) whose owner,
+    level and frame index are the *parameter's*, so `addressOf` reaches it by
+    the walk every enclosing variable makes — which is what makes the tuple
+    per-invocation rather than per-procedure.
+  - The schema body is resolved **once, generically**: the discriminants are
+    bound to those symbols instead of to values, and a bound that reaches one
+    is recorded on the `Type` as the symbol. `array [1..n] of real` is then an
+    ordinary array type whose upper bound is read at run time, so the array,
+    index and assignment code needed no case for schemata.
+  - **A dynamic bound is a discriminant and nothing else** — not `n - 1`.
+    ISO 7185 has no constant-expression, so this is the restriction every other
+    bound is already under, not one invented here.
+  - A discriminant may bound an array, and an array inside it: `dynSize` is
+    `(hi - lo + 1) * dynSize(component)` and an address is
+    `base + (i - lo) * dynSize(component)`, in bytes. **Anywhere else it is
+    refused** — a record field after a dynamically-bounded one would sit at an
+    offset nothing can compute.
+  - A **value** parameter is copied on entry into an `alloca` of a computed
+    length, because its size is not known until the tuple is in place.
+  - **The tuple is compared at compile time**, because every tuple this
+    compiler can write is a constant. §6.7.3.3 calls a mismatch a
+    dynamic-violation; when non-constant discriminants land it becomes one.
+  - **`verify/` gained nothing**, and that is the point: the array rule already
+    quantifies over its bounds, so it covers a pair that arrives at run time.
+    The span check `resolveArray` cannot make for a dynamic bound was already
+    made where the actual's type was produced.
   - Refused, and neither is in the standard's words: an **enumerated type in a
     schema body** (its constants would be declared once per tuple, into a
     scope that dies with the production), and a schema **naming itself**
@@ -516,7 +548,9 @@ folding, and — since ADR-0039 — the schema intern table, which is the one pl
 a type's *identity* is decided by something other than the denoter that built
 it. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of
-integer` the *same* type rather than two alike ones. `runtime/pasrt.c`
+integer` the *same* type rather than two alike ones. The one exception is a
+parameter group naming a schema (ADR-0040): each name there gets its *own*
+type, because each reads its own descriptor. `runtime/pasrt.c`
 holds anything not expressible in IR — formatted output and runtime checks —
 where `width < 0` / `prec < 0` mean "not given".
 
@@ -620,7 +654,8 @@ one — `;` and `end`, but also `else` and `until`, so `if c then ; else s` is
 legal. `tests/empty_statements.pas` pins it.
 
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
-array's own bounds optimises the check away. Storing outside a subrange traps,
+array's own bounds optimises the check away; where the bounds arrived with the
+actual (ADR-0040) the message is built by the runtime and says the same words. Storing outside a subrange traps,
 and so does a `case` whose selector matches no label (ADR-0018) — unless it has
 an Extended Pascal `otherwise`, which is the only thing that gives that arm
 something to do (ADR-0033) — a dereference of `nil` (ADR-0019), and a set whose
