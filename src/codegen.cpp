@@ -390,6 +390,13 @@ StructType *CodeGen::buildFrameType(Symbol *proc) {
   fields.push_back(ptr()); // field 0: the static link
   for (const Symbol *v : proc->frameVars)
     fields.push_back(slotType(v));
+  // A block reachable by a non-local `goto` carries the jump record after its
+  // variables. It is last so that no frame index moves, and it is not a
+  // frameVar because nothing in the source can name it: the prologue arms it,
+  // the epilogue disarms it, and a goto in a nested block reaches it by
+  // walking the static chain (ADR-0032).
+  if (!proc->nonLocalLabels.empty())
+    fields.push_back(jumpRecordType());
   StructType *ty = StructType::create(ctx_, fields, "frame." + proc->name);
   frameTypes_[proc] = ty;
   return ty;
@@ -475,6 +482,48 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   }
 
   initFiles(proc);
+  emitJumpDispatch(proc);
+}
+
+llvm::Value *CodeGen::jumpRecord(Symbol *proc, llvm::Value *frame) {
+  return b_.CreateStructGEP(frameTypes_[proc], frame,
+                            1 + proc->frameVars.size(), "jump");
+}
+
+/// The target's half of a non-local `goto`. The record is armed first — which
+/// notes the files the block already has open, so a later jump knows which
+/// ones it abandons — and then `_setjmp` is called *here*, in the function
+/// that owns the frame. It cannot be called through a runtime wrapper: the
+/// wrapper would have returned by the time the jump arrived, and its frame is
+/// what `_setjmp` recorded.
+///
+/// A label arrives as its own id plus one, because `_longjmp` with zero would
+/// come back looking like the ordinary entry to the block.
+void CodeGen::emitJumpDispatch(Symbol *proc) {
+  if (proc->nonLocalLabels.empty())
+    return;
+
+  llvm::Value *record = jumpRecord(proc, curFrame_);
+  llvm::Value *env =
+      b_.CreateCall(rt("pas_jump_env", ptr(), {ptr()}), {record}, "env");
+
+  FunctionCallee sj = rt("_setjmp", i32(), {ptr()});
+  // LLVM does *not* infer this from the name. Without it the call looks like
+  // an ordinary one: a value may be kept in a register across it that the jump
+  // will not restore, and the function containing it may be inlined into one
+  // whose frame `_setjmp` never recorded.
+  if (auto *fn = dyn_cast<Function>(sj.getCallee()))
+    fn->addFnAttr(Attribute::ReturnsTwice);
+  CallInst *arrived = b_.CreateCall(sj, {env}, "arrived");
+  arrived->addFnAttr(Attribute::ReturnsTwice);
+
+  BasicBlock *body = BasicBlock::Create(ctx_, "entry.body", curFn_);
+  SwitchInst *sw = b_.CreateSwitch(arrived, body,
+                                   proc->nonLocalLabels.size());
+  for (int id : proc->nonLocalLabels)
+    sw->addCase(cast<ConstantInt>(ConstantInt::get(i32(), id + 1)),
+                labelBlock(id));
+  b_.SetInsertPoint(body);
 }
 
 /// Every file variable the frame holds starts closed, and knows how `reset`
@@ -513,8 +562,13 @@ void CodeGen::initFiles(Symbol *proc) {
 /// A block exit closes the files the block declared, which is ISO 7185's rule
 /// and also the only thing that flushes a file written to inside a procedure.
 /// Pascal has no early return, so the single exit point each body ends with is
-/// the whole of the epilogue — and a `goto` does not change that, because a
-/// local one cannot leave the block and a non-local one is refused (ADR-0029).
+/// the whole of the epilogue — and a `goto` does not change that: a local one
+/// cannot leave the block, and a non-local one runs this same work for every
+/// block it abandons, from the runtime rather than from here (ADR-0032).
+///
+/// Disarming the jump record is part of the same exit. Nothing the compiler
+/// accepts can reach a dead frame — the static chain only names live ones —
+/// so it buys a diagnosable error rather than a jump into reclaimed stack.
 void CodeGen::closeFiles(Symbol *proc) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   for (Symbol *v : proc->frameVars) {
@@ -522,6 +576,9 @@ void CodeGen::closeFiles(Symbol *proc) {
       continue;
     b_.CreateCall(rt("pas_file_done", voidTy, {ptr()}), {addressOf(v)});
   }
+  if (!proc->nonLocalLabels.empty())
+    b_.CreateCall(rt("pas_jump_done", voidTy, {ptr()}),
+                  {jumpRecord(proc, curFrame_)});
 }
 
 void CodeGen::emitProcBody(ProcDecl &decl) {
@@ -829,6 +886,20 @@ void CodeGen::emitLabeled(LabeledStmt *l) {
 void CodeGen::emitGoto(GotoStmt *g) {
   if (g->id < 0)
     return; // Sema has already reported it
+  if (g->nonLocal && g->owner) {
+    // Out of this block altogether. The target's activation is the one on this
+    // procedure's static chain, which for a recursive enclosing procedure is
+    // the invocation this one was called from — the same rule every other
+    // access to an enclosing frame follows (ADR-0016). The runtime closes the
+    // abandoned blocks' files before cutting the stack back.
+    llvm::Value *record = jumpRecord(g->owner, frameAt(g->owner->level));
+    b_.CreateCall(rt("pas_jump_go", llvm::Type::getVoidTy(ctx_),
+                     {ptr(), i32()}),
+                  {record, ConstantInt::get(i32(), g->id + 1)});
+    b_.CreateUnreachable();
+    b_.SetInsertPoint(BasicBlock::Create(ctx_, "after.goto", curFn_));
+    return;
+  }
   b_.CreateBr(labelBlock(g->id));
   b_.SetInsertPoint(BasicBlock::Create(ctx_, "after.goto", curFn_));
 }

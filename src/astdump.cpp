@@ -319,8 +319,11 @@ struct Dumper {
       GotoStmt *n = as<GotoStmt>(s);
       pad();
       std::printf("goto %d @%d:%d", n->label, n->line, n->col);
-      if (annotate)
+      if (annotate) {
         std::printf(" -> #%d", n->id);
+        if (n->nonLocal)
+          std::printf(" nonlocal");
+      }
       std::printf("\n");
       break;
     }

@@ -4,7 +4,8 @@ Date: 2026-08-10
 
 ## Status
 
-Accepted. Partial: the non-local form is refused, and this record says why.
+Accepted. The non-local form this record deferred — and whose cost it set out
+— is now implemented; see ADR-0032. Everything else here stands unchanged.
 
 ## Context
 

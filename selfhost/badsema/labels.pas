@@ -9,8 +9,8 @@ var i: integer;
 
 procedure inner;
 begin
-  { a label of an enclosing block, placed where 6.8.1 allows: legal, and not
-    implemented }
+  { a label of an enclosing block, placed where 6.8.1 allows: legal, and here
+    to keep the *legal* non-local case beside the illegal one }
   goto 1;
   { and one placed where 6.8.1 does not allow it }
   goto 3

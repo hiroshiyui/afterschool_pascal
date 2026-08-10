@@ -128,6 +128,15 @@ block declares and that marks one of its statements. A label is a *number*, not
 a name, so it lives in no scope: two blocks may each declare label 1 and each
 means its own (ADR-0029).
 
+**Non-local `goto`.** A goto to a label of an *enclosing* block, which leaves
+the block rather than a statement and so abandons every activation between the
+two. The target's activation record carries a jump record: its prologue arms it
+and calls `_setjmp`, and the goto reaches it through the static chain. §6.8.1
+allows it only to a label at the top level of that block's statement part —
+the one place an activation that is still alive can be re-entered. The jump
+closes the files of every block it abandons, which those blocks' own exits
+would have done had they run (ADR-0032).
+
 **Statement path.** The chain of statements containing a given one. §6.8.1 lets
 a `goto` leave a structured statement but not enter one, and stated over paths
 that rule is exactly "the label's path is a prefix of the goto's" — which

@@ -1,0 +1,23 @@
+level 1
+ level 2
+  level 3 jumps
+level 1 landed
+  bail called at depth 3
+  leaving depth 3
+  returned into depth 2
+  leaving depth 2
+  returned into depth 1
+  leaving depth 1
+  inside Call
+  jumping out of Deep(1)
+  leaving Deep(1)
+  past the call in Deep(2)
+  leaving Deep(2)
+  past the call in Deep(3)
+  leaving Deep(3)
+program landed, n = 1
+  First jumps into the program block
+program landed, n = 2
+  Second jumps to the same label
+program landed, n = 3
+program done

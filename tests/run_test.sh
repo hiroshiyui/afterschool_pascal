@@ -42,6 +42,16 @@ trap 'rm -rf "$work"' EXIT
 
 normalise() { sed "s|$source_file|<source>|g" "$1"; }
 
+# The compiled program runs with a deliberately small descriptor table. Closing
+# a file at block exit is ISO's rule and this compiler's obligation — a test
+# that opens thousands of scratch files in sequence (files_scratch.pas,
+# goto_files.pas) can only fail if the table can actually run out, and on a
+# machine whose default limit is half a million it never would.
+run_program() {
+  ( ulimit -n 256
+    exec "$work/$name" "$work/file1" "$work/file2" <"$stdin_file" )
+}
+
 "$pascalc" "$source_file" -o "$work/$name" 2>"$work/compile.err"
 compile_status=$?
 
@@ -52,8 +62,7 @@ if [[ ! -f $expected_err ]]; then
     cat "$work/compile.err" >&2
     exit 1
   fi
-  "$work/$name" "$work/file1" "$work/file2" \
-      <"$stdin_file" >"$work/actual" 2>&1
+  run_program >"$work/actual" 2>&1
   status=$?
   if [[ $status -ne 0 ]]; then
     echo "--- $name: program exited with status $status ---" >&2
@@ -79,8 +88,7 @@ if [[ $compile_status -ne 0 ]]; then
   exit 0
 fi
 
-"$work/$name" "$work/file1" "$work/file2" \
-    <"$stdin_file" >"$work/actual" 2>"$work/actual.err"
+run_program >"$work/actual" 2>"$work/actual.err"
 status=$?
 if [[ $status -eq 0 ]]; then
   echo "--- $name: expected a failure, but the program succeeded ---" >&2

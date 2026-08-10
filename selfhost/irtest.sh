@@ -46,16 +46,21 @@ if [[ ! -f $runtime ]]; then
   exit 1
 fi
 
-# The size of a file variable's storage lives in two places that cannot include
-# one another: runtime/pasrt.h, which codegen.cpp includes, and the fileSize
-# constant of the Pascal compiler. A disagreement would allocate the wrong
-# number of bytes in every activation record, so it is checked, not trusted.
-want=$(sed -n 's/^#define PAS_FILE_SIZE \([0-9]*\).*/\1/p' "$root/runtime/pasrt.h")
-have=$(sed -n 's/^ *fileSize = \([0-9]*\);.*/\1/p' "$here/compiler.pas")
-if [[ -z $want || $want != "$have" ]]; then
-  echo "irtest: PAS_FILE_SIZE is $want but compiler.pas says $have" >&2
-  exit 1
-fi
+# Two sizes live in two places that cannot include one another:
+# runtime/pasrt.h, which codegen.cpp includes, and the constants of the Pascal
+# compiler. A disagreement would allocate the wrong number of bytes in every
+# activation record, so they are checked, not trusted.
+check_size() {
+  local macro=$1 constant=$2 want have
+  want=$(sed -n "s/^#define $macro \([0-9]*\).*/\1/p" "$root/runtime/pasrt.h")
+  have=$(sed -n "s/^ *$constant = \([0-9]*\);.*/\1/p" "$here/compiler.pas")
+  if [[ -z $want || $want != "$have" ]]; then
+    echo "irtest: $macro is $want but compiler.pas says $have" >&2
+    exit 1
+  fi
+}
+check_size PAS_FILE_SIZE fileSize
+check_size PAS_JUMP_SIZE jumpSize
 
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>

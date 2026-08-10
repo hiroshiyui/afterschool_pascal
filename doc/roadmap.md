@@ -51,7 +51,7 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 51 ctest cases — 48 Pascal programs, the verification
+Alongside the language, 53 ctest cases — 50 Pascal programs, the verification
 run, the differential test and the bootstrap — and 35 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
@@ -227,14 +227,9 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **Not implemented at all:** nothing, beside the non-local `goto` below. Sets
-  (ADR-0028), `goto` (ADR-0029), procedural parameters (ADR-0030) and non-text
-  files (ADR-0031) were this group, and it is now empty.
-- **A `goto` to a label in an enclosing block is refused.** ISO 7185 §6.8.2.4
-  allows it and §6.8.1 says where it may land — which *is* checked, so what is
-  refused is the lowering rather than the program's shape. It needs the
-  abandoned activations unwound and their files closed, which is a piece of
-  work of its own (ADR-0029).
+- **Not implemented at all:** nothing. Sets (ADR-0028), `goto` (ADR-0029 and
+  ADR-0032), procedural parameters (ADR-0030) and non-text files (ADR-0031)
+  were this group, and it is now empty — **ISO 7185 is complete**.
 - **A set's base type must have its values in 0..255**, because every set is
   one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
   this is a permitted limit rather than a deviation — but `set of integer` is a
@@ -260,11 +255,13 @@ Extended Pascal's spelling rather than invented here.
 
 - ~~**Sets.**~~ Done (ADR-0028): one 256-bit word, with the base type bounded
   at 0..255 under the latitude §6.4.3.4 gives.
-- ~~**`goto` and labels.**~~ Done for the local form (ADR-0029), where
-  §6.8.1's restriction turned out to be one prefix test on statement paths.
-  What is left is the non-local jump: `setjmp`/`longjmp`, a jump buffer in the
-  target's frame, and the abandoned frames' files closed on the way out — the
-  last of which is why it is not a small addition.
+- ~~**`goto` and labels.**~~ Done: the local form (ADR-0029), where §6.8.1's
+  restriction turned out to be one prefix test on statement paths, and then the
+  non-local one (ADR-0032) — a jump record in the *target's* activation record,
+  reached through the static chain. The part that was not small is the one
+  ADR-0029 predicted: the abandoned blocks' files, which have to be found
+  dynamically because a procedural parameter can be called from a block that is
+  not on the jumping procedure's static chain.
 - ~~**Procedural and functional parameters.**~~ Done (ADR-0030): the value is
   the pair `{code, static link}`, so a passed procedure runs in the scope it
   was *declared* in. It is the first thing here that makes an activation

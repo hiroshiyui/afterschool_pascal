@@ -13,7 +13,14 @@
 #ifndef APASCAL_PASRT_H
 #define APASCAL_PASRT_H
 
-#define PAS_FILE_SIZE 80
+#define PAS_FILE_SIZE 96
+
+/* The storage a block needs to be the target of a non-local `goto`: somewhere
+ * to jump back to, and the mark that says which files the jump abandons. It is
+ * opaque for the same reason a file variable is, and sized here for the same
+ * reason — `jmp_buf` is the platform's business and the compiler must not have
+ * an opinion about it. See ADR-0032. */
+#define PAS_JUMP_SIZE 256
 
 /* How reset/rewrite find the external file a file variable stands for.
  * ISO 7185 §6.10 makes the binding implementation-defined; this compiler binds

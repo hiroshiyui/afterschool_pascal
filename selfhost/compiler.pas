@@ -60,7 +60,11 @@ const
     runtime/pasrt.h. The C++ code generator includes that header so the two
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
     the number and selfhost/irtest.sh checks that the two still match. }
-  fileSize = 80;
+  fileSize = 96;
+  { The storage a block needs to be the target of a non-local `goto`, which is
+    PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
+    variable's is, and checked against that header by selfhost/irtest.sh. }
+  jumpSize = 256;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
@@ -265,6 +269,11 @@ type
     params, paramTail: symListPtr;
     frameVars, frameTail: symListPtr;
     frameCount: integer;
+    { The ids of this block's labels that a goto in a *nested* block jumps to.
+      Non-empty means the activation record carries a jump record after the
+      frame variables, and the prologue arms it and dispatches on it -- so it
+      is the one thing about a block that its own statements do not decide. }
+    nlLabels, nlTail: numPtr;
     resultVar: symPtr;
     defined: boolean
   end;
@@ -371,7 +380,11 @@ type
       { `goto L` and `L: statement`. Sema resolves the number to the labelled
         statement's own id, which is what codegen branches to -- the number is
         not enough, since two blocks may each declare label 1. }
-      nkGoto:       (gtLabel, gtId: integer);
+      { gtNonLocal: the label belongs to an *enclosing* block, so reaching
+        it abandons every activation between here and that one. A different
+        lowering, not a longer one: a branch cannot leave a function. }
+      nkGoto:       (gtLabel, gtId: integer; gtNonLocal: boolean;
+                     gtOwner: symPtr);
       nkLabeled:    (lbLabel, lbId: integer; lbStmt: nodePtr);
       nkLabelDecl:  (ldNumber: integer);
       nkCaseArm:    (caLabels, caBody: nodePtr; caValues, caValueTail: numPtr);
@@ -1388,7 +1401,11 @@ begin
       n^.vaTagLine := 0;
       n^.vaTagCol := 0
     end;
-    nkGoto:    n^.gtId := -1;
+    nkGoto:    begin
+                 n^.gtId := -1;
+                 n^.gtNonLocal := false;
+                 n^.gtOwner := nil
+               end;
     nkLabeled: n^.lbId := -1;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
     nkBinary, nkUnary,
@@ -3250,6 +3267,8 @@ begin
   s^.frameVars := nil;
   s^.frameTail := nil;
   s^.frameCount := 0;
+  s^.nlLabels := nil;
+  s^.nlTail := nil;
   s^.resultVar := nil;
   s^.defined := false;
   NewSymbol := s
@@ -6017,7 +6036,8 @@ end;
       still alive could be re-entered. }
 procedure ResolveGotos;
 var pending, moved: pendingGotoPtr; found, info: labelInfoPtr;
-    sc, home: labelScopePtr; p: stmtPathPtr; reachable: boolean;
+    sc, home: labelScopePtr; p: stmtPathPtr; reachable, known: boolean;
+    target: symPtr; num: numPtr;
 begin
   pending := labelScope^.gotos;
   while pending <> nil do begin
@@ -6069,7 +6089,8 @@ begin
                 'but not enter one')
       end
       else begin
-        pending^.gnode^.gtId := found^.id
+        pending^.gnode^.gtId := found^.id;
+        pending^.gnode^.gtOwner := found^.owner
       end
     end
     else if found^.path <> nil then begin
@@ -6079,12 +6100,28 @@ begin
               'statement part and not one inside a statement of it')
     end
     else begin
-      { The placement is legal; the lowering is what is missing. A non-local
-        goto abandons the activations between here and the target, which needs
-        the frames unwound and their files closed -- see ADR-0029. }
-      ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
-      writeln('a goto to a label in an enclosing block is not implemented; ',
-              'only a goto within one block is')
+      { A legal non-local goto. The *target* block is what has work to do -- it
+        carries the jump record and dispatches to the label on arrival -- and
+        it learns of it here, from a goto in a block nested inside it that has
+        already been walked (ADR-0032). }
+      pending^.gnode^.gtId := found^.id;
+      pending^.gnode^.gtOwner := found^.owner;
+      pending^.gnode^.gtNonLocal := true;
+      target := found^.owner;
+      num := target^.nlLabels;
+      known := false;
+      while num <> nil do begin
+        if num^.value = found^.id then known := true;
+        num := num^.next
+      end;
+      if not known then begin
+        new(num);
+        num^.value := found^.id;
+        num^.next := nil;
+        if target^.nlLabels = nil then target^.nlLabels := num
+        else target^.nlTail^.next := num;
+        target^.nlTail := num
+      end
     end;
     pending := pending^.next
   end;
@@ -6759,7 +6796,10 @@ begin
     nkGoto: begin
       write('goto ', n^.gtLabel:1);
       WritePos(n^.line, n^.col);
-      if annotate then write(' -> #', n^.gtId:1);
+      if annotate then begin
+        write(' -> #', n^.gtId:1);
+        if n^.gtNonLocal then write(' nonlocal')
+      end;
       writeln
     end;
     nkLabeled: begin
@@ -7878,6 +7918,16 @@ begin
     cur := nxt
   end;
   v := cur
+end;
+
+{ The jump record is the field after the last variable. Only called for a
+  procedure whose nlLabels is non-empty. }
+procedure JumpRecord(p: symPtr; var frame: str; var v: str);
+begin
+  Def(v);
+  write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
+  PutOp(frame);
+  writeln(ircode, ', i32 0, i32 ', 1 + p^.frameCount:1)
 end;
 
 procedure FrameSlot(s: symPtr; var v: str);
@@ -9702,9 +9752,26 @@ end;
   statement may follow it in the same sequence, and LLVM requires it to live in
   a block of its own rather than after a terminator. }
 procedure EmitGoto(s: nodePtr);
+var frame, rec: str;
 begin
   if s^.gtId >= 0 then begin
-    writeln(ircode, '  br label %L', LabelBlock(s^.gtId):1);
+    if s^.gtNonLocal then begin
+      { Out of this block altogether. The target's activation is the one on
+        this procedure's static chain, which for a recursive enclosing
+        procedure is the invocation this one was called from -- the same rule
+        every other access to an enclosing frame follows (ADR-0016). The
+        runtime closes the abandoned blocks' files before cutting the stack
+        back. The label arrives as its id plus one, because a longjmp with
+        zero would come back looking like the ordinary entry. }
+      FrameAt(s^.gtOwner^.level, frame);
+      JumpRecord(s^.gtOwner, frame, rec);
+      write(ircode, '  call void @pas_jump_go(ptr ');
+      PutOp(rec);
+      writeln(ircode, ', i32 ', s^.gtId + 1:1, ')');
+      writeln(ircode, '  unreachable')
+    end
+    else
+      writeln(ircode, '  br label %L', LabelBlock(s^.gtId):1);
     StartBlock(NewBlock)
   end
 end;
@@ -10002,6 +10069,13 @@ begin
     PutSlotType(l^.sym);
     l := l^.next
   end;
+  { A block reachable by a non-local goto carries the jump record after its
+    variables. It is last so that no frame index moves, and it is not a frame
+    variable because nothing in the source can name it: the prologue arms it,
+    the epilogue disarms it, and a goto in a nested block reaches it by
+    walking the static chain (ADR-0032). }
+  if p^.nlLabels <> nil then
+    write(ircode, ', [', jumpSize div 8:1, ' x i64]');
   writeln(ircode, ' }')
 end;
 
@@ -10062,7 +10136,7 @@ end;
   Pascal has no early return, so the single exit point each body ends with is
   the whole of the epilogue. }
 procedure CloseFiles(p: symPtr);
-var l: symListPtr; addr: str;
+var l: symListPtr; addr, frame, rec: str;
 begin
   l := p^.frameVars;
   while l <> nil do begin
@@ -10073,6 +10147,52 @@ begin
       writeln(ircode, ')')
     end;
     l := l^.next
+  end;
+  { Disarming the jump record is part of the same exit. Nothing the compiler
+    accepts can reach a dead frame -- the static chain only names live ones --
+    so it buys a diagnosable error rather than a jump into reclaimed stack. }
+  if p^.nlLabels <> nil then begin
+    FrameAt(p^.level, frame);
+    JumpRecord(p, frame, rec);
+    write(ircode, '  call void @pas_jump_done(ptr ');
+    PutOp(rec);
+    writeln(ircode, ')')
+  end
+end;
+
+{ The target's half of a non-local goto. The record is armed first -- which
+  notes the files the block already has open, so a later jump knows which ones
+  it abandons -- and then `_setjmp` is called *here*, in the function that owns
+  the frame. It cannot be called through a runtime wrapper: the wrapper would
+  have returned by the time the jump arrived, and its frame is what `_setjmp`
+  recorded. #0 is `returns_twice`, without which LLVM may keep a value in a
+  register across the call that the jump will not restore. }
+procedure JumpDispatch(p: symPtr);
+var frame, rec, env, arrived: str; num: numPtr; bodyB: integer;
+begin
+  if p^.nlLabels <> nil then begin
+    FrameAt(p^.level, frame);
+    JumpRecord(p, frame, rec);
+    Def(env);
+    write(ircode, 'call ptr @pas_jump_env(ptr ');
+    PutOp(rec);
+    writeln(ircode, ')');
+    Def(arrived);
+    write(ircode, 'call i32 @_setjmp(ptr ');
+    PutOp(env);
+    writeln(ircode, ') #0');
+    bodyB := NewBlock;
+    write(ircode, '  switch i32 ');
+    PutOp(arrived);
+    writeln(ircode, ', label %L', bodyB:1, ' [');
+    num := p^.nlLabels;
+    while num <> nil do begin
+      writeln(ircode, '    i32 ', num^.value + 1:1, ', label %L',
+              LabelBlock(num^.value):1);
+      num := num^.next
+    end;
+    writeln(ircode, '  ]');
+    StartBlock(bodyB)
   end
 end;
 
@@ -10173,7 +10293,8 @@ begin
     end
   end;
 
-  InitFiles(p)
+  InitFiles(p);
+  JumpDispatch(p)
 end;
 
 procedure EmitProcBody(d: nodePtr);
@@ -10232,6 +10353,11 @@ begin
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
   writeln(ircode, 'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32)');
   writeln(ircode, 'declare void @pas_file_done(ptr)');
+  writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
+  writeln(ircode, 'declare void @pas_jump_done(ptr)');
+  writeln(ircode, 'declare void @pas_jump_go(ptr, i32)');
+  writeln(ircode, 'declare i32 @_setjmp(ptr) #0');
+  writeln(ircode, 'attributes #0 = { returns_twice }');
   writeln(ircode, 'declare void @pas_reset(ptr)');
   writeln(ircode, 'declare void @pas_rewrite(ptr)');
   writeln(ircode, 'declare void @pas_get(ptr)');

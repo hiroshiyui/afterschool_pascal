@@ -61,6 +61,13 @@ struct Symbol {
   bool defined = false;            // a body has been seen (vs. only `forward`)
   ProcDecl *decl = nullptr;
 
+  /// The ids of this block's labels that a `goto` in a *nested* block jumps
+  /// to. Non-empty means the activation record carries a jump record after the
+  /// frame variables, and the prologue arms it and dispatches on it — so this
+  /// is the one thing about a block that its own statements do not decide
+  /// (ADR-0032). The ids are in declaration order and never repeat.
+  std::vector<int> nonLocalLabels;
+
   bool isCallable() const {
     return kind == SymKind::Proc || kind == SymKind::Func;
   }

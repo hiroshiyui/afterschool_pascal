@@ -847,13 +847,17 @@ void Sema::resolveGotos() {
                    "statement part and not one inside a statement of it");
       continue;
     } else {
-      // The placement is legal; the lowering is what is missing. A non-local
-      // goto abandons the activations between here and the target, which
-      // needs the frames unwound and their files closed — see ADR-0029.
-      diags_.error(g->line, g->col,
-                   "a goto to a label in an enclosing block is not "
-                   "implemented; only a goto within one block is");
-      continue;
+      // A legal non-local goto. The *target* block is what has work to do —
+      // it carries the jump record and dispatches to the label on arrival —
+      // and it learns of it here, from a goto in a block nested inside it
+      // that has already been walked (ADR-0032).
+      g->nonLocal = true;
+      Symbol *target = found->owner;
+      bool known = false;
+      for (int id : target->nonLocalLabels)
+        known = known || id == found->id;
+      if (!known)
+        target->nonLocalLabels.push_back(found->id);
     }
 
     g->id = found->id;

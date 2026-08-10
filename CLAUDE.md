@@ -127,7 +127,7 @@ the distinction asks `isSubrange()`.
   `parseVariantPart` takes its own depth guard, because it is the one recursion
   in a type-denoter that does not pass through `parseTypeExpr`.
 
-**`goto` and labels** (ADR-0029). A label is a *number*, not a name (§6.1.6),
+**`goto` and labels** (ADR-0029, ADR-0032). A label is a *number*, not a name (§6.1.6),
 so it is not a Symbol and does not go in a scope — two blocks may each declare
 label 1. Sema gives every label a program-wide unique id, and that id is what a
 goto resolves to and what codegen branches to.
@@ -142,12 +142,35 @@ goto resolves to and what codegen branches to.
   written: a forward jump has nothing to resolve against yet. One whose label
   is in an enclosing block is handed *outwards*, because a nested procedure's
   body is checked before the statements of the block containing it.
-- **Only the local form is implemented.** A non-local goto is refused with a
-  message, after §6.8.1's placement rule has been applied — so both branches
-  are reachable. Doing it needs setjmp/longjmp plus the abandoned frames' files
-  closed, which is what ADR-0021 made a block-exit obligation.
 - A goto opens a fresh block for what follows it. LLVM tolerates the
   alternative, so no test can see this — don't "simplify" it away.
+
+**The non-local form** (ADR-0032) leaves the block, which a branch cannot do.
+The *target* block carries a jump record in its activation record — after the
+variables, so no frame index moves — and its prologue arms it, calls `_setjmp`,
+and switches on the result to the label the jump named. The goto reaches that
+record with `frameAt(owner->level)`, the same walk every access to an enclosing
+variable does, so a recursive enclosing procedure gets the invocation this one
+was called from.
+
+- **A block learns it is a target from its nested blocks**, when Sema resolves
+  a goto handed outwards to it — which has already happened by the time its own
+  statements are walked. `Symbol::nonLocalLabels` is what codegen reads.
+- **`_setjmp` is called from the generated function, never through a wrapper**:
+  a wrapper would have returned by the time the jump arrived, and its frame is
+  what `_setjmp` recorded. `pas_jump_env` arms the record and hands back the
+  address to call it on, so `jmp_buf` stays the runtime's business.
+- **`returns_twice` is load-bearing and LLVM does not infer it.** Without it the
+  declaration comes out bare and `-O2` will inline a function containing the
+  call. No test catches its removal; don't drop it because the suite stays green.
+- A label arrives as its id **plus one**, because `_longjmp` with zero comes
+  back looking like the ordinary entry.
+- **The abandoned blocks' files are closed dynamically, not through the static
+  chain.** Every open file is on a list and the record notes its head when
+  armed; the jump closes what was registered since. Walking the static chain
+  looks equivalent and is wrong — a procedure passed as a procedural parameter
+  is called from a block that is not on its chain, and a jump out of it
+  abandons that block too. `tests/goto_files.pas` has both shapes.
 
 **Procedural and functional parameters** (ADR-0030). A procedure passed as an
 argument travels as a **pair**: the code, and the static link to call it with —
@@ -254,12 +277,13 @@ cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
   using `write` without `output` is the error §6.10 says it is.
 - Standard input is opened but not read until the program first asks, or every
   program listing `input` would block before its first statement.
-- A block exit closes the files the block declared, and now also frees the
-  buffer variable a `file of T` allocated. Pascal has no early return, so the
-  single exit point each body already has is the epilogue — and a *local*
-  `goto` cannot leave the block, so it does not change that. A non-local one
-  would, which is one of the reasons ADR-0029 refuses it, and heap storage
-  makes that a leak rather than only an unflushed buffer.
+- A block exit closes the files the block declared, and also frees the buffer
+  variable a `file of T` allocated. Pascal has no early return, so the single
+  exit point each body already has is the epilogue. A *local* `goto` cannot
+  leave the block; a **non-local** one does, and skips that epilogue — so the
+  runtime does the same work for every block the jump abandons (ADR-0032).
+  Two implementations of one obligation, and the second exists because a
+  `longjmp` skips the first.
 - `char` is a byte, ordinal 0..255, and nothing consults the locale. UTF-8
   passes through as bytes; a multi-byte character is several `char` values.
 
@@ -326,8 +350,7 @@ tracks it.
 bootstrap purposes — and the bar for a new feature has therefore *changed*
 rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
-conformance with ISO 7185. What is left of it is the non-local half of
-`goto`. **Anything the standard does not
+conformance with ISO 7185, and **that is now complete**. **Anything the standard does not
 have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.
@@ -376,7 +399,7 @@ It takes two program parameters: `compiler.pas <source> <ircode>`. The dumps go
 to standard output; the IR goes to the second file, because it is the
 compiler's *product* rather than a dump and has to be assembled. It is written
 on every run, which is what keeps `difftest.sh` exercising the code generator on
-all 202 files even though it compares none of it.
+all 204 files even though it compares none of it.
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc

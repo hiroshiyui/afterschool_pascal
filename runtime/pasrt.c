@@ -8,6 +8,7 @@
  *   width < 0  means "no width given"
  *   prec  < 0  means "no precision given"
  */
+#include <setjmp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -58,7 +59,34 @@ struct pas_file {
   char ch;       /* the buffer variable of a text file */
   void *buf;     /* the buffer variable f^: &ch for a text, else allocated */
   const char *name; /* what to call this file in a diagnostic */
+  /* Every open file, most recent first. A block exit unlinks the files it
+   * declared; a non-local `goto` unlinks and closes every file a block entry
+   * registered after the target block's activation began, which is the
+   * obligation the epilogue would otherwise have discharged (ADR-0032). File
+   * lifetimes nest, so "registered later" and "abandoned" are the same set. */
+  struct pas_file *prev_open, *next_open;
 };
+
+static struct pas_file *pas_open_files;
+
+static void pas_link_open(struct pas_file *f) {
+  f->prev_open = NULL;
+  f->next_open = pas_open_files;
+  if (pas_open_files)
+    pas_open_files->prev_open = f;
+  pas_open_files = f;
+}
+
+static void pas_unlink_open(struct pas_file *f) {
+  if (f->prev_open)
+    f->prev_open->next_open = f->next_open;
+  else if (pas_open_files == f)
+    pas_open_files = f->next_open;
+  if (f->next_open)
+    f->next_open->prev_open = f->prev_open;
+  f->prev_open = NULL;
+  f->next_open = NULL;
+}
 
 _Static_assert(sizeof(struct pas_file) <= PAS_FILE_SIZE,
                "PAS_FILE_SIZE is smaller than struct pas_file");
@@ -119,6 +147,7 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
     if (!f->buf)
       pas_runtime_error("out of memory for a file buffer variable");
   }
+  pas_link_open(f);
   /* ISO 7185 §6.10: `input` is reset and `output` rewritten before the program
    * body runs. The lookahead is deliberately *not* fetched here — a program
    * that never reads must not block waiting for a terminal. */
@@ -135,6 +164,7 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
  * files are left alone: the process owns them, not the block. */
 void pas_file_done(void *v) {
   struct pas_file *f = v;
+  pas_unlink_open(f);
   if (f->fp) {
     if (f->binding == PAS_BIND_INPUT || f->binding == PAS_BIND_OUTPUT) {
       fflush(f->fp);
@@ -468,6 +498,66 @@ void pas_write_str(void *v, const char *s, int len, int width) {
 }
 
 void pas_writeln(void *v) { putc('\n', pas_out(v)); }
+
+/* -------------------------------------------------- the non-local goto ---- */
+
+/* ISO 7185 §6.8.2.4 lets a `goto` name a label in an enclosing block, which
+ * abandons every activation between here and the target. Two things have to
+ * happen, in this order: the abandoned blocks' files are closed, and then the
+ * stack is cut back.
+ *
+ * The buffer is opaque to the compiler exactly as a file variable is — it
+ * alloca's PAS_JUMP_SIZE bytes in the target's activation record and passes
+ * their address. `jmp_buf` is the platform's business, and the one thing the
+ * compiler cannot do through this interface is call `_setjmp` for us: a
+ * wrapper that called it would have returned by the time the jump arrives, so
+ * its frame would be gone. Hence pas_jump_env, which arms the record and hands
+ * back the address the generated code calls `_setjmp` on itself. */
+
+struct pas_jump {
+  struct pas_file *mark; /* the open-file list as it stood when armed */
+  int active;            /* the block that owns this record has not exited */
+  jmp_buf env;
+};
+
+_Static_assert(sizeof(struct pas_jump) <= PAS_JUMP_SIZE,
+               "PAS_JUMP_SIZE is smaller than struct pas_jump");
+
+void *pas_jump_env(void *v) {
+  struct pas_jump *j = v;
+  j->mark = pas_open_files;
+  j->active = 1;
+  return &j->env;
+}
+
+void pas_jump_done(void *v) {
+  struct pas_jump *j = v;
+  j->active = 0;
+}
+
+/* The jump itself. `id` is the label's number plus one, because `_longjmp`
+ * with zero would arrive at the `_setjmp` looking like the ordinary entry. */
+void pas_jump_go(void *v, int id) {
+  struct pas_jump *j = v;
+  struct pas_file *f;
+
+  /* The static chain reaches only activations that are still alive, so this
+   * cannot fire for a program the compiler accepted — it fires if that
+   * reasoning is ever wrong, rather than jumping into a dead frame. */
+  if (!j->active)
+    pas_runtime_error("goto to a block that is no longer active");
+
+  /* Close what the jump abandons, from the most recent back to the mark. The
+   * epilogue of each of those blocks is about to be skipped, and this is the
+   * work it would have done. */
+  f = pas_open_files;
+  while (f && f != j->mark) {
+    struct pas_file *next = f->next_open;
+    pas_file_done(f);
+    f = next;
+  }
+  _longjmp(j->env, id);
+}
 
 /* ------------------------------------------------------- strings and memory */
 

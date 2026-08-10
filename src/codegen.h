@@ -13,6 +13,10 @@
 #include "diag.h"
 #include "sema.h"
 
+// The sizes the compiler and the runtime cannot disagree about: a file
+// variable's storage, and the jump record a non-local `goto` lands in.
+#include "../runtime/pasrt.h"
+
 namespace ap {
 
 /// Lowers a type-checked program to an LLVM module whose entry point is the
@@ -60,6 +64,19 @@ private:
   llvm::StructType *procPairType() {
     return llvm::StructType::get(ctx_, {ptr(), ptr()});
   }
+  /// The storage a block that a non-local `goto` can reach carries in its
+  /// activation record. Opaque, like a file variable, and i64-element for the
+  /// same reason: the alignment has to be a machine word's whatever the
+  /// platform puts in a `jmp_buf`.
+  llvm::Type *jumpRecordType() {
+    return llvm::ArrayType::get(i64(), PAS_JUMP_SIZE / 8);
+  }
+  /// The address of that record within a frame, which is the field after the
+  /// last variable. Only called for a proc whose `nonLocalLabels` is non-empty.
+  llvm::Value *jumpRecord(Symbol *proc, llvm::Value *frame);
+  /// Arm the jump record, call `_setjmp`, and dispatch to the label the jump
+  /// carried — the whole of what a non-local goto's *target* has to do.
+  void emitJumpDispatch(Symbol *proc);
   /// The signature an indirect call through a procedural parameter uses:
   /// the static link, then the parameters, exactly as declareProcs builds it
   /// for a procedure with a body.

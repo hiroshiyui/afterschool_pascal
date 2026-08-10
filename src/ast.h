@@ -193,6 +193,10 @@ struct GotoStmt : Stmt {
   int label = 0;
   int id = -1;            // filled in by Sema: the target's unique id
   Symbol *owner = nullptr; // the procedure whose block declared the label
+  /// The label belongs to an *enclosing* block, so reaching it abandons every
+  /// activation between here and that one. A different lowering, not a longer
+  /// one: a branch cannot leave a function (ADR-0032).
+  bool nonLocal = false;
 };
 
 /// `L: statement`. A labelled statement is a statement, so it may appear
