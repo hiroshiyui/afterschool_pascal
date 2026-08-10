@@ -313,8 +313,18 @@ last that decides nothing a later feature has to live with. The point is not
 that each was hard but that the language's growth reads end to end from
 `doc/adr/`; a feature with a short record is then distinguishable from one that
 was never written down.
-- **`pow` and `**`, `and_then`/`or_else`** — small, independent, and each
-  reserving its own word-symbols as it lands.
+- ~~**`pow` and `**`.**~~ Done (ADR-0037). Exponentiation, and with it the one
+  precedence level Extended Pascal adds that ISO 7185 has not — so this is the
+  first feature to change the shape of the expression grammar: every factor is
+  now a primary, and a factor is a primary with an optional operator and
+  another primary. `**` always yields a real and `pow` yields the type of its
+  left operand, which is why the standard has two. Integer `pow` traps on
+  overflow because it *is* repeated multiplication, and the proof rules reach
+  into `runtime/pasrt.c` for the first time to say the check fires exactly when
+  the exact power leaves the type.
+- **`and_then`/`or_else`** — the short-circuit spellings, and the next small
+  one. `and`/`or` already short-circuit here, so this is two word-symbols and a
+  parser change rather than a lowering.
 - **Schemata**, the core of the standard: parameterised types, and what
   `string(n)` is built on. Everything larger composes with it.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the

@@ -390,6 +390,32 @@ in one language or the other, and the standard is a property of the source.
   instead of being an error. Nothing may follow it, and the flag is not "the
   label list is empty": a label that fails to evaluate is dropped, and a
   diagnostic must not turn a broken arm into the completer.
+- **Exponentiation is a precedence level, and two operators** (ADR-0037).
+  §6.8.1 puts `factor = primary [ exponentiating-operator primary ]` between
+  `not` and the multiplying operators, so what was `parseFactor` is now
+  `parsePrimary` and a factor is the exponentiation level. Under ISO 7185
+  neither operator can reach it and a factor *is* a primary, which is why the
+  rename is unconditional. The syntax admits **one** operator, so `a ** b ** c`
+  is diagnosed rather than associated — §6.8.1's left-associativity rule has
+  nothing to apply to when the syntax offers no second operator.
+  - `**` yields a **real** however it is written and `pow` yields the type of
+    its **left** operand (table 3 of §6.8.3.2). That is the whole reason the
+    standard has two, and `i := 2 ** 3` is therefore an error while
+    `i := 2 pow 3` is not.
+  - A sign takes a whole factor, so `-3 ** 2` is `-(3 ** 2)`. Not taste: a
+    negative left operand is an *error* under `**`, so the other reading turns
+    a legal expression into a runtime error.
+  - All three forms are runtime calls (`pas_pow_real`, `pas_pow_realint`,
+    `pas_pow_int`) and carry §6.8.3.2's error conditions with them, so neither
+    backend spells a check. Integer `pow` traps on overflow because it *is*
+    repeated multiplication — the accumulator is wider than the type, and both
+    ends are checked, and `tests/extended/trap_pow_overflow*.pas` are the two
+    programs that say so. Neither is the obvious one: a wrap onto a plausible
+    in-range value, and an overflow at −maxint−1.
+  - The proof rules model `pas_pow_int` — the first time `verify/` describes C
+    rather than emitted IR. They establish the *design* (the check fires on
+    exactly the powers that leave the type) and cannot see the runtime drift
+    away from the model, so the trap programs are not redundant with them.
 - **A non-decimal literal is lexical and nothing else** (ADR-0036). `16#ff` reaches the
   parser as an integer literal, so no later rule knows it was written that way.
   Two things the code says and a reader might undo: the extended-digit sequence

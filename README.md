@@ -233,13 +233,17 @@ labels     1..9, 'a'..'z' — a range wherever a case constant may appear,
            in a case statement and in a variant alike
 literals   16#ff, 2#1010, 36#z — any base from 2 to 36, letters as the
            digits above nine
-words      otherwise is reserved
+operators  x ** y and x pow y — exponentiation, binding tighter than * and
+           looser than not. ** always yields a real; pow takes an integer
+           exponent and yields the type of its left operand, so 2 pow 3 is
+           the integer 8 and 2 ** 3 is 8.0
+words      otherwise and pow are reserved
 ```
 
 Not accepted yet: schemata (parameterised types), the `string` type, modules,
-`pow` and `**`, `and_then`/`or_else`, `protected` parameters, initial-state
-specifiers (`value`), binding (`bind`/`unbind`), direct-access files, and
-complex numbers. A word-symbol is reserved only when the feature needing it
+`and_then`/`or_else`, `protected` parameters, initial-state specifiers
+(`value`), binding (`bind`/`unbind`), direct-access files, and complex
+numbers. A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.
