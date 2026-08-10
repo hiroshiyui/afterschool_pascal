@@ -57,9 +57,12 @@ fi
 # compilers are told from the same variable so they cannot drift — the C++ one
 # by --std, the Pascal one through a file, because ISO 7185 gives a program no
 # other channel (ADR-0033).
+# The glob is deliberately unanchored: a file named on the command line arrives
+# as a relative path, and a leading-slash pattern would quietly call it ISO 7185
+# and compare two identical rejections.
 standard_of() {
   case $1 in
-    */tests/extended/*) echo extended ;;
+    *tests/extended/*)  echo extended ;;
     *)                  echo iso7185 ;;
   esac
 }

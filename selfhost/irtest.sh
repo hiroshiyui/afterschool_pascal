@@ -62,15 +62,19 @@ check_size() {
 check_size PAS_FILE_SIZE fileSize
 check_size PAS_JUMP_SIZE jumpSize
 
-# Compile one Pascal source with a stage-1 compiler and link the result.
-#   build <compiler> <source.pas> <output-binary>
+# Which standard a source is written in is decided by where it lives. The glob
+# is deliberately unanchored: a file named on the command line arrives as a
+# relative path, and a leading-slash pattern would quietly call it ISO 7185 and
+# then compare two identical rejections.
 standard_of() {
   case $1 in
-    */tests/extended/*) echo extended ;;
+    *tests/extended/*)  echo extended ;;
     *)                  echo iso7185 ;;
   esac
 }
 
+# Compile one Pascal source with a stage-1 compiler and link the result.
+#   build <compiler> <source.pas> <output-binary>
 build() {
   local cc=$1 src=$2 out=$3
   rm -f "$work/ir.ll"
