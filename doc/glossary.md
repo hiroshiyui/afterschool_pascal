@@ -111,9 +111,23 @@ as one block of shared storage with each arm a struct laid over it; the block's
 element type carries the alignment (`[k x i64]`, not `[n x i8]`) or a `real`
 inside a variant would be misaligned (ADR-0018).
 
+**Label.** An unsigned integer of at most four digits (ISO 7185 §6.1.6) that a
+block declares and that marks one of its statements. A label is a *number*, not
+a name, so it lives in no scope: two blocks may each declare label 1 and each
+means its own (ADR-0029).
+
+**Statement path.** The chain of statements containing a given one. §6.8.1 lets
+a `goto` leave a structured statement but not enter one, and stated over paths
+that rule is exactly "the label's path is a prefix of the goto's" — which
+settles jumping out of a loop nest, into a loop, and between two sibling loops
+with one comparison. A block's statement part is deliberately not on the path:
+it is the outermost statement-sequence rather than a statement containing one,
+which is what makes "at the top level of the block" mean "an empty path".
+
 **Error condition.** ISO's term for a situation a conforming program must not
 reach — integer overflow, a subscript outside its bounds, a value stored outside
-a subrange, a `case` matching no label, a dereference of `nil`. This compiler
+a subrange, a set carrying a member outside its base type, a `case` matching no
+label, a dereference of `nil`. This compiler
 *traps*: it stops the program with a message rather than wrapping, reading past
 the array, or producing an arbitrary value (ADR-0014, ADR-0015).
 

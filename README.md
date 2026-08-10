@@ -180,6 +180,7 @@ overflow, in the parser or in any walk after it. See
 | --- | --- |
 | `src/lexer.cpp` | source text to tokens; folds case, handles both comment forms |
 | `src/parser.cpp` | recursive descent over the ISO grammar, builds the AST |
+| `src/astdump.cpp` | the `--dump-*` format — a specification, since the Pascal compiler writes it too |
 | `src/ast.h` | tag-dispatched nodes (`NK` + `as<T>()`), no C++ RTTI |
 | `src/sema.cpp` | scopes, name resolution, type checking, constant folding |
 | `src/codegen.cpp` | AST to LLVM IR via `IRBuilder`; `main` is the program body |
@@ -187,6 +188,7 @@ overflow, in the parser or in any walk after it. See
 | `runtime/pasrt.c` | formatted output and runtime checks |
 | `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
 | `verify/` | SMT proofs that the lowering means what ISO 7185 says |
+| `selfhost/compiler.pas` | the same compiler, written in Afterschool Pascal |
 
 Two deliberate constraints, both there for the bootstrap:
 
@@ -211,17 +213,17 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Thirty-one rules are currently established — the
+the two disagree. Thirty-five rules are currently established — the
 non-negative `mod`, truncating `div`, `odd` on negative values, ordinal `char`
 comparison, the exact integer-to-real widening, the `for` loop's inability to
 overflow, an array subscript's inability to leave its bounds, a subrange's
-inability to hold a value outside it, and the digit accumulator in `read`
-being unable to wrap before its check sees it — twenty-seven of them for all
-2³² inputs.
+inability to hold a value outside it, a set constructor containing exactly the
+members it names, and the digit accumulator in `read` being unable to wrap
+before its check sees it — twenty-seven of them for all 2³² inputs.
 
 Several rules keep their bounds *symbolic*, so they are theorems about every
-array, every subrange and every enumeration rather than about the ones a test
-happens to declare.
+array, every subrange, every enumeration and every set base type rather than
+about the ones a test happens to declare.
 
 Each runtime check is proved to fire *exactly* when ISO says the operation is in
 error. Both directions matter: trapping always would satisfy "never produces a

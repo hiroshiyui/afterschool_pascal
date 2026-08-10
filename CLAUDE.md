@@ -170,11 +170,9 @@ the by-address machinery applies.
 - A range `[lo..hi]` is built by shifting, and `hi < lo` is selected away to
   the empty set. No 256-bit literal is ever needed, which matters because the
   Pascal-hosted compiler cannot spell one.
-- **The emitted `.ll` states its `target datalayout`**, and must. `LlSize` and
-  `LlAlign` model x86-64; before sets, nothing was more than 8-aligned and the
-  omission cost nothing. An i256 is 16-aligned, and an unstated layout made
-  LLVM assemble against its own defaults — 16-byte moves against an 8-aligned
-  frame. Don't remove the line.
+- A set is the first type wider than a machine word, which is what turned the
+  emitted module's missing `target datalayout` from a latent hazard into a
+  segfault — see the CodeGen section, where that rule now lives.
 
 **Pointers** (ADR-0019). A pointer's domain is a type *identifier* and may name
 a type defined later in the same type part — the language's only forward
@@ -222,7 +220,9 @@ cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
 - Standard input is opened but not read until the program first asks, or every
   program listing `input` would block before its first statement.
 - A block exit closes the files the block declared. Pascal has no early
-  return, so the single exit point each body already has is the epilogue.
+  return, so the single exit point each body already has is the epilogue — and
+  a *local* `goto` cannot leave the block, so it does not change that. A
+  non-local one would, which is one of the two reasons ADR-0029 refuses it.
 - Only `text` is implemented; `file of T` parses and is rejected for any
   component but `char`.
 - `char` is a byte, ordinal 0..255, and nothing consults the locale. UTF-8
@@ -363,6 +363,12 @@ compiling the compiler with itself twice and requiring the results to match.
   copy's length and the size `new` allocates. `fileSize` must equal
   `PAS_FILE_SIZE`; `irtest.sh` checks it, because the two files cannot include
   one another.
+- **The module states its `target datalayout`**, so the assembler lays things
+  out the way `LlSize`/`LlAlign` say it does. It did not, until a set in a
+  record segfaulted: LLVM's defaults align an i256 to 8 and the target's to 16,
+  and 16-byte moves landed on an 8-aligned frame (ADR-0028). The rules were
+  never wrong, only unstated — which is the same thing once something else is
+  doing the layout. Don't drop the line.
 - `WriteTypeName`/`WriteOrdinalName` write through the `Put` sink, which either
   goes to output or into `msgBuf`. A trap message is a string constant *in the
   generated program*, so it has to be assembled before it is emitted — and a
@@ -373,7 +379,10 @@ compiling the compiler with itself twice and requiring the results to match.
 `mod` yields a non-negative result (not C's truncating remainder); `and`/`or`
 short-circuit; `/` is always real division; `for` evaluates its limit once and
 tests `= limit` before stepping so the last iteration cannot overflow; a
-one-character string literal is a `char`.
+one-character string literal is a `char`; and a statement may be **empty**
+(§6.8.1), which means every token that can *follow* a statement also starts
+one — `;` and `end`, but also `else` and `until`, so `if c then ; else s` is
+legal. `tests/empty_statements.pas` pins it.
 
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
 array's own bounds optimises the check away. Storing outside a subrange traps,
