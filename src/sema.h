@@ -157,6 +157,16 @@ private:
   /// label, a variant's tag value. Reports the type it was written as, so a
   /// mismatch can be named rather than silently coerced.
   bool evalOrdinal(Expr *e, Type *&type, long long &value);
+  /// One entry of a case-constant-list, folded to the interval it denotes: a
+  /// single constant is [v, v], and Extended Pascal's `lo..hi` is the general
+  /// case. Both the case statement and a variant part read their labels
+  /// through this, so a range is legal in either without a second rule.
+  bool evalLabelRange(CaseLabel &label, const char *constantMsg, Type *&type,
+                      LabelRange &r);
+  /// The lowest value a new label shares with the ones already accepted, if
+  /// any — the general form of "this label appears twice".
+  static bool overlaps(const std::vector<LabelRange> &seen, LabelRange r,
+                       long long &at);
 
   /// Give the program parameters their meaning: `input` and `output` are the
   /// standard files, and every other one must be a file variable the program

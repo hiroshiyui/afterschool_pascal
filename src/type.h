@@ -24,6 +24,14 @@ inline constexpr int kSetLimit = 255;
 
 struct Type;
 
+/// A folded case-constant: the closed interval [lo, hi]. ISO 7185's single
+/// constant is `lo = hi`, so every user of a label list works one way and a
+/// range never has to be expanded into its members — which matters, because a
+/// range may span every value of its type.
+struct LabelRange {
+  long long lo = 0, hi = 0;
+};
+
 /// One field of a record. `index` is the position in the LLVM struct it
 /// belongs to, which is also the declaration order — codegen indexes by it and
 /// never by name. `variant` says which struct that is: empty is the record's
@@ -43,7 +51,7 @@ struct Field {
 /// a fixed part and an optional variant part of its own — because that is what
 /// §6.4.3.3 makes it: its field-list is a field-list like any other.
 struct Variant {
-  std::vector<long long> labels;
+  std::vector<LabelRange> labels;
   bool isOtherwise = false;    // selected by whatever the other arms leave
                                // (Extended Pascal's variant-part-completer)
   std::vector<Field> fields;

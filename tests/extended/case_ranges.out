@@ -1,0 +1,16 @@
+   0: zero
+   7: one digit
+  42: two digits or four
+ 500: three digits
+1234: two digits or four
+70000: bigger, or negative
+  -1: bigger, or negative
+letters: 1565
+a range of one
+a named bound
+the whole positive half
+low low high
+band small: 11
+band medium: m
+band large: TRUE
+newed medium: n

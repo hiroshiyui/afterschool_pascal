@@ -1012,17 +1012,43 @@ void CodeGen::emitCase(CaseStmt *s) {
   BasicBlock *defaultBB = BasicBlock::Create(ctx_, "case.none", curFn_);
   BasicBlock *endBB = BasicBlock::Create(ctx_, "case.end", curFn_);
 
+  // Every arm needs its block before anything can branch to it, because a
+  // range test names it before the body is emitted.
+  std::vector<BasicBlock *> armBBs;
+  for (size_t i = 0; i < s->arms.size(); ++i)
+    armBBs.push_back(BasicBlock::Create(ctx_, "case.arm", curFn_));
+
+  // A range is *tested*, not enumerated: `1..maxint` is a legal label list
+  // (ISO/IEC 10206:1991 §6.8.3.5) and two billion switch cases. So the ranges
+  // are a chain of comparisons ahead of the switch, and only single constants
+  // reach the switch itself. Sema has already proved the arms disjoint, so
+  // which of the two answers first cannot matter.
   unsigned labels = 0;
   for (const CaseArm &arm : s->arms)
     labels += static_cast<unsigned>(arm.values.size());
+  for (size_t i = 0; i < s->arms.size(); ++i)
+    for (const LabelRange &r : s->arms[i].values) {
+      if (r.lo == r.hi)
+        continue;
+      BasicBlock *nextBB = BasicBlock::Create(ctx_, "case.test", curFn_);
+      llvm::Value *atLeast = b_.CreateICmpSGE(
+          selector, ConstantInt::getSigned(i32(), r.lo), "case.ge");
+      llvm::Value *atMost = b_.CreateICmpSLE(
+          selector, ConstantInt::getSigned(i32(), r.hi), "case.le");
+      b_.CreateCondBr(b_.CreateAnd(atLeast, atMost, "case.in"), armBBs[i],
+                      nextBB);
+      b_.SetInsertPoint(nextBB);
+    }
+
   SwitchInst *sw = b_.CreateSwitch(selector, defaultBB, labels);
 
-  for (const CaseArm &arm : s->arms) {
-    BasicBlock *armBB = BasicBlock::Create(ctx_, "case.arm", curFn_);
-    for (long long value : arm.values)
-      sw->addCase(cast<ConstantInt>(ConstantInt::getSigned(i32(), value)),
-                  armBB);
-    b_.SetInsertPoint(armBB);
+  for (size_t i = 0; i < s->arms.size(); ++i) {
+    const CaseArm &arm = s->arms[i];
+    for (const LabelRange &r : arm.values)
+      if (r.lo == r.hi)
+        sw->addCase(cast<ConstantInt>(ConstantInt::getSigned(i32(), r.lo)),
+                    armBBs[i]);
+    b_.SetInsertPoint(armBBs[i]);
     emitStmt(arm.body.get());
     b_.CreateBr(endBB);
   }

@@ -426,6 +426,27 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
   return t;
 }
 
+/// case-constant-list = case-range (',' case-range)*
+/// case-range         = constant ('..' constant)?     -- '..' Extended Pascal
+///
+/// ISO/IEC 10206:1991 generalised the constant list once, and both the case
+/// statement (§6.8.3.5) and a variant (§6.4.3.3) name it — so a range is legal
+/// in either, and neither place gets a rule of its own.
+CaseLabel Parser::parseCaseLabel() {
+  CaseLabel label;
+  label.lo = parseExpr();
+  if (check(Tok::DotDot)) {
+    if (std_ == Std::Iso7185) {
+      errorAtCur("a range of case constants is an Extended Pascal feature; "
+                 "compile with --std=extended");
+      bail();
+    }
+    ++pos_;
+    label.hi = parseExpr();
+  }
+  return label;
+}
+
 /// variant-part = 'case' (identifier ':')? type-identifier 'of' variant
 ///                (';' variant)* (';' completer)?
 /// variant      = constant (',' constant)* ':' '(' field-list ')'
@@ -476,7 +497,7 @@ void Parser::parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
         bail();
       }
       do {
-        arm.labels.push_back(parseExpr());
+        arm.labels.push_back(parseCaseLabel());
       } while (accept(Tok::Comma));
       expect(Tok::Colon, "after the labels of a variant");
     }
@@ -719,7 +740,7 @@ StmtPtr Parser::parseCase() {
     arm.line = cur().line;
     arm.col = cur().col;
     do {
-      arm.labels.push_back(parseExpr());
+      arm.labels.push_back(parseCaseLabel());
     } while (accept(Tok::Comma));
 
     expect(Tok::Colon, "after the labels of a case arm");

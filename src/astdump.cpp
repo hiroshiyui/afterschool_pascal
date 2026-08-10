@@ -462,16 +462,18 @@ struct Dumper {
         ++level;
         mark("labels");
         ++level;
-        for (ExprPtr &l : arm.labels)
-          expr(l.get());
+        caseLabels(arm.labels);
         --level;
         // The folded label values: this is where constant folding of an
         // ordinal is compared, and a label the checker rejected leaves a gap.
         if (annotate) {
           pad();
           std::printf("values");
-          for (long long v : arm.values)
-            std::printf(" %lld", v);
+          for (const LabelRange &v : arm.values)
+            if (v.lo == v.hi)
+              std::printf(" %lld", v.lo);
+            else
+              std::printf(" %lld..%lld", v.lo, v.hi);
           std::printf("\n");
         }
         mark("body");
@@ -570,6 +572,23 @@ struct Dumper {
     }
   }
 
+  /// A case-constant-list, in a case statement or in a variant. A single
+  /// constant prints as the expression itself and a range wraps its two ends,
+  /// so the shape says which without a tag — the same way a set member does.
+  void caseLabels(std::vector<CaseLabel> &labels) {
+    for (CaseLabel &l : labels) {
+      if (!l.hi) {
+        expr(l.lo.get());
+        continue;
+      }
+      mark("range");
+      ++level;
+      expr(l.lo.get());
+      expr(l.hi.get());
+      --level;
+    }
+  }
+
   /// The layout Sema gave a record: which struct each field lives in and at
   /// what position, and which tag values select each variant. Codegen indexes
   /// by exactly these numbers, so they are what a record type *is*.
@@ -593,8 +612,11 @@ struct Dumper {
         std::printf("variant %s otherwise\n", here.c_str());
       } else {
         std::printf("variant %s labels", here.c_str());
-        for (long long value : v.labels)
-          std::printf(" %lld", value);
+        for (const LabelRange &value : v.labels)
+          if (value.lo == value.hi)
+            std::printf(" %lld", value.lo);
+          else
+            std::printf(" %lld..%lld", value.lo, value.hi);
         std::printf("\n");
       }
       ++level;
@@ -637,8 +659,7 @@ struct Dumper {
       ++level;
       mark(arm.isOtherwise ? "otherwise" : "labels");
       ++level;
-      for (ExprPtr &l : arm.labels)
-        expr(l.get());
+      caseLabels(arm.labels);
       --level;
       mark("fields");
       ++level;

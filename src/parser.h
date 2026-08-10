@@ -96,6 +96,10 @@ private:
   void parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
                         std::vector<VariantArm> &arms, int &tagLine,
                         int &tagCol);
+  /// One entry of a case-constant-list, in a case statement or in a variant:
+  /// a constant, or `lo..hi` under Extended Pascal. Both places read the same
+  /// production, so both get ranges from this one function.
+  CaseLabel parseCaseLabel();
   /// True if what follows begins a subrange rather than a type name — that is,
   /// a constant followed by '..'.
   bool looksLikeSubrange() const;

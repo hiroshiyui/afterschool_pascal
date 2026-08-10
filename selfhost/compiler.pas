@@ -195,10 +195,16 @@ type
   fieldPtr = ^fieldRec;
   variantPtr = ^variantRec;
   numPtr = ^numRec;
+  rangePtr = ^rangeRec;
   namePtr = ^nameRec;
   symListPtr = ^symListRec;
 
   numRec = record value: integer; next: numPtr end;
+  { A folded case-constant: the closed interval it denotes. A single
+    constant is lo = hi, so every user of a label list works one way and a
+    range is never expanded into its members -- `1..maxint` is one of
+    these and two billion switch cases if expanded. }
+  rangeRec = record lo, hi: integer; next: rangePtr end;
   nameRec = record at, len: integer; next: namePtr end;
   symListRec = record sym: symPtr; next: symListPtr end;
 
@@ -222,7 +228,7 @@ type
     fixed part and an optional variant part of its own -- because that is what
     6.4.3.3 makes it: its field-list is a field-list like any other. }
   variantRec = record
-    labels: numPtr;
+    labels: rangePtr;
     { selected by whatever the other arms leave (Extended Pascal's
       variant-part-completer) }
     isOtherwise: boolean;
@@ -405,7 +411,8 @@ type
                      gtOwner: symPtr);
       nkLabeled:    (lbLabel, lbId: integer; lbStmt: nodePtr);
       nkLabelDecl:  (ldNumber: integer);
-      nkCaseArm:    (caLabels, caBody: nodePtr; caValues, caValueTail: numPtr);
+      nkCaseArm:    (caLabels, caBody: nodePtr;
+                     caValues, caValueTail: rangePtr);
       nkDeclName:   (dnAt, dnLen: integer);
       { one type-denoter shared by a list of names: a field group, a variable
         declaration, or a parameter group -- or, when grIsProc, a single
@@ -1722,6 +1729,33 @@ end;
   The tag may be a real field or exist only as a type (ISO 7185 6.4.3.3). The
   two are told apart by the ':' -- `case kind: nodekind of` names a field,
   `case nodekind of` does not. }
+{ case-constant-list = case-range (',' case-range)*
+  case-range         = case-constant ('..' case-constant)?   -- Extended Pascal
+
+  ISO/IEC 10206:1991 generalised the constant list once, and both the case
+  statement (6.8.3.5) and a variant (6.4.3.3) name it -- so a range is legal in
+  either, and neither place gets a rule of its own. A case-range and a set
+  member are the same pair, so they share the node rather than duplicating it. }
+function ParseCaseLabel: nodePtr;
+var m: nodePtr;
+begin
+  m := NewNode(nkSetMember, CurLine, CurCol);
+  m^.smLo := nil;
+  m^.smHi := nil;
+  m^.smLo := ParseExpr;
+  if Check(tkDotDot) then begin
+    if langStd = stdIso7185 then begin
+      ErrorAtCur;
+      write('a range of case constants is an Extended Pascal feature; ');
+      writeln('compile with --std=extended');
+      Bail
+    end;
+    pos := pos + 1;
+    m^.smHi := ParseExpr
+  end;
+  ParseCaseLabel := m
+end;
+
 { The `case T of ...` of a record or of one arm of a variant part. Both places
   hold the same four pieces, but a variant record cannot share a sub-struct
   between two of its arms (ADR-0023), so the destination is chosen at the end
@@ -1786,7 +1820,7 @@ begin
       lt := nil;
       moreLabels := true;
       while moreLabels and not aborted do begin
-        Append(lh, lt, ParseExpr);
+        Append(lh, lt, ParseCaseLabel);
         moreLabels := Accept(tkComma)
       end;
       arm^.vaLabels := lh;
@@ -2427,7 +2461,7 @@ begin
     lt := nil;
     moreLabels := true;
     while moreLabels and not aborted do begin
-      Append(lh, lt, ParseExpr);
+      Append(lh, lt, ParseCaseLabel);
       moreLabels := Accept(tkComma)
     end;
     arm^.caLabels := lh;
@@ -3787,6 +3821,86 @@ begin
   end
 end;
 
+{ One entry of a case-constant-list, folded to the closed interval it denotes.
+  A single constant is [v, v], so a case statement and a variant part read
+  their labels the same way whether or not Extended Pascal ranges are in play;
+  `forCase` picks the one diagnostic the two constructs spell differently.
+
+  A range is never expanded into its members -- `1..maxint` is two integers
+  here and two billion switch cases if expanded, and the code generator tests
+  it rather than enumerating it for exactly that reason. }
+function EvalLabelRange(lab: nodePtr; forCase: boolean; var ltype: typePtr;
+                        var lo, hi: integer): boolean;
+var hiType: typePtr; ok: boolean;
+begin
+  ok := true;
+  ltype := nil;
+  lo := 0;
+  hi := 0;
+  if not EvalOrdinal(lab^.smLo, ltype, lo) then begin
+    ErrorAt(lab^.smLo^.line, lab^.smLo^.col);
+    if forCase then
+      writeln('a case label must be an ordinal constant')
+    else
+      writeln('a variant''s label must be an ordinal constant');
+    ok := false
+  end
+  else begin
+    hi := lo;
+    if lab^.smHi <> nil then begin
+      hiType := nil;
+      if not EvalOrdinal(lab^.smHi, hiType, hi) then begin
+        ErrorAt(lab^.smHi^.line, lab^.smHi^.col);
+        if forCase then
+          writeln('a case label must be an ordinal constant')
+        else
+          writeln('a variant''s label must be an ordinal constant');
+        ok := false
+      end
+      else if (ltype <> nil) and (hiType <> nil) and
+              (Base(ltype) <> Base(hiType)) then begin
+        ErrorAt(lab^.smHi^.line, lab^.smHi^.col);
+        write('the two ends of a range must be of one type, found ');
+        WriteTypeName(ltype);
+        write(' and ');
+        WriteTypeName(hiType);
+        writeln;
+        ok := false
+      end
+      { A backwards range denotes no values at all. ISO 7185 6.7.1 says so for
+        a set constructor and this compiler honours it there, but a label
+        selecting nothing can only be a mistake -- nothing would ever run. }
+      else if hi < lo then begin
+        ErrorAt(lab^.smLo^.line, lab^.smLo^.col);
+        write('this range runs backwards: ');
+        WriteOrdinalName(ltype, lo);
+        write(' is greater than ');
+        WriteOrdinalName(ltype, hi);
+        writeln;
+        ok := false
+      end
+    end
+  end;
+  EvalLabelRange := ok
+end;
+
+{ The lowest value a new label shares with the ones already accepted, if any --
+  "this label appears twice" is the single-constant case of exactly this
+  question, so both constructs ask it in the general form. }
+function Overlaps(seen: rangePtr; lo, hi: integer; var at: integer): boolean;
+var found: boolean;
+begin
+  found := false;
+  while (seen <> nil) and not found do begin
+    if (seen^.lo <= hi) and (lo <= seen^.hi) then begin
+      found := true;
+      if seen^.lo > lo then at := seen^.lo else at := lo
+    end;
+    seen := seen^.next
+  end;
+  Overlaps := found
+end;
+
 { ------------------------------------------------------ type resolution -- }
 
 function StringType(len: integer): typePtr;
@@ -4163,9 +4277,9 @@ var
   tag, labelType, fieldType: typePtr;
   arm, label_, g, n, tagName: nodePtr;
   v, w: variantPtr;
-  num, seen: numPtr;
+  rg, rseen: rangePtr;
   armPath: numPtr;
-  index, value: integer;
+  index, lo, hi, at: integer;
   claimed: boolean;
 begin
   tag := ResolveType(tagDenoter);
@@ -4211,13 +4325,12 @@ begin
       label_ := arm^.vaLabels;
       while label_ <> nil do begin
         labelType := nil;
-        value := 0;
-        if not EvalOrdinal(label_, labelType, value) then begin
-          ErrorAt(label_^.line, label_^.col);
-          writeln('a variant''s label must be an ordinal constant')
+        at := 0;
+        if not EvalLabelRange(label_, false, labelType, lo, hi) then begin
+          { the diagnostic is EvalLabelRange's; nothing more to say here }
         end
         else if Base(labelType) <> Base(tag) then begin
-          ErrorAt(label_^.line, label_^.col);
+          ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
           write('this variant''s tag is ');
           WriteTypeName(tag);
           write(', but the label is ');
@@ -4225,37 +4338,33 @@ begin
           writeln
         end
         else begin
-          { has an earlier arm of *this* variant part already claimed it? }
+          { has an earlier arm of *this* variant part already claimed any of
+            these values? `v` is not on the list yet, so it is asked apart. }
           claimed := false;
           w := variants;
           while w <> nil do begin
-            seen := w^.labels;
-            while seen <> nil do begin
-              if seen^.value = value then claimed := true;
-              seen := seen^.next
-            end;
+            if not claimed then
+              claimed := Overlaps(w^.labels, lo, hi, at);
             w := w^.next
           end;
-          seen := v^.labels;
-          while seen <> nil do begin
-            if seen^.value = value then claimed := true;
-            seen := seen^.next
-          end;
+          if not claimed then
+            claimed := Overlaps(v^.labels, lo, hi, at);
           if claimed then begin
-            ErrorAt(label_^.line, label_^.col);
+            ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
             write('the tag value ');
-            WriteOrdinalName(tag, value);
+            WriteOrdinalName(tag, at);
             writeln(' already selects an earlier variant')
           end
           else begin
-            new(num);
-            num^.value := value;
-            num^.next := nil;
-            if v^.labels = nil then v^.labels := num
+            new(rg);
+            rg^.lo := lo;
+            rg^.hi := hi;
+            rg^.next := nil;
+            if v^.labels = nil then v^.labels := rg
             else begin
-              seen := v^.labels;
-              while seen^.next <> nil do seen := seen^.next;
-              seen^.next := num
+              rseen := v^.labels;
+              while rseen^.next <> nil do rseen := rseen^.next;
+              rseen^.next := rg
             end
           end
         end;
@@ -5390,7 +5499,7 @@ var
   n, v, k, chosen: integer;
   domain, tag, valueType: typePtr;
   arms, w: variantPtr;
-  lbl: numPtr;
+  lbl: rangePtr;
   stop: boolean;
 begin
   if PoolIs(p^.pcAt, p^.pcLen, 'reset    ') then p^.pcStd := spReset
@@ -5511,7 +5620,8 @@ begin
               while w <> nil do begin
                 lbl := w^.labels;
                 while lbl <> nil do begin
-                  if (lbl^.value = v) and (chosen < 0) then chosen := k;
+                  if (lbl^.lo <= v) and (v <= lbl^.hi) and (chosen < 0) then
+                    chosen := k;
                   lbl := lbl^.next
                 end;
                 k := k + 1;
@@ -5554,8 +5664,8 @@ var
   sel, labelType, named: typePtr;
   arm, label_: nodePtr;
   saved: stmtPathPtr;
-  seenHead, seenTail, n: numPtr;
-  value: integer;
+  seenHead, seenTail, r: rangePtr;
+  lo, hi, at: integer;
   seen: boolean;
 begin
   CheckExpr(c^.csSelector);
@@ -5582,13 +5692,12 @@ begin
     label_ := arm^.caLabels;
     while label_ <> nil do begin
       labelType := nil;
-      value := 0;
-      if not EvalOrdinal(label_, labelType, value) then begin
-        ErrorAt(label_^.line, label_^.col);
-        writeln('a case label must be an ordinal constant')
+      at := 0;
+      if not EvalLabelRange(label_, true, labelType, lo, hi) then begin
+        { the diagnostic is EvalLabelRange's; nothing more to say here }
       end
       else if (sel <> nil) and not Assignable(sel, labelType) then begin
-        ErrorAt(label_^.line, label_^.col);
+        ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
         write('this case selects on ');
         WriteTypeName(sel);
         write(', but the label is ');
@@ -5596,31 +5705,28 @@ begin
         writeln
       end
       else begin
-        seen := false;
-        n := seenHead;
-        while n <> nil do begin
-          if n^.value = value then seen := true;
-          n := n^.next
-        end;
+        seen := Overlaps(seenHead, lo, hi, at);
         if seen then begin
-          ErrorAt(label_^.line, label_^.col);
+          ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
           write('the label ');
           if sel <> nil then named := sel else named := labelType;
-          WriteOrdinalName(named, value);
+          WriteOrdinalName(named, at);
           writeln(' appears twice in this case statement')
         end
         else begin
-          new(n);
-          n^.value := value;
-          n^.next := nil;
-          if seenHead = nil then seenHead := n else seenTail^.next := n;
-          seenTail := n;
-          new(n);
-          n^.value := value;
-          n^.next := nil;
-          if arm^.caValues = nil then arm^.caValues := n
-          else arm^.caValueTail^.next := n;
-          arm^.caValueTail := n
+          new(r);
+          r^.lo := lo;
+          r^.hi := hi;
+          r^.next := nil;
+          if seenHead = nil then seenHead := r else seenTail^.next := r;
+          seenTail := r;
+          new(r);
+          r^.lo := lo;
+          r^.hi := hi;
+          r^.next := nil;
+          if arm^.caValues = nil then arm^.caValues := r
+          else arm^.caValueTail^.next := r;
+          arm^.caValueTail := r
         end
       end;
       label_ := label_^.next
@@ -6646,7 +6752,7 @@ end;
 { One level of arms and everything nested in them. The name of an arm is its
   path, which is also what a field of it prints as its variant. }
 procedure DumpArmList(v: variantPtr; prefix: numPtr);
-var lbl, here: numPtr; i: integer;
+var lbl: rangePtr; here: numPtr; i: integer;
 begin
   i := 0;
   while v <> nil do begin
@@ -6660,7 +6766,10 @@ begin
       write(' labels');
       lbl := v^.labels;
       while lbl <> nil do begin
-        write(' ', lbl^.value:1);
+        if lbl^.lo = lbl^.hi then
+          write(' ', lbl^.lo:1)
+        else
+          write(' ', lbl^.lo:1, '..', lbl^.hi:1);
         lbl := lbl^.next
       end;
       writeln
@@ -6771,6 +6880,28 @@ begin
   p := n;
   while p <> nil do begin
     DumpExpr(p);
+    p := p^.next
+  end
+end;
+
+{ A case-constant-list, in a case statement or in a variant. A single constant
+  prints as the expression itself and a range wraps its two ends, so the shape
+  says which without a tag -- the same way a set member does. }
+procedure DumpCaseLabels(n: nodePtr);
+var p: nodePtr;
+begin
+  p := n;
+  while p <> nil do begin
+    if p^.smHi = nil then
+      DumpExpr(p^.smLo)
+    else begin
+      Pad;
+      writeln('range');
+      level := level + 1;
+      DumpExpr(p^.smLo);
+      DumpExpr(p^.smHi);
+      level := level - 1
+    end;
     p := p^.next
   end
 end;
@@ -6933,7 +7064,7 @@ begin
 end;
 
 procedure DumpStmt;
-var p: nodePtr; num: numPtr;
+var p: nodePtr; rng: rangePtr;
 begin
   Pad;
   case n^.kind of
@@ -7093,17 +7224,20 @@ begin
         Pad;
         writeln('labels');
         level := level + 1;
-        DumpExprList(p^.caLabels);
+        DumpCaseLabels(p^.caLabels);
         level := level - 1;
         { The folded label values: this is where constant folding of an ordinal
           is compared, and a label the checker rejected leaves a gap. }
         if annotate then begin
           Pad;
           write('values');
-          num := p^.caValues;
-          while num <> nil do begin
-            write(' ', num^.value:1);
-            num := num^.next
+          rng := p^.caValues;
+          while rng <> nil do begin
+            if rng^.lo = rng^.hi then
+              write(' ', rng^.lo:1)
+            else
+              write(' ', rng^.lo:1, '..', rng^.hi:1);
+            rng := rng^.next
           end;
           writeln
         end;
@@ -7259,7 +7393,7 @@ begin
     Pad;
     if p^.vaOtherwise then writeln('otherwise') else writeln('labels');
     level := level + 1;
-    DumpExprList(p^.vaLabels);
+    DumpCaseLabels(p^.vaLabels);
     level := level - 1;
     Pad;
     writeln('fields');
@@ -10082,8 +10216,8 @@ end;
   way out: a selector matching no label stops the program. That maps onto a
   switch exactly, and the jump table survives optimisation. }
 procedure EmitCase(s: nodePtr);
-var sel, wide: str; arm: nodePtr; n: numPtr;
-    first, k, count, armB, defaultB, endB, msg: integer;
+var sel, wide, ge, le, both: str; arm: nodePtr; n: rangePtr;
+    first, k, count, armB, defaultB, endB, nextB, msg: integer;
 begin
   EmitExpr(s^.csSelector, sel);
   { The switch wants a single integer type; a char or boolean selector is
@@ -10113,6 +10247,43 @@ begin
   defaultB := NewBlock;
   endB := NewBlock;
 
+  { A range is *tested*, not enumerated: `1..maxint` is a legal label list
+    (ISO/IEC 10206:1991 6.8.3.5) and two billion switch cases. So the ranges are
+    a chain of comparisons ahead of the switch, and only single constants reach
+    the switch itself. Sema has already proved the arms disjoint, so which of
+    the two answers first cannot matter. }
+  arm := s^.csArms;
+  k := first;
+  while arm <> nil do begin
+    n := arm^.caValues;
+    while n <> nil do begin
+      if n^.lo <> n^.hi then begin
+        nextB := NewBlock;
+        Def(ge);
+        write(ircode, 'icmp sge i32 ');
+        PutOp(sel);
+        writeln(ircode, ', ', n^.lo:1);
+        Def(le);
+        write(ircode, 'icmp sle i32 ');
+        PutOp(sel);
+        writeln(ircode, ', ', n^.hi:1);
+        Def(both);
+        write(ircode, 'and i1 ');
+        PutOp(ge);
+        write(ircode, ', ');
+        PutOp(le);
+        writeln(ircode);
+        write(ircode, '  br i1 ');
+        PutOp(both);
+        writeln(ircode, ', label %L', k:1, ', label %L', nextB:1);
+        StartBlock(nextB)
+      end;
+      n := n^.next
+    end;
+    k := k + 1;
+    arm := arm^.next
+  end;
+
   write(ircode, '  switch i32 ');
   PutOp(sel);
   write(ircode, ', label %L', defaultB:1, ' [');
@@ -10121,7 +10292,8 @@ begin
   while arm <> nil do begin
     n := arm^.caValues;
     while n <> nil do begin
-      write(ircode, ' i32 ', n^.value:1, ', label %L', k:1);
+      if n^.lo = n^.hi then
+        write(ircode, ' i32 ', n^.lo:1, ', label %L', k:1);
       n := n^.next
     end;
     k := k + 1;

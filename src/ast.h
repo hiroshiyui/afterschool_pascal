@@ -303,9 +303,16 @@ struct WithStmt : Stmt {
 };
 
 /// One arm of a case statement: the constants that select it, and what to do.
+/// One entry of a case-constant-list: a single constant, or the range `lo..hi`
+/// that ISO/IEC 10206:1991 §6.8.3.5 adds. `hi` is null for a single constant —
+/// the same pair, and the same way of telling the two apart, as SetMember.
+struct CaseLabel {
+  ExprPtr lo, hi;
+};
+
 struct CaseArm {
-  std::vector<ExprPtr> labels;
-  std::vector<long long> values; // filled in by Sema
+  std::vector<CaseLabel> labels;
+  std::vector<LabelRange> values; // filled in by Sema
   StmtPtr body;
   int line = 0, col = 0;
 };
@@ -379,7 +386,7 @@ struct FieldGroup {
 /// being factored out, because the Pascal AST is a variant record and cannot
 /// share a sub-struct between two arms of it (ADR-0023).
 struct VariantArm {
-  std::vector<ExprPtr> labels;
+  std::vector<CaseLabel> labels;
   /// Extended Pascal's variant-part-completer, `otherwise (fields)`: an arm
   /// with no labels, selected by every tag value the others leave. Empty
   /// `labels` would say the same thing only in a program with no errors.

@@ -356,6 +356,61 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   return t;
 }
 
+/// One entry of a case-constant-list, folded to the closed interval it denotes.
+/// A single constant is [v, v], so a case statement and a variant part read
+/// their labels the same way whether or not Extended Pascal ranges are in play;
+/// `constantMsg` is the one diagnostic the two constructs spell differently.
+///
+/// A range is never expanded into its members — `1..maxint` is four bytes here
+/// and two billion switch cases if expanded, and codegen tests it rather than
+/// enumerating it for exactly that reason.
+bool Sema::evalLabelRange(CaseLabel &label, const char *constantMsg,
+                          Type *&type, LabelRange &r) {
+  type = nullptr;
+  if (!evalOrdinal(label.lo.get(), type, r.lo)) {
+    diags_.error(label.lo->line, label.lo->col, constantMsg);
+    return false;
+  }
+  r.hi = r.lo;
+  if (!label.hi)
+    return true;
+
+  Type *hiType = nullptr;
+  if (!evalOrdinal(label.hi.get(), hiType, r.hi)) {
+    diags_.error(label.hi->line, label.hi->col, constantMsg);
+    return false;
+  }
+  if (type && hiType && type->base() != hiType->base()) {
+    diags_.error(label.hi->line, label.hi->col,
+                 "the two ends of a range must be of one type, found " +
+                     type->name() + " and " + hiType->name());
+    return false;
+  }
+  // A backwards range denotes no values at all. ISO 7185 §6.7.1 says so for a
+  // set constructor and this compiler honours it there, but a label selecting
+  // nothing can only be a mistake — nothing would ever run.
+  if (r.hi < r.lo) {
+    diags_.error(label.lo->line, label.lo->col,
+                 "this range runs backwards: " + Type::ordinalName(type, r.lo) +
+                     " is greater than " + Type::ordinalName(type, r.hi));
+    return false;
+  }
+  return true;
+}
+
+/// The lowest value two label lists share, if they share one. "This label
+/// appears twice" is the single-constant case of exactly this question, so
+/// both constructs ask it in the general form.
+bool Sema::overlaps(const std::vector<LabelRange> &seen, LabelRange r,
+                    long long &at) {
+  for (const LabelRange &s : seen)
+    if (s.lo <= r.hi && r.lo <= s.hi) {
+      at = s.lo > r.lo ? s.lo : r.lo;
+      return true;
+    }
+  return false;
+}
+
 /// ISO 7185 §6.4.3.3 requires every field name in a record to be distinct,
 /// across the fixed part and every variant alike — which is what lets one flat
 /// lookup answer where a name lives.
@@ -417,7 +472,7 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
     addField(record, fields, {tagName, tagLine, tagCol}, tag, path);
   }
 
-  std::unordered_map<long long, int> claimed; // tag value -> variant that owns it
+  std::vector<LabelRange> claimed; // the tag values earlier arms have taken
   for (VariantArm &arm : arms) {
     Variant v;
     v.line = arm.line;
@@ -428,29 +483,27 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
     v.isOtherwise = arm.isOtherwise;
     int index = static_cast<int>(variants.size());
 
-    for (ExprPtr &label : arm.labels) {
+    for (CaseLabel &label : arm.labels) {
       Type *labelType = nullptr;
-      long long value = 0;
-      if (!evalOrdinal(label.get(), labelType, value)) {
-        diags_.error(label->line, label->col,
-                     "a variant's label must be an ordinal constant");
+      LabelRange r;
+      if (!evalLabelRange(label, "a variant's label must be an ordinal constant",
+                          labelType, r))
         continue;
-      }
       if (labelType->base() != tag->base()) {
-        diags_.error(label->line, label->col,
+        diags_.error(label.lo->line, label.lo->col,
                      "this variant's tag is " + tag->name() +
                          ", but the label is " + labelType->name());
         continue;
       }
-      auto seen = claimed.find(value);
-      if (seen != claimed.end()) {
-        diags_.error(label->line, label->col,
-                     "the tag value " + Type::ordinalName(tag, value) +
+      long long at = 0;
+      if (overlaps(claimed, r, at)) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "the tag value " + Type::ordinalName(tag, at) +
                          " already selects an earlier variant");
         continue;
       }
-      claimed[value] = index;
-      v.labels.push_back(value);
+      claimed.push_back(r);
+      v.labels.push_back(r);
     }
 
     // The fields are pushed into the arm, so each variant is numbered from
@@ -1922,8 +1975,8 @@ void Sema::checkStdProc(ProcCallStmt *p) {
     }
     int chosen = -1;
     for (size_t k = 0; k < arms->size() && chosen < 0; ++k)
-      for (long long label : (*arms)[k].labels)
-        if (label == v) {
+      for (const LabelRange &label : (*arms)[k].labels)
+        if (label.lo <= v && v <= label.hi) {
           chosen = static_cast<int>(k);
           break;
         }
@@ -1962,31 +2015,30 @@ void Sema::checkCase(CaseStmt *c) {
     sel = nullptr;
   }
 
-  std::unordered_map<long long, bool> seen;
+  std::vector<LabelRange> seen;
   for (CaseArm &arm : c->arms) {
-    for (ExprPtr &label : arm.labels) {
+    for (CaseLabel &label : arm.labels) {
       Type *labelType = nullptr;
-      long long value = 0;
-      if (!evalOrdinal(label.get(), labelType, value)) {
-        diags_.error(label->line, label->col,
-                     "a case label must be an ordinal constant");
+      LabelRange r;
+      if (!evalLabelRange(label, "a case label must be an ordinal constant",
+                          labelType, r))
         continue;
-      }
       if (sel && !assignable(sel, labelType)) {
-        diags_.error(label->line, label->col,
+        diags_.error(label.lo->line, label.lo->col,
                      "this case selects on " + sel->name() +
                          ", but the label is " + labelType->name());
         continue;
       }
-      if (seen.count(value)) {
-        diags_.error(label->line, label->col,
-                     "the label " + Type::ordinalName(sel ? sel : labelType,
-                                                      value) +
+      long long at = 0;
+      if (overlaps(seen, r, at)) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "the label " +
+                         Type::ordinalName(sel ? sel : labelType, at) +
                          " appears twice in this case statement");
         continue;
       }
-      seen[value] = true;
-      arm.values.push_back(value);
+      seen.push_back(r);
+      arm.values.push_back(r);
     }
     stmtPath_.push_back(c);
     checkStmt(arm.body.get());

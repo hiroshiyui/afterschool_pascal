@@ -1,0 +1,6 @@
+<source>:11:7: error: the tag value 4 already selects an earlier variant
+<source>:21:5: error: this range runs backwards: 9 is greater than 1
+<source>:23:8: error: the two ends of a range must be of one type, found integer and char
+<source>:25:5: error: this case selects on integer, but the label is colour
+<source>:28:5: error: the label 25 appears twice in this case statement
+<source>:31:5: error: the label 50 appears twice in this case statement
