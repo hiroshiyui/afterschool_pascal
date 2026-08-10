@@ -49,3 +49,4 @@ the alternatives that were rejected and why.
 | [0038](0038-a-word-symbol-may-be-two-words.md) | A word-symbol may be two words | Accepted |
 | [0039](0039-a-discriminated-schema-produces-an-ordinary-type.md) | A discriminated schema produces an ordinary type | Accepted |
 | [0040](0040-a-schematic-formal-parameter-carries-its-discriminants.md) | A schematic formal parameter carries its discriminants beside the address | Accepted |
+| [0041](0041-a-discriminant-may-be-evaluated-on-entry.md) | A discriminant may be evaluated when the block is entered | Accepted |

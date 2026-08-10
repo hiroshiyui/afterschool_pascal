@@ -628,6 +628,15 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   if (denoter.resolved)
     return denoter.resolved;
 
+  // §6.2.3.2 allows a discriminant that is not a constant in a variable's own
+  // type-denoter, and there only. A denoter of any other kind is on the way to
+  // somewhere else — a component, a field, a domain — so the offer is
+  // withdrawn before it recurses, and `array [1..3] of vector(n)` is refused
+  // exactly as it was.
+  Symbol *savedDynamic = dynamicVarFor_;
+  if (denoter.kind != TEK::Schema)
+    dynamicVarFor_ = nullptr;
+
   Type *t = nullptr;
   switch (denoter.kind) {
   case TEK::Named:
@@ -690,6 +699,7 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   }
   }
 
+  dynamicVarFor_ = savedDynamic;
   denoter.resolved = t;
   return t;
 }
@@ -808,20 +818,32 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
 
   std::vector<long long> tuple;
   bool ok = true;
+  // §6.2.3.2 evaluates an actual-discriminant-part when the block is entered,
+  // so a *variable* may have a discriminant that is not a constant — and then
+  // no tuple is known here and the whole denoter goes the dynamic way. One
+  // argument that is not constant is enough: a tuple is chosen as a whole.
+  bool dynamic = false;
   for (size_t i = 0; i < denoter.args.size(); ++i) {
     Type *given = nullptr;
     long long value = 0;
     if (!evalOrdinal(denoter.args[i].get(), given, value)) {
-      // A discriminant-value is evaluated when the block is entered (§6.2.3.2),
-      // so the standard allows a variable here and this compiler does not yet.
-      // The message says which of the two it is, because "not a constant" and
-      // "not ordinal" are different mistakes.
-      diags_.error(denoter.args[i]->line, denoter.args[i]->col,
-                   "the discriminants of a schema must be ordinal constants "
-                   "here; '" +
-                       formals[i]->name + "' is not one");
-      ok = false;
-      continue;
+      given = denoter.args[i]->type;
+      if (dynamicVarFor_ && given && given->isOrdinal()) {
+        dynamic = true;
+      } else {
+        // The message says which of the two it is, because "not a constant"
+        // and "not ordinal" are different mistakes — and where a variable
+        // would have been allowed, only the second one is left.
+        diags_.error(denoter.args[i]->line, denoter.args[i]->col,
+                     dynamicVarFor_
+                         ? "the discriminants of a schema must be ordinal; '" +
+                               formals[i]->name + "' is not"
+                         : "the discriminants of a schema must be ordinal "
+                           "constants here; '" +
+                               formals[i]->name + "' is not one");
+        ok = false;
+        continue;
+      }
     }
     if (!assignable(formals[i]->type, given)) {
       diags_.error(denoter.args[i]->line, denoter.args[i]->col,
@@ -833,8 +855,12 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
     }
     // §6.4.7's domain is the tuples *allowed* by the formal-discriminant-part,
     // so a value outside the discriminant's own type is not in the domain and
-    // never reaches a production.
-    if (value < formals[i]->type->ordinalLo() ||
+    // never reaches a production. A value not known until entry is checked
+    // there instead, by the store into the descriptor — the same check, made
+    // where the value finally is.
+    if (dynamic) {
+      continue;
+    } else if (value < formals[i]->type->ordinalLo() ||
         value > formals[i]->type->ordinalHi()) {
       diags_.error(denoter.args[i]->line, denoter.args[i]->col,
                    "discriminant '" + formals[i]->name + "' is outside " +
@@ -846,6 +872,21 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
   }
   if (!ok)
     return ty::Int();
+
+  if (dynamic) {
+    // Every position but a variable declaration has already been refused, so
+    // the tuple is this variable's own and so is the type it produces.
+    Symbol *v = dynamicVarFor_;
+    dynamicVarFor_ = nullptr; // the body is not a variable declaration
+    Type *t = genericFromSchema(schema, v, denoter, "variable's type");
+    dynamicVarFor_ = v;
+    if (t->isGeneric()) {
+      v->descSchema = schema;
+      for (auto &a : denoter.args)
+        v->discExprs.push_back(a.get());
+    }
+    return t;
+  }
 
   auto key = std::make_pair(schema, tuple);
   auto it = produced_.find(key);
@@ -962,6 +1003,22 @@ bool Sema::staticVariants(const std::vector<Variant> &arms) const {
 /// two parameters of one schema read two descriptors, so they cannot share a
 /// type however alike they look.
 Type *Sema::schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter) {
+  Type *t = genericFromSchema(schema, param, denoter, "parameter form");
+  if (t->isGeneric())
+    param->descSchema = schema;
+  return t;
+}
+
+/// The body resolved once with each discriminant bound to a `Disc` symbol that
+/// reads `owner`'s descriptor rather than to a value — so `1..n` comes out as
+/// "the value of n", and one resolution serves every tuple.
+///
+/// The result belongs to that one symbol and is deliberately not interned: two
+/// of them read two descriptors, so they cannot share a type however alike
+/// they look.
+Type *Sema::genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
+                              const char *noun) {
+  Symbol *param = owner;
   const std::vector<Symbol *> &formals = schema->discriminants;
   if (formals.empty())
     return ty::Int(); // already reported at the schema-definition
@@ -1006,7 +1063,7 @@ Type *Sema::schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter) {
   if (diags_.all().size() != before) {
     diags_.error(denoter.line, denoter.col,
                  "no type is produced from schema '" + schema->name +
-                     "' for this parameter");
+                     "' for this " + noun);  // "parameter form" / "variable's type"
     return ty::Int();
   }
 
@@ -1019,10 +1076,9 @@ Type *Sema::schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter) {
     comp = comp->elem;
   if (!staticThroughout(comp)) {
     diags_.error(denoter.line, denoter.col,
-                 "schema '" + schema->name +
-                     "' cannot be a parameter form: its discriminants have to "
-                     "bound an array, because that is the only size a "
-                     "descriptor can describe");
+                 "schema '" + schema->name + "' cannot be a " + noun +
+                     ": its discriminants have to bound an array, because "
+                     "that is the only size a descriptor can describe");
     return ty::Int();
   }
 
@@ -1035,8 +1091,7 @@ Type *Sema::schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter) {
     t = copy;
   }
   t->schema = schema;
-  t->alias = schema->name; // no tuple to name it by; the actual brings that
-  param->paramSchema = schema;
+  t->alias = schema->name; // no tuple to name it by; the descriptor holds it
   return t;
 }
 
@@ -1443,6 +1498,40 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
   resolvePendingPointers();
 
   for (auto &group : block.vars) {
+    // §6.2.3.2: a discriminated schema is the one denoter whose discriminants
+    // may be variables, and only here. The first name is resolved with itself
+    // offered as the variable they would belong to; if they turned out to be
+    // constants the type is an ordinary one and the group shares it, exactly
+    // as before.
+    Symbol *schema = nullptr;
+    if (group.type->kind == TEK::Schema) {
+      Symbol *named = lookup(group.type->name);
+      if (named && named->kind == SymKind::Schema)
+        schema = named;
+    }
+    if (schema && !group.names.empty()) {
+      const DeclName &n0 = group.names[0];
+      Symbol *first =
+          addFrameVar(n0.name, SymKind::Var, ty::Int(), owner, n0.line, n0.col);
+      dynamicVarFor_ = first;
+      first->type = resolveType(*group.type);
+      dynamicVarFor_ = nullptr;
+      for (size_t i = 1; i < group.names.size(); ++i) {
+        const DeclName &n = group.names[i];
+        Symbol *v =
+            addFrameVar(n.name, SymKind::Var, first->type, owner, n.line, n.col);
+        if (!first->type->isGeneric())
+          continue;
+        // Each name has its own descriptor, so each needs its own type — but
+        // one actual-discriminant-part, evaluated once per variable on entry
+        // from the one tree the group shares.
+        v->type = genericFromSchema(schema, v, *group.type, "variable's type");
+        v->descSchema = first->descSchema;
+        v->discExprs = first->discExprs;
+      }
+      continue;
+    }
+
     // One denoter for the whole group, so `a, b: array [1..3] of integer`
     // makes a and b the same type and lets `a := b` through.
     Type *t = resolveType(*group.type);
@@ -1669,11 +1758,11 @@ bool Sema::congruous(Symbol *formal, Symbol *actual) const {
     if (f->kind == SymKind::ProcParam) {
       if (!congruous(f, a))
         return false;
-    } else if (f->paramSchema || a->paramSchema) {
+    } else if (f->descSchema || a->descSchema) {
       // A schematic formal's type belongs to that one parameter and is never
       // equal to another's, so congruity asks the question §6.7.3.3 asks: the
       // same schema, with the tuple left to the actual as it always is.
-      if (f->paramSchema != a->paramSchema)
+      if (f->descSchema != a->descSchema)
         return false;
     } else if (f->type != a->type) {
       return false;
@@ -2065,6 +2154,16 @@ void Sema::checkExpr(Expr *e) {
     v->sym = lookup(v->name);
     if (!v->sym) {
       diags_.error(v->line, v->col, "undeclared identifier '" + v->name + "'");
+      v->type = ty::Int();
+      return;
+    }
+    // §6.2.3.2 evaluates a variable's actual-discriminant-part when the block
+    // is entered, which is before that variable has a size or a value — so it
+    // cannot be one of the discriminants that decide them. Its name is in
+    // scope by then, which is exactly why this has to be said.
+    if (dynamicVarFor_ && v->sym == dynamicVarFor_) {
+      diags_.error(v->line, v->col,
+                   "'" + v->name + "' cannot be one of its own discriminants");
       v->type = ty::Int();
       return;
     }
@@ -2701,17 +2800,17 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
     // whatever tuple it was produced with. It must be a variable either way,
     // because a value parameter of a size not known until now is copied out of
     // one rather than evaluated into one.
-    if (p->paramSchema) {
+    if (p->descSchema) {
       if (!isDesignator(a))
         diags_.error(a->line, a->col,
                      "argument " + std::to_string(i + 1) + " of '" +
                          callee->name + "' needs a variable produced from "
-                         "schema '" + p->paramSchema->name + "'");
-      else if (!a->type || a->type->schema != p->paramSchema)
+                         "schema '" + p->descSchema->name + "'");
+      else if (!a->type || a->type->schema != p->descSchema)
         diags_.error(a->line, a->col,
                      "argument " + std::to_string(i + 1) + " of '" +
                          callee->name + "' must be produced from schema '" +
-                         p->paramSchema->name + "', but the argument is " +
+                         p->descSchema->name + "', but the argument is " +
                          (a->type ? a->type->name() : std::string("untyped")));
       continue;
     }
@@ -2755,11 +2854,11 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
   // already known here, so it is reported before the program runs.
   for (size_t i = 0; i < args.size(); ++i) {
     Symbol *p = callee->params[i];
-    if (!p->paramSchema || !args[i]->type || args[i]->type->isGeneric())
+    if (!p->descSchema || !args[i]->type || args[i]->type->isGeneric())
       continue;
     for (size_t j = 0; j < i; ++j) {
       Symbol *q = callee->params[j];
-      if (q->paramSchema != p->paramSchema ||
+      if (q->descSchema != p->descSchema ||
           q->paramSection != p->paramSection || !args[j]->type ||
           args[j]->type->isGeneric() || args[j]->type == args[i]->type)
         continue;

@@ -3,7 +3,7 @@
 <source>:46:27: error: schema 'boxed' cannot be a parameter form: its discriminants have to bound an array, because that is the only size a descriptor can describe
 <source>:49:29: error: schema 'sized' cannot be a parameter form: its discriminants have to bound an array, because that is the only size a descriptor can describe
 <source>:14:41: error: schema 'selfish' is defined in terms of itself; only the domain of a pointer may name a schema being defined
-<source>:52:28: error: no type is produced from schema 'selfish' for this parameter
+<source>:52:28: error: no type is produced from schema 'selfish' for this parameter form
 <source>:70:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is real
 <source>:71:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is other(3)
 <source>:73:8: error: argument 1 of 'good' needs a variable produced from schema 'vector'

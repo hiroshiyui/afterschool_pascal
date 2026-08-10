@@ -365,7 +365,7 @@ llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
 StructType *CodeGen::descriptorType(const Symbol *param) {
   SmallVector<llvm::Type *, 4> fields;
   fields.push_back(ptr()); // the actual's address
-  for (const Symbol *d : param->paramSchema->discriminants)
+  for (const Symbol *d : param->descSchema->discriminants)
     fields.push_back(llvmType(d->type));
   return StructType::get(ctx_, fields);
 }
@@ -400,7 +400,7 @@ llvm::Value *CodeGen::dynSize(ap::Type *t) {
 llvm::Type *CodeGen::slotType(const Symbol *v) {
   // A schematic formal parameter's slot holds the whole descriptor: the
   // address, and the tuple that says how far the thing at it reaches.
-  if (v->paramSchema)
+  if (v->descSchema)
     return descriptorType(v);
   // A `var` parameter's slot holds the address of the caller's variable, not
   // a copy of its value. Everything else — including a structured value
@@ -422,12 +422,12 @@ void CodeGen::appendParamTypes(const std::vector<Symbol *> &params,
     if (p->kind == SymKind::ProcParam) {
       into.push_back(ptr()); // the code
       into.push_back(ptr()); // the static link to call it with
-    } else if (p->paramSchema) {
+    } else if (p->descSchema) {
       // The address, and then the tuple: one argument per discriminant, so
       // the descriptor is assembled by the callee and never passed as a
       // struct.
       into.push_back(ptr());
-      for (const Symbol *d : p->paramSchema->discriminants)
+      for (const Symbol *d : p->descSchema->discriminants)
         into.push_back(llvmType(d->type));
     } else {
       into.push_back(paramType(p));
@@ -520,7 +520,7 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
       arg->setName(p->name);
       llvm::Value *slot =
           b_.CreateStructGEP(frameTy, curFrame_, 1 + p->frameIndex, p->name);
-      if (p->paramSchema) {
+      if (p->descSchema) {
         // The tuple is stored first, because everything about the size of
         // what the address points at is asked of it — including, for a value
         // parameter, how much to copy.
@@ -569,8 +569,57 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
     }
   }
 
+  // After the parameters, because a discriminant may be one of them, and
+  // before anything that could jump: the storage a dynamically sized variable
+  // stands for has to exist for the whole activation.
+  initDynamicVars(proc);
   initFiles(proc);
   emitJumpDispatch(proc);
+}
+
+void CodeGen::checkSchemaDomain(ap::Type *t, const std::string &schema) {
+  if (!t || !t->isArray() || !t->dynamicExtent())
+    return;
+  if (t->dynamicBounds())
+    emitTrapIf(b_.CreateICmpSLT(boundValue(t, true), boundValue(t, false),
+                                "empty"),
+               "no type is produced from schema '" + schema +
+                   "' with these discriminants");
+  checkSchemaDomain(t->elem, schema);
+}
+
+/// §6.2.3.2: the actual-discriminant-part of a variable is evaluated when the
+/// block is entered. The tuple goes into the descriptor first, because
+/// everything after it — the domain check, the size, the storage — is asked of
+/// the descriptor and not of the expressions that filled it.
+void CodeGen::initDynamicVars(Symbol *proc) {
+  for (Symbol *v : proc->frameVars) {
+    if (!v->descSchema || v->discExprs.empty())
+      continue;
+    StructType *desc = descriptorType(v);
+    llvm::Value *slot = b_.CreateStructGEP(frameTypes_[proc], curFrame_,
+                                           1 + v->frameIndex, v->name);
+    for (size_t k = 0; k < v->discExprs.size() && k < v->discSyms.size(); ++k) {
+      Symbol *d = v->discSyms[k];
+      llvm::Value *value = emitExpr(v->discExprs[k]);
+      value = convertFor(value, v->discExprs[k]->type, d->type);
+      // A discriminant outside its own type is outside §6.4.7's domain. The
+      // store is where a value enters a variable, so the check that guards
+      // every other such store is the one that says so here too.
+      value = checkedForStore(value, d->type);
+      b_.CreateStore(value, b_.CreateStructGEP(desc, slot, 1 + unsigned(k),
+                                               d->name));
+    }
+    checkSchemaDomain(v->type, v->descSchema->name);
+    ap::Type *comp = v->type;
+    while (comp->isArray())
+      comp = comp->elem;
+    Align align = mod_->getDataLayout().getABITypeAlign(llvmType(comp));
+    AllocaInst *storage =
+        b_.CreateAlloca(i8(), dynSize(v->type), v->name + ".storage");
+    storage->setAlignment(align);
+    b_.CreateStore(storage, b_.CreateStructGEP(desc, slot, 0, "storage"));
+  }
 }
 
 llvm::Value *CodeGen::jumpRecord(Symbol *proc, llvm::Value *frame) {
@@ -737,7 +786,7 @@ llvm::Value *CodeGen::addressOf(Symbol *v) {
   // A schematic formal parameter's slot is its descriptor, and the variable
   // is at the address the descriptor's first field holds — for a `var`
   // parameter the actual, and for a value parameter the prologue's copy of it.
-  if (v->paramSchema)
+  if (v->descSchema)
     return b_.CreateLoad(ptr(), b_.CreateStructGEP(descriptorType(v), slot, 0),
                          v->name + ".ref");
   // A `var` parameter — and the binding of a `with` — holds an address, so the
@@ -928,7 +977,7 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
     const Symbol *p = callee->params[i];
     if (p->kind == SymKind::ProcParam) {
       emitProcArgument(static_cast<VarRef *>(args[i].get())->sym, argv);
-    } else if (p->paramSchema) {
+    } else if (p->descSchema) {
       // The address, then the tuple the actual was produced with — constants
       // where the actual is an ordinary variable, and the caller's own
       // descriptor where it is itself a schematic formal, which is how a
@@ -942,8 +991,8 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
       if (actual->isGeneric())
         if (auto *v = as<VarRef>(args[i].get()))
           from = v->sym;
-      for (size_t k = 0; k < p->paramSchema->discriminants.size(); ++k) {
-        llvm::Type *want = llvmType(p->paramSchema->discriminants[k]->type);
+      for (size_t k = 0; k < p->descSchema->discriminants.size(); ++k) {
+        llvm::Type *want = llvmType(p->descSchema->discriminants[k]->type);
         if (from && k < from->discSyms.size())
           argv.push_back(b_.CreateLoad(want, addressOf(from->discSyms[k]),
                                        from->discSyms[k]->name));

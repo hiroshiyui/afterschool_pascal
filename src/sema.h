@@ -96,10 +96,19 @@ struct Symbol {
   /// reading this parameter's descriptor rather than constants, so one body
   /// serves every tuple an actual may bring. Null for every ordinary
   /// parameter, and it is what decides the shape the parameter travels in.
-  Symbol *paramSchema = nullptr;
+  /// ...and, since ADR-0041, of a *variable* whose actual-discriminant-part is
+  /// not constant: §6.2.3.2 evaluates one when the block is entered, so such a
+  /// variable holds the same descriptor a parameter does and differs only in
+  /// where the tuple comes from.
+  Symbol *descSchema = nullptr;
   /// The `Disc` symbols of this parameter, in the schema's own order. Their
   /// storage is inside this parameter's frame slot, after the address.
   std::vector<Symbol *> discSyms;
+  /// The actual-discriminant-part of a variable whose discriminants are not
+  /// constants, in order — the expressions the prologue evaluates on entry.
+  /// Empty for a schematic formal parameter, whose tuple the caller brings,
+  /// which is what tells the two apart wherever it matters.
+  std::vector<Expr *> discExprs;
   /// Which discriminant of `owner`'s parameter this is, for a `Disc`.
   int discIndex = -1;
   /// Which formal-parameter-section declared this parameter. §6.7.3.3 requires
@@ -179,6 +188,12 @@ private:
   /// instead of to values. The result belongs to that one parameter, so it is
   /// deliberately *not* interned — two parameters read two descriptors.
   Type *schematicFormal(Symbol *schema, Symbol *param, TypeExpr &denoter);
+  /// The schema body resolved with its discriminants bound to `owner`'s
+  /// descriptor rather than to values: what a schematic formal parameter and a
+  /// variable with non-constant discriminants both need, differing only in the
+  /// noun a diagnostic calls them.
+  Type *genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
+                          const char *noun);
   /// A bound inside a schema body being resolved generically: a constant, a
   /// discriminant, or a discriminant with a constant added to or taken from
   /// it. Anything else is refused, because a bound is re-evaluated on entry
@@ -338,6 +353,11 @@ private:
   /// with any other and from every type of any other schema — so this map is
   /// the whole of that rule, and `assignable` needs no case for schemata.
   std::map<std::pair<Symbol *, std::vector<long long>>, Type *> produced_;
+  /// The variable a discriminated schema is being resolved for, while it is.
+  /// §6.2.3.2 allows a discriminant that is not a constant *there* and nowhere
+  /// else, so this is what separates `var s: vector(n)` from every other
+  /// position the same denoter could have been written in.
+  Symbol *dynamicVarFor_ = nullptr;
   /// The schemata whose bodies are being resolved right now. §6.4.7 forbids a
   /// schema-definition from containing an applied occurrence of its own
   /// identifier anywhere but the domain of a pointer, and this is that rule:

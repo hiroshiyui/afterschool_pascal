@@ -58,10 +58,12 @@ var
   e: hollow(0);
   f: narrow(20);
   n: integer;
-  { §6.2.3.2 evaluates a discriminant-value when the block is entered, so the
-    standard allows a variable here. This compiler does not yet, and says so
-    rather than saying the value is not ordinal. }
-  later: vector(n);
+  { §6.2.3.2 evaluates a discriminant-value when the block is entered, so a
+    variable *is* allowed there (ADR-0041) -- but an ordinal one, and only in
+    a variable declaration. A real is neither a constant nor an ordinal, and
+    the message says the second because that is what is left to say. }
+  r: real;
+  later: vector(r);
 
 begin
   { §6.4.8: one tuple, one type -- and a different tuple, a different type }

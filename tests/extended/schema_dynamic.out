@@ -1,0 +1,11 @@
+vector(3) ends at 9, and vector(5) at 5
+vector(6) ends at 36, and vector(11) at 11
+a and b hold 4 and 4, last 4 and 400
+grid 2x3:  11  12  13  21  22  23
+  depth 1 still holds 1 of 1
+  depth 2 still holds 2 of 2
+  depth 3 still holds 3 of 3
+filled 5 from 4 down to 0
+letters(1) = a
+letters(2) = ab
+letters(3) = abc

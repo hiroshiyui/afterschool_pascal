@@ -1,0 +1,8 @@
+<source>:19:15: error: the discriminants of a schema must be ordinal; 'n' is not
+<source>:22:16: error: 'self' cannot be one of its own discriminants
+<source>:26:8: error: schema 'boxed' cannot be a variable's type: its discriminants have to bound an array, because that is the only size a descriptor can describe
+<source>:13:47: error: the discriminants of a schema must be ordinal constants here; 'n' is not one
+<source>:28:9: error: no type is produced from schema 'nested' with these discriminants
+<source>:31:32: error: the discriminants of a schema must be ordinal constants here; 'n' is not one
+<source>:33:29: error: the discriminants of a schema must be ordinal constants here; 'n' is not one
+<source>:38:21: error: the discriminants of a schema must be ordinal constants here; 'n' is not one

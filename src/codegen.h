@@ -77,6 +77,14 @@ private:
   llvm::Value *dynSize(Type *t);
   /// The two bounds of an array, either of which may come from a descriptor.
   llvm::Value *boundValue(Type *t, bool high);
+  /// A variable whose actual-discriminant-part is not constant: §6.2.3.2
+  /// evaluates it when the block is entered, which is here. The tuple is
+  /// stored, checked, and the storage it sizes is claimed.
+  void initDynamicVars(Symbol *proc);
+  /// §6.4.7 NOTE 2: a tuple that leaves an index range empty selects no type
+  /// from the schema at all. Where the tuple is a constant Sema says so; where
+  /// it is not, this does.
+  void checkSchemaDomain(Type *t, const std::string &schema);
 
   /// The storage a block that a non-local `goto` can reach carries in its
   /// activation record. Opaque, like a file variable, and i64-element for the

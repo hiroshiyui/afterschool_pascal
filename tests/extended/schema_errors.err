@@ -5,7 +5,7 @@
 <source>:49:8: error: schema 'grid' has 2 discriminants, found 1
 <source>:50:9: error: schema 'vector' has 1 discriminant, found 2
 <source>:52:21: error: discriminant 'n' of schema 'vector' is integer, found char
-<source>:54:12: error: the discriminants of a schema must be ordinal constants here; 'x' is not one
+<source>:54:12: error: the discriminants of a schema must be ordinal; 'x' is not
 <source>:26:38: error: a schema's type cannot contain an enumerated type: its constants would be declared once per set of discriminants
 <source>:55:6: error: no type is produced from schema 'enumerated' with these discriminants
 <source>:28:41: error: schema 'selfish' is defined in terms of itself; only the domain of a pointer may name a schema being defined
@@ -13,8 +13,8 @@
 <source>:32:31: error: a subrange cannot be empty: 0 is below 1
 <source>:58:6: error: no type is produced from schema 'hollow' with these discriminants
 <source>:59:13: error: discriminant 'n' is outside small
-<source>:64:17: error: the discriminants of a schema must be ordinal constants here; 'n' is not one
-<source>:68:3: error: cannot assign vector(4) to a variable of type vector(3)
-<source>:69:3: error: cannot assign alike(3) to a variable of type vector(3)
-<source>:74:4: error: the left side of an assignment must be a variable
-<source>:77:12: error: 'bogus' is not a discriminant of schema 'vector'
+<source>:66:17: error: the discriminants of a schema must be ordinal; 'n' is not
+<source>:70:3: error: cannot assign vector(4) to a variable of type vector(3)
+<source>:71:3: error: cannot assign alike(3) to a variable of type vector(3)
+<source>:76:4: error: the left side of an assignment must be a variable
+<source>:79:12: error: 'bogus' is not a discriminant of schema 'vector'

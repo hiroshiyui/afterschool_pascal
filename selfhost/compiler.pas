@@ -362,8 +362,13 @@ type
       discIndex is which of them a skDisc is; paramSection is which
       formal-parameter-section declared a parameter, because 6.7.3.3 requires
       every actual in one section to bring the same tuple. }
-    paramSchema: symPtr;
+    descSchema: symPtr;
     discSyms, discSymTail: symListPtr;
+    { The actual-discriminant-part of a variable whose discriminants are not
+      constants, in order -- the expressions the prologue evaluates on entry
+      (6.2.3.2). Nil for a schematic formal parameter, whose tuple the caller
+      brings, which is what tells the two apart wherever it matters. }
+    discExprs: nodePtr;
     discIndex, paramSection: integer
   end;
 
@@ -655,6 +660,11 @@ var
     the production recurses until the stack runs out. }
   producedHead: producedPtr;
   producingTop: symListPtr;
+  { The variable a discriminated schema is being resolved for, while it is.
+    6.2.3.2 allows a discriminant that is not a constant *there* and nowhere
+    else, so this is what separates `var s: vector(n)` from every other
+    position the same denoter could have been written in. }
+  dynamicVarFor: symPtr;
   { Not nil while a schema body is being resolved *generically*, for the
     schematic formal parameter it belongs to. It is what tells the subrange
     resolver that a bound naming a discriminant is a bound and not a mistake. }
@@ -3827,9 +3837,10 @@ begin
   s^.schemaBody := nil;
   s^.discs := nil;
   s^.discTail := nil;
-  s^.paramSchema := nil;
+  s^.descSchema := nil;
   s^.discSyms := nil;
   s^.discSymTail := nil;
+  s^.discExprs := nil;
   s^.discIndex := -1;
   s^.paramSection := 0;
   NewSymbol := s
@@ -3998,9 +4009,9 @@ begin
       { A schematic formal's type belongs to that one parameter and is never
         equal to another's, so congruity asks the question 6.7.3.3 asks: the
         same schema, with the tuple left to the actual as it always is. }
-      else if (f^.sym^.paramSchema <> nil) or (a^.sym^.paramSchema <> nil) then
+      else if (f^.sym^.descSchema <> nil) or (a^.sym^.descSchema <> nil) then
       begin
-        if f^.sym^.paramSchema <> a^.sym^.paramSchema then ok := false
+        if f^.sym^.descSchema <> a^.sym^.descSchema then ok := false
       end
       else if f^.sym^.stype <> a^.sym^.stype then
         ok := false;
@@ -4117,6 +4128,10 @@ end;
 procedure CheckExpr(e: nodePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
+  forward;
+function IsGeneric(t: typePtr): boolean; forward;
+function GenericFromSchema(schema, param: symPtr; d: nodePtr;
+                           forVariable: boolean): typePtr;
   forward;
 procedure CheckStmt(s: nodePtr); forward;
 procedure CheckBlock(b: nodePtr; owner: symPtr); forward;
@@ -5159,8 +5174,8 @@ end;
 function ProduceFromSchema;
 var formals: symListPtr; a, arg: nodePtr; t, given: typePtr;
     tuple, tupleTail, tv: numPtr; value, count, want, before: integer;
-    ok, repeated: boolean; pr: producedPtr; mark: entryPtr;
-    disc: symPtr; p, q, push: symListPtr;
+    ok, repeated, dynamic: boolean; pr: producedPtr; mark: entryPtr;
+    disc, v: symPtr; p, q, push: symListPtr;
 begin
   t := nil;
   formals := schema^.discs;
@@ -5212,21 +5227,38 @@ begin
     tuple := nil;
     tupleTail := nil;
     ok := true;
+    { 6.2.3.2 evaluates an actual-discriminant-part when the block is entered,
+      so a *variable* may have a discriminant that is not a constant -- and
+      then no tuple is known here and the whole denoter goes the dynamic way.
+      One argument that is not constant is enough: a tuple is chosen whole. }
+    dynamic := false;
     a := d^.scArgs;
     p := formals;
     while a <> nil do begin
       given := nil;
       value := 0;
       if not EvalOrdinal(a, given, value) then begin
-        { A discriminant-value is evaluated when the block is entered
-          (6.2.3.2), so the standard allows a variable here and this compiler
-          does not yet. }
-        ErrorAt(a^.line, a^.col);
-        write('the discriminants of a schema must be ordinal constants ',
-              'here; ''');
-        WritePool(p^.sym^.at, p^.sym^.len);
-        writeln(''' is not one');
-        ok := false
+        given := a^.ntype;
+        if (dynamicVarFor <> nil) and IsOrdinal(given) then
+          dynamic := true
+        else begin
+          { The message says which of the two it is, because "not a constant"
+            and "not ordinal" are different mistakes -- and where a variable
+            would have been allowed, only the second one is left. }
+          ErrorAt(a^.line, a^.col);
+          if dynamicVarFor <> nil then begin
+            write('the discriminants of a schema must be ordinal; ''');
+            WritePool(p^.sym^.at, p^.sym^.len);
+            writeln(''' is not')
+          end
+          else begin
+            write('the discriminants of a schema must be ordinal constants ',
+                  'here; ''');
+            WritePool(p^.sym^.at, p^.sym^.len);
+            writeln(''' is not one')
+          end;
+          ok := false
+        end
       end
       else if not Assignable(p^.sym^.stype, given) then begin
         ErrorAt(a^.line, a^.col);
@@ -5243,7 +5275,11 @@ begin
       end
       { 6.4.7's domain is the tuples *allowed* by the formal-discriminant-part,
         so a value outside the discriminant's own type is not in the domain and
-        never reaches a production. }
+        never reaches a production. A value not known until entry is checked
+        there instead, by the store into the descriptor -- the same check, made
+        where the value finally is. }
+      else if dynamic then
+        { checked on entry }
       else if (value < OrdinalLo(p^.sym^.stype))
            or (value > OrdinalHi(p^.sym^.stype)) then begin
         ErrorAt(a^.line, a^.col);
@@ -5262,6 +5298,18 @@ begin
 
     if not ok then
       t := intType
+    { Every position but a variable declaration has already been refused, so
+      the tuple is this variable's own and so is the type it produces. }
+    else if dynamic then begin
+      v := dynamicVarFor;
+      dynamicVarFor := nil;   { the body is not a variable declaration }
+      t := GenericFromSchema(schema, v, d, true);
+      dynamicVarFor := v;
+      if IsGeneric(t) then begin
+        v^.descSchema := schema;
+        v^.discExprs := d^.scArgs
+      end
+    end
     else begin
       pr := producedHead;
       while (pr <> nil) and (t = nil) do begin
@@ -5442,7 +5490,7 @@ end;
   tuple -- the tuple arrives with the actual, in the descriptor that travels
   beside its address. A schema with no discriminants is refused, so an empty
   tuple cannot mean anything else. }
-function IsGeneric(t: typePtr): boolean;
+function IsGeneric;
 begin
   IsGeneric := (t <> nil) and (t^.schema <> nil) and (t^.tuple = nil)
 end;
@@ -5455,7 +5503,16 @@ end;
   The result belongs to this one parameter and is deliberately not interned:
   two parameters of one schema read two descriptors, so they cannot share a
   type however alike they look. }
-function SchematicFormal(schema, param: symPtr; d: nodePtr): typePtr;
+{ The body resolved once with each discriminant bound to an skDisc symbol that
+  reads `param`'s descriptor rather than to a value -- so `1..n` comes out as
+  "the value of n", and one resolution serves every tuple.
+
+  The result belongs to that one symbol and is deliberately not interned: two
+  of them read two descriptors, so they cannot share a type however alike they
+  look. `forVariable` picks the noun a diagnostic calls them by: a schematic
+  formal parameter and a variable with non-constant discriminants need exactly
+  the same thing of this. }
+function GenericFromSchema;
 var t, comp: typePtr; p, q, push: symListPtr; disc: symPtr;
     mark: entryPtr; before, k: integer; repeated: boolean;
 begin
@@ -5517,8 +5574,9 @@ begin
     if errorCount <> before then begin
       ErrorAt(d^.line, d^.col);
       write('no type is produced from schema ''');
-      WritePool(d^.nmAt, d^.nmLen);
-      writeln(''' for this parameter');
+      WritePool(schema^.at, schema^.len);
+      if forVariable then writeln(''' for this variable''s type')
+      else writeln(''' for this parameter form');
       t := intType
     end
     else begin
@@ -5533,10 +5591,11 @@ begin
       if not StaticThroughout(comp) then begin
         ErrorAt(d^.line, d^.col);
         write('schema ''');
-        WritePool(d^.nmAt, d^.nmLen);
-        writeln(''' cannot be a parameter form: its discriminants have to ',
-                'bound an array, because that is the only size a descriptor ',
-                'can describe');
+        WritePool(schema^.at, schema^.len);
+        if forVariable then write(''' cannot be a variable''s type: ')
+        else write(''' cannot be a parameter form: ');
+        writeln('its discriminants have to bound an array, because that is ',
+                'the only size a descriptor can describe');
         t := intType
       end
       else begin
@@ -5548,20 +5607,34 @@ begin
         t^.schema := schema;
         { no tuple to name it by; the actual brings that }
         t^.aliasAt := schema^.at;
-        t^.aliasLen := schema^.len;
-        param^.paramSchema := schema
+        t^.aliasLen := schema^.len
       end
     end
   end;
+  GenericFromSchema := t
+end;
+
+function SchematicFormal(schema, param: symPtr; d: nodePtr): typePtr;
+var t: typePtr;
+begin
+  t := GenericFromSchema(schema, param, d, false);
+  if IsGeneric(t) then param^.descSchema := schema;
   SchematicFormal := t
 end;
 
 function ResolveType;
-var t: typePtr; s: symPtr; n: nodePtr;
+var t: typePtr; s, savedDynamic: symPtr; n: nodePtr;
 begin
   if d^.ntype <> nil then
     ResolveType := d^.ntype
   else begin
+    { 6.2.3.2 allows a discriminant that is not a constant in a variable's own
+      type-denoter, and there only. A denoter of any other kind is on the way
+      to somewhere else -- a component, a field, a domain -- so the offer is
+      withdrawn before it recurses, and `array [1..3] of vector(n)` is refused
+      exactly as it was. }
+    savedDynamic := dynamicVarFor;
+    if d^.kind <> nkSchema then dynamicVarFor := nil;
     t := nil;
     case d^.kind of
       nkNamed: begin
@@ -5625,6 +5698,7 @@ begin
       nkTypeDecl, nkProcDecl, nkBlock:
         t := intType
     end;
+    dynamicVarFor := savedDynamic;
     d^.ntype := t;
     ResolveType := t
   end
@@ -5835,22 +5909,22 @@ begin
         -- whatever tuple it was produced with. It must be a variable either
         way, because a value parameter of a size not known until now is copied
         out of one rather than evaluated into one. }
-      else if p^.sym^.paramSchema <> nil then begin
+      else if p^.sym^.descSchema <> nil then begin
         if not IsDesignator(a) then begin
           ErrorAt(a^.line, a^.col);
           write('argument ', i:1, ' of ''');
           WritePool(callee^.at, callee^.len);
           write(''' needs a variable produced from schema ''');
-          WritePool(p^.sym^.paramSchema^.at, p^.sym^.paramSchema^.len);
+          WritePool(p^.sym^.descSchema^.at, p^.sym^.descSchema^.len);
           writeln('''')
         end
-        else if (a^.ntype = nil) or (a^.ntype^.schema <> p^.sym^.paramSchema)
+        else if (a^.ntype = nil) or (a^.ntype^.schema <> p^.sym^.descSchema)
         then begin
           ErrorAt(a^.line, a^.col);
           write('argument ', i:1, ' of ''');
           WritePool(callee^.at, callee^.len);
           write(''' must be produced from schema ''');
-          WritePool(p^.sym^.paramSchema^.at, p^.sym^.paramSchema^.len);
+          WritePool(p^.sym^.descSchema^.at, p^.sym^.descSchema^.len);
           write(''', but the argument is ');
           WriteTypeName(a^.ntype);
           writeln
@@ -5911,12 +5985,12 @@ begin
     a := args;
     p := callee^.params;
     while a <> nil do begin
-      if p^.sym^.paramSchema <> nil then
+      if p^.sym^.descSchema <> nil then
         if (a^.ntype <> nil) and not IsGeneric(a^.ntype) then begin
           b := args;
           q := callee^.params;
           while b <> a do begin
-            if (q^.sym^.paramSchema = p^.sym^.paramSchema) and
+            if (q^.sym^.descSchema = p^.sym^.descSchema) and
                (q^.sym^.paramSection = p^.sym^.paramSection) and
                (b^.ntype <> nil) then
               if not IsGeneric(b^.ntype) and (b^.ntype <> a^.ntype) then begin
@@ -6555,6 +6629,19 @@ begin
             write('undeclared identifier ''');
             WritePool(e^.vrAt, e^.vrLen);
             writeln('''');
+            e^.ntype := intType
+          end
+          { 6.2.3.2 evaluates a variable's actual-discriminant-part when the
+            block is entered, which is before that variable has a size or a
+            value -- so it cannot be one of the discriminants that decide
+            them. Its name is in scope by then, which is exactly why this has
+            to be said. }
+          else if (dynamicVarFor <> nil) and (e^.vrSym = dynamicVarFor) then
+          begin
+            ErrorAt(e^.line, e^.col);
+            write('''');
+            WritePool(e^.vrAt, e^.vrLen);
+            writeln(''' cannot be one of its own discriminants');
             e^.ntype := intType
           end
           else if IsInvocable(e^.vrSym) and
@@ -7751,8 +7838,8 @@ begin
 end;
 
 procedure CheckBlock;
-var d, g, n: nodePtr; s: symPtr; t: typePtr; value: symbol;
-    outerPath: stmtPathPtr;
+var d, g, n: nodePtr; s, schema, named, first: symPtr; t: typePtr;
+    value: symbol; outerPath: stmtPathPtr;
 begin
   CheckLabelPart(b, owner);
   d := b^.blConsts;
@@ -7806,13 +7893,48 @@ begin
 
   g := b^.blVars;
   while g <> nil do begin
-    { One denoter for the whole group, so `a, b: array [1..3] of integer` makes
-      a and b the same type and lets `a := b` through. }
-    t := ResolveType(g^.grType);
-    n := g^.grNames;
-    while n <> nil do begin
-      s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
-      n := n^.next
+    { 6.2.3.2: a discriminated schema is the one denoter whose discriminants
+      may be variables, and only here. The first name is resolved with itself
+      offered as the variable they would belong to; if they turned out to be
+      constants the type is an ordinary one and the group shares it, exactly
+      as before. }
+    schema := nil;
+    if g^.grType^.kind = nkSchema then begin
+      named := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
+      if named <> nil then
+        if named^.kind = skSchema then schema := named
+    end;
+    if (schema <> nil) and (g^.grNames <> nil) then begin
+      n := g^.grNames;
+      first := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner, n^.line,
+                           n^.col);
+      dynamicVarFor := first;
+      first^.stype := ResolveType(g^.grType);
+      dynamicVarFor := nil;
+      n := n^.next;
+      while n <> nil do begin
+        s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, first^.stype, owner,
+                         n^.line, n^.col);
+        { Each name has its own descriptor, so each needs its own type -- but
+          one actual-discriminant-part, evaluated once per variable on entry
+          from the one tree the group shares. }
+        if IsGeneric(first^.stype) then begin
+          s^.stype := GenericFromSchema(schema, s, g^.grType, true);
+          s^.descSchema := first^.descSchema;
+          s^.discExprs := first^.discExprs
+        end;
+        n := n^.next
+      end
+    end
+    else begin
+      { One denoter for the whole group, so `a, b: array [1..3] of integer`
+        makes a and b the same type and lets `a := b` through. }
+      t := ResolveType(g^.grType);
+      n := g^.grNames;
+      while n <> nil do begin
+        s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
+        n := n^.next
+      end
     end;
     g := g^.next
   end;
@@ -9685,7 +9807,7 @@ procedure PutDescType(param: symPtr);
 var p: symListPtr;
 begin
   write(ircode, '{ ptr');
-  p := param^.paramSchema^.discs;
+  p := param^.descSchema^.discs;
   while p <> nil do begin
     write(ircode, ', ');
     PutLlType(p^.sym^.stype);
@@ -9703,7 +9825,7 @@ begin
   write(ircode, 'ptr');
   if named then write(ircode, ' %a', k:1);
   k := k + 1;
-  p := s^.paramSchema^.discs;
+  p := s^.descSchema^.discs;
   while p <> nil do begin
     write(ircode, ', ');
     PutLlType(p^.sym^.stype);
@@ -9751,7 +9873,7 @@ begin
       and for a value parameter the prologue's copy of it. A `var` parameter --
       and the binding of a `with` -- likewise holds an address, so the variable
       it stands for is one load further on. }
-    if s^.paramSchema <> nil then begin
+    if s^.descSchema <> nil then begin
       Def(v);
       write(ircode, 'getelementptr inbounds ');
       PutDescType(s);
@@ -10450,7 +10572,7 @@ begin
   k := 0;
   while p <> nil do begin
     write(ircode, ', ');
-    if p^.sym^.paramSchema <> nil then
+    if p^.sym^.descSchema <> nil then
       PutDescParamTypes(p^.sym, false, k)
     else if (p^.sym^.kind = skVarParam) or (p^.sym^.kind = skProcParam) or
        IsMemory(p^.sym^.stype) then
@@ -10511,7 +10633,7 @@ begin
       where the actual is an ordinary variable, and the caller's own descriptor
       where it is itself a schematic formal, which is how a schematic array is
       handed on through any number of blocks. }
-    else if p^.sym^.paramSchema <> nil then begin
+    else if p^.sym^.descSchema <> nil then begin
       EmitAddress(arg, a);
       AppendOpnd(head, tail, a, true, nil);
       { A generic type belongs to one parameter, so an actual possessing one
@@ -10521,7 +10643,7 @@ begin
         ds := arg^.vrSym^.discSyms
       else
         ds := nil;
-      dp := p^.sym^.paramSchema^.discs;
+      dp := p^.sym^.descSchema^.discs;
       tv := arg^.ntype^.tuple;
       while dp <> nil do begin
         if ds <> nil then begin
@@ -12096,7 +12218,7 @@ begin
     parameter's slot holds the address of the caller's variable, not a copy of
     its value. Everything else -- including a structured value parameter, which
     the prologue copies in -- holds the value itself. }
-  if s^.paramSchema <> nil then PutDescType(s)
+  if s^.descSchema <> nil then PutDescType(s)
   else if s^.kind = skVarParam then write(ircode, 'ptr')
   else PutLlType(s^.stype)
 end;
@@ -12111,7 +12233,7 @@ begin
   k := 0;
   while p <> nil do begin
     write(ircode, ', ');
-    if p^.sym^.paramSchema <> nil then
+    if p^.sym^.descSchema <> nil then
       PutDescParamTypes(p^.sym, named, k)
     else begin
       if p^.sym^.kind = skProcParam then begin
@@ -12270,6 +12392,98 @@ begin
   end
 end;
 
+{ 6.4.7 NOTE 2: a tuple that leaves an index range empty selects no type from
+  the schema at all. Where the tuple is a constant Sema says so; where it is
+  not, this does. }
+procedure CheckSchemaDomain(t: typePtr; schema: symPtr);
+var lo, hi, bad: str; msg: integer;
+begin
+  if t <> nil then
+    if (t^.kind = tyArray) and DynamicExtent(t) then begin
+      if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
+        BoundValue(t, false, lo);
+        BoundValue(t, true, hi);
+        Def(bad);
+        write(ircode, 'icmp slt i32 ');
+        PutOp(hi);
+        write(ircode, ', ');
+        PutOp(lo);
+        writeln(ircode);
+        MsgStart;
+        MsgText('no type is produced from schema ''       ');
+        WritePool(schema^.at, schema^.len);
+        MsgText(''' with these discriminants              ');
+        msg := MsgEnd;
+        EmitTrapIf(bad, msg)
+      end;
+      CheckSchemaDomain(t^.elem, schema)
+    end
+end;
+
+{ 6.2.3.2: the actual-discriminant-part of a variable is evaluated when the
+  block is entered. The tuple goes into the descriptor first, because
+  everything after it -- the domain check, the size, the storage -- is asked of
+  the descriptor and not of the expressions that filled it. }
+procedure InitDynamicVars(p: symPtr);
+var l, d: symListPtr; a: nodePtr; slot, half, value, size, storage: str;
+    comp: typePtr; align: integer;
+begin
+  l := p^.frameVars;
+  while l <> nil do begin
+    if (l^.sym^.descSchema <> nil) and (l^.sym^.discExprs <> nil) then begin
+      Def(slot);
+      writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
+              ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
+      a := l^.sym^.discExprs;
+      d := l^.sym^.discSyms;
+      while (a <> nil) and (d <> nil) do begin
+        EmitExpr(a, value);
+        ConvertFor(value, a^.ntype, d^.sym^.stype);
+        { A discriminant outside its own type is outside 6.4.7's domain. The
+          store is where a value enters a variable, so the check that guards
+          every other such store is the one that says so here too. }
+        CheckedForStore(value, d^.sym^.stype);
+        Def(half);
+        write(ircode, 'getelementptr inbounds ');
+        PutDescType(l^.sym);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 ', 1 + d^.sym^.discIndex:1);
+        write(ircode, '  store ');
+        PutLlType(d^.sym^.stype);
+        write(ircode, ' ');
+        PutOp(value);
+        write(ircode, ', ptr ');
+        PutOp(half);
+        writeln(ircode);
+        a := a^.next;
+        d := d^.next
+      end;
+      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema);
+      comp := l^.sym^.stype;
+      while comp^.kind = tyArray do comp := comp^.elem;
+      align := LlAlign(comp);
+      DynSize(l^.sym^.stype, size);
+      Def(storage);
+      write(ircode, 'alloca i8, i32 ');
+      PutOp(size);
+      writeln(ircode, ', align ', align:1);
+      Def(half);
+      write(ircode, 'getelementptr inbounds ');
+      PutDescType(l^.sym);
+      write(ircode, ', ptr ');
+      PutOp(slot);
+      writeln(ircode, ', i32 0, i32 0');
+      write(ircode, '  store ptr ');
+      PutOp(storage);
+      write(ircode, ', ptr ');
+      PutOp(half);
+      writeln(ircode)
+    end;
+    l := l^.next
+  end
+end;
+
 { The prologue shared by main and every procedure: alloca the frame, store the
   static link, copy the incoming arguments into their slots. }
 procedure EnterFrame(p: symPtr);
@@ -12314,7 +12528,7 @@ begin
       Def(slot);
       writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
               ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
-      if l^.sym^.paramSchema <> nil then begin
+      if l^.sym^.descSchema <> nil then begin
         { The tuple is stored first, because everything about the size of what
           the address points at is asked of it -- including, for a value
           parameter, how much to copy. }
@@ -12433,6 +12647,10 @@ begin
     end
   end;
 
+  { After the parameters, because a discriminant may be one of them, and
+    before anything that could jump: the storage a dynamically sized variable
+    stands for has to exist for the whole activation. }
+  InitDynamicVars(p);
   InitFiles(p);
   JumpDispatch(p)
 end;
@@ -12638,6 +12856,7 @@ begin
   producedHead := nil;
   producingTop := nil;
   genericFor := nil;
+  dynamicVarFor := nil;
   stdInput := nil;
   stdOutput := nil;
   for stringIndex := 1 to strMax do
