@@ -39,7 +39,7 @@ is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`
 compiler's own stage-1 source does. See
 [ADR-0033](doc/adr/0033-extended-pascal-is-a-second-language-behind-std.md).
 
-## What the compiler accepts today (milestone 6)
+## What the compiler accepts today, with `--std=iso7185`
 
 ```
 program-header, const part, type part, var part, compound statement
@@ -73,6 +73,10 @@ literals   integers, reals, 'strings', '' escapes, nil,
            { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
 ```
+
+**This is the whole of ISO 7185.** Every feature of the standard is
+implemented; what is left of the language is the next standard, not more of
+this one.
 
 Enumerations and subranges are ordinal types like `char`: they index arrays,
 drive `for` loops, answer `ord`/`succ`/`pred`, and select `case` arms. `succ`
@@ -201,19 +205,39 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-**This is the whole of ISO 7185.** The last of it was the non-local `goto`,
-which leaves a block rather than a statement: the target's activation record
-carries somewhere to jump back to, and the jump closes the files of every block
-it abandons — the work those blocks' own exits would have done
+The last of ISO 7185 to arrive was the non-local `goto`, which leaves a block
+rather than a statement: the target's activation record carries somewhere to
+jump back to, and the jump closes the files of every block it abandons — the
+work those blocks' own exits would have done
 ([ADR-0032](doc/adr/0032-a-non-local-goto-is-a-jump-record-in-the-target-frame.md)).
-The next standard, not more of this one, is where the language goes from here:
-ISO/IEC 10206:1991 Extended Pascal.
 
 One implementation limit: nesting deeper
 than 1000 levels — parentheses, statements, type denoters, or the depth of the
 *tree* an operator chain builds — is a compile-time error rather than a stack
 overflow, in the parser or in any walk after it. See
 [ADR-0020](doc/adr/0020-the-parser-bounds-tree-depth.md).
+
+## What `--std=extended` adds
+
+ISO/IEC 10206:1991, one feature at a time. Everything above is accepted here
+too, except that Extended Pascal reserves the word-symbols its own features
+need — so an ISO 7185 program that uses one of them as an identifier compiles
+under `--std=iso7185` and not under `--std=extended`. That is the standard's
+rule, not a limitation of this compiler.
+
+```
+statements case ... otherwise <statements> end — the default arm
+words      otherwise is reserved
+```
+
+Not accepted yet: schemata (parameterised types), the `string` type,
+modules, `otherwise` in a variant part, case-constant ranges, non-decimal
+literals, `pow` and `**`, `and_then`/`or_else`, `protected` parameters,
+initial-state specifiers (`value`), binding (`bind`/`unbind`), direct-access
+files, and complex numbers. A word-symbol is reserved only when the feature
+needing it lands, so until the list above is complete `--std=extended` accepts
+some programs a conforming processor would reject. `doc/roadmap.md` has the
+order and the reasoning.
 
 ## How it fits together
 
@@ -228,6 +252,7 @@ overflow, in the parser or in any walk after it. See
 | `src/main.cpp` | driver: optimisation pipeline, object emission, linking |
 | `runtime/pasrt.c` | formatted output and runtime checks |
 | `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
+| `tests/extended/` | the same, for cases written in Extended Pascal — the directory is what selects `--std` |
 | `verify/` | SMT proofs that the lowering means what ISO 7185 says |
 | `selfhost/compiler.pas` | the same compiler, written in Afterschool Pascal |
 
