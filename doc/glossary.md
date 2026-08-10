@@ -30,6 +30,22 @@ its bounds matter, and code needing the distinction asks `isSubrange()`.
 **Host type.** The ordinal type a subrange is carved from. `1..9`'s host is
 `integer`; `green..blue`'s host is the enumeration.
 
+**Set type.** `set of T` for an ordinal T, whose values are the subsets of T's
+(ISO 7185 §6.4.3.4). Every set here is one 256-bit word — a bit per possible
+member — so T's values must lie in 0..255 and `set of integer` is refused. That
+makes a set a *value*: it is neither structured nor a memory type, and is
+assigned, compared and passed exactly as an integer is (ADR-0028).
+
+**Set base type.** The T of a `set of T`. Set compatibility is decided on it
+*structurally*, which is ISO 7185 §6.4.6's own departure from the name
+equivalence §6.4.5 gives every other structured type — two separately written
+`set of char` denoters are compatible, where two `array [1..3] of integer`
+denoters are not.
+
+**Empty set** (`[]`). A set with no base type, and a value of every set type —
+the set-valued counterpart of `nil`. Unlike `nil` it is not an exception to
+name equivalence, because §6.4.6 was already structural for sets.
+
 **Memory type** (`isMemory()`). Anything whose value never occupies a register
 and is reached through its address: arrays, records, and files. Distinct from
 `isStructured()`, which is arrays and records only — that predicate is what

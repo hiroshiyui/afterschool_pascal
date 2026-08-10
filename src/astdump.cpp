@@ -22,6 +22,7 @@ const char *binOpName(BinOp op) {
   case BinOp::Le: return "le";
   case BinOp::Gt: return "gt";
   case BinOp::Ge: return "ge";
+  case BinOp::In: return "in";
   }
   return "?";
 }
@@ -195,6 +196,24 @@ struct Dumper {
     case NK::NilLit:
       headExpr("nil", e);
       break;
+    case NK::SetLit: {
+      SetExpr *n = as<SetExpr>(e);
+      headExpr("set", e);
+      ++level;
+      // A member with a second child is a range and a member with one is a
+      // single value, so the two tags are what keeps `[a, b]` and `[a..b]`
+      // from dumping identically.
+      for (SetMember &m : n->members) {
+        mark(m.hi ? "range" : "member");
+        ++level;
+        expr(m.lo.get());
+        if (m.hi)
+          expr(m.hi.get());
+        --level;
+      }
+      --level;
+      break;
+    }
     case NK::VarRef: {
       VarRef *n = as<VarRef>(e);
       // A name reached through an open `with` resolves to the hidden binding
@@ -577,6 +596,12 @@ struct Dumper {
       break;
     case TEK::File:
       headType(std::string("file") + pk, t);
+      ++level;
+      typeExpr(t->elem.get());
+      --level;
+      break;
+    case TEK::Set:
+      headType(std::string("set") + pk, t);
       ++level;
       typeExpr(t->elem.get());
       --level;

@@ -36,6 +36,11 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   // alignment a struct full of pointers needs.
   case TypeKind::File:
     return ArrayType::get(i64(), PAS_FILE_SIZE / 8);
+  // Every set is the same 256-bit integer whatever its base type: one bit per
+  // possible member, which is what makes the operators single instructions and
+  // keeps a set a *value* rather than something reached through its address.
+  case TypeKind::Set:
+    return i256();
   case TypeKind::Array:
   case TypeKind::Record:
     break;
@@ -272,6 +277,61 @@ llvm::Value *CodeGen::checkedForSubrange(llvm::Value *v, ap::Type *target) {
   emitTrapIf(b_.CreateOr(below, above, "range.bad"),
              "value out of range (" + target->name() + ")");
   return v;
+}
+
+/// The 256-bit constant whose set bits are exactly the values of `base`: the
+/// bits from its first ordinal to its last. Built by shifting rather than
+/// written as a literal, because a 256-bit literal is a number neither this
+/// compiler's own source language nor its reader can spell — and LLVM folds
+/// the shifts before they ever reach the target.
+llvm::Value *CodeGen::setUniverse(ap::Type *base) {
+  llvm::Value *ones = ConstantInt::getSigned(i256(), -1);
+  uint64_t lo = static_cast<uint64_t>(base->ordinalLo());
+  uint64_t hi = static_cast<uint64_t>(base->ordinalHi());
+  // Clear the bits above hi, then the bits below lo. Sema has already refused
+  // a base type outside 0..255, so neither shift can reach 256.
+  llvm::Value *v = b_.CreateLShr(ones, ConstantInt::get(i256(), kSetLimit - hi));
+  return b_.CreateAnd(v, b_.CreateShl(ones, ConstantInt::get(i256(), lo)),
+                      "universe");
+}
+
+/// ISO 7185 §6.4.6 makes it an error to store a value that is not of the
+/// variable's type, and a set carrying a member outside its base type is
+/// exactly that. It is one `and` against the base type's universe: the check a
+/// set constructor cannot make for itself, because a constructor does not know
+/// what it is being assigned to.
+llvm::Value *CodeGen::checkedForSetBase(llvm::Value *v, ap::Type *target) {
+  if (!target || !target->isSet() || !target->elem)
+    return v;
+  ap::Type *base = target->elem;
+  // A base type covering the whole 0..255 universe can hold anything a set
+  // value can carry, so `set of char` pays nothing.
+  if (base->ordinalLo() == 0 && base->ordinalHi() == kSetLimit)
+    return v;
+  llvm::Value *stray = b_.CreateAnd(v, b_.CreateNot(setUniverse(base)));
+  emitTrapIf(b_.CreateICmpNE(stray, ConstantInt::get(i256(), 0), "set.stray"),
+             "set member out of range (" + target->name() + ")");
+  return v;
+}
+
+/// A member's position in the bit vector. Every set shares one 256-bit
+/// representation, so the position must lie in 0..255 whatever the base type
+/// is — a shift by more than that is poison in LLVM, and would be a silently
+/// wrong answer here.
+llvm::Value *CodeGen::setIndex(Expr *e, const char *what) {
+  llvm::Value *v = emitExpr(e);
+  bool sign = e->type->isSignedOrdinal();
+  llvm::Type *ty = v->getType();
+  if (sign) {
+    llvm::Value *below =
+        b_.CreateICmpSLT(v, ConstantInt::getSigned(ty, 0), "set.below");
+    llvm::Value *above = b_.CreateICmpSGT(
+        v, ConstantInt::getSigned(ty, kSetLimit), "set.above");
+    emitTrapIf(b_.CreateOr(below, above), what);
+  } else if (ty->getIntegerBitWidth() > 8) {
+    emitTrapIf(b_.CreateICmpUGT(v, ConstantInt::get(ty, kSetLimit)), what);
+  }
+  return b_.CreateZExt(v, i256(), "bit");
 }
 
 llvm::Value *CodeGen::guardNonZero(llvm::Value *divisor, const char *message) {
@@ -604,7 +664,7 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
     } else {
       llvm::Value *v = emitExpr(args[i].get());
       v = convertFor(v, args[i]->type, p->type);
-      argv.push_back(checkedForSubrange(v, p->type));
+      argv.push_back(checkedForStore(v, p->type));
     }
   }
   return b_.CreateCall(functions_[callee], argv,
@@ -681,7 +741,7 @@ void CodeGen::emitAssign(Assign *s) {
   }
   llvm::Value *v = emitExpr(s->value.get());
   v = convertFor(v, s->value->type, s->target->type);
-  b_.CreateStore(checkedForSubrange(v, s->target->type), dst);
+  b_.CreateStore(checkedForStore(v, s->target->type), dst);
 }
 
 /// `new(p)` gives p the address of fresh storage for one variable of its
@@ -1002,11 +1062,63 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
   case NK::Index:
   case NK::Field:
     return emitLoad(e);
+  case NK::SetLit: return emitSet(static_cast<SetExpr *>(e));
   case NK::Binary: return emitBinary(static_cast<Binary *>(e));
   case NK::Unary:  return emitUnary(static_cast<Unary *>(e));
   case NK::Call:   return emitCall(static_cast<Call *>(e));
   default:
     return ConstantInt::get(i32(), 0);
+  }
+}
+
+/// A set constructor, built by or-ing one member at a time into an empty set.
+/// A single value contributes `1 << v`; a range `lo..hi` contributes the bits
+/// from lo to hi, which is the same pair of shifts `setUniverse` uses — with
+/// the difference that the bounds are expressions, so `hi < lo` is a run-time
+/// possibility and must yield the empty set rather than a mask of everything
+/// (ISO 7185 §6.7.1).
+llvm::Value *CodeGen::emitSet(SetExpr *e) {
+  llvm::Value *result = ConstantInt::get(i256(), 0);
+  llvm::Value *one = ConstantInt::get(i256(), 1);
+  llvm::Value *ones = ConstantInt::getSigned(i256(), -1);
+  llvm::Value *limit = ConstantInt::get(i256(), kSetLimit);
+  for (SetMember &m : e->members) {
+    llvm::Value *lo = setIndex(m.lo.get(), "set member out of range");
+    llvm::Value *bits;
+    if (!m.hi) {
+      bits = b_.CreateShl(one, lo, "bit");
+    } else {
+      llvm::Value *hi = setIndex(m.hi.get(), "set member out of range");
+      llvm::Value *below = b_.CreateLShr(ones, b_.CreateSub(limit, hi));
+      llvm::Value *above = b_.CreateShl(ones, lo);
+      bits = b_.CreateAnd(below, above, "range");
+      // An empty range selects nothing. Without this the two masks would
+      // still intersect in the bits between hi and lo.
+      bits = b_.CreateSelect(b_.CreateICmpUGT(lo, hi),
+                             ConstantInt::get(i256(), 0), bits, "range.or.empty");
+    }
+    result = b_.CreateOr(result, bits, "set");
+  }
+  return result;
+}
+
+/// The set operators, all of them one instruction on the bit vector:
+/// union is `or`, intersection is `and`, difference is `and not`, and
+/// inclusion is "nothing left over" (ISO 7185 §6.7.2.3, §6.7.2.5).
+llvm::Value *CodeGen::emitSetBinary(Binary *e, llvm::Value *l,
+                                    llvm::Value *r) {
+  switch (e->op) {
+  case BinOp::Add: return b_.CreateOr(l, r, "union");
+  case BinOp::Mul: return b_.CreateAnd(l, r, "inter");
+  case BinOp::Sub: return b_.CreateAnd(l, b_.CreateNot(r), "diff");
+  case BinOp::Eq:  return b_.CreateICmpEQ(l, r, "seteq");
+  case BinOp::Ne:  return b_.CreateICmpNE(l, r, "setne");
+  case BinOp::Le:
+    return b_.CreateICmpEQ(b_.CreateAnd(l, b_.CreateNot(r)),
+                           ConstantInt::get(i256(), 0), "subset");
+  default: // Ge — Sema has refused < and > on sets
+    return b_.CreateICmpEQ(b_.CreateAnd(r, b_.CreateNot(l)),
+                           ConstantInt::get(i256(), 0), "superset");
   }
 }
 
@@ -1037,6 +1149,30 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
     return phi;
   }
 
+  // `x in s` is the one operator whose operands are of different kinds, so it
+  // is taken before the two are evaluated alike. A member position outside
+  // 0..255 cannot be in any set, and answers false rather than trapping: the
+  // value is not of the base type, which is what `in` is there to report.
+  if (e->op == BinOp::In) {
+    llvm::Value *raw = emitExpr(e->lhs.get());
+    // Widened with its own signedness, a value outside 0..255 lands outside
+    // that range in the 256-bit word too — so one unsigned compare catches a
+    // negative value and an oversized one alike.
+    llvm::Value *idx = e->lhs->type->isSignedOrdinal()
+                           ? b_.CreateSExt(raw, i256())
+                           : b_.CreateZExt(raw, i256());
+    llvm::Value *ok = b_.CreateICmpULT(
+        idx, ConstantInt::get(i256(), kSetLimit + 1), "in.range");
+    // The shift is by a value LLVM has to see is under 256, or it is poison.
+    llvm::Value *safe =
+        b_.CreateSelect(ok, idx, ConstantInt::get(i256(), 0), "in.bit");
+    llvm::Value *set = emitExpr(e->rhs.get());
+    llvm::Value *got = b_.CreateAnd(b_.CreateLShr(set, safe),
+                                    ConstantInt::get(i256(), 1));
+    return b_.CreateAnd(
+        ok, b_.CreateICmpNE(got, ConstantInt::get(i256(), 0)), "in");
+  }
+
   // Strings compare through the runtime rather than in registers, and must be
   // caught before the operands are evaluated: an array has no register form.
   if (e->lhs->type->isCharArray() && e->rhs->type->isCharArray())
@@ -1046,6 +1182,11 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
   llvm::Value *r = emitExpr(e->rhs.get());
   ap::Type *lt = e->lhs->type;
   ap::Type *rt_ = e->rhs->type;
+
+  // Both operands are the same 256-bit word whatever their base types, so the
+  // set operators need nothing from the types beyond knowing they are sets.
+  if (lt->isSet() || rt_->isSet())
+    return emitSetBinary(e, l, r);
 
   switch (e->op) {
   case BinOp::Add:

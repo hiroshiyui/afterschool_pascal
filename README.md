@@ -40,6 +40,7 @@ types      integer  real  boolean  char
            lo..hi — subranges of any ordinal type, range-checked on store
            array [ordinal-type] of T, multi-dimensional, any ordinal index
            record, nested to any depth, packed, with variant parts
+           set of T — sets over any ordinal type with values in 0..255
            packed array [1..n] of char — the string types
            ^T — pointers, including to a type defined later
            text — text files, with the buffer variable f^
@@ -49,11 +50,14 @@ statements := , if/then/else, while, repeat/until, for/to/downto,
            begin/end, case, with, procedure call,
            write, writeln, read, readln
 operators  + - * / div mod, and or not (short-circuiting),
-           = <> < <= > >=  (including on strings)
+           = <> < <= > >=  (including on strings),
+           + - * on sets — union, difference, intersection,
+           <= >= on sets — inclusion, and `in` — membership
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
            trunc round eof eoln
 procedures new, dispose, reset, rewrite, get, put
 literals   integers, reals, 'strings', '' escapes, nil,
+           [a, b..c] set constructors, and [] the empty set,
            { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
 ```
@@ -64,6 +68,14 @@ runs out at the end of its own type — at `blue`, or at 9 for a `1..9` — not 
 `maxint`. A record may have a variant part, tagged or not, which is what makes
 a tag-plus-variant AST node expressible. See
 [ADR-0018](doc/adr/0018-ordinal-types-and-variant-records.md).
+
+A set is one 256-bit word — a bit per possible member — so its base type's
+values must lie in 0..255, and `set of integer` is refused rather than
+truncated. That makes a set a *value*: it is assigned, compared and passed
+exactly as an integer is, and the operators are one instruction each. Set
+compatibility is decided on the base type structurally, which is ISO 7185's own
+departure from the name equivalence it gives every other structured type. See
+[ADR-0028](doc/adr/0028-a-set-is-one-256-bit-word.md).
 
 Arrays and records assign whole (`b := a` copies every component), pass as
 value parameters by copy and as `var` parameters by reference, and nest freely
@@ -151,8 +163,8 @@ becoming `-2147483648`. See
 [ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
 [ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
 
-Not accepted yet: sets, `goto`, procedural parameters, files of anything but
-`char`, and a variant part nested inside another variant. One implementation
+Not accepted yet: `goto`, procedural and functional parameters, and files of
+anything but `char`. One implementation
 limit: nesting deeper
 than 1000 levels — parentheses, statements, type denoters, or the depth of the
 *tree* an operator chain builds — is a compile-time error rather than a stack
@@ -262,7 +274,7 @@ stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 b
 ```
 
 **This now holds.** The compiler compiles itself, and stage 2 and stage 3 are
-identical — 56 121 lines of IR, byte for byte, checked under `ctest` by
+identical — 61 577 lines of IR, byte for byte, checked under `ctest` by
 `selfhost/irtest.sh`.
 
 Reaching stage 1 means the accepted language has to cover what a compiler is

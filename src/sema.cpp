@@ -23,6 +23,7 @@ const char *opName(BinOp op) {
   case BinOp::Le: return "<=";
   case BinOp::Gt: return ">";
   case BinOp::Ge: return ">=";
+  case BinOp::In: return "in";
   }
   return "?";
 }
@@ -202,6 +203,34 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
 /// about an external format this compiler has not made and does not need to
 /// reach stage 1. Accepting the syntax and rejecting the component gives a
 /// better diagnostic than treating `file` as an unknown type name.
+/// ISO 7185 §6.4.3.4: a set type is `set of T` for an ordinal T, and the set of
+/// values is the powerset of T's. The standard leaves the size to the
+/// implementation, and this one fixes it at 256 bits — so T's values must lie
+/// in 0..255. That admits `char` exactly, and every enumeration and small
+/// subrange; it refuses `set of integer` rather than quietly keeping a prefix
+/// of it, because a set that silently forgets members is worse than one that
+/// does not compile.
+Type *Sema::resolveSet(TypeExpr &denoter) {
+  Type *t = newType(TypeKind::Set);
+  Type *base = denoter.elem ? resolveType(*denoter.elem) : ty::Int();
+  if (!base->isOrdinal()) {
+    diags_.error(denoter.line, denoter.col,
+                 "the base type of a set must be an ordinal type, found " +
+                     base->name());
+    base = ty::Char();
+  } else if (base->ordinalLo() < 0 || base->ordinalHi() > kSetLimit) {
+    diags_.error(denoter.line, denoter.col,
+                 "a set base type must lie within 0.." +
+                     std::to_string(kSetLimit) + ", but " + base->name() +
+                     " spans " + Type::ordinalName(base, base->ordinalLo()) +
+                     ".." + Type::ordinalName(base, base->ordinalHi()));
+    base = ty::Char();
+  }
+  t->elem = base;
+  t->packed = denoter.packed;
+  return t;
+}
+
 Type *Sema::resolveFile(TypeExpr &denoter) {
   Type *t = newType(TypeKind::File);
   Type *component = denoter.elem ? resolveType(*denoter.elem) : ty::Char();
@@ -446,6 +475,9 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   case TEK::File:
     t = resolveFile(denoter);
     break;
+  case TEK::Set:
+    t = resolveSet(denoter);
+    break;
   }
 
   denoter.resolved = t;
@@ -485,6 +517,18 @@ bool Sema::assignable(Type *to, Type *from) const {
     return false;
   if (to == from)
     return true;
+  // ISO 7185 §6.4.6 makes set compatibility *structural*, not by name: two set
+  // types are compatible when their base types are. This is the standard's own
+  // departure from the name equivalence of §6.4.5, so it is not an exception
+  // invented here — and it is what lets `[]` and `['a'..'z']`, which no type
+  // definition ever named, be assigned to a variable at all.
+  if (to->isSet() || from->isSet()) {
+    if (!to->isSet() || !from->isSet())
+      return false;
+    if (to->isEmptySet() || from->isEmptySet())
+      return true;
+    return to->elem->base() == from->elem->base();
+  }
   if (to->isStructured() || from->isStructured())
     return to->isCharArray() && from->isCharArray() &&
            to->length() == from->length();
@@ -736,9 +780,13 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
       sym->type = ty::Int();
     } else {
       sym->type = resolveType(*decl.returnType);
-      // ISO 7185 §6.6.2: a function returns a simple type, which is what lets
-      // the result travel in a register and be read back with a plain load.
-      if (sym->type->isMemory()) {
+      // ISO 7185 §6.6.2: a function's result type is a *simple* type or a
+      // pointer type. Stated the standard's way round rather than as "not
+      // something that lives in memory", because a set lives in a register and
+      // would pass that test while still not being a result type the language
+      // allows.
+      if (!sym->type->isOrdinal() && !sym->type->isReal() &&
+          !sym->type->isPointer()) {
         diags_.error(decl.line, decl.col,
                      "a function cannot return " + sym->type->name() +
                          "; use a var parameter");
@@ -1042,6 +1090,11 @@ void Sema::checkExpr(Expr *e) {
     return;
   }
 
+  if (auto *s = as<SetExpr>(e)) {
+    checkSetExpr(s);
+    return;
+  }
+
   if (auto *d = as<DerefExpr>(e)) {
     checkExpr(d->base.get());
     Type *base = d->base->type;
@@ -1155,6 +1208,50 @@ void Sema::checkExpr(Expr *e) {
   }
 }
 
+/// ISO 7185 §6.7.1: the members of a set constructor are expressions of a
+/// single ordinal type, and `a..b` abbreviates every value from a to b — an
+/// empty range when b precedes a. The constructor's type is a set of that
+/// ordinal type; `[]` has no members to say what it is a set of, so it gets the
+/// one set type that is compatible with all of them.
+///
+/// The members need not be constants, so nothing is folded here: whether a
+/// value lies in the base type of whatever this is finally assigned to is a
+/// run-time question, and codegen asks it.
+void Sema::checkSetExpr(SetExpr *s) {
+  Type *base = nullptr;
+  for (SetMember &m : s->members) {
+    checkExpr(m.lo.get());
+    checkExpr(m.hi.get());
+    for (Expr *end : {m.lo.get(), m.hi.get()}) {
+      if (!end || !end->type)
+        continue;
+      if (!end->type->isOrdinal()) {
+        diags_.error(end->line, end->col,
+                     "a set member must have an ordinal type, found " +
+                         end->type->name());
+        continue;
+      }
+      if (!base) {
+        // The base is the member's own base type, so `['a'..'z']` is a set of
+        // char rather than a set of some anonymous subrange of it.
+        base = end->type->base();
+      } else if (!assignable(base, end->type) &&
+                 !assignable(end->type, base)) {
+        diags_.error(end->line, end->col,
+                     "the members of a set must all have one type: this one "
+                     "is " + end->type->name() + ", not " + base->name());
+      }
+    }
+  }
+  if (!base) {
+    s->type = ty::EmptySet();
+    return;
+  }
+  Type *t = newType(TypeKind::Set);
+  t->elem = base;
+  s->type = t;
+}
+
 void Sema::checkBinary(Binary *b) {
   checkExpr(b->lhs.get());
   checkExpr(b->rhs.get());
@@ -1171,7 +1268,45 @@ void Sema::checkBinary(Binary *b) {
                                       l->name() + " and " + r->name());
   };
 
+  // ISO 7185 §6.7.2.3 gives `+`, `-` and `*` a second meaning on sets — union,
+  // difference and intersection — so the set case is taken before the numeric
+  // one rather than after it, where "numeric operands" would already have been
+  // reported.
+  if (b->op == BinOp::Add || b->op == BinOp::Sub || b->op == BinOp::Mul) {
+    if (l->isSet() || r->isSet()) {
+      if (!assignable(l, r) && !assignable(r, l)) {
+        bad("compatible");
+        b->type = l->isSet() ? l : r;
+      } else {
+        // The result is a set of the operands' common base type, which is
+        // whichever of them has one: `s + []` is still a set of s's base.
+        b->type = l->isEmptySet() ? r : l;
+      }
+      return;
+    }
+  }
+
   switch (b->op) {
+  case BinOp::In:
+    // §6.7.2.4: the left operand is a value of the right's base type, and the
+    // result says whether it is a member. A value outside the base type is not
+    // an error — it is simply not in the set.
+    if (!r->isSet())
+      diags_.error(b->line, b->col,
+                   "the right operand of 'in' must be a set, found " +
+                       r->name());
+    else if (!l->isOrdinal())
+      diags_.error(b->line, b->col,
+                   "the left operand of 'in' must have an ordinal type, found " +
+                       l->name());
+    else if (!r->isEmptySet() && !assignable(r->elem, l) &&
+             !assignable(l, r->elem))
+      diags_.error(b->line, b->col,
+                   "this set has base type " + r->elem->name() +
+                       ", but the value tested is " + l->name());
+    b->type = ty::Bool();
+    return;
+
   case BinOp::Add:
   case BinOp::Sub:
   case BinOp::Mul:
@@ -1220,6 +1355,15 @@ void Sema::checkBinary(Binary *b) {
         diags_.error(b->line, b->col,
                      std::string("pointers can only be compared with = and "
                                  "<>, not with '") + opName(b->op) + "'");
+      else if (!assignable(l, r) && !assignable(r, l))
+        bad("compatible");
+    } else if (l->isSet() || r->isSet()) {
+      // ISO 7185 §6.7.2.5: `<=` and `>=` on sets are inclusion, not order, and
+      // there is no `<` or `>` at all — a proper subset is not a primitive.
+      if (b->op == BinOp::Lt || b->op == BinOp::Gt)
+        diags_.error(b->line, b->col,
+                     std::string("sets have no '") + opName(b->op) +
+                         "': use <= and >= for inclusion");
       else if (!assignable(l, r) && !assignable(r, l))
         bad("compatible");
     } else if (l->isFile() || r->isFile()) {

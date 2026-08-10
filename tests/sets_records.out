@@ -1,0 +1,6 @@
+direct: x TRUE 4321
+copied: x TRUE 4321
+by value: x TRUE 4321
+heap: x TRUE 4321
+grown: TRUE TRUE TRUE
+done

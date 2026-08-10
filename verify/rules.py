@@ -33,6 +33,15 @@ KNOWN_GAP = "known-gap"
 
 FULL = (32,)
 BOUNDED = (4, 6, 8, 10)
+# The set rules are checked at reduced *set* widths rather than reduced integer
+# widths: a set is 256 bits wide in the compiler and a symbolic shift that wide
+# bit-blasts into a circuit no solver will finish. The lowering is generic in
+# the width — the same two shifts whether the vector is 16 bits or 256 — so a
+# proof at these widths establishes the construction, not a sampled instance of
+# it. What it does *not* establish is anything that depends on 256 in
+# particular, and nothing in the lowering does: the only place the number
+# appears is the bound Sema checks a base type against.
+SET_WIDTHS = (8, 16, 32)
 
 
 class Rule:
@@ -360,6 +369,56 @@ def _succ_traps_exactly_at_the_end_of_its_type(w):
     return pre, claim
 
 
+def _set_range_selects_exactly_its_members(w):
+    """`[lo..hi]` contains a position exactly when the position lies between
+    the bounds — including the empty range, where it contains nothing. The
+    bounds are symbolic, so this is one theorem about every constructor range
+    rather than a sample of some, in the same way the array and subrange rules
+    quantify over their bounds."""
+    lo, hi = low.set_position("lo", w), low.set_position("hi", w)
+    v = low.set_position("v", w)
+    pre = z3.And(z3.ULT(lo, w), z3.ULT(hi, w), z3.ULT(v, w))
+    claim = low.set_contains(low.set_range(lo, hi, w), v, w) == \
+        iso.is_in_the_set_range(v, lo, hi)
+    return pre, claim
+
+
+def _set_single_selects_exactly_one_member(w):
+    """`[x]` contains x and nothing else. The one-member case is a separate
+    shift in emitSet, so it is a separate claim."""
+    x, v = low.set_position("x", w), low.set_position("v", w)
+    pre = z3.And(z3.ULT(x, w), z3.ULT(v, w))
+    claim = low.set_contains(low.set_single(x, w), v, w) == (v == x)
+    return pre, claim
+
+
+def _set_store_accepts_only_values_of_the_base_type(w):
+    """A set the store check accepts has no member outside the base type. This
+    and the rule below are the two halves of "traps exactly": the trap is an
+    existential over members, so it cannot be stated as one biconditional with
+    a free position the way the subrange check can."""
+    s = low.set_value("s", w)
+    lo, hi = low.set_position("lo", w), low.set_position("hi", w)
+    v = low.set_position("v", w)
+    pre = z3.And(z3.ULE(lo, hi), z3.ULT(lo, w), z3.ULT(hi, w), z3.ULT(v, w),
+                 z3.Not(low.traps_set_store(s, lo, hi, w)),
+                 low.set_contains(s, v, w))
+    return pre, iso.is_a_value_of_the_set_base_type(v, lo, hi)
+
+
+def _set_store_traps_on_any_member_outside_it(w):
+    """And a set with a member outside the base type is rejected — so no
+    accepted value carries a member that does not exist."""
+    s = low.set_value("s", w)
+    lo, hi = low.set_position("lo", w), low.set_position("hi", w)
+    v = low.set_position("v", w)
+    pre = z3.And(z3.ULE(lo, hi), z3.ULT(lo, w), z3.ULT(hi, w), z3.ULT(v, w),
+                 low.set_contains(s, v, w),
+                 z3.Not(iso.is_a_value_of_the_set_base_type(v, lo, hi)))
+    return pre, low.traps_set_store(s, lo, hi, w)
+
+
+
 ALL = [
     Rule("mod-satisfies-iso", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — 0 <= i mod j < j, and j divides (i - r)",
@@ -473,4 +532,20 @@ ALL = [
          "ISO 7185 §6.6.6.4 — succ over any ordinal type, not just integer",
          "codegen.cpp Builtin::Succ",
          _succ_traps_exactly_at_the_end_of_its_type),
+    Rule("set-range-selects-exactly-its-members", MUST_HOLD,
+         "ISO 7185 §6.7.1 — [lo..hi] is the values from lo to hi, and none\n          when hi precedes lo",
+         "codegen.cpp emitSet", _set_range_selects_exactly_its_members,
+         widths=SET_WIDTHS),
+    Rule("set-single-selects-exactly-one-member", MUST_HOLD,
+         "ISO 7185 §6.7.1 — [x] is the set whose one member is x",
+         "codegen.cpp emitSet", _set_single_selects_exactly_one_member,
+         widths=SET_WIDTHS),
+    Rule("set-store-accepts-only-values-of-the-base-type", MUST_HOLD,
+         "ISO 7185 §6.4.6 — a set with a member outside its base type is\n          not a value of the type",
+         "codegen.cpp checkedForSetBase",
+         _set_store_accepts_only_values_of_the_base_type, widths=SET_WIDTHS),
+    Rule("set-store-traps-on-any-member-outside-it", MUST_HOLD,
+         "ISO 7185 §6.4.6 — and every such set is refused, not merely\n          some of them",
+         "codegen.cpp checkedForSetBase",
+         _set_store_traps_on_any_member_outside_it, widths=SET_WIDTHS),
 ]

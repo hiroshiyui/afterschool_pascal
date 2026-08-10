@@ -218,6 +218,20 @@ TypeExprPtr Parser::parseTypeExpr() {
     t->elem = parseTypeExpr();
     return t;
   }
+  // set-type = 'set' 'of' base-type. The base type is an *ordinal* type, so
+  // this is the same construct as an array's index type and is parsed by the
+  // same routine (ISO 7185 §6.4.3.4).
+  if (check(Tok::KwSet)) {
+    auto t = std::make_unique<TypeExpr>();
+    t->kind = TEK::Set;
+    t->packed = packed;
+    t->line = cur().line;
+    t->col = cur().col;
+    ++pos_;
+    expect(Tok::KwOf, "after 'set'");
+    t->elem = parseTypeExpr();
+    return t;
+  }
   if (check(Tok::KwArray))
     return parseArrayType(packed);
   if (check(Tok::KwRecord))
@@ -225,10 +239,6 @@ TypeExprPtr Parser::parseTypeExpr() {
 
   if (packed) {
     errorAtCur("'packed' applies only to an array, record, set or file type");
-    bail();
-  }
-  if (check(Tok::KwSet) || check(Tok::KwFile)) {
-    errorAtCur(std::string(tokenName(cur().kind)) + " types are not supported yet");
     bail();
   }
 
@@ -773,6 +783,7 @@ ExprPtr Parser::parseExpr() {
   case Tok::Le:    op = BinOp::Le; break;
   case Tok::Gt:    op = BinOp::Gt; break;
   case Tok::Ge:    op = BinOp::Ge; break;
+  case Tok::KwIn:  op = BinOp::In; break;
   default:         return lhs;
   }
   auto bin = makeNode<Binary>(cur());
@@ -904,6 +915,25 @@ ExprPtr Parser::parseFactor() {
     ExprPtr e = parseExpr();
     expect(Tok::RParen, "after a parenthesised expression");
     return e;
+  }
+  // set-constructor = '[' (member (',' member)*)? ']', member = expr ('..'
+  // expr)?. `[]` is the empty set. A '[' can only start a constructor here:
+  // a subscript follows a designator, which parseSelectors has already
+  // consumed by the time control reaches a factor.
+  case Tok::LBracket: {
+    auto n = makeNode<SetExpr>(t);
+    ++pos_;
+    if (!check(Tok::RBracket)) {
+      do {
+        SetMember m;
+        m.lo = parseExpr();
+        if (accept(Tok::DotDot))
+          m.hi = parseExpr();
+        n->members.push_back(std::move(m));
+      } while (accept(Tok::Comma));
+    }
+    expect(Tok::RBracket, "after the members of a set");
+    return n;
   }
   case Tok::Ident: {
     // `eof` and `eoln` are the only functions ISO 7185 lets a program call

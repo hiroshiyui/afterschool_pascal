@@ -127,6 +127,33 @@ the distinction asks `isSubrange()`.
   `parseVariantPart` takes its own depth guard, because it is the one recursion
   in a type-denoter that does not pass through `parseTypeExpr`.
 
+**Sets** (ADR-0028). A set is one 256-bit word, a bit per possible member, so a
+base type's values must lie in 0..255 — `set of integer` is refused under the
+latitude ISO 7185 §6.4.3.4 gives, not silently truncated. The consequence that
+matters is that a set is a **value**: `isStructured()` and `isMemory()` both
+exclude it, it is assigned with a store and passed in a register, and none of
+the by-address machinery applies.
+
+- Set compatibility is **structural**, decided on the base type. That is
+  §6.4.6's own rule, not an exception invented here — it is why `assignable`
+  must handle sets before falling through to name equivalence, and why `[]`
+  needs no exception at all.
+- The operators are one instruction each: `or`, `and`, `and not`, and
+  `(s and not t) = 0` for inclusion. There is no `<` or `>` on sets.
+- **Two range checks answer different questions.** A member outside 0..255 has
+  no bit, so the *constructor* traps. A member outside the *target's* base type
+  is representable but not a value of the type, so the **store** traps —
+  `checkedForSetBase` beside `checkedForSubrange`. `in` traps on neither: an
+  unrepresentable value is simply not a member.
+- A range `[lo..hi]` is built by shifting, and `hi < lo` is selected away to
+  the empty set. No 256-bit literal is ever needed, which matters because the
+  Pascal-hosted compiler cannot spell one.
+- **The emitted `.ll` states its `target datalayout`**, and must. `LlSize` and
+  `LlAlign` model x86-64; before sets, nothing was more than 8-aligned and the
+  omission cost nothing. An i256 is 16-aligned, and an unstated layout made
+  LLVM assemble against its own defaults — 16-byte moves against an 8-aligned
+  frame. Don't remove the line.
+
 **Pointers** (ADR-0019). A pointer's domain is a type *identifier* and may name
 a type defined later in the same type part — the language's only forward
 reference, and what makes a recursive type possible. `resolvePointer` records a
@@ -206,12 +233,23 @@ holds the three-stage plan and the dependency ordering; `doc/roadmap.md`
 tracks it.
 
 **All six bootstrap items are now settled**, so the language is finished for
-bootstrap purposes — a new feature needs a reason beyond "the standard has it".
+bootstrap purposes — and the bar for a new feature has therefore *changed*
+rather than risen. During the bootstrap a feature needed a reason beyond "the
+standard has it"; now that is exactly the reason, because the goal is
+conformance with ISO 7185. What is left of it is `goto`, procedural and
+functional parameters, and non-text files. **Anything the standard does not
+have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
+Pascal), so an extension should be taken from its spelling rather than
+invented here.
+
 Strings are the length-plus-buffer record of ADR-0012, not an extension:
 `tests/bootstrap_strings.pas` is the working evidence and the regression test
 for it. Don't add a `string` type without new evidence from real stage-1 code,
 because measuring the C++ compiler is what showed the extension was
 unnecessary — nearly all its string building feeds text that is written out.
+Extended Pascal defines a `string` type, so that decision is the one most
+likely to be revisited at stage 2 — its reason expires there rather than the
+decision being overturned on taste.
 
 ## Where things live
 
@@ -317,8 +355,9 @@ one-character string literal is a `char`.
 
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
 array's own bounds optimises the check away. Storing outside a subrange traps,
-and so does a `case` whose selector matches no label (ADR-0018), and a
-dereference of `nil` (ADR-0019).
+and so does a `case` whose selector matches no label (ADR-0018), a dereference
+of `nil` (ADR-0019), and a set whose members are not values of the target's
+base type (ADR-0028).
 
 **ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
 through `checkedArith` and stop the program on overflow rather than wrapping —
@@ -357,7 +396,7 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 31 rules, 27 of them for every
+The catalogue currently has **no known gaps** — 35 rules, 27 of them for every
 32-bit input — so any gap that appears is something this change introduced.
 
 Don't add a rule that restates the lowering. A check whose ISO condition *is*

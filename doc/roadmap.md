@@ -51,8 +51,8 @@ Item 6 is a decision rather than a feature, and it is now made, so **the
 language is finished for bootstrap purposes**: what remains is writing the
 Pascal, not growing what it is written in.
 
-Alongside the language, 40 ctest cases — 37 Pascal programs, the verification
-run, the differential test and the bootstrap — and 31 SMT rules, 27 of them for
+Alongside the language, 45 ctest cases — 42 Pascal programs, the verification
+run, the differential test and the bootstrap — and 35 SMT rules, 27 of them for
 all 2³² inputs, with no known gaps.
 
 ## Item 5 — text files (done)
@@ -227,22 +227,59 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **Not implemented at all:** sets, `goto`, procedural and functional
-  parameters, and non-text files. None of them is on the path to stage 1. Sets
-  would be the most useful of the four for a compiler (character classes,
-  follow sets) and are the likeliest to be added opportunistically.
+- **Not implemented at all:** `goto`, procedural and functional parameters, and
+  non-text files. Sets were the fourth of this group and are now done
+  (ADR-0028); these three are what is left of ISO 7185.
+- **A set's base type must have its values in 0..255**, because every set is
+  one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
+  this is a permitted limit rather than a deviation — but `set of integer` is a
+  legal program this compiler refuses (ADR-0028).
+- **`packed set` is accepted and ignored.** There is nothing to pack: the
+  representation is already one bit per member. §6.4.6 asks that compatible
+  sets agree on packing, which is not checked, and here could only reject
+  programs that would work.
 
 ## Beyond self-hosting
 
-Nothing here is scheduled, and none of it should start before stage 3 compares
-equal.
+Stage 3 compares equal, so this is now the live section. The order is settled:
+**finish base ISO 7185 first, and only then take on ISO/IEC 10206:1991
+(Extended Pascal).**
+
+That ordering is what decides whether a feature is in scope. Anything ISO 7185
+has is worth adding on conformance grounds alone, even where nothing in this
+compiler's own source needs it — which was the bar during the bootstrap and is
+no longer. Anything the standard lacks waits, and should then be taken from
+Extended Pascal's spelling rather than invented here.
+
+**What is left of ISO 7185**, in the order they are likely to be taken:
+
+- ~~**Sets.**~~ Done (ADR-0028): one 256-bit word, with the base type bounded
+  at 0..255 under the latitude §6.4.3.4 gives.
+- **`goto` and labels.** §6.8.2.4. The label part already parses and is
+  rejected; the work is the non-local jump, which has to unwind to a frame the
+  static link chain names.
+- **Procedural and functional parameters.** §6.6.3.1. A procedure passed as an
+  argument travels with the static link of where it was *declared*, so this is
+  the first thing that makes an activation record's address outlive the call
+  that made it.
+- **Non-text files.** §6.4.3.5. `file of T` already parses and is rejected for
+  any component but `char`; the runtime's `pas_file` is what has to stop
+  assuming a character.
+
+**Then Extended Pascal.** ISO/IEC 10206:1991 is the target for the second
+stage, not an ad-hoc pile of extensions. The decision most likely to be
+revisited there is ADR-0012's refusal of a `string` type: the reason for
+refusing it was that it would be an invention, and Extended Pascal defines it —
+so the reason expires rather than the decision being overturned on taste.
+Schemata, modules and `otherwise` are in the same position. Until then, keep
+refusing them.
+
+**And the two things that are not features:**
 
 - **Retire stage 0.** The Pascal compiler *is* a fixed point now, so this is
   available — but the C++ compiler is still what builds stage 1, still what the
   first three components are diffed against, and still the one `verify/` proves.
   Retiring it means giving up all three, and none of them has a replacement yet.
-- **The rest of ISO 7185**, driven by a conformance suite rather than by what
-  the compiler's own source happens to use.
 - **Keep the proofs alive across the port.** ADR-0025 made the decision the
   earlier version of this line asked for: the theorems stay attached to the C++
   model, and the Pascal generator is tied to it by *behaviour* — the golden

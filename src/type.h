@@ -12,8 +12,15 @@ inline constexpr int kMaxInt = 2147483647;
 
 enum class TypeKind {
   Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer,
-  File
+  File, Set
 };
+
+/// ISO 7185 §6.4.3.4 leaves the size of a set to the implementation. This one
+/// gives every set the same 256-bit representation, so the base type's values
+/// must be ordinals in 0..255 — which is exactly `char`, and every enumeration
+/// and small subrange a compiler wants to build a character class or a follow
+/// set out of. `set of integer` is refused rather than silently truncated.
+inline constexpr int kSetLimit = 255;
 
 struct Type;
 
@@ -97,6 +104,10 @@ struct Type {
   bool isRecord() const { return kind == TypeKind::Record; }
   bool isPointer() const { return kind == TypeKind::Pointer; }
   bool isFile() const { return kind == TypeKind::File; }
+  bool isSet() const { return kind == TypeKind::Set; }
+  /// `[]`, which belongs to every set type — the set-valued counterpart of
+  /// `nil`, and null for the same reason: it has no base type of its own.
+  bool isEmptySet() const { return isSet() && elem == nullptr; }
   /// `nil`, which is a value of every pointer type and of no other.
   bool isNil() const { return isPointer() && elem == nullptr; }
 
@@ -109,6 +120,11 @@ struct Type {
   /// is no assignment between file variables — so grouping it here would grant
   /// it exactly the operations it must not have. `isFile()` is asked for
   /// separately wherever an address is what travels.
+  ///
+  /// A set is not structured either, and for the opposite reason to a file: it
+  /// *is* a value. Every set is one 256-bit integer, so it is assigned,
+  /// compared and passed exactly as an integer is, and none of the machinery
+  /// that exists to move structured values around by address applies to it.
   bool isStructured() const { return isArray() || isRecord(); }
 
   /// True for anything whose value never occupies a register: it is reached
@@ -216,6 +232,10 @@ struct Type {
       return elem ? "^" + elem->name() : "nil";
     case TypeKind::File:
       return elem && elem->isChar() ? "text" : "file";
+    // The type of `[]` names no base type because it has none; it is written
+    // the way the source writes it.
+    case TypeKind::Set:
+      return elem ? "set of " + elem->name() : "[]";
     case TypeKind::Record: {
       // An anonymous record is named by its fields, which is the only thing
       // that distinguishes it from any other anonymous record.
@@ -281,6 +301,14 @@ inline Type *Void() { return get(TypeKind::Void); }
 inline Type *Nil() {
   static Type n{TypeKind::Pointer};
   return &n;
+}
+/// The type of `[]`: a set with no base type, and a value of every set type.
+/// ISO 7185 §6.4.6 makes set compatibility structural — two sets are
+/// compatible when their base types are — so unlike `nil` this is not an
+/// exception to name equivalence but the ordinary rule with nothing to compare.
+inline Type *EmptySet() {
+  static Type s{TypeKind::Set};
+  return &s;
 }
 /// `text`, the predefined file of char (ISO 7185 §6.4.3.5). A singleton like
 /// the other predefined types, so every variable declared `text` has the same

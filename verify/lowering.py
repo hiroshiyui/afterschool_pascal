@@ -259,3 +259,60 @@ def cmp_integer_lt(a, b):
 def cmp_char_lt(a, b):
     """Relational on char: unsigned predicate (`sign` is false)."""
     return z3.ULT(a, b)
+
+
+# --- sets (ADR-0028) --------------------------------------------------------
+#
+# A set is one bit vector, one bit per possible member: SET_BITS wide in the
+# real compiler, and width-generic here for the same reason the integer
+# operations are. The member positions are unsigned, and Sema has already
+# refused a base type outside 0..SET_BITS-1, so nothing below shifts by a
+# amount the width cannot hold.
+
+SET_BITS = 256
+
+
+def set_value(name, width):
+    return z3.BitVec(name, width)
+
+
+def set_position(name, width):
+    """A member's position in the bit vector — what `setIndex` produces after
+    it has checked the value against 0..255 and widened it."""
+    return z3.BitVec(name, width)
+
+
+def set_single(v, width):
+    """`[v]`, one member: emitSet's `shl i256 1, v`."""
+    return z3.BitVecVal(1, width) << v
+
+
+def set_range(lo, hi, width):
+    """`[lo..hi]`: two masks and-ed, with the empty range selected away.
+    emitSet builds it from `lshr (-1), (limit - hi)` and `shl (-1), lo`."""
+    ones = z3.BitVecVal(-1, width)
+    limit = z3.BitVecVal(width - 1, width)
+    below = z3.LShR(ones, limit - hi)
+    above = ones << lo
+    return z3.If(z3.UGT(lo, hi), z3.BitVecVal(0, width), below & above)
+
+
+def set_contains(s, v, width):
+    """`v in s`: emitBinary's `(s lshr v) and 1`, for a v already known to be
+    a representable position."""
+    return (z3.LShR(s, v) & z3.BitVecVal(1, width)) != z3.BitVecVal(0, width)
+
+
+def set_universe(lo, hi, width):
+    """The mask `setUniverse` builds for a base type spanning lo..hi. The same
+    pair of shifts as a constructor range, without the empty case: Sema has
+    already refused an empty base type."""
+    ones = z3.BitVecVal(-1, width)
+    limit = z3.BitVecVal(width - 1, width)
+    return z3.LShR(ones, limit - hi) & (ones << lo)
+
+
+def traps_set_store(s, lo, hi, width):
+    """`checkedForSetBase`: the store traps when anything is set outside the
+    base type's own values."""
+    return (s & ~set_universe(lo, hi, width)) != z3.BitVecVal(0, width)

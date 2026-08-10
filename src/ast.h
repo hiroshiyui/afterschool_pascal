@@ -15,8 +15,8 @@ struct Symbol;
 /// variant record is exactly what that version will use.
 enum class NK {
   // expressions
-  IntLit, RealLit, CharLit, StrLit, NilLit, VarRef, Index, Field, Deref,
-  Binary, Unary, Call,
+  IntLit, RealLit, CharLit, StrLit, NilLit, SetLit, VarRef, Index, Field,
+  Deref, Binary, Unary, Call,
   // statements
   Empty, Assign, Write, Read, Compound, If, While, Repeat, For, ProcCall, With,
   Case,
@@ -42,7 +42,10 @@ template <typename T, typename N> bool is(N *n) {
 
 enum class BinOp {
   Add, Sub, Mul, RealDiv, IntDiv, Mod, And, Or,
-  Eq, Ne, Lt, Le, Gt, Ge,
+  // `in` is a relational operator in ISO 7185 §6.7.2.4 and sits at the same
+  // precedence as `=` and `<`, which is why it belongs here and not with the
+  // adding operators despite taking a set on only one side.
+  Eq, Ne, Lt, Le, Gt, Ge, In,
 };
 enum class UnOp { Pos, Neg, Not };
 
@@ -94,6 +97,23 @@ struct StrLit : Expr {
 struct NilLit : Expr {
   static constexpr NK NodeKind = NK::NilLit;
   NilLit() : Expr(NodeKind) {}
+};
+
+/// One element of a set constructor: a single value, or the range `lo..hi`
+/// that ISO 7185 §6.7.1 abbreviates. `hi` is null for a single value, which is
+/// what tells the two apart — a range is not rewritten into its members,
+/// because the bounds need not be constant.
+struct SetMember {
+  ExprPtr lo, hi;
+};
+
+/// `[a, b..c]` — a set constructor. Its type is decided by its members, and
+/// `[]` by whatever it is compared or assigned to, so this is the one
+/// expression whose type is not determined by its own subtree alone.
+struct SetExpr : Expr {
+  static constexpr NK NodeKind = NK::SetLit;
+  SetExpr() : Expr(NodeKind) {}
+  std::vector<SetMember> members;
 };
 
 struct VarRef : Expr {
@@ -333,7 +353,7 @@ struct VariantArm {
   int line = 0, col = 0;
 };
 
-enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File };
+enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File, Set };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is
@@ -349,7 +369,7 @@ struct TypeExpr {
   /// same construct rather than two — and several of them is the `[a, b]`
   /// shorthand for an array of arrays.
   std::vector<TypeExprPtr> dims;
-  TypeExprPtr elem;               // Array or File: the component type
+  TypeExprPtr elem;               // Array, File or Set: the component type
   std::vector<FieldGroup> fields; // Record: the fixed part
   std::vector<DeclName> constants;// Enum
   ExprPtr lo, hi;                 // Subrange

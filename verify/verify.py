@@ -124,15 +124,18 @@ def run_proofs(timeout_ms):
           f"({proved - bounded} at the full 32-bit width, {bounded} bounded), "
           f"{gaps} known gaps documented")
     if bounded:
-        print(f"  {DIM}* bounded: the claim involves a symbolic division or "
-              f"multiplication, which\n"
-              f"    bit-blasts into a circuit too large to solve at 32 bits. "
-              f"It is established\n"
-              f"    exhaustively at small widths instead. The lowering is the "
-              f"same instruction\n"
-              f"    sequence at every width, which is the argument for "
-              f"generalising — but it is\n"
-              f"    an argument, not a proof.{RESET}")
+        print(f"  {DIM}* bounded: the claim is checked at reduced widths, "
+              f"because at the real width\n"
+              f"    it bit-blasts into a circuit too large to solve — a "
+              f"symbolic division or\n"
+              f"    multiplication over 32 bits, or a symbolic shift over the "
+              f"256 bits of a set.\n"
+              f"    It is established exhaustively at small widths "
+              f"instead. The lowering is the\n"
+              f"    same instruction sequence at every width, which is the "
+              f"argument for\n"
+              f"    generalising — but it is an argument, not a "
+              f"proof.{RESET}")
     return failures
 
 

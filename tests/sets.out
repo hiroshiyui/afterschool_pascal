@@ -1,0 +1,25 @@
+member: TRUE FALSE
+union: TRUE
+intersection: TRUE
+difference: FALSE
+subset: TRUE FALSE
+superset: TRUE FALSE
+equal: TRUE FALSE
+unequal: TRUE
+v: 5
+c: 21
+s: 5
+grown: TRUE original: FALSE
+enum: TRUEFALSETRUEFALSE
+enum range: FALSETRUETRUETRUE
+enum union: TRUE
+enum inter: TRUE
+digits: FALSETRUEFALSETRUETRUETRUE
+computed: FALSETRUETRUEFALSE
+empty range: TRUE FALSE
+far outside: FALSE
+negative: FALSE
+bits: TRUE FALSE
+empty: TRUE TRUE FALSE
+built: TRUE
+primes under ten: 17

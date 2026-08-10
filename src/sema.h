@@ -107,6 +107,7 @@ private:
   Type *resolveSubrange(TypeExpr &denoter);
   Type *resolvePointer(TypeExpr &denoter);
   Type *resolveFile(TypeExpr &denoter);
+  Type *resolveSet(TypeExpr &denoter);
   /// Fill in the domains of pointers that named a type not yet defined, and
   /// report any that never were. Run at the end of each type part.
   void resolvePendingPointers();
@@ -144,6 +145,7 @@ private:
   void checkRead(ReadStmt *r);
   void checkExpr(Expr *e);
   void checkBinary(Binary *b);
+  void checkSetExpr(SetExpr *s);
   void checkCall(Call *c);
   void checkWith(WithStmt *w);
   void checkCase(CaseStmt *c);

@@ -49,6 +49,9 @@ private:
   llvm::Type *i8() { return llvm::Type::getInt8Ty(ctx_); }
   llvm::Type *i1() { return llvm::Type::getInt1Ty(ctx_); }
   llvm::Type *f64() { return llvm::Type::getDoubleTy(ctx_); }
+  /// Every set is one 256-bit integer: a bit per possible member, so union is
+  /// `or`, intersection is `and`, and membership is one shift (ADR-0028).
+  llvm::Type *i256() { return llvm::Type::getIntNTy(ctx_, 256); }
   llvm::Type *ptr() { return llvm::PointerType::getUnqual(ctx_); }
   /// The type of a variable's field in its activation record.
   llvm::Type *slotType(const Symbol *v);
@@ -134,10 +137,22 @@ private:
   /// Trap unless the value is in `target`'s subrange. A no-op for every other
   /// type, so it can be applied wherever a value is stored.
   llvm::Value *checkedForSubrange(llvm::Value *v, Type *target);
+  llvm::Value *checkedForSetBase(llvm::Value *v, Type *target);
+  /// A value entering a variable of `target`: the subrange check and the set
+  /// check are the same idea for two kinds of type, so call sites ask once.
+  llvm::Value *checkedForStore(llvm::Value *v, Type *target) {
+    return checkedForSetBase(checkedForSubrange(v, target), target);
+  }
+  /// The 256-bit constant with a bit set for every value of `base`.
+  llvm::Value *setUniverse(Type *base);
+  /// A member's bit position, checked against 0..255 and widened.
+  llvm::Value *setIndex(Expr *e, const char *what);
 
   // expressions
   llvm::Value *emitExpr(Expr *e);
   llvm::Value *emitBinary(Binary *e);
+  llvm::Value *emitSet(SetExpr *e);
+  llvm::Value *emitSetBinary(Binary *e, llvm::Value *l, llvm::Value *r);
   llvm::Value *emitUnary(Unary *e);
   llvm::Value *emitCall(Call *e);
   llvm::Value *emitConst(const Symbol &sym);

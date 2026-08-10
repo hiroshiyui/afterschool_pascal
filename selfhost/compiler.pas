@@ -61,6 +61,10 @@ const
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
     the number and selfhost/irtest.sh checks that the two still match. }
   fileSize = 64;
+  { Every set is one 256-bit word, so a set's base type must have its values
+    in 0..setLimit (ADR-0028). That admits `char` exactly. }
+  setLimit = 255;
+  setBits  = 256;
 
 type
   strLen = 0..strMax;
@@ -104,7 +108,7 @@ type
     of spelling it. }
   ctxKind = (
     ctxNone, ctxProgramStart, ctxProgramParams, ctxProgramHeader, ctxFinalEnd,
-    ctxAfterFile, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
+    ctxAfterFile, ctxAfterSet, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
     ctxArrayIndex, ctxRecordEnd, ctxFieldList, ctxVariantTag,
     ctxVariantLabels, ctxVariantOpen, ctxVariantFields, ctxVariantClose,
     ctxConstDef, ctxConstDefEnd, ctxTypeDef, ctxTypeDefEnd, ctxVarDecl,
@@ -114,8 +118,11 @@ type
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxParenExpr,
     ctxCallArgs);
 
+  { `in` is a relational operator (ISO 7185 6.7.2.4) and sits at the same
+    precedence as `=`, which is why it belongs here rather than with the
+    adding operators despite taking a set on only one side. }
   binaryOp = (opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-              opEq, opNe, opLt, opLe, opGt, opGe);
+              opEq, opNe, opLt, opLe, opGt, opGe, opIn);
   unaryOp = (opPos, opNeg, opNot);
 
   { The tag ADR-0005 has been carrying since the first commit. Expressions and
@@ -124,8 +131,8 @@ type
     code than five parallel ones. }
   nodeKind = (
     { expressions }
-    nkInt, nkReal, nkChar, nkStr, nkNil, nkVar, nkIndex, nkField, nkDeref,
-    nkBinary, nkUnary, nkCall,
+    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+    nkField, nkDeref, nkBinary, nkUnary, nkCall,
     { statements }
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase,
@@ -133,6 +140,7 @@ type
     nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName,
     { type denoters }
     nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkFile,
+    nkSetOf,
     { declarations }
     nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock);
 
@@ -146,7 +154,7 @@ type
   fileBinding = (fbInternal, fbStdInput, fbStdOutput, fbArgument);
 
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-              tyArray, tyRecord, tyPointer, tyFile);
+              tyArray, tyRecord, tyPointer, tyFile, tySet);
 
   { The required functions of ISO 7185, and the standard procedures that are
     not statements of their own. }
@@ -304,6 +312,11 @@ type
       nkChar:       (chVal: char);
       nkStr:        (stAt, stLen: integer);
       nkNil:        ();
+      { A set constructor and one of its members. A member with no `smHi` is a
+        single value and one with it is the range ISO 7185 6.7.1 abbreviates;
+        the bounds need not be constant, so a range is not expanded here. }
+      nkSet:        (seMembers: nodePtr);
+      nkSetMember:  (smLo, smHi: nodePtr);
       nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr);
       nkIndex:      (ixBase, ixIndex: nodePtr);
       nkField:      (fdBase: nodePtr; fdAt, fdLen: integer;
@@ -343,6 +356,7 @@ type
       nkSubrange:   (sbLo, sbHi: nodePtr);
       nkArray:      (arDims, arElem: nodePtr; arPacked: boolean);
       nkFile:       (flElem: nodePtr; flPacked: boolean);
+      nkSetOf:      (soElem: nodePtr; soPacked: boolean);
       nkRecord:     (rcFields, rcTagType, rcVariants: nodePtr;
                      rcTagAt, rcTagLen, rcTagLine, rcTagCol: integer;
                      rcPacked: boolean);
@@ -417,6 +431,7 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
+  emptySetType: typePtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
 
 { ------------------------------------------------------------------ strings }
@@ -1183,6 +1198,8 @@ begin
     ctxProgramHeader:  write('after the program header');
     ctxFinalEnd:       write('after the final ''end''');
     ctxAfterFile:      write('after ''file''');
+    ctxAfterSet:       write('after ''set''');
+    ctxSetMembers:     write('after the members of a set');
     ctxSubrangeBounds: write('between the bounds of a subrange');
     ctxEnumConstants:  write('after the constants of an enumerated type');
     ctxAfterArray:     write('after ''array''');
@@ -1260,10 +1277,12 @@ begin
       n^.vaTagLine := 0;
       n^.vaTagCol := 0
     end;
-    nkInt, nkReal, nkChar, nkStr, nkNil, nkIndex, nkDeref, nkBinary, nkUnary,
+    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
+    nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkCase, nkWriteArg, nkGroup, nkDeclName, nkNamed, nkEnum,
-    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkConstDecl, nkTypeDecl,
+    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkConstDecl,
+    nkTypeDecl,
     nkBlock: { nothing of Sema's to clear }
   end;
   NewNode := n
@@ -1609,7 +1628,18 @@ begin
   if not aborted then begin
     packed_ := Accept(tkPacked);
 
-    if Check(tkFile) then begin
+    { set-type = 'set' 'of' base-type. The base type is an *ordinal* type, so
+      this is the same construct as an array's index type and is parsed by the
+      same routine (ISO 7185 6.4.3.4). }
+    if Check(tkSet) then begin
+      t := NewNode(nkSetOf, CurLine, CurCol);
+      t^.soPacked := packed_;
+      t^.soElem := nil;
+      pos := pos + 1;
+      Expect(tkOf, ctxAfterSet);
+      t^.soElem := ParseTypeExpr
+    end
+    else if Check(tkFile) then begin
       t := NewNode(nkFile, CurLine, CurCol);
       t^.flPacked := packed_;
       t^.flElem := nil;
@@ -1624,12 +1654,6 @@ begin
     else if packed_ then begin
       ErrorAtCur;
       writeln('''packed'' applies only to an array, record, set or file type');
-      Bail
-    end
-    else if Check(tkSet) then begin
-      ErrorAtCur;
-      WriteTokenName(tok[pos].kind);
-      writeln(' types are not supported yet');
       Bail
     end
     { pointer-type = '^' type-identifier. ISO 7185 6.4.4 requires a type
@@ -1740,7 +1764,7 @@ begin
 end;
 
 function ParseFactor: nodePtr;
-var e, call: nodePtr; head, tail: nodePtr; more: boolean;
+var e, call, m: nodePtr; head, tail, memberTail: nodePtr; more: boolean;
 begin
   { Every way an expression nests inside an expression -- parentheses, `not`,
     a unary sign, a call's arguments -- passes through here exactly once per
@@ -1796,6 +1820,26 @@ begin
       pos := pos + 1;
       e := ParseExpr;
       Expect(tkRParen, ctxParenExpr)
+    end
+    { set-constructor = '[' (member (',' member)*)? ']',
+      member = expr ('..' expr)?. `[]` is the empty set. A '[' can only start
+      a constructor here: a subscript follows a designator, which
+      ParseSelectors has already consumed by the time a factor is reached. }
+    else if Check(tkLBracket) then begin
+      e := NewNode(nkSet, CurLine, CurCol);
+      e^.seMembers := nil;
+      memberTail := nil;
+      pos := pos + 1;
+      if not Check(tkRBracket) then
+        repeat
+          m := NewNode(nkSetMember, CurLine, CurCol);
+          m^.smLo := nil;
+          m^.smHi := nil;
+          m^.smLo := ParseExpr;
+          if Accept(tkDotDot) then m^.smHi := ParseExpr;
+          Append(e^.seMembers, memberTail, m)
+        until not Accept(tkComma);
+      Expect(tkRBracket, ctxSetMembers)
     end
     else if Check(tkIdent) then begin
       { `eof` and `eoln` are the only functions ISO 7185 lets a program call
@@ -1934,6 +1978,7 @@ begin
   else if Check(tkLe) then op := opLe
   else if Check(tkGt) then op := opGt
   else if Check(tkGe) then op := opGe
+  else if Check(tkIn) then op := opIn
   else relational := false;
 
   if relational and not aborted then begin
@@ -2689,9 +2734,20 @@ begin IsFile := (t <> nil) and (t^.kind = tyFile) end;
 function IsNil(t: typePtr): boolean;
 begin IsNil := IsPointer(t) and (t^.elem = nil) end;
 
+function IsSet(t: typePtr): boolean;
+begin IsSet := (t <> nil) and (t^.kind = tySet) end;
+
+{ `[]`, which belongs to every set type -- the set-valued counterpart of nil,
+  and elem-less for the same reason: it has no base type of its own. }
+function IsEmptySet(t: typePtr): boolean;
+begin IsEmptySet := IsSet(t) and (t^.elem = nil) end;
+
 { Arrays and records live in memory and are copied wholesale. A file is *not*
   structured: it also lives in memory, but it may never be copied, so grouping
   it here would grant it exactly the operations it must not have. }
+{ A set is not structured either, and for the opposite reason to a file: it
+  *is* a value. Every set is one 256-bit integer, so it is assigned, compared
+  and passed exactly as an integer is (ADR-0028). }
 function IsStructured(t: typePtr): boolean;
 begin IsStructured := IsArray(t) or IsRecord(t) end;
 
@@ -2887,6 +2943,15 @@ begin
       tyFile:
         if IsChar(t^.elem) then PutLit('text            ')
         else PutLit('file            ');
+      { The type of `[]` names no base type because it has none; it is written
+        the way the source writes it. }
+      tySet:
+        if t^.elem = nil then PutLit('[]              ')
+        else begin
+          PutLit('set of          ');
+          Put(' ');
+          WriteTypeName(t^.elem)
+        end;
       tyRecord: begin
         { An anonymous record is named by its fields, which is the only thing
           that distinguishes it from any other anonymous record. }
@@ -3072,6 +3137,18 @@ begin
     Assignable := false
   else if toT = fromT then
     Assignable := true
+  { ISO 7185 6.4.6 makes set compatibility *structural*, not by name: two set
+    types are compatible when their base types are. This is the standard's own
+    departure from the name equivalence of 6.4.5, and it is what lets `[]` and
+    `['a'..'z']`, which no type definition ever named, be assigned at all. }
+  else if IsSet(toT) or IsSet(fromT) then begin
+    if not (IsSet(toT) and IsSet(fromT)) then
+      Assignable := false
+    else if IsEmptySet(toT) or IsEmptySet(fromT) then
+      Assignable := true
+    else
+      Assignable := Base(toT^.elem) = Base(fromT^.elem)
+  end
   else if IsStructured(toT) or IsStructured(fromT) then
     Assignable := IsCharArray(toT) and IsCharArray(fromT) and
                   (TypeLength(toT) = TypeLength(fromT))
@@ -3196,11 +3273,13 @@ begin
                 ok := true
               end
           end;
-      nkStr, nkNil, nkIndex, nkField, nkDeref, nkBinary, nkCall,
+      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkField, nkDeref, nkBinary,
+      nkCall,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+      nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkBlock:
         ok := false
     end;
   EvalConst := ok
@@ -3335,6 +3414,42 @@ end;
 { Only a text file is supported: a typed file writes the machine
   representation of a component, which is a decision about an external format
   this compiler has not made and does not need to reach stage 1. }
+{ ISO 7185 6.4.3.4: a set type is `set of T` for an ordinal T, and its values
+  are the powerset of T's. The standard leaves the size to the implementation,
+  and this one fixes it at 256 bits -- so T's values must lie in 0..setLimit.
+  That admits `char` exactly, and every enumeration and small subrange; it
+  refuses `set of integer` rather than quietly keeping a prefix of it, because
+  a set that silently forgets members is worse than one that does not
+  compile. }
+function ResolveSet(d: nodePtr): typePtr;
+var t, baseType: typePtr;
+begin
+  t := NewType(tySet);
+  if d^.soElem <> nil then baseType := ResolveType(d^.soElem)
+  else baseType := intType;
+  if not IsOrdinal(baseType) then begin
+    ErrorAt(d^.line, d^.col);
+    write('the base type of a set must be an ordinal type, found ');
+    WriteTypeName(baseType);
+    writeln;
+    baseType := charType
+  end
+  else if (OrdinalLo(baseType) < 0) or (OrdinalHi(baseType) > setLimit) then begin
+    ErrorAt(d^.line, d^.col);
+    write('a set base type must lie within 0..', setLimit:1, ', but ');
+    WriteTypeName(baseType);
+    write(' spans ');
+    WriteOrdinalName(baseType, OrdinalLo(baseType));
+    write('..');
+    WriteOrdinalName(baseType, OrdinalHi(baseType));
+    writeln;
+    baseType := charType
+  end;
+  t^.elem := baseType;
+  t^.isPacked := d^.soPacked;
+  ResolveSet := t
+end;
+
 function ResolveFile(d: nodePtr): typePtr;
 var t, component: typePtr;
 begin
@@ -3701,7 +3816,9 @@ begin
       nkRecord:   t := ResolveRecord(d);
       nkPointer:  t := ResolvePointer(d);
       nkFile:     t := ResolveFile(d);
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkVar, nkIndex, nkField, nkDeref,
+      nkSetOf:    t := ResolveSet(d);
+      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
+      nkVar, nkIndex, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkEmpty, nkAssign, nkWrite, nkRead,
       nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall, nkWith, nkCase,
       nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName, nkConstDecl,
@@ -3880,7 +3997,8 @@ begin
     opLt:      write('<');
     opLe:      write('<=');
     opGt:      write('>');
-    opGe:      write('>=')
+    opGe:      write('>=');
+    opIn:      write('in')
   end
 end;
 
@@ -3908,6 +4026,60 @@ begin
   writeln
 end;
 
+{ ISO 7185 6.7.1: the members of a set constructor are expressions of a single
+  ordinal type, and `a..b` abbreviates every value from a to b -- an empty
+  range when b precedes a. The constructor's type is a set of that ordinal
+  type; `[]` has no members to say what it is a set of, so it gets the one set
+  type compatible with all of them.
+
+  The members need not be constants, so nothing is folded here: whether a value
+  lies in the base type of whatever this is finally assigned to is a run-time
+  question, and codegen asks it. }
+procedure CheckSetMember(e: nodePtr; var baseType: typePtr);
+begin
+  if (e <> nil) and (e^.ntype <> nil) then
+    if not IsOrdinal(e^.ntype) then begin
+      ErrorAt(e^.line, e^.col);
+      write('a set member must have an ordinal type, found ');
+      WriteTypeName(e^.ntype);
+      writeln
+    end
+    else if baseType = nil then
+      { The base is the member's own base type, so `['a'..'z']` is a set of
+        char rather than a set of some anonymous subrange of it. }
+      baseType := Base(e^.ntype)
+    else if not Assignable(baseType, e^.ntype) and
+            not Assignable(e^.ntype, baseType) then begin
+      ErrorAt(e^.line, e^.col);
+      write('the members of a set must all have one type: this one is ');
+      WriteTypeName(e^.ntype);
+      write(', not ');
+      WriteTypeName(baseType);
+      writeln
+    end
+end;
+
+procedure CheckSetExpr(e: nodePtr);
+var m: nodePtr; baseType, t: typePtr;
+begin
+  baseType := nil;
+  m := e^.seMembers;
+  while m <> nil do begin
+    CheckExpr(m^.smLo);
+    if m^.smHi <> nil then CheckExpr(m^.smHi);
+    CheckSetMember(m^.smLo, baseType);
+    if m^.smHi <> nil then CheckSetMember(m^.smHi, baseType);
+    m := m^.next
+  end;
+  if baseType = nil then
+    e^.ntype := emptySetType
+  else begin
+    t := NewType(tySet);
+    t^.elem := baseType;
+    e^.ntype := t
+  end
+end;
+
 procedure CheckBinary(b: nodePtr);
 var l, r: typePtr;
 begin
@@ -3917,8 +4089,53 @@ begin
   r := b^.bnRhs^.ntype;
   if (l = nil) or (r = nil) then
     b^.ntype := intType
+  { ISO 7185 6.7.2.3 gives +, - and * a second meaning on sets -- union,
+    difference and intersection -- so the set case is taken before the numeric
+    one rather than after it, where "numeric operands" would already have been
+    reported. }
+  else if (IsSet(l) or IsSet(r)) and
+          ((b^.bnOp = opAdd) or (b^.bnOp = opSub) or (b^.bnOp = opMul)) then
+  begin
+    if not Assignable(l, r) and not Assignable(r, l) then begin
+      BadOperands(b, l, r, 'compatible  ');
+      if IsSet(l) then b^.ntype := l else b^.ntype := r
+    end
+    { The result is a set of the operands' common base type, which is whichever
+      of them has one: `s + []` is still a set of s's base. }
+    else if IsEmptySet(l) then b^.ntype := r
+    else b^.ntype := l
+  end
   else
     case b^.bnOp of
+      { 6.7.2.4: the left operand is a value of the right's base type, and the
+        result says whether it is a member. A value outside the base type is
+        not an error -- it is simply not in the set. }
+      opIn: begin
+        if not IsSet(r) then begin
+          ErrorAt(b^.line, b^.col);
+          write('the right operand of ''in'' must be a set, found ');
+          WriteTypeName(r);
+          writeln
+        end
+        else if not IsOrdinal(l) then begin
+          ErrorAt(b^.line, b^.col);
+          write('the left operand of ''in'' must have an ordinal type, ');
+          write('found ');
+          WriteTypeName(l);
+          writeln
+        end
+        else if not IsEmptySet(r) and not Assignable(r^.elem, l) and
+                not Assignable(l, r^.elem) then begin
+          ErrorAt(b^.line, b^.col);
+          write('this set has base type ');
+          WriteTypeName(r^.elem);
+          write(', but the value tested is ');
+          WriteTypeName(l);
+          writeln
+        end;
+        b^.ntype := boolType
+      end;
+
       opAdd, opSub, opMul:
         if not IsNumeric(l) or not IsNumeric(r) then begin
           BadOperands(b, l, r, 'numeric     ');
@@ -3971,6 +4188,18 @@ begin
           end
           else if not Assignable(l, r) and not Assignable(r, l) then
             BadOperands(b, l, r, 'compatible  ');
+        end
+        else if IsSet(l) or IsSet(r) then begin
+          { 6.7.2.5: <= and >= on sets are inclusion, not order, and there is
+            no < or > at all -- a proper subset is not a primitive. }
+          if (b^.bnOp = opLt) or (b^.bnOp = opGt) then begin
+            ErrorAt(b^.line, b^.col);
+            write('sets have no ''');
+            WriteOpName(b^.bnOp);
+            writeln(''': use <= and >= for inclusion')
+          end
+          else if not Assignable(l, r) and not Assignable(r, l) then
+            BadOperands(b, l, r, 'compatible  ')
         end
         else if IsFile(l) or IsFile(r) then begin
           { 6.7.2.5 gives a file no relational operators at all, and naming the
@@ -4157,6 +4386,7 @@ begin
       nkReal: e^.ntype := realType;
       nkChar: e^.ntype := charType;
       nkNil:  e^.ntype := nilType;
+      nkSet:  CheckSetExpr(e);
 
       { ISO 7185 6.4.3.2: a string literal *is* a packed array of char. Giving
         it that type rather than one of its own is what makes assignment,
@@ -4323,10 +4553,12 @@ begin
       nkBinary: CheckBinary(e);
       nkCall:   CheckCall(e);
 
+      nkSetMember,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+      nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkBlock:
         { not an expression }
     end
 end;
@@ -4892,10 +5124,11 @@ begin
         CheckStmt(s^.frBody)
       end;
 
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkVar, nkIndex, nkField, nkDeref,
+      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+      nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+      nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
         { not a statement }
     end
 end;
@@ -4942,9 +5175,13 @@ begin
       end
       else begin
         sym^.stype := ResolveType(d^.pdResult);
-        { ISO 7185 6.6.2: a function returns a simple type, which is what lets
-          the result travel in a register and be read back with a plain load. }
-        if IsMemory(sym^.stype) then begin
+        { ISO 7185 6.6.2: a function's result type is a *simple* type or a
+          pointer type. Stated the standard's way round rather than as "not
+          something that lives in memory", because a set lives in a register
+          and would pass that test while still not being a result type the
+          language allows. }
+        if not IsOrdinal(sym^.stype) and not IsReal(sym^.stype) and
+           not IsPointer(sym^.stype) then begin
           ErrorAt(d^.line, d^.col);
           write('a function cannot return ');
           WriteTypeName(sym^.stype);
@@ -5144,6 +5381,10 @@ begin
   voidType := NewType(tyVoid);
   { The type of `nil`: a pointer with no domain, assignable to any pointer. }
   nilType := NewType(tyPointer);
+  { And the type of `[]`: a set with no base type, and a value of every set
+    type. Unlike nil this is not an exception to name equivalence but the
+    ordinary rule of 6.4.6 with nothing to compare. }
+  emptySetType := NewType(tySet);
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like
     the other predefined types, so every variable declared `text` has the same
     type -- a `file of char` written out longhand is a different one, exactly
@@ -5281,7 +5522,8 @@ begin
     opLt:      write('lt');
     opLe:      write('le');
     opGt:      write('gt');
-    opGe:      write('ge')
+    opGe:      write('ge');
+    opIn:      write('in')
   end
 end;
 
@@ -5514,6 +5756,26 @@ begin
       write('nil');
       WritePos(n^.line, n^.col);
       ExprEnd(n)
+    end;
+    nkSet: begin
+      write('set');
+      WritePos(n^.line, n^.col);
+      ExprEnd(n);
+      level := level + 1;
+      a := n^.seMembers;
+      DumpExprList(a);
+      level := level - 1
+    end;
+    { A member with a second child is a range and one with a single child is a
+      value, so the two tags are what keeps `[a, b]` and `[a..b]` from dumping
+      identically. A member has no type of its own, so no position and no
+      ExprEnd: the tree records neither. }
+    nkSetMember: begin
+      if n^.smHi = nil then writeln('member') else writeln('range');
+      level := level + 1;
+      DumpExpr(n^.smLo);
+      if n^.smHi <> nil then DumpExpr(n^.smHi);
+      level := level - 1
     end;
     nkVar: begin
       write('var ');
@@ -5945,6 +6207,15 @@ begin
       DumpTypeExpr(n^.flElem);
       level := level - 1
     end;
+    nkSetOf: begin
+      write('set');
+      if n^.soPacked then write(' packed');
+      WritePos(n^.line, n^.col);
+      TypeEnd(n);
+      level := level + 1;
+      DumpTypeExpr(n^.soElem);
+      level := level - 1
+    end;
     nkArray: begin
       write('array');
       if n^.arPacked then write(' packed');
@@ -6351,6 +6622,9 @@ begin
       tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
       tyInteger, tyEnum: LlAlign := 4;
       tyReal, tyPointer, tyFile: LlAlign := 8;
+      { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
+        it takes the largest one that is named, which is i128's. }
+      tySet: LlAlign := 16;
       tyArray: LlAlign := LlAlign(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -6372,6 +6646,7 @@ begin
       tyInteger, tyEnum: LlSize := 4;
       tyReal, tyPointer: LlSize := 8;
       tyFile: LlSize := fileSize;
+      tySet: LlSize := setBits div 8;
       tyArray: LlSize := TypeLength(b) * LlSize(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -6437,6 +6712,10 @@ begin
         compiler needs is its size, and i64 elements give it the alignment a
         struct full of pointers needs. }
       tyFile: write(ircode, '[', fileSize div 8:1, ' x i64]');
+      { Every set is the same 256-bit integer whatever its base type: one bit
+        per possible member, which is what makes the operators single
+        instructions and keeps a set a *value* (ADR-0028). }
+      tySet: write(ircode, 'i', setBits:1);
       tyArray: begin
         { The bounds are folded away: an index is lowered to an offset from the
           lower bound, so the type only needs the extent. }
@@ -6850,8 +7129,377 @@ begin
         if s^.boolVal then OpWord('true            ', v)
         else OpWord('false           ', v);
       tyChar: OpInt(ord(s^.charVal), v);
-      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile: OpInt(0, v)
+      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet:
+        OpInt(0, v)
     end
+end;
+
+{ ------------------------------------------------------------------- sets }
+
+{ The 256-bit constant whose set bits are exactly the values of `baseType`:
+  the bits from its first ordinal to its last. Built by shifting rather than
+  written as a literal, because a 256-bit literal is a number this compiler's
+  own source language cannot spell -- and LLVM folds the shifts before they
+  ever reach the target. }
+procedure SetUniverse(baseType: typePtr; var v: str);
+var ones, sh, below, above: str;
+begin
+  OpInt(-1, ones);
+  { Clear the bits above hi, then the bits below lo. Sema has already refused
+    a base type outside 0..setLimit, so neither shift can reach setBits. }
+  OpInt(setLimit - OrdinalHi(baseType), sh);
+  Def(below);
+  write(ircode, 'lshr i', setBits:1, ' ');
+  PutOp(ones);
+  write(ircode, ', ');
+  PutOp(sh);
+  writeln(ircode);
+  OpInt(OrdinalLo(baseType), sh);
+  Def(above);
+  write(ircode, 'shl i', setBits:1, ' ');
+  PutOp(ones);
+  write(ircode, ', ');
+  PutOp(sh);
+  writeln(ircode);
+  Def(v);
+  write(ircode, 'and i', setBits:1, ' ');
+  PutOp(below);
+  write(ircode, ', ');
+  PutOp(above);
+  writeln(ircode)
+end;
+
+{ ISO 7185 6.4.6 makes it an error to store a value that is not of the
+  variable's type, and a set carrying a member outside its base type is exactly
+  that. It is one `and` against the base type's universe: the check a set
+  constructor cannot make for itself, because a constructor does not know what
+  it is being assigned to. }
+procedure CheckedForSetBase(var v: str; target: typePtr);
+var universe, notU, stray, bad, zero: str; msg: integer;
+begin
+  if IsSet(target) and (target^.elem <> nil) then
+    { A base type covering the whole universe can hold anything a set value
+      can carry, so `set of char` pays nothing. }
+    if (OrdinalLo(target^.elem) <> 0) or
+       (OrdinalHi(target^.elem) <> setLimit) then begin
+      SetUniverse(target^.elem, universe);
+      OpInt(-1, notU);
+      Def(stray);
+      write(ircode, 'xor i', setBits:1, ' ');
+      PutOp(universe);
+      write(ircode, ', ');
+      PutOp(notU);
+      writeln(ircode);
+      Def(bad);
+      write(ircode, 'and i', setBits:1, ' ');
+      PutOp(v);
+      write(ircode, ', ');
+      PutOp(stray);
+      writeln(ircode);
+      OpInt(0, zero);
+      Def(notU);
+      write(ircode, 'icmp ne i', setBits:1, ' ');
+      PutOp(bad);
+      write(ircode, ', ');
+      PutOp(zero);
+      writeln(ircode);
+
+      MsgStart;
+      MsgText('set member out of range (               ');
+      WriteTypeName(target);
+      Put(')');
+      msg := MsgEnd;
+      EmitTrapIf(notU, msg)
+    end
+end;
+
+{ A value entering a variable of `target`: the subrange check and the set check
+  are the same idea for two kinds of type, so call sites ask once. }
+procedure CheckedForStore(var v: str; target: typePtr);
+begin
+  CheckedForSubrange(v, target);
+  CheckedForSetBase(v, target)
+end;
+
+{ A member's position in the bit vector, checked and widened. Every set shares
+  one 256-bit representation, so the position must lie in 0..setLimit whatever
+  the base type is -- a shift by more than that is poison in LLVM, and would be
+  a silently wrong answer here. }
+procedure SetIndex(e: nodePtr; var v: str);
+var raw, lo, hi, below, above, bad: str; msg: integer; sign: boolean;
+begin
+  EmitExpr(e, raw);
+  sign := IsInteger(e^.ntype);
+  if sign or (LlSize(e^.ntype) > 1) then begin
+    OpInt(0, lo);
+    OpInt(setLimit, hi);
+    MsgStart;
+    MsgText('set member out of range                 ');
+    msg := MsgEnd;
+    if sign then begin
+      Def(below);
+      write(ircode, 'icmp slt ');
+      PutLlType(e^.ntype);
+      write(ircode, ' ');
+      PutOp(raw);
+      write(ircode, ', ');
+      PutOp(lo);
+      writeln(ircode);
+      Def(above);
+      write(ircode, 'icmp sgt ');
+      PutLlType(e^.ntype);
+      write(ircode, ' ');
+      PutOp(raw);
+      write(ircode, ', ');
+      PutOp(hi);
+      writeln(ircode);
+      Def(bad);
+      write(ircode, 'or i1 ');
+      PutOp(below);
+      write(ircode, ', ');
+      PutOp(above);
+      writeln(ircode)
+    end
+    else begin
+      Def(bad);
+      write(ircode, 'icmp ugt ');
+      PutLlType(e^.ntype);
+      write(ircode, ' ');
+      PutOp(raw);
+      write(ircode, ', ');
+      PutOp(hi);
+      writeln(ircode)
+    end;
+    EmitTrapIf(bad, msg)
+  end;
+  Def(v);
+  write(ircode, 'zext ');
+  PutLlType(e^.ntype);
+  write(ircode, ' ');
+  PutOp(raw);
+  write(ircode, ' to i', setBits:1);
+  writeln(ircode)
+end;
+
+{ A set constructor, built by or-ing one member at a time into an empty set. A
+  single value contributes 1 shifted left by it; a range lo..hi contributes the
+  bits from lo to hi, which is the same pair of shifts SetUniverse uses -- with
+  the difference that the bounds are expressions, so hi < lo is a run-time
+  possibility and must yield the empty set rather than a mask of everything
+  (ISO 7185 6.7.1). }
+procedure EmitSet(e: nodePtr; var v: str);
+var m: nodePtr; lo, hi, one, ones, bits, tmp, sh, empty, cmp, acc: str;
+begin
+  OpInt(0, acc);
+  OpInt(1, one);
+  OpInt(-1, ones);
+  OpInt(0, empty);
+  m := e^.seMembers;
+  while m <> nil do begin
+    SetIndex(m^.smLo, lo);
+    if m^.smHi = nil then begin
+      Def(bits);
+      write(ircode, 'shl i', setBits:1, ' ');
+      PutOp(one);
+      write(ircode, ', ');
+      PutOp(lo);
+      writeln(ircode)
+    end
+    else begin
+      SetIndex(m^.smHi, hi);
+      OpInt(setLimit, sh);
+      Def(tmp);
+      write(ircode, 'sub i', setBits:1, ' ');
+      PutOp(sh);
+      write(ircode, ', ');
+      PutOp(hi);
+      writeln(ircode);
+      Def(bits);
+      write(ircode, 'lshr i', setBits:1, ' ');
+      PutOp(ones);
+      write(ircode, ', ');
+      PutOp(tmp);
+      writeln(ircode);
+      Def(tmp);
+      write(ircode, 'shl i', setBits:1, ' ');
+      PutOp(ones);
+      write(ircode, ', ');
+      PutOp(lo);
+      writeln(ircode);
+      Def(sh);
+      write(ircode, 'and i', setBits:1, ' ');
+      PutOp(bits);
+      write(ircode, ', ');
+      PutOp(tmp);
+      writeln(ircode);
+      { An empty range selects nothing. Without this the two masks would still
+        intersect in the bits between hi and lo. }
+      Def(cmp);
+      write(ircode, 'icmp ugt i', setBits:1, ' ');
+      PutOp(lo);
+      write(ircode, ', ');
+      PutOp(hi);
+      writeln(ircode);
+      Def(bits);
+      write(ircode, 'select i1 ');
+      PutOp(cmp);
+      write(ircode, ', i', setBits:1, ' ');
+      PutOp(empty);
+      write(ircode, ', i', setBits:1, ' ');
+      PutOp(sh);
+      writeln(ircode)
+    end;
+    Def(tmp);
+    write(ircode, 'or i', setBits:1, ' ');
+    PutOp(acc);
+    write(ircode, ', ');
+    PutOp(bits);
+    writeln(ircode);
+    acc := tmp;
+    m := m^.next
+  end;
+  v := acc
+end;
+
+{ `x in s`. A member position outside 0..setLimit cannot be in any set, and
+  answers false rather than trapping: the value is not of the base type, which
+  is what `in` is there to report. }
+procedure EmitIn(e: nodePtr; var v: str);
+var raw, idx, limit, ok, safe, zero, one, set_, shifted, got, hit: str;
+begin
+  EmitExpr(e^.bnLhs, raw);
+  { Widened with its own signedness, a value outside 0..setLimit lands outside
+    that range in the 256-bit word too -- so one unsigned compare catches a
+    negative value and an oversized one alike. }
+  Def(idx);
+  if IsInteger(e^.bnLhs^.ntype) then write(ircode, 'sext ')
+  else write(ircode, 'zext ');
+  PutLlType(e^.bnLhs^.ntype);
+  write(ircode, ' ');
+  PutOp(raw);
+  write(ircode, ' to i', setBits:1);
+  writeln(ircode);
+  OpInt(setLimit + 1, limit);
+  Def(ok);
+  write(ircode, 'icmp ult i', setBits:1, ' ');
+  PutOp(idx);
+  write(ircode, ', ');
+  PutOp(limit);
+  writeln(ircode);
+  { The shift is by a value LLVM has to see is under setBits, or it is
+    poison. }
+  OpInt(0, zero);
+  Def(safe);
+  write(ircode, 'select i1 ');
+  PutOp(ok);
+  write(ircode, ', i', setBits:1, ' ');
+  PutOp(idx);
+  write(ircode, ', i', setBits:1, ' ');
+  PutOp(zero);
+  writeln(ircode);
+  EmitExpr(e^.bnRhs, set_);
+  Def(shifted);
+  write(ircode, 'lshr i', setBits:1, ' ');
+  PutOp(set_);
+  write(ircode, ', ');
+  PutOp(safe);
+  writeln(ircode);
+  OpInt(1, one);
+  Def(got);
+  write(ircode, 'and i', setBits:1, ' ');
+  PutOp(shifted);
+  write(ircode, ', ');
+  PutOp(one);
+  writeln(ircode);
+  Def(hit);
+  write(ircode, 'icmp ne i', setBits:1, ' ');
+  PutOp(got);
+  write(ircode, ', ');
+  PutOp(zero);
+  writeln(ircode);
+  Def(v);
+  write(ircode, 'and i1 ');
+  PutOp(ok);
+  write(ircode, ', ');
+  PutOp(hit);
+  writeln(ircode)
+end;
+
+{ The set operators, all of them one instruction on the bit vector: union is
+  `or`, intersection is `and`, difference is `and not`, and inclusion is
+  "nothing left over" (ISO 7185 6.7.2.3, 6.7.2.5). }
+procedure EmitSetBinary(e: nodePtr; var l, r, v: str);
+var notR, left, zero, ones: str;
+begin
+  case e^.bnOp of
+    opAdd: begin
+      Def(v);
+      write(ircode, 'or i', setBits:1, ' ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(r);
+      writeln(ircode)
+    end;
+    opMul: begin
+      Def(v);
+      write(ircode, 'and i', setBits:1, ' ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(r);
+      writeln(ircode)
+    end;
+    opSub: begin
+      OpInt(-1, ones);
+      Def(notR);
+      write(ircode, 'xor i', setBits:1, ' ');
+      PutOp(r);
+      write(ircode, ', ');
+      PutOp(ones);
+      writeln(ircode);
+      Def(v);
+      write(ircode, 'and i', setBits:1, ' ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(notR);
+      writeln(ircode)
+    end;
+    opEq, opNe: begin
+      Def(v);
+      if e^.bnOp = opEq then write(ircode, 'icmp eq i', setBits:1, ' ')
+      else write(ircode, 'icmp ne i', setBits:1, ' ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(r);
+      writeln(ircode)
+    end;
+    { `l <= r` is "l has nothing r lacks", and `l >= r` is the same question
+      with the operands the other way round. }
+    opLe, opGe, opLt, opGt, opRealDiv, opIntDiv, opMod, opAnd, opOr, opIn:
+    begin
+      OpInt(-1, ones);
+      if e^.bnOp = opGe then begin notR := l; left := r end
+      else begin notR := r; left := l end;
+      Def(zero);
+      write(ircode, 'xor i', setBits:1, ' ');
+      PutOp(notR);
+      write(ircode, ', ');
+      PutOp(ones);
+      writeln(ircode);
+      Def(notR);
+      write(ircode, 'and i', setBits:1, ' ');
+      PutOp(left);
+      write(ircode, ', ');
+      PutOp(zero);
+      writeln(ircode);
+      OpInt(0, zero);
+      Def(v);
+      write(ircode, 'icmp eq i', setBits:1, ' ');
+      PutOp(notR);
+      write(ircode, ', ');
+      PutOp(zero);
+      writeln(ircode)
+    end
+  end
 end;
 
 { An argument list has to be complete before the call line can be written, so
@@ -6887,7 +7535,7 @@ begin
     else begin
       EmitExpr(arg, a);
       ConvertFor(a, arg^.ntype, p^.sym^.stype);
-      CheckedForSubrange(a, p^.sym^.stype)
+      CheckedForStore(a, p^.sym^.stype)
     end;
     AppendOpnd(head, tail, a);
     arg := arg^.next;
@@ -7066,6 +7714,10 @@ var l, r, rem, neg, adj, bad, m1, m2: str;
 begin
   if (e^.bnOp = opAnd) or (e^.bnOp = opOr) then
     EmitShortCircuit(e, v)
+  { `x in s` is the one operator whose operands are of different kinds, so it
+    is taken before the two are evaluated alike. }
+  else if e^.bnOp = opIn then
+    EmitIn(e, v)
   { Strings compare through the runtime rather than in registers, and must be
     caught before the operands are evaluated: an array has no register form. }
   else if IsCharArray(e^.bnLhs^.ntype) and IsCharArray(e^.bnRhs^.ntype) then
@@ -7075,6 +7727,12 @@ begin
     EmitExpr(e^.bnRhs, r);
     lt := e^.bnLhs^.ntype;
     rt := e^.bnRhs^.ntype;
+
+    { Both operands are the same 256-bit word whatever their base types, so the
+      set operators need nothing from the types beyond knowing they are sets. }
+    if IsSet(lt) or IsSet(rt) then
+      EmitSetBinary(e, l, r, v)
+    else
 
     case e^.bnOp of
       opAdd, opSub, opMul:
@@ -7561,11 +8219,12 @@ begin
       other value of that type. }
     nkStr: OpGlobal(AddGlobal(e^.stAt, e^.stLen), v);
 
-    nkInt, nkReal, nkChar, nkNil, nkBinary, nkUnary, nkCall,
+    nkInt, nkReal, nkChar, nkNil, nkSet, nkSetMember, nkBinary, nkUnary,
+    nkCall,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+    nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
       OpWord('null            ', v)   { Sema has already required a designator }
   end
 end;
@@ -7586,13 +8245,15 @@ begin
         EmitUserCall(e^.vrSym, nil, v)   { a parameterless call by name }
       else
         EmitLoad(e, v);
+    nkSet: EmitSet(e, v);
     nkBinary: EmitBinary(e, v);
     nkUnary: EmitUnary(e, v);
     nkCall: EmitCall(e, v);
+    nkSetMember,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
+    nkPointer, nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock:
       OpInt(0, v)
   end
 end;
@@ -7622,7 +8283,7 @@ begin
   else begin
     EmitExpr(s^.asValue, v);
     ConvertFor(v, s^.asValue^.ntype, s^.asTarget^.ntype);
-    CheckedForSubrange(v, s^.asTarget^.ntype);
+    CheckedForStore(v, s^.asTarget^.ntype);
     write(ircode, '  store ');
     PutLlType(s^.asTarget^.ntype);
     write(ircode, ' ');
@@ -8125,10 +8786,11 @@ begin
       nkProcCall:
         if s^.pcStd <> spNone then EmitStdProc(s)
         else if s^.pcSym <> nil then EmitUserCall(s^.pcSym, s^.pcArgs, v);
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkVar, nkIndex, nkField, nkDeref,
+      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+      nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock: ;
+      nkFile, nkSetOf, nkConstDecl, nkTypeDecl, nkProcDecl, nkBlock: ;
     end
 end;
 
@@ -8393,6 +9055,16 @@ end;
 procedure RunCodeGen;
 begin
   rewrite(ircode);
+  { The layout LlSize and LlAlign model, stated so the assembler uses the same
+    one. Without it LLVM falls back to its own defaults, and the two disagree
+    the moment a type is wider than a machine word: an i256 is 16-aligned here
+    and 8-aligned there, so a set in a record got 16-byte moves against an
+    8-aligned frame. The hand-written rules were never wrong -- they were
+    unstated, which is the same thing once someone else is doing the layout. }
+  writeln(ircode, 'target datalayout = "e-m:e-p270:32:32-p271:32:32-',
+                  'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
+  writeln(ircode, 'target triple = "x86_64-pc-linux-gnu"');
+  writeln(ircode);
   nextProcId := 1;
   nextStr := 0;
   strHead := nil;

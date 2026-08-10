@@ -167,3 +167,17 @@ def the_number_the_digits_denote(previous, digit):
     P = z3.ZeroExt(64, previous)
     D = z3.ZeroExt(124, digit)
     return P * z3.BitVecVal(10, 128) + D
+
+
+def is_in_the_set_range(v, lo, hi):
+    """ISO 7185 §6.7.1 — `[lo..hi]` denotes the values from lo to hi, and no
+    values at all when hi precedes lo. Member positions are ordinals of the
+    base type, which §6.4.3.4 leaves the implementation to bound; this one
+    bounds them at 0..255, so they compare unsigned."""
+    return z3.And(z3.ULE(lo, v), z3.ULE(v, hi))
+
+
+def is_a_value_of_the_set_base_type(v, lo, hi):
+    """§6.4.3.4 — the members of a `set of T` are values of T, and §6.4.6 makes
+    storing a set with any other member an error."""
+    return z3.And(z3.ULE(lo, v), z3.ULE(v, hi))
