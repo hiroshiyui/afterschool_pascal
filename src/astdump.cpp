@@ -1,3 +1,16 @@
+// The tree dumps behind --dump-ast and --dump-sema.
+//
+// This file is a *specification*, not a debugging aid: `selfhost/compiler.pas`
+// writes the same three sections, and `selfhost/difftest.sh` diffs the two
+// over every Pascal source in the tree. Change the format here and the Pascal
+// side changes in the same commit, or the differential test goes red — which
+// is the point of it (ADR-0022, ADR-0024).
+//
+// One walk serves both flags. `--dump-ast` runs before Sema and shows only
+// what the parser decided; `--dump-sema` walks the same tree with `annotate`
+// set, adding types, resolutions and layouts. Sharing the walker is deliberate:
+// the shape is then the same question asked twice.
+
 #include "astdump.h"
 
 #include <cstdio>

@@ -5,7 +5,11 @@
 //   pascalc --emit-llvm hello.pas   write hello.ll and stop
 //   pascalc -c hello.pas         write hello.o and stop
 //   pascalc --dump-tokens hello.pas   the token stream, for selfhost/difftest.sh
-//   pascalc --dump-ast hello.pas      the parse tree, likewise
+//   pascalc --dump-ast hello.pas      the parse tree, before Sema
+//   pascalc --dump-sema hello.pas     the same tree, annotated by Sema
+//   pascalc --dump-all hello.pas      all three sections in one run — this is
+//                                     the form selfhost/difftest.sh compares
+//                                     the Pascal compiler against
 
 #include <cstdio>
 #include <cstdlib>
@@ -118,7 +122,9 @@ void usage() {
                "  -O0..-O3      optimisation level (default -O2)\n"
                "  --keep-temps  do not delete the intermediate object file\n"
                "  --dump-tokens write the token stream and stop\n"
-               "  --dump-ast    write the parse tree and stop\n");
+               "  --dump-ast    write the parse tree and stop\n"
+               "  --dump-sema   write the tree Sema annotated and stop\n"
+               "  --dump-all    write all three dumps and stop\n");
 }
 
 std::string stripExtension(const std::string &path) {
