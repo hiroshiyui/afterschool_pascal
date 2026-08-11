@@ -372,12 +372,67 @@ StructType *CodeGen::descriptorType(const Symbol *param) {
 
 /// A bound of an array: a constant where the source wrote one, and otherwise
 /// the discriminant it names, read out of the descriptor.
-llvm::Value *CodeGen::boundValue(ap::Type *t, bool high) {
+/// How many bytes the tuple of a heap variable occupies in front of it. Every
+/// discriminant is stored as an `i32` whatever its own type, so the header is
+/// one number wide per discriminant — and it is rounded up to 16 so that the
+/// variable itself keeps the alignment `malloc` gave the block. 16 rather than
+/// 8 because a set is 256 bits and the target aligns one to 16 (ADR-0028).
+unsigned CodeGen::headerSize(const ap::Type *t) {
+  if (!t || !t->heapTuple || !t->schema)
+    return 0;
+  unsigned bytes = 4 * unsigned(t->schema->discriminants.size());
+  return (bytes + 15) / 16 * 16;
+}
+
+/// The address of a heap variable's tuple, given the variable's own address.
+/// Null for every type whose tuple is somewhere a symbol can name.
+llvm::Value *CodeGen::headerOf(ap::Type *t, llvm::Value *base) {
+  if (!base || !t || !t->heapTuple)
+    return nullptr;
+  return b_.CreateGEP(i8(), base,
+                      {ConstantInt::getSigned(i32(), -int(headerSize(t)))},
+                      "header");
+}
+
+/// The tuple governing a designator, found by walking to the whole variable it
+/// selects from. One header serves every dimension — `g^[i][j]` reads `r` and
+/// `c` out of the same one — and only the outermost designator has the address
+/// it sits in front of, so an inner subscript cannot compute it from its own
+/// base. Walking down is what stands in for threading it through.
+llvm::Value *CodeGen::heapHeader(Expr *e) {
+  while (true) {
+    if (auto *ix = as<IndexExpr>(e)) { e = ix->base.get(); continue; }
+    if (auto *f = as<FieldExpr>(e)) { e = f->base.get(); continue; }
+    break;
+  }
+  if (!e->type || !e->type->heapTuple)
+    return nullptr;
+  return headerOf(e->type, emitAddress(e));
+}
+
+/// `header` is the tuple of the heap variable this type belongs to, and is
+/// null for every other type — a schematic formal and a variable with
+/// non-constant discriminants both keep theirs where a symbol can name it, and
+/// `addressOf` reaches those by the walk every enclosing variable makes.
+llvm::Value *CodeGen::boundValue(ap::Type *t, bool high, llvm::Value *header) {
   Symbol *disc = high ? t->hiDisc : t->loDisc;
   if (!disc)
     return ConstantInt::getSigned(i32(), high ? t->hi : t->lo);
-  llvm::Value *v = b_.CreateLoad(llvmType(disc->type), addressOf(disc),
-                                 disc->name);
+  // Inside `new` the tuple has no home yet — the block it will live in front
+  // of is the thing being sized — so the values are answered from the
+  // arguments themselves. That is what keeps the size, the domain check and
+  // every later read of the same bounds one piece of code.
+  if (disc->heapDisc && newTuple_ &&
+      size_t(disc->discIndex) < newTuple_->size())
+    return (*newTuple_)[disc->discIndex];
+  llvm::Value *at = disc->heapDisc
+                        ? b_.CreateGEP(i32(), header,
+                                       {ConstantInt::get(i32(), disc->discIndex)},
+                                       disc->name)
+                        : addressOf(disc);
+  llvm::Value *v =
+      b_.CreateLoad(disc->heapDisc ? i32() : llvmType(disc->type), at,
+                    disc->name);
   // A discriminant may be of any ordinal type, and the index arithmetic is
   // done in the integer type as it always is.
   if (v->getType() != i32())
@@ -393,6 +448,15 @@ llvm::Value *CodeGen::boundValue(ap::Type *t, bool high) {
 /// constants, and they are on the Type.
 llvm::Value *CodeGen::discValue(Expr *e, size_t k, llvm::Type *want) {
   ap::Type *t = e->type;
+  // A heap variable carries its tuple in front of it, so any designator of one
+  // answers — not only a name, since `p^` is not a name and `q^.next^` is not
+  // even a pointer variable.
+  if (t->heapTuple) {
+    llvm::Value *hdr = headerOf(t, emitAddress(e));
+    llvm::Value *v = b_.CreateLoad(
+        i32(), b_.CreateGEP(i32(), hdr, {ConstantInt::get(i32(), k)}), "disc");
+    return want == i32() ? v : b_.CreateTrunc(v, want);
+  }
   if (t->isGeneric())
     if (auto *v = as<VarRef>(e))
       if (v->sym && k < v->sym->discSyms.size())
@@ -407,24 +471,25 @@ llvm::Value *CodeGen::discValue(Expr *e, size_t k, llvm::Type *want) {
 /// they are discriminants it returns arithmetic on the placeholders, which is
 /// a number and therefore not obviously wrong. Everything that needs a length
 /// rather than a size comes through here instead.
-llvm::Value *CodeGen::dynLength(ap::Type *t) {
+llvm::Value *CodeGen::dynLength(ap::Type *t, llvm::Value *header) {
   if (!t->dynamicBounds())
     return ConstantInt::get(i32(), t->length());
-  return b_.CreateAdd(
-      b_.CreateSub(boundValue(t, true), boundValue(t, false), "extent"),
-      ConstantInt::get(i32(), 1), "length");
+  return b_.CreateAdd(b_.CreateSub(boundValue(t, true, header),
+                                   boundValue(t, false, header), "extent"),
+                      ConstantInt::get(i32(), 1), "length");
 }
 
-llvm::Value *CodeGen::dynSize(ap::Type *t) {
+llvm::Value *CodeGen::dynSize(ap::Type *t, llvm::Value *header) {
   if (!t->dynamicExtent())
     return ConstantInt::get(i32(), sizeOf(t));
   // (hi - lo + 1) components, each of whatever one component costs. The count
   // cannot be negative: the tuple that produced the actual's type was checked
   // when it was produced, so an empty range never reaches here.
-  llvm::Value *count = b_.CreateAdd(
-      b_.CreateSub(boundValue(t, true), boundValue(t, false), "extent"),
-      ConstantInt::get(i32(), 1), "count");
-  return b_.CreateMul(count, dynSize(t->elem), "size");
+  llvm::Value *count = b_.CreateAdd(boundValue(t, true, header), ConstantInt::get(i32(), 1));
+  count = b_.CreateSub(count, boundValue(t, false, header), "count");
+  // One header serves every level: an array of dynamically-bounded arrays has
+  // one tuple, and the inner bounds are other discriminants of it.
+  return b_.CreateMul(count, dynSize(t->elem, header), "size");
 }
 
 llvm::Type *CodeGen::slotType(const Symbol *v) {
@@ -607,15 +672,16 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   emitJumpDispatch(proc);
 }
 
-void CodeGen::checkSchemaDomain(ap::Type *t, const std::string &schema) {
+void CodeGen::checkSchemaDomain(ap::Type *t, const std::string &schema,
+                                llvm::Value *header) {
   if (!t || !t->isArray() || !t->dynamicExtent())
     return;
   if (t->dynamicBounds())
-    emitTrapIf(b_.CreateICmpSLT(boundValue(t, true), boundValue(t, false),
-                                "empty"),
+    emitTrapIf(b_.CreateICmpSLT(boundValue(t, true, header),
+                                boundValue(t, false, header), "empty"),
                "no type is produced from schema '" + schema +
                    "' with these discriminants");
-  checkSchemaDomain(t->elem, schema);
+  checkSchemaDomain(t->elem, schema, header);
 }
 
 /// §6.2.3.2: the actual-discriminant-part of a variable is evaluated when the
@@ -879,8 +945,12 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     // ISO 7185 §6.5.3.2 makes an index outside the bounds an error. The check
     // comes first, so the subtraction below cannot overflow: afterwards
     // lo <= i <= hi, and both bounds are values of the index type.
-    llvm::Value *lo = boundValue(arr, false);
-    llvm::Value *hi = boundValue(arr, true);
+    // A heap variable's tuple sits in front of the *variable*, so the bounds
+    // come from there rather than from any activation record — and for an
+    // inner dimension that is not the address just computed.
+    llvm::Value *hdr = heapHeader(ix->base.get());
+    llvm::Value *lo = boundValue(arr, false, hdr);
+    llvm::Value *hi = boundValue(arr, true, hdr);
     llvm::Value *outside =
         b_.CreateOr(b_.CreateICmpSLT(idx, lo, "idx.lt"),
                     b_.CreateICmpSGT(idx, hi, "idx.gt"), "idx.bad");
@@ -901,9 +971,9 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     // answers, so the address is computed in bytes. The arithmetic is the
     // same `(i - lo) * stride` the two-index GEP stands for.
     if (arr->dynamicExtent())
-      return b_.CreateGEP(i8(), base,
-                          {b_.CreateMul(offset, dynSize(arr->elem), "byte")},
-                          "elem");
+      return b_.CreateGEP(
+          i8(), base, {b_.CreateMul(offset, dynSize(arr->elem, hdr), "byte")},
+          "elem");
     return b_.CreateGEP(llvmType(arr), base,
                         {ConstantInt::get(i32(), 0), offset}, "elem");
   }
@@ -1176,7 +1246,11 @@ void CodeGen::emitAssign(Assign *s) {
     while (comp->isArray())
       comp = comp->elem;
     Align align = mod_->getDataLayout().getABITypeAlign(llvmType(comp));
-    b_.CreateMemCpy(dst, align, src, align, dynSize(type));
+    // The length is the *destination's*, which the tuple check has just shown
+    // to be the source's too — and for a variable created by `new` it is read
+    // from the header in front of it rather than from a descriptor.
+    b_.CreateMemCpy(dst, align, src, align,
+                    dynSize(type, headerOf(type, dst)));
     return;
   }
   emitStore(dst, type, s->value.get());
@@ -1228,6 +1302,59 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
     return;
   }
 
+  ap::Type *domain = arg->type ? arg->type->elem : nullptr;
+
+  // §6.7.5.3's other form of `new`: the arguments are the tuple the created
+  // variable's type is produced with. The tuple has to exist before the size
+  // can be asked of it, so it is built in a local header first, the size and
+  // the domain check are made against *that*, and it is copied in front of the
+  // variable once there is a block to copy it into.
+  if (s->standard == StdProc::New && domain && domain->heapTuple) {
+    const std::vector<Symbol *> &formals = domain->schema->discriminants;
+    unsigned n = unsigned(formals.size());
+    std::vector<llvm::Value *> tuple;
+    for (unsigned k = 0; k < n && k + 1 < s->args.size(); ++k) {
+      llvm::Value *v = emitExpr(s->args[k + 1].get());
+      v = convertFor(v, s->args[k + 1]->type, formals[k]->type);
+      // A discriminant outside its own type is outside §6.4.7's domain, and
+      // this is where the value enters the variable that holds it — so the
+      // check that guards every other such store makes this one too.
+      v = checkedForStore(v, formals[k]->type);
+      if (v->getType() != i32())
+        v = b_.CreateZExt(v, i32(), "disc.wide");
+      tuple.push_back(v);
+    }
+
+    // The size is asked of the tuple before there is anywhere to put the
+    // tuple, so for the length of these two calls the bounds are answered
+    // from the values rather than from a header. No scratch storage exists —
+    // which is what lets a sequential emitter do this at all, since it could
+    // not go back and put an alloca in the entry block.
+    newTuple_ = &tuple;
+    // §6.7.5.3: it shall be a dynamic-violation if the tuple is not in the
+    // domain of the schema — the same check a variable's tuple gets on entry.
+    checkSchemaDomain(domain, domain->schema->name);
+    unsigned head = headerSize(domain);
+    llvm::Value *size = b_.CreateAdd(dynSize(domain),
+                                     ConstantInt::get(i32(), head), "blocksize");
+    newTuple_ = nullptr;
+
+    llvm::Value *block = b_.CreateCall(
+        rt("pas_new", ptr(), {i64()}),
+        {b_.CreateZExt(size, i64(), "blocksize.wide")}, "new");
+    for (unsigned k = 0; k < tuple.size(); ++k)
+      b_.CreateStore(tuple[k], b_.CreateGEP(i32(), block,
+                                            {ConstantInt::get(i32(), k)},
+                                            formals[k]->name));
+    // The pointer denotes the *variable*, not the block, so everything else
+    // about a pointer — assignment, comparison with nil, dereference — is
+    // unchanged, and only `new` and `dispose` know the header is there.
+    b_.CreateStore(
+        b_.CreateGEP(i8(), block, {ConstantInt::get(i32(), head)}, "var"),
+        slot);
+    return;
+  }
+
   if (s->standard == StdProc::New) {
     // ISO 7185 §6.6.5.3: with tag values, only the selected variants have to
     // fit. Without them the whole record does.
@@ -1242,6 +1369,18 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
   }
 
   llvm::Value *block = b_.CreateLoad(ptr(), slot, "old");
+  // What was allocated is the header and the variable together, so what is
+  // given back has to be the block rather than the variable.
+  if (unsigned head = headerSize(domain)) {
+    // ISO 7185 §6.6.5.3 makes disposing nil an error, and until there was a
+    // header it was a harmless one — `free(nil)` does nothing. Stepping back
+    // over a header first turns it into a free of an address that was never
+    // allocated, so the check exists where the hazard was introduced rather
+    // than being extended to every pointer.
+    emitTrapIf(b_.CreateIsNull(block, "isnil"), "dispose of nil");
+    block = b_.CreateGEP(i8(), block,
+                         {ConstantInt::getSigned(i32(), -int(head))}, "block");
+  }
   b_.CreateCall(rt("pas_dispose", llvm::Type::getVoidTy(ctx_), {ptr()}),
                 {block});
   // ISO 7185 §6.6.5.3 leaves the pointer undefined afterwards. Setting it to
@@ -1363,8 +1502,10 @@ void CodeGen::emitWrite(WriteStmt *s) {
     // which covers a string literal, since that is what a literal's type is.
     if (arg.value->type->isCharArray()) {
       llvm::Value *addr = emitAddress(arg.value.get());
-      b_.CreateCall(rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
-                    {file, addr, dynLength(arg.value->type), width});
+      b_.CreateCall(
+          rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
+          {file, addr,
+           dynLength(arg.value->type, heapHeader(arg.value.get())), width});
       continue;
     }
 
@@ -1602,8 +1743,14 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     // produced with no tuple: then it is one field of the descriptor the
     // actual brought, and reading it is a load like any other.
     if (f->discSym)
-      return b_.CreateLoad(llvmType(e->type), addressOf(f->discSym),
-                           f->discSym->name);
+      // A heap variable's tuple is in front of the variable, so `p^.n` is read
+      // from where `p^` is; every other descriptor is reached by the walk any
+      // enclosing variable takes.
+      return f->discSym->heapDisc
+                 ? discValue(f->base.get(), size_t(f->discSym->discIndex),
+                             llvmType(e->type))
+                 : b_.CreateLoad(llvmType(e->type), addressOf(f->discSym),
+                                 f->discSym->name);
     if (f->isDiscriminant)
       return ConstantInt::getSigned(llvmType(e->type), f->discValue);
     return emitLoad(e);
@@ -1846,13 +1993,13 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
 llvm::Value *CodeGen::emitStringCompare(Binary *e) {
   llvm::Value *lhs = emitAddress(e->lhs.get());
   llvm::Value *rhs = emitAddress(e->rhs.get());
-  llvm::Value *len = dynLength(e->lhs->type);
+  llvm::Value *len = dynLength(e->lhs->type, heapHeader(e->lhs.get()));
   // Sema requires equal lengths, and can say so wherever both are numbers.
   // Where one is a discriminant the requirement is the same one, made here —
   // and it has to be made, because a comparison over the wrong number of
   // characters answers rather than failing.
   if (e->lhs->type->dynamicBounds() || e->rhs->type->dynamicBounds()) {
-    llvm::Value *other = dynLength(e->rhs->type);
+    llvm::Value *other = dynLength(e->rhs->type, heapHeader(e->rhs.get()));
     emitTrapCall(b_.CreateICmpNE(len, other, "length.bad"),
                  rt("pas_length_error", llvm::Type::getVoidTy(ctx_),
                     {i32(), i32()}),

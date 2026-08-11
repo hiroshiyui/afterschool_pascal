@@ -74,13 +74,29 @@ private:
   /// The bytes a value of this type occupies, as a *value* rather than a
   /// constant: an array whose bounds arrive with the actual has a size only
   /// the descriptor can answer.
-  llvm::Value *dynSize(Type *t);
-  /// The two bounds of an array, either of which may come from a descriptor.
-  llvm::Value *boundValue(Type *t, bool high);
+  llvm::Value *dynSize(Type *t, llvm::Value *header = nullptr);
+  /// The two bounds of an array, either of which may come from a descriptor —
+  /// or, for a variable created by `new` from a schema domain, from the header
+  /// in front of it, which is what `header` points at.
+  llvm::Value *boundValue(Type *t, bool high, llvm::Value *header = nullptr);
   /// How many components an array has, as a value: `Type::length()` answers
   /// only where the bounds are numbers, and returns a plausible one where they
   /// are not.
-  llvm::Value *dynLength(Type *t);
+  llvm::Value *dynLength(Type *t, llvm::Value *header = nullptr);
+  /// The bytes a heap variable's tuple occupies in front of it, and where it
+  /// sits given the variable's own address. Zero and null for every other
+  /// type (ADR-0043).
+  static unsigned headerSize(const Type *t);
+  llvm::Value *headerOf(Type *t, llvm::Value *base);
+  /// The header governing a designator: the one in front of the whole variable
+  /// it selects from, which an inner subscript cannot reach from its own base.
+  llvm::Value *heapHeader(Expr *e);
+  /// The tuple `new` is building, for as long as it has nowhere to live: the
+  /// block it will sit in front of is what the tuple is being used to size.
+  /// Null everywhere else, and that is what makes it safe for `boundValue` to
+  /// consult — outside `new` a heap variable's bounds are only ever in its
+  /// header.
+  std::vector<llvm::Value *> *newTuple_ = nullptr;
   /// The k'th discriminant of the tuple an expression's type was produced
   /// with: a constant, or a read of the variable's own descriptor.
   llvm::Value *discValue(Expr *e, size_t k, llvm::Type *want);
@@ -95,7 +111,8 @@ private:
   /// §6.4.7 NOTE 2: a tuple that leaves an index range empty selects no type
   /// from the schema at all. Where the tuple is a constant Sema says so; where
   /// it is not, this does.
-  void checkSchemaDomain(Type *t, const std::string &schema);
+  void checkSchemaDomain(Type *t, const std::string &schema,
+                         llvm::Value *header = nullptr);
 
   /// The storage a block that a non-local `goto` can reach carries in its
   /// activation record. Opaque, like a file variable, and i64-element for the

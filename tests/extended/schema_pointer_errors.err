@@ -1,0 +1,6 @@
+<source>:20:3: error: 'new' needs the discriminants of schema 'vector' here, as new(p, ...): a schema denotes a type only once its discriminants are given
+<source>:23:10: error: schema 'vector' has 1 discriminant, found 2
+<source>:27:10: error: discriminant 'n' of schema 'vector' is integer, but the value is real
+<source>:32:14: error: 'dispose' takes no discriminants: they belong to the variable, which already has them
+<source>:37:10: error: tag values are only for a pointer to a record with a variant part
+<source>:41:3: error: cannot assign vp to a variable of type pp

@@ -120,6 +120,18 @@ struct Type {
   /// written as a constant, which is every bound outside a schematic formal.
   Symbol *loDisc = nullptr, *hiDisc = nullptr;
 
+  /// This type's tuple is in a header immediately before the variable rather
+  /// than in an activation record: it is the domain of a pointer, written as a
+  /// bare schema-name (§6.4.4), and `new` supplied the tuple (ADR-0043). The
+  /// bounds are then read from the object's own address, so a designator of
+  /// this type carries its tuple with it wherever it is passed.
+  bool heapTuple = false;
+  /// The symbol whose `discSyms` are this heap type's discriminants. It is in
+  /// no scope and has no storage of its own — it exists because a heap
+  /// variable is reached through `p^` rather than by a name, so there is no
+  /// other symbol to hang them on.
+  Symbol *descOwner = nullptr;
+
   /// The type of a schematic formal parameter: produced from a schema, but
   /// with no tuple — the tuple arrives with the actual, in the descriptor that
   /// travels beside its address. A schema with no discriminants is refused, so

@@ -111,6 +111,12 @@ struct Symbol {
   std::vector<Expr *> discExprs;
   /// Which discriminant of `owner`'s parameter this is, for a `Disc`.
   int discIndex = -1;
+  /// A `Disc` whose storage is not in any activation record: the tuple of a
+  /// variable created by `new` lives in a header immediately before it, so
+  /// this one is read from the object's own address rather than by walking
+  /// the static chain. §6.4.4's domain-type may be a schema-name, and a heap
+  /// variable has no frame to keep a descriptor in (ADR-0043).
+  bool heapDisc = false;
   /// Which formal-parameter-section declared this parameter. §6.7.3.3 requires
   /// every actual in one section to bring the same tuple, so the section has
   /// to be recoverable at the call.
@@ -208,6 +214,9 @@ private:
   Type *resolveEnum(TypeExpr &denoter);
   Type *resolveSubrange(TypeExpr &denoter);
   Type *resolvePointer(TypeExpr &denoter);
+  /// §6.4.4's domain-type written as a schema-name. One type per schema, so a
+  /// schema that names itself in a pointer domain terminates.
+  Type *heapFromSchema(Symbol *schema, TypeExpr &denoter);
   Type *resolveFile(TypeExpr &denoter);
   Type *resolveSet(TypeExpr &denoter);
   /// Fill in the domains of pointers that named a type not yet defined, and
@@ -340,7 +349,14 @@ private:
     Type *pointer;
     std::string domain;
     int line = 0, col = 0;
+    /// Set when the domain is a schema that was still being produced: the
+    /// recursion §6.4.7 permits in a pointer domain, which cannot be resolved
+    /// until that production has finished and can be memoised.
+    Symbol *schema = nullptr;
   };
+  /// §6.4.4's schema domains, one type per schema. Not the intern table of
+  /// ADR-0039: that is keyed by (schema, tuple) and these have no tuple.
+  std::map<Symbol *, Type *> heapSchemaTypes_;
 
   Diagnostics &diags_;
   std::vector<std::unique_ptr<Symbol>> owned_;

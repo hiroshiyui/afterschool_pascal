@@ -44,6 +44,12 @@ const
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
+  { Which noun a diagnostic calls a schema's generic production by. Three
+    places ask for one: a parameter form (6.7.3.1), a variable's type
+    (6.2.3.2), and a pointer domain (6.4.4). }
+  nounParamForm = 0;
+  nounVarType = 1;
+  nounPointerDomain = 2;
   kwCount  = 37;     { 35 word-symbols of ISO 7185, then ISO 10206's }
   isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
@@ -311,7 +317,15 @@ type
       with the actual. lo/hi are then not the bound and nothing reads them.
       Nil for every bound written as a constant, which is every bound outside
       a schematic formal parameter. }
-    loDisc, hiDisc: symPtr
+    loDisc, hiDisc: symPtr;
+
+    { 10206 6.4.4: this type's tuple is in a header immediately before the
+      variable rather than in an activation record -- it is the domain of a
+      pointer written as a bare schema-name, and `new` supplied the tuple
+      (ADR-0043). descOwner holds its discriminant symbols, because a heap
+      variable is reached through `p^` and so has no name to hang them on. }
+    heapTuple: boolean;
+    descOwner: symPtr
   end;
 
   symbol = record
@@ -369,7 +383,13 @@ type
       (6.2.3.2). Nil for a schematic formal parameter, whose tuple the caller
       brings, which is what tells the two apart wherever it matters. }
     discExprs: nodePtr;
-    discIndex, paramSection: integer
+    discIndex, paramSection: integer;
+
+    { A skDisc whose storage is not in any activation record: the tuple of a
+      variable created by `new` lives in a header immediately before it, so
+      this one is read from the object's own address rather than by walking
+      the static chain (ADR-0043). }
+    heapDisc: boolean
   end;
 
   { Every type produced from a schema, keyed by the schema and the tuple.
@@ -397,11 +417,33 @@ type
   { A pointer type whose domain named a type not yet defined: ISO 7185 6.4.4
     allows exactly this, and it is the only forward reference in the language
     (ADR-0019). }
+  { 6.4.4's schema domains, one type per schema. Not the intern table of
+    ADR-0039: that is keyed by (schema, tuple) and these have no tuple. }
+  { One discriminant of the tuple `new` is building, before there is a block
+    to put it in front of. }
+  discValPtr = ^discValRec;
+  discValRec = record
+    idx: integer;
+    value: str;
+    next: discValPtr
+  end;
+
+  heapTypePtr = ^heapTypeRec;
+  heapTypeRec = record
+    schema: symPtr;
+    ty: typePtr;
+    next: heapTypePtr
+  end;
+
   pendingPtr = ^pendingRec;
   pendingRec = record
     ptype: typePtr;
     at, len: integer;
     line, col: integer;
+    { Set when the domain is a schema that was still being produced: the
+      recursion 6.4.7 permits in a pointer domain, which cannot be resolved
+      until that production has finished and can be memoised. }
+    schema: symPtr;
     next: pendingPtr
   end;
 
@@ -649,6 +691,13 @@ var
   scopeTop: entryPtr;
   scopeDepth: integer;
   pendingHead, pendingTail: pendingPtr;
+  heapTypes: heapTypePtr;
+  { The tuple `new` is building, for as long as it has nowhere to live: the
+    block it will sit in front of is what the tuple is being used to size.
+    Nil everywhere else, and that is what makes it safe for BoundValue to
+    consult -- outside `new` a heap variable's bounds are only ever in its
+    header. }
+  newTuple: discValPtr;
   { The `packed array [1..n] of char` of each length, so two literals of a
     length share one type as ISO 7185 6.4.5 requires. }
   stringCache: array [1..strMax] of typePtr;
@@ -3449,6 +3498,8 @@ begin
   t^.tupleTail := nil;
   t^.loDisc := nil;
   t^.hiDisc := nil;
+  t^.heapTuple := false;
+  t^.descOwner := nil;
   NewType := t
 end;
 
@@ -3842,6 +3893,7 @@ begin
   s^.discSymTail := nil;
   s^.discExprs := nil;
   s^.discIndex := -1;
+  s^.heapDisc := false;
   s^.paramSection := 0;
   NewSymbol := s
 end;
@@ -4145,7 +4197,7 @@ function ResolveType(d: nodePtr): typePtr; forward;
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
   forward;
 function GenericFromSchema(schema, param: symPtr; d: nodePtr;
-                           forVariable: boolean): typePtr;
+                           noun: integer): typePtr;
   forward;
 procedure CheckStmt(s: nodePtr); forward;
 procedure CheckBlock(b: nodePtr; owner: symPtr); forward;
@@ -4438,8 +4490,86 @@ end;
 
 { A pointer's domain is a type identifier, and it may be one defined later in
   the same type part -- the language's only forward reference (ADR-0019). }
+{ 10206 6.4.4 makes a domain-type a type-name *or* a schema-name, and a bare
+  schema-name leaves the tuple to `new` (6.7.5.3). The variable that creates
+  has no activation record to keep a descriptor in, so its tuple lives in a
+  header immediately before it and its discriminants are read from the
+  object's own address -- which is the whole of what heapDisc marks
+  (ADR-0043).
+
+  One type per schema, memoised: `^vector` written twice denotes one type, the
+  way `vector(3)` written twice does. That is also what stops the recursion,
+  since a schema may name itself in a pointer domain and nowhere else. }
+function HeapFromSchema(schema: symPtr; d: nodePtr): typePtr;
+var t: typePtr; owner: symPtr; l: symListPtr; h: heapTypePtr;
+    p, keep, tail: pendingPtr;
+begin
+  h := heapTypes;
+  while (h <> nil) and (h^.schema <> schema) do h := h^.next;
+  if h <> nil then
+    HeapFromSchema := h^.ty
+  else begin
+    owner := NewSymbol;
+    owner^.kind := skVar;
+    owner^.at := schema^.at;
+    owner^.len := schema^.len;
+    t := GenericFromSchema(schema, owner, d, nounPointerDomain);
+    if IsGeneric(t) then begin
+      owner^.descSchema := schema;
+      l := owner^.discSyms;
+      while l <> nil do begin
+        l^.sym^.heapDisc := true;
+        l := l^.next
+      end;
+      t^.heapTuple := true;
+      t^.descOwner := owner
+    end;
+    new(h);
+    h^.schema := schema;
+    h^.ty := t;
+    h^.next := heapTypes;
+    heapTypes := h;
+    { The body may have named this very schema in a pointer domain, and that
+      pointer could not be completed while the production was running. It can
+      be now, and it has to be here rather than at the end of the type part:
+      this production may have been asked for from the variable part, which is
+      past that point. }
+    keep := nil;
+    tail := nil;
+    p := pendingHead;
+    while p <> nil do begin
+      if p^.schema = schema then
+        p^.ptype^.elem := t
+      else begin
+        if keep = nil then keep := p else tail^.next := p;
+        tail := p
+      end;
+      p := p^.next
+    end;
+    if tail <> nil then tail^.next := nil;
+    pendingHead := keep;
+    pendingTail := tail;
+    HeapFromSchema := t
+  end
+end;
+
+procedure PendPointer(t: typePtr; d: nodePtr; schema: symPtr);
+var p: pendingPtr;
+begin
+  new(p);
+  p^.ptype := t;
+  p^.at := d^.ptAt;
+  p^.len := d^.ptLen;
+  p^.line := d^.line;
+  p^.col := d^.col;
+  p^.schema := schema;
+  p^.next := nil;
+  if pendingHead = nil then pendingHead := p else pendingTail^.next := p;
+  pendingTail := p
+end;
+
 function ResolvePointer(d: nodePtr): typePtr;
-var t: typePtr; s: symPtr; p: pendingPtr;
+var t: typePtr; s: symPtr; busy: boolean; l: symListPtr;
 begin
   t := NewType(tyPointer);
   t^.elem := BuiltinType(d^.ptAt, d^.ptLen);
@@ -4447,38 +4577,54 @@ begin
     s := Lookup(d^.ptAt, d^.ptLen);
     if (s <> nil) and (s^.kind = skType) then
       t^.elem := s^.stype
-    else begin
-      { Not yet -- it may arrive before the type part ends. }
-      new(p);
-      p^.ptype := t;
-      p^.at := d^.ptAt;
-      p^.len := d^.ptLen;
-      p^.line := d^.line;
-      p^.col := d^.col;
-      p^.next := nil;
-      if pendingHead = nil then pendingHead := p else pendingTail^.next := p;
-      pendingTail := p
+    else if (s <> nil) and (s^.kind = skSchema) then begin
+      { 6.4.4: a domain-type may be a schema-name. It is resolved here rather
+        than deferred, because a pointer written in the *variable* part is past
+        the point where deferred domains are completed -- unless the schema is
+        the one being produced, which is the recursion 6.4.7 permits in a
+        pointer domain and nowhere else. That one waits, and by the time it is
+        completed the schema's own type is in the memo. }
+      busy := false;
+      l := producingTop;
+      while l <> nil do begin
+        if l^.sym = s then busy := true;
+        l := l^.next
+      end;
+      if busy then PendPointer(t, d, s)
+      else t^.elem := HeapFromSchema(s, d)
     end
+    else
+      { Not yet -- it may arrive before the type part ends. }
+      PendPointer(t, d, nil)
   end;
   ResolvePointer := t
 end;
 
 procedure ResolvePendingPointers;
-var p: pendingPtr; s: symPtr;
+var p: pendingPtr; s: symPtr; d: nodePtr;
 begin
-  p := pendingHead;
-  while p <> nil do begin
+  { Not a simple walk: resolving a schema domain resolves that schema's body,
+    which may itself pend a pointer and rebuild this list. }
+  while pendingHead <> nil do begin
+    p := pendingHead;
+    pendingHead := p^.next;
+    if pendingHead = nil then pendingTail := nil;
     s := Lookup(p^.at, p^.len);
     if (s <> nil) and (s^.kind = skType) then
       p^.ptype^.elem := s^.stype
+    else if (s <> nil) and (s^.kind = skSchema) then begin
+      d := NewNode(nkPointer, p^.line, p^.col);
+      d^.ptAt := p^.at;
+      d^.ptLen := p^.len;
+      p^.ptype^.elem := HeapFromSchema(s, d)
+    end
     else begin
       ErrorAt(p^.line, p^.col);
       write('unknown type ''');
       WritePool(p^.at, p^.len);
       writeln(''' as the domain of a pointer');
       p^.ptype^.elem := intType   { keep the tree checkable }
-    end;
-    p := p^.next
+    end
   end;
   pendingHead := nil;
   pendingTail := nil
@@ -5317,7 +5463,7 @@ begin
     else if dynamic then begin
       v := dynamicVarFor;
       dynamicVarFor := nil;   { the body is not a variable declaration }
-      t := GenericFromSchema(schema, v, d, true);
+      t := GenericFromSchema(schema, v, d, nounVarType);
       dynamicVarFor := v;
       if IsGeneric(t) then begin
         v^.descSchema := schema;
@@ -5523,7 +5669,7 @@ end;
 
   The result belongs to that one symbol and is deliberately not interned: two
   of them read two descriptors, so they cannot share a type however alike they
-  look. `forVariable` picks the noun a diagnostic calls them by: a schematic
+  look. `noun` picks the word a diagnostic calls them by: a schematic
   formal parameter and a variable with non-constant discriminants need exactly
   the same thing of this. }
 function GenericFromSchema;
@@ -5589,8 +5735,11 @@ begin
       ErrorAt(d^.line, d^.col);
       write('no type is produced from schema ''');
       WritePool(schema^.at, schema^.len);
-      if forVariable then writeln(''' for this variable''s type')
-      else writeln(''' for this parameter form');
+      case noun of
+        nounVarType:       writeln(''' for this variable''s type');
+        nounParamForm:     writeln(''' for this parameter form');
+        nounPointerDomain: writeln(''' for this pointer domain')
+      end;
       t := intType
     end
     else begin
@@ -5606,8 +5755,11 @@ begin
         ErrorAt(d^.line, d^.col);
         write('schema ''');
         WritePool(schema^.at, schema^.len);
-        if forVariable then write(''' cannot be a variable''s type: ')
-        else write(''' cannot be a parameter form: ');
+        case noun of
+          nounVarType:       write(''' cannot be a variable''s type: ');
+          nounParamForm:     write(''' cannot be a parameter form: ');
+          nounPointerDomain: write(''' cannot be a pointer domain: ')
+        end;
         writeln('its discriminants have to bound an array, because that is ',
                 'the only size a descriptor can describe');
         t := intType
@@ -5631,7 +5783,7 @@ end;
 function SchematicFormal(schema, param: symPtr; d: nodePtr): typePtr;
 var t: typePtr;
 begin
-  t := GenericFromSchema(schema, param, d, false);
+  t := GenericFromSchema(schema, param, d, nounParamForm);
   if IsGeneric(t) then param^.descSchema := schema;
   SchematicFormal := t
 end;
@@ -6564,7 +6716,12 @@ begin
           { A schematic formal parameter has no tuple: its discriminants are in
             the descriptor the actual brought, and the parameter is what says
             which descriptor. Everything else has folded them already. }
-          if IsGeneric(b) and (e^.fdBase^.kind = nkVar) then
+          { A heap variable's tuple travels with the variable, so the symbol
+            holding its discriminants is on the *type* -- there is no name to
+            ask, since `p^` is not one. }
+          if b^.heapTuple then
+            ds := b^.descOwner^.discSyms
+          else if IsGeneric(b) and (e^.fdBase^.kind = nkVar) then
             ds := e^.fdBase^.vrSym^.discSyms
           else
             ds := nil;
@@ -6912,6 +7069,60 @@ end;
   argument has to be a variable. The file primitives are here too: ISO 7185
   6.6.5.2 defines read and write in terms of get, put and the buffer variable,
   and this compiler keeps them rather than providing only the derived forms. }
+{ 10206 6.7.5.3's tuple form of `new`: the arguments are the discriminants the
+  created variable's type is produced with. Unlike 6.4.8's
+  actual-discriminant-part these need not be constants -- the tuple is chosen
+  when `new` runs, which is the whole reason the header exists. }
+procedure CheckNewTuple(p: nodePtr; domain: typePtr; n: integer);
+var d: symListPtr; value: nodePtr; count: integer;
+begin
+  if p^.pcStd = spDispose then begin
+    ErrorAt(p^.pcArgs^.next^.line, p^.pcArgs^.next^.col);
+    writeln('''dispose'' takes no discriminants: they belong to the ',
+            'variable, which already has them')
+  end
+  else begin
+    count := 0;
+    d := domain^.schema^.discs;
+    while d <> nil do begin
+      count := count + 1;
+      d := d^.next
+    end;
+    if n - 1 <> count then begin
+      ErrorAt(p^.pcArgs^.next^.line, p^.pcArgs^.next^.col);
+      write('schema ''');
+      WritePool(domain^.schema^.at, domain^.schema^.len);
+      write(''' has ', count:1, ' discriminant');
+      if count <> 1 then write('s');
+      writeln(', found ', n - 1:1)
+    end
+    else begin
+      { 6.7.5.3: the type of each expression shall be compatible with the type
+        of the corresponding formal discriminant. }
+      d := domain^.schema^.discs;
+      value := p^.pcArgs^.next;
+      while (d <> nil) and (value <> nil) do begin
+        if (value^.ntype = nil) or not Assignable(d^.sym^.stype, value^.ntype)
+        then begin
+          ErrorAt(value^.line, value^.col);
+          write('discriminant ''');
+          WritePool(d^.sym^.at, d^.sym^.len);
+          write(''' of schema ''');
+          WritePool(domain^.schema^.at, domain^.schema^.len);
+          write(''' is ');
+          WriteTypeName(d^.sym^.stype);
+          write(', but the value is ');
+          if value^.ntype = nil then write('untyped')
+          else WriteTypeName(value^.ntype);
+          writeln
+        end;
+        d := d^.next;
+        value := value^.next
+      end
+    end
+  end
+end;
+
 procedure CheckStdProc(p: nodePtr);
 var
   a, value: nodePtr;
@@ -6987,12 +7198,31 @@ begin
       WriteTypeName(a^.ntype);
       writeln
     end
+    { 6.7.5.3's `new(p)` gives the created variable the domain type, and a
+      schema domain has no type until a tuple names one. `dispose(q)` is the
+      opposite: the variable it removes already has its tuple. }
+    else if (n = 1) and (p^.pcStd = spNew) and (a^.ntype <> nil) and
+            (a^.ntype^.elem <> nil) and a^.ntype^.elem^.heapTuple then begin
+      ErrorAt(p^.line, p^.col);
+      write('''new'' needs the discriminants of schema ''');
+      WritePool(a^.ntype^.elem^.schema^.at, a^.ntype^.elem^.schema^.len);
+      writeln(''' here, as new(p, ...): a schema denotes a type only once ',
+              'its discriminants are given')
+    end
     { ISO 7185 6.6.5.3: `new(p, c1, ..., cn)` creates a variable with the
       variants those tag values select, one value per nested variant part,
       outermost first. `dispose` takes the same list. }
     else if n > 1 then begin
       if a^.ntype = nil then domain := nil else domain := a^.ntype^.elem;
-      if not IsRecord(domain) then begin
+      { 10206 6.7.5.3 gives `new(p, d1, ..., ds)` a second meaning: where the
+        domain-type is a schema-name, the arguments are the *tuple* the
+        created variable's type is produced with, not tag values selecting
+        variants. The two forms are told apart by the domain and by nothing
+        else -- a record with a variant part takes the first, a schema domain
+        the second. }
+      if (domain <> nil) and domain^.heapTuple then
+        CheckNewTuple(p, domain, n)
+      else if not IsRecord(domain) then begin
         ErrorAt(a^.next^.line, a^.next^.col);
         writeln('tag values are only for a pointer to a record with a ',
                 'variant part')
@@ -7939,7 +8169,7 @@ begin
           one actual-discriminant-part, evaluated once per variable on entry
           from the one tree the group shares. }
         if IsGeneric(first^.stype) then begin
-          s^.stype := GenericFromSchema(schema, s, g^.grType, true);
+          s^.stype := GenericFromSchema(schema, s, g^.grType, nounVarType);
           s^.descSchema := first^.descSchema;
           s^.discExprs := first^.discExprs
         end;
@@ -9962,32 +10192,100 @@ end;
 
 { A bound of an array: a constant where the source wrote one, and otherwise the
   discriminant it names, read out of the descriptor. }
-procedure BoundValue(t: typePtr; high: boolean; var v: str);
-var disc: symPtr; addr, raw: str;
+{ How many bytes the tuple of a heap variable occupies in front of it. Every
+  discriminant is stored as an i32 whatever its own type, so the header is one
+  number wide per discriminant -- and it is rounded up to 16 so that the
+  variable itself keeps the alignment the allocator gave the block. 16 rather
+  than 8 because a set is 256 bits and the target aligns one to 16 (ADR-0028). }
+function HeaderSize(t: typePtr): integer;
+var bytes, n: integer; d: symListPtr;
+begin
+  if (t = nil) or not t^.heapTuple or (t^.schema = nil) then
+    HeaderSize := 0
+  else begin
+    n := 0;
+    d := t^.schema^.discs;
+    while d <> nil do begin
+      n := n + 1;
+      d := d^.next
+    end;
+    bytes := 4 * n;
+    HeaderSize := ((bytes + 15) div 16) * 16
+  end
+end;
+
+{ The address of a heap variable's tuple, given the variable's own address.
+  Empty for every type whose tuple is somewhere a symbol can name. }
+procedure HeaderOf(t: typePtr; var base: str; var v: str);
+begin
+  if (t = nil) or not t^.heapTuple then
+    StrClear(v)
+  else begin
+    Def(v);
+    write(ircode, 'getelementptr i8, ptr ');
+    PutOp(base);
+    writeln(ircode, ', i32 ', -HeaderSize(t):1)
+  end
+end;
+
+{ `header` is the tuple of the heap variable this type belongs to, and is
+  empty for every other type -- a schematic formal and a variable with
+  non-constant discriminants both keep theirs where a symbol can name it, and
+  AddressOfSym reaches those by the walk every enclosing variable makes. }
+procedure BoundValue(t: typePtr; high: boolean; var header: str; var v: str);
+var disc: symPtr; addr, raw: str; d: discValPtr; done: boolean;
 begin
   if high then disc := t^.hiDisc else disc := t^.loDisc;
   if disc = nil then
     if high then OpInt(t^.hi, v) else OpInt(t^.lo, v)
   else begin
-    AddressOfSym(disc, addr);
+    done := false;
+    { Inside `new` the tuple has no home yet -- the block it will live in
+      front of is the thing being sized -- so the values are answered from the
+      arguments themselves. That is what keeps the size, the domain check and
+      every later read of the same bounds one piece of code. }
+    if disc^.heapDisc then begin
+      d := newTuple;
+      while d <> nil do begin
+        if d^.idx = disc^.discIndex then begin
+          v := d^.value;
+          done := true
+        end;
+        d := d^.next
+      end
+    end;
+    if not done then begin
+    if disc^.heapDisc then begin
+      Def(addr);
+      write(ircode, 'getelementptr i32, ptr ');
+      PutOp(header);
+      writeln(ircode, ', i32 ', disc^.discIndex:1)
+    end
+    else
+      AddressOfSym(disc, addr);
     Def(raw);
     write(ircode, 'load ');
-    PutLlType(disc^.stype);
+    if disc^.heapDisc then write(ircode, 'i32')
+    else PutLlType(disc^.stype);
     write(ircode, ', ptr ');
     PutOp(addr);
     writeln(ircode);
     { A discriminant may be of any ordinal type, and the index arithmetic is
       done in the integer type as it always is. }
-    if IsChar(disc^.stype) or IsBoolean(disc^.stype) then begin
-      Def(v);
-      write(ircode, 'zext ');
-      PutLlType(disc^.stype);
-      write(ircode, ' ');
-      PutOp(raw);
-      writeln(ircode, ' to i32')
-    end
+    if IsChar(disc^.stype) or IsBoolean(disc^.stype) then
+      if disc^.heapDisc then
+        v := raw   { a heap tuple is stored one i32 per discriminant }
+      else begin
+        Def(v);
+        write(ircode, 'zext ');
+        PutLlType(disc^.stype);
+        write(ircode, ' ');
+        PutOp(raw);
+        writeln(ircode, ' to i32')
+      end
     else
       v := raw
+    end
   end
 end;
 
@@ -9996,14 +10294,14 @@ end;
   discriminants it returns arithmetic on the placeholders, which is a number
   and therefore not obviously wrong. Everything needing a length rather than a
   size comes through here instead. }
-procedure DynLength(t: typePtr; var v: str);
+procedure DynLength(t: typePtr; var header: str; var v: str);
 var lo, hi, extent: str;
 begin
   if (t^.loDisc = nil) and (t^.hiDisc = nil) then
     OpInt(TypeLength(t), v)
   else begin
-    BoundValue(t, false, lo);
-    BoundValue(t, true, hi);
+    BoundValue(t, false, header, lo);
+    BoundValue(t, true, header, hi);
     Def(extent);
     write(ircode, 'sub i32 ');
     PutOp(hi);
@@ -10020,7 +10318,7 @@ end;
 { The bytes a value of this type occupies, as a *value* rather than a constant:
   an array whose bounds arrive with the actual has a size only the descriptor
   can answer. }
-procedure DynSize(t: typePtr; var v: str);
+procedure DynSize(t: typePtr; var header: str; var v: str);
 var lo, hi, extent, count, inner: str;
 begin
   if not DynamicExtent(t) then
@@ -10029,8 +10327,8 @@ begin
     { (hi - lo + 1) components, each of whatever one component costs. The count
       cannot be negative: the tuple that produced the actual's type was checked
       when it was produced, so an empty range never reaches here. }
-    BoundValue(t, false, lo);
-    BoundValue(t, true, hi);
+    BoundValue(t, false, header, lo);
+    BoundValue(t, true, header, hi);
     Def(extent);
     write(ircode, 'sub i32 ');
     PutOp(hi);
@@ -10041,7 +10339,9 @@ begin
     write(ircode, 'add i32 ');
     PutOp(extent);
     writeln(ircode, ', 1');
-    DynSize(t^.elem, inner);
+    { One header serves every level: an array of dynamically-bounded arrays
+      has one tuple, and the inner bounds are other discriminants of it. }
+    DynSize(t^.elem, header, inner);
     Def(v);
     write(ircode, 'mul i32 ');
     PutOp(count);
@@ -10186,6 +10486,27 @@ end;
 
 procedure EmitExpr(e: nodePtr; var v: str); forward;
 procedure EmitAddress(e: nodePtr; var v: str); forward;
+
+{ The tuple governing a designator, found by walking to the whole variable it
+  selects from. One header serves every dimension -- `g^[i][j]` reads `rows`
+  and `cols` out of the same one -- and only the outermost designator has the
+  address it sits in front of, so an inner subscript cannot compute it from
+  its own base. Walking down is what stands in for threading it through. }
+procedure HeapHeader(e: nodePtr; var v: str);
+var base: str; walking: boolean;
+begin
+  walking := true;
+  while walking do
+    if e^.kind = nkIndex then e := e^.ixBase
+    else if e^.kind = nkField then e := e^.fdBase
+    else walking := false;
+  if (e^.ntype = nil) or not e^.ntype^.heapTuple then
+    StrClear(v)
+  else begin
+    EmitAddress(e, base);
+    HeaderOf(e^.ntype, base, v)
+  end
+end;
 procedure EmitStmt(s: nodePtr); forward;
 
 { The value a designator holds. An array or a record has no register form, so
@@ -10674,51 +10995,65 @@ begin
   write(ircode, ')')
 end;
 
-{ Where to read the tuple a designator's type was produced with. A generic
-  type belongs to one variable -- nothing else can be given it, and a subscript
-  of one would already have yielded the component -- so a designator possessing
-  one *is* that variable, and its tuple is in the descriptor. Every other type
-  produced from a schema was produced from constants, and they are on the type.
-  Two cursors rather than one, because the two live in different lists. }
-procedure DiscCursors(e: nodePtr; var ds: symListPtr; var tv: numPtr);
+{ The k'th discriminant of the tuple this expression's type was produced with.
+  A generic type belongs to one variable -- nothing else can be given it, and a
+  subscript of one would already have yielded the component -- so an expression
+  possessing one *is* that variable, and its tuple is in the descriptor. A heap
+  variable carries its tuple in front of it, so any designator of one answers,
+  not only a name: `p^` is not a name and `q^[1]^` is not even a pointer
+  variable. Every other type produced from a schema was produced from
+  constants, and they are on the type. }
+procedure DiscValue(e: nodePtr; k: integer; want: typePtr; var v: str);
+var d: symListPtr; tv: numPtr; i: integer; hdr, half, raw: str;
 begin
-  ds := nil;
-  tv := nil;
-  if IsGeneric(e^.ntype) and (e^.kind = nkVar) then
-    ds := e^.vrSym^.discSyms
-  else
-    tv := e^.ntype^.tuple
-end;
-
-{ One step of that walk: the next discriminant's value, and the cursors moved
-  on. A tuple shorter than the schema's discriminant list means an error was
-  already reported, so zero keeps the emitter going rather than deciding
-  anything. }
-procedure DiscStep(var ds: symListPtr; var tv: numPtr; want: typePtr;
-                   var v: str);
-var half: str;
-begin
-  if ds <> nil then begin
-    AddressOfSym(ds^.sym, half);
-    Def(v);
-    write(ircode, 'load ');
-    PutLlType(want);
-    write(ircode, ', ptr ');
+  if e^.ntype^.heapTuple then begin
+    HeapHeader(e, hdr);
+    Def(half);
+    write(ircode, 'getelementptr i32, ptr ');
+    PutOp(hdr);
+    writeln(ircode, ', i32 ', k:1);
+    Def(raw);
+    write(ircode, 'load i32, ptr ');
     PutOp(half);
     writeln(ircode);
-    ds := ds^.next
+    { The header holds one i32 per discriminant whatever its own type. }
+    if IsChar(want) or IsBoolean(want) then begin
+      Def(v);
+      write(ircode, 'trunc i32 ');
+      PutOp(raw);
+      write(ircode, ' to ');
+      PutLlType(want);
+      writeln(ircode)
+    end
+    else
+      v := raw
   end
-  else if tv <> nil then begin
-    OpInt(tv^.value, v);
-    tv := tv^.next
+  else if IsGeneric(e^.ntype) and (e^.kind = nkVar) then begin
+    d := e^.vrSym^.discSyms;
+    for i := 1 to k do
+      if d <> nil then d := d^.next;
+    if d = nil then OpInt(0, v)
+    else begin
+      AddressOfSym(d^.sym, half);
+      Def(v);
+      write(ircode, 'load ');
+      PutLlType(want);
+      write(ircode, ', ptr ');
+      PutOp(half);
+      writeln(ircode)
+    end
   end
-  else
-    OpInt(0, v)
+  else begin
+    tv := e^.ntype^.tuple;
+    for i := 1 to k do
+      if tv <> nil then tv := tv^.next;
+    if tv = nil then OpInt(0, v) else OpInt(tv^.value, v)
+  end
 end;
 
 procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
 var link, a, slot, half, target: str; head, tail, o: opndPtr;
-    p, ds, dp: symListPtr; arg: nodePtr; result: typePtr; tv: numPtr;
+    p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
 begin
   StrClear(target);
   if callee^.kind = skProcParam then begin
@@ -10767,11 +11102,12 @@ begin
     else if p^.sym^.descSchema <> nil then begin
       EmitAddress(arg, a);
       AppendOpnd(head, tail, a, true, nil);
-      DiscCursors(arg, ds, tv);
+      k := 0;
       dp := p^.sym^.descSchema^.discs;
       while dp <> nil do begin
-        DiscStep(ds, tv, dp^.sym^.stype, a);
+        DiscValue(arg, k, dp^.sym^.stype, a);
         AppendOpnd(head, tail, a, false, dp^.sym^.stype);
+        k := k + 1;
         dp := dp^.next
       end
     end
@@ -10828,17 +11164,19 @@ end;
   character, which is what the runtime helper reports; the operator then only
   has to say what it wants of the sign. }
 procedure EmitStringCompare(e: nodePtr; var v: str);
-var lhs, rhs, cmp, len, other, bad: str;
+var lhs, rhs, cmp, len, other, bad, lhdr, rhdr: str;
 begin
   EmitAddress(e^.bnLhs, lhs);
   EmitAddress(e^.bnRhs, rhs);
-  DynLength(e^.bnLhs^.ntype, len);
+  HeapHeader(e^.bnLhs, lhdr);
+  DynLength(e^.bnLhs^.ntype, lhdr, len);
   { Sema requires equal lengths, and can say so wherever both are numbers.
     Where one is a discriminant the requirement is the same one, made here --
     and it has to be made, because a comparison over the wrong number of
     characters answers rather than failing. }
   if DynamicExtent(e^.bnLhs^.ntype) or DynamicExtent(e^.bnRhs^.ntype) then begin
-    DynLength(e^.bnRhs^.ntype, other);
+    HeapHeader(e^.bnRhs, rhdr);
+    DynLength(e^.bnRhs^.ntype, rhdr, other);
     Def(bad);
     write(ircode, 'icmp ne i32 ');
     PutOp(len);
@@ -11423,7 +11761,7 @@ end;
 
 procedure EmitAddress;
 var base, idx, lo, hi, below, above, bad, off, target, stride, byte: str;
-    arr: typePtr; msg: integer;
+    hdr: str; arr: typePtr; msg: integer;
 begin
   case e^.kind of
     nkVar: begin
@@ -11459,8 +11797,12 @@ begin
       { ISO 7185 6.5.3.2 makes an index outside the bounds an error. The check
         comes first, so the subtraction below cannot overflow: afterwards
         lo <= i <= hi, and both bounds are values of the index type. }
-      BoundValue(arr, false, lo);
-      BoundValue(arr, true, hi);
+      { A heap variable's tuple sits in front of the *variable*, so the
+        bounds come from there rather than from any activation record -- and
+        for an inner dimension that is not the address just computed. }
+      HeapHeader(e^.ixBase, hdr);
+      BoundValue(arr, false, hdr, lo);
+      BoundValue(arr, true, hdr, hi);
       Def(below);
       write(ircode, 'icmp slt i32 ');
       PutOp(idx);
@@ -11505,7 +11847,7 @@ begin
         answers, so the address is computed in bytes. The arithmetic is the
         same `(i - lo) * stride` the two-index getelementptr stands for. }
       if DynamicExtent(arr) then begin
-        DynSize(arr^.elem, stride);
+        DynSize(arr^.elem, hdr, stride);
         Def(byte);
         write(ircode, 'mul i32 ');
         PutOp(off);
@@ -11587,15 +11929,21 @@ begin
       { ...unless the base is a schematic formal parameter, whose type was
         produced with no tuple: then it is one field of the descriptor the
         actual brought, and reading it is a load like any other. }
-      if e^.fdDiscSym <> nil then begin
-        AddressOfSym(e^.fdDiscSym, addr);
-        Def(v);
-        write(ircode, 'load ');
-        PutLlType(e^.ntype);
-        write(ircode, ', ptr ');
-        PutOp(addr);
-        writeln(ircode)
-      end
+      if e^.fdDiscSym <> nil then
+        { A heap variable's tuple is in front of the variable, so `p^.n` is
+          read from where `p^` is; every other descriptor is reached by the
+          walk any enclosing variable takes. }
+        if e^.fdDiscSym^.heapDisc then
+          DiscValue(e^.fdBase, e^.fdDiscSym^.discIndex, e^.ntype, v)
+        else begin
+          AddressOfSym(e^.fdDiscSym, addr);
+          Def(v);
+          write(ircode, 'load ');
+          PutLlType(e^.ntype);
+          write(ircode, ', ptr ');
+          PutOp(addr);
+          writeln(ircode)
+        end
       else if e^.fdIsDisc then OpInt(e^.fdDiscValue, v)
       else EmitLoad(e, v);
     nkVar:
@@ -11692,19 +12040,18 @@ end;
   ordinal type; the message reports it as a number, which is what its ordinal
   is. }
 procedure EmitTupleCheck(dst, src: nodePtr);
-var dp, lds, rds: symListPtr; ltv, rtv: numPtr; l, r, bad: str;
-    schema: symPtr; schemaMsg, discMsg: integer;
+var dp: symListPtr; l, r, bad: str;
+    schema: symPtr; schemaMsg, discMsg, k: integer;
 begin
   schema := dst^.ntype^.schema;
   MsgStart;
   WritePool(schema^.at, schema^.len);
   schemaMsg := MsgEnd;
-  DiscCursors(dst, lds, ltv);
-  DiscCursors(src, rds, rtv);
   dp := schema^.discs;
+  k := 0;
   while dp <> nil do begin
-    DiscStep(lds, ltv, dp^.sym^.stype, l);
-    DiscStep(rds, rtv, dp^.sym^.stype, r);
+    DiscValue(dst, k, dp^.sym^.stype, l);
+    DiscValue(src, k, dp^.sym^.stype, r);
     MsgStart;
     WritePool(dp^.sym^.at, dp^.sym^.len);
     discMsg := MsgEnd;
@@ -11719,6 +12066,7 @@ begin
     WidenOrdinal(l, dp^.sym^.stype);
     WidenOrdinal(r, dp^.sym^.stype);
     EmitTrapDisc(bad, schemaMsg, discMsg, l, r);
+    k := k + 1;
     dp := dp^.next
   end
 end;
@@ -11729,7 +12077,7 @@ end;
   this is where the tuples meet -- and once they agree the copy is the ordinary
   whole-variable one with a length that is computed rather than written. }
 procedure EmitAssign(s: nodePtr);
-var dst, src, size: str; t, comp: typePtr; align: integer;
+var dst, src, size, hdr: str; t, comp: typePtr; align: integer;
 begin
   EmitAddress(s^.asTarget, dst);
   t := s^.asTarget^.ntype;
@@ -11743,7 +12091,11 @@ begin
     comp := t;
     while comp^.kind = tyArray do comp := comp^.elem;
     align := LlAlign(comp);
-    DynSize(t, size);
+    { The length is the *destination's*, which the tuple check has just shown
+      to be the source's too -- and for a variable created by `new` it is read
+      from the header in front of it rather than from a descriptor. }
+    HeaderOf(t, dst, hdr);
+    DynSize(t, hdr, size);
     write(ircode, '  call void @llvm.memcpy.p0.p0.i32(ptr align ', align:1,
           ' ');
     PutOp(dst);
@@ -11758,7 +12110,7 @@ begin
 end;
 
 procedure EmitWrite(s: nodePtr);
-var fh, v, width, prec, addr, slen: str; a: nodePtr; b: typePtr;
+var fh, v, width, prec, addr, slen, shdr: str; a: nodePtr; b: typePtr;
 begin
   if s^.wrFile <> nil then begin
     EmitAddress(s^.wrFile, fh);
@@ -11791,7 +12143,8 @@ begin
         which covers a string literal, since that is what a literal's type is. }
       if IsCharArray(a^.waValue^.ntype) then begin
         EmitAddress(a^.waValue, addr);
-        DynLength(a^.waValue^.ntype, slen);
+        HeapHeader(a^.waValue, shdr);
+        DynLength(a^.waValue^.ntype, shdr, slen);
         write(ircode, '  call void @pas_write_str(ptr ');
         PutOp(fh);
         write(ircode, ', ptr ');
@@ -11958,8 +12311,100 @@ end;
 { `new(p)` gives p the address of fresh storage for one variable of its domain;
   `dispose(p)` gives it back. The size is a compile-time constant because the
   domain type is. }
+{ 10206 6.7.5.3's other form of `new`: the arguments are the tuple the created
+  variable's type is produced with. The size is asked of the tuple before there
+  is anywhere to put the tuple, so for the length of those two calls the bounds
+  are answered from the values rather than from a header -- no scratch storage
+  exists, which is what lets a sequential emitter do this at all. }
+procedure CheckSchemaDomain(t: typePtr; schema: symPtr;
+                            var header: str);
+  forward;
+
+procedure EmitNewTuple(s: nodePtr; domain: typePtr; var slot: str);
+var d: symListPtr; value: nodePtr; v, size, raw, block, vr, nohdr: str;
+    k, head: integer; cell, next: discValPtr;
+begin
+  newTuple := nil;
+  k := 0;
+  d := domain^.schema^.discs;
+  value := s^.pcArgs^.next;
+  while (d <> nil) and (value <> nil) do begin
+    EmitExpr(value, v);
+    ConvertFor(v, value^.ntype, d^.sym^.stype);
+    { A discriminant outside its own type is outside 6.4.7's domain, and this
+      is where the value enters the variable that holds it -- so the check
+      that guards every other such store makes this one too. }
+    CheckedForStore(v, d^.sym^.stype);
+    if IsChar(d^.sym^.stype) or IsBoolean(d^.sym^.stype) then begin
+      raw := v;
+      Def(v);
+      write(ircode, 'zext ');
+      PutLlType(d^.sym^.stype);
+      write(ircode, ' ');
+      PutOp(raw);
+      writeln(ircode, ' to i32')
+    end;
+    new(cell);
+    cell^.idx := k;
+    cell^.value := v;
+    cell^.next := newTuple;
+    newTuple := cell;
+    k := k + 1;
+    d := d^.next;
+    value := value^.next
+  end;
+
+  StrClear(nohdr);
+  { 6.7.5.3: it shall be a dynamic-violation if the tuple is not in the domain
+    of the schema -- the same check a variable's tuple gets on entry. }
+  CheckSchemaDomain(domain, domain^.schema, nohdr);
+  DynSize(domain, nohdr, size);
+  head := HeaderSize(domain);
+  Def(raw);
+  write(ircode, 'add i32 ');
+  PutOp(size);
+  writeln(ircode, ', ', head:1);
+  Def(v);
+  write(ircode, 'zext i32 ');
+  PutOp(raw);
+  writeln(ircode, ' to i64');
+  Def(block);
+  write(ircode, 'call ptr @pas_new(i64 ');
+  PutOp(v);
+  writeln(ircode, ')');
+
+  cell := newTuple;
+  while cell <> nil do begin
+    Def(vr);
+    write(ircode, 'getelementptr i32, ptr ');
+    PutOp(block);
+    writeln(ircode, ', i32 ', cell^.idx:1);
+    write(ircode, '  store i32 ');
+    PutOp(cell^.value);
+    write(ircode, ', ptr ');
+    PutOp(vr);
+    writeln(ircode);
+    next := cell^.next;
+    cell := next
+  end;
+  newTuple := nil;
+
+  { The pointer denotes the *variable*, not the block, so everything else
+    about a pointer -- assignment, comparison with nil, dereference -- is
+    unchanged, and only `new` and `dispose` know the header is there. }
+  Def(vr);
+  write(ircode, 'getelementptr i8, ptr ');
+  PutOp(block);
+  writeln(ircode, ', i32 ', head:1);
+  write(ircode, '  store ptr ');
+  PutOp(vr);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode)
+end;
+
 procedure EmitStdProc(s: nodePtr);
-var slot, block: str;
+var slot, block, raw: str; domain: typePtr; head, msg: integer;
 begin
   EmitAddress(s^.pcArgs, slot);
   case s^.pcStd of
@@ -11977,6 +12422,9 @@ begin
       writeln(ircode, ')')
     end;
     spNew: begin
+      domain := s^.pcArgs^.ntype^.elem;
+      if domain^.heapTuple then EmitNewTuple(s, domain, slot)
+      else begin
       { ISO 7185 6.6.5.3: with tag values, only the selected variants have to
         fit. Without them the whole record does. }
       Def(block);
@@ -11991,12 +12439,36 @@ begin
       write(ircode, ', ptr ');
       PutOp(slot);
       writeln(ircode)
+      end
     end;
     spDispose: begin
       Def(block);
       write(ircode, 'load ptr, ptr ');
       PutOp(slot);
       writeln(ircode);
+      { What was allocated is the header and the variable together, so what is
+        given back has to be the block rather than the variable. }
+      head := HeaderSize(s^.pcArgs^.ntype^.elem);
+      if head <> 0 then begin
+        { ISO 7185 6.6.5.3 makes disposing nil an error, and until there was a
+          header it was a harmless one -- freeing nil does nothing. Stepping
+          back over a header first turns it into a free of an address that was
+          never allocated, so the check exists where the hazard was introduced
+          rather than being extended to every pointer. }
+        Def(raw);
+        write(ircode, 'icmp eq ptr ');
+        PutOp(block);
+        writeln(ircode, ', null');
+        MsgStart;
+        MsgText('dispose of nil                          ');
+        msg := MsgEnd;
+        EmitTrapIf(raw, msg);
+        raw := block;
+        Def(block);
+        write(ircode, 'getelementptr i8, ptr ');
+        PutOp(raw);
+        writeln(ircode, ', i32 ', -head:1)
+      end;
       write(ircode, '  call void @pas_dispose(ptr ');
       PutOp(block);
       writeln(ircode, ')');
@@ -12604,14 +13076,14 @@ end;
 { 6.4.7 NOTE 2: a tuple that leaves an index range empty selects no type from
   the schema at all. Where the tuple is a constant Sema says so; where it is
   not, this does. }
-procedure CheckSchemaDomain(t: typePtr; schema: symPtr);
+procedure CheckSchemaDomain;
 var lo, hi, bad: str; msg: integer;
 begin
   if t <> nil then
     if (t^.kind = tyArray) and DynamicExtent(t) then begin
       if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
-        BoundValue(t, false, lo);
-        BoundValue(t, true, hi);
+        BoundValue(t, false, header, lo);
+        BoundValue(t, true, header, hi);
         Def(bad);
         write(ircode, 'icmp slt i32 ');
         PutOp(hi);
@@ -12625,7 +13097,7 @@ begin
         msg := MsgEnd;
         EmitTrapIf(bad, msg)
       end;
-      CheckSchemaDomain(t^.elem, schema)
+      CheckSchemaDomain(t^.elem, schema, header)
     end
 end;
 
@@ -12635,7 +13107,7 @@ end;
   the descriptor and not of the expressions that filled it. }
 procedure InitDynamicVars(p: symPtr);
 var l, d: symListPtr; a: nodePtr; slot, half, value, size, storage: str;
-    comp: typePtr; align: integer;
+    nohdr: str; comp: typePtr; align: integer;
 begin
   l := p^.frameVars;
   while l <> nil do begin
@@ -12668,11 +13140,12 @@ begin
         a := a^.next;
         d := d^.next
       end;
-      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema);
+      StrClear(nohdr);
+      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema, nohdr);
       comp := l^.sym^.stype;
       while comp^.kind = tyArray do comp := comp^.elem;
       align := LlAlign(comp);
-      DynSize(l^.sym^.stype, size);
+      DynSize(l^.sym^.stype, nohdr, size);
       Def(storage);
       write(ircode, 'alloca i8, i32 ');
       PutOp(size);
@@ -12697,7 +13170,7 @@ end;
   static link, copy the incoming arguments into their slots. }
 procedure EnterFrame(p: symPtr);
 var l, d: symListPtr; link, slot, arg, half, actual, size, copy: str;
-    k, align: integer; comp: typePtr;
+    nohdr: str; k, align: integer; comp: typePtr;
 begin
   { A label belongs to exactly one block, so the map is emptied per function.
     Sema numbers labels across the whole program, so a stale entry would never
@@ -12782,7 +13255,8 @@ begin
           comp := l^.sym^.stype;
           while comp^.kind = tyArray do comp := comp^.elem;
           align := LlAlign(comp);
-          DynSize(l^.sym^.stype, size);
+          StrClear(nohdr);
+          DynSize(l^.sym^.stype, nohdr, size);
           Def(copy);
           write(ircode, 'alloca i8, i32 ');
           PutOp(size);
@@ -13070,6 +13544,8 @@ begin
   withTop := nil;
   producedHead := nil;
   producingTop := nil;
+  heapTypes := nil;
+  newTuple := nil;
   genericFor := nil;
   dynamicVarFor := nil;
   stdInput := nil;

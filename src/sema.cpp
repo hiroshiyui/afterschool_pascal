@@ -206,6 +206,24 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
     t->elem = sym->type;
     return t;
   }
+  // §6.4.4: a domain-type may be a schema-name. It is resolved here rather
+  // than deferred, because a pointer written in the *variable* part is past
+  // the point where deferred domains are completed — unless the schema is the
+  // one being produced, which is the recursion §6.4.7 permits in a pointer
+  // domain and nowhere else. That one waits, and by the time it is completed
+  // the schema's own type is in the memo.
+  if (sym && sym->kind == SymKind::Schema) {
+    bool busy = false;
+    for (Symbol *s : producing_)
+      busy = busy || s == sym;
+    if (!busy) {
+      t->elem = heapFromSchema(sym, denoter);
+      return t;
+    }
+    pendingPointers_.push_back(
+        {t, denoter.name, denoter.line, denoter.col, sym});
+    return t;
+  }
   // Not yet — it may arrive before the type part ends.
   pendingPointers_.push_back({t, denoter.name, denoter.line, denoter.col});
   return t;
@@ -290,11 +308,68 @@ Type *Sema::resolveFile(TypeExpr &denoter) {
   return t;
 }
 
-void Sema::resolvePendingPointers() {
+/// ISO/IEC 10206:1991 §6.4.4 makes a domain-type a type-name *or* a
+/// schema-name, and a bare schema-name leaves the tuple to `new` (§6.7.5.3).
+/// The variable that creates has no activation record to keep a descriptor in,
+/// so its tuple lives in a header immediately before it and its discriminants
+/// are read from the object's own address — which is the whole of what
+/// `heapDisc` marks (ADR-0043).
+///
+/// One type per schema, memoised: `^vector` written twice denotes one type, the
+/// way `vector(3)` written twice does. That is also what stops the recursion,
+/// since a schema may name itself in a pointer domain and nowhere else.
+Type *Sema::heapFromSchema(Symbol *schema, TypeExpr &denoter) {
+  auto found = heapSchemaTypes_.find(schema);
+  if (found != heapSchemaTypes_.end())
+    return found->second;
+
+  Symbol *owner = newSymbol();
+  owner->name = schema->name;
+  owner->kind = SymKind::Var;
+  Type *t = genericFromSchema(schema, owner, denoter, "pointer domain");
+  if (t->isGeneric()) {
+    owner->descSchema = schema;
+    for (Symbol *d : owner->discSyms)
+      d->heapDisc = true;
+    t->heapTuple = true;
+    t->descOwner = owner;
+  }
+  heapSchemaTypes_[schema] = t;
+  // The body may have named this very schema in a pointer domain, and that
+  // pointer could not be completed while the production was running. It can
+  // be now, and it has to be here rather than at the end of the type part:
+  // this production may have been asked for from the variable part, which is
+  // past that point.
+  std::vector<PendingPointer> rest;
   for (PendingPointer &p : pendingPointers_) {
+    if (p.schema == schema)
+      p.pointer->elem = t;
+    else
+      rest.push_back(p);
+  }
+  pendingPointers_ = rest;
+  return t;
+}
+
+/// A pointer domain is resolved after the type part, so it may name a type —
+/// or a schema — declared later than the pointer. That is the language's only
+/// forward reference (ADR-0019), and a schema reaches it by the same route: a
+/// name that is not a type when the pointer is written simply waits here.
+void Sema::resolvePendingPointers() {
+  // Not a range-for: resolving a schema domain resolves that schema's body,
+  // which may itself contain a pointer and append to this vector.
+  for (size_t i = 0; i < pendingPointers_.size(); ++i) {
+    PendingPointer p = pendingPointers_[i];
     Symbol *sym = lookup(p.domain);
     if (sym && sym->kind == SymKind::Type) {
       p.pointer->elem = sym->type;
+      continue;
+    }
+    if (sym && sym->kind == SymKind::Schema) {
+      TypeExpr at;
+      at.line = p.line;
+      at.col = p.col;
+      p.pointer->elem = heapFromSchema(sym, at);
       continue;
     }
     diags_.error(p.line, p.col,
@@ -2114,7 +2189,12 @@ void Sema::checkExpr(Expr *e) {
       // A schematic formal parameter has no tuple: its discriminants are in
       // the descriptor the actual brought, and the parameter is what says
       // which descriptor. Everything else has folded them already.
-      Symbol *param = base->isGeneric() ? baseSymbol(fld->base.get()) : nullptr;
+      // A heap variable's tuple travels with the variable, so the symbol
+      // holding its discriminants is on the *type* — there is no name to ask,
+      // since `p^` is not one.
+      Symbol *param = base->heapTuple ? base->descOwner
+                      : base->isGeneric() ? baseSymbol(fld->base.get())
+                                          : nullptr;
       for (size_t i = 0; i < ds.size(); ++i)
         if (ds[i]->name == fld->field) {
           if (base->isGeneric() && (!param || i >= param->discSyms.size()))
@@ -2624,13 +2704,62 @@ void Sema::checkStdProc(ProcCallStmt *p) {
                      a->type->name());
     return;
   }
-  if (p->args.size() == 1)
+  if (p->args.size() == 1) {
+    // §6.7.5.3's `new(p)` gives the created variable the domain type, and a
+    // schema domain has no type until a tuple names one. `dispose(q)` is the
+    // opposite: the variable it removes already has its tuple.
+    if (p->standard == StdProc::New && a->type && a->type->elem &&
+        a->type->elem->heapTuple)
+      diags_.error(p->line, p->col,
+                   "'new' needs the discriminants of schema '" +
+                       a->type->elem->schema->name +
+                       "' here, as new(p, ...): a schema denotes a type only "
+                       "once its discriminants are given");
     return;
+  }
+
+  Type *domain = a->type ? a->type->elem : nullptr;
+
+  // ISO/IEC 10206:1991 §6.7.5.3 gives `new(p, d1, ..., ds)` a second meaning:
+  // where the domain-type is a schema-name, the arguments are the *tuple* the
+  // created variable's type is produced with, not tag values selecting
+  // variants. The two forms are told apart by the domain and by nothing else —
+  // a record with a variant part takes the first, a schema domain the second.
+  if (domain && domain->heapTuple) {
+    if (p->standard == StdProc::Dispose) {
+      diags_.error(p->args[1]->line, p->args[1]->col,
+                   "'dispose' takes no discriminants: they belong to the "
+                   "variable, which already has them");
+      return;
+    }
+    const std::vector<Symbol *> &formals = domain->schema->discriminants;
+    if (p->args.size() - 1 != formals.size()) {
+      diags_.error(p->args[1]->line, p->args[1]->col,
+                   "schema '" + domain->schema->name + "' has " +
+                       std::to_string(formals.size()) + " discriminant" +
+                       (formals.size() == 1 ? "" : "s") + ", found " +
+                       std::to_string(p->args.size() - 1));
+      return;
+    }
+    // §6.7.5.3: the type of each expression shall be compatible with the type
+    // of the corresponding formal discriminant. Unlike §6.4.8's
+    // actual-discriminant-part these need not be constants — the tuple is
+    // chosen when `new` runs, which is the whole reason the header exists.
+    for (size_t i = 0; i < formals.size(); ++i) {
+      Expr *d = p->args[i + 1].get();
+      if (!d->type || !assignable(formals[i]->type, d->type))
+        diags_.error(d->line, d->col,
+                     "discriminant '" + formals[i]->name + "' of schema '" +
+                         domain->schema->name + "' is " +
+                         formals[i]->type->name() + ", but the value is " +
+                         (d->type ? d->type->name() : std::string("untyped")));
+    }
+    return;
+  }
 
   // ISO 7185 §6.6.5.3: `new(p, c1, ..., cn)` creates a variable with the
   // variants those tag values select, one value per nested variant part,
   // outermost first. `dispose` takes the same list.
-  Type *domain = a->type ? a->type->elem : nullptr;
   if (!domain || !domain->isRecord()) {
     diags_.error(p->args[1]->line, p->args[1]->col,
                  "tag values are only for a pointer to a record with a "
