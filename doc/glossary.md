@@ -64,10 +64,13 @@ uses, since ISO has no string type (ADR-0012). Its one cost is that a literal
 must be *padded* to a fixed width to be passed to a procedure, which is why the
 keyword tables in the Pascal source will read `'begin       '`.
 
-**String type.** `packed array [1..n] of char`, and nothing else. A string
-literal is given this type in Sema rather than a type of its own, so `write`,
-assignment, comparison and argument passing need no literal-shaped special case
-(ADR-0017). A one-character literal is a `char`.
+**String type.** Under ISO 7185, `packed array [1..n] of char` and nothing
+else. A string literal is given that type in Sema rather than one of its own, so
+`write`, assignment, comparison and argument passing need no literal-shaped
+special case (ADR-0017); a one-character literal is a `char`. Under
+`--std=extended` §6.4.3.3 adds two more — a *variable-string* `string(n)` and
+the *canonical-string-type* every value has on its way into one — and a literal
+then belongs to all of them (ADR-0051).
 
 **Designator.** The syntactic form that denotes a variable: a name, possibly
 followed by subscripts, field selections and dereferences — `a[i].next^.value`.
@@ -175,6 +178,80 @@ identifiers, and `selfhost/compiler.pas` does. The directory a test lives in
 says which language it is in, and the stage-1 compiler is told through a file
 because ISO 7185 gives a program no other channel (ADR-0033).
 
+**Schema.** ISO/IEC 10206:1991 §6.4.7's mapping from discriminant tuples to
+types: `type vector(n: integer) = array [1..n] of real`. Not a type — nothing
+possesses it and it has no values — so `SymKind::Schema` is a kind of its own,
+and a schema keeps its *syntax* (`Symbol::schemaBody`) rather than a resolved
+type, because it has none until a tuple arrives (ADR-0039).
+
+**Discriminant.** One of a schema's formal parameters, and the value a produced
+type was made with. `v.n` reads it, and where it is not a compile-time constant
+it is a `SymKind::Disc` symbol with storage inside the descriptor of whatever
+it belongs to (ADR-0040, ADR-0041).
+
+**Production.** The act of turning a schema and a tuple into a type, and the
+type that results. §6.4.8 makes one tuple one type however many times it is
+written, which is why productions are interned on (schema, tuple) — that intern
+table is the one place a type's identity is decided by something other than the
+denoter that built it.
+
+**Generic type.** A type produced from a schema with the discriminants bound to
+*symbols* rather than to values, so one compiled body serves every tuple. What a
+schematic formal parameter has; `isGeneric()` asks.
+
+**Descriptor.** What a schematic formal parameter's frame slot holds: the
+address of the actual, then its tuple, one field per discriminant. Like a
+procedure value it never exists as an LLVM aggregate — the parts are stored and
+loaded through their own getelementptrs and travel as separate arguments, so
+nothing depends on how a struct is passed (ADR-0040).
+
+**Protected.** ISO/IEC 10206:1991 §6.7.3.1's parameter qualifier and §6.11.2's
+export qualifier. A Sema-only flag: it says nothing about how the argument
+travels — a protected `var` parameter is still an address — and CodeGen never
+reads it. What it means is §6.5.1's rule about the *body*: no statement may
+threaten a variable-access closest-containing the name (ADR-0046).
+
+**Initial state.** §6.6's `value` specifier. It belongs to the *type-denoter*
+(§6.4.1) and not to the declaration, which is why a type-name hands it on to
+every variable of that type, and why it is recorded on the type *symbol* rather
+than on the shared `Type` (ADR-0048).
+
+**Type-inquiry.** §6.4.9's `type of x` — the type the named variable already
+possesses, handed back rather than built again. Building an alike type would not
+do: name equivalence would make the two unassignable (ADR-0047).
+
+**Bindable / binding.** §6.4.1's `bindable` and §6.7.5.6's `bind`. The external
+entity here is a *file name*, which is the one thing ISO 7185 could not express:
+§6.10 binds the program parameters before the program starts. A bound file is a
+program parameter that named itself (ADR-0052).
+
+**Complex.** §6.4.2.2 e) makes it a *simple* type, so it is a value — assigned
+with a store, passed in a register, returned from a function — and none of the
+by-address machinery applies. Represented as `<2 x double>` rather than a
+struct, so nothing depends on how a struct is passed (ADR-0049).
+
+**Interface.** ISO/IEC 10206:1991 §6.11.2's named set of constituents, which an
+`export` part introduces and an `import` specification reaches. §6.2.2.2 makes
+it a region that "shall not be a part of the program text", so it is a *table*
+and not a scope: exporting a name changes nothing about how visible it is inside
+the module (ADR-0053).
+
+**Constituent.** One name an interface makes available. It carries the spelling
+an importer writes — which either end may rename — and whether it is
+`protected`, because that belongs to the export and not to the module's own
+declaration of the variable.
+
+**Supplies.** §6.2.2.13's relation: A supplies B when B imports an interface A
+exports, transitively. It decides which modules are activated at all, and
+§6.2.3.6 orders their commencements by it — an order this compiler gets for
+free from the text, since §6.2.2.9 already puts a module-heading before
+everything importing its interface.
+
+**Module-parameter.** A name in `module m(...)`. `input` and `output` there are
+§6.11.4.2's way to make the required text file accessible *in that module*;
+every other spelling must be a variable the module declares, and is bound to
+nothing (NOTE 6 permits that).
+
 **Otherwise-part.** The default arm of a case statement, which ISO 7185 does
 not have and ISO/IEC 10206:1991 does. It is *what the default block of the
 switch holds*: without one that block traps, which is ISO 7185's rule that a
@@ -214,23 +291,32 @@ expressible in IR — formatted output, `pas_runtime_error`, `pas_new`/
 
 ## Activation records
 
-**Frame.** A struct alloca'd in each procedure's entry block, and in the program
-itself at level 0. Field 0 is the static link; locals, value parameters, `var`
-parameters and the function result are the remaining fields. `Symbol::frameVars`
-is the layout codegen consumes (ADR-0016).
+**Frame.** A struct holding one activation's storage. Field 0 is the static
+link; locals, value parameters, `var` parameters and the function result are the
+remaining fields, and `Symbol::frameVars` is the layout codegen consumes
+(ADR-0016). A procedure's is alloca'd in its entry block; a **level-0** block's
+— the program's, and every module's — is a *global*, because it has exactly one
+activation and a module's must outlive the function that fills it in
+(ADR-0053).
 
 **Static link.** The pointer to the *enclosing block's* frame, held at field 0
 so intermediate hops can load it without knowing the struct type at that level.
-Calling a procedure at level `L` passes the frame at level `L-1` — for a
-recursive call that is the caller's parent, not the caller, which is the one
-place this is easy to get subtly wrong.
+Calling a procedure passes the frame of the block the procedure was *declared*
+in — for a recursive call that is the caller's parent, not the caller, which is
+the one place this is easy to get subtly wrong. A level-1 procedure's link is
+dead since ADR-0053: nothing walks to level 0 any more, because a level-0 frame
+is named directly.
 
 **Level.** Lexical nesting depth. The program body is level 0.
 
-**`addressOf` / `frameAt`.** The single path to a variable's address:
-`frameAt(level)` walks the static-link chain, `addressOf(sym)` walks then
-indexes. All variable access goes through it, so there is no separate global
-path. A `var` parameter's slot holds a pointer, which `addressOf` dereferences.
+**`addressOf` / `frameAt` / `frameOf`.** The single path to a variable's
+address: `frameOf(block)` answers with a level-0 block's global or else walks
+the static-link chain, and `addressOf(sym)` asks for the frame of the symbol's
+*owner* and then indexes. All variable access goes through it, so there is still
+no separate global path — asking the owner rather than the level is what lets a
+module reach the program's `output` and the program reach a module's variable,
+neither of which is on the other's static chain (ADR-0053). A `var` parameter's
+slot holds a pointer, which `addressOf` dereferences.
 
 **`emitAddress` / `emitLoad` / `emitCopy`.** The structured-type equivalent.
 `emitAddress` is the single path to a designator's address; `emitLoad` reads
