@@ -49,6 +49,13 @@ fact about the source program, that fact belongs in Sema. On an error path Sema
 still assigns a placeholder type rather than null, so codegen can't crash on a
 half-checked tree.
 
+Most of what Sema hands over is *per node*. Since ADR-0053 one thing is not:
+`Sema::activeModules()` is a whole-program answer — which modules supply the
+main-program-block, in the order their activations must commence. It is on the
+same side of the contract as everything else (Sema decided it, CodeGen only
+emits calls in that order), and it is worth knowing that the contract has a
+shape other than an annotation on a node.
+
 Errors: the parser throws `ap::ParseAbort` (the only exception in the codebase)
 when it cannot make progress; Sema and the lexer instead accumulate into
 `Diagnostics` so one run reports many errors.
@@ -924,7 +931,7 @@ It takes three program parameters: `compiler.pas <source> <ircode> <options>`.
 The dumps go to standard output; the IR goes to the second file, because it is
 the compiler's *product* rather than a dump and has to be assembled. It is
 written on every run, which is what keeps `difftest.sh` exercising the code
-generator on all 207 files even though it compares none of it. The third holds
+generator on every file in the corpus even though it compares none of it. The third holds
 one word, the standard to compile for — ISO 7185 gives a program no access to
 its command line beyond its program parameters, and those are files, so there
 is no `--std` flag to take (ADR-0033).
@@ -1053,7 +1060,7 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 35 rules, 27 of them for every
+The catalogue currently has **no known gaps** — 43 rules, 27 of them for every
 32-bit input — so any gap that appears is something this change introduced.
 
 Don't add a rule that restates the lowering. A check whose ISO condition *is*

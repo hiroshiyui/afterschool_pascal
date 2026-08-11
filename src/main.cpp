@@ -2,14 +2,22 @@
 //
 //   pascalc hello.pas            compile and link to ./hello
 //   pascalc -o out hello.pas     choose the executable name
-//   pascalc --emit-llvm hello.pas   write hello.ll and stop
+//   pascalc --std=extended hello.pas  ISO/IEC 10206:1991 rather than ISO 7185.
+//                                     The two are not nested (ADR-0033), so
+//                                     this selects the *language* and not a
+//                                     set of extensions.
+//   pascalc --emit-llvm hello.pas, -S   write hello.ll and stop
 //   pascalc -c hello.pas         write hello.o and stop
+//   pascalc -O0 .. -O3           optimisation level; the default is -O2
+//   pascalc --keep-temps hello.pas    keep the intermediate object file
 //   pascalc --dump-tokens hello.pas   the token stream, for selfhost/difftest.sh
 //   pascalc --dump-ast hello.pas      the parse tree, before Sema
 //   pascalc --dump-sema hello.pas     the same tree, annotated by Sema
 //   pascalc --dump-all hello.pas      all three sections in one run — this is
 //                                     the form selfhost/difftest.sh compares
 //                                     the Pascal compiler against
+//
+// `usage()` below is the authoritative list; keep the two in step.
 
 #include <cstdio>
 #include <cstdlib>

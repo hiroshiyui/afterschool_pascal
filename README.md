@@ -357,12 +357,22 @@ words      otherwise, pow, protected, value, bindable, module, export,
            in the one position each may occupy, exactly as `forward` is
 ```
 
-Not accepted yet: structured-value constructors, substring *variables*
-(`s[i..j]` as an assignment target), `readstr`/`writestr`, restricted types,
-and function-accesses (a selector applied to a function call). A word-symbol is
-reserved only when the feature needing it lands, so until the list above is
-complete `--std=extended` accepts some programs a conforming processor would
-reject.
+Not accepted yet, and each its own piece of work: structured-value
+constructors, substring *variables* (`s[i..j]` as an assignment target),
+`readstr`/`writestr`, restricted types, and function-accesses (a selector
+applied to a function call).
+
+Also absent, and smaller — the cost is in writing them twice rather than in the
+design: `halt`, `card`, the symmetric difference `><`,
+`maxchar`/`minreal`/`maxreal`/`epsreal`, the two-argument `succ`/`pred`, zero
+field widths in `write`, the time procedures, and set-member iteration. Two are
+in between and unlock others: **constant-expressions** (§6.8.2), which general
+subrange bounds and export-ranges rest on, and **structured function result
+types** (§6.7.2), which is what would let a function return a string.
+
+A word-symbol is reserved only when the feature needing it lands, so until that
+list is empty `--std=extended` accepts some programs a conforming processor
+would reject.
 
 The program-components of a program-block are **not compiled separately**: they
 go in one file, in an order consistent with §6.2.2.9's. §6.13 asks for separate
@@ -412,7 +422,7 @@ python3 verify/verify.py --pascalc build/bin/pascalc
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Thirty-five rules are currently established — the
+the two disagree. Forty-three rules are currently established — the
 non-negative `mod`, truncating `div`, `odd` on negative values, ordinal `char`
 comparison, the exact integer-to-real widening, the `for` loop's inability to
 overflow, an array subscript's inability to leave its bounds, a subrange's
@@ -514,7 +524,7 @@ needed them is written.
 the parser, Sema and the code generator, in **one source file**, because ISO
 7185 has no include mechanism and the finished compiler is one source. It is
 checked against the C++ stages it was ported from, on every Pascal source in the
-tree — 207 files, compared stage for stage:
+tree, compared stage for stage — the harness prints how many:
 
 ```sh
 selfhost/difftest.sh build/bin/pascalc     # also runs under ctest
@@ -573,9 +583,15 @@ last comparison alone, so stage 2 is put through the golden suite too. See
 
 ```sh
 build/bin/pascalc selfhost/compiler.pas -o stage1
-./stage1 selfhost/compiler.pas stage2.ll        # source, then where the IR goes
+echo iso7185 > std.txt
+./stage1 selfhost/compiler.pas stage2.ll std.txt   # source, IR, and the standard
 clang stage2.ll build/lib/libpasrt.a -lm -o stage2
 ```
+
+The third argument is a *file* holding one word, not a flag: ISO 7185 gives a
+program no access to its command line beyond its program parameters, and those
+are files — so the Pascal compiler cannot take a `--std` the way the C++ one
+does (ADR-0033).
 
 [doc/roadmap.md](doc/roadmap.md) expands this: what items 5 and 6 actually
 involve, the order the stage-1 source gets ported in, and the known limitations
@@ -585,6 +601,12 @@ involve, the order the stage-1 source gets ported in, and the known limitations
 
 Drop `tests/name.pas` plus its expectation into `tests/`, then re-run CMake so
 the case is registered — the suite is globbed at configure time.
+
+**The directory selects the language.** A case in `tests/` is compiled with
+`--std=iso7185` and one in `tests/extended/` with `--std=extended`; the two are
+globbed separately for exactly that reason, and every harness derives the flag
+from the path so that none of them can be told something different about one
+file (ADR-0034).
 
 * `name.out` — expected stdout. The program must compile and exit 0.
 * `name.err` — expected stderr, for a program that is *supposed* to fail: one

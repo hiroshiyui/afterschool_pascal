@@ -329,14 +329,14 @@ was never written down.
   already reserved in ISO 7185. It was indeed small, but not for the reason
   written here: the parser change was trivial and the *lexical* question — what
   may sit between the two words — was the one that needed deciding.
-- **Schemata** (ADR-0039) — *the discriminated half is done*. `vector(n:
+- ~~**Schemata**~~ Done, over seven records (ADR-0039 to ADR-0045). `vector(n:
   integer) = array [1..n] of real` and `vector(3)` work, and §6.4.8's identity
   rule — one tuple one type, distinct tuples distinct types — is an intern
   table rather than a comparison, so `assignable` gained no case at all. A
   discriminated schema produces an *ordinary* type, which is why codegen
   needed one line (for `v.n`) and the proof rules needed none.
 
-  Two halves were left, and both are now done:
+  Six halves were left after the first record, and all six are now done:
   - ~~**A schematic formal parameter**~~ Done (ADR-0040). `procedure p(var v:
     vector)`. The bounds come from the actual, so they travel: a descriptor
     beside the address, the shape ADR-0030 already uses for a procedural
