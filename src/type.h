@@ -218,6 +218,24 @@ struct Type {
   /// through its address, and a parameter of it arrives as one.
   bool isMemory() const { return isStructured() || isFile(); }
 
+  /// ISO/IEC 10206:1991 §6.4.1: a type is protectable unless it is a file or a
+  /// pointer, or is structured and holds one. The standard's own NOTE gives
+  /// both reasons: nearly every operation on a file modifies it, and a pointer
+  /// *value* can be copied out and disposed of — so protecting the variable
+  /// would protect nothing. Only §6.7.3.1 asks this today.
+  bool protectable() const {
+    if (isFile() || isPointer())
+      return false;
+    if (isArray())
+      return elem && elem->protectable();
+    if (isRecord()) {
+      for (const Field &f : fields)
+        if (f.type && !f.type->protectable())
+          return false;
+    }
+    return true;
+  }
+
   /// The type a subrange is a subrange of; every other type is its own base.
   /// Assignment compatibility, arithmetic, and the machine representation are
   /// all decided on the base, which is what makes `1..9` an integer that

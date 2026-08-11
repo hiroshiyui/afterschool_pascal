@@ -1357,6 +1357,42 @@ Symbol *Sema::baseSymbol(Expr *e) const {
   return nullptr;
 }
 
+/// The entire-variable a designator selects from. `baseSymbol` makes the same
+/// walk and answers with the symbol; this answers with the node, which is what
+/// a diagnostic needs when the symbol is a hidden one.
+static Expr *rootDesignator(Expr *e) {
+  if (auto *i = as<IndexExpr>(e))
+    return rootDesignator(i->base.get());
+  if (auto *f = as<FieldExpr>(e))
+    return rootDesignator(f->base.get());
+  return e;
+}
+
+/// ISO/IEC 10206:1991 §6.5.1: "No statement shall threaten a variable-access
+/// closest-containing a protected variable-identifier." §6.9.4 lists what
+/// threatens one, and every entry on that list is a place this compiler
+/// already had to decide the argument was a *variable* — so each call sits
+/// beside an `isDesignator` test rather than in a walk of its own.
+///
+/// "Closest-containing" is the walk `baseSymbol` already makes: a subscript
+/// and a field selection stay inside the same variable, and a dereference
+/// leaves it. Nothing is lost there, because §6.4.1 makes a pointer type
+/// unprotectable and so a protected parameter can never be one.
+void Sema::checkNotThreatened(Expr *e, const std::string &what) {
+  Symbol *s = baseSymbol(e);
+  if (!s || !s->isProtected)
+    return;
+  // A `with` binding is hidden and its name is a frame slot's, not the
+  // program's — so naming it would name something the source never wrote.
+  // The rule is the same one either way; only the wording differs.
+  const VarRef *v = as<VarRef>(rootDesignator(e));
+  std::string who = v && v->withField
+                        ? "the record of an enclosing with statement is a "
+                          "protected parameter"
+                        : "'" + s->name + "' is a protected parameter";
+  diags_.error(e->line, e->col, who + ", so " + what);
+}
+
 // ------------------------------------------------------------------- driver
 
 void Sema::run(Program &prog) {
@@ -1854,7 +1890,15 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
                                          n.col)
                            : formalSymbol(newSymbol(), n, kind, ty::Int());
         ps->paramSection = section;
+        ps->isProtected = group.isProtected;
         ps->type = schematicFormal(schema, ps, *group.type);
+        // §6.7.3.1 asks the question of "every type possessed by" the name,
+        // and a schematic formal possesses one per tuple — but they all come
+        // from one body, so the produced type answers for every one of them.
+        if (group.isProtected && ps->type && !ps->type->protectable())
+          diags_.error(n.line, n.col,
+                       "'" + n.name + "' cannot be protected: " +
+                           ps->type->name() + " is not a protectable type");
         // The denoter keeps the last of them, the way a schema body keeps its
         // last production (ADR-0039): one parameter-form has as many types as
         // it has names, and showing one of them says more than showing none.
@@ -1871,11 +1915,21 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
     if (t->isFile() && !group.byRef && !group.names.empty())
       diags_.error(group.names[0].line, group.names[0].col,
                    "a file parameter must be a var parameter");
+    // §6.4.1: a file or a pointer is not protectable, and neither is anything
+    // holding one. The standard's own reason is that protecting either would
+    // protect nothing — a file is modified by nearly every operation on it,
+    // and a pointer's *value* can be copied out of the protected variable and
+    // disposed of through the copy.
+    if (group.isProtected && !group.names.empty() && !t->protectable())
+      diags_.error(group.names[0].line, group.names[0].col,
+                   "'" + group.names[0].name + "' cannot be protected: " +
+                       t->name() + " is not a protectable type");
     for (auto &n : group.names) {
       Symbol *ps =
           frame ? addFrameVar(n.name, kind, t, frame, n.line, n.col)
                 : formalSymbol(newSymbol(), n, kind, t);
       ps->paramSection = section;
+      ps->isProtected = group.isProtected;
       into->params.push_back(ps);
     }
   }
@@ -1900,6 +1954,13 @@ bool Sema::congruous(Symbol *formal, Symbol *actual) const {
     // variable and a value parameter copies one, and the caller emits
     // different code for each — so the two cannot stand in for one another.
     if (f->kind != a->kind)
+      return false;
+    // §6.7.3.6: "Either both contain protected or neither contains
+    // protected." A body written against a protected parameter may not be
+    // handed one it is allowed to write, and — the direction that is easier
+    // to forget — a body that writes its parameter may not be passed where a
+    // protected one was promised.
+    if (f->isProtected != a->isProtected)
       return false;
     if (f->kind == SymKind::ProcParam) {
       if (!congruous(f, a))
@@ -2037,6 +2098,8 @@ void Sema::checkStmt(Stmt *s) {
 
     checkExpr(a->target.get());
     checkExpr(a->value.get());
+    // §6.9.4 a): an assignment-statement threatens its target.
+    checkNotThreatened(a->target.get(), "it cannot be assigned to");
     if (!isDesignator(a->target.get()))
       diags_.error(a->target->line, a->target->col,
                    "the left side of an assignment must be a variable");
@@ -2701,6 +2764,8 @@ void Sema::checkRead(ReadStmt *r) {
       diags_.error(a->line, a->col, "read needs a variable, not a value");
       continue;
     }
+    // §6.9.4 c): read and readln threaten every variable they read into.
+    checkNotThreatened(a.get(), "it cannot be read into");
     Type *t = a->type;
     if (!text) {
       if (!assignable(t, rf->elem))
@@ -2758,6 +2823,11 @@ void Sema::checkStdProc(ProcCallStmt *p) {
                  "'" + p->name + "' needs a pointer variable");
     return;
   }
+  // §6.9.4 e) makes `new(p)` a threat to p, and this is where the check for it
+  // would go — but there is nothing to check. §6.4.1 makes a pointer type
+  // unprotectable, and a record or array holding one unprotectable with it, so
+  // no designator that reaches here can have a protected variable under it.
+  // Enforced by construction, the way ADR-0044's dynamic-violation is.
   if (a->type && (!a->type->isPointer() || a->type->isNil())) {
     diags_.error(a->line, a->col,
                  "'" + p->name + "' needs a pointer variable, found " +
@@ -2972,6 +3042,11 @@ void Sema::checkWith(WithStmt *w) {
   // this line alone.
   w->binding = addHiddenVar("with$" + std::to_string(current_->frameVars.size()),
                             SymKind::VarParam, t, current_);
+  // §6.9.4 i): a `with` is where a protected variable's name stops being
+  // written down, so the protection has to travel onto the binding or
+  // `with p do f := 1` would slip past a rule `p.f := 1` obeys.
+  if (Symbol *root = baseSymbol(w->record.get()))
+    w->binding->isProtected = root->isProtected;
 
   withStack_.push_back(w->binding);
   stmtPath_.push_back(w);
@@ -3041,6 +3116,12 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                          "' is a var parameter and needs a variable");
         continue;
       }
+      // §6.9.4 b) threatens an actual var parameter only when the *formal* is
+      // not itself protected — which is what lets a protected parameter be
+      // handed on, and is the base case that makes the rule usable at all.
+      if (!p->isProtected)
+        checkNotThreatened(a, "it cannot be passed to the var parameter '" +
+                                  p->name + "' of '" + callee->name + "'");
       // No implicit conversion is possible through a reference, so the types
       // must be the same rather than merely assignment-compatible.
       if (a->type && p->type && a->type != p->type)

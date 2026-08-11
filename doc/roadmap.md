@@ -409,6 +409,17 @@ was never written down.
   plausible-looking number — the first was `hi - lo` over the whole integer
   type during the Sema port — and both were found by asking what a *number*
   meant rather than by a failing test.
+- ~~**Protected parameters.**~~ Done (ADR-0046). §6.7.3.1's `protected`, and
+  the first Extended Pascal feature here that adds no way to write anything
+  down — it removes one. The enforcement is §6.5.1's one sentence, "no
+  statement shall threaten a variable-access closest-containing a protected
+  variable-identifier", and §6.9.4's list of what threatens one turned out to
+  name only places this compiler had already decided the argument was a
+  variable, so every check sits beside an existing test. Two things worth
+  remembering: protection **forwards** — a protected parameter may be passed to
+  another protected one, and without that clause the word would be unusable —
+  and `new(p)` needs no check at all, because §6.4.1 makes a pointer
+  unprotectable and so nothing that reaches `new` can be protected.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and
@@ -417,7 +428,19 @@ was never written down.
   — so this should be settled by measuring stage-1 code again, the way it was
   settled the first time, and not by taste.
 - **Modules**, `bind`/`unbind`, direct-access files, complex numbers,
-  `protected`, initial-state specifiers. Each needs its own record.
+  initial-state specifiers, `type of`, restricted types. Each needs its own
+  record.
+
+  The list above is the one the README carries, and it is not the whole of
+  what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the
+  cost is in the pair of compilers rather than in the design: `halt`, `card`,
+  the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
+  two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
+  procedures, and set-member iteration. Two more are medium and unlock others:
+  **constant-expressions** (§6.8.2), which general subrange bounds, export
+  ranges and a module heading's nonvarying expressions all rest on, and
+  **structured function result types** (§6.7.2), which is what lets a function
+  return a string.
 
 **And the two things that are not features:**
 

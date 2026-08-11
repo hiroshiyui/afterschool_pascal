@@ -1,0 +1,13 @@
+<source>:24:3: error: 'a' is a protected parameter, so it cannot be assigned to
+<source>:25:4: error: 'r' is a protected parameter, so it cannot be assigned to
+<source>:26:5: error: 'v' is a protected parameter, so it cannot be assigned to
+<source>:32:8: error: 'a' is a protected parameter, so it cannot be read into
+<source>:44:12: error: 'a' is a protected parameter, so it cannot be passed to the var parameter 'a' of 'writesit'
+<source>:50:13: error: the record of an enclosing with statement is a protected parameter, so it cannot be assigned to
+<source>:58:39: error: 'f' cannot be protected: text is not a protectable type
+<source>:58:58: error: 'p' cannot be protected: link is not a protectable type
+<source>:59:39: error: 'h' cannot be protected: holder is not a protectable type
+<source>:59:64: error: 'b' cannot be protected: buf is not a protectable type
+<source>:60:39: error: 'q' cannot be protected: links is not a protectable type
+<source>:91:16: error: 'unguarded' does not match the parameter list of functional parameter 'f'
+<source>:92:14: error: 'guarded' does not match the parameter list of functional parameter 'f'

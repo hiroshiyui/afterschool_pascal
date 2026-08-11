@@ -570,7 +570,13 @@ struct Dumper {
   void paramGroups(std::vector<ParamGroup> &groups) {
     for (ParamGroup &p : groups) {
       if (!p.isProc) {
-        group(p.names, p.type.get(), p.byRef ? "group var" : "group");
+        // The tag spells the specification back: `protected` precedes `var`
+        // in the source (ISO/IEC 10206:1991 §6.7.3.1) and precedes it here.
+        const char *tag = p.isProtected
+                              ? (p.byRef ? "group protected var"
+                                         : "group protected")
+                              : (p.byRef ? "group var" : "group");
+        group(p.names, p.type.get(), tag);
         continue;
       }
       head(std::string(p.isFunction ? "funcparam " : "procparam ") +

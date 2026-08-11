@@ -195,6 +195,10 @@ void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
       into.push_back(std::move(group));
       continue;
     }
+    // §6.7.3.1 puts `protected` before the whole specification, so it comes
+    // before `var` rather than after it: a protected variable parameter is
+    // `protected var d: integer`. Both orders read alike, and only one parses.
+    group.isProtected = accept(Tok::KwProtected);
     group.byRef = accept(Tok::KwVar);
     group.names = parseNameList("a parameter name");
     expect(Tok::Colon, "in a parameter list");

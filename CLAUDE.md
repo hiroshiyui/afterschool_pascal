@@ -599,6 +599,25 @@ in one language or the other, and the standard is a property of the source.
     accepted without it. Two mutations needed tests written for them, and both
     are of that kind — the other is a record with *two* dynamic fields, since a
     static field after a dynamic one already fails the last-field question.
+- **A protected parameter is a rule about the body** (ADR-0046). §6.7.3.1's
+  `protected` is a Sema-only flag on the parameter's symbol: the calling
+  convention is untouched and CodeGen never reads it.
+  - **§6.5.1 is the whole enforcement** — "no statement shall threaten a
+    variable-access closest-containing a protected variable-identifier" — and
+    every entry on §6.9.4's list of threats is a place this compiler had
+    already decided the argument was a variable, so each check sits beside an
+    existing `isDesignator` test. "Closest-containing" is the walk
+    `baseSymbol` already made.
+  - **Protection forwards.** §6.9.4 b) threatens an actual var parameter only
+    when the *formal* is not protected, which is what makes the word usable at
+    all, and §6.7.3.6 ("either both contain protected or neither") is what
+    keeps a procedural parameter honest about it — symmetric on purpose.
+  - **`new(p)` needs no check**: §6.4.1 makes a pointer type unprotectable, so
+    nothing reaching it can be protected. Enforced by construction, as
+    ADR-0044's dynamic-violation is, and the code says so where the check
+    would have gone.
+  - A **`with` carries the protection onto its hidden binding**, because that
+    is where the protected variable's name stops being written down.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

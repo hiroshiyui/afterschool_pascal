@@ -270,15 +270,21 @@ assign     v := w between two variables of one schema's types. Where both
            where one is not known until the block is entered, the tuples
            are compared while the program runs and a mismatch stops it
            (§6.4.6 d)
-words      otherwise and pow are reserved; `and then` and `or else` reserve
-           nothing new, because both of their words already are
+params     procedure p(protected c: integer; protected var d: point) — a
+           parameter the body may not change. It says nothing about how the
+           argument travels: the promise is that no statement of the body
+           assigns it, reads into it, or hands it to something that would.
+           Passing it on to another *protected* parameter is allowed, and
+           that is what makes the word usable; a file or a pointer cannot be
+           protected, because protecting either would protect nothing
+words      otherwise, pow and protected are reserved; `and then` and
+           `or else` reserve nothing new, because both of their words
+           already are
 ```
 
-Not accepted yet: `type of`, the `string` type,
-modules,
-`protected` parameters, initial-state specifiers
-(`value`), binding (`bind`/`unbind`), direct-access files, and complex
-numbers. A word-symbol is reserved only when the feature needing it
+Not accepted yet: `type of`, the `string` type, modules,
+initial-state specifiers (`value`), binding (`bind`/`unbind`), direct-access
+files, and complex numbers. A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.

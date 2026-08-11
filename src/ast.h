@@ -500,6 +500,12 @@ struct ParamGroup {
   std::vector<DeclName> names;
   TypeExprPtr type;
   bool byRef = false; // a `var` parameter, passed by reference
+  /// ISO/IEC 10206:1991 §6.7.3.1's `protected`. It is written before the
+  /// names — and before `var` when there is one — and says that no statement
+  /// of the body may *threaten* the parameter (§6.9.4). It is a rule about
+  /// the body rather than about the calling convention, so nothing downstream
+  /// of Sema knows it is here.
+  bool isProtected = false;
   bool isProc = false;
   bool isFunction = false; // meaningful only when isProc
   std::vector<ParamGroup> params;

@@ -127,6 +127,14 @@ struct Symbol {
   /// every actual in one section to bring the same tuple, so the section has
   /// to be recoverable at the call.
   int paramSection = 0;
+  /// ISO/IEC 10206:1991 §6.7.3.1's `protected`: no statement of the body may
+  /// *threaten* this parameter (§6.9.4). It says nothing about how the
+  /// argument travels — a protected `var` parameter is still an address — so
+  /// it is a Sema-only property and CodeGen never reads it. It also rides on
+  /// the hidden binding a `with` makes, because §6.5.1 asks about the
+  /// variable-access's *closest-containing* variable-identifier and a `with`
+  /// is where that name stops being written down.
+  bool isProtected = false;
 
   bool isCallable() const {
     return kind == SymKind::Proc || kind == SymKind::Func;
@@ -310,6 +318,7 @@ private:
   bool isDesignator(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
+  void checkNotThreatened(Expr *e, const std::string &what);
 
   /// True if a value of `from` may be assigned to / compared with `to`.
   bool assignable(Type *to, Type *from) const;

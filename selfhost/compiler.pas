@@ -50,7 +50,7 @@ const
   nounParamForm = 0;
   nounVarType = 1;
   nounPointerDomain = 2;
-  kwCount  = 37;     { 35 word-symbols of ISO 7185, then ISO 10206's }
+  kwCount  = 38;     { 35 word-symbols of ISO 7185, then ISO 10206's }
   isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
@@ -104,7 +104,7 @@ type
     { ISO/IEC 10206:1991 word-symbols, reserved only under the extended
       standard. Under ISO 7185 the scanner yields these spellings as
       identifiers, which is what they are in that language. }
-    tkOtherwise, tkPow,
+    tkOtherwise, tkPow, tkProtected,
     { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
       under both standards and refused under ISO 7185, where no valid program
       can hold two adjacent stars outside a comment or a string anyway. }
@@ -407,7 +407,16 @@ type
       the variant-selector a discriminant-identifier?", which the *kind*
       cannot, because an ordinary constant is also an skConst and is not
       one. }
-    discBinding: boolean
+    discBinding: boolean;
+
+    { ISO/IEC 10206:1991 6.7.3.1's `protected`: no statement of the body may
+      *threaten* this parameter (6.9.4). It says nothing about how the argument
+      travels -- a protected var parameter is still an address -- so it is a
+      Sema-only property and CodeGen never reads it. It also rides on the
+      hidden binding a `with` makes, because 6.5.1 asks about the
+      variable-access's *closest-containing* variable-identifier and a `with`
+      is where that name stops being written down. }
+    isProtected: boolean
   end;
 
   { Every type produced from a schema, keyed by the schema and the tuple.
@@ -575,8 +584,9 @@ type
         procedural or functional parameter written as a heading of its own
         (ISO 7185 6.6.3.1), which uses grParams and grResult in place of
         grType and always has exactly one name. }
-      nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProc,
-                     grIsFunction: boolean; grParams, grResult: nodePtr);
+      nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProtected,
+                     grIsProc, grIsFunction: boolean;
+                     grParams, grResult: nodePtr);
       nkNamed:      (nmAt, nmLen: integer);
       nkSchema:     (scAt, scLen: integer; scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen: integer);
@@ -1144,7 +1154,8 @@ begin
   DefineKeyword(35, 'with     ', tkWith);
   { Beyond isoKwCount: looked up only under the extended standard. }
   DefineKeyword(36, 'otherwise', tkOtherwise);
-  DefineKeyword(37, 'pow      ', tkPow)
+  DefineKeyword(37, 'pow      ', tkPow);
+  DefineKeyword(38, 'protected', tkProtected)
 end;
 
 { A str against a space-padded literal, which is the comparison LookupKeyword
@@ -1657,6 +1668,7 @@ begin
     tkWith:      write('''with''');
     tkOtherwise: write('''otherwise''');
     tkPow:       write('''pow''');
+    tkProtected: write('''protected''');
     tkStarStar:  write('''**''');
     tkAndThen:   write('''and then''');
     tkOrElse:    write('''or else''')
@@ -1683,7 +1695,7 @@ begin
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
-    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow,
+    tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow, tkProtected,
     tkAndThen, tkOrElse: write('?')
   end
 end;
@@ -2040,6 +2052,7 @@ begin
     else begin
       g := NewNode(nkGroup, CurLine, CurCol);
       g^.grByRef := false;
+      g^.grIsProtected := false;
       g^.grNames := ParseNameList(ctxFieldList);
       if inVariant then
         Expect(tkColon, ctxVariantFields)
@@ -3153,6 +3166,7 @@ begin
     g^.grParams := nil;
     g^.grResult := nil;
     g^.grByRef := false;
+    g^.grIsProtected := false;
     g^.grIsProc := false;
     g^.grIsFunction := false;
     g^.grNames := ParseNameList(ctxFormalDisc);
@@ -3223,6 +3237,7 @@ begin
   while more and not aborted do begin
     g := NewNode(nkGroup, CurLine, CurCol);
     g^.grByRef := false;
+    g^.grIsProtected := false;
     g^.grNames := nil;
     g^.grType := nil;
     g^.grNames := ParseNameList(ctxVarDecl);
@@ -3300,9 +3315,15 @@ begin
     g^.grNames := nil;
     g^.grType := nil;
     g^.grByRef := false;
+    g^.grIsProtected := false;
     if Check(tkProcedure) or Check(tkFunction) then
       ParseProcParam(g, Check(tkFunction))
     else begin
+      { 6.7.3.1 puts `protected` before the whole specification, so it comes
+        before `var` rather than after it: a protected variable parameter is
+        `protected var d: integer`. Both orders read alike, and only one
+        parses. }
+      g^.grIsProtected := Accept(tkProtected);
       g^.grByRef := Accept(tkVar);
       g^.grNames := ParseNameList(ctxParamList);
       Expect(tkColon, ctxParamList);
@@ -3619,6 +3640,33 @@ begin IsStructured := IsArray(t) or IsRecord(t) end;
 function IsMemory(t: typePtr): boolean;
 begin IsMemory := IsStructured(t) or IsFile(t) end;
 
+{ ISO/IEC 10206:1991 6.4.1: a type is protectable unless it is a file or a
+  pointer, or is structured and holds one. The standard's own NOTE gives both
+  reasons: nearly every operation on a file modifies it, and a pointer *value*
+  can be copied out and disposed of -- so protecting the variable would protect
+  nothing. Only 6.7.3.1 asks this today. }
+function Protectable(t: typePtr): boolean;
+var f: fieldPtr; ok: boolean;
+begin
+  if t = nil then
+    Protectable := true
+  else if IsFile(t) or IsPointer(t) then
+    Protectable := false
+  else if IsArray(t) then
+    Protectable := Protectable(t^.elem)
+  else if IsRecord(t) then begin
+    ok := true;
+    f := t^.fields;
+    while (f <> nil) and ok do begin
+      if not Protectable(f^.ftype) then ok := false;
+      f := f^.next
+    end;
+    Protectable := ok
+  end
+  else
+    Protectable := true
+end;
+
 function IsOrdinal(t: typePtr): boolean;
 var k: typeKind; b: typePtr;
 begin
@@ -3915,6 +3963,7 @@ begin
   s^.heapDisc := false;
   s^.discBinding := false;
   s^.paramSection := 0;
+  s^.isProtected := false;
   NewSymbol := s
 end;
 
@@ -4076,6 +4125,13 @@ begin
         another. }
       if f^.sym^.kind <> a^.sym^.kind then
         ok := false
+      { 6.7.3.6: "Either both contain protected or neither contains
+        protected." A body written against a protected parameter may not be
+        handed one it is allowed to write, and -- the direction that is easier
+        to forget -- a body that writes its parameter may not be passed where a
+        protected one was promised. }
+      else if f^.sym^.isProtected <> a^.sym^.isProtected then
+        ok := false
       else if f^.sym^.kind = skProcParam then
         ok := Congruous(f^.sym, a^.sym)
       { A schematic formal's type belongs to that one parameter and is never
@@ -4190,6 +4246,54 @@ begin
     so a dereference is a designator even when its base is not. }
   else if e^.kind = nkDeref then IsDesignator := true
   else IsDesignator := false
+end;
+
+{ The entire-variable a designator selects from. A subscript and a field
+  selection stay inside the same variable and a dereference leaves it, which is
+  exactly ISO/IEC 10206:1991 6.5.1's "closest-containing". }
+function RootDesignator(e: nodePtr): nodePtr;
+begin
+  if e = nil then RootDesignator := nil
+  else if e^.kind = nkIndex then RootDesignator := RootDesignator(e^.ixBase)
+  else if e^.kind = nkField then RootDesignator := RootDesignator(e^.fdBase)
+  else RootDesignator := e
+end;
+
+{ 6.5.1: "No statement shall threaten a variable-access closest-containing a
+  protected variable-identifier." 6.9.4 lists what threatens one, and every
+  entry on that list is a place this compiler already had to decide the
+  argument was a *variable* -- so each call sits beside an IsDesignator test
+  rather than in a walk of its own.
+
+  Nothing is lost by stopping at a dereference: 6.4.1 makes a pointer type
+  unprotectable, so a protected parameter can never be one.
+
+  True means the error's opening was written and the caller supplies the rest,
+  which is how the one rule keeps one wording across five places. }
+function Threatened(e: nodePtr): boolean;
+var r: nodePtr; sym: symPtr;
+begin
+  r := RootDesignator(e);
+  sym := nil;
+  if r <> nil then
+    if r^.kind = nkVar then sym := r^.vrSym;
+  if (sym = nil) or not sym^.isProtected then
+    Threatened := false
+  else begin
+    Threatened := true;
+    ErrorAt(e^.line, e^.col);
+    { A `with` binding is hidden and its name is a frame slot's, not the
+      program's -- so naming it would name something the source never wrote.
+      The rule is the same one either way; only the wording differs. }
+    if r^.vrField <> nil then
+      write('the record of an enclosing with statement is a protected ',
+            'parameter, so ')
+    else begin
+      write('''');
+      WritePool(sym^.at, sym^.len);
+      write(''' is a protected parameter, so ')
+    end
+  end
 end;
 
 { The field of an enclosing `with` this name refers to, if any. A `with` scope
@@ -6222,9 +6326,21 @@ begin
           WritePool(callee^.at, callee^.len);
           writeln(''' is a var parameter and needs a variable')
         end
+        else begin
+        { 6.9.4 b) threatens an actual var parameter only when the *formal* is
+          not itself protected -- which is what lets a protected parameter be
+          handed on, and is the base case that makes the rule usable at all. }
+        if not p^.sym^.isProtected then
+          if Threatened(a) then begin
+            write('it cannot be passed to the var parameter ''');
+            WritePool(p^.sym^.at, p^.sym^.len);
+            write(''' of ''');
+            WritePool(callee^.at, callee^.len);
+            writeln('''')
+          end;
         { No implicit conversion is possible through a reference, so the types
           must be the same rather than merely assignment-compatible. }
-        else if (a^.ntype <> nil) and (p^.sym^.stype <> nil) and
+        if (a^.ntype <> nil) and (p^.sym^.stype <> nil) and
                 (a^.ntype <> p^.sym^.stype) then begin
           ErrorAt(a^.line, a^.col);
           write('var parameter ''');
@@ -6234,6 +6350,7 @@ begin
           write(', but the argument is ');
           WriteTypeName(a^.ntype);
           writeln
+        end
         end
       end
       { A structured value parameter is a copy, so it needs something to copy
@@ -7160,6 +7277,9 @@ begin
       ErrorAt(a^.line, a^.col);
       writeln('read needs a variable, not a value')
     end
+    { 6.9.4 c): read and readln threaten every variable they read into. }
+    else if Threatened(a) then
+      writeln('it cannot be read into')
     else if not text then begin
       if not Assignable(a^.ntype, rf^.elem) then begin
         ErrorAt(a^.line, a^.col);
@@ -7524,6 +7644,7 @@ end;
   in the designator are evaluated a single time. }
 procedure CheckWith(w: nodePtr);
 var t: typePtr; at, len: integer; entry: symListPtr; saved: stmtPathPtr;
+    root: nodePtr;
 begin
   CheckExpr(w^.wtRecord);
   t := w^.wtRecord^.ntype;
@@ -7552,6 +7673,14 @@ begin
     InternWithName(currentProc^.frameCount, at, len);
     new(entry);
     entry^.sym := AddHiddenVar(at, len, skVarParam, t, currentProc);
+    { 6.9.4 i): a `with` is where a protected variable's name stops being
+      written down, so the protection has to travel onto the binding or
+      `with p do f := 1` would slip past a rule `p.f := 1` obeys. }
+    root := RootDesignator(w^.wtRecord);
+    if root <> nil then
+      if root^.kind = nkVar then
+        if root^.vrSym <> nil then
+          entry^.sym^.isProtected := root^.vrSym^.isProtected;
     w^.wtBinding := entry^.sym;
     entry^.next := withTop;
     withTop := entry;
@@ -7619,6 +7748,9 @@ begin
         else begin
           CheckExpr(s^.asTarget);
           CheckExpr(s^.asValue);
+          { 6.9.4 a): an assignment-statement threatens its target. }
+          if Threatened(s^.asTarget) then
+            writeln('it cannot be assigned to');
           if not IsDesignator(s^.asTarget) then begin
             ErrorAt(s^.asTarget^.line, s^.asTarget^.col);
             writeln('the left side of an assignment must be a variable')
@@ -7848,7 +7980,20 @@ begin
             ps^.stype := intType
           end;
           ps^.paramSection := section;
+          ps^.isProtected := g^.grIsProtected;
           ps^.stype := SchematicFormal(schema, ps, g^.grType);
+          { 6.7.3.1 asks the question of "every type possessed by" the name,
+            and a schematic formal possesses one per tuple -- but they all come
+            from one body, so the produced type answers for every one of
+            them. }
+          if g^.grIsProtected and not Protectable(ps^.stype) then begin
+            ErrorAt(n^.line, n^.col);
+            write('''');
+            WritePool(n^.dnAt, n^.dnLen);
+            write(''' cannot be protected: ');
+            WriteTypeName(ps^.stype);
+            writeln(' is not a protectable type')
+          end;
           { The denoter keeps the last of them, the way a schema body keeps its
             last production (ADR-0039): one parameter-form has as many types as
             it has names, and showing one of them says more than showing
@@ -7867,6 +8012,20 @@ begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
         writeln('a file parameter must be a var parameter')
       end;
+      { 6.4.1: a file or a pointer is not protectable, and neither is anything
+        holding one. The standard's own reason is that protecting either would
+        protect nothing -- a file is modified by nearly every operation on it,
+        and a pointer's *value* can be copied out of the protected variable and
+        disposed of through the copy. }
+      if g^.grIsProtected and (g^.grNames <> nil) and not Protectable(t) then
+      begin
+        ErrorAt(g^.grNames^.line, g^.grNames^.col);
+        write('''');
+        WritePool(g^.grNames^.dnAt, g^.grNames^.dnLen);
+        write(''' cannot be protected: ');
+        WriteTypeName(t);
+        writeln(' is not a protectable type')
+      end;
       n := g^.grNames;
       while n <> nil do begin
         if frame <> nil then
@@ -7884,6 +8043,7 @@ begin
           ps^.stype := t
         end;
         ps^.paramSection := section;
+        ps^.isProtected := g^.grIsProtected;
         AppendSym(into^.params, into^.paramTail, ps);
         n := n^.next
       end
@@ -9233,6 +9393,12 @@ begin
   else begin
   if asVar then
     writeln('var')
+  { The tag spells the specification back: `protected` precedes `var` in the
+    source (ISO/IEC 10206:1991 6.7.3.1) and precedes it here. }
+  else if g^.grIsProtected and g^.grByRef then
+    writeln('group protected var')
+  else if g^.grIsProtected then
+    writeln('group protected')
   else if g^.grByRef then
     writeln('group var')
   else
@@ -9562,7 +9728,7 @@ begin
       tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
       tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
       tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile,
-      tkWith, tkOtherwise, tkPow: begin
+      tkWith, tkOtherwise, tkPow, tkProtected: begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
