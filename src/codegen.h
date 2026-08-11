@@ -77,6 +77,13 @@ private:
   llvm::Value *dynSize(Type *t);
   /// The two bounds of an array, either of which may come from a descriptor.
   llvm::Value *boundValue(Type *t, bool high);
+  /// The k'th discriminant of the tuple an expression's type was produced
+  /// with: a constant, or a read of the variable's own descriptor.
+  llvm::Value *discValue(Expr *e, size_t k, llvm::Type *want);
+  /// §6.4.6 d): a mismatched tuple makes two types produced from one schema
+  /// different types, and where that is not known until the program runs it is
+  /// a dynamic-violation rather than a diagnostic.
+  void emitTupleCheck(Expr *dst, Expr *src);
   /// A variable whose actual-discriminant-part is not constant: §6.2.3.2
   /// evaluates it when the block is entered, which is here. The tuple is
   /// stored, checked, and the storage it sizes is claimed.

@@ -4027,6 +4027,10 @@ end;
 
 { ------------------------------------------------- assignment compatibility }
 
+{ Assignable asks this of a type produced from a schema, and IsGeneric is
+  defined with the rest of the schema machinery further down. }
+function IsGeneric(t: typePtr): boolean; forward;
+
 { ISO 7185 6.4.5 makes two structured types the same only when one type
   identifier denotes both, so they compare by identity here. String types are
   the documented exception: packed char arrays of equal length are compatible
@@ -4048,6 +4052,17 @@ begin
     Assignable := false
   else if toT = fromT then
     Assignable := true
+  { 10206 6.4.6 a) is "T1 and T2 are the same type", and 6.4.8 makes one schema
+    with one tuple one type -- so wherever both tuples are known the line above
+    has already decided this, and two different tuples are two different types.
+    What that line cannot decide is a type produced *within an activation*,
+    whose tuple is not known until the block is entered. 6.4.6 d) calls a
+    mismatch there a dynamic-violation, and 6.1's f) 2) is the permission to
+    report it while the program runs -- so the rule is unchanged and only the
+    moment of the comparison moves. CodeGen makes it; all that is decided here
+    is that both were produced from one schema. }
+  else if IsGeneric(toT) or IsGeneric(fromT) then
+    Assignable := toT^.schema = fromT^.schema
   { ISO 7185 6.4.6 makes set compatibility *structural*, not by name: two set
     types are compatible when their base types are. This is the standard's own
     departure from the name equivalence of 6.4.5, and it is what lets `[]` and
@@ -4129,7 +4144,6 @@ procedure CheckExpr(e: nodePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
   forward;
-function IsGeneric(t: typePtr): boolean; forward;
 function GenericFromSchema(schema, param: symPtr; d: nodePtr;
                            forVariable: boolean): typePtr;
   forward;
@@ -9756,6 +9770,29 @@ begin
   StartBlock(c)
 end;
 
+{ The same shape again, for 6.4.6 d): the schema and the discriminant are named
+  where the program is compiled and their values are known only where it runs,
+  so the message is assembled out of two string constants and two integers. }
+procedure EmitTrapDisc(var cond: str; schemaMsg, discMsg: integer;
+                       var l, r: str);
+var t, c: integer;
+begin
+  t := NewBlock;
+  c := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', t:1, ', label %L', c:1);
+  StartBlock(t);
+  write(ircode, '  call void @pas_disc_error(ptr @s', schemaMsg:1,
+        ', ptr @s', discMsg:1, ', i32 ');
+  PutOp(l);
+  write(ircode, ', i32 ');
+  PutOp(r);
+  writeln(ircode, ')');
+  writeln(ircode, '  unreachable');
+  StartBlock(c)
+end;
+
 { ------------------------------------------------------- the static chain }
 
 { The activation record `levels` deep in the static chain from here. The link
@@ -10585,6 +10622,48 @@ begin
   write(ircode, ')')
 end;
 
+{ Where to read the tuple a designator's type was produced with. A generic
+  type belongs to one variable -- nothing else can be given it, and a subscript
+  of one would already have yielded the component -- so a designator possessing
+  one *is* that variable, and its tuple is in the descriptor. Every other type
+  produced from a schema was produced from constants, and they are on the type.
+  Two cursors rather than one, because the two live in different lists. }
+procedure DiscCursors(e: nodePtr; var ds: symListPtr; var tv: numPtr);
+begin
+  ds := nil;
+  tv := nil;
+  if IsGeneric(e^.ntype) and (e^.kind = nkVar) then
+    ds := e^.vrSym^.discSyms
+  else
+    tv := e^.ntype^.tuple
+end;
+
+{ One step of that walk: the next discriminant's value, and the cursors moved
+  on. A tuple shorter than the schema's discriminant list means an error was
+  already reported, so zero keeps the emitter going rather than deciding
+  anything. }
+procedure DiscStep(var ds: symListPtr; var tv: numPtr; want: typePtr;
+                   var v: str);
+var half: str;
+begin
+  if ds <> nil then begin
+    AddressOfSym(ds^.sym, half);
+    Def(v);
+    write(ircode, 'load ');
+    PutLlType(want);
+    write(ircode, ', ptr ');
+    PutOp(half);
+    writeln(ircode);
+    ds := ds^.next
+  end
+  else if tv <> nil then begin
+    OpInt(tv^.value, v);
+    tv := tv^.next
+  end
+  else
+    OpInt(0, v)
+end;
+
 procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
 var link, a, slot, half, target: str; head, tail, o: opndPtr;
     p, ds, dp: symListPtr; arg: nodePtr; result: typePtr; tv: numPtr;
@@ -10636,32 +10715,10 @@ begin
     else if p^.sym^.descSchema <> nil then begin
       EmitAddress(arg, a);
       AppendOpnd(head, tail, a, true, nil);
-      { A generic type belongs to one parameter, so an actual possessing one
-        *is* that parameter: nothing else can be given the type, and a
-        subscript of it would already have yielded the component. }
-      if IsGeneric(arg^.ntype) and (arg^.kind = nkVar) then
-        ds := arg^.vrSym^.discSyms
-      else
-        ds := nil;
+      DiscCursors(arg, ds, tv);
       dp := p^.sym^.descSchema^.discs;
-      tv := arg^.ntype^.tuple;
       while dp <> nil do begin
-        if ds <> nil then begin
-          AddressOfSym(ds^.sym, half);
-          Def(a);
-          write(ircode, 'load ');
-          PutLlType(dp^.sym^.stype);
-          write(ircode, ', ptr ');
-          PutOp(half);
-          writeln(ircode);
-          ds := ds^.next
-        end
-        else if tv <> nil then begin
-          OpInt(tv^.value, a);
-          tv := tv^.next
-        end
-        else
-          OpInt(0, a);
+        DiscStep(ds, tv, dp^.sym^.stype, a);
         AppendOpnd(head, tail, a, false, dp^.sym^.stype);
         dp := dp^.next
       end
@@ -11544,11 +11601,91 @@ begin
   end
 end;
 
+{ A discriminant may be of any ordinal type, and a message reports it as a
+  number -- which is what its ordinal is. }
+procedure WidenOrdinal(var v: str; t: typePtr);
+var raw: str;
+begin
+  if IsChar(t) or IsBoolean(t) then begin
+    raw := v;
+    Def(v);
+    write(ircode, 'zext ');
+    PutLlType(t);
+    write(ircode, ' ');
+    PutOp(raw);
+    writeln(ircode, ' to i32')
+  end
+end;
+
+{ Two types produced from one schema are the same type exactly when they were
+  produced with the same tuple (6.4.8), so that is the comparison -- one per
+  discriminant, whatever the body did with them. A discriminant may be of any
+  ordinal type; the message reports it as a number, which is what its ordinal
+  is. }
+procedure EmitTupleCheck(dst, src: nodePtr);
+var dp, lds, rds: symListPtr; ltv, rtv: numPtr; l, r, bad: str;
+    schema: symPtr; schemaMsg, discMsg: integer;
+begin
+  schema := dst^.ntype^.schema;
+  MsgStart;
+  WritePool(schema^.at, schema^.len);
+  schemaMsg := MsgEnd;
+  DiscCursors(dst, lds, ltv);
+  DiscCursors(src, rds, rtv);
+  dp := schema^.discs;
+  while dp <> nil do begin
+    DiscStep(lds, ltv, dp^.sym^.stype, l);
+    DiscStep(rds, rtv, dp^.sym^.stype, r);
+    MsgStart;
+    WritePool(dp^.sym^.at, dp^.sym^.len);
+    discMsg := MsgEnd;
+    Def(bad);
+    write(ircode, 'icmp ne ');
+    PutLlType(dp^.sym^.stype);
+    write(ircode, ' ');
+    PutOp(l);
+    write(ircode, ', ');
+    PutOp(r);
+    writeln(ircode);
+    WidenOrdinal(l, dp^.sym^.stype);
+    WidenOrdinal(r, dp^.sym^.stype);
+    EmitTrapDisc(bad, schemaMsg, discMsg, l, r);
+    dp := dp^.next
+  end
+end;
+
+{ 6.4.6 d): where both types were produced from one schema but the tuples are
+  not both known, whether they are the same type is a question only the running
+  program can answer. Sema let the assignment through on the schema alone, so
+  this is where the tuples meet -- and once they agree the copy is the ordinary
+  whole-variable one with a length that is computed rather than written. }
 procedure EmitAssign(s: nodePtr);
-var dst: str;
+var dst, src, size: str; t, comp: typePtr; align: integer;
 begin
   EmitAddress(s^.asTarget, dst);
-  EmitStore(dst, s^.asTarget^.ntype, s^.asValue)
+  t := s^.asTarget^.ntype;
+  if (t^.schema <> nil) and
+     (IsGeneric(t) or IsGeneric(s^.asValue^.ntype)) then begin
+    EmitTupleCheck(s^.asTarget, s^.asValue);
+    EmitAddress(s^.asValue, src);
+    { The alignment is the component's, for the same reason a schematic value
+      parameter's copy takes it from there: the array type has no extent to
+      give. }
+    comp := t;
+    while comp^.kind = tyArray do comp := comp^.elem;
+    align := LlAlign(comp);
+    DynSize(t, size);
+    write(ircode, '  call void @llvm.memcpy.p0.p0.i32(ptr align ', align:1,
+          ' ');
+    PutOp(dst);
+    write(ircode, ', ptr align ', align:1, ' ');
+    PutOp(src);
+    write(ircode, ', i32 ');
+    PutOp(size);
+    writeln(ircode, ', i1 false)')
+  end
+  else
+    EmitStore(dst, t, s^.asValue)
 end;
 
 procedure EmitWrite(s: nodePtr);
@@ -12756,7 +12893,11 @@ begin
     and the message for a subscript outside its bounds names bounds the
     compiler never had. }
   writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i32(ptr, ptr, i32, i1)');
-  writeln(ircode, 'declare void @pas_index_error(i32, i32)')
+  writeln(ircode, 'declare void @pas_index_error(i32, i32)');
+  { 6.4.6 d): an assignment between two types produced from one schema with
+    different tuples. The schema and the discriminant are named here; only the
+    values come from the running program. }
+  writeln(ircode, 'declare void @pas_disc_error(ptr, ptr, i32, i32)')
 end;
 
 procedure RunCodeGen;

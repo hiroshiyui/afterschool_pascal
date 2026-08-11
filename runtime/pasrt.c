@@ -33,6 +33,21 @@ void pas_index_error(int lo, int hi) {
   exit(1);
 }
 
+/// ISO/IEC 10206:1991 §6.4.6 d): two types produced from one schema with
+/// different tuples are different types, and an assignment between them is a
+/// dynamic-violation. The schema and the discriminant are named where the
+/// program was compiled and the values are known only where it runs, so the
+/// two halves of the message meet here.
+void pas_disc_error(const char *schema, const char *disc, int left,
+                    int right) {
+  fflush(stdout);
+  fprintf(stderr,
+          "runtime error: assignment needs one type: schema '%s' with %s = %d "
+          "and %s = %d\n",
+          schema, disc, left, disc, right);
+  exit(1);
+}
+
 static void pas_error2(const char *msg, const char *what) {
   fflush(stdout);
   fprintf(stderr, "runtime error: %s%s\n", msg, what);

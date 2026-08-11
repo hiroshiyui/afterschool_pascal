@@ -1,0 +1,9 @@
+<source>:20:3: error: cannot assign vector(4) to a variable of type vector(3)
+<source>:24:3: error: cannot assign other(3) to a variable of type vector(3)
+<source>:25:3: error: cannot assign other to a variable of type vector
+<source>:29:3: error: cannot assign vector(3) to a variable of type plain
+<source>:30:3: error: cannot assign plain to a variable of type vector(3)
+<source>:31:3: error: cannot assign plain to a variable of type vector
+<source>:35:3: error: cannot assign vector to a variable of type real
+<source>:36:3: error: cannot assign real to a variable of type vector
+<source>:37:8: error: operator '=' needs comparable operands, found vector and other

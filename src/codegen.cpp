@@ -385,6 +385,23 @@ llvm::Value *CodeGen::boundValue(ap::Type *t, bool high) {
   return v;
 }
 
+/// The k'th discriminant of the tuple this expression's type was produced
+/// with. A generic type belongs to one variable — nothing else can be given
+/// it, and a subscript of one would already have yielded the component — so an
+/// expression possessing one *is* that variable, and its tuple is in the
+/// descriptor. Every other type produced from a schema was produced from
+/// constants, and they are on the Type.
+llvm::Value *CodeGen::discValue(Expr *e, size_t k, llvm::Type *want) {
+  ap::Type *t = e->type;
+  if (t->isGeneric())
+    if (auto *v = as<VarRef>(e))
+      if (v->sym && k < v->sym->discSyms.size())
+        return b_.CreateLoad(want, addressOf(v->sym->discSyms[k]),
+                             v->sym->discSyms[k]->name);
+  return ConstantInt::getSigned(want,
+                                k < t->tuple.size() ? t->tuple[k] : 0);
+}
+
 llvm::Value *CodeGen::dynSize(ap::Type *t) {
   if (!t->dynamicExtent())
     return ConstantInt::get(i32(), sizeOf(t));
@@ -983,23 +1000,9 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
       // descriptor where it is itself a schematic formal, which is how a
       // schematic array is handed on through any number of blocks.
       argv.push_back(emitAddress(args[i].get()));
-      ap::Type *actual = args[i]->type;
-      // A generic type belongs to one parameter, so an actual possessing one
-      // *is* that parameter: nothing else can be given the type, and a
-      // subscript of it would already have yielded the component.
-      Symbol *from = nullptr;
-      if (actual->isGeneric())
-        if (auto *v = as<VarRef>(args[i].get()))
-          from = v->sym;
-      for (size_t k = 0; k < p->descSchema->discriminants.size(); ++k) {
-        llvm::Type *want = llvmType(p->descSchema->discriminants[k]->type);
-        if (from && k < from->discSyms.size())
-          argv.push_back(b_.CreateLoad(want, addressOf(from->discSyms[k]),
-                                       from->discSyms[k]->name));
-        else
-          argv.push_back(ConstantInt::getSigned(
-              want, k < actual->tuple.size() ? actual->tuple[k] : 0));
-      }
+      for (size_t k = 0; k < p->descSchema->discriminants.size(); ++k)
+        argv.push_back(discValue(args[i].get(), k,
+                                 llvmType(p->descSchema->discriminants[k]->type)));
     } else if (passedByAddress(p)) {
       // A `var` parameter binds to the variable itself; a structured value
       // parameter is copied from it by the callee. Either way what travels is
@@ -1141,9 +1144,53 @@ void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src) {
   b_.CreateStore(checkedForStore(v, type), dst);
 }
 
+/// §6.4.6 d): where both types were produced from one schema but the tuples
+/// are not both known, whether they are the same type is a question only the
+/// running program can answer. Sema let the assignment through on the schema
+/// alone, so this is where the tuples meet — and once they agree the copy is
+/// the ordinary whole-variable one with a length that is computed rather than
+/// written.
 void CodeGen::emitAssign(Assign *s) {
   llvm::Value *dst = emitAddress(s->target.get());
-  emitStore(dst, s->target->type, s->value.get());
+  ap::Type *type = s->target->type;
+  if (type->schema && (type->isGeneric() || s->value->type->isGeneric())) {
+    emitTupleCheck(s->target.get(), s->value.get());
+    llvm::Value *src = emitAddress(s->value.get());
+    // The alignment is the component's, for the same reason a schematic value
+    // parameter's copy takes it from there: the array type LLVM would be asked
+    // about has no extent to give.
+    ap::Type *comp = type;
+    while (comp->isArray())
+      comp = comp->elem;
+    Align align = mod_->getDataLayout().getABITypeAlign(llvmType(comp));
+    b_.CreateMemCpy(dst, align, src, align, dynSize(type));
+    return;
+  }
+  emitStore(dst, type, s->value.get());
+}
+
+/// Two types produced from one schema are the same type exactly when they were
+/// produced with the same tuple (§6.4.8), so that is the comparison — one per
+/// discriminant, whatever the body did with them. The message is built by the
+/// runtime because the values are known only there, while the names are known
+/// only here.
+void CodeGen::emitTupleCheck(Expr *dst, Expr *src) {
+  const Symbol *schema = dst->type->schema;
+  llvm::Value *name = b_.CreateGlobalString(schema->name, "schema");
+  for (size_t k = 0; k < schema->discriminants.size(); ++k) {
+    const Symbol *d = schema->discriminants[k];
+    llvm::Type *want = llvmType(d->type);
+    llvm::Value *l = discValue(dst, k, want);
+    llvm::Value *r = discValue(src, k, want);
+    // A discriminant may be of any ordinal type; the message reports it as a
+    // number, which is what its ordinal is.
+    llvm::Value *lw = l->getType() == i32() ? l : b_.CreateZExt(l, i32());
+    llvm::Value *rw = r->getType() == i32() ? r : b_.CreateZExt(r, i32());
+    emitTrapCall(b_.CreateICmpNE(l, r, "tuple.bad"),
+                 rt("pas_disc_error", llvm::Type::getVoidTy(ctx_),
+                    {ptr(), ptr(), i32(), i32()}),
+                 {name, b_.CreateGlobalString(d->name, "disc"), lw, rw});
+  }
 }
 
 /// `new(p)` gives p the address of fresh storage for one variable of its

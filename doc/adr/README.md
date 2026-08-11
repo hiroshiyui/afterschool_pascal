@@ -50,3 +50,4 @@ the alternatives that were rejected and why.
 | [0039](0039-a-discriminated-schema-produces-an-ordinary-type.md) | A discriminated schema produces an ordinary type | Accepted |
 | [0040](0040-a-schematic-formal-parameter-carries-its-discriminants.md) | A schematic formal parameter carries its discriminants beside the address | Accepted |
 | [0041](0041-a-discriminant-may-be-evaluated-on-entry.md) | A discriminant may be evaluated when the block is entered | Accepted |
+| [0042](0042-a-schematic-assignment-compares-the-tuples.md) | An assignment between two schematic types compares the tuples | Accepted |

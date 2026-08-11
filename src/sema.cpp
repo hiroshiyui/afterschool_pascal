@@ -1133,6 +1133,17 @@ bool Sema::assignable(Type *to, Type *from) const {
     return false;
   if (to == from)
     return true;
+  // ISO/IEC 10206:1991 §6.4.6 a) is "T1 and T2 are the same type", and §6.4.8
+  // makes one schema with one tuple one type — so wherever both tuples are
+  // known the line above has already decided this, and two different tuples
+  // are two different types. What that line cannot decide is a type produced
+  // *within an activation*, whose tuple is not known until the block is
+  // entered. §6.4.6 d) calls a mismatch there a dynamic-violation, and §6.1's
+  // f) 2) is the permission to report it while the program runs — so the rule
+  // is unchanged and only the moment of the comparison moves. CodeGen makes
+  // it; all that is decided here is that both were produced from one schema.
+  if (to->isGeneric() || from->isGeneric())
+    return to->schema == from->schema;
   // ISO 7185 §6.4.6 makes set compatibility *structural*, not by name: two set
   // types are compatible when their base types are. This is the standard's own
   // departure from the name equivalence of §6.4.5, so it is not an exception
