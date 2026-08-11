@@ -519,6 +519,33 @@ in one language or the other, and the standard is a property of the source.
   - Once the tuples agree the copy is ADR-0017's whole-variable one, with
     `dynSize` as its length and the **component's** alignment, because the
     array type has no extent to give.
+- **A heap variable's tuple is a header in front of it** (ADR-0043). §6.4.4's
+  domain-type may be a bare schema-name and §6.7.5.3's `new(p, d1, ..., ds)`
+  supplies the tuple, so the created variable has no activation record to keep
+  a descriptor in.
+  - **The pointer denotes the variable, not the block.** That is the whole
+    reason the feature is small: `p^` is the address `p` already was, so
+    pointer assignment, comparison with nil, the nil check on a dereference
+    and ADR-0019's "every pointer type is `ptr()`" are untouched, and only
+    `new` and `dispose` know a header is there.
+  - A discriminant is one `i32` whatever its type and the header is rounded to
+    **16**, because `malloc`'s alignment has to survive to the variable — a set
+    is 256 bits aligned to 16, which is ADR-0028's segfault again.
+  - **The bounds are found by walking *down* a designator** to the whole
+    variable it selects from. One header serves every dimension, and an inner
+    subscript's base is a component's address, so it cannot compute the header
+    from what it has.
+  - **Inside `new` the bounds come from the argument values**, because the size
+    is asked of the tuple before there is anywhere to put it. Not a shortcut:
+    the Pascal emitter is sequential and cannot put an `alloca` in the entry
+    block afterwards, so scratch storage would grow the stack for a `new`
+    inside a loop.
+  - The two forms of `new` are told apart by **the domain and nothing else** —
+    a record with a variant part selects variants, a schema domain gives a
+    tuple, and the argument lists are indistinguishable.
+  - `dispose` of nil traps **only** for a schema domain: §6.6.5.3 always made
+    it an error, and stepping back over a header is what turned a harmless one
+    into a free of an address that was never allocated.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

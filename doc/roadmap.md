@@ -362,8 +362,16 @@ was never written down.
     generic case becomes one `icmp` per discriminant. Sema decides only that
     both types came from one schema; everything else was already written.
 
-  What is left of schemata: a schema as the domain of a pointer with
-  `new(p, discriminants)`, a discriminant as a variant-selector, and a
+  - ~~**A schema as the domain of a pointer**~~ Done (ADR-0043). §6.4.4's
+    domain-type may be a bare schema-name, and §6.7.5.3's `new(p, d1, ..., ds)`
+    gives the tuple. The created variable has no activation record, so its
+    tuple is a **header in front of it** and the pointer denotes the variable
+    rather than the block — which is what leaves everything else a pointer does
+    untouched. The header is rounded to 16 so `malloc`'s alignment survives to
+    the variable; a corpus with no set component let a rounding of 8 pass every
+    test until one was written.
+
+  What is left of schemata: a discriminant as a variant-selector, and a
   schematic formal whose discriminants reach past an array — which is the
   shape `string` itself has.
 
