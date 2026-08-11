@@ -344,6 +344,22 @@ something that looks over-complicated — most of the odd-looking choices here a
 load-bearing for the bootstrap, and each record says what it costs. Add a record
 when a choice constrains future work or deviates from the standard.
 
+**A landed feature is two commits**, and the split is not tidiness: the `feat:`
+one, then a `docs:` one that moves the feature out of README's "not accepted
+yet" list and into the accepted block, and nothing else. That cadence is what
+makes the language's growth greppable from `docs:` alone — `git log
+--oneline --grep='^docs'` is meant to read as a changelog of what the compiler
+accepts. The rule is written out in `.claude/skills/docs-engineering/SKILL.md`,
+which is loaded only when that skill is invoked; it is repeated here because
+that is exactly how it came to be missed.
+
+It *was* missed, for the eight Extended Pascal features from `d49bc75`
+(protected parameters) through `2ce4c85` (modules): each carried its README
+edit inside the `feat:` commit. Those features are documented — the grep is
+what is incomplete, not the docs — and the gap is recorded here so the next
+reader does not conclude otherwise from an empty search. Don't try to repair it
+by rewriting published history.
+
 ## Bootstrap constraints (do not casually violate)
 
 1. **No C++ RTTI in the AST.** `ast.h` tags nodes with `NK` and casts via
