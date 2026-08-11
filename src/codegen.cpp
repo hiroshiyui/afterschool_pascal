@@ -883,12 +883,17 @@ void CodeGen::initFiles(Symbol *proc) {
     uint64_t comp = v->type->elem ? sizeOf(v->type->elem) : 1;
     b_.CreateCall(
         rt("pas_file_init", voidTy,
-           {ptr(), i32(), i32(), ptr(), i32(), i32()}),
+           {ptr(), i32(), i32(), ptr(), i32(), i32(), i32()}),
         {addressOf(v), ConstantInt::get(i32(), binding),
          ConstantInt::get(i32(), v->fileArg),
          b_.CreateGlobalString(v->name, "file.name"),
          ConstantInt::get(i32(), comp),
-         ConstantInt::get(i32(), v->type->isText() ? 1 : 0)});
+         ConstantInt::get(i32(), v->type->isText() ? 1 : 0),
+         // §6.4.3.6: an index-type makes the file direct-access, and the one
+         // thing the runtime does differently is open the stream for reading
+         // *and* writing — SeekUpdate must be able to turn one into the other
+         // without reopening, since it has to preserve the contents.
+         ConstantInt::get(i32(), v->type->isDirectAccess() ? 1 : 0)});
   }
 }
 
@@ -1395,10 +1400,33 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
   case StdProc::Rewrite: fileOp = "pas_rewrite"; break;
   case StdProc::Get:     fileOp = "pas_get"; break;
   case StdProc::Put:     fileOp = "pas_put"; break;
+  case StdProc::Update:  fileOp = "pas_update"; break;
+  case StdProc::Extend:  fileOp = "pas_extend"; break;
   default: break;
   }
   if (fileOp) {
     b_.CreateCall(rt(fileOp, voidTy, {ptr()}), {slot});
+    return;
+  }
+
+  // §6.7.5.2's three seeks. The position reaches the runtime already relative
+  // to the index-type's smallest value, so `SeekRead(f, 'c')` on a
+  // `file [char] of T` arrives as 99 — the same division of labour an array
+  // subscript has, where the lower bound is folded into the offset and the
+  // runtime never sees an ordinal.
+  const char *seekOp = s->standard == StdProc::SeekRead    ? "pas_seekread"
+                       : s->standard == StdProc::SeekWrite ? "pas_seekwrite"
+                       : s->standard == StdProc::SeekUpdate
+                           ? "pas_seekupdate"
+                           : nullptr;
+  if (seekOp) {
+    ap::Type *idx = arg->type ? arg->type->indexType : nullptr;
+    llvm::Value *n = emitExpr(s->args[1].get());
+    n = b_.CreateZExtOrTrunc(n, i32(), "pos");
+    if (idx && idx->ordinalLo() != 0)
+      n = b_.CreateSub(n, ConstantInt::getSigned(i32(), idx->ordinalLo()),
+                       "pos.rel");
+    b_.CreateCall(rt(seekOp, voidTy, {ptr(), i32()}), {slot, n});
     return;
   }
 
@@ -2222,6 +2250,30 @@ llvm::Value *CodeGen::emitCall(Call *e) {
     const char *fn = e->builtin == Builtin::Eof ? "pas_eof" : "pas_eoln";
     return b_.CreateTrunc(b_.CreateCall(rt(fn, i32(), {ptr()}), {file}, "eof"),
                           i1(), "eof.b");
+  }
+
+  // §6.7.6.5's `empty` and §6.7.6.6's two positions. The runtime counts from
+  // zero, so a position comes back relative to the index-type's smallest value
+  // and the lower bound is added here — the same fold an array subscript makes
+  // in the other direction.
+  if (e->builtin == Builtin::Empty || e->builtin == Builtin::Position ||
+      e->builtin == Builtin::LastPosition) {
+    if (e->args.empty())
+      return ConstantInt::get(i32(), 0); // reported by Sema
+    llvm::Value *file = emitAddress(e->args[0].get());
+    if (e->builtin == Builtin::Empty)
+      return b_.CreateTrunc(
+          b_.CreateCall(rt("pas_empty", i32(), {ptr()}), {file}, "empty"), i1(),
+          "empty.b");
+    const char *fn = e->builtin == Builtin::Position ? "pas_position"
+                                                     : "pas_lastposition";
+    llvm::Value *at = b_.CreateCall(rt(fn, i32(), {ptr()}), {file}, "at");
+    ap::Type *idx = e->args[0]->type ? e->args[0]->type->indexType : nullptr;
+    if (idx && idx->ordinalLo() != 0)
+      at = b_.CreateAdd(at, ConstantInt::getSigned(i32(), idx->ordinalLo()),
+                        "at.abs");
+    // The result possesses the index type, which may be narrower than i32.
+    return b_.CreateZExtOrTrunc(at, llvmType(e->type), "at.idx");
   }
 
   // §6.7.6.3: the two-argument constructors, and the only way to write a

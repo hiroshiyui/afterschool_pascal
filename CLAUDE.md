@@ -686,6 +686,27 @@ in one language or the other, and the standard is a property of the source.
     result kind does not follow its operand; §6.8.3.5 gives complex only `=`
     and `<>`; `write` and `read` refuse it through the message that was
     already there for every type not on §6.10.3.1's list.
+- **A direct-access file is the sequential one plus a position** (ADR-0050).
+  §6.4.3.6's `file [T] of C`: the index-type in brackets is the whole of the
+  syntax, and one number is the whole of the mechanism — ADR-0031's machine
+  with a position added, and one flag on `struct pas_file`.
+  - **Counted in components, never bytes**, and the **lower bound is folded in
+    the compiler**: `SeekRead(f, 'c')` on a `file ['a'..'z'] of T` reaches the
+    runtime as 2, so the runtime needs no notion of an ordinal. The same
+    division of labour ADR-0017 gave indexing.
+  - `position`/`LastPosition` yield a value of the **index type** (§6.7.6.6's
+    "a result of type T"), which is why `Type::indexType` is kept for a file.
+  - **Seeking one past the last component is legal** — the append position,
+    and §6.7.5.2's pre-assertion says so explicitly.
+  - **Update mode has one door**, `SeekUpdate`; `update(f)` then writes the
+    buffer variable back *without advancing*, which is what makes
+    read-modify-write expressible. A direct-access file's stream is opened for
+    reading *and* writing so that door needs no reopen.
+  - **ADR-0021's lookahead became observable**: after a fill the stream is one
+    component ahead of the program, so `position`, `update` and a mid-file
+    `put` each step back. The only genuinely new subtlety in the feature.
+  - Not checked: §6.4.3.6's length bound (`file [1..10]` may hold eleven
+    components), stated in the ADR rather than silently omitted.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

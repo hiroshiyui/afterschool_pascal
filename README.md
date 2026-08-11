@@ -298,15 +298,24 @@ types      complex — a *simple* type, so it is assigned, passed and
            ordering operators do not, there being no order on the complex
            numbers. sqr, sqrt, exp, ln, sin, cos and arctan give a complex
            for a complex, with C99's principal values
+files      file [1..100] of integer — a direct-access file. The index type
+           in brackets is what makes one, and its values are the
+           positions: SeekRead, SeekWrite and SeekUpdate move to one,
+           position and lastposition report one, and empty says whether
+           there are any. update(f) writes the buffer variable back over
+           the current component without advancing, which is what makes
+           read-modify-write possible; extend(f) opens for writing at the
+           end and needs no index type at all
 words      otherwise, pow, protected and value are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
            their words already are. complex, cmplx, polar, re, im and arg
-           are required *identifiers* rather than word-symbols, so a
-           program may still declare its own
+           are required *identifiers* rather than word-symbols, and so are
+           seekread, seekwrite, seekupdate, update, extend, position,
+           lastposition and empty — so a program may still declare its own
 ```
 
 Not accepted yet: the `string` type, modules, structured-value
-constructors, binding (`bind`/`unbind`), and direct-access files. A word-symbol is reserved only when the feature needing it
+constructors, and binding (`bind`/`unbind`). A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.

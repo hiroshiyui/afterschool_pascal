@@ -73,6 +73,10 @@ enum class Builtin {
   /// value — the standard gives the type no literal — and `re`, `im` and `arg`
   /// are the only way back out to a real.
   Cmplx, Polar, Re, Im, Arg,
+  /// ISO/IEC 10206:1991 §6.7.6.6's direct-access position functions and
+  /// §6.7.6.5's `empty`. All three take a file variable, so they join `eof`
+  /// and `eoln` in taking an *address* rather than a value.
+  Position, LastPosition, Empty,
 };
 
 struct Expr : Node {
@@ -369,7 +373,14 @@ struct CaseStmt : Stmt {
 /// The standard procedures that are not statements of their own. `read` and
 /// `readln` are ReadStmt, and `write`/`writeln` are WriteStmt, because their
 /// argument lists are not ordinary expression lists.
-enum class StdProc { None, New, Dispose, Reset, Rewrite, Get, Put };
+enum class StdProc {
+  None, New, Dispose, Reset, Rewrite, Get, Put,
+  /// ISO/IEC 10206:1991 §6.7.5.2's direct-access procedures. The three seeks
+  /// differ only in the mode they leave the file in; `update` writes the
+  /// buffer variable back without advancing; `extend` opens for writing at the
+  /// end, and is the one of the five that needs no direct-access file.
+  SeekRead, SeekWrite, SeekUpdate, Update, Extend
+};
 
 struct ProcCallStmt : Stmt {
   static constexpr NK NodeKind = NK::ProcCall;
@@ -460,6 +471,11 @@ struct TypeExpr {
   /// prologue may store. A declaration reads this rather than `initValue`, so
   /// a rejected specifier cannot reach CodeGen.
   bool initOk = false;
+  /// ISO/IEC 10206:1991 §6.4.3.6: `file-type = 'file' [ '[' index-type ']' ]
+  /// 'of' component-type`. "If there is an index-type in a file-type, then
+  /// that file-type shall be designated a **direct-access file-type**." Null
+  /// for an ordinary sequential file, which is what ISO 7185 has.
+  TypeExprPtr index;
 
   std::string name;               // Named, and the domain of a Pointer
   bool packed = false;            // Array, Record

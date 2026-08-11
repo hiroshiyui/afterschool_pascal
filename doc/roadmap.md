@@ -471,6 +471,25 @@ was never written down.
   - `abs` and `arg` of a complex yield a **real** — the two places table 2's
     result kind does not follow its operand — and §6.8.3.5 gives complex only
     `=` and `<>`, there being no order to give the other four.
+- ~~**Direct-access files.**~~ Done (ADR-0050). §6.4.3.6's `file [T] of C`, and
+  the record's title is the design: ADR-0031 made a `file of T` the text-file
+  machine with two constants changed, and this makes a direct-access file that
+  machine with **one number** added. `struct pas_file` gained one flag.
+  - **Counted in components, never bytes**, because that is the unit the
+    index-type gives — and the **lower bound is folded in the compiler**, so
+    the runtime never sees an ordinal. `SeekRead(f, 'c')` on a
+    `file ['a'..'z'] of T` arrives as 2, the same division of labour ADR-0017
+    gave indexing.
+  - `position` and `LastPosition` return a value of the **index type**, which
+    is the whole reason that type is kept rather than checked and discarded.
+  - **Seeking one past the end is legal** — that is the append position, and
+    §6.7.5.2's pre-assertion says so.
+  - **Update mode has exactly one door**, `SeekUpdate`, because §6.7.5.2 gives
+    `reset` and `rewrite` no direct-access variant. What it buys is `update`:
+    write the buffer back and *do not advance*.
+  - The lookahead of ADR-0021 became observable for the first time: after a
+    fill the stream is one component ahead of the program, so `position`,
+    `update` and a mid-file `put` all have to step back.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and
@@ -478,8 +497,8 @@ was never written down.
   the language rather than a missing mechanism. Its *finding* has not — a compiler reads text in and writes text out
   — so this should be settled by measuring stage-1 code again, the way it was
   settled the first time, and not by taste.
-- **Modules**, `bind`/`unbind`, direct-access files, restricted types,
-  structured-value constructors. Each needs its own record.
+- **Modules**, `bind`/`unbind`, restricted types, structured-value
+  constructors. Each needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

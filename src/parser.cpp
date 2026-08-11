@@ -314,6 +314,19 @@ TypeExprPtr Parser::parseTypeDenoter() {
     t->line = cur().line;
     t->col = cur().col;
     ++pos_;
+    // ISO/IEC 10206:1991 §6.4.3.6: `file [ index-type ] of component-type`.
+    // The brackets are what make a file direct-access, and nothing else does —
+    // so this is the whole of the syntax the feature adds.
+    if (check(Tok::LBracket)) {
+      if (std_ == Std::Iso7185) {
+        errorAtCur("a direct-access file is an Extended Pascal feature; "
+                   "compile with --std=extended");
+        bail();
+      }
+      ++pos_;
+      t->index = parseTypeDenoter();
+      expect(Tok::RBracket, "after the index type of a direct-access file");
+    }
     expect(Tok::KwOf, "after 'file'");
     t->elem = parseTypeDenoter();
     return t;

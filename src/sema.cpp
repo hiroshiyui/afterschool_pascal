@@ -61,6 +61,11 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       {"cmplx", Builtin::Cmplx}, {"polar", Builtin::Polar},
       {"re", Builtin::Re},       {"im", Builtin::Im},
       {"arg", Builtin::Arg},
+      // §6.7.6.6 and §6.7.6.5. Required identifiers like the complex ones, so
+      // a declaration of the same name wins and ISO 7185 refuses them.
+      {"position", Builtin::Position},
+      {"lastposition", Builtin::LastPosition},
+      {"empty", Builtin::Empty},
   };
   return m;
 }
@@ -318,6 +323,18 @@ Type *Sema::resolveFile(TypeExpr &denoter) {
   }
   t->elem = component;
   t->packed = denoter.packed;
+  // §6.4.3.6: the index-type is what makes a file direct-access. It is an
+  // ordinal type, because §6.7.6.6 makes `position` return a value of it and
+  // §6.7.5.2 makes `SeekRead`'s argument assignment-compatible with it.
+  if (denoter.index) {
+    t->indexType = resolveType(*denoter.index);
+    if (!t->indexType->isOrdinal()) {
+      diags_.error(denoter.index->line, denoter.index->col,
+                   "the index type of a direct-access file must be an "
+                   "ordinal type, found " + t->indexType->name());
+      t->indexType = ty::Int();
+    }
+  }
   return t;
 }
 
@@ -2370,7 +2387,8 @@ void Sema::checkStmt(Stmt *s) {
     // the required functions in checkCall.
     if (!sym && (p->name == "new" || p->name == "dispose" ||
                  p->name == "reset" || p->name == "rewrite" ||
-                 p->name == "get" || p->name == "put")) {
+                 p->name == "get" || p->name == "put" ||
+                 (std_ == Std::Extended && isDirectAccessProc(p->name)))) {
       checkStdProc(p);
       return;
     }
@@ -3033,7 +3051,63 @@ void Sema::checkRead(ReadStmt *r) {
   }
 }
 
+/// ISO/IEC 10206:1991 §6.7.5.2's five. They are required *identifiers* like
+/// the complex functions, not word-symbols, so a valid ISO 7185 program may
+/// declare a procedure called `update` — which is why they are recognised only
+/// under the standard that has them and only when no declaration was found.
+bool Sema::isDirectAccessProc(const std::string &name) {
+  return name == "seekread" || name == "seekwrite" || name == "seekupdate" ||
+         name == "update" || name == "extend";
+}
+
 void Sema::checkStdProc(ProcCallStmt *p) {
+  // §6.7.5.2: `SeekRead(f, n)`, `SeekWrite(f, n)` and `SeekUpdate(f, n)` take
+  // a direct-access file and a position; `update(f)` and `extend(f)` take a
+  // file alone. Only `extend` works on a sequential one.
+  if (isDirectAccessProc(p->name)) {
+    bool seeks = p->name != "update" && p->name != "extend";
+    p->standard = p->name == "seekread"     ? StdProc::SeekRead
+                  : p->name == "seekwrite"  ? StdProc::SeekWrite
+                  : p->name == "seekupdate" ? StdProc::SeekUpdate
+                  : p->name == "update"     ? StdProc::Update
+                                            : StdProc::Extend;
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    size_t want = seeks ? 2u : 1u;
+    if (p->args.size() != want) {
+      diags_.error(p->line, p->col,
+                   "'" + p->name + "' takes a file variable" +
+                       (seeks ? " and a position" : ""));
+      return;
+    }
+    Expr *a = p->args[0].get();
+    if (!isDesignator(a) || (a->type && !a->type->isFile())) {
+      diags_.error(a->line, a->col,
+                   "'" + p->name + "' needs a file variable" +
+                       (a->type ? ", found " + a->type->name() : ""));
+      return;
+    }
+    // §6.4.3.6 gives only a file-type with an index-type any position at all,
+    // and `text` never has one. `extend` is the exception: appending is a
+    // sequential operation and §6.7.5.2 asks nothing of the file-type.
+    if (p->name != "extend" && a->type && !a->type->isDirectAccess()) {
+      diags_.error(a->line, a->col,
+                   "'" + p->name + "' needs a direct-access file, and " +
+                       a->type->name() + " has no index type");
+      return;
+    }
+    // The buffer variable is what `update` writes back, so it threatens the
+    // file the same way `put` does — but a file is not protectable, so there
+    // is nothing to check (§6.4.1).
+    if (seeks && p->args[1]->type &&
+        !assignable(a->type->indexType, p->args[1]->type))
+      diags_.error(p->args[1]->line, p->args[1]->col,
+                   "the position must be a value of the index type " +
+                       a->type->indexType->name() + ", found " +
+                       p->args[1]->type->name());
+    return;
+  }
+
   // The file primitives. ISO 7185 §6.6.5.2 defines read and write in terms of
   // get, put and the buffer variable, and this compiler keeps them rather than
   // providing only the derived forms — one character of lookahead is what a
@@ -3435,6 +3509,13 @@ static bool isComplexBuiltin(Builtin b) {
          b == Builtin::Im || b == Builtin::Arg;
 }
 
+/// §6.7.6.6's two and §6.7.6.5's one. Grouped for the same reason the complex
+/// ones are: the only question anyone asks is whether this standard has them.
+static bool isFileEnquiry(Builtin b) {
+  return b == Builtin::Position || b == Builtin::LastPosition ||
+         b == Builtin::Empty;
+}
+
 static bool isRequiredName(const std::string &name) {
   static const char *procs[] = {"new",   "dispose", "reset",  "rewrite",
                                 "get",   "put",     "read",   "readln",
@@ -3517,7 +3598,7 @@ void Sema::checkCall(Call *c) {
   // that name was found, and only under the standard that has them; the
   // message then says the feature is missing rather than that the name is.
   if (it != builtins().end() && std_ == Std::Iso7185 &&
-      isComplexBuiltin(it->second)) {
+      (isComplexBuiltin(it->second) || isFileEnquiry(it->second))) {
     diags_.error(c->line, c->col,
                  "'" + c->name + "' is an Extended Pascal function; compile "
                  "with --std=extended");
@@ -3538,6 +3619,37 @@ void Sema::checkCall(Call *c) {
   // left out, and the only ones taking a file (ISO 7185 §6.6.6.5). The default
   // is supplied here rather than in codegen, so that by the time the tree is
   // handed on, both forms look the same.
+  // §6.7.6.5 and §6.7.6.6: `empty`, `position` and `LastPosition` take a file
+  // variable and nothing else — no default, unlike `eof`, because there is no
+  // standard direct-access file to default to.
+  if (isFileEnquiry(c->builtin)) {
+    c->type = c->builtin == Builtin::Empty ? ty::Bool() : ty::Int();
+    if (c->args.size() != 1) {
+      diags_.error(c->line, c->col,
+                   "'" + c->name + "' takes exactly one file variable");
+      return;
+    }
+    Expr *a = c->args[0].get();
+    checkExpr(a);
+    if (!isDesignator(a) || (a->type && !a->type->isFile())) {
+      diags_.error(a->line, a->col,
+                   "'" + c->name + "' needs a file variable" +
+                       (a->type ? ", found " + a->type->name() : ""));
+      return;
+    }
+    if (a->type && !a->type->isDirectAccess()) {
+      diags_.error(a->line, a->col,
+                   "'" + c->name + "' needs a direct-access file, and " +
+                       a->type->name() + " has no index type");
+      return;
+    }
+    // §6.7.6.6: "shall return a result of type T" — the *index* type, not an
+    // integer. That is the whole reason the index-type is kept on the Type.
+    if (a->type && c->builtin != Builtin::Empty)
+      c->type = a->type->indexType;
+    return;
+  }
+
   if (c->builtin == Builtin::Eof || c->builtin == Builtin::Eoln) {
     c->type = ty::Bool();
     if (c->args.empty()) {

@@ -154,7 +154,10 @@ int pas_pow_int(int x, int y) {
  * at", which is what `have` already meant — so `get`, `put`, `eof` and the
  * buffer variable are one implementation with a text branch, not two. */
 
-enum { PAS_CLOSED = 0, PAS_READING = 1, PAS_WRITING = 2 };
+/* ISO/IEC 10206:1991 §6.4.3.6 gives a file exactly three modes: Inspection,
+ * Generation and Update. The third is reachable only through SeekUpdate, and
+ * only for a direct-access file — reset and rewrite have no update variant. */
+enum { PAS_CLOSED = 0, PAS_READING = 1, PAS_WRITING = 2, PAS_UPDATING = 3 };
 
 struct pas_file {
   FILE *fp;
@@ -164,6 +167,11 @@ struct pas_file {
   int lookahead; /* text: the raw character, or EOF; only when `have` */
   int have;      /* the buffer variable holds the current component */
   int istext;    /* a `text`, with line structure; not a `file of char` */
+  /* ISO/IEC 10206:1991 §6.4.3.6: the file-type had an index-type. It changes
+   * exactly one thing about an ordinary file — the stream is opened for both
+   * reading and writing, because `SeekUpdate` may turn a file being read into
+   * one being written without reopening it. */
+  int direct;
   int compsize;  /* the size of one component in bytes; 1 for a text */
   int ateof;     /* non-text: the fetch that filled `have` found no component */
   char ch;       /* the buffer variable of a text file */
@@ -214,9 +222,134 @@ void pas_args(int argc, char **argv) {
  * which is ISO's rule; this list only catches the standard files and anything
  * still open at exit. */
 static void pas_check_open(struct pas_file *f, int mode, const char *op) {
-  if (f->mode != mode)
+  /* §6.7.5.2 lets Update stand in for both: `get` accepts "Inspection or
+   * Update" and `put` accepts a direct-access file in either writing mode, so
+   * a file being updated answers to whichever question is asked of it. */
+  if (f->mode != mode && f->mode != PAS_UPDATING)
     pas_error2(op, f->mode == PAS_CLOSED ? " a file that is not open"
                                          : " a file open in the other mode");
+}
+
+/* --- direct access (§6.7.5.2, §6.7.6.6) ----------------------------------
+ *
+ * A direct-access file is the sequential machine with one number added: the
+ * component the next operation acts on. Everything about it is expressed in
+ * *components* rather than bytes, because that is the unit §6.4.3.6 gives the
+ * index-type — the byte offset is `compsize` times the position and appears
+ * nowhere else.
+ *
+ * The compiler passes positions already relative to the index-type's smallest
+ * value, so the runtime never sees an ordinal: `SeekRead(f, 'c')` on a
+ * `file [char] of T` arrives here as 99. That is the same division of labour
+ * the array code has, where the lower bound is folded into the offset. */
+
+static void pas_check_direct(struct pas_file *f, const char *op) {
+  if (!f->fp || f->mode == PAS_CLOSED)
+    pas_error2(op, " a file that is not open");
+}
+
+/* The number of components the file holds. §6.7.6.6's LastPosition and
+ * `empty` are both this question; so is the pre-assertion of the three Seek
+ * procedures, which allow seeking to exactly one past the last component. */
+static long pas_length(struct pas_file *f) {
+  long here = ftell(f->fp);
+  long end;
+  fflush(f->fp);
+  if (fseek(f->fp, 0, SEEK_END) != 0)
+    pas_runtime_error("cannot measure the file");
+  end = ftell(f->fp);
+  if (fseek(f->fp, here, SEEK_SET) != 0)
+    pas_runtime_error("cannot measure the file");
+  return end / f->compsize;
+}
+
+/* §6.7.5.2: the three seeks differ only in the mode they leave the file in and
+ * in whether they preload the buffer variable. The shared pre-assertion is
+ * `0 <= ord(n)-ord(a) <= length(f)`, so seeking one past the end is legal —
+ * that is the append position, and refusing it would make SeekWrite unable to
+ * add a component. */
+static void pas_seek(void *v, int n, int mode, const char *op) {
+  struct pas_file *f = v;
+  long len;
+  pas_check_direct(f, op);
+  if (n < 0)
+    pas_error2(op, " a position before the start of the file");
+  fflush(f->fp);
+  len = pas_length(f);
+  if ((long)n > len)
+    pas_error2(op, " a position past the end of the file");
+  if (fseek(f->fp, (long)n * f->compsize, SEEK_SET) != 0)
+    pas_error2(op, " a position the operating system refused");
+  /* The lookahead belongs to the old position, so it is dropped whatever the
+   * new mode is; a read or update then refills it from where we now are. */
+  f->have = 0;
+  f->ateof = 0;
+  f->mode = mode;
+}
+
+void pas_seekread(void *v, int n) { pas_seek(v, n, PAS_READING, "seeking to"); }
+void pas_seekwrite(void *v, int n) { pas_seek(v, n, PAS_WRITING, "seeking to"); }
+void pas_seekupdate(void *v, int n) {
+  pas_seek(v, n, PAS_UPDATING, "seeking to");
+}
+
+/* §6.7.6.6: "position(f) = succ(a, length(f.L))" — how many components lie
+ * before the current one. The lookahead complicates it: filling the buffer
+ * reads a component, so the stream is one ahead of where the program is. */
+int pas_position(void *v) {
+  struct pas_file *f = v;
+  long at;
+  pas_check_direct(f, "asking the position of");
+  fflush(f->fp);
+  at = ftell(f->fp) / f->compsize;
+  if (f->have && f->mode != PAS_WRITING)
+    at -= 1;
+  return (int)at;
+}
+
+/* §6.7.6.6: "LastPosition(f) = succ(a, length(f.L~f.R)-1)", and "it shall be
+ * an error if no such value exists" — which is exactly the empty file, where
+ * there is no last component to name. */
+int pas_lastposition(void *v) {
+  struct pas_file *f = v;
+  long len;
+  pas_check_direct(f, "asking the last position of");
+  fflush(f->fp);
+  len = pas_length(f);
+  if (len == 0)
+    pas_runtime_error("lastposition of an empty file");
+  return (int)(len - 1);
+}
+
+int pas_empty(void *v) {
+  struct pas_file *f = v;
+  pas_check_direct(f, "asking whether it is empty");
+  fflush(f->fp);
+  return pas_length(f) == 0;
+}
+
+/* §6.7.5.2's `update(f)`: write the buffer variable back over the component
+ * the file is positioned at, and *do not advance* — `f.L = f0.L` is the whole
+ * difference from `put`, and it is what makes read-modify-write possible. */
+void pas_update(void *v) {
+  struct pas_file *f = v;
+  long at;
+  pas_check_direct(f, "updating");
+  if (f->mode != PAS_UPDATING && f->mode != PAS_WRITING)
+    pas_runtime_error("update needs a file opened with SeekUpdate");
+  fflush(f->fp);
+  at = ftell(f->fp) / f->compsize;
+  if (f->have)
+    at -= 1; /* the lookahead already consumed the component being replaced */
+  if (fseek(f->fp, at * f->compsize, SEEK_SET) != 0)
+    pas_runtime_error("cannot position the file to update it");
+  if (fwrite(f->buf, 1, (size_t)f->compsize, f->fp) != (size_t)f->compsize)
+    pas_runtime_error("cannot write to the file");
+  fflush(f->fp);
+  /* ...and back, because the position must not move. */
+  if (fseek(f->fp, at * f->compsize, SEEK_SET) != 0)
+    pas_runtime_error("cannot position the file after updating it");
+  f->have = 0;
 }
 
 /* The external file a variable stands for, or a diagnostic if the program was
@@ -233,7 +366,7 @@ static const char *pas_external(struct pas_file *f) {
 }
 
 void pas_file_init(void *v, int binding, int arg, const char *name,
-                   int compsize, int istext) {
+                   int compsize, int istext, int direct) {
   struct pas_file *f = v;
   f->fp = NULL;
   f->mode = PAS_CLOSED;
@@ -242,6 +375,7 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->lookahead = EOF;
   f->have = 0;
   f->istext = istext;
+  f->direct = direct;
   f->compsize = compsize > 0 ? compsize : 1;
   f->ateof = 0;
   f->ch = ' ';
@@ -309,7 +443,10 @@ void pas_reset(void *v) {
       fclose(f->fp);
     /* The component of a `file of T` is T's machine representation, so the
      * stream must not be translated on a platform that would. */
-    f->fp = fopen(name, f->istext ? "r" : "rb");
+    /* A direct-access file may be sought into and updated afterwards, so it
+     * is opened for both from the start — `SeekUpdate` is not allowed to
+     * reopen, since §6.7.5.2 requires it to preserve the contents. */
+    f->fp = fopen(name, f->direct ? "r+b" : f->istext ? "r" : "rb");
     if (!f->fp)
       pas_error2("cannot open for reading: ", name);
     break;
@@ -345,7 +482,7 @@ void pas_rewrite(void *v) {
     const char *name = pas_external(f);
     if (f->fp)
       fclose(f->fp);
-    f->fp = fopen(name, f->istext ? "w" : "wb");
+    f->fp = fopen(name, f->direct ? "w+b" : f->istext ? "w" : "wb");
     if (!f->fp)
       pas_error2("cannot open for writing: ", name);
     break;
@@ -412,7 +549,13 @@ int pas_eoln(void *v) {
  * `file of T` whose T is a record hands back somewhere `f^.field` can index. */
 void *pas_buffer(void *v) {
   struct pas_file *f = v;
-  if (f->mode == PAS_READING) {
+  /* Update counts as reading here. §6.7.5.2's SeekUpdate post-assertion is
+   * `f" = f.R.first` — the buffer variable holds the component sought to — so
+   * a file in Update mode has a component to fetch, and `f^ := f^ + 1;
+   * update(f)` reads the old value before writing the new one. Treating
+   * Update as writing returned whatever the last `put` had left in the
+   * buffer, which is a wrong answer rather than a refused one. */
+  if (f->mode == PAS_READING || f->mode == PAS_UPDATING) {
     pas_fill(f);
     if (f->ateof)
       pas_runtime_error("the buffer variable is undefined at end of file");
@@ -420,6 +563,49 @@ void *pas_buffer(void *v) {
     pas_check_open(f, PAS_WRITING, "using the buffer variable of");
   }
   return f->buf;
+}
+
+/* ISO/IEC 10206:1991 §6.7.5.2's `extend(f)`: open for writing, positioned at
+ * the end, with the contents kept. It is the one file procedure that is
+ * neither reset nor rewrite, and it needs no direct-access file — appending is
+ * a sequential operation. */
+void pas_extend(void *v) {
+  struct pas_file *f = v;
+  f->have = 0;
+  f->lookahead = EOF;
+  f->ateof = 0;
+  f->ch = ' ';
+  switch (f->binding) {
+  case PAS_BIND_INPUT:
+    pas_runtime_error("extend applied to the standard input");
+    break;
+  case PAS_BIND_OUTPUT:
+    f->fp = stdout;
+    break;
+  case PAS_BIND_ARG: {
+    const char *name = pas_external(f);
+    if (f->fp)
+      fclose(f->fp);
+    f->fp = fopen(name, f->direct ? "a+b" : f->istext ? "a" : "ab");
+    if (!f->fp)
+      pas_error2("cannot open for appending: ", name);
+    break;
+  }
+  default:
+    /* An internal file has no name to reopen, so `extend` is `rewrite` that
+     * keeps what is there: seek to the end of the temporary already in hand. */
+    if (!f->fp) {
+      f->fp = tmpfile();
+      if (!f->fp)
+        pas_runtime_error("cannot create a temporary file");
+    } else {
+      fflush(f->fp);
+      if (fseek(f->fp, 0, SEEK_END) != 0)
+        pas_runtime_error("cannot position the file to extend it");
+    }
+    break;
+  }
+  f->mode = PAS_WRITING;
 }
 
 void pas_get(void *v) {
@@ -433,6 +619,17 @@ void pas_get(void *v) {
 void pas_put(void *v) {
   struct pas_file *f = v;
   pas_check_open(f, PAS_WRITING, "writing to");
+  /* §6.7.5.2 extends put's pre-assertion for a direct-access file: it may
+   * write over a component in the middle rather than only at the end. The
+   * lookahead, if one was fetched, belongs to the component being overwritten,
+   * so the stream is one ahead and has to be stepped back. */
+  if (f->direct && f->have) {
+    long at = ftell(f->fp) / f->compsize - 1;
+    fflush(f->fp);
+    if (fseek(f->fp, at * f->compsize, SEEK_SET) != 0)
+      pas_runtime_error("cannot position the file to write to it");
+    f->have = 0;
+  }
   if (f->istext)
     putc(f->ch, f->fp);
   else if (fwrite(f->buf, 1, (size_t)f->compsize, f->fp) !=

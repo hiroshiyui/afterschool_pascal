@@ -1,0 +1,1 @@
+<source>:8:13: error: a direct-access file is an Extended Pascal feature; compile with --std=extended

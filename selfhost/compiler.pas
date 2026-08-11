@@ -140,7 +140,7 @@ type
   ctxKind = (
     ctxNone, ctxProgramStart, ctxProgramParams, ctxProgramHeader, ctxFinalEnd,
     ctxAfterFile, ctxAfterSet, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
-    ctxSchemaArgs, ctxFormalDisc, ctxTypeInquiry,
+    ctxSchemaArgs, ctxFormalDisc, ctxTypeInquiry, ctxDirectIndex,
     ctxArrayIndex, ctxRecordEnd, ctxFieldList, ctxVariantTag,
     ctxVariantLabels, ctxVariantOpen, ctxVariantFields, ctxVariantClose,
     ctxConstDef, ctxConstDefEnd, ctxTypeDef, ctxTypeDefEnd, ctxVarDecl,
@@ -242,8 +242,17 @@ type
                    polar are the only way to *write* a complex value -- the
                    standard gives the type no literal -- and re, im and arg are
                    the only way back out to a real. }
-                 biCmplx, biPolar, biRe, biIm, biArg);
-  stdProcKind = (spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut);
+                 biCmplx, biPolar, biRe, biIm, biArg,
+                 { 6.7.6.6's direct-access position functions and 6.7.6.5's
+                   `empty`. All three take a file variable, so they join eof
+                   and eoln in taking an *address* rather than a value. }
+                 biPosition, biLastPosition, biEmpty);
+  { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
+    three seeks differ only in the mode they leave the file in; update writes
+    the buffer variable back without advancing; extend opens for writing at the
+    end, and is the one of the five that needs no direct-access file. }
+  stdProcKind = (spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut,
+                 spSeekRead, spSeekWrite, spSeekUpdate, spUpdate, spExtend);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -628,7 +637,10 @@ type
       nkEnum:       (enConstants: nodePtr);
       nkSubrange:   (sbLo, sbHi: nodePtr);
       nkArray:      (arDims, arElem: nodePtr; arPacked: boolean);
-      nkFile:       (flElem: nodePtr; flPacked: boolean);
+      { ISO/IEC 10206:1991 6.4.3.6: `file [ index-type ] of component-type`.
+        The brackets are what make a file direct-access, and nothing else
+        does -- so flIndex is the whole of the syntax the feature adds. }
+      nkFile:       (flElem, flIndex: nodePtr; flPacked: boolean);
       nkSetOf:      (soElem: nodePtr; soPacked: boolean);
       nkRecord:     (rcFields, rcTagType, rcVariants: nodePtr;
                      rcTagAt, rcTagLen, rcTagLine, rcTagCol: integer;
@@ -1030,6 +1042,25 @@ end;
 { True when a pooled spelling is the given word. The literal is padded because
   a value parameter of a packed array type must have the array's exact length
   (ADR-0012); the padding is stripped here rather than at the call. }
+{ ...and the same against a *wider* literal. ISO/IEC 10206:1991 has required
+  identifiers longer than the longest ISO 7185 word-symbol -- `seekupdate` is
+  ten characters and `lastposition` twelve -- so kwLit cannot spell them. }
+function PoolIsWide(at, len: integer; word: msgLit): boolean;
+var n, k: integer; same: boolean;
+begin
+  n := msgWidth;
+  while (n > 0) and (word[n] = ' ') do
+    n := n - 1;
+  if n <> len then
+    PoolIsWide := false
+  else begin
+    same := true;
+    for k := 1 to n do
+      if pool[at + k - 1] <> word[k] then same := false;
+    PoolIsWide := same
+  end
+end;
+
 function PoolIs(at, len: integer; word: kwLit): boolean;
 var n, k: integer; same: boolean;
 begin
@@ -1790,6 +1821,7 @@ begin
     ctxSubrangeBounds: write('between the bounds of a subrange');
     ctxSchemaArgs:     write('after the discriminants of a schema');
     ctxTypeInquiry:    write('after ''type'' in a type-inquiry');
+    ctxDirectIndex:    write('after the index type of a direct-access file');
     ctxFormalDisc:     write('in a formal discriminant');
     ctxEnumConstants:  write('after the constants of an enumerated type');
     ctxAfterArray:     write('after ''array''');
@@ -2377,9 +2409,28 @@ begin
       t := NewNode(nkFile, CurLine, CurCol);
       t^.flPacked := packed_;
       t^.flElem := nil;
+      t^.flIndex := nil;
       pos := pos + 1;
-      Expect(tkOf, ctxAfterFile);
-      t^.flElem := ParseTypeDenoter
+      { ISO/IEC 10206:1991 6.4.3.6: `file [ index-type ] of component-type`.
+        The brackets are what make a file direct-access, and nothing else
+        does -- so this is the whole of the syntax the feature adds. }
+      if Check(tkLBracket) then begin
+        if langStd = stdIso7185 then begin
+          ErrorAtCur;
+          writeln('a direct-access file is an Extended Pascal feature; ',
+                  'compile with --std=extended');
+          Bail
+        end
+        else begin
+          pos := pos + 1;
+          t^.flIndex := ParseTypeDenoter;
+          Expect(tkRBracket, ctxDirectIndex)
+        end
+      end;
+      if not aborted then begin
+        Expect(tkOf, ctxAfterFile);
+        t^.flElem := ParseTypeDenoter
+      end
     end
     else if Check(tkArray) then
       t := ParseArrayType(packed_)
@@ -4000,8 +4051,18 @@ begin
       { `text` names itself; every other file names its component, because a
         `file of char` is a different type from a text and a diagnostic that
         called them both "text" would be describing the wrong one. }
+      { A direct-access file names its index type too (6.4.3.6): it is what
+        makes the type direct-access, so a diagnostic that left it out would
+        be describing a different type. }
       tyFile:
         if t^.isText then PutLit('text            ')
+        else if t^.indexType <> nil then begin
+          PutLit('file [          ');
+          WriteTypeName(t^.indexType);
+          PutLit('] of            ');
+          Put(' ');
+          WriteTypeName(t^.elem)
+        end
         else begin
           PutLit('file of         ');
           Put(' ');
@@ -5016,6 +5077,20 @@ begin
   end;
   t^.elem := component;
   t^.isPacked := d^.flPacked;
+  { 6.4.3.6: the index-type is what makes a file direct-access. It is an
+    ordinal type, because 6.7.6.6 makes `position` return a value of it and
+    6.7.5.2 makes SeekRead's argument assignment-compatible with it. }
+  if d^.flIndex <> nil then begin
+    t^.indexType := ResolveType(d^.flIndex);
+    if not IsOrdinal(t^.indexType) then begin
+      ErrorAt(d^.flIndex^.line, d^.flIndex^.col);
+      write('the index type of a direct-access file must be an ordinal ',
+            'type, found ');
+      WriteTypeName(t^.indexType);
+      writeln;
+      t^.indexType := intType
+    end
+  end;
   ResolveFile := t
 end;
 
@@ -5520,7 +5595,10 @@ begin
         ForgetList(d^.arDims);
         ForgetResolved(d^.arElem)
       end;
-      nkFile:  ForgetResolved(d^.flElem);
+      nkFile:  begin
+        ForgetResolved(d^.flElem);
+        ForgetResolved(d^.flIndex)
+      end;
       nkSetOf: ForgetResolved(d^.soElem);
       nkRecord: begin
         g := d^.rcFields;
@@ -7127,6 +7205,14 @@ begin
   else if PoolIs(at, len, 're       ') then LookupBuiltin := biRe
   else if PoolIs(at, len, 'im       ') then LookupBuiltin := biIm
   else if PoolIs(at, len, 'arg      ') then LookupBuiltin := biArg
+  { 6.7.6.6 and 6.7.6.5. Required identifiers like the complex ones, so a
+    declaration of the same name wins and ISO 7185 refuses them. }
+  else if PoolIsWide(at, len, 'position        ') then
+    LookupBuiltin := biPosition
+  else if PoolIsWide(at, len, 'lastposition    ') then
+    LookupBuiltin := biLastPosition
+  else if PoolIsWide(at, len, 'empty           ') then
+    LookupBuiltin := biEmpty
   else LookupBuiltin := biNone
 end;
 
@@ -7137,6 +7223,13 @@ function IsComplexBuiltin(b: builtinKind): boolean;
 begin
   IsComplexBuiltin := (b = biCmplx) or (b = biPolar) or (b = biRe) or
                       (b = biIm) or (b = biArg)
+end;
+
+{ 6.7.6.6's two and 6.7.6.5's one. Grouped for the same reason the complex ones
+  are: the only question anyone asks is whether this standard has them. }
+function IsFileEnquiry(b: builtinKind): boolean;
+begin
+  IsFileEnquiry := (b = biPosition) or (b = biLastPosition) or (b = biEmpty)
 end;
 
 procedure RequireArg(c: nodePtr; ok: boolean; want: wordLit; a: typePtr);
@@ -7178,7 +7271,8 @@ begin
       function called `re`. So they are recognised only when nothing else of
       that name was found, and only under the standard that has them; the
       message then says the feature is missing rather than that the name is. }
-    if (langStd = stdIso7185) and IsComplexBuiltin(c^.clBuiltin) then begin
+    if (langStd = stdIso7185) and
+       (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin)) then begin
       ErrorAt(c^.line, c^.col);
       write('''');
       WritePool(c^.clAt, c^.clLen);
@@ -7212,7 +7306,48 @@ begin
         left out, and the only ones taking a file (ISO 7185 6.6.6.5). The
         default is supplied here rather than in codegen, so that by the time
         the tree is handed on, both forms look the same. }
-      if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
+      { 6.7.6.5 and 6.7.6.6: empty, position and LastPosition take a file
+        variable and nothing else -- no default, unlike eof, because there is
+        no standard direct-access file to default to. }
+      if IsFileEnquiry(c^.clBuiltin) then begin
+        if c^.clBuiltin = biEmpty then c^.ntype := boolType
+        else c^.ntype := intType;
+        if n <> 1 then begin
+          ErrorAt(c^.line, c^.col);
+          write('''');
+          WritePool(c^.clAt, c^.clLen);
+          writeln(''' takes exactly one file variable')
+        end
+        else begin
+          a := c^.clArgs;
+          if not IsDesignator(a) or
+             ((a^.ntype <> nil) and not IsFile(a^.ntype)) then begin
+            ErrorAt(a^.line, a^.col);
+            write('''');
+            WritePool(c^.clAt, c^.clLen);
+            write(''' needs a file variable');
+            if a^.ntype <> nil then begin
+              write(', found ');
+              WriteTypeName(a^.ntype)
+            end;
+            writeln
+          end
+          else if (a^.ntype <> nil) and (a^.ntype^.indexType = nil) then begin
+            ErrorAt(a^.line, a^.col);
+            write('''');
+            WritePool(c^.clAt, c^.clLen);
+            write(''' needs a direct-access file, and ');
+            WriteTypeName(a^.ntype);
+            writeln(' has no index type')
+          end
+          { 6.7.6.6: "shall return a result of type T" -- the *index* type, not
+            an integer. That is the whole reason the index-type is kept on the
+            type. }
+          else if (a^.ntype <> nil) and (c^.clBuiltin <> biEmpty) then
+            c^.ntype := a^.ntype^.indexType
+        end
+      end
+      else if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
         c^.ntype := boolType;
         if n = 0 then begin
           def := StandardFileRef(true, c^.line, c^.col);
@@ -7334,7 +7469,8 @@ begin
             otherwise the type of the operand" -- so a complex operand gives a
             complex result and everything else gives a real. }
           biNone, biSqrt, biSin, biCos, biLn, biExp, biArcTan, biEof,
-          biEoln, biCmplx, biPolar: begin
+          biEoln, biCmplx, biPolar, biPosition, biLastPosition, biEmpty:
+          begin
             RequireArg(c, IsArith(t), 'a numeric   ', t);
             if IsComplex(t) then c^.ntype := complexType
             else c^.ntype := realType
@@ -7842,6 +7978,19 @@ begin
   end
 end;
 
+{ ISO/IEC 10206:1991 6.7.5.2's five. They are required *identifiers* like the
+  complex functions, not word-symbols, so a valid ISO 7185 program may declare
+  a procedure called `update` -- which is why they are recognised only under
+  the standard that has them and only when no declaration was found. }
+function IsDirectAccessProc(at, len: integer): boolean;
+begin
+  IsDirectAccessProc := PoolIsWide(at, len, 'seekread        ') or
+                        PoolIsWide(at, len, 'seekwrite       ') or
+                        PoolIsWide(at, len, 'seekupdate      ') or
+                        PoolIsWide(at, len, 'update          ') or
+                        PoolIsWide(at, len, 'extend          ')
+end;
+
 procedure CheckStdProc(p: nodePtr);
 var
   a, value: nodePtr;
@@ -7849,12 +7998,23 @@ var
   domain, tag, valueType: typePtr;
   arms, w: variantPtr;
   lbl: rangePtr;
-  stop, discSel: boolean;
+  want: integer;
+  stop, discSel, seeks: boolean;
 begin
   if PoolIs(p^.pcAt, p^.pcLen, 'reset    ') then p^.pcStd := spReset
   else if PoolIs(p^.pcAt, p^.pcLen, 'rewrite  ') then p^.pcStd := spRewrite
   else if PoolIs(p^.pcAt, p^.pcLen, 'get      ') then p^.pcStd := spGet
   else if PoolIs(p^.pcAt, p^.pcLen, 'put      ') then p^.pcStd := spPut
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'seekread        ') then
+    p^.pcStd := spSeekRead
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'seekwrite       ') then
+    p^.pcStd := spSeekWrite
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'seekupdate      ') then
+    p^.pcStd := spSeekUpdate
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'update          ') then
+    p^.pcStd := spUpdate
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'extend          ') then
+    p^.pcStd := spExtend
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -7870,8 +8030,62 @@ begin
     a := a^.next
   end;
 
-  if (p^.pcStd = spReset) or (p^.pcStd = spRewrite) or (p^.pcStd = spGet) or
-     (p^.pcStd = spPut) then begin
+  { 6.7.5.2: SeekRead(f, n), SeekWrite(f, n) and SeekUpdate(f, n) take a
+    direct-access file and a position; update(f) and extend(f) take a file
+    alone. Only extend works on a sequential one. }
+  if (p^.pcStd = spSeekRead) or (p^.pcStd = spSeekWrite) or
+     (p^.pcStd = spSeekUpdate) or (p^.pcStd = spUpdate) or
+     (p^.pcStd = spExtend) then begin
+    seeks := (p^.pcStd = spSeekRead) or (p^.pcStd = spSeekWrite) or
+             (p^.pcStd = spSeekUpdate);
+    if seeks then want := 2 else want := 1;
+    if n <> want then begin
+      ErrorAt(p^.line, p^.col);
+      write('''');
+      WritePool(p^.pcAt, p^.pcLen);
+      write(''' takes a file variable');
+      if seeks then writeln(' and a position') else writeln
+    end
+    else begin
+      a := p^.pcArgs;
+      if not IsDesignator(a) or
+         ((a^.ntype <> nil) and not IsFile(a^.ntype)) then begin
+        ErrorAt(a^.line, a^.col);
+        write('''');
+        WritePool(p^.pcAt, p^.pcLen);
+        write(''' needs a file variable');
+        if a^.ntype <> nil then begin
+          write(', found ');
+          WriteTypeName(a^.ntype)
+        end;
+        writeln
+      end
+      { 6.4.3.6 gives only a file-type with an index-type a position at all,
+        and `text` never has one. `extend` is the exception: appending is a
+        sequential operation and 6.7.5.2 asks nothing of the file-type. }
+      else if (p^.pcStd <> spExtend) and (a^.ntype <> nil) and
+              (a^.ntype^.indexType = nil) then begin
+        ErrorAt(a^.line, a^.col);
+        write('''');
+        WritePool(p^.pcAt, p^.pcLen);
+        write(''' needs a direct-access file, and ');
+        WriteTypeName(a^.ntype);
+        writeln(' has no index type')
+      end
+      else if seeks then
+        if (a^.next^.ntype <> nil) and (a^.ntype <> nil) then
+          if not Assignable(a^.ntype^.indexType, a^.next^.ntype) then begin
+            ErrorAt(a^.next^.line, a^.next^.col);
+            write('the position must be a value of the index type ');
+            WriteTypeName(a^.ntype^.indexType);
+            write(', found ');
+            WriteTypeName(a^.next^.ntype);
+            writeln
+          end
+    end
+  end
+  else if (p^.pcStd = spReset) or (p^.pcStd = spRewrite) or
+          (p^.pcStd = spGet) or (p^.pcStd = spPut) then begin
     if n <> 1 then begin
       ErrorAt(p^.line, p^.col);
       write('''');
@@ -8270,7 +8484,9 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'reset    ') or
             PoolIs(s^.pcAt, s^.pcLen, 'rewrite  ') or
             PoolIs(s^.pcAt, s^.pcLen, 'get      ') or
-            PoolIs(s^.pcAt, s^.pcLen, 'put      ')) then
+            PoolIs(s^.pcAt, s^.pcLen, 'put      ') or
+            ((langStd = stdExtended) and
+             IsDirectAccessProc(s^.pcAt, s^.pcLen))) then
           CheckStdProc(s)
         else if sym = nil then begin
           ErrorAt(s^.line, s^.col);
@@ -12668,10 +12884,56 @@ end;
 
 procedure EmitCall(e: nodePtr; var v: str);
 var a, w, lim, tmp, b_, re, im, x, y, c_, d_: str;
-    at: typePtr; msg, up: integer; isSucc: boolean;
+    at, idx: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
     EmitUserCall(e^.clSym, e^.clArgs, v)
+  { 6.7.6.5's `empty` and 6.7.6.6's two positions. The runtime counts from
+    zero, so a position comes back relative to the index-type's smallest value
+    and the lower bound is added here -- the same fold an array subscript makes
+    in the other direction. }
+  else if (e^.clBuiltin = biEmpty) or (e^.clBuiltin = biPosition) or
+          (e^.clBuiltin = biLastPosition) then begin
+    if e^.clArgs = nil then
+      OpInt(0, v)
+    else begin
+      EmitAddress(e^.clArgs, a);
+      Def(w);
+      if e^.clBuiltin = biEmpty then write(ircode, 'call i32 @pas_empty(ptr ')
+      else if e^.clBuiltin = biPosition then
+        write(ircode, 'call i32 @pas_position(ptr ')
+      else write(ircode, 'call i32 @pas_lastposition(ptr ');
+      PutOp(a);
+      writeln(ircode, ')');
+      if e^.clBuiltin = biEmpty then begin
+        Def(v);
+        write(ircode, 'trunc i32 ');
+        PutOp(w);
+        writeln(ircode, ' to i1')
+      end
+      else begin
+        idx := e^.clArgs^.ntype^.indexType;
+        if OrdinalLo(idx) <> 0 then begin
+          Def(lim);
+          write(ircode, 'add i32 ');
+          PutOp(w);
+          writeln(ircode, ', ', OrdinalLo(idx):1);
+          w := lim
+        end;
+        { the result possesses the index type, which may be narrower than i32 }
+        if IsChar(idx) or IsBoolean(idx) then begin
+          Def(v);
+          write(ircode, 'trunc i32 ');
+          PutOp(w);
+          write(ircode, ' to ');
+          PutLlType(idx);
+          writeln(ircode)
+        end
+        else
+          v := w
+      end
+    end
+  end
   { The file enquiries take the file's address, not its value, and Sema has
     already supplied `input` where the program left the argument out. }
   else if (e^.clBuiltin = biEof) or (e^.clBuiltin = biEoln) then begin
@@ -12799,7 +13061,7 @@ begin
         biExp:    ComplexCall('pas_cexp        ', a, v);
         biArcTan: ComplexCall('pas_carctan     ', a, v);
         biNone, biOdd, biOrd, biChr, biSucc, biPred, biTrunc, biRound,
-        biEof, biEoln, biCmplx, biPolar:
+        biEof, biEoln, biCmplx, biPolar, biPosition, biLastPosition, biEmpty:
           OpWord('undef           ', v)
       end
     else
@@ -12956,7 +13218,8 @@ begin
         msg := MsgEnd;
         CheckedFpToInt(w, v, msg)
       end;
-      biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg: OpInt(0, v)
+      biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
+      biPosition, biLastPosition, biEmpty: OpInt(0, v)
     end
   end
 end;
@@ -13606,21 +13869,54 @@ begin
 end;
 
 procedure EmitStdProc(s: nodePtr);
-var slot, block, raw: str; domain: typePtr; head, msg: integer;
+var slot, block, raw: str; domain, idx: typePtr; head, msg: integer;
 begin
   EmitAddress(s^.pcArgs, slot);
   case s^.pcStd of
-    spReset, spRewrite, spGet, spPut: begin
+    spReset, spRewrite, spGet, spPut, spUpdate, spExtend: begin
       write(ircode, '  call void @pas_');
       case s^.pcStd of
         spReset:   write(ircode, 'reset');
         spRewrite: write(ircode, 'rewrite');
         spGet:     write(ircode, 'get');
         spPut:     write(ircode, 'put');
-        spNone, spNew, spDispose: write(ircode, 'get')
+        spUpdate:  write(ircode, 'update');
+        spExtend:  write(ircode, 'extend');
+        spNone, spNew, spDispose, spSeekRead, spSeekWrite, spSeekUpdate:
+          write(ircode, 'get')
       end;
       write(ircode, '(ptr ');
       PutOp(slot);
+      writeln(ircode, ')')
+    end;
+    { 6.7.5.2's three seeks. The position reaches the runtime already relative
+      to the index-type's smallest value, so `SeekRead(f, 'c')` on a
+      `file ['a'..'z'] of T` arrives as 2 -- the same division of labour an
+      array subscript has, where the lower bound is folded into the offset and
+      the runtime never sees an ordinal. }
+    spSeekRead, spSeekWrite, spSeekUpdate: begin
+      EmitExpr(s^.pcArgs^.next, raw);
+      WidenOrdinal(raw, s^.pcArgs^.next^.ntype);
+      idx := s^.pcArgs^.ntype^.indexType;
+      if OrdinalLo(idx) <> 0 then begin
+        Def(block);
+        write(ircode, 'sub i32 ');
+        PutOp(raw);
+        writeln(ircode, ', ', OrdinalLo(idx):1);
+        raw := block
+      end;
+      write(ircode, '  call void @pas_');
+      case s^.pcStd of
+        spSeekRead:   write(ircode, 'seekread');
+        spSeekWrite:  write(ircode, 'seekwrite');
+        spSeekUpdate: write(ircode, 'seekupdate');
+        spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut, spUpdate,
+        spExtend: write(ircode, 'seekread')
+      end;
+      write(ircode, '(ptr ');
+      PutOp(slot);
+      write(ircode, ', i32 ');
+      PutOp(raw);
       writeln(ircode, ')')
     end;
     spNew: begin
@@ -14181,7 +14477,8 @@ end;
   the program body runs -- but no character is read until the program asks, or
   a program that never reads would hang waiting for a terminal. }
 procedure InitFiles(p: symPtr);
-var l: symListPtr; addr: str; binding, name, comp, istext: integer;
+var l: symListPtr; addr: str;
+    binding, name, comp, istext, direct: integer;
 begin
   l := p^.frameVars;
   while l <> nil do begin
@@ -14201,10 +14498,17 @@ begin
       if l^.sym^.stype^.elem <> nil then comp := LlSize(l^.sym^.stype^.elem);
       istext := 0;
       if l^.sym^.stype^.isText then istext := 1;
+      { 6.4.3.6: an index-type makes the file direct-access, and the one thing
+        the runtime does differently is open the stream for reading *and*
+        writing -- SeekUpdate must be able to turn one into the other without
+        reopening, since it has to preserve the contents. }
+      direct := 0;
+      if l^.sym^.stype^.indexType <> nil then direct := 1;
       write(ircode, '  call void @pas_file_init(ptr ');
       PutOp(addr);
       writeln(ircode, ', i32 ', binding:1, ', i32 ', l^.sym^.fileArg:1,
-              ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1, ')')
+              ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1,
+              ', i32 ', direct:1, ')')
     end;
     l := l^.next
   end
@@ -14645,7 +14949,8 @@ begin
   writeln(ircode);
   writeln(ircode, 'declare void @pas_runtime_error(ptr)');
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
-  writeln(ircode, 'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32)');
+  writeln(ircode,
+          'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32, i32)');
   writeln(ircode, 'declare void @pas_file_done(ptr)');
   writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
   writeln(ircode, 'declare void @pas_jump_done(ptr)');
@@ -14687,6 +14992,15 @@ begin
   writeln(ircode, 'declare double @llvm.exp.f64(double)');
   writeln(ircode, 'declare double @llvm.round.f64(double)');
   writeln(ircode, 'declare double @atan(double)');
+  { ISO/IEC 10206:1991 6.7.5.2 and 6.7.6.6's direct-access operations. }
+  writeln(ircode, 'declare void @pas_seekread(ptr, i32)');
+  writeln(ircode, 'declare void @pas_seekwrite(ptr, i32)');
+  writeln(ircode, 'declare void @pas_seekupdate(ptr, i32)');
+  writeln(ircode, 'declare void @pas_update(ptr)');
+  writeln(ircode, 'declare void @pas_extend(ptr)');
+  writeln(ircode, 'declare i32 @pas_position(ptr)');
+  writeln(ircode, 'declare i32 @pas_lastposition(ptr)');
+  writeln(ircode, 'declare i32 @pas_empty(ptr)');
   { ISO/IEC 10206:1991's complex functions. `abs` and `arg` are one libm call
     each; the six transcendentals are two runtime calls each, one per part,
     because a `double complex` returned across this boundary would put the C

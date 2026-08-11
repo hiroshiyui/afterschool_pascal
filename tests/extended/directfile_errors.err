@@ -1,0 +1,10 @@
+<source>:13:12: error: 'seekread' needs a direct-access file, and file of integer has no index type
+<source>:14:13: error: 'seekwrite' needs a direct-access file, and text has no index type
+<source>:15:14: error: 'seekupdate' needs a direct-access file, and file of integer has no index type
+<source>:16:10: error: 'update' needs a direct-access file, and file of integer has no index type
+<source>:17:17: error: 'position' needs a direct-access file, and file of integer has no index type
+<source>:18:21: error: 'lastposition' needs a direct-access file, and text has no index type
+<source>:19:14: error: 'empty' needs a direct-access file, and file of integer has no index type
+<source>:22:15: error: the position must be a value of the index type 1..10, found char
+<source>:25:3: error: 'seekread' takes a file variable and a position
+<source>:26:3: error: 'update' takes a file variable

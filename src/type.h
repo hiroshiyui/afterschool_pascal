@@ -96,7 +96,10 @@ struct Type {
   /// null for a procedural parameter as against a functional one. Sharing the
   /// field is how a variant record would do it, which is where this is going.
   Type *elem = nullptr;
-  Type *indexType = nullptr; // the ordinal type of a subscript
+  /// The ordinal type of a subscript — and, for a direct-access file
+  /// (ISO/IEC 10206:1991 §6.4.3.6), of a position. The two never collide: a
+  /// file is not an array.
+  Type *indexType = nullptr;
   bool packed = false;
   bool textFile = false; // File: this is `text`, not a `file of char`
 
@@ -205,6 +208,15 @@ struct Type {
   /// are otherwise identical, right down to the component size, so nothing but
   /// this flag distinguishes them.
   bool isText() const { return isFile() && textFile; }
+  /// ISO/IEC 10206:1991 §6.4.3.6: a file-type with an index-type. It is the
+  /// index-type's presence and nothing else that makes a file direct-access —
+  /// `text` never has one, and §6.4.3.6 says so explicitly.
+  /// ISO/IEC 10206:1991 §6.4.3.6: a file-type with an index-type. It is the
+  /// index-type's presence and nothing else that makes a file direct-access —
+  /// `text` never has one, and §6.4.3.6 says so explicitly. The type is kept
+  /// in `indexType`, which an array already used for the same idea and which
+  /// a file has no other use for.
+  bool isDirectAccess() const { return isFile() && indexType != nullptr; }
   bool isSet() const { return kind == TypeKind::Set; }
   /// The type of a procedural or functional parameter (ISO 7185 §6.6.3.1).
   /// There is no way to *write* one outside a formal parameter list — the type
@@ -359,8 +371,14 @@ struct Type {
     // `file of char` is a different type from a text and a diagnostic that
     // called them both "text" would be describing the wrong one.
     case TypeKind::File:
+      // A direct-access file names its index type too (§6.4.3.6): it is what
+      // makes the type direct-access, so a diagnostic that left it out would
+      // be describing a different type.
       return textFile ? "text"
-                      : "file of " + (elem ? elem->name() : "?");
+             : indexType
+                 ? "file [" + indexType->name() + "] of " +
+                       (elem ? elem->name() : "?")
+                 : "file of " + (elem ? elem->name() : "?");
     // The type of `[]` names no base type because it has none; it is written
     // the way the source writes it.
     case TypeKind::Set:

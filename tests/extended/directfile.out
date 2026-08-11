@@ -1,0 +1,11 @@
+empty FALSE  last 5
+at 3 = 30
+back 3 = 1030
+next 4 = 40
+held 2 = 20
+all  10 20 1030 40 50 
+then 10 20 1030 40 999 
+grew 6
+char c = 99 last e
+gs   97 98 99 100 101 999 
+glast f
