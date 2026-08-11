@@ -66,6 +66,12 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       {"position", Builtin::Position},
       {"lastposition", Builtin::LastPosition},
       {"empty", Builtin::Empty},
+      // §6.7.6.7. Required identifiers, so a program may declare its own.
+      {"length", Builtin::Length}, {"index", Builtin::Index},
+      {"substr", Builtin::Substr}, {"trim", Builtin::Trim},
+      {"eq", Builtin::StrEq},      {"ne", Builtin::StrNe},
+      {"lt", Builtin::StrLt},      {"gt", Builtin::StrGt},
+      {"le", Builtin::StrLe},      {"ge", Builtin::StrGe},
   };
   return m;
 }
@@ -1216,6 +1222,28 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
   if (it != produced_.end())
     return it->second;
 
+  // §6.4.3.3.3: the required schema has no body to resolve. What it produces
+  // is a variable-string-type whose capacity is the tuple's one component —
+  // "each tuple in the domain of the schema shall have one component that is a
+  // value of integer-type greater than zero". A capacity of zero or less is
+  // therefore outside the *domain*, which is why the message is the one every
+  // other tuple outside a domain gets.
+  if (schema->isStringSchema) {
+    if (tuple[0] <= 0) {
+      diags_.error(denoter.line, denoter.col,
+                   "the capacity of a string must be greater than zero, "
+                   "found " + std::to_string(tuple[0]));
+      return ty::Int();
+    }
+    Type *t = newType(TypeKind::String);
+    t->lo = 1;
+    t->hi = tuple[0];
+    t->schema = schema;
+    t->tuple = tuple;
+    produced_[key] = t;
+    return t;
+  }
+
   // Produce it: the discriminants become ordinary constants for as long as the
   // body is being resolved, which is what lets `array [1..n] of real` reach
   // the existing subrange and array code with nothing added to either.
@@ -1403,6 +1431,20 @@ Type *Sema::genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
       scopes_.back()[d->name] = d;
   }
 
+  // §6.4.3.3.3 again: a schematic formal `var s: string` is a string whose
+  // capacity arrives with the actual, so the bound is the `Disc` symbol rather
+  // than a number — exactly as `array [1..n]` reaches ADR-0040's descriptor.
+  if (schema->isStringSchema) {
+    popScope();
+    Type *t = newType(TypeKind::String);
+    t->lo = 1;
+    t->hi = 0;
+    t->hiDisc = param->discSyms[0];
+    t->schema = schema;
+    param->descSchema = schema;
+    return t;
+  }
+
   forgetResolved(schema->schemaBody);
   producing_.push_back(schema);
   Symbol *savedGeneric = genericFor_;
@@ -1457,6 +1499,25 @@ void Sema::installPredefined() {
   Symbol *m = declare("maxint", SymKind::Const, 0, 0);
   m->type = ty::Int();
   m->intVal = kMaxInt;
+
+  // ISO/IEC 10206:1991 §6.4.3.3.3: "There shall be a schema that is denoted by
+  // the required schema-identifier `string`. The schema `string` shall have
+  // one formal discriminant denoted by the required discriminant-identifier
+  // `capacity`, which shall possess the integer-type."
+  //
+  // It is declared like any other required identifier — in the outermost
+  // scope, where a program may shadow it — and not as a word-symbol, because
+  // §6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define
+  // a type of that name.
+  if (std_ == Std::Extended) {
+    Symbol *str = declare("string", SymKind::Schema, 0, 0);
+    str->isStringSchema = true;
+    Symbol *cap = newSymbol();
+    cap->name = "capacity";
+    cap->kind = SymKind::Const;
+    cap->type = ty::Int();
+    str->discriminants.push_back(cap);
+  }
 }
 
 /// ISO 7185 §6.4.5 makes two structured types the same only when one type
@@ -1492,6 +1553,23 @@ bool Sema::assignable(Type *to, Type *from) const {
   // f) 2) is the permission to report it while the program runs — so the rule
   // is unchanged and only the moment of the comparison moves. CodeGen makes
   // it; all that is decided here is that both were produced from one schema.
+  // ISO/IEC 10206:1991 §6.4.5 d): "T1 is either a string-type or the char-type
+  // and T2 is either a string-type or the char-type." *All* of them are
+  // compatible with each other, whatever their capacities — and §6.4.6 f) then
+  // makes the assignment legal when the value's length fits, which is a
+  // question about the value and so a run-time one. That is the whole of the
+  // divergence from ISO 7185, where two strings had to have the same length.
+  //
+  // It comes before the schema rule below, and must: two capacities are two
+  // types produced from one schema with different tuples, which §6.4.6 d)
+  // would otherwise call a dynamic-violation. §6.4.6 f) is the more specific
+  // rule and the required schema is what it is about.
+  // Two chars are not this rule: they are the ordinary compatibility below,
+  // and routing them here would answer a different question — an ISO 7185
+  // program indexing a `'a'..'e'` array with a char is not a string at all.
+  if (std_ == Std::Extended && (to->isStringType() || from->isStringType()) &&
+      to->isStringOrChar() && from->isStringOrChar())
+    return true;
   if (to->isGeneric() || from->isGeneric())
     return to->schema == from->schema;
   // ISO 7185 §6.4.6 makes set compatibility *structural*, not by name: two set
@@ -1506,6 +1584,12 @@ bool Sema::assignable(Type *to, Type *from) const {
       return true;
     return to->elem->base() == from->elem->base();
   }
+  // ISO/IEC 10206:1991 §6.4.5 d): "T1 is either a string-type or the char-type
+  // and T2 is either a string-type or the char-type." *All* of them are
+  // compatible with each other, whatever their capacities — and §6.4.6 f) then
+  // makes the assignment legal when the value's length fits, which is a
+  // question about the value and so a run-time one. That is the whole of the
+  // divergence from ISO 7185, where two strings had to have the same length.
   if (to->isStructured() || from->isStructured())
     return to->isCharArray() && from->isCharArray() &&
            to->length() == from->length();
@@ -2484,9 +2568,18 @@ void Sema::checkExpr(Expr *e) {
     // ISO 7185 §6.4.3.2: a string literal *is* a packed array of char. Giving
     // it that type rather than a type of its own is what makes assignment,
     // comparison and parameter passing work with no special cases anywhere.
+    // ISO/IEC 10206:1991 §6.1.9 writes `character-string = ''' { string-element
+    // } '''` — braces, so *zero* elements are allowed and `''` denotes the
+    // null-string §6.4.3.3.1 names. ISO 7185's grammar has one element and then
+    // the braces, which is why the two languages differ over two apostrophes
+    // and nothing else.
     if (s->value.empty()) {
-      diags_.error(s->line, s->col, "a string literal cannot be empty");
-      s->type = stringType(1);
+      if (std_ == Std::Iso7185) {
+        diags_.error(s->line, s->col, "a string literal cannot be empty");
+        s->type = stringType(1);
+        return;
+      }
+      s->type = ty::CanonicalString();
       return;
     }
     s->type = stringType(static_cast<long long>(s->value.size()));
@@ -2497,6 +2590,18 @@ void Sema::checkExpr(Expr *e) {
     checkExpr(idx->base.get());
     checkExpr(idx->index.get());
     Type *base = idx->base->type;
+    // §6.4.3.3.3 NOTE 1: a variable-string is indexed as an array, and every
+    // component is a char. §6.5.3.2 makes the subscript an *integer* — not a
+    // value of an index type, because a string's index-domain is 1..length
+    // and no type names it.
+    if (base && base->isVarString()) {
+      if (idx->index->type && !idx->index->type->isInteger())
+        diags_.error(idx->index->line, idx->index->col,
+                     "a string is indexed by an integer, but the subscript is " +
+                         idx->index->type->name());
+      e->type = ty::Char();
+      return;
+    }
     if (!base || !base->isArray()) {
       if (base)
         diags_.error(idx->line, idx->col,
@@ -2745,6 +2850,16 @@ void Sema::checkBinary(Binary *b) {
   // difference and intersection — so the set case is taken before the numeric
   // one rather than after it, where "numeric operands" would already have been
   // reported.
+  // §6.8.3.6 gives `+` a second meaning again — string concatenation — so it
+  // is taken before the numeric case, exactly as the set case is. "a + b shall
+  // denote a value of the canonical-string-type whose length shall be equal to
+  // the sum of the length of a and the length of b."
+  if (b->op == BinOp::Add && std_ == Std::Extended && l->isStringOrChar() &&
+      r->isStringOrChar() && !(l->isChar() && r->isChar())) {
+    b->type = ty::CanonicalString();
+    return;
+  }
+
   if (b->op == BinOp::Add || b->op == BinOp::Sub || b->op == BinOp::Mul) {
     if (l->isSet() || r->isSet()) {
       if (!assignable(l, r) && !assignable(r, l)) {
@@ -2857,6 +2972,15 @@ void Sema::checkBinary(Binary *b) {
     // ISO 7185 §6.7.2.5 gives the string types the full set of relational
     // operators, comparing character by character; every other structured
     // type has none at all.
+    // §6.8.3.5: the relational operators over compatible string-types, where
+    // the shorter operand is padded with spaces. Under ISO 7185 the lengths
+    // had to be equal and this compiler said so; that check now applies only
+    // to the language that has the rule.
+    if (std_ == Std::Extended && l->isStringOrChar() && r->isStringOrChar() &&
+        !(l->isChar() && r->isChar())) {
+      b->type = ty::Bool();
+      return;
+    }
     if (l->isCharArray() && r->isCharArray()) {
       // A length that is a discriminant is not known here, so the requirement
       // that the two agree is made where the values are (§6.4.6 d)'s shape,
@@ -2978,8 +3102,11 @@ void Sema::checkWrite(WriteStmt *w) {
     // a boolean, a char, or a packed array of char. An enumeration is not on
     // the list — the standard gives no spelling for its constants at run
     // time — and neither is any other structured type.
+    // ISO/IEC 10206:1991 §6.10.3.1 has the same list with "a string-type" in
+    // place of the packed char array — so a variable-string and a canonical
+    // value join it, and nothing else does.
     bool writable = t && (t->isInteger() || t->isReal() || t->isBoolean() ||
-                          t->isChar() || t->isCharArray());
+                          t->isChar() || t->isStringType());
     if (t && !writable)
       diags_.error(arg.value->line, arg.value->col,
                    "a value of type " + t->name() + " cannot be written");
@@ -3045,7 +3172,12 @@ void Sema::checkRead(ReadStmt *r) {
                          " cannot be read from a " + rf->name());
       continue;
     }
-    if (t && !(t->isInteger() || t->isReal() || t->isChar()))
+    // ISO/IEC 10206:1991 §6.10.1 a) adds the string types to ISO 7185's list:
+    // "each of which shall possess a type that is the real-type, is a
+    // string-type, or is compatible with the char-type or with the
+    // integer-type".
+    if (t && !(t->isInteger() || t->isReal() || t->isChar() ||
+               (std_ == Std::Extended && t->isStringType())))
       diags_.error(a->line, a->col,
                    "a value of type " + t->name() + " cannot be read");
   }
@@ -3516,6 +3648,22 @@ static bool isFileEnquiry(Builtin b) {
          b == Builtin::Empty;
 }
 
+/// §6.7.6.7's ten, grouped for the same reason as the rest: the only question
+/// asked of them together is whether this standard has them.
+static bool isStringBuiltin(Builtin b) {
+  return b == Builtin::Length || b == Builtin::Index || b == Builtin::Substr ||
+         b == Builtin::Trim || b == Builtin::StrEq || b == Builtin::StrNe ||
+         b == Builtin::StrLt || b == Builtin::StrGt || b == Builtin::StrLe ||
+         b == Builtin::StrGe;
+}
+
+/// The six comparison functions of §6.7.6.7, which take two operands where
+/// the other four take one or three.
+static bool isStringCompare(Builtin b) {
+  return b == Builtin::StrEq || b == Builtin::StrNe || b == Builtin::StrLt ||
+         b == Builtin::StrGt || b == Builtin::StrLe || b == Builtin::StrGe;
+}
+
 static bool isRequiredName(const std::string &name) {
   static const char *procs[] = {"new",   "dispose", "reset",  "rewrite",
                                 "get",   "put",     "read",   "readln",
@@ -3598,7 +3746,8 @@ void Sema::checkCall(Call *c) {
   // that name was found, and only under the standard that has them; the
   // message then says the feature is missing rather than that the name is.
   if (it != builtins().end() && std_ == Std::Iso7185 &&
-      (isComplexBuiltin(it->second) || isFileEnquiry(it->second))) {
+      (isComplexBuiltin(it->second) || isFileEnquiry(it->second) ||
+       isStringBuiltin(it->second))) {
     diags_.error(c->line, c->col,
                  "'" + c->name + "' is an Extended Pascal function; compile "
                  "with --std=extended");
@@ -3679,6 +3828,73 @@ void Sema::checkCall(Call *c) {
   // §6.7.6.3: `cmplx(x, y)` and `polar(r, t)` are the two-argument required
   // functions, and the only way to write a complex value at all — the standard
   // gives the type no literal.
+  // §6.7.6.7's ten. They take one, two or three arguments, so they are
+  // checked before the "exactly one" gate below.
+  if (isStringBuiltin(c->builtin)) {
+    for (auto &a : c->args)
+      checkExpr(a.get());
+    auto stringy = [&](Expr *a) {
+      if (a->type && !a->type->isStringOrChar())
+        diags_.error(a->line, a->col,
+                     "'" + c->name + "' needs a string or a char, found " +
+                         a->type->name());
+    };
+    if (isStringCompare(c->builtin)) {
+      c->type = ty::Bool();
+      if (c->args.size() != 2) {
+        diags_.error(c->line, c->col, "'" + c->name + "' takes two strings");
+        return;
+      }
+      stringy(c->args[0].get());
+      stringy(c->args[1].get());
+      return;
+    }
+    if (c->builtin == Builtin::Index) {
+      c->type = ty::Int();
+      if (c->args.size() != 2) {
+        diags_.error(c->line, c->col, "'index' takes two strings");
+        return;
+      }
+      stringy(c->args[0].get());
+      stringy(c->args[1].get());
+      return;
+    }
+    if (c->builtin == Builtin::Length) {
+      c->type = ty::Int();
+      if (c->args.size() != 1) {
+        diags_.error(c->line, c->col, "'length' takes one string");
+        return;
+      }
+      stringy(c->args[0].get());
+      return;
+    }
+    // §6.7.6.7: `trim` and `substr` "return a result of the
+    // canonical-string-type" — a value with no capacity, because it has no
+    // storage. What it may be assigned to is decided by its *length*, where
+    // the value finally is.
+    c->type = ty::CanonicalString();
+    if (c->builtin == Builtin::Trim) {
+      if (c->args.size() != 1) {
+        diags_.error(c->line, c->col, "'trim' takes one string");
+        return;
+      }
+      stringy(c->args[0].get());
+      return;
+    }
+    if (c->args.size() != 2 && c->args.size() != 3) {
+      diags_.error(c->line, c->col,
+                   "'substr' takes a string and one or two positions");
+      return;
+    }
+    stringy(c->args[0].get());
+    for (size_t i = 1; i < c->args.size(); ++i)
+      if (c->args[i]->type && !c->args[i]->type->isInteger())
+        diags_.error(c->args[i]->line, c->args[i]->col,
+                     "the positions of 'substr' are integers, found " +
+                         c->args[i]->type->name());
+    return;
+  }
+
   if (c->builtin == Builtin::Cmplx || c->builtin == Builtin::Polar) {
     if (c->args.size() != 2) {
       diags_.error(c->line, c->col,

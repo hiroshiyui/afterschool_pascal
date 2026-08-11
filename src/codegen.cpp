@@ -65,7 +65,18 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
     return cached->second;
 
   llvm::Type *result;
-  if (t->isArray()) {
+  // ISO/IEC 10206:1991 §6.4.3.3.3: a variable-string-type's value is a length
+  // and that many characters. The layout is the one ADR-0045 made expressible
+  // — a length beside a buffer whose capacity is the discriminant — so a
+  // string whose capacity arrives with the actual is the flexible-array-member
+  // struct that record already described, and `dynSize` needs no new case.
+  if (t->isVarString()) {
+    SmallVector<llvm::Type *, 2> fields;
+    fields.push_back(i32());
+    fields.push_back(ArrayType::get(
+        i8(), t->hi > 0 ? static_cast<uint64_t>(t->hi) : 0));
+    result = StructType::create(ctx_, fields, "str." + t->name());
+  } else if (t->isArray()) {
     // The bounds are folded away here: an index is lowered to an offset from
     // the lower bound, so the LLVM type only needs the extent. An array whose
     // extent arrives with the actual has none to state, and nothing asks: its
@@ -521,6 +532,12 @@ llvm::Value *CodeGen::dynLength(ap::Type *t, llvm::Value *header) {
 llvm::Value *CodeGen::dynSize(ap::Type *t, llvm::Value *header) {
   if (!t->dynamicExtent())
     return ConstantInt::get(i32(), sizeOf(t));
+  // A variable-string is a length beside a buffer, so its size is four bytes
+  // and the capacity — the shape ADR-0045 already described, laid out by hand
+  // because a string is not the record a program could have written.
+  if (t->isVarString())
+    return b_.CreateAdd(ConstantInt::get(i32(), 4), stringCapacity(t, header),
+                        "strsize");
   // A record's dynamic part is its last field and nothing else (ADR-0045), so
   // every offset in it is a constant and the size is the last field's offset
   // plus whatever the tail costs. The offset comes from the struct's own
@@ -1039,6 +1056,27 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
   case NK::Index: {
     auto *ix = static_cast<IndexExpr *>(e);
     ap::Type *arr = ix->base->type;
+
+    // ISO/IEC 10206:1991 §6.4.3.3.3 NOTE 1: "The individual components of a
+    // variable-string-type can be obtained by indexing it as an array." The
+    // bound is the *length*, not the capacity (§6.5.3.2), because the
+    // index-domain is the value's and the capacity is the type's — so this
+    // cannot go through the array path, whose bounds come from the type.
+    if (arr && arr->isVarString()) {
+      llvm::Value *data, *len;
+      emitString(ix->base.get(), data, len);
+      llvm::Value *sidx = emitExpr(ix->index.get());
+      emitTrapCall(b_.CreateOr(
+                       b_.CreateICmpSLT(sidx, ConstantInt::get(i32(), 1)),
+                       b_.CreateICmpSGT(sidx, len), "sidx.bad"),
+                   rt("pas_index_error", llvm::Type::getVoidTy(ctx_),
+                      {i32(), i32()}),
+                   {ConstantInt::get(i32(), 1), len});
+      return b_.CreateGEP(i8(), data,
+                          b_.CreateSub(sidx, ConstantInt::get(i32(), 1)),
+                          "strelem");
+    }
+
     llvm::Value *base = emitAddress(ix->base.get());
     llvm::Value *idx = emitExpr(ix->index.get());
 
@@ -1320,7 +1358,19 @@ void CodeGen::emitStmt(Stmt *s) {
   }
 }
 
-void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src) {
+void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src,
+                        llvm::Value *header) {
+  // ISO/IEC 10206:1991 §6.4.6: a string destination is not a memcpy. A short
+  // value is padded with spaces into a fixed string, kept at its own length in
+  // a variable one, and a value longer than the capacity is an *error* — so
+  // this is a runtime operation and is taken before the copy below.
+  if (type->isStringType() &&
+      src->type && src->type->isStringOrChar() &&
+      (type->isVarString() || src->type->isVarString() ||
+       src->type->isChar() || type->length() != src->type->length())) {
+    emitStringStore(dst, type, src, header);
+    return;
+  }
   // A whole array or record is copied; ISO 7185 §6.8.2.2 makes assignment of a
   // structured value a copy of every component, not a sharing of storage.
   if (type->isStructured()) {
@@ -1341,6 +1391,14 @@ void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src) {
 void CodeGen::emitAssign(Assign *s) {
   llvm::Value *dst = emitAddress(s->target.get());
   ap::Type *type = s->target->type;
+  // A string is produced from the required schema, so it would otherwise take
+  // the tuple-comparison path below — and must not: §6.4.6 f) makes two
+  // capacities *compatible*, and the check that matters is the value's length
+  // against the destination's capacity, which the store makes.
+  if (type->isStringType()) {
+    emitStore(dst, type, s->value.get(), heapHeader(s->target.get()));
+    return;
+  }
   if (type->schema && (type->isGeneric() || s->value->type->isGeneric())) {
     emitTupleCheck(s->target.get(), s->value.get());
     llvm::Value *src = emitAddress(s->value.get());
@@ -1626,14 +1684,15 @@ void CodeGen::emitWrite(WriteStmt *s) {
     llvm::Value *width = arg.width ? emitExpr(arg.width.get()) : noWidth;
     llvm::Value *prec = arg.prec ? emitExpr(arg.prec.get()) : noWidth;
 
-    // A packed array of char is written as its address plus its length —
-    // which covers a string literal, since that is what a literal's type is.
-    if (arg.value->type->isCharArray()) {
-      llvm::Value *addr = emitAddress(arg.value.get());
-      b_.CreateCall(
-          rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
-          {file, addr,
-           dynLength(arg.value->type, heapHeader(arg.value.get())), width});
+    // A string is written as its address plus its length — which covers a
+    // literal, since that is what a literal's type is, and a variable-string
+    // and a canonical value alike, since `emitString` is what a string value
+    // *is*. §6.10.3.6 asks for exactly those two numbers.
+    if (arg.value->type->isStringType()) {
+      llvm::Value *data, *len;
+      emitString(arg.value.get(), data, len);
+      b_.CreateCall(rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
+                    {file, data, len, width});
       continue;
     }
 
@@ -1697,6 +1756,20 @@ void CodeGen::emitRead(ReadStmt *s) {
   for (auto &a : s->args) {
     llvm::Value *slot = emitAddress(a.get());
     ap::Type *t = a->type;
+    // ISO/IEC 10206:1991 §6.10.1 e) and f): reading a string does not skip
+    // leading blanks, never crosses an end-of-line, and takes at most the
+    // capacity — a fixed target is then padded with spaces and a variable one
+    // gets exactly what was read. That is one runtime call for both, told
+    // apart by the capacity and one flag.
+    if (t->isStringType()) {
+      llvm::Value *cap = t->isVarString()
+                             ? stringCapacity(t, heapHeader(a.get()))
+                             : dynLength(t, heapHeader(a.get()));
+      b_.CreateCall(rt("pas_read_str", voidTy, {ptr(), ptr(), i32(), i32()}),
+                    {file, slot, cap,
+                     ConstantInt::get(i32(), t->isVarString() ? 1 : 0)});
+      continue;
+    }
     llvm::Value *v = nullptr;
     if (t->isChar()) {
       v = b_.CreateCall(rt("pas_read_char", i8(), {ptr()}), {file}, "ch");
@@ -2049,6 +2122,18 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
 
   // Strings compare through the runtime rather than in registers, and must be
   // caught before the operands are evaluated: an array has no register form.
+  // §6.8.3.5's padded comparison, whenever either side is a string and the
+  // lengths are not both statically equal char arrays — the ISO 7185 path is
+  // kept for the case it already handled, so nothing about that language's
+  // emitted code moved.
+  if (e->lhs->type->isStringOrChar() && e->rhs->type->isStringOrChar() &&
+      !(e->lhs->type->isChar() && e->rhs->type->isChar())) {
+    if (e->lhs->type->isCharArray() && e->rhs->type->isCharArray() &&
+        !e->lhs->type->dynamicBounds() && !e->rhs->type->dynamicBounds() &&
+        e->lhs->type->length() == e->rhs->type->length())
+      return emitStringCompare(e);
+    return emitStringCompare2(e);
+  }
   if (e->lhs->type->isCharArray() && e->rhs->type->isCharArray())
     return emitStringCompare(e);
 
@@ -2192,6 +2277,155 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
 /// ISO 7185 §6.7.2.5 orders equal-length strings by their first differing
 /// character, which is what the runtime helper reports; the operator then only
 /// has to say what it wants of the sign.
+/// The capacity of a string type, as a value. §6.4.3.3.3 makes it the schema's
+/// one discriminant, so it is a number where the type was written with one and
+/// the descriptor's when an actual brought it — the same two answers every
+/// dynamic bound has (ADR-0040).
+llvm::Value *CodeGen::stringCapacity(ap::Type *t, llvm::Value *header) {
+  if (!t->hiDisc)
+    return ConstantInt::get(i32(), t->hi < 0 ? 0 : t->hi);
+  return boundValue(t, true, header);
+}
+
+/// ISO/IEC 10206:1991 §6.4.3.3: every string *value*, as the pointer and
+/// length pair §6.4.3.3.1 describes it — "a one-to-one mapping from an
+/// index-domain to a set of components possessing the char-type", with the
+/// index-domain's size as the length.
+///
+/// The pair is what makes `substr` and `trim` free: they are a pointer and a
+/// shorter length into the string they came from, and copy nothing. Only `+`
+/// makes characters that did not exist.
+void CodeGen::emitString(Expr *e, llvm::Value *&data, llvm::Value *&len) {
+  ap::Type *t = e->type;
+
+  // A concatenation, and the one operation that needs storage.
+  if (auto *b = as<Binary>(e)) {
+    if (b->op == BinOp::Add && t && t->isStringType()) {
+      llvm::Value *ad, *al, *bd, *bl;
+      emitString(b->lhs.get(), ad, al);
+      emitString(b->rhs.get(), bd, bl);
+      data = b_.CreateCall(
+          rt("pas_str_concat", ptr(), {ptr(), i32(), ptr(), i32()}),
+          {ad, al, bd, bl}, "concat");
+      // §6.8.3.6: "whose length shall be equal to the sum of the length of a
+      // and the length of b" — so the length is arithmetic here and the
+      // runtime never returns one.
+      len = b_.CreateAdd(al, bl, "concat.len");
+      return;
+    }
+  }
+
+  if (auto *c = as<Call>(e)) {
+    if (c->builtin == Builtin::Substr || c->builtin == Builtin::Trim) {
+      llvm::Value *sd, *sl;
+      emitString(c->args[0].get(), sd, sl);
+      if (c->builtin == Builtin::Trim) {
+        data = sd;
+        len = b_.CreateCall(rt("pas_str_trimlen", i32(), {ptr(), i32()}),
+                            {sd, sl}, "trimlen");
+        return;
+      }
+      // §6.7.6.7: `substr(s, i, j)` is j characters from position i, and the
+      // two-argument form is "substr(sv, iv, length(sv)-(iv)+1)" — the tail.
+      llvm::Value *at = emitExpr(c->args[1].get());
+      llvm::Value *count =
+          c->args.size() > 2
+              ? emitExpr(c->args[2].get())
+              : b_.CreateAdd(b_.CreateSub(sl, at), ConstantInt::get(i32(), 1),
+                             "tail");
+      b_.CreateCall(rt("pas_str_slice_check", llvm::Type::getVoidTy(ctx_),
+                       {i32(), i32(), i32()}),
+                    {at, count, sl});
+      data = b_.CreateGEP(i8(), sd, b_.CreateSub(at, ConstantInt::get(i32(), 1)),
+                          "substr");
+      len = count;
+      return;
+    }
+  }
+
+  // A literal is its own characters and its own length, whatever type it was
+  // given — and the null-string is *why* this comes first: `''` has the
+  // canonical type, which would otherwise be read as a length in front of
+  // characters that are not there.
+  if (auto *lit = as<StrLit>(e)) {
+    data = emitAddress(e);
+    len = ConstantInt::get(i32(), lit->value.size());
+    return;
+  }
+
+  // §6.4.3.3.1 gives the char-type length 1, and a char in a register has no
+  // address — this is where it gets one.
+  if (t && t->isChar()) {
+    data = b_.CreateCall(rt("pas_str_char", ptr(), {i8()}), {emitExpr(e)},
+                         "charstr");
+    len = ConstantInt::get(i32(), 1);
+    return;
+  }
+
+  // A variable-string variable: the length is stored in front of the
+  // characters, which is the whole of §6.4.3.3.3's representation.
+  if (t && t->isVarString()) {
+    llvm::Value *addr = emitAddress(e);
+    StructType *st = cast<StructType>(llvmType(t));
+    len = b_.CreateLoad(i32(), b_.CreateStructGEP(st, addr, 0, "strlen"),
+                        "len");
+    data = b_.CreateStructGEP(st, addr, 1, "strdata");
+    return;
+  }
+
+  // ...and a fixed-string-type, whose length §6.4.3.3.2 makes equal to its
+  // capacity: "the length of all values of a particular fixed-string-type is
+  // equal to the capacity".
+  data = emitAddress(e);
+  len = dynLength(t, heapHeader(e));
+}
+
+/// §6.4.6's assignment rules for a string destination, which are three
+/// different things depending on what the destination is — padded to the
+/// capacity for a fixed string, exact for a variable one, one character for a
+/// char — and one thing they share: it is an *error* if the value is longer
+/// than the capacity.
+void CodeGen::emitStringStore(llvm::Value *dst, ap::Type *type, Expr *src,
+                              llvm::Value *header) {
+  llvm::Value *sd, *sl;
+  emitString(src, sd, sl);
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+  if (type->isVarString()) {
+    b_.CreateCall(rt("pas_str_store_var", voidTy, {ptr(), i32(), ptr(), i32()}),
+                  {dst, stringCapacity(type, header), sd, sl});
+    return;
+  }
+  if (type->isChar()) {
+    b_.CreateCall(rt("pas_str_store_char", voidTy, {ptr(), ptr(), i32()}),
+                  {dst, sd, sl});
+    return;
+  }
+  b_.CreateCall(rt("pas_str_store_fixed", voidTy, {ptr(), i32(), ptr(), i32()}),
+                {dst, dynLength(type, header), sd, sl});
+}
+
+/// §6.8.3.5: the relational operators over string types, where the shorter
+/// value is "effectively extended with trailing spaces to the length of the
+/// longer". That is the ISO 7185 divergence that matters — there the lengths
+/// had to be equal, and this compiler said so.
+llvm::Value *CodeGen::emitStringCompare2(Binary *e) {
+  llvm::Value *ad, *al, *bd, *bl;
+  emitString(e->lhs.get(), ad, al);
+  emitString(e->rhs.get(), bd, bl);
+  llvm::Value *cmp = b_.CreateCall(
+      rt("pas_str_cmp_pad", i32(), {ptr(), i32(), ptr(), i32()}),
+      {ad, al, bd, bl}, "strcmp");
+  llvm::Value *zero = ConstantInt::get(i32(), 0);
+  switch (e->op) {
+  case BinOp::Eq: return b_.CreateICmpEQ(cmp, zero, "streq");
+  case BinOp::Ne: return b_.CreateICmpNE(cmp, zero, "strne");
+  case BinOp::Lt: return b_.CreateICmpSLT(cmp, zero, "strlt");
+  case BinOp::Le: return b_.CreateICmpSLE(cmp, zero, "strle");
+  case BinOp::Gt: return b_.CreateICmpSGT(cmp, zero, "strgt");
+  default:        return b_.CreateICmpSGE(cmp, zero, "strge");
+  }
+}
+
 llvm::Value *CodeGen::emitStringCompare(Binary *e) {
   llvm::Value *lhs = emitAddress(e->lhs.get());
   llvm::Value *rhs = emitAddress(e->rhs.get());
@@ -2274,6 +2508,46 @@ llvm::Value *CodeGen::emitCall(Call *e) {
                         "at.abs");
     // The result possesses the index type, which may be narrower than i32.
     return b_.CreateZExtOrTrunc(at, llvmType(e->type), "at.idx");
+  }
+
+  // §6.7.6.7's string functions. `substr` and `trim` are string *values* and
+  // are emitted by `emitString`; the rest answer about one, so they take the
+  // pair apart here.
+  if (e->builtin == Builtin::Length) {
+    llvm::Value *d, *l;
+    emitString(e->args[0].get(), d, l);
+    (void)d;
+    return l;
+  }
+  if (e->builtin == Builtin::Index) {
+    llvm::Value *ad, *al, *bd, *bl;
+    emitString(e->args[0].get(), ad, al);
+    emitString(e->args[1].get(), bd, bl);
+    return b_.CreateCall(
+        rt("pas_str_index", i32(), {ptr(), i32(), ptr(), i32()}),
+        {ad, al, bd, bl}, "index");
+  }
+  if (e->builtin == Builtin::StrEq || e->builtin == Builtin::StrNe ||
+      e->builtin == Builtin::StrLt || e->builtin == Builtin::StrGt ||
+      e->builtin == Builtin::StrLe || e->builtin == Builtin::StrGe) {
+    llvm::Value *ad, *al, *bd, *bl;
+    emitString(e->args[0].get(), ad, al);
+    emitString(e->args[1].get(), bd, bl);
+    // §6.7.6.7's NOTE 3: these are *not* the operators — they compare lengths
+    // as well as characters, so a proper prefix is strictly less than its
+    // extension where `<` would pad and call them equal.
+    llvm::Value *cmp = b_.CreateCall(
+        rt("pas_str_cmp_exact", i32(), {ptr(), i32(), ptr(), i32()}),
+        {ad, al, bd, bl}, "strcmp");
+    llvm::Value *zero = ConstantInt::get(i32(), 0);
+    switch (e->builtin) {
+    case Builtin::StrEq: return b_.CreateICmpEQ(cmp, zero, "eq");
+    case Builtin::StrNe: return b_.CreateICmpNE(cmp, zero, "ne");
+    case Builtin::StrLt: return b_.CreateICmpSLT(cmp, zero, "lt");
+    case Builtin::StrGt: return b_.CreateICmpSGT(cmp, zero, "gt");
+    case Builtin::StrLe: return b_.CreateICmpSLE(cmp, zero, "le");
+    default:             return b_.CreateICmpSGE(cmp, zero, "ge");
+    }
   }
 
   // §6.7.6.3: the two-argument constructors, and the only way to write a

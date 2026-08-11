@@ -490,15 +490,43 @@ was never written down.
   - The lookahead of ADR-0021 became observable for the first time: after a
     fill the stream is one component ahead of the program, so `position`,
     `update` and a mid-file `put` all have to step back.
-- **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
-  project had not committed to this standard; it now has, so that reason has
-  expired. It is *buildable* since ADR-0041 — it is a required schema, and
-  schemata are finished enough to carry one — and it is still a decision about
-  the language rather than a missing mechanism. Its *finding* has not — a compiler reads text in and writes text out
-  — so this should be settled by measuring stage-1 code again, the way it was
-  settled the first time, and not by taste.
+- ~~**`string`.**~~ Done (ADR-0051). ADR-0012 chose the length-plus-buffer
+  record partly because the project had not committed to this standard; it now
+  has, so that reason expired, and ADR-0045 had already made the shape
+  expressible. The record's title is the design: **a string value is a pointer
+  and a length**, two scalars that travel separately — the third time this
+  project has reached for ADR-0030's shape, and for the same reason each time.
+  - **`substr` and `trim` copy nothing**: a value costs nothing to make under
+    that representation. Only `+` makes characters that did not exist, and it
+    takes them from a ring in the runtime, whose one limit — a single
+    *statement* concatenating more than the ring holds — is stated rather than
+    silently wrong.
+  - **The required schema has no body**, which is what makes it required: the
+    production builds the type instead of resolving a denoter, and §6.4.8's
+    intern table then treats it like any other schema. A schematic formal
+    `var s: string` is ADR-0040's descriptor with the capacity as its one
+    discriminant.
+  - **The canonical-string-type is that kind with a negative capacity** — no
+    storage, so no capacity to exceed, which is exactly why §6.4.6 checks a
+    value's length against the *destination's* capacity.
+  - **Two comparisons that must not be unified**: §6.8.3.5's operators pad the
+    shorter operand with spaces, §6.7.6.7's `EQ`/`LT` family compares lengths
+    too. The standard's NOTE 3 says so outright, and the test prints both
+    answers side by side.
+  - It **retires ISO 7185's equal-length rule** and the trap `9b72539` added
+    with it. What that trap protected has not gone away — the defect was a
+    length computed from placeholder bounds — so the evidence moved from a
+    program that stops to one that answers.
+  - Deferred and stated: substring *variables* (§6.5.6's `s[i..j]` as an
+    assignment target), `readstr`/`writestr` (§6.7.5.5, which need a text file
+    over a string buffer), a string-valued function result, and §6.10.3.6's
+    zero and truncating field widths.
 - **Modules**, `bind`/`unbind`, restricted types, structured-value
-  constructors. Each needs its own record.
+  constructors, substring variables, `readstr`/`writestr`. Each needs its own
+  record. Binding is the one with a *dependency* rather than only a size:
+  §6.4.3.4 gives `BindingType.name` "an implementation-defined
+  variable-string-type", which needed the string type to exist first — and now
+  does.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

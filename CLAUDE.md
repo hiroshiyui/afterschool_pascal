@@ -707,6 +707,37 @@ in one language or the other, and the standard is a property of the source.
     `put` each step back. The only genuinely new subtlety in the feature.
   - Not checked: §6.4.3.6's length bound (`file [1..10]` may hold eleven
     components), stated in the ADR rather than silently omitted.
+- **A string value is a pointer and a length** (ADR-0051). §6.4.3.3's string
+  types, and the third time this project has reached for ADR-0030's
+  two-scalar shape — nothing may depend on how a two-word value is passed.
+  - **`substr` and `trim` copy nothing** — a pointer into the string they came
+    from and a shorter length. Only `+` makes new characters, from a ring in
+    the runtime whose one limit (a single *statement* concatenating more than
+    it holds) is stated rather than silently wrong.
+  - **A variable-string is `{ i32, [cap x i8] }`** — ADR-0045's
+    flexible-array-member record — so `dynSize` needed nothing and
+    `procedure p(var s: string)` is ADR-0040's descriptor with the capacity as
+    its discriminant. The **required schema has no body**: the production
+    builds the type rather than resolving a denoter.
+  - **The canonical-string-type is that kind with a negative capacity**: no
+    storage, so nothing to exceed. §6.4.6 checks a *value's length* against the
+    destination's capacity, which is why a string assignment is a runtime
+    operation and `isStructured()` excludes a variable-string — the same
+    exclusion a file has, for the same reason.
+  - **A literal is its own characters and its own length, checked first.**
+    `''` is the null-string, has the canonical type, and reading a length in
+    front of characters that are not there is what happens without that line.
+    Both compilers had that bug for one test run.
+  - **Two comparisons, never unified**: §6.8.3.5's operators pad the shorter
+    operand with spaces; §6.7.6.7's `EQ`/`LT` family compares lengths as well.
+    NOTE 3 says "LT(a,b) could be false and a<b true", and the test prints
+    both.
+  - It **retires ISO 7185's equal-length comparison rule** and the trap
+    `9b72539` added — see `tests/extended/schema_string_compare.pas`, which
+    now shows the padding.
+  - Deferred, all stated in the ADR: substring *variables* (§6.5.6 as an
+    lvalue), `readstr`/`writestr`, a string function result, and §6.10.3.6's
+    zero/truncating field widths.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
@@ -755,7 +786,10 @@ have still waits**: the second stage targets ISO/IEC 10206:1991 (Extended
 Pascal), so an extension should be taken from its spelling rather than
 invented here.
 
-Strings are the length-plus-buffer record of ADR-0012, not an extension:
+Strings *were* the length-plus-buffer record of ADR-0012; ISO/IEC 10206:1991's
+own `string` type landed as ADR-0051 and that decision is now closed. What
+follows is the reasoning that got there, kept because it is why the record
+shape is still the right one to write in ISO 7185:
 `tests/bootstrap_strings.pas` is the working evidence and the regression test
 for it. Don't add a `string` type without new evidence from real stage-1 code,
 because measuring the C++ compiler is what showed the extension was

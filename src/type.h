@@ -13,6 +13,18 @@ inline constexpr int kMaxInt = 2147483647;
 enum class TypeKind {
   Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer,
   File, Set, Proc,
+  /// ISO/IEC 10206:1991 §6.4.3.3.3's variable-string-type: a type produced
+  /// from the required schema `string`. Its value is a length and that many
+  /// characters, and the length may be anything from zero up to the
+  /// **capacity** — the schema's one discriminant. `hi` holds the capacity,
+  /// `hiDisc` the discriminant it came from when an actual brought it, and
+  /// `lo` is 1 because §6.4.3.3.1 makes every string's index-domain start
+  /// there.
+  ///
+  /// The *canonical*-string-type of §6.4.3.3.1 — the type of `+`, `substr`
+  /// and `trim` — is this kind with `hi` negative: a value with no storage
+  /// and so no capacity to exceed.
+  String,
   /// ISO/IEC 10206:1991 §6.4.2.2 e): "The required type-identifier `complex`
   /// shall denote the complex-type. The complex-type shall be a
   /// **simple-type**." Simple is the operative word — a complex value is
@@ -187,6 +199,23 @@ struct Type {
   // about integers applies to it unchanged.
   bool isInteger() const { return base()->kind == TypeKind::Integer; }
   bool isReal() const { return kind == TypeKind::Real; }
+  /// A type produced from the required schema `string` (§6.4.3.3.3), or the
+  /// canonical-string-type that `+` yields.
+  bool isVarString() const { return kind == TypeKind::String; }
+  /// §6.4.3.3.1: "A string-type shall be a fixed-string-type or a
+  /// variable-string-type or the required type designated
+  /// canonical-string-type." A fixed-string-type is §6.4.3.3.2's `packed
+  /// array [1..n] of char`, which ISO 7185 already had and already gave the
+  /// relational operators.
+  bool isStringType() const { return isVarString() || isCharArray(); }
+  /// §6.4.3.3.1 gives the char-type "length 1 and capacity 1", so it stands
+  /// wherever a string does — in a comparison, a concatenation, an assignment
+  /// — without being one.
+  bool isStringOrChar() const { return isStringType() || isChar(); }
+  /// The canonical-string-type: a string *value* with no storage behind it.
+  /// It has no capacity, which is exactly what makes it assignable to any
+  /// string type whose capacity the value's length happens to fit.
+  bool isCanonicalString() const { return isVarString() && hi < 0; }
   bool isComplex() const { return kind == TypeKind::Complex; }
   bool isNumeric() const { return isInteger() || isReal(); }
   /// Everything the arithmetic operators accept (§6.8.3.2, table 3). Kept
@@ -243,11 +272,15 @@ struct Type {
   /// *is* a value. Every set is one 256-bit integer, so it is assigned,
   /// compared and passed exactly as an integer is, and none of the machinery
   /// that exists to move structured values around by address applies to it.
+  /// A variable-string is *not* structured, and the exclusion is the same
+  /// shape as a file's: `isStructured()` grants a whole-variable copy, and a
+  /// string assignment is not one — §6.4.6 pads a short value with spaces or
+  /// refuses a long one, so it is a runtime operation and not a memcpy.
   bool isStructured() const { return isArray() || isRecord(); }
 
   /// True for anything whose value never occupies a register: it is reached
   /// through its address, and a parameter of it arrives as one.
-  bool isMemory() const { return isStructured() || isFile(); }
+  bool isMemory() const { return isStructured() || isFile() || isVarString(); }
 
   /// ISO/IEC 10206:1991 §6.4.1: a type is protectable unless it is a file or a
   /// pointer, or is structured and holds one. The standard's own NOTE gives
@@ -350,6 +383,8 @@ struct Type {
     switch (kind) {
     case TypeKind::Integer: return "integer";
     case TypeKind::Real:    return "real";
+    case TypeKind::String:
+      return hi < 0 ? "string" : "string(" + std::to_string(hi) + ")";
     case TypeKind::Complex: return "complex";
     case TypeKind::Boolean: return "boolean";
     case TypeKind::Char:    return "char";
@@ -456,6 +491,20 @@ inline Type *get(TypeKind k) {
 inline Type *Int()  { return get(TypeKind::Integer); }
 inline Type *Real() { return get(TypeKind::Real); }
 inline Type *Complex() { return get(TypeKind::Complex); }
+/// ISO/IEC 10206:1991 §6.4.3.3.1's canonical-string-type: the type of every
+/// string *value* — a literal's, `+`'s, `substr`'s and `trim`'s. It has no
+/// capacity (`hi` is negative) because it has no storage: a value is only
+/// ever on its way into something that does, and §6.4.6 checks it against
+/// *that* capacity. No type-denoter produces one, so no variable has it.
+inline Type *CanonicalString() {
+  static Type s = [] {
+    Type t{TypeKind::String};
+    t.lo = 1;
+    t.hi = -1;
+    return t;
+  }();
+  return &s;
+}
 inline Type *Bool() { return get(TypeKind::Boolean); }
 inline Type *Char() { return get(TypeKind::Char); }
 inline Type *Void() { return get(TypeKind::Void); }

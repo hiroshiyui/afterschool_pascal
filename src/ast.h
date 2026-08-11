@@ -77,6 +77,14 @@ enum class Builtin {
   /// §6.7.6.5's `empty`. All three take a file variable, so they join `eof`
   /// and `eoln` in taking an *address* rather than a value.
   Position, LastPosition, Empty,
+  /// ISO/IEC 10206:1991 §6.7.6.7's string functions. `Length`, `Index`,
+  /// `Substr` and `Trim` are the four that answer about a string; `StrEq`
+  /// through `StrGe` are the six that compare one, and are deliberately *not*
+  /// the operators — §6.7.6.7's NOTE 3 points out that `LT(a,b)` may be false
+  /// where `a<b` is true, because these compare lengths as well as characters
+  /// and the operators pad with spaces instead.
+  Length, Index, Substr, Trim,
+  StrEq, StrNe, StrLt, StrGt, StrLe, StrGe,
 };
 
 struct Expr : Node {

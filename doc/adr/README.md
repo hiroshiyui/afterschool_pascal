@@ -59,3 +59,4 @@ the alternatives that were rejected and why.
 | [0048](0048-an-initial-state-belongs-to-the-type-denoter.md) | An initial state belongs to the type-denoter | Accepted |
 | [0049](0049-complex-is-a-simple-type-and-therefore-a-vector.md) | `complex` is a simple type, and therefore a vector | Accepted |
 | [0050](0050-a-direct-access-file-is-the-sequential-one-plus-a-position.md) | A direct-access file is the sequential one plus a position | Accepted |
+| [0051](0051-a-string-value-is-a-pointer-and-a-length.md) | A string value is a pointer and a length | Accepted |

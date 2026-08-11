@@ -90,6 +90,11 @@ struct Symbol {
   /// The formal discriminants, in order. Each carries only a name and an
   /// ordinal type; they get their values when a type is produced.
   std::vector<Symbol *> discriminants;
+  /// ISO/IEC 10206:1991 §6.4.3.3.3's *required* schema `string`. It has no
+  /// body: what it produces is a variable-string-type, whose representation
+  /// the compiler fixes rather than the program's text. The flag is what tells
+  /// `produceFromSchema` to build one instead of resolving a denoter.
+  bool isStringSchema = false;
 
   // --- schematic formal parameters (§6.7.3.2, §6.7.3.3) --------------------
   /// The schema a formal parameter was written as the bare name of. Its type

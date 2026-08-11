@@ -203,7 +203,8 @@ private:
   /// the whole of what assignment does — the conversion, the range check, and
   /// the whole-variable copy — and `write` to a file that is not a text needs
   /// exactly it, because §6.6.5.2 defines that write as `f^ := e`.
-  void emitStore(llvm::Value *dst, Type *type, Expr *src);
+  void emitStore(llvm::Value *dst, Type *type, Expr *src,
+                 llvm::Value *header = nullptr);
   void initInitialStates(Symbol *proc);
   void initialStateInto(llvm::Value *addr, Type *t, Expr *init);
   /// The frame to pass as a callee's static link.
@@ -269,6 +270,16 @@ private:
   llvm::Value *toComplex(llvm::Value *v, Type *from);
   llvm::Value *emitComplexBinary(Binary *e, llvm::Value *l,
                                  llvm::Value *r);
+  /// ISO/IEC 10206:1991 §6.4.3.3: a string *value* is a pointer and a length,
+  /// two scalars that travel separately — ADR-0030's shape, for ADR-0030's
+  /// reason. Every string-valued expression is emitted through this.
+  void emitString(Expr *e, llvm::Value *&data, llvm::Value *&len);
+  /// The capacity a string variable can hold, as a value: `hi` for a written
+  /// one and the descriptor's discriminant for a schematic formal.
+  llvm::Value *stringCapacity(Type *t, llvm::Value *addr);
+  void emitStringStore(llvm::Value *dst, Type *type, Expr *src,
+                       llvm::Value *header);
+  llvm::Value *emitStringCompare2(Binary *e);
 
   /// Compare two equal-length strings through the runtime helper.
   llvm::Value *emitStringCompare(Binary *e);

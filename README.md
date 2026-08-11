@@ -306,16 +306,30 @@ files      file [1..100] of integer — a direct-access file. The index type
            the current component without advancing, which is what makes
            read-modify-write possible; extend(f) opens for writing at the
            end and needs no index type at all
+strings    string(n) — the required schema of §6.4.3.3.3: a length and up
+           to n characters. Assignment keeps the value's own length and
+           stops the program if it does not fit; a `packed array [1..n]
+           of char` is the other string type and is padded instead, and
+           the two are compatible with each other and with char. s[i]
+           indexes to the *length*, s.capacity is the type's. + joins
+           any two of them; = < > pad the shorter with spaces (where
+           ISO 7185 required equal lengths); length, index, substr and
+           trim answer about one, and eq, ne, lt, gt, le, ge compare
+           lengths as well as characters — so `eq('ab','ab  ')` is false
+           where `'ab' = 'ab  '` is true, which is the standard's own
+           example. '' is the null-string
 words      otherwise, pow, protected and value are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
            their words already are. complex, cmplx, polar, re, im and arg
            are required *identifiers* rather than word-symbols, and so are
            seekread, seekwrite, seekupdate, update, extend, position,
-           lastposition and empty — so a program may still declare its own
+           lastposition, empty, string, length, index, substr, trim, eq,
+           ne, lt, gt, le and ge — so a program may still declare its own
 ```
 
-Not accepted yet: the `string` type, modules, structured-value
-constructors, and binding (`bind`/`unbind`). A word-symbol is reserved only when the feature needing it
+Not accepted yet: modules, structured-value constructors, substring
+*variables* (`s[i..j]` as an assignment target), `readstr`/`writestr`, and
+binding (`bind`/`unbind`). A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.

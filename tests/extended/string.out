@@ -1,0 +1,23 @@
+s cap 12 len  5 [hello]
+s cap 12 len  8 [hello ab]
+s cap 12 len  9 [hello ab!]
+[hello ab!]
+[   hello ab!]
+[abc       ]  len 10
+s cap 12 len 10 [abc       ]
+[abc]
+[]
+[cdef]
+[fgh]
+[]
+5010
+TRUE TRUE TRUE TRUE
+FALSE TRUE
+TRUE FALSE
+FALSETRUETRUETRUE
+h-e-l-l-o-
+Hello o
+s cap 12 len  5 [Hello]
+t cap  6 len  2 [ab]
+s cap 12 len  0 []
+0 TRUE TRUE

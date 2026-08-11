@@ -1,0 +1,13 @@
+<source>:8:8: error: the capacity of a string must be greater than zero, found 0
+<source>:16:15: error: 'length' needs a string or a char, found integer
+<source>:17:17: error: 'index' needs a string or a char, found integer
+<source>:18:8: error: 'length' takes one string
+<source>:19:18: error: the positions of 'substr' are integers, found real
+<source>:20:8: error: 'trim' takes one string
+<source>:21:8: error: 'eq' takes two strings
+<source>:22:14: error: 'lt' needs a string or a char, found integer
+<source>:25:10: error: operator '+' needs numeric operands, found string(5) and integer
+<source>:25:3: error: cannot assign integer to a variable of type string(5)
+<source>:26:3: error: cannot assign string(5) to a variable of type real
+<source>:29:10: error: a string is indexed by an integer, but the subscript is char
+<source>:31:8: error: 'ord' needs an ordinal argument, found string(5)

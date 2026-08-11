@@ -979,3 +979,192 @@ double pas_cpowi_re(double re, double im, int n) {
 double pas_cpowi_im(double re, double im, int n) {
   return cimag(pas_cpow_value(re, im, (double)n));
 }
+
+/* ---------------------------------------------------------------- strings
+ *
+ * ISO/IEC 10206:1991 §6.4.3.3. A string *value* is a pointer and a length —
+ * two scalars, never an aggregate — which is the shape ADR-0030 chose for a
+ * procedural parameter and ADR-0049 for a complex, and for the same reason:
+ * nothing then depends on how a two-word value is passed.
+ *
+ * `substr` and `trim` need no storage at all under that representation: they
+ * are a pointer and a shorter length into the string they came from. Only
+ * concatenation makes bytes that did not exist, and it takes them from a ring
+ * below. A string value's life is one expression evaluation, so a ring is the
+ * right shape: the space is reused as soon as the statement that made the
+ * value has finished with it. The one thing it cannot survive is a single
+ * *statement* that concatenates more than the ring holds, which is stated as
+ * an implementation limit rather than being silently wrong. */
+
+#define PAS_STR_ARENA (1 << 20)
+static char pas_str_arena[PAS_STR_ARENA];
+static int pas_str_at;
+
+static char *pas_str_temp(int n) {
+  if (n < 0)
+    n = 0;
+  if (n > PAS_STR_ARENA)
+    pas_runtime_error("a single string value is larger than the string arena");
+  if (pas_str_at + n > PAS_STR_ARENA)
+    pas_str_at = 0;
+  char *p = pas_str_arena + pas_str_at;
+  pas_str_at += n;
+  return p;
+}
+
+/* §6.4.3.3.1 gives the char-type "length 1 and capacity 1", so a char stands
+ * wherever a string does. It has no address of its own in a register, and this
+ * is where it gets one. */
+char *pas_str_char(char c) {
+  char *p = pas_str_temp(1);
+  *p = c;
+  return p;
+}
+
+/* §6.8.3.6: "a + b shall denote a value of the canonical-string-type whose
+ * length shall be equal to the sum of the length of a and the length of b."
+ * The length is therefore known to the compiler and is not returned here. */
+char *pas_str_concat(const char *a, int la, const char *b, int lb) {
+  char *p;
+  if (la < 0) la = 0;
+  if (lb < 0) lb = 0;
+  p = pas_str_temp(la + lb);
+  memcpy(p, a, (size_t)la);
+  memcpy(p + la, b, (size_t)lb);
+  return p;
+}
+
+/* §6.8.3.5: the relational operators over string types. "For comparison of
+ * values of compatible char-types or string-types, the relational-operators
+ * effectively extend the shorter value with trailing spaces to the length of
+ * the longer value." That is the ISO 7185 divergence that matters: there, the
+ * lengths had to be equal. */
+int pas_str_cmp_pad(const char *a, int la, const char *b, int lb) {
+  int n = la > lb ? la : lb;
+  for (int i = 0; i < n; i++) {
+    unsigned char ca = i < la ? (unsigned char)a[i] : (unsigned char)' ';
+    unsigned char cb = i < lb ? (unsigned char)b[i] : (unsigned char)' ';
+    if (ca != cb)
+      return ca < cb ? -1 : 1;
+  }
+  return 0;
+}
+
+/* §6.7.6.7's EQ/NE/LT/GT/LE/GE, which are *not* the operators: they compare
+ * lengths as well as characters, so a proper prefix is strictly less than its
+ * extension. The standard's NOTE 3 says so outright — "LT(a,b) could be false
+ * and a<b true" — which is why the two comparisons are separate routines and
+ * must not be unified. */
+int pas_str_cmp_exact(const char *a, int la, const char *b, int lb) {
+  int n = la < lb ? la : lb;
+  for (int i = 0; i < n; i++) {
+    unsigned char ca = (unsigned char)a[i], cb = (unsigned char)b[i];
+    if (ca != cb)
+      return ca < cb ? -1 : 1;
+  }
+  if (la == lb)
+    return 0;
+  return la < lb ? -1 : 1;
+}
+
+/* §6.7.6.7's `trim`: "if the value of sv[n] is not equal to the char-type
+ * value space, the function shall yield the value of sv; otherwise ... the
+ * least value p such that each component of sv[p..n] is the space." Trailing
+ * spaces only, and an all-blank string yields the null-string. */
+int pas_str_trimlen(const char *a, int la) {
+  while (la > 0 && a[la - 1] == ' ')
+    la--;
+  return la;
+}
+
+/* §6.7.6.7's `index`: "the least i such that s1v[i..i+length(s2)-1] = s2, if
+ * such an i exists; otherwise 0" — with the null-string yielding 1, and a
+ * null s1 against a non-null s2 yielding 0. The window comparison is the
+ * *operator*'s, which is space-padded; over equal lengths the two agree. */
+int pas_str_index(const char *a, int la, const char *b, int lb) {
+  if (lb == 0)
+    return 1;
+  if (la == 0)
+    return 0;
+  for (int i = 0; i + lb <= la; i++)
+    if (memcmp(a + i, b, (size_t)lb) == 0)
+      return i + 1;
+  return 0;
+}
+
+/* §6.4.6 c): "it shall be an error if T1 and T2 are compatible, T1 is a
+ * string-type or the char-type, and the length of the value of T2 is greater
+ * than the capacity of T1." One message for every string assignment, because
+ * it is one rule. */
+static void pas_str_fits(int len, int cap) {
+  if (len > cap) {
+    char msg[128];
+    snprintf(msg, sizeof msg,
+             "a string of length %d does not fit a capacity of %d", len, cap);
+    pas_runtime_error(msg);
+  }
+}
+
+/* §6.4.6: a canonical value assigned to a *fixed*-string-type is "the
+ * components of the canonical-string-type value ... followed by zero or more
+ * spaces", so a short value is padded and the length is always the capacity. */
+void pas_str_store_fixed(char *dst, int cap, const char *src, int len) {
+  pas_str_fits(len, cap);
+  memmove(dst, src, (size_t)len);
+  memset(dst + len, ' ', (size_t)(cap - len));
+}
+
+/* ...and to a variable-string-type it is the components and nothing else: the
+ * length becomes the value's, which is the whole difference between the two
+ * string kinds. */
+void pas_str_store_var(void *dst, int cap, const char *src, int len) {
+  pas_str_fits(len, cap);
+  *(int *)dst = len;
+  memmove((char *)dst + 4, src, (size_t)len);
+}
+
+/* §6.4.6 again: a char is a string of capacity 1. A null-string padded to that
+ * capacity is a space, which is the case worth spelling out. */
+void pas_str_store_char(char *dst, const char *src, int len) {
+  pas_str_fits(len, 1);
+  *dst = len == 1 ? src[0] : ' ';
+}
+
+/* A string value is written by `pas_write_str`, which ISO 7185 already had
+ * for a `packed array [1..n] of char` — a string value is a pointer and a
+ * length, which is exactly what that call takes, so the two string kinds and
+ * the char share one path. */
+
+/* §6.5.6 and §6.7.6.7's substr share their error conditions: an index below 1,
+ * an index past the length, and a first index greater than the second. `substr`
+ * states them as `i <= 0`, `j < 0` and `i+j-1 > length`, which is the same
+ * three once j is a count rather than an end. */
+void pas_str_slice_check(int at, int count, int len) {
+  if (at <= 0 || count < 0 || at + count - 1 > len) {
+    char msg[160];
+    snprintf(msg, sizeof msg,
+             "substr: %d characters from position %d is outside a string of "
+             "length %d", count, at, len);
+    pas_runtime_error(msg);
+  }
+}
+
+/* §6.10.1 e) and f): reading a string does *not* skip leading blanks, never
+ * crosses an end-of-line, and takes at most the capacity. A fixed target is
+ * then padded with spaces and a variable one gets exactly what was read. */
+void pas_read_str(void *v, void *dst, int cap, int isvar) {
+  struct pas_file *f = v;
+  char *out = isvar ? (char *)dst + 4 : (char *)dst;
+  int n = 0;
+  while (n < cap) {
+    pas_fill(f);
+    if (f->ateof || f->lookahead == '\n')
+      break;
+    out[n++] = f->ch;
+    f->have = 0;
+  }
+  if (isvar)
+    *(int *)dst = n;
+  else
+    memset(out + n, ' ', (size_t)(cap - n));
+}

@@ -231,7 +231,19 @@ type
     assigned, passed and returned as a value, so none of the by-address
     machinery touches it, exactly as for a set. }
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-              tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc, tyComplex);
+              tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc, tyComplex,
+              { ISO/IEC 10206:1991 6.4.3.3.3's variable-string-type: a type
+                produced from the required schema `string`. Its value is a
+                length and that many characters, and the length may be anything
+                from zero up to the *capacity* -- the schema's one discriminant.
+                `hi` holds the capacity, `hiDisc` the discriminant it came from
+                when an actual brought it, and `lo` is 1 because 6.4.3.3.1
+                makes every string's index-domain start there.
+
+                The *canonical*-string-type of 6.4.3.3.1 -- the type of `+`,
+                `substr` and `trim` -- is this kind with `hi` negative: a value
+                with no storage and so no capacity to exceed. }
+              tyString);
 
   { The required functions of ISO 7185, and the standard procedures that are
     not statements of their own. }
@@ -246,7 +258,14 @@ type
                  { 6.7.6.6's direct-access position functions and 6.7.6.5's
                    `empty`. All three take a file variable, so they join eof
                    and eoln in taking an *address* rather than a value. }
-                 biPosition, biLastPosition, biEmpty);
+                 biPosition, biLastPosition, biEmpty,
+                 { 6.7.6.7's string functions. The six comparisons are
+                   deliberately *not* the operators: NOTE 3 points out that
+                   LT(a,b) may be false where a<b is true, because these
+                   compare lengths as well as characters and the operators pad
+                   with spaces instead. }
+                 biLength, biIndex, biSubstr, biTrim,
+                 biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
@@ -444,6 +463,12 @@ type
       variable-access's *closest-containing* variable-identifier and a `with`
       is where that name stops being written down. }
     isProtected: boolean;
+
+    { ISO/IEC 10206:1991 6.4.3.3.3's *required* schema `string`. It has no
+      body: what it produces is a variable-string-type, whose representation
+      the compiler fixes rather than the program's text. The flag is what tells
+      ProduceFromSchema to build one instead of resolving a denoter. }
+    isStringSchema: boolean;
 
     { ISO/IEC 10206:1991 6.6: the value this variable bears when the block that
       declares it is entered. Borrowed from the AST and read only by the
@@ -824,7 +849,7 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
-  complexType: typePtr;
+  complexType, canonStringType: typePtr;
   emptySetType: typePtr;
   { the label declaration parts of the blocks currently open, innermost first }
   labelScope: labelScopePtr;
@@ -3751,6 +3776,11 @@ begin IsReal := (t <> nil) and (t^.kind = tyReal) end;
 function IsComplex(t: typePtr): boolean;
 begin IsComplex := (t <> nil) and (t^.kind = tyComplex) end;
 
+{ A type produced from the required schema `string` (6.4.3.3.3), or the
+  canonical-string-type that `+` yields. }
+function IsVarString(t: typePtr): boolean;
+begin IsVarString := (t <> nil) and (t^.kind = tyString) end;
+
 function IsNumeric(t: typePtr): boolean;
 begin IsNumeric := IsInteger(t) or IsReal(t) end;
 
@@ -3824,7 +3854,7 @@ function IsStructured(t: typePtr): boolean;
 begin IsStructured := IsArray(t) or IsRecord(t) end;
 
 function IsMemory(t: typePtr): boolean;
-begin IsMemory := IsStructured(t) or IsFile(t) end;
+begin IsMemory := IsStructured(t) or IsFile(t) or IsVarString(t) end;
 
 { ISO/IEC 10206:1991 6.4.1: a type is protectable unless it is a file or a
   pointer, or is structured and holds one. The standard's own NOTE gives both
@@ -3872,6 +3902,19 @@ function IsCharArray(t: typePtr): boolean;
 begin
   IsCharArray := IsArray(t) and t^.isPacked and IsChar(t^.elem)
 end;
+
+{ 6.4.3.3.1: "A string-type shall be a fixed-string-type or a
+  variable-string-type or the required type designated canonical-string-type."
+  A fixed-string-type is 6.4.3.3.2's `packed array [1..n] of char`, which
+  ISO 7185 already had and already gave the relational operators. }
+function IsStringType(t: typePtr): boolean;
+begin IsStringType := IsVarString(t) or IsCharArray(t) end;
+
+{ 6.4.3.3.1 gives the char-type "length 1 and capacity 1", so it stands
+  wherever a string does -- in a comparison, a concatenation, an assignment --
+  without being one. }
+function IsStringOrChar(t: typePtr): boolean;
+begin IsStringOrChar := IsStringType(t) or IsChar(t) end;
 
 function EnumCount(t: typePtr): integer;
 var p: namePtr; n: integer;
@@ -4018,6 +4061,13 @@ begin
       tyInteger: PutLit('integer         ');
       tyReal:    PutLit('real            ');
       tyComplex: PutLit('complex         ');
+      tyString:
+        if t^.hi < 0 then PutLit('string          ')
+        else begin
+          PutLit('string(         ');
+          PutInt(t^.hi);
+          PutLit(')               ')
+        end;
       tyBoolean: PutLit('boolean         ');
       tyChar:    PutLit('char            ');
       tyVoid:    PutLit('void            ');
@@ -4162,6 +4212,7 @@ begin
   s^.paramSection := 0;
   s^.isProtected := false;
   s^.initValue := nil;
+  s^.isStringSchema := false;
   NewSymbol := s
 end;
 
@@ -4396,6 +4447,23 @@ begin
     report it while the program runs -- so the rule is unchanged and only the
     moment of the comparison moves. CodeGen makes it; all that is decided here
     is that both were produced from one schema. }
+  { ISO/IEC 10206:1991 6.4.5 d): "T1 is either a string-type or the char-type
+    and T2 is either a string-type or the char-type." *All* of them are
+    compatible with each other, whatever their capacities -- and 6.4.6 f) then
+    makes the assignment legal when the value's length fits, which is a
+    question about the value and so a run-time one. That is the whole of the
+    divergence from ISO 7185, where two strings had to have the same length.
+
+    It comes before the schema rule below, and must: two capacities are two
+    types produced from one schema with different tuples, which 6.4.6 d) would
+    otherwise call a dynamic-violation. 6.4.6 f) is the more specific rule and
+    the required schema is what it is about. Two chars are not this rule --
+    they are the ordinary compatibility further down, and routing them here
+    would answer a different question. }
+  else if (langStd = stdExtended) and
+          (IsStringType(toT) or IsStringType(fromT)) and
+          IsStringOrChar(toT) and IsStringOrChar(fromT) then
+    Assignable := true
   else if IsGeneric(toT) or IsGeneric(fromT) then
     Assignable := toT^.schema = fromT^.schema
   { ISO 7185 6.4.6 makes set compatibility *structural*, not by name: two set
@@ -5899,6 +5967,33 @@ begin
         pr := pr^.next
       end;
 
+      { 6.4.3.3.3: the required schema has no body to resolve. What it produces
+        is a variable-string-type whose capacity is the tuple's one component
+        -- "each tuple in the domain of the schema shall have one component
+        that is a value of integer-type greater than zero". A capacity of zero
+        or less is therefore outside the *domain*. }
+      if (t = nil) and schema^.isStringSchema then begin
+        if tuple^.value <= 0 then begin
+          ErrorAt(d^.line, d^.col);
+          writeln('the capacity of a string must be greater than zero, ',
+                  'found ', tuple^.value:1);
+          t := intType
+        end
+        else begin
+          t := NewType(tyString);
+          t^.lo := 1;
+          t^.hi := tuple^.value;
+          t^.schema := schema;
+          t^.tuple := tuple;
+          new(pr);
+          pr^.schema := schema;
+          pr^.tuple := tuple;
+          pr^.ty := t;
+          pr^.next := producedHead;
+          producedHead := pr
+        end
+      end;
+
       if t = nil then begin
         begin
           { The discriminants become ordinary constants for as long as the
@@ -6200,7 +6295,22 @@ begin
       p := p^.next
     end;
 
-    ForgetResolved(schema^.schemaBody);
+    { 6.4.3.3.3 again: a schematic formal `var s: string` is a string whose
+    capacity arrives with the actual, so the bound is the skDisc symbol rather
+    than a number -- exactly as `array [1..n]` reaches ADR-0040's descriptor. }
+  if schema^.isStringSchema then begin
+    scopeTop := mark;
+    scopeDepth := scopeDepth - 1;
+    t := NewType(tyString);
+    t^.lo := 1;
+    t^.hi := 0;
+    t^.hiDisc := param^.discSyms^.sym;
+    t^.schema := schema;
+    param^.descSchema := schema;
+    GenericFromSchema := t
+  end
+  else begin
+  ForgetResolved(schema^.schemaBody);
     savedSchemaBody := inSchemaBody;
     inSchemaBody := true;
     new(push);
@@ -6257,6 +6367,7 @@ begin
     end
   end;
   GenericFromSchema := t
+  end
 end;
 
 { ISO/IEC 10206:1991 6.4.9: "The type denoted by a type-inquiry shall be the
@@ -7037,8 +7148,16 @@ begin
         or a complex, and the result is complex if either operand is. The
         widening is 6.4.6 c)'s implicit conversion, which is why the operand
         check is the *same* assignability question asked everywhere else. }
+      { 6.8.3.6 gives `+` a second meaning again -- string concatenation -- so
+        it is taken before the numeric case, exactly as the set case is. "a + b
+        shall denote a value of the canonical-string-type whose length shall be
+        equal to the sum of the length of a and the length of b." }
       opAdd, opSub, opMul:
-        if not IsArith(l) or not IsArith(r) then begin
+        if (b^.bnOp = opAdd) and (langStd = stdExtended) and
+           IsStringOrChar(l) and IsStringOrChar(r) and
+           not (IsChar(l) and IsChar(r)) then
+          b^.ntype := canonStringType
+        else if not IsArith(l) or not IsArith(r) then begin
           BadOperands(b, l, r, 'numeric     ');
           b^.ntype := intType
         end
@@ -7104,7 +7223,14 @@ begin
         { ISO 7185 6.7.2.5 gives the string types the full set of relational
           operators, comparing character by character; every other structured
           type has none at all. }
-        if IsCharArray(l) and IsCharArray(r) then begin
+        { 6.8.3.5: the relational operators over compatible string-types, where
+          the shorter operand is padded with spaces. Under ISO 7185 the lengths
+          had to be equal and this compiler said so; that check now applies
+          only to the language that has the rule. }
+        if (langStd = stdExtended) and IsStringOrChar(l) and
+           IsStringOrChar(r) and not (IsChar(l) and IsChar(r)) then
+          { padded comparison: nothing to check }
+        else if IsCharArray(l) and IsCharArray(r) then begin
           { A length that is a discriminant is not known here, so the
             requirement that the two agree is made where the values are.
             TypeLength would answer with arithmetic on the placeholder bounds,
@@ -7213,6 +7339,17 @@ begin
     LookupBuiltin := biLastPosition
   else if PoolIsWide(at, len, 'empty           ') then
     LookupBuiltin := biEmpty
+  { 6.7.6.7. Required identifiers, so a program may declare its own. }
+  else if PoolIsWide(at, len, 'length          ') then LookupBuiltin := biLength
+  else if PoolIsWide(at, len, 'index           ') then LookupBuiltin := biIndex
+  else if PoolIsWide(at, len, 'substr          ') then LookupBuiltin := biSubstr
+  else if PoolIsWide(at, len, 'trim            ') then LookupBuiltin := biTrim
+  else if PoolIsWide(at, len, 'eq              ') then LookupBuiltin := biStrEq
+  else if PoolIsWide(at, len, 'ne              ') then LookupBuiltin := biStrNe
+  else if PoolIsWide(at, len, 'lt              ') then LookupBuiltin := biStrLt
+  else if PoolIsWide(at, len, 'gt              ') then LookupBuiltin := biStrGt
+  else if PoolIsWide(at, len, 'le              ') then LookupBuiltin := biStrLe
+  else if PoolIsWide(at, len, 'ge              ') then LookupBuiltin := biStrGe
   else LookupBuiltin := biNone
 end;
 
@@ -7230,6 +7367,47 @@ end;
 function IsFileEnquiry(b: builtinKind): boolean;
 begin
   IsFileEnquiry := (b = biPosition) or (b = biLastPosition) or (b = biEmpty)
+end;
+
+{ 6.7.6.7's ten, grouped for the same reason as the rest: the only question
+  asked of them together is whether this standard has them. }
+function IsStringBuiltin(b: builtinKind): boolean;
+begin
+  IsStringBuiltin := (b = biLength) or (b = biIndex) or (b = biSubstr) or
+                     (b = biTrim) or (b = biStrEq) or (b = biStrNe) or
+                     (b = biStrLt) or (b = biStrGt) or (b = biStrLe) or
+                     (b = biStrGe)
+end;
+
+{ The six comparison functions of 6.7.6.7, which take two operands where the
+  other four take one or three. }
+function IsStringCompare(b: builtinKind): boolean;
+begin
+  IsStringCompare := (b = biStrEq) or (b = biStrNe) or (b = biStrLt) or
+                     (b = biStrGt) or (b = biStrLe) or (b = biStrGe)
+end;
+
+{ Every argument of a 6.7.6.7 function that is meant to be a string: "the
+  expressions s1 and s2 shall each be of char-type or a string-type". Only the
+  first argument of `substr` is one, which is why the caller says how many. }
+procedure CheckStringArgs(c, first: nodePtr);
+var a: nodePtr; k: integer;
+begin
+  a := first;
+  k := 0;
+  while (a <> nil) and (k < 2) do begin
+    if a^.ntype <> nil then
+      if not IsStringOrChar(a^.ntype) then begin
+        ErrorAt(a^.line, a^.col);
+        write('''');
+        WritePool(c^.clAt, c^.clLen);
+        write(''' needs a string or a char, found ');
+        WriteTypeName(a^.ntype);
+        writeln
+      end;
+    if c^.clBuiltin = biSubstr then k := 2 else k := k + 1;
+    a := a^.next
+  end
 end;
 
 procedure RequireArg(c: nodePtr; ok: boolean; want: wordLit; a: typePtr);
@@ -7272,7 +7450,8 @@ begin
       that name was found, and only under the standard that has them; the
       message then says the feature is missing rather than that the name is. }
     if (langStd = stdIso7185) and
-       (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin)) then begin
+       (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin) or
+        IsStringBuiltin(c^.clBuiltin)) then begin
       ErrorAt(c^.line, c^.col);
       write('''');
       WritePool(c^.clAt, c^.clLen);
@@ -7306,10 +7485,77 @@ begin
         left out, and the only ones taking a file (ISO 7185 6.6.6.5). The
         default is supplied here rather than in codegen, so that by the time
         the tree is handed on, both forms look the same. }
+      { 6.7.6.7's ten. They take one, two or three arguments, so they are
+        checked before the "exactly one" gate below. }
+      if IsStringBuiltin(c^.clBuiltin) then begin
+        if IsStringCompare(c^.clBuiltin) then begin
+          c^.ntype := boolType;
+          if n <> 2 then begin
+            ErrorAt(c^.line, c^.col);
+            write('''');
+            WritePool(c^.clAt, c^.clLen);
+            writeln(''' takes two strings')
+          end
+          else
+            CheckStringArgs(c, c^.clArgs)
+        end
+        else if c^.clBuiltin = biIndex then begin
+          c^.ntype := intType;
+          if n <> 2 then begin
+            ErrorAt(c^.line, c^.col);
+            writeln('''index'' takes two strings')
+          end
+          else
+            CheckStringArgs(c, c^.clArgs)
+        end
+        else if c^.clBuiltin = biLength then begin
+          c^.ntype := intType;
+          if n <> 1 then begin
+            ErrorAt(c^.line, c^.col);
+            writeln('''length'' takes one string')
+          end
+          else
+            CheckStringArgs(c, c^.clArgs)
+        end
+        { 6.7.6.7: trim and substr "return a result of the
+          canonical-string-type" -- a value with no capacity, because it has no
+          storage. What it may be assigned to is decided by its *length*, where
+          the value finally is. }
+        else if c^.clBuiltin = biTrim then begin
+          c^.ntype := canonStringType;
+          if n <> 1 then begin
+            ErrorAt(c^.line, c^.col);
+            writeln('''trim'' takes one string')
+          end
+          else
+            CheckStringArgs(c, c^.clArgs)
+        end
+        else begin
+          c^.ntype := canonStringType;
+          if (n <> 2) and (n <> 3) then begin
+            ErrorAt(c^.line, c^.col);
+            writeln('''substr'' takes a string and one or two positions')
+          end
+          else begin
+            CheckStringArgs(c, c^.clArgs);
+            a := c^.clArgs^.next;
+            while a <> nil do begin
+              if a^.ntype <> nil then
+                if not IsInteger(a^.ntype) then begin
+                  ErrorAt(a^.line, a^.col);
+                  write('the positions of ''substr'' are integers, found ');
+                  WriteTypeName(a^.ntype);
+                  writeln
+                end;
+              a := a^.next
+            end
+          end
+        end
+      end
       { 6.7.6.5 and 6.7.6.6: empty, position and LastPosition take a file
         variable and nothing else -- no default, unlike eof, because there is
         no standard direct-access file to default to. }
-      if IsFileEnquiry(c^.clBuiltin) then begin
+      else if IsFileEnquiry(c^.clBuiltin) then begin
         if c^.clBuiltin = biEmpty then c^.ntype := boolType
         else c^.ntype := intType;
         if n <> 1 then begin
@@ -7496,11 +7742,19 @@ begin
       { ISO 7185 6.4.3.2: a string literal *is* a packed array of char. Giving
         it that type rather than one of its own is what makes assignment,
         comparison and parameter passing work with no special cases. }
+      { ISO/IEC 10206:1991 6.1.9 spells a character-string with *zero or more*
+        string-elements, so `''` denotes the null-string 6.4.3.3.1 names.
+        ISO 7185's grammar has one element before the repetition, which is why
+        the two languages differ over two apostrophes and nothing else. }
       nkStr:
         if e^.stLen = 0 then begin
-          ErrorAt(e^.line, e^.col);
-          writeln('a string literal cannot be empty');
-          e^.ntype := StringType(1)
+          if langStd = stdIso7185 then begin
+            ErrorAt(e^.line, e^.col);
+            writeln('a string literal cannot be empty');
+            e^.ntype := StringType(1)
+          end
+          else
+            e^.ntype := canonStringType
         end
         else
           e^.ntype := StringType(e^.stLen);
@@ -7509,7 +7763,22 @@ begin
         CheckExpr(e^.ixBase);
         CheckExpr(e^.ixIndex);
         b := e^.ixBase^.ntype;
-        if not IsArray(b) then begin
+        { 6.4.3.3.3 NOTE 1: a variable-string is indexed as an array, and every
+          component is a char. 6.5.3.2 makes the subscript an *integer* -- not
+          a value of an index type, because a string's index-domain is
+          1..length and no type names it. }
+        if IsVarString(b) then begin
+          if e^.ixIndex^.ntype <> nil then
+            if not IsInteger(e^.ixIndex^.ntype) then begin
+              ErrorAt(e^.ixIndex^.line, e^.ixIndex^.col);
+              write('a string is indexed by an integer, but the subscript ',
+                    'is ');
+              WriteTypeName(e^.ixIndex^.ntype);
+              writeln
+            end;
+          e^.ntype := charType
+        end
+        else if not IsArray(b) then begin
           if b <> nil then begin
             ErrorAt(e^.line, e^.col);
             write('cannot subscript a value of type ');
@@ -7814,9 +8083,11 @@ begin
     { ISO 7185 6.9.3 lists exactly what write accepts: an integer, a real, a
       boolean, a char, or a packed array of char. An enumeration is not on the
       list -- the standard gives no spelling for its constants at run time --
-      and neither is any other structured type. }
+      and neither is any other structured type. ISO/IEC 10206:1991 6.10.3.1
+      has the same list with "a string-type" in place of the packed char
+      array, so a variable-string and a canonical value join it. }
     if (t <> nil) and not (IsInteger(t) or IsReal(t) or IsBoolean(t) or
-                           IsChar(t) or IsCharArray(t)) then begin
+                           IsChar(t) or IsStringType(t)) then begin
       ErrorAt(a^.waValue^.line, a^.waValue^.col);
       write('a value of type ');
       WriteTypeName(t);
@@ -9254,7 +9525,7 @@ begin
 end;
 
 procedure InstallPredefined;
-var s: symPtr; at, len: integer;
+var s, cap: symPtr; at, len: integer;
 begin
   InternWord('true     ', at, len);
   s := Declare(at, len, skConst, 0, 0);
@@ -9269,7 +9540,29 @@ begin
   InternWord('maxint   ', at, len);
   s := Declare(at, len, skConst, 0, 0);
   s^.stype := intType;
-  s^.intVal := maxint
+  s^.intVal := maxint;
+
+  { ISO/IEC 10206:1991 6.4.3.3.3: "There shall be a schema that is denoted by
+    the required schema-identifier `string`. The schema `string` shall have one
+    formal discriminant denoted by the required discriminant-identifier
+    `capacity`, which shall possess the integer-type."
+
+    It is declared like any other required identifier -- in the outermost
+    scope, where a program may shadow it -- and not as a word-symbol, because
+    6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define a
+    type of that name. }
+  if langStd = stdExtended then begin
+    InternWord('string   ', at, len);
+    s := Declare(at, len, skSchema, 0, 0);
+    s^.isStringSchema := true;
+    cap := NewSymbol;
+    InternWord('capacity ', at, len);
+    cap^.at := at;
+    cap^.len := len;
+    cap^.kind := skConst;
+    cap^.stype := intType;
+    AppendSym(s^.discs, s^.discTail, cap)
+  end
 end;
 
 procedure RunSema;
@@ -9278,6 +9571,14 @@ begin
   intType := NewType(tyInteger);
   realType := NewType(tyReal);
   complexType := NewType(tyComplex);
+  { ISO/IEC 10206:1991 6.4.3.3.1's canonical-string-type: the type of every
+    string *value* -- a literal's, `+`'s, `substr`'s and `trim`'s. It has no
+    capacity (hi is negative) because it has no storage: a value is only ever
+    on its way into something that does, and 6.4.6 checks it against *that*
+    capacity. No type-denoter produces one, so no variable has it. }
+  canonStringType := NewType(tyString);
+  canonStringType^.lo := 1;
+  canonStringType^.hi := -1;
   boolType := NewType(tyBoolean);
   charType := NewType(tyChar);
   voidType := NewType(tyVoid);
@@ -10702,6 +11003,7 @@ begin
       { <2 x double>: two doubles, and the target aligns a vector to its whole
         size. }
       tyComplex: LlAlign := 16;
+      tyString: LlAlign := 4;
       { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
         it takes the largest one that is named, which is i128's. }
       tySet: LlAlign := 16;
@@ -10729,6 +11031,9 @@ begin
       tyInteger, tyEnum: LlSize := 4;
       tyReal, tyPointer: LlSize := 8;
       tyComplex: LlSize := 16;
+      { a length beside a buffer: the shape ADR-0045 made expressible }
+      tyString:
+        if b^.hi > 0 then LlSize := 4 + b^.hi else LlSize := 4;
       tyFile: LlSize := fileSize;
       tySet: LlSize := setBits div 8;
       tyProc: LlSize := 16;
@@ -10813,6 +11118,16 @@ begin
         struct is passed -- which is the constraint ADR-0030 named and settled
         the same way. }
       tyComplex: write(ircode, '<2 x double>');
+      { 6.4.3.3.3: a variable-string-type's value is a length and that many
+        characters. The layout is ADR-0045's -- a length beside a buffer whose
+        capacity is the discriminant -- so a string whose capacity arrives with
+        the actual is that record's flexible array member and DynSize needs no
+        new case. }
+      tyString: begin
+        write(ircode, '{ i32, [');
+        if b^.hi > 0 then write(ircode, b^.hi:1) else write(ircode, '0');
+        write(ircode, ' x i8] }')
+      end;
       tyArray: begin
         { The bounds are folded away: an index is lowered to an offset from the
           lower bound, so the type only needs the extent. }
@@ -11337,6 +11652,19 @@ end;
   discriminants it returns arithmetic on the placeholders, which is a number
   and therefore not obviously wrong. Everything needing a length rather than a
   size comes through here instead. }
+{ The capacity of a string type, as a value. 6.4.3.3.3 makes it the schema's
+  one discriminant, so it is a number where the type was written with one and
+  the descriptor's when an actual brought it -- the same two answers every
+  dynamic bound has (ADR-0040). }
+procedure StringCapacity(t: typePtr; var hdr: str; var v: str);
+begin
+  if t^.hiDisc = nil then begin
+    if t^.hi < 0 then OpInt(0, v) else OpInt(t^.hi, v)
+  end
+  else
+    BoundValue(t, true, hdr, v)
+end;
+
 procedure DynLength(t: typePtr; var header: str; var v: str);
 var lo, hi, extent: str;
 begin
@@ -11367,6 +11695,16 @@ var lo, hi, extent, count, inner, sum: str;
 begin
   if not DynamicExtent(t) then
     OpInt(LlSize(t), v)
+  { A variable-string is a length beside a buffer, so its size is four bytes
+    and the capacity -- the shape ADR-0045 already described, laid out by hand
+    because a string is not the record a program could have written. }
+  else if IsVarString(t) then begin
+    StringCapacity(t, header, count);
+    Def(v);
+    write(ircode, 'add i32 4, ');
+    PutOp(count);
+    writeln(ircode)
+  end
   { A record's dynamic part is its last field and nothing else (ADR-0045), so
     every offset in it is a constant and the size is the last field's offset
     plus whatever the tail costs. The offset is accumulated here rather than
@@ -12585,6 +12923,232 @@ begin
   end
 end;
 
+{ ISO/IEC 10206:1991 6.4.3.3: every string *value*, as the pointer and length
+  pair 6.4.3.3.1 describes it -- "a one-to-one mapping from an index-domain to
+  a set of components possessing the char-type", with the index-domain's size
+  as the length.
+
+  The pair is what makes `substr` and `trim` free: they are a pointer and a
+  shorter length into the string they came from, and copy nothing. Only `+`
+  makes characters that did not exist. }
+procedure EmitString(e: nodePtr; var data, len: str);
+var ad, al, bd, bl, at_, count, hdr, addr, c, one: str; st: typePtr;
+begin
+  st := e^.ntype;
+  { A concatenation, and the one operation that needs storage. }
+  if (e^.kind = nkBinary) and (e^.bnOp = opAdd) and IsStringType(st) then begin
+    EmitString(e^.bnLhs, ad, al);
+    EmitString(e^.bnRhs, bd, bl);
+    Def(data);
+    write(ircode, 'call ptr @pas_str_concat(ptr ');
+    PutOp(ad);
+    write(ircode, ', i32 ');
+    PutOp(al);
+    write(ircode, ', ptr ');
+    PutOp(bd);
+    write(ircode, ', i32 ');
+    PutOp(bl);
+    writeln(ircode, ')');
+    { 6.8.3.6: "whose length shall be equal to the sum of the length of a and
+      the length of b" -- so the length is arithmetic here and the runtime
+      never returns one. }
+    Def(len);
+    write(ircode, 'add i32 ');
+    PutOp(al);
+    write(ircode, ', ');
+    PutOp(bl);
+    writeln(ircode)
+  end
+  else if (e^.kind = nkCall) and
+          ((e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim)) then begin
+    EmitString(e^.clArgs, ad, al);
+    if e^.clBuiltin = biTrim then begin
+      data := ad;
+      Def(len);
+      write(ircode, 'call i32 @pas_str_trimlen(ptr ');
+      PutOp(ad);
+      write(ircode, ', i32 ');
+      PutOp(al);
+      writeln(ircode, ')')
+    end
+    else begin
+      { 6.7.6.7: substr(s, i, j) is j characters from position i, and the
+        two-argument form is "substr(sv, iv, length(sv)-(iv)+1)" -- the tail. }
+      EmitExpr(e^.clArgs^.next, at_);
+      if e^.clArgs^.next^.next <> nil then
+        EmitExpr(e^.clArgs^.next^.next, count)
+      else begin
+        Def(bd);
+        write(ircode, 'sub i32 ');
+        PutOp(al);
+        write(ircode, ', ');
+        PutOp(at_);
+        writeln(ircode);
+        Def(count);
+        write(ircode, 'add i32 ');
+        PutOp(bd);
+        writeln(ircode, ', 1')
+      end;
+      write(ircode, '  call void @pas_str_slice_check(i32 ');
+      PutOp(at_);
+      write(ircode, ', i32 ');
+      PutOp(count);
+      write(ircode, ', i32 ');
+      PutOp(al);
+      writeln(ircode, ')');
+      Def(bl);
+      write(ircode, 'sub i32 ');
+      PutOp(at_);
+      writeln(ircode, ', 1');
+      Def(data);
+      write(ircode, 'getelementptr inbounds i8, ptr ');
+      PutOp(ad);
+      write(ircode, ', i32 ');
+      PutOp(bl);
+      writeln(ircode);
+      len := count
+    end
+  end
+  { A literal is its own characters and its own length, whatever type it was
+    given -- and the null-string is *why* this comes first: `''` has the
+    canonical type, which would otherwise be read as a length in front of
+    characters that are not there. }
+  else if e^.kind = nkStr then begin
+    EmitAddress(e, data);
+    OpInt(e^.stLen, len)
+  end
+  { 6.4.3.3.1 gives the char-type length 1, and a char in a register has no
+    address -- this is where it gets one. }
+  else if IsChar(st) then begin
+    EmitExpr(e, c);
+    Def(data);
+    write(ircode, 'call ptr @pas_str_char(i8 ');
+    PutOp(c);
+    writeln(ircode, ')');
+    OpInt(1, len)
+  end
+  { A variable-string variable: the length is stored in front of the
+    characters, which is the whole of 6.4.3.3.3's representation. }
+  else if IsVarString(st) then begin
+    EmitAddress(e, addr);
+    Def(at_);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(st);
+    write(ircode, ', ptr ');
+    PutOp(addr);
+    writeln(ircode, ', i32 0, i32 0');
+    Def(len);
+    write(ircode, 'load i32, ptr ');
+    PutOp(at_);
+    writeln(ircode);
+    Def(data);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(st);
+    write(ircode, ', ptr ');
+    PutOp(addr);
+    writeln(ircode, ', i32 0, i32 1')
+  end
+  { ...and a fixed-string-type, whose length 6.4.3.3.2 makes equal to its
+    capacity: "the length of all values of a particular fixed-string-type is
+    equal to the capacity". }
+  else begin
+    EmitAddress(e, data);
+    HeapHeader(e, hdr);
+    DynLength(st, hdr, len)
+  end
+end;
+
+{ 6.4.6's assignment rules for a string destination, which are three different
+  things depending on what the destination is -- padded to the capacity for a
+  fixed string, exact for a variable one, one character for a char -- and one
+  thing they share: it is an *error* if the value is longer than the
+  capacity. }
+procedure EmitStringStore(var dst: str; t: typePtr; src: nodePtr;
+                          var hdr: str);
+var sd, sl, cap: str;
+begin
+  EmitString(src, sd, sl);
+  if IsVarString(t) then begin
+    StringCapacity(t, hdr, cap);
+    write(ircode, '  call void @pas_str_store_var(ptr ');
+    PutOp(dst);
+    write(ircode, ', i32 ');
+    PutOp(cap);
+    write(ircode, ', ptr ');
+    PutOp(sd);
+    write(ircode, ', i32 ');
+    PutOp(sl);
+    writeln(ircode, ')')
+  end
+  else if IsChar(t) then begin
+    write(ircode, '  call void @pas_str_store_char(ptr ');
+    PutOp(dst);
+    write(ircode, ', ptr ');
+    PutOp(sd);
+    write(ircode, ', i32 ');
+    PutOp(sl);
+    writeln(ircode, ')')
+  end
+  else begin
+    DynLength(t, hdr, cap);
+    write(ircode, '  call void @pas_str_store_fixed(ptr ');
+    PutOp(dst);
+    write(ircode, ', i32 ');
+    PutOp(cap);
+    write(ircode, ', ptr ');
+    PutOp(sd);
+    write(ircode, ', i32 ');
+    PutOp(sl);
+    writeln(ircode, ')')
+  end
+end;
+
+{ 6.8.3.5: the relational operators over string types, where the shorter value
+  is "effectively extended with trailing spaces to the length of the longer".
+  That is the ISO 7185 divergence that matters -- there the lengths had to be
+  equal, and this compiler said so. }
+{ A concatenation appearing where a *value* is wanted rather than where a
+  string is: only a string context can consume one, so the pair is built and
+  the pointer stands for it. Sema has already refused every other use. }
+procedure EmitStringValue(e: nodePtr; var v: str);
+var d, l: str;
+begin
+  EmitString(e, d, l);
+  v := d
+end;
+
+procedure EmitStringCompare2(e: nodePtr; var v: str);
+var ad, al, bd, bl, cmp: str;
+begin
+  EmitString(e^.bnLhs, ad, al);
+  EmitString(e^.bnRhs, bd, bl);
+  Def(cmp);
+  write(ircode, 'call i32 @pas_str_cmp_pad(ptr ');
+  PutOp(ad);
+  write(ircode, ', i32 ');
+  PutOp(al);
+  write(ircode, ', ptr ');
+  PutOp(bd);
+  write(ircode, ', i32 ');
+  PutOp(bl);
+  writeln(ircode, ')');
+  Def(v);
+  write(ircode, 'icmp ');
+  case e^.bnOp of
+    opEq: write(ircode, 'eq');
+    opNe: write(ircode, 'ne');
+    opLt: write(ircode, 'slt');
+    opLe: write(ircode, 'sle');
+    opGt: write(ircode, 'sgt');
+    opGe: write(ircode, 'sge');
+    opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr, opAndThen,
+    opOrElse, opIn, opExp, opPow: write(ircode, 'eq')
+  end;
+  write(ircode, ' i32 ');
+  PutOp(cmp);
+  writeln(ircode, ', 0')
+end;
+
 procedure EmitBinary(e: nodePtr; var v: str);
 var l, r, rem, neg, adj, bad, m1, m2: str;
     lt, rt: typePtr; msg: integer; sign, useFloat: boolean;
@@ -12596,6 +13160,22 @@ begin
     is taken before the two are evaluated alike. }
   else if e^.bnOp = opIn then
     EmitIn(e, v)
+  { 6.8.3.6's concatenation, which is a value and not a comparison. }
+  else if (e^.bnOp = opAdd) and IsStringType(e^.ntype) then
+    EmitStringValue(e, v)
+  { 6.8.3.5's padded comparison, whenever either side is a string and the
+    lengths are not both statically equal char arrays -- the ISO 7185 path is
+    kept for the case it already handled, so nothing about that language's
+    emitted code moved. }
+  else if IsStringOrChar(e^.bnLhs^.ntype) and IsStringOrChar(e^.bnRhs^.ntype)
+          and not (IsChar(e^.bnLhs^.ntype) and IsChar(e^.bnRhs^.ntype)) then
+    if IsCharArray(e^.bnLhs^.ntype) and IsCharArray(e^.bnRhs^.ntype) and
+       (e^.bnLhs^.ntype^.loDisc = nil) and (e^.bnLhs^.ntype^.hiDisc = nil) and
+       (e^.bnRhs^.ntype^.loDisc = nil) and (e^.bnRhs^.ntype^.hiDisc = nil) and
+       (TypeLength(e^.bnLhs^.ntype) = TypeLength(e^.bnRhs^.ntype)) then
+      EmitStringCompare(e, v)
+    else
+      EmitStringCompare2(e, v)
   { Strings compare through the runtime rather than in registers, and must be
     caught before the operands are evaluated: an array has no register form. }
   else if IsCharArray(e^.bnLhs^.ntype) and IsCharArray(e^.bnRhs^.ntype) then
@@ -12888,6 +13468,64 @@ var a, w, lim, tmp, b_, re, im, x, y, c_, d_: str;
 begin
   if e^.clSym <> nil then
     EmitUserCall(e^.clSym, e^.clArgs, v)
+  { 6.7.6.7's string functions. `substr` and `trim` are string *values* and are
+    emitted by EmitString; the rest answer about one, so they take the pair
+    apart here. }
+  else if e^.clBuiltin = biLength then begin
+    EmitString(e^.clArgs, x, v)
+  end
+  else if e^.clBuiltin = biIndex then begin
+    EmitString(e^.clArgs, x, y);
+    EmitString(e^.clArgs^.next, c_, d_);
+    Def(v);
+    write(ircode, 'call i32 @pas_str_index(ptr ');
+    PutOp(x);
+    write(ircode, ', i32 ');
+    PutOp(y);
+    write(ircode, ', ptr ');
+    PutOp(c_);
+    write(ircode, ', i32 ');
+    PutOp(d_);
+    writeln(ircode, ')')
+  end
+  else if (e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim) then
+    EmitStringValue(e, v)
+  else if (e^.clBuiltin = biStrEq) or (e^.clBuiltin = biStrNe) or
+          (e^.clBuiltin = biStrLt) or (e^.clBuiltin = biStrGt) or
+          (e^.clBuiltin = biStrLe) or (e^.clBuiltin = biStrGe) then begin
+    EmitString(e^.clArgs, x, y);
+    EmitString(e^.clArgs^.next, c_, d_);
+    { 6.7.6.7's NOTE 3: these are *not* the operators -- they compare lengths
+      as well as characters, so a proper prefix is strictly less than its
+      extension where `<` would pad and call them equal. }
+    Def(w);
+    write(ircode, 'call i32 @pas_str_cmp_exact(ptr ');
+    PutOp(x);
+    write(ircode, ', i32 ');
+    PutOp(y);
+    write(ircode, ', ptr ');
+    PutOp(c_);
+    write(ircode, ', i32 ');
+    PutOp(d_);
+    writeln(ircode, ')');
+    Def(v);
+    write(ircode, 'icmp ');
+    case e^.clBuiltin of
+      biStrEq: write(ircode, 'eq');
+      biStrNe: write(ircode, 'ne');
+      biStrLt: write(ircode, 'slt');
+      biStrGt: write(ircode, 'sgt');
+      biStrLe: write(ircode, 'sle');
+      biStrGe: write(ircode, 'sge');
+      biNone, biAbs, biSqr, biOdd, biOrd, biChr, biSucc, biPred, biSqrt,
+      biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound, biEof, biEoln,
+      biCmplx, biPolar, biRe, biIm, biArg, biPosition, biLastPosition,
+      biEmpty, biLength, biIndex, biSubstr, biTrim: write(ircode, 'eq')
+    end;
+    write(ircode, ' i32 ');
+    PutOp(w);
+    writeln(ircode, ', 0')
+  end
   { 6.7.6.5's `empty` and 6.7.6.6's two positions. The runtime counts from
     zero, so a position comes back relative to the index-type's smallest value
     and the lower bound is added here -- the same fold an array subscript makes
@@ -13061,7 +13699,9 @@ begin
         biExp:    ComplexCall('pas_cexp        ', a, v);
         biArcTan: ComplexCall('pas_carctan     ', a, v);
         biNone, biOdd, biOrd, biChr, biSucc, biPred, biTrunc, biRound,
-        biEof, biEoln, biCmplx, biPolar, biPosition, biLastPosition, biEmpty:
+        biEof, biEoln, biCmplx, biPolar, biPosition, biLastPosition, biEmpty,
+        biLength, biIndex, biSubstr, biTrim, biStrEq, biStrNe, biStrLt,
+        biStrGt, biStrLe, biStrGe:
           OpWord('undef           ', v)
       end
     else
@@ -13219,7 +13859,8 @@ begin
         CheckedFpToInt(w, v, msg)
       end;
       biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
-      biPosition, biLastPosition, biEmpty: OpInt(0, v)
+      biPosition, biLastPosition, biEmpty, biLength, biIndex, biSubstr,
+      biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe: OpInt(0, v)
     end
   end
 end;
@@ -13245,6 +13886,45 @@ begin
     end;
 
     nkIndex: begin
+      arr := e^.ixBase^.ntype;
+      { 6.4.3.3.3 NOTE 1: "The individual components of a variable-string-type
+        can be obtained by indexing it as an array." The bound is the *length*,
+        not the capacity (6.5.3.2), because the index-domain is the value's and
+        the capacity is the type's -- so this cannot go through the array path,
+        whose bounds come from the type. }
+      if IsVarString(arr) then begin
+        EmitString(e^.ixBase, base, hi);
+        EmitExpr(e^.ixIndex, idx);
+        Def(below);
+        write(ircode, 'icmp slt i32 ');
+        PutOp(idx);
+        writeln(ircode, ', 1');
+        Def(above);
+        write(ircode, 'icmp sgt i32 ');
+        PutOp(idx);
+        write(ircode, ', ');
+        PutOp(hi);
+        writeln(ircode);
+        Def(bad);
+        write(ircode, 'or i1 ');
+        PutOp(below);
+        write(ircode, ', ');
+        PutOp(above);
+        writeln(ircode);
+        OpInt(1, lo);
+        EmitTrapIndex(bad, lo, hi);
+        Def(off);
+        write(ircode, 'sub i32 ');
+        PutOp(idx);
+        writeln(ircode, ', 1');
+        Def(v);
+        write(ircode, 'getelementptr inbounds i8, ptr ');
+        PutOp(base);
+        write(ircode, ', i32 ');
+        PutOp(off);
+        writeln(ircode)
+      end
+      else begin
       arr := e^.ixBase^.ntype;
       EmitAddress(e^.ixBase, base);
       EmitExpr(e^.ixIndex, idx);
@@ -13335,6 +14015,7 @@ begin
         write(ircode, ', i32 0, i32 ');
         PutOp(off);
         writeln(ircode)
+      end
       end
     end;
 
@@ -13463,11 +14144,21 @@ end;
   whole-variable copy -- and `write` to a file that is not a text needs exactly
   it, because 6.6.5.2 defines that write as `f^ := e`. }
 procedure EmitStore(var dst: str; t: typePtr; src: nodePtr);
-var v: str;
+var v, hdr: str;
 begin
+  { ISO/IEC 10206:1991 6.4.6: a string destination is not a memcpy. A short
+    value is padded with spaces into a fixed string, kept at its own length in
+    a variable one, and a value longer than the capacity is an *error* -- so
+    this is a runtime operation and is taken before the copy below. }
+  if IsStringType(t) and IsStringOrChar(src^.ntype) and
+     (IsVarString(t) or IsVarString(src^.ntype) or IsChar(src^.ntype) or
+      (TypeLength(t) <> TypeLength(src^.ntype))) then begin
+    StrClear(hdr);
+    EmitStringStore(dst, t, src, hdr)
+  end
   { A whole array or record is copied; ISO 7185 6.8.2.2 makes assignment of a
     structured value a copy of every component, not a sharing of storage. }
-  if IsStructured(t) then
+  else if IsStructured(t) then
     EmitCopy(dst, t, src)
   else begin
     EmitExpr(src, v);
@@ -13546,7 +14237,15 @@ var dst, src, size, hdr: str; t, comp: typePtr; align: integer;
 begin
   EmitAddress(s^.asTarget, dst);
   t := s^.asTarget^.ntype;
-  if (t^.schema <> nil) and
+  { A string is produced from the required schema, so it would otherwise take
+    the tuple-comparison path below -- and must not: 6.4.6 f) makes two
+    capacities *compatible*, and the check that matters is the value's length
+    against the destination's capacity, which the store makes. }
+  if IsStringType(t) then begin
+    HeapHeader(s^.asTarget, hdr);
+    EmitStringStore(dst, t, s^.asValue, hdr)
+  end
+  else if (t^.schema <> nil) and
      (IsGeneric(t) or IsGeneric(s^.asValue^.ntype)) then begin
     EmitTupleCheck(s^.asTarget, s^.asValue);
     EmitAddress(s^.asValue, src);
@@ -13575,7 +14274,8 @@ begin
 end;
 
 procedure EmitWrite(s: nodePtr);
-var fh, v, width, prec, addr, slen, shdr: str; a: nodePtr; b: typePtr;
+var fh, v, width, prec, addr, slen, shdr, sdata: str;
+    a: nodePtr; b: typePtr;
 begin
   if s^.wrFile <> nil then begin
     EmitAddress(s^.wrFile, fh);
@@ -13606,7 +14306,23 @@ begin
 
       { A packed array of char is written as its address plus its length --
         which covers a string literal, since that is what a literal's type is. }
-      if IsCharArray(a^.waValue^.ntype) then begin
+      { A string is written as its address plus its length -- which covers a
+      literal, since that is what a literal's type is, and a variable-string
+      and a canonical value alike, since EmitString is what a string value
+      *is*. 6.10.3.6 asks for exactly those two numbers. }
+    if IsStringType(a^.waValue^.ntype) then begin
+      EmitString(a^.waValue, sdata, slen);
+      write(ircode, '  call void @pas_write_str(ptr ');
+      PutOp(fh);
+      write(ircode, ', ptr ');
+      PutOp(sdata);
+      write(ircode, ', i32 ');
+      PutOp(slen);
+      write(ircode, ', i32 ');
+      PutOp(width);
+      writeln(ircode, ')')
+    end
+    else if IsCharArray(a^.waValue^.ntype) then begin
         EmitAddress(a^.waValue, addr);
         HeapHeader(a^.waValue, shdr);
         DynLength(a^.waValue^.ntype, shdr, slen);
@@ -13684,7 +14400,7 @@ end;
 { Each variable is filled by the runtime call its type selects, and `readln`
   then finishes the line -- which is what makes readln(x) one statement. }
 procedure EmitRead(s: nodePtr);
-var fh, slot, v, wide, buf: str; a: nodePtr; t, comp: typePtr;
+var fh, slot, v, wide, buf, rhdr, rcap: str; a: nodePtr; t, comp: typePtr;
 begin
   if s^.rdFile <> nil then begin
     EmitAddress(s^.rdFile, fh);
@@ -13730,7 +14446,25 @@ begin
     while a <> nil do begin
       EmitAddress(a, slot);
       t := a^.ntype;
-      if IsChar(t) then begin
+      { ISO/IEC 10206:1991 6.10.1 e) and f): reading a string does not skip
+        leading blanks, never crosses an end-of-line, and takes at most the
+        capacity -- a fixed target is then padded with spaces and a variable
+        one gets exactly what was read. That is one runtime call for both, told
+        apart by the capacity and one flag. }
+      if IsStringType(t) then begin
+        HeapHeader(a, rhdr);
+        if IsVarString(t) then StringCapacity(t, rhdr, rcap)
+        else DynLength(t, rhdr, rcap);
+        write(ircode, '  call void @pas_read_str(ptr ');
+        PutOp(fh);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        write(ircode, ', i32 ');
+        PutOp(rcap);
+        if IsVarString(t) then writeln(ircode, ', i32 1)')
+        else writeln(ircode, ', i32 0)')
+      end
+      else if IsChar(t) then begin
         Def(v);
         write(ircode, 'call i8 @pas_read_char(ptr ');
         PutOp(fh);
@@ -14992,6 +15726,20 @@ begin
   writeln(ircode, 'declare double @llvm.exp.f64(double)');
   writeln(ircode, 'declare double @llvm.round.f64(double)');
   writeln(ircode, 'declare double @atan(double)');
+  { ISO/IEC 10206:1991 6.4.3.3's string operations. A string value is a pointer
+    and a length, so every one of these takes the pair rather than an
+    aggregate. }
+  writeln(ircode, 'declare ptr @pas_str_char(i8)');
+  writeln(ircode, 'declare ptr @pas_str_concat(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_str_cmp_pad(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_str_cmp_exact(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_str_trimlen(ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_str_index(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare void @pas_str_slice_check(i32, i32, i32)');
+  writeln(ircode, 'declare void @pas_str_store_fixed(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare void @pas_str_store_var(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare void @pas_str_store_char(ptr, ptr, i32)');
+  writeln(ircode, 'declare void @pas_read_str(ptr, ptr, i32, i32)');
   { ISO/IEC 10206:1991 6.7.5.2 and 6.7.6.6's direct-access operations. }
   writeln(ircode, 'declare void @pas_seekread(ptr, i32)');
   writeln(ircode, 'declare void @pas_seekwrite(ptr, i32)');
