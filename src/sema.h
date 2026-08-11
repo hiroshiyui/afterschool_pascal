@@ -138,6 +138,12 @@ struct Symbol {
   /// prologue — every expression in one is nonvarying (§6.8.2), so CodeGen
   /// emits it as the constant it is rather than re-evaluating anything.
   Expr *initValue = nullptr;
+  /// ISO/IEC 10206:1991 §6.4.1's `bindable`. §6.7.5.6 makes it a
+  /// dynamic-violation to `bind` a file variable that is not one, and §6.5.1
+  /// makes such a variable totally-undefined until it is bound — so this is
+  /// the one property of a variable that says something about the world
+  /// outside the program.
+  bool isBindable = false;
   /// ISO/IEC 10206:1991 §6.7.3.1's `protected`: no statement of the body may
   /// *threaten* this parameter (§6.9.4). It says nothing about how the
   /// argument travels — a protected `var` parameter is still an address — so
@@ -342,6 +348,7 @@ private:
   bool nonvarying(Expr *e) const;
   void checkInitialState(TypeExpr &denoter, Type *t);
   Expr *initialStateOf(TypeExpr &denoter);
+  bool bindableOf(TypeExpr &denoter);
   /// True while a field of a *variant part* is being resolved, where §6.5.1
   /// makes the initial state conditional on the selector. There is no flag for
   /// "this position admits a specifier at all": the parser settles that, by
@@ -351,6 +358,10 @@ private:
   /// type-denoter, so the word parses there, and it is spelled as a type
   /// definition — so refusing it needs a reason of its own.
   bool schemaBody_ = false;
+  /// ISO/IEC 10206:1991 §6.4.3.4's required `BindingType`, built once when the
+  /// standard has it. Null under ISO 7185, which is what makes every rule
+  /// about binding answer "no such type" there rather than needing a flag.
+  Type *bindingType_ = nullptr;
   void checkNotThreatened(Expr *e, const std::string &what);
 
   /// True if a value of `from` may be assigned to / compared with `to`.

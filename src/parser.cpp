@@ -292,7 +292,14 @@ bool Parser::looksLikeSubrange() const {
 /// component stops at the word and the outer denoter takes it, which is what
 /// turns that example into the type error the note says it is.
 TypeExprPtr Parser::parseTypeExpr() {
+  // §6.4.1 puts `bindable` *before* the denoter and the initial-state
+  // specifier after it, so the two brackets of that production are parsed on
+  // either side of one call. Like `value`, this word is one Extended Pascal
+  // adds, so no `--std` test is possible: under ISO 7185 the lexer yields an
+  // identifier and the token never appears.
+  bool bindable = accept(Tok::KwBindable);
   TypeExprPtr t = parseTypeDenoter();
+  t->bindable = bindable;
   // No `--std` test here, and there cannot be one: `value` is a word-symbol
   // Extended Pascal *adds*, so under ISO 7185 the lexer yields an identifier
   // and this token never appears. The lexer's decision is the whole of the

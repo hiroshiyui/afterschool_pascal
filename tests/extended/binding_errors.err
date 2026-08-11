@@ -1,0 +1,12 @@
+<source>:13:17: error: a string parameter must be a var parameter; a value parameter would have to convert the argument, and there is nowhere yet to build the conversion
+<source>:32:8: error: 'f' is not bindable; only a variable of a bindable type can be bound to something outside the program
+<source>:33:10: error: 'f' is not bindable; only a variable of a bindable type can be bound to something outside the program
+<source>:34:16: error: 'f' is not bindable; only a variable of a bindable type can be bound to something outside the program
+<source>:36:8: error: 'bind' needs a file variable, found integer
+<source>:37:11: error: the second argument of 'bind' is a BindingType, found integer
+<source>:38:3: error: 'bind' takes a bindable variable and a BindingType value
+<source>:39:3: error: 'unbind' takes a bindable variable
+<source>:40:16: error: 'binding' needs a file variable, found integer
+<source>:40:3: error: cannot assign BindingType to a variable of type integer
+<source>:42:9: error: 'size' is not a field of BindingType
+<source>:43:10: error: argument 1 of 'padded' is eight, and a value parameter is copied rather than padded; so the argument must have the same length

@@ -40,6 +40,11 @@ enum class TypeKind {
 /// set out of. `set of integer` is refused rather than silently truncated.
 inline constexpr int kSetLimit = 255;
 
+/// The capacity of `BindingType.name`. ISO/IEC 10206:1991 §6.4.3.4 makes the
+/// field "an implementation-defined variable-string-type" and says nothing
+/// more, so the number is this compiler's; it is a file name's worth.
+inline constexpr int kBindingNameCapacity = 255;
+
 struct Type;
 struct Symbol;
 

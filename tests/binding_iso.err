@@ -1,0 +1,4 @@
+<source>:7:8: error: unknown type 'bindingtype'
+<source>:10:8: error: 'binding' is an Extended Pascal function; compile with --std=extended
+<source>:11:3: error: unknown procedure 'bind'
+<source>:12:3: error: unknown procedure 'unbind'

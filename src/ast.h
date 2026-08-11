@@ -85,6 +85,12 @@ enum class Builtin {
   /// and the operators pad with spaces instead.
   Length, Index, Substr, Trim,
   StrEq, StrNe, StrLt, StrGt, StrLe, StrGe,
+  /// ISO/IEC 10206:1991 §6.7.6.8's `binding`, the only required function whose
+  /// result is a *record*. It is given a hidden frame slot to be built in —
+  /// the same mechanism a `with` binding uses — so that `binding(f).bound` and
+  /// `b := binding(f)` are both ordinary designators and need no case of their
+  /// own anywhere.
+  Binding,
 };
 
 struct Expr : Node {
@@ -215,6 +221,12 @@ struct Call : Expr {
   std::string name;
   Builtin builtin = Builtin::None; // filled in by Sema
   Symbol *sym = nullptr;           // set instead, for a user-defined function
+  /// Where `binding(f)`'s result is built: a hidden frame variable of type
+  /// `BindingType`, one per call site. §6.7.6.8 makes the result a record and
+  /// this compiler returns no records, so the value needs somewhere to live —
+  /// and a frame slot is somewhere both backends can name without an alloca
+  /// in the middle of a function.
+  Symbol *resultSlot = nullptr;
   std::vector<ExprPtr> args;
 };
 
@@ -387,7 +399,10 @@ enum class StdProc {
   /// differ only in the mode they leave the file in; `update` writes the
   /// buffer variable back without advancing; `extend` opens for writing at the
   /// end, and is the one of the five that needs no direct-access file.
-  SeekRead, SeekWrite, SeekUpdate, Update, Extend
+  SeekRead, SeekWrite, SeekUpdate, Update, Extend,
+  /// ISO/IEC 10206:1991 §6.7.5.6's binding procedures. `bind` attaches a
+  /// variable to an entity outside the program and `unbind` detaches it.
+  Bind, Unbind
 };
 
 struct ProcCallStmt : Stmt {
@@ -474,6 +489,11 @@ struct TypeExpr {
   /// written. §6.4.3.2 forbids one on a component-type and this compiler
   /// refuses it in every other nested position too, so Sema checks *where* it
   /// was written and the parser only records that it was.
+  /// ISO/IEC 10206:1991 §6.4.1's `bindable`, which precedes the denoter where
+  /// the initial-state-specifier follows it. A variable of a bindable type may
+  /// be bound to an entity outside the program (§6.7.5.6), and §6.5.1 makes it
+  /// totally-undefined until it is.
+  bool bindable = false;
   ExprPtr initValue;
   /// Set by Sema when that specifier passed its checks — a value the block
   /// prologue may store. A declaration reads this rather than `initValue`, so

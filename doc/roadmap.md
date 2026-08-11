@@ -521,12 +521,30 @@ was never written down.
     assignment target), `readstr`/`writestr` (§6.7.5.5, which need a text file
     over a string buffer), a string-valued function result, and §6.10.3.6's
     zero and truncating field widths.
-- **Modules**, `bind`/`unbind`, restricted types, structured-value
-  constructors, substring variables, `readstr`/`writestr`. Each needs its own
-  record. Binding is the one with a *dependency* rather than only a size:
-  §6.4.3.4 gives `BindingType.name` "an implementation-defined
-  variable-string-type", which needed the string type to exist first — and now
-  does.
+- ~~**Binding.**~~ Done (ADR-0052). §6.7.5.6's `bind`/`unbind`, §6.7.6.8's
+  `binding` and §6.4.3.4's `BindingType`. It is the feature the string type
+  unblocked: `BindingType.name` has "an implementation-defined
+  variable-string-type", and there was none to give it before ADR-0051.
+  - **The external entity is a file name**, which is the one thing ISO 7185
+    could not express: §6.10 binds the program parameters *before* the program
+    starts. A bound file is a program parameter that named itself, so `reset`,
+    `rewrite` and `extend` needed no change — `pas_external` simply gained a
+    third answer.
+  - **`bindable` belongs to the type-denoter**, so a type-name hands it on
+    (§6.4.1) — which is what makes `type btext = bindable text` the way to
+    write a bindable *parameter*, since `text` never is.
+  - **`binding(f)` is built in a hidden frame slot**, the mechanism a `with`
+    binding uses: it is the only required function returning a record, and the
+    call then *is* a designator, so a whole-record assignment and a value
+    parameter both work with no case anywhere.
+  - It found a real disagreement between the backends: the Pascal `LlSize` for
+    a string was unrounded, so a record's field after one fell outside a
+    whole-record copy. `irtest` caught it as a wrong answer, which is what
+    that harness exists for — two backends can agree on every dump and still
+    disagree about a number no dump prints.
+- **Modules**, restricted types, structured-value constructors, substring
+  variables, `readstr`/`writestr`, function-accesses. Each needs its own
+  record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

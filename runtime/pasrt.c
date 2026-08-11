@@ -172,6 +172,12 @@ struct pas_file {
    * reading and writing, because `SeekUpdate` may turn a file being read into
    * one being written without reopening it. */
   int direct;
+  /* ISO/IEC 10206:1991 §6.7.5.6: the external entity this variable is bound
+   * to, if any. A *bound* file names its own external file, where a program
+   * parameter names an argument and a scratch file names nothing — so this is
+   * a third answer to the question `pas_external` asks, and the only one the
+   * running program chooses for itself. */
+  char *bound_name;
   int compsize;  /* the size of one component in bytes; 1 for a text */
   int ateof;     /* non-text: the fetch that filled `have` found no component */
   char ch;       /* the buffer variable of a text file */
@@ -355,6 +361,11 @@ void pas_update(void *v) {
 /* The external file a variable stands for, or a diagnostic if the program was
  * not given one. */
 static const char *pas_external(struct pas_file *f) {
+  /* A binding made by the program wins over the one the command line gave:
+   * §6.7.5.6's `bind` is what a program uses to name a file it was not
+   * started with, and §6.12 binds the program-parameters before it runs. */
+  if (f->bound_name)
+    return f->bound_name;
   if (f->arg >= pas_argc) {
     char msg[128];
     snprintf(msg, sizeof msg,
@@ -380,6 +391,7 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->ateof = 0;
   f->ch = ' ';
   f->name = name;
+  f->bound_name = NULL;
   /* The buffer variable of a text file is the one character `ch` already
    * there; a `file of T` needs T's worth of storage, and malloc is what
    * guarantees it is aligned for any T. It is freed when the block that
@@ -891,6 +903,78 @@ void *pas_new(long long size) {
 }
 
 void pas_dispose(void *p) { free(p); }
+
+/* --- binding (§6.7.5.6, §6.7.6.8) -----------------------------------------
+ *
+ * §6.7.5.6 leaves the binding itself implementation-defined; here it is the
+ * name of an external file. That is the one external entity this compiler has
+ * a meaning for, and it is what makes `bind` the answer to a question ISO 7185
+ * could not ask: a program that names a file while it is running rather than
+ * being handed one before it starts. */
+
+void pas_bind(void *v, const char *name, int len) {
+  struct pas_file *f = v;
+  if (f->bound_name)
+    pas_runtime_error("bind: the variable is already bound");
+  /* §6.4.6's trailing spaces come with a fixed-string name, and a file name
+   * ending in them is never what was meant. The length is the value's, so a
+   * variable-string that really ends in a space keeps it. */
+  while (len > 0 && name[len - 1] == ' ')
+    len--;
+  f->bound_name = malloc((size_t)len + 1);
+  if (!f->bound_name)
+    pas_runtime_error("out of memory in bind");
+  memcpy(f->bound_name, name, (size_t)len);
+  f->bound_name[len] = '\0';
+  /* NOTE 1: "The procedure bind may change the state of the variable that is
+   * to be bound in an implementation-defined way." Closing is that change:
+   * whatever the variable was reading or writing, it is not this file. */
+  if (f->fp && f->binding == PAS_BIND_ARG) {
+    fclose(f->fp);
+    f->fp = NULL;
+  }
+  f->mode = PAS_CLOSED;
+  f->have = 0;
+  f->ateof = 0;
+  /* §6.7.5.6 makes a bound file-variable bindable, and §6.10's binding of a
+   * program parameter is what this replaces — so it becomes one. */
+  f->binding = PAS_BIND_ARG;
+}
+
+/* §6.7.5.6: "If the attempt is successful, the variable shall become
+ * totally-undefined." NOTE 7 permits it on a variable that is not bound, so
+ * there is nothing to report when there was nothing to undo. */
+void pas_unbind(void *v) {
+  struct pas_file *f = v;
+  if (f->fp && f->binding == PAS_BIND_ARG) {
+    fclose(f->fp);
+    f->fp = NULL;
+  }
+  free(f->bound_name);
+  f->bound_name = NULL;
+  f->mode = PAS_CLOSED;
+  f->have = 0;
+  f->ateof = 0;
+}
+
+/* §6.7.6.8: "If the variable is bound to an external entity, the value of
+ * binding(f).bound shall be true". The name comes back with it, which is what
+ * lets the standard's own example read a name into `b.name` and hand the whole
+ * record to `bind`. */
+int pas_binding_bound(void *v) {
+  struct pas_file *f = v;
+  return f->bound_name != NULL;
+}
+
+const char *pas_binding_name(void *v) {
+  struct pas_file *f = v;
+  return f->bound_name ? f->bound_name : "";
+}
+
+int pas_binding_namelen(void *v) {
+  struct pas_file *f = v;
+  return f->bound_name ? (int)strlen(f->bound_name) : 0;
+}
 
 void pas_halt(int code) {
   fflush(stdout);

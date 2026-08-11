@@ -41,6 +41,10 @@ program Compile(output, source, ircode, options);
 const
   strMax   = 255;    { longest identifier or string literal kept }
   kwWidth  = 9;      { 'procedure', the longest reserved word }
+  { The capacity of BindingType.name. ISO/IEC 10206:1991 6.4.3.4 makes the
+    field "an implementation-defined variable-string-type" and says nothing
+    more, so the number is this compiler's; it is a file name's worth. }
+  bindNameCap = 255;
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
@@ -50,7 +54,7 @@ const
   nounParamForm = 0;
   nounVarType = 1;
   nounPointerDomain = 2;
-  kwCount  = 39;     { 35 word-symbols of ISO 7185, then ISO 10206's }
+  kwCount  = 40;     { 35 word-symbols of ISO 7185, then ISO 10206's }
   isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
@@ -104,7 +108,7 @@ type
     { ISO/IEC 10206:1991 word-symbols, reserved only under the extended
       standard. Under ISO 7185 the scanner yields these spellings as
       identifiers, which is what they are in that language. }
-    tkOtherwise, tkPow, tkProtected, tkValue,
+    tkOtherwise, tkPow, tkProtected, tkValue, tkBindable,
     { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
       under both standards and refused under ISO 7185, where no valid program
       can hold two adjacent stars outside a comment or a string anyway. }
@@ -265,13 +269,21 @@ type
                    compare lengths as well as characters and the operators pad
                    with spaces instead. }
                  biLength, biIndex, biSubstr, biTrim,
-                 biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe);
+                 biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe,
+                 { 6.7.6.8's `binding`, the only required function whose result
+                   is a *record*. It is given a hidden frame slot to be built
+                   in -- the same mechanism a `with` binding uses -- so that
+                   `b := binding(f)` is an ordinary designator. }
+                 biBinding);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
     end, and is the one of the five that needs no direct-access file. }
   stdProcKind = (spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut,
-                 spSeekRead, spSeekWrite, spSeekUpdate, spUpdate, spExtend);
+                 spSeekRead, spSeekWrite, spSeekUpdate, spUpdate, spExtend,
+                 { 6.7.5.6's binding procedures. bind attaches a variable to an
+                   entity outside the program and unbind detaches it. }
+                 spBind, spUnbind);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -470,6 +482,13 @@ type
       ProduceFromSchema to build one instead of resolving a denoter. }
     isStringSchema: boolean;
 
+    { ISO/IEC 10206:1991 6.4.1's `bindable`. 6.7.5.6 makes it a
+      dynamic-violation to `bind` a file variable that is not one, and 6.5.1
+      makes such a variable totally-undefined until it is bound -- so this is
+      the one property of a variable that says something about the world
+      outside the program. }
+    isBindable: boolean;
+
     { ISO/IEC 10206:1991 6.6: the value this variable bears when the block that
       declares it is entered. Borrowed from the AST and read only by the
       prologue -- every expression in one is nonvarying (6.8.2), so it is
@@ -575,6 +594,11 @@ type
       specifier passed its checks, so a rejected one cannot reach CodeGen. }
     nsValue: nodePtr;
     nsOk: boolean;
+    { ISO/IEC 10206:1991 6.4.1's `bindable`, which precedes the denoter where
+      the initial-state-specifier follows it. A variable of a bindable type may
+      be bound to an entity outside the program (6.7.5.6), and 6.5.1 makes it
+      totally-undefined until it is. }
+    nsBindable: boolean;
     case kind: nodeKind of
       nkInt:        (intVal: integer);
       { A real literal is kept as its source text and not converted. The
@@ -609,8 +633,13 @@ type
       nkDeref:      (drBase: nodePtr);
       nkBinary:     (bnOp: binaryOp; bnLhs, bnRhs: nodePtr);
       nkUnary:      (unOp: unaryOp; unArg: nodePtr);
+      { clSlot is where binding(f)'s result is built: a hidden frame variable
+        of type BindingType, one per call site. 6.7.6.8 makes the result a
+        record and this compiler returns no records, so the value needs
+        somewhere to live -- and a frame slot is somewhere both backends can
+        name without an alloca in the middle of a function. }
       nkCall:       (clAt, clLen: integer; clArgs: nodePtr;
-                     clBuiltin: builtinKind; clSym: symPtr);
+                     clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr);
       nkEmpty:      ();
       nkAssign:     (asTarget, asValue: nodePtr);
       nkWrite:      (wrArgs, wrFile: nodePtr; wrNewline: boolean);
@@ -849,7 +878,7 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
-  complexType, canonStringType: typePtr;
+  complexType, canonStringType, bindingType: typePtr;
   emptySetType: typePtr;
   { the label declaration parts of the blocks currently open, innermost first }
   labelScope: labelScopePtr;
@@ -1145,6 +1174,18 @@ begin
   for k := 1 to n do PoolPut(w[k])
 end;
 
+{ ...and the same for a name longer than the longest ISO 7185 word-symbol.
+  `bindingtype` is eleven characters, and kwLit holds nine. }
+procedure InternWide(w: msgLit; var at, len: integer);
+var n, k: integer;
+begin
+  n := msgWidth;
+  while (n > 0) and (w[n] = ' ') do n := n - 1;
+  at := poolLen + 1;
+  len := n;
+  for k := 1 to n do PoolPut(w[k])
+end;
+
 { The two names Sema builds rather than reads. A function's result slot is
   named after the function; a `with` binding is named after the frame slot it
   occupies, which is unique within the frame and needs no type name -- see the
@@ -1158,6 +1199,25 @@ begin
   PoolPut('r'); PoolPut('e'); PoolPut('s'); PoolPut('u');
   PoolPut('l'); PoolPut('t');
   len := nameLen + 7
+end;
+
+{ ...and the slot 6.7.6.8's `binding` builds its result in, named the same way
+  and for the same reason: it is a frame slot the program cannot name. }
+procedure InternBindingName(slot: integer; var at, len: integer);
+var digits: array [1..12] of char; n, v, k: integer;
+begin
+  at := poolLen + 1;
+  PoolPut('b'); PoolPut('i'); PoolPut('n'); PoolPut('d'); PoolPut('i');
+  PoolPut('n'); PoolPut('g'); PoolPut('$');
+  n := 0;
+  v := slot;
+  repeat
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  until v = 0;
+  for k := n downto 1 do PoolPut(digits[k]);
+  len := poolLen + 1 - at
 end;
 
 procedure InternWithName(slot: integer; var at, len: integer);
@@ -1269,7 +1329,8 @@ begin
   DefineKeyword(36, 'otherwise', tkOtherwise);
   DefineKeyword(37, 'pow      ', tkPow);
   DefineKeyword(38, 'protected', tkProtected);
-  DefineKeyword(39, 'value    ', tkValue)
+  DefineKeyword(39, 'value    ', tkValue);
+  DefineKeyword(40, 'bindable ', tkBindable)
 end;
 
 { A str against a space-padded literal, which is the comparison LookupKeyword
@@ -1784,6 +1845,7 @@ begin
     tkPow:       write('''pow''');
     tkProtected: write('''protected''');
     tkValue:     write('''value''');
+    tkBindable:  write('''bindable''');
     tkStarStar:  write('''**''');
     tkAndThen:   write('''and then''');
     tkOrElse:    write('''or else''')
@@ -1811,7 +1873,7 @@ begin
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
     tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow, tkProtected,
-    tkValue,
+    tkValue, tkBindable,
     tkAndThen, tkOrElse: write('?')
   end
 end;
@@ -1903,6 +1965,7 @@ begin
   n^.ntype := nil;
   n^.nsValue := nil;
   n^.nsOk := false;
+  n^.nsBindable := false;
   { What Sema will fill in. A C++ struct gets these from its member
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
@@ -1914,7 +1977,11 @@ begin
                n^.fdDiscValue := 0;
                n^.fdDiscSym := nil
              end;
-    nkCall: begin n^.clBuiltin := biNone; n^.clSym := nil end;
+    nkCall: begin
+              n^.clBuiltin := biNone;
+              n^.clSym := nil;
+              n^.clSlot := nil
+            end;
     nkWrite: n^.wrFile := nil;
     nkRead: n^.rdFile := nil;
     nkProcCall: begin
@@ -2402,9 +2469,16 @@ end;
   the feature's language gating -- unlike `type of`, whose words are reserved
   in both languages and which therefore needs an explicit refusal. }
 function ParseTypeExpr;
-var t: nodePtr;
+var t: nodePtr; bindable_: boolean;
 begin
+  { 6.4.1 puts `bindable` *before* the denoter and the initial-state specifier
+    after it, so the two brackets of that production are parsed on either side
+    of one call. Like `value`, this word is one Extended Pascal adds, so no
+    langStd test is possible: under ISO 7185 the lexer yields an identifier and
+    the token never appears. }
+  bindable_ := Accept(tkBindable);
   t := ParseTypeDenoter;
+  if t <> nil then t^.nsBindable := bindable_;
   if (t <> nil) and not aborted then
     if Accept(tkValue) then
       t^.nsValue := ParseExpr;
@@ -4213,6 +4287,7 @@ begin
   s^.isProtected := false;
   s^.initValue := nil;
   s^.isStringSchema := false;
+  s^.isBindable := false;
   NewSymbol := s
 end;
 
@@ -4527,6 +4602,9 @@ begin
   { What a pointer points at is a variable however the pointer was obtained,
     so a dereference is a designator even when its base is not. }
   else if e^.kind = nkDeref then IsDesignator := true
+  { 6.7.6.8's binding(f) is built in a hidden frame slot, so it denotes a
+    variable -- which is what lets it be copied whole and passed by value. }
+  else if e^.kind = nkCall then IsDesignator := e^.clBuiltin = biBinding
   else IsDesignator := false
 end;
 
@@ -6560,6 +6638,25 @@ end;
   makes the *type-denoter* carry the initial state, so a type-name hands on the
   one its definition wrote -- which is what makes `type count = integer value 1;
   var c: count` initialise c. }
+{ ISO/IEC 10206:1991 6.4.1 makes bindability a property the *type-denoter*
+  denotes, and a type-name denotes "the type, bindability and initial state" of
+  its definition -- so `type btext = bindable text` hands it on, and a parameter
+  whose form is that name is bindable. Exactly InitialStateOf's shape, for
+  exactly the clause's reason. }
+function BindableOf(d: nodePtr): boolean;
+var s: symPtr;
+begin
+  BindableOf := false;
+  if d <> nil then
+    if d^.nsBindable then
+      BindableOf := true
+    else if d^.kind = nkNamed then begin
+      s := Lookup(d^.nmAt, d^.nmLen);
+      if s <> nil then
+        if s^.kind = skType then BindableOf := s^.isBindable
+    end
+end;
+
 function InitialStateOf;
 var s: symPtr;
 begin
@@ -6917,6 +7014,27 @@ begin
           writeln
         end
         end
+      end
+      { ISO/IEC 10206:1991 6.4.5 d) made every string type compatible with
+        every other, and 6.4.6 pads the shorter -- but a value parameter is
+        copied *bytewise*, so a shorter actual would be read past its end. The
+        padding needs somewhere to build the conversion, which is the same
+        thing a variable-string value parameter needs and does not have
+        (ADR-0052), so the lengths must agree until it does. }
+      else if IsCharArray(p^.sym^.stype) and (a^.ntype <> nil) and
+              IsStringOrChar(a^.ntype) and
+              (p^.sym^.stype^.loDisc = nil) and
+              (p^.sym^.stype^.hiDisc = nil) and
+              (not IsCharArray(a^.ntype) or (a^.ntype^.loDisc <> nil) or
+               (a^.ntype^.hiDisc <> nil) or
+               (TypeLength(a^.ntype) <> TypeLength(p^.sym^.stype))) then begin
+        ErrorAt(a^.line, a^.col);
+        write('argument ', i:1, ' of ''');
+        WritePool(callee^.at, callee^.len);
+        write(''' is ');
+        WriteTypeName(p^.sym^.stype);
+        writeln(', and a value parameter is copied rather than padded; ',
+                'so the argument must have the same length')
       end
       { A structured value parameter is a copy, so it needs something to copy
         from: a designator, or a string literal. }
@@ -7350,6 +7468,9 @@ begin
   else if PoolIsWide(at, len, 'gt              ') then LookupBuiltin := biStrGt
   else if PoolIsWide(at, len, 'le              ') then LookupBuiltin := biStrLe
   else if PoolIsWide(at, len, 'ge              ') then LookupBuiltin := biStrGe
+  { 6.7.6.8's one. }
+  else if PoolIsWide(at, len, 'binding         ') then
+    LookupBuiltin := biBinding
   else LookupBuiltin := biNone
 end;
 
@@ -7381,6 +7502,11 @@ end;
 
 { The six comparison functions of 6.7.6.7, which take two operands where the
   other four take one or three. }
+{ 6.7.6.8's one. Grouped with the rest for the same reason: the only question
+  asked of it alone is whether this standard has it. }
+function IsBindingBuiltin(b: builtinKind): boolean;
+begin IsBindingBuiltin := b = biBinding end;
+
 function IsStringCompare(b: builtinKind): boolean;
 begin
   IsStringCompare := (b = biStrEq) or (b = biStrNe) or (b = biStrLt) or
@@ -7425,7 +7551,8 @@ begin
 end;
 
 procedure CheckCall(c: nodePtr);
-var sym: symPtr; a, def, last: nodePtr; t: typePtr; n: integer;
+var sym: symPtr; a, def, last, root: nodePtr; t: typePtr;
+    n, at2, len2: integer; bad: boolean;
 begin
   { A user-defined function shadows nothing built in: names are resolved in the
     scope chain first, so a local `abs` would win. }
@@ -7451,7 +7578,8 @@ begin
       message then says the feature is missing rather than that the name is. }
     if (langStd = stdIso7185) and
        (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin) or
-        IsStringBuiltin(c^.clBuiltin)) then begin
+        IsStringBuiltin(c^.clBuiltin) or
+        IsBindingBuiltin(c^.clBuiltin)) then begin
       ErrorAt(c^.line, c^.col);
       write('''');
       WritePool(c^.clAt, c^.clLen);
@@ -7485,9 +7613,52 @@ begin
         left out, and the only ones taking a file (ISO 7185 6.6.6.5). The
         default is supplied here rather than in codegen, so that by the time
         the tree is handed on, both forms look the same. }
-      { 6.7.6.7's ten. They take one, two or three arguments, so they are
-        checked before the "exactly one" gate below. }
-      if IsStringBuiltin(c^.clBuiltin) then begin
+      { 6.7.6.8: binding(f) returns a BindingType -- the only required function
+        whose result is a record. This compiler returns no records, so the
+        value is built in a hidden frame slot and the call *is* that
+        designator, which is what makes `b := binding(f)` need no case. }
+      if c^.clBuiltin = biBinding then begin
+        c^.ntype := bindingType;
+        if n <> 1 then begin
+          ErrorAt(c^.line, c^.col);
+          writeln('''binding'' takes one bindable variable')
+        end
+        else begin
+          a := c^.clArgs;
+          if not IsDesignator(a) or
+             ((a^.ntype <> nil) and not IsFile(a^.ntype)) then begin
+            ErrorAt(a^.line, a^.col);
+            write('''binding'' needs a file variable');
+            if a^.ntype <> nil then begin
+              write(', found ');
+              WriteTypeName(a^.ntype)
+            end;
+            writeln
+          end
+          else begin
+            root := RootDesignator(a);
+            bad := false;
+            if root <> nil then
+              if root^.kind = nkVar then
+                if root^.vrSym <> nil then
+                  if not root^.vrSym^.isBindable then begin
+                    bad := true;
+                    ErrorAt(a^.line, a^.col);
+                    write('''');
+                    WritePool(root^.vrSym^.at, root^.vrSym^.len);
+                    writeln(''' is not bindable; only a variable of a ',
+                            'bindable type can be bound to something outside ',
+                            'the program')
+                  end;
+            if not bad then begin
+              InternBindingName(currentProc^.frameCount, at2, len2);
+              c^.clSlot := AddHiddenVar(at2, len2, skVar, bindingType,
+                                        currentProc)
+            end
+          end
+        end
+      end
+      else if IsStringBuiltin(c^.clBuiltin) then begin
         if IsStringCompare(c^.clBuiltin) then begin
           c^.ntype := boolType;
           if n <> 2 then begin
@@ -8255,7 +8426,9 @@ end;
   the standard that has them and only when no declaration was found. }
 function IsDirectAccessProc(at, len: integer): boolean;
 begin
-  IsDirectAccessProc := PoolIsWide(at, len, 'seekread        ') or
+  IsDirectAccessProc := PoolIsWide(at, len, 'bind            ') or
+                        PoolIsWide(at, len, 'unbind          ') or
+                        PoolIsWide(at, len, 'seekread        ') or
                         PoolIsWide(at, len, 'seekwrite       ') or
                         PoolIsWide(at, len, 'seekupdate      ') or
                         PoolIsWide(at, len, 'update          ') or
@@ -8270,6 +8443,7 @@ var
   arms, w: variantPtr;
   lbl: rangePtr;
   want: integer;
+  root: nodePtr;
   stop, discSel, seeks: boolean;
 begin
   if PoolIs(p^.pcAt, p^.pcLen, 'reset    ') then p^.pcStd := spReset
@@ -8286,6 +8460,10 @@ begin
     p^.pcStd := spUpdate
   else if PoolIsWide(p^.pcAt, p^.pcLen, 'extend          ') then
     p^.pcStd := spExtend
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'bind            ') then
+    p^.pcStd := spBind
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'unbind          ') then
+    p^.pcStd := spUnbind
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -8304,7 +8482,58 @@ begin
   { 6.7.5.2: SeekRead(f, n), SeekWrite(f, n) and SeekUpdate(f, n) take a
     direct-access file and a position; update(f) and extend(f) take a file
     alone. Only extend works on a sequential one. }
-  if (p^.pcStd = spSeekRead) or (p^.pcStd = spSeekWrite) or
+  { 6.7.5.6: bind(f, b) takes a variable-access and a BindingType value;
+    unbind(f) takes the variable alone. Both are dynamic-violations on a file
+    variable that is not `bindable`, and this compiler restricts them to file
+    variables -- the only external entity it has a meaning for. }
+  if (p^.pcStd = spBind) or (p^.pcStd = spUnbind) then begin
+    if p^.pcStd = spBind then want := 2 else want := 1;
+    if n <> want then begin
+      ErrorAt(p^.line, p^.col);
+      write('''');
+      WritePool(p^.pcAt, p^.pcLen);
+      write(''' takes a bindable variable');
+      if want = 2 then writeln(' and a BindingType value') else writeln
+    end
+    else begin
+      a := p^.pcArgs;
+      if not IsDesignator(a) or
+         ((a^.ntype <> nil) and not IsFile(a^.ntype)) then begin
+        ErrorAt(a^.line, a^.col);
+        write('''');
+        WritePool(p^.pcAt, p^.pcLen);
+        write(''' needs a file variable');
+        if a^.ntype <> nil then begin
+          write(', found ');
+          WriteTypeName(a^.ntype)
+        end;
+        writeln
+      end
+      else begin
+        root := RootDesignator(a);
+        if root <> nil then
+          if root^.kind = nkVar then
+            if root^.vrSym <> nil then
+              if not root^.vrSym^.isBindable then begin
+                ErrorAt(a^.line, a^.col);
+                write('''');
+                WritePool(root^.vrSym^.at, root^.vrSym^.len);
+                writeln(''' is not bindable; only a variable of a bindable ',
+                        'type can be bound to something outside the program')
+              end;
+        if p^.pcStd = spBind then
+          if a^.next^.ntype <> nil then
+            if a^.next^.ntype <> bindingType then begin
+              ErrorAt(a^.next^.line, a^.next^.col);
+              write('the second argument of ''bind'' is a BindingType, ',
+                    'found ');
+              WriteTypeName(a^.next^.ntype);
+              writeln
+            end
+      end
+    end
+  end
+  else if (p^.pcStd = spSeekRead) or (p^.pcStd = spSeekWrite) or
      (p^.pcStd = spSeekUpdate) or (p^.pcStd = spUpdate) or
      (p^.pcStd = spExtend) then begin
     seeks := (p^.pcStd = spSeekRead) or (p^.pcStd = spSeekWrite) or
@@ -8997,6 +9226,18 @@ begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
         writeln('a file parameter must be a var parameter')
       end;
+      { A variable-string value parameter would have to be *converted* at the
+        call -- 6.4.6 pads or refuses by length, and the actual may be a
+        literal, a fixed string or a string of another capacity -- and a
+        conversion needs somewhere to build the result that the caller can
+        name. Until it has one, such a parameter is refused rather than copied
+        bytewise from whatever the actual happened to be (ADR-0052). }
+      if IsVarString(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+        ErrorAt(g^.grNames^.line, g^.grNames^.col);
+        writeln('a string parameter must be a var parameter; a value ',
+                'parameter would have to convert the argument, and there is ',
+                'nowhere yet to build the conversion')
+      end;
       { 6.4.1: a file or a pointer is not protectable, and neither is anything
         holding one. The standard's own reason is that protecting either would
         protect nothing -- a file is modified by nearly every operation on it,
@@ -9029,6 +9270,10 @@ begin
         end;
         ps^.paramSection := section;
         ps^.isProtected := g^.grIsProtected;
+        { 6.7.3.3: a var parameter's form is a type-name, and 6.4.1 makes a
+          type-name denote the bindability of its definition -- so a parameter
+          of a bindable type is bindable and one of `text` is not. }
+        ps^.isBindable := BindableOf(g^.grType);
         AppendSym(into^.params, into^.paramTail, ps);
         n := n^.next
       end
@@ -9412,6 +9657,7 @@ begin
         its definition denoted, so the initial state travels with the name and
         every variable of it is initialised. }
       s^.initValue := InitialStateOf(d^.tdType);
+      s^.isBindable := BindableOf(d^.tdType);
       if t^.aliasLen = 0 then begin
         t^.aliasAt := d^.tdAt;
         t^.aliasLen := d^.tdLen
@@ -9470,6 +9716,10 @@ begin
         { 6.2.3.5 creates each local "in its initial state" on entry, so the
           whole group shares one value as it shares one type. }
         s^.initValue := init;
+        { 6.4.1's `bindable` belongs to the type-denoter, like the initial
+          state -- so the group shares it, and 6.5.1 makes such a variable
+          totally-undefined until something binds it. }
+        s^.isBindable := BindableOf(g^.grType);
         n := n^.next
       end
     end;
@@ -9526,6 +9776,7 @@ end;
 
 procedure InstallPredefined;
 var s, cap: symPtr; at, len: integer;
+    nameType: typePtr; fld: fieldPtr;
 begin
   InternWord('true     ', at, len);
   s := Declare(at, len, skConst, 0, 0);
@@ -9552,6 +9803,52 @@ begin
     6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define a
     type of that name. }
   if langStd = stdExtended then begin
+    { 6.4.3.4: "There shall be a record-type designated packed and denoted by
+      the required type-identifier `BindingType`. For each of the required
+      field-identifiers `name` and `bound`, there shall be an associated
+      required field ... an implementation-defined variable-string-type and a
+      type denoted by the type-denoter Boolean, respectively."
+
+      The capacity of `name` is the implementation-defined part, and it is what
+      made this feature wait for the string type: there was no
+      variable-string-type to give the field until 6.4.3.3 landed. }
+    bindingType := NewType(tyRecord);
+    bindingType^.isPacked := true;
+    nameType := NewType(tyString);
+    nameType^.lo := 1;
+    nameType^.hi := bindNameCap;
+    new(fld);
+    InternWord('name     ', fld^.at, fld^.len);
+    fld^.ftype := nameType;
+    fld^.index := 0;
+    fld^.variant := nil;
+    fld^.line := 0;
+    fld^.col := 0;
+    fld^.initValue := nil;
+    fld^.next := nil;
+    bindingType^.fields := fld;
+    bindingType^.fieldTail := fld;
+    new(fld);
+    InternWord('bound    ', fld^.at, fld^.len);
+    fld^.ftype := boolType;
+    fld^.index := 1;
+    fld^.variant := nil;
+    fld^.line := 0;
+    fld^.col := 0;
+    fld^.initValue := nil;
+    fld^.next := nil;
+    bindingType^.fieldTail^.next := fld;
+    bindingType^.fieldTail := fld;
+    InternWide('bindingtype     ', at, len);
+    s := Declare(at, len, skType, 0, 0);
+    s^.stype := bindingType;
+    { The name is folded for lookup, as every identifier is, but a diagnostic
+      spells it the way 6.4.3.4 does -- so the alias is interned separately in
+      the standard's own capitals. Nothing ever looks that copy up. }
+    InternWide('BindingType     ', at, len);
+    bindingType^.aliasAt := at;
+    bindingType^.aliasLen := len;
+
     InternWord('string   ', at, len);
     s := Declare(at, len, skSchema, 0, 0);
     s^.isStringSchema := true;
@@ -10764,7 +11061,7 @@ begin
       tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
       tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
       tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile,
-      tkWith, tkOtherwise, tkPow, tkProtected, tkValue: begin
+      tkWith, tkOtherwise, tkPow, tkProtected, tkValue, tkBindable: begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
@@ -11031,9 +11328,12 @@ begin
       tyInteger, tyEnum: LlSize := 4;
       tyReal, tyPointer: LlSize := 8;
       tyComplex: LlSize := 16;
-      { a length beside a buffer: the shape ADR-0045 made expressible }
+      { A length beside a buffer: the shape ADR-0045 made expressible. Rounded
+        to the alignment like every other type, and it has to be -- a record
+        holding one puts its next field after the *rounded* size, so a short
+        answer here leaves that field outside a whole-record copy. }
       tyString:
-        if b^.hi > 0 then LlSize := 4 + b^.hi else LlSize := 4;
+        if b^.hi > 0 then LlSize := RoundUp(4 + b^.hi, 4) else LlSize := 4;
       tyFile: LlSize := fileSize;
       tySet: LlSize := setBits div 8;
       tyProc: LlSize := 16;
@@ -13468,6 +13768,58 @@ var a, w, lim, tmp, b_, re, im, x, y, c_, d_: str;
 begin
   if e^.clSym <> nil then
     EmitUserCall(e^.clSym, e^.clArgs, v)
+  { 6.7.6.8's binding(f): the result is a record, so it is built in the hidden
+    frame slot Sema gave this call site and the call becomes that slot's
+    address. Everything after -- a field selection, a whole-record assignment,
+    a value parameter -- is then the ordinary designator it looks like. }
+  else if e^.clBuiltin = biBinding then begin
+    if e^.clSlot = nil then
+      OpInt(0, v)
+    else begin
+      EmitAddress(e^.clArgs, a);
+      AddressOfSym(e^.clSlot, v);
+      Def(x);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(e^.clSlot^.stype);
+      write(ircode, ', ptr ');
+      PutOp(v);
+      writeln(ircode, ', i32 0, i32 0');
+      Def(y);
+      write(ircode, 'call ptr @pas_binding_name(ptr ');
+      PutOp(a);
+      writeln(ircode, ')');
+      Def(c_);
+      write(ircode, 'call i32 @pas_binding_namelen(ptr ');
+      PutOp(a);
+      writeln(ircode, ')');
+      write(ircode, '  call void @pas_str_store_var(ptr ');
+      PutOp(x);
+      write(ircode, ', i32 ', bindNameCap:1, ', ptr ');
+      PutOp(y);
+      write(ircode, ', i32 ');
+      PutOp(c_);
+      writeln(ircode, ')');
+      Def(d_);
+      write(ircode, 'call i32 @pas_binding_bound(ptr ');
+      PutOp(a);
+      writeln(ircode, ')');
+      Def(w);
+      write(ircode, 'trunc i32 ');
+      PutOp(d_);
+      writeln(ircode, ' to i1');
+      Def(x);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(e^.clSlot^.stype);
+      write(ircode, ', ptr ');
+      PutOp(v);
+      writeln(ircode, ', i32 0, i32 1');
+      write(ircode, '  store i1 ');
+      PutOp(w);
+      write(ircode, ', ptr ');
+      PutOp(x);
+      writeln(ircode)
+    end
+  end
   { 6.7.6.7's string functions. `substr` and `trim` are string *values* and are
     emitted by EmitString; the rest answer about one, so they take the pair
     apart here. }
@@ -14048,8 +14400,11 @@ begin
       other value of that type. }
     nkStr: OpGlobal(AddGlobal(e^.stAt, e^.stLen), v);
 
+    { 6.7.6.8's binding(f) denotes the hidden frame slot its result was built
+      in, so it is an address like any designator's. }
+    nkCall: EmitCall(e, v);
+
     nkInt, nkReal, nkChar, nkNil, nkSet, nkSetMember, nkBinary, nkUnary,
-    nkCall,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -14603,10 +14958,52 @@ begin
 end;
 
 procedure EmitStdProc(s: nodePtr);
-var slot, block, raw: str; domain, idx: typePtr; head, msg: integer;
+var slot, block, raw, rec, nameRec, nlen, ndata: str;
+    domain, idx: typePtr; head, msg: integer;
 begin
   EmitAddress(s^.pcArgs, slot);
   case s^.pcStd of
+    { 6.7.5.6's bind(f, b). The binding is implementation-defined and here it
+      is a file name, so what crosses to the runtime is b.name as the pointer
+      and length every string value is -- b.bound is ignored, which NOTE 3 says
+      outright. }
+    spBind: begin
+      EmitAddress(s^.pcArgs^.next, rec);
+      Def(nameRec);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(s^.pcArgs^.next^.ntype);
+      write(ircode, ', ptr ');
+      PutOp(rec);
+      writeln(ircode, ', i32 0, i32 0');
+      Def(nlen);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(s^.pcArgs^.next^.ntype^.fields^.ftype);
+      write(ircode, ', ptr ');
+      PutOp(nameRec);
+      writeln(ircode, ', i32 0, i32 0');
+      Def(raw);
+      write(ircode, 'load i32, ptr ');
+      PutOp(nlen);
+      writeln(ircode);
+      Def(ndata);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(s^.pcArgs^.next^.ntype^.fields^.ftype);
+      write(ircode, ', ptr ');
+      PutOp(nameRec);
+      writeln(ircode, ', i32 0, i32 1');
+      write(ircode, '  call void @pas_bind(ptr ');
+      PutOp(slot);
+      write(ircode, ', ptr ');
+      PutOp(ndata);
+      write(ircode, ', i32 ');
+      PutOp(raw);
+      writeln(ircode, ')')
+    end;
+    spUnbind: begin
+      write(ircode, '  call void @pas_unbind(ptr ');
+      PutOp(slot);
+      writeln(ircode, ')')
+    end;
     spReset, spRewrite, spGet, spPut, spUpdate, spExtend: begin
       write(ircode, '  call void @pas_');
       case s^.pcStd of
@@ -14616,7 +15013,8 @@ begin
         spPut:     write(ircode, 'put');
         spUpdate:  write(ircode, 'update');
         spExtend:  write(ircode, 'extend');
-        spNone, spNew, spDispose, spSeekRead, spSeekWrite, spSeekUpdate:
+        spNone, spNew, spDispose, spSeekRead, spSeekWrite, spSeekUpdate,
+        spBind, spUnbind:
           write(ircode, 'get')
       end;
       write(ircode, '(ptr ');
@@ -14645,7 +15043,7 @@ begin
         spSeekWrite:  write(ircode, 'seekwrite');
         spSeekUpdate: write(ircode, 'seekupdate');
         spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut, spUpdate,
-        spExtend: write(ircode, 'seekread')
+        spExtend, spBind, spUnbind: write(ircode, 'seekread')
       end;
       write(ircode, '(ptr ');
       PutOp(slot);
@@ -15740,6 +16138,12 @@ begin
   writeln(ircode, 'declare void @pas_str_store_var(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare void @pas_str_store_char(ptr, ptr, i32)');
   writeln(ircode, 'declare void @pas_read_str(ptr, ptr, i32, i32)');
+  { ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8's binding operations. }
+  writeln(ircode, 'declare void @pas_bind(ptr, ptr, i32)');
+  writeln(ircode, 'declare void @pas_unbind(ptr)');
+  writeln(ircode, 'declare i32 @pas_binding_bound(ptr)');
+  writeln(ircode, 'declare ptr @pas_binding_name(ptr)');
+  writeln(ircode, 'declare i32 @pas_binding_namelen(ptr)');
   { ISO/IEC 10206:1991 6.7.5.2 and 6.7.6.6's direct-access operations. }
   writeln(ircode, 'declare void @pas_seekread(ptr, i32)');
   writeln(ircode, 'declare void @pas_seekwrite(ptr, i32)');

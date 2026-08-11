@@ -1,0 +1,12 @@
+start FALSE []
+bound TRUE [/tmp/apascal_bind1.txt]
+after FALSE []
+again FALSE
+hello from bind
+second line
+lines 2
+bound TRUE [/tmp/apascal_bind2.txt]
+g FALSE
+padded 30
+t
+report TRUE [/tmp/apascal_bind3.txt]

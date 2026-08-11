@@ -738,6 +738,33 @@ in one language or the other, and the standard is a property of the source.
   - Deferred, all stated in the ADR: substring *variables* (§6.5.6 as an
     lvalue), `readstr`/`writestr`, a string function result, and §6.10.3.6's
     zero/truncating field widths.
+- **Binding is a file name chosen while the program runs** (ADR-0052).
+  §6.7.5.6's `bind`/`unbind`, §6.7.6.8's `binding`, §6.4.3.4's `BindingType` —
+  the feature ADR-0051 unblocked, since that record's `name` field needs "an
+  implementation-defined variable-string-type".
+  - **A bound file is a program parameter that named itself**: `pas_external`
+    gained a third answer beside "argument n" and "a scratch file", so
+    `reset`, `rewrite` and `extend` needed no change. It is the one thing ISO
+    7185 could not express — §6.10 binds the parameters before the program
+    starts.
+  - **`bindable` belongs to the type-denoter and a type-name hands it on**
+    (§6.4.1), which is why `type btext = bindable text` is how a bindable
+    *parameter* is written: `text` is a required identifier and never is.
+    `bindableOf` is `initialStateOf`'s shape.
+  - **`binding(f)` is built in a hidden frame slot** — the `with` mechanism —
+    because it is the only required function returning a record and this
+    compiler returns none. The call is then a designator, so `b := binding(f)`
+    and passing it by value need no cases.
+  - `bind` ignores `b.bound` and never writes back to `b` (NOTES 3 and 4);
+    only `binding` reports the result. Trailing spaces are trimmed from the
+    name, because a fixed-string value arrives padded.
+  - **It exposed a backend disagreement**: the Pascal `LlSize` for a string was
+    unrounded, so a record's next field fell outside a whole-record copy.
+    `irtest` caught it as a wrong answer — two backends can agree on every
+    dump and still disagree about a number no dump prints.
+  - Refused, all stated: binding anything but a file, a variable-string as a
+    *value* parameter (it would have to convert its argument), and
+    `binding(f).bound` written directly (§6.8.6's function-accesses).
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

@@ -318,18 +318,27 @@ strings    string(n) — the required schema of §6.4.3.3.3: a length and up
            lengths as well as characters — so `eq('ab','ab  ')` is false
            where `'ab' = 'ab  '` is true, which is the standard's own
            example. '' is the null-string
-words      otherwise, pow, protected and value are reserved; `and then`,
+binding    var f: bindable text — a variable that may be bound to
+           something outside the program. bind(f, b) attaches it to the
+           file named by b.name, unbind(f) detaches it, and binding(f)
+           reports both the name and whether it took. BindingType is the
+           required record they trade in: a name and a boolean. This is
+           the only way a program names a file while it is *running* —
+           ISO 7185 binds the program parameters before it starts and
+           gives it no other way out
+words      otherwise, pow, protected, value and bindable are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
            their words already are. complex, cmplx, polar, re, im and arg
            are required *identifiers* rather than word-symbols, and so are
            seekread, seekwrite, seekupdate, update, extend, position,
            lastposition, empty, string, length, index, substr, trim, eq,
-           ne, lt, gt, le and ge — so a program may still declare its own
+           ne, lt, gt, le, ge, binding, bind and unbind — so a program may
+           still declare its own
 ```
 
 Not accepted yet: modules, structured-value constructors, substring
 *variables* (`s[i..j]` as an assignment target), `readstr`/`writestr`, and
-binding (`bind`/`unbind`). A word-symbol is reserved only when the feature needing it
+function-accesses (a selector applied to a function call). A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.

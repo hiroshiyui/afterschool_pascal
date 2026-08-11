@@ -65,7 +65,7 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       // a declaration of the same name wins and ISO 7185 refuses them.
       {"position", Builtin::Position},
       {"lastposition", Builtin::LastPosition},
-      {"empty", Builtin::Empty},
+      {"empty", Builtin::Empty}, {"binding", Builtin::Binding},
       // §6.7.6.7. Required identifiers, so a program may declare its own.
       {"length", Builtin::Length}, {"index", Builtin::Index},
       {"substr", Builtin::Substr}, {"trim", Builtin::Trim},
@@ -1022,6 +1022,22 @@ Type *Sema::resolveType(TypeExpr &denoter) {
 /// makes the *type-denoter* carry the initial state, so a type-name hands on
 /// the one its definition wrote — which is what makes `type count = integer
 /// value 1; var c: count` initialise `c`.
+/// ISO/IEC 10206:1991 §6.4.1 makes bindability a property the *type-denoter*
+/// denotes, and a type-name denotes "the type, bindability and initial state"
+/// of its definition — so `type btext = bindable text` hands it on, and a
+/// parameter whose form is that name is bindable. Exactly `initialStateOf`'s
+/// shape, for exactly the clause's reason.
+bool Sema::bindableOf(TypeExpr &denoter) {
+  if (denoter.bindable)
+    return true;
+  if (denoter.kind == TEK::Named) {
+    Symbol *s = lookup(denoter.name);
+    if (s && s->kind == SymKind::Type)
+      return s->isBindable;
+  }
+  return false;
+}
+
 Expr *Sema::initialStateOf(TypeExpr &denoter) {
   if (denoter.initOk)
     return denoter.initValue.get();
@@ -1510,6 +1526,35 @@ void Sema::installPredefined() {
   // §6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define
   // a type of that name.
   if (std_ == Std::Extended) {
+    // §6.4.3.4: "There shall be a record-type designated packed and denoted by
+    // the required type-identifier `BindingType`. For each of the required
+    // field-identifiers `name` and `bound`, there shall be an associated
+    // required field ... an implementation-defined variable-string-type and a
+    // type denoted by the type-denoter Boolean, respectively."
+    //
+    // The capacity of `name` is the implementation-defined part, and it is
+    // what made this feature wait for ADR-0051: there was no
+    // variable-string-type to give the field until the string type existed.
+    Type *bt = newType(TypeKind::Record);
+    bt->packed = true;
+    bt->alias = "BindingType";
+    Type *nameType = newType(TypeKind::String);
+    nameType->lo = 1;
+    nameType->hi = kBindingNameCapacity;
+    Field name;
+    name.name = "name";
+    name.type = nameType;
+    name.index = 0;
+    bt->fields.push_back(name);
+    Field bound;
+    bound.name = "bound";
+    bound.type = ty::Bool();
+    bound.index = 1;
+    bt->fields.push_back(bound);
+    Symbol *bts = declare("bindingtype", SymKind::Type, 0, 0);
+    bts->type = bt;
+    bindingType_ = bt;
+
     Symbol *str = declare("string", SymKind::Schema, 0, 0);
     str->isStringSchema = true;
     Symbol *cap = newSymbol();
@@ -1650,6 +1695,11 @@ bool Sema::isDesignator(Expr *e) const {
   // so a dereference is a designator even when its base is not.
   if (is<DerefExpr>(e))
     return true;
+  // §6.7.6.8's `binding(f)` is built in a hidden frame slot, so it denotes a
+  // variable — which is what makes `binding(f).bound` an ordinary field
+  // selection rather than a case of its own.
+  if (auto *c = as<Call>(e))
+    return c->builtin == Builtin::Binding;
   return false;
 }
 
@@ -1982,6 +2032,7 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     // its definition denoted, so the initial state travels with the name and
     // every variable of it is initialised.
     s->initValue = initialStateOf(*t.type);
+    s->isBindable = bindableOf(*t.type);
     if (resolved->alias.empty())
       resolved->alias = t.name;
   }
@@ -2033,6 +2084,10 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
       // §6.2.3.5 creates each local "in its initial state" on entry, so the
       // whole group shares one value as it shares one type.
       v->initValue = init;
+      // §6.4.1's `bindable` belongs to the type-denoter, like the initial
+      // state — so the group shares it, and §6.5.1 makes such a variable
+      // totally-undefined until something binds it.
+      v->isBindable = bindableOf(*group.type);
     }
   }
 
@@ -2244,6 +2299,17 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
     if (t->isFile() && !group.byRef && !group.names.empty())
       diags_.error(group.names[0].line, group.names[0].col,
                    "a file parameter must be a var parameter");
+    // A variable-string value parameter would have to be *converted* at the
+    // call — §6.4.6 pads or refuses by length, and the actual may be a literal,
+    // a fixed string or a string of another capacity — and a conversion needs
+    // somewhere to build the result that the caller can name. Until it has
+    // one, such a parameter is refused rather than copied bytewise from
+    // whatever the actual happened to be (ADR-0052).
+    if (t->isVarString() && !group.byRef && !group.names.empty())
+      diags_.error(group.names[0].line, group.names[0].col,
+                   "a string parameter must be a var parameter; a value "
+                   "parameter would have to convert the argument, and there "
+                   "is nowhere yet to build the conversion");
     // §6.4.1: a file or a pointer is not protectable, and neither is anything
     // holding one. The standard's own reason is that protecting either would
     // protect nothing — a file is modified by nearly every operation on it,
@@ -2259,6 +2325,10 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
                 : formalSymbol(newSymbol(), n, kind, t);
       ps->paramSection = section;
       ps->isProtected = group.isProtected;
+      // §6.7.3.3: a var parameter's form is a type-name, and §6.4.1 makes a
+      // type-name denote the bindability of its definition — so a parameter of
+      // a bindable type is bindable and one of `text` is not.
+      ps->isBindable = bindableOf(*group.type);
       into->params.push_back(ps);
     }
   }
@@ -3189,13 +3259,50 @@ void Sema::checkRead(ReadStmt *r) {
 /// under the standard that has them and only when no declaration was found.
 bool Sema::isDirectAccessProc(const std::string &name) {
   return name == "seekread" || name == "seekwrite" || name == "seekupdate" ||
-         name == "update" || name == "extend";
+         name == "update" || name == "extend" || name == "bind" ||
+         name == "unbind";
 }
 
 void Sema::checkStdProc(ProcCallStmt *p) {
   // §6.7.5.2: `SeekRead(f, n)`, `SeekWrite(f, n)` and `SeekUpdate(f, n)` take
   // a direct-access file and a position; `update(f)` and `extend(f)` take a
   // file alone. Only `extend` works on a sequential one.
+  // §6.7.5.6: `bind(f, b)` takes a variable-access and a BindingType value;
+  // `unbind(f)` takes the variable alone. Both are dynamic-violations on a
+  // file variable that is not `bindable`, and this compiler restricts them to
+  // file variables — the only external entity it has a meaning for.
+  if (p->name == "bind" || p->name == "unbind") {
+    p->standard = p->name == "bind" ? StdProc::Bind : StdProc::Unbind;
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    size_t want = p->name == "bind" ? 2u : 1u;
+    if (p->args.size() != want) {
+      diags_.error(p->line, p->col,
+                   "'" + p->name + "' takes a bindable variable" +
+                       (want == 2 ? " and a BindingType value" : ""));
+      return;
+    }
+    Expr *a = p->args[0].get();
+    if (!isDesignator(a) || (a->type && !a->type->isFile())) {
+      diags_.error(a->line, a->col,
+                   "'" + p->name + "' needs a file variable" +
+                       (a->type ? ", found " + a->type->name() : ""));
+      return;
+    }
+    Symbol *root = baseSymbol(a);
+    if (root && !root->isBindable)
+      diags_.error(a->line, a->col,
+                   "'" + root->name + "' is not bindable; only a variable of "
+                   "a bindable type can be bound to something outside the "
+                   "program");
+    if (p->name == "bind" && p->args[1]->type &&
+        p->args[1]->type != bindingType_)
+      diags_.error(p->args[1]->line, p->args[1]->col,
+                   "the second argument of 'bind' is a BindingType, found " +
+                       p->args[1]->type->name());
+    return;
+  }
+
   if (isDirectAccessProc(p->name)) {
     bool seeks = p->name != "update" && p->name != "extend";
     p->standard = p->name == "seekread"     ? StdProc::SeekRead
@@ -3590,9 +3697,24 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
       continue;
     }
 
+    // ISO/IEC 10206:1991 §6.4.5 d) made every string type compatible with
+    // every other, and §6.4.6 pads the shorter — but a value parameter is
+    // copied *bytewise*, so a shorter actual would be read past its end. The
+    // padding needs somewhere to build the conversion, which is the same thing
+    // a variable-string value parameter needs and does not have (ADR-0052), so
+    // the lengths must agree until it does.
+    if (p->type && p->type->isCharArray() && a->type &&
+        a->type->isStringOrChar() && !p->type->dynamicBounds() &&
+        (!a->type->isCharArray() || a->type->dynamicBounds() ||
+         a->type->length() != p->type->length()))
+      diags_.error(a->line, a->col,
+                   "argument " + std::to_string(i + 1) + " of '" +
+                       callee->name + "' is " + p->type->name() +
+                       ", and a value parameter is copied rather than padded; "
+                       "so the argument must have the same length");
     // A structured value parameter is a copy, so it needs something to copy
     // from: a designator, or a string literal.
-    if (p->type && p->type->isStructured() && !isDesignator(a) &&
+    else if (p->type && p->type->isStructured() && !isDesignator(a) &&
         !is<StrLit>(a))
       diags_.error(a->line, a->col,
                    "argument " + std::to_string(i + 1) + " of '" +
@@ -3647,6 +3769,10 @@ static bool isFileEnquiry(Builtin b) {
   return b == Builtin::Position || b == Builtin::LastPosition ||
          b == Builtin::Empty;
 }
+
+/// §6.7.6.8's one. Grouped with the rest for the same reason: the only
+/// question asked of it alone is whether this standard has it.
+static bool isBindingBuiltin(Builtin b) { return b == Builtin::Binding; }
 
 /// §6.7.6.7's ten, grouped for the same reason as the rest: the only question
 /// asked of them together is whether this standard has them.
@@ -3747,7 +3873,7 @@ void Sema::checkCall(Call *c) {
   // message then says the feature is missing rather than that the name is.
   if (it != builtins().end() && std_ == Std::Iso7185 &&
       (isComplexBuiltin(it->second) || isFileEnquiry(it->second) ||
-       isStringBuiltin(it->second))) {
+       isStringBuiltin(it->second) || isBindingBuiltin(it->second))) {
     diags_.error(c->line, c->col,
                  "'" + c->name + "' is an Extended Pascal function; compile "
                  "with --std=extended");
@@ -3828,6 +3954,38 @@ void Sema::checkCall(Call *c) {
   // §6.7.6.3: `cmplx(x, y)` and `polar(r, t)` are the two-argument required
   // functions, and the only way to write a complex value at all — the standard
   // gives the type no literal.
+  // §6.7.6.8: `binding(f)` returns a BindingType — the only required function
+  // whose result is a record. This compiler returns no records, so the value
+  // is built in a hidden frame slot and the call *is* that designator, which
+  // is what makes `binding(f).bound` and `b := binding(f)` need no cases.
+  if (c->builtin == Builtin::Binding) {
+    c->type = bindingType_ ? bindingType_ : ty::Int();
+    for (auto &a : c->args)
+      checkExpr(a.get());
+    if (c->args.size() != 1) {
+      diags_.error(c->line, c->col, "'binding' takes one bindable variable");
+      return;
+    }
+    Expr *a = c->args[0].get();
+    if (!isDesignator(a) || (a->type && !a->type->isFile())) {
+      diags_.error(a->line, a->col,
+                   "'binding' needs a file variable" +
+                       (a->type ? ", found " + a->type->name() : ""));
+      return;
+    }
+    Symbol *root = baseSymbol(a);
+    if (root && !root->isBindable)
+      diags_.error(a->line, a->col,
+                   "'" + root->name + "' is not bindable; only a variable of "
+                   "a bindable type can be bound to something outside the "
+                   "program");
+    else if (current_ && bindingType_)
+      c->resultSlot = addHiddenVar(
+          "binding$" + std::to_string(current_->frameVars.size()),
+          SymKind::Var, bindingType_, current_);
+    return;
+  }
+
   // §6.7.6.7's ten. They take one, two or three arguments, so they are
   // checked before the "exactly one" gate below.
   if (isStringBuiltin(c->builtin)) {

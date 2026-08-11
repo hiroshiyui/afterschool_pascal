@@ -535,9 +535,14 @@ llvm::Value *CodeGen::dynSize(ap::Type *t, llvm::Value *header) {
   // A variable-string is a length beside a buffer, so its size is four bytes
   // and the capacity — the shape ADR-0045 already described, laid out by hand
   // because a string is not the record a program could have written.
-  if (t->isVarString())
-    return b_.CreateAdd(ConstantInt::get(i32(), 4), stringCapacity(t, header),
-                        "strsize");
+  if (t->isVarString()) {
+    // Rounded to the alignment, like every other size: a record holding one
+    // puts its next field after the *rounded* size, so a short answer here
+    // would leave that field outside a whole-record copy.
+    llvm::Value *raw = b_.CreateAdd(ConstantInt::get(i32(), 4 + 3),
+                                    stringCapacity(t, header), "strsize");
+    return b_.CreateAnd(raw, ConstantInt::getSigned(i32(), -4), "strsize.a");
+  }
   // A record's dynamic part is its last field and nothing else (ADR-0045), so
   // every offset in it is a constant and the size is the last field's offset
   // plus whatever the tail costs. The offset comes from the struct's own
@@ -1053,6 +1058,11 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
   }
 
 
+  // §6.7.6.8's `binding(f)` denotes the hidden frame slot its result was built
+  // in, so it is an address like any designator's — which is what lets
+  // `binding(f).bound` and `b := binding(f)` reach here at all.
+  case NK::Call:
+    return emitExpr(e);
   case NK::Index: {
     auto *ix = static_cast<IndexExpr *>(e);
     ap::Type *arr = ix->base->type;
@@ -1460,10 +1470,29 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
   case StdProc::Put:     fileOp = "pas_put"; break;
   case StdProc::Update:  fileOp = "pas_update"; break;
   case StdProc::Extend:  fileOp = "pas_extend"; break;
+  case StdProc::Unbind:  fileOp = "pas_unbind"; break;
   default: break;
   }
   if (fileOp) {
     b_.CreateCall(rt(fileOp, voidTy, {ptr()}), {slot});
+    return;
+  }
+
+  // §6.7.5.6's `bind(f, b)`. The binding is implementation-defined and here it
+  // is a file name, so what crosses to the runtime is `b.name` as the pointer
+  // and length every string value is — `b.bound` is ignored, which NOTE 3 says
+  // outright.
+  if (s->standard == StdProc::Bind) {
+    ap::Type *bt = s->args[1]->type;
+    llvm::Value *rec = emitAddress(s->args[1].get());
+    StructType *st = cast<StructType>(llvmType(bt));
+    llvm::Value *nameRec = b_.CreateStructGEP(st, rec, 0, "b.name");
+    StructType *strTy = cast<StructType>(llvmType(bt->fields[0].type));
+    llvm::Value *len = b_.CreateLoad(
+        i32(), b_.CreateStructGEP(strTy, nameRec, 0), "namelen");
+    llvm::Value *data = b_.CreateStructGEP(strTy, nameRec, 1, "namedata");
+    b_.CreateCall(rt("pas_bind", voidTy, {ptr(), ptr(), i32()}),
+                  {slot, data, len});
     return;
   }
 
@@ -2508,6 +2537,33 @@ llvm::Value *CodeGen::emitCall(Call *e) {
                         "at.abs");
     // The result possesses the index type, which may be narrower than i32.
     return b_.CreateZExtOrTrunc(at, llvmType(e->type), "at.idx");
+  }
+
+  // §6.7.6.8's `binding(f)`: the result is a record, so it is built in the
+  // hidden frame slot Sema gave this call site and the call becomes that
+  // slot's address. Everything after — a field selection, a whole-record
+  // assignment — is then the ordinary designator it looks like.
+  if (e->builtin == Builtin::Binding) {
+    if (!e->resultSlot)
+      return ConstantInt::get(i32(), 0); // reported by Sema
+    llvm::Value *file = emitAddress(e->args[0].get());
+    llvm::Value *rec = addressOf(e->resultSlot);
+    ap::Type *bt = e->resultSlot->type;
+    StructType *st = cast<StructType>(llvmType(bt));
+    llvm::Value *nameRec = b_.CreateStructGEP(st, rec, 0, "b.name");
+    llvm::Value *data =
+        b_.CreateCall(rt("pas_binding_name", ptr(), {ptr()}), {file}, "bname");
+    llvm::Value *len = b_.CreateCall(rt("pas_binding_namelen", i32(), {ptr()}),
+                                     {file}, "bnamelen");
+    b_.CreateCall(rt("pas_str_store_var", llvm::Type::getVoidTy(ctx_),
+                     {ptr(), i32(), ptr(), i32()}),
+                  {nameRec, ConstantInt::get(i32(), kBindingNameCapacity), data,
+                   len});
+    llvm::Value *bound = b_.CreateCall(rt("pas_binding_bound", i32(), {ptr()}),
+                                       {file}, "bound");
+    b_.CreateStore(b_.CreateTrunc(bound, i1(), "bound.b"),
+                   b_.CreateStructGEP(st, rec, 1, "b.bound"));
+    return rec;
   }
 
   // §6.7.6.7's string functions. `substr` and `trim` are string *values* and

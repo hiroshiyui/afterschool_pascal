@@ -34,7 +34,7 @@ enum class Tok {
   // ISO/IEC 10206:1991 word-symbols, reserved only under `--std=extended`.
   // Under ISO 7185 the lexer yields these spellings as identifiers, which is
   // what they are in that language.
-  KwOtherwise, KwPow, KwProtected, KwValue,
+  KwOtherwise, KwPow, KwProtected, KwValue, KwBindable,
 
   // §6.1.2 spells the short-circuit operators as *two words with a separator
   // between them* — `and then` and `or else` are each one word-symbol, not a
