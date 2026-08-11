@@ -353,10 +353,25 @@ was never written down.
     type, and a tuple that leaves an index range empty — because "the tuple
     was checked where the type was produced" only holds if every tuple is.
 
-  What is left of schemata is smaller than either: a whole-variable assignment
-  between two schematic types (the tuple comparison §6.7.3.3 calls a
-  dynamic-violation), a schema as the domain of a pointer, and a discriminant
-  as a variant-selector.
+  - ~~**Assignment between two schematic types**~~ Done (ADR-0042), and it is
+    the clause rather than a third mechanism: §6.4.6 a) is "the same type",
+    §6.4.8 makes one schema with one tuple one type, and §6.4.6 d) says what
+    happens when the tuples are not both known — a **dynamic-violation**,
+    which §6.1's f) lets a processor report either at preparation time or
+    during execution. So `vector(3) := vector(4)` stays a diagnostic and the
+    generic case becomes one `icmp` per discriminant. Sema decides only that
+    both types came from one schema; everything else was already written.
+
+  What is left of schemata: a schema as the domain of a pointer with
+  `new(p, discriminants)`, a discriminant as a variant-selector, and a
+  schematic formal whose discriminants reach past an array — which is the
+  shape `string` itself has.
+
+  And one **defect**, found while the assignment was being written and fixed
+  separately: two schematic *packed char arrays* compared equal whatever they
+  held, because the comparison took its length from a type whose bounds are
+  symbols rather than numbers. No oracle saw it, because the corpus had no
+  schema producing a string.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and

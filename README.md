@@ -253,11 +253,16 @@ params     procedure p(var v: vector) — a schematic formal parameter, whose
            one is copied on entry, at whatever size the tuple says. The
            discriminants may bound an array of the schema's type and
            nothing further in
+assign     v := w between two variables of one schema's types. Where both
+           tuples are written in the program the compiler decides it;
+           where one is not known until the block is entered, the tuples
+           are compared while the program runs and a mismatch stops it
+           (§6.4.6 d)
 words      otherwise and pow are reserved; `and then` and `or else` reserve
            nothing new, because both of their words already are
 ```
 
-Not accepted yet: assignment between two schematic-typed variables, a schema as
+Not accepted yet: a schema as
 the domain of a pointer, a discriminant as a variant-selector,
 `type of`, the `string` type,
 modules,

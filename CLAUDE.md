@@ -499,6 +499,26 @@ in one language or the other, and the standard is a property of the source.
     scope that dies with the production), and a schema **naming itself**
     outside a pointer domain (§6.4.7 does require this; without it the
     production recurses forever).
+- **An assignment between two schematic types compares the tuples**
+  (ADR-0042), and that is the *whole* of the feature: §6.4.6 a) is "the same
+  type" and §6.4.8 makes one schema with one tuple one type, so `assignable`
+  decides only that both came from one schema and CodeGen decides the rest.
+  §6.4.6 d) makes a mismatch a **dynamic-violation**, and §6.1's f) permits
+  reporting one either at preparation time or during execution — which is why
+  `vector(3) := vector(4)` is still a diagnostic and nothing was weakened to
+  make room for the run-time check.
+  - **Every discriminant is compared**, not the ones a bound used: identity is
+    keyed on the whole tuple, so the walk is over the *schema's* discriminant
+    list rather than the array's `loDisc`/`hiDisc`.
+  - **Either side may be a constant.** `discValue` answers "the k'th
+    discriminant of this type's tuple" from the descriptor for a generic type
+    and from the `Type` for every other, so the known tuple may be on the left
+    as easily as the right. A version that took the run-time path only when the
+    *destination* was generic is the mutation to remember — it copies the right
+    number of bytes and simply never asks whether the source was that type.
+  - Once the tuples agree the copy is ADR-0017's whole-variable one, with
+    `dynSize` as its length and the **component's** alignment, because the
+    array type has no extent to give.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
