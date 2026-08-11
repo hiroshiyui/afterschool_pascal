@@ -77,6 +77,10 @@ private:
   llvm::Value *dynSize(Type *t);
   /// The two bounds of an array, either of which may come from a descriptor.
   llvm::Value *boundValue(Type *t, bool high);
+  /// How many components an array has, as a value: `Type::length()` answers
+  /// only where the bounds are numbers, and returns a plausible one where they
+  /// are not.
+  llvm::Value *dynLength(Type *t);
   /// The k'th discriminant of the tuple an expression's type was produced
   /// with: a constant, or a read of the variable's own descriptor.
   llvm::Value *discValue(Expr *e, size_t k, llvm::Type *want);

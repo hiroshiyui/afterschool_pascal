@@ -402,6 +402,19 @@ llvm::Value *CodeGen::discValue(Expr *e, size_t k, llvm::Type *want) {
                                 k < t->tuple.size() ? t->tuple[k] : 0);
 }
 
+/// How many components an array has, as a *value*. `Type::length()` is
+/// `hi - lo + 1` and answers only for an array whose bounds are numbers; where
+/// they are discriminants it returns arithmetic on the placeholders, which is
+/// a number and therefore not obviously wrong. Everything that needs a length
+/// rather than a size comes through here instead.
+llvm::Value *CodeGen::dynLength(ap::Type *t) {
+  if (!t->dynamicBounds())
+    return ConstantInt::get(i32(), t->length());
+  return b_.CreateAdd(
+      b_.CreateSub(boundValue(t, true), boundValue(t, false), "extent"),
+      ConstantInt::get(i32(), 1), "length");
+}
+
 llvm::Value *CodeGen::dynSize(ap::Type *t) {
   if (!t->dynamicExtent())
     return ConstantInt::get(i32(), sizeOf(t));
@@ -1349,10 +1362,9 @@ void CodeGen::emitWrite(WriteStmt *s) {
     // A packed array of char is written as its address plus its length —
     // which covers a string literal, since that is what a literal's type is.
     if (arg.value->type->isCharArray()) {
-      b_.CreateCall(
-          rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
-          {file, emitAddress(arg.value.get()),
-           ConstantInt::get(i32(), arg.value->type->length()), width});
+      llvm::Value *addr = emitAddress(arg.value.get());
+      b_.CreateCall(rt("pas_write_str", voidTy, {ptr(), ptr(), i32(), i32()}),
+                    {file, addr, dynLength(arg.value->type), width});
       continue;
     }
 
@@ -1834,7 +1846,18 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
 llvm::Value *CodeGen::emitStringCompare(Binary *e) {
   llvm::Value *lhs = emitAddress(e->lhs.get());
   llvm::Value *rhs = emitAddress(e->rhs.get());
-  llvm::Value *len = ConstantInt::get(i32(), e->lhs->type->length());
+  llvm::Value *len = dynLength(e->lhs->type);
+  // Sema requires equal lengths, and can say so wherever both are numbers.
+  // Where one is a discriminant the requirement is the same one, made here —
+  // and it has to be made, because a comparison over the wrong number of
+  // characters answers rather than failing.
+  if (e->lhs->type->dynamicBounds() || e->rhs->type->dynamicBounds()) {
+    llvm::Value *other = dynLength(e->rhs->type);
+    emitTrapCall(b_.CreateICmpNE(len, other, "length.bad"),
+                 rt("pas_length_error", llvm::Type::getVoidTy(ctx_),
+                    {i32(), i32()}),
+                 {len, other});
+  }
   llvm::Value *cmp =
       b_.CreateCall(rt("pas_str_compare", i32(), {ptr(), ptr(), i32()}),
                     {lhs, rhs, len}, "strcmp");

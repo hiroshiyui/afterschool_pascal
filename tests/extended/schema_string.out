@@ -1,0 +1,10 @@
+[abc] length 3
+[abcde] length 5
+<
+>
+=
+is abc
+not abc
+[   abc]
+[abc]
+entry 1: [abc] length 3

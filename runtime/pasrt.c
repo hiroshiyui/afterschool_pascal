@@ -48,6 +48,18 @@ void pas_disc_error(const char *schema, const char *disc, int left,
   exit(1);
 }
 
+/// ISO 7185 §6.7.2.5 compares two strings character by character and gives the
+/// operators only to strings of one length. Where both lengths are written in
+/// the program the compiler says so; where one is a discriminant, this does.
+void pas_length_error(int left, int right) {
+  fflush(stdout);
+  fprintf(stderr,
+          "runtime error: strings of different lengths cannot be compared "
+          "(%d and %d)\n",
+          left, right);
+  exit(1);
+}
+
 static void pas_error2(const char *msg, const char *what) {
   fflush(stdout);
   fprintf(stderr, "runtime error: %s%s\n", msg, what);

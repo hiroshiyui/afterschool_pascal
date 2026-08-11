@@ -368,10 +368,17 @@ was never written down.
   shape `string` itself has.
 
   And one **defect**, found while the assignment was being written and fixed
-  separately: two schematic *packed char arrays* compared equal whatever they
-  held, because the comparison took its length from a type whose bounds are
-  symbols rather than numbers. No oracle saw it, because the corpus had no
-  schema producing a string.
+  on its own: a schema producing a `packed array [1..n] of char` produces a
+  *string* type, and both of the things a string type can do read a length.
+  Both read it from `Type::length()`, which is `hi - lo + 1` — on bounds that
+  are discriminants that is arithmetic on placeholders, so every comparison
+  answered `true` and every `write` printed nothing. No oracle saw it because
+  the corpus had no schema producing a string; the length is now computed where
+  the bounds are, and the equal-length requirement §6.7.2.5 makes is checked
+  there too. It is the second time a wrong answer has hidden behind a
+  plausible-looking number — the first was `hi - lo` over the whole integer
+  type during the Sema port — and both were found by asking what a *number*
+  meant rather than by a failing test.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and

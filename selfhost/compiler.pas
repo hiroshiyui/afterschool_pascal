@@ -6252,7 +6252,13 @@ begin
           operators, comparing character by character; every other structured
           type has none at all. }
         if IsCharArray(l) and IsCharArray(r) then begin
-          if TypeLength(l) <> TypeLength(r) then begin
+          { A length that is a discriminant is not known here, so the
+            requirement that the two agree is made where the values are.
+            TypeLength would answer with arithmetic on the placeholder bounds,
+            which is a number and so not visibly wrong. }
+          if DynamicExtent(l) or DynamicExtent(r) then
+            { checked when the program runs }
+          else if TypeLength(l) <> TypeLength(r) then begin
             ErrorAt(b^.line, b^.col);
             write('strings of different lengths cannot be compared: ');
             WriteTypeName(l);
@@ -9770,6 +9776,26 @@ begin
   StartBlock(c)
 end;
 
+{ And again for 6.7.2.5's equal-length requirement, where one of the lengths is
+  a discriminant and neither is known until the program runs. }
+procedure EmitTrapLength(var cond, left, right: str);
+var t, c: integer;
+begin
+  t := NewBlock;
+  c := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', t:1, ', label %L', c:1);
+  StartBlock(t);
+  write(ircode, '  call void @pas_length_error(i32 ');
+  PutOp(left);
+  write(ircode, ', i32 ');
+  PutOp(right);
+  writeln(ircode, ')');
+  writeln(ircode, '  unreachable');
+  StartBlock(c)
+end;
+
 { The same shape again, for 6.4.6 d): the schema and the discriminant are named
   where the program is compiled and their values are known only where it runs,
   so the message is assembled out of two string constants and two integers. }
@@ -9962,6 +9988,32 @@ begin
     end
     else
       v := raw
+  end
+end;
+
+{ How many components an array has, as a *value*. TypeLength is `hi - lo + 1`
+  and answers only for an array whose bounds are numbers; where they are
+  discriminants it returns arithmetic on the placeholders, which is a number
+  and therefore not obviously wrong. Everything needing a length rather than a
+  size comes through here instead. }
+procedure DynLength(t: typePtr; var v: str);
+var lo, hi, extent: str;
+begin
+  if (t^.loDisc = nil) and (t^.hiDisc = nil) then
+    OpInt(TypeLength(t), v)
+  else begin
+    BoundValue(t, false, lo);
+    BoundValue(t, true, hi);
+    Def(extent);
+    write(ircode, 'sub i32 ');
+    PutOp(hi);
+    write(ircode, ', ');
+    PutOp(lo);
+    writeln(ircode);
+    Def(v);
+    write(ircode, 'add i32 ');
+    PutOp(extent);
+    writeln(ircode, ', 1')
   end
 end;
 
@@ -10776,16 +10828,33 @@ end;
   character, which is what the runtime helper reports; the operator then only
   has to say what it wants of the sign. }
 procedure EmitStringCompare(e: nodePtr; var v: str);
-var lhs, rhs, cmp: str;
+var lhs, rhs, cmp, len, other, bad: str;
 begin
   EmitAddress(e^.bnLhs, lhs);
   EmitAddress(e^.bnRhs, rhs);
+  DynLength(e^.bnLhs^.ntype, len);
+  { Sema requires equal lengths, and can say so wherever both are numbers.
+    Where one is a discriminant the requirement is the same one, made here --
+    and it has to be made, because a comparison over the wrong number of
+    characters answers rather than failing. }
+  if DynamicExtent(e^.bnLhs^.ntype) or DynamicExtent(e^.bnRhs^.ntype) then begin
+    DynLength(e^.bnRhs^.ntype, other);
+    Def(bad);
+    write(ircode, 'icmp ne i32 ');
+    PutOp(len);
+    write(ircode, ', ');
+    PutOp(other);
+    writeln(ircode);
+    EmitTrapLength(bad, len, other)
+  end;
   Def(cmp);
   write(ircode, 'call i32 @pas_str_compare(ptr ');
   PutOp(lhs);
   write(ircode, ', ptr ');
   PutOp(rhs);
-  writeln(ircode, ', i32 ', TypeLength(e^.bnLhs^.ntype):1, ')');
+  write(ircode, ', i32 ');
+  PutOp(len);
+  writeln(ircode, ')');
   Def(v);
   case e^.bnOp of
     opEq: write(ircode, 'icmp eq i32 ');
@@ -11689,7 +11758,7 @@ begin
 end;
 
 procedure EmitWrite(s: nodePtr);
-var fh, v, width, prec, addr: str; a: nodePtr; b: typePtr;
+var fh, v, width, prec, addr, slen: str; a: nodePtr; b: typePtr;
 begin
   if s^.wrFile <> nil then begin
     EmitAddress(s^.wrFile, fh);
@@ -11722,11 +11791,14 @@ begin
         which covers a string literal, since that is what a literal's type is. }
       if IsCharArray(a^.waValue^.ntype) then begin
         EmitAddress(a^.waValue, addr);
+        DynLength(a^.waValue^.ntype, slen);
         write(ircode, '  call void @pas_write_str(ptr ');
         PutOp(fh);
         write(ircode, ', ptr ');
         PutOp(addr);
-        write(ircode, ', i32 ', TypeLength(a^.waValue^.ntype):1, ', i32 ');
+        write(ircode, ', i32 ');
+        PutOp(slen);
+        write(ircode, ', i32 ');
         PutOp(width);
         writeln(ircode, ')')
       end
@@ -12897,7 +12969,9 @@ begin
   { 6.4.6 d): an assignment between two types produced from one schema with
     different tuples. The schema and the discriminant are named here; only the
     values come from the running program. }
-  writeln(ircode, 'declare void @pas_disc_error(ptr, ptr, i32, i32)')
+  writeln(ircode, 'declare void @pas_disc_error(ptr, ptr, i32, i32)');
+  { 6.7.2.5 compares strings of one length, and a schema's is a discriminant. }
+  writeln(ircode, 'declare void @pas_length_error(i32, i32)')
 end;
 
 procedure RunCodeGen;

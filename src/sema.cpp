@@ -2396,7 +2396,13 @@ void Sema::checkBinary(Binary *b) {
     // operators, comparing character by character; every other structured
     // type has none at all.
     if (l->isCharArray() && r->isCharArray()) {
-      if (l->length() != r->length())
+      // A length that is a discriminant is not known here, so the requirement
+      // that the two agree is made where the values are (§6.4.6 d)'s shape,
+      // for §6.7.2.5's rule). `length()` would answer with arithmetic on the
+      // placeholder bounds, which is a number and so not visibly wrong.
+      if (l->dynamicExtent() || r->dynamicExtent())
+        ;
+      else if (l->length() != r->length())
         diags_.error(b->line, b->col,
                      "strings of different lengths cannot be compared: " +
                          l->name() + " and " + r->name());
