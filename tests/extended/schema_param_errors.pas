@@ -4,10 +4,28 @@ program SchemaParamErrors(output);
 type
   vector(n: integer) = array [1..n] of real;
   other(n: integer) = array [1..n] of real;
-  { a discriminant may bound an array of the schema's type and nothing else:
-    a field after a dynamically-bounded one would sit at an offset nothing
-    can compute, and a set and a file are sized once }
-  boxed(n: integer) = record a: array [1..n] of char end;
+  { a discriminant may bound an array, and a record may hold one *last*
+    (ADR-0045) -- but only last, because a field after a dynamically-sized one
+    would sit at an offset nothing can compute. A variant part is refused for
+    the same reason: its shared block is laid after the fixed fields. And a set
+    and a file are each sized once, so neither may be dynamic at all }
+  boxed(n: integer) = record a: array [1..n] of char; b: integer end;
+  tagged(n: integer) = record a: array [1..n] of char;
+                              case k: boolean of true: (x: integer);
+                                                 false: (y: integer) end;
+  { two dynamic fields: the last one may be dynamic, and this says *only* the
+    last one may be. `boxed` above cannot say it — a static field after the
+    dynamic one already fails the "is the last field dynamic" question, so the
+    rule about the fields before it is never reached }
+  two(n: integer) = record a: array [1..n] of char;
+                           b: array [1..n] of char end;
+  { and the same with a *tagless* variant part, which is the one that needs
+    saying: a tag field is an ordinary field and lands after the dynamic one,
+    so the rule about fields already covers `tagged`. Without a tag there is no
+    field at all — only the shared block, which the field rule never sees }
+  untagged(n: integer) = record a: array [1..n] of char;
+                                case boolean of true: (x: integer);
+                                                false: (y: integer) end;
   sized(n: integer) = 1..n;
   { §6.4.7 lets a schema name itself only in the domain of a pointer, and a
     parameter form is not one }
@@ -45,6 +63,15 @@ end;
   would report the placeholder rather than the mistake. }
 procedure notarray(var b: boxed);
 begin i := 1 end;
+
+procedure twodynamic(var b: two);
+begin i := 5 end;
+
+procedure hasvariant(var b: tagged);
+begin i := 3 end;
+
+procedure hasbareariant(var b: untagged);
+begin i := 4 end;
 
 procedure notordinal(var s: sized);
 begin i := 2 end;

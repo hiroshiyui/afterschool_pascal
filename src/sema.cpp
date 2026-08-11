@@ -1098,6 +1098,29 @@ bool Sema::staticThroughout(Type *t) const {
   }
 }
 
+/// What a descriptor can describe: a type whose *size* may depend on the
+/// discriminants while every offset *inside* it stays a constant. That is the
+/// whole of the restriction, and both halves of it are here.
+///
+/// An array qualifies whatever its bounds, because a component's address is
+/// computed from the bounds rather than looked up. A record qualifies when the
+/// dynamic part is its **last** field and it has no variant part — a field
+/// after a dynamically-sized one, and the shared block of a variant part, both
+/// sit at an offset nothing can compute. Everything else is refused: a set and
+/// a file each have a size the runtime is told once.
+bool Sema::dynamicTail(Type *t) const {
+  if (!t || !t->dynamicExtent())
+    return staticThroughout(t);
+  if (t->isArray())
+    return dynamicTail(t->elem);
+  if (!t->isRecord() || !t->variants.empty() || t->fields.empty())
+    return false;
+  for (size_t i = 0; i + 1 < t->fields.size(); ++i)
+    if (!staticThroughout(t->fields[i].type))
+      return false;
+  return dynamicTail(t->fields.back().type);
+}
+
 /// The same question through every arm of a variant part, at every depth.
 bool Sema::staticVariants(const std::vector<Variant> &arms) const {
   for (const Variant &v : arms) {
@@ -1184,18 +1207,13 @@ Type *Sema::genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
     return ty::Int();
   }
 
-  // What a descriptor can describe: an array, and arrays inside it. A record
-  // field after a dynamically-bounded one would sit at an offset nothing can
-  // compute, and a set or a file has a size the runtime is told once — so a
-  // discriminant is allowed in an index type and nowhere else.
-  Type *comp = t;
-  while (comp->isArray() && comp->dynamicExtent())
-    comp = comp->elem;
-  if (!staticThroughout(comp)) {
+  // What a descriptor can describe (ADR-0045).
+  if (!dynamicTail(t)) {
     diags_.error(denoter.line, denoter.col,
                  "schema '" + schema->name + "' cannot be a " + noun +
-                     ": its discriminants have to bound an array, because "
-                     "that is the only size a descriptor can describe");
+                     ": a discriminant has to bound an array, and a record "
+                     "holding one has to hold it last, because a field after "
+                     "it would sit at an offset nothing can compute");
     return ty::Int();
   }
 

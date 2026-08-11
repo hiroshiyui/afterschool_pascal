@@ -5,7 +5,7 @@
 program SchemaDynamicErrors(output);
 type
   vector(n: integer) = array [1..n] of integer;
-  boxed(n: integer) = record a: array [1..n] of char end;
+  boxed(n: integer) = record a: array [1..n] of char; b: integer end;
   { a schema body is resolved when a type is produced from it, which happens in
     the variable declaration that produces it -- but the type it produces is
     the program's and not that variable's, so a discriminant written *inside*
@@ -21,8 +21,8 @@ var
     it is exactly the thing that does not exist yet }
   self: vector(self);
   { §6.4.7's rule about where a discriminant may reach is the same one a
-    parameter form is under: a record field after a dynamically-bounded one
-    would sit at an offset nothing can compute }
+    parameter form is under: a record may hold a dynamically-bounded array
+    last, and this one holds a field after it (ADR-0045) }
   box: boxed(k);
   { the body above, so that it is produced from }
   deep: nested(2);

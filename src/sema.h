@@ -238,6 +238,9 @@ private:
                           std::vector<Variant> &variants, int &tagField,
                           Type *&tagTypeOut, bool &discSelOut,
                           std::vector<int> &path);
+  /// Whether a schema body is a type a descriptor can describe: its size may
+  /// depend on the discriminants, but every offset inside it must not.
+  bool dynamicTail(Type *t) const;
   /// The discriminant a variant-selector names, or null when it names a type.
   Symbol *discSelectorFor(TypeExpr *denoter);
   /// Add a field to `into`, reporting a name already used anywhere in `record`.

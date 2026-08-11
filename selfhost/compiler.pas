@@ -5706,12 +5706,68 @@ end;
   reach this -- a schematic formal whose dynamic part is anywhere else is
   refused, because a record field after one would sit at an offset nothing
   could compute. }
+{ The last field of a field-list, nil when there is none. It is the only
+  position a dynamically-sized field may occupy (ADR-0045), so it is the only
+  one anything asks for. }
+function LastField(f: fieldPtr): fieldPtr;
+begin
+  LastField := nil;
+  while f <> nil do begin
+    LastField := f;
+    f := f^.next
+  end
+end;
+
+{ Whether this type's size is not known until run time: its own bounds are
+  discriminants, or an array's component reaches one, or a record's **last**
+  field does. Only the last, because a field after it would sit at an offset
+  nothing could compute -- which is why this reads the last field and not "any
+  field". A record with a dynamic field anywhere else is not a type with a
+  dynamic extent; it is a type that is refused (ADR-0045). }
 function DynamicExtent(t: typePtr): boolean;
+var f: fieldPtr;
 begin
   if t = nil then DynamicExtent := false
   else if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then DynamicExtent := true
   else if t^.kind = tyArray then DynamicExtent := DynamicExtent(t^.elem)
+  else if t^.kind = tyRecord then begin
+    f := LastField(t^.fields);
+    if f = nil then DynamicExtent := false
+    else DynamicExtent := DynamicExtent(f^.ftype)
+  end
   else DynamicExtent := false
+end;
+
+{ What a descriptor can describe: a type whose *size* may depend on the
+  discriminants while every offset *inside* it stays a constant. That is the
+  whole of the restriction, and both halves of it are here.
+
+  An array qualifies whatever its bounds, because a component's address is
+  computed from the bounds rather than looked up. A record qualifies when the
+  dynamic part is its **last** field and it has no variant part -- a field
+  after a dynamically-sized one, and the shared block of a variant part, both
+  sit at an offset nothing can compute. Everything else is refused: a set and
+  a file each have a size the runtime is told once. }
+function DynamicTail(t: typePtr): boolean;
+var f, last: fieldPtr; ok: boolean;
+begin
+  if not DynamicExtent(t) then
+    DynamicTail := StaticThroughout(t)
+  else if t^.kind = tyArray then
+    DynamicTail := DynamicTail(t^.elem)
+  else if (t^.kind <> tyRecord) or (t^.variants <> nil) or (t^.fields = nil)
+  then
+    DynamicTail := false
+  else begin
+    last := LastField(t^.fields);
+    ok := true;
+    f := t^.fields;
+    while f <> last do begin
+      if not StaticThroughout(f^.ftype) then ok := false;
+      f := f^.next
+    end;
+    if ok then DynamicTail := DynamicTail(last^.ftype) else DynamicTail := false
+  end
 end;
 
 { The type of a schematic formal parameter: produced from a schema, but with no
@@ -5812,15 +5868,8 @@ begin
       t := intType
     end
     else begin
-      { What a descriptor can describe: an array, and arrays inside it. A
-        record field after a dynamically-bounded one would sit at an offset
-        nothing can compute, and a set or a file has a size the runtime is
-        told once -- so a discriminant is allowed in an index type and nowhere
-        else. }
-      comp := t;
-      while (comp^.kind = tyArray) and DynamicExtent(comp) do
-        comp := comp^.elem;
-      if not StaticThroughout(comp) then begin
+      { What a descriptor can describe (ADR-0045). }
+      if not DynamicTail(t) then begin
         ErrorAt(d^.line, d^.col);
         write('schema ''');
         WritePool(schema^.at, schema^.len);
@@ -5829,8 +5878,9 @@ begin
           nounParamForm:     write(''' cannot be a parameter form: ');
           nounPointerDomain: write(''' cannot be a pointer domain: ')
         end;
-        writeln('its discriminants have to bound an array, because that is ',
-                'the only size a descriptor can describe');
+        writeln('a discriminant has to bound an array, and a record holding ',
+                'one has to hold it last, because a field after it would sit ',
+                'at an offset nothing can compute');
         t := intType
       end
       else begin
@@ -10400,10 +10450,40 @@ end;
   an array whose bounds arrive with the actual has a size only the descriptor
   can answer. }
 procedure DynSize(t: typePtr; var header: str; var v: str);
-var lo, hi, extent, count, inner: str;
+var lo, hi, extent, count, inner, sum: str;
+    f, last: fieldPtr; off, align: integer;
 begin
   if not DynamicExtent(t) then
     OpInt(LlSize(t), v)
+  { A record's dynamic part is its last field and nothing else (ADR-0045), so
+    every offset in it is a constant and the size is the last field's offset
+    plus whatever the tail costs. The offset is accumulated here rather than
+    asked of LlSize, because LlSize of the last field is the one number that
+    is not known. }
+  else if t^.kind = tyRecord then begin
+    last := LastField(t^.fields);
+    off := 0;
+    align := 1;
+    f := t^.fields;
+    while f <> last do begin
+      off := RoundUp(off, LlAlign(f^.ftype)) + LlSize(f^.ftype);
+      if LlAlign(f^.ftype) > align then align := LlAlign(f^.ftype);
+      f := f^.next
+    end;
+    off := RoundUp(off, LlAlign(last^.ftype));
+    if LlAlign(last^.ftype) > align then align := LlAlign(last^.ftype);
+    DynSize(last^.ftype, header, inner);
+    { An array of these strides by the size, so it is rounded up to the
+      record's alignment exactly as a static record's allocation size is. }
+    Def(sum);
+    write(ircode, 'add i32 ');
+    PutOp(inner);
+    writeln(ircode, ', ', off + align - 1:1);
+    Def(v);
+    write(ircode, 'and i32 ');
+    PutOp(sum);
+    writeln(ircode, ', ', -align:1)
+  end
   else begin
     { (hi - lo + 1) components, each of whatever one component costs. The count
       cannot be negative: the tuple that produced the actual's type was checked
@@ -13158,10 +13238,17 @@ end;
   the schema at all. Where the tuple is a constant Sema says so; where it is
   not, this does. }
 procedure CheckSchemaDomain;
-var lo, hi, bad: str; msg: integer;
+var lo, hi, bad: str; msg: integer; last: fieldPtr;
 begin
   if t <> nil then
-    if (t^.kind = tyArray) and DynamicExtent(t) then begin
+    { A record reaches here only with its dynamic part last (ADR-0045), so the
+      walk into it is the same walk: one dimension per level, wherever the
+      level came from. }
+    if (t^.kind = tyRecord) and DynamicExtent(t) then begin
+      last := LastField(t^.fields);
+      CheckSchemaDomain(last^.ftype, schema, header)
+    end
+    else if (t^.kind = tyArray) and DynamicExtent(t) then begin
       if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
         BoundValue(t, false, header, lo);
         BoundValue(t, true, header, hi);

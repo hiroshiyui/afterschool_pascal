@@ -1,0 +1,18 @@
+8/2 hi
+8/3 hi!
+8/2 hi
+20/5 abcde
+3/1 x
+A  11  12  13
+B  21  22  23
+<A  11  12  13>
+<B  21  22  23>
+ 1 abcde
+ 2 fghij
+ 3 klmno
+[1 abcde]
+[2 fghij]
+[3 klmno]
+"abcdefgh" = abcdefgh
+"zzzzzzzz" <>
+done 2335

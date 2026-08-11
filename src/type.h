@@ -152,11 +152,18 @@ struct Type {
   bool dynamicBounds() const { return loDisc || hiDisc; }
 
   /// ...and neither is its size: an array of dynamically-bounded arrays has a
-  /// dynamic extent at every level. Only arrays reach this — a schematic
-  /// formal whose dynamic part is anywhere else is refused, because a record
-  /// field after one would sit at an offset nothing could compute.
+  /// dynamic extent at every level, and so does a record whose **last** field
+  /// has one. Only the last, because a field after it would sit at an offset
+  /// nothing could compute — which is why this reads `fields.back()` and not
+  /// "any field". A record with a dynamic field anywhere else is not a type
+  /// with a dynamic extent; it is a type that is refused (ADR-0045).
   bool dynamicExtent() const {
-    return dynamicBounds() || (isArray() && elem && elem->dynamicExtent());
+    if (dynamicBounds())
+      return true;
+    if (isArray())
+      return elem && elem->dynamicExtent();
+    return kind == TypeKind::Record && !fields.empty() &&
+           fields.back().type && fields.back().type->dynamicExtent();
   }
 
   // These ask what a value *is*, so they look through a subrange to its host:

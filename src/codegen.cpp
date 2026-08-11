@@ -482,6 +482,25 @@ llvm::Value *CodeGen::dynLength(ap::Type *t, llvm::Value *header) {
 llvm::Value *CodeGen::dynSize(ap::Type *t, llvm::Value *header) {
   if (!t->dynamicExtent())
     return ConstantInt::get(i32(), sizeOf(t));
+  // A record's dynamic part is its last field and nothing else (ADR-0045), so
+  // every offset in it is a constant and the size is the last field's offset
+  // plus whatever the tail costs. The offset comes from the struct's own
+  // layout, which is right because the dynamic field is `[0 x T]` there.
+  if (t->isRecord()) {
+    auto *st = cast<StructType>(llvmType(t));
+    unsigned last = static_cast<unsigned>(t->fields.size()) - 1;
+    llvm::Value *size = b_.CreateAdd(
+        ConstantInt::get(
+            i32(), mod_->getDataLayout().getStructLayout(st)->getElementOffset(
+                       last)),
+        dynSize(t->fields[last].type, header), "recsize");
+    // An array of these strides by the size, so it is rounded up to the
+    // record's alignment exactly as a static record's allocation size is.
+    uint64_t align = mod_->getDataLayout().getABITypeAlign(st).value();
+    return b_.CreateAnd(
+        b_.CreateAdd(size, ConstantInt::get(i32(), align - 1)),
+        ConstantInt::getSigned(i32(), -static_cast<int64_t>(align)), "aligned");
+  }
   // (hi - lo + 1) components, each of whatever one component costs. The count
   // cannot be negative: the tuple that produced the actual's type was checked
   // when it was produced, so an empty range never reaches here.
@@ -674,8 +693,15 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
 
 void CodeGen::checkSchemaDomain(ap::Type *t, const std::string &schema,
                                 llvm::Value *header) {
-  if (!t || !t->isArray() || !t->dynamicExtent())
+  if (!t || !t->dynamicExtent())
     return;
+  // A record reaches here only with its dynamic part last (ADR-0045), so the
+  // walk into it is the same walk: one dimension per level, wherever the level
+  // came from.
+  if (t->isRecord()) {
+    checkSchemaDomain(t->fields.back().type, schema, header);
+    return;
+  }
   if (t->dynamicBounds())
     emitTrapIf(b_.CreateICmpSLT(boundValue(t, true, header),
                                 boundValue(t, false, header), "empty"),
