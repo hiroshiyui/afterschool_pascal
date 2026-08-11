@@ -157,7 +157,7 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
       errorAtCur("expected the result type of the function");
       bail();
     }
-    decl->returnType = parseTypeExpr();
+    decl->returnType = parseTypeDenoter();
   }
   expect(Tok::Semi, "after the heading of a procedure or function");
 
@@ -209,7 +209,7 @@ void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
       errorAtCur("a parameter's type must be a type name");
       bail();
     }
-    group.type = parseTypeExpr();
+    group.type = parseTypeDenoter();
     into.push_back(std::move(group));
   } while (accept(Tok::Semi));
   expect(Tok::RParen, "after the parameter list");
@@ -240,7 +240,7 @@ void Parser::parseProcParam(ParamGroup &group, bool isFunction) {
       errorAtCur("the result type of a functional parameter must be a type name");
       bail();
     }
-    group.returnType = parseTypeExpr();
+    group.returnType = parseTypeDenoter();
   }
 }
 
@@ -280,7 +280,30 @@ bool Parser::looksLikeSubrange() const {
 
 /// type-denoter  = 'packed'? structured-type | ordinal-type | type-identifier
 /// ordinal-type  = enumerated-type | subrange-type
+/// type-denoter = ( type-name | new-type | type-inquiry | discriminated-schema )
+///                 [ initial-state-specifier ]      (ISO/IEC 10206:1991 §6.4.1)
+///
+/// Only the three positions that may carry a specifier call this; every nested
+/// denoter calls `parseTypeDenoter` and stops before the word. That is not a
+/// shortcut — it is the only reading that parses. `set of 1..9 value [2]` has
+/// one place the specifier can attach and the recursion would have taken it
+/// for the base type, and `array [1..8] of char value '*'` is §6.6 NOTE 3's
+/// own example of a violation *because* the value belongs to the array. So the
+/// component stops at the word and the outer denoter takes it, which is what
+/// turns that example into the type error the note says it is.
 TypeExprPtr Parser::parseTypeExpr() {
+  TypeExprPtr t = parseTypeDenoter();
+  // No `--std` test here, and there cannot be one: `value` is a word-symbol
+  // Extended Pascal *adds*, so under ISO 7185 the lexer yields an identifier
+  // and this token never appears. The lexer's decision is the whole of the
+  // feature's language gating — unlike `type of`, whose words are reserved in
+  // both languages and which therefore needs an explicit refusal.
+  if (accept(Tok::KwValue))
+    t->initValue = parseExpr();
+  return t;
+}
+
+TypeExprPtr Parser::parseTypeDenoter() {
   Depth depth(*this); // array-of-array and record fields recurse through here
   bool packed = accept(Tok::KwPacked);
 
@@ -292,7 +315,7 @@ TypeExprPtr Parser::parseTypeExpr() {
     t->col = cur().col;
     ++pos_;
     expect(Tok::KwOf, "after 'file'");
-    t->elem = parseTypeExpr();
+    t->elem = parseTypeDenoter();
     return t;
   }
   // set-type = 'set' 'of' base-type. The base type is an *ordinal* type, so
@@ -306,7 +329,7 @@ TypeExprPtr Parser::parseTypeExpr() {
     t->col = cur().col;
     ++pos_;
     expect(Tok::KwOf, "after 'set'");
-    t->elem = parseTypeExpr();
+    t->elem = parseTypeDenoter();
     return t;
   }
   if (check(Tok::KwArray))
@@ -438,12 +461,12 @@ TypeExprPtr Parser::parseArrayType(bool packed) {
   expect(Tok::LBracket, "after 'array'");
 
   do {
-    t->dims.push_back(parseTypeExpr());
+    t->dims.push_back(parseTypeDenoter());
   } while (accept(Tok::Comma));
 
   expect(Tok::RBracket, "after the index type of an array");
   expect(Tok::KwOf, "after the index type of an array");
-  t->elem = parseTypeExpr();
+  t->elem = parseTypeDenoter();
   return t;
 }
 
@@ -524,7 +547,7 @@ void Parser::parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
     errorAtCur("the tag of a variant part must be a type name");
     bail();
   }
-  tagType = parseTypeExpr();
+  tagType = parseTypeDenoter();
   expect(Tok::KwOf, "after the tag of a variant part");
 
   while (!check(Tok::KwEnd)) {

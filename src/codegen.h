@@ -199,6 +199,8 @@ private:
   /// the whole-variable copy — and `write` to a file that is not a text needs
   /// exactly it, because §6.6.5.2 defines that write as `f^ := e`.
   void emitStore(llvm::Value *dst, Type *type, Expr *src);
+  void initInitialStates(Symbol *proc);
+  void initialStateInto(llvm::Value *addr, Type *t, Expr *init);
   /// The frame to pass as a callee's static link.
   llvm::Value *staticLinkFor(Symbol *callee);
   llvm::Value *emitUserCall(Symbol *callee, std::vector<ExprPtr> &args);

@@ -443,6 +443,19 @@ struct TypeExpr {
   TEK kind = TEK::Named;
   int line = 0, col = 0;
 
+  /// ISO/IEC 10206:1991 §6.6's initial-state-specifier, `value <expression>`.
+  /// It belongs to the *type-denoter* (§6.4.1) rather than to the declaration,
+  /// which is why it lives here and why `type count = integer value 1` gives
+  /// the initial state to every variable of `count`. Null when none was
+  /// written. §6.4.3.2 forbids one on a component-type and this compiler
+  /// refuses it in every other nested position too, so Sema checks *where* it
+  /// was written and the parser only records that it was.
+  ExprPtr initValue;
+  /// Set by Sema when that specifier passed its checks — a value the block
+  /// prologue may store. A declaration reads this rather than `initValue`, so
+  /// a rejected specifier cannot reach CodeGen.
+  bool initOk = false;
+
   std::string name;               // Named, and the domain of a Pointer
   bool packed = false;            // Array, Record
   /// Array: one ordinal type per index. ISO 7185 §6.4.3.2 makes the index an

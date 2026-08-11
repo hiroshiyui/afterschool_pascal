@@ -687,6 +687,7 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   // before anything that could jump: the storage a dynamically sized variable
   // stands for has to exist for the whole activation.
   initDynamicVars(proc);
+  initInitialStates(proc);
   initFiles(proc);
   emitJumpDispatch(proc);
 }
@@ -741,6 +742,40 @@ void CodeGen::initDynamicVars(Symbol *proc) {
         b_.CreateAlloca(i8(), dynSize(v->type), v->name + ".storage");
     storage->setAlignment(align);
     b_.CreateStore(storage, b_.CreateStructGEP(desc, slot, 0, "storage"));
+  }
+}
+
+/// ISO/IEC 10206:1991 §6.2.3.5: "Each variable contained by an activation of a
+/// block ... shall be created in its initial state within the commencement of
+/// the activation." §6.6 makes every expression in one nonvarying, so this is
+/// a store of a constant and nothing here can depend on the order — which is
+/// why the whole feature is a walk of the frame rather than a place in the
+/// declaration sequence.
+///
+/// A record's fields may each carry one, so a record with no initial state of
+/// its own may still have parts of it initialised. That recursion is what
+/// `initialStateInto` is for; it does not recurse into an array, because
+/// §6.4.3.2 forbids a component-type from carrying a specifier at all.
+void CodeGen::initialStateInto(llvm::Value *addr, ap::Type *t, Expr *init) {
+  if (init) {
+    emitStore(addr, t, init);
+    return;
+  }
+  if (!t || !t->isRecord())
+    return;
+  for (const Field &f : t->fields)
+    if (f.initValue || (f.type && f.type->isRecord()))
+      initialStateInto(fieldAddress(addr, t, &f), f.type, f.initValue);
+}
+
+void CodeGen::initInitialStates(Symbol *proc) {
+  for (Symbol *v : proc->frameVars) {
+    if (v->kind != SymKind::Var)
+      continue; // §6.2.3.5 excludes formal parameters, and a hidden slot has
+                // no declaration to have carried a specifier
+    if (!v->initValue && !(v->type && v->type->isRecord()))
+      continue;
+    initialStateInto(addressOf(v), v->type, v->initValue);
   }
 }
 

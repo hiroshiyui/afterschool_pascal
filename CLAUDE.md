@@ -639,6 +639,32 @@ in one language or the other, and the standard is a property of the source.
   - **Where a parameter-identifier object may live is not enforced**, and the
     deviation is permissive: ordinary lookup lets a procedural parameter's own
     list see the enclosing list's parameters, which §6.4.9 does not allow.
+- **An initial state belongs to the type-denoter** (ADR-0048). §6.6's `value`
+  hangs off the type-denoter (§6.4.1), not the declaration — so a **type-name
+  hands it on** to every variable of that type, and it is recorded on the type
+  *symbol* rather than on the `Type`, which is shared and name-equivalent.
+  - **Attributed at every activation** (§6.2.3.5), so a recursive procedure's
+    local is created in its initial state on each call. It is a prologue
+    beside ADR-0041's and ADR-0021's, and `emitStore` does the storing — so a
+    subrange initialised out of range traps where it always would.
+  - **Nonvarying (§6.8.2) is about what the expression reads**, not what the
+    compiler folds: §6.6's examples are `ord(red)` and `polar(exp(1.0), pi)`.
+    What survives is emitted where it stands, so no constant representation
+    was added.
+  - **Only one reading parses.** The three permitted positions — a variable
+    declaration, a type definition, a record field — call `parseTypeExpr`;
+    every nested denoter calls `parseTypeDenoter` and stops before the word,
+    or `set of 1..9 value [2]` would attach it to the base type. That is what
+    makes §6.6 NOTE 3's `array [1..8] of char value '*'` a type error.
+  - A record's fields may each carry one, so the prologue recurses over
+    fields; it does not recurse into an array, because §6.4.3.2 forbids a
+    component-type from carrying one.
+  - Refused, both stated: a **component-value that is not an expression**
+    (§6.8.7's array- and record-values are the structured-value-constructor
+    feature), and a field of a **variant part**, whose initial state §6.5.1
+    makes conditional on the selector.
+  - `value` is a word Extended Pascal *adds*, so no `--std` test is possible
+    in the parser — under ISO 7185 the token never appears. Contrast ADR-0047.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

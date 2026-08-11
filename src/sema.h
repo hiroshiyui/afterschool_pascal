@@ -127,6 +127,11 @@ struct Symbol {
   /// every actual in one section to bring the same tuple, so the section has
   /// to be recoverable at the call.
   int paramSection = 0;
+  /// ISO/IEC 10206:1991 §6.6: the value this variable bears when the block
+  /// that declares it is entered. Borrowed from the AST, and read only by the
+  /// prologue — every expression in one is nonvarying (§6.8.2), so CodeGen
+  /// emits it as the constant it is rather than re-evaluating anything.
+  Expr *initValue = nullptr;
   /// ISO/IEC 10206:1991 §6.7.3.1's `protected`: no statement of the body may
   /// *threaten* this parameter (§6.9.4). It says nothing about how the
   /// argument travels — a protected `var` parameter is still an address — so
@@ -253,7 +258,8 @@ private:
   Symbol *discSelectorFor(TypeExpr *denoter);
   /// Add a field to `into`, reporting a name already used anywhere in `record`.
   void addField(Type *record, std::vector<Field> &into, const DeclName &name,
-                Type *type, const std::vector<int> &variant);
+                Type *type, const std::vector<int> &variant,
+                Expr *init = nullptr);
   /// The `packed array [1..n] of char` that ISO 7185 §6.4.3.2 gives a string
   /// literal. Cached by length so two literals of a length share one type.
   Type *stringType(long long length);
@@ -319,6 +325,19 @@ private:
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
   Type *resolveInquiry(TypeExpr &denoter);
+  /// ISO/IEC 10206:1991 §6.6's initial-state-specifier, checked and folded.
+  bool nonvarying(Expr *e) const;
+  void checkInitialState(TypeExpr &denoter, Type *t);
+  Expr *initialStateOf(TypeExpr &denoter);
+  /// True while a field of a *variant part* is being resolved, where §6.5.1
+  /// makes the initial state conditional on the selector. There is no flag for
+  /// "this position admits a specifier at all": the parser settles that, by
+  /// stopping before the word everywhere but the three positions that do.
+  bool variantField_ = false;
+  /// ...and true while a *schema body* is being resolved. §6.4.7 makes one a
+  /// type-denoter, so the word parses there, and it is spelled as a type
+  /// definition — so refusing it needs a reason of its own.
+  bool schemaBody_ = false;
   void checkNotThreatened(Expr *e, const std::string &what);
 
   /// True if a value of `from` may be assigned to / compared with `to`.

@@ -283,14 +283,21 @@ types      type of x — a type-inquiry: the type the variable x already
            `record x, y: integer end` written out would not be. It reaches
            a parameter of the same list, so `procedure p(var a: point;
            b: type of a)` writes the type once
-words      otherwise, pow and protected are reserved; `and then`, `or else`
-           and `type of` reserve nothing new, because all of their words
-           already are
+types      integer value 1 — an initial-state specifier: the value a
+           variable bears when the block declaring it is entered, and
+           again on every later activation of that block. It belongs to
+           the type-denoter, so `type count = integer value 7` gives it to
+           every variable of count, and a record's fields may each carry
+           one. The value must read nothing that can change — a literal,
+           a constant, an operator over those, or a required function
+words      otherwise, pow, protected and value are reserved; `and then`,
+           `or else` and `type of` reserve nothing new, because all of
+           their words already are
 ```
 
-Not accepted yet: the `string` type, modules,
-initial-state specifiers (`value`), binding (`bind`/`unbind`), direct-access
-files, and complex numbers. A word-symbol is reserved only when the feature needing it
+Not accepted yet: the `string` type, modules, structured-value
+constructors, binding (`bind`/`unbind`), direct-access files, and complex
+numbers. A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.

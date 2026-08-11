@@ -587,7 +587,7 @@ bool Sema::overlaps(const std::vector<LabelRange> &seen, LabelRange r,
 /// lookup answer where a name lives.
 void Sema::addField(Type *record, std::vector<Field> &into,
                     const DeclName &name, Type *type,
-                    const std::vector<int> &variant) {
+                    const std::vector<int> &variant, Expr *init) {
   if (record->findField(name.name)) {
     diags_.error(name.line, name.col,
                  "'" + name.name + "' is already a field of this record");
@@ -600,6 +600,7 @@ void Sema::addField(Type *record, std::vector<Field> &into,
   f.variant = variant;
   f.line = name.line;
   f.col = name.col;
+  f.initValue = init;
   into.push_back(std::move(f));
 }
 
@@ -619,9 +620,13 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Record);
   t->packed = denoter.packed;
   for (FieldGroup &group : denoter.fields) {
+    // §6.6: a field's own type-denoter may carry an initial-state-specifier,
+    // and then the record's initial state has that field bearing that value.
+    // The offer is made here and nowhere else inside a type-denoter.
     Type *fieldType = resolveType(*group.type);
+    Expr *init = initialStateOf(*group.type);
     for (DeclName &n : group.names)
-      addField(t, t->fields, n, fieldType, {});
+      addField(t, t->fields, n, fieldType, {}, init);
   }
   if (denoter.tagType) {
     std::vector<int> path;
@@ -721,7 +726,12 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
     variants.push_back(std::move(v));
     path.push_back(index);
     for (FieldGroup &group : arm.fields) {
+      // A field-list is a field-list (§6.4.3.3), so an arm's fields may carry
+      // an initial-state-specifier syntactically — and are told why they may
+      // not have one here rather than being told it is the wrong position.
+      variantField_ = true;
       Type *fieldType = resolveType(*group.type);
+      variantField_ = false;
       for (DeclName &n : group.names)
         addField(record, variants[index].fields, n, fieldType, path);
     }
@@ -782,6 +792,110 @@ Type *Sema::resolveInquiry(TypeExpr &denoter) {
     return ty::Int();
   }
   return sym->type;
+}
+
+/// ISO/IEC 10206:1991 §6.6: "The initial state specified by an
+/// initial-state-specifier shall be the state bearing the value denoted by the
+/// component-value", and "An expression contained by the component-value of an
+/// initial-state-specifier shall be nonvarying."
+///
+/// Nonvarying is what makes the whole feature cheap: the value is a constant,
+/// so the prologue stores it and nothing is evaluated at entry that could
+/// depend on the order the entry happens in.
+/// ISO/IEC 10206:1991 §6.8.2: an expression is *nonvarying* when its value
+/// cannot change — literals, constants, and operations on those. That is not
+/// the same as "the compiler can fold it": §6.6's own examples include
+/// `ord(red)` and `polar(exp(1.0), pi)`, neither of which this compiler folds,
+/// and both of which are perfectly good things for a block prologue to
+/// compute. So the test is over what the expression *reads*, and what survives
+/// it is emitted as an ordinary expression at block entry.
+///
+/// A required function is nonvarying with nonvarying arguments; a
+/// user-declared one is not, because §6.8.2 does not make it so and its body
+/// may read anything at all.
+bool Sema::nonvarying(Expr *e) const {
+  if (!e)
+    return false;
+  if (is<IntLit>(e) || is<RealLit>(e) || is<CharLit>(e) || is<StrLit>(e) ||
+      is<NilLit>(e))
+    return true;
+  if (auto *v = as<VarRef>(e))
+    return v->sym && v->sym->kind == SymKind::Const;
+  if (auto *u = as<Unary>(e))
+    return nonvarying(u->operand.get());
+  if (auto *b = as<Binary>(e))
+    return nonvarying(b->lhs.get()) && nonvarying(b->rhs.get());
+  if (auto *st = as<SetExpr>(e)) {
+    for (const SetMember &m : st->members)
+      if (!nonvarying(m.lo.get()) || (m.hi && !nonvarying(m.hi.get())))
+        return false;
+    return true;
+  }
+  if (auto *c = as<Call>(e)) {
+    // `eof` and `eoln` read a file, which is what varying means.
+    if (c->builtin == Builtin::None || c->builtin == Builtin::Eof ||
+        c->builtin == Builtin::Eoln)
+      return false;
+    for (const ExprPtr &a : c->args)
+      if (!nonvarying(a.get()))
+        return false;
+    return true;
+  }
+  return false;
+}
+
+/// There is deliberately no check here that the *position* admits a specifier.
+/// The parser is the whole of that rule: only the three positions that may
+/// carry one call `parseTypeExpr`, and every nested denoter stops before the
+/// word — so a denoter reaching here with a value is by construction in a
+/// position that allows it. A version of this function carrying a
+/// "not here" message was written, and deleted when nothing could reach it.
+void Sema::checkInitialState(TypeExpr &denoter, Type *t) {
+  Expr *v = denoter.initValue.get();
+  if (!v)
+    return;
+  // §6.4.7 makes a schema body a type-denoter, so the word parses there —
+  // and it is spelled as a type definition, which is why this needs a reason
+  // of its own rather than the position message below.
+  if (schemaBody_) {
+    diags_.error(v->line, v->col,
+                 "a schema's body cannot carry an initial-state specifier: "
+                 "every discriminant tuple produces its own type, and the "
+                 "value would have to be attributed once for each");
+    return;
+  }
+  // §6.5.1 makes the initial state of a *variant* conditional on the selector's
+  // own initial state selecting it. Nothing here tracks that, so a field of a
+  // variant part is refused rather than initialised into a variant that may
+  // not be the live one.
+  if (variantField_) {
+    diags_.error(v->line, v->col,
+                 "a field of a variant part cannot have an initial value, "
+                 "because which variant exists is not settled here");
+    return;
+  }
+  checkExpr(v);
+  if (!nonvarying(v)) {
+    diags_.error(v->line, v->col,
+                 "the value of an initial-state specifier must not depend on "
+                 "a variable");
+    return;
+  }
+  // §6.4.3.6 gives a file the initial state totally-undefined, and a file has
+  // no value to bear in any case. Asked before compatibility, or the message
+  // would be about the type of the value rather than about the file.
+  if (t && t->isFile()) {
+    diags_.error(v->line, v->col, "a file variable has no initial value");
+    return;
+  }
+  if (!assignable(t, v->type)) {
+    diags_.error(v->line, v->col,
+                 "cannot give " + (t ? t->name() : std::string("this")) +
+                     " an initial value of type " +
+                     (v->type ? v->type->name() : std::string("nothing")));
+    return;
+  }
+  denoter.initOk = true;
 }
 
 Type *Sema::resolveType(TypeExpr &denoter) {
@@ -863,8 +977,24 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   }
 
   dynamicVarFor_ = savedDynamic;
+  checkInitialState(denoter, t);
   denoter.resolved = t;
   return t;
+}
+
+/// The initial value a declaration of this denoter gives its variables. §6.4.1
+/// makes the *type-denoter* carry the initial state, so a type-name hands on
+/// the one its definition wrote — which is what makes `type count = integer
+/// value 1; var c: count` initialise `c`.
+Expr *Sema::initialStateOf(TypeExpr &denoter) {
+  if (denoter.initOk)
+    return denoter.initValue.get();
+  if (denoter.kind == TEK::Named) {
+    Symbol *s = lookup(denoter.name);
+    if (s && s->kind == SymKind::Type)
+      return s->initValue;
+  }
+  return nullptr;
 }
 
 /// Forget every type this denoter and its sub-denoters resolved to, so the
@@ -1081,7 +1211,10 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
   forgetResolved(schema->schemaBody);
   producing_.push_back(schema);
   size_t before = diags_.all().size();
+  bool savedSchemaBody = schemaBody_;
+  schemaBody_ = true;
   Type *t = resolveType(*schema->schemaBody);
+  schemaBody_ = savedSchemaBody;
   producing_.pop_back();
   popScope();
   // §6.4.7's domain is the tuples for which the body denotes a type at all —
@@ -1245,7 +1378,10 @@ Type *Sema::genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
   Symbol *savedGeneric = genericFor_;
   genericFor_ = param;
   size_t before = diags_.all().size();
+  bool savedSchemaBody = schemaBody_;
+  schemaBody_ = true;
   Type *t = resolveType(*schema->schemaBody);
+  schemaBody_ = savedSchemaBody;
   genericFor_ = savedGeneric;
   producing_.pop_back();
   popScope();
@@ -1721,6 +1857,10 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     if (s->type)
       continue; // a duplicate: keep the first definition
     s->type = resolved;
+    // §6.4.1: a type-name denotes "the type, bindability and initial state"
+    // its definition denoted, so the initial state travels with the name and
+    // every variable of it is initialised.
+    s->initValue = initialStateOf(*t.type);
     if (resolved->alias.empty())
       resolved->alias = t.name;
   }
@@ -1766,8 +1906,13 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     // One denoter for the whole group, so `a, b: array [1..3] of integer`
     // makes a and b the same type and lets `a := b` through.
     Type *t = resolveType(*group.type);
-    for (auto &n : group.names)
-      addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
+    Expr *init = initialStateOf(*group.type);
+    for (auto &n : group.names) {
+      Symbol *v = addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
+      // §6.2.3.5 creates each local "in its initial state" on entry, so the
+      // whole group shares one value as it shares one type.
+      v->initValue = init;
+    }
   }
 
   // The variables exist now, so the program header's parameters can be matched

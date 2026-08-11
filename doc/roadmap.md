@@ -430,6 +430,29 @@ was never written down.
   lookup because a scope is pushed before the formals are built. Refused: a
   parameter naming itself (§6.7.3.1), and an object that is a schematic formal,
   whose bounds are in a descriptor a second name would have to share.
+- ~~**Initial-state specifiers.**~~ Done (ADR-0048). §6.6's `value`, and the
+  record's title is the design: the specifier belongs to the *type-denoter*, so
+  a type-name hands it on to every variable of that type, and §6.2.3.5
+  attributes it at every *activation* rather than once — a recursive
+  procedure's local is created in its initial state on each call. It is a
+  prologue beside the two that were already there, and `emitStore` does the
+  storing, so both backends and `verify/` needed nothing new.
+  - **Nonvarying (§6.8.2) is a question about what an expression reads**, not
+    about what the compiler can fold: §6.6's own examples include `ord(red)`
+    and `polar(exp(1.0), pi)`, so what survives the test is *computed* at block
+    entry rather than folded into a constant.
+  - **The parser decides where the word attaches, and only one reading
+    parses.** `set of 1..9 value [2]` has one place for it and a recursive
+    denoter would have taken it for the base type — so the three permitted
+    positions parse the specifier and every nested denoter stops before the
+    word. That is what makes §6.6 NOTE 3's `array [1..8] of char value '*'`
+    the type error the note says it is.
+  - **The first reserved word to cost the corpus something**: an existing test
+    had a record field named `value`. ADR-0033's reason for making the standard
+    a property of the source, made concrete.
+  - A component-value may only be an **expression** here; §6.8.7's array-values
+    and record-values are the structured-value-constructor feature, which is
+    usable in an ordinary expression too and is therefore its own item.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and
@@ -438,7 +461,7 @@ was never written down.
   — so this should be settled by measuring stage-1 code again, the way it was
   settled the first time, and not by taste.
 - **Modules**, `bind`/`unbind`, direct-access files, complex numbers,
-  initial-state specifiers, restricted types. Each needs its own record.
+  restricted types, structured-value constructors. Each needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

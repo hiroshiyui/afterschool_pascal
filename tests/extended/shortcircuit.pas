@@ -9,8 +9,12 @@
 program ShortCircuit(output);
 type
   link = ^node;
+  { `value` was this field's name until §6.6's initial-state-specifier reserved
+    the word (ADR-0048). Extended Pascal reserving what ISO 7185 leaves free is
+    ADR-0033's whole reason for making the standard a property of the source,
+    and this is the first place in the corpus where the bill came due. }
   node = record
-    value: integer;
+    datum: integer;
     next: link
   end;
 var
@@ -31,7 +35,7 @@ begin
     dereferences a pointer the left one has just found to be nil, and a
     dereference of nil traps. }
   p := nil;
-  if (p <> nil) and then (p^.value = 5) then
+  if (p <> nil) and then (p^.datum = 5) then
     writeln('unreachable')
   else
     writeln('nil was not dereferenced');
@@ -76,7 +80,7 @@ begin
   { One word-symbol, two words: what may sit between them is what may sit
     between any two tokens, so a comment and a line break are both allowed. }
   if (p = nil) or { a comment, in the middle of an operator }
-     else (p^.value = 0) then
+     else (p^.datum = 0) then
     writeln('separators between the two words');
 
   { the second `then` here is the if-statement's, not part of an operator }

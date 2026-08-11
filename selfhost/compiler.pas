@@ -50,7 +50,7 @@ const
   nounParamForm = 0;
   nounVarType = 1;
   nounPointerDomain = 2;
-  kwCount  = 38;     { 35 word-symbols of ISO 7185, then ISO 10206's }
+  kwCount  = 39;     { 35 word-symbols of ISO 7185, then ISO 10206's }
   isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
@@ -104,7 +104,7 @@ type
     { ISO/IEC 10206:1991 word-symbols, reserved only under the extended
       standard. Under ISO 7185 the scanner yields these spellings as
       identifiers, which is what they are in that language. }
-    tkOtherwise, tkPow, tkProtected,
+    tkOtherwise, tkPow, tkProtected, tkValue,
     { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
       under both standards and refused under ISO 7185, where no valid program
       can hold two adjacent stars outside a comment or a string anyway. }
@@ -265,6 +265,9 @@ type
     at, len: integer;
     ftype: typePtr;
     index: integer;
+    { 6.6: a field's own type-denoter may carry an initial-state-specifier, and
+      then the record's initial state has that field bearing that value. }
+    initValue: nodePtr;
     { Where the field lives, as a path: nil is the record's fixed part, (0) is
       arm 0 of its variant part, (0, 1) is arm 1 of the variant part inside arm
       0. ISO 7185 6.4.3.3 puts no limit on the nesting, so a single index could
@@ -421,7 +424,14 @@ type
       hidden binding a `with` makes, because 6.5.1 asks about the
       variable-access's *closest-containing* variable-identifier and a `with`
       is where that name stops being written down. }
-    isProtected: boolean
+    isProtected: boolean;
+
+    { ISO/IEC 10206:1991 6.6: the value this variable bears when the block that
+      declares it is entered. Borrowed from the AST and read only by the
+      prologue -- every expression in one is nonvarying (6.8.2), so it is
+      emitted where it stands rather than folded. For an skType it is the
+      initial state the *type-name* hands on (6.4.1). }
+    initValue: nodePtr
   end;
 
   { Every type produced from a schema, keyed by the schema and the tuple.
@@ -512,6 +522,15 @@ type
       is never both, so one field serves -- the same sharing typeRec.elem uses,
       and what the C++ splits over Expr::type and TypeExpr::resolved. }
     ntype: typePtr;
+    { ISO/IEC 10206:1991 6.6's initial-state-specifier, `value <expression>`.
+      It hangs off the *type-denoter* (6.4.1) rather than the declaration,
+      which is why it is here and why `type count = integer value 1` gives the
+      initial state to every variable of `count`. It is in the fixed part
+      because 6.4.1 offers it to every denoter, whatever kind, and a variant
+      field could not be shared across them. nsOk is Sema's: set when the
+      specifier passed its checks, so a rejected one cannot reach CodeGen. }
+    nsValue: nodePtr;
+    nsOk: boolean;
     case kind: nodeKind of
       nkInt:        (intVal: integer);
       { A real literal is kept as its source text and not converted. The
@@ -748,6 +767,15 @@ var
     else, so this is what separates `var s: vector(n)` from every other
     position the same denoter could have been written in. }
   dynamicVarFor: symPtr;
+  { True while a field of a *variant part* is being resolved, where 6.5.1 makes
+    the initial state conditional on the selector. There is no flag for "this
+    position admits a specifier at all": the parser settles that, by stopping
+    before the word everywhere but the three positions that do. }
+  variantField: boolean;
+  { True while a *schema body* is being resolved. 6.4.7 makes one a
+    type-denoter, so the word parses there, and a schema definition is spelled
+    as a type definition -- so refusing it needs a reason of its own. }
+  inSchemaBody: boolean;
   { Not nil while a schema body is being resolved *generically*, for the
     schematic formal parameter it belongs to. It is what tells the subrange
     resolver that a bound naming a discriminant is a bound and not a mistake. }
@@ -1161,7 +1189,8 @@ begin
   { Beyond isoKwCount: looked up only under the extended standard. }
   DefineKeyword(36, 'otherwise', tkOtherwise);
   DefineKeyword(37, 'pow      ', tkPow);
-  DefineKeyword(38, 'protected', tkProtected)
+  DefineKeyword(38, 'protected', tkProtected);
+  DefineKeyword(39, 'value    ', tkValue)
 end;
 
 { A str against a space-padded literal, which is the comparison LookupKeyword
@@ -1675,6 +1704,7 @@ begin
     tkOtherwise: write('''otherwise''');
     tkPow:       write('''pow''');
     tkProtected: write('''protected''');
+    tkValue:     write('''value''');
     tkStarStar:  write('''**''');
     tkAndThen:   write('''and then''');
     tkOrElse:    write('''or else''')
@@ -1702,6 +1732,7 @@ begin
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
     tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow, tkProtected,
+    tkValue,
     tkAndThen, tkOrElse: write('?')
   end
 end;
@@ -1790,6 +1821,8 @@ begin
   n^.col := c;
   n^.next := nil;
   n^.ntype := nil;
+  n^.nsValue := nil;
+  n^.nsOk := false;
   { What Sema will fill in. A C++ struct gets these from its member
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
@@ -1946,6 +1979,7 @@ end;
 function ParseExpr: nodePtr; forward;
 function ParseFactor: nodePtr; forward;
 function ParseTypeExpr: nodePtr; forward;
+function ParseTypeDenoter: nodePtr; forward;
 function ParseStatement: nodePtr; forward;
 function ParseBlock: nodePtr; forward;
 
@@ -2031,14 +2065,14 @@ begin
   tail := nil;
   more := true;
   while more and not aborted do begin
-    Append(head, tail, ParseTypeExpr);
+    Append(head, tail, ParseTypeDenoter);
     more := Accept(tkComma)
   end;
   t^.arDims := head;
 
   Expect(tkRBracket, ctxArrayIndex);
   Expect(tkOf, ctxArrayIndex);
-  t^.arElem := ParseTypeExpr;
+  t^.arElem := ParseTypeDenoter;
   ParseArrayType := t
 end;
 
@@ -2138,7 +2172,7 @@ begin
       writeln('the tag of a variant part must be a type name');
       Bail
     end;
-  tagType := ParseTypeExpr;
+  tagType := ParseTypeDenoter;
   Expect(tkOf, ctxVariantTag);
 
   head := nil;
@@ -2270,7 +2304,34 @@ begin
 end;
 
 { type-denoter = 'packed'? structured-type | ordinal-type | type-identifier }
+{ type-denoter = ( type-name | new-type | type-inquiry | discriminated-schema )
+                  [ initial-state-specifier ]      (ISO/IEC 10206:1991 6.4.1)
+
+  Only the three positions that may carry a specifier call this; every nested
+  denoter calls ParseTypeDenoter and stops before the word. That is not a
+  shortcut -- it is the only reading that parses. `set of 1..9 value [2]` has
+  one place the specifier can attach and the recursion would have taken it for
+  the base type, and `array [1..8] of char value '*'` is 6.6 NOTE 3's own
+  example of a violation *because* the value belongs to the array. So the
+  component stops at the word and the outer denoter takes it, which is what
+  turns that example into the type error the note says it is.
+
+  There is no langStd test here, and there cannot be one: `value` is a
+  word-symbol Extended Pascal *adds*, so under ISO 7185 the lexer yields an
+  identifier and this token never appears. The lexer's decision is the whole of
+  the feature's language gating -- unlike `type of`, whose words are reserved
+  in both languages and which therefore needs an explicit refusal. }
 function ParseTypeExpr;
+var t: nodePtr;
+begin
+  t := ParseTypeDenoter;
+  if (t <> nil) and not aborted then
+    if Accept(tkValue) then
+      t^.nsValue := ParseExpr;
+  ParseTypeExpr := t
+end;
+
+function ParseTypeDenoter;
 var t, n: nodePtr; packed_: boolean;
 begin
   EnterLevel;
@@ -2287,7 +2348,7 @@ begin
       t^.soElem := nil;
       pos := pos + 1;
       Expect(tkOf, ctxAfterSet);
-      t^.soElem := ParseTypeExpr
+      t^.soElem := ParseTypeDenoter
     end
     else if Check(tkFile) then begin
       t := NewNode(nkFile, CurLine, CurCol);
@@ -2295,7 +2356,7 @@ begin
       t^.flElem := nil;
       pos := pos + 1;
       Expect(tkOf, ctxAfterFile);
-      t^.flElem := ParseTypeExpr
+      t^.flElem := ParseTypeDenoter
     end
     else if Check(tkArray) then
       t := ParseArrayType(packed_)
@@ -3336,7 +3397,7 @@ begin
         writeln('the result type of a functional parameter must be a type name');
         Bail
       end;
-    g^.grResult := ParseTypeExpr
+    g^.grResult := ParseTypeDenoter
   end
 end;
 
@@ -3374,7 +3435,7 @@ begin
           writeln('a parameter''s type must be a type name');
           Bail
         end;
-      g^.grType := ParseTypeExpr
+      g^.grType := ParseTypeDenoter
     end;
     Append(head, tail, g);
     more := Accept(tkSemi)
@@ -3421,7 +3482,7 @@ begin
       writeln('expected the result type of the function');
       Bail
     end;
-    d^.pdResult := ParseTypeExpr
+    d^.pdResult := ParseTypeDenoter
   end;
   Expect(tkSemi, ctxProcHeading);
 
@@ -4005,6 +4066,7 @@ begin
   s^.discBinding := false;
   s^.paramSection := 0;
   s^.isProtected := false;
+  s^.initValue := nil;
   NewSymbol := s
 end;
 
@@ -4368,6 +4430,7 @@ end;
 
 procedure CheckExpr(e: nodePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
+function InitialStateOf(d: nodePtr): nodePtr; forward;
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
   forward;
 function GenericFromSchema(schema, param: symPtr; d: nodePtr;
@@ -5072,7 +5135,8 @@ begin
 end;
 
 procedure AddField(rec: typePtr; var into, tail: fieldPtr; n: nodePtr;
-                   t: typePtr; variant: numPtr; index: integer);
+                   t: typePtr; variant: numPtr; index: integer;
+                   init: nodePtr);
 var f: fieldPtr;
 begin
   if FindField(rec, n^.dnAt, n^.dnLen) <> nil then begin
@@ -5090,6 +5154,7 @@ begin
     f^.variant := variant;
     f^.line := n^.line;
     f^.col := n^.col;
+    f^.initValue := init;
     f^.next := nil;
     if into = nil then into := f else tail^.next := f;
     tail := f
@@ -5210,7 +5275,7 @@ begin
       tagName := NewNode(nkDeclName, tagLine, tagCol);
       tagName^.dnAt := tagAt;
       tagName^.dnLen := tagLen;
-      AddField(rec, fields, fieldTail, tagName, tag, path, tagField)
+      AddField(rec, fields, fieldTail, tagName, tag, path, tagField, nil)
     end;
 
     index := 0;
@@ -5291,11 +5356,17 @@ begin
       armPath := PathAppend(path, index);
       g := arm^.vaFields;
       while g <> nil do begin
+        { A field-list is a field-list (ISO 7185 6.4.3.3), so an arm's fields
+          may carry an initial-state-specifier syntactically -- and are told
+          why they may not have one here rather than being told it is the wrong
+          position. }
+        variantField := true;
         fieldType := ResolveType(g^.grType);
+        variantField := false;
         n := g^.grNames;
         while n <> nil do begin
           AddField(rec, v^.fields, v^.fieldTail, n, fieldType, armPath,
-                   FieldCount(v^.fields));
+                   FieldCount(v^.fields), nil);
           n := n^.next
         end;
         g := g^.next
@@ -5317,17 +5388,21 @@ begin
 end;
 
 function ResolveRecord(d: nodePtr): typePtr;
-var t, fieldType: typePtr; g, n: nodePtr;
+var t, fieldType: typePtr; g, n, init: nodePtr;
 begin
   t := NewType(tyRecord);
   t^.isPacked := d^.rcPacked;
   g := d^.rcFields;
   while g <> nil do begin
+    { 6.6: a field's own type-denoter may carry an initial-state-specifier, and
+      then the record's initial state has that field bearing that value. The
+      offer is made here and nowhere else inside a type-denoter. }
     fieldType := ResolveType(g^.grType);
+    init := InitialStateOf(g^.grType);
     n := g^.grNames;
     while n <> nil do begin
       AddField(t, t^.fields, t^.fieldTail, n, fieldType, nil,
-               FieldCount(t^.fields));
+               FieldCount(t^.fields), init);
       n := n^.next
     end;
     g := g^.next
@@ -5555,7 +5630,8 @@ end;
 function ProduceFromSchema;
 var formals: symListPtr; a, arg: nodePtr; t, given: typePtr;
     tuple, tupleTail, tv: numPtr; value, count, want, before: integer;
-    ok, repeated, dynamic: boolean; pr: producedPtr; mark: entryPtr;
+    ok, repeated, dynamic, savedSchemaBody: boolean;
+    pr: producedPtr; mark: entryPtr;
     disc, v: symPtr; p, q, push: symListPtr;
 begin
   t := nil;
@@ -5734,12 +5810,15 @@ begin
           end;
 
           ForgetResolved(schema^.schemaBody);
+          savedSchemaBody := inSchemaBody;
+          inSchemaBody := true;
           new(push);
           push^.sym := schema;
           push^.next := producingTop;
           producingTop := push;
           before := errorCount;
           t := ResolveType(schema^.schemaBody);
+          inSchemaBody := savedSchemaBody;
           { popped by rebuilding the list without its head }
           producingTop := producingTop^.next;
           scopeTop := mark;
@@ -5952,7 +6031,7 @@ end;
   the same thing of this. }
 function GenericFromSchema;
 var t, comp: typePtr; p, q, push: symListPtr; disc: symPtr;
-    mark: entryPtr; before, k: integer; repeated: boolean;
+    mark: entryPtr; before, k: integer; repeated, savedSchemaBody: boolean;
 begin
   t := nil;
   { No self-reference guard here. 6.4.7's rule is enforced where the recursion
@@ -5998,6 +6077,8 @@ begin
     end;
 
     ForgetResolved(schema^.schemaBody);
+    savedSchemaBody := inSchemaBody;
+    inSchemaBody := true;
     new(push);
     push^.sym := schema;
     push^.next := producingTop;
@@ -6005,6 +6086,7 @@ begin
     genericFor := param;
     before := errorCount;
     t := ResolveType(schema^.schemaBody);
+    inSchemaBody := savedSchemaBody;
     genericFor := nil;
     producingTop := producingTop^.next;
     scopeTop := mark;
@@ -6117,6 +6199,146 @@ begin
   SchematicFormal := t
 end;
 
+{ ISO/IEC 10206:1991 6.8.2: an expression is *nonvarying* when its value cannot
+  change -- literals, constants, and operations on those. That is not the same
+  as "the compiler can fold it": 6.6's own examples include `ord(red)` and
+  `polar(exp(1.0), pi)`, neither of which this compiler folds, and both of
+  which are perfectly good things for a block prologue to compute. So the test
+  is over what the expression *reads*, and what survives it is emitted as an
+  ordinary expression at block entry.
+
+  A required function is nonvarying with nonvarying arguments; a user-declared
+  one is not, because 6.8.2 does not make it so and its body may read
+  anything. }
+function Nonvarying(e: nodePtr): boolean;
+var ok: boolean; m: nodePtr;
+begin
+  if e = nil then
+    Nonvarying := false
+  else
+    case e^.kind of
+      nkInt, nkReal, nkChar, nkStr, nkNil: Nonvarying := true;
+      nkVar: Nonvarying := (e^.vrSym <> nil) and (e^.vrSym^.kind = skConst);
+      nkUnary: Nonvarying := Nonvarying(e^.unArg);
+      nkBinary: Nonvarying := Nonvarying(e^.bnLhs) and Nonvarying(e^.bnRhs);
+      nkSet: begin
+        ok := true;
+        m := e^.seMembers;
+        while (m <> nil) and ok do begin
+          if not Nonvarying(m^.smLo) then ok := false;
+          if m^.smHi <> nil then
+            if not Nonvarying(m^.smHi) then ok := false;
+          m := m^.next
+        end;
+        Nonvarying := ok
+      end;
+      { `eof` and `eoln` read a file, which is what varying means. }
+      nkCall: begin
+        if (e^.clBuiltin = biNone) or (e^.clBuiltin = biEof) or
+           (e^.clBuiltin = biEoln) then
+          Nonvarying := false
+        else begin
+          ok := true;
+          m := e^.clArgs;
+          while (m <> nil) and ok do begin
+            if not Nonvarying(m) then ok := false;
+            m := m^.next
+          end;
+          Nonvarying := ok
+        end
+      end;
+      nkSetMember, nkIndex, nkField, nkDeref, nkWriteArg, nkEmpty, nkAssign,
+      nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
+      nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
+      nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
+      nkProcDecl, nkLabelDecl, nkBlock:
+        Nonvarying := false
+    end
+end;
+
+{ 6.6: "The initial state specified by an initial-state-specifier shall be the
+  state bearing the value denoted by the component-value", and "An expression
+  contained by the component-value of an initial-state-specifier shall be
+  nonvarying."
+
+  Nonvarying is what makes the whole feature cheap: nothing evaluated at entry
+  can depend on the order the entry happens in. }
+{ There is deliberately no check here that the *position* admits a specifier.
+  The parser is the whole of that rule: only the three positions that may carry
+  one call ParseTypeExpr, and every nested denoter stops before the word -- so
+  a denoter reaching here with a value is by construction in a position that
+  allows it. A version of this procedure carrying a "not here" message was
+  written, and deleted when nothing could reach it. }
+procedure CheckInitialState(d: nodePtr; t: typePtr);
+var v: nodePtr;
+begin
+  v := d^.nsValue;
+  if v <> nil then
+    { 6.4.7 makes a schema body a type-denoter, so the word parses there -- and
+      it is spelled as a type definition, which is why this needs a reason of
+      its own rather than the position message below. }
+    if inSchemaBody then begin
+      ErrorAt(v^.line, v^.col);
+      writeln('a schema''s body cannot carry an initial-state specifier: ',
+              'every discriminant tuple produces its own type, and the ',
+              'value would have to be attributed once for each')
+    end
+    { 6.5.1 makes the initial state of a *variant* conditional on the
+      selector's own initial state selecting it. Nothing here tracks that, so a
+      field of a variant part is refused rather than initialised into a variant
+      that may not be the live one. }
+    else if variantField then begin
+      ErrorAt(v^.line, v^.col);
+      writeln('a field of a variant part cannot have an initial value, ',
+              'because which variant exists is not settled here')
+    end
+    else begin
+      CheckExpr(v);
+      if not Nonvarying(v) then begin
+        ErrorAt(v^.line, v^.col);
+        writeln('the value of an initial-state specifier must not depend on ',
+                'a variable')
+      end
+      { 6.4.3.6 gives a file the initial state totally-undefined, and a file has
+        no value to bear in any case. Asked before compatibility, or the
+        message would be about the type of the value rather than about the
+        file. }
+      else if IsFile(t) then begin
+        ErrorAt(v^.line, v^.col);
+        writeln('a file variable has no initial value')
+      end
+      else if not Assignable(t, v^.ntype) then begin
+        ErrorAt(v^.line, v^.col);
+        write('cannot give ');
+        if t = nil then write('this') else WriteTypeName(t);
+        write(' an initial value of type ');
+        if v^.ntype = nil then write('nothing') else WriteTypeName(v^.ntype);
+        writeln
+      end
+      else
+        d^.nsOk := true
+    end
+end;
+
+{ The initial value a declaration of this denoter gives its variables. 6.4.1
+  makes the *type-denoter* carry the initial state, so a type-name hands on the
+  one its definition wrote -- which is what makes `type count = integer value 1;
+  var c: count` initialise c. }
+function InitialStateOf;
+var s: symPtr;
+begin
+  InitialStateOf := nil;
+  if d <> nil then
+    if d^.nsOk then
+      InitialStateOf := d^.nsValue
+    else if d^.kind = nkNamed then begin
+      s := Lookup(d^.nmAt, d^.nmLen);
+      if s <> nil then
+        if s^.kind = skType then InitialStateOf := s^.initValue
+    end
+end;
+
 function ResolveType;
 var t: typePtr; s, savedDynamic: symPtr; n: nodePtr;
 begin
@@ -6195,6 +6417,7 @@ begin
         t := intType
     end;
     dynamicVarFor := savedDynamic;
+    CheckInitialState(d, t);
     d^.ntype := t;
     ResolveType := t
   end
@@ -8504,7 +8727,7 @@ begin
 end;
 
 procedure CheckBlock;
-var d, g, n: nodePtr; s, schema, named, first: symPtr; t: typePtr;
+var d, g, n, init: nodePtr; s, schema, named, first: symPtr; t: typePtr;
     value: symbol; outerPath: stmtPathPtr;
 begin
   CheckLabelPart(b, owner);
@@ -8545,6 +8768,10 @@ begin
     s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
     if s^.stype = nil then begin   { a duplicate: keep the first definition }
       s^.stype := t;
+      { 6.4.1: a type-name denotes "the type, bindability and initial state"
+        its definition denoted, so the initial state travels with the name and
+        every variable of it is initialised. }
+      s^.initValue := InitialStateOf(d^.tdType);
       if t^.aliasLen = 0 then begin
         t^.aliasAt := d^.tdAt;
         t^.aliasLen := d^.tdLen
@@ -8596,9 +8823,13 @@ begin
       { One denoter for the whole group, so `a, b: array [1..3] of integer`
         makes a and b the same type and lets `a := b` through. }
       t := ResolveType(g^.grType);
+      init := InitialStateOf(g^.grType);
       n := g^.grNames;
       while n <> nil do begin
         s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
+        { 6.2.3.5 creates each local "in its initial state" on entry, so the
+          whole group shares one value as it shares one type. }
+        s^.initValue := init;
         n := n^.next
       end
     end;
@@ -9862,7 +10093,7 @@ begin
       tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
       tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
       tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile,
-      tkWith, tkOtherwise, tkPow, tkProtected: begin
+      tkWith, tkOtherwise, tkPow, tkProtected, tkValue: begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
@@ -13573,6 +13804,49 @@ end;
   block is entered. The tuple goes into the descriptor first, because
   everything after it -- the domain check, the size, the storage -- is asked of
   the descriptor and not of the expressions that filled it. }
+{ ISO/IEC 10206:1991 6.2.3.5: "Each variable contained by an activation of a
+  block ... shall be created in its initial state within the commencement of
+  the activation." 6.6 makes every expression in one nonvarying, so nothing
+  here can depend on the order -- which is why the whole feature is a walk of
+  the frame rather than a place in the declaration sequence.
+
+  A record's fields may each carry one, so a record with no initial state of
+  its own may still have parts of it initialised. That is the recursion; it
+  does not go into an array, because 6.4.3.2 forbids a component-type from
+  carrying a specifier at all. }
+procedure InitialStateInto(var addr: str; t: typePtr; init: nodePtr);
+var f: fieldPtr; sub: str;
+begin
+  if init <> nil then
+    EmitStore(addr, t, init)
+  else if IsRecord(t) then begin
+    f := t^.fields;
+    while f <> nil do begin
+      if (f^.initValue <> nil) or IsRecord(f^.ftype) then begin
+        FieldAddress(addr, t, f, sub);
+        InitialStateInto(sub, f^.ftype, f^.initValue)
+      end;
+      f := f^.next
+    end
+  end
+end;
+
+procedure InitInitialStates(p: symPtr);
+var l: symListPtr; addr: str;
+begin
+  l := p^.frameVars;
+  while l <> nil do begin
+    { 6.2.3.5 excludes formal parameters, and a hidden slot has no declaration
+      to have carried a specifier. }
+    if l^.sym^.kind = skVar then
+      if (l^.sym^.initValue <> nil) or IsRecord(l^.sym^.stype) then begin
+        AddressOfSym(l^.sym, addr);
+        InitialStateInto(addr, l^.sym^.stype, l^.sym^.initValue)
+      end;
+    l := l^.next
+  end
+end;
+
 procedure InitDynamicVars(p: symPtr);
 var l, d: symListPtr; a: nodePtr; slot, half, value, size, storage: str;
     nohdr: str; comp: typePtr; align: integer;
@@ -13802,6 +14076,7 @@ begin
     before anything that could jump: the storage a dynamically sized variable
     stands for has to exist for the whole activation. }
   InitDynamicVars(p);
+  InitInitialStates(p);
   InitFiles(p);
   JumpDispatch(p)
 end;
@@ -14016,6 +14291,8 @@ begin
   newTuple := nil;
   genericFor := nil;
   dynamicVarFor := nil;
+  variantField := false;
+  inSchemaBody := false;
   stdInput := nil;
   stdOutput := nil;
   for stringIndex := 1 to strMax do

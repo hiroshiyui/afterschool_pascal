@@ -39,12 +39,19 @@ struct LabelRange {
 /// fixed part, `[k]` is arm k of its variant part, `[k, j]` is arm j of the
 /// variant part *inside* arm k, and so on. ISO 7185 §6.4.3.3 puts no limit on
 /// the nesting, so a single index could not say where a field lives.
+struct Expr; // an initial-state-specifier's value, owned by the AST
+
 struct Field {
   std::string name;
   Type *type = nullptr;
   int index = 0;
   std::vector<int> variant;
   int line = 0, col = 0;
+  /// ISO/IEC 10206:1991 §6.6: a field's own type-denoter may carry an
+  /// initial-state-specifier, and then the record's initial state has that
+  /// field bearing that value. Borrowed from the AST — Sema owns the tree —
+  /// and read only by the block prologue.
+  Expr *initValue = nullptr;
 };
 
 /// One arm of a variant part: the tag values that select it, and the fields
