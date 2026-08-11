@@ -7,6 +7,7 @@
 
 #include "ast.h"
 #include "diag.h"
+#include "token.h"
 #include "type.h"
 
 namespace ap {
@@ -169,7 +170,13 @@ struct Symbol {
 /// to ask questions about the source program.
 class Sema {
 public:
-  explicit Sema(Diagnostics &diags) : diags_(diags) {}
+  /// The standard decides two things here, and both are about *identifiers*
+  /// rather than word-symbols: whether `complex` denotes a type, and whether
+  /// the five complex functions are required ones. Neither name is reserved in
+  /// either language — a valid ISO 7185 program may declare a function called
+  /// `re` — so this is not a lexical question and the lexer cannot answer it.
+  explicit Sema(Diagnostics &diags, Std std = Std::Iso7185)
+      : diags_(diags), std_(std) {}
 
   void run(Program &prog);
 
@@ -400,6 +407,7 @@ private:
   std::map<Symbol *, Type *> heapSchemaTypes_;
 
   Diagnostics &diags_;
+  Std std_;
   std::vector<std::unique_ptr<Symbol>> owned_;
   std::vector<std::unique_ptr<Type>> types_;
   std::vector<PendingPointer> pendingPointers_;

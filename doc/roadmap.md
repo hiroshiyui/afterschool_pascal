@@ -453,6 +453,24 @@ was never written down.
   - A component-value may only be an **expression** here; §6.8.7's array-values
     and record-values are the structured-value-constructor feature, which is
     usable in an ordinary expression too and is therefore its own item.
+- ~~**Complex numbers.**~~ Done (ADR-0049). §6.4.2.2 e) makes `complex` a
+  **simple** type, and that one word decides the feature: a complex is a value,
+  assigned with a store and passed in a register, exactly where a set is
+  (ADR-0028) and nowhere near the by-address machinery of ADR-0017.
+  - **The representation is `<2 x double>`, a vector and not a struct**, for
+    ADR-0030's reason: nothing may depend on how a struct is passed between
+    the two backends. Only three functions know it is rectangular, which is
+    what makes §6.4.2.2's NOTE 4 free to honour.
+  - The arithmetic is inline; only the six transcendentals go to the runtime,
+    and each is **two calls**, one per part — the same trade ADR-0030 made, so
+    that no complex-shaped value ever crosses the C boundary.
+  - **The first feature gated in Sema rather than in the lexer.** `complex`,
+    `cmplx`, `re` and the rest are required *identifiers*, not word-symbols: a
+    valid ISO 7185 program may declare them, and `tests/complex_redeclared.pas`
+    is one that does. Sema had to learn which standard it is checking.
+  - `abs` and `arg` of a complex yield a **real** — the two places table 2's
+    result kind does not follow its operand — and §6.8.3.5 gives complex only
+    `=` and `<>`, there being no order to give the other four.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and
@@ -460,8 +478,8 @@ was never written down.
   the language rather than a missing mechanism. Its *finding* has not — a compiler reads text in and writes text out
   — so this should be settled by measuring stage-1 code again, the way it was
   settled the first time, and not by taste.
-- **Modules**, `bind`/`unbind`, direct-access files, complex numbers,
-  restricted types, structured-value constructors. Each needs its own record.
+- **Modules**, `bind`/`unbind`, direct-access files, restricted types,
+  structured-value constructors. Each needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

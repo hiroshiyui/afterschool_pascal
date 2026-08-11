@@ -290,14 +290,23 @@ types      integer value 1 — an initial-state specifier: the value a
            every variable of count, and a record's fields may each carry
            one. The value must read nothing that can change — a literal,
            a constant, an operator over those, or a required function
+types      complex — a *simple* type, so it is assigned, passed and
+           returned as a value like a real. cmplx(x, y) and polar(r, t)
+           build one (the standard gives it no literal); re, im, arg and
+           abs take one apart, all yielding a real. + - * / work, and an
+           integer or real operand widens; = and <> compare, and the
+           ordering operators do not, there being no order on the complex
+           numbers. sqr, sqrt, exp, ln, sin, cos and arctan give a complex
+           for a complex, with C99's principal values
 words      otherwise, pow, protected and value are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
-           their words already are
+           their words already are. complex, cmplx, polar, re, im and arg
+           are required *identifiers* rather than word-symbols, so a
+           program may still declare its own
 ```
 
 Not accepted yet: the `string` type, modules, structured-value
-constructors, binding (`bind`/`unbind`), direct-access files, and complex
-numbers. A word-symbol is reserved only when the feature needing it
+constructors, binding (`bind`/`unbind`), and direct-access files. A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some
 programs a conforming processor would reject.
 `doc/roadmap.md` has the order and the reasoning.

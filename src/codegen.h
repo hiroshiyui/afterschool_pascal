@@ -53,6 +53,11 @@ private:
   llvm::Type *i8() { return llvm::Type::getInt8Ty(ctx_); }
   llvm::Type *i1() { return llvm::Type::getInt1Ty(ctx_); }
   llvm::Type *f64() { return llvm::Type::getDoubleTy(ctx_); }
+  /// ISO/IEC 10206:1991's `complex`, as a two-element vector of doubles:
+  /// element 0 is the real part and element 1 the imaginary one.
+  llvm::Type *cplx() {
+    return llvm::FixedVectorType::get(llvm::Type::getDoubleTy(ctx_), 2);
+  }
   /// Every set is one 256-bit integer: a bit per possible member, so union is
   /// `or`, intersection is `and`, and membership is one shift (ADR-0028).
   llvm::Type *i256() { return llvm::Type::getIntNTy(ctx_, 256); }
@@ -258,6 +263,12 @@ private:
   llvm::Value *toReal(llvm::Value *v, Type *from);
   /// Convert a value of type `from` for storage in a slot of type `to`.
   llvm::Value *convertFor(llvm::Value *v, Type *from, Type *to);
+  llvm::Value *reOf(llvm::Value *z);
+  llvm::Value *imOf(llvm::Value *z);
+  llvm::Value *makeComplex(llvm::Value *re, llvm::Value *im);
+  llvm::Value *toComplex(llvm::Value *v, Type *from);
+  llvm::Value *emitComplexBinary(Binary *e, llvm::Value *l,
+                                 llvm::Value *r);
 
   /// Compare two equal-length strings through the runtime helper.
   llvm::Value *emitStringCompare(Binary *e);

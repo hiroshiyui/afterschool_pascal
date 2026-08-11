@@ -53,13 +53,26 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       {"arctan", Builtin::ArcTan}, {"trunc", Builtin::Trunc},
       {"round", Builtin::Round}, {"eof", Builtin::Eof},
       {"eoln", Builtin::Eoln},
+      // ISO/IEC 10206:1991 §6.7.6.2 and §6.7.6.3. Looked up under both
+      // standards and refused under ISO 7185, the same way `**` is: a valid
+      // ISO 7185 program may declare a function called `re`, so the *name* is
+      // not reserved — the refusal happens where the call is checked, and only
+      // when no declaration of that name was found.
+      {"cmplx", Builtin::Cmplx}, {"polar", Builtin::Polar},
+      {"re", Builtin::Re},       {"im", Builtin::Im},
+      {"arg", Builtin::Arg},
   };
   return m;
 }
 
-Type *builtinType(const std::string &name) {
+Type *builtinType(const std::string &name, Std std) {
   if (name == "integer") return ty::Int();
   if (name == "real")    return ty::Real();
+  // A required type-identifier of ISO/IEC 10206:1991 and an ordinary
+  // identifier of ISO 7185, where a program may define a type called
+  // `complex` of its own — which is why this is asked of the standard rather
+  // than of the lexer.
+  if (name == "complex" && std == Std::Extended) return ty::Complex();
   if (name == "boolean") return ty::Bool();
   if (name == "char")    return ty::Char();
   if (name == "text")    return ty::Text();
@@ -197,7 +210,7 @@ Type *Sema::resolveEnum(TypeExpr &denoter) {
 /// a record can contain a pointer to itself.
 Type *Sema::resolvePointer(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Pointer);
-  if (Type *builtin = builtinType(denoter.name)) {
+  if (Type *builtin = builtinType(denoter.name, std_)) {
     t->elem = builtin;
     return t;
   }
@@ -914,7 +927,7 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   Type *t = nullptr;
   switch (denoter.kind) {
   case TEK::Named:
-    if ((t = builtinType(denoter.name)) == nullptr) {
+    if ((t = builtinType(denoter.name, std_)) == nullptr) {
       Symbol *sym = lookup(denoter.name);
       if (sym && sym->kind == SymKind::Type) {
         t = sym->type;
@@ -1037,7 +1050,7 @@ void Sema::declareSchema(TypeDecl &decl) {
   s->schemaBody = decl.type.get();
 
   for (DiscriminantGroup &g : decl.discriminants) {
-    Type *t = builtinType(g.typeName);
+    Type *t = builtinType(g.typeName, std_);
     if (!t) {
       Symbol *named = lookup(g.typeName);
       if (named && named->kind == SymKind::Type)
@@ -1499,6 +1512,13 @@ bool Sema::assignable(Type *to, Type *from) const {
     return false;
   if (tb->kind == fb->kind)
     return true;
+  // ISO/IEC 10206:1991 §6.4.6 c): a complex accepts an integer or a real, and
+  // "an implicit integer-to-complex conversion or real-to-complex conversion,
+  // respectively, shall be performed". Written the same way round as the
+  // real-from-integer widening below it, and for the same reason — the
+  // widening is exact and the narrowing does not exist.
+  if (to->isComplex())
+    return from->isNumeric();
   return to->isReal() && from->isInteger();
 }
 
@@ -1993,8 +2013,11 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
       // something that lives in memory", because a set lives in a register and
       // would pass that test while still not being a result type the language
       // allows.
+      // ISO 7185 §6.6.2 restricts a function's result to a simple type or a
+      // pointer type, and ISO/IEC 10206:1991 §6.4.2.2 adds `complex` to the
+      // simple types — so this list grew by one word rather than by a rule.
       if (!sym->type->isOrdinal() && !sym->type->isReal() &&
-          !sym->type->isPointer()) {
+          !sym->type->isComplex() && !sym->type->isPointer()) {
         diags_.error(decl.line, decl.col,
                      "a function cannot return " + sym->type->name() +
                          "; use a var parameter");
@@ -2044,7 +2067,7 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
         // parameter's heading is a function heading — the same rule, so the
         // same message.
         if (!t->elem->isOrdinal() && !t->elem->isReal() &&
-            !t->elem->isPointer()) {
+            !t->elem->isComplex() && !t->elem->isPointer()) {
           diags_.error(group.names[0].line, group.names[0].col,
                        "a function cannot return " + t->elem->name() +
                            "; use a var parameter");
@@ -2739,21 +2762,27 @@ void Sema::checkBinary(Binary *b) {
     b->type = ty::Bool();
     return;
 
+  // ISO/IEC 10206:1991 §6.8.3.2, table 3: `+ - * /` take an integer, a real or
+  // a complex, and the result is complex if either operand is. The widening is
+  // §6.4.6 c)'s implicit conversion, which is why the operand check is the
+  // *same* assignability question asked everywhere else.
   case BinOp::Add:
   case BinOp::Sub:
   case BinOp::Mul:
-    if (!l->isNumeric() || !r->isNumeric()) {
+    if (!l->isArith() || !r->isArith()) {
       bad("numeric");
       b->type = ty::Int();
+    } else if (l->isComplex() || r->isComplex()) {
+      b->type = ty::Complex();
     } else {
       b->type = (l->isReal() || r->isReal()) ? ty::Real() : ty::Int();
     }
     return;
 
   case BinOp::RealDiv:
-    if (!l->isNumeric() || !r->isNumeric())
+    if (!l->isArith() || !r->isArith())
       bad("numeric");
-    b->type = ty::Real();
+    b->type = (l->isComplex() || r->isComplex()) ? ty::Complex() : ty::Real();
     return;
 
   case BinOp::IntDiv:
@@ -2780,22 +2809,29 @@ void Sema::checkBinary(Binary *b) {
   // an integer power", and its result has the type of its *left* operand —
   // which is the whole reason the standard has two operators rather than one.
   case BinOp::Exp:
-    if (!l->isNumeric() || !r->isNumeric())
+    // Table 3 gives `**` a complex *left* operand and a numeric right one, and
+    // the result is complex exactly when the left operand is — the same rule
+    // `pow` has, which is why both ask one question about the left operand.
+    if (!l->isArith() || !r->isNumeric())
       bad("numeric");
-    b->type = ty::Real();
+    b->type = l->isComplex() ? ty::Complex() : ty::Real();
     return;
 
   case BinOp::Pow:
-    if (!l->isNumeric()) {
+    if (!l->isArith()) {
       bad("numeric");
       b->type = ty::Int();
     } else if (!r->isInteger()) {
       diags_.error(b->line, b->col,
                    "the right operand of 'pow' must be an integer, found " +
                        r->name() + " (use ** for a real exponent)");
-      b->type = l->isReal() ? ty::Real() : ty::Int();
+      b->type = l->isComplex() ? ty::Complex()
+                : l->isReal()  ? ty::Real()
+                               : ty::Int();
     } else {
-      b->type = l->isReal() ? ty::Real() : ty::Int();
+      b->type = l->isComplex() ? ty::Complex()
+                : l->isReal()  ? ty::Real()
+                               : ty::Int();
     }
     return;
 
@@ -2839,6 +2875,18 @@ void Sema::checkBinary(Binary *b) {
       diags_.error(b->line, b->col, "file variables cannot be compared");
     } else if (l->isMemory() || r->isMemory()) {
       bad("comparable");
+    } else if (l->isComplex() || r->isComplex()) {
+      // §6.8.3.5, table 6: `=` and `<>` accept any simple type, and the four
+      // ordering operators accept "any simple-type **except complex-type**".
+      // There is no order on the complex numbers, so this is the standard
+      // declining to invent one rather than an omission.
+      if (b->op != BinOp::Eq && b->op != BinOp::Ne)
+        diags_.error(b->line, b->col,
+                     std::string("complex values can only be compared with = "
+                                 "and <>, not with '") + opName(b->op) +
+                         "': there is no order on the complex numbers");
+      else if (!l->isArith() || !r->isArith())
+        bad("compatible");
     } else if (!(l->isNumeric() && r->isNumeric()) &&
                !assignable(l, r) && !assignable(r, l)) {
       // Compatibility is decided the same way it is for assignment, so a
@@ -3379,6 +3427,14 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
 /// and functions. They are not symbols — the compiler knows them by name — so
 /// a program that tries to pass one gets "undeclared identifier" unless it is
 /// recognised here, which would be a baffling way to report §6.6.3.7.
+/// The five required functions ISO/IEC 10206:1991 adds for the complex type.
+/// They are grouped because every question anyone asks about them is the same
+/// one: does this standard have them?
+static bool isComplexBuiltin(Builtin b) {
+  return b == Builtin::Cmplx || b == Builtin::Polar || b == Builtin::Re ||
+         b == Builtin::Im || b == Builtin::Arg;
+}
+
 static bool isRequiredName(const std::string &name) {
   static const char *procs[] = {"new",   "dispose", "reset",  "rewrite",
                                 "get",   "put",     "read",   "readln",
@@ -3455,6 +3511,19 @@ void Sema::checkCall(Call *c) {
   }
 
   auto it = builtins().find(c->name);
+  // The complex functions are ISO/IEC 10206:1991's, and their names are not
+  // reserved in either language — a valid ISO 7185 program may declare a
+  // function called `re`. So they are recognised only when nothing else of
+  // that name was found, and only under the standard that has them; the
+  // message then says the feature is missing rather than that the name is.
+  if (it != builtins().end() && std_ == Std::Iso7185 &&
+      isComplexBuiltin(it->second)) {
+    diags_.error(c->line, c->col,
+                 "'" + c->name + "' is an Extended Pascal function; compile "
+                 "with --std=extended");
+    c->type = ty::Int();
+    return;
+  }
   if (it == builtins().end()) {
     diags_.error(c->line, c->col, "unknown function '" + c->name + "'");
     c->type = ty::Int();
@@ -3495,6 +3564,25 @@ void Sema::checkCall(Call *c) {
     return;
   }
 
+  // §6.7.6.3: `cmplx(x, y)` and `polar(r, t)` are the two-argument required
+  // functions, and the only way to write a complex value at all — the standard
+  // gives the type no literal.
+  if (c->builtin == Builtin::Cmplx || c->builtin == Builtin::Polar) {
+    if (c->args.size() != 2) {
+      diags_.error(c->line, c->col,
+                   "'" + c->name + "' takes two real arguments");
+      c->type = ty::Complex();
+      return;
+    }
+    for (ExprPtr &arg : c->args)
+      if (arg->type && !arg->type->isNumeric())
+        diags_.error(arg->line, arg->col,
+                     "'" + c->name + "' needs real arguments, found " +
+                         arg->type->name());
+    c->type = ty::Complex();
+    return;
+  }
+
   if (c->args.size() != 1) {
     diags_.error(c->line, c->col,
                  "'" + c->name + "' takes exactly one argument");
@@ -3510,10 +3598,27 @@ void Sema::checkCall(Call *c) {
   };
 
   switch (c->builtin) {
+  // §6.7.6.2, table 2 footnote 5: `abs` of a complex is its *magnitude*, and
+  // so a real — the one function in the table whose result kind changes rather
+  // than following its operand.
   case Builtin::Abs:
+    require(a->isArith(), "a numeric");
+    c->type = a->isComplex() ? ty::Real() : a->isReal() ? ty::Real()
+                                                        : ty::Int();
+    return;
+  // `sqr` keeps its operand's type, complex included.
   case Builtin::Sqr:
-    require(a->isNumeric(), "a numeric");
-    c->type = a->isReal() ? ty::Real() : ty::Int();
+    require(a->isArith(), "a numeric");
+    c->type = a->isComplex() ? ty::Complex()
+              : a->isReal()  ? ty::Real()
+                             : ty::Int();
+    return;
+  // §6.7.6.2: `re`, `im` and `arg` take a complex and yield a real.
+  case Builtin::Re:
+  case Builtin::Im:
+  case Builtin::Arg:
+    require(a->isComplex(), "a complex");
+    c->type = ty::Real();
     return;
   case Builtin::Odd:
     require(a->isInteger(), "an integer");
@@ -3540,9 +3645,13 @@ void Sema::checkCall(Call *c) {
     require(a->isNumeric(), "a real");
     c->type = ty::Int();
     return;
-  default: // the transcendental functions
-    require(a->isNumeric(), "a numeric");
-    c->type = ty::Real();
+  default:
+    // §6.7.6.2: `sin cos exp ln sqrt arctan` take an integer, a real or a
+    // complex, and the result is "real if the operand is of integer-type,
+    // otherwise the type of the operand" — so a complex operand gives a
+    // complex result and everything else gives a real.
+    require(a->isArith(), "a numeric");
+    c->type = a->isComplex() ? ty::Complex() : ty::Real();
     return;
   }
 }

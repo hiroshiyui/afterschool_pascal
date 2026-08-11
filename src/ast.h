@@ -68,6 +68,11 @@ enum class Builtin {
   // written without one (ISO 7185 §6.6.6.5), so they are the only builtins
   // that may appear with no argument list at all.
   Eof, Eoln,
+  /// ISO/IEC 10206:1991 §6.7.6.3's complex constructors and §6.7.6.2's
+  /// accessors. `cmplx` and `polar` are the only way to *write* a complex
+  /// value — the standard gives the type no literal — and `re`, `im` and `arg`
+  /// are the only way back out to a real.
+  Cmplx, Polar, Re, Im, Arg,
 };
 
 struct Expr : Node {

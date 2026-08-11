@@ -665,6 +665,27 @@ in one language or the other, and the standard is a property of the source.
     makes conditional on the selector.
   - `value` is a word Extended Pascal *adds*, so no `--std` test is possible
     in the parser — under ISO 7185 the token never appears. Contrast ADR-0047.
+- **`complex` is a simple type, and therefore a vector** (ADR-0049).
+  §6.4.2.2 e) makes it *simple*, so a complex is a value — assigned with a
+  store, passed in a register, returned from a function — and none of
+  ADR-0017's by-address machinery touches it, exactly as for a set.
+  - **`<2 x double>`, not a struct**, for ADR-0030's reason: nothing may
+    depend on how a struct is passed. Three functions (`reOf`, `imOf`,
+    `makeComplex`) are the whole interface to the representation, which is
+    what makes §6.4.2.2's NOTE 4 — the representation is
+    implementation-defined — free to honour.
+  - **The arithmetic is inline and only the transcendentals are calls**, and
+    each of those is **two** calls, one per part, so that no complex-shaped
+    value ever crosses the C boundary. §6.7.6.2's principal values are C99's,
+    so `csqrt`/`clog`/`catan` are called rather than re-derived.
+  - **The first feature gated in Sema rather than the lexer.** `complex`,
+    `cmplx`, `polar`, `re`, `im` and `arg` are required *identifiers*, not
+    word-symbols — a valid ISO 7185 program may declare them, and
+    `tests/complex_redeclared.pas` does. `Sema` therefore takes a `Std`.
+  - `abs` and `arg` of a complex yield a **real**, the two places table 2's
+    result kind does not follow its operand; §6.8.3.5 gives complex only `=`
+    and `<>`; `write` and `read` refuse it through the message that was
+    already there for every type not on §6.10.3.1's list.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

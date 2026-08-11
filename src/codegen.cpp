@@ -19,6 +19,14 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   switch (t->kind) {
   case TypeKind::Integer: return i32();
   case TypeKind::Real:    return f64();
+  // ISO/IEC 10206:1991 §6.4.2.2 e) makes `complex` a *simple* type, so it must
+  // be a value and not a thing reached through its address. A two-element
+  // vector is the one shape that is both: LLVM lowers it in registers, and
+  // neither backend has to hold an opinion about how a struct is passed —
+  // which is the constraint ADR-0030 named and settled the same way. It is
+  // built and taken apart with insertelement/extractelement, both of which the
+  // textual backend can spell.
+  case TypeKind::Complex: return cplx();
   case TypeKind::Boolean: return i1();
   case TypeKind::Char:    return i8();
   case TypeKind::Void:    return llvm::Type::getVoidTy(ctx_);
@@ -204,7 +212,38 @@ llvm::Value *CodeGen::convertFor(llvm::Value *v, ap::Type *from,
                                  ap::Type *to) {
   if (to && to->isReal())
     return toReal(v, from);
+  // ISO/IEC 10206:1991 §6.4.6 c): "an implicit integer-to-complex conversion
+  // or real-to-complex conversion, respectively, shall be performed".
+  if (to && to->isComplex() && from && !from->isComplex())
+    return toComplex(v, from);
   return v;
+}
+
+/// The real part of a complex value; §6.7.6.2's `re`.
+llvm::Value *CodeGen::reOf(llvm::Value *z) {
+  return b_.CreateExtractElement(z, ConstantInt::get(i32(), 0), "re");
+}
+/// ...and the imaginary one, §6.7.6.2's `im`.
+llvm::Value *CodeGen::imOf(llvm::Value *z) {
+  return b_.CreateExtractElement(z, ConstantInt::get(i32(), 1), "im");
+}
+
+/// A complex value from its two parts. This and the two above are the whole
+/// interface to the representation, which is why §6.4.2.2's NOTE that the
+/// representation "could be rectangular, polar, or something quite different"
+/// costs nothing to honour: only these three lines know it is rectangular.
+llvm::Value *CodeGen::makeComplex(llvm::Value *re, llvm::Value *im) {
+  llvm::Value *z = UndefValue::get(cplx());
+  z = b_.CreateInsertElement(z, re, ConstantInt::get(i32(), 0));
+  return b_.CreateInsertElement(z, im, ConstantInt::get(i32(), 1), "cplx");
+}
+
+/// §6.4.6 c)'s widening: a real or an integer is the complex with that real
+/// part and a zero imaginary one.
+llvm::Value *CodeGen::toComplex(llvm::Value *v, ap::Type *from) {
+  if (from && from->isComplex())
+    return v;
+  return makeComplex(toReal(v, from), ConstantFP::get(f64(), 0.0));
 }
 
 llvm::Value *CodeGen::intrinsicCall(unsigned id,
@@ -1878,6 +1917,53 @@ llvm::Value *CodeGen::emitSetBinary(Binary *e, llvm::Value *l,
   }
 }
 
+/// The four arithmetic operators and the two relational ones ISO/IEC
+/// 10206:1991 gives the complex type. All six are emitted inline: nothing here
+/// needs a library, and keeping them out of the runtime keeps the *only*
+/// complex-shaped value crossing a C boundary out of existence — which is what
+/// lets the representation stay a vector without either backend acquiring an
+/// opinion about how a struct is passed (ADR-0030's constraint).
+llvm::Value *CodeGen::emitComplexBinary(Binary *e, llvm::Value *l,
+                                        llvm::Value *r) {
+  switch (e->op) {
+  case BinOp::Add:
+    return b_.CreateFAdd(l, r, "cadd");
+  case BinOp::Sub:
+    return b_.CreateFSub(l, r, "csub");
+  case BinOp::Mul: {
+    // (a + bi)(c + di) = (ac - bd) + (ad + bc)i
+    llvm::Value *a = reOf(l), *bb = imOf(l), *c = reOf(r), *d = imOf(r);
+    return makeComplex(
+        b_.CreateFSub(b_.CreateFMul(a, c), b_.CreateFMul(bb, d), "cmul.re"),
+        b_.CreateFAdd(b_.CreateFMul(a, d), b_.CreateFMul(bb, c), "cmul.im"));
+  }
+  case BinOp::RealDiv: {
+    // (a + bi)/(c + di) = ((ac + bd) + (bc - ad)i) / (c² + d²). Division by a
+    // zero divisor is left to IEEE, exactly as real `/` is: this compiler does
+    // not trap that one either, so trapping here would be the odd one out.
+    llvm::Value *a = reOf(l), *bb = imOf(l), *c = reOf(r), *d = imOf(r);
+    llvm::Value *den =
+        b_.CreateFAdd(b_.CreateFMul(c, c), b_.CreateFMul(d, d), "cdiv.den");
+    return makeComplex(
+        b_.CreateFDiv(
+            b_.CreateFAdd(b_.CreateFMul(a, c), b_.CreateFMul(bb, d)), den,
+            "cdiv.re"),
+        b_.CreateFDiv(
+            b_.CreateFSub(b_.CreateFMul(bb, c), b_.CreateFMul(a, d)), den,
+            "cdiv.im"));
+  }
+  default: {
+    // Only `=` and `<>` reach here; Sema refused the four ordering operators,
+    // because §6.8.3.5 gives them "any simple-type except complex-type" and
+    // there is no order on the complex numbers to give them.
+    llvm::Value *same =
+        b_.CreateAnd(b_.CreateFCmpOEQ(reOf(l), reOf(r)),
+                     b_.CreateFCmpOEQ(imOf(l), imOf(r)), "ceq");
+    return e->op == BinOp::Eq ? same : b_.CreateNot(same, "cne");
+  }
+  }
+}
+
 llvm::Value *CodeGen::emitBinary(Binary *e) {
   // `and` and `or` short-circuit, which is what makes guarded tests such as
   // `while (i <= n) and (a[i] <> x)` safe to write. Extended Pascal's
@@ -1947,6 +2033,33 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
   // set operators need nothing from the types beyond knowing they are sets.
   if (lt->isSet() || rt_->isSet())
     return emitSetBinary(e, l, r);
+
+  // §6.8.3.2 table 3 and §6.8.3.5 table 6. A complex operand decides the whole
+  // operation, so this is taken before the real/integer split rather than
+  // inside it: `1 + z` is complex addition with the 1 widened, not integer
+  // addition with something odd afterwards.
+  // ...except the two exponentiating operators, whose *right* operand is
+  // never complex (table 3 gives it a real for `**` and an integer for `pow`).
+  // Widening it would be wrong rather than merely wasteful, so they are taken
+  // before the widening and not inside it.
+  if (e->type->isComplex() &&
+      (e->op == BinOp::Exp || e->op == BinOp::Pow)) {
+    llvm::Value *z = toComplex(l, lt);
+    const char *stem = e->op == BinOp::Exp ? "pas_cpow" : "pas_cpowi";
+    llvm::Type *expTy = e->op == BinOp::Exp ? f64() : i32();
+    llvm::Value *y = e->op == BinOp::Exp ? toReal(r, rt_) : r;
+    FunctionType *sig =
+        FunctionType::get(f64(), {f64(), f64(), expTy}, false);
+    auto part = [&](const char *suffix) {
+      return b_.CreateCall(
+          mod_->getOrInsertFunction(std::string(stem) + suffix, sig),
+          {reOf(z), imOf(z), y}, "cpow");
+    };
+    return makeComplex(part("_re"), part("_im"));
+  }
+
+  if (lt->isComplex() || rt_->isComplex())
+    return emitComplexBinary(e, toComplex(l, lt), toComplex(r, rt_));
 
   switch (e->op) {
   case BinOp::Add:
@@ -2111,12 +2224,78 @@ llvm::Value *CodeGen::emitCall(Call *e) {
                           i1(), "eof.b");
   }
 
+  // §6.7.6.3: the two-argument constructors, and the only way to write a
+  // complex value — the standard gives the type no literal. `polar` is
+  // `r*cos t + r*sin t * i`, computed here rather than in the runtime for the
+  // same reason the operators are.
+  if (e->builtin == Builtin::Cmplx || e->builtin == Builtin::Polar) {
+    if (e->args.size() != 2)
+      return UndefValue::get(cplx()); // reported by Sema
+    llvm::Value *x = toReal(emitExpr(e->args[0].get()), e->args[0]->type);
+    llvm::Value *y = toReal(emitExpr(e->args[1].get()), e->args[1]->type);
+    if (e->builtin == Builtin::Cmplx)
+      return makeComplex(x, y);
+    return makeComplex(
+        b_.CreateFMul(x, intrinsicCall(Intrinsic::cos, {y}), "polar.re"),
+        b_.CreateFMul(x, intrinsicCall(Intrinsic::sin, {y}), "polar.im"));
+  }
+
   llvm::Value *a = emitExpr(e->args[0].get());
   ap::Type *at = e->args[0]->type;
+
+  // §6.7.6.2's transcendentals over a complex operand. Each is two calls, one
+  // per part, because a `double complex` crossing the C boundary would put an
+  // ABI question into an interface whose whole point is not to have one — the
+  // same reason ADR-0030's procedural pair travels as two arguments. The
+  // runtime computes both parts from the same C99 call, so the pair cannot
+  // disagree about anything but rounding, which is exact for both halves.
+  auto cplxCall = [&](const char *stem) {
+    llvm::Value *re = reOf(a), *im = imOf(a);
+    FunctionType *sig = FunctionType::get(f64(), {f64(), f64()}, false);
+    auto part = [&](const char *suffix) {
+      return b_.CreateCall(
+          mod_->getOrInsertFunction(std::string(stem) + suffix, sig),
+          {re, im}, "cpart");
+    };
+    return makeComplex(part("_re"), part("_im"));
+  };
 
   auto libm = [&](const char *name) {
     return b_.CreateCall(rt(name, f64(), {f64()}), {toReal(a, at)}, "call");
   };
+
+  // The three accessors are the representation itself, so they are not calls.
+  if (at->isComplex()) {
+    switch (e->builtin) {
+    case Builtin::Re:  return reOf(a);
+    case Builtin::Im:  return imOf(a);
+    // §6.7.6.2's `abs` of a complex is its magnitude and `arg` its argument,
+    // and both yield a *real* — the two places the table's result kind does
+    // not follow its operand.
+    case Builtin::Abs:
+      return b_.CreateCall(rt("hypot", f64(), {f64(), f64()}),
+                           {reOf(a), imOf(a)}, "cabs");
+    case Builtin::Arg:
+      return b_.CreateCall(rt("atan2", f64(), {f64(), f64()}),
+                           {imOf(a), reOf(a)}, "carg");
+    // sqr keeps its operand's type, so this is the multiplication above with
+    // both operands the same value.
+    case Builtin::Sqr: {
+      llvm::Value *x = reOf(a), *y = imOf(a);
+      return makeComplex(
+          b_.CreateFSub(b_.CreateFMul(x, x), b_.CreateFMul(y, y), "csqr.re"),
+          b_.CreateFMul(ConstantFP::get(f64(), 2.0),
+                        b_.CreateFMul(x, y), "csqr.im"));
+    }
+    case Builtin::Sqrt:   return cplxCall("pas_csqrt");
+    case Builtin::Sin:    return cplxCall("pas_csin");
+    case Builtin::Cos:    return cplxCall("pas_ccos");
+    case Builtin::Ln:     return cplxCall("pas_cln");
+    case Builtin::Exp:    return cplxCall("pas_cexp");
+    case Builtin::ArcTan: return cplxCall("pas_carctan");
+    default:              return UndefValue::get(cplx());
+    }
+  }
 
   switch (e->builtin) {
   case Builtin::Abs:

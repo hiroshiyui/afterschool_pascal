@@ -1,0 +1,13 @@
+<source>:12:10: error: complex values can only be compared with = and <>, not with '<': there is no order on the complex numbers
+<source>:13:10: error: complex values can only be compared with = and <>, not with '>=': there is no order on the complex numbers
+<source>:17:11: error: a value of type complex cannot be written
+<source>:19:8: error: a value of type complex cannot be read
+<source>:22:3: error: cannot assign complex to a variable of type real
+<source>:23:3: error: cannot assign complex to a variable of type integer
+<source>:25:8: error: 're' needs a complex argument, found real
+<source>:26:8: error: 'arg' needs a complex argument, found integer
+<source>:28:8: error: 'cmplx' takes two real arguments
+<source>:29:8: error: 'polar' takes two real arguments
+<source>:31:8: error: 'ord' needs an ordinal argument, found complex
+<source>:32:8: error: 'trunc' needs a real argument, found complex
+<source>:34:10: error: the right operand of 'pow' must be an integer, found real (use ** for a real exponent)

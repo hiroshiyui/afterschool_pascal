@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
           ap::dumpAst(*parsed);
       }
       if (opt.dumpSema) {
-        ap::Sema sema(diags);
+        ap::Sema sema(diags, opt.lang);
         if (parsed && !diags.hasErrors())
           sema.run(*parsed);
         if (opt.dumpAll)
@@ -354,7 +354,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  ap::Sema sema(diags);
+  ap::Sema sema(diags, opt.lang);
   sema.run(*program);
   if (diags.hasErrors()) {
     diags.print();

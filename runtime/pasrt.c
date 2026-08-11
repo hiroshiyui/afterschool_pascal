@@ -699,3 +699,86 @@ void pas_halt(int code) {
   fflush(stdout);
   exit(code);
 }
+
+/* ---------------------------------------------------------------- complex
+ *
+ * ISO/IEC 10206:1991 §6.7.6.2's transcendental functions over the complex
+ * type. Each is two entry points, one per part, and each computes the whole
+ * C99 result and returns half of it.
+ *
+ * That is deliberate, and the reason is an interface rather than a language
+ * one: a `double complex` returned across this boundary would put the C ABI's
+ * opinion about how a two-double aggregate travels into an interface whose
+ * whole point is that neither backend has one. ADR-0030 settled the same
+ * question the same way for a procedural parameter's code-and-link pair. The
+ * cost is one redundant call per operation, in the six least common
+ * operations in the language; the benefit is that the emitted IR names only
+ * doubles.
+ *
+ * The two halves cannot disagree: each is the same libm call on the same
+ * inputs, so both see the same rounding.
+ *
+ * §6.7.6.2's principal-value NOTE is C99's own convention — arg in (-pi, pi],
+ * sqrt with non-negative real part — so these are direct calls rather than
+ * re-derivations. */
+#include <complex.h>
+
+#define PAS_COMPLEX_FN(name, expr)                                            \
+  double pas_c##name##_re(double re, double im) {                             \
+    double complex z = re + im * I;                                           \
+    (void)z;                                                                  \
+    return creal(expr);                                                       \
+  }                                                                           \
+  double pas_c##name##_im(double re, double im) {                             \
+    double complex z = re + im * I;                                           \
+    (void)z;                                                                  \
+    return cimag(expr);                                                       \
+  }
+
+PAS_COMPLEX_FN(sqrt, csqrt(z))
+PAS_COMPLEX_FN(exp, cexp(z))
+PAS_COMPLEX_FN(sin, csin(z))
+PAS_COMPLEX_FN(cos, ccos(z))
+PAS_COMPLEX_FN(arctan, catan(z))
+
+/* §6.7.6.2: "For x of complex-type, it shall be an error if x = 0.0" — the one
+ * error condition the complex functions carry, and the only one of the six
+ * that is not total. */
+double pas_cln_re(double re, double im) {
+  if (re == 0.0 && im == 0.0)
+    pas_runtime_error("ln: argument is zero");
+  return creal(clog(re + im * I));
+}
+double pas_cln_im(double re, double im) {
+  if (re == 0.0 && im == 0.0)
+    pas_runtime_error("ln: argument is zero");
+  return cimag(clog(re + im * I));
+}
+
+/* §6.8.3.2 table 3: `**` and `pow` take a complex left operand. The standard
+ * defines both by the same words — "zero if x is zero, else 1.0 if y is zero,
+ * else an approximation to exp(y*ln(x))" — and the two special cases are what
+ * keep the definition total where `ln(0)` is not. The negative-base error the
+ * *real* `**` carries has no counterpart here: a complex power of a negative
+ * number is an ordinary value. */
+static double complex pas_cpow_value(double re, double im, double y) {
+  double complex x = re + im * I;
+  if (re == 0.0 && im == 0.0)
+    return 0.0;
+  if (y == 0.0)
+    return 1.0;
+  return cpow(x, y);
+}
+
+double pas_cpow_re(double re, double im, double y) {
+  return creal(pas_cpow_value(re, im, y));
+}
+double pas_cpow_im(double re, double im, double y) {
+  return cimag(pas_cpow_value(re, im, y));
+}
+double pas_cpowi_re(double re, double im, int n) {
+  return creal(pas_cpow_value(re, im, (double)n));
+}
+double pas_cpowi_im(double re, double im, int n) {
+  return cimag(pas_cpow_value(re, im, (double)n));
+}

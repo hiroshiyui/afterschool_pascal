@@ -225,14 +225,24 @@ type
     way to *write* one outside a formal parameter list -- the type part has no
     procedure type -- so no variable ever has it, and it takes part in no
     operation but being passed on and being called. }
+  { ISO/IEC 10206:1991 6.4.2.2 e): "The required type-identifier `complex`
+    shall denote the complex-type. The complex-type shall be a
+    **simple-type**." Simple is the operative word -- a complex value is
+    assigned, passed and returned as a value, so none of the by-address
+    machinery touches it, exactly as for a set. }
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-              tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc);
+              tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc, tyComplex);
 
   { The required functions of ISO 7185, and the standard procedures that are
     not statements of their own. }
   builtinKind = (biNone, biAbs, biSqr, biOdd, biOrd, biChr, biSucc, biPred,
                  biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound,
-                 biEof, biEoln);
+                 biEof, biEoln,
+                 { 6.7.6.3's constructors and 6.7.6.2's accessors. cmplx and
+                   polar are the only way to *write* a complex value -- the
+                   standard gives the type no literal -- and re, im and arg are
+                   the only way back out to a real. }
+                 biCmplx, biPolar, biRe, biIm, biArg);
   stdProcKind = (spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut);
 
   typePtr = ^typeRec;
@@ -802,6 +812,7 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
+  complexType: typePtr;
   emptySetType: typePtr;
   { the label declaration parts of the blocks currently open, innermost first }
   labelScope: labelScopePtr;
@@ -848,6 +859,18 @@ begin
     n := n - 1;
   for k := 1 to n do
     Put(w[k])
+end;
+
+{ A padded literal written straight to the IR file. PutLit goes through the Put
+  sink, which may be aimed at the message buffer; an instruction never is. }
+procedure PutIrLit(w: msgLit);
+var n, k: integer;
+begin
+  n := msgWidth;
+  while (n > 0) and (w[n] = ' ') do
+    n := n - 1;
+  for k := 1 to n do
+    write(ircode, w[k])
 end;
 
 { An integer, written the way `v:1` writes it. Spelled out rather than left to
@@ -3674,8 +3697,18 @@ end;
 function IsReal(t: typePtr): boolean;
 begin IsReal := (t <> nil) and (t^.kind = tyReal) end;
 
+function IsComplex(t: typePtr): boolean;
+begin IsComplex := (t <> nil) and (t^.kind = tyComplex) end;
+
 function IsNumeric(t: typePtr): boolean;
 begin IsNumeric := IsInteger(t) or IsReal(t) end;
+
+{ Everything the arithmetic operators accept (6.8.3.2, table 3). Kept apart
+  from IsNumeric because the *ordering* operators take a numeric type and
+  refuse a complex one -- 6.8.3.5 admits only = and <> there, there being no
+  order on the complex numbers. }
+function IsArith(t: typePtr): boolean;
+begin IsArith := IsNumeric(t) or IsComplex(t) end;
 
 function IsBoolean(t: typePtr): boolean;
 var b: typePtr;
@@ -3933,6 +3966,7 @@ begin
     case t^.kind of
       tyInteger: PutLit('integer         ');
       tyReal:    PutLit('real            ');
+      tyComplex: PutLit('complex         ');
       tyBoolean: PutLit('boolean         ');
       tyChar:    PutLit('char            ');
       tyVoid:    PutLit('void            ');
@@ -4334,6 +4368,13 @@ begin
       Assignable := false
     else if tb^.kind = fb^.kind then
       Assignable := true
+    { ISO/IEC 10206:1991 6.4.6 c): a complex accepts an integer or a real, and
+      "an implicit integer-to-complex conversion or real-to-complex conversion,
+      respectively, shall be performed". Written the same way round as the
+      real-from-integer widening below it, and for the same reason -- the
+      widening is exact and the narrowing does not exist. }
+    else if IsComplex(toT) then
+      Assignable := IsNumeric(fromT)
     else
       Assignable := IsReal(toT) and IsInteger(fromT)
   end
@@ -4687,6 +4728,11 @@ begin
   else if PoolIs(at, len, 'boolean  ') then BuiltinType := boolType
   else if PoolIs(at, len, 'char     ') then BuiltinType := charType
   else if PoolIs(at, len, 'text     ') then BuiltinType := textType
+  { A required type-identifier of ISO/IEC 10206:1991 and an ordinary identifier
+    of ISO 7185, where a program may define a type called `complex` of its own
+    -- which is why this is asked of the standard rather than of the lexer. }
+  else if PoolIs(at, len, 'complex  ') and (langStd = stdExtended) then
+    BuiltinType := complexType
   else BuiltinType := nil
 end;
 
@@ -5930,7 +5976,7 @@ begin
         StaticThroughout := ok
       end;
       tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-      tyPointer, tyProc: StaticThroughout := true
+      tyPointer, tyProc, tyComplex: StaticThroughout := true
     end
 end;
 
@@ -6909,18 +6955,24 @@ begin
         b^.ntype := boolType
       end;
 
+      { ISO/IEC 10206:1991 6.8.3.2, table 3: `+ - * /` take an integer, a real
+        or a complex, and the result is complex if either operand is. The
+        widening is 6.4.6 c)'s implicit conversion, which is why the operand
+        check is the *same* assignability question asked everywhere else. }
       opAdd, opSub, opMul:
-        if not IsNumeric(l) or not IsNumeric(r) then begin
+        if not IsArith(l) or not IsArith(r) then begin
           BadOperands(b, l, r, 'numeric     ');
           b^.ntype := intType
         end
+        else if IsComplex(l) or IsComplex(r) then b^.ntype := complexType
         else if IsReal(l) or IsReal(r) then b^.ntype := realType
         else b^.ntype := intType;
 
       opRealDiv: begin
-        if not IsNumeric(l) or not IsNumeric(r) then
+        if not IsArith(l) or not IsArith(r) then
           BadOperands(b, l, r, 'numeric     ');
-        b^.ntype := realType
+        if IsComplex(l) or IsComplex(r) then b^.ntype := complexType
+        else b^.ntype := realType
       end;
 
       opIntDiv, opMod: begin
@@ -6943,14 +6995,18 @@ begin
         "exponentiation to an integer power", and its result has the type of
         its *left* operand -- which is the whole reason the standard has two
         operators rather than one. }
+      { Table 3 gives `**` a complex *left* operand and a numeric right one,
+        and the result is complex exactly when the left operand is -- the same
+        rule `pow` has, which is why both ask one question about the left. }
       opExp: begin
-        if not IsNumeric(l) or not IsNumeric(r) then
+        if not IsArith(l) or not IsNumeric(r) then
           BadOperands(b, l, r, 'numeric     ');
-        b^.ntype := realType
+        if IsComplex(l) then b^.ntype := complexType
+        else b^.ntype := realType
       end;
 
       opPow:
-        if not IsNumeric(l) then begin
+        if not IsArith(l) then begin
           BadOperands(b, l, r, 'numeric     ');
           b^.ntype := intType
         end
@@ -6961,7 +7017,8 @@ begin
             WriteTypeName(r);
             writeln(' (use ** for a real exponent)')
           end;
-          if IsReal(l) then b^.ntype := realType
+          if IsComplex(l) then b^.ntype := complexType
+          else if IsReal(l) then b^.ntype := realType
           else b^.ntype := intType
         end;
 
@@ -7018,6 +7075,21 @@ begin
         end
         else if IsMemory(l) or IsMemory(r) then
           BadOperands(b, l, r, 'comparable  ')
+        { 6.8.3.5, table 6: `=` and `<>` accept any simple type, and the four
+          ordering operators accept "any simple-type **except complex-type**".
+          There is no order on the complex numbers, so this is the standard
+          declining to invent one rather than an omission. }
+        else if IsComplex(l) or IsComplex(r) then begin
+          if (b^.bnOp <> opEq) and (b^.bnOp <> opNe) then begin
+            ErrorAt(b^.line, b^.col);
+            write('complex values can only be compared with = and <>, ',
+                  'not with ''');
+            WriteOpName(b^.bnOp);
+            writeln(''': there is no order on the complex numbers')
+          end
+          else if not IsArith(l) or not IsArith(r) then
+            BadOperands(b, l, r, 'compatible  ')
+        end
         else if not (IsNumeric(l) and IsNumeric(r)) and
                 not Assignable(l, r) and not Assignable(r, l) then
           { Compatibility is decided the same way it is for assignment, so a
@@ -7047,7 +7119,24 @@ begin
   else if PoolIs(at, len, 'round    ') then LookupBuiltin := biRound
   else if PoolIs(at, len, 'eof      ') then LookupBuiltin := biEof
   else if PoolIs(at, len, 'eoln     ') then LookupBuiltin := biEoln
+  { 6.7.6.2 and 6.7.6.3. Looked up under both standards and refused under
+    ISO 7185 where the call is checked: a valid ISO 7185 program may declare a
+    function called `re`, so the *name* is not reserved. }
+  else if PoolIs(at, len, 'cmplx    ') then LookupBuiltin := biCmplx
+  else if PoolIs(at, len, 'polar    ') then LookupBuiltin := biPolar
+  else if PoolIs(at, len, 're       ') then LookupBuiltin := biRe
+  else if PoolIs(at, len, 'im       ') then LookupBuiltin := biIm
+  else if PoolIs(at, len, 'arg      ') then LookupBuiltin := biArg
   else LookupBuiltin := biNone
+end;
+
+{ The five required functions ISO/IEC 10206:1991 adds for the complex type.
+  They are grouped because every question anyone asks about them is the same
+  one: does this standard have them? }
+function IsComplexBuiltin(b: builtinKind): boolean;
+begin
+  IsComplexBuiltin := (b = biCmplx) or (b = biPolar) or (b = biRe) or
+                      (b = biIm) or (b = biArg)
 end;
 
 procedure RequireArg(c: nodePtr; ok: boolean; want: wordLit; a: typePtr);
@@ -7084,7 +7173,20 @@ begin
   end
   else begin
     c^.clBuiltin := LookupBuiltin(c^.clAt, c^.clLen);
-    if c^.clBuiltin = biNone then begin
+    { The complex functions are ISO/IEC 10206:1991's, and their names are not
+      reserved in either language -- a valid ISO 7185 program may declare a
+      function called `re`. So they are recognised only when nothing else of
+      that name was found, and only under the standard that has them; the
+      message then says the feature is missing rather than that the name is. }
+    if (langStd = stdIso7185) and IsComplexBuiltin(c^.clBuiltin) then begin
+      ErrorAt(c^.line, c^.col);
+      write('''');
+      WritePool(c^.clAt, c^.clLen);
+      writeln(''' is an Extended Pascal function; compile with ',
+              '--std=extended');
+      c^.ntype := intType
+    end
+    else if c^.clBuiltin = biNone then begin
       ErrorAt(c^.line, c^.col);
       write('unknown function ''');
       WritePool(c^.clAt, c^.clLen);
@@ -7147,6 +7249,33 @@ begin
           end
         end
       end
+      { 6.7.6.3: cmplx(x, y) and polar(r, t) are the two-argument required
+        functions, and the only way to write a complex value at all -- the
+        standard gives the type no literal. }
+      else if (c^.clBuiltin = biCmplx) or (c^.clBuiltin = biPolar) then begin
+        c^.ntype := complexType;
+        if n <> 2 then begin
+          ErrorAt(c^.line, c^.col);
+          write('''');
+          WritePool(c^.clAt, c^.clLen);
+          writeln(''' takes two real arguments')
+        end
+        else begin
+          a := c^.clArgs;
+          while a <> nil do begin
+            if a^.ntype <> nil then
+              if not IsNumeric(a^.ntype) then begin
+                ErrorAt(a^.line, a^.col);
+                write('''');
+                WritePool(c^.clAt, c^.clLen);
+                write(''' needs real arguments, found ');
+                WriteTypeName(a^.ntype);
+                writeln
+              end;
+            a := a^.next
+          end
+        end
+      end
       else if n <> 1 then begin
         ErrorAt(c^.line, c^.col);
         write('''');
@@ -7157,9 +7286,25 @@ begin
       else begin
         t := c^.clArgs^.ntype;
         case c^.clBuiltin of
-          biAbs, biSqr: begin
-            RequireArg(c, IsNumeric(t), 'a numeric   ', t);
-            if IsReal(t) then c^.ntype := realType else c^.ntype := intType
+          { 6.7.6.2, table 2 footnote 5: `abs` of a complex is its *magnitude*,
+            and so a real -- the one function in the table whose result kind
+            changes rather than following its operand. `sqr` keeps its
+            operand's type, complex included. }
+          biAbs: begin
+            RequireArg(c, IsArith(t), 'a numeric   ', t);
+            if IsComplex(t) or IsReal(t) then c^.ntype := realType
+            else c^.ntype := intType
+          end;
+          biSqr: begin
+            RequireArg(c, IsArith(t), 'a numeric   ', t);
+            if IsComplex(t) then c^.ntype := complexType
+            else if IsReal(t) then c^.ntype := realType
+            else c^.ntype := intType
+          end;
+          { 6.7.6.2: re, im and arg take a complex and yield a real. }
+          biRe, biIm, biArg: begin
+            RequireArg(c, IsComplex(t), 'a complex   ', t);
+            c^.ntype := realType
           end;
           biOdd: begin
             RequireArg(c, IsInteger(t), 'an integer  ', t);
@@ -7184,10 +7329,15 @@ begin
             RequireArg(c, IsNumeric(t), 'a real      ', t);
             c^.ntype := intType
           end;
+          { 6.7.6.2: sin cos exp ln sqrt arctan take an integer, a real or a
+            complex, and the result is "real if the operand is of integer-type,
+            otherwise the type of the operand" -- so a complex operand gives a
+            complex result and everything else gives a real. }
           biNone, biSqrt, biSin, biCos, biLn, biExp, biArcTan, biEof,
-          biEoln: begin   { the transcendental functions }
-            RequireArg(c, IsNumeric(t), 'a numeric   ', t);
-            c^.ntype := realType
+          biEoln, biCmplx, biPolar: begin
+            RequireArg(c, IsArith(t), 'a numeric   ', t);
+            if IsComplex(t) then c^.ntype := complexType
+            else c^.ntype := realType
           end
         end
       end
@@ -8253,7 +8403,7 @@ begin
           parameter's heading is a function heading -- the same rule, so the
           same message. }
         if not IsOrdinal(t^.elem) and not IsReal(t^.elem) and
-           not IsPointer(t^.elem) then begin
+           not IsComplex(t^.elem) and not IsPointer(t^.elem) then begin
           ErrorAt(g^.grNames^.line, g^.grNames^.col);
           write('a function cannot return ');
           WriteTypeName(t^.elem);
@@ -8445,8 +8595,11 @@ begin
           something that lives in memory", because a set lives in a register
           and would pass that test while still not being a result type the
           language allows. }
+        { ISO 7185 6.6.2 restricts a function's result to a simple type or a
+          pointer type, and ISO/IEC 10206:1991 6.4.2.2 adds `complex` to the
+          simple types -- so this list grew by one word rather than by a rule. }
         if not IsOrdinal(sym^.stype) and not IsReal(sym^.stype) and
-           not IsPointer(sym^.stype) then begin
+           not IsComplex(sym^.stype) and not IsPointer(sym^.stype) then begin
           ErrorAt(d^.line, d^.col);
           write('a function cannot return ');
           WriteTypeName(sym^.stype);
@@ -8908,6 +9061,7 @@ var p: nodePtr;
 begin
   intType := NewType(tyInteger);
   realType := NewType(tyReal);
+  complexType := NewType(tyComplex);
   boolType := NewType(tyBoolean);
   charType := NewType(tyChar);
   voidType := NewType(tyVoid);
@@ -10329,6 +10483,9 @@ begin
       tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
       tyInteger, tyEnum: LlAlign := 4;
       tyReal, tyPointer, tyFile: LlAlign := 8;
+      { <2 x double>: two doubles, and the target aligns a vector to its whole
+        size. }
+      tyComplex: LlAlign := 16;
       { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
         it takes the largest one that is named, which is i128's. }
       tySet: LlAlign := 16;
@@ -10355,6 +10512,7 @@ begin
       tyBoolean, tyChar: LlSize := 1;
       tyInteger, tyEnum: LlSize := 4;
       tyReal, tyPointer: LlSize := 8;
+      tyComplex: LlSize := 16;
       tyFile: LlSize := fileSize;
       tySet: LlSize := setBits div 8;
       tyProc: LlSize := 16;
@@ -10432,6 +10590,13 @@ begin
         an argument carries the scope it was *declared* in, not the one it is
         called from -- which is the whole difficulty of the feature. }
       tyProc: write(ircode, '{ ptr, ptr }');
+      { ISO/IEC 10206:1991 6.4.2.2 e) makes `complex` a *simple* type, so it
+        must be a value and not a thing reached through its address. A
+        two-element vector is the one shape that is both: LLVM lowers it in
+        registers, and neither backend has to hold an opinion about how a
+        struct is passed -- which is the constraint ADR-0030 named and settled
+        the same way. }
+      tyComplex: write(ircode, '<2 x double>');
       tyArray: begin
         { The bounds are folded away: an index is lowered to an offset from the
           lower bound, so the type only needs the extent. }
@@ -11089,9 +11254,62 @@ begin
   end
 end;
 
+{ The real part of a complex value; 6.7.6.2's `re`. }
+procedure ReOf(a: str; var v: str);
+begin
+  Def(v);
+  write(ircode, 'extractelement <2 x double> ');
+  PutOp(a);
+  writeln(ircode, ', i32 0')
+end;
+
+{ ...and the imaginary one, 6.7.6.2's `im`. }
+procedure ImOf(a: str; var v: str);
+begin
+  Def(v);
+  write(ircode, 'extractelement <2 x double> ');
+  PutOp(a);
+  writeln(ircode, ', i32 1')
+end;
+
+{ A complex value from its two parts. This and the two above are the whole
+  interface to the representation, which is why 6.4.2.2's NOTE that the
+  representation "could be rectangular, polar, or something quite different"
+  costs nothing to honour: only these three know it is rectangular. }
+procedure MakeComplex(re, im: str; var v: str);
+var half: str;
+begin
+  Def(half);
+  write(ircode, 'insertelement <2 x double> undef, double ');
+  PutOp(re);
+  writeln(ircode, ', i32 0');
+  Def(v);
+  write(ircode, 'insertelement <2 x double> ');
+  PutOp(half);
+  write(ircode, ', double ');
+  PutOp(im);
+  writeln(ircode, ', i32 1')
+end;
+
+{ 6.4.6 c)'s widening: a real or an integer is the complex with that real part
+  and a zero imaginary one. }
+procedure ToComplex(var v: str; from: typePtr);
+var zero, w: str;
+begin
+  if not IsComplex(from) then begin
+    ToReal(v, from);
+    OpWord('0.0             ', zero);
+    MakeComplex(v, zero, w);
+    v := w
+  end
+end;
+
 procedure ConvertFor(var v: str; from, toT: typePtr);
 begin
   if IsReal(toT) then ToReal(v, from)
+  { 6.4.6 c): "an implicit integer-to-complex conversion or real-to-complex
+    conversion, respectively, shall be performed". }
+  else if IsComplex(toT) then ToComplex(v, from)
 end;
 
 { A real literal reaches the IR as the text it was written with -- which is
@@ -11233,7 +11451,8 @@ begin
         if s^.boolVal then OpWord('true            ', v)
         else OpWord('false           ', v);
       tyChar: OpInt(ord(s^.charVal), v);
-      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc:
+      tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
+      tyComplex:
         OpInt(0, v)
     end
 end;
@@ -12014,6 +12233,142 @@ begin
   writeln(ircode, ', %L', rhsEnd:1, ' ]')
 end;
 
+{ The four arithmetic operators and the two relational ones ISO/IEC 10206:1991
+  gives the complex type. All six are emitted inline: nothing here needs a
+  library, and keeping them out of the runtime keeps the *only* complex-shaped
+  value crossing a C boundary out of existence -- which is what lets the
+  representation stay a vector without either backend acquiring an opinion
+  about how a struct is passed (ADR-0030's constraint). }
+{ One `<op> double x, y`. The complex arithmetic is a dozen of these, and
+  spelling each out would bury the formula in the emission. }
+procedure EmitFBin(op: msgLit; x, y: str; var v: str);
+begin
+  Def(v);
+  PutIrLit(op);
+  write(ircode, ' double ');
+  PutOp(x);
+  write(ircode, ', ');
+  PutOp(y);
+  writeln(ircode)
+end;
+
+{ 6.8.3.2 table 3 gives `**` and `pow` a complex *left* operand, and the right
+  one is never complex -- a real for `**`, an integer for `pow`. Both go to the
+  runtime, which carries the standard's two special cases with them. }
+procedure EmitComplexPow(e: nodePtr; l, r: str; lt, rt: typePtr;
+                         realExp: boolean; var v: str);
+var re, im, pr, pi_: str;
+begin
+  ToComplex(l, lt);
+  ReOf(l, re);
+  ImOf(l, im);
+  if realExp then ToReal(r, rt);
+  Def(pr);
+  if realExp then write(ircode, 'call double @pas_cpow_re(double ')
+  else write(ircode, 'call double @pas_cpowi_re(double ');
+  PutOp(re);
+  write(ircode, ', double ');
+  PutOp(im);
+  if realExp then write(ircode, ', double ') else write(ircode, ', i32 ');
+  PutOp(r);
+  writeln(ircode, ')');
+  Def(pi_);
+  if realExp then write(ircode, 'call double @pas_cpow_im(double ')
+  else write(ircode, 'call double @pas_cpowi_im(double ');
+  PutOp(re);
+  write(ircode, ', double ');
+  PutOp(im);
+  if realExp then write(ircode, ', double ') else write(ircode, ', i32 ');
+  PutOp(r);
+  writeln(ircode, ')');
+  MakeComplex(pr, pi_, v)
+end;
+
+procedure EmitComplexBinary(e: nodePtr; l, r: str; var v: str);
+var a, b_, c_, d_, ac, bd, ad, bc, re, im, den, cc, dd, er, ei: str;
+begin
+  case e^.bnOp of
+    opAdd: begin
+      Def(v);
+      write(ircode, 'fadd <2 x double> ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(r);
+      writeln(ircode)
+    end;
+    opSub: begin
+      Def(v);
+      write(ircode, 'fsub <2 x double> ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(r);
+      writeln(ircode)
+    end;
+    { (a + bi)(c + di) = (ac - bd) + (ad + bc)i }
+    opMul: begin
+      ReOf(l, a); ImOf(l, b_); ReOf(r, c_); ImOf(r, d_);
+      EmitFBin('fmul            ', a, c_, ac);
+      EmitFBin('fmul            ', b_, d_, bd);
+      EmitFBin('fsub            ', ac, bd, re);
+      EmitFBin('fmul            ', a, d_, ad);
+      EmitFBin('fmul            ', b_, c_, bc);
+      EmitFBin('fadd            ', ad, bc, im);
+      MakeComplex(re, im, v)
+    end;
+    { (a + bi)/(c + di) = ((ac + bd) + (bc - ad)i) / (c*c + d*d). Division by a
+      zero divisor is left to IEEE, exactly as real `/` is: this compiler does
+      not trap that one either, so trapping here would be the odd one out. }
+    opRealDiv: begin
+      ReOf(l, a); ImOf(l, b_); ReOf(r, c_); ImOf(r, d_);
+      EmitFBin('fmul            ', c_, c_, cc);
+      EmitFBin('fmul            ', d_, d_, dd);
+      EmitFBin('fadd            ', cc, dd, den);
+      EmitFBin('fmul            ', a, c_, ac);
+      EmitFBin('fmul            ', b_, d_, bd);
+      EmitFBin('fadd            ', ac, bd, er);
+      EmitFBin('fdiv            ', er, den, re);
+      EmitFBin('fmul            ', b_, c_, bc);
+      EmitFBin('fmul            ', a, d_, ad);
+      EmitFBin('fsub            ', bc, ad, ei);
+      EmitFBin('fdiv            ', ei, den, im);
+      MakeComplex(re, im, v)
+    end;
+    { Only = and <> reach here; Sema refused the four ordering operators,
+      because 6.8.3.5 gives them "any simple-type except complex-type" and
+      there is no order on the complex numbers to give them. }
+    opEq, opNe, opLt, opLe, opGt, opGe, opIntDiv, opMod, opAnd, opOr,
+    opAndThen, opOrElse, opIn, opExp, opPow: begin
+      ReOf(l, a); ImOf(l, b_); ReOf(r, c_); ImOf(r, d_);
+      Def(ac);
+      write(ircode, 'fcmp oeq double ');
+      PutOp(a);
+      write(ircode, ', ');
+      PutOp(c_);
+      writeln(ircode);
+      Def(bd);
+      write(ircode, 'fcmp oeq double ');
+      PutOp(b_);
+      write(ircode, ', ');
+      PutOp(d_);
+      writeln(ircode);
+      Def(re);
+      write(ircode, 'and i1 ');
+      PutOp(ac);
+      write(ircode, ', ');
+      PutOp(bd);
+      writeln(ircode);
+      if e^.bnOp = opEq then
+        v := re
+      else begin
+        Def(v);
+        write(ircode, 'xor i1 ');
+        PutOp(re);
+        writeln(ircode, ', true')
+      end
+    end
+  end
+end;
+
 procedure EmitBinary(e: nodePtr; var v: str);
 var l, r, rem, neg, adj, bad, m1, m2: str;
     lt, rt: typePtr; msg: integer; sign, useFloat: boolean;
@@ -12039,6 +12394,20 @@ begin
       set operators need nothing from the types beyond knowing they are sets. }
     if IsSet(lt) or IsSet(rt) then
       EmitSetBinary(e, l, r, v)
+    { 6.8.3.2 table 3 and 6.8.3.5 table 6. A complex operand decides the whole
+      operation, so this is taken before the real/integer split rather than
+      inside it: `1 + z` is complex addition with the 1 widened, not integer
+      addition with something odd afterwards. The two exponentiating operators
+      are excluded because their *right* operand is never complex. }
+    else if IsComplex(e^.ntype) and (e^.bnOp = opExp) then
+      EmitComplexPow(e, l, r, lt, rt, true, v)
+    else if IsComplex(e^.ntype) and (e^.bnOp = opPow) then
+      EmitComplexPow(e, l, r, lt, rt, false, v)
+    else if IsComplex(lt) or IsComplex(rt) then begin
+      ToComplex(l, lt);
+      ToComplex(r, rt);
+      EmitComplexBinary(e, l, r, v)
+    end
     else
 
     case e^.bnOp of
@@ -12267,8 +12636,39 @@ begin
   end
 end;
 
+{ 6.7.6.2's transcendentals over a complex operand. Each is two calls, one per
+  part, because a `double complex` crossing the C boundary would put an ABI
+  question into an interface whose whole point is not to have one -- the same
+  reason ADR-0030's procedural pair travels as two arguments. The runtime
+  computes both parts from the same C99 call, so the pair cannot disagree about
+  anything but rounding, which is exact for both halves. }
+procedure ComplexCall(stem: msgLit; a: str; var v: str);
+var re, im, pr, pi_: str;
+begin
+  ReOf(a, re);
+  ImOf(a, im);
+  Def(pr);
+  write(ircode, 'call double @');
+  PutIrLit(stem);
+  write(ircode, '_re(double ');
+  PutOp(re);
+  write(ircode, ', double ');
+  PutOp(im);
+  writeln(ircode, ')');
+  Def(pi_);
+  write(ircode, 'call double @');
+  PutIrLit(stem);
+  write(ircode, '_im(double ');
+  PutOp(re);
+  write(ircode, ', double ');
+  PutOp(im);
+  writeln(ircode, ')');
+  MakeComplex(pr, pi_, v)
+end;
+
 procedure EmitCall(e: nodePtr; var v: str);
-var a, w, lim, tmp: str; at: typePtr; msg, up: integer; isSucc: boolean;
+var a, w, lim, tmp, b_, re, im, x, y, c_, d_: str;
+    at: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
     EmitUserCall(e^.clSym, e^.clArgs, v)
@@ -12290,9 +12690,119 @@ begin
       writeln(ircode, ' to i1')
     end
   end
+  { 6.7.6.3: the two-argument constructors, and the only way to write a complex
+    value -- the standard gives the type no literal. `polar` is
+    `r*cos t + r*sin t * i`, computed here rather than in the runtime for the
+    same reason the operators are. }
+  else if (e^.clBuiltin = biCmplx) or (e^.clBuiltin = biPolar) then begin
+    EmitExpr(e^.clArgs, x);
+    ToReal(x, e^.clArgs^.ntype);
+    EmitExpr(e^.clArgs^.next, y);
+    ToReal(y, e^.clArgs^.next^.ntype);
+    if e^.clBuiltin = biCmplx then
+      MakeComplex(x, y, v)
+    else begin
+      Def(c_);
+      write(ircode, 'call double @llvm.cos.f64(double ');
+      PutOp(y);
+      writeln(ircode, ')');
+      Def(d_);
+      write(ircode, 'call double @llvm.sin.f64(double ');
+      PutOp(y);
+      writeln(ircode, ')');
+      Def(re);
+      write(ircode, 'fmul double ');
+      PutOp(x);
+      write(ircode, ', ');
+      PutOp(c_);
+      writeln(ircode);
+      Def(im);
+      write(ircode, 'fmul double ');
+      PutOp(x);
+      write(ircode, ', ');
+      PutOp(d_);
+      writeln(ircode);
+      MakeComplex(re, im, v)
+    end
+  end
   else begin
     EmitExpr(e^.clArgs, a);
     at := e^.clArgs^.ntype;
+    { The three accessors are the representation itself, so they are not
+      calls. }
+    if IsComplex(at) then
+      case e^.clBuiltin of
+        biRe: ReOf(a, v);
+        biIm: ImOf(a, v);
+        { 6.7.6.2's `abs` of a complex is its magnitude and `arg` its argument,
+          and both yield a *real* -- the two places the table's result kind
+          does not follow its operand. }
+        biAbs: begin
+          ReOf(a, re);
+          ImOf(a, im);
+          Def(v);
+          write(ircode, 'call double @hypot(double ');
+          PutOp(re);
+          write(ircode, ', double ');
+          PutOp(im);
+          writeln(ircode, ')')
+        end;
+        biArg: begin
+          ReOf(a, re);
+          ImOf(a, im);
+          Def(v);
+          write(ircode, 'call double @atan2(double ');
+          PutOp(im);
+          write(ircode, ', double ');
+          PutOp(re);
+          writeln(ircode, ')')
+        end;
+        { sqr keeps its operand's type, so this is the multiplication with
+          both operands the same value. }
+        biSqr: begin
+          ReOf(a, x);
+          ImOf(a, y);
+          Def(c_);
+          write(ircode, 'fmul double ');
+          PutOp(x);
+          write(ircode, ', ');
+          PutOp(x);
+          writeln(ircode);
+          Def(d_);
+          write(ircode, 'fmul double ');
+          PutOp(y);
+          write(ircode, ', ');
+          PutOp(y);
+          writeln(ircode);
+          Def(re);
+          write(ircode, 'fsub double ');
+          PutOp(c_);
+          write(ircode, ', ');
+          PutOp(d_);
+          writeln(ircode);
+          Def(b_);
+          write(ircode, 'fmul double ');
+          PutOp(x);
+          write(ircode, ', ');
+          PutOp(y);
+          writeln(ircode);
+          Def(im);
+          write(ircode, 'fmul double 2.0, ');
+          PutOp(b_);
+          writeln(ircode);
+          MakeComplex(re, im, v)
+        end;
+        biSqrt:   ComplexCall('pas_csqrt       ', a, v);
+        biSin:    ComplexCall('pas_csin        ', a, v);
+        biCos:    ComplexCall('pas_ccos        ', a, v);
+        biLn:     ComplexCall('pas_cln         ', a, v);
+        biExp:    ComplexCall('pas_cexp        ', a, v);
+        biArcTan: ComplexCall('pas_carctan     ', a, v);
+        biNone, biOdd, biOrd, biChr, biSucc, biPred, biTrunc, biRound,
+        biEof, biEoln, biCmplx, biPolar:
+          OpWord('undef           ', v)
+      end
+    else
     case e^.clBuiltin of
       biAbs:
         if IsReal(at) then begin
@@ -12446,7 +12956,7 @@ begin
         msg := MsgEnd;
         CheckedFpToInt(w, v, msg)
       end;
-      biNone, biEof, biEoln: OpInt(0, v)
+      biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg: OpInt(0, v)
     end
   end
 end;
@@ -14177,6 +14687,29 @@ begin
   writeln(ircode, 'declare double @llvm.exp.f64(double)');
   writeln(ircode, 'declare double @llvm.round.f64(double)');
   writeln(ircode, 'declare double @atan(double)');
+  { ISO/IEC 10206:1991's complex functions. `abs` and `arg` are one libm call
+    each; the six transcendentals are two runtime calls each, one per part,
+    because a `double complex` returned across this boundary would put the C
+    ABI's opinion about a two-double aggregate into an interface whose whole
+    point is not to have one. }
+  writeln(ircode, 'declare double @hypot(double, double)');
+  writeln(ircode, 'declare double @atan2(double, double)');
+  writeln(ircode, 'declare double @pas_csqrt_re(double, double)');
+  writeln(ircode, 'declare double @pas_csqrt_im(double, double)');
+  writeln(ircode, 'declare double @pas_cexp_re(double, double)');
+  writeln(ircode, 'declare double @pas_cexp_im(double, double)');
+  writeln(ircode, 'declare double @pas_cln_re(double, double)');
+  writeln(ircode, 'declare double @pas_cln_im(double, double)');
+  writeln(ircode, 'declare double @pas_csin_re(double, double)');
+  writeln(ircode, 'declare double @pas_csin_im(double, double)');
+  writeln(ircode, 'declare double @pas_ccos_re(double, double)');
+  writeln(ircode, 'declare double @pas_ccos_im(double, double)');
+  writeln(ircode, 'declare double @pas_carctan_re(double, double)');
+  writeln(ircode, 'declare double @pas_carctan_im(double, double)');
+  writeln(ircode, 'declare double @pas_cpow_re(double, double, double)');
+  writeln(ircode, 'declare double @pas_cpow_im(double, double, double)');
+  writeln(ircode, 'declare double @pas_cpowi_re(double, double, i32)');
+  writeln(ircode, 'declare double @pas_cpowi_im(double, double, i32)');
   writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)');
   { A schematic formal parameter's copy has a length only the descriptor knows,
     and the message for a subscript outside its bounds names bounds the

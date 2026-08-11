@@ -12,7 +12,13 @@ inline constexpr int kMaxInt = 2147483647;
 
 enum class TypeKind {
   Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer,
-  File, Set, Proc
+  File, Set, Proc,
+  /// ISO/IEC 10206:1991 §6.4.2.2 e): "The required type-identifier `complex`
+  /// shall denote the complex-type. The complex-type shall be a
+  /// **simple-type**." Simple is the operative word — a complex value is
+  /// assigned, passed and returned as a value, so none of the by-address
+  /// machinery of ADR-0017 touches it, exactly as for a set (ADR-0028).
+  Complex
 };
 
 /// ISO 7185 §6.4.3.4 leaves the size of a set to the implementation. This one
@@ -178,7 +184,13 @@ struct Type {
   // about integers applies to it unchanged.
   bool isInteger() const { return base()->kind == TypeKind::Integer; }
   bool isReal() const { return kind == TypeKind::Real; }
+  bool isComplex() const { return kind == TypeKind::Complex; }
   bool isNumeric() const { return isInteger() || isReal(); }
+  /// Everything the arithmetic operators accept (§6.8.3.2, table 3). Kept
+  /// apart from `isNumeric` because the *ordering* operators take a numeric
+  /// type and refuse a complex one — §6.8.3.5 admits only `=` and `<>` there,
+  /// there being no order on the complex numbers.
+  bool isArith() const { return isNumeric() || isComplex(); }
   bool isBoolean() const { return base()->kind == TypeKind::Boolean; }
   bool isChar() const { return base()->kind == TypeKind::Char; }
   bool isEnum() const { return base()->kind == TypeKind::Enum; }
@@ -326,6 +338,7 @@ struct Type {
     switch (kind) {
     case TypeKind::Integer: return "integer";
     case TypeKind::Real:    return "real";
+    case TypeKind::Complex: return "complex";
     case TypeKind::Boolean: return "boolean";
     case TypeKind::Char:    return "char";
     case TypeKind::Void:    return "void";
@@ -411,17 +424,20 @@ inline Type *get(TypeKind k) {
   static Type r{TypeKind::Real};
   static Type b{TypeKind::Boolean};
   static Type c{TypeKind::Char};
+  static Type z{TypeKind::Complex};
   switch (k) {
   case TypeKind::Integer: return &i;
   case TypeKind::Real:    return &r;
   case TypeKind::Boolean: return &b;
   case TypeKind::Char:    return &c;
+  case TypeKind::Complex: return &z;
   default:                break;
   }
   return &v;
 }
 inline Type *Int()  { return get(TypeKind::Integer); }
 inline Type *Real() { return get(TypeKind::Real); }
+inline Type *Complex() { return get(TypeKind::Complex); }
 inline Type *Bool() { return get(TypeKind::Boolean); }
 inline Type *Char() { return get(TypeKind::Char); }
 inline Type *Void() { return get(TypeKind::Void); }
