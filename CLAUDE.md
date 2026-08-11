@@ -455,9 +455,8 @@ in one language or the other, and the standard is a property of the source.
     bound is already under, not one invented here.
   - A discriminant may bound an array, and an array inside it: `dynSize` is
     `(hi - lo + 1) * dynSize(component)` and an address is
-    `base + (i - lo) * dynSize(component)`, in bytes. **Anywhere else it is
-    refused** — a record field after a dynamically-bounded one would sit at an
-    offset nothing can compute.
+    `base + (i - lo) * dynSize(component)`, in bytes. Since ADR-0045 it may
+    also bound a record's **last** field; anywhere else it is still refused.
   - A **value** parameter is copied on entry into an `alloca` of a computed
     length, because its size is not known until the tuple is in place.
   - **The tuple is compared at compile time**, because every tuple this
@@ -575,6 +574,31 @@ in one language or the other, and the standard is a property of the source.
     only because that record decided the form is chosen by the domain and by
     nothing else. Decided by the arguments, this is the program that would have
     made it ambiguous.
+- **A record may hold a dynamically bounded array, last** (ADR-0045) — the
+  other half of ADR-0040, and the shape the required schema `string` has: a
+  length beside a buffer whose capacity is the discriminant.
+  - The rule is the exact boundary of ADR-0040's own sentence: **every offset
+    inside the type must stay a constant while the size need not.** A field
+    after a dynamically-sized one has an offset that is not; there is no field
+    after the last. `Sema::dynamicTail` is that sentence, and it replaced the
+    walk-the-array-spine-then-ask-`staticThroughout` pair.
+  - **LLVM already had the representation.** A dynamically bounded array is
+    `[0 x T]` (ADR-0040), so such a record is a flexible-array-member struct:
+    `getStructLayout` gives every field's offset, and **`fieldAddress` is
+    untouched**. No byte arithmetic was added anywhere.
+  - **`dynamicExtent()` reads `fields.back()`, not "any field"**, and the
+    asymmetry is deliberate: a record with a dynamic field elsewhere is not a
+    type with a dynamic extent, it is a type that is *refused*.
+  - The size is **rounded up to the record's alignment** — an array of them
+    strides by it, so 4 + cap content bytes at 4-byte alignment must stride 12
+    for cap = 5 and not 9. The one piece of arithmetic that is new rather than
+    reused.
+  - A **variant part is refused**, and that clause is not implied by the field
+    clause: a *tag-field* is an ordinary field and lands after the dynamic one,
+    but a **tagless** `case T of` contributes no field at all and would be
+    accepted without it. Two mutations needed tests written for them, and both
+    are of that kind — the other is a record with *two* dynamic fields, since a
+    static field after a dynamic one already fails the last-field question.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

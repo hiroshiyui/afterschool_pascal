@@ -381,8 +381,21 @@ was never written down.
     discriminant — the *kind* cannot answer, because a constant production
     binds them as ordinary constants.
 
-  What is left of schemata: a schematic formal whose discriminants reach past
-  an array — which is the shape `string` itself has.
+  - ~~**A schematic formal whose discriminants reach past an array**~~ Done
+    (ADR-0045). A record may hold a dynamically bounded array as its **last**
+    field — the shape `string` has, a length beside a buffer whose capacity is
+    the discriminant. Only last, and no variant part, because both a later
+    field and a variant part's shared block sit at an offset nothing can
+    compute; the record's layout is therefore entirely static and only its
+    *size* is dynamic, which is what `dynSize` already existed to say. LLVM had
+    the representation already: a dynamically bounded array is `[0 x T]`, so
+    such a record is a flexible-array-member struct and every field access is
+    the getelementptr it always was.
+
+  **Schemata are done.** What remains of §6.4 is the required schema `string`
+  itself (§6.4.3.3), which is now expressible by hand but is its own type-class
+  with a capacity, a truncating assignment, and comparison across unequal
+  lengths.
 
   And one **defect**, found while the assignment was being written and fixed
   on its own: a schema producing a `packed array [1..n] of char` produces a

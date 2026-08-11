@@ -250,9 +250,12 @@ types      vector(n: integer) = array [1..n] of real — a schema, and
 params     procedure p(var v: vector) — a schematic formal parameter, whose
            bounds come from the actual: one body serves every tuple, and
            v.n reads the tuple the argument brought. A value parameter of
-           one is copied on entry, at whatever size the tuple says. The
-           discriminants may bound an array of the schema's type and
-           nothing further in
+           one is copied on entry, at whatever size the tuple says
+records    a schema may produce a record holding a dynamically bounded
+           array as its *last* field — the shape `string` has: a length
+           beside a buffer whose capacity is the discriminant. Only last,
+           because a field after it would sit at an offset nothing can
+           compute; a variant part is refused for the same reason
 pointers   ^vector — a schema as the domain of a pointer, with
            new(p, 3) giving the tuple. The variable's discriminants travel
            with it, so p^.n, p^[i] and passing p^ to a schematic formal all
@@ -271,8 +274,7 @@ words      otherwise and pow are reserved; `and then` and `or else` reserve
            nothing new, because both of their words already are
 ```
 
-Not accepted yet: a schematic formal whose discriminants reach past an
-array, `type of`, the `string` type,
+Not accepted yet: `type of`, the `string` type,
 modules,
 `protected` parameters, initial-state specifiers
 (`value`), binding (`bind`/`unbind`), direct-access files, and complex

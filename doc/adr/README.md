@@ -53,3 +53,4 @@ the alternatives that were rejected and why.
 | [0042](0042-a-schematic-assignment-compares-the-tuples.md) | An assignment between two schematic types compares the tuples | Accepted |
 | [0043](0043-a-heap-variables-tuple-is-a-header-in-front-of-it.md) | A heap variable's tuple is a header in front of it | Accepted |
 | [0044](0044-a-discriminant-may-be-the-variant-selector.md) | A discriminant may be the variant-selector | Accepted |
+| [0045](0045-a-record-may-hold-a-dynamic-array-last.md) | A record may hold a dynamically bounded array, last | Accepted |
