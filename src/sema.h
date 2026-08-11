@@ -117,6 +117,12 @@ struct Symbol {
   /// the static chain. §6.4.4's domain-type may be a schema-name, and a heap
   /// variable has no frame to keep a descriptor in (ADR-0043).
   bool heapDisc = false;
+  /// This symbol is a schema's discriminant, bound for as long as the body is
+  /// being resolved — a `Const` in a production with a tuple and a `Disc` in a
+  /// generic one. Both forms answer §6.4.3.4's question "is this name in the
+  /// variant-selector a discriminant-identifier?", which the *kind* cannot,
+  /// because an ordinary constant is also a `Const` and is not one.
+  bool discBinding = false;
   /// Which formal-parameter-section declared this parameter. §6.7.3.3 requires
   /// every actual in one section to bring the same tuple, so the section has
   /// to be recoverable at the call.
@@ -230,7 +236,10 @@ private:
                           std::vector<VariantArm> &arms, int tagLine,
                           int tagCol, Type *record, std::vector<Field> &fields,
                           std::vector<Variant> &variants, int &tagField,
-                          Type *&tagTypeOut, std::vector<int> &path);
+                          Type *&tagTypeOut, bool &discSelOut,
+                          std::vector<int> &path);
+  /// The discriminant a variant-selector names, or null when it names a type.
+  Symbol *discSelectorFor(TypeExpr *denoter);
   /// Add a field to `into`, reporting a name already used anywhere in `record`.
   void addField(Type *record, std::vector<Field> &into, const DeclName &name,
                 Type *type, const std::vector<int> &variant);

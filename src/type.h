@@ -60,6 +60,9 @@ struct Variant {
   int tagField = -1;           // index into `fields`, or -1 when the nested
                                // tag has no field of its own
   Type *tagType = nullptr;
+  /// The nested variant-selector was a discriminant-identifier rather than a
+  /// tag-type (ISO/IEC 10206:1991 §6.4.3.4). See `Type::discSelector`.
+  bool discSelector = false;
   int line = 0, col = 0;
 };
 
@@ -99,6 +102,13 @@ struct Type {
   int tagField = -1;           // index into `fields`, or -1 when the tag has
                                // no name of its own (ISO 7185 §6.4.3.3)
   Type *tagType = nullptr;
+  /// ISO/IEC 10206:1991 §6.4.3.4 spells a variant-selector `[tag-field ':']
+  /// tag-type | discriminant-identifier`, and this says it was the third form.
+  /// The selector is then not a field — the tuple holds it — so the *layout*
+  /// is a tagless `case T of` and codegen never asks. What it changes is that
+  /// §6.7.5.3 requires a tag-type of every variant-part `new(p, c1, ..., cn)`
+  /// selects, so this variant part is not one a tag value may choose.
+  bool discSelector = false;
 
   /// The identifier a `type` definition gave this, purely for diagnostics.
   std::string alias;

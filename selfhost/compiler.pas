@@ -281,6 +281,9 @@ type
     variants, variantTail: variantPtr;
     tagField: integer;
     tagType: typePtr;
+    { The nested variant-selector was a discriminant-identifier rather than a
+      tag-type (6.4.3.4). See typeRec's discSelector. }
+    discSelector: boolean;
     line, col: integer;
     next: variantPtr
   end;
@@ -305,6 +308,13 @@ type
     fields, fieldTail: fieldPtr;
     variants, variantTail: variantPtr;
     tagField: integer;
+    { 6.4.3.4 spells a variant-selector `[tag-field ':'] tag-type |
+      discriminant-identifier`, and this says it was the third form. The
+      selector is then not a field -- the tuple holds it -- so the *layout* is
+      a tagless `case T of` and CodeGen never asks. What it changes is that
+      6.7.5.3 requires a tag-type of every variant-part `new(p, c1, ..., cn)`
+      selects, so this variant part is not one a tag value may choose. }
+    discSelector: boolean;
     aliasAt, aliasLen: integer;
     { 6.4.7 and 6.4.8: the schema this type was produced from and the tuple it
       was produced with, nil and empty for every type written out in full.
@@ -389,7 +399,15 @@ type
       variable created by `new` lives in a header immediately before it, so
       this one is read from the object's own address rather than by walking
       the static chain (ADR-0043). }
-    heapDisc: boolean
+    heapDisc: boolean;
+
+    { This symbol is a schema's discriminant, bound for as long as the body is
+      being resolved -- an skConst in a production with a tuple and an skDisc
+      in a generic one. Both forms answer 6.4.3.4's question "is this name in
+      the variant-selector a discriminant-identifier?", which the *kind*
+      cannot, because an ordinary constant is also an skConst and is not
+      one. }
+    discBinding: boolean
   end;
 
   { Every type produced from a schema, keyed by the schema and the tuple.
@@ -3490,6 +3508,7 @@ begin
   t^.fieldTail := nil;
   t^.variants := nil;
   t^.variantTail := nil;
+  t^.discSelector := false;
   t^.tagField := -1;
   t^.aliasAt := 0;
   t^.aliasLen := 0;
@@ -3894,6 +3913,7 @@ begin
   s^.discExprs := nil;
   s^.discIndex := -1;
   s^.heapDisc := false;
+  s^.discBinding := false;
   s^.paramSection := 0;
   NewSymbol := s
 end;
@@ -4956,6 +4976,21 @@ begin
   PathAppend := head
 end;
 
+{ 6.4.3.4: the discriminant-identifier a variant-selector names, or nil when
+  the selector is a tag-type. A discriminant is only ever in scope while a
+  schema body is being resolved, so this answers nil everywhere else without
+  needing to ask where it is -- which is what keeps the form out of an ordinary
+  record with no rule saying so. }
+function DiscSelectorFor(d: nodePtr): symPtr;
+var s: symPtr;
+begin
+  DiscSelectorFor := nil;
+  if d^.kind = nkNamed then begin
+    s := Lookup(d^.nmAt, d^.nmLen);
+    if (s <> nil) and s^.discBinding then DiscSelectorFor := s
+  end
+end;
+
 { Resolve one variant part -- a record's, or one nested inside an arm. The
   containers are passed explicitly because both a typeRec and a variantRec have
   them, and `path` says where the container sits so a field can record how to
@@ -4965,22 +5000,51 @@ procedure ResolveVariantPart(tagAt, tagLen, tagLine, tagCol: integer;
                              var fields, fieldTail: fieldPtr;
                              var variants, variantTail: variantPtr;
                              var tagField: integer; var tagTypeOut: typePtr;
+                             var discSelOut: boolean;
                              path: numPtr);
 var
   tag, labelType, fieldType: typePtr;
   arm, label_, g, n, tagName: nodePtr;
+  selector: symPtr;
   v, w: variantPtr;
   rg, rseen: rangePtr;
   armPath: numPtr;
   index, lo, hi, at: integer;
   claimed: boolean;
 begin
-  tag := ResolveType(tagDenoter);
+  { 6.4.3.4's third form of variant-selector: a bare name that is one of the
+    discriminants the body is being resolved with. It is asked *before* the
+    denoter is resolved, because as a type-denoter the name is unknown and
+    would report so. The two forms are told apart by the symbol and not by the
+    syntax -- `case k of` is a tag-type when k names a type and a
+    discriminant-identifier when it names a discriminant, and no third reading
+    of it exists. }
+  selector := DiscSelectorFor(tagDenoter);
+  if selector <> nil then begin
+    tag := selector^.stype;
+    discSelOut := true;
+    { The dump prints the denoter's resolved type, and this one *is* resolved
+      -- to the discriminant's type -- even though ResolveType never saw it. }
+    tagDenoter^.ntype := tag
+  end
+  else
+    tag := ResolveType(tagDenoter);
   if not IsOrdinal(tag) then begin
     ErrorAt(tagLine, tagCol);
     write('the tag of a variant part must be an ordinal type, found ');
     WriteTypeName(tag);
     writeln
+  end
+  { 6.4.3.4 offers the tag-field to the tag-type form only: the selector of a
+    discriminant-selected variant part *is* the discriminant, and a field would
+    be a second place to keep it -- one the program could then assign, which is
+    the very thing the section calls a dynamic-violation. }
+  else if (selector <> nil) and (tagLen > 0) then begin
+    ErrorAt(tagLine, tagCol);
+    write('''');
+    WritePool(selector^.at, selector^.len);
+    writeln(''' is a discriminant, so it is the tag of this variant part ',
+            'and cannot also name a field')
   end
   else begin
     tagTypeOut := tag;
@@ -5011,6 +5075,7 @@ begin
       v^.variantTail := nil;
       v^.tagField := -1;
       v^.tagType := nil;
+      v^.discSelector := false;
       v^.line := arm^.line;
       v^.col := arm^.col;
       v^.next := nil;
@@ -5088,7 +5153,8 @@ begin
         ResolveVariantPart(arm^.vaTagAt, arm^.vaTagLen, arm^.vaTagLine,
                            arm^.vaTagCol, arm^.vaTagType, arm^.vaVariants, rec,
                            v^.fields, v^.fieldTail, v^.variants,
-                           v^.variantTail, v^.tagField, v^.tagType, armPath);
+                           v^.variantTail, v^.tagField, v^.tagType,
+                           v^.discSelector, armPath);
 
       index := index + 1;
       arm := arm^.next
@@ -5116,7 +5182,7 @@ begin
     ResolveVariantPart(d^.rcTagAt, d^.rcTagLen, d^.rcTagLine, d^.rcTagCol,
                        d^.rcTagType, d^.rcVariants, t, t^.fields, t^.fieldTail,
                        t^.variants, t^.variantTail, t^.tagField, t^.tagType,
-                       nil);
+                       t^.discSelector, nil);
   ResolveRecord := t
 end;
 
@@ -5146,6 +5212,7 @@ begin
   t^.variants := src^.variants;
   t^.variantTail := src^.variantTail;
   t^.tagField := src^.tagField;
+  t^.discSelector := src^.discSelector;
   t^.loDisc := src^.loDisc;
   t^.hiDisc := src^.hiDisc;
   CopyType := t
@@ -5503,6 +5570,7 @@ begin
               disc := Declare(p^.sym^.at, p^.sym^.len, skConst, d^.line,
                               d^.col);
               disc^.stype := p^.sym^.stype;
+              disc^.discBinding := true;
               disc^.intVal := tv^.value;
               disc^.charVal := chr(tv^.value mod 256);
               disc^.boolVal := tv^.value <> 0
@@ -5696,6 +5764,7 @@ begin
       disc^.len := p^.sym^.len;
       disc^.kind := skDisc;
       disc^.stype := p^.sym^.stype;
+      disc^.discBinding := true;
       { The discriminant lives in the parameter's own frame slot, after the
         address, so it is reached exactly as the parameter is and a recursive
         procedure sees the descriptor of the invocation it is running in. }
@@ -7130,7 +7199,7 @@ var
   domain, tag, valueType: typePtr;
   arms, w: variantPtr;
   lbl: rangePtr;
-  stop: boolean;
+  stop, discSel: boolean;
 begin
   if PoolIs(p^.pcAt, p^.pcLen, 'reset    ') then p^.pcStd := spReset
   else if PoolIs(p^.pcAt, p^.pcLen, 'rewrite  ') then p^.pcStd := spRewrite
@@ -7230,10 +7299,21 @@ begin
       else begin
         arms := domain^.variants;
         tag := domain^.tagType;
+        discSel := domain^.discSelector;
         value := a^.next;
         stop := false;
         while (value <> nil) and not stop do begin
-          if arms = nil then begin
+          { 6.7.5.3: every variant-part a tag value selects "shall
+            closest-contain a tag-type". A discriminant-selected one does not
+            -- its selector was fixed by the tuple the type was produced with,
+            and this list would be a second, disagreeing answer. }
+          if discSel then begin
+            ErrorAt(value^.line, value^.col);
+            writeln('this variant part is selected by a discriminant, so its ',
+                    'variant was chosen when the type was produced');
+            stop := true
+          end
+          else if arms = nil then begin
             ErrorAt(value^.line, value^.col);
             if value = a^.next then
               writeln('this record has no variant part')
@@ -7297,6 +7377,7 @@ begin
                 p^.pcSelect := PathAppend(p^.pcSelect, chosen);
                 w := ArmAtIn(arms, chosen);
                 tag := w^.tagType;
+                discSel := w^.discSelector;
                 arms := w^.variants
               end
             end

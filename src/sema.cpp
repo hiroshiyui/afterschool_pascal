@@ -603,6 +603,18 @@ void Sema::addField(Type *record, std::vector<Field> &into,
   into.push_back(std::move(f));
 }
 
+/// ISO/IEC 10206:1991 §6.4.3.4: the discriminant-identifier a variant-selector
+/// names, or null when the selector is a tag-type. A discriminant is only ever
+/// in scope while a schema body is being resolved, so this answers null
+/// everywhere else without needing to ask where it is — which is what keeps
+/// the form out of an ordinary record with no rule saying so.
+Symbol *Sema::discSelectorFor(TypeExpr *denoter) {
+  if (denoter->kind != TEK::Named)
+    return nullptr;
+  Symbol *s = lookup(denoter->name);
+  return s && s->discBinding ? s : nullptr;
+}
+
 Type *Sema::resolveRecord(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Record);
   t->packed = denoter.packed;
@@ -616,7 +628,7 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
     resolveVariantPart(denoter.tagName, denoter.tagType.get(),
                        denoter.variants, denoter.tagLine,
                        denoter.tagCol, t, t->fields, t->variants,
-                       t->tagField, t->tagType, path);
+                       t->tagField, t->tagType, t->discSelector, path);
   }
   return t;
 }
@@ -626,8 +638,23 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
                               int tagCol, Type *record,
                               std::vector<Field> &fields,
                               std::vector<Variant> &variants, int &tagField,
-                              Type *&tagTypeOut, std::vector<int> &path) {
-  Type *tag = resolveType(*tagDenoter);
+                              Type *&tagTypeOut, bool &discSelOut,
+                              std::vector<int> &path) {
+  // ISO/IEC 10206:1991 §6.4.3.4's third form of variant-selector: a bare name
+  // that is one of the discriminants the body is being resolved with. It is
+  // asked *before* the denoter is resolved, because as a type-denoter the name
+  // is unknown and would report so. The two forms are told apart by the symbol
+  // and not by the syntax — `case k of` is a tag-type when `k` names a type
+  // and a discriminant-identifier when it names a discriminant, and no third
+  // reading of it exists.
+  Symbol *selector = discSelectorFor(tagDenoter);
+  Type *tag = selector ? selector->type : resolveType(*tagDenoter);
+  if (selector) {
+    discSelOut = true;
+    // The dump prints the denoter's resolved type, and this one *is* resolved
+    // — to the discriminant's type — even though resolveType never saw it.
+    tagDenoter->resolved = tag;
+  }
   if (!tag->isOrdinal()) {
     diags_.error(tagLine, tagCol,
                  "the tag of a variant part must be an ordinal type, found " +
@@ -635,6 +662,18 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
     return;
   }
   tagTypeOut = tag;
+
+  // §6.4.3.4 offers the tag-field to the tag-type form only: the selector of a
+  // discriminant-selected variant part *is* the discriminant, and a field
+  // would be a second place to keep it — one the program could then assign,
+  // which is the very thing the section calls a dynamic-violation.
+  if (selector && !tagName.empty()) {
+    diags_.error(tagLine, tagCol,
+                 "'" + selector->name +
+                     "' is a discriminant, so it is the tag of this variant "
+                     "part and cannot also name a field");
+    return;
+  }
 
   // A named tag is an ordinary field of the field-list it heads; a tagless
   // variant part has the type but no storage for it (ISO 7185 §6.4.3.3).
@@ -694,7 +733,7 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
                          arm.tagLine, arm.tagCol, record,
                          variants[index].fields, variants[index].variants,
                          variants[index].tagField, variants[index].tagType,
-                         path);
+                         variants[index].discSelector, path);
     path.pop_back();
   }
 }
@@ -984,6 +1023,8 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
     Symbol *d = declare(formals[i]->name, SymKind::Const, denoter.line,
                         denoter.col);
     d->type = formals[i]->type;
+    d->discBinding = true;
+    d->discIndex = static_cast<int>(i);
     d->intVal = tuple[i];
     d->charVal = static_cast<char>(tuple[i]);
     d->boolVal = tuple[i] != 0;
@@ -1109,6 +1150,7 @@ Type *Sema::genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
     d->name = formals[i]->name;
     d->kind = SymKind::Disc;
     d->type = formals[i]->type;
+    d->discBinding = true;
     // The discriminant lives in the parameter's own frame slot, after the
     // address, so it is reached exactly as the parameter is and a recursive
     // procedure sees the descriptor of the invocation it is running in.
@@ -2769,8 +2811,19 @@ void Sema::checkStdProc(ProcCallStmt *p) {
 
   const std::vector<Variant> *arms = &domain->variants;
   Type *tag = domain->tagType;
+  bool discSel = domain->discSelector;
   for (size_t i = 1; i < p->args.size(); ++i) {
     Expr *value = p->args[i].get();
+    // §6.7.5.3: every variant-part a tag value selects "shall closest-contain
+    // a tag-type". A discriminant-selected one does not — its selector was
+    // fixed by the tuple the type was produced with, and this list would be a
+    // second, disagreeing answer.
+    if (discSel) {
+      diags_.error(value->line, value->col,
+                   "this variant part is selected by a discriminant, so its "
+                   "variant was chosen when the type was produced");
+      return;
+    }
     if (arms->empty()) {
       diags_.error(value->line, value->col,
                    i == 1 ? "this record has no variant part"
@@ -2812,6 +2865,7 @@ void Sema::checkStdProc(ProcCallStmt *p) {
     }
     p->variantSelection.push_back(chosen);
     tag = (*arms)[chosen].tagType;
+    discSel = (*arms)[chosen].discSelector;
     arms = &(*arms)[chosen].variants;
   }
 }

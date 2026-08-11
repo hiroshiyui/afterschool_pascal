@@ -1,0 +1,10 @@
+<source>:37:26: error: unknown type 'k'
+<source>:37:31: error: this variant's tag is integer, but the label is kind
+<source>:37:52: error: this variant's tag is integer, but the label is kind
+<source>:11:35: error: 'k' is a discriminant, so it is the tag of this variant part and cannot also name a field
+<source>:41:8: error: no type is produced from schema 'named' with these discriminants
+<source>:17:43: error: this variant's tag is integer, but the label is kind
+<source>:42:8: error: no type is produced from schema 'wrong' with these discriminants
+<source>:49:10: error: this variant part is selected by a discriminant, so its variant was chosen when the type was produced
+<source>:50:14: error: this variant part is selected by a discriminant, so its variant was chosen when the type was produced
+<source>:53:16: error: this variant part is selected by a discriminant, so its variant was chosen when the type was produced
