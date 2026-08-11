@@ -371,9 +371,18 @@ was never written down.
     the variable; a corpus with no set component let a rounding of 8 pass every
     test until one was written.
 
-  What is left of schemata: a discriminant as a variant-selector, and a
-  schematic formal whose discriminants reach past an array — which is the
-  shape `string` itself has.
+  - ~~**A discriminant as a variant-selector**~~ Done (ADR-0044). §6.4.3.4's
+    variant-selector may be a discriminant-identifier, so which arm of a
+    variant part is live is fixed by the tuple rather than stored. The selector
+    is then **not a field**, which is the whole design: it has no storage, the
+    layout is a tagless `case T of`, codegen and `verify/` are untouched, and
+    §6.4.3.4's dynamic-violation cannot be committed because no designator
+    denotes the selector. What it costs is one flag saying a symbol is a bound
+    discriminant — the *kind* cannot answer, because a constant production
+    binds them as ordinary constants.
+
+  What is left of schemata: a schematic formal whose discriminants reach past
+  an array — which is the shape `string` itself has.
 
   And one **defect**, found while the assignment was being written and fixed
   on its own: a schema producing a `packed array [1..n] of char` produces a

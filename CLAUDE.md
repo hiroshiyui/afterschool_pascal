@@ -546,6 +546,35 @@ in one language or the other, and the standard is a property of the source.
   - `dispose` of nil traps **only** for a schema domain: §6.6.5.3 always made
     it an error, and stepping back over a header is what turned a harmless one
     into a free of an address that was never allocated.
+- **A discriminant may be the variant-selector** (ADR-0044), which is §6.4.3.4's
+  third form of one and the last of ADR-0039's five deferrals. The selector is
+  then **not a field** — §6.4.3.4 makes it one only when a tag-field names it —
+  so it has no storage anywhere, the tuple is the only place the value exists,
+  and `v.k` already reads that. **CodeGen, `verify/`, the parser and the lexer
+  are untouched**: the layout is a tagless `case T of`, which has been emitted
+  since ADR-0018.
+  - §6.4.3.4's dynamic-violation is enforced **by construction**. No designator
+    denotes the selector, so nothing can attribute another value to it — which
+    is why this feature adds no runtime error where the three before it each
+    added two.
+  - The two forms are told apart by **the symbol, not the syntax**: `case k of`
+    is a tag-type when `k` names a type and a discriminant-identifier when it
+    names a discriminant, so Sema asks *before* resolving the denoter — as a
+    type-denoter the name would be reported unknown. `Symbol::discBinding` is
+    what it asks, and the *kind* cannot answer: a production with a tuple binds
+    each discriminant as an ordinary `Const`. Set in **two** places, because
+    ADR-0039 resolves a body by binding values and ADR-0040 by binding `Disc`
+    symbols; either going unmarked is caught.
+  - A **tag-field is refused** with this form. It would be a second place to
+    keep a value the tuple fixes, and one the program could then assign.
+  - **`new(p, c1, ..., cn)` may not select such a variant part** (§6.7.5.3
+    requires a tag-type of every one it selects), and the check is per variant
+    part rather than per record — an outer tag-selected part is selectable and
+    a discriminant-selected one nested in the arm it chooses is not.
+  - Where this meets ADR-0043 the two readings of `new(p, round)` agree, but
+    only because that record decided the form is chosen by the domain and by
+    nothing else. Decided by the arguments, this is the program that would have
+    made it ambiguous.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

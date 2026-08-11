@@ -257,6 +257,11 @@ pointers   ^vector — a schema as the domain of a pointer, with
            new(p, 3) giving the tuple. The variable's discriminants travel
            with it, so p^.n, p^[i] and passing p^ to a schematic formal all
            work wherever the pointer reaches; dispose gives the storage back
+variants   record case k of ... end inside a schema — a discriminant as the
+           variant-selector (§6.4.3.4), so which arm is live is fixed by the
+           tuple the type was produced with rather than by a value the
+           program stores. The selector is not a field, so nothing can
+           disagree with it, and one compiled body serves every variant
 assign     v := w between two variables of one schema's types. Where both
            tuples are written in the program the compiler decides it;
            where one is not known until the block is entered, the tuples
@@ -266,8 +271,8 @@ words      otherwise and pow are reserved; `and then` and `or else` reserve
            nothing new, because both of their words already are
 ```
 
-Not accepted yet: a discriminant as a variant-selector,
-`type of`, the `string` type,
+Not accepted yet: a schematic formal whose discriminants reach past an
+array, `type of`, the `string` type,
 modules,
 `protected` parameters, initial-state specifiers
 (`value`), binding (`bind`/`unbind`), direct-access files, and complex
