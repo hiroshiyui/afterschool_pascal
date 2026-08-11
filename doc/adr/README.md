@@ -55,3 +55,4 @@ the alternatives that were rejected and why.
 | [0044](0044-a-discriminant-may-be-the-variant-selector.md) | A discriminant may be the variant-selector | Accepted |
 | [0045](0045-a-record-may-hold-a-dynamic-array-last.md) | A record may hold a dynamically bounded array, last | Accepted |
 | [0046](0046-a-protected-parameter-is-a-rule-about-the-body.md) | A protected parameter is a rule about the body | Accepted |
+| [0047](0047-a-type-inquiry-hands-back-a-type-that-already-exists.md) | A type-inquiry hands back a type that already exists | Accepted |

@@ -618,6 +618,27 @@ in one language or the other, and the standard is a property of the source.
     would have gone.
   - A **`with` carries the protection onto its hidden binding**, because that
     is where the protected variable's name stops being written down.
+- **A type-inquiry hands back a type that already exists** (ADR-0047).
+  §6.4.9's `type of x` resolves to the `Type *` the named symbol holds and
+  builds nothing. That is what the clause asks for, not a shortcut: ADR-0017
+  makes two structured types the same only when one identifier denotes both,
+  so a type-inquiry that *built* an alike type could not be assigned from the
+  original. CodeGen and `verify/` are untouched, because nothing records that
+  a second name arrived at the type this way.
+  - It **reserves nothing** — `type` and `of` are ISO 7185 word-symbols
+    already, the second such feature after `and then`.
+  - Its **parameter form needed no new lookup**: `declareProcHeading` pushes a
+    scope before building the formals, so `procedure p(var a: point; b: type
+    of a)` finds `a` by ordinary lookup. A side list of the parameters built
+    so far was written and then deleted for that reason.
+  - Refused: `x: type of x` (§6.7.3.1), checked *before* the names are
+    declared or the name finds itself; and an object that is a **schematic
+    formal**, whose bounds are in a descriptor belonging to that one parameter
+    — a second name would share the descriptor, not the type, which is a
+    different mechanism.
+  - **Where a parameter-identifier object may live is not enforced**, and the
+    deviation is permissive: ordinary lookup lets a procedural parameter's own
+    list see the enclosing list's parameters, which §6.4.9 does not allow.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

@@ -738,6 +738,52 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
   }
 }
 
+/// ISO/IEC 10206:1991 §6.4.9: "The type denoted by a type-inquiry shall be the
+/// type possessed by the variable-identifier or parameter-identifier contained
+/// by the type-inquiry."
+///
+/// It is the only type-denoter that names a *variable*, so its name is looked
+/// up in the ordinary scope rather than among the types — and the whole
+/// feature is that one sentence. A type-inquiry yields a `Type *` that some
+/// other declaration already owns, so nothing downstream can tell that the
+/// type arrived this way, which is exactly what §6.4.9 asks for: `var b: type
+/// of a` makes `b` the *same* type as `a` under §6.4.5's name equivalence,
+/// not a second type that looks like it.
+Type *Sema::resolveInquiry(TypeExpr &denoter) {
+  // §6.4.9 also allows the object to be a parameter of the closest-containing
+  // formal-parameter-list, and that needs nothing added: `declareProcHeading`
+  // pushes a scope before building the formals, so a parameter declared
+  // earlier in the same list is already an ordinary lookup by the time a later
+  // one's type-denoter asks.
+  Symbol *sym = lookup(denoter.name);
+  if (!sym) {
+    diags_.error(denoter.line, denoter.col,
+                 "unknown variable '" + denoter.name + "' in 'type of'");
+    return ty::Int();
+  }
+  if (!sym->isVariable()) {
+    diags_.error(denoter.line, denoter.col,
+                 "'type of' names a variable or a parameter, and '" +
+                     denoter.name + "' is not one");
+    return ty::Int();
+  }
+  if (!sym->type)
+    return ty::Int();
+  // A schematic formal's type has no tuple: its bounds are in a descriptor
+  // belonging to *that* parameter, and a second name reading them would need
+  // to share the descriptor rather than the type. §6.7.3.3 says what that
+  // means and this compiler does not do it yet — so it is refused rather than
+  // silently given a type whose bounds it cannot read.
+  if (sym->type->isGeneric()) {
+    diags_.error(denoter.line, denoter.col,
+                 "'type of " + denoter.name +
+                     "' would need the discriminants that arrive with '" +
+                     denoter.name + "', which is not supported");
+    return ty::Int();
+  }
+  return sym->type;
+}
+
 Type *Sema::resolveType(TypeExpr &denoter) {
   if (denoter.resolved)
     return denoter.resolved;
@@ -795,6 +841,9 @@ Type *Sema::resolveType(TypeExpr &denoter) {
     break;
   case TEK::Set:
     t = resolveSet(denoter);
+    break;
+  case TEK::Inquiry:
+    t = resolveInquiry(denoter);
     break;
   case TEK::Schema: {
     Symbol *sym = lookup(denoter.name);
@@ -1907,6 +1956,17 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
       }
       continue;
     }
+
+    // §6.7.3.1: "The parameter-form ... shall not contain an applied
+    // occurrence of the parameter-identifier", so `x: type of x` is refused —
+    // and it has to be refused *before* the names are declared, or the name
+    // would find itself.
+    if (group.type && group.type->kind == TEK::Inquiry)
+      for (auto &n : group.names)
+        if (n.name == group.type->name)
+          diags_.error(group.type->line, group.type->col,
+                       "'type of " + n.name +
+                           "' names the very parameter it is the type of");
 
     Type *t = resolveType(*group.type);
     // ISO 7185 §6.6.3.3: a file may only be passed by reference. A value

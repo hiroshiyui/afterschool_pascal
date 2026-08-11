@@ -428,7 +428,13 @@ enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File, Set,
                  /// `schema-name '(' discriminant-value, ... ')'`. It is a
                  /// type-denoter like any other, and the only one whose
                  /// spelling contains expressions that are not bounds.
-                 Schema };
+                 Schema,
+                 /// ISO/IEC 10206:1991 §6.4.9's type-inquiry, `type of x`. It
+                 /// is the only type-denoter that names a *variable*: what it
+                 /// denotes is the type that variable possesses, which is why
+                 /// `name` here is resolved in the ordinary scope rather than
+                 /// among the types.
+                 Inquiry };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is

@@ -708,6 +708,12 @@ struct Dumper {
     case TEK::Pointer:
       headType("pointer " + t->name, t);
       break;
+    // A type-inquiry names a *variable*, so it prints like `named` and means
+    // something else entirely — which is why it gets its own tag rather than
+    // being folded into one.
+    case TEK::Inquiry:
+      headType("typeof " + t->name, t);
+      break;
     // A discriminated-schema's children are *expressions*, not denoters: it is
     // the only type-denoter whose subtree holds values rather than types.
     case TEK::Schema:

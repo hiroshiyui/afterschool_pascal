@@ -202,7 +202,10 @@ void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
     group.byRef = accept(Tok::KwVar);
     group.names = parseNameList("a parameter name");
     expect(Tok::Colon, "in a parameter list");
-    if (!check(Tok::Ident)) {
+    // §6.7.3.1: `parameter-form = type-name | schema-name | type-inquiry`, so
+    // a parameter's type is still not a type-denoter — it is a name, or one of
+    // those two other forms. `type` is the only word-symbol that may begin one.
+    if (!check(Tok::Ident) && !check(Tok::KwType)) {
       errorAtCur("a parameter's type must be a type name");
       bail();
     }
@@ -328,6 +331,31 @@ TypeExprPtr Parser::parseTypeExpr() {
     ++pos_;
     if (!check(Tok::Ident)) {
       errorAtCur("the domain of a pointer type must be a type name");
+      bail();
+    }
+    t->name = cur().text;
+    ++pos_;
+    return t;
+  }
+
+  // type-inquiry = 'type' 'of' type-inquiry-object (§6.4.9). Both words are
+  // already reserved in ISO 7185, so this feature reserves nothing — the
+  // second such after `and then`. There is no ambiguity to resolve either:
+  // `type` cannot begin a type-denoter in that language at all.
+  if (check(Tok::KwType)) {
+    auto t = std::make_unique<TypeExpr>();
+    t->kind = TEK::Inquiry;
+    t->line = cur().line;
+    t->col = cur().col;
+    if (std_ == Std::Iso7185) {
+      errorAtCur("a type-inquiry is an Extended Pascal feature; compile with "
+                 "--std=extended");
+      bail();
+    }
+    ++pos_;
+    expect(Tok::KwOf, "after 'type' in a type-inquiry");
+    if (!check(Tok::Ident)) {
+      errorAtCur("'type of' must name a variable or a parameter");
       bail();
     }
     t->name = cur().text;

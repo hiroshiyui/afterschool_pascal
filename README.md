@@ -277,12 +277,18 @@ params     procedure p(protected c: integer; protected var d: point) — a
            Passing it on to another *protected* parameter is allowed, and
            that is what makes the word usable; a file or a pointer cannot be
            protected, because protecting either would protect nothing
-words      otherwise, pow and protected are reserved; `and then` and
-           `or else` reserve nothing new, because both of their words
+types      type of x — a type-inquiry: the type the variable x already
+           possesses, handed back rather than built again. That is what
+           makes `b: type of a` assignable from a, where a second
+           `record x, y: integer end` written out would not be. It reaches
+           a parameter of the same list, so `procedure p(var a: point;
+           b: type of a)` writes the type once
+words      otherwise, pow and protected are reserved; `and then`, `or else`
+           and `type of` reserve nothing new, because all of their words
            already are
 ```
 
-Not accepted yet: `type of`, the `string` type, modules,
+Not accepted yet: the `string` type, modules,
 initial-state specifiers (`value`), binding (`bind`/`unbind`), direct-access
 files, and complex numbers. A word-symbol is reserved only when the feature needing it
 lands, so until the list above is complete `--std=extended` accepts some

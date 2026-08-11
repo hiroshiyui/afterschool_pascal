@@ -420,6 +420,16 @@ was never written down.
   another protected one, and without that clause the word would be unusable —
   and `new(p)` needs no check at all, because §6.4.1 makes a pointer
   unprotectable and so nothing that reaches `new` can be protected.
+- ~~**Type-inquiry.**~~ Done (ADR-0047). §6.4.9's `type of x`, the only
+  type-denoter that names a *variable*. It resolves to the `Type *` that
+  variable already holds and builds nothing — which is not a shortcut but what
+  the clause asks for: under ADR-0017's name equivalence a type-inquiry that
+  built a type alike the original could not be assigned from it, and that is
+  the one thing anybody writes one for. It reserves nothing, both of its words
+  being ISO 7185 word-symbols already, and its parameter form needed no new
+  lookup because a scope is pushed before the formals are built. Refused: a
+  parameter naming itself (§6.7.3.1), and an object that is a schematic formal,
+  whose bounds are in a descriptor a second name would have to share.
 - **`string`.** ADR-0012 chose the length-plus-buffer record partly because the
   project had not committed to this standard; it now has, so that reason has
   expired. It is *buildable* since ADR-0041 — it is a required schema, and
@@ -428,8 +438,7 @@ was never written down.
   — so this should be settled by measuring stage-1 code again, the way it was
   settled the first time, and not by taste.
 - **Modules**, `bind`/`unbind`, direct-access files, complex numbers,
-  initial-state specifiers, `type of`, restricted types. Each needs its own
-  record.
+  initial-state specifiers, restricted types. Each needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

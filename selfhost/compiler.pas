@@ -140,7 +140,7 @@ type
   ctxKind = (
     ctxNone, ctxProgramStart, ctxProgramParams, ctxProgramHeader, ctxFinalEnd,
     ctxAfterFile, ctxAfterSet, ctxSetMembers, ctxSubrangeBounds, ctxEnumConstants, ctxAfterArray,
-    ctxSchemaArgs, ctxFormalDisc,
+    ctxSchemaArgs, ctxFormalDisc, ctxTypeInquiry,
     ctxArrayIndex, ctxRecordEnd, ctxFieldList, ctxVariantTag,
     ctxVariantLabels, ctxVariantOpen, ctxVariantFields, ctxVariantClose,
     ctxConstDef, ctxConstDefEnd, ctxTypeDef, ctxTypeDefEnd, ctxVarDecl,
@@ -187,6 +187,11 @@ type
     { ISO/IEC 10206:1991 6.4.8's discriminated-schema. The only type-denoter
       whose children are expressions rather than denoters. }
     nkSchema,
+    { 6.4.9's type-inquiry, `type of x`. The only type-denoter that names a
+      *variable*: what it denotes is the type that variable possesses, which is
+      why its name is resolved in the ordinary scope rather than among the
+      types. }
+    nkInquiry,
     { declarations }
     nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock);
 
@@ -588,6 +593,7 @@ type
                      grIsProc, grIsFunction: boolean;
                      grParams, grResult: nodePtr);
       nkNamed:      (nmAt, nmLen: integer);
+      nkInquiry:    (tqAt, tqLen: integer);
       nkSchema:     (scAt, scLen: integer; scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen: integer);
       nkEnum:       (enConstants: nodePtr);
@@ -1729,6 +1735,7 @@ begin
     ctxAfterLabelPart: write('after a label declaration');
     ctxSubrangeBounds: write('between the bounds of a subrange');
     ctxSchemaArgs:     write('after the discriminants of a schema');
+    ctxTypeInquiry:    write('after ''type'' in a type-inquiry');
     ctxFormalDisc:     write('in a formal discriminant');
     ctxEnumConstants:  write('after the constants of an enumerated type');
     ctxAfterArray:     write('after ''array''');
@@ -1831,7 +1838,7 @@ begin
     nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
-    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema,
+    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry,
     nkConstDecl, nkTypeDecl, nkLabelDecl,
     nkBlock: { nothing of Sema's to clear }
   end;
@@ -2315,6 +2322,36 @@ begin
         t^.ptAt := tok[pos].at;
         t^.ptLen := tok[pos].len;
         pos := pos + 1
+      end
+    end
+    { type-inquiry = 'type' 'of' type-inquiry-object (6.4.9). Both words are
+      already reserved in ISO 7185, so this feature reserves nothing -- the
+      second such after `and then`. There is no ambiguity to resolve either:
+      `type` cannot begin a type-denoter in that language at all. }
+    else if Check(tkType) then begin
+      t := NewNode(nkInquiry, CurLine, CurCol);
+      t^.tqAt := 0;
+      t^.tqLen := 0;
+      if langStd = stdIso7185 then begin
+        ErrorAtCur;
+        writeln('a type-inquiry is an Extended Pascal feature; compile with ',
+                '--std=extended');
+        Bail
+      end
+      else begin
+        pos := pos + 1;
+        Expect(tkOf, ctxTypeInquiry);
+        if not aborted then
+          if not Check(tkIdent) then begin
+            ErrorAtCur;
+            writeln('''type of'' must name a variable or a parameter');
+            Bail
+          end
+          else begin
+            t^.tqAt := tok[pos].at;
+            t^.tqLen := tok[pos].len;
+            pos := pos + 1
+          end
       end
     end
     else if Check(tkLParen) then
@@ -3327,8 +3364,12 @@ begin
       g^.grByRef := Accept(tkVar);
       g^.grNames := ParseNameList(ctxParamList);
       Expect(tkColon, ctxParamList);
+      { 6.7.3.1: `parameter-form = type-name | schema-name | type-inquiry`, so
+        a parameter's type is still not a type-denoter -- it is a name, or one
+        of those two other forms. `type` is the only word-symbol that may begin
+        one. }
       if not aborted then
-        if not Check(tkIdent) then begin
+        if not (Check(tkIdent) or Check(tkType)) then begin
           ErrorAtCur;
           writeln('a parameter''s type must be a type name');
           Bail
@@ -4079,6 +4120,15 @@ end;
   parameter is deliberately not lumped in with skProc/skFunc elsewhere: those
   two ask whether a symbol *has* a body, which is what forward declarations
   and duplicate checks want. }
+{ A declared variable, a value parameter or a var parameter -- what 6.5.1
+  calls a variable-identifier. }
+function IsVariable(s: symPtr): boolean;
+begin
+  IsVariable := (s <> nil) and
+                ((s^.kind = skVar) or (s^.kind = skParam) or
+                 (s^.kind = skVarParam))
+end;
+
 function IsInvocable(s: symPtr): boolean;
 begin
   IsInvocable := (s <> nil) and
@@ -4410,7 +4460,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock:
         ok := false
     end;
@@ -6003,6 +6053,62 @@ begin
   GenericFromSchema := t
 end;
 
+{ ISO/IEC 10206:1991 6.4.9: "The type denoted by a type-inquiry shall be the
+  type possessed by the variable-identifier or parameter-identifier contained
+  by the type-inquiry."
+
+  It is the only type-denoter that names a *variable*, so its name is looked up
+  in the ordinary scope rather than among the types -- and the whole feature is
+  that one sentence. What comes back is a type some other declaration already
+  owns, so nothing downstream can tell the type arrived this way: `var b: type
+  of a` makes b the *same* type as a under 6.4.5's name equivalence, not a
+  second type that looks like it. }
+function ResolveInquiry(d: nodePtr): typePtr;
+var s: symPtr; t: typePtr;
+begin
+  { 6.4.9 also allows the object to be a parameter of the closest-containing
+    formal-parameter-list, and that needs nothing added: DeclareProcHeading
+    pushes a scope before building the formals, so a parameter declared earlier
+    in the same list is already an ordinary lookup by the time a later one's
+    type-denoter asks. }
+  s := Lookup(d^.tqAt, d^.tqLen);
+  if s = nil then begin
+    ErrorAt(d^.line, d^.col);
+    write('unknown variable ''');
+    WritePool(d^.tqAt, d^.tqLen);
+    writeln(''' in ''type of''');
+    ResolveInquiry := intType
+  end
+  else if not IsVariable(s) then begin
+    ErrorAt(d^.line, d^.col);
+    write('''type of'' names a variable or a parameter, and ''');
+    WritePool(d^.tqAt, d^.tqLen);
+    writeln(''' is not one');
+    ResolveInquiry := intType
+  end
+  else begin
+    t := s^.stype;
+    if t = nil then
+      ResolveInquiry := intType
+    { A schematic formal's type has no tuple: its bounds are in a descriptor
+      belonging to *that* parameter, and a second name reading them would need
+      to share the descriptor rather than the type. 6.7.3.3 says what that
+      means and this compiler does not do it yet -- so it is refused rather
+      than silently given a type whose bounds it cannot read. }
+    else if IsGeneric(t) then begin
+      ErrorAt(d^.line, d^.col);
+      write('''type of ');
+      WritePool(d^.tqAt, d^.tqLen);
+      write(''' would need the discriminants that arrive with ''');
+      WritePool(d^.tqAt, d^.tqLen);
+      writeln(''', which is not supported');
+      ResolveInquiry := intType
+    end
+    else
+      ResolveInquiry := t
+  end
+end;
+
 function SchematicFormal(schema, param: symPtr; d: nodePtr): typePtr;
 var t: typePtr;
 begin
@@ -6060,6 +6166,7 @@ begin
       nkPointer:  t := ResolvePointer(d);
       nkFile:     t := ResolveFile(d);
       nkSetOf:    t := ResolveSet(d);
+      nkInquiry:  t := ResolveInquiry(d);
       nkSchema: begin
         s := Lookup(d^.scAt, d^.scLen);
         if (s = nil) or (s^.kind <> skSchema) then begin
@@ -7119,7 +7226,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock:
         { not an expression }
     end
@@ -7892,7 +7999,7 @@ begin
       nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkBlock:
         { not a statement }
     end
@@ -8004,6 +8111,24 @@ begin
         end
       end
       else begin
+      { 6.7.3.1: "The parameter-form ... shall not contain an applied
+        occurrence of the parameter-identifier", so `x: type of x` is refused
+        -- and it has to be refused *before* the names are declared, or the
+        name would find itself. }
+      if g^.grType <> nil then
+        if g^.grType^.kind = nkInquiry then begin
+          n := g^.grNames;
+          while n <> nil do begin
+            if PoolSame(n^.dnAt, n^.dnLen, g^.grType^.tqAt, g^.grType^.tqLen)
+            then begin
+              ErrorAt(g^.grType^.line, g^.grType^.col);
+              write('''type of ');
+              WritePool(n^.dnAt, n^.dnLen);
+              writeln(''' names the very parameter it is the type of')
+            end;
+            n := n^.next
+          end
+        end;
       t := ResolveType(g^.grType);
       { ISO 7185 6.6.3.3: a file may only be passed by reference. A value
         parameter is a copy, and a file has no copy -- the position, the buffer
@@ -9492,6 +9617,15 @@ begin
     nkPointer: begin
       write('pointer ');
       WritePool(n^.ptAt, n^.ptLen);
+      WritePos(n^.line, n^.col);
+      TypeEnd(n)
+    end;
+    { A type-inquiry names a *variable*, so it prints like `named` and means
+      something else entirely -- which is why it gets its own tag rather than
+      being folded into one. }
+    nkInquiry: begin
+      write('typeof ');
+      WritePool(n^.tqAt, n^.tqLen);
       WritePos(n^.line, n^.col);
       TypeEnd(n)
     end;
@@ -12234,7 +12368,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock:
       OpWord('null            ', v)   { Sema has already required a designator }
   end
@@ -12291,7 +12425,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl,
+    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock:
       OpInt(0, v)
   end
@@ -13212,7 +13346,7 @@ begin
       nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkSchema, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock: ;
     end
 end;

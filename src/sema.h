@@ -318,6 +318,7 @@ private:
   bool isDesignator(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
+  Type *resolveInquiry(TypeExpr &denoter);
   void checkNotThreatened(Expr *e, const std::string &what);
 
   /// True if a value of `from` may be assigned to / compared with `to`.
