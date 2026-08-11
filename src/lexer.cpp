@@ -33,6 +33,7 @@ const char *tokenName(Tok t) {
   case Tok::RBracket: return "']'";
   case Tok::Caret: return "'^'";
   case Tok::Eq: return "'='";
+  case Tok::Arrow: return "'=>'";
   case Tok::NotEq: return "'<>'";
   case Tok::Lt: return "'<'";
   case Tok::Le: return "'<='";
@@ -78,6 +79,11 @@ const char *tokenName(Tok t) {
   case Tok::KwProtected: return "'protected'";
   case Tok::KwValue: return "'value'";
   case Tok::KwBindable: return "'bindable'";
+  case Tok::KwModule: return "'module'";
+  case Tok::KwExport: return "'export'";
+  case Tok::KwImport: return "'import'";
+  case Tok::KwOnly: return "'only'";
+  case Tok::KwQualified: return "'qualified'";
   case Tok::StarStar: return "'**'";
   case Tok::KwAndThen: return "'and then'";
   case Tok::KwOrElse: return "'or else'";
@@ -120,6 +126,11 @@ const std::unordered_map<std::string, Tok> &extendedKeywords() {
       {"protected", Tok::KwProtected},
       {"value", Tok::KwValue},
       {"bindable", Tok::KwBindable},
+      {"module", Tok::KwModule},
+      {"export", Tok::KwExport},
+      {"import", Tok::KwImport},
+      {"only", Tok::KwOnly},
+      {"qualified", Tok::KwQualified},
   };
   return kw;
 }
@@ -429,7 +440,16 @@ std::vector<Token> Lexer::tokenize() {
     case '/': out.push_back(make(Tok::Slash, sl, sc)); break;
     case ',': out.push_back(make(Tok::Comma, sl, sc)); break;
     case ';': out.push_back(make(Tok::Semi, sl, sc)); break;
-    case '=': out.push_back(make(Tok::Eq, sl, sc)); break;
+    case '=':
+      // §6.11.2's `=>`. Maximal munch, as everywhere else here: `=` cannot be
+      // followed by `>` in any ISO 7185 program, so nothing is taken away.
+      if (peek() == '>') {
+        advance();
+        out.push_back(make(Tok::Arrow, sl, sc));
+      } else {
+        out.push_back(make(Tok::Eq, sl, sc));
+      }
+      break;
     case '(': out.push_back(make(Tok::LParen, sl, sc)); break;
     case ')': out.push_back(make(Tok::RParen, sl, sc)); break;
     case '[': out.push_back(make(Tok::LBracket, sl, sc)); break;

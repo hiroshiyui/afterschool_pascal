@@ -542,9 +542,36 @@ was never written down.
     whole-record copy. `irtest` caught it as a wrong answer, which is what
     that harness exists for — two backends can agree on every dump and still
     disagree about a number no dump prints.
-- **Modules**, restricted types, structured-value constructors, substring
-  variables, `readstr`/`writestr`, function-accesses. Each needs its own
-  record.
+- ~~**Modules.**~~ Done (ADR-0053). §6.11's module-declaration and §6.13's
+  program-components, and with it the last of the eight features the README
+  listed. It is the only one that changes what a *program* is.
+  - **A level-0 activation record is a global**, and that one sentence is the
+    whole of the code generator's share. A module has exactly one activation
+    (§6.2.3.6) that must outlive the function commencing it, and the main
+    program is in the same position — so `addressOf` asks a symbol's *owner*
+    rather than its level, which is the only way an imported variable can be
+    reached at all.
+  - **Written order is a legal activation order and no sort produced it.**
+    §6.2.2.9 already puts a module-heading before everything that imports its
+    interface, so a supplier is textually first — exactly §6.2.3.6's
+    condition. Finalizations run in reverse. Two modules can still supply each
+    other through a *split* module, and §6.11.1 then forbids an
+    initialization- or finalization-part in either — the one rule here that
+    needs a reachability check rather than the text's order.
+  - **An interface is a table, not a scope** (§6.2.2.2), a heading in a
+    module-heading is `forward` under another name (§6.11.1), and a qualified
+    name is told from a field selection by the *symbol* — three places where
+    the feature reused a mechanism rather than adding one.
+  - Five word-symbols, not seven: §6.1.5 and §6.1.6 make `interface` and
+    `implementation` directives, which are identifiers exactly as `forward`
+    is.
+  - Deferred and stated: **separate compilation of program-components**, which
+    §6.13 asks for with a *should* rather than a *shall* and which would need
+    an interface artefact this compiler does not define; a module variable
+    with computed discriminants; and a module-parameter that is neither
+    `input` nor `output`, which §6.11.1 NOTE 6 lets go unbound.
+- Restricted types, structured-value constructors, substring variables,
+  `readstr`/`writestr`, function-accesses. Each needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

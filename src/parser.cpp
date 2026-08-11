@@ -38,15 +38,313 @@ bool Parser::expect(Tok k, const char *context) {
 
 // ------------------------------------------------------------------- program
 
+/// ISO/IEC 10206:1991 §6.13: `program-block = program-component
+/// { program-component }`, each terminated by `.`, exactly one of which is the
+/// main-program-declaration. Under ISO 7185 `module` is not a word-symbol, so
+/// this loop runs once and the whole production is the one that was here
+/// before.
 std::unique_ptr<Program> Parser::parseProgram() {
   auto prog = std::make_unique<Program>();
+  bool sawMain = false;
 
+  for (;;) {
+    if (check(Tok::KwModule)) {
+      prog->modules.push_back(parseModule());
+      continue;
+    }
+    if (check(Tok::KwProgram)) {
+      if (sawMain) {
+        errorAtCur("a program has one 'program' declaration, and this is the "
+                   "second");
+        bail();
+      }
+      prog->mainIndex = prog->modules.size();
+      parseMainProgram(*prog);
+      sawMain = true;
+      continue;
+    }
+    break;
+  }
+
+  if (!sawMain) {
+    // The whole source was modules, or began with neither word. Either way the
+    // message that was here before is the right one: something has to start a
+    // program-component, and `program` is the only word that starts the one
+    // every program must have.
+    expect(Tok::KwProgram, "at the start of the program");
+    bail();
+  }
+  if (!check(Tok::Eof))
+    errorAtCur("trailing text after the end of the program");
+  return prog;
+}
+
+/// §6.11.1's module-declaration. Which of its three forms this is comes down
+/// to the word after the module's name: `interface` gives a heading with no
+/// block, `implementation` gives a block with no heading, and neither gives
+/// both in one component. Both words are *directives* (§6.1.5, §6.1.6) and so
+/// ordinary identifiers here, exactly as `forward` is — which is why modules
+/// reserve five words and not seven.
+std::unique_ptr<ModuleDecl> Parser::parseModule() {
+  auto m = std::make_unique<ModuleDecl>();
+  m->line = cur().line;
+  m->col = cur().col;
+  ++pos_; // 'module'
+
+  if (!check(Tok::Ident)) {
+    errorAtCur("expected the module name");
+    bail();
+  }
+  m->name = cur().text;
+  ++pos_;
+
+  bool implementation = false;
+  if (check(Tok::Ident) && cur().text == "interface") {
+    ++pos_;
+    m->hasHeading = true;
+  } else if (check(Tok::Ident) && cur().text == "implementation") {
+    ++pos_;
+    implementation = true;
+    m->hasBlock = true;
+  } else {
+    m->hasHeading = true;
+    m->hasBlock = true;
+  }
+
+  if (implementation) {
+    // module-identification: the heading was given by an earlier component, so
+    // there is no parameter list and no export part to write again.
+    expect(Tok::Semi, "after 'implementation'");
+    parseModuleBlock(*m);
+    expect(Tok::Period, "after the 'end' of a module block");
+    return m;
+  }
+
+  parseModuleHeading(*m);
+  if (m->hasBlock) {
+    expect(Tok::Semi, "after the 'end' of a module heading");
+    parseModuleBlock(*m);
+  }
+  expect(Tok::Period, m->hasBlock ? "after the 'end' of a module block"
+                                  : "after the 'end' of a module heading");
+  return m;
+}
+
+/// module-heading = 'module' identifier [interface-directive]
+///                  [ '(' module-parameter-list ')' ] ';'
+///                  interface-specification-part import-part
+///                  { const | type | var | procedure-and-function-heading } 'end'
+///
+/// The name and the directive have already been read.
+void Parser::parseModuleHeading(ModuleDecl &m) {
+  if (accept(Tok::LParen)) {
+    m.params = parseNameList("a module parameter name");
+    expect(Tok::RParen, "after the module parameters");
+  }
+  expect(Tok::Semi, "after the module heading");
+
+  m.heading = std::make_unique<Block>();
+  while (check(Tok::KwExport))
+    parseExportPart(m);
+  parseImportPart(m.heading->imports);
+
+  for (;;) {
+    if (check(Tok::KwConst)) {
+      parseConstPart(*m.heading);
+    } else if (check(Tok::KwType)) {
+      parseTypePart(*m.heading);
+    } else if (check(Tok::KwVar)) {
+      parseVarPart(*m.heading);
+    } else if (check(Tok::KwProcedure) || check(Tok::KwFunction)) {
+      // procedure-and-function-heading-part: a heading and a semicolon, with
+      // no body and no `forward` — the body belongs to the module-block.
+      bool isFunction = check(Tok::KwFunction);
+      auto decl = parseProcHeadingOnly(isFunction);
+      m.heading->procs.push_back(std::move(decl));
+    } else {
+      break;
+    }
+  }
+  expect(Tok::KwEnd, "at the end of a module heading");
+}
+
+/// module-block = import-part { const | type | var | procedure-and-function }
+///                [ initialization-part ] [ finalization-part ] 'end'
+///
+/// It has no statement-part: §6.11.1 gives a module its two `to begin do` and
+/// `to end do` parts instead, and each takes a single *statement*.
+void Parser::parseModuleBlock(ModuleDecl &m) {
+  m.block = std::make_unique<Block>();
+  parseImportPart(m.block->imports);
+
+  for (;;) {
+    if (check(Tok::KwConst)) {
+      parseConstPart(*m.block);
+    } else if (check(Tok::KwType)) {
+      parseTypePart(*m.block);
+    } else if (check(Tok::KwVar)) {
+      parseVarPart(*m.block);
+    } else if (check(Tok::KwProcedure) || check(Tok::KwFunction)) {
+      bool isFunction = check(Tok::KwFunction);
+      m.block->procs.push_back(parseProcOrFunc(isFunction));
+    } else {
+      break;
+    }
+  }
+
+  // `to begin do S;` and `to end do S;`, in that order and each at most once.
+  if (check(Tok::KwTo) && check(Tok::KwBegin, 1)) {
+    pos_ += 2;
+    expect(Tok::KwDo, "after 'to begin'");
+    m.init = parseStatement();
+    expect(Tok::Semi, "after the initialization part of a module");
+  }
+  if (check(Tok::KwTo) && check(Tok::KwEnd, 1)) {
+    pos_ += 2;
+    expect(Tok::KwDo, "after 'to end'");
+    m.fini = parseStatement();
+    expect(Tok::Semi, "after the finalization part of a module");
+  }
+  if (check(Tok::KwTo)) {
+    errorAtCur("a module has one 'to begin do' part and one 'to end do' part, "
+               "in that order");
+    bail();
+  }
+  expect(Tok::KwEnd, "at the end of a module block");
+}
+
+/// export-part = identifier '=' '(' export-list ')'
+///
+/// An export-clause names something the module declares; an export-range names
+/// two constants of one enumerated type and stands for every principal
+/// identifier between them (§6.11.2 NOTE 6). Which of the two an item is comes
+/// down to whether `..` follows the first name.
+void Parser::parseExportPart(ModuleDecl &m) {
+  expect(Tok::KwExport, "");
+  do {
+    ExportPart part;
+    part.line = cur().line;
+    part.col = cur().col;
+    if (!check(Tok::Ident)) {
+      errorAtCur("expected the name of an interface after 'export'");
+      bail();
+    }
+    part.name = cur().text;
+    ++pos_;
+    expect(Tok::Eq, "after the name of an interface");
+    expect(Tok::LParen, "before an export list");
+    do {
+      ExportItem item;
+      item.line = cur().line;
+      item.col = cur().col;
+      // §6.11.2: `protected` may precede a variable-name, and only a
+      // variable-name — it is what makes the importer unable to write to it.
+      item.isProtected = accept(Tok::KwProtected);
+      if (!check(Tok::Ident)) {
+        errorAtCur("expected a name in an export list");
+        bail();
+      }
+      item.name = cur().text;
+      ++pos_;
+      // A qualified exportable-name. `..` cannot follow an interface name, so
+      // one token of lookahead past the dot is what parts `i.x` from `lo..hi`.
+      if (check(Tok::Period) && check(Tok::Ident, 1)) {
+        item.qualifier = item.name;
+        ++pos_;
+        item.name = cur().text;
+        ++pos_;
+      }
+      if (accept(Tok::DotDot)) {
+        if (!check(Tok::Ident)) {
+          errorAtCur("expected the last constant of an export range");
+          bail();
+        }
+        item.last = cur().text;
+        ++pos_;
+        if (check(Tok::Period) && check(Tok::Ident, 1)) {
+          item.lastQualifier = item.last;
+          ++pos_;
+          item.last = cur().text;
+          ++pos_;
+        }
+      } else if (accept(Tok::Arrow)) {
+        if (!check(Tok::Ident)) {
+          errorAtCur("expected the new name after '=>'");
+          bail();
+        }
+        item.renamed = cur().text;
+        ++pos_;
+      }
+      part.items.push_back(std::move(item));
+    } while (accept(Tok::Comma));
+    expect(Tok::RParen, "after an export list");
+    m.exports.push_back(std::move(part));
+    expect(Tok::Semi, "after an export part");
+  } while (check(Tok::Ident) && !check(Tok::KwEnd));
+}
+
+/// import-part = [ 'import' import-specification ';'
+///                 { import-specification ';' } ]
+///
+/// §6.2.1 puts this at the head of every block. The word `import` is written
+/// once and the specifications that follow it are separated by semicolons, so
+/// the loop's exit is a token that cannot begin an interface name.
+void Parser::parseImportPart(std::vector<ImportSpec> &into) {
+  if (!accept(Tok::KwImport))
+    return;
+  do {
+    ImportSpec spec;
+    spec.line = cur().line;
+    spec.col = cur().col;
+    if (!check(Tok::Ident)) {
+      errorAtCur("expected the name of an interface after 'import'");
+      bail();
+    }
+    spec.interfaceName = cur().text;
+    ++pos_;
+    spec.qualified = accept(Tok::KwQualified);
+    spec.only = accept(Tok::KwOnly);
+    if (check(Tok::LParen)) {
+      ++pos_;
+      spec.hasList = true;
+      do {
+        ImportItem item;
+        item.line = cur().line;
+        item.col = cur().col;
+        if (!check(Tok::Ident)) {
+          errorAtCur("expected a name in an import list");
+          bail();
+        }
+        item.name = cur().text;
+        ++pos_;
+        if (accept(Tok::Arrow)) {
+          if (!check(Tok::Ident)) {
+            errorAtCur("expected the new name after '=>'");
+            bail();
+          }
+          item.renamed = cur().text;
+          ++pos_;
+        }
+        spec.items.push_back(std::move(item));
+      } while (accept(Tok::Comma));
+      expect(Tok::RParen, "after an import list");
+    } else if (spec.only) {
+      errorAtCur("'only' introduces the list of what to import, so a list "
+                 "must follow it");
+      bail();
+    }
+    into.push_back(std::move(spec));
+    expect(Tok::Semi, "after an import specification");
+  } while (check(Tok::Ident));
+}
+
+void Parser::parseMainProgram(Program &prog) {
   expect(Tok::KwProgram, "at the start of the program");
   if (!check(Tok::Ident)) {
     errorAtCur("expected the program name");
     bail();
   }
-  prog->name = cur().text;
+  prog.name = cur().text;
   ++pos_;
 
   // The program parameters. `input` and `output` name the standard files;
@@ -59,18 +357,15 @@ std::unique_ptr<Program> Parser::parseProgram() {
         errorAtCur("expected a program parameter name");
         bail();
       }
-      prog->params.push_back({cur().text, cur().line, cur().col});
+      prog.params.push_back({cur().text, cur().line, cur().col});
       ++pos_;
     } while (accept(Tok::Comma));
     expect(Tok::RParen, "after the program parameters");
   }
   expect(Tok::Semi, "after the program header");
 
-  prog->block = parseBlock();
+  prog.block = parseBlock();
   expect(Tok::Period, "after the final 'end'");
-  if (!check(Tok::Eof))
-    errorAtCur("trailing text after the end of the program");
-  return prog;
 }
 
 /// block = const-part? var-part? (procedure | function)* statement-part
@@ -79,6 +374,10 @@ std::unique_ptr<Program> Parser::parseProgram() {
 /// needs no extra machinery here.
 std::unique_ptr<Block> Parser::parseBlock() {
   auto block = std::make_unique<Block>();
+
+  // §6.2.1 puts the import-part first, and there is at most one. Under ISO
+  // 7185 `import` is an ordinary identifier and this returns at once.
+  parseImportPart(block->imports);
 
   for (;;) {
     if (check(Tok::KwConst)) {
@@ -132,7 +431,33 @@ void Parser::parseLabelPart(Block &block) {
   expect(Tok::Semi, "after a label declaration");
 }
 
+/// A procedure- or function-*heading* in a module-heading (ISO/IEC 10206:1991
+/// §6.11.1). It is a heading and a semicolon: no body, and no `forward` to
+/// say so, because a module-heading is the one place where declaring without
+/// defining is the whole point rather than a way to break a cycle.
+std::unique_ptr<ProcDecl> Parser::parseProcHeadingOnly(bool isFunction) {
+  auto decl = parseProcHeading(isFunction);
+  decl->inModuleHeading = true;
+  return decl;
+}
+
 std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
+  auto decl = parseProcHeading(isFunction);
+
+  // `forward` is not a reserved word; it is an identifier in this position.
+  if (check(Tok::Ident) && cur().text == "forward") {
+    ++pos_;
+    decl->isForward = true;
+  } else {
+    decl->body = parseBlock();
+  }
+  expect(Tok::Semi, "after the body of a procedure or function");
+  return decl;
+}
+
+/// The heading alone, up to and including the semicolon that ends it. Shared
+/// by a declaration, a `forward` one, and a module-heading's heading part.
+std::unique_ptr<ProcDecl> Parser::parseProcHeading(bool isFunction) {
   auto decl = std::make_unique<ProcDecl>();
   decl->isFunction = isFunction;
   decl->line = cur().line;
@@ -160,15 +485,6 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
     decl->returnType = parseTypeDenoter();
   }
   expect(Tok::Semi, "after the heading of a procedure or function");
-
-  // `forward` is not a reserved word; it is an identifier in this position.
-  if (check(Tok::Ident) && cur().text == "forward") {
-    ++pos_;
-    decl->isForward = true;
-  } else {
-    decl->body = parseBlock();
-  }
-  expect(Tok::Semi, "after the body of a procedure or function");
   return decl;
 }
 
@@ -431,6 +747,16 @@ TypeExprPtr Parser::parseTypeDenoter() {
   t->col = cur().col;
   t->name = cur().text;
   ++pos_;
+
+  // §6.11.3's qualified name. In a type-denoter there is nothing else `a.b`
+  // could be — a type has no fields to select — so unlike an expression this
+  // needs no help from Sema to decide.
+  if (std_ == Std::Extended && check(Tok::Period) && check(Tok::Ident, 1)) {
+    t->qualifier = t->name;
+    ++pos_;
+    t->name = cur().text;
+    ++pos_;
+  }
 
   // ISO/IEC 10206:1991 §6.4.8: a name followed by an actual-discriminant-part
   // is a discriminated-schema. Nothing else in a type-denoter position can
@@ -929,6 +1255,28 @@ StmtPtr Parser::parseIdentStatement() {
   if (id.text == "readln")
     return parseRead(true);
 
+  // ISO/IEC 10206:1991 §6.11.3's qualified name in a procedure-statement.
+  // `a.b` is a field selection unless what follows it can neither continue a
+  // designator nor assign to one — and those five tokens are the whole of what
+  // can, so a sixth means the statement is a call of `b` through interface `a`.
+  if (peek().kind == Tok::Period && peek(2).kind == Tok::Ident &&
+      peek(3).kind != Tok::Assign && peek(3).kind != Tok::LBracket &&
+      peek(3).kind != Tok::Period && peek(3).kind != Tok::Caret) {
+    auto s = makeNode<ProcCallStmt>(id);
+    s->qualifier = id.text;
+    s->name = peek(2).text;
+    pos_ += 3;
+    if (accept(Tok::LParen)) {
+      if (!check(Tok::RParen)) {
+        do {
+          s->args.push_back(parseExpr());
+        } while (accept(Tok::Comma));
+      }
+      expect(Tok::RParen, "after the arguments of a procedure call");
+    }
+    return s;
+  }
+
   // A statement starting with a designator is an assignment; one starting with
   // a bare name or a name and arguments is a procedure call. The selectors are
   // what tell the two apart, because only a designator can carry them.
@@ -1257,6 +1605,23 @@ ExprPtr Parser::parsePrimary() {
       auto call = makeNode<Call>(t);
       call->name = t.text;
       ++pos_;
+      return call;
+    }
+    // §6.11.3's qualified name in call position. A record field is never
+    // followed by `(` — there is no procedure type in the type part — so
+    // `a.b(` has exactly one reading and the parser can take it.
+    if (peek().kind == Tok::Period && peek(2).kind == Tok::Ident &&
+        peek(3).kind == Tok::LParen) {
+      auto call = makeNode<Call>(t);
+      call->qualifier = t.text;
+      call->name = peek(2).text;
+      pos_ += 4;
+      if (!check(Tok::RParen)) {
+        do {
+          call->args.push_back(parseExpr());
+        } while (accept(Tok::Comma));
+      }
+      expect(Tok::RParen, "after the arguments of a function call");
       return call;
     }
     if (peek().kind == Tok::LParen) {

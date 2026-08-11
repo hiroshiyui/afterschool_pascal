@@ -61,3 +61,4 @@ the alternatives that were rejected and why.
 | [0050](0050-a-direct-access-file-is-the-sequential-one-plus-a-position.md) | A direct-access file is the sequential one plus a position | Accepted |
 | [0051](0051-a-string-value-is-a-pointer-and-a-length.md) | A string value is a pointer and a length | Accepted |
 | [0052](0052-binding-is-a-file-name-chosen-while-the-program-runs.md) | Binding is a file name chosen while the program runs | Accepted |
+| [0053](0053-a-level-0-activation-record-is-a-global.md) | A level-0 activation record is a global | Accepted |

@@ -85,6 +85,12 @@ begin
   b := b and
        { including a comment } then b;
 
+  { §6.11.2's `=>` is the one special-symbol modules add, and it is scanned
+    under both standards for the reason `**` is: `=` cannot be followed by `>`
+    in any ISO 7185 program, so maximal munch takes nothing away and the
+    refusal is one token rather than a complaint about `>` after `=`. }
+  x := 1 => 2;
+
   { an unexpected character }
   x := x @ 1;
   x := x $ 1;

@@ -23,6 +23,11 @@ enum class Tok {
   StarStar,
   LParen, RParen, LBracket, RBracket, Caret,
   Eq, NotEq, Lt, Le, Gt, Ge,
+  /// ISO/IEC 10206:1991 §6.11.2's renaming, in an export-clause and in an
+  /// import-clause alike. Lexed under both standards for the reason `**` is:
+  /// no valid ISO 7185 program can contain `=>`, so consuming it and refusing
+  /// it yields one diagnostic instead of a cascade about `=` and `>`.
+  Arrow,
 
   // all ISO 7185 reserved words; the parser rejects the ones it cannot handle
   // yet, but the lexer knows every one of them from the start.
@@ -35,6 +40,11 @@ enum class Tok {
   // Under ISO 7185 the lexer yields these spellings as identifiers, which is
   // what they are in that language.
   KwOtherwise, KwPow, KwProtected, KwValue, KwBindable,
+  /// §6.11's five. `interface` and `implementation` are deliberately *not*
+  /// here: §6.1.5 and §6.1.6 make them *directives*, which are identifiers in
+  /// the one position each may occupy — exactly as `forward` is (§6.1.4). So
+  /// modules reserve five words rather than seven.
+  KwModule, KwExport, KwImport, KwOnly, KwQualified,
 
   // §6.1.2 spells the short-circuit operators as *two words with a separator
   // between them* — `and then` and `or else` are each one word-symbol, not a

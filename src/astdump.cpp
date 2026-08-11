@@ -262,6 +262,13 @@ struct Dumper {
     }
     case NK::Field: {
       FieldExpr *n = as<FieldExpr>(e);
+      // ISO/IEC 10206:1991 §6.11.3's qualified name shares this node with a
+      // field selection too, and denotes one symbol — so there is no base to
+      // print under it.
+      if (n->qualified) {
+        headExpr("qualified " + n->field, e, symRef(n->qualified));
+        break;
+      }
       // A schema-discriminant shares this node with a field selection and
       // resolves to neither a field nor an address, so it prints as what it
       // is: the value the base's type was produced with.
@@ -309,7 +316,9 @@ struct Dumper {
                            ? "builtin " + std::to_string(
                                               static_cast<int>(n->builtin))
                            : symRef(n->sym);
-      headExpr("call " + n->name, e, to);
+      headExpr("call " + (n->qualifier.empty() ? n->name
+                                               : n->qualifier + "." + n->name),
+               e, to);
       ++level;
       mark("args");
       ++level;
@@ -514,7 +523,9 @@ struct Dumper {
     }
     case NK::ProcCall: {
       ProcCallStmt *n = as<ProcCallStmt>(s);
-      std::string tag = "proccall " + n->name;
+      std::string tag = "proccall " + (n->qualifier.empty()
+                                           ? n->name
+                                           : n->qualifier + "." + n->name);
       if (annotate) {
         tag += n->standard != StdProc::None
                    ? " -> standard " +
@@ -703,7 +714,11 @@ struct Dumper {
     const char *pk = t->packed ? " packed" : "";
     switch (t->kind) {
     case TEK::Named:
-      headType("named " + t->name, t);
+      // §6.11.3's qualified name reaches a type through an interface, and the
+      // two halves are printed as they were written.
+      headType("named " + (t->qualifier.empty() ? t->name
+                                                : t->qualifier + "." + t->name),
+               t);
       break;
     case TEK::Pointer:
       headType("pointer " + t->name, t);
@@ -796,7 +811,11 @@ struct Dumper {
     }
     // A forward declaration has no body, and the completion that follows it
     // repeats neither the parameters nor the result type (ISO 7185 §6.6.1).
-    if (d.isForward)
+    // A heading in a module-heading is the same shape and a different reason
+    // (ISO/IEC 10206:1991 §6.11.1), so it says which it is.
+    if (d.inModuleHeading)
+      mark("heading");
+    else if (d.isForward)
       mark("forward");
     else
       block(*d.body);
@@ -834,9 +853,149 @@ struct Dumper {
     }
   }
 
+  /// ISO/IEC 10206:1991 §6.2.1's import-part, which every block may have. The
+  /// three modifiers go on the specification's own line and the renamings on
+  /// the items', because that is where each was written.
+  void imports(const std::vector<ImportSpec> &specs) {
+    mark("imports");
+    ++level;
+    for (const ImportSpec &s : specs) {
+      std::string tag = "import " + s.interfaceName;
+      if (s.qualified)
+        tag += " qualified";
+      if (s.only)
+        tag += " only";
+      head(tag, s.line, s.col);
+      ++level;
+      for (const ImportItem &i : s.items)
+        head("item " + i.name + (i.renamed.empty() ? "" : " => " + i.renamed),
+             i.line, i.col);
+      --level;
+    }
+    --level;
+  }
+
+  /// §6.11.2's interface-specification-part. An export-range prints with `..`
+  /// and a renaming with `=>`, so the three forms of an export-clause are
+  /// told apart by what is printed and not by a flag.
+  void exports(const std::vector<ExportPart> &parts) {
+    mark("exports");
+    ++level;
+    for (const ExportPart &p : parts) {
+      head("export " + p.name, p.line, p.col);
+      ++level;
+      for (const ExportItem &i : p.items) {
+        std::string tag = "item ";
+        if (i.isProtected)
+          tag += "protected ";
+        if (!i.qualifier.empty())
+          tag += i.qualifier + ".";
+        tag += i.name;
+        if (!i.last.empty()) {
+          tag += " .. ";
+          if (!i.lastQualifier.empty())
+            tag += i.lastQualifier + ".";
+          tag += i.last;
+        }
+        else if (!i.renamed.empty())
+          tag += " => " + i.renamed;
+        head(tag, i.line, i.col);
+      }
+      --level;
+    }
+    --level;
+  }
+
+  /// The declaration parts a module-heading and a module-block share with a
+  /// block, minus what neither of them has: labels and a statement part.
+  void moduleParts(Block &b) {
+    imports(b.imports);
+    mark("consts");
+    ++level;
+    for (ConstDecl &c : b.consts) {
+      head("const " + c.name, c.line, c.col);
+      ++level;
+      expr(c.value.get());
+      --level;
+    }
+    --level;
+    mark("types");
+    ++level;
+    for (TypeDecl &t : b.types)
+      typeDecl(t);
+    --level;
+    mark("vars");
+    ++level;
+    for (VarDecl &v : b.vars)
+      group(v.names, v.type.get(), "var");
+    --level;
+    mark("procs");
+    ++level;
+    for (std::unique_ptr<ProcDecl> &p : b.procs)
+      proc(*p);
+    --level;
+  }
+
+  void module(ModuleDecl &m) {
+    head("module " + m.name, m.line, m.col);
+    ++level;
+    mark("params");
+    ++level;
+    for (const DeclName &p : m.params)
+      head("name " + p.name, p.line, p.col);
+    --level;
+    exports(m.exports);
+    if (m.heading) {
+      mark("heading");
+      ++level;
+      moduleParts(*m.heading);
+      --level;
+    }
+    if (m.block) {
+      mark("moduleblock");
+      ++level;
+      moduleParts(*m.block);
+      --level;
+    }
+    // §6.11.1's two `to` parts, each a single statement. The marker says which
+    // of the two is absent, as `optionalChild` does for a file.
+    if (m.init) {
+      mark("init");
+      ++level;
+      stmt(m.init.get());
+      --level;
+    } else {
+      mark("no-init");
+    }
+    if (m.fini) {
+      mark("fini");
+      ++level;
+      stmt(m.fini.get());
+      --level;
+    } else {
+      mark("no-fini");
+    }
+    --level;
+  }
+
+  void typeDecl(TypeDecl &t) {
+    head((t.discriminants.empty() ? "type " : "schema ") + t.name, t.line,
+         t.col);
+    ++level;
+    for (DiscriminantGroup &g : t.discriminants) {
+      mark(("discriminant " + g.typeName).c_str());
+      ++level;
+      names(g.names);
+      --level;
+    }
+    typeExpr(t.type.get());
+    --level;
+  }
+
   void block(Block &b) {
     mark("block");
     ++level;
+    imports(b.imports);
     mark("labels");
     ++level;
     for (LabelDecl &d : b.labels)
@@ -853,22 +1012,10 @@ struct Dumper {
     --level;
     mark("types");
     ++level;
-    for (TypeDecl &t : b.types) {
-      head((t.discriminants.empty() ? "type " : "schema ") + t.name, t.line,
-           t.col);
-      ++level;
-      // The formal discriminants come first, in the order that fixes the
-      // tuple's positions — which is the only thing about them a reader of
-      // this dump could need.
-      for (DiscriminantGroup &g : t.discriminants) {
-        mark(("discriminant " + g.typeName).c_str());
-        ++level;
-        names(g.names);
-        --level;
-      }
-      typeExpr(t.type.get());
-      --level;
-    }
+    // The formal discriminants come first, in the order that fixes the tuple's
+    // positions — which is the only thing about them a reader could need.
+    for (TypeDecl &t : b.types)
+      typeDecl(t);
     --level;
     mark("vars");
     ++level;
@@ -891,6 +1038,11 @@ struct Dumper {
 
 void dumpAst(Program &program) {
   Dumper d;
+  // §6.13's program-components, in the order they were written — the modules
+  // before the main-program-declaration first, and any after it last, so the
+  // dump is the source's own order.
+  for (size_t i = 0; i < program.modules.size() && i < program.mainIndex; ++i)
+    d.module(*program.modules[i]);
   std::printf("program %s\n", program.name.c_str());
   d.level = 1;
   d.mark("params");
@@ -899,11 +1051,16 @@ void dumpAst(Program &program) {
     d.head("name " + p.name, p.line, p.col);
   d.level = 1;
   d.block(*program.block);
+  d.level = 0;
+  for (size_t i = program.mainIndex; i < program.modules.size(); ++i)
+    d.module(*program.modules[i]);
 }
 
 void dumpSema(Program &program, Sema &sema) {
   Dumper d;
   d.annotate = true;
+  for (size_t i = 0; i < program.modules.size() && i < program.mainIndex; ++i)
+    d.module(*program.modules[i]);
   std::printf("program %s\n", program.name.c_str());
   d.level = 1;
   d.mark("params");
@@ -916,9 +1073,22 @@ void dumpSema(Program &program, Sema &sema) {
   // The program's own frame first: at level 0 it holds what another language
   // would call the globals, which is ADR-0016's point.
   d.frame(sema.programSymbol());
+  // A module's activation record is one of the program's globals too — it is
+  // a level-0 frame like the program's own (ADR-0053) — so it is printed
+  // beside it, in written order.
+  for (std::unique_ptr<ModuleDecl> &m : program.modules) {
+    d.frame(m->sym);
+    if (m->heading)
+      d.frames(*m->heading);
+    if (m->block)
+      d.frames(*m->block);
+  }
   d.frames(*program.block);
   d.level = 1;
   d.block(*program.block);
+  d.level = 0;
+  for (size_t i = program.mainIndex; i < program.modules.size(); ++i)
+    d.module(*program.modules[i]);
 }
 
 } // namespace ap

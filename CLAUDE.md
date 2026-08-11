@@ -53,13 +53,19 @@ Errors: the parser throws `ap::ParseAbort` (the only exception in the codebase)
 when it cannot make progress; Sema and the lexer instead accumulate into
 `Diagnostics` so one run reports many errors.
 
-**Activation records and static links** (ADR-0016). Every procedure — and the
-program itself, at level 0 — gets a frame struct alloca'd in its entry block.
+**Activation records and static links** (ADR-0016). Every procedure gets a
+frame struct alloca'd in its entry block; a **level-0** block — the program, and
+since ADR-0053 every module — gets a global instead, because it has exactly one
+activation and a module's must outlive the function that fills it in.
 Field 0 is the static link to the enclosing block's frame; locals, value
 parameters, `var` parameters, and the function result are the remaining fields.
 
 - `frameAt(level)` walks the chain; `addressOf(sym)` walks then indexes. All
-  variable access goes through `addressOf`, so there is no separate global path.
+  variable access goes through `addressOf`, so there is still no separate
+  global path — but it asks for the frame of the symbol's *owner*, and a
+  level-0 owner answers with its global without walking. That is what lets a
+  module reach the program's `output` and the program reach a module's
+  variable, neither of which is on the other's static chain.
 - Calling a procedure at level `L` passes the frame at level `L-1` as a hidden
   first argument. For a *recursive* call that is the caller's parent, not the
   caller — the one place this is easy to get subtly wrong.
@@ -765,6 +771,56 @@ in one language or the other, and the standard is a property of the source.
   - Refused, all stated: binding anything but a file, a variable-string as a
     *value* parameter (it would have to convert its argument), and
     `binding(f).bound` written directly (§6.8.6's function-accesses).
+- **A level-0 activation record is a global** (ADR-0053), and that one sentence
+  is the whole of what §6.11's modules cost the code generator. A module has
+  exactly one activation (§6.2.3.6) and it must outlive the function that
+  commences it, so its frame cannot be an alloca; the main program is in the
+  same position, so the rule is stated for *level 0* and its frame became a
+  global too.
+  - **`addressOf` asks the owner, not the level.** A level-0 owner answers with
+    its global, which is the only way an imported variable can be reached: a
+    module's static chain says nothing about the program's frame and the
+    program's says nothing about any module's. ADR-0016's "no separate global
+    path" still holds — there is one `addressOf` and it still answers for every
+    variable; what moved is where the walk stops.
+  - **Written order is a legal activation order and no sort produced it.**
+    §6.2.2.9 already requires a module-heading to precede everything importing
+    its interface, so a supplier is textually first — which is exactly
+    §6.2.3.6's condition. Finalizations run in the reverse. Two modules *can*
+    still supply each other, through a **split** module — A's heading supplies
+    B and B supplies A's block, a later component (§6.11.1 NOTE 2) — and
+    §6.11.1 then forbids an initialization- or finalization-part in either,
+    which is the one thing enforced by a reachability check rather than by the
+    text's order.
+  - **Only the modules that supply the main-program-block are activated**, and
+    supplying is transitive (§6.2.2.13). This matters rather than being a
+    nicety: an unactivated module's initialization-part could write to output.
+  - The module initializations are emitted **after the program's own file and
+    initial-state prologue**, not before it. No module can observe that
+    prologue — the program exports nothing — but §6.11.4.2 requires `output` to
+    be open before the first access, and opening it is what the prologue does.
+    A module writing at initialization time is the program that says so.
+  - **A heading in a module-heading is `forward` under another name**
+    (§6.11.1), so `declareProcHeading` was reused unchanged and only the
+    diagnostic is new. **An interface is a table, not a scope** (§6.2.2.2), so
+    exporting changes nothing about visibility inside the module. **A module's
+    heading and block share one scope** (§6.2.2.12), kept between components.
+  - **A qualified name is told from a field selection by the symbol**, as
+    ADR-0044's variant-selector is. The one place the parser can decide is a
+    call: `a.b(` has exactly one reading, because ADR-0030 left no procedure
+    type in the type part and so no record field is ever followed by `(`.
+  - **An imported variable is a copy of the symbol; everything else is
+    shared** — the spelling and the protection belong to the import, and the
+    copy names the same storage because owner, level and frame index are what
+    an address is computed from.
+  - Five word-symbols, not seven: §6.1.5 and §6.1.6 make `interface` and
+    `implementation` *directives*, which are identifiers exactly as `forward`
+    is. `tests/module_iso.pas` uses all five reserved ones as variable names.
+  - **Program-components are not compiled separately**, and §6.13 asks for it
+    with a *should*. Refused and stated: a module variable with computed
+    discriminants (its activation outlives the stack the storage would be on),
+    and a module-parameter that is not `input`/`output` is bound to nothing
+    (§6.11.1 NOTE 6).
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
@@ -842,7 +898,10 @@ change it and the Pascal side together.
 `src/sema.cpp` owns scopes, type rules, type-denoter resolution, constant
 folding, and — since ADR-0039 — the schema intern table, which is the one place
 a type's *identity* is decided by something other than the denoter that built
-it. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
+it. Since ADR-0053 it also owns the interface table and the module records: an
+interface is not a scope (§6.2.2.2), so it lives beside the scope stack rather
+than in it, and a module's scope is *kept* between program-components because
+§6.2.2.12 makes the heading's defining-points the block's as well. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of
 integer` the *same* type rather than two alike ones. The one exception is a
 parameter group naming a schema (ADR-0040): each name there gets its *own*

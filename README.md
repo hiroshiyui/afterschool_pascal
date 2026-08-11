@@ -326,21 +326,50 @@ binding    var f: bindable text — a variable that may be bound to
            the only way a program names a file while it is *running* —
            ISO 7185 binds the program parameters before it starts and
            gives it no other way out
-words      otherwise, pow, protected, value and bindable are reserved; `and then`,
+modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
+           a module: a heading that says what it exports and a block that
+           implements it, either written together or as separate
+           program-components with `interface` and `implementation`. A
+           program is a sequence of those, one of which is the `program`.
+           import i; brings everything an interface holds; `only (x)` says
+           the list is exhaustive, `qualified` says the names arrive as
+           i.x and never bare, and `=>` renames at either end.
+           `protected v` exports a variable the importer may read and not
+           write. A procedure's heading may sit in the module-heading and
+           its body in the module-block — the `forward` mechanism under
+           another name. `to begin do` and `to end do` are the module's
+           initialization and finalization; the modules that supply the
+           program are activated in the order they were written and
+           finalised in the reverse (§6.2.3.6), and one that supplies
+           nothing is never activated at all. StandardInput and
+           StandardOutput are the required interfaces a module imports to
+           reach `input` and `output`
+words      otherwise, pow, protected, value, bindable, module, export,
+           import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
            their words already are. complex, cmplx, polar, re, im and arg
            are required *identifiers* rather than word-symbols, and so are
            seekread, seekwrite, seekupdate, update, extend, position,
            lastposition, empty, string, length, index, substr, trim, eq,
            ne, lt, gt, le, ge, binding, bind and unbind — so a program may
-           still declare its own
+           still declare its own. So are `interface` and `implementation`:
+           §6.1.5 and §6.1.6 make them *directives*, which are identifiers
+           in the one position each may occupy, exactly as `forward` is
 ```
 
-Not accepted yet: modules, structured-value constructors, substring
-*variables* (`s[i..j]` as an assignment target), `readstr`/`writestr`, and
-function-accesses (a selector applied to a function call). A word-symbol is reserved only when the feature needing it
-lands, so until the list above is complete `--std=extended` accepts some
-programs a conforming processor would reject.
+Not accepted yet: structured-value constructors, substring *variables*
+(`s[i..j]` as an assignment target), `readstr`/`writestr`, restricted types,
+and function-accesses (a selector applied to a function call). A word-symbol is
+reserved only when the feature needing it lands, so until the list above is
+complete `--std=extended` accepts some programs a conforming processor would
+reject.
+
+The program-components of a program-block are **not compiled separately**: they
+go in one file, in an order consistent with §6.2.2.9's. §6.13 asks for separate
+compilation with a *should* rather than a *shall*, and accepting them apart
+means defining an interface artefact — a second file format, and one the
+stage-1 compiler could not write. See
+[ADR-0053](doc/adr/0053-a-level-0-activation-record-is-a-global.md).
 `doc/roadmap.md` has the order and the reasoning.
 
 ## How it fits together

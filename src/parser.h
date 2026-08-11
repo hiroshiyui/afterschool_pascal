@@ -72,12 +72,24 @@ private:
   void enterLevel();
 
   std::unique_ptr<Block> parseBlock();
+  /// ISO/IEC 10206:1991 §6.11: one program-component that is a
+  /// module-declaration, and the two parts it may be split into.
+  std::unique_ptr<ModuleDecl> parseModule();
+  void parseModuleHeading(ModuleDecl &m);
+  void parseModuleBlock(ModuleDecl &m);
+  void parseExportPart(ModuleDecl &m);
+  /// §6.2.1 puts an import-part at the head of *every* block, not only a
+  /// module's, so this is called from `parseBlock` too.
+  void parseImportPart(std::vector<ImportSpec> &into);
   void parseLabelPart(Block &block);
   int parseLabel(const char *where);
   void parseConstPart(Block &block);
   void parseTypePart(Block &block);
   void parseVarPart(Block &block);
+  void parseMainProgram(Program &prog);
   std::unique_ptr<ProcDecl> parseProcOrFunc(bool isFunction);
+  std::unique_ptr<ProcDecl> parseProcHeading(bool isFunction);
+  std::unique_ptr<ProcDecl> parseProcHeadingOnly(bool isFunction);
   /// The formal parameter list of a procedure, or of a procedural parameter —
   /// the same production, which is why it takes the vector rather than the
   /// declaration (ISO 7185 §6.6.3.1).

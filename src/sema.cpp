@@ -114,6 +114,16 @@ Symbol *Sema::declare(const std::string &name, SymKind kind, int line,
   return s;
 }
 
+void Sema::bindName(const std::string &name, Symbol *sym, int line, int col) {
+  auto &scope = scopes_.back();
+  auto it = scope.find(name);
+  if (it != scope.end()) {
+    diags_.error(line, col, "'" + name + "' is already declared in this block");
+    return;
+  }
+  scope[name] = sym;
+}
+
 /// Innermost-first lookup, which is what makes an inner declaration shadow an
 /// outer one of the same name.
 Symbol *Sema::lookup(const std::string &name) const {
@@ -950,9 +960,15 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   Type *t = nullptr;
   switch (denoter.kind) {
   case TEK::Named:
-    if ((t = builtinType(denoter.name, std_)) == nullptr) {
-      Symbol *sym = lookup(denoter.name);
-      if (sym && sym->kind == SymKind::Type) {
+    // A qualified name reaches only what an import brought, so a required
+    // type-identifier is not among the answers: `i.integer` is not `integer`.
+    if (!denoter.qualifier.empty() ||
+        (t = builtinType(denoter.name, std_)) == nullptr) {
+      Symbol *sym = lookupName(denoter.qualifier, denoter.name, denoter.line,
+                               denoter.col);
+      if (!sym && !denoter.qualifier.empty()) {
+        t = ty::Int();
+      } else if (sym && sym->kind == SymKind::Type) {
         t = sym->type;
       } else if (sym && sym->kind == SymKind::Schema) {
         // §6.4.8: a schema denotes a type only once its discriminants are
@@ -996,8 +1012,13 @@ Type *Sema::resolveType(TypeExpr &denoter) {
     t = resolveInquiry(denoter);
     break;
   case TEK::Schema: {
-    Symbol *sym = lookup(denoter.name);
-    if (!sym || sym->kind != SymKind::Schema) {
+    Symbol *sym =
+        lookupName(denoter.qualifier, denoter.name, denoter.line, denoter.col);
+    if (!denoter.qualifier.empty() && !sym) {
+      for (auto &a : denoter.args)
+        checkExpr(a.get());
+      t = ty::Int();
+    } else if (!sym || sym->kind != SymKind::Schema) {
       diags_.error(denoter.line, denoter.col,
                    "unknown schema '" + denoter.name + "'");
       // The discriminants are still checked, so a mistake in one of them is
@@ -1686,11 +1707,16 @@ bool Sema::isDesignator(Expr *e) const {
     return v->sym && (v->sym->isVariable() || v->withField);
   if (auto *i = as<IndexExpr>(e))
     return isDesignator(i->base.get());
-  if (auto *f = as<FieldExpr>(e))
+  if (auto *f = as<FieldExpr>(e)) {
+    // A qualified name is the whole selection, so what it denotes is what
+    // decides — there is no base variable underneath it.
+    if (f->qualified)
+      return f->qualified->isVariable();
     // §6.8.4 makes a schema-discriminant a *primary*, not a variable-access:
     // it is the value the type was produced with, and there is nowhere to
     // store into. `v.n := 3` would be asking a variable to change its type.
     return !f->isDiscriminant && isDesignator(f->base.get());
+  }
   // What a pointer points at is a variable however the pointer was obtained,
   // so a dereference is a designator even when its base is not.
   if (is<DerefExpr>(e))
@@ -1709,7 +1735,7 @@ Symbol *Sema::baseSymbol(Expr *e) const {
   if (auto *i = as<IndexExpr>(e))
     return baseSymbol(i->base.get());
   if (auto *f = as<FieldExpr>(e))
-    return baseSymbol(f->base.get());
+    return f->qualified ? f->qualified : baseSymbol(f->base.get());
   return nullptr;
 }
 
@@ -1720,7 +1746,7 @@ static Expr *rootDesignator(Expr *e) {
   if (auto *i = as<IndexExpr>(e))
     return rootDesignator(i->base.get());
   if (auto *f = as<FieldExpr>(e))
-    return rootDesignator(f->base.get());
+    return f->qualified ? e : rootDesignator(f->base.get());
   return e;
 }
 
@@ -1741,19 +1767,62 @@ void Sema::checkNotThreatened(Expr *e, const std::string &what) {
   // A `with` binding is hidden and its name is a frame slot's, not the
   // program's — so naming it would name something the source never wrote.
   // The rule is the same one either way; only the wording differs.
+  // §6.7.3.1 protects a formal parameter and §6.11.2 a constituent of an
+  // interface, and §6.5.1's rule is the same for both — but the noun is not,
+  // and an imported variable was never anybody's parameter.
+  const char *noun =
+      s->kind == SymKind::Var ? "protected variable" : "protected parameter";
   const VarRef *v = as<VarRef>(rootDesignator(e));
   std::string who = v && v->withField
-                        ? "the record of an enclosing with statement is a "
-                          "protected parameter"
-                        : "'" + s->name + "' is a protected parameter";
+                        ? std::string("the record of an enclosing with "
+                                      "statement is a ") + noun
+                        : "'" + s->name + "' is a " + noun;
   diags_.error(e->line, e->col, who + ", so " + what);
 }
 
 // ------------------------------------------------------------------- driver
 
+/// ISO 7185 §6.10's `input` and `output`, and ISO/IEC 10206:1991 §6.11.4.2's.
+/// There is one of each in a program however many blocks reach it, so it is
+/// created once and lives in the *program's* frame — which a module can
+/// address because a level-0 frame is a global (ADR-0053), and could not
+/// otherwise, since a module's static chain says nothing about the program.
+Symbol *Sema::ensureStdFile(bool input) {
+  // §6.11.4.2's accessibility is per block, so whichever block asked is the
+  // one that gets it.
+  Symbol *root = curModule_ ? curModule_ : program_;
+  (input ? root->stdInputOk : root->stdOutputOk) = true;
+  Symbol *&slot = input ? stdInput_ : stdOutput_;
+  if (slot)
+    return slot;
+  slot = addHiddenVar(input ? "input" : "output", SymKind::Var, ty::Text(),
+                      program_);
+  slot->fileBinding =
+      input ? FileBinding::StandardInput : FileBinding::StandardOutput;
+  return slot;
+}
+
+/// §6.11.4.2's two required interfaces. Each has one constituent, and the
+/// constituent *is* the required text file — so importing `StandardOutput`
+/// and listing `output` as a program parameter reach the same variable, which
+/// is what makes them alternatives rather than two outputs.
+void Sema::installRequiredInterfaces() {
+  if (std_ != Std::Extended)
+    return;
+  Interface in;
+  in.name = "standardinput";
+  in.items.push_back({"input", nullptr, false});
+  interfaces_["standardinput"] = in;
+  Interface out;
+  out.name = "standardoutput";
+  out.items.push_back({"output", nullptr, false});
+  interfaces_["standardoutput"] = out;
+}
+
 void Sema::run(Program &prog) {
   pushScope(); // the predefined identifiers live in their own outermost scope
   installPredefined();
+  installRequiredInterfaces();
 
   program_ = newSymbol();
   program_->name = prog.name;
@@ -1763,25 +1832,529 @@ void Sema::run(Program &prog) {
   current_ = program_;
   prog_ = &prog;
 
+  // §6.13's program-components, in the order they were written. A module
+  // written *after* the main-program-declaration is legal and supplies
+  // nothing, because nothing before it can name an interface it exports.
+  for (size_t i = 0; i < prog.modules.size() && i < prog.mainIndex; ++i)
+    checkModule(*prog.modules[i]);
+
   pushScope();
   // `input` and `output` are declared by the program header rather than by the
   // block, so they exist before the declarations are seen. Declaring them only
   // when they are listed is what makes using `write` without `output` in the
   // header the error ISO 7185 §6.10 says it is.
+  // A module may already have created the file — there is one `output` in a
+  // program however many blocks reach it — so what is asked here is whether
+  // *this* block has the name, not whether the file exists.
   for (DeclName &p : prog.params) {
-    if (p.name == "input" && !stdInput_) {
-      stdInput_ = addFrameVar(p.name, SymKind::Var, ty::Text(), program_,
-                              p.line, p.col);
-      stdInput_->fileBinding = FileBinding::StandardInput;
-    } else if (p.name == "output" && !stdOutput_) {
-      stdOutput_ = addFrameVar(p.name, SymKind::Var, ty::Text(), program_,
-                               p.line, p.col);
-      stdOutput_->fileBinding = FileBinding::StandardOutput;
-    }
+    if (p.name != "input" && p.name != "output")
+      continue;
+    if (!scopes_.back().count(p.name))
+      bindName(p.name, ensureStdFile(p.name == "input"), p.line, p.col);
   }
   checkBlock(*prog.block, program_);
   popScope();
+
+  for (size_t i = prog.mainIndex; i < prog.modules.size(); ++i)
+    checkModule(*prog.modules[i]);
+
+  for (auto &entry : modules_)
+    if (entry.second.headingSeen && !entry.second.blockSeen)
+      diags_.error(entry.second.line, entry.second.col,
+                   "module '" + entry.second.sym->name +
+                       "' has an interface but no implementation");
+
+  computeActiveModules();
+  checkMutualSupply();
   popScope();
+}
+
+/// §6.2.2.13: "A module A shall be designated as supplying a ... block, B,
+/// either if B contains an applied occurrence of an interface-identifier having
+/// a defining occurrence contained by the module-heading of A, or if A supplies
+/// a module that supplies B." So this is the transitive closure of the
+/// interfaces `block` imports, and every module in it supplies `block`.
+std::vector<Symbol *> Sema::suppliersOf(Symbol *block) const {
+  std::vector<Symbol *> stack = block->importedFrom, reached;
+  while (!stack.empty()) {
+    Symbol *m = stack.back();
+    stack.pop_back();
+    bool seen = false;
+    for (Symbol *r : reached)
+      if (r == m)
+        seen = true;
+    if (seen)
+      continue;
+    reached.push_back(m);
+    for (Symbol *s : m->importedFrom)
+      stack.push_back(s);
+  }
+  return reached;
+}
+
+/// §6.2.3.6 activates the main-program-block and "each module supplying" it. A
+/// module nothing reaches is therefore never activated — which matters, because
+/// its initialization-part could write to output.
+void Sema::computeActiveModules() {
+  std::vector<Symbol *> reached = suppliersOf(program_);
+  // Written order, not discovery order: it is the one §6.2.2.9 guarantees is
+  // consistent with "a supplier commences first".
+  for (Symbol *m : moduleOrder_)
+    for (Symbol *r : reached)
+      if (r == m)
+        active_.push_back(m);
+}
+
+/// §6.11.1: "For any two distinct modules A and B such that A supplies B and B
+/// supplies A, neither the module-block of A nor the module-block of B shall
+/// contain an initialization-part; neither module-block shall contain a
+/// finalization-part; and an expression contained by the module-heading of
+/// either A or B shall be nonvarying."
+///
+/// Mutual supply is expressible at all only because a module may be *split*:
+/// A's heading exports what B imports, and A's block — a later
+/// program-component — imports what B exports. NOTE 2 describes exactly that
+/// shape, and it is the one case §6.2.3.6 leaves no order for, which is why
+/// the standard takes the ordered parts away rather than picking one.
+///
+/// The clause about nonvarying expressions needs nothing here: every
+/// expression this compiler admits in a module-heading is already required to
+/// be a constant.
+void Sema::checkMutualSupply() {
+  std::map<Symbol *, std::vector<Symbol *>> reach;
+  for (Symbol *m : moduleOrder_)
+    reach[m] = suppliersOf(m);
+  auto has = [](const std::vector<Symbol *> &v, Symbol *s) {
+    for (Symbol *e : v)
+      if (e == s)
+        return true;
+    return false;
+  };
+  for (auto &entry : modules_) {
+    ModuleInfo &info = entry.second;
+    ModuleDecl *decl = info.blockDecl;
+    if (!decl || (!decl->init && !decl->fini))
+      continue;
+    for (Symbol *other : moduleOrder_) {
+      if (other == info.sym)
+        continue;
+      if (!has(reach[info.sym], other) || !has(reach[other], info.sym))
+        continue;
+      Stmt *at = decl->init ? decl->init.get() : decl->fini.get();
+      diags_.error(at->line, at->col,
+                   "modules '" + info.sym->name + "' and '" + other->name +
+                       "' supply each other, so neither may have a 'to begin "
+                       "do' or a 'to end do' part");
+      break;
+    }
+  }
+}
+
+/// §6.11.2's export-part. The interface it names is a region of its own, so
+/// building it adds nothing to the module's scope: an exported name stays
+/// exactly as visible inside the module as it was, and becomes reachable
+/// elsewhere only through an import-specification.
+void Sema::checkExports(ModuleDecl &m, Symbol *module) {
+  for (const ExportPart &part : m.exports) {
+    if (interfaces_.count(part.name)) {
+      diags_.error(part.line, part.col,
+                   "interface '" + part.name + "' is already exported");
+      continue;
+    }
+    Interface iface;
+    iface.name = part.name;
+    iface.module = module;
+    for (const ExportItem &item : part.items)
+      addExportItem(iface, item);
+    interfaces_[part.name] = std::move(iface);
+  }
+}
+
+void Sema::addExportItem(Interface &iface, const ExportItem &item) {
+  auto alreadyThere = [&](const std::string &spelling) {
+    for (const Constituent &c : iface.items)
+      if (c.name == spelling)
+        return true;
+    return false;
+  };
+
+  if (!item.last.empty()) {
+    // An export-range. §6.11.2 NOTE 6: it is shorthand for listing the
+    // *principal* identifier of every value in the range — the names the
+    // enumerated type was defined with, not the two written here, which serve
+    // only to say where the range starts and ends.
+    Symbol *lo = lookupName(item.qualifier, item.name, item.line, item.col);
+    Symbol *hi =
+        lookupName(item.lastQualifier, item.last, item.line, item.col);
+    if (!lo || lo->kind != SymKind::Const || !hi || hi->kind != SymKind::Const) {
+      diags_.error(item.line, item.col,
+                   "an export range is written between two constants");
+      return;
+    }
+    if (!lo->type || !lo->type->isEnum() || lo->type->base() != hi->type->base()) {
+      diags_.error(item.line, item.col,
+                   "an export range runs between two values of one enumerated "
+                   "type");
+      return;
+    }
+    if (lo->intVal > hi->intVal) {
+      diags_.error(item.line, item.col,
+                   "the first constant of an export range comes after the "
+                   "last");
+      return;
+    }
+    Type *base = lo->type->base();
+    for (long long v = lo->intVal; v <= hi->intVal; ++v) {
+      const std::string &spelling = base->enumNames[size_t(v)];
+      Symbol *s = lookup(spelling);
+      if (!s || s->kind != SymKind::Const || s->intVal != v ||
+          s->type->base() != base) {
+        // §6.11.2 a): the range must be within the scope of a defining-point
+        // of the value's principal identifier. Redeclaring the name in the
+        // module is what takes it away.
+        diags_.error(item.line, item.col,
+                     "'" + spelling + "' does not name the value it names in "
+                     "the type, so the export range cannot export it");
+        continue;
+      }
+      if (!alreadyThere(spelling))
+        iface.items.push_back({spelling, s, false});
+    }
+    return;
+  }
+
+  Symbol *s = lookupName(item.qualifier, item.name, item.line, item.col);
+  if (!s) {
+    // A qualified name that missed has already been reported by name.
+    if (item.qualifier.empty())
+      diags_.error(item.line, item.col,
+                   "'" + item.name + "' is not declared, so it cannot be "
+                   "exported");
+    return;
+  }
+  if (s->kind == SymKind::Interface) {
+    diags_.error(item.line, item.col,
+                 "'" + item.name +
+                     "' names an interface, and an interface is not a "
+                     "constituent of one");
+    return;
+  }
+  if (item.isProtected) {
+    // §6.11.2: `protected` qualifies a variable-name, and the type possessed
+    // by a protected constituent-identifier shall be protectable (§6.4.1).
+    if (!s->isVariable()) {
+      diags_.error(item.line, item.col,
+                   "only a variable can be exported protected, and '" +
+                       item.name + "' is not one");
+      return;
+    }
+    if (s->type && !s->type->protectable()) {
+      diags_.error(item.line, item.col,
+                   "a protected variable cannot be " + s->type->name() +
+                       ", because a file or a pointer in it would let the "
+                       "importer change what it reaches");
+      return;
+    }
+  }
+  const std::string &spelling = item.renamed.empty() ? item.name : item.renamed;
+  if (alreadyThere(spelling)) {
+    diags_.error(item.line, item.col,
+                 "interface '" + iface.name + "' already has a constituent "
+                 "named '" + spelling + "'");
+    return;
+  }
+  // A variable that was already protected — an imported protected constituent
+  // re-exported — stays protected however this clause is written.
+  iface.items.push_back({spelling, s, item.isProtected || s->isProtected});
+}
+
+/// §6.11.3's import-specification. The three modifiers decide only *which*
+/// constituents arrive and under what spelling; what arrives is the module's
+/// own symbol, so an imported procedure is the procedure and an imported
+/// variable is the variable.
+void Sema::checkImports(const std::vector<ImportSpec> &specs, Symbol *owner) {
+  for (const ImportSpec &spec : specs) {
+    auto found = interfaces_.find(spec.interfaceName);
+    if (found == interfaces_.end()) {
+      diags_.error(spec.line, spec.col,
+                   "no interface named '" + spec.interfaceName +
+                       "' has been exported");
+      continue;
+    }
+    Interface &iface = found->second;
+    // §6.11.4.2's two required interfaces have no module and one required
+    // constituent each, and the constituent *is* the text file — so importing
+    // one is what makes it implicitly accessible here.
+    if (iface.name == "standardinput")
+      iface.items[0].sym = ensureStdFile(true);
+    else if (iface.name == "standardoutput")
+      iface.items[0].sym = ensureStdFile(false);
+
+    if (iface.module && iface.module != owner) {
+      bool known = false;
+      for (Symbol *s : owner->importedFrom)
+        if (s == iface.module)
+          known = true;
+      if (!known)
+        owner->importedFrom.push_back(iface.module);
+    }
+
+    Symbol *ifaceSym = newSymbol();
+    ifaceSym->name = spec.interfaceName;
+    ifaceSym->kind = SymKind::Interface;
+
+    // Which constituents are named, and under what spelling. `only` makes the
+    // list exhaustive; without it the list only renames, and everything else
+    // arrives under its own name (§6.11.3 d).
+    std::vector<bool> named(iface.items.size(), false);
+    std::vector<std::pair<const Constituent *, std::string>> arriving;
+    for (const ImportItem &item : spec.items) {
+      size_t k = iface.items.size();
+      for (size_t i = 0; i < iface.items.size(); ++i)
+        if (iface.items[i].name == item.name)
+          k = i;
+      if (k == iface.items.size()) {
+        diags_.error(item.line, item.col,
+                     "interface '" + spec.interfaceName +
+                         "' has no constituent named '" + item.name + "'");
+        continue;
+      }
+      named[k] = true;
+      arriving.push_back({&iface.items[k],
+                          item.renamed.empty() ? item.name : item.renamed});
+    }
+    if (!spec.only)
+      for (size_t i = 0; i < iface.items.size(); ++i)
+        if (!named[i])
+          arriving.push_back({&iface.items[i], iface.items[i].name});
+
+    for (auto &entry : arriving) {
+      Symbol *s =
+          importedSymbol(*entry.first, entry.second, spec.line, spec.col);
+      ifaceSym->constituents.push_back({entry.second, s, entry.first->isProtected});
+      // §6.11.3's last paragraph: with an access-qualifier the defining-point
+      // is for the import-specification alone, so the name is reachable only
+      // as `i.x` and never bare.
+      if (!spec.qualified)
+        bindName(entry.second, s, spec.line, spec.col);
+    }
+    // The interface-identifier itself is introduced whether or not the import
+    // was qualified, so `i.x` is always available.
+    bindName(spec.interfaceName, ifaceSym, spec.line, spec.col);
+  }
+}
+
+Symbol *Sema::importedSymbol(const Constituent &c, const std::string &spelling,
+                             int line, int col) {
+  if (!c.sym) {
+    diags_.error(line, col, "'" + spelling + "' cannot be imported");
+    return nullptr;
+  }
+  // A variable arrives as a *copy* of the symbol: the spelling and the
+  // protection belong to the import and not to the module's own declaration,
+  // and the copy names the same storage because owner, level and frame index
+  // are what an address is computed from. Everything else — a constant, a
+  // type, a schema, a procedure, a function — is shared, because nothing about
+  // it can differ between the two ends.
+  if (!c.sym->isVariable() || (spelling == c.sym->name && !c.isProtected))
+    return c.sym;
+  Symbol *alias = newSymbol();
+  *alias = *c.sym;
+  alias->name = spelling;
+  alias->isProtected = c.isProtected || c.sym->isProtected;
+  return alias;
+}
+
+/// The same lookup with nothing reported. Used where a name is being *probed*
+/// rather than resolved, so that the one place that resolves it says whatever
+/// has to be said exactly once.
+Symbol *Sema::lookupQuiet(const std::string &qualifier,
+                          const std::string &name) const {
+  if (qualifier.empty())
+    return lookup(name);
+  Symbol *iface = lookup(qualifier);
+  if (!iface || iface->kind != SymKind::Interface)
+    return nullptr;
+  for (const Constituent &c : iface->constituents)
+    if (c.name == name)
+      return c.sym;
+  return nullptr;
+}
+
+bool Sema::isInterfaceName(const std::string &name) const {
+  Symbol *s = lookup(name);
+  return s && s->kind == SymKind::Interface;
+}
+
+/// A name that may be qualified. With no qualifier this is an ordinary lookup;
+/// with one it is §6.11.3's `i.x`, which reaches only what that
+/// import-specification brought and never what the module it came from also
+/// declares.
+Symbol *Sema::lookupName(const std::string &qualifier, const std::string &name,
+                         int line, int col) {
+  if (qualifier.empty())
+    return lookup(name);
+  Symbol *iface = lookup(qualifier);
+  if (!iface) {
+    diags_.error(line, col, "'" + qualifier + "' is not declared");
+    return nullptr;
+  }
+  if (iface->kind != SymKind::Interface) {
+    diags_.error(line, col,
+                 "'" + qualifier + "' does not name an imported interface");
+    return nullptr;
+  }
+  for (const Constituent &c : iface->constituents)
+    if (c.name == name)
+      return c.sym;
+  diags_.error(line, col,
+               "'" + name + "' was not imported through interface '" +
+                   qualifier + "'");
+  return nullptr;
+}
+
+void Sema::checkModule(ModuleDecl &m) {
+  ModuleInfo &info = modules_[m.name];
+  if (!info.sym) {
+    info.sym = newSymbol();
+    info.sym->name = m.name;
+    info.sym->kind = SymKind::Proc;
+    info.sym->isModuleSym = true;
+    info.sym->level = 0;
+    info.sym->defined = true;
+    info.line = m.line;
+    info.col = m.col;
+    moduleOrder_.push_back(info.sym);
+  }
+  m.sym = info.sym;
+
+  if (m.hasHeading) {
+    if (info.headingSeen) {
+      diags_.error(m.line, m.col,
+                   "module '" + m.name + "' already has a heading");
+      return;
+    }
+    info.headingSeen = true;
+    info.headingDecl = &m;
+    checkModuleHeading(m, info);
+  }
+  if (m.hasBlock) {
+    if (!info.headingSeen) {
+      diags_.error(m.line, m.col,
+                   "there is no interface for module '" + m.name +
+                       "' to implement");
+      return;
+    }
+    if (info.blockSeen) {
+      diags_.error(m.line, m.col,
+                   "module '" + m.name + "' already has an implementation");
+      return;
+    }
+    info.blockSeen = true;
+    info.blockDecl = &m;
+    checkModuleBlock(m, info);
+  }
+}
+
+void Sema::checkModuleHeading(ModuleDecl &m, ModuleInfo &info) {
+  Symbol *saveCurrent = current_;
+  Symbol *saveModule = curModule_;
+  current_ = info.sym;
+  curModule_ = info.sym;
+  pushScope();
+
+  // §6.11.1: a module-parameter named `input` or `output` denotes the required
+  // text file, and is what makes it implicitly accessible in the module
+  // (§6.11.4.2 d). Any other spelling must be a variable the module declares,
+  // and this compiler binds it to nothing — NOTE 6 permits that outright.
+  for (DeclName &p : m.params)
+    if (p.name == "input" || p.name == "output")
+      bindName(p.name, ensureStdFile(p.name == "input"), p.line, p.col);
+
+  checkImports(m.heading->imports, info.sym);
+  checkDeclarations(*m.heading, info.sym);
+  for (auto &proc : m.heading->procs)
+    declareProcHeading(*proc, info.sym);
+
+  // §6.11.1: a module-parameter that is neither `input` nor `output` "either
+  // shall be local to the module or shall be an imported variable-identifier
+  // that is a module-parameter". Its binding to anything outside the program
+  // is implementation-defined, and NOTE 6 says one need not be bound at all —
+  // which is what this compiler does with it.
+  for (DeclName &p : m.params) {
+    if (p.name == "input" || p.name == "output")
+      continue;
+    Symbol *s = lookup(p.name);
+    if (!s || !s->isVariable())
+      diags_.error(p.line, p.col,
+                   "the module parameter '" + p.name +
+                       "' is not declared as a variable in this module");
+  }
+
+  // The export parts are resolved last although they are written first: an
+  // export-clause names something the module declares, and §6.11.2's example 2
+  // exports a type defined below the `export` that names it.
+  checkExports(m, info.sym);
+
+  // Every name the heading defined is also a defining-point of the block
+  // (§6.2.2.12), and the block may be a separate program-component — so the
+  // scope is kept rather than discarded.
+  info.scope = scopes_.back();
+  popScope();
+  current_ = saveCurrent;
+  curModule_ = saveModule;
+}
+
+void Sema::checkModuleBlock(ModuleDecl &m, ModuleInfo &info) {
+  Symbol *saveCurrent = current_;
+  Symbol *saveModule = curModule_;
+  current_ = info.sym;
+  curModule_ = info.sym;
+  scopes_.push_back(info.scope);
+
+  checkImports(m.block->imports, info.sym);
+  checkDeclarations(*m.block, info.sym);
+
+  for (auto &proc : m.block->procs) {
+    declareProcHeading(*proc, info.sym);
+    if (proc->body)
+      checkProcBody(*proc);
+  }
+  for (auto &proc : m.block->procs)
+    if (proc->sym && !proc->sym->defined)
+      diags_.error(proc->line, proc->col,
+                   "'" + proc->name +
+                       "' was declared forward but never given a body");
+  // A heading that promised a body and never got one. The heading may be a
+  // different program-component from this block, so it is reached through the
+  // module's record rather than through `m`. The message says `heading` rather
+  // than `forward`, because nothing here was written forward.
+  if (info.headingDecl)
+    for (auto &proc : info.headingDecl->heading->procs)
+      if (proc->sym && !proc->sym->defined)
+        diags_.error(proc->line, proc->col,
+                     "'" + proc->name +
+                         "' is declared in the heading of module '" + m.name +
+                         "' but has no body in its implementation");
+
+  // §6.11.1 gives a module-block no label-declaration-part, so the scope these
+  // two statements are checked against is deliberately empty: a `goto` in an
+  // initialization-part has nowhere in the module to land, and says so.
+  // `resolveGotos` pops both, as it does for every block.
+  std::vector<Stmt *> outerPath;
+  outerPath.swap(stmtPath_);
+  labelScopes_.emplace_back();
+  gotoScopes_.emplace_back();
+  if (m.init)
+    checkStmt(m.init.get());
+  if (m.fini)
+    checkStmt(m.fini.get());
+  resolveGotos();
+  stmtPath_.swap(outerPath);
+
+  scopes_.pop_back();
+  current_ = saveCurrent;
+  curModule_ = saveModule;
 }
 
 void Sema::bindProgramParameters() {
@@ -1816,12 +2389,25 @@ void Sema::bindProgramParameters() {
 /// never resolving a name, so the defaulted file arrives as an ordinary
 /// resolved VarRef like any other.
 ExprPtr Sema::standardFileRef(bool input, int line, int col) {
-  Symbol *file = input ? stdInput_ : stdOutput_;
+  Symbol *root = curModule_ ? curModule_ : program_;
+  Symbol *file =
+      (input ? root->stdInputOk : root->stdOutputOk)
+          ? (input ? stdInput_ : stdOutput_)
+          : nullptr;
   const char *name = input ? "input" : "output";
   if (!file) {
+    // §6.11.4.2 gives Extended Pascal three more ways to make the file
+    // implicitly accessible than §6.10's one, so the message lists them —
+    // otherwise it names the only remedy a module cannot use.
     diags_.error(line, col,
-                 std::string("'") + name +
-                     "' must be listed as a program parameter to use it");
+                 std::string("'") + name + "' must be listed as a program " +
+                     (std_ == Std::Extended
+                          ? "parameter or a module parameter, or imported "
+                            "through " +
+                                std::string(input ? "StandardInput"
+                                                  : "StandardOutput") +
+                                ", to use it"
+                          : std::string("parameter to use it")));
     return nullptr;
   }
   auto ref = std::make_unique<VarRef>();
@@ -1995,7 +2581,53 @@ void Sema::resolveGotos() {
 }
 
 void Sema::checkBlock(Block &block, Symbol *owner) {
+  // ISO/IEC 10206:1991 §6.2.1 puts the import-part at the head of every block.
+  checkImports(block.imports, owner);
   checkLabelPart(block, owner);
+  checkDeclarations(block, owner);
+
+  // The variables exist now, so the program header's parameters can be matched
+  // against them — before the statements, so a use of an unbound file is
+  // reported after the reason it is unbound rather than before it.
+  if (owner == program_)
+    bindProgramParameters();
+
+  // Headings first, then bodies. Declaring every heading in this block before
+  // checking any body would let a procedure call one declared after it without
+  // `forward`, so headings are declared one at a time, in order, and each body
+  // is checked as it is reached.
+  for (auto &proc : block.procs) {
+    declareProcHeading(*proc, owner);
+    if (proc->body)
+      checkProcBody(*proc);
+  }
+
+  for (auto &proc : block.procs)
+    if (proc->sym && !proc->sym->defined)
+      diags_.error(proc->line, proc->col,
+                   "'" + proc->name +
+                       "' was declared forward but never given a body");
+
+  // The statement path is per block: a goto in a nested procedure is not
+  // inside the enclosing block's statements, whatever they are.
+  std::vector<Stmt *> outerPath;
+  outerPath.swap(stmtPath_);
+  // The statement part *is* the block's outermost statement-sequence, so it is
+  // walked without joining the path — a label at the top of it has no
+  // containing statement, which is what ISO 7185 §6.8.1 requires of the target
+  // of a goto from a nested block. A `begin ... end` written *inside* it is an
+  // ordinary statement and does join.
+  if (block.body)
+    for (auto &sub : block.body->body)
+      checkStmt(sub.get());
+  stmtPath_.swap(outerPath);
+  resolveGotos();
+}
+
+/// The constant, type and variable definition parts. Shared by a block and by
+/// both halves of a module, which have the same three parts and differ only in
+/// what may surround them.
+void Sema::checkDeclarations(Block &block, Symbol *owner) {
   for (auto &c : block.consts) {
     checkExpr(c.value.get());
     Symbol value;
@@ -2048,7 +2680,7 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
     // as before.
     Symbol *schema = nullptr;
     if (group.type->kind == TEK::Schema) {
-      Symbol *named = lookup(group.type->name);
+      Symbol *named = lookupQuiet(group.type->qualifier, group.type->name);
       if (named && named->kind == SymKind::Schema)
         schema = named;
     }
@@ -2059,6 +2691,16 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
       dynamicVarFor_ = first;
       first->type = resolveType(*group.type);
       dynamicVarFor_ = nullptr;
+      // §6.2.3.2 evaluates the discriminants when the block is entered and the
+      // storage they size lives as long as the activation (ADR-0041). A
+      // module's activation outlives the function that commences it, so there
+      // is nowhere on the stack to put that storage — the tuple has to be
+      // constant here, as it is everywhere except a block's own variables.
+      if (owner->isModuleSym && first->type->isGeneric())
+        diags_.error(n0.line, n0.col,
+                     "the discriminants of a module's variable must be "
+                     "constants, because a module's activation lasts as long "
+                     "as the program");
       for (size_t i = 1; i < group.names.size(); ++i) {
         const DeclName &n = group.names[i];
         Symbol *v =
@@ -2090,44 +2732,6 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
       v->isBindable = bindableOf(*group.type);
     }
   }
-
-  // The variables exist now, so the program header's parameters can be matched
-  // against them — before the statements, so a use of an unbound file is
-  // reported after the reason it is unbound rather than before it.
-  if (owner == program_)
-    bindProgramParameters();
-
-  // Headings first, then bodies. Declaring every heading in this block before
-  // checking any body would let a procedure call one declared after it without
-  // `forward`, so headings are declared one at a time, in order, and each body
-  // is checked as it is reached.
-  for (auto &proc : block.procs) {
-    declareProcHeading(*proc, owner);
-    if (proc->body)
-      checkProcBody(*proc);
-  }
-
-  for (auto &proc : block.procs) {
-    if (proc->sym && !proc->sym->defined)
-      diags_.error(proc->line, proc->col,
-                   "'" + proc->name +
-                       "' was declared forward but never given a body");
-  }
-
-  // The statement path is per block: a goto in a nested procedure is not
-  // inside the enclosing block's statements, whatever they are.
-  std::vector<Stmt *> outerPath;
-  outerPath.swap(stmtPath_);
-  // The statement part *is* the block's outermost statement-sequence, so it is
-  // walked without joining the path — a label at the top of it has no
-  // containing statement, which is what ISO 7185 §6.8.1 requires of the target
-  // of a goto from a nested block. A `begin ... end` written *inside* it is an
-  // ordinary statement and does join.
-  if (block.body)
-    for (auto &sub : block.body->body)
-      checkStmt(sub.get());
-  stmtPath_.swap(outerPath);
-  resolveGotos();
 }
 
 void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
@@ -2422,6 +3026,15 @@ bool Sema::evalConst(Expr *e, Symbol &out) {
     out = *v->sym;
     return true;
   }
+  // A constant reached through an interface. §6.11.3 makes the imported
+  // identifier "a constant-identifier that denotes the value", so it is as
+  // constant as the one the module wrote.
+  if (auto *f = as<FieldExpr>(e)) {
+    if (!f->qualified || f->qualified->kind != SymKind::Const)
+      return false;
+    out = *f->qualified;
+    return true;
+  }
   if (auto *u = as<Unary>(e)) {
     Symbol inner;
     if (!evalConst(u->operand.get(), inner))
@@ -2536,6 +3149,20 @@ void Sema::checkStmt(Stmt *s) {
   }
 
   if (auto *p = as<ProcCallStmt>(s)) {
+    if (!p->qualifier.empty()) {
+      Symbol *sym = lookupName(p->qualifier, p->name, p->line, p->col);
+      if (!sym)
+        return;
+      if (!sym->isInvocable() || sym->resultType()) {
+        diags_.error(p->line, p->col,
+                     "'" + p->qualifier + "." + p->name +
+                         "' is not a procedure");
+        return;
+      }
+      p->sym = sym;
+      checkArguments(sym, p->args, p->line, p->col);
+      return;
+    }
     Symbol *sym = lookup(p->name);
     // A user-declared procedure of the same name wins, exactly as it does for
     // the required functions in checkCall.
@@ -2721,6 +3348,37 @@ void Sema::checkExpr(Expr *e) {
   }
 
   if (auto *fld = as<FieldExpr>(e)) {
+    // §6.11.3's qualified name. The syntax is a field selection and only the
+    // symbol the base resolves to tells the two apart — so this is asked
+    // before the base is checked, since an interface-identifier has no type
+    // and checking it would report that first.
+    if (auto *b = as<VarRef>(fld->base.get()))
+      if (b->sym == nullptr && isInterfaceName(b->name)) {
+        Symbol *sym = lookupName(b->name, fld->field, fld->line, fld->col);
+        fld->qualified = sym;
+        e->type = ty::Int();
+        if (!sym)
+          return;
+        if (sym->kind == SymKind::Const || sym->isVariable()) {
+          e->type = sym->type;
+        } else if (sym->isInvocable() && sym->resultType()) {
+          // A parameterless function written without an argument list. There
+          // is no `Call` node to make here, so the selection itself is the
+          // call and codegen emits one.
+          if (!sym->params.empty()) {
+            diags_.error(fld->line, fld->col,
+                         "'" + b->name + "." + fld->field +
+                             "' needs its arguments");
+            return;
+          }
+          e->type = sym->resultType();
+        } else {
+          diags_.error(fld->line, fld->col,
+                       "'" + b->name + "." + fld->field +
+                           "' is not a value");
+        }
+        return;
+      }
     checkExpr(fld->base.get());
     Type *base = fld->base->type;
     // §6.8.4: `v.d` where v possesses a type produced from a schema and d is
@@ -3848,6 +4506,25 @@ void Sema::checkProcArgument(Symbol *formal, Expr *a, Symbol *callee,
 }
 
 void Sema::checkCall(Call *c) {
+  // §6.11.3's qualified name. A required function is never one of the answers,
+  // so this returns whatever the interface holds or nothing at all.
+  if (!c->qualifier.empty()) {
+    Symbol *sym = lookupName(c->qualifier, c->name, c->line, c->col);
+    c->type = ty::Int();
+    if (!sym)
+      return;
+    if (!sym->isInvocable() || !sym->resultType()) {
+      diags_.error(c->line, c->col,
+                   "'" + c->qualifier + "." + c->name +
+                       "' is not a function");
+      return;
+    }
+    c->sym = sym;
+    c->type = sym->resultType();
+    checkArguments(sym, c->args, c->line, c->col);
+    return;
+  }
+
   // A user-defined function shadows nothing built in: names are resolved in
   // the scope chain first, so a local `abs` would win.
   if (Symbol *sym = lookup(c->name)) {

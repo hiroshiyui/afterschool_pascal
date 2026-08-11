@@ -676,17 +676,21 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   b_.SetInsertPoint(entry);
 
   StructType *frameTy = frameTypes_[proc];
-  curFrame_ = b_.CreateAlloca(frameTy, nullptr, "frame");
+  // A level-0 block's record is a global: it has one activation, and a
+  // module's must outlive the function that initialises it (ADR-0053).
+  curFrame_ = proc->level == 0 ? llvm::cast<llvm::Value>(frameGlobal(proc))
+                               : b_.CreateAlloca(frameTy, nullptr, "frame");
 
   auto arg = fn->arg_begin();
   if (proc->level == 0) {
-    // The program has no enclosing block, so its static link is never followed.
-    b_.CreateStore(ConstantPointerNull::get(cast<PointerType>(ptr())),
-                   b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
-    // Hand the command line to the runtime before any file is opened: it is
-    // where `reset` looks for the name of an external file.
-    b_.CreateCall(rt("pas_args", llvm::Type::getVoidTy(ctx_), {i32(), ptr()}),
-                  {fn->getArg(0), fn->getArg(1)});
+    // The program and a module have no enclosing block, so the static link is
+    // never followed — and a global is already zeroed, so there is nothing to
+    // store.
+    if (!proc->isModuleSym)
+      // Hand the command line to the runtime before any file is opened: it is
+      // where `reset` looks for the name of an external file.
+      b_.CreateCall(rt("pas_args", llvm::Type::getVoidTy(ctx_), {i32(), ptr()}),
+                    {fn->getArg(0), fn->getArg(1)});
   } else {
     arg->setName("static.link");
     b_.CreateStore(&*arg, b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
@@ -750,6 +754,20 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   initDynamicVars(proc);
   initInitialStates(proc);
   initFiles(proc);
+  // ISO/IEC 10206:1991 §6.2.3.6 orders the *commencements* of the modules
+  // that supply the main-program-block before the program's own, and written
+  // order is such an order — §6.2.2.9 already puts a module-heading before
+  // everything that imports its interface, so a supplier is textually first.
+  //
+  // What comes before them here is only the program's own file and
+  // initial-state prologue, and no module can observe that: the program
+  // exports nothing, so nothing of its is nameable from a module. What a
+  // module *can* observe is `output`, which §6.11.4.2 requires to be open
+  // before the first access to it — and opening it is exactly what this
+  // prologue just did.
+  if (proc == sema_.programSymbol())
+    for (Symbol *m : sema_.activeModules())
+      b_.CreateCall(moduleInit_[m]);
   emitJumpDispatch(proc);
 }
 
@@ -979,6 +997,29 @@ void CodeGen::emitProcs(Block &block) {
   }
 }
 
+/// The one activation record of a level-0 block. The program and every module
+/// have exactly one activation each (§6.2.3.6), and a module's has to outlive
+/// the function that fills it in — so both are globals rather than allocas,
+/// and reaching one costs no walk at all.
+llvm::GlobalVariable *CodeGen::frameGlobal(Symbol *block) {
+  auto found = frameGlobals_.find(block);
+  if (found != frameGlobals_.end())
+    return found->second;
+  StructType *ty = frameTypes_[block];
+  auto *g = new llvm::GlobalVariable(*mod_, ty, false,
+                                     llvm::GlobalValue::InternalLinkage,
+                                     Constant::getNullValue(ty),
+                                     "frame." + block->name);
+  frameGlobals_[block] = g;
+  return g;
+}
+
+llvm::Value *CodeGen::frameOf(Symbol *block) {
+  if (block->level == 0)
+    return frameGlobal(block);
+  return frameAt(block->level);
+}
+
 llvm::Value *CodeGen::frameAt(int level) {
   llvm::Value *frame = curFrame_;
   // The static link is field 0 of every frame, so it sits at offset zero and
@@ -990,7 +1031,10 @@ llvm::Value *CodeGen::frameAt(int level) {
 }
 
 llvm::Value *CodeGen::frameSlot(Symbol *v) {
-  llvm::Value *frame = frameAt(v->level);
+  // Asking the *owner* rather than the level is what lets a name imported from
+  // another module resolve: its owner is that module, which is not on this
+  // block's static chain and does not need to be.
+  llvm::Value *frame = frameOf(v->owner);
   StructType *frameTy = frameTypes_[v->owner];
   return b_.CreateStructGEP(frameTy, frame, 1 + v->frameIndex, v->name);
 }
@@ -1054,6 +1098,11 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
 
   case NK::Field: {
     auto *f = static_cast<FieldExpr *>(e);
+    // ISO/IEC 10206:1991 §6.11.3's qualified name denotes one symbol, so it is
+    // addressed as a bare name is — the base is an interface-identifier and
+    // has no address of its own.
+    if (f->qualified)
+      return addressOf(f->qualified);
     return fieldAddress(emitAddress(f->base.get()), f->base->type, f->resolved);
   }
 
@@ -1181,8 +1230,10 @@ void CodeGen::emitCopy(llvm::Value *dst, ap::Type *type,
 llvm::Value *CodeGen::staticLinkFor(Symbol *callee) {
   // A callee declared at level L runs with the frame at level L-1 as its
   // enclosing scope — which for a recursive call is the caller's own parent,
-  // not the caller.
-  return frameAt(callee->level - 1);
+  // not the caller. Asking for the *owner's* frame rather than for the level
+  // is what lets a procedure imported from another module be called: its
+  // enclosing block is that module, and no walk from here would find it.
+  return frameOf(callee->owner);
 }
 
 /// The pair a procedural argument travels as. Naming a procedure with a body
@@ -1254,9 +1305,60 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
                        fnTy->getReturnType()->isVoidTy() ? "" : "call");
 }
 
+/// ISO/IEC 10206:1991 §6.11.1's module. Its heading and its block share one
+/// activation record, and the two `to` parts are its commencement and its
+/// finalization — so it comes out as a pair of functions over one global
+/// frame, called by `main` around the program's own body.
+void CodeGen::emitModule(ModuleDecl &m) {
+  Symbol *sym = m.sym;
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+  FunctionType *ty = FunctionType::get(voidTy, {}, false);
+
+  Function *init = Function::Create(ty, Function::InternalLinkage,
+                                    "m." + sym->name + ".init", mod_.get());
+  moduleInit_[sym] = init;
+  enterFrame(sym, init);
+  if (m.init)
+    emitStmt(m.init.get());
+  b_.CreateRetVoid();
+
+  // The finalization has its own function because §6.2.3.6 runs it after the
+  // main-program-block has terminated, not after the initialization.
+  Function *fini = Function::Create(ty, Function::InternalLinkage,
+                                    "m." + sym->name + ".fini", mod_.get());
+  moduleFini_[sym] = fini;
+  curFn_ = fini;
+  curProc_ = sym;
+  curFrame_ = frameGlobal(sym);
+  labelBlocks_.clear();
+  b_.SetInsertPoint(BasicBlock::Create(ctx_, "entry", fini));
+  if (m.fini)
+    emitStmt(m.fini.get());
+  // A module's files are closed when its activation terminates, which is the
+  // same obligation a block's exit has and the same call that discharges it.
+  closeFiles(sym);
+  b_.CreateRetVoid();
+
+  if (m.block)
+    emitProcs(*m.block);
+}
+
 std::unique_ptr<Module> CodeGen::run(Program &prog) {
   Symbol *programSym = sema_.programSymbol();
   buildFrameType(programSym);
+  // Every module's frame type and every procedure of every module, before any
+  // body is emitted: the main program may call an imported procedure, and a
+  // module written earlier may have been given its body later.
+  for (auto &m : prog.modules) {
+    if (!m->sym)
+      continue;
+    if (!frameTypes_.count(m->sym))
+      buildFrameType(m->sym);
+    if (m->heading)
+      declareProcs(*m->heading);
+    if (m->block)
+      declareProcs(*m->block);
+  }
   declareProcs(*prog.block);
 
   // main takes the command line, because ISO 7185 §6.10 leaves it to the
@@ -1268,9 +1370,22 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   mainFn->getArg(0)->setName("argc");
   mainFn->getArg(1)->setName("argv");
 
+  // Once per *module*, not once per component: a module written as a
+  // separate interface and implementation is two ModuleDecls sharing one
+  // symbol, and it has one activation record and one pair of functions. The
+  // block is the half that carries them.
+  for (auto &m : prog.modules)
+    if (m->sym && m->block)
+      emitModule(*m);
+
   enterFrame(programSym, mainFn);
   emitStmt(prog.block->body.get());
   closeFiles(programSym);
+  // ...and the same sentence read the other way for termination: the
+  // activation of A terminates before the finalization of B.
+  const std::vector<Symbol *> &active = sema_.activeModules();
+  for (auto it = active.rbegin(); it != active.rend(); ++it)
+    b_.CreateCall(moduleFini_[*it]);
   b_.CreateRet(ConstantInt::get(i32(), 0));
 
   emitProcs(*prog.block);
@@ -1322,7 +1437,7 @@ void CodeGen::emitGoto(GotoStmt *g) {
     // the invocation this one was called from — the same rule every other
     // access to an enclosing frame follows (ADR-0016). The runtime closes the
     // abandoned blocks' files before cutting the stack back.
-    llvm::Value *record = jumpRecord(g->owner, frameAt(g->owner->level));
+    llvm::Value *record = jumpRecord(g->owner, frameOf(g->owner));
     b_.CreateCall(rt("pas_jump_go", llvm::Type::getVoidTy(ctx_),
                      {ptr(), i32()}),
                   {record, ConstantInt::get(i32(), g->id + 1)});
@@ -1969,6 +2084,15 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     // a constant here and there is nothing to load (§6.8.4). The width is the
     // discriminant's own ordinal type, exactly as a literal of it would be.
     auto *f = static_cast<FieldExpr *>(e);
+    // A qualified name reaches whatever the interface holds, and the three
+    // things it can hold each behave as the bare form does.
+    if (f->qualified) {
+      if (f->qualified->kind == SymKind::Const)
+        return emitConst(*f->qualified);
+      if (f->qualified->isInvocable())
+        return emitUserCall(f->qualified, noArgs_);
+      return emitLoad(e);
+    }
     // ...unless the base is a schematic formal parameter, whose type was
     // produced with no tuple: then it is one field of the descriptor the
     // actual brought, and reading it is a load like any other.

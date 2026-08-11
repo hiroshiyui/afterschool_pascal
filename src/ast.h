@@ -191,6 +191,13 @@ struct FieldExpr : Expr {
   /// this is the `Disc` symbol that reads it out of the descriptor. Exactly
   /// one of the two is how a discriminant answers.
   Symbol *discSym = nullptr;
+  /// ISO/IEC 10206:1991 §6.11.3's qualified name, `i.x`: the base names an
+  /// imported interface rather than a record, so the whole selection denotes
+  /// one symbol and there is no base to evaluate. Sema decides which reading
+  /// this is — the syntax is the same and only the *symbol* the base resolves
+  /// to can tell them apart, exactly as ADR-0044's variant-selector is told
+  /// from a tag-type.
+  Symbol *qualified = nullptr;
 };
 
 /// `base^` — the variable a pointer points at. A designator like any other,
@@ -219,6 +226,10 @@ struct Call : Expr {
   static constexpr NK NodeKind = NK::Call;
   Call() : Expr(NodeKind) {}
   std::string name;
+  /// §6.11.3's qualified name in call position, `i.f(x)`. The parser can
+  /// decide this one on its own: a record field is never followed by `(`, so
+  /// `a.b(` has exactly one reading.
+  std::string qualifier;
   Builtin builtin = Builtin::None; // filled in by Sema
   Symbol *sym = nullptr;           // set instead, for a user-defined function
   /// Where `binding(f)`'s result is built: a hidden frame variable of type
@@ -409,6 +420,8 @@ struct ProcCallStmt : Stmt {
   static constexpr NK NodeKind = NK::ProcCall;
   ProcCallStmt() : Stmt(NodeKind) {}
   std::string name;
+  /// §6.11.3's qualified name in a procedure-statement, `i.p`.
+  std::string qualifier;
   Symbol *sym = nullptr;          // filled in by Sema, for a user procedure
   StdProc standard = StdProc::None; // set instead, for new/dispose
   std::vector<ExprPtr> args;
@@ -506,6 +519,11 @@ struct TypeExpr {
   TypeExprPtr index;
 
   std::string name;               // Named, and the domain of a Pointer
+  /// ISO/IEC 10206:1991 §6.11.3's qualified name: the interface a type-name or
+  /// schema-name arrived through, when it is written `i.t`. Empty otherwise —
+  /// and there is no ambiguity to resolve here, unlike in an expression, since
+  /// a type-denoter has no record to select a field of.
+  std::string qualifier;
   bool packed = false;            // Array, Record
   /// Array: one ordinal type per index. ISO 7185 §6.4.3.2 makes the index an
   /// ordinal *type*, which is why `array [1..3]` and `array [color]` are the
@@ -592,6 +610,11 @@ struct ProcDecl {
   TypeExprPtr returnType; // null in the completion of a forward function
   std::unique_ptr<Block> body; // null for a forward declaration
   bool isForward = false;
+  /// True for a heading in a module-heading's procedure-and-function-heading-part
+  /// (ISO/IEC 10206:1991 §6.11.1). It behaves exactly as `forward` does — the
+  /// name and parameters are declared here and the body comes later, repeating
+  /// the name alone — so only the diagnostic tells the two apart.
+  bool inModuleHeading = false;
   int line = 0, col = 0;
   Symbol *sym = nullptr; // filled in by Sema
 };
@@ -606,13 +629,90 @@ struct LabelDecl {
   int line = 0, col = 0;
 };
 
+/// One entry of an export-list (ISO/IEC 10206:1991 §6.11.2). An export-clause
+/// and an export-range share this shape: a range is the one with `last`
+/// non-empty, and it may not also be renamed, because what it exports is
+/// whatever *principal* identifiers the values in it already have.
+struct ExportItem {
+  std::string name;    // exportable-name, or the first-constant-name of a range
+  /// §6.11.3's qualified name in an export-list: a module may re-export what
+  /// it imported `qualified`, and then the only name it has for it is `i.x`.
+  /// The standard's own example 3 (§6.11.6) does exactly this.
+  std::string qualifier;
+  std::string lastQualifier;
+  std::string last;    // last-constant-name; empty unless this is a range
+  std::string renamed; // the identifier after `=>`; empty when not renamed
+  bool isProtected = false;
+  int line = 0, col = 0;
+};
+
+/// `export i = (a, b => c, lo..hi)`. The identifier names an *interface*, which
+/// §6.2.2.2 makes a region that "shall not be a part of the program text" —
+/// so an interface is not a scope of the block that wrote it, and the only way
+/// into one is an import-specification.
+struct ExportPart {
+  std::string name;
+  std::vector<ExportItem> items;
+  int line = 0, col = 0;
+};
+
+struct ImportItem {
+  std::string name;    // constituent-identifier
+  std::string renamed; // the identifier after `=>`; empty when not renamed
+  int line = 0, col = 0;
+};
+
+/// `import i qualified only (t => u);`. The three modifiers are independent:
+/// `only` says the list is exhaustive rather than a set of exceptions to
+/// rename, and `qualified` says the imported names arrive *only* under
+/// `i.name` and not bare (§6.11.3 NOTE 2).
+struct ImportSpec {
+  std::string interfaceName;
+  bool qualified = false;
+  bool only = false;
+  bool hasList = false;
+  std::vector<ImportItem> items;
+  int line = 0, col = 0;
+};
+
 struct Block {
+  /// §6.2.1: `block = import-part { ... } statement-part` — the import-part is
+  /// first and there is at most one, in every block, not only in a module's.
+  std::vector<ImportSpec> imports;
   std::vector<LabelDecl> labels;
   std::vector<ConstDecl> consts;
   std::vector<TypeDecl> types;
   std::vector<VarDecl> vars;
   std::vector<std::unique_ptr<ProcDecl>> procs;
   std::unique_ptr<Compound> body;
+};
+
+/// §6.11.1's module-declaration, in whichever of its three forms was written:
+///
+///   module m;              heading... end ; block... end .   both parts
+///   module m interface;    heading... end .                  the heading alone
+///   module m implementation;      block... end .             the block alone
+///
+/// The heading and the block are one module however they were split, and
+/// §6.2.2.12 makes every defining-point of the heading a defining-point of the
+/// block as well — so the two share one scope and one activation record.
+struct ModuleDecl {
+  std::string name;
+  bool hasHeading = false;
+  bool hasBlock = false;
+  /// §6.11.1's module-parameter-list. `input` and `output` here are what make
+  /// the standard files implicitly accessible in the module (§6.11.4.2 d).
+  std::vector<DeclName> params;
+  std::vector<ExportPart> exports;
+  std::unique_ptr<Block> heading;
+  std::unique_ptr<Block> block;
+  /// `to begin do S;` and `to end do S;` — each one *statement*, not a
+  /// compound, so the `begin` a reader expects is part of the word-symbol
+  /// rather than the start of a statement.
+  StmtPtr init;
+  StmtPtr fini;
+  int line = 0, col = 0;
+  Symbol *sym = nullptr;
 };
 
 struct Program {
@@ -624,6 +724,17 @@ struct Program {
   /// meaning.
   std::vector<DeclName> params;
   std::unique_ptr<Block> block;
+  /// §6.13's other program-components, in the order they were written. That
+  /// order is also a legal *activation* order and no sort is needed to find
+  /// one: §6.2.2.9 already requires a module-heading to precede everything
+  /// that imports its interface, so a supplier always precedes what it
+  /// supplies. Modules written after the main-program-declaration are legal
+  /// and can supply nothing, since nothing before them can name their
+  /// interfaces.
+  std::vector<std::unique_ptr<ModuleDecl>> modules;
+  /// How many of them were written before the main-program-declaration, so
+  /// that the components can be checked in the order they appear.
+  size_t mainIndex = 0;
 };
 
 } // namespace ap

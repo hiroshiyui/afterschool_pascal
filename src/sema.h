@@ -38,12 +38,31 @@ enum class SymKind {
   Disc,
   Proc,
   Func,
+  /// An *imported-interface-identifier* (ISO/IEC 10206:1991 §6.11.3). It is
+  /// not a value, a type or anything callable — its whole job is to be the
+  /// left half of `i.x`, which is the only way to reach a constituent of an
+  /// interface imported `qualified`.
+  Interface,
 };
 
 /// How a file variable reaches something outside the program. ISO 7185 §6.10
 /// makes only a *program parameter* external; every other file variable is a
 /// scratch file with no name, which is what `Internal` means.
 enum class FileBinding { Internal, StandardInput, StandardOutput, Argument };
+
+struct Symbol;
+
+/// One name an interface makes available (ISO/IEC 10206:1991 §6.11.2). The
+/// spelling is what an importer writes and is not the symbol's own name, since
+/// either end may rename it.
+struct Constituent {
+  std::string name;
+  Symbol *sym = nullptr;
+  /// §6.11.2: `protected` in the export-clause, or a variable-name that was
+  /// already protected. It travels with the *constituent* rather than with the
+  /// symbol, because the module that exported it may still write to it.
+  bool isProtected = false;
+};
 
 struct Symbol {
   std::string name;
@@ -153,6 +172,26 @@ struct Symbol {
   /// is where that name stops being written down.
   bool isProtected = false;
 
+  /// §6.11.1's module. It is a `Proc` because it owns an activation record and
+  /// procedures nest inside it exactly as they nest inside the program — but
+  /// it is never called, and it has exactly one activation, which is what lets
+  /// its frame be a global (ADR-0053).
+  bool isModuleSym = false;
+  /// ISO/IEC 10206:1991 §6.11.4.2: whether the required text file is
+  /// *implicitly accessible* in this level-0 block. It is a property of the
+  /// block and not of the program — a module that neither lists `output` as a
+  /// module-parameter nor imports `StandardOutput` may not write, however many
+  /// other blocks do.
+  bool stdInputOk = false;
+  bool stdOutputOk = false;
+  /// The constituents an imported-interface-identifier makes reachable as
+  /// `i.x`. Only a symbol of kind `Interface` has any.
+  std::vector<Constituent> constituents;
+  /// The modules whose interfaces this block imports, directly. §6.2.2.13's
+  /// "supplies" is the transitive closure of this, and the program's copy is
+  /// what decides which modules are activated at all.
+  std::vector<Symbol *> importedFrom;
+
   bool isCallable() const {
     return kind == SymKind::Proc || kind == SymKind::Func;
   }
@@ -195,6 +234,13 @@ public:
   /// the global variables. Codegen needs it to lay out `main`.
   Symbol *programSymbol() const { return program_; }
 
+  /// §6.2.3.6: the modules that supply the main-program-block, in the order
+  /// their activations must commence. That order is the order they were
+  /// written in, and no sort produced it — §6.2.2.9 already requires a
+  /// module-heading to precede everything importing its interface, so a
+  /// supplier is always textually earlier than what it supplies.
+  const std::vector<Symbol *> &activeModules() const { return active_; }
+
 private:
   void installPredefined();
   Symbol *declare(const std::string &name, SymKind kind, int line, int col);
@@ -204,7 +250,62 @@ private:
   void pushScope() { scopes_.emplace_back(); }
   void popScope() { scopes_.pop_back(); }
 
+  // --- modules (ISO/IEC 10206:1991 §6.11) -----------------------------------
+  /// §6.2.2.2 makes an interface a region that "shall not be a part of the
+  /// program text and shall be disjoint from every other interface" — so it is
+  /// not a scope of the module that wrote it, and one table serves the whole
+  /// program-block.
+  struct Interface {
+    std::string name;
+    Symbol *module = nullptr;
+    std::vector<Constituent> items;
+  };
+  /// A module's heading and its block may be two separate program-components,
+  /// so the scope the heading built has to survive until the block arrives —
+  /// §6.2.2.12 makes every defining-point of the heading one of the block's.
+  struct ModuleInfo {
+    Symbol *sym = nullptr;
+    std::unordered_map<std::string, Symbol *> scope;
+    bool headingSeen = false;
+    bool blockSeen = false;
+    /// The components that carried each half, so a later check can name the
+    /// headings still waiting for a body and the two `to` parts, even when the
+    /// two halves were written apart.
+    ModuleDecl *headingDecl = nullptr;
+    ModuleDecl *blockDecl = nullptr;
+    int line = 0, col = 0;
+  };
+  void checkModule(ModuleDecl &m);
+  void checkModuleHeading(ModuleDecl &m, ModuleInfo &info);
+  void checkModuleBlock(ModuleDecl &m, ModuleInfo &info);
+  void checkExports(ModuleDecl &m, Symbol *module);
+  void addExportItem(Interface &iface, const ExportItem &item);
+  /// The import-part of a block, a module-heading or a module-block. `owner`
+  /// is the block the names arrive in, and is what records who supplies it.
+  void checkImports(const std::vector<ImportSpec> &specs, Symbol *owner);
+  /// The imported form of a constituent. A variable is *copied* — same owner,
+  /// level and frame index, so it names the same storage — because the
+  /// importer's spelling and its protection are properties of the import and
+  /// not of the module's own declaration. Everything else is shared.
+  Symbol *importedSymbol(const Constituent &c, const std::string &spelling,
+                         int line, int col);
+  void installRequiredInterfaces();
+  void computeActiveModules();
+  /// The modules a block's imports reach, directly or through another module —
+  /// §6.2.2.13's "supplies", read backwards.
+  std::vector<Symbol *> suppliersOf(Symbol *block) const;
+  void checkMutualSupply();
+  /// Whether a name denotes an imported interface. It is what tells a
+  /// qualified name from an ordinary field selection, and it is a question
+  /// about the *symbol* — the syntax of the two is identical.
+  bool isInterfaceName(const std::string &name) const;
+  Symbol *lookupQuiet(const std::string &qualifier,
+                      const std::string &name) const;
+  Symbol *lookupName(const std::string &qualifier, const std::string &name,
+                     int line, int col);
+
   void checkBlock(Block &block, Symbol *owner);
+  void checkDeclarations(Block &block, Symbol *owner);
   void declareProcHeading(ProcDecl &decl, Symbol *owner);
   void checkProcBody(ProcDecl &decl);
   Symbol *addFrameVar(const std::string &name, SymKind kind, Type *type,
@@ -213,6 +314,12 @@ private:
   /// binding. It is still an ordinary frame variable, so recursion works.
   Symbol *addHiddenVar(const std::string &name, SymKind kind, Type *type,
                        Symbol *owner);
+  /// Put an existing symbol into the current scope under a spelling. An
+  /// import does this, and so does a program or module parameter naming a
+  /// required text file — in each case the symbol was made elsewhere.
+  void bindName(const std::string &name, Symbol *sym, int line = 0,
+                int col = 0);
+  Symbol *ensureStdFile(bool input);
 
   // --- types ---------------------------------------------------------------
   Type *newType(TypeKind kind);
@@ -464,6 +571,15 @@ private:
   /// The standard files, when the program parameters name them.
   Symbol *stdInput_ = nullptr;
   Symbol *stdOutput_ = nullptr;
+  /// Every interface of the program-block, and every module, by name.
+  std::map<std::string, Interface> interfaces_;
+  std::map<std::string, ModuleInfo> modules_;
+  std::vector<Symbol *> moduleOrder_; // as written
+  std::vector<Symbol *> active_;
+  /// The module whose heading or block is being checked, null in the program.
+  /// It is what makes `input` and `output` reach §6.11.4.2's implicit
+  /// accessibility rather than §6.10's program-parameter one.
+  Symbol *curModule_ = nullptr;
 };
 
 } // namespace ap

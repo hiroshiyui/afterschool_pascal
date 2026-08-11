@@ -184,6 +184,18 @@ private:
 
   /// The activation record `levels` deep in the static chain from here.
   llvm::Value *frameAt(int level);
+  /// The activation record of a *block*: the program, a module, or a
+  /// procedure. A level-0 block has exactly one activation for the whole run
+  /// of the program, so its record is a global and needs no walk — which is
+  /// also the only way a module's procedure reaches the program's `output`,
+  /// or the main program reaches a module's variable, since neither is on the
+  /// other's static chain (ADR-0053).
+  llvm::Value *frameOf(Symbol *block);
+  llvm::GlobalVariable *frameGlobal(Symbol *block);
+  /// Emit a module's `init` and `fini` functions and the bodies of its
+  /// procedures. §6.2.3.6 makes the two the commencement and the finalization
+  /// of the module's one activation.
+  void emitModule(ModuleDecl &m);
   /// The variable's field in its activation record, without following it.
   llvm::Value *frameSlot(Symbol *v);
   /// The address of a variable, wherever in the chain it lives.
@@ -300,6 +312,11 @@ private:
 
   std::unordered_map<const Symbol *, llvm::StructType *> frameTypes_;
   std::unordered_map<const Symbol *, llvm::Function *> functions_;
+  /// The activation records of the level-0 blocks, one global apiece.
+  std::unordered_map<const Symbol *, llvm::GlobalVariable *> frameGlobals_;
+  /// The `init`/`fini` pair of each module, so `main` can call them.
+  std::unordered_map<const Symbol *, llvm::Function *> moduleInit_;
+  std::unordered_map<const Symbol *, llvm::Function *> moduleFini_;
   /// One LLVM type per Pascal type, so a record keeps a single struct type
   /// however many variables have it.
   std::unordered_map<const Type *, llvm::Type *> typeCache_;

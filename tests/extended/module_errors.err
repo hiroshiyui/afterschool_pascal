@@ -1,0 +1,28 @@
+<source>:24:13: error: interface 'good' already has a constituent named 'guarded'
+<source>:26:5: error: interface 'good' is already exported
+<source>:27:12: error: 'nowhere' is not declared, so it cannot be exported
+<source>:29:12: error: only a variable can be exported protected, and 'f' is not one
+<source>:33:12: error: a protected variable cannot be ^integer, because a file or a pointer in it would let the importer change what it reaches
+<source>:35:12: error: an export range runs between two values of one enumerated type
+<source>:37:12: error: the first constant of an export range comes after the last
+<source>:39:12: error: 'good' is not declared, so it cannot be exported
+<source>:45:3: error: 'f' is declared in the heading of module 'lib' but has no body in its implementation
+<source>:59:11: error: 'hue' names an interface, and an interface is not a constituent of one
+<source>:65:11: error: 'green' does not name the value it names in the type, so the export range cannot export it
+<source>:91:9: error: 'output' must be listed as a program parameter or a module parameter, or imported through StandardOutput, to use it
+<source>:124:1: error: module 'twice' already has a heading
+<source>:132:3: error: no interface named 'missing' has been exported
+<source>:137:13: error: interface 'bad' has no constituent named 'v'
+<source>:137:16: error: interface 'bad' has no constituent named 'absent'
+<source>:145:3: error: 'guarded' is a protected variable, so it cannot be assigned to
+<source>:146:3: error: 'w' is a protected variable, so it cannot be assigned to
+<source>:148:3: error: undeclared identifier 'y'
+<source>:148:3: error: the left side of an assignment must be a variable
+<source>:151:9: error: cannot select a field of a value of type integer
+<source>:153:13: error: 'absent' was not imported through interface 't2'
+<source>:155:11: error: 'good.v' is not a function
+<source>:156:3: error: 'good.f' is not a procedure
+<source>:75:1: error: module 'orphan' has an interface but no implementation
+<source>:120:1: error: module 'twice' has an interface but no implementation
+<source>:117:13: error: modules 'each' and 'other' supply each other, so neither may have a 'to begin do' or a 'to end do' part
+<source>:112:15: error: modules 'other' and 'each' supply each other, so neither may have a 'to begin do' or a 'to end do' part

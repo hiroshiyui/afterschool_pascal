@@ -54,7 +54,7 @@ const
   nounParamForm = 0;
   nounVarType = 1;
   nounPointerDomain = 2;
-  kwCount  = 40;     { 35 word-symbols of ISO 7185, then ISO 10206's }
+  kwCount  = 45;     { 35 word-symbols of ISO 7185, then ISO 10206's }
   isoKwCount = 35;   { how many of them ISO 7185 reserves }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
@@ -65,7 +65,7 @@ const
     storage, so they are the fixed-buffer limits ADR-0012 predicted -- and both
     fail loudly rather than silently truncating. }
   poolMax  = 400000; { characters of identifier and literal text }
-  tokMax   = 90000;
+  tokMax   = 110000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
   { The size of a file variable's storage, which is PAS_FILE_SIZE in
     runtime/pasrt.h. The C++ code generator includes that header so the two
@@ -109,10 +109,19 @@ type
       standard. Under ISO 7185 the scanner yields these spellings as
       identifiers, which is what they are in that language. }
     tkOtherwise, tkPow, tkProtected, tkValue, tkBindable,
+    { 6.11's five. `interface` and `implementation` are deliberately not among
+      them: 6.1.5 and 6.1.6 make those *directives*, which are identifiers in
+      the one position each may occupy -- exactly as `forward` is. }
+    tkModule, tkExport, tkImport, tkOnly, tkQualified,
     { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
       under both standards and refused under ISO 7185, where no valid program
       can hold two adjacent stars outside a comment or a string anyway. }
     tkStarStar,
+    { 6.11.2's renaming, in an export-clause and an import-clause alike.
+      Scanned under both standards for the reason `**` is: no valid ISO 7185
+      program can hold `=>`, so consuming it and refusing it yields one
+      diagnostic rather than a cascade about `=` and `>`. }
+    tkArrow,
     { 6.1.2 spells the short-circuit operators as *two words with a separator
       between them* -- `and then` and `or else` are each one word-symbol, not
       a pair. They reserve nothing new, because both halves are already
@@ -153,7 +162,12 @@ type
     ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxParenExpr,
     ctxCallArgs, ctxAfterGoto, ctxLabelStart, ctxAfterLabel, ctxLabelDecl,
-    ctxAfterLabelPart, ctxFuncParamResult);
+    ctxAfterLabelPart, ctxFuncParamResult,
+    { ISO/IEC 10206:1991 6.11's module, its two lists, and the two `to` parts }
+    ctxImplementation, ctxModuleBlockEnd, ctxModuleHeadEnd, ctxModuleParams,
+    ctxModuleHeader, ctxModuleEnd, ctxModuleBlockClose, ctxToBegin, ctxToEnd,
+    ctxExportName, ctxExportOpen, ctxExportClose, ctxExportEnd,
+    ctxImportClose, ctxImportEnd);
 
   { `in` is a relational operator (ISO 7185 6.7.2.4) and sits at the same
     precedence as `=`, which is why it belongs here rather than with the
@@ -197,7 +211,12 @@ type
       types. }
     nkInquiry,
     { declarations }
-    nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock);
+    nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
+    { ISO/IEC 10206:1991 6.11's module and the two lists that surround it. An
+      export-part names an *interface*, which 6.2.2.2 makes a region that
+      "shall not be a part of the program text" -- so nothing here is a scope
+      of the module that wrote it. }
+    nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem);
 
   { ------------------------------------------------------- Sema's own types }
 
@@ -217,8 +236,12 @@ type
     not a variable: nothing may assign to it, and it is in scope only while
     the parameter's type is being resolved. Afterwards `v.n` is the only way
     to name it, which is what 6.8.4 makes a primary. }
+  { skInterface is an *imported-interface-identifier* (6.11.3). It is not a
+    value, a type or anything callable -- its whole job is to be the left half
+    of `i.x`, which is the only way to reach a constituent of an interface
+    imported `qualified`. }
   symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam, skDisc,
-             skProc, skFunc, skSchema);
+             skProc, skFunc, skSchema, skInterface);
 
   { How a file variable reaches something outside the program. ISO 7185 6.10
     makes only a *program parameter* external; every other file variable is a
@@ -287,6 +310,12 @@ type
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
+  { ISO/IEC 10206:1991 6.11's three: one constituent of an interface, an
+    interface, and a module's record. Forward here because a symbol holds a
+    list of constituents. }
+  constitPtr = ^constitRec;
+  ifacePtr = ^ifaceRec;
+  modRecPtr = ^modRec;
   producedPtr = ^producedRec;
   { Forward, because a schema's symbol holds the *syntax* of its body: a
     schema-definition has no type until a tuple gives its discriminants
@@ -489,6 +518,24 @@ type
       outside the program. }
     isBindable: boolean;
 
+    { 6.11.1's module. It is an skProc because it owns an activation record and
+      procedures nest inside it exactly as they nest inside the program -- but
+      it is never called, and it has exactly one activation, which is what lets
+      its frame be a global (ADR-0053). }
+    isModuleSym: boolean;
+    { 6.11.4.2: whether the required text file is *implicitly accessible* in
+      this level-0 block. It is a property of the block and not of the program
+      -- a module that neither lists `output` as a module-parameter nor imports
+      StandardOutput may not write, however many other blocks do. }
+    stdInputOk, stdOutputOk: boolean;
+    { The constituents an imported-interface-identifier makes reachable as
+      `i.x`. Only a symbol of kind skInterface has any. }
+    constituents, constitTail: constitPtr;
+    { The modules whose interfaces this block imports, directly. 6.2.2.13's
+      "supplies" is the transitive closure of this, and the program's copy is
+      what decides which modules are activated at all. }
+    importedFrom, importedTail: symListPtr;
+
     { ISO/IEC 10206:1991 6.6: the value this variable bears when the block that
       declares it is entered. Borrowed from the AST and read only by the
       prologue -- every expression in one is nonvarying (6.8.2), so it is
@@ -517,6 +564,44 @@ type
     depth: integer;
     sym: symPtr;
     prev: entryPtr
+  end;
+
+  { ISO/IEC 10206:1991 6.11.2: one name an interface makes available. The
+    spelling is what an importer writes and is not the symbol's own, since
+    either end may rename it. `protected` travels with the *constituent*
+    rather than with the symbol, because the module that exported it may still
+    write to the variable. }
+  constitRec = record
+    at, len: integer;
+    sym: symPtr;
+    isProtected: boolean;
+    next: constitPtr
+  end;
+
+  { 6.2.2.2 makes an interface a region that "shall not be a part of the
+    program text and shall be disjoint from every other interface" -- so it is
+    not a scope of the module that wrote it, and one list serves the whole
+    program-block. }
+  ifaceRec = record
+    at, len: integer;
+    owner: symPtr;
+    items, itemTail: constitPtr;
+    next: ifacePtr
+  end;
+
+  { A module's heading and its block may be two separate program-components,
+    so the scope the heading built has to survive until the block arrives --
+    6.2.2.12 makes every defining-point of the heading one of the block's. The
+    scope stack is a chain, so keeping its top and its depth is keeping it. }
+  modRec = record
+    at, len: integer;
+    sym: symPtr;
+    savedTop: entryPtr;
+    savedDepth: integer;
+    headingSeen, blockSeen: boolean;
+    headingDecl, blockDecl: nodePtr;
+    line, col: integer;
+    next: modRecPtr
   end;
 
   { A pointer type whose domain named a type not yet defined: ISO 7185 6.4.4
@@ -621,8 +706,13 @@ type
         schema's formal discriminants. It shares its syntax with a field
         selection and nothing else -- there is no field, and fdResolved stays
         nil. Sema folds it to the tuple's value. }
+      { fdQualified is 6.11.3's qualified name, `i.x`: the base names an
+        imported interface rather than a record, so the whole selection denotes
+        one symbol and there is no base to evaluate. Sema decides which reading
+        this is -- the syntax is the same, and only the symbol the base
+        resolves to can tell them apart. }
       nkField:      (fdBase: nodePtr; fdAt, fdLen: integer;
-                     fdResolved: fieldPtr;
+                     fdResolved: fieldPtr; fdQualified: symPtr;
                      fdIsDisc: boolean; fdDiscValue: integer;
                      { ...unless the base is a schematic formal parameter,
                        whose type was produced with no tuple at all: then the
@@ -638,7 +728,10 @@ type
         record and this compiler returns no records, so the value needs
         somewhere to live -- and a frame slot is somewhere both backends can
         name without an alloca in the middle of a function. }
-      nkCall:       (clAt, clLen: integer; clArgs: nodePtr;
+      { clQualAt/clQualLen is 6.11.3's qualified name in call position,
+        `i.f(x)`. The parser decides this one on its own: a record field is
+        never followed by `(`, so `a.b(` has exactly one reading. }
+      nkCall:       (clAt, clLen, clQualAt, clQualLen: integer; clArgs: nodePtr;
                      clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr);
       nkEmpty:      ();
       nkAssign:     (asTarget, asValue: nodePtr);
@@ -653,7 +746,7 @@ type
       { pcSelect: `new(p, c1, ..., cn)` -- the arms the tag values select,
         outermost first, as indices into the variant part at each level
         (ISO 7185 6.6.5.3). nil for the one-argument form. }
-      nkProcCall:   (pcAt, pcLen: integer; pcArgs: nodePtr;
+      nkProcCall:   (pcAt, pcLen, pcQualAt, pcQualLen: integer; pcArgs: nodePtr;
                      pcSym: symPtr; pcStd: stdProcKind; pcSelect: numPtr);
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
@@ -684,9 +777,13 @@ type
       nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProtected,
                      grIsProc, grIsFunction: boolean;
                      grParams, grResult: nodePtr);
-      nkNamed:      (nmAt, nmLen: integer);
+      { nmQualAt/nmQualLen is 6.11.3's qualified name in a type-denoter. There
+        is nothing else `a.b` could be there -- a type has no fields to select
+        -- so unlike an expression this needs no help from Sema. }
+      nkNamed:      (nmAt, nmLen, nmQualAt, nmQualLen: integer);
       nkInquiry:    (tqAt, tqLen: integer);
-      nkSchema:     (scAt, scLen: integer; scArgs, scArgTail: nodePtr);
+      nkSchema:     (scAt, scLen, scQualAt, scQualLen: integer;
+                     scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen: integer);
       nkEnum:       (enConstants: nodePtr);
       nkSubrange:   (sbLo, sbHi: nodePtr);
@@ -711,11 +808,47 @@ type
         been told everything yet. Each entry is an nkGroup whose grType is the
         nkNamed ordinal type the discriminants possess. }
       nkTypeDecl:   (tdAt, tdLen: integer; tdType, tdDiscs, tdDiscTail: nodePtr);
+      { pdInHeading: a heading in a module-heading's
+        procedure-and-function-heading-part (6.11.1). It behaves exactly as
+        `forward` does -- name and parameters here, body later, repeating the
+        name alone -- so only the diagnostic tells the two apart. }
       nkProcDecl:   (pdAt, pdLen: integer;
                      pdParams, pdResult, pdBody: nodePtr;
-                     pdIsFunction, pdIsForward: boolean; pdSym: symPtr);
-      nkBlock:      (blLabels, blConsts, blTypes, blVars, blProcs,
-                     blBody: nodePtr)
+                     pdIsFunction, pdIsForward, pdInHeading: boolean;
+                     pdSym: symPtr);
+      { 6.2.1 puts an import-part at the head of a block, before the label,
+        constant, type, variable and procedure parts -- in every block, and
+        not only a module's. There is at most one. }
+      nkBlock:      (blImports, blLabels, blConsts, blTypes, blVars, blProcs,
+                     blBody: nodePtr);
+      { 6.11.1's module-declaration in whichever of its three forms was
+        written. The heading and the block are one module however they were
+        split, and 6.2.2.12 makes every defining-point of the heading one of
+        the block's too -- so the two share one scope and one activation
+        record. mdInit and mdFini are the `to begin do` and `to end do` parts,
+        each a single *statement*. }
+      nkModule:     (mdAt, mdLen: integer;
+                     mdParams, mdExports, mdHeading, mdBlock,
+                     mdInit, mdFini: nodePtr;
+                     mdHasHeading, mdHasBlock: boolean; mdSym: symPtr);
+      nkExportPart: (epAt, epLen: integer; epItems: nodePtr);
+      { An export-clause and an export-range share this shape: a range is the
+        one with eiLastLen > 0, and may not also be renamed, because what it
+        exports is whatever principal identifiers the values already have. }
+      { eiQualAt/eiQualLen and eiLastQualAt/eiLastQualLen are 6.11.3's
+        qualified name in an export-list: a module may re-export what it
+        imported `qualified`, and then the only name it has for it is `i.x`.
+        The standard's own example 3 (6.11.6) does exactly this. }
+      nkExportItem: (eiAt, eiLen, eiLastAt, eiLastLen,
+                     eiNewAt, eiNewLen, eiQualAt, eiQualLen,
+                     eiLastQualAt, eiLastQualLen: integer;
+                     eiProtected: boolean);
+      { The three modifiers are independent: `only` says the list is
+        exhaustive rather than a set of renamings, and `qualified` says the
+        names arrive only as `i.x` and never bare (6.11.3 NOTE 2). }
+      nkImportSpec: (isAt, isLen: integer; isItems: nodePtr;
+                     isQualified, isOnly, isHasList: boolean);
+      nkImportItem: (iiAt, iiLen, iiNewAt, iiNewLen: integer)
   end;
 
   { The statements containing the one being checked, innermost first. Built by
@@ -804,6 +937,26 @@ var
 
   progAt, progLen: integer;
   progParams, progBlock: nodePtr;
+  { 6.13's other program-components, in the order they were written, and how
+    many of them precede the main-program-declaration. That order is also a
+    legal *activation* order and no sort produced it: 6.2.2.9 already requires
+    a module-heading to precede everything importing its interface, so a
+    supplier is always textually earlier than what it supplies. }
+  progModules, progModuleTail: nodePtr;
+  progMainIndex: integer;
+  { Every interface of the program-block, and every module, in written order.
+    6.2.2.2 makes an interface disjoint from every other, so one list is the
+    whole table (ISO/IEC 10206:1991 6.11). }
+  interfaces, interfaceTail: ifacePtr;
+  modules, moduleTail: modRecPtr;
+  moduleOrder, moduleOrderTail: symListPtr;
+  { 6.2.3.6: the modules that supply the main-program-block, in the order
+    their activations must commence. }
+  activeModules, activeTail: symListPtr;
+  { The module whose heading or block is being checked, nil in the program. It
+    is what makes `input` and `output` reach 6.11.4.2's implicit accessibility
+    rather than 6.10's program-parameter one. }
+  curModule: symPtr;
 
   { --- the character sink (see Put) --- }
   msgOut: boolean;
@@ -874,6 +1027,10 @@ var
   nextProcId, nextStr: integer;
   irProc: symPtr;                { the procedure being emitted }
   irLevel: integer;
+  { The level-0 block the function being emitted belongs to: the program, or
+    the module a procedure was declared in. It is what FrameAt(0) names, since
+    a level-0 record is a global rather than something to walk to. }
+  irRoot: symPtr;
   strHead, strTail: strConstPtr;
 
   { the predefined types, shared singletons }
@@ -1330,7 +1487,12 @@ begin
   DefineKeyword(37, 'pow      ', tkPow);
   DefineKeyword(38, 'protected', tkProtected);
   DefineKeyword(39, 'value    ', tkValue);
-  DefineKeyword(40, 'bindable ', tkBindable)
+  DefineKeyword(40, 'bindable ', tkBindable);
+  DefineKeyword(41, 'module   ', tkModule);
+  DefineKeyword(42, 'export   ', tkExport);
+  DefineKeyword(43, 'import   ', tkImport);
+  DefineKeyword(44, 'only     ', tkOnly);
+  DefineKeyword(45, 'qualified', tkQualified)
 end;
 
 { A str against a space-padded literal, which is the comparison LookupKeyword
@@ -1717,7 +1879,12 @@ begin
   else if c = '/' then AddSimple(sl, sc, tkSlash)
   else if c = ',' then AddSimple(sl, sc, tkComma)
   else if c = ';' then AddSimple(sl, sc, tkSemi)
-  else if c = '=' then AddSimple(sl, sc, tkEq)
+  else if c = '=' then begin
+    { 6.11.2's `=>`. Maximal munch, as everywhere else here: `=` cannot be
+      followed by `>` in any ISO 7185 program, so nothing is taken away. }
+    if Peek(0) = '>' then begin Advance; AddSimple(sl, sc, tkArrow) end
+    else AddSimple(sl, sc, tkEq)
+  end
   else if c = '(' then AddSimple(sl, sc, tkLParen)
   else if c = ')' then AddSimple(sl, sc, tkRParen)
   else if c = '[' then AddSimple(sl, sc, tkLBracket)
@@ -1801,6 +1968,7 @@ begin
     tkRBracket:  write(''']''');
     tkCaret:     write('''^''');
     tkEq:        write('''=''');
+    tkArrow:     write('''=>''');
     tkNotEq:     write('''<>''');
     tkLt:        write('''<''');
     tkLe:        write('''<=''');
@@ -1846,6 +2014,11 @@ begin
     tkProtected: write('''protected''');
     tkValue:     write('''value''');
     tkBindable:  write('''bindable''');
+    tkModule:    write('''module''');
+    tkExport:    write('''export''');
+    tkImport:    write('''import''');
+    tkOnly:      write('''only''');
+    tkQualified: write('''qualified''');
     tkStarStar:  write('''**''');
     tkAndThen:   write('''and then''');
     tkOrElse:    write('''or else''')
@@ -1868,12 +2041,14 @@ begin
     tkNotEq: write('<>');     tkLt: write('<');
     tkLe: write('<=');        tkGt: write('>');
     tkGe: write('>=');    tkStarStar: write('**');
+    tkArrow: write('=>');
     tkEof, tkIdent, tkInt, tkReal, tkStr, tkAnd, tkArray, tkBegin, tkCase,
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
     tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow, tkProtected,
     tkValue, tkBindable,
+    tkModule, tkExport, tkImport, tkOnly, tkQualified,
     tkAndThen, tkOrElse: write('?')
   end
 end;
@@ -1948,7 +2123,22 @@ begin
     ctxParenExpr:      write('after a parenthesised expression');
     ctxCallArgs:       write('after the arguments of a function call');
     ctxFuncParamResult:
-      write('before the result type of a functional parameter')
+      write('before the result type of a functional parameter');
+    ctxImplementation:    write('after ''implementation''');
+    ctxModuleBlockEnd:    write('after the ''end'' of a module block');
+    ctxModuleHeadEnd:     write('after the ''end'' of a module heading');
+    ctxModuleParams:      write('after the module parameters');
+    ctxModuleHeader:      write('after the module heading');
+    ctxModuleEnd:         write('at the end of a module heading');
+    ctxModuleBlockClose:  write('at the end of a module block');
+    ctxToBegin:           write('after ''to begin''');
+    ctxToEnd:             write('after ''to end''');
+    ctxExportName:        write('after the name of an interface');
+    ctxExportOpen:        write('before an export list');
+    ctxExportClose:       write('after an export list');
+    ctxExportEnd:         write('after an export part');
+    ctxImportClose:       write('after an import list');
+    ctxImportEnd:         write('after an import specification')
   end
 end;
 
@@ -1975,7 +2165,8 @@ begin
                n^.fdResolved := nil;
                n^.fdIsDisc := false;
                n^.fdDiscValue := 0;
-               n^.fdDiscSym := nil
+               n^.fdDiscSym := nil;
+               n^.fdQualified := nil
              end;
     nkCall: begin
               n^.clBuiltin := biNone;
@@ -2020,7 +2211,8 @@ begin
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry,
     nkConstDecl, nkTypeDecl, nkLabelDecl,
-    nkBlock: { nothing of Sema's to clear }
+    nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
+    nkImportItem: { nothing of Sema's to clear }
   end;
   NewNode := n
 end;
@@ -2129,6 +2321,7 @@ function ParseTypeExpr: nodePtr; forward;
 function ParseTypeDenoter: nodePtr; forward;
 function ParseStatement: nodePtr; forward;
 function ParseBlock: nodePtr; forward;
+function ParseImportPart: nodePtr; forward;
 
 { name-list = identifier (',' identifier)*, as a list of nkDeclName. `what`
   names what was expected; the four callers are the four spellings the C++
@@ -2609,7 +2802,22 @@ begin
       t := NewNode(nkNamed, CurLine, CurCol);
       t^.nmAt := tok[pos].at;
       t^.nmLen := tok[pos].len;
+      t^.nmQualAt := 0;
+      t^.nmQualLen := 0;
       pos := pos + 1;
+
+      { 6.11.3's qualified name. In a type-denoter there is nothing else `a.b`
+        could be -- a type has no fields to select -- so unlike an expression
+        this needs no help from Sema to decide. }
+      if (langStd = stdExtended) and Check(tkPeriod) and
+         (PeekKind(1) = tkIdent) then begin
+        t^.nmQualAt := t^.nmAt;
+        t^.nmQualLen := t^.nmLen;
+        pos := pos + 1;
+        t^.nmAt := tok[pos].at;
+        t^.nmLen := tok[pos].len;
+        pos := pos + 1
+      end;
 
       { ISO/IEC 10206:1991 6.4.8: a name followed by an actual-discriminant-
         part is a discriminated-schema. Nothing else in a type-denoter
@@ -2628,6 +2836,8 @@ begin
           t := NewNode(nkSchema, n^.line, n^.col);
           t^.scAt := n^.nmAt;
           t^.scLen := n^.nmLen;
+          t^.scQualAt := n^.nmQualAt;
+          t^.scQualLen := n^.nmQualLen;
           t^.scArgs := nil;
           t^.scArgTail := nil;
           pos := pos + 1;
@@ -2800,11 +3010,40 @@ begin
         e := NewNode(nkCall, CurLine, CurCol);
         e^.clAt := tok[pos].at;
         e^.clLen := tok[pos].len;
+        e^.clQualAt := 0;
+        e^.clQualLen := 0;
         e^.clArgs := nil;
         pos := pos + 1
       end
+      { 6.11.3's qualified name in call position. A record field is never
+        followed by '(' -- there is no procedure type in the type part -- so
+        `a.b(` has exactly one reading and the parser can take it. }
+      else if (PeekKind(1) = tkPeriod) and (PeekKind(2) = tkIdent) and
+              (PeekKind(3) = tkLParen) then begin
+        call := NewNode(nkCall, CurLine, CurCol);
+        call^.clQualAt := tok[pos].at;
+        call^.clQualLen := tok[pos].len;
+        call^.clAt := tok[pos + 2].at;
+        call^.clLen := tok[pos + 2].len;
+        call^.clArgs := nil;
+        pos := pos + 4;
+        head := nil;
+        tail := nil;
+        if not Check(tkRParen) then begin
+          more := true;
+          while more and not aborted do begin
+            Append(head, tail, ParseExpr);
+            more := Accept(tkComma)
+          end
+        end;
+        call^.clArgs := head;
+        Expect(tkRParen, ctxCallArgs);
+        e := call
+      end
       else if PeekKind(1) = tkLParen then begin
         call := NewNode(nkCall, CurLine, CurCol);
+        call^.clQualAt := 0;
+        call^.clQualLen := 0;
         call^.clAt := tok[pos].at;
         call^.clLen := tok[pos].len;
         call^.clArgs := nil;
@@ -3296,7 +3535,35 @@ begin
       selectors are what tell the two apart, because only a designator can
       carry them. }
     k := PeekKind(1);
-    if (k = tkAssign) or (k = tkLBracket) or (k = tkPeriod) or
+    { 6.11.3's qualified name in a procedure-statement. `a.b` is a field
+      selection unless what follows it can neither continue a designator nor
+      assign to one -- and those five tokens are the whole of what can, so a
+      sixth means the statement is a call of `b` through interface `a`. }
+    if (k = tkPeriod) and (PeekKind(2) = tkIdent) and
+       (PeekKind(3) <> tkAssign) and (PeekKind(3) <> tkLBracket) and
+       (PeekKind(3) <> tkPeriod) and (PeekKind(3) <> tkCaret) then begin
+      s := NewNode(nkProcCall, l, c);
+      s^.pcQualAt := at;
+      s^.pcQualLen := len;
+      s^.pcAt := tok[pos + 2].at;
+      s^.pcLen := tok[pos + 2].len;
+      s^.pcArgs := nil;
+      pos := pos + 3;
+      head := nil;
+      tail := nil;
+      if Accept(tkLParen) then begin
+        if not Check(tkRParen) then begin
+          more := true;
+          while more and not aborted do begin
+            Append(head, tail, ParseExpr);
+            more := Accept(tkComma)
+          end
+        end;
+        Expect(tkRParen, ctxProcCallArgs)
+      end;
+      s^.pcArgs := head
+    end
+    else if (k = tkAssign) or (k = tkLBracket) or (k = tkPeriod) or
        (k = tkCaret) then begin
       s := NewNode(nkAssign, l, c);
       s^.asTarget := nil;
@@ -3313,6 +3580,8 @@ begin
       { Anything else beginning with an identifier is a procedure call. A
         parameterless call is just the name -- Pascal has no empty list. }
       s := NewNode(nkProcCall, l, c);
+      s^.pcQualAt := 0;
+      s^.pcQualLen := 0;
       s^.pcAt := at;
       s^.pcLen := len;
       s^.pcArgs := nil;
@@ -3449,6 +3718,8 @@ begin
     end
     else begin
       ty := NewNode(nkNamed, CurLine, CurCol);
+      ty^.nmQualAt := 0;
+      ty^.nmQualLen := 0;
       ty^.nmAt := tok[pos].at;
       ty^.nmLen := tok[pos].len;
       pos := pos + 1;
@@ -3617,12 +3888,15 @@ begin
   ParseFormalParameters := head
 end;
 
-function ParseProcOrFunc(isFunction: boolean): nodePtr;
+{ The heading alone, up to and including the semicolon that ends it. Shared by
+  a declaration, a `forward` one, and a module-heading's heading part. }
+function ParseProcHeading(isFunction: boolean): nodePtr;
 var d: nodePtr;
 begin
   d := NewNode(nkProcDecl, CurLine, CurCol);
   d^.pdIsFunction := isFunction;
   d^.pdIsForward := false;
+  d^.pdInHeading := false;
   d^.pdParams := nil;
   d^.pdResult := nil;
   d^.pdBody := nil;
@@ -3658,6 +3932,13 @@ begin
     d^.pdResult := ParseTypeDenoter
   end;
   Expect(tkSemi, ctxProcHeading);
+  ParseProcHeading := d
+end;
+
+function ParseProcOrFunc(isFunction: boolean): nodePtr;
+var d: nodePtr;
+begin
+  d := ParseProcHeading(isFunction);
 
   { `forward` is not a reserved word; it is an identifier in this position. }
   if (not aborted) and Check(tkIdent) and
@@ -3671,6 +3952,18 @@ begin
   ParseProcOrFunc := d
 end;
 
+{ A procedure- or function-heading in a module-heading (6.11.1). It is a
+  heading and a semicolon: no body, and no `forward` to say so, because a
+  module-heading is the one place where declaring without defining is the whole
+  point rather than a way to break a cycle. }
+function ParseProcHeadingOnly(isFunction: boolean): nodePtr;
+var d: nodePtr;
+begin
+  d := ParseProcHeading(isFunction);
+  d^.pdInHeading := true;
+  ParseProcHeadingOnly := d
+end;
+
 { block = const-part? type-part? var-part? (procedure | function)*
           statement-part
 
@@ -3680,6 +3973,7 @@ function ParseBlock;
 var b, ph, pt, ch, ct, th, tt, vh, vt, lh, lt: nodePtr; done: boolean;
 begin
   b := NewNode(nkBlock, CurLine, CurCol);
+  b^.blImports := nil;
   b^.blLabels := nil;
   b^.blConsts := nil;
   b^.blTypes := nil;
@@ -3691,6 +3985,10 @@ begin
   th := nil; tt := nil;
   vh := nil; vt := nil;
   lh := nil; lt := nil;
+
+  { 6.2.1 puts the import-part first, and there is at most one. Under ISO 7185
+    `import` is an ordinary identifier and this returns at once. }
+  b^.blImports := ParseImportPart;
 
   done := false;
   while not done and not aborted do begin
@@ -3719,14 +4017,371 @@ begin
   ParseBlock := b
 end;
 
-procedure ParseProgram;
+{ import-part = an optional 'import' followed by one or more
+  import-specifications, each ended by a semicolon.
+
+  6.2.1 puts this at the head of every block, not only a module's. The word
+  `import` is written once and the specifications after it are separated by
+  semicolons, so the loop's exit is a token that cannot begin an interface
+  name. }
+function ParseImportPart;
+var head, tail, spec, item, ih, it_: nodePtr; more, inner: boolean;
+begin
+  head := nil;
+  tail := nil;
+  if Accept(tkImport) then begin
+    more := true;
+    while more and not aborted do begin
+      spec := NewNode(nkImportSpec, CurLine, CurCol);
+      spec^.isItems := nil;
+      spec^.isQualified := false;
+      spec^.isOnly := false;
+      spec^.isHasList := false;
+      spec^.isAt := 0;
+      spec^.isLen := 0;
+      if not Check(tkIdent) then begin
+        ErrorAtCur;
+        writeln('expected the name of an interface after ''import''');
+        Bail
+      end
+      else begin
+        spec^.isAt := tok[pos].at;
+        spec^.isLen := tok[pos].len;
+        pos := pos + 1;
+        spec^.isQualified := Accept(tkQualified);
+        spec^.isOnly := Accept(tkOnly);
+        ih := nil;
+        it_ := nil;
+        if Check(tkLParen) then begin
+          pos := pos + 1;
+          spec^.isHasList := true;
+          inner := true;
+          while inner and not aborted do begin
+            if not Check(tkIdent) then begin
+              ErrorAtCur;
+              writeln('expected a name in an import list');
+              Bail
+            end
+            else begin
+              item := NewNode(nkImportItem, CurLine, CurCol);
+              item^.iiAt := tok[pos].at;
+              item^.iiLen := tok[pos].len;
+              item^.iiNewAt := 0;
+              item^.iiNewLen := 0;
+              pos := pos + 1;
+              if Accept(tkArrow) then
+                if not Check(tkIdent) then begin
+                  ErrorAtCur;
+                  writeln('expected the new name after ''=>''');
+                  Bail
+                end
+                else begin
+                  item^.iiNewAt := tok[pos].at;
+                  item^.iiNewLen := tok[pos].len;
+                  pos := pos + 1
+                end;
+              Append(ih, it_, item);
+              inner := Accept(tkComma)
+            end
+          end;
+          Expect(tkRParen, ctxImportClose)
+        end
+        else if spec^.isOnly then begin
+          ErrorAtCur;
+          writeln('''only'' introduces the list of what to import, so a ',
+                  'list must follow it');
+          Bail
+        end;
+        spec^.isItems := ih;
+        Append(head, tail, spec);
+        Expect(tkSemi, ctxImportEnd);
+        more := (not aborted) and Check(tkIdent)
+      end
+    end
+  end;
+  ParseImportPart := head
+end;
+
+{ export-part = identifier '=' '(' export-list ')'
+
+  An export-clause names something the module declares; an export-range names
+  two constants of one enumerated type and stands for every principal
+  identifier between them (6.11.2 NOTE 6). Which of the two an item is comes
+  down to whether '..' follows the first name. }
+procedure ParseExportPart(var head, tail: nodePtr);
+var part, item, ih, it_: nodePtr; more, inner: boolean;
+begin
+  Expect(tkExport, ctxNone);
+  more := true;
+  while more and not aborted do begin
+    part := NewNode(nkExportPart, CurLine, CurCol);
+    part^.epItems := nil;
+    part^.epAt := 0;
+    part^.epLen := 0;
+    if not Check(tkIdent) then begin
+      ErrorAtCur;
+      writeln('expected the name of an interface after ''export''');
+      Bail
+    end
+    else begin
+      part^.epAt := tok[pos].at;
+      part^.epLen := tok[pos].len;
+      pos := pos + 1;
+      Expect(tkEq, ctxExportName);
+      Expect(tkLParen, ctxExportOpen);
+      ih := nil;
+      it_ := nil;
+      inner := true;
+      while inner and not aborted do begin
+        item := NewNode(nkExportItem, CurLine, CurCol);
+        item^.eiAt := 0;
+        item^.eiLen := 0;
+        item^.eiLastAt := 0;
+        item^.eiLastLen := 0;
+        item^.eiNewAt := 0;
+        item^.eiNewLen := 0;
+        item^.eiQualAt := 0;
+        item^.eiQualLen := 0;
+        item^.eiLastQualAt := 0;
+        item^.eiLastQualLen := 0;
+        { 6.11.2: `protected` may precede a variable-name, and only one -- it
+          is what makes the importer unable to write to it. }
+        item^.eiProtected := Accept(tkProtected);
+        if not Check(tkIdent) then begin
+          ErrorAtCur;
+          writeln('expected a name in an export list');
+          Bail
+        end
+        else begin
+          item^.eiAt := tok[pos].at;
+          item^.eiLen := tok[pos].len;
+          pos := pos + 1;
+          { A qualified exportable-name. `..` cannot follow an interface name,
+            so one token of lookahead past the dot parts `i.x` from `lo..hi`. }
+          if Check(tkPeriod) and (PeekKind(1) = tkIdent) then begin
+            item^.eiQualAt := item^.eiAt;
+            item^.eiQualLen := item^.eiLen;
+            pos := pos + 1;
+            item^.eiAt := tok[pos].at;
+            item^.eiLen := tok[pos].len;
+            pos := pos + 1
+          end;
+          if Accept(tkDotDot) then
+            if not Check(tkIdent) then begin
+              ErrorAtCur;
+              writeln('expected the last constant of an export range');
+              Bail
+            end
+            else begin
+              item^.eiLastAt := tok[pos].at;
+              item^.eiLastLen := tok[pos].len;
+              pos := pos + 1;
+              if Check(tkPeriod) and (PeekKind(1) = tkIdent) then begin
+                item^.eiLastQualAt := item^.eiLastAt;
+                item^.eiLastQualLen := item^.eiLastLen;
+                pos := pos + 1;
+                item^.eiLastAt := tok[pos].at;
+                item^.eiLastLen := tok[pos].len;
+                pos := pos + 1
+              end
+            end
+          else if Accept(tkArrow) then
+            if not Check(tkIdent) then begin
+              ErrorAtCur;
+              writeln('expected the new name after ''=>''');
+              Bail
+            end
+            else begin
+              item^.eiNewAt := tok[pos].at;
+              item^.eiNewLen := tok[pos].len;
+              pos := pos + 1
+            end;
+          Append(ih, it_, item);
+          inner := Accept(tkComma)
+        end
+      end;
+      Expect(tkRParen, ctxExportClose);
+      part^.epItems := ih;
+      Append(head, tail, part);
+      Expect(tkSemi, ctxExportEnd);
+      more := (not aborted) and Check(tkIdent) and not Check(tkEnd)
+    end
+  end
+end;
+
+{ The declaration parts a module-heading and a module-block share. `headings`
+  says which: a module-heading's procedures are headings with no body, and a
+  module-block's are ordinary declarations. }
+function ParseModuleParts(headings: boolean): nodePtr;
+var b, ph, pt, ch, ct, th, tt, vh, vt: nodePtr; done: boolean;
+begin
+  b := NewNode(nkBlock, CurLine, CurCol);
+  b^.blLabels := nil;
+  b^.blBody := nil;
+  ph := nil; pt := nil;
+  ch := nil; ct := nil;
+  th := nil; tt := nil;
+  vh := nil; vt := nil;
+  b^.blImports := ParseImportPart;
+  done := false;
+  while not done and not aborted do begin
+    if Check(tkConst) then
+      ParseConstPart(ch, ct)
+    else if Check(tkType) then
+      ParseTypePart(th, tt)
+    else if Check(tkVar) then
+      ParseVarPart(vh, vt)
+    else if Check(tkProcedure) then
+      if headings then Append(ph, pt, ParseProcHeadingOnly(false))
+                  else Append(ph, pt, ParseProcOrFunc(false))
+    else if Check(tkFunction) then
+      if headings then Append(ph, pt, ParseProcHeadingOnly(true))
+                  else Append(ph, pt, ParseProcOrFunc(true))
+    else
+      done := true
+  end;
+  b^.blConsts := ch;
+  b^.blTypes := th;
+  b^.blVars := vh;
+  b^.blProcs := ph;
+  ParseModuleParts := b
+end;
+
+{ module-block = an import-part, then any number of constant, type, variable
+  and procedure-and-function declaration parts, then an optional
+  initialization-part and an optional finalization-part, then 'end'.
+
+  It has no statement-part: 6.11.1 gives a module its two `to begin do` and
+  `to end do` parts instead, and each takes a single *statement*. }
+procedure ParseModuleBlock(m: nodePtr);
+begin
+  m^.mdBlock := ParseModuleParts(false);
+  if (not aborted) and Check(tkTo) and (tok[pos + 1].kind = tkBegin) then begin
+    pos := pos + 2;
+    Expect(tkDo, ctxToBegin);
+    m^.mdInit := ParseStatement;
+    Expect(tkSemi, ctxToBegin)
+  end;
+  if (not aborted) and Check(tkTo) and (tok[pos + 1].kind = tkEnd) then begin
+    pos := pos + 2;
+    Expect(tkDo, ctxToEnd);
+    m^.mdFini := ParseStatement;
+    Expect(tkSemi, ctxToEnd)
+  end;
+  if (not aborted) and Check(tkTo) then begin
+    ErrorAtCur;
+    writeln('a module has one ''to begin do'' part and one ''to end do'' ',
+            'part, in that order');
+    Bail
+  end;
+  Expect(tkEnd, ctxModuleBlockClose)
+end;
+
+{ 6.11.1's module-declaration. Which of its three forms this is comes down to
+  the word after the module's name: `interface` gives a heading with no block,
+  `implementation` gives a block with no heading, and neither gives both in one
+  component. Both words are *directives* (6.1.5, 6.1.6) and so ordinary
+  identifiers here, exactly as `forward` is -- which is why modules reserve
+  five words and not seven. }
+function ParseModule: nodePtr;
+var m, head, tail, n: nodePtr; implementation_, more: boolean;
+begin
+  m := NewNode(nkModule, CurLine, CurCol);
+  m^.mdParams := nil;
+  m^.mdExports := nil;
+  m^.mdHeading := nil;
+  m^.mdBlock := nil;
+  m^.mdInit := nil;
+  m^.mdFini := nil;
+  m^.mdHasHeading := false;
+  m^.mdHasBlock := false;
+  m^.mdSym := nil;
+  m^.mdAt := 0;
+  m^.mdLen := 0;
+  pos := pos + 1;   { 'module' }
+
+  if not Check(tkIdent) then begin
+    ErrorAtCur;
+    writeln('expected the module name');
+    Bail
+  end
+  else begin
+    m^.mdAt := tok[pos].at;
+    m^.mdLen := tok[pos].len;
+    pos := pos + 1
+  end;
+
+  implementation_ := false;
+  if (not aborted) and Check(tkIdent) and
+     PoolIsWide(tok[pos].at, tok[pos].len, 'interface       ') then begin
+    pos := pos + 1;
+    m^.mdHasHeading := true
+  end
+  else if (not aborted) and Check(tkIdent) and
+          PoolIsWide(tok[pos].at, tok[pos].len, 'implementation  ') then begin
+    pos := pos + 1;
+    implementation_ := true;
+    m^.mdHasBlock := true
+  end
+  else begin
+    m^.mdHasHeading := true;
+    m^.mdHasBlock := true
+  end;
+
+  if implementation_ then begin
+    { module-identification: the heading was given by an earlier component, so
+      there is no parameter list and no export part to write again. }
+    Expect(tkSemi, ctxImplementation);
+    ParseModuleBlock(m);
+    Expect(tkPeriod, ctxModuleBlockEnd)
+  end
+  else begin
+    head := nil;
+    tail := nil;
+    if Accept(tkLParen) then begin
+      more := true;
+      while more and not aborted do begin
+        if not Check(tkIdent) then begin
+          ErrorAtCur;
+          writeln('expected a module parameter name');
+          Bail
+        end
+        else begin
+          n := NewNode(nkDeclName, CurLine, CurCol);
+          n^.dnAt := tok[pos].at;
+          n^.dnLen := tok[pos].len;
+          Append(head, tail, n);
+          pos := pos + 1;
+          more := Accept(tkComma)
+        end
+      end;
+      Expect(tkRParen, ctxModuleParams)
+    end;
+    m^.mdParams := head;
+    Expect(tkSemi, ctxModuleHeader);
+
+    head := nil;
+    tail := nil;
+    while (not aborted) and Check(tkExport) do
+      ParseExportPart(head, tail);
+    m^.mdExports := head;
+    m^.mdHeading := ParseModuleParts(true);
+    Expect(tkEnd, ctxModuleEnd);
+    if m^.mdHasBlock then begin
+      Expect(tkSemi, ctxModuleHeadEnd);
+      ParseModuleBlock(m);
+      Expect(tkPeriod, ctxModuleBlockEnd)
+    end
+    else
+      Expect(tkPeriod, ctxModuleHeadEnd)
+  end;
+  ParseModule := m
+end;
+
+{ The main-program-declaration, up to the '.' that ends the component. }
+procedure ParseMainProgram;
 var head, tail, n: nodePtr; more: boolean;
 begin
-  progParams := nil;
-  progBlock := nil;
-  progAt := 0;
-  progLen := 0;
-
   Expect(tkProgram, ctxProgramStart);
   if not aborted then
     if not Check(tkIdent) then begin
@@ -3768,7 +4423,56 @@ begin
   Expect(tkSemi, ctxProgramHeader);
 
   progBlock := ParseBlock;
-  Expect(tkPeriod, ctxFinalEnd);
+  Expect(tkPeriod, ctxFinalEnd)
+end;
+
+{ 6.13: a program-block is a sequence of program-components, each ended by '.',
+  exactly one of which is the main-program-declaration. Under ISO 7185 `module`
+  is not a word-symbol, so this loop runs once and the whole production is the
+  one that was here before. }
+procedure ParseProgram;
+var sawMain, done: boolean; count: integer;
+begin
+  progParams := nil;
+  progBlock := nil;
+  progAt := 0;
+  progLen := 0;
+  progModules := nil;
+  progModuleTail := nil;
+  progMainIndex := 0;
+  sawMain := false;
+  count := 0;
+
+  done := false;
+  while not done and not aborted do begin
+    if Check(tkModule) then begin
+      Append(progModules, progModuleTail, ParseModule);
+      count := count + 1
+    end
+    else if Check(tkProgram) then
+      if sawMain then begin
+        ErrorAtCur;
+        writeln('a program has one ''program'' declaration, and this is ',
+                'the second');
+        Bail
+      end
+      else begin
+        progMainIndex := count;
+        ParseMainProgram;
+        sawMain := true
+      end
+    else
+      done := true
+  end;
+
+  if (not aborted) and not sawMain then begin
+    { The whole source was modules, or began with neither word. Either way the
+      message that was here before is the right one: something has to start a
+      program-component, and `program` is the only word that starts the one
+      every program must have. }
+    Expect(tkProgram, ctxProgramStart);
+    Bail
+  end;
   if (not aborted) and not Check(tkEof) then begin
     ErrorAtCur;
     writeln('trailing text after the end of the program')
@@ -4288,6 +4992,13 @@ begin
   s^.initValue := nil;
   s^.isStringSchema := false;
   s^.isBindable := false;
+  s^.isModuleSym := false;
+  s^.stdInputOk := false;
+  s^.stdOutputOk := false;
+  s^.constituents := nil;
+  s^.constitTail := nil;
+  s^.importedFrom := nil;
+  s^.importedTail := nil;
   NewSymbol := s
 end;
 
@@ -4597,8 +5308,13 @@ begin
   { 6.8.4 makes a schema-discriminant a *primary*, not a variable-access: it
     is the value the type was produced with, and there is nowhere to store
     into. `v.n := 3` would be asking a variable to change its type. }
+  { A qualified name is the whole selection, so what it denotes is what
+    decides -- there is no base variable underneath it. }
   else if e^.kind = nkField then
-    IsDesignator := (not e^.fdIsDisc) and IsDesignator(e^.fdBase)
+    if e^.fdQualified <> nil then
+      IsDesignator := IsVariable(e^.fdQualified)
+    else
+      IsDesignator := (not e^.fdIsDisc) and IsDesignator(e^.fdBase)
   { What a pointer points at is a variable however the pointer was obtained,
     so a dereference is a designator even when its base is not. }
   else if e^.kind = nkDeref then IsDesignator := true
@@ -4615,7 +5331,9 @@ function RootDesignator(e: nodePtr): nodePtr;
 begin
   if e = nil then RootDesignator := nil
   else if e^.kind = nkIndex then RootDesignator := RootDesignator(e^.ixBase)
-  else if e^.kind = nkField then RootDesignator := RootDesignator(e^.fdBase)
+  else if e^.kind = nkField then
+    if e^.fdQualified <> nil then RootDesignator := e
+    else RootDesignator := RootDesignator(e^.fdBase)
   else RootDesignator := e
 end;
 
@@ -4636,7 +5354,8 @@ begin
   r := RootDesignator(e);
   sym := nil;
   if r <> nil then
-    if r^.kind = nkVar then sym := r^.vrSym;
+    if r^.kind = nkVar then sym := r^.vrSym
+    else if r^.kind = nkField then sym := r^.fdQualified;
   if (sym = nil) or not sym^.isProtected then
     Threatened := false
   else begin
@@ -4645,13 +5364,19 @@ begin
     { A `with` binding is hidden and its name is a frame slot's, not the
       program's -- so naming it would name something the source never wrote.
       The rule is the same one either way; only the wording differs. }
-    if r^.vrField <> nil then
-      write('the record of an enclosing with statement is a protected ',
-            'parameter, so ')
+    { 6.7.3.1 protects a formal parameter and 6.11.2 a constituent of an
+      interface, and 6.5.1's rule is the same for both -- but the noun is not,
+      and an imported variable was never anybody's parameter. }
+    if (r^.kind = nkVar) and (r^.vrField <> nil) then begin
+      write('the record of an enclosing with statement is a protected ');
+      if sym^.kind = skVar then write('variable, so ')
+                           else write('parameter, so ')
+    end
     else begin
       write('''');
       WritePool(sym^.at, sym^.len);
-      write(''' is a protected parameter, so ')
+      if sym^.kind = skVar then write(''' is a protected variable, so ')
+                           else write(''' is a protected parameter, so ')
     end
   end
 end;
@@ -4686,6 +5411,12 @@ function GenericFromSchema(schema, param: symPtr; d: nodePtr;
   forward;
 procedure CheckStmt(s: nodePtr); forward;
 procedure CheckBlock(b: nodePtr; owner: symPtr); forward;
+{ ISO/IEC 10206:1991 6.11.3's qualified names. Their tables are built with the
+  modules, which are checked after the expressions that may name them. }
+function IsInterfaceName(at, len: integer): boolean; forward;
+function LookupName(qAt, qLen, at, len, line, col: integer): symPtr; forward;
+function LookupQuiet(qAt, qLen, at, len: integer): symPtr; forward;
+procedure CheckImports(specs: nodePtr; owner: symPtr); forward;
 procedure CheckGoto(s: nodePtr); forward;
 procedure CheckLabeled(s: nodePtr); forward;
 
@@ -4729,6 +5460,15 @@ begin
         res.realNeg := false;
         ok := true
       end;
+      { A constant reached through an interface. 6.11.3 makes the imported
+        identifier "a constant-identifier that denotes the value", so it is as
+        constant as the one the module wrote. }
+      nkField:
+        if e^.fdQualified <> nil then
+          if e^.fdQualified^.kind = skConst then begin
+            res := e^.fdQualified^;
+            ok := true
+          end;
       nkChar: begin
         res.stype := charType;
         res.charVal := e^.chVal;
@@ -4766,13 +5506,14 @@ begin
                 ok := true
               end
           end;
-      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkField, nkDeref, nkBinary,
+      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref, nkBinary,
       nkCall,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
       nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
-      nkProcDecl, nkBlock:
+      nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+      nkImportSpec, nkImportItem:
         ok := false
     end;
   EvalConst := ok
@@ -5761,7 +6502,8 @@ begin
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
       nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
-      nkPointer, nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock: ;
+      nkPointer, nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
+      nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem: ;
     end
   end
 end;
@@ -6565,7 +7307,8 @@ begin
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
-      nkProcDecl, nkLabelDecl, nkBlock:
+      nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+      nkImportSpec, nkImportItem:
         Nonvarying := false
     end
 end;
@@ -6687,10 +7430,17 @@ begin
     t := nil;
     case d^.kind of
       nkNamed: begin
-        t := BuiltinType(d^.nmAt, d^.nmLen);
-        if t = nil then begin
-          s := Lookup(d^.nmAt, d^.nmLen);
-          if (s <> nil) and (s^.kind = skType) then
+        { A qualified name reaches only what an import brought, so a required
+          type-identifier is not among the answers: `i.integer` is not
+          `integer`. }
+        if d^.nmQualLen > 0 then t := nil
+        else t := BuiltinType(d^.nmAt, d^.nmLen);
+        if (t = nil) or (d^.nmQualLen > 0) then begin
+          s := LookupName(d^.nmQualAt, d^.nmQualLen, d^.nmAt, d^.nmLen,
+                          d^.line, d^.col);
+          if (s = nil) and (d^.nmQualLen > 0) then
+            t := intType
+          else if (s <> nil) and (s^.kind = skType) then
             t := s^.stype
           { 6.4.8: a schema denotes a type only once its discriminants are
             given, so the message says what is missing rather than that the
@@ -6722,8 +7472,17 @@ begin
       nkSetOf:    t := ResolveSet(d);
       nkInquiry:  t := ResolveInquiry(d);
       nkSchema: begin
-        s := Lookup(d^.scAt, d^.scLen);
-        if (s = nil) or (s^.kind <> skSchema) then begin
+        s := LookupName(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen,
+                        d^.line, d^.col);
+        if (s = nil) and (d^.scQualLen > 0) then begin
+          n := d^.scArgs;
+          while n <> nil do begin
+            CheckExpr(n);
+            n := n^.next
+          end;
+          t := intType
+        end
+        else if (s = nil) or (s^.kind <> skSchema) then begin
           ErrorAt(d^.line, d^.col);
           write('unknown schema ''');
           WritePool(d^.scAt, d^.scLen);
@@ -6745,7 +7504,8 @@ begin
       nkBinary, nkUnary, nkCall, nkEmpty, nkAssign, nkWrite, nkRead,
       nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall, nkWith, nkCase,
       nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName, nkConstDecl,
-      nkTypeDecl, nkProcDecl, nkBlock:
+      nkTypeDecl, nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+      nkImportSpec, nkImportItem:
         t := intType
     end;
     dynamicVarFor := savedDynamic;
@@ -6762,13 +7522,28 @@ end;
   never resolving a name, so the defaulted file arrives as an ordinary resolved
   designator like any other. }
 function StandardFileRef(wantInput: boolean; line, col: integer): nodePtr;
-var f: symPtr; r: nodePtr;
+var f, root: symPtr; r: nodePtr;
 begin
-  if wantInput then f := stdInput else f := stdOutput;
+  if curModule <> nil then root := curModule else root := programSym;
+  f := nil;
+  if wantInput then begin
+    if root^.stdInputOk then f := stdInput
+  end
+  else if root^.stdOutputOk then f := stdOutput;
   if f = nil then begin
     ErrorAt(line, col);
     if wantInput then write('''input''') else write('''output''');
-    writeln(' must be listed as a program parameter to use it');
+    { 6.11.4.2 gives Extended Pascal three more ways to make the file
+      implicitly accessible than 6.10's one, so the message lists them --
+      otherwise it names the only remedy a module cannot use. }
+    if langStd = stdExtended then begin
+      write(' must be listed as a program parameter or a module parameter, ',
+            'or imported through ');
+      if wantInput then write('StandardInput') else write('StandardOutput');
+      writeln(', to use it')
+    end
+    else
+      writeln(' must be listed as a program parameter to use it');
     StandardFileRef := nil
   end
   else begin
@@ -7554,6 +8329,28 @@ procedure CheckCall(c: nodePtr);
 var sym: symPtr; a, def, last, root: nodePtr; t: typePtr;
     n, at2, len2: integer; bad: boolean;
 begin
+  { 6.11.3's qualified name. A required function is never one of the answers,
+    so this returns whatever the interface holds or nothing at all. }
+  if c^.clQualLen > 0 then begin
+    sym := LookupName(c^.clQualAt, c^.clQualLen, c^.clAt, c^.clLen,
+                      c^.line, c^.col);
+    c^.ntype := intType;
+    if sym <> nil then
+      if (not IsInvocable(sym)) or (ResultTypeOf(sym) = nil) then begin
+        ErrorAt(c^.line, c^.col);
+        write('''');
+        WritePool(c^.clQualAt, c^.clQualLen);
+        write('.');
+        WritePool(c^.clAt, c^.clLen);
+        writeln(''' is not a function')
+      end
+      else begin
+        c^.clSym := sym;
+        c^.ntype := ResultTypeOf(sym);
+        CheckArguments(sym, c^.clArgs, c^.line, c^.col)
+      end
+  end
+  else begin
   { A user-defined function shadows nothing built in: names are resolved in the
     scope chain first, so a local `abs` would win. }
   sym := Lookup(c^.clAt, c^.clLen);
@@ -7896,10 +8693,11 @@ begin
       end
     end
   end
+  end
 end;
 
 procedure CheckExpr;
-var t, b: typePtr; f: fieldPtr; binding: symPtr;
+var t, b: typePtr; f: fieldPtr; binding: symPtr; qual: nodePtr;
     p, ds: symListPtr; tv: numPtr; found: boolean;
 begin
   if e <> nil then
@@ -7996,6 +8794,47 @@ begin
       end;
 
       nkField: begin
+        { 6.11.3's qualified name. The syntax is a field selection and only
+          the symbol the base resolves to tells the two apart -- so this is
+          asked before the base is checked, since an interface-identifier has
+          no type and checking it would report that first. }
+        qual := nil;
+        if e^.fdBase^.kind = nkVar then
+          if (e^.fdBase^.vrSym = nil) and
+             IsInterfaceName(e^.fdBase^.vrAt, e^.fdBase^.vrLen) then begin
+            qual := e^.fdBase;
+            e^.fdQualified := LookupName(qual^.vrAt, qual^.vrLen,
+                                         e^.fdAt, e^.fdLen, e^.line, e^.col);
+            e^.ntype := intType;
+            if e^.fdQualified <> nil then
+              if (e^.fdQualified^.kind = skConst) or
+                 IsVariable(e^.fdQualified) then
+                e^.ntype := e^.fdQualified^.stype
+              else if IsInvocable(e^.fdQualified) and
+                      (ResultTypeOf(e^.fdQualified) <> nil) then
+                { A parameterless function written without an argument list.
+                  There is no call node to make here, so the selection itself
+                  is the call and codegen emits one. }
+                if e^.fdQualified^.params <> nil then begin
+                  ErrorAt(e^.line, e^.col);
+                  write('''');
+                  WritePool(qual^.vrAt, qual^.vrLen);
+                  write('.');
+                  WritePool(e^.fdAt, e^.fdLen);
+                  writeln(''' needs its arguments')
+                end
+                else
+                  e^.ntype := ResultTypeOf(e^.fdQualified)
+              else begin
+                ErrorAt(e^.line, e^.col);
+                write('''');
+                WritePool(qual^.vrAt, qual^.vrLen);
+                write('.');
+                WritePool(e^.fdAt, e^.fdLen);
+                writeln(''' is not a value')
+              end
+          end;
+        if qual = nil then begin
         CheckExpr(e^.fdBase);
         b := e^.fdBase^.ntype;
         { 6.8.4: `v.d` where v possesses a type produced from a schema and d
@@ -8081,6 +8920,7 @@ begin
             e^.fdResolved := f;
             e^.ntype := f^.ftype
           end
+        end
         end
       end;
 
@@ -8176,7 +9016,8 @@ begin
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
       nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
-      nkProcDecl, nkBlock:
+      nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+      nkImportSpec, nkImportItem:
         { not an expression }
     end
 end;
@@ -8974,7 +9815,25 @@ begin
       nkWrite: CheckWrite(s);
       nkRead:  CheckRead(s);
 
-      nkProcCall: begin
+      nkProcCall: if s^.pcQualLen > 0 then begin
+        { 6.11.3's qualified name in a procedure-statement. }
+        sym := LookupName(s^.pcQualAt, s^.pcQualLen, s^.pcAt, s^.pcLen,
+                          s^.line, s^.col);
+        if sym <> nil then
+          if (not IsInvocable(sym)) or (ResultTypeOf(sym) <> nil) then begin
+            ErrorAt(s^.line, s^.col);
+            write('''');
+            WritePool(s^.pcQualAt, s^.pcQualLen);
+            write('.');
+            WritePool(s^.pcAt, s^.pcLen);
+            writeln(''' is not a procedure')
+          end
+          else begin
+            s^.pcSym := sym;
+            CheckArguments(sym, s^.pcArgs, s^.line, s^.col)
+          end
+      end
+      else begin
         sym := Lookup(s^.pcAt, s^.pcLen);
         { A user-declared procedure of the same name wins, exactly as it does
           for the required functions in CheckCall. }
@@ -9089,7 +9948,8 @@ begin
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
-      nkBlock:
+      nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
+      nkImportItem:
         { not a statement }
     end
 end;
@@ -9611,11 +10471,340 @@ begin
   labelScope := labelScope^.outer
 end;
 
-procedure CheckBlock;
-var d, g, n, init: nodePtr; s, schema, named, first: symPtr; t: typePtr;
-    value: symbol; outerPath: stmtPathPtr;
+{ ------------------------------------------- ISO/IEC 10206:1991 6.11: modules }
+
+{ ISO 7185 6.10's `input` and `output`, and 6.11.4.2's. There is one of each in
+  a program however many blocks reach it, so it is created once and lives in
+  the *program's* frame -- which a module can address because a level-0 frame
+  is a global (ADR-0053), and could not otherwise, since a module's static
+  chain says nothing about the program. }
+function EnsureStdFile(wantInput: boolean): symPtr;
+var root: symPtr; at, len: integer;
 begin
-  CheckLabelPart(b, owner);
+  { 6.11.4.2's accessibility is per block, so whichever block asked gets it. }
+  if curModule <> nil then root := curModule else root := programSym;
+  if wantInput then root^.stdInputOk := true
+               else root^.stdOutputOk := true;
+  if wantInput then begin
+    if stdInput = nil then begin
+      InternWord('input    ', at, len);
+      stdInput := AddHiddenVar(at, len, skVar, textType, programSym);
+      stdInput^.binding := fbStdInput
+    end;
+    EnsureStdFile := stdInput
+  end
+  else begin
+    if stdOutput = nil then begin
+      InternWord('output   ', at, len);
+      stdOutput := AddHiddenVar(at, len, skVar, textType, programSym);
+      stdOutput^.binding := fbStdOutput
+    end;
+    EnsureStdFile := stdOutput
+  end
+end;
+
+{ Put an existing symbol into the current scope under a spelling. An import
+  does this, and so does a program or module parameter naming a required text
+  file -- in each case the symbol was made elsewhere. }
+procedure BindName(at, len: integer; s: symPtr; line, col: integer);
+begin
+  if LookupInScope(at, len) <> nil then begin
+    ErrorAt(line, col);
+    write('''');
+    WritePool(at, len);
+    writeln(''' is already declared in this block')
+  end
+  else
+    Bind(at, len, s)
+end;
+
+function FindInterface(at, len: integer): ifacePtr;
+var i, found: ifacePtr;
+begin
+  found := nil;
+  i := interfaces;
+  while (i <> nil) and (found = nil) do begin
+    if PoolSame(i^.at, i^.len, at, len) then found := i;
+    i := i^.next
+  end;
+  FindInterface := found
+end;
+
+{ 6.11.4.2's two required interfaces. Each has one constituent, and the
+  constituent *is* the required text file -- so importing `StandardOutput` and
+  listing `output` as a program parameter reach the same variable, which is
+  what makes them alternatives rather than two outputs. }
+procedure InstallRequiredInterfaces;
+var i: ifacePtr; c: constitPtr; at, len: integer;
+begin
+  if langStd = stdExtended then begin
+    new(i);
+    InternWide('standardinput   ', i^.at, i^.len);
+    i^.owner := nil;
+    i^.next := nil;
+    new(c);
+    InternWord('input    ', c^.at, c^.len);
+    c^.sym := nil;
+    c^.isProtected := false;
+    c^.next := nil;
+    i^.items := c;
+    i^.itemTail := c;
+    interfaces := i;
+    interfaceTail := i;
+    new(i);
+    InternWide('standardoutput  ', i^.at, i^.len);
+    i^.owner := nil;
+    i^.next := nil;
+    new(c);
+    InternWord('output   ', c^.at, c^.len);
+    c^.sym := nil;
+    c^.isProtected := false;
+    c^.next := nil;
+    i^.items := c;
+    i^.itemTail := c;
+    interfaceTail^.next := i;
+    interfaceTail := i;
+    at := 0;
+    len := 0
+  end
+end;
+
+{ The imported form of a constituent. A variable arrives as a *copy* of the
+  symbol: the spelling and the protection belong to the import and not to the
+  module's own declaration, and the copy names the same storage because owner,
+  level and frame index are what an address is computed from. Everything else
+  -- a constant, a type, a schema, a procedure, a function -- is shared,
+  because nothing about it can differ between the two ends. }
+function ImportedSymbol(c: constitPtr; at, len, line, col: integer): symPtr;
+var alias: symPtr;
+begin
+  if c^.sym = nil then begin
+    ErrorAt(line, col);
+    write('''');
+    WritePool(at, len);
+    writeln(''' cannot be imported');
+    ImportedSymbol := nil
+  end
+  else if (not IsVariable(c^.sym)) or
+          (PoolSame(at, len, c^.sym^.at, c^.sym^.len) and
+           not c^.isProtected) then
+    ImportedSymbol := c^.sym
+  else begin
+    new(alias);
+    alias^ := c^.sym^;
+    alias^.at := at;
+    alias^.len := len;
+    alias^.isProtected := c^.isProtected or c^.sym^.isProtected;
+    ImportedSymbol := alias
+  end
+end;
+
+{ Whether a name denotes an imported interface. It is what tells a qualified
+  name from an ordinary field selection, and it is a question about the
+  *symbol* -- the syntax of the two is identical. }
+function IsInterfaceName;
+var s: symPtr;
+begin
+  s := Lookup(at, len);
+  IsInterfaceName := (s <> nil) and (s^.kind = skInterface)
+end;
+
+{ The lookup with nothing reported. Used where a name is being *probed* rather
+  than resolved, so that the one place that resolves it says whatever has to be
+  said exactly once. }
+function LookupQuiet;
+var iface, found: symPtr; c: constitPtr;
+begin
+  if qLen = 0 then
+    LookupQuiet := Lookup(at, len)
+  else begin
+    found := nil;
+    iface := Lookup(qAt, qLen);
+    if iface <> nil then
+      if iface^.kind = skInterface then begin
+        c := iface^.constituents;
+        while c <> nil do begin
+          if PoolSame(c^.at, c^.len, at, len) then found := c^.sym;
+          c := c^.next
+        end
+      end;
+    LookupQuiet := found
+  end
+end;
+
+{ A name that may be qualified. With no qualifier this is an ordinary lookup;
+  with one it is 6.11.3's `i.x`, which reaches only what that
+  import-specification brought and never what the module it came from also
+  declares. }
+function LookupName;
+var iface, found: symPtr; c: constitPtr;
+begin
+  if qLen = 0 then
+    LookupName := Lookup(at, len)
+  else begin
+    found := nil;
+    iface := Lookup(qAt, qLen);
+    if iface = nil then begin
+      ErrorAt(line, col);
+      write('''');
+      WritePool(qAt, qLen);
+      writeln(''' is not declared')
+    end
+    else if iface^.kind <> skInterface then begin
+      ErrorAt(line, col);
+      write('''');
+      WritePool(qAt, qLen);
+      writeln(''' does not name an imported interface')
+    end
+    else begin
+      c := iface^.constituents;
+      while c <> nil do begin
+        if PoolSame(c^.at, c^.len, at, len) then found := c^.sym;
+        c := c^.next
+      end;
+      if found = nil then begin
+        ErrorAt(line, col);
+        write('''');
+        WritePool(at, len);
+        write(''' was not imported through interface ''');
+        WritePool(qAt, qLen);
+        writeln('''')
+      end
+    end;
+    LookupName := found
+  end
+end;
+
+{ 6.11.3's import-specification. The three modifiers decide only *which*
+  constituents arrive and under what spelling; what arrives is the module's own
+  symbol, so an imported procedure is the procedure and an imported variable is
+  the variable. }
+procedure CheckImports;
+var spec, item: nodePtr; i: ifacePtr; c, ic: constitPtr; ifaceSym, s: symPtr;
+    known, named: boolean; e: symListPtr; at, len: integer;
+begin
+  spec := specs;
+  while spec <> nil do begin
+    i := FindInterface(spec^.isAt, spec^.isLen);
+    if i = nil then begin
+      ErrorAt(spec^.line, spec^.col);
+      write('no interface named ''');
+      WritePool(spec^.isAt, spec^.isLen);
+      writeln(''' has been exported')
+    end
+    else begin
+      { The two required interfaces have no module and one required
+        constituent each, and the constituent *is* the text file -- so
+        importing one is what makes it implicitly accessible here. }
+      if PoolIsWide(i^.at, i^.len, 'standardinput   ') then
+        i^.items^.sym := EnsureStdFile(true)
+      else if PoolIsWide(i^.at, i^.len, 'standardoutput  ') then
+        i^.items^.sym := EnsureStdFile(false);
+
+      if (i^.owner <> nil) and (i^.owner <> owner) then begin
+        known := false;
+        e := owner^.importedFrom;
+        while e <> nil do begin
+          if e^.sym = i^.owner then known := true;
+          e := e^.next
+        end;
+        if not known then
+          AppendSym(owner^.importedFrom, owner^.importedTail, i^.owner)
+      end;
+
+      ifaceSym := NewSymbol;
+      ifaceSym^.at := spec^.isAt;
+      ifaceSym^.len := spec^.isLen;
+      ifaceSym^.kind := skInterface;
+
+      { Which constituents are named, and under what spelling. `only` makes
+        the list exhaustive; without it the list only renames, and everything
+        else arrives under its own name (6.11.3 d). }
+      item := spec^.isItems;
+      while item <> nil do begin
+        c := nil;
+        ic := i^.items;
+        while ic <> nil do begin
+          if PoolSame(ic^.at, ic^.len, item^.iiAt, item^.iiLen) then c := ic;
+          ic := ic^.next
+        end;
+        if c = nil then begin
+          ErrorAt(item^.line, item^.col);
+          write('interface ''');
+          WritePool(spec^.isAt, spec^.isLen);
+          write(''' has no constituent named ''');
+          WritePool(item^.iiAt, item^.iiLen);
+          writeln('''')
+        end
+        else begin
+          if item^.iiNewLen > 0 then begin
+            at := item^.iiNewAt;
+            len := item^.iiNewLen
+          end
+          else begin
+            at := c^.at;
+            len := c^.len
+          end;
+          s := ImportedSymbol(c, at, len, spec^.line, spec^.col);
+          new(ic);
+          ic^.at := at;
+          ic^.len := len;
+          ic^.sym := s;
+          ic^.isProtected := c^.isProtected;
+          ic^.next := nil;
+          if ifaceSym^.constituents = nil then ifaceSym^.constituents := ic
+          else ifaceSym^.constitTail^.next := ic;
+          ifaceSym^.constitTail := ic;
+          { 6.11.3's last paragraph: with an access-qualifier the
+            defining-point is for the import-specification alone, so the name
+            is reachable only as `i.x` and never bare. }
+          if (not spec^.isQualified) and (s <> nil) then
+            BindName(at, len, s, spec^.line, spec^.col)
+        end;
+        item := item^.next
+      end;
+      if not spec^.isOnly then begin
+        ic := i^.items;
+        while ic <> nil do begin
+          named := false;
+          item := spec^.isItems;
+          while item <> nil do begin
+            if PoolSame(ic^.at, ic^.len, item^.iiAt, item^.iiLen) then
+              named := true;
+            item := item^.next
+          end;
+          if not named then begin
+            s := ImportedSymbol(ic, ic^.at, ic^.len, spec^.line, spec^.col);
+            new(c);
+            c^.at := ic^.at;
+            c^.len := ic^.len;
+            c^.sym := s;
+            c^.isProtected := ic^.isProtected;
+            c^.next := nil;
+            if ifaceSym^.constituents = nil then ifaceSym^.constituents := c
+            else ifaceSym^.constitTail^.next := c;
+            ifaceSym^.constitTail := c;
+            if (not spec^.isQualified) and (s <> nil) then
+              BindName(c^.at, c^.len, s, spec^.line, spec^.col)
+          end;
+          ic := ic^.next
+        end
+      end;
+      { The interface-identifier itself is introduced whether or not the
+        import was qualified, so `i.x` is always available. }
+      BindName(spec^.isAt, spec^.isLen, ifaceSym, spec^.line, spec^.col)
+    end;
+    spec := spec^.next
+  end
+end;
+
+{ The constant, type and variable definition parts. Shared by a block and by
+  both halves of a module, which have the same three parts and differ only in
+  what may surround them. }
+procedure CheckDeclarations(b: nodePtr; owner: symPtr);
+var d, g, n, init: nodePtr; s, schema, named, first: symPtr; t: typePtr;
+    value: symbol;
+begin
   d := b^.blConsts;
   while d <> nil do begin
     CheckExpr(d^.kdValue);
@@ -9679,7 +10868,8 @@ begin
       as before. }
     schema := nil;
     if g^.grType^.kind = nkSchema then begin
-      named := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
+      named := LookupQuiet(g^.grType^.scQualAt, g^.grType^.scQualLen,
+                           g^.grType^.scAt, g^.grType^.scLen);
       if named <> nil then
         if named^.kind = skSchema then schema := named
     end;
@@ -9690,6 +10880,17 @@ begin
       dynamicVarFor := first;
       first^.stype := ResolveType(g^.grType);
       dynamicVarFor := nil;
+      { 6.2.3.2 evaluates the discriminants when the block is entered and the
+        storage they size lives as long as the activation (ADR-0041). A
+        module's activation outlives the function that commences it, so there
+        is nowhere on the stack to put that storage -- the tuple has to be
+        constant here, as it is everywhere except a block's own variables. }
+      if owner^.isModuleSym and IsGeneric(first^.stype) then begin
+        ErrorAt(n^.line, n^.col);
+        writeln('the discriminants of a module''s variable must be ',
+                'constants, because a module''s activation lasts as long as ',
+                'the program')
+      end;
       n := n^.next;
       while n <> nil do begin
         s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, first^.stype, owner,
@@ -9725,6 +10926,221 @@ begin
     end;
     g := g^.next
   end;
+
+end;
+
+{ 6.11.2's export-part. The interface it names is a region of its own, so
+  building it adds nothing to the module's scope: an exported name stays
+  exactly as visible inside the module as it was, and becomes reachable
+  elsewhere only through an import-specification. }
+function ExportHas(i: ifacePtr; at, len: integer): boolean;
+var c: constitPtr; found: boolean;
+begin
+  found := false;
+  c := i^.items;
+  while c <> nil do begin
+    if PoolSame(c^.at, c^.len, at, len) then found := true;
+    c := c^.next
+  end;
+  ExportHas := found
+end;
+
+procedure AddConstituent(i: ifacePtr; at, len: integer; s: symPtr;
+                         prot: boolean);
+var c: constitPtr;
+begin
+  new(c);
+  c^.at := at;
+  c^.len := len;
+  c^.sym := s;
+  c^.isProtected := prot;
+  c^.next := nil;
+  if i^.items = nil then i^.items := c else i^.itemTail^.next := c;
+  i^.itemTail := c
+end;
+
+procedure AddExportItem(i: ifacePtr; item: nodePtr);
+var lo, hi, s: symPtr; enumBase, loBase, hiBase: typePtr;
+    v, at, len, k: integer; nm: namePtr;
+begin
+  if item^.eiLastLen > 0 then begin
+    { An export-range. 6.11.2 NOTE 6: it is shorthand for listing the
+      *principal* identifier of every value in the range -- the names the
+      enumerated type was defined with, not the two written here, which serve
+      only to say where the range starts and ends. }
+    lo := LookupName(item^.eiQualAt, item^.eiQualLen, item^.eiAt, item^.eiLen,
+                     item^.line, item^.col);
+    hi := LookupName(item^.eiLastQualAt, item^.eiLastQualLen,
+                     item^.eiLastAt, item^.eiLastLen, item^.line, item^.col);
+    if (lo = nil) or (hi = nil) then begin
+      ErrorAt(item^.line, item^.col);
+      writeln('an export range is written between two constants')
+    end
+    else if (lo^.kind <> skConst) or (hi^.kind <> skConst) then begin
+      ErrorAt(item^.line, item^.col);
+      writeln('an export range is written between two constants')
+    end
+    else if (lo^.stype = nil) or (hi^.stype = nil) then begin
+      ErrorAt(item^.line, item^.col);
+      writeln('an export range runs between two values of one enumerated type')
+    end
+    else begin
+      loBase := Base(lo^.stype);
+      hiBase := Base(hi^.stype);
+      if (loBase^.kind <> tyEnum) or (loBase <> hiBase) then begin
+        ErrorAt(item^.line, item^.col);
+        writeln('an export range runs between two values of one enumerated ',
+                'type')
+      end
+      else if lo^.intVal > hi^.intVal then begin
+        ErrorAt(item^.line, item^.col);
+        writeln('the first constant of an export range comes after the last')
+      end
+      else begin
+      enumBase := loBase;
+      v := lo^.intVal;
+      while v <= hi^.intVal do begin
+        nm := enumBase^.enumNames;
+        at := 0;
+        len := 0;
+        k := 0;
+        while nm <> nil do begin
+          if k = v then begin
+            at := nm^.at;
+            len := nm^.len
+          end;
+          k := k + 1;
+          nm := nm^.next
+        end;
+        s := Lookup(at, len);
+        if (s = nil) or (len = 0) then begin
+          { 6.11.2 a): the range must be within the scope of a defining-point
+            of the value's principal identifier. Not importing the name, or
+            redeclaring it, is what takes it away. }
+          ErrorAt(item^.line, item^.col);
+          write('''');
+          WritePool(at, len);
+          writeln(''' does not name the value it names in the type, so the ',
+                  'export range cannot export it')
+        end
+        else if (s^.kind <> skConst) or (s^.intVal <> v) or
+                (Base(s^.stype) <> enumBase) then begin
+          { 6.11.2 a): the range must be within the scope of a defining-point
+            of the value's principal identifier. Redeclaring the name in the
+            module is what takes it away. }
+          ErrorAt(item^.line, item^.col);
+          write('''');
+          WritePool(at, len);
+          writeln(''' does not name the value it names in the type, so the ',
+                  'export range cannot export it')
+        end
+        else if not ExportHas(i, at, len) then
+          AddConstituent(i, at, len, s, false);
+        v := v + 1
+      end
+      end
+    end
+  end
+  else begin
+    s := LookupName(item^.eiQualAt, item^.eiQualLen, item^.eiAt, item^.eiLen,
+                    item^.line, item^.col);
+    if s = nil then begin
+      { A qualified name that missed has already been reported by name. }
+      if item^.eiQualLen = 0 then begin
+        ErrorAt(item^.line, item^.col);
+        write('''');
+        WritePool(item^.eiAt, item^.eiLen);
+        writeln(''' is not declared, so it cannot be exported')
+      end
+    end
+    else if s^.kind = skInterface then begin
+      ErrorAt(item^.line, item^.col);
+      write('''');
+      WritePool(item^.eiAt, item^.eiLen);
+      writeln(''' names an interface, and an interface is not a ',
+              'constituent of one')
+    end
+    else if item^.eiProtected and not IsVariable(s) then begin
+      { 6.11.2: `protected` qualifies a variable-name, and only one. }
+      ErrorAt(item^.line, item^.col);
+      write('only a variable can be exported protected, and ''');
+      WritePool(item^.eiAt, item^.eiLen);
+      writeln(''' is not one')
+    end
+    else if item^.eiProtected and (s^.stype <> nil) and
+            not Protectable(s^.stype) then begin
+      ErrorAt(item^.line, item^.col);
+      write('a protected variable cannot be ');
+      WriteTypeName(s^.stype);
+      writeln(', because a file or a pointer in it would let the importer ',
+              'change what it reaches')
+    end
+    else begin
+      if item^.eiNewLen > 0 then begin
+        at := item^.eiNewAt;
+        len := item^.eiNewLen
+      end
+      else begin
+        at := item^.eiAt;
+        len := item^.eiLen
+      end;
+      if ExportHas(i, at, len) then begin
+        ErrorAt(item^.line, item^.col);
+        write('interface ''');
+        WritePool(i^.at, i^.len);
+        write(''' already has a constituent named ''');
+        WritePool(at, len);
+        writeln('''')
+      end
+      else
+        { A variable that was already protected -- an imported protected
+          constituent re-exported -- stays protected however this is
+          written. }
+        AddConstituent(i, at, len, s,
+                       item^.eiProtected or s^.isProtected)
+    end
+  end
+end;
+
+procedure CheckExports(m: nodePtr; owner: symPtr);
+var part, item: nodePtr; i: ifacePtr;
+begin
+  part := m^.mdExports;
+  while part <> nil do begin
+    if FindInterface(part^.epAt, part^.epLen) <> nil then begin
+      ErrorAt(part^.line, part^.col);
+      write('interface ''');
+      WritePool(part^.epAt, part^.epLen);
+      writeln(''' is already exported')
+    end
+    else begin
+      new(i);
+      i^.at := part^.epAt;
+      i^.len := part^.epLen;
+      i^.owner := owner;
+      i^.items := nil;
+      i^.itemTail := nil;
+      i^.next := nil;
+      item := part^.epItems;
+      while item <> nil do begin
+        AddExportItem(i, item);
+        item := item^.next
+      end;
+      if interfaces = nil then interfaces := i
+      else interfaceTail^.next := i;
+      interfaceTail := i
+    end;
+    part := part^.next
+  end
+end;
+
+procedure CheckBlock;
+var d: nodePtr; outerPath: stmtPathPtr;
+begin
+  { 6.2.1 puts the import-part at the head of every block. }
+  CheckImports(b^.blImports, owner);
+  CheckLabelPart(b, owner);
+  CheckDeclarations(b, owner);
 
   { The variables exist now, so the program header's parameters can be matched
     against them -- before the statements, so a use of an unbound file is
@@ -9862,8 +11278,349 @@ begin
   end
 end;
 
+function FindModule(at, len: integer): modRecPtr;
+var m, found: modRecPtr;
+begin
+  found := nil;
+  m := modules;
+  while (m <> nil) and (found = nil) do begin
+    if PoolSame(m^.at, m^.len, at, len) then found := m;
+    m := m^.next
+  end;
+  FindModule := found
+end;
+
+procedure CheckModuleHeading(m: nodePtr; info: modRecPtr);
+var saveCurrent, saveModule, s: symPtr; p, d: nodePtr; mark: entryPtr;
+begin
+  saveCurrent := currentProc;
+  saveModule := curModule;
+  currentProc := info^.sym;
+  curModule := info^.sym;
+  mark := scopeTop;
+  scopeDepth := scopeDepth + 1;
+
+  { 6.11.1: a module-parameter named `input` or `output` denotes the required
+    text file, and is what makes it implicitly accessible in the module
+    (6.11.4.2 d). Any other spelling must be a variable the module declares,
+    and this compiler binds it to nothing -- NOTE 6 permits that outright. }
+  p := m^.mdParams;
+  while p <> nil do begin
+    if PoolIs(p^.dnAt, p^.dnLen, 'input    ') then
+      BindName(p^.dnAt, p^.dnLen, EnsureStdFile(true), p^.line, p^.col)
+    else if PoolIs(p^.dnAt, p^.dnLen, 'output   ') then
+      BindName(p^.dnAt, p^.dnLen, EnsureStdFile(false), p^.line, p^.col);
+    p := p^.next
+  end;
+
+  CheckImports(m^.mdHeading^.blImports, info^.sym);
+  CheckDeclarations(m^.mdHeading, info^.sym);
+  d := m^.mdHeading^.blProcs;
+  while d <> nil do begin
+    DeclareProcHeading(d, info^.sym);
+    d := d^.next
+  end;
+
+  { 6.11.1: a module-parameter that is neither `input` nor `output` "either
+    shall be local to the module or shall be an imported variable-identifier
+    that is a module-parameter". Its binding to anything outside the program is
+    implementation-defined, and NOTE 6 says one need not be bound at all --
+    which is what this compiler does with it. }
+  p := m^.mdParams;
+  while p <> nil do begin
+    if not (PoolIs(p^.dnAt, p^.dnLen, 'input    ') or
+            PoolIs(p^.dnAt, p^.dnLen, 'output   ')) then begin
+      s := Lookup(p^.dnAt, p^.dnLen);
+      if (s = nil) or not IsVariable(s) then begin
+        ErrorAt(p^.line, p^.col);
+        write('the module parameter ''');
+        WritePool(p^.dnAt, p^.dnLen);
+        writeln(''' is not declared as a variable in this module')
+      end
+    end;
+    p := p^.next
+  end;
+
+  { The export parts are resolved last although they are written first: an
+    export-clause names something the module declares, and 6.11.2's example 2
+    exports a type defined below the `export` that names it. }
+  CheckExports(m, info^.sym);
+
+  { Every name the heading defined is also a defining-point of the block
+    (6.2.2.12), and the block may be a separate program-component -- so the
+    scope is kept rather than discarded. }
+  info^.savedTop := scopeTop;
+  info^.savedDepth := scopeDepth;
+  scopeTop := mark;
+  scopeDepth := scopeDepth - 1;
+  currentProc := saveCurrent;
+  curModule := saveModule
+end;
+
+procedure CheckModuleBlock(m: nodePtr; info: modRecPtr);
+var saveCurrent, saveModule: symPtr; d: nodePtr; mark: entryPtr;
+    saveDepth: integer; outerPath: stmtPathPtr; sc: labelScopePtr;
+begin
+  saveCurrent := currentProc;
+  saveModule := curModule;
+  currentProc := info^.sym;
+  curModule := info^.sym;
+  mark := scopeTop;
+  saveDepth := scopeDepth;
+  scopeTop := info^.savedTop;
+  scopeDepth := info^.savedDepth;
+
+  CheckImports(m^.mdBlock^.blImports, info^.sym);
+  CheckDeclarations(m^.mdBlock, info^.sym);
+
+  d := m^.mdBlock^.blProcs;
+  while d <> nil do begin
+    DeclareProcHeading(d, info^.sym);
+    if d^.pdBody <> nil then CheckProcBody(d);
+    d := d^.next
+  end;
+  d := m^.mdBlock^.blProcs;
+  while d <> nil do begin
+    if d^.pdSym <> nil then
+      if not d^.pdSym^.defined then begin
+        ErrorAt(d^.line, d^.col);
+        write('''');
+        WritePool(d^.pdAt, d^.pdLen);
+        writeln(''' was declared forward but never given a body')
+      end;
+    d := d^.next
+  end;
+  { A heading that promised a body and never got one. The heading may be a
+    different program-component from this block, so it is reached through the
+    module's record rather than through `m`. The message says `heading` rather
+    than `forward`, because nothing here was written forward. }
+  if info^.headingDecl <> nil then begin
+    d := info^.headingDecl^.mdHeading^.blProcs;
+    while d <> nil do begin
+      if d^.pdSym <> nil then
+        if not d^.pdSym^.defined then begin
+          ErrorAt(d^.line, d^.col);
+          write('''');
+          WritePool(d^.pdAt, d^.pdLen);
+          write(''' is declared in the heading of module ''');
+          WritePool(m^.mdAt, m^.mdLen);
+          writeln(''' but has no body in its implementation')
+        end;
+      d := d^.next
+    end
+  end;
+
+  { 6.11.1 gives a module-block no label-declaration-part, so the scope these
+    two statements are checked against is deliberately empty: a `goto` in an
+    initialization-part has nowhere in the module to land, and says so.
+    ResolveGotos pops the scope, as it does for every block. }
+  outerPath := stmtPath;
+  stmtPath := nil;
+  new(sc);
+  sc^.labels := nil;
+  sc^.labelTail := nil;
+  sc^.gotos := nil;
+  sc^.gotoTail := nil;
+  sc^.outer := labelScope;
+  labelScope := sc;
+  if m^.mdInit <> nil then CheckStmt(m^.mdInit);
+  if m^.mdFini <> nil then CheckStmt(m^.mdFini);
+  ResolveGotos;
+  stmtPath := outerPath;
+
+  scopeTop := mark;
+  scopeDepth := saveDepth;
+  currentProc := saveCurrent;
+  curModule := saveModule
+end;
+
+procedure CheckModule(m: nodePtr);
+var info: modRecPtr;
+begin
+  info := FindModule(m^.mdAt, m^.mdLen);
+  if info = nil then begin
+    new(info);
+    info^.at := m^.mdAt;
+    info^.len := m^.mdLen;
+    info^.sym := NewSymbol;
+    info^.sym^.at := m^.mdAt;
+    info^.sym^.len := m^.mdLen;
+    info^.sym^.kind := skProc;
+    info^.sym^.isModuleSym := true;
+    info^.sym^.level := 0;
+    info^.sym^.defined := true;
+    info^.savedTop := nil;
+    info^.savedDepth := 0;
+    info^.headingSeen := false;
+    info^.blockSeen := false;
+    info^.headingDecl := nil;
+    info^.blockDecl := nil;
+    info^.line := m^.line;
+    info^.col := m^.col;
+    info^.next := nil;
+    if modules = nil then modules := info else moduleTail^.next := info;
+    moduleTail := info;
+    AppendSym(moduleOrder, moduleOrderTail, info^.sym)
+  end;
+  m^.mdSym := info^.sym;
+
+  if m^.mdHasHeading then
+    if info^.headingSeen then begin
+      ErrorAt(m^.line, m^.col);
+      write('module ''');
+      WritePool(m^.mdAt, m^.mdLen);
+      writeln(''' already has a heading')
+    end
+    else begin
+      info^.headingSeen := true;
+      info^.headingDecl := m;
+      CheckModuleHeading(m, info)
+    end;
+  if m^.mdHasBlock and (not aborted) then
+    if not info^.headingSeen then begin
+      ErrorAt(m^.line, m^.col);
+      write('there is no interface for module ''');
+      WritePool(m^.mdAt, m^.mdLen);
+      writeln(''' to implement')
+    end
+    else if info^.blockSeen then begin
+      ErrorAt(m^.line, m^.col);
+      write('module ''');
+      WritePool(m^.mdAt, m^.mdLen);
+      writeln(''' already has an implementation')
+    end
+    else begin
+      info^.blockSeen := true;
+      info^.blockDecl := m;
+      CheckModuleBlock(m, info)
+    end
+end;
+
+{ 6.2.2.13: "A module A shall be designated as supplying a ... block, B,
+  either if B contains an applied occurrence of an interface-identifier having
+  a defining occurrence contained by the module-heading of A, or if A supplies
+  a module that supplies B." So this is the transitive closure of the
+  interfaces `block` imports, and every module in it supplies `block`. The set
+  is small -- one entry per module -- so sweeping until nothing new is added
+  buys as much as a worklist would. }
+procedure SuppliersOf(block: symPtr; var reached, tail: symListPtr);
+var e, f, look: symListPtr; grew, seen: boolean;
+begin
+  reached := nil;
+  tail := nil;
+  e := block^.importedFrom;
+  while e <> nil do begin
+    AppendSym(reached, tail, e^.sym);
+    e := e^.next
+  end;
+  grew := true;
+  while grew do begin
+    grew := false;
+    look := reached;
+    while look <> nil do begin
+      f := look^.sym^.importedFrom;
+      while f <> nil do begin
+        seen := false;
+        e := reached;
+        while e <> nil do begin
+          if e^.sym = f^.sym then seen := true;
+          e := e^.next
+        end;
+        if not seen then begin
+          AppendSym(reached, tail, f^.sym);
+          grew := true
+        end;
+        f := f^.next
+      end;
+      look := look^.next
+    end
+  end
+end;
+
+function Reaches(set_: symListPtr; s: symPtr): boolean;
+var e: symListPtr; found: boolean;
+begin
+  found := false;
+  e := set_;
+  while e <> nil do begin
+    if e^.sym = s then found := true;
+    e := e^.next
+  end;
+  Reaches := found
+end;
+
+{ 6.2.3.6 activates the main-program-block and "each module supplying" it. A
+  module nothing reaches is therefore never activated -- which matters, because
+  its initialization-part could write to output. }
+procedure ComputeActiveModules;
+var reached, tail, e: symListPtr; m: symPtr;
+begin
+  SuppliersOf(programSym, reached, tail);
+  { Written order, not discovery order: it is the one 6.2.2.9 guarantees is
+    consistent with "a supplier commences first". }
+  e := moduleOrder;
+  while e <> nil do begin
+    m := e^.sym;
+    if Reaches(reached, m) then AppendSym(activeModules, activeTail, m);
+    e := e^.next
+  end
+end;
+
+{ 6.11.1: "For any two distinct modules A and B such that A supplies B and B
+  supplies A, neither the module-block of A nor the module-block of B shall
+  contain an initialization-part; neither module-block shall contain a
+  finalization-part; and an expression contained by the module-heading of
+  either A or B shall be nonvarying."
+
+  Mutual supply is expressible at all only because a module may be *split*:
+  A's heading exports what B imports, and A's block -- a later
+  program-component -- imports what B exports. NOTE 2 describes exactly that
+  shape, and it is the one case 6.2.3.6 leaves no order for, which is why the
+  standard takes the ordered parts away rather than picking one.
+
+  The clause about nonvarying expressions needs nothing here: every expression
+  this compiler admits in a module-heading is already required to be a
+  constant. }
+procedure CheckMutualSupply;
+var info: modRecPtr; e: symListPtr; mine, mineTail, theirs, theirsTail: symListPtr;
+    at: nodePtr; done: boolean;
+begin
+  info := modules;
+  while info <> nil do begin
+    if info^.blockDecl <> nil then
+      if (info^.blockDecl^.mdInit <> nil) or
+         (info^.blockDecl^.mdFini <> nil) then begin
+        SuppliersOf(info^.sym, mine, mineTail);
+        e := moduleOrder;
+        done := false;
+        while (e <> nil) and not done do begin
+          if e^.sym <> info^.sym then
+            if Reaches(mine, e^.sym) then begin
+              SuppliersOf(e^.sym, theirs, theirsTail);
+              if Reaches(theirs, info^.sym) then begin
+                if info^.blockDecl^.mdInit <> nil then
+                  at := info^.blockDecl^.mdInit
+                else
+                  at := info^.blockDecl^.mdFini;
+                ErrorAt(at^.line, at^.col);
+                write('modules ''');
+                WritePool(info^.sym^.at, info^.sym^.len);
+                write(''' and ''');
+                WritePool(e^.sym^.at, e^.sym^.len);
+                writeln(''' supply each other, so neither may have a ',
+                        '''to begin do'' or a ''to end do'' part');
+                done := true
+              end
+            end;
+          e := e^.next
+        end
+      end;
+    info := info^.next
+  end
+end;
+
 procedure RunSema;
-var p: nodePtr;
+var p, m: nodePtr; k: integer; info: modRecPtr;
 begin
   intType := NewType(tyInteger);
   realType := NewType(tyReal);
@@ -9899,8 +11656,18 @@ begin
 
   scopeTop := nil;
   scopeDepth := 0;
+  interfaces := nil;
+  interfaceTail := nil;
+  modules := nil;
+  moduleTail := nil;
+  moduleOrder := nil;
+  moduleOrderTail := nil;
+  activeModules := nil;
+  activeTail := nil;
+  curModule := nil;
   { the predefined identifiers live in their own outermost scope }
   InstallPredefined;
+  InstallRequiredInterfaces;
 
   programSym := NewSymbol;
   programSym^.at := progAt;
@@ -9910,27 +11677,57 @@ begin
   programSym^.defined := true;
   currentProc := programSym;
 
+  { 6.13's program-components, in the order they were written. A module written
+    *after* the main-program-declaration is legal and supplies nothing, because
+    nothing before it can name an interface it exports. }
+  m := progModules;
+  k := 0;
+  while (m <> nil) and (k < progMainIndex) and not aborted do begin
+    CheckModule(m);
+    m := m^.next;
+    k := k + 1
+  end;
+
   scopeDepth := scopeDepth + 1;
   { `input` and `output` are declared by the program header rather than by the
     block, so they exist before the declarations are seen. Declaring them only
     when they are listed is what makes using `write` without `output` in the
     header the error ISO 7185 6.10 says it is. }
+  { A module may already have created the file -- there is one `output` in a
+    program however many blocks reach it -- so what is asked here is whether
+    *this* block has the name, not whether the file exists. }
   p := progParams;
   while p <> nil do begin
-    if PoolIs(p^.dnAt, p^.dnLen, 'input    ') and (stdInput = nil) then begin
-      stdInput := AddFrameVar(p^.dnAt, p^.dnLen, skVar, textType, programSym,
-                              p^.line, p^.col);
-      stdInput^.binding := fbStdInput
+    if PoolIs(p^.dnAt, p^.dnLen, 'input    ') then begin
+      if LookupInScope(p^.dnAt, p^.dnLen) = nil then
+        BindName(p^.dnAt, p^.dnLen, EnsureStdFile(true), p^.line, p^.col)
     end
-    else if PoolIs(p^.dnAt, p^.dnLen, 'output   ') and (stdOutput = nil) then
-    begin
-      stdOutput := AddFrameVar(p^.dnAt, p^.dnLen, skVar, textType, programSym,
-                               p^.line, p^.col);
-      stdOutput^.binding := fbStdOutput
+    else if PoolIs(p^.dnAt, p^.dnLen, 'output   ') then begin
+      if LookupInScope(p^.dnAt, p^.dnLen) = nil then
+        BindName(p^.dnAt, p^.dnLen, EnsureStdFile(false), p^.line, p^.col)
     end;
     p := p^.next
   end;
-  CheckBlock(progBlock, programSym)
+  CheckBlock(progBlock, programSym);
+
+  while (m <> nil) and not aborted do begin
+    CheckModule(m);
+    m := m^.next
+  end;
+
+  info := modules;
+  while info <> nil do begin
+    if info^.headingSeen and not info^.blockSeen then begin
+      ErrorAt(info^.line, info^.col);
+      write('module ''');
+      WritePool(info^.at, info^.len);
+      writeln(''' has an interface but no implementation')
+    end;
+    info := info^.next
+  end;
+
+  ComputeActiveModules;
+  CheckMutualSupply
 end;
 
 { ---------------------------------------------------------------- the dump }
@@ -10352,6 +12149,19 @@ begin
       level := level - 1
     end;
     nkField: begin
+      { 6.11.3's qualified name shares this node with a field selection too,
+        and denotes one symbol -- so there is no base to print under it. }
+      if n^.fdQualified <> nil then begin
+        write('qualified ');
+        WritePool(n^.fdAt, n^.fdLen);
+        WritePos(n^.line, n^.col);
+        if annotate then begin
+          write(' -> ');
+          WriteSymRef(n^.fdQualified)
+        end;
+        ExprEnd(n)
+      end
+      else begin
       { A schema-discriminant shares this node with a field selection and
         resolves to neither a field nor an address, so it prints as what it
         is: the value the base's type was produced with. }
@@ -10376,6 +12186,7 @@ begin
       level := level + 1;
       DumpExpr(n^.fdBase);
       level := level - 1
+      end
     end;
     nkDeref: begin
       write('deref');
@@ -10406,6 +12217,10 @@ begin
     end;
     nkCall: begin
       write('call ');
+      if n^.clQualLen > 0 then begin
+        WritePool(n^.clQualAt, n^.clQualLen);
+        write('.')
+      end;
       WritePool(n^.clAt, n^.clLen);
       WritePos(n^.line, n^.col);
       { Sema decides whether a call is a required function or a user one; the
@@ -10641,6 +12456,10 @@ begin
     end;
     nkProcCall: begin
       write('proccall ');
+      if n^.pcQualLen > 0 then begin
+        WritePool(n^.pcQualAt, n^.pcQualLen);
+        write('.')
+      end;
       WritePool(n^.pcAt, n^.pcLen);
       if annotate then begin
         if n^.pcStd <> spNone then
@@ -10797,7 +12616,13 @@ begin
   Pad;
   case n^.kind of
     nkNamed: begin
+      { 6.11.3's qualified name reaches a type through an interface, and the
+        two halves are printed as they were written. }
       write('named ');
+      if n^.nmQualLen > 0 then begin
+        WritePool(n^.nmQualAt, n^.nmQualLen);
+        write('.')
+      end;
       WritePool(n^.nmAt, n^.nmLen);
       WritePos(n^.line, n^.col);
       TypeEnd(n)
@@ -10806,6 +12631,10 @@ begin
       the only type-denoter whose subtree holds values rather than types. }
     nkSchema: begin
       write('schema ');
+      if n^.scQualLen > 0 then begin
+        WritePool(n^.scQualAt, n^.scQualLen);
+        write('.')
+      end;
       WritePool(n^.scAt, n^.scLen);
       WritePos(n^.line, n^.col);
       TypeEnd(n);
@@ -10906,56 +12735,94 @@ begin
   end
 end;
 
-procedure DumpProc(d: nodePtr);
+{ 6.2.1's import-part, which every block may have. The three modifiers go on
+  the specification's own line and the renamings on the items', because that is
+  where each was written. }
+procedure DumpImports(n: nodePtr);
+var p, i: nodePtr;
 begin
   Pad;
-  if d^.pdIsFunction then
-    write('func ')
-  else
-    write('proc ');
-  WritePool(d^.pdAt, d^.pdLen);
-  At(d^.line, d^.col);
+  writeln('imports');
   level := level + 1;
-  Pad;
-  writeln('params');
-  level := level + 1;
-  DumpGroupList(d^.pdParams, false);
-  level := level - 1;
-  if d^.pdResult <> nil then begin
+  p := n;
+  while p <> nil do begin
     Pad;
-    writeln('result');
+    write('import ');
+    WritePool(p^.isAt, p^.isLen);
+    if p^.isQualified then write(' qualified');
+    if p^.isOnly then write(' only');
+    At(p^.line, p^.col);
     level := level + 1;
-    DumpTypeExpr(d^.pdResult);
-    level := level - 1
+    i := p^.isItems;
+    while i <> nil do begin
+      Pad;
+      write('item ');
+      WritePool(i^.iiAt, i^.iiLen);
+      if i^.iiNewLen > 0 then begin
+        write(' => ');
+        WritePool(i^.iiNewAt, i^.iiNewLen)
+      end;
+      At(i^.line, i^.col);
+      i := i^.next
+    end;
+    level := level - 1;
+    p := p^.next
   end;
-  { A forward declaration has no body, and the completion that follows it
-    repeats neither the parameters nor the result type (ISO 7185 6.6.1). }
-  if d^.pdIsForward then begin
-    Pad;
-    writeln('forward')
-  end
-  else
-    DumpBlock(d^.pdBody);
   level := level - 1
 end;
 
-procedure DumpBlock;
-var p, g: nodePtr;
+{ 6.11.2's interface-specification-part. An export-range prints with '..' and a
+  renaming with '=>', so the three forms of an export-clause are told apart by
+  what is printed and not by a flag. }
+procedure DumpExports(n: nodePtr);
+var p, i: nodePtr;
 begin
   Pad;
-  writeln('block');
+  writeln('exports');
   level := level + 1;
-  Pad;
-  writeln('labels');
-  level := level + 1;
-  p := n^.blLabels;
+  p := n;
   while p <> nil do begin
     Pad;
-    write('label ', p^.ldNumber:1);
+    write('export ');
+    WritePool(p^.epAt, p^.epLen);
     At(p^.line, p^.col);
+    level := level + 1;
+    i := p^.epItems;
+    while i <> nil do begin
+      Pad;
+      write('item ');
+      if i^.eiProtected then write('protected ');
+      if i^.eiQualLen > 0 then begin
+        WritePool(i^.eiQualAt, i^.eiQualLen);
+        write('.')
+      end;
+      WritePool(i^.eiAt, i^.eiLen);
+      if i^.eiLastLen > 0 then begin
+        write(' .. ');
+        if i^.eiLastQualLen > 0 then begin
+          WritePool(i^.eiLastQualAt, i^.eiLastQualLen);
+          write('.')
+        end;
+        WritePool(i^.eiLastAt, i^.eiLastLen)
+      end
+      else if i^.eiNewLen > 0 then begin
+        write(' => ');
+        WritePool(i^.eiNewAt, i^.eiNewLen)
+      end;
+      At(i^.line, i^.col);
+      i := i^.next
+    end;
+    level := level - 1;
     p := p^.next
   end;
-  level := level - 1;
+  level := level - 1
+end;
+
+{ The constant, type and variable definition parts, which a block and both
+  halves of a module print the same way. }
+procedure DumpDeclParts(n: nodePtr);
+var p, g: nodePtr;
+begin
   Pad;
   writeln('consts');
   level := level + 1;
@@ -11003,7 +12870,67 @@ begin
   writeln('vars');
   level := level + 1;
   DumpGroupList(n^.blVars, true);
+  level := level - 1
+end;
+
+procedure DumpProc(d: nodePtr);
+begin
+  Pad;
+  if d^.pdIsFunction then
+    write('func ')
+  else
+    write('proc ');
+  WritePool(d^.pdAt, d^.pdLen);
+  At(d^.line, d^.col);
+  level := level + 1;
+  Pad;
+  writeln('params');
+  level := level + 1;
+  DumpGroupList(d^.pdParams, false);
   level := level - 1;
+  if d^.pdResult <> nil then begin
+    Pad;
+    writeln('result');
+    level := level + 1;
+    DumpTypeExpr(d^.pdResult);
+    level := level - 1
+  end;
+  { A forward declaration has no body, and the completion that follows it
+    repeats neither the parameters nor the result type (ISO 7185 6.6.1). }
+  { A heading in a module-heading is the same shape and a different reason
+    (6.11.1), so it says which it is. }
+  if d^.pdInHeading then begin
+    Pad;
+    writeln('heading')
+  end
+  else if d^.pdIsForward then begin
+    Pad;
+    writeln('forward')
+  end
+  else
+    DumpBlock(d^.pdBody);
+  level := level - 1
+end;
+
+procedure DumpBlock;
+var p: nodePtr;
+begin
+  Pad;
+  writeln('block');
+  level := level + 1;
+  DumpImports(n^.blImports);
+  Pad;
+  writeln('labels');
+  level := level + 1;
+  p := n^.blLabels;
+  while p <> nil do begin
+    Pad;
+    write('label ', p^.ldNumber:1);
+    At(p^.line, p^.col);
+    p := p^.next
+  end;
+  level := level - 1;
+  DumpDeclParts(n);
   Pad;
   writeln('procs');
   level := level + 1;
@@ -11052,7 +12979,7 @@ begin
       end;
       tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
       tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
-      tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar: begin
+      tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar, tkArrow: begin
         write('op ');
         WriteOperator(tok[i].kind);
         writeln
@@ -11061,7 +12988,8 @@ begin
       tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
       tkNil, tkNot, tkOf, tkOr, tkPacked, tkProcedure, tkProgram, tkRecord,
       tkRepeat, tkSet, tkThen, tkTo, tkType, tkUntil, tkVar, tkWhile,
-      tkWith, tkOtherwise, tkPow, tkProtected, tkValue, tkBindable: begin
+      tkWith, tkOtherwise, tkPow, tkProtected, tkValue, tkBindable,
+      tkModule, tkExport, tkImport, tkOnly, tkQualified: begin
         write('kw ');
         WriteKeyword(tok[i].kind);
         writeln
@@ -11074,9 +13002,121 @@ begin
   end
 end;
 
-procedure DumpProgram;
+{ The declaration parts a module-heading and a module-block share with a block,
+  minus what neither of them has: labels and a statement part. }
+procedure DumpModuleParts(b: nodePtr);
 var p: nodePtr;
 begin
+  DumpImports(b^.blImports);
+  DumpDeclParts(b);
+  Pad;
+  writeln('procs');
+  level := level + 1;
+  p := b^.blProcs;
+  while p <> nil do begin
+    DumpProc(p);
+    p := p^.next
+  end;
+  level := level - 1
+end;
+
+procedure DumpModule(m: nodePtr);
+var p: nodePtr;
+begin
+  Pad;
+  write('module ');
+  WritePool(m^.mdAt, m^.mdLen);
+  At(m^.line, m^.col);
+  level := level + 1;
+  Pad;
+  writeln('params');
+  level := level + 1;
+  p := m^.mdParams;
+  while p <> nil do begin
+    Pad;
+    write('name ');
+    WritePool(p^.dnAt, p^.dnLen);
+    At(p^.line, p^.col);
+    p := p^.next
+  end;
+  level := level - 1;
+  DumpExports(m^.mdExports);
+  if m^.mdHeading <> nil then begin
+    Pad;
+    writeln('heading');
+    level := level + 1;
+    DumpModuleParts(m^.mdHeading);
+    level := level - 1
+  end;
+  if m^.mdBlock <> nil then begin
+    Pad;
+    writeln('moduleblock');
+    level := level + 1;
+    DumpModuleParts(m^.mdBlock);
+    level := level - 1
+  end;
+  { 6.11.1's two `to` parts, each a single statement. The marker says which of
+    the two is absent, as DumpOptional does for a file. }
+  if m^.mdInit <> nil then begin
+    Pad;
+    writeln('init');
+    level := level + 1;
+    DumpStmt(m^.mdInit);
+    level := level - 1
+  end
+  else begin
+    Pad;
+    writeln('no-init')
+  end;
+  if m^.mdFini <> nil then begin
+    Pad;
+    writeln('fini');
+    level := level + 1;
+    DumpStmt(m^.mdFini);
+    level := level - 1
+  end
+  else begin
+    Pad;
+    writeln('no-fini')
+  end;
+  level := level - 1
+end;
+
+{ The modules written before the main-program-declaration, then those after
+  it -- the source's own order (6.13). }
+procedure DumpModulesBefore;
+var m: nodePtr; k: integer;
+begin
+  level := 0;
+  m := progModules;
+  k := 0;
+  while (m <> nil) and (k < progMainIndex) do begin
+    DumpModule(m);
+    m := m^.next;
+    k := k + 1
+  end
+end;
+
+procedure DumpModulesAfter;
+var m: nodePtr; k: integer;
+begin
+  level := 0;
+  m := progModules;
+  k := 0;
+  while k < progMainIndex do begin
+    m := m^.next;
+    k := k + 1
+  end;
+  while m <> nil do begin
+    DumpModule(m);
+    m := m^.next
+  end
+end;
+
+procedure DumpProgram;
+var p, m: nodePtr;
+begin
+  DumpModulesBefore;
   write('program ');
   WritePool(progAt, progLen);
   writeln;
@@ -11100,10 +13140,21 @@ begin
     { The program's own frame first: at level 0 it holds what another language
       would call the globals, which is ADR-0016's point. }
     DumpFrame(programSym);
+    { A module's activation record is one of the program's globals too -- it is
+      a level-0 frame like the program's own -- so it is printed beside it, in
+      written order. }
+    m := progModules;
+    while m <> nil do begin
+      DumpFrame(m^.mdSym);
+      if m^.mdHeading <> nil then DumpFrames(m^.mdHeading);
+      if m^.mdBlock <> nil then DumpFrames(m^.mdBlock);
+      m := m^.next
+    end;
     DumpFrames(progBlock)
   end;
   level := 1;
-  DumpBlock(progBlock)
+  DumpBlock(progBlock);
+  DumpModulesAfter
 end;
 
 { Every stage, in one pass, with a header before each. There is one program
@@ -11712,9 +13763,27 @@ end;
 { The activation record `levels` deep in the static chain from here. The link
   is field 0 of every frame, so it sits at offset zero and can be loaded from
   the frame pointer without knowing which procedure's struct this level has. }
+{ The one activation record of a level-0 block. The program and every module
+  have exactly one activation each (6.2.3.6), and a module's has to outlive the
+  function that fills it in -- so both are globals rather than allocas, and
+  reaching one costs no walk at all (ADR-0053). }
+procedure FrameGlobal(b: symPtr; var v: str);
+begin
+  StrClear(v);
+  StrAppend(v, '@');
+  AppendLit(v, 'frame           ');
+  AppendInt(v, b^.irId)
+end;
+
 procedure FrameAt(lev: integer; var v: str);
 var l: integer; cur, nxt: str;
 begin
+  { A level-0 frame is a global, so there is nothing to walk to: the block
+    this function belongs to is the one whose record it names. }
+  if lev = 0 then begin
+    FrameGlobal(irRoot, v)
+  end
+  else begin
   StrClear(cur);
   StrAppend(cur, '%');
   AppendLit(cur, 'frame           ');
@@ -11726,6 +13795,17 @@ begin
     cur := nxt
   end;
   v := cur
+  end
+end;
+
+{ The activation record of a *block*: the program, a module, or a procedure.
+  Asking the owner rather than the level is what lets a name imported from
+  another module resolve -- its owner is that module, which is not on this
+  block's static chain and does not need to be. }
+procedure FrameOf(b: symPtr; var v: str);
+begin
+  if b^.level = 0 then FrameGlobal(b, v)
+  else FrameAt(b^.level, v)
 end;
 
 { The jump record is the field after the last variable. Only called for a
@@ -11741,7 +13821,7 @@ end;
 procedure FrameSlot(s: symPtr; var v: str);
 var f: str;
 begin
-  FrameAt(s^.level, f);
+  FrameOf(s^.owner, f);
   Def(v);
   write(ircode, 'getelementptr inbounds %frame', s^.owner^.irId:1, ', ptr ');
   PutOp(f);
@@ -12729,7 +14809,7 @@ begin
     StrAppend(code, 'p');
     AppendInt(code, actual^.irId);
     AppendOpnd(head, tail, code, true, nil);
-    FrameAt(actual^.level - 1, link);
+    FrameOf(actual^.owner, link);
     AppendOpnd(head, tail, link, true, nil)
   end
 end;
@@ -12847,7 +14927,7 @@ begin
     { A callee declared at level L runs with the frame at level L-1 as its
       enclosing scope -- which for a recursive call is the caller's own
       parent, not the caller. }
-    FrameAt(callee^.level - 1, link);
+    FrameOf(callee^.owner, link);
     StrAppend(target, '@');
     StrAppend(target, 'p');
     AppendInt(target, callee^.irId)
@@ -14232,10 +16312,16 @@ begin
         FieldAddress(base, e^.vrSym^.stype, e^.vrField, v)
     end;
 
-    nkField: begin
-      EmitAddress(e^.fdBase, base);
-      FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v)
-    end;
+    nkField:
+      { 6.11.3's qualified name denotes one symbol, so it is addressed as a
+        bare name is -- the base is an interface-identifier and has no address
+        of its own. }
+      if e^.fdQualified <> nil then
+        AddressOfSym(e^.fdQualified, v)
+      else begin
+        EmitAddress(e^.fdBase, base);
+        FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v)
+      end;
 
     nkIndex: begin
       arr := e^.ixBase^.ntype;
@@ -14409,7 +16495,8 @@ begin
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
     nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
-    nkProcDecl, nkBlock:
+    nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+    nkImportSpec, nkImportItem:
       OpWord('null            ', v)   { Sema has already required a designator }
   end
 end;
@@ -14427,10 +16514,17 @@ begin
     { A schema-discriminant is the value the type was produced with, so it is
       a constant here and there is nothing to load (6.8.4). }
     nkField:
+      { A qualified name reaches whatever the interface holds, and the three
+        things it can hold each behave as the bare form does. }
+      if e^.fdQualified <> nil then
+        if e^.fdQualified^.kind = skConst then EmitConst(e^.fdQualified, v)
+        else if IsInvocable(e^.fdQualified) then
+          EmitUserCall(e^.fdQualified, nil, v)
+        else EmitLoad(e, v)
       { ...unless the base is a schematic formal parameter, whose type was
         produced with no tuple: then it is one field of the descriptor the
         actual brought, and reading it is a load like any other. }
-      if e^.fdDiscSym <> nil then
+      else if e^.fdDiscSym <> nil then
         { A heap variable's tuple is in front of the variable, so `p^.n` is
           read from where `p^` is; every other descriptor is reached by the
           walk any enclosing variable takes. }
@@ -14466,7 +16560,8 @@ begin
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
     nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
-    nkProcDecl, nkBlock:
+    nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+    nkImportSpec, nkImportItem:
       OpInt(0, v)
   end
 end;
@@ -15210,7 +17305,7 @@ begin
         runtime closes the abandoned blocks' files before cutting the stack
         back. The label arrives as its id plus one, because a longjmp with
         zero would come back looking like the ordinary entry. }
-      FrameAt(s^.gtOwner^.level, frame);
+      FrameOf(s^.gtOwner, frame);
       JumpRecord(s^.gtOwner, frame, rec);
       write(ircode, '  call void @pas_jump_go(ptr ');
       PutOp(rec);
@@ -15516,7 +17611,8 @@ begin
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
-      nkLabelDecl, nkBlock: ;
+      nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+      nkImportSpec, nkImportItem: ;
     end
 end;
 
@@ -15857,7 +17953,7 @@ end;
 { The prologue shared by main and every procedure: alloca the frame, store the
   static link, copy the incoming arguments into their slots. }
 procedure EnterFrame(p: symPtr);
-var l, d: symListPtr; link, slot, arg, half, actual, size, copy: str;
+var l, d, e: symListPtr; link, slot, arg, half, actual, size, copy: str;
     nohdr: str; k, align: integer; comp: typePtr;
 begin
   { A label belongs to exactly one block, so the map is emptied per function.
@@ -15867,22 +17963,31 @@ begin
   labelBlocks := nil;
   irProc := p;
   irLevel := p^.level;
+  { The level-0 block this function belongs to, which is what FrameAt(0)
+    names. For a procedure it is whatever module or program it is declared in,
+    reached by walking the owners. }
+  irRoot := p;
+  while irRoot^.owner <> nil do irRoot := irRoot^.owner;
   nextReg := 0;
   nextBlock := 0;
   StartBlock(NewBlock);
-  writeln(ircode, '  %frame = alloca %frame', p^.irId:1);
-  Def(link);
-  writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
-          ', ptr %frame, i32 0, i32 0');
+  { A level-0 block's record is a global: it has one activation, and a
+    module's must outlive the function that initialises it (ADR-0053). A
+    global is already zeroed, so its static link needs no store either. }
+  if p^.level > 0 then begin
+    writeln(ircode, '  %frame = alloca %frame', p^.irId:1);
+    Def(link);
+    writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
+            ', ptr %frame, i32 0, i32 0')
+  end;
 
   if p^.level = 0 then begin
-    { The program has no enclosing block, so its static link is never followed.
-      The command line goes to the runtime before any file is opened: it is
-      where `reset` looks for the name of an external file. }
-    write(ircode, '  store ptr null, ptr ');
-    PutOp(link);
-    writeln(ircode);
-    writeln(ircode, '  call void @pas_args(i32 %argc, ptr %argv)')
+    { The program and a module have no enclosing block, so the static link is
+      never followed and there is nothing to store. }
+    if not p^.isModuleSym then
+      { The command line goes to the runtime before any file is opened: it is
+        where `reset` looks for the name of an external file. }
+      writeln(ircode, '  call void @pas_args(i32 %argc, ptr %argv)')
   end
   else begin
     write(ircode, '  store ptr %link, ptr ');
@@ -16024,6 +18129,24 @@ begin
   InitDynamicVars(p);
   InitInitialStates(p);
   InitFiles(p);
+  { 6.2.3.6 orders the *commencements* of the modules that supply the
+    main-program-block before the program's own, and written order is such an
+    order -- 6.2.2.9 already puts a module-heading before everything that
+    imports its interface, so a supplier is textually first.
+
+    What comes before them here is only the program's own file and
+    initial-state prologue, and no module can observe that: the program
+    exports nothing, so nothing of its is nameable from a module. What a
+    module *can* observe is `output`, which 6.11.4.2 requires to be open
+    before the first access to it -- and opening it is what this prologue has
+    just done. }
+  if p = programSym then begin
+    e := activeModules;
+    while e <> nil do begin
+      writeln(ircode, '  call void @m', e^.sym^.irId:1, 'i()');
+      e := e^.next
+    end
+  end;
   JumpDispatch(p)
 end;
 
@@ -16190,7 +18313,61 @@ begin
   writeln(ircode, 'declare void @pas_length_error(i32, i32)')
 end;
 
+{ One global activation record. }
+procedure EmitFrameGlobal(p: symPtr);
+begin
+  writeln(ircode, '@frame', p^.irId:1, ' = internal global %frame', p^.irId:1,
+          ' zeroinitializer')
+end;
+
+{ The finalization calls, in the reverse of the list's order. The list is
+  singly linked, so the recursion is what reverses it. }
+procedure EmitFinis(e: symListPtr);
+begin
+  if e <> nil then begin
+    EmitFinis(e^.next);
+    writeln(ircode, '  call void @m', e^.sym^.irId:1, 'f()')
+  end
+end;
+
+{ 6.11.1's module. Its heading and its block share one activation record, and
+  the two `to` parts are its commencement and its finalization -- so it comes
+  out as a pair of functions over one global frame, called by main around the
+  program's own body. }
+procedure EmitModule(m: nodePtr);
+var p: symPtr;
+begin
+  p := m^.mdSym;
+  writeln(ircode);
+  writeln(ircode, 'define internal void @m', p^.irId:1, 'i() {');
+  EnterFrame(p);
+  if m^.mdInit <> nil then EmitStmt(m^.mdInit);
+  writeln(ircode, '  ret void');
+  writeln(ircode, '}');
+
+  { The finalization has its own function because 6.2.3.6 runs it after the
+    main-program-block has terminated, not after the initialization. }
+  writeln(ircode);
+  writeln(ircode, 'define internal void @m', p^.irId:1, 'f() {');
+  labelBlocks := nil;
+  irProc := p;
+  irLevel := 0;
+  irRoot := p;
+  nextReg := 0;
+  nextBlock := 0;
+  StartBlock(NewBlock);
+  if m^.mdFini <> nil then EmitStmt(m^.mdFini);
+  { A module's files are closed when its activation terminates, which is the
+    same obligation a block's exit has and the same call that discharges it. }
+  CloseFiles(p);
+  writeln(ircode, '  ret void');
+  writeln(ircode, '}');
+
+  if m^.mdBlock <> nil then EmitProcs(m^.mdBlock)
+end;
+
 procedure RunCodeGen;
+var m: nodePtr;
 begin
   rewrite(ircode);
   { The layout LlSize and LlAlign model, stated so the assembler uses the same
@@ -16208,9 +18385,47 @@ begin
   strHead := nil;
   strTail := nil;
 
-  { The frame types come before any function that indexes one. }
+  { The frame types come before any function that indexes one. Every module's
+    comes too, and every procedure of every module is declared before any body
+    is emitted: the main program may call an imported procedure, and a module
+    written earlier may have been given its body later. }
   EmitFrameType(programSym);
+  m := progModules;
+  while m <> nil do begin
+    if m^.mdSym <> nil then
+      if m^.mdSym^.irId = 0 then EmitFrameType(m^.mdSym);
+    m := m^.next
+  end;
+  m := progModules;
+  while m <> nil do begin
+    if m^.mdHeading <> nil then DeclareProcs(m^.mdHeading);
+    if m^.mdBlock <> nil then DeclareProcs(m^.mdBlock);
+    m := m^.next
+  end;
   DeclareProcs(progBlock);
+
+  { A level-0 activation record is a global (ADR-0053): the program has one
+    activation and so has every module, and a module's must outlive the
+    function that initialises it. }
+  writeln(ircode);
+  EmitFrameGlobal(programSym);
+  m := progModules;
+  while m <> nil do begin
+    if m^.mdSym <> nil then
+      if m^.mdBlock <> nil then EmitFrameGlobal(m^.mdSym);
+    m := m^.next
+  end;
+
+  { Once per *module*, not once per component: a module written as a separate
+    interface and implementation is two nodes sharing one symbol, and it has
+    one activation record and one pair of functions. The block is the half
+    that carries them. }
+  m := progModules;
+  while m <> nil do begin
+    if m^.mdSym <> nil then
+      if m^.mdBlock <> nil then EmitModule(m);
+    m := m^.next
+  end;
 
   { main takes the command line, because ISO 7185 6.10 leaves it to the
     implementation to say how a program parameter names an external file and
@@ -16220,6 +18435,10 @@ begin
   EnterFrame(programSym);
   EmitStmt(progBlock^.blBody);
   CloseFiles(programSym);
+  { 6.2.3.6 read the other way round for termination: the activation of A
+    terminates before the finalization of B, so the finalizations run in the
+    reverse of the order the commencements did. }
+  EmitFinis(activeModules);
   writeln(ircode, '  ret i32 0');
   writeln(ircode, '}');
 
