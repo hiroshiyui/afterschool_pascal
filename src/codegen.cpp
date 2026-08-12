@@ -1127,6 +1127,12 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
   switch (e->kind) {
   case NK::VarRef: {
     auto *v = static_cast<VarRef *>(e);
+    // A parameterless function written as a bare name is a call (§6.8.2.2),
+    // and a result living in memory *is* the storage the call filled in — so
+    // the address of this expression is the address the call returns, not the
+    // address of anything named `v->sym`, which is a function and has none.
+    if (!v->withField && v->sym->isInvocable())
+      return emitExpr(e);
     llvm::Value *base = addressOf(v->sym);
     if (!v->withField)
       return base;
@@ -1141,7 +1147,8 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     // addressed as a bare name is — the base is an interface-identifier and
     // has no address of its own.
     if (f->qualified)
-      return addressOf(f->qualified);
+      return f->qualified->isInvocable() ? emitExpr(e)
+                                         : addressOf(f->qualified);
     return fieldAddress(emitAddress(f->base.get()), f->base->type, f->resolved);
   }
 
@@ -2126,7 +2133,7 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     // A parameterless call written as a bare name — of a function, or of a
     // functional parameter, which is the same call through a loaded address.
     if (!v->withField && v->sym->isInvocable())
-      return emitUserCall(v->sym, noArgs_);
+      return emitUserCall(v->sym, noArgs_, v->resultSlot);
     return emitLoad(e);
   }
   case NK::Field: {
@@ -2140,7 +2147,7 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
       if (f->qualified->kind == SymKind::Const)
         return emitConst(*f->qualified);
       if (f->qualified->isInvocable())
-        return emitUserCall(f->qualified, noArgs_);
+        return emitUserCall(f->qualified, noArgs_, f->resultSlot);
       return emitLoad(e);
     }
     // ...unless the base is a schematic formal parameter, whose type was

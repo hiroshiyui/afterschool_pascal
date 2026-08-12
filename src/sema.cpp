@@ -3706,6 +3706,7 @@ void Sema::checkExpr(Expr *e) {
             return;
           }
           e->type = sym->resultType();
+          fld->resultSlot = newResultSlot(e->type);
         } else {
           diags_.error(fld->line, fld->col,
                        "'" + b->name + "." + fld->field +
@@ -3809,8 +3810,14 @@ void Sema::checkExpr(Expr *e) {
     // A function name used as a value is a call with no arguments — Pascal has
     // no empty argument list, and inside the function's own body this is the
     // recursive call rather than a way to read the result (ISO 7185 §6.8.2.2).
-    if (v->sym->isInvocable() && v->sym->params.empty())
+    if (v->sym->isInvocable() && v->sym->params.empty()) {
       v->type = v->sym->resultType();
+      // The bare name *is* the call, so it needs the storage a written-out
+      // call site gets. Without this a result living in memory has nowhere to
+      // be built and the call is never emitted at all — the address the
+      // expression evaluates to is the slot's, so no slot means no call.
+      v->resultSlot = newResultSlot(v->type);
+    }
     else if (v->sym->isInvocable())
       diags_.error(v->line, v->col, "'" + v->name + "' needs arguments");
     else
@@ -4625,13 +4632,14 @@ void Sema::checkWith(WithStmt *w) {
 /// own, and a frame slot is somewhere both backends can name without an
 /// `alloca` in the middle of a function. A recursive call needs nothing extra,
 /// because each activation brings its own frame and so its own slots.
-void Sema::giveResultSlot(Call *c) {
-  if (!current_ || !c->type || !c->type->isMemory())
-    return;
-  c->resultSlot =
-      addHiddenVar("result$" + std::to_string(current_->frameVars.size()),
-                   SymKind::Var, c->type, current_);
+Symbol *Sema::newResultSlot(Type *t) {
+  if (!current_ || !t || !t->isMemory())
+    return nullptr;
+  return addHiddenVar("result$" + std::to_string(current_->frameVars.size()),
+                      SymKind::Var, t, current_);
 }
+
+void Sema::giveResultSlot(Call *c) { c->resultSlot = newResultSlot(c->type); }
 
 void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                           int col) {
@@ -4837,7 +4845,6 @@ void Sema::checkFileEnquiry(Call *c) {
     return;
   }
   Expr *a = c->args[0].get();
-  checkExpr(a);
   if (!isDesignator(a) || (a->type && !a->type->isFile())) {
     diags_.error(a->line, a->col,
                  "'" + c->name + "' needs a file variable" +
@@ -4860,8 +4867,10 @@ void Sema::checkFileEnquiry(Call *c) {
 /// §6.7.6.7's ten string functions. They take one, two or three arguments, so
 /// they are checked apart from the required functions whose arity is one.
 void Sema::checkStringBuiltin(Call *c) {
-  for (auto &a : c->args)
-    checkExpr(a.get());
+  // The arguments were checked before the dispatch above; checking them again
+  // is not merely wasted work, because `checkExpr` is not idempotent — a
+  // parameterless function used as a value takes a hidden frame slot each
+  // time, and a second one is a slot nothing ever writes to.
   auto stringy = [&](Expr *a) {
     if (a->type && !a->type->isStringOrChar())
       diags_.error(a->line, a->col,

@@ -197,6 +197,11 @@ struct VarRef : Expr {
   /// hidden variable holding that record's address and this is the field it
   /// selects. Null when the name is an ordinary variable.
   const Field *withField = nullptr;
+  /// A parameterless function written as a bare name is a call (ISO 7185
+  /// §6.8.2.2), and a result that lives in memory needs storage the caller
+  /// supplies (ADR-0055) — so this node takes a result slot exactly as a
+  /// `Call` does. Null unless `sym` is invocable with such a result.
+  Symbol *resultSlot = nullptr;
 };
 
 /// `base[index]`. One subscript per node, so `a[i, j]` is two of them — which
@@ -223,6 +228,9 @@ struct FieldExpr : Expr {
   /// null. Sema folds it to the tuple's value, which is what a discriminated
   /// type knows about itself.
   bool isDiscriminant = false;
+  /// The same slot a `VarRef` takes, for §6.11.3's qualified name denoting a
+  /// parameterless function.
+  Symbol *resultSlot = nullptr;
   long long discValue = 0;
   /// ...unless the base is a *schematic formal parameter*, whose type was
   /// produced with no tuple at all: then the value arrives with the actual and

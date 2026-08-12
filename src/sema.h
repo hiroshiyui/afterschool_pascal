@@ -344,6 +344,7 @@ private:
   Type *checkedResultType(Type *t, bool bindable, int line, int col);
   /// Hidden caller-side storage for a result that lives in memory.
   void giveResultSlot(Call *c);
+  Symbol *newResultSlot(Type *t);
   /// §6.4.7's schema-definition: a name, its formal discriminants, and the
   /// body kept unresolved until a tuple arrives.
   void declareSchema(TypeDecl &decl);

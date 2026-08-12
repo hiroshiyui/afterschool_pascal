@@ -1,0 +1,7 @@
+record 3 4
+array  7 14 21
+string [hello world] 11
+field  4
+index  14
+len    11
+nested 11 20

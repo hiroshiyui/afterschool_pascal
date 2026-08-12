@@ -710,7 +710,12 @@ type
         the bounds need not be constant, so a range is not expanded here. }
       nkSet:        (seMembers: nodePtr);
       nkSetMember:  (smLo, smHi: nodePtr);
-      nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr);
+      { vrSlot: a parameterless function written as a bare name is a call
+        (ISO 7185 6.8.2.2), and a result that lives in memory needs storage the
+        caller supplies -- so this node takes a result slot exactly as nkCall
+        does. nil unless vrSym is invocable with such a result. }
+      nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr;
+                     vrSlot: symPtr);
       nkIndex:      (ixBase, ixIndex: nodePtr);
       { ISO/IEC 10206:1991 6.8.4's schema-discriminant, `v.n`: the base
         possesses a type produced from a schema and the name is one of that
@@ -730,7 +735,10 @@ type
                        value arrives with the actual and this is the skDisc
                        symbol that reads it out of the descriptor. Exactly one
                        of the two is how a discriminant answers. }
-                     fdDiscSym: symPtr);
+                     fdDiscSym: symPtr;
+                     { The same slot vrSlot is, for 6.11.3's qualified name
+                       denoting a parameterless function. }
+                     fdSlot: symPtr);
       nkDeref:      (drBase: nodePtr);
       nkBinary:     (bnOp: binaryOp; bnLhs, bnRhs: nodePtr);
       nkUnary:      (unOp: unaryOp; unArg: nodePtr);
@@ -2273,13 +2281,14 @@ begin
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
   case k of
-    nkVar: begin n^.vrSym := nil; n^.vrField := nil end;
+    nkVar: begin n^.vrSym := nil; n^.vrField := nil; n^.vrSlot := nil end;
     nkField: begin
                n^.fdResolved := nil;
                n^.fdIsDisc := false;
                n^.fdDiscValue := 0;
                n^.fdDiscSym := nil;
-               n^.fdQualified := nil
+               n^.fdQualified := nil;
+               n^.fdSlot := nil
              end;
     nkCall: begin
               n^.clBuiltin := biNone;
@@ -8215,15 +8224,22 @@ end;
   own, and a frame slot is somewhere both backends can name without an alloca
   in the middle of a function. A recursive call needs nothing extra, because
   each activation brings its own frame and so its own slots. }
-procedure GiveResultSlot(c: nodePtr);
-var at, len: integer;
+function NewResultSlot(t: typePtr): symPtr;
+var at, len: integer; r: symPtr;
 begin
+  r := nil;
   if currentProc <> nil then
-    if c^.ntype <> nil then
-      if IsMemory(c^.ntype) then begin
+    if t <> nil then
+      if IsMemory(t) then begin
         InternCallResultName(currentProc^.frameCount, at, len);
-        c^.clSlot := AddHiddenVar(at, len, skVar, c^.ntype, currentProc)
-      end
+        r := AddHiddenVar(at, len, skVar, t, currentProc)
+      end;
+  NewResultSlot := r
+end;
+
+procedure GiveResultSlot(c: nodePtr);
+begin
+  c^.clSlot := NewResultSlot(c^.ntype)
 end;
 
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
@@ -9370,8 +9386,10 @@ begin
                   WritePool(e^.fdAt, e^.fdLen);
                   writeln(''' needs its arguments')
                 end
-                else
-                  e^.ntype := ResultTypeOf(e^.fdQualified)
+                else begin
+                  e^.ntype := ResultTypeOf(e^.fdQualified);
+                  e^.fdSlot := NewResultSlot(e^.ntype)
+                end
               else begin
                 ErrorAt(e^.line, e^.col);
                 write('''');
@@ -9519,8 +9537,15 @@ begin
             Pascal has no empty argument list, and inside the function's own
             body this is the recursive call rather than a way to read the
             result (ISO 7185 6.8.2.2). }
-          else if IsInvocable(e^.vrSym) and (e^.vrSym^.params = nil) then
-            e^.ntype := ResultTypeOf(e^.vrSym)
+          else if IsInvocable(e^.vrSym) and (e^.vrSym^.params = nil) then begin
+            e^.ntype := ResultTypeOf(e^.vrSym);
+            { The bare name *is* the call, so it needs the storage a written-out
+              call site gets. Without this a result living in memory has nowhere
+              to be built and the call is never emitted at all -- the address
+              the expression evaluates to is the slot's, so no slot means no
+              call. }
+            e^.vrSlot := NewResultSlot(e^.ntype)
+          end
           else if IsInvocable(e^.vrSym) then begin
             ErrorAt(e^.line, e^.col);
             write('''');
@@ -16974,6 +16999,13 @@ var base, idx, lo, hi, below, above, bad, off, target, stride, byte: str;
 begin
   case e^.kind of
     nkVar: begin
+      { A parameterless function written as a bare name is a call (6.8.2.2),
+        and a result living in memory *is* the storage the call filled in -- so
+        the address of this expression is the address the call returns, not the
+        address of anything named vrSym, which is a function and has none. }
+      if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
+        EmitExpr(e, v)
+      else begin
       AddressOfSym(e^.vrSym, base);
       if e^.vrField = nil then
         v := base
@@ -16981,14 +17013,19 @@ begin
         { The name was a field of an enclosing `with`, and vrSym is that
           statement's binding -- the record's address, taken once on entry. }
         FieldAddress(base, e^.vrSym^.stype, e^.vrField, v)
+      end
     end;
 
     nkField:
       { 6.11.3's qualified name denotes one symbol, so it is addressed as a
         bare name is -- the base is an interface-identifier and has no address
         of its own. }
-      if e^.fdQualified <> nil then
-        AddressOfSym(e^.fdQualified, v)
+      if e^.fdQualified <> nil then begin
+        if IsInvocable(e^.fdQualified) then
+          EmitExpr(e, v)
+        else
+          AddressOfSym(e^.fdQualified, v)
+      end
       else begin
         EmitAddress(e^.fdBase, base);
         FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v)
@@ -17190,7 +17227,7 @@ begin
       if e^.fdQualified <> nil then
         if e^.fdQualified^.kind = skConst then EmitConst(e^.fdQualified, v)
         else if IsInvocable(e^.fdQualified) then
-          EmitUserCall(e^.fdQualified, nil, nil, v)
+          EmitUserCall(e^.fdQualified, nil, e^.fdSlot, v)
         else EmitLoad(e, v)
       { ...unless the base is a schematic formal parameter, whose type was
         produced with no tuple: then it is one field of the descriptor the
@@ -17219,7 +17256,7 @@ begin
         functional parameter, which is the same call through a loaded
         address. }
       else if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
-        EmitUserCall(e^.vrSym, nil, nil, v)
+        EmitUserCall(e^.vrSym, nil, e^.vrSlot, v)
       else
         EmitLoad(e, v);
     nkSet: EmitSet(e, v);
