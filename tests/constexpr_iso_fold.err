@@ -1,0 +1,6 @@
+<source>:15:3: error: the value of constant 'folded' is not a compile-time constant
+<source>:16:3: error: the value of constant 'called' is not a compile-time constant
+<source>:17:3: error: the value of constant 'compared' is not a compile-time constant
+<source>:22:8: error: undeclared identifier 'folded'
+<source>:22:17: error: undeclared identifier 'called'
+<source>:23:16: error: undeclared identifier 'compared'

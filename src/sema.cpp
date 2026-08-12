@@ -189,6 +189,7 @@ Type *Sema::stringType(long long length) {
 bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
   checkExpr(e);
   Symbol out;
+  constReported_ = false;
   if (!evalConst(e, out) || !out.type || !out.type->isOrdinal())
     return false;
   type = out.type;
@@ -506,8 +507,11 @@ Type *Sema::resolveSubrange(TypeExpr &denoter) {
 
   if (!evalOrdinal(denoter.lo.get(), loType, lo) ||
       !evalOrdinal(denoter.hi.get(), hiType, hi)) {
-    diags_.error(denoter.line, denoter.col,
-                 "the bounds of a subrange must be ordinal constants");
+    // Silent when the folder was specific: an overflow in a bound is one
+    // mistake and deserves one message, not that one and "not a constant".
+    if (!constReported_)
+      diags_.error(denoter.line, denoter.col,
+                   "the bounds of a subrange must be ordinal constants");
     ok = false;
   } else if (loType->base() != hiType->base()) {
     diags_.error(denoter.line, denoter.col,
@@ -585,7 +589,8 @@ bool Sema::evalLabelRange(CaseLabel &label, const char *constantMsg,
                           Type *&type, LabelRange &r) {
   type = nullptr;
   if (!evalOrdinal(label.lo.get(), type, r.lo)) {
-    diags_.error(label.lo->line, label.lo->col, constantMsg);
+    if (!constReported_)
+      diags_.error(label.lo->line, label.lo->col, constantMsg);
     return false;
   }
   r.hi = r.lo;
@@ -594,7 +599,8 @@ bool Sema::evalLabelRange(CaseLabel &label, const char *constantMsg,
 
   Type *hiType = nullptr;
   if (!evalOrdinal(label.hi.get(), hiType, r.hi)) {
-    diags_.error(label.hi->line, label.hi->col, constantMsg);
+    if (!constReported_)
+      diags_.error(label.hi->line, label.hi->col, constantMsg);
     return false;
   }
   if (type && hiType && type->base() != hiType->base()) {
@@ -2631,10 +2637,15 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
   for (auto &c : block.consts) {
     checkExpr(c.value.get());
     Symbol value;
+    constReported_ = false;
     if (!evalConst(c.value.get(), value)) {
-      diags_.error(c.line, c.col,
-                   "the value of constant '" + c.name +
-                       "' is not a compile-time constant");
+      // The folder says why when it can — an overflow, a `chr` out of range —
+      // and this generic message is for when it cannot: the expression was
+      // never constant in the first place.
+      if (!constReported_)
+        diags_.error(c.line, c.col,
+                     "the value of constant '" + c.name +
+                         "' is not a compile-time constant");
       continue;
     }
     Symbol *s = declare(c.name, SymKind::Const, c.line, c.col);
@@ -3056,7 +3067,265 @@ bool Sema::evalConst(Expr *e, Symbol &out) {
       return true;
     }
   }
+  // ISO/IEC 10206:1991 §6.8.2 opens every one of these positions from a
+  // *constant* to a constant-expression. Everything above is ISO 7185's
+  // `constant` — a signed literal or a name — and everything below is the
+  // rest of an expression, so the standard decides which of the two languages
+  // is being folded.
+  if (std_ == Std::Extended) {
+    if (auto *b = as<Binary>(e))
+      return evalConstBinary(b, out);
+    if (auto *c = as<Call>(e))
+      return evalConstCall(c, out);
+  }
   return false;
+}
+
+/// §6.7.2.2 makes an integer overflow an error, and one the *compiler* can see
+/// is a diagnostic rather than a trap: the value would otherwise reach a type
+/// declaration as a wrapped number. The arithmetic is done in a wider type and
+/// the result range-checked, which is the same set of accepted programs the
+/// Pascal-hosted compiler reaches by checking before it multiplies — it has no
+/// wider type to fall back on.
+bool Sema::foldIntOp(long long a, long long b, BinOp op, int line, int col,
+                     long long &out) {
+  switch (op) {
+  case BinOp::Add: out = a + b; break;
+  case BinOp::Sub: out = a - b; break;
+  case BinOp::Mul: out = a * b; break;
+  case BinOp::IntDiv:
+    if (b == 0) {
+      diags_.error(line, col, "div by zero in a constant expression");
+      constReported_ = true;
+      return false;
+    }
+    out = a / b;
+    break;
+  case BinOp::Mod:
+    // §6.7.2.2 defines `mod` only for a positive right operand, and gives a
+    // non-negative result — the same rule the emitted code follows, so a
+    // folded `mod` and a computed one cannot disagree.
+    if (b <= 0) {
+      diags_.error(line, col,
+                   "the right operand of mod must be positive, and this one "
+                   "is a constant that is not");
+      constReported_ = true;
+      return false;
+    }
+    out = ((a % b) + b) % b;
+    break;
+  default:
+    return false;
+  }
+  if (out > kMaxInt || out < -kMaxInt) {
+    diags_.error(line, col, "integer overflow in a constant expression");
+    constReported_ = true;
+    return false;
+  }
+  return true;
+}
+
+/// §6.8.2's expression, once both operands have folded. What it will not fold
+/// is stated rather than silently refused: a real-valued operation, because a
+/// real constant is carried here as its source text and never converted
+/// (ADR-0025), and a set- or string-valued one, because a `Symbol` has nowhere
+/// to keep the value.
+bool Sema::evalConstBinary(Binary *b, Symbol &out) {
+  Symbol l, r;
+  if (!evalConst(b->lhs.get(), l) || !evalConst(b->rhs.get(), r))
+    return false;
+  if (!l.type || !r.type)
+    return false;
+
+  if (l.type->isReal() || r.type->isReal() || b->op == BinOp::RealDiv ||
+      b->op == BinOp::Exp) {
+    diags_.error(b->line, b->col,
+                 "a real constant expression is not folded: a real constant "
+                 "is carried as the text that was written and never "
+                 "converted");
+    constReported_ = true;
+    return false;
+  }
+
+  auto ordinalOf = [](const Symbol &s) -> long long {
+    if (s.type->isChar())
+      return static_cast<unsigned char>(s.charVal);
+    if (s.type->base()->kind == TypeKind::Boolean)
+      return s.boolVal ? 1 : 0;
+    return s.intVal;
+  };
+
+  switch (b->op) {
+  case BinOp::Add:
+  case BinOp::Sub:
+  case BinOp::Mul:
+  case BinOp::IntDiv:
+  case BinOp::Mod:
+  case BinOp::Pow: {
+    if (!l.type->isInteger() || !r.type->isInteger())
+      return false;
+    if (b->op == BinOp::Pow) {
+      // §6.8.3.2 table 3: `pow` yields the type of its *left* operand, so an
+      // integer base gives an integer. It is repeated multiplication, and
+      // every step is checked, exactly as the runtime's is.
+      if (r.intVal < 0) {
+        diags_.error(b->line, b->col,
+                     "the right operand of pow must not be negative");
+        constReported_ = true;
+        return false;
+      }
+      long long acc = 1;
+      for (long long k = 0; k < r.intVal; ++k)
+        if (!foldIntOp(acc, l.intVal, BinOp::Mul, b->line, b->col, acc))
+          return false;
+      out.type = ty::Int();
+      out.intVal = acc;
+      return true;
+    }
+    long long v = 0;
+    if (!foldIntOp(l.intVal, r.intVal, b->op, b->line, b->col, v))
+      return false;
+    out.type = ty::Int();
+    out.intVal = v;
+    return true;
+  }
+  case BinOp::And:
+  case BinOp::AndThen:
+  case BinOp::Or:
+  case BinOp::OrElse:
+    if (!l.type->isBoolean() || !r.type->isBoolean())
+      return false;
+    out.type = ty::Bool();
+    out.boolVal = (b->op == BinOp::And || b->op == BinOp::AndThen)
+                      ? (l.boolVal && r.boolVal)
+                      : (l.boolVal || r.boolVal);
+    return true;
+  case BinOp::Eq:
+  case BinOp::Ne:
+  case BinOp::Lt:
+  case BinOp::Le:
+  case BinOp::Gt:
+  case BinOp::Ge: {
+    // §6.8.3.5 compares values of one type, and the ordinal is what a folded
+    // comparison has of either.
+    if (!l.type->isOrdinal() || !r.type->isOrdinal())
+      return false;
+    if (l.type->base() != r.type->base() && !(l.type->isInteger() &&
+                                              r.type->isInteger()))
+      return false;
+    long long a = ordinalOf(l), c = ordinalOf(r);
+    out.type = ty::Bool();
+    switch (b->op) {
+    case BinOp::Eq: out.boolVal = a == c; break;
+    case BinOp::Ne: out.boolVal = a != c; break;
+    case BinOp::Lt: out.boolVal = a < c; break;
+    case BinOp::Le: out.boolVal = a <= c; break;
+    case BinOp::Gt: out.boolVal = a > c; break;
+    default:        out.boolVal = a >= c; break;
+    }
+    return true;
+  }
+  default:
+    return false;
+  }
+}
+
+/// §6.8.2 c) excludes a function declared by the program and the two required
+/// functions `eof` and `eoln`; NOTE 1 excludes the ones that take a variable.
+/// What is left that this compiler can evaluate *exactly* is ISO 7185's
+/// ordinal-valued required functions, and those are the seven here. The
+/// transcendentals are not among them for the reason a real operator is not:
+/// their results would have to be converted, and a real constant is carried as
+/// the text that was written.
+bool Sema::evalConstCall(Call *c, Symbol &out) {
+  if (c->args.size() != 1)
+    return false;
+  Symbol a;
+  if (!evalConst(c->args[0].get(), a) || !a.type)
+    return false;
+
+  auto ordinal = [&]() -> long long {
+    if (a.type->isChar())
+      return static_cast<unsigned char>(a.charVal);
+    if (a.type->base()->kind == TypeKind::Boolean)
+      return a.boolVal ? 1 : 0;
+    return a.intVal;
+  };
+
+  switch (c->builtin) {
+  case Builtin::Abs:
+  case Builtin::Sqr: {
+    if (!a.type->isInteger())
+      return false;
+    long long v = 0;
+    if (c->builtin == Builtin::Abs)
+      v = a.intVal < 0 ? -a.intVal : a.intVal;
+    else if (!foldIntOp(a.intVal, a.intVal, BinOp::Mul, c->line, c->col, v))
+      return false;
+    out.type = ty::Int();
+    out.intVal = v;
+    return true;
+  }
+  case Builtin::Odd:
+    if (!a.type->isInteger())
+      return false;
+    out.type = ty::Bool();
+    // The emitted code masks the low bit, which is what makes `odd(-3)` true;
+    // C's `%` would answer -1 and compare false.
+    out.boolVal = (a.intVal & 1) != 0;
+    return true;
+  case Builtin::Ord:
+    if (!a.type->isOrdinal())
+      return false;
+    out.type = ty::Int();
+    out.intVal = ordinal();
+    return true;
+  case Builtin::Chr: {
+    if (!a.type->isInteger())
+      return false;
+    if (a.intVal < 0 || a.intVal > 255) {
+      diags_.error(c->line, c->col,
+                   "chr of a value outside 0..255 in a constant expression");
+      constReported_ = true;
+      return false;
+    }
+    out.type = ty::Char();
+    out.charVal = static_cast<char>(a.intVal);
+    return true;
+  }
+  case Builtin::Succ:
+  case Builtin::Pred: {
+    if (!a.type->isOrdinal())
+      return false;
+    long long v = ordinal();
+    // §6.6.6.4: succ and pred run out at the ends of the operand's *own* type,
+    // which for an enumeration is its last constant and not maxint. The end is
+    // tested *before* the step, because at maxint the step itself would
+    // overflow — the same reason the emitted code checks first, and what lets
+    // the Pascal-hosted folder reach the same answer without a wider type.
+    bool up = c->builtin == Builtin::Succ;
+    if ((up && v >= a.type->ordinalHi()) ||
+        (!up && v <= a.type->ordinalLo())) {
+      diags_.error(c->line, c->col,
+                   std::string(c->builtin == Builtin::Succ ? "succ" : "pred") +
+                       " runs past the end of " + a.type->name() +
+                       " in a constant expression");
+      constReported_ = true;
+      return false;
+    }
+    v += up ? 1 : -1;
+    out = a;
+    if (a.type->isChar())
+      out.charVal = static_cast<char>(v);
+    else if (a.type->base()->kind == TypeKind::Boolean)
+      out.boolVal = v != 0;
+    else
+      out.intVal = v;
+    return true;
+  }
+  default:
+    return false;
+  }
 }
 
 // --------------------------------------------------------------- statements

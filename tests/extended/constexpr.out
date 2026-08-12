@@ -1,0 +1,10 @@
+const  20 5 7 1024
+funcs  A65 13 B
+bool   TRUE TRUE
+signs  2 TRUE -2
+range  5 11
+array  1 25
+case   one
+case   two
+case   three
+enum   blue

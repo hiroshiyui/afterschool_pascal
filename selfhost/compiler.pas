@@ -957,6 +957,12 @@ var
     is what makes `input` and `output` reach 6.11.4.2's implicit accessibility
     rather than 6.10's program-parameter one. }
   curModule: symPtr;
+  { Set when the constant folder has said *why* a constant expression failed.
+    Failing to fold has two unrelated causes -- the expression is not constant,
+    which the caller describes in its own words, and the expression is constant
+    and wrong, which only the folder can describe -- and without this the second
+    would be reported twice, once precisely and once vaguely. }
+  constReported: boolean;
 
   { --- the character sink (see Put) --- }
   msgOut: boolean;
@@ -2436,18 +2442,55 @@ end;
   The two only diverge at the '..', so this is the one place the type grammar
   needs to look past the current token. }
 function LooksLikeSubrange: boolean;
-var i: integer; ok: boolean;
+var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
-  i := pos;
-  if (tok[i].kind = tkPlus) or (tok[i].kind = tkMinus) then
-    i := i + 1;
-  ok := (tok[i].kind = tkIdent) or (tok[i].kind = tkInt) or
-        (tok[i].kind = tkStr);
-  if ok then begin
-    i := i + 1;
-    ok := (i <= tokCount) and (tok[i].kind = tkDotDot)
-  end;
-  LooksLikeSubrange := ok
+  if langStd = stdExtended then begin
+    { 6.4.2.4 makes a subrange-bound a constant-expression (6.8.2), so the
+      `..` is no longer two tokens away -- `base - 9 .. base + 1` is a subrange
+      and `base` alone is a type name. What still separates them is a `..`
+      before the denoter ends, so this scans for one at bracket depth zero.
+      Only the denoters beginning with a name, a literal or a sign reach here:
+      array, record, set, file and `^` are decided by their first token. }
+    depth := 0;
+    i := pos;
+    ok := false;
+    done := false;
+    while (not done) and (i <= tokCount) do begin
+      k := tok[i].kind;
+      if (k = tkLParen) or (k = tkLBracket) then
+        depth := depth + 1
+      else if (k = tkRParen) or (k = tkRBracket) then
+        if depth = 0 then done := true          { the denoter ended }
+        else depth := depth - 1
+      else if k = tkDotDot then begin
+        if depth = 0 then begin
+          ok := true;
+          done := true
+        end
+      end
+      else if (k = tkSemi) or (k = tkComma) or (k = tkColon) or (k = tkEq) or
+              (k = tkPeriod) or (k = tkOf) or (k = tkEnd) or (k = tkBegin) or
+              (k = tkEof) then begin
+        if depth = 0 then done := true
+      end;
+      i := i + 1
+    end;
+    LooksLikeSubrange := ok
+  end
+  else begin
+    { ISO 7185 6.4.2.4's bound is a `constant` -- a signed literal or a name --
+      so the two forms diverge at the token after it and nowhere else. }
+    i := pos;
+    if (tok[i].kind = tkPlus) or (tok[i].kind = tkMinus) then
+      i := i + 1;
+    ok := (tok[i].kind = tkIdent) or (tok[i].kind = tkInt) or
+          (tok[i].kind = tkStr);
+    if ok then begin
+      i := i + 1;
+      ok := (i <= tokCount) and (tok[i].kind = tkDotDot)
+    end;
+    LooksLikeSubrange := ok
+  end
 end;
 
 function ParseEnumType: nodePtr;
@@ -5513,7 +5556,89 @@ begin
 end;
 
 
-function EvalConst(e: nodePtr; var res: symbol): boolean;
+function EvalConst(e: nodePtr; var res: symbol): boolean; forward;
+function EvalConstBinary(e: nodePtr; var res: symbol): boolean; forward;
+function EvalConstCall(e: nodePtr; var res: symbol): boolean; forward;
+
+{ The ordinal a folded constant carries, whatever field its type selects. }
+function ConstOrdinal(var s: symbol): integer;
+begin
+  if IsChar(s.stype) then ConstOrdinal := ord(s.charVal)
+  else if IsBoolean(s.stype) then
+    if s.boolVal then ConstOrdinal := 1 else ConstOrdinal := 0
+  else ConstOrdinal := s.intVal
+end;
+
+{ 6.7.2.2 makes an integer overflow an error, and one the *compiler* can see is
+  a diagnostic rather than a trap: the value would otherwise reach a type
+  declaration as a wrapped number. There is no wider type here to compute in
+  and range-check afterwards, so each operation is checked before it is done --
+  which accepts exactly the programs the C++ compiler's wider arithmetic does. }
+function FoldIntOp(a, b: integer; op: binaryOp; line, col: integer;
+                   var out: integer): boolean;
+var ok, said: boolean;
+begin
+  ok := true;
+  said := false;
+  case op of
+    opAdd:
+      if ((b > 0) and (a > maxint - b)) or ((b < 0) and (a < -maxint - b)) then
+        ok := false
+      else
+        out := a + b;
+    opSub:
+      if ((b < 0) and (a > maxint + b)) or ((b > 0) and (a < -maxint + b)) then
+        ok := false
+      else
+        out := a - b;
+    opMul:
+      if a = 0 then
+        out := 0
+      else if abs(b) > maxint div abs(a) then
+        ok := false
+      else
+        out := a * b;
+    opIntDiv:
+      if b = 0 then begin
+        ErrorAt(line, col);
+        writeln('div by zero in a constant expression');
+        ok := false;
+        said := true
+      end
+      else
+        out := a div b;
+    opMod:
+      { 6.7.2.2 defines `mod` only for a positive right operand, and gives a
+        non-negative result -- the same rule the emitted code follows, so a
+        folded `mod` and a computed one cannot disagree. }
+      if b <= 0 then begin
+        ErrorAt(line, col);
+        writeln('the right operand of mod must be positive, and this one is ',
+                'a constant that is not');
+        ok := false;
+        said := true
+      end
+      else
+        { No adjustment here, where the C++ folder needs `((a % b) + b) % b`:
+          this compiler is written in Afterschool Pascal, whose `mod` is
+          already the one 6.7.2.2 asks for. The two folders differ because
+          their host languages do, and the wrapped form would compute the very
+          same value -- so no test could ever tell the two spellings apart. }
+        out := a mod b;
+    opRealDiv, opAnd, opOr, opExp, opPow, opAndThen, opOrElse,
+    opEq, opNe, opLt, opLe, opGt, opGe, opIn:
+      ok := false
+  end;
+  if (not ok) and (not said) then begin
+    ErrorAt(line, col);
+    writeln('integer overflow in a constant expression');
+    said := true
+  end;
+  if said then constReported := true;
+  FoldIntOp := ok
+end;
+
+function EvalConst;
 var inner: symbol; ok: boolean;
 begin
   ok := false;
@@ -5580,8 +5705,15 @@ begin
                 ok := true
               end
           end;
-      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref, nkBinary,
-      nkCall,
+      { 6.8.2 opens every constant position from a *constant* to a
+        constant-expression. Everything above is ISO 7185's `constant` -- a
+        signed literal or a name -- and these two are the rest of an
+        expression, so the standard decides which language is being folded. }
+      nkBinary:
+        if langStd = stdExtended then ok := EvalConstBinary(e, res);
+      nkCall:
+        if langStd = stdExtended then ok := EvalConstCall(e, res);
+      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -5593,6 +5725,186 @@ begin
   EvalConst := ok
 end;
 
+{ 6.8.2's expression, once both operands have folded. What it will not fold is
+  stated rather than silently refused: a real-valued operation, because a real
+  constant is carried here as its source text and never converted (ADR-0025),
+  and a set- or string-valued one, because a symbol has nowhere to keep the
+  value. }
+function EvalConstBinary;
+var l, r: symbol; ok: boolean; a, c, v: integer; k: integer;
+begin
+  ok := false;
+  l.stype := nil;
+  r.stype := nil;
+  if EvalConst(e^.bnLhs, l) and EvalConst(e^.bnRhs, r) then
+    if (l.stype <> nil) and (r.stype <> nil) then
+      if IsReal(l.stype) or IsReal(r.stype) or (e^.bnOp = opRealDiv) or
+         (e^.bnOp = opExp) then begin
+        ErrorAt(e^.line, e^.col);
+        writeln('a real constant expression is not folded: a real constant ',
+                'is carried as the text that was written and never converted');
+        constReported := true
+      end
+      else
+        case e^.bnOp of
+          opAdd, opSub, opMul, opIntDiv, opMod:
+            if IsInteger(l.stype) and IsInteger(r.stype) then begin
+              ok := FoldIntOp(l.intVal, r.intVal, e^.bnOp, e^.line, e^.col, v);
+              if ok then begin
+                res.stype := intType;
+                res.intVal := v
+              end
+            end;
+          { 6.8.3.2 table 3: `pow` yields the type of its *left* operand, so an
+            integer base gives an integer. It is repeated multiplication, and
+            every step is checked, exactly as the runtime's is. }
+          opPow:
+            if IsInteger(l.stype) and IsInteger(r.stype) then
+              if r.intVal < 0 then begin
+                ErrorAt(e^.line, e^.col);
+                writeln('the right operand of pow must not be negative');
+                constReported := true
+              end
+              else begin
+                v := 1;
+                ok := true;
+                k := 0;
+                while (k < r.intVal) and ok do begin
+                  ok := FoldIntOp(v, l.intVal, opMul, e^.line, e^.col, v);
+                  k := k + 1
+                end;
+                if ok then begin
+                  res.stype := intType;
+                  res.intVal := v
+                end
+              end;
+          opAnd, opAndThen, opOr, opOrElse:
+            if IsBoolean(l.stype) and IsBoolean(r.stype) then begin
+              res.stype := boolType;
+              if (e^.bnOp = opAnd) or (e^.bnOp = opAndThen) then
+                res.boolVal := l.boolVal and r.boolVal
+              else
+                res.boolVal := l.boolVal or r.boolVal;
+              ok := true
+            end;
+          { 6.8.3.5 compares values of one type, and the ordinal is what a
+            folded comparison has of either. }
+          opEq, opNe, opLt, opLe, opGt, opGe:
+            if IsOrdinal(l.stype) and IsOrdinal(r.stype) then
+              if (Base(l.stype) = Base(r.stype)) or
+                 (IsInteger(l.stype) and IsInteger(r.stype)) then begin
+                a := ConstOrdinal(l);
+                c := ConstOrdinal(r);
+                res.stype := boolType;
+                case e^.bnOp of
+                  opEq: res.boolVal := a = c;
+                  opNe: res.boolVal := a <> c;
+                  opLt: res.boolVal := a < c;
+                  opLe: res.boolVal := a <= c;
+                  opGt: res.boolVal := a > c;
+                  opGe: res.boolVal := a >= c;
+                  opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
+                  opExp, opPow, opAndThen, opOrElse, opIn: ;
+                end;
+                ok := true
+              end;
+          opRealDiv, opExp, opIn: ;
+        end;
+  EvalConstBinary := ok
+end;
+
+{ 6.8.2 c) excludes a function declared by the program and the required
+  functions eof and eoln; NOTE 1 excludes the ones that take a variable. What
+  is left that this compiler can evaluate *exactly* is ISO 7185's
+  ordinal-valued required functions, and those are the seven here. The
+  transcendentals are not among them for the reason a real operator is not:
+  their results would have to be converted, and a real constant is carried as
+  the text that was written. }
+function EvalConstCall;
+var a: symbol; ok: boolean; v: integer;
+begin
+  ok := false;
+  a.stype := nil;
+  if e^.clArgs <> nil then
+    if e^.clArgs^.next = nil then
+      if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
+        case e^.clBuiltin of
+          biAbs, biSqr:
+            if IsInteger(a.stype) then begin
+              if e^.clBuiltin = biAbs then begin
+                v := abs(a.intVal);
+                ok := true
+              end
+              else
+                ok := FoldIntOp(a.intVal, a.intVal, opMul, e^.line, e^.col, v);
+              if ok then begin
+                res.stype := intType;
+                res.intVal := v
+              end
+            end;
+          biOdd:
+            if IsInteger(a.stype) then begin
+              res.stype := boolType;
+              { The emitted code masks the low bit, which is what makes
+                odd(-3) true; a remainder would answer -1 and compare false. }
+              res.boolVal := (a.intVal mod 2 <> 0);
+              ok := true
+            end;
+          biOrd:
+            if IsOrdinal(a.stype) then begin
+              res.stype := intType;
+              res.intVal := ConstOrdinal(a);
+              ok := true
+            end;
+          biChr:
+            if IsInteger(a.stype) then
+              if (a.intVal < 0) or (a.intVal > 255) then begin
+                ErrorAt(e^.line, e^.col);
+                writeln('chr of a value outside 0..255 in a constant ',
+                        'expression');
+                constReported := true
+              end
+              else begin
+                res.stype := charType;
+                res.charVal := chr(a.intVal);
+                ok := true
+              end;
+          biSucc, biPred:
+            if IsOrdinal(a.stype) then begin
+              { 6.6.6.4: succ and pred run out at the ends of the operand's
+                *own* type, which for an enumeration is its last constant and
+                not maxint. The end is tested *before* the step, because at
+                maxint the step itself would overflow -- the same reason the
+                emitted code checks first. }
+              v := ConstOrdinal(a);
+              if ((e^.clBuiltin = biSucc) and (v >= OrdinalHi(a.stype))) or
+                 ((e^.clBuiltin = biPred) and (v <= OrdinalLo(a.stype))) then
+              begin
+                ErrorAt(e^.line, e^.col);
+                if e^.clBuiltin = biSucc then write('succ') else write('pred');
+                write(' runs past the end of ');
+                WriteTypeName(a.stype);
+                writeln(' in a constant expression');
+                constReported := true
+              end
+              else begin
+                if e^.clBuiltin = biSucc then v := v + 1 else v := v - 1;
+                res := a;
+                if IsChar(a.stype) then res.charVal := chr(v)
+                else if IsBoolean(a.stype) then res.boolVal := v <> 0
+                else res.intVal := v;
+                ok := true
+              end
+            end;
+          biNone, biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc,
+          biRound, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
+          biPosition, biLastPosition, biEmpty, biLength, biIndex, biSubstr,
+          biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe,
+          biBinding: ;
+        end;
+  EvalConstCall := ok
+end;
+
 { Evaluate a constant that must be ordinal -- a subrange bound, a case label, a
   variant's tag value. Reports the type it was written as, so a mismatch can be
   named rather than silently coerced. }
@@ -5601,6 +5913,7 @@ var res: symbol;
 begin
   CheckExpr(e);
   res.stype := nil;
+  constReported := false;
   if not EvalConst(e, res) then
     EvalOrdinal := false
   else if not IsOrdinal(res.stype) then
@@ -5661,11 +5974,13 @@ begin
   lo := 0;
   hi := 0;
   if not EvalOrdinal(lab^.smLo, ltype, lo) then begin
-    ErrorAt(lab^.smLo^.line, lab^.smLo^.col);
-    if forCase then
-      writeln('a case label must be an ordinal constant')
-    else
-      writeln('a variant''s label must be an ordinal constant');
+    if not constReported then begin
+      ErrorAt(lab^.smLo^.line, lab^.smLo^.col);
+      if forCase then
+        writeln('a case label must be an ordinal constant')
+      else
+        writeln('a variant''s label must be an ordinal constant')
+    end;
     ok := false
   end
   else begin
@@ -5673,11 +5988,13 @@ begin
     if lab^.smHi <> nil then begin
       hiType := nil;
       if not EvalOrdinal(lab^.smHi, hiType, hi) then begin
-        ErrorAt(lab^.smHi^.line, lab^.smHi^.col);
-        if forCase then
-          writeln('a case label must be an ordinal constant')
-        else
-          writeln('a variant''s label must be an ordinal constant');
+        if not constReported then begin
+          ErrorAt(lab^.smHi^.line, lab^.smHi^.col);
+          if forCase then
+            writeln('a case label must be an ordinal constant')
+          else
+            writeln('a variant''s label must be an ordinal constant')
+        end;
         ok := false
       end
       else if (ltype <> nil) and (hiType <> nil) and
@@ -6124,8 +6441,12 @@ begin
   ok := EvalOrdinal(d^.sbLo, loType, lo);
   if ok then ok := EvalOrdinal(d^.sbHi, hiType, hi);
   if not ok then begin
-    ErrorAt(d^.line, d^.col);
-    writeln('the bounds of a subrange must be ordinal constants')
+    { Silent when the folder was specific: an overflow in a bound is one
+      mistake and deserves one message, not that one and "not a constant". }
+    if not constReported then begin
+      ErrorAt(d^.line, d^.col);
+      writeln('the bounds of a subrange must be ordinal constants')
+    end
   end
   else if Base(loType) <> Base(hiType) then begin
     ErrorAt(d^.line, d^.col);
@@ -10882,11 +11203,17 @@ begin
   while d <> nil do begin
     CheckExpr(d^.kdValue);
     value.stype := nil;
+    constReported := false;
     if not EvalConst(d^.kdValue, value) then begin
-      ErrorAt(d^.line, d^.col);
-      write('the value of constant ''');
-      WritePool(d^.kdAt, d^.kdLen);
-      writeln(''' is not a compile-time constant')
+      { The folder says why when it can -- an overflow, a `chr` out of range --
+        and this generic message is for when it cannot: the expression was
+        never constant in the first place. }
+      if not constReported then begin
+        ErrorAt(d^.line, d^.col);
+        write('the value of constant ''');
+        WritePool(d^.kdAt, d^.kdLen);
+        writeln(''' is not a compile-time constant')
+      end
     end
     else begin
       s := Declare(d^.kdAt, d^.kdLen, skConst, d^.line, d^.col);

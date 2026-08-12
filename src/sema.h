@@ -449,6 +449,20 @@ private:
   /// here instead of through checkExpr — which would read `f` as a call.
   void checkProcArgument(Symbol *formal, Expr *a, Symbol *callee, size_t at);
   bool evalConst(Expr *e, Symbol &out);
+  /// ISO/IEC 10206:1991 §6.8.2's constant-expression, which is everything an
+  /// expression can be once it is nonvarying. Only reached under
+  /// `--std=extended`: ISO 7185 §6.3 admits a signed literal or a name and
+  /// nothing else.
+  bool evalConstBinary(Binary *b, Symbol &out);
+  bool evalConstCall(Call *c, Symbol &out);
+  bool foldIntOp(long long a, long long b, BinOp op, int line, int col,
+                 long long &out);
+  /// Set when the folder has said *why* a constant expression failed. Failing
+  /// to fold has two unrelated causes — the expression is not constant, which
+  /// the caller describes in its own words, and the expression is constant and
+  /// wrong, which only the folder can describe — and without this the second
+  /// would be reported twice, once precisely and once vaguely.
+  bool constReported_ = false;
 
   /// True if `e` denotes a variable — a name, or one with subscripts and
   /// fields applied. Assignment targets and `var` arguments must be one.

@@ -1,0 +1,16 @@
+<source>:15:19: error: integer overflow in a constant expression
+<source>:16:19: error: integer overflow in a constant expression
+<source>:17:20: error: integer overflow in a constant expression
+<source>:18:14: error: div by zero in a constant expression
+<source>:19:14: error: the right operand of mod must be positive, and this one is a constant that is not
+<source>:21:12: error: chr of a value outside 0..255 in a constant expression
+<source>:22:12: error: succ runs past the end of integer in a constant expression
+<source>:23:12: error: pred runs past the end of integer in a constant expression
+<source>:26:17: error: the right operand of pow must not be negative
+<source>:27:17: error: integer overflow in a constant expression
+<source>:30:16: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
+<source>:31:14: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
+<source>:36:21: error: integer overflow in a constant expression
+<source>:46:19: error: the discriminants of a schema must be ordinal constants here; 'cap' is not one
+<source>:54:7: error: the value of constant 'varying' is not a compile-time constant
+<source>:60:12: error: integer overflow in a constant expression

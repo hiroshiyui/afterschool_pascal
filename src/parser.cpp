@@ -579,6 +579,51 @@ std::vector<DeclName> Parser::parseNameList(const char *what) {
 /// name. The two only diverge at the '..', so this is the one place the type
 /// grammar needs to look past the current token.
 bool Parser::looksLikeSubrange() const {
+  // ISO/IEC 10206:1991 §6.4.2.4 makes a subrange-bound a constant-expression
+  // (§6.8.2), so the `..` is no longer two tokens away — `base - 9 .. base + 1`
+  // is a subrange and `base` alone is a type name. What still separates them is
+  // a `..` before the denoter ends, so this scans for one at bracket depth
+  // zero. Only the denoters that begin with a name, a literal or a sign reach
+  // here: `array`, `record`, `set`, `file` and `^` are all decided by their
+  // first token.
+  if (std_ == Std::Extended) {
+    int depth = 0;
+    for (size_t i = pos_; i < toks_.size(); ++i) {
+      switch (toks_[i].kind) {
+      case Tok::LParen:
+      case Tok::LBracket:
+        ++depth;
+        break;
+      case Tok::RParen:
+      case Tok::RBracket:
+        if (depth == 0)
+          return false; // the denoter ended
+        --depth;
+        break;
+      case Tok::DotDot:
+        if (depth == 0)
+          return true;
+        break;
+      case Tok::Semi:
+      case Tok::Comma:
+      case Tok::Colon:
+      case Tok::Eq:
+      case Tok::Period:
+      case Tok::KwOf:
+      case Tok::KwEnd:
+      case Tok::KwBegin:
+      case Tok::Eof:
+        if (depth == 0)
+          return false;
+        break;
+      default:
+        break;
+      }
+    }
+    return false;
+  }
+  // ISO 7185 §6.4.2.4's bound is a `constant` — a signed literal or a name —
+  // so the two forms diverge at the token after it and nowhere else.
   size_t i = pos_;
   if (toks_[i].kind == Tok::Plus || toks_[i].kind == Tok::Minus)
     ++i;
