@@ -1445,6 +1445,25 @@ begin
   for k := 1 to n do PoolPut(w[k])
 end;
 
+{ ...and in two pieces, for text longer than any literal type here holds. The
+  three required real constants of 6.4.2.2 b) are the only users: the shortest
+  decimal that round-trips to an IEEE-754 binary64 runs to twenty-two
+  characters and msgLit holds sixteen. }
+procedure InternWide2(a, b: msgLit; var at, len: integer);
+var n, k: integer;
+begin
+  at := poolLen + 1;
+  len := 0;
+  n := msgWidth;
+  while (n > 0) and (a[n] = ' ') do n := n - 1;
+  for k := 1 to n do PoolPut(a[k]);
+  len := len + n;
+  n := msgWidth;
+  while (n > 0) and (b[n] = ' ') do n := n - 1;
+  for k := 1 to n do PoolPut(b[k]);
+  len := len + n
+end;
+
 { The two names Sema builds rather than reads. A function's result slot is
   named after the function; a `with` binding is named after the frame slot it
   occupies, which is unique within the frame and needs no type name -- see the
@@ -13216,7 +13235,36 @@ begin
     InternWord('maxchar  ', at, len);
     s := Declare(at, len, skConst, 0, 0);
     s^.stype := charType;
-    s^.charVal := chr(setLimit)
+    s^.charVal := chr(setLimit);
+
+    { 6.4.2.2 b): "Each of the required constant-identifiers minreal, maxreal,
+      and epsreal shall denote an implementation-defined positive value of
+      real-type", where maxreal and minreal bound the magnitudes arithmetic can
+      be expected to work over and "the value of epsreal shall be the result of
+      subtracting 1.0 from the smallest value of real-type that is greater than
+      1.0."
+
+      A real is an IEEE-754 binary64 here, so the three are its largest finite
+      value, its smallest positive *normal* one, and its epsilon. Each is
+      spelled as decimal text, the same characters the C++ compiler writes, and
+      that is the mechanism rather than a formatting choice: this compiler has
+      no floating-point type and carries a real as the characters that were
+      written, all the way into the IR (ADR-0025). Each spelling is the
+      shortest decimal that round-trips to the value it names. }
+    InternWord('maxreal  ', at, len);
+    s := Declare(at, len, skConst, 0, 0);
+    s^.stype := realType;
+    InternWide2('1.79769313486231', '57e308          ', s^.realAt, s^.realLen);
+
+    InternWord('minreal  ', at, len);
+    s := Declare(at, len, skConst, 0, 0);
+    s^.stype := realType;
+    InternWide2('2.22507385850720', '14e-308         ', s^.realAt, s^.realLen);
+
+    InternWord('epsreal  ', at, len);
+    s := Declare(at, len, skConst, 0, 0);
+    s^.stype := realType;
+    InternWide2('2.22044604925031', '3e-16           ', s^.realAt, s^.realLen)
   end;
 
   { ISO/IEC 10206:1991 6.4.3.3.3: "There shall be a schema that is denoted by

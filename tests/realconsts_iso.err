@@ -1,0 +1,3 @@
+<source>:6:11: error: undeclared identifier 'maxreal'
+<source>:7:11: error: undeclared identifier 'minreal'
+<source>:8:11: error: undeclared identifier 'epsreal'

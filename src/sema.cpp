@@ -1653,6 +1653,38 @@ void Sema::installPredefined() {
     Symbol *mc = declare("maxchar", SymKind::Const, 0, 0);
     mc->type = ty::Char();
     mc->charVal = static_cast<char>(kSetLimit);
+
+    // ISO/IEC 10206:1991 §6.4.2.2 b): "Each of the required
+    // constant-identifiers minreal, maxreal, and epsreal shall denote an
+    // implementation-defined positive value of real-type", where maxreal and
+    // minreal bound the magnitudes arithmetic can be expected to work over and
+    // "the value of epsreal shall be the result of subtracting 1.0 from the
+    // smallest value of real-type that is greater than 1.0."
+    //
+    // A real is an IEEE-754 binary64 here, so the three are its largest
+    // finite value, its smallest positive *normal* one, and its epsilon —
+    // §6.4.2.2's NOTE 2 leaves the representation unspecified and Annex E
+    // makes each of these values implementation-defined, so naming the
+    // representation is what fixes them.
+    //
+    // They are spelled as **decimal text, identical in both compilers**, and
+    // that is the mechanism rather than a formatting choice: `selfhost` has no
+    // floating-point type at all and carries a real literal as the characters
+    // that were written, all the way into the IR (ADR-0025). Each of the three
+    // spellings below is the shortest decimal that round-trips to the value it
+    // names, so the two compilers reach the same double by two different
+    // routes — one through strtod here, one through LLVM's assembler there.
+    Symbol *mr = declare("maxreal", SymKind::Const, 0, 0);
+    mr->type = ty::Real();
+    mr->realVal = 1.7976931348623157e308;
+
+    Symbol *nr = declare("minreal", SymKind::Const, 0, 0);
+    nr->type = ty::Real();
+    nr->realVal = 2.2250738585072014e-308;
+
+    Symbol *er = declare("epsreal", SymKind::Const, 0, 0);
+    er->type = ty::Real();
+    er->realVal = 2.220446049250313e-16;
   }
 
   // ISO/IEC 10206:1991 §6.4.3.3.3: "There shall be a schema that is denoted by
