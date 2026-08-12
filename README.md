@@ -406,6 +406,11 @@ epsreal    next value above it. A real is an IEEE-754 binary64 here, so they
            are its largest finite value, its smallest positive normal one,
            and its epsilon. All three are required *identifiers*, so a
            program may declare its own
+for..in    §6.9.3.9.3's set-member-iteration: `for v in s do` runs the body
+           once per member of s, in ascending order — the standard leaves the
+           order to the implementation. The set is evaluated once, an empty
+           one runs the body no times, and a control variable narrower than
+           the set's base type traps on a member outside it
 required   maxchar — the largest char; halt — stop the program, closing what
            is open; card(s) — how many members a set has; succ(x, k) and
            pred(x, k) — step k places along an ordinal type, in either
@@ -425,8 +430,8 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
 ```
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
-design: zero field widths in `write`, the time procedures, set-member
-iteration, §6.8.7.4's set-value, and §6.8.8's structured constants.
+design: zero field widths in `write`, the time procedures, §6.8.7.4's
+set-value, and §6.8.8's structured constants.
 
 A word-symbol is reserved only when the feature needing it lands, so until that
 list is empty `--std=extended` accepts some programs a conforming processor

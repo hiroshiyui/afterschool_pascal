@@ -1114,6 +1114,31 @@ in one language or the other, and the standard is a property of the source.
   - The ISO 7185 gate had to be a *negative* test — the names are ordinary
     identifiers there, so a program declaring its own compiles under both and
     distinguishes nothing (ADR-0056's fault, met again).
+- **A set-member-iteration is a walk over the bits** (ADR-0063). §6.9.3.9.3's
+  `for v in s do`. A set is one 256-bit word with a bit per member (ADR-0028),
+  so "for each member" is a counter over the base type's ordinals and the
+  `lshr`/`and`/`icmp ne` the `in` operator already emits.
+  - **The iteration range is clamped to 0..255**, and that is the one thing
+    this feature taught: a set *constructor* infers its base type from its
+    members, so `[1, 2]` is a set of `integer` — a type ADR-0028 refuses to
+    declare but happily infers — and its ordinal range is −maxint..maxint. The
+    first run scanned two billion values. There is no bit outside 0..255, so
+    the clamp states where a set keeps its members rather than guarding
+    against the inference.
+  - Three obligations were discharged by existing code: "evaluated prior to
+    the first execution" is free because a set is a *value*; D.96's error on a
+    member outside a narrower control variable is `checkedForSubrange` at the
+    store; and the counter cannot overflow because it is an `i32` bounded by
+    255 — so the sequence form's test-before-stepping care is unnecessary
+    rather than omitted, and `verify/` gained nothing.
+  - **One node, two shapes**, because §6.9.3.9.1 makes the two an
+    *iteration-clause*: one production with two alternatives. The dump's head
+    says which.
+  - It **reserves nothing** — `in` is an ISO 7185 word-symbol already, the
+    third such feature after `and then` and `type of`.
+  - Not enforced, and stated: §6.9.4 g) (a body may assign to the control
+    variable, in either form) and "the control-variable shall be undefined
+    after the loop".
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

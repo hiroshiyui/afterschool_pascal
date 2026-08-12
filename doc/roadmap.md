@@ -665,6 +665,20 @@ was never written down.
   - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
     so under `--std=extended` a program cannot declare its own — where
     §6.7.5.5 makes them required identifiers.
+- ~~**Set-member iteration.**~~ Done (ADR-0063). §6.9.3.9.3's `for v in s do`,
+  the second of the two iteration-clauses §6.9.3.9.1 splits the for-statement
+  into.
+  - **A walk over the bits.** A set is one 256-bit word (ADR-0028), so the
+    lowering is a counter over the base type's ordinals and the same bit test
+    the `in` operator emits.
+  - **Clamped to 0..255**, because a set *constructor* infers `set of integer`
+    from `[1, 2]` and that type's ordinal range is −maxint..maxint. The first
+    run scanned two billion values.
+  - Three obligations came free: the set is a *value*, so evaluating it before
+    the loop is evaluating it once; D.96's error is the store's existing range
+    check; and the counter cannot overflow, so the sequence form's
+    stop-before-stepping care is unnecessary rather than omitted.
+  - Reserves nothing — `in` is already an ISO 7185 word-symbol.
 - ~~**The three required real constants.**~~ Done (ADR-0062). §6.4.2.2 b)'s
   `minreal`, `maxreal` and `epsreal`, and the deferral three records had made.
   - **The text was always the mechanism.** ADR-0025 carries a real as the
@@ -710,9 +724,9 @@ was never written down.
   the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
   procedures, and set-member iteration. Most of those have since landed with
-  ADR-0059 and `minreal`/`maxreal`/`epsreal` with ADR-0062; the field widths,
-  the time procedures and set-member iteration have not, and neither have
-  §6.8.7.4's set-value or §6.8.8's structured constants.
+  ADR-0059, `minreal`/`maxreal`/`epsreal` with ADR-0062 and set-member
+  iteration with ADR-0063; the field widths and the time procedures have not,
+  and neither have §6.8.7.4's set-value or §6.8.8's structured constants.
 
 - ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
   halves of it: a function may return anything that is not, and does not
