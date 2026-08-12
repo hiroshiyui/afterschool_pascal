@@ -1,12 +1,19 @@
 # Roadmap
 
-Where the compiler is, what is left before it can compile itself, and what is
-deliberately not being done yet.
+Where the compiler is, how it got there, and what is deliberately not being
+done yet.
 
-The ordering is not ISO 7185's chapter order. It is the order a *compiler* needs
-its features in: procedures, then the data structures an AST is made of, then
-the I/O that reads source and writes IR. ADR-0004 sets that priority; this file
-tracks it.
+**The bootstrap has closed** — the compiler compiles itself and stage 2 equals
+stage 3 — so the question this file used to answer, what is left before it can
+compile itself, is answered. What it tracks now is the second standard.
+
+Two orderings, and the second replaced the first. During the bootstrap it was
+not ISO 7185's chapter order but the order a *compiler* needs its features in:
+procedures, then the data structures an AST is made of, then the I/O that reads
+source and writes IR (ADR-0004). That priority expired when the language
+finished being a means to an end: since then a feature needs no reason beyond
+the standard having it, ISO 7185 was completed on those grounds, and
+ISO/IEC 10206:1991 is being worked through the same way.
 
 ## The three-stage build
 
@@ -21,9 +28,11 @@ stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 b
 ctest and requires stage 2 to equal stage 3; they are compared as IR rather than
 as binaries, because IR is what the Pascal compiler emits (ADR-0025).
 
-Stage 0 only has to be good enough to compile the Pascal-written compiler
-*once*. It does not have to be fast, complete, or pleasant — which is why the
-feature list below stops where it does rather than at full ISO coverage.
+Stage 0 only had to be good enough to compile the Pascal-written compiler
+*once*, which is why the feature list grew in the order it did rather than the
+standard's. It is past that bar now, and both compilers grow together: a
+feature lands in C++ and in `selfhost/compiler.pas` in the same commit, because
+the differential test compares them on every file in the tree.
 
 The stage-2 ≡ stage-3 comparison is the whole point: stage 2 is built by a
 compiler that was itself built by C++, stage 3 by one built by Pascal. If the
@@ -38,7 +47,7 @@ bytes match, the Pascal source is a fixed point and stage 0 can be retired.
 | 3 | Enumerations, subranges, `case` | **done**, with the variant records they unlock | [ADR-0018](adr/0018-ordinal-types-and-variant-records.md) |
 | 4 | Pointers, `new`/`dispose` | **done**, with the forward-referenced domain that makes a recursive type possible | [ADR-0019](adr/0019-pointers-and-the-only-forward-reference.md) |
 | 5 | Text files | **done** — `reset`, `rewrite`, `read`, `readln`, `eof`, `eoln`, and the buffer variable with `get`/`put` | [ADR-0021](adr/0021-text-files-keep-the-buffer-variable.md) |
-| 6 | Character strings | **decided** — a length-plus-buffer record, no extension | [ADR-0012](adr/0012-character-strings-for-self-hosting.md) |
+| 6 | Character strings | **decided** — a length-plus-buffer record, no extension; the `string` type arrived later, with the second standard | [ADR-0012](adr/0012-character-strings-for-self-hosting.md), [ADR-0051](adr/0051-a-string-value-is-a-pointer-and-a-length.md) |
 
 Items 1–4 mean the AST of a self-hosted compiler is now *expressible*: the node
 kind is an enumeration, the node is a variant record, and the tree is heap
@@ -48,12 +57,14 @@ and write its output, so **every structural prerequisite for stage 1 is in
 place**.
 
 Item 6 is a decision rather than a feature, and it is now made, so **the
-language is finished for bootstrap purposes**: what remains is writing the
-Pascal, not growing what it is written in.
+language was finished for bootstrap purposes** at that point: what remained was
+writing the Pascal, not growing what it is written in. That writing is done
+too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 55 ctest cases — 52 Pascal programs, the verification
-run, the differential test and the bootstrap — and 35 SMT rules, 27 of them for
-all 2³² inputs, with no known gaps.
+Alongside the language, 212 ctest cases — the Pascal programs of `tests/` and
+`tests/extended/`, the verification run, the differential test and the
+bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
+width, with no known gaps.
 
 ## Item 5 — text files (done)
 
@@ -78,7 +89,11 @@ the descriptor table if block exit ever stops closing files.
 ## Item 6 — character strings (decided)
 
 Settled as ADR-0012: a length-plus-buffer record in strict ISO Pascal, no
-extension, ADR-0002's conformance untouched.
+extension, ADR-0002's conformance untouched. That record named the one thing
+that would expire the decision — committing to Extended Pascal, which defines a
+`string` type of its own — and it has since expired: ADR-0051 landed §6.4.3.3's
+required schema. What follows is why the record shape was still right for a
+compiler written in ISO 7185, which is what `selfhost/compiler.pas` is.
 
 What settled it was measuring the existing compiler rather than reasoning about
 the language. The record's own earlier warning — that strict ISO would cost
@@ -113,7 +128,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 207
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 368
    files agree stage for stage today.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
@@ -221,7 +236,7 @@ surprises.
   passed.** ISO 7185 §6.6.5.3 forbids it, because the unselected variants do
   not exist; detecting it needs the pointer's *value* to carry which form
   created it, and nothing tracks that (ADR-0027). Permissive where the standard
-  is restrictive, like the use-after-dispose gap above.
+  is restrictive, like the use-after-dispose gap below.
 - **Use-after-dispose through a second pointer is undetected.** `dispose(p)`
   sets `p` to nil, which converts the common form into the nil trap, and that is
   all it does. No proof in this repository claims more.
@@ -246,6 +261,25 @@ surprises.
   sets agree on packing, which is not checked, and here could only reject
   programs that would work.
 
+And four from the second standard, each stated in the record that made it:
+
+- **String concatenation draws from a ring.** A string value is a pointer and a
+  length (ADR-0051), so only `+` makes characters that did not exist; they come
+  from a fixed buffer in the runtime. One *statement* concatenating more than
+  the ring holds is the limit, and it is stated rather than silently wrong.
+- **ExpDigits is not a fixed number** (ADR-0064). §6.10.3.4.1 makes it one
+  implementation-defined value; here it is what C's `%E` writes — two digits,
+  or three past 1e100 — so a representation stays exactly ActWidth wide while
+  that width depends on the exponent. A conforming processor pads `E+00` to
+  `E+000`.
+- **A direct-access file's length bound is not checked** (ADR-0050). §6.4.3.6
+  makes `file [1..10] of T` at most ten components; this one will hold eleven.
+  The index type is used for the position's *type* and its lower bound, not as
+  a capacity.
+- **§6.5.6's substring aliasing rule is not enforced** (ADR-0057), for the same
+  reason ADR-0027's is: it is a property of values at run time, and nothing
+  tracks it.
+
 ## Beyond self-hosting
 
 Stage 3 compares equal, so this is the live section. The order was settled as
@@ -259,7 +293,8 @@ compiler's own source needs it — which was the bar during the bootstrap and is
 no longer. Anything the standard lacks waits, and should then be taken from
 Extended Pascal's spelling rather than invented here.
 
-**What is left of ISO 7185**, in the order they are likely to be taken:
+**What ISO 7185 had left**, in the order they were taken — nothing is left now,
+and each entry says what the feature turned out to cost:
 
 - ~~**Sets.**~~ Done (ADR-0028): one 256-bit word, with the base type bounded
   at 0..255 under the latitude §6.4.3.4 gives.
@@ -287,6 +322,13 @@ selects the language per source, ISO 7185 stays the default, and
 reserves word-symbols a valid ISO 7185 program may use as identifiers, and the
 stage-1 compiler is such a program.
 
+**Every feature of the second standard gets a record**, including ones that
+decide nothing a later feature has to live with. The point is not that each was
+hard but that the language's growth reads end to end from `doc/adr/`; a feature
+with a short record is then distinguishable from one that was never written
+down. The list below is in that order — ADR number, which is also the order
+they landed — rather than in the standard's.
+
 - ~~**`otherwise`.**~~ Done (ADR-0033), in the case statement. It retires
   ADR-0018's "ISO 7185 has no `else` and none is invented": the standard has
   one now, and the lowering is unchanged — an otherwise-part is what the
@@ -307,12 +349,6 @@ stage-1 compiler is such a program.
   is *maximal*, so `16#ffand` is one ill-formed number, and the overflow is
   caught *while accumulating*, because the Pascal lexer has no wider type to
   convert in and then compare.
-
-**Every feature of the second standard gets a record**, including one like that
-last that decides nothing a later feature has to live with. The point is not
-that each was hard but that the language's growth reads end to end from
-`doc/adr/`; a feature with a short record is then distinguishable from one that
-was never written down.
 - ~~**`pow` and `**`.**~~ Done (ADR-0037). Exponentiation, and with it the one
   precedence level Extended Pascal adds that ISO 7185 has not — so this is the
   first feature to change the shape of the expression grammar: every factor is
@@ -352,7 +388,6 @@ was never written down.
     the two checks ADR-0040 could argue away — a discriminant outside its own
     type, and a tuple that leaves an index range empty — because "the tuple
     was checked where the type was produced" only holds if every tuple is.
-
   - ~~**Assignment between two schematic types**~~ Done (ADR-0042), and it is
     the clause rather than a third mechanism: §6.4.6 a) is "the same type",
     §6.4.8 makes one schema with one tuple one type, and §6.4.6 d) says what
@@ -361,7 +396,6 @@ was never written down.
     during execution. So `vector(3) := vector(4)` stays a diagnostic and the
     generic case becomes one `icmp` per discriminant. Sema decides only that
     both types came from one schema; everything else was already written.
-
   - ~~**A schema as the domain of a pointer**~~ Done (ADR-0043). §6.4.4's
     domain-type may be a bare schema-name, and §6.7.5.3's `new(p, d1, ..., ds)`
     gives the tuple. The created variable has no activation record, so its
@@ -370,7 +404,6 @@ was never written down.
     untouched. The header is rounded to 16 so `malloc`'s alignment survives to
     the variable; a corpus with no set component let a rounding of 8 pass every
     test until one was written.
-
   - ~~**A discriminant as a variant-selector**~~ Done (ADR-0044). §6.4.3.4's
     variant-selector may be a discriminant-identifier, so which arm of a
     variant part is live is fixed by the tuple rather than stored. The selector
@@ -380,7 +413,6 @@ was never written down.
     denotes the selector. What it costs is one flag saying a symbol is a bound
     discriminant — the *kind* cannot answer, because a constant production
     binds them as ordinary constants.
-
   - ~~**A schematic formal whose discriminants reach past an array**~~ Done
     (ADR-0045). A record may hold a dynamically bounded array as its **last**
     field — the shape `string` has, a length beside a buffer whose capacity is
@@ -392,10 +424,10 @@ was never written down.
     such a record is a flexible-array-member struct and every field access is
     the getelementptr it always was.
 
-  **Schemata are done.** What remains of §6.4 is the required schema `string`
-  itself (§6.4.3.3), which is now expressible by hand but is its own type-class
-  with a capacity, a truncating assignment, and comparison across unequal
-  lengths.
+  **Schemata are done**, and what they unblocked was the required schema
+  `string` itself (§6.4.3.3) — expressible by hand once ADR-0045 landed, but
+  its own type-class with a capacity, a truncating assignment and comparison
+  across unequal lengths. It arrived as ADR-0051, below.
 
   And one **defect**, found while the assignment was being written and fixed
   on its own: a schema producing a `packed array [1..n] of char` produces a
@@ -571,6 +603,33 @@ was never written down.
     an interface artefact this compiler does not define; a module variable
     with computed discriminants; and a module-parameter that is neither
     `input` nor `output`, which §6.11.1 NOTE 6 lets go unbound.
+- ~~**Constant-expressions.**~~ Done (ADR-0054). §6.8.2's
+  `constant-expression = expression`, which replaces ISO 7185 §6.3's and
+  §6.4.2.4's one-token `constant` in every position that asked for one. The
+  feature is one function: `evalConst` already served the constant definition
+  and `evalOrdinal` — a wrapper on it — already served subrange bounds, array
+  bounds, case labels, variant labels and a schema's discriminants, so adding
+  the expression grammar to that one place opened all six at once and no
+  caller changed except to say less. The parser changed in exactly one spot:
+  a bound is no longer two tokens from the `..`, so telling a subrange from a
+  type name is a scan for a `..` at bracket depth zero, and only under
+  `--std=extended`. Refused and stated: real-, set- and string-valued
+  constant-expressions — the first because ADR-0025 carries a real literal as
+  its source text and neither compiler has a float to fold with, the other
+  two because a `Symbol` has nowhere to keep the value.
+- ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
+  halves of it: a function may return anything that is not, and does not
+  contain, a file and is not bindable, and a result-variable-specification
+  (`function mk(a, b: integer) = r: point`) gives the result a name. The two
+  arrive together because §6.8.2.2 makes every *read* of a function identifier
+  a recursive call, so without a name a structured result could be assigned
+  whole and never built a field at a time. The result travels in storage the
+  *caller* supplies — ADR-0052's hidden frame slot, generalised — and the
+  callee binds the incoming address exactly as a `var` parameter does, which
+  is why assignment, copying, subscripting and field selection over a result
+  all needed nothing. It found a real bug in `selfhost/compiler.pas` the day
+  it landed: `ParseTypeDenoter` assigned a *sibling* function's result and
+  never its own, which five oracles had not noticed.
 - ~~**Function-accesses.**~~ Done (ADR-0056). §6.8.6: a call may carry
   selectors, so `mk(7, 8).y`, `scale(10)[2]` and `alloc(3)^` are expressions.
   It is the smallest feature in this list and the record's title says why —
@@ -665,49 +724,6 @@ was never written down.
   - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
     so under `--std=extended` a program cannot declare its own — where
     §6.7.5.5 makes them required identifiers.
-- ~~**Zero field widths in `write`.**~~ Done (ADR-0064). §6.10.3.1 lowers the
-  least width from one to zero, and every subclause under it then says what
-  zero writes.
-  - **Three different answers**: nothing for a string, a char or a Boolean;
-    the digits for an integer, since §6.10.3.3 b) applies whenever the width
-    is under IntDigits + 1; a full representation for a real, since both real
-    forms clamp.
-  - **The bound is checked in the compiler**, because which number is least is
-    what the standard decides and the runtime is never told which language it
-    was compiled for — and because `-1` has to stay usable as the "no width
-    given" sentinel.
-  - It **fixed two conformance gaps that predate Extended Pascal**:
-    §6.10.3.6's truncation of a string written narrower than its length, which
-    is ISO 7185 §6.9.3.6's rule word for word, and §6.10.3.4.1's DecPlaces
-    derivation, which the runtime replaced with a hard-coded six.
-  - Stated deviation: ExpDigits is not a fixed number.
-- ~~**Set-member iteration.**~~ Done (ADR-0063). §6.9.3.9.3's `for v in s do`,
-  the second of the two iteration-clauses §6.9.3.9.1 splits the for-statement
-  into.
-  - **A walk over the bits.** A set is one 256-bit word (ADR-0028), so the
-    lowering is a counter over the base type's ordinals and the same bit test
-    the `in` operator emits.
-  - **Clamped to 0..255**, because a set *constructor* infers `set of integer`
-    from `[1, 2]` and that type's ordinal range is −maxint..maxint. The first
-    run scanned two billion values.
-  - Three obligations came free: the set is a *value*, so evaluating it before
-    the loop is evaluating it once; D.96's error is the store's existing range
-    check; and the counter cannot overflow, so the sequence form's
-    stop-before-stepping care is unnecessary rather than omitted.
-  - Reserves nothing — `in` is already an ISO 7185 word-symbol.
-- ~~**The three required real constants.**~~ Done (ADR-0062). §6.4.2.2 b)'s
-  `minreal`, `maxreal` and `epsreal`, and the deferral three records had made.
-  - **The text was always the mechanism.** ADR-0025 carries a real as the
-    characters that were written and this compiler has no floating-point type,
-    so what was missing was never a conversion — it was somewhere to put
-    twenty-two characters. Each constant is the shortest decimal that
-    round-trips to the binary64 value it names, spelled identically in both
-    compilers.
-  - Required *identifiers*, so shadowable; CodeGen and `verify/` untouched.
-  - The test asserts the clause's property (`1.0 + epsreal > 1.0` and
-    `1.0 + epsreal / 2.0 = 1.0`), not the printed digits.
-  - A real-valued *constant-expression* is still refused (ADR-0054): these are
-    values a symbol holds, not values an operator can produce.
 - ~~**Structured-value constructors.**~~ Done (ADR-0061). §6.8.7's array-value
   and record-value, and the initial-state form ADR-0048 deferred.
   - **A structured value is built, not computed.** An array and a record have
@@ -733,46 +749,77 @@ was never written down.
     none of this machinery, and `sieve[2,3]` cannot be told from `a[2,3]`
     without the symbol), §6.8.8's structured constants, and a value of a
     dynamically bounded type.
+- ~~**The three required real constants.**~~ Done (ADR-0062). §6.4.2.2 b)'s
+  `minreal`, `maxreal` and `epsreal`, and the deferral three records had made.
+  - **The text was always the mechanism.** ADR-0025 carries a real as the
+    characters that were written and this compiler has no floating-point type,
+    so what was missing was never a conversion — it was somewhere to put
+    twenty-two characters. Each constant is the shortest decimal that
+    round-trips to the binary64 value it names, spelled identically in both
+    compilers.
+  - Required *identifiers*, so shadowable; CodeGen and `verify/` untouched.
+  - The test asserts the clause's property (`1.0 + epsreal > 1.0` and
+    `1.0 + epsreal / 2.0 = 1.0`), not the printed digits.
+  - A real-valued *constant-expression* is still refused (ADR-0054): these are
+    values a symbol holds, not values an operator can produce.
+- ~~**Set-member iteration.**~~ Done (ADR-0063). §6.9.3.9.3's `for v in s do`,
+  the second of the two iteration-clauses §6.9.3.9.1 splits the for-statement
+  into.
+  - **A walk over the bits.** A set is one 256-bit word (ADR-0028), so the
+    lowering is a counter over the base type's ordinals and the same bit test
+    the `in` operator emits.
+  - **Clamped to 0..255**, because a set *constructor* infers `set of integer`
+    from `[1, 2]` and that type's ordinal range is −maxint..maxint. The first
+    run scanned two billion values.
+  - Three obligations came free: the set is a *value*, so evaluating it before
+    the loop is evaluating it once; D.96's error is the store's existing range
+    check; and the counter cannot overflow, so the sequence form's
+    stop-before-stepping care is unnecessary rather than omitted.
+  - Reserves nothing — `in` is already an ISO 7185 word-symbol.
+- ~~**Zero field widths in `write`.**~~ Done (ADR-0064). §6.10.3.1 lowers the
+  least width from one to zero, and every subclause under it then says what
+  zero writes.
+  - **Three different answers**: nothing for a string, a char or a Boolean;
+    the digits for an integer, since §6.10.3.3 b) applies whenever the width
+    is under IntDigits + 1; a full representation for a real, since both real
+    forms clamp.
+  - **The bound is checked in the compiler**, because which number is least is
+    what the standard decides and the runtime is never told which language it
+    was compiled for — and because `-1` has to stay usable as the "no width
+    given" sentinel.
+  - It **fixed two conformance gaps that predate Extended Pascal**:
+    §6.10.3.6's truncation of a string written narrower than its length, which
+    is ISO 7185 §6.9.3.6's rule word for word, and §6.10.3.4.1's DecPlaces
+    derivation, which the runtime replaced with a hard-coded six.
+  - Stated deviation: ExpDigits is not a fixed number.
 
-  The list above is the one the README carries, and it is not the whole of
-  what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the
-  cost is in the pair of compilers rather than in the design: `halt`, `card`,
-  the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
-  two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
-  procedures, and set-member iteration. Most of those have since landed with
-  ADR-0059, `minreal`/`maxreal`/`epsreal` with ADR-0062, set-member iteration
-  with ADR-0063 and the field widths with ADR-0064; the time procedures have
-  not, and neither have §6.8.7.4's set-value or §6.8.8's structured
-  constants.
+**What is left of ISO/IEC 10206:1991**, and it is now a short list:
 
-- ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
-  halves of it: a function may return anything that is not, and does not
-  contain, a file and is not bindable, and a result-variable-specification
-  (`function mk(a, b: integer) = r: point`) gives the result a name. The two
-  arrive together because §6.8.2.2 makes every *read* of a function identifier
-  a recursive call, so without a name a structured result could be assigned
-  whole and never built a field at a time. The result travels in storage the
-  *caller* supplies — ADR-0052's hidden frame slot, generalised — and the
-  callee binds the incoming address exactly as a `var` parameter does, which
-  is why assignment, copying, subscripting and field selection over a result
-  all needed nothing. It found a real bug in `selfhost/compiler.pas` the day
-  it landed: `ParseTypeDenoter` assigned a *sibling* function's result and
-  never its own, which five oracles had not noticed.
+- **The time procedures** (§6.7.5.8). `GetTimeStamp`, `date` and `time`, with
+  the required type-identifier `TimeStamp` §6.4.3.4 gives them. The only one of
+  these that reads the world outside the program, and the only required record
+  type besides `BindingType` — which is the mechanism it will reuse.
+- **§6.8.7.4's set-value** (ADR-0061). A set is a value and needs none of the
+  constructor machinery, and `sieve[2, 3]` cannot be told from `a[2, 3]`
+  without the symbol.
+- **§6.8.8's structured constants** (ADR-0061). A `Symbol` has nowhere to keep
+  a value that is not a scalar, which is the same reason ADR-0054 refuses a
+  set- or string-valued constant-expression.
+- **Separate compilation of program-components** (ADR-0053). §6.13 asks for it
+  with a *should* rather than a *shall*, and it needs an interface artefact
+  this compiler does not define — a second file format, and one the stage-1
+  compiler could not write.
 
-- ~~**Constant-expressions.**~~ Done (ADR-0054). §6.8.2's
-  `constant-expression = expression`, which replaces ISO 7185 §6.3's and
-  §6.4.2.4's one-token `constant` in every position that asked for one. The
-  feature is one function: `evalConst` already served the constant definition
-  and `evalOrdinal` — a wrapper on it — already served subrange bounds, array
-  bounds, case labels, variant labels and a schema's discriminants, so adding
-  the expression grammar to that one place opened all six at once and no
-  caller changed except to say less. The parser changed in exactly one spot:
-  a bound is no longer two tokens from the `..`, so telling a subrange from a
-  type name is a scan for a `..` at bracket depth zero, and only under
-  `--std=extended`. Refused and stated: real-, set- and string-valued
-  constant-expressions — the first because ADR-0025 carries a real literal as
-  its source text and neither compiler has a float to fold with, the other
-  two because a `Symbol` has nowhere to keep the value.
+**ADR-0033's caveat has expired.** That record said a word-symbol is reserved
+only when the feature needing it lands, so until the list was empty
+`--std=extended` would accept some programs a conforming processor rejects.
+§6.1.2's word-symbol list adds thirteen to ISO 7185's — `and then`, `bindable`,
+`export`, `import`, `module`, `only`, `or else`, `otherwise`, `pow`,
+`protected`, `qualified`, `restricted`, `value` — and all thirteen are now
+reserved, the first and seventh by the lexer joining two tokens (ADR-0038) and
+the rest from a table. Nothing on the list above needs a fourteenth: the time
+procedures are required *identifiers*, which §6.1.3 makes shadowable rather
+than reserved. So the lexis is complete even though the language is not.
 
 **And the two things that are not features:**
 
