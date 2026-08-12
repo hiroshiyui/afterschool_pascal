@@ -977,6 +977,35 @@ in one language or the other, and the standard is a property of the source.
     neither had.
   - Not enforced and stated: §6.5.6's aliasing rule (a run-time property, as
     ADR-0027's is).
+- **A restricted type is a type kind** (ADR-0058). §6.4.2.5's `restricted T`
+  has T's values and T's representation and almost none of T's operations, and
+  making it a `TypeKind` is the whole enforcement: `isInteger`, `isOrdinal`,
+  `isArray`, `isStringType` all answer `false`, so arithmetic, indexing, field
+  selection, `write`, `case`, `for` and `ord` each refuse it through **the
+  diagnostic they already had**. Nothing enumerates what is forbidden — the
+  third refusal-by-construction here, after ADR-0044 and ADR-0046.
+  - **`isStructured` and `isMemory` are the only two predicates that see
+    through**, because *how a value travels* is not an operation the program
+    performs. `llvmType` follows, and is the only line CodeGen gained.
+  - **The comparison is the one refusal written down, and only because the
+    assignment rule exists.** §6.4.2.5 makes a restricted type and its
+    underlying type assign to each other, so `assignable` learned about them —
+    and a relational operator asks `assignable`. Without its own line, `n = 3`
+    rides in on the assignment's permission. A permission granted in a shared
+    predicate leaks to every caller of it.
+  - **Two restrictions of one underlying type do not assign to each other**:
+    §6.4.2.5 says nothing about a second restricted type, so exactly one side
+    may be restricted and ADR-0017 stands.
+  - The var-parameter rule is a **widening** of the same-type rule, one way
+    only. The initial state is handed on by ADR-0048's `initialStateOf`.
+    Refused: `bindable restricted`, a restricted *file*, and restricting a
+    restricted type.
+  - **The first word-symbol too long for the Pascal `kwLit`** (nine wide, and
+    `restricted` is ten). Recognised by one comparison beside the table rather
+    than repadding 188 literals, and its spelling is written out in the token
+    dump beside `and then`/`or else`, which are in no table either.
+  - **A diagnostic cannot contain `§`** — `char` is a byte, so the Pascal source
+    would carry two of them. `difftest` caught it as a one-character diff.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

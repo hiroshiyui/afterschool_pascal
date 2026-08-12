@@ -377,7 +377,14 @@ s[i..j]    a substring, of a string variable or of a call's result. Of a
            Reading one copies nothing. `s[3..2]` is an error, where
            `substr(s, 3, 0)` is the null-string: the two rules agree
            everywhere except the empty case
-words      otherwise, pow, protected, value, bindable, module, export,
+restricted a restricted type has another type's values and representation
+           and almost none of its operations: it may be assigned to and from
+           the underlying type, passed as a value or var parameter to a
+           formal of that type, and returned from a function, and §6.4.2.5
+           says "no other operations ... are possible". Its initial state is
+           the underlying type's. Two restrictions of one type are still two
+           types, and a restricted type is nonbindable
+words      otherwise, pow, protected, value, bindable, restricted, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
            their words already are. complex, cmplx, polar, re, im and arg
@@ -391,7 +398,7 @@ words      otherwise, pow, protected, value, bindable, module, export,
 ```
 
 Not accepted yet, and each its own piece of work: structured-value
-constructors, `readstr`/`writestr`, and restricted types.
+constructors and `readstr`/`writestr`.
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `halt`, `card`, the symmetric difference `><`,

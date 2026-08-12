@@ -611,8 +611,24 @@ was never written down.
   - The Pascal port met §6.4.3.3's rule that field identifiers are distinct
     across every variant — the first new node kind since ADR-0023 recorded it,
     and it collided at once.
-- Restricted types, structured-value constructors, `readstr`/`writestr`. Each
-  needs its own record.
+- ~~**Restricted types.**~~ Done (ADR-0058). §6.4.2.5's `restricted T`, the
+  feature whose point is a type-name exported without its structure. The
+  record's title is the design: a **type kind**, so every predicate answers
+  `false` and each forbidden operation refuses it through the diagnostic it
+  already had. Seven diagnostics in the negative test and six were written for
+  other features.
+  - **`isStructured` and `isMemory` are the only predicates that see through**,
+    because how a value travels is not an operation the program performs.
+  - **The comparison is the one refusal written down**, and only because
+    §6.4.2.5's assignment rule had to teach `assignable` about restricted
+    types — a relational operator asks `assignable`, so the permission leaked.
+    A shared predicate's new permission reaches every caller of it.
+  - It is the **first word-symbol too long for the Pascal keyword table**:
+    `kwLit` is nine wide and `restricted` is ten. Recognised beside the table
+    rather than repadding 188 literals, and printed in the token dump beside
+    the two-word symbols, which are in no table either.
+- Structured-value constructors and `readstr`/`writestr`. Each needs its own
+  record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the
