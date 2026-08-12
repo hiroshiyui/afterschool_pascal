@@ -592,8 +592,27 @@ was never written down.
     `constexpr_iso.pas`; this time it was recognised before it landed.
   - Deferred with §6.5.6: **§6.8.6.5's substring-function-access**, because
     `parseSelectors` is now shared and would learn `[i..j]` once for both.
-- Restricted types, structured-value constructors, substring variables,
-  `readstr`/`writestr`. Each needs its own record.
+- ~~**Substring variables.**~~ Done (ADR-0057). §6.5.6's `s[i..j]` as a
+  variable, and §6.8.6.5's substring of a function-access with it — one node,
+  because §6.5.1 makes the first a variable-access and the second a value and
+  the *base* is the whole difference, which `isDesignator` was already asking.
+  It closes ADR-0056's deferral in the place that record named.
+  - **The capacity is never a compile-time number and never needs to be.**
+    §6.5.6 calls the result "a new fixed-string-type" of capacity `hi - lo + 1`;
+    this compiler gives it the canonical-string-type, which under ADR-0051 is a
+    pointer and a length. The only rule that reads a capacity is the store, and
+    the store reads it at run time from the same subtraction.
+  - **Writing one is the fixed-string store, unchanged**: §6.4.6 already pads a
+    shorter value with spaces and refuses a longer one.
+  - **The bounds check could not be shared with `substr`'s**, and the reason is
+    exactly one program: `substr(s, 3, 0)` is the null-string and legal, while
+    `s[3..2]` is an error — the two conditions agree everywhere except at the
+    empty case, which is where a shared check would have been wrong in silence.
+  - The Pascal port met §6.4.3.3's rule that field identifiers are distinct
+    across every variant — the first new node kind since ADR-0023 recorded it,
+    and it collided at once.
+- Restricted types, structured-value constructors, `readstr`/`writestr`. Each
+  needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the

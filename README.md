@@ -370,6 +370,13 @@ f(x).y     a selector may follow a call: `mk(7, 8).y` reads a field of a
            a variable however the pointer was obtained — so only it may be
            assigned to, passed as a var parameter or read into. The others
            are values: a function-access is not a variable-access
+s[i..j]    a substring, of a string variable or of a call's result. Of a
+           variable it is a variable — `s[2..4] := 'XYZ'` writes three
+           characters in place, and a shorter value is padded with spaces as
+           any fixed-string assignment is; of a call's result it is a value.
+           Reading one copies nothing. `s[3..2]` is an error, where
+           `substr(s, 3, 0)` is the null-string: the two rules agree
+           everywhere except the empty case
 words      otherwise, pow, protected, value, bindable, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -384,9 +391,7 @@ words      otherwise, pow, protected, value, bindable, module, export,
 ```
 
 Not accepted yet, and each its own piece of work: structured-value
-constructors, substring *variables* (`s[i..j]` as an assignment target, which
-is also what a substring of a function's result waits on), `readstr`/`writestr`,
-and restricted types.
+constructors, `readstr`/`writestr`, and restricted types.
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `halt`, `card`, the symmetric difference `><`,

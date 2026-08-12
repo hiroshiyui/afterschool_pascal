@@ -943,9 +943,40 @@ in one language or the other, and the standard is a property of the source.
     A record result is refused by §6.6.2 first, so the obvious negative program
     passes whatever the parser does — ADR-0054's `constexpr_iso.pas` fault, met
     again. The statement form has a second gate and its own file.
-  - Deferred: **§6.8.6.5's substring-function-access**, with §6.5.6's substring
-    variables, because `parseSelectors` is now shared and would learn the
-    syntax once for both.
+  - §6.8.6.5's substring-function-access arrived with ADR-0057, in that shared
+    `parseSelectors` — which is the reason this record gave for deferring it.
+- **A substring is a pointer, a length, and somewhere to store** (ADR-0057).
+  §6.5.6's substring-variable and §6.8.6.5's substring-function-access are one
+  node, because §6.5.1 makes the first a variable-access and the second a value
+  and **the base is the whole difference** — which `isDesignator` already asks.
+  - **The parser decides without types**: a `..` inside a subscript can only be
+    this, since §6.5.3.2 gives an array one index-expression per subscript.
+  - **The type is the canonical-string-type.** §6.5.6's "new fixed-string-type"
+    of capacity `hi - lo + 1` is never built — that capacity is not a
+    compile-time number, and the only rule that reads it is the store, which
+    reads it at run time from the same subtraction the length came from.
+  - **Reading copies nothing** (ADR-0051's representation) and **writing is the
+    fixed-string store unchanged** — §6.4.6 already pads a shorter value and
+    refuses a longer one. `emitStore` was not touched.
+  - **The bounds check could not be shared with `substr`.** §6.7.6.7 lets
+    `substr(s, i, 0)` yield the null-string; §6.5.6 makes `i > j` an error, and
+    `s[3..2]` is exactly the empty substring. The two conditions agree
+    everywhere *except* the empty case, so `pas_str_substr_check` is its own.
+  - **§6.7.3.3 NOTE 3** — a var parameter cannot denote one — is checked by
+    name even though the same-type rule would refuse it anyway, because that
+    rule's words name a representation rather than the reason.
+  - §6.5.6's "a reference to a substring is a reference to the variable" needed
+    no new walk: `baseSymbol` and `rootDesignator` step through a substring as
+    through a subscript, which is what protects a protected string.
+  - **`read` into a substring works**, and writing it found two things nothing
+    had reached: the Pascal Sema refused *every* string read (§6.10.1 a) was
+    ported to C++ only, so the compilers had disagreed since ADR-0051 with no
+    corpus program to notice), and the Pascal backend's string-read branch fell
+    through into a store because Pascal has no `continue`. Unreachable only
+    because Sema refused first. `tests/extended/readstring.pas` is the program
+    neither had.
+  - Not enforced and stated: §6.5.6's aliasing rule (a run-time property, as
+    ADR-0027's is).
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
