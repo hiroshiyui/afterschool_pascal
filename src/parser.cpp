@@ -1030,8 +1030,10 @@ void Parser::parseVariantPart(std::string &tagName, TypeExprPtr &tagType,
     arms.push_back(std::move(arm));
 
     // The completer ends the variant-list, so nothing may follow it — the same
-    // shape as the otherwise-part of a case statement.
-    if (completer || !accept(Tok::Semi))
+    // shape as the otherwise-part of a case statement, including §6.4.3.4's
+    // `[ [ ';' ] variant-part-completer ]`: the separator before `otherwise`
+    // is optional there too.
+    if (completer || (!accept(Tok::Semi) && !check(Tok::KwOtherwise)))
       break;
   }
 }
@@ -1301,7 +1303,12 @@ StmtPtr Parser::parseCase() {
     arm.body = parseStatement();
     s->arms.push_back(std::move(arm));
 
-    if (!accept(Tok::Semi))
+    // §6.9.3.5 writes `[ [ ';' ] case-statement-completer ]` — the inner
+    // bracket makes the separator before `otherwise` optional, and the
+    // clause's own Example 1 omits it. Under ISO 7185 `otherwise` is an
+    // ordinary identifier and never this token, so the test costs that
+    // standard nothing.
+    if (!accept(Tok::Semi) && !check(Tok::KwOtherwise))
       break;
   }
 

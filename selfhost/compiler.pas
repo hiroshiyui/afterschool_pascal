@@ -3106,8 +3106,11 @@ begin
     Expect(tkRParen, ctxVariantClose);
     Append(head, tail, arm);
     { The completer ends the variant-list, so nothing may follow it -- the same
-      shape as the otherwise-part of a case statement. }
-    if completer then more := false else more := Accept(tkSemi)
+      shape as the otherwise-part of a case statement, including 6.4.3.4's
+      `[ [ ';' ] variant-part-completer ]`: the separator before `otherwise` is
+      optional there too. }
+    if completer then more := false
+    else more := Accept(tkSemi) or Check(tkOtherwise)
   end;
 
   if intoArm then begin
@@ -4034,7 +4037,12 @@ begin
     Expect(tkColon, ctxCaseLabels);
     arm^.caBody := ParseStatement;
     Append(head, tail, arm);
-    more := Accept(tkSemi)
+    { 6.9.3.5 writes `[ [ ';' ] case-statement-completer ]` -- the inner
+      bracket makes the separator before `otherwise` optional, and the clause's
+      own Example 1 omits it. Under ISO 7185 `otherwise` is an ordinary
+      identifier and never this token, so the test costs that standard
+      nothing. }
+    more := Accept(tkSemi) or Check(tkOtherwise)
     end
   end;
   s^.csArms := head;
@@ -7896,6 +7904,22 @@ begin
         variantField := true;
         fieldType := ResolveType(g^.grType);
         variantField := false;
+        { The arms share one block of storage, and a file's storage is not just
+          bytes: pas_file_init gives it a heap buffer sized by the component
+          type, and the block's prologue has to do that for every file the
+          variable contains before the program can name one. Two arms holding
+          files would need two buffers at one address -- the second init leaks
+          the first, and the file that is read is not the file that was set up.
+          6.4.3.4 does not forbid this; this compiler does, because there is no
+          answer to "which arm's file is this storage" at block entry. }
+        if IsFile(fieldType) or ContainsFile(fieldType) then begin
+          if g^.grNames <> nil then
+            ErrorAt(g^.grNames^.line, g^.grNames^.col)
+          else
+            ErrorAt(arm^.line, arm^.col);
+          writeln('a file cannot be a field of a variant part, because the ',
+                  'arms share storage and a file''s storage is its own')
+        end;
         n := g^.grNames;
         while n <> nil do begin
           AddField(rec, v^.fields, v^.fieldTail, n, fieldType, armPath,
@@ -17366,6 +17390,145 @@ begin
   writeln(ircode, ', i32 0, i32 ', f^.index:1)
 end;
 
+{ ---------------------------------------------------------- file variables }
+
+{ Whether a value of this type holds a file anywhere inside it. A variant part
+  cannot -- Sema refuses a file in one, because the arms share storage and a
+  file's storage is its own -- so this walks the fixed part only, which is also
+  what makes the walk below able to reach every file exactly once. }
+function HoldsFile(t: typePtr): boolean;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  if t <> nil then
+    if IsFile(t) then found := true
+    else if IsArray(t) then found := HoldsFile(t^.elem)
+    else if IsRecord(t) then begin
+      f := t^.fields;
+      while (f <> nil) and not found do begin
+        if HoldsFile(f^.ftype) then found := true;
+        f := f^.next
+      end
+    end;
+  HoldsFile := found
+end;
+
+{ Every file inside `addr`, set up or torn down. ISO 7185 6.5.1's own example
+  is `pooltape : array [1..4] of FileOfInteger` and 6.5.5's is `pooltape[2]^`,
+  so a file need not be an entire variable -- and each one needs its
+  `struct pas_file` prepared before the program can name it, and closed when
+  the storage goes away.
+
+  `binding` and `arg` describe the *whole* variable and so apply only when it
+  is itself a file: a program parameter is an entire variable (6.10), so a file
+  reached through a subscript or a field is always an internal one. }
+procedure WalkFiles(addr: str; t: typePtr; init: boolean;
+                    binding, arg, name: integer);
+var comp, istext, direct, headB, bodyB, doneB: integer;
+    f: fieldPtr;
+    nohdr, count, iv, i, more, elem, next, zero, one: str;
+begin
+  if IsFile(t) then begin
+    if not init then begin
+      write(ircode, '  call void @pas_file_done(ptr ');
+      PutOp(addr);
+      writeln(ircode, ')')
+    end
+    else begin
+      { The component type is the whole of what the runtime needs to know
+        about a `file of T`: how many bytes one component is, and whether the
+        file has the line structure only a `text` has. }
+      comp := 1;
+      if t^.elem <> nil then comp := LlSize(t^.elem);
+      istext := 0;
+      if t^.isText then istext := 1;
+      { 6.4.3.6: an index-type makes the file direct-access, and the one thing
+        the runtime does differently is open the stream for reading *and*
+        writing -- SeekUpdate must be able to turn one into the other without
+        reopening, since it has to preserve the contents. }
+      direct := 0;
+      if t^.indexType <> nil then direct := 1;
+      write(ircode, '  call void @pas_file_init(ptr ');
+      PutOp(addr);
+      writeln(ircode, ', i32 ', binding:1, ', i32 ', arg:1,
+              ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1,
+              ', i32 ', direct:1, ')')
+    end
+  end
+  else if IsRecord(t) then begin
+    f := t^.fields;
+    while f <> nil do begin
+      if HoldsFile(f^.ftype) then begin
+        FieldAddress(addr, t, f, elem);
+        WalkFiles(elem, f^.ftype, init, 0, 0, name)
+      end;
+      f := f^.next
+    end
+  end
+  else if IsArray(t) then begin
+    if HoldsFile(t^.elem) then begin
+      { A loop rather than an unrolled run: the length may be a discriminant's
+        (ADR-0040), and an array of files is otherwise as long as the program
+        says. It is emitted in the prologue, where an alloca belongs anyway. }
+      StrClear(nohdr);
+      DynLength(t, nohdr, count);
+      Def(iv);
+      writeln(ircode, 'alloca i32');
+      OpInt(0, zero);
+      write(ircode, '  store i32 ');
+      PutOp(zero);
+      write(ircode, ', ptr ');
+      PutOp(iv);
+      writeln(ircode);
+      headB := NewBlock;
+      bodyB := NewBlock;
+      doneB := NewBlock;
+      writeln(ircode, '  br label %L', headB:1);
+
+      StartBlock(headB);
+      Def(i);
+      write(ircode, 'load i32, ptr ');
+      PutOp(iv);
+      writeln(ircode);
+      Def(more);
+      write(ircode, 'icmp slt i32 ');
+      PutOp(i);
+      write(ircode, ', ');
+      PutOp(count);
+      writeln(ircode);
+      write(ircode, '  br i1 ');
+      PutOp(more);
+      writeln(ircode, ', label %L', bodyB:1, ', label %L', doneB:1);
+
+      StartBlock(bodyB);
+      Def(elem);
+      write(ircode, 'getelementptr ');
+      PutLlType(t);
+      write(ircode, ', ptr ');
+      PutOp(addr);
+      write(ircode, ', i32 0, i32 ');
+      PutOp(i);
+      writeln(ircode);
+      WalkFiles(elem, t^.elem, init, 0, 0, name);
+      OpInt(1, one);
+      Def(next);
+      write(ircode, 'add i32 ');
+      PutOp(i);
+      write(ircode, ', ');
+      PutOp(one);
+      writeln(ircode);
+      write(ircode, '  store i32 ');
+      PutOp(next);
+      write(ircode, ', ptr ');
+      PutOp(iv);
+      writeln(ircode);
+      writeln(ircode, '  br label %L', headB:1);
+
+      StartBlock(doneB)
+    end
+  end
+end;
+
 { ------------------------------------------------------------- conversions }
 
 { Widen an integer to double where Pascal's implicit conversion applies. }
@@ -21152,14 +21315,28 @@ begin
       PutOp(block);
       write(ircode, ', ptr ');
       PutOp(slot);
-      writeln(ircode)
+      writeln(ircode);
+      { A created variable holding a file needs the same preparation a declared
+        one gets: pas_file_init per file, because 6.4.4 does not stop a
+        domain-type from containing one. dispose closes them below, which is
+        where the storage stops existing. }
+      if HoldsFile(domain) then begin
+        MsgStart;
+        MsgText('heap                                    ');
+        msg := MsgEnd;
+        WalkFiles(block, domain, true, 0, 0, msg)
+      end
       end
     end;
     spDispose: begin
+      domain := nil;
+      if s^.pcArgs^.ntype <> nil then domain := s^.pcArgs^.ntype^.elem;
       Def(block);
       write(ircode, 'load ptr, ptr ');
       PutOp(slot);
       writeln(ircode);
+      if HoldsFile(domain) then
+        WalkFiles(block, domain, false, 0, 0, 0);
       { What was allocated is the header and the variable together, so what is
         given back has to be the block rather than the variable. }
       head := HeaderSize(s^.pcArgs^.ntype^.elem);
@@ -21906,11 +22083,11 @@ end;
   a program that never reads would hang waiting for a terminal. }
 procedure InitFiles(p: symPtr);
 var l: symListPtr; addr: str;
-    binding, name, comp, istext, direct: integer;
+    binding, name: integer;
 begin
   l := p^.frameVars;
   while l <> nil do begin
-    if IsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
+    if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
       case l^.sym^.binding of
         fbInternal:  binding := 0;
         fbStdInput:  binding := 1;
@@ -21919,24 +22096,7 @@ begin
       end;
       name := AddGlobal(l^.sym^.at, l^.sym^.len);
       AddressOfSym(l^.sym, addr);
-      { The component type is the whole of what the runtime needs to know
-        about a `file of T`: how many bytes one component is, and whether the
-        file has the line structure only a `text` has. }
-      comp := 1;
-      if l^.sym^.stype^.elem <> nil then comp := LlSize(l^.sym^.stype^.elem);
-      istext := 0;
-      if l^.sym^.stype^.isText then istext := 1;
-      { 6.4.3.6: an index-type makes the file direct-access, and the one thing
-        the runtime does differently is open the stream for reading *and*
-        writing -- SeekUpdate must be able to turn one into the other without
-        reopening, since it has to preserve the contents. }
-      direct := 0;
-      if l^.sym^.stype^.indexType <> nil then direct := 1;
-      write(ircode, '  call void @pas_file_init(ptr ');
-      PutOp(addr);
-      writeln(ircode, ', i32 ', binding:1, ', i32 ', l^.sym^.fileArg:1,
-              ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1,
-              ', i32 ', direct:1, ')')
+      WalkFiles(addr, l^.sym^.stype, true, binding, l^.sym^.fileArg, name)
     end;
     l := l^.next
   end
@@ -21951,11 +22111,9 @@ var l: symListPtr; addr, frame, rec: str;
 begin
   l := p^.frameVars;
   while l <> nil do begin
-    if IsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
+    if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
       AddressOfSym(l^.sym, addr);
-      write(ircode, '  call void @pas_file_done(ptr ');
-      PutOp(addr);
-      writeln(ircode, ')')
+      WalkFiles(addr, l^.sym^.stype, false, 0, 0, 0)
     end;
     l := l^.next
   end;

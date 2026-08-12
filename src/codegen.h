@@ -255,6 +255,10 @@ private:
   /// Open the file variables a frame declares, and close them when it exits.
   /// ISO 7185 ties a file's lifetime to the block that declares it, so this is
   /// the block's own prologue and epilogue rather than anything global.
+  /// Every file inside a variable's storage, set up or torn down — a file
+  /// need not be an entire variable (ISO 7185 §6.5.1).
+  void walkFiles(llvm::Value *addr, ap::Type *t, bool init, int binding,
+                 int arg, llvm::Value *name);
   void initFiles(Symbol *proc);
   void closeFiles(Symbol *proc);
   void emitIf(IfStmt *s);

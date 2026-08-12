@@ -11,7 +11,14 @@ type
   logged = record
     a: integer;
     case tagged: boolean of
-      true:  (log: text);      { a variant's field is a component too }
+      { A variant's field is a component of the record too, so `file of logged`
+        below is refused for the same reason a fixed field would refuse it.
+        This arm is also refused *in its own right*: the arms share one block
+        of storage and a file's storage is not just bytes — the runtime gives
+        it a heap buffer and a place on the list of open files — so two arms
+        holding files cannot both be set up at one address. §6.4.3.4 permits
+        it and this compiler does not. }
+      true:  (log: text);
       false: (b: integer)
   end;
 

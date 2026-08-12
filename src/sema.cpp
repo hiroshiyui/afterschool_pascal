@@ -795,6 +795,19 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
       variantField_ = true;
       Type *fieldType = resolveType(*group.type);
       variantField_ = false;
+      // The arms share one block of storage, and a file's storage is not just
+      // bytes: `pas_file_init` gives it a heap buffer sized by the component
+      // type, and the block's prologue has to do that for every file the
+      // variable contains before the program can name one. Two arms holding
+      // files would need two buffers at one address — the second init leaks
+      // the first, and the file that is read is not the file that was set up.
+      // §6.4.3.4 does not forbid this; this compiler does, because there is no
+      // answer to "which arm's file is this storage" at block entry.
+      if (fieldType->isFile() || containsFile(fieldType))
+        diags_.error(group.names.empty() ? arm.line : group.names[0].line,
+                     group.names.empty() ? arm.col : group.names[0].col,
+                     "a file cannot be a field of a variant part, because the "
+                     "arms share storage and a file's storage is its own");
       for (DeclName &n : group.names)
         addField(record, variants[index].fields, n, fieldType, path);
     }

@@ -970,35 +970,101 @@ void CodeGen::emitJumpDispatch(Symbol *proc) {
 /// rewritten before the program body runs — but no character is read until
 /// the program asks for one, or a program that never reads would hang waiting
 /// for a terminal.
-void CodeGen::initFiles(Symbol *proc) {
+/// Whether a value of this type holds a file anywhere inside it. A variant
+/// part cannot (Sema refuses one), so this walks the fixed part only — which
+/// is also what makes the walk below able to reach every file exactly once.
+static bool holdsFile(ap::Type *t) {
+  if (!t)
+    return false;
+  if (t->isFile())
+    return true;
+  if (t->isArray())
+    return holdsFile(t->elem);
+  if (t->isRecord())
+    for (const Field &f : t->fields)
+      if (holdsFile(f.type))
+        return true;
+  return false;
+}
+
+/// Every file inside `addr`, set up or torn down. ISO 7185 §6.5.1's own
+/// example is `pooltape : array [1..4] of FileOfInteger` and §6.5.5's is
+/// `pooltape[2]^`, so a file need not be an entire variable — and each one
+/// needs its `struct pas_file` prepared before the program can name it, and
+/// closed when the storage goes away.
+///
+/// `binding` and `arg` describe the *whole* variable and so apply only when it
+/// is itself a file: a program parameter is an entire variable (§6.10), so a
+/// file reached through a subscript or a field is always an internal one.
+void CodeGen::walkFiles(llvm::Value *addr, ap::Type *t, bool init, int binding,
+                        int arg, llvm::Value *name) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
-  for (Symbol *v : proc->frameVars) {
-    if (!v->type || !v->type->isFile() || v->kind == SymKind::VarParam)
-      continue; // a var parameter is someone else's file
-    int binding = PAS_BIND_INTERNAL;
-    switch (v->fileBinding) {
-    case FileBinding::StandardInput:  binding = PAS_BIND_INPUT; break;
-    case FileBinding::StandardOutput: binding = PAS_BIND_OUTPUT; break;
-    case FileBinding::Argument:       binding = PAS_BIND_ARG; break;
-    case FileBinding::Internal:       binding = PAS_BIND_INTERNAL; break;
+  if (t->isFile()) {
+    if (!init) {
+      b_.CreateCall(rt("pas_file_done", voidTy, {ptr()}), {addr});
+      return;
     }
     // The component type is the whole of what the runtime needs to know about
     // a `file of T`: how many bytes one component is, and whether the file has
     // the line structure only a `text` has.
-    uint64_t comp = v->type->elem ? sizeOf(v->type->elem) : 1;
+    uint64_t comp = t->elem ? sizeOf(t->elem) : 1;
     b_.CreateCall(
         rt("pas_file_init", voidTy,
            {ptr(), i32(), i32(), ptr(), i32(), i32(), i32()}),
-        {addressOf(v), ConstantInt::get(i32(), binding),
-         ConstantInt::get(i32(), v->fileArg),
-         b_.CreateGlobalString(v->name, "file.name"),
-         ConstantInt::get(i32(), comp),
-         ConstantInt::get(i32(), v->type->isText() ? 1 : 0),
+        {addr, ConstantInt::get(i32(), binding), ConstantInt::get(i32(), arg),
+         name, ConstantInt::get(i32(), comp),
+         ConstantInt::get(i32(), t->isText() ? 1 : 0),
          // §6.4.3.6: an index-type makes the file direct-access, and the one
          // thing the runtime does differently is open the stream for reading
          // *and* writing — SeekUpdate must be able to turn one into the other
          // without reopening, since it has to preserve the contents.
-         ConstantInt::get(i32(), v->type->isDirectAccess() ? 1 : 0)});
+         ConstantInt::get(i32(), t->isDirectAccess() ? 1 : 0)});
+    return;
+  }
+  if (t->isRecord()) {
+    for (const Field &f : t->fields)
+      if (holdsFile(f.type))
+        walkFiles(fieldAddress(addr, t, &f), f.type, init, PAS_BIND_INTERNAL, 0,
+                  name);
+    return;
+  }
+  if (!t->isArray() || !holdsFile(t->elem))
+    return;
+  // A loop rather than an unrolled run: the length may be a discriminant's
+  // (ADR-0040), and an array of files is otherwise as long as the program
+  // says. It is emitted in the prologue, where an `alloca` belongs anyway.
+  llvm::Value *count = dynLength(t);
+  llvm::Value *iv = b_.CreateAlloca(i32(), nullptr, "file.i");
+  b_.CreateStore(ConstantInt::get(i32(), 0), iv);
+  auto *head = llvm::BasicBlock::Create(ctx_, "file.head", curFn_);
+  auto *body = llvm::BasicBlock::Create(ctx_, "file.body", curFn_);
+  auto *done = llvm::BasicBlock::Create(ctx_, "file.done", curFn_);
+  b_.CreateBr(head);
+  b_.SetInsertPoint(head);
+  llvm::Value *i = b_.CreateLoad(i32(), iv, "file.iv");
+  b_.CreateCondBr(b_.CreateICmpSLT(i, count, "file.more"), body, done);
+  b_.SetInsertPoint(body);
+  walkFiles(b_.CreateGEP(llvmType(t), addr, {ConstantInt::get(i32(), 0), i},
+                         "file.elem"),
+            t->elem, init, PAS_BIND_INTERNAL, 0, name);
+  b_.CreateStore(b_.CreateAdd(i, ConstantInt::get(i32(), 1), "file.next"), iv);
+  b_.CreateBr(head);
+  b_.SetInsertPoint(done);
+}
+
+void CodeGen::initFiles(Symbol *proc) {
+  for (Symbol *v : proc->frameVars) {
+    if (!v->type || !holdsFile(v->type) || v->kind == SymKind::VarParam)
+      continue; // a var parameter is someone else's file
+    int binding = PAS_BIND_INTERNAL;
+    switch (v->fileBinding) {
+    case FileBinding::StandardInput: binding = PAS_BIND_INPUT; break;
+    case FileBinding::StandardOutput: binding = PAS_BIND_OUTPUT; break;
+    case FileBinding::Argument: binding = PAS_BIND_ARG; break;
+    case FileBinding::Internal: binding = PAS_BIND_INTERNAL; break;
+    }
+    walkFiles(addressOf(v), v->type, /*init=*/true, binding, v->fileArg,
+              b_.CreateGlobalString(v->name, "file.name"));
   }
 }
 
@@ -1015,9 +1081,10 @@ void CodeGen::initFiles(Symbol *proc) {
 void CodeGen::closeFiles(Symbol *proc) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   for (Symbol *v : proc->frameVars) {
-    if (!v->type || !v->type->isFile() || v->kind == SymKind::VarParam)
+    if (!v->type || !holdsFile(v->type) || v->kind == SymKind::VarParam)
       continue;
-    b_.CreateCall(rt("pas_file_done", voidTy, {ptr()}), {addressOf(v)});
+    walkFiles(addressOf(v), v->type, /*init=*/false, PAS_BIND_INTERNAL, 0,
+              nullptr);
   }
   if (!proc->nonLocalLabels.empty())
     b_.CreateCall(rt("pas_jump_done", voidTy, {ptr()}),
@@ -2091,10 +2158,19 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
     llvm::Value *block =
         b_.CreateCall(rt("pas_new", ptr(), {i64()}), {size}, "new");
     b_.CreateStore(block, slot);
+    // A created variable holding a file needs the same preparation a declared
+    // one gets: `pas_file_init` per file, because §6.4.4 does not stop a
+    // domain-type from containing one. `dispose` closes them below, which is
+    // where the storage stops existing.
+    if (holdsFile(arg->type->elem))
+      walkFiles(block, arg->type->elem, /*init=*/true, PAS_BIND_INTERNAL, 0,
+                b_.CreateGlobalString("heap", "file.name"));
     return;
   }
 
   llvm::Value *block = b_.CreateLoad(ptr(), slot, "old");
+  if (domain && holdsFile(domain))
+    walkFiles(block, domain, /*init=*/false, PAS_BIND_INTERNAL, 0, nullptr);
   // What was allocated is the header and the variable together, so what is
   // given back has to be the block rather than the variable.
   if (unsigned head = headerSize(domain)) {
