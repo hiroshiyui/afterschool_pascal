@@ -398,15 +398,21 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  std::string exePath = opt.output.empty() ? base : opt.output;
+  // The object of a `-c` run is the product and is named after the source (or
+  // by `-o`). The one a link run leaves behind is a temporary, and it is named
+  // after the *executable* rather than after the source: two concurrent
+  // compilations of one source file are ordinary — the two self-hosting
+  // harnesses do exactly that — and naming it after the source made them
+  // delete each other's object between emitting it and linking it.
   std::string objPath =
       opt.compileOnly ? (opt.output.empty() ? base + ".o" : opt.output)
-                      : base + ".o";
+                      : exePath + ".o";
   if (!emitObject(*mod, *tm, objPath))
     return 1;
   if (opt.compileOnly)
     return 0;
 
-  std::string exePath = opt.output.empty() ? base : opt.output;
   std::string cmd = "clang '" + objPath + "' -L'" + runtimeDir() +
                     "' -lpasrt -lm -o '" + exePath + "'";
   int rc = std::system(cmd.c_str());
