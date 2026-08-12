@@ -96,6 +96,13 @@ std::string symRef(const Symbol *s) {
       return "const ?";
     if (s->type->isReal())
       return "const real";
+    // A constant whose value lives in memory has no scalar field to print —
+    // it *is* its defining expression (ADR-0068), and that expression was
+    // dumped at the constant-definition. Reading `intVal` here would print
+    // whichever number the field happened to hold, which is how the two
+    // compilers first disagreed about one.
+    if (s->type->isMemory())
+      return "const expr";
     if (s->type->isChar())
       return "const " + std::to_string(static_cast<unsigned char>(s->charVal));
     if (s->type->base()->kind == TypeKind::Boolean)

@@ -78,6 +78,12 @@ struct Symbol {
   double realVal = 0;
   char charVal = 0;
   bool boolVal = false;
+  /// ...unless the value does not fit in a field. ISO 7185 §6.3 makes a
+  /// `character-string` a constant, and a string has no scalar form — so such
+  /// a constant is *its defining expression, named*, and this is that node.
+  /// The same shape `Symbol::initValue` gives §6.6's initial state: Sema holds
+  /// the tree and CodeGen emits it where the value is needed (ADR-0068).
+  Expr *constValue = nullptr;
 
   // --- lexical position -----------------------------------------------------
   // `level` is the nesting depth: 0 for the program, 1 for a procedure declared
@@ -529,6 +535,7 @@ private:
   /// True if `e` denotes a variable — a name, or one with subscripts and
   /// fields applied. Assignment targets and `var` arguments must be one.
   bool isDesignator(Expr *e) const;
+  bool isMemoryConstant(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
   Type *resolveInquiry(TypeExpr &denoter);

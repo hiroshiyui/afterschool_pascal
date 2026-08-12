@@ -300,6 +300,7 @@ private:
   llvm::Value *emitUnary(Unary *e);
   llvm::Value *emitCall(Call *e);
   llvm::Value *emitConst(const Symbol &sym);
+  llvm::Value *constAddress(const Symbol &sym);
 
   /// Widen an integer value to double when Pascal's implicit conversion applies.
   llvm::Value *toReal(llvm::Value *v, Type *from);

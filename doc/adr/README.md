@@ -76,3 +76,4 @@ the alternatives that were rejected and why.
 | [0065](0065-a-time-stamp-is-eight-numbers-and-the-layout-stays-here.md) | A time stamp is eight numbers, and the layout stays here | Accepted |
 | [0066](0066-a-set-value-is-told-from-a-subscript-by-the-symbol.md) | A set-value is told from a subscript by the symbol | Accepted |
 | [0067](0067-the-transfer-procedures-are-index-arithmetic.md) | The transfer procedures are index arithmetic, and nothing else | Accepted |
+| [0068](0068-a-string-constant-is-its-literal-named.md) | A string constant is its literal, named | Accepted |

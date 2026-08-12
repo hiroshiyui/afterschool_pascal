@@ -496,6 +496,11 @@ type
     boolVal: boolean;
     realAt, realLen: integer;
     realNeg: boolean;
+    { ...unless the value does not fit in a field. ISO 7185 6.3 makes a
+      character-string a constant, and a string has no scalar form -- so such
+      a constant is *its defining expression, named*, and this is that node.
+      The same shape initValue gives 6.6's initial state below. ADR-0068. }
+    constValue: nodePtr;
     { The number this procedure's LLVM function is named with. Nesting allows
       two procedures of the same name in different parents, so the name cannot
       be the Pascal one. }
@@ -5854,6 +5859,7 @@ begin
   s^.paramSection := 0;
   s^.isProtected := false;
   s^.initValue := nil;
+  s^.constValue := nil;
   s^.isStringSchema := false;
   s^.isBindable := false;
   s^.isModuleSym := false;
@@ -6172,6 +6178,26 @@ end;
 
 { ---------------------------------------------------------- designators -- }
 
+{ Whether the expression is a constant whose value lives in memory -- today
+  that is ISO 7185 6.3's string constant, and the predicate is written for the
+  type rather than for strings so that it needs nothing when another kind
+  arrives. It is not a variable and never becomes one; what it has is
+  *storage*, which is what the places that copy a structured value need of an
+  argument. ADR-0068. }
+function IsMemoryConstant(e: nodePtr): boolean;
+var s: symPtr;
+begin
+  s := nil;
+  if e <> nil then
+    if e^.kind = nkVar then begin
+      if e^.vrField = nil then s := e^.vrSym
+    end
+    else if e^.kind = nkField then
+      s := e^.fdQualified;
+  if s = nil then IsMemoryConstant := false
+  else IsMemoryConstant := (s^.kind = skConst) and IsMemory(s^.stype)
+end;
+
 function IsDesignator(e: nodePtr): boolean;
 begin
   if e = nil then IsDesignator := false
@@ -6439,6 +6465,17 @@ begin
         res.charVal := e^.chVal;
         ok := true
       end;
+      { ISO 7185 6.3: a character-string is a constant. It has no scalar form,
+        so what is folded is the literal itself -- the constant *is* the
+        literal, named, and takes whichever type the literal has in the
+        standard being compiled for. A one-character literal never reaches
+        here; the parser has already made it an nkChar, which is why
+        const c = 'a' is a char. }
+      nkStr: begin
+        res.stype := e^.ntype;
+        res.constValue := e;
+        ok := true
+      end;
       nkVar:
         if (e^.vrSym <> nil) and (e^.vrSym^.kind = skConst) then begin
           res := e^.vrSym^;
@@ -6482,7 +6519,7 @@ begin
       { 6.8.8's constant-accesses are not implemented (ADR-0061), so a
         structured value folds to nothing and the context says so. }
       nkStructValue, nkValueElem,
-      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr, nkDeref,
+      nkNil, nkSet, nkSetMember, nkIndex, nkSubstr, nkDeref,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -9165,11 +9202,14 @@ begin
                 'so the argument must have the same length')
       end
       { A structured value parameter is a copy, so it needs something to copy
-        from: a designator, a string literal, or -- since ADR-0061 -- a
-        structured-value-constructor, which is not a variable but does have
-        storage, because 6.8.7's value is *built* rather than computed. }
+        from: a designator, a string literal, a structured-value-constructor
+        (ADR-0061), or a constant whose value lives in memory (ADR-0068). The
+        last three are not variables but each has storage -- a constructor
+        because 6.8.7's value is *built* rather than computed, a constant
+        because it is its defining expression, named. }
       else if IsStructured(p^.sym^.stype) and not IsDesignator(a) and
-              (a^.kind <> nkStr) and (a^.kind <> nkStructValue) then begin
+              (a^.kind <> nkStr) and (a^.kind <> nkStructValue) and
+              not IsMemoryConstant(a) then begin
         ErrorAt(a^.line, a^.col);
         write('argument ', i:1, ' of ''');
         WritePool(callee^.at, callee^.len);
@@ -13300,6 +13340,10 @@ begin
   while d <> nil do begin
     CheckExpr(d^.kdValue);
     value.stype := nil;
+    { The folder fills in only the field its kind selects, so the one that
+      holds a node has to start empty or a scalar constant inherits whatever
+      the last one left here. }
+    value.constValue := nil;
     constReported := false;
     if not EvalConst(d^.kdValue, value) then begin
       { The folder says why when it can -- an overflow, a `chr` out of range --
@@ -13320,7 +13364,8 @@ begin
       s^.boolVal := value.boolVal;
       s^.realAt := value.realAt;
       s^.realLen := value.realLen;
-      s^.realNeg := value.realNeg
+      s^.realNeg := value.realNeg;
+      s^.constValue := value.constValue
     end;
     d := d^.next
   end;
@@ -14364,6 +14409,12 @@ begin
       skConst:
         if s^.stype = nil then write('const ?')
         else if IsReal(s^.stype) then write('const real')
+        { A constant whose value lives in memory has no scalar field to print
+          -- it *is* its defining expression (ADR-0068), and that expression
+          was dumped at the constant-definition. Reading intVal here would
+          print whichever number the field happened to hold, which is how the
+          two compilers first disagreed about one. }
+        else if IsMemory(s^.stype) then write('const expr')
         else if IsChar(s^.stype) then write('const ', ord(s^.charVal):1)
         else if IsBoolean(s^.stype) then
           if s^.boolVal then write('const true') else write('const false')
@@ -17079,11 +17130,25 @@ begin
   end
 end;
 
+{ The storage of a constant whose value does not fit in a register. ISO 7185
+  6.3's string constant is its literal, named, so what it needs is what the
+  literal already had: a private constant global holding the characters.
+  ADR-0068. }
+procedure ConstAddress(s: symPtr; var v: str);
+begin
+  EmitAddress(s^.constValue, v)
+end;
+
 procedure EmitConst(s: symPtr; var v: str);
 var b: typePtr;
 begin
   b := Base(s^.stype);
-  if b = nil then
+  { A value that travels by address has no scalar field to have been folded
+    into, so the constant answers with its storage -- which is what every
+    designator of a structured type answers with (ADR-0017). }
+  if IsMemory(s^.stype) then
+    ConstAddress(s, v)
+  else if b = nil then
     OpInt(0, v)
   else
     case b^.kind of
@@ -17094,7 +17159,7 @@ begin
         else OpWord('false           ', v);
       tyChar: OpInt(ord(s^.charVal), v);
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex, tyRestricted:
+      tyComplex, tyRestricted, tyString:
         OpInt(0, v)
     end
 end;
@@ -19229,6 +19294,11 @@ begin
         address of anything named vrSym, which is a function and has none. }
       if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
         EmitExpr(e, v)
+      { A constant whose value lives in memory has storage of its own and no
+        frame slot, so it must be answered before AddressOfSym -- which would
+        otherwise index the frame at frameIndex = -1, i.e. the static link. }
+      else if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
+        ConstAddress(e^.vrSym, v)
       else begin
       AddressOfSym(e^.vrSym, base);
       if e^.vrField = nil then
@@ -19245,7 +19315,9 @@ begin
         bare name is -- the base is an interface-identifier and has no address
         of its own. }
       if e^.fdQualified <> nil then begin
-        if IsInvocable(e^.fdQualified) then
+        if e^.fdQualified^.kind = skConst then
+          ConstAddress(e^.fdQualified, v)
+        else if IsInvocable(e^.fdQualified) then
           EmitExpr(e, v)
         else
           AddressOfSym(e^.fdQualified, v)

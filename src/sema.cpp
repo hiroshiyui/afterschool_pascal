@@ -1930,6 +1930,21 @@ Symbol *Sema::lookupWithField(const std::string &name,
   return nullptr;
 }
 
+/// Whether the expression is a constant whose value lives in memory — today
+/// that is ISO 7185 §6.3's string constant, and the predicate is written for
+/// the type rather than for strings so that it needs nothing when another
+/// kind arrives. It is not a variable and never becomes one; what it has is
+/// *storage*, which is what the places that copy a structured value need of
+/// an argument (ADR-0068).
+bool Sema::isMemoryConstant(Expr *e) const {
+  const Symbol *s = nullptr;
+  if (auto *v = as<VarRef>(e))
+    s = v->withField ? nullptr : v->sym;
+  else if (auto *f = as<FieldExpr>(e))
+    s = f->qualified;
+  return s && s->kind == SymKind::Const && s->type && s->type->isMemory();
+}
+
 bool Sema::isDesignator(Expr *e) const {
   if (auto *v = as<VarRef>(e))
     return v->sym && (v->sym->isVariable() || v->withField);
@@ -2889,6 +2904,7 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
     s->realVal = value.realVal;
     s->charVal = value.charVal;
     s->boolVal = value.boolVal;
+    s->constValue = value.constValue;
   }
 
   // A type name is visible to the definitions after it, so each is declared as
@@ -3324,6 +3340,16 @@ bool Sema::evalConst(Expr *e, Symbol &out) {
   if (auto *c = as<CharLit>(e)) {
     out.type = ty::Char();
     out.charVal = c->value;
+    return true;
+  }
+  // ISO 7185 §6.3: a `character-string` is a constant. It has no scalar form,
+  // so what is folded is the literal itself — the constant *is* the literal,
+  // named, and takes whichever type the literal has in the standard being
+  // compiled for. A one-character literal never reaches here; the parser has
+  // already made it a `CharLit`, which is why `const c = 'a'` is a char.
+  if (auto *s = as<StrLit>(e)) {
+    out.type = s->type;
+    out.constValue = s;
     return true;
   }
   if (auto *v = as<VarRef>(e)) {
@@ -5740,11 +5766,13 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                        ", and a value parameter is copied rather than padded; "
                        "so the argument must have the same length");
     // A structured value parameter is a copy, so it needs something to copy
-    // from: a designator, a string literal, or — since ADR-0061 — a
-    // structured-value-constructor, which is not a variable but does have
-    // storage, because §6.8.7's value is *built* rather than computed.
+    // from: a designator, a string literal, a structured-value-constructor
+    // (ADR-0061), or a constant whose value lives in memory (ADR-0068). The
+    // last three are not variables but each has storage — a constructor
+    // because §6.8.7's value is *built* rather than computed, a constant
+    // because it is its defining expression, named.
     else if (p->type && p->type->isStructured() && !isDesignator(a) &&
-             !is<StrLit>(a) && !is<StructValueExpr>(a))
+             !is<StrLit>(a) && !is<StructValueExpr>(a) && !isMemoryConstant(a))
       diags_.error(a->line, a->col,
                    "argument " + std::to_string(i + 1) + " of '" +
                        callee->name + "' is " + p->type->name() +

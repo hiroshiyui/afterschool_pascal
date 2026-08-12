@@ -1263,6 +1263,11 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     // address of anything named `v->sym`, which is a function and has none.
     if (!v->withField && v->sym->isInvocable())
       return emitExpr(e);
+    // A constant whose value lives in memory has storage of its own and no
+    // frame slot, so it must be answered before `addressOf` — which would
+    // otherwise index the frame at `frameIndex == -1`, i.e. the static link.
+    if (!v->withField && v->sym->kind == SymKind::Const)
+      return constAddress(*v->sym);
     llvm::Value *base = addressOf(v->sym);
     if (!v->withField)
       return base;
@@ -1276,9 +1281,12 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
     // ISO/IEC 10206:1991 §6.11.3's qualified name denotes one symbol, so it is
     // addressed as a bare name is — the base is an interface-identifier and
     // has no address of its own.
-    if (f->qualified)
+    if (f->qualified) {
+      if (f->qualified->kind == SymKind::Const)
+        return constAddress(*f->qualified);
       return f->qualified->isInvocable() ? emitExpr(e)
                                          : addressOf(f->qualified);
+    }
     return fieldAddress(emitAddress(f->base.get()), f->base->type, f->resolved);
   }
 
@@ -2595,7 +2603,20 @@ void CodeGen::emitFor(ForStmt *s) {
 
 // --------------------------------------------------------------- expressions
 
+/// The storage of a constant whose value does not fit in a register. ISO 7185
+/// §6.3's string constant is its literal, named, so what it needs is what the
+/// literal already had: a private constant global holding the characters
+/// (ADR-0068).
+llvm::Value *CodeGen::constAddress(const Symbol &sym) {
+  return emitAddress(sym.constValue);
+}
+
 llvm::Value *CodeGen::emitConst(const Symbol &sym) {
+  // A value that travels by address has no scalar field to have been folded
+  // into, so the constant answers with its storage — which is what every
+  // designator of a structured type answers with (ADR-0017).
+  if (sym.type->isMemory())
+    return constAddress(sym);
   switch (sym.type->base()->kind) {
   case TypeKind::Integer: return ConstantInt::getSigned(i32(), sym.intVal);
   case TypeKind::Real:    return ConstantFP::get(f64(), sym.realVal);
