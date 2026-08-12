@@ -1123,9 +1123,12 @@ in one language or the other, and the standard is a property of the source.
   - Refused and stated: §6.8.7.4's **set-value** (a set is a value and needs
     none of this; and `sieve[2,3]` cannot be told from `a[2,3]` without the
     symbol), §6.8.8's constant-accesses — which that record calls "structured
-    constants" — and a value of a dynamically bounded type. The first of those
-    landed as ADR-0066, by taking the second half of its own reason seriously:
-    the symbol is what tells them apart, so Sema is where it is told.
+    constants" — and a value of a dynamically bounded type. The first landed
+    as ADR-0066, by taking the second half of its own reason seriously: the
+    symbol is what tells them apart, so Sema is where it is told. The second
+    landed as ADR-0069. The third is still refused: a dynamically bounded type
+    has no compile-time extent, so "every component is specified" is not a
+    question that can be asked of it.
 - **The transfer procedures are index arithmetic, and nothing else**
   (ADR-0067). ISO 7185 §6.6.5.4's `pack`/`unpack` and §6.9.5's `page`, the
   three required procedures that were missing.
@@ -1309,6 +1312,56 @@ in one language or the other, and the standard is a property of the source.
     that was there first: the variable was set and the output still varied
     from run to run. It is also the only way a program on a working machine
     reaches that arm, so it is what makes the fallback fields testable at all.
+- **A constant-access is a designator over a constant** (ADR-0069). §6.8.8, the
+  last production of ISO/IEC 10206:1991, and the structured constants ADR-0061
+  deferred. §6.5.1's variable-accesses and §6.8.8's constant-accesses have the
+  same three selector forms and differ only in what stands at the bottom, so
+  **CodeGen and `verify/` gained nothing**: the spine is the one the parser
+  built, and D.88 to D.91 are the array, string and substring bounds already
+  proved. `isConstantAccess` is `isDesignator` written for the other root, and
+  is structural on purpose — it neither folds nor diagnoses, so it can be asked
+  as a question.
+  - **§6.8.8.1's NOTE is what the clause is for**: `c[i]` "denotes a different
+    value for each iteration of the loop", so a constant-access is a *run-time
+    read*. Where the index is constant it is a constant, which §6.3.2's own
+    `column1 = BlankCard[1]` needs — and §6.8.2 keeps the two apart with no
+    rule of its own, since a variable index is a variable-access and a
+    constant-expression may not contain one.
+  - **A structured constant is a global filled by a prologue**, not an LLVM
+    aggregate initializer. Printing one needs record padding, variant arms and
+    256-bit sets spelled as text in *both* backends, and ADR-0025's emitter has
+    `LlSize`/`LlAlign` and no struct-literal printer. It is filled before every
+    other initialisation — a constant-expression is nonvarying, so it cannot
+    read what the rest of the prologue writes, and §6.6's initial state may
+    name a constant. The global is keyed by the **node**, so `const b = a`
+    shares storage rather than copying.
+  - **A set constant needs no storage at all**, being a value (ADR-0028): the
+    constructor is emitted where the name is written.
+  - **Folding is a walk into the same node** — an array-value's element and a
+    record-value's field-value are nodes the program wrote, so nothing is
+    computed and no value representation was added. Only the two *string* forms
+    compute, because the characters are the value; §6.8.8.4's substring is the
+    one place this compiler builds a piece of tree the program did not write.
+  - **§6.8.8.3's inactive-variant error is settled at compile time.** D.90 is a
+    run-time property for a variable and ADR-0027 does not enforce it — but a
+    constant's tag is a constant, so the walk down `Field::variant` either
+    reaches the selected arm or reports that it did not.
+  - **§6.9.3.10's with-element may be a constant-access**, and its field names
+    are then constant-field-identifiers, which denote values. The binding is a
+    `VarParam` either way, so the *kind* cannot answer and the binding carries
+    a flag. Reusing ADR-0046's protection was tried and rejected: it would have
+    said "protected", which is a different rule and the wrong noun.
+  - **It forced the declaration parts to be read in written order.** §6.2.1
+    makes an Extended Pascal block a *repetition* of the five parts in any
+    order and §6.2.2.9 makes a defining-point precede its applied occurrences,
+    so written order is the only one that works — and Sema had been imposing
+    ISO 7185's fixed order on both standards. The parts are merged by **source
+    position**, not recorded at parse time; under ISO 7185 there is at most one
+    of each in the fixed order, so the merge is provably what it always did.
+    §6.4.4's pointer domain completes at the end of *its* type-definition-part,
+    so a run of type definitions ending is what triggers it. It **tightens**
+    too: `var v: t` before `type t` is now the forward reference §6.2.2.9 says
+    it is.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
@@ -1389,7 +1442,11 @@ a type's *identity* is decided by something other than the denoter that built
 it. Since ADR-0053 it also owns the interface table and the module records: an
 interface is not a scope (§6.2.2.2), so it lives beside the scope stack rather
 than in it, and a module's scope is *kept* between program-components because
-§6.2.2.12 makes the heading's defining-points the block's as well. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
+§6.2.2.12 makes the heading's defining-points the block's as well. Since
+ADR-0069 `checkDeclarations` walks the constant, type and variable parts
+**merged by source position** rather than one part at a time, because
+ISO/IEC 10206:1991 §6.2.1 lets them interleave and §6.2.2.9 then makes written
+order the only correct one. A type-denoter is a `TypeExpr`, deliberately not an `Expr`, and a
 declaration group shares one — which is what makes `a, b: array [1..3] of
 integer` the *same* type rather than two alike ones. The one exception is a
 parameter group naming a schema (ADR-0040): each name there gets its *own*

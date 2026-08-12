@@ -442,6 +442,28 @@ values     a structured-value-constructor denotes a value of a named array or
            name. Its members are checked against that type, so `digits[i]`
            stops the program when i is not a value of the base type — the
            check a constructor with no name on it cannot make
+const c    a constant may be structured: `const squares = vec[1: 1; 2: 4]`,
+           a record one, or a set one. Its value is fixed at compile time
+           and lives in storage the program cannot write to
+c[i]       a constant-access selects from one — `c[i]`, `o.x`, `s[1..3]` —
+           and §6.8.8.1's NOTE is what it is for: the index need not be
+           constant, so `c[i]` in a loop denotes a different value each
+           time. Where the index *is* constant the access is a constant
+           too, so `third = squares[3]` may then bound an array or label a
+           case. Selecting a component of a variant the constant did not
+           select is an error, and a constant's tag is known, so it is
+           reported at compile time. None of it is a variable: a
+           constant-access has a designator's shape and a constant at the
+           bottom of it, so assigning to one, passing it as a var parameter
+           or reading into it are refused
+with c     a with-element may be a constant-access, and the field names it
+           introduces then denote values rather than variables
+parts      the declaration parts may be written in any order and repeated,
+           which §6.2.1 requires — so a constant may name a type, or an
+           enumeration constant a type part declared. §6.2.2.9's rule that a
+           defining-point precedes its applied occurrences is what decides
+           the rest: a variable whose type is defined after it is an error,
+           and §6.4.4's pointer domain is still the one exception
 minreal    §6.4.2.2 b)'s three required real constants: the largest usable
 maxreal    magnitude, the smallest, and the difference between 1.0 and the
 epsreal    next value above it. A real is an IEEE-754 binary64 here, so they
@@ -491,15 +513,6 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            §6.1.5 and §6.1.6 make them *directives*, which are identifiers
            in the one position each may occupy, exactly as `forward` is
 ```
-
-Also absent: a **structured-valued constant**. `const c = t[1: 1; 2: 2]` is
-refused — there is nowhere to keep an array-, record- or set-valued constant —
-and §6.8.8's constant-access `c[i]` goes with it, whose own NOTE points out
-that the index need not be constant and `c[i]` therefore denotes a different
-value on each iteration of a loop. Assigning such a value to a *variable*,
-`q := t[1: 1; 2: 2]`, does work; it is the constant that does not. A
-**string**-valued constant is the one of the four that does work, since
-ISO 7185 §6.3 requires it.
 
 **All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
 though the language is not. A word-symbol is reserved only when the feature

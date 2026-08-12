@@ -61,7 +61,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 229 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 237 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -128,7 +128,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 385
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 393
    files agree stage for stage today.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
@@ -877,27 +877,35 @@ they landed — rather than in the standard's.
     Counting what the corpus reaches has now turned something up every time it
     has been done.
 
-**What is left of ISO/IEC 10206:1991**, and it is now a short list:
+- ~~**§6.8.8's constant-accesses.**~~ Done (ADR-0069), and with them the
+  structured constants ADR-0061 deferred and ADR-0068 half-unblocked. A
+  constant-access is `isDesignator`'s shape with a constant at the bottom of
+  it, so CodeGen and `verify/` gained nothing at all: the spine is the one the
+  parser already built, and D.88 to D.91 are the array, string and substring
+  bounds already proved. What the feature is *for* is §6.8.8.1's NOTE — `c[i]`
+  denotes a different value on each iteration, so a constant-access is a
+  run-time read — while a constant index makes it a constant, which is what
+  §6.3.2's own `column1 = BlankCard[1]` needs.
+  - A structured constant is a **global filled by a prologue**, not an LLVM
+    aggregate initializer: printing one would need record padding, variant arms
+    and 256-bit sets spelled as text in *both* backends, and ADR-0025's
+    emitter has `LlSize`/`LlAlign` and no struct-literal printer.
+  - It forced the **declaration parts to be read in written order**, which
+    §6.2.1 has always required of Extended Pascal and Sema had never done —
+    a conformance fix in its own right, since `const first = red` after a type
+    part has no structured constant in it.
 
-- **§6.8.8's constant-accesses** (ADR-0061). Half the obstacle is gone:
-  ADR-0068 gave a `Symbol` somewhere to keep a value that is not a scalar, so
-  a string constant now exists and `hex_string` in §6.3.2's example compiles.
-  What is left is an array-, record- or set-valued one — which ADR-0061's
-  constructor can already *build*, into a variable — and then the accesses
-  themselves. §6.8.8.1's own NOTE is what makes those more than storage: given
-  `const c = t[1: 1; 2: 2]`, the constant-access `c[i]` "denotes a different
-  value for each iteration of the loop", so the index need not be constant and
-  the access is a run-time read of wherever the constant lives. The clause adds
-  no new run-time check — D.88 to D.91 are the array, string and substring
-  bounds this compiler already tests.
+**What is left of ISO/IEC 10206:1991**, and it is now one item:
+
 - **Separate compilation of program-components** (ADR-0053). §6.13 asks for it
   with a *should* rather than a *shall*, and it needs an interface artefact
   this compiler does not define — a second file format, and one the stage-1
   compiler could not write.
 
 **With the time procedures the required procedures and functions are
-complete**, so what is left above is one production of §6.8 and one *should*
-of §6.13 — no required identifier, no required type, and nothing lexical.
+complete**, and with §6.8.8 the grammar is too — so what is left above is one
+*should* of §6.13, and no production, required identifier, required type or
+lexical rule at all.
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
 only when the feature needing it lands, so until the list was empty
