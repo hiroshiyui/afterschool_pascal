@@ -216,6 +216,63 @@ Token Lexer::lexIdentOrKeyword() {
   return t;
 }
 
+namespace {
+/// Whether a real literal is certainly larger than any real the target can
+/// represent, decided from its decimal exponent alone.
+///
+/// The magnitude of a literal with `d` significant digits before the point and
+/// an explicit exponent `e` is strictly less than 10^(d+e), so `d + e > 309`
+/// means it exceeds IEEE double's ~1.8e308 whatever the digits are. The
+/// converse does not hold, which is stated where this is called: the last
+/// decade before the boundary is let through.
+///
+/// It is written over the *text* because that is all the Pascal-hosted lexer
+/// has — a real literal is never converted there (ADR-0025) — and the two
+/// lexers have to accept the same programs.
+bool decimalExponentExceedsRange(const std::string &text) {
+  size_t i = 0;
+  bool anySignificant = false;
+  long long digits = 0; // significant digits before the point
+  while (i < text.size() && std::isdigit(static_cast<unsigned char>(text[i]))) {
+    if (text[i] != '0')
+      anySignificant = true;
+    if (anySignificant)
+      ++digits;
+    ++i;
+  }
+  // A mantissa of zero is zero however it is scaled.
+  bool fractionSignificant = false;
+  if (i < text.size() && text[i] == '.') {
+    for (size_t k = i + 1;
+         k < text.size() && std::isdigit(static_cast<unsigned char>(text[k]));
+         ++k)
+      if (text[k] != '0')
+        fractionSignificant = true;
+  }
+  if (!anySignificant && !fractionSignificant)
+    return false;
+
+  long long exponent = 0;
+  size_t e = text.find_first_of("eE");
+  if (e != std::string::npos) {
+    size_t k = e + 1;
+    bool negative = k < text.size() && text[k] == '-';
+    if (k < text.size() && (text[k] == '+' || text[k] == '-'))
+      ++k;
+    for (; k < text.size() && std::isdigit(static_cast<unsigned char>(text[k]));
+         ++k) {
+      // Stop accumulating well before anything can wrap: past this the answer
+      // cannot change.
+      if (exponent < 1000000)
+        exponent = exponent * 10 + (text[k] - '0');
+    }
+    if (negative)
+      return false; // a negative exponent only ever underflows
+  }
+  return digits + exponent > 309;
+}
+} // namespace
+
 Token Lexer::lexNumber() {
   int sl = line_, sc = col_;
   std::string text;
@@ -254,6 +311,26 @@ Token Lexer::lexNumber() {
   t.text = text;
   if (isReal) {
     t.realVal = std::strtod(text.c_str(), nullptr);
+    // ISO 7185 §6.4.2.2 makes a real literal denote a value of the real-type,
+    // and one that does not is an error rather than an infinity: without this
+    // `1e400` compiled silently and printed INF, where the integer path below
+    // had always reported its own overflow.
+    //
+    // The test is on the *decimal exponent* rather than on `strtod`'s ERANGE,
+    // and that is not laziness. ADR-0025 keeps a real literal as its source
+    // text all the way into the IR precisely so that no conversion is needed,
+    // and the Pascal-hosted lexer therefore has no `strtod` to ask — a check
+    // that consulted `errno` here could not be mirrored there, and the two
+    // compilers would disagree about which programs they accept. One rule, in
+    // both, is worth more than an exact rule in one.
+    //
+    // What it costs: the rule refuses what is *certainly* out of range and
+    // lets through the last decade before the boundary, so `9e308` still
+    // becomes an infinity. Underflow is not an error at all — §6.4.2.2 leaves
+    // the value set implementation-defined, and a literal too small to
+    // represent denotes the nearest value there is, which is zero.
+    if (decimalExponentExceedsRange(text))
+      diags_.error(sl, sc, "real literal out of range: " + text);
   } else {
     errno = 0;
     t.intVal = std::strtoll(text.c_str(), nullptr, 10);

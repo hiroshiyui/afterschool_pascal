@@ -1,0 +1,7 @@
+ord    200 255
+order  TRUE TRUE
+succpr 201 199
+inset  TRUE FALSE FALSE
+array  400 420
+chrord 200 255
+case   hit

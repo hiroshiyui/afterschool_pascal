@@ -1673,6 +1673,70 @@ begin
     ExtendedDigit := -1
 end;
 
+{ Whether a real literal is certainly larger than any real the target can
+  represent, decided from its decimal exponent alone.
+
+  The magnitude of a literal with `d` significant digits before the point and
+  an explicit exponent `e` is strictly less than 10 to the (d+e), so d+e > 309
+  means it exceeds IEEE double's 1.8e308 whatever the digits are. The converse
+  does not hold: the last decade before the boundary is let through, and 9e308
+  still becomes an infinity.
+
+  The test is on the *text* because that is all this lexer has -- a real
+  literal is never converted here (ADR-0025), and the C++ lexer uses this same
+  rule rather than its `strtod`'s ERANGE so that the two accept the same
+  programs. }
+function RealTooLarge(var text: str): boolean;
+var i, digits, exponent: integer;
+    anySignificant, fractionSignificant, negative: boolean;
+begin
+  i := 1;
+  digits := 0;
+  anySignificant := false;
+  while (i <= text.len) and IsDigit(text.ch[i]) do begin
+    if text.ch[i] <> '0' then anySignificant := true;
+    if anySignificant then digits := digits + 1;
+    i := i + 1
+  end;
+  { A mantissa of zero is zero however it is scaled. }
+  fractionSignificant := false;
+  if (i <= text.len) and (text.ch[i] = '.') then begin
+    i := i + 1;
+    while (i <= text.len) and IsDigit(text.ch[i]) do begin
+      if text.ch[i] <> '0' then fractionSignificant := true;
+      i := i + 1
+    end
+  end;
+  if (not anySignificant) and (not fractionSignificant) then
+    RealTooLarge := false
+  else begin
+    exponent := 0;
+    negative := false;
+    while (i <= text.len) and (text.ch[i] <> 'e') and (text.ch[i] <> 'E') do
+      i := i + 1;
+    if i <= text.len then begin
+      i := i + 1;
+      if i <= text.len then
+        if (text.ch[i] = '+') or (text.ch[i] = '-') then begin
+          negative := text.ch[i] = '-';
+          i := i + 1
+        end;
+      while (i <= text.len) and IsDigit(text.ch[i]) do begin
+        { Stop accumulating well before anything can wrap: past this the
+          answer cannot change. }
+        if exponent < 1000000 then
+          exponent := exponent * 10 + (ord(text.ch[i]) - ord('0'));
+        i := i + 1
+      end
+    end;
+    if negative then
+      { a negative exponent only ever underflows }
+      RealTooLarge := false
+    else
+      RealTooLarge := digits + exponent > 309
+  end
+end;
+
 procedure LexNumber;
 var
   sl, sc, digit, digitAt, base, i: integer;
@@ -1801,8 +1865,18 @@ begin
     end
   end;
 
-  if isReal then
+  if isReal then begin
+    { ISO 7185 6.4.2.2 makes a real literal denote a value of the real-type,
+      and one that does not is an error rather than an infinity. }
+    if RealTooLarge(text) then begin
+      ErrorAt(sl, sc);
+      write('real literal out of range: ');
+      for digit := 1 to text.len do
+        write(text.ch[digit]);
+      writeln
+    end;
     AddText(sl, sc, tkReal, PoolAdd(text), text.len)
+  end
   else begin
     if overflow then begin
       ErrorAt(sl, sc);
@@ -8800,8 +8874,7 @@ begin
           no type and checking it would report that first. }
         qual := nil;
         if e^.fdBase^.kind = nkVar then
-          if (e^.fdBase^.vrSym = nil) and
-             IsInterfaceName(e^.fdBase^.vrAt, e^.fdBase^.vrLen) then begin
+          if IsInterfaceName(e^.fdBase^.vrAt, e^.fdBase^.vrLen) then begin
             qual := e^.fdBase;
             e^.fdQualified := LookupName(qual^.vrAt, qual^.vrLen,
                                          e^.fdAt, e^.fdLen, e^.line, e^.col);
@@ -17952,9 +18025,12 @@ end;
 
 { The prologue shared by main and every procedure: alloca the frame, store the
   static link, copy the incoming arguments into their slots. }
-procedure EnterFrame(p: symPtr);
-var l, d, e: symListPtr; link, slot, arg, half, actual, size, copy: str;
-    nohdr: str; k, align: integer; comp: typePtr;
+{ The facts every emitted function starts from, and the frame it works
+  through. Split out of EnterFrame because a module's finalization needs
+  exactly this and none of the prologue that follows it -- no parameters to
+  copy in, no files to open, no jump record to arm, since 6.11.1 gives a
+  module-block no label-declaration-part. }
+procedure BeginFunction(p: symPtr);
 begin
   { A label belongs to exactly one block, so the map is emptied per function.
     Sema numbers labels across the whole program, so a stale entry would never
@@ -17970,7 +18046,14 @@ begin
   while irRoot^.owner <> nil do irRoot := irRoot^.owner;
   nextReg := 0;
   nextBlock := 0;
-  StartBlock(NewBlock);
+  StartBlock(NewBlock)
+end;
+
+procedure EnterFrame(p: symPtr);
+var l, d, e: symListPtr; link, slot, arg, half, actual, size, copy: str;
+    nohdr: str; k, align: integer; comp: typePtr;
+begin
+  BeginFunction(p);
   { A level-0 block's record is a global: it has one activation, and a
     module's must outlive the function that initialises it (ADR-0053). A
     global is already zeroed, so its static link needs no store either. }
@@ -18349,13 +18432,7 @@ begin
     main-program-block has terminated, not after the initialization. }
   writeln(ircode);
   writeln(ircode, 'define internal void @m', p^.irId:1, 'f() {');
-  labelBlocks := nil;
-  irProc := p;
-  irLevel := 0;
-  irRoot := p;
-  nextReg := 0;
-  nextBlock := 0;
-  StartBlock(NewBlock);
+  BeginFunction(p);
   if m^.mdFini <> nil then EmitStmt(m^.mdFini);
   { A module's files are closed when its activation terminates, which is the
     same obligation a block's exit has and the same call that discharges it. }
@@ -18390,10 +18467,13 @@ begin
     is emitted: the main program may call an imported procedure, and a module
     written earlier may have been given its body later. }
   EmitFrameType(programSym);
+  { Every module node carries its symbol by the time Sema is done, and codegen
+    does not run when Sema found anything -- so there is nothing to guard
+    against. A split module is two nodes sharing one symbol, which is what the
+    irId test asks about. }
   m := progModules;
   while m <> nil do begin
-    if m^.mdSym <> nil then
-      if m^.mdSym^.irId = 0 then EmitFrameType(m^.mdSym);
+    if m^.mdSym^.irId = 0 then EmitFrameType(m^.mdSym);
     m := m^.next
   end;
   m := progModules;
@@ -18411,8 +18491,7 @@ begin
   EmitFrameGlobal(programSym);
   m := progModules;
   while m <> nil do begin
-    if m^.mdSym <> nil then
-      if m^.mdBlock <> nil then EmitFrameGlobal(m^.mdSym);
+    if m^.mdBlock <> nil then EmitFrameGlobal(m^.mdSym);
     m := m^.next
   end;
 
@@ -18422,8 +18501,7 @@ begin
     that carries them. }
   m := progModules;
   while m <> nil do begin
-    if m^.mdSym <> nil then
-      if m^.mdBlock <> nil then EmitModule(m);
+    if m^.mdBlock <> nil then EmitModule(m);
     m := m^.next
   end;
 

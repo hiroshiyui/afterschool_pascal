@@ -178,6 +178,17 @@ def traps_index(i, lo, hi):
     before anything is computed from it.
 
         outside = CreateOr(CreateICmpSLT(idx, lo), CreateICmpSGT(idx, hi))
+
+    ASSUMPTION, and the one thing about this rule worth knowing: `i` is the
+    subscript *after* widening. The predicates emitted are signed whatever the
+    index type is, and that is sound only because an unsigned ordinal reaches
+    them zero-extended — a `char` subscript of 200 arrives as 200 and not as
+    the -56 an `i8` holds. The rules below quantify over an already-widened
+    value, so a `zext` turned into a `sext` would leave every one of them green
+    while breaking each array indexed by a char above 127.
+
+    What stands behind the assumption is `tests/highchar.pas`, which indexes
+    an `array [chr(200)..chr(210)]` and fails if the widening changes.
     """
     return z3.Or(i < lo, i > hi)
 

@@ -1,0 +1,4 @@
+<source>:14:11: error: real literal out of range: 1e400
+<source>:15:11: error: real literal out of range: 1e309
+<source>:16:11: error: real literal out of range: 1.5e999
+<source>:17:11: error: real literal out of range: 12345678901234567890123456789012345678901234567890.0e260
