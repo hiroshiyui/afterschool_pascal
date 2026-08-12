@@ -457,6 +457,17 @@ type
       is the one thing about a block that its own statements do not decide. }
     nlLabels, nlTail: numPtr;
     resultVar: symPtr;
+    { 6.7.2: a result-variable-specification was written, so the body names
+      the result and must *not* assign to the function identifier. Without one
+      the body must assign to it at least once -- the two rules are exclusive,
+      which is why one flag answers both. assignedResult is the syntactic
+      containment the standard asks about: an assignment inside an `if`
+      counts. }
+    resultNamed, assignedResult: boolean;
+    { The result type was refused, so `never assigns its result` is
+      suppressed: the body cannot assign a type the heading does not have, and
+      one mistake deserves one message. }
+    resultTypeBad: boolean;
     defined: boolean;
     { 6.4.7: the type-denoter a schema produces its types from, re-resolved
       once per distinct tuple with the discriminants bound to that tuple's
@@ -812,7 +823,10 @@ type
         procedure-and-function-heading-part (6.11.1). It behaves exactly as
         `forward` does -- name and parameters here, body later, repeating the
         name alone -- so only the diagnostic tells the two apart. }
-      nkProcDecl:   (pdAt, pdLen: integer;
+      { pdResAt/pdResLen: 6.7.2's result-variable-specification, the name
+        the block calls its result by. Zero length where none was written,
+        which is what decides whether `f := e` is required or forbidden. }
+      nkProcDecl:   (pdAt, pdLen, pdResAt, pdResLen: integer;
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward, pdInHeading: boolean;
                      pdSym: symPtr);
@@ -1372,6 +1386,25 @@ begin
   at := poolLen + 1;
   PoolPut('b'); PoolPut('i'); PoolPut('n'); PoolPut('d'); PoolPut('i');
   PoolPut('n'); PoolPut('g'); PoolPut('$');
+  n := 0;
+  v := slot;
+  repeat
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  until v = 0;
+  for k := n downto 1 do PoolPut(digits[k]);
+  len := poolLen + 1 - at
+end;
+
+{ ...and the slot a call whose result lives in memory builds it in (6.7.2),
+  named the same way and for the same reason. }
+procedure InternCallResultName(slot: integer; var at, len: integer);
+var digits: array [1..12] of char; n, v, k: integer;
+begin
+  at := poolLen + 1;
+  PoolPut('r'); PoolPut('e'); PoolPut('s'); PoolPut('u');
+  PoolPut('l'); PoolPut('t'); PoolPut('$');
   n := 0;
   v := slot;
   repeat
@@ -2967,7 +3000,7 @@ begin
     end
   end;
   LeaveLevels(1);
-  ParseTypeExpr := t
+  ParseTypeDenoter := t
 end;
 
 { ------------------------------------------------------------- expressions }
@@ -4019,6 +4052,8 @@ begin
   d^.pdBody := nil;
   d^.pdAt := 0;
   d^.pdLen := 0;
+  d^.pdResAt := 0;
+  d^.pdResLen := 0;
   pos := pos + 1;   { 'procedure' / 'function' }
 
   if not Check(tkIdent) then begin
@@ -4037,6 +4072,26 @@ begin
 
   if (not aborted) and Check(tkLParen) then
     d^.pdParams := ParseFormalParameters;
+
+  { 6.7.2's result-variable-specification: `= identifier` between the
+    parameters and the result type gives the result a *name*. Without one the
+    only way to write the result is `f := e`, and 6.8.2.2 makes every *read* of
+    `f` a recursive call -- so a structured result could be assigned whole and
+    never built a field at a time. This is the standard's own answer to that,
+    which is why the two halves of 6.7.2 arrive together. }
+  if (not aborted) and isFunction and (langStd = stdExtended)
+      and Accept(tkEq) then begin
+    if not Check(tkIdent) then begin
+      ErrorAtCur;
+      writeln('expected the name of the result variable after ''=''');
+      Bail
+    end
+    else begin
+      d^.pdResAt := tok[pos].at;
+      d^.pdResLen := tok[pos].len;
+      pos := pos + 1
+    end
+  end;
 
   { The completion of a forward declaration repeats the name alone (ISO 7185
     6.6.1), so both the parameters and the result type may be absent here. }
@@ -5093,6 +5148,9 @@ begin
   s^.nlLabels := nil;
   s^.nlTail := nil;
   s^.resultVar := nil;
+  s^.resultNamed := false;
+  s^.assignedResult := false;
+  s^.resultTypeBad := false;
   s^.defined := false;
   s^.schemaBody := nil;
   s^.discs := nil;
@@ -8075,6 +8133,27 @@ begin
   end
 end;
 
+{ A result that lives in memory has no register form (ADR-0017) and the
+  callee's activation record dies at the return, so the storage has to be the
+  caller's. Each call site gets a hidden frame slot for it -- the mechanism
+  ADR-0052 built for `binding(f)` back when that was the only function
+  returning a record and this compiler returned none.
+
+  Per *site*, not per callee: `f(g(x))` and a call in a loop each want their
+  own, and a frame slot is somewhere both backends can name without an alloca
+  in the middle of a function. A recursive call needs nothing extra, because
+  each activation brings its own frame and so its own slots. }
+procedure GiveResultSlot(c: nodePtr);
+var at, len: integer;
+begin
+  if currentProc <> nil then
+    if c^.ntype <> nil then
+      if IsMemory(c^.ntype) then begin
+        InternCallResultName(currentProc^.frameCount, at, len);
+        c^.clSlot := AddHiddenVar(at, len, skVar, c^.ntype, currentProc)
+      end
+end;
+
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a, b: nodePtr; p, q: symListPtr; n, given, i: integer;
 begin
@@ -8742,6 +8821,7 @@ begin
       else begin
         c^.clSym := sym;
         c^.ntype := ResultTypeOf(sym);
+        GiveResultSlot(c);
         CheckArguments(sym, c^.clArgs, c^.line, c^.col)
       end
   end
@@ -8752,6 +8832,7 @@ begin
   if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
     c^.ntype := ResultTypeOf(sym);
+    GiveResultSlot(c);
     CheckArguments(sym, c^.clArgs, c^.line, c^.col)
   end
   else if IsInvocable(sym) then begin
@@ -10148,7 +10229,7 @@ begin
         { Assigning to a function's own name sets its result (ISO 7185
           6.8.2.2), so it is redirected before the target is otherwise
           resolved. Reading the name is a recursive call -- see CheckExpr.
-          Only a bare name can mean this; a function result has no fields. }
+          Only a bare name can mean this. }
         named := nil;
         if s^.asTarget^.kind = nkVar then begin
           named := Lookup(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
@@ -10157,8 +10238,20 @@ begin
         if named <> nil then begin
           s^.asTarget^.vrSym := named^.resultVar;
           s^.asTarget^.ntype := named^.stype;
+          named^.assignedResult := true;
           CheckExpr(s^.asValue);
-          if named^.resultVar = nil then begin
+          if named^.resultNamed then begin
+            { 6.7.2: with a result-variable-specification the block "shall
+              contain no assignment-statement" to the function-identifier. The
+              two spellings would mean the same storage, so this is not about
+              ambiguity -- it is the standard keeping one name for one thing. }
+            ErrorAt(s^.line, s^.col);
+            write('''');
+            WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
+            write(''' names a result variable, so assign ');
+            writeln('to that instead of to the function')
+          end
+          else if named^.resultVar = nil then begin
             ErrorAt(s^.line, s^.col);
             write('''');
             WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
@@ -10355,8 +10448,12 @@ end;
   parameter is a descriptor only -- it says how the argument travels and what
   type it has, and the frame it will occupy is the frame of whatever procedure
   is eventually passed. Hence `frame` being nil for those. }
+function CheckedResultType(t: typePtr; bindable: boolean;
+                          line, col: integer): typePtr; forward;
+
 procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
 var g, n: nodePtr; t: typePtr; ps, schema, named: symPtr; section: integer;
+    bindable_: boolean;
 begin
   g := groups;
   section := 0;
@@ -10371,15 +10468,11 @@ begin
         else t^.elem := ResolveType(g^.grResult);
         { 6.6.2 restricts a function's result type, and a functional
           parameter's heading is a function heading -- the same rule, so the
-          same message. }
-        if not IsOrdinal(t^.elem) and not IsReal(t^.elem) and
-           not IsComplex(t^.elem) and not IsPointer(t^.elem) then begin
-          ErrorAt(g^.grNames^.line, g^.grNames^.col);
-          write('a function cannot return ');
-          WriteTypeName(t^.elem);
-          writeln('; use a var parameter');
-          t^.elem := intType
-        end
+          same check. }
+        bindable_ := false;
+        if g^.grResult <> nil then bindable_ := BindableOf(g^.grResult);
+        t^.elem := CheckedResultType(t^.elem, bindable_,
+                                     g^.grNames^.line, g^.grNames^.col)
       end;
       n := g^.grNames;
       if frame <> nil then
@@ -10537,8 +10630,56 @@ begin
   end
 end;
 
+{ What a function may return. The two standards draw the line in opposite
+  directions, so this states each in its own words rather than deriving one
+  from the other.
+
+  ISO 7185 6.6.2 lists what is *allowed* -- a simple type or a pointer type --
+  and that is the way round it has to be read: a set lives in a register and
+  would pass any "not something in memory" test while still not being a result
+  type the language admits. ISO/IEC 10206:1991 6.4.2.2 adds `complex` to the
+  simple types, so under both standards that list grew by a word rather than by
+  a rule.
+
+  6.7.2 replaces the list with what is *refused*: a file-type, a structured
+  type having a component a file may not have, and a bindable one. The first
+  two are one predicate -- ContainsFile is precisely "not permissible as a
+  component-type of a file-type" -- and the third is there because a bindable
+  variable is one the program can point at something outside itself, which a
+  value with no name cannot be. }
+function CheckedResultType;
+begin
+  CheckedResultType := t;
+  if langStd = stdExtended then begin
+    if IsFile(t) or ContainsFile(t) then begin
+      ErrorAt(line, col);
+      write('a function cannot return ');
+      WriteTypeName(t);
+      write(': a result may not be, or ');
+      writeln('contain, a file');
+      CheckedResultType := intType
+    end
+    else if bindable then begin
+      ErrorAt(line, col);
+      write('a function cannot return a bindable ');
+      WriteTypeName(t);
+      write(': only a variable can be bound ');
+      writeln('to something outside the program');
+      CheckedResultType := intType
+    end
+  end
+  else if not IsOrdinal(t) and not IsReal(t) and not IsComplex(t) and
+          not IsPointer(t) then begin
+    ErrorAt(line, col);
+    write('a function cannot return ');
+    WriteTypeName(t);
+    writeln('; use a var parameter');
+    CheckedResultType := intType
+  end
+end;
+
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
-var existing, sym: symPtr; mark: entryPtr; at, len: integer;
+var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
 begin
   existing := LookupInScope(d^.pdAt, d^.pdLen);
   if existing <> nil then
@@ -10575,23 +10716,10 @@ begin
         sym^.stype := intType
       end
       else begin
-        sym^.stype := ResolveType(d^.pdResult);
-        { ISO 7185 6.6.2: a function's result type is a *simple* type or a
-          pointer type. Stated the standard's way round rather than as "not
-          something that lives in memory", because a set lives in a register
-          and would pass that test while still not being a result type the
-          language allows. }
-        { ISO 7185 6.6.2 restricts a function's result to a simple type or a
-          pointer type, and ISO/IEC 10206:1991 6.4.2.2 adds `complex` to the
-          simple types -- so this list grew by one word rather than by a rule. }
-        if not IsOrdinal(sym^.stype) and not IsReal(sym^.stype) and
-           not IsComplex(sym^.stype) and not IsPointer(sym^.stype) then begin
-          ErrorAt(d^.line, d^.col);
-          write('a function cannot return ');
-          WriteTypeName(sym^.stype);
-          writeln('; use a var parameter');
-          sym^.stype := intType
-        end
+        want := ResolveType(d^.pdResult);
+        sym^.stype := CheckedResultType(want, BindableOf(d^.pdResult),
+                                        d^.line, d^.col);
+        sym^.resultTypeBad := sym^.stype <> want
       end;
 
     { Parameters belong to the procedure's own frame, so they are created here
@@ -10601,9 +10729,22 @@ begin
     BuildFormals(d^.pdParams, sym, sym);
     if sym^.kind = skFunc then begin
       { The result lives in the frame like a local; assigning to the function
-        name writes here, and the epilogue returns it. }
-      InternResultName(d^.pdAt, d^.pdLen, at, len);
-      sym^.resultVar := AddHiddenVar(at, len, skVar, sym^.stype, sym)
+        name writes here, and the epilogue returns it.
+
+        Unless it lives in memory (6.7.2), in which case the caller built the
+        storage and the frame slot holds its *address*. That is what a `var`
+        parameter already is, so saying so is the whole of the difference:
+        AddressOf dereferences an skVarParam, and assignment, whole-variable
+        copying and every designator over the result then need nothing new. }
+      sym^.resultNamed := d^.pdResLen > 0;
+      if sym^.resultNamed then
+        InternResultName(d^.pdResAt, d^.pdResLen, at, len)
+      else
+        InternResultName(d^.pdAt, d^.pdLen, at, len);
+      if IsMemory(sym^.stype) then
+        sym^.resultVar := AddHiddenVar(at, len, skVarParam, sym^.stype, sym)
+      else
+        sym^.resultVar := AddHiddenVar(at, len, skVar, sym^.stype, sym)
     end;
     scopeDepth := scopeDepth - 1;
     scopeTop := mark
@@ -10633,9 +10774,31 @@ begin
         Bind(p^.sym^.at, p^.sym^.len, p^.sym);
         p := p^.next
       end;
+      { 6.7.2: the result-variable-specification's identifier is a
+        variable-identifier for the region that is the block. It is the *same*
+        symbol the function name assigns to, so nothing else has to know which
+        of the two spellings a body used. }
+      if (d^.pdResLen > 0) and (sym^.resultVar <> nil) then
+        Bind(d^.pdResAt, d^.pdResLen, sym^.resultVar);
       CheckBlock(d^.pdBody, sym);
       scopeDepth := scopeDepth - 1;
       scopeTop := mark;
+
+      { ISO 7185 6.6.2 and ISO/IEC 10206:1991 6.7.2 both require a function's
+        block to contain at least one assignment to the function-identifier;
+        with a result-variable-specification the requirement moves to the
+        result variable, and "threatens" is a weaker word than "assigns" -- a
+        `read` or a `var` argument counts -- so that half is not checked here
+        and the ADR says so. What is checked is the form that has no other
+        reading: a function whose body never mentions its own result at all
+        returns whatever the storage happened to hold. }
+      if (sym^.kind = skFunc) and not sym^.resultNamed and
+         not sym^.assignedResult and not sym^.resultTypeBad then begin
+        ErrorAt(d^.line, d^.col);
+        write('function ''');
+        WritePool(d^.pdAt, d^.pdLen);
+        writeln(''' never assigns its result')
+      end;
 
       currentProc := outer
     end
@@ -13288,6 +13451,14 @@ begin
   level := level + 1;
   DumpGroupList(d^.pdParams, false);
   level := level - 1;
+  { 6.7.2's result-variable-specification. Printed only when one was written,
+    so no ISO 7185 dump moves. }
+  if d^.pdResLen > 0 then begin
+    Pad;
+    write('result-var ');
+    WritePool(d^.pdResAt, d^.pdResLen);
+    writeln
+  end;
   if d^.pdResult <> nil then begin
     Pad;
     writeln('result');
@@ -15221,8 +15392,19 @@ procedure PutProcSignature(callee: symPtr);
 var p: symListPtr; result: typePtr; k: integer;
 begin
   result := ResultTypeOf(callee);
-  if result = nil then write(ircode, 'void') else PutLlType(result);
+  { A result that lives in memory (ADR-0017) has no register form, and the
+    callee's activation record dies at the return, so the storage cannot be
+    there. The caller supplies it and its address travels as a hidden argument
+    after the static link; the function then returns void. That is ADR-0030's
+    choice again -- a procedural parameter's pair and a schematic parameter's
+    tuple both travel as extra scalar arguments, so nothing here depends on how
+    a struct is passed, because none ever is. }
+  if result = nil then write(ircode, 'void')
+  else if IsMemory(result) then write(ircode, 'void')
+  else PutLlType(result);
   write(ircode, ' (ptr');
+  if result <> nil then
+    if IsMemory(result) then write(ircode, ', ptr');
   p := callee^.params;
   k := 0;
   while p <> nil do begin
@@ -15296,9 +15478,13 @@ begin
   end
 end;
 
-procedure EmitUserCall(callee: symPtr; args: nodePtr; var v: str);
-var link, a, slot, half, target: str; head, tail, o: opndPtr;
+{ slotSym is the call site's own storage for a result that lives in memory
+  (6.7.2); nil for every other call, and unread for them. }
+procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
+                       var v: str);
+var link, a, slot, half, target, resAddr: str; head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
+    byAddr: boolean;
 begin
   StrClear(target);
   if callee^.kind = skProcParam then begin
@@ -15376,7 +15562,15 @@ begin
   end;
 
   result := ResultTypeOf(callee);
-  if result <> nil then begin
+  { Where to build a result that lives in memory. Sema gave this call site a
+    frame slot of its own; the callee writes through the address and hands
+    nothing back, so the call *is* the storage and this address is what the
+    expression evaluates to. The address is taken before the call line is
+    started, because the emitter is sequential. }
+  byAddr := false;
+  if result <> nil then byAddr := IsMemory(result);
+  if byAddr then AddressOfSym(slotSym, resAddr);
+  if (result <> nil) and not byAddr then begin
     Def(v);
     write(ircode, 'call ')
   end
@@ -15388,12 +15582,16 @@ begin
     whose signature the module already carries. }
   if callee^.kind = skProcParam then
     PutProcSignature(callee)
-  else if result = nil then write(ircode, 'void')
+  else if (result = nil) or byAddr then write(ircode, 'void')
   else PutLlType(result);
   write(ircode, ' ');
   PutOp(target);
   write(ircode, '(ptr ');
   PutOp(link);
+  if byAddr then begin
+    write(ircode, ', ptr ');
+    PutOp(resAddr)
+  end;
   o := head;
   while o <> nil do begin
     write(ircode, ', ');
@@ -15402,7 +15600,8 @@ begin
     PutOp(o^.text);
     o := o^.next
   end;
-  writeln(ircode, ')')
+  writeln(ircode, ')');
+  if byAddr then v := resAddr
 end;
 
 { ISO 7185 6.7.2.5 orders equal-length strings by their first differing
@@ -16247,7 +16446,7 @@ var a, w, lim, tmp, b_, re, im, x, y, c_, d_: str;
     at, idx: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
-    EmitUserCall(e^.clSym, e^.clArgs, v)
+    EmitUserCall(e^.clSym, e^.clArgs, e^.clSlot, v)
   { 6.7.6.8's binding(f): the result is a record, so it is built in the hidden
     frame slot Sema gave this call site and the call becomes that slot's
     address. Everything after -- a field selection, a whole-record assignment,
@@ -16919,7 +17118,7 @@ begin
       if e^.fdQualified <> nil then
         if e^.fdQualified^.kind = skConst then EmitConst(e^.fdQualified, v)
         else if IsInvocable(e^.fdQualified) then
-          EmitUserCall(e^.fdQualified, nil, v)
+          EmitUserCall(e^.fdQualified, nil, nil, v)
         else EmitLoad(e, v)
       { ...unless the base is a schematic formal parameter, whose type was
         produced with no tuple: then it is one field of the descriptor the
@@ -16948,7 +17147,7 @@ begin
         functional parameter, which is the same call through a loaded
         address. }
       else if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
-        EmitUserCall(e^.vrSym, nil, v)
+        EmitUserCall(e^.vrSym, nil, nil, v)
       else
         EmitLoad(e, v);
     nkSet: EmitSet(e, v);
@@ -18005,7 +18204,8 @@ begin
       nkLabeled: EmitLabeled(s);
       nkProcCall:
         if s^.pcStd <> spNone then EmitStdProc(s)
-        else if s^.pcSym <> nil then EmitUserCall(s^.pcSym, s^.pcArgs, v);
+        else if s^.pcSym <> nil then
+          EmitUserCall(s^.pcSym, s^.pcArgs, nil, v);
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
       nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
@@ -18403,6 +18603,21 @@ begin
     write(ircode, '  store ptr %link, ptr ');
     PutOp(link);
     writeln(ircode);
+    { A result that lives in memory was built by the caller, and its address
+      arrives here. Sema made resultVar an skVarParam for exactly this, so
+      storing the pointer in its slot is the whole of the binding -- every
+      later `f := ...` and every read of the result variable goes through
+      AddressOf, which dereferences an skVarParam without being told why. }
+    if p^.kind = skFunc then
+      if IsMemory(p^.stype) then begin
+        Def(slot);
+        writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
+                ', ptr %frame, i32 0, i32 ',
+                1 + p^.resultVar^.frameIndex:1);
+        write(ircode, '  store ptr %res, ptr ');
+        PutOp(slot);
+        writeln(ircode)
+      end;
     l := p^.params;
     k := 0;
     while l <> nil do begin
@@ -18566,8 +18781,16 @@ begin
   p := d^.pdSym;
   writeln(ircode);
   write(ircode, 'define internal ');
-  if p^.kind = skFunc then PutLlType(p^.stype) else write(ircode, 'void');
+  { A result that lives in memory is written into storage the caller supplied,
+    so the function returns void and takes its address after the static link.
+    It is named rather than numbered so the parameters keep the %a0.. they
+    always had -- the two backends' assembler text is not compared (ADR-0025),
+    only what it does. }
+  if (p^.kind = skFunc) and not IsMemory(p^.stype) then PutLlType(p^.stype)
+  else write(ircode, 'void');
   write(ircode, ' @p', p^.irId:1, '(ptr %link');
+  if p^.kind = skFunc then
+    if IsMemory(p^.stype) then write(ircode, ', ptr %res');
   PutParamTypes(p^.params, true);
   writeln(ircode, ') {');
 
@@ -18575,7 +18798,7 @@ begin
   EmitStmt(d^.pdBody^.blBody);
   CloseFiles(p);
 
-  if p^.kind = skFunc then begin
+  if (p^.kind = skFunc) and not IsMemory(p^.stype) then begin
     Def(slot);
     writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
             ', ptr %frame, i32 0, i32 ', 1 + p^.resultVar^.frameIndex:1);
@@ -18592,6 +18815,8 @@ begin
     writeln(ircode)
   end
   else
+    { A result that lives in memory went straight into the caller's storage,
+      so there is nothing left to hand back. }
     writeln(ircode, '  ret void');
   writeln(ircode, '}')
 end;

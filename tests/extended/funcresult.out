@@ -1,0 +1,8 @@
+record 3 4
+nested 6 8
+array  10 20 30
+simple 60
+set    0 2 4 6 8
+recurs 10 30
+copy   1 2
+indir  5 6

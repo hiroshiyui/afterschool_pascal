@@ -646,6 +646,11 @@ struct ProcDecl {
   bool isFunction = false;
   std::vector<ParamGroup> params;
   TypeExprPtr returnType; // null in the completion of a forward function
+  /// ISO/IEC 10206:1991 §6.7.2's result-variable-specification: the name the
+  /// block calls its result by. Empty where none was written, which is what
+  /// decides whether `f := e` is required or forbidden in the body.
+  std::string resultName;
+  int resultLine = 0, resultCol = 0;
   std::unique_ptr<Block> body; // null for a forward declaration
   bool isForward = false;
   /// True for a heading in a module-heading's procedure-and-function-heading-part

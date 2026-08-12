@@ -475,6 +475,24 @@ std::unique_ptr<ProcDecl> Parser::parseProcHeading(bool isFunction) {
   if (check(Tok::LParen))
     parseFormalParameters(decl->params);
 
+  // ISO/IEC 10206:1991 §6.7.2's result-variable-specification: `= identifier`
+  // between the parameters and the result type gives the result a *name*.
+  // Without one the only way to write the result is `f := e`, and §6.8.2.2
+  // makes every *read* of `f` a recursive call — so a structured result could
+  // be assigned whole and never built a field at a time. This is the
+  // standard's own answer to that, which is why the two halves of §6.7.2
+  // arrive together.
+  if (isFunction && std_ == Std::Extended && accept(Tok::Eq)) {
+    if (!check(Tok::Ident)) {
+      errorAtCur("expected the name of the result variable after '='");
+      bail();
+    }
+    decl->resultName = cur().text;
+    decl->resultLine = cur().line;
+    decl->resultCol = cur().col;
+    ++pos_;
+  }
+
   // The completion of a forward declaration repeats the name alone (ISO 7185
   // §6.6.1), so both the parameters and the result type may be absent here.
   if (isFunction && accept(Tok::Colon)) {

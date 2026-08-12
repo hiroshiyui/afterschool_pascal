@@ -136,6 +136,10 @@ private:
   /// the static link, then the parameters, exactly as declareProcs builds it
   /// for a procedure with a body.
   llvm::FunctionType *procFnType(const Symbol *p);
+  /// The static link, a hidden result address when the result lives in
+  /// memory, and then the parameters. The one place the shape is decided.
+  llvm::FunctionType *signature(ap::Type *result,
+                                const std::vector<Symbol *> &params);
   void appendParamTypes(const std::vector<Symbol *> &params,
                         llvm::SmallVectorImpl<llvm::Type *> &into);
   /// The type of a variable's field in its activation record.
@@ -224,7 +228,10 @@ private:
   void initialStateInto(llvm::Value *addr, Type *t, Expr *init);
   /// The frame to pass as a callee's static link.
   llvm::Value *staticLinkFor(Symbol *callee);
-  llvm::Value *emitUserCall(Symbol *callee, std::vector<ExprPtr> &args);
+  /// `resultSlot` is the call site's own storage for a result that lives in
+  /// memory (§6.7.2); null for every other call, and unread for them.
+  llvm::Value *emitUserCall(Symbol *callee, std::vector<ExprPtr> &args,
+                            Symbol *resultSlot = nullptr);
   /// Push the `{code, link}` pair an actual procedural parameter travels as.
   void emitProcArgument(Symbol *actual,
                         llvm::SmallVectorImpl<llvm::Value *> &argv);

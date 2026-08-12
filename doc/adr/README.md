@@ -63,3 +63,4 @@ the alternatives that were rejected and why.
 | [0052](0052-binding-is-a-file-name-chosen-while-the-program-runs.md) | Binding is a file name chosen while the program runs | Accepted |
 | [0053](0053-a-level-0-activation-record-is-a-global.md) | A level-0 activation record is a global | Accepted |
 | [0054](0054-a-constant-expression-is-one-folder-and-every-context-follows.md) | A constant-expression is one folder, and every context follows | Accepted |
+| [0055](0055-a-result-that-lives-in-memory-is-the-callers-storage.md) | A result that lives in memory is the caller's storage | Accepted |

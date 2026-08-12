@@ -91,6 +91,19 @@ struct Symbol {
   std::vector<Symbol *> params;
   std::vector<Symbol *> frameVars; // everything this procedure's frame holds
   Symbol *resultVar = nullptr;     // where a function's result is accumulated
+  /// ISO/IEC 10206:1991 §6.7.2: a result-variable-specification was written,
+  /// so the body names the result and must *not* assign to the function
+  /// identifier. Without one the body must assign to it at least once — the
+  /// two rules are exclusive, which is why one flag answers both.
+  bool resultNamed = false;
+  /// The result type was refused, so `never assigns its result` is suppressed:
+  /// the body cannot assign a type the heading does not have, and one mistake
+  /// deserves one message.
+  bool resultTypeBad = false;
+  /// The body contains an assignment whose target is the function identifier.
+  /// Syntactic containment, as the standard states it: an assignment inside an
+  /// `if` counts, because §6.6.2 asks what the block *contains*.
+  bool assignedResult = false;
   bool defined = false;            // a body has been seen (vs. only `forward`)
   ProcDecl *decl = nullptr;
 
@@ -326,6 +339,11 @@ private:
   /// Turn a type-denoter into a Type, reporting anything it cannot make sense
   /// of. Never returns null: on error it yields integer so checking continues.
   Type *resolveType(TypeExpr &denoter);
+  /// What §6.6.2 / §6.7.2 let a function return; `ty::Int()` on refusal, so a
+  /// half-checked heading still hands codegen a type.
+  Type *checkedResultType(Type *t, bool bindable, int line, int col);
+  /// Hidden caller-side storage for a result that lives in memory.
+  void giveResultSlot(Call *c);
   /// §6.4.7's schema-definition: a name, its formal discriminants, and the
   /// body kept unresolved until a tuple arrives.
   void declareSchema(TypeDecl &decl);

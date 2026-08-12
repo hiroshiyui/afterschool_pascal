@@ -610,14 +610,32 @@ void CodeGen::appendParamTypes(const std::vector<Symbol *> &params,
   }
 }
 
+/// The one place a function's shape is decided, so a caller and a callee can
+/// only agree — `appendParamTypes`'s role, for the two ends of the signature
+/// it does not cover.
+///
+/// A result that lives in memory (ADR-0017) has no register form, and the
+/// callee's activation record dies at the return, so the storage cannot be
+/// there. The *caller* supplies it and its address travels as a hidden
+/// argument after the static link; the function then returns void. That is
+/// ADR-0030's choice again — a procedural parameter's pair and a schematic
+/// parameter's tuple both travel as extra scalar arguments, so nothing here
+/// depends on how a struct is passed, because none ever is.
+llvm::FunctionType *CodeGen::signature(ap::Type *result,
+                                       const std::vector<Symbol *> &params) {
+  SmallVector<llvm::Type *, 8> ps;
+  ps.push_back(ptr()); // the static link
+  bool byAddress = result && result->isMemory();
+  if (byAddress)
+    ps.push_back(ptr()); // where the caller wants the result built
+  appendParamTypes(params, ps);
+  llvm::Type *ret = (!result || byAddress) ? llvm::Type::getVoidTy(ctx_)
+                                           : llvmType(result);
+  return FunctionType::get(ret, ps, false);
+}
+
 llvm::FunctionType *CodeGen::procFnType(const Symbol *p) {
-  SmallVector<llvm::Type *, 8> params;
-  params.push_back(ptr()); // the static link
-  appendParamTypes(p->params, params);
-  ap::Type *result = p->type ? p->type->elem : nullptr;
-  return FunctionType::get(result ? llvmType(result)
-                                  : llvm::Type::getVoidTy(ctx_),
-                           params, false);
+  return signature(p->type ? p->type->elem : nullptr, p->params);
 }
 
 StructType *CodeGen::buildFrameType(Symbol *proc) {
@@ -645,19 +663,13 @@ void CodeGen::declareProcs(Block &block) {
 
     buildFrameType(sym);
 
-    SmallVector<llvm::Type *, 8> params;
-    params.push_back(ptr()); // the static link
-    appendParamTypes(sym->params, params);
-
-    llvm::Type *ret =
-        sym->kind == SymKind::Func ? llvmType(sym->type)
-                                   : llvm::Type::getVoidTy(ctx_);
     // Names are mangled with a counter because nesting allows two procedures
     // of the same name in different parents.
     std::string name = "p." + sym->name + "." + std::to_string(nextId_++);
-    functions_[sym] = Function::Create(FunctionType::get(ret, params, false),
-                                       Function::InternalLinkage, name,
-                                       mod_.get());
+    functions_[sym] = Function::Create(
+        signature(sym->kind == SymKind::Func ? sym->type : nullptr,
+                  sym->params),
+        Function::InternalLinkage, name, mod_.get());
   }
   for (auto &decl : block.procs)
     if (decl->body)
@@ -707,6 +719,19 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
     arg->setName("static.link");
     b_.CreateStore(&*arg, b_.CreateStructGEP(frameTy, curFrame_, 0, "link"));
     ++arg;
+    // A result that lives in memory was built by the caller, and its address
+    // arrives here. Sema made `resultVar` a `VarParam` for exactly this, so
+    // storing the pointer in its slot is the whole of the binding — every
+    // later `f := ...` and every read of the result variable goes through
+    // `addressOf`, which dereferences a `VarParam` without being told why.
+    if (proc->kind == SymKind::Func && proc->type->isMemory()) {
+      arg->setName("result.addr");
+      b_.CreateStore(&*arg,
+                     b_.CreateStructGEP(frameTy, curFrame_,
+                                        1 + proc->resultVar->frameIndex,
+                                        "result"));
+      ++arg;
+    }
     for (const Symbol *p : proc->params) {
       arg->setName(p->name);
       llvm::Value *slot =
@@ -986,11 +1011,13 @@ void CodeGen::emitProcBody(ProcDecl &decl) {
   emitStmt(decl.body->body.get());
   closeFiles(sym);
 
-  if (sym->kind == SymKind::Func) {
+  if (sym->kind == SymKind::Func && !sym->type->isMemory()) {
     llvm::Value *slot = b_.CreateStructGEP(
         frameTypes_[sym], curFrame_, 1 + sym->resultVar->frameIndex, "result");
     b_.CreateRet(b_.CreateLoad(llvmType(sym->type), slot, "result.val"));
   } else {
+    // A result that lives in memory was written straight into the caller's
+    // storage, so there is nothing left to hand back.
     b_.CreateRetVoid();
   }
 
@@ -1267,7 +1294,8 @@ void CodeGen::emitProcArgument(Symbol *actual,
   argv.push_back(staticLinkFor(actual));
 }
 
-llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
+llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args,
+                                   Symbol *resultSlot) {
   SmallVector<llvm::Value *, 8> argv;
   llvm::Value *target = nullptr;
   llvm::FunctionType *fnTy = nullptr;
@@ -1287,6 +1315,17 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
     target = functions_[callee];
     fnTy = functions_[callee]->getFunctionType();
     argv.push_back(staticLinkFor(callee));
+  }
+
+  // Where to build a result that lives in memory, immediately after the static
+  // link. Sema gave this call site a frame slot of its own; the callee writes
+  // through the address and hands nothing back, so the call *is* the storage
+  // and this address is what the expression evaluates to.
+  ap::Type *result = callee->resultType();
+  llvm::Value *into = nullptr;
+  if (result && result->isMemory()) {
+    into = addressOf(resultSlot);
+    argv.push_back(into);
   }
 
   for (size_t i = 0; i < args.size(); ++i) {
@@ -1313,8 +1352,9 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args) {
       argv.push_back(checkedForStore(v, p->type));
     }
   }
-  return b_.CreateCall(fnTy, target, argv,
-                       fnTy->getReturnType()->isVoidTy() ? "" : "call");
+  llvm::Value *call = b_.CreateCall(
+      fnTy, target, argv, fnTy->getReturnType()->isVoidTy() ? "" : "call");
+  return into ? into : call;
 }
 
 /// ISO/IEC 10206:1991 §6.11.1's module. Its heading and its block share one
@@ -2636,7 +2676,7 @@ llvm::Value *CodeGen::emitUnary(Unary *e) {
 
 llvm::Value *CodeGen::emitCall(Call *e) {
   if (e->sym)
-    return emitUserCall(e->sym, e->args);
+    return emitUserCall(e->sym, e->args, e->resultSlot);
 
   // The file enquiries take the file's address, not its value, and Sema has
   // already supplied `input` where the program left the argument out.

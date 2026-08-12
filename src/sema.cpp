@@ -2745,6 +2745,49 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
   }
 }
 
+/// What a function may return. The two standards draw the line in opposite
+/// directions, so this states each in its own words rather than deriving one
+/// from the other.
+///
+/// ISO 7185 §6.6.2 lists what is *allowed* — a simple type or a pointer type —
+/// and that is the way round it has to be read: a set lives in a register and
+/// would pass any "not something in memory" test while still not being a
+/// result type the language admits. ISO/IEC 10206:1991 §6.4.2.2 adds `complex`
+/// to the simple types, so under both standards that list grew by a word
+/// rather than by a rule.
+///
+/// §6.7.2 replaces the list with what is *refused*: a file-type, a structured
+/// type having a component a file may not have, and a bindable one. The first
+/// two are one predicate — `containsFile` is precisely "not permissible as a
+/// component-type of a file-type" — and the third is there because a bindable
+/// variable is one the program can point at something outside itself, which a
+/// value with no name cannot be.
+Type *Sema::checkedResultType(Type *t, bool bindable, int line, int col) {
+  if (std_ == Std::Extended) {
+    if (t->isFile() || containsFile(t)) {
+      diags_.error(line, col,
+                   "a function cannot return " + t->name() +
+                       ": a result may not be, or contain, a file");
+      return ty::Int();
+    }
+    if (bindable) {
+      diags_.error(line, col,
+                   "a function cannot return a bindable " + t->name() +
+                       ": only a variable can be bound to something outside "
+                       "the program");
+      return ty::Int();
+    }
+    return t;
+  }
+  if (!t->isOrdinal() && !t->isReal() && !t->isComplex() && !t->isPointer()) {
+    diags_.error(line, col,
+                 "a function cannot return " + t->name() +
+                     "; use a var parameter");
+    return ty::Int();
+  }
+  return t;
+}
+
 void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
   Symbol *existing = nullptr;
   auto it = scopes_.back().find(decl.name);
@@ -2778,22 +2821,10 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
                    "function '" + decl.name + "' needs a result type");
       sym->type = ty::Int();
     } else {
-      sym->type = resolveType(*decl.returnType);
-      // ISO 7185 §6.6.2: a function's result type is a *simple* type or a
-      // pointer type. Stated the standard's way round rather than as "not
-      // something that lives in memory", because a set lives in a register and
-      // would pass that test while still not being a result type the language
-      // allows.
-      // ISO 7185 §6.6.2 restricts a function's result to a simple type or a
-      // pointer type, and ISO/IEC 10206:1991 §6.4.2.2 adds `complex` to the
-      // simple types — so this list grew by one word rather than by a rule.
-      if (!sym->type->isOrdinal() && !sym->type->isReal() &&
-          !sym->type->isComplex() && !sym->type->isPointer()) {
-        diags_.error(decl.line, decl.col,
-                     "a function cannot return " + sym->type->name() +
-                         "; use a var parameter");
-        sym->type = ty::Int();
-      }
+      Type *want = resolveType(*decl.returnType);
+      sym->type = checkedResultType(want, bindableOf(*decl.returnType),
+                                    decl.line, decl.col);
+      sym->resultTypeBad = sym->type != want;
     }
   }
 
@@ -2804,8 +2835,17 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
   if (sym->kind == SymKind::Func) {
     // The result lives in the frame like a local; assigning to the function
     // name writes here, and the epilogue returns it.
-    sym->resultVar =
-        addHiddenVar(decl.name + "$result", SymKind::Var, sym->type, sym);
+    //
+    // Unless it lives in memory (§6.7.2), in which case the caller built the
+    // storage and the frame slot holds its *address*. That is what a `var`
+    // parameter already is, so saying so is the whole of the difference:
+    // `addressOf` dereferences a `VarParam`, and assignment, whole-variable
+    // copying and every designator over the result then need nothing new.
+    sym->resultNamed = !decl.resultName.empty();
+    sym->resultVar = addHiddenVar(
+        (sym->resultNamed ? decl.resultName : decl.name) + "$result",
+        sym->type->isMemory() ? SymKind::VarParam : SymKind::Var, sym->type,
+        sym);
   }
   popScope();
 }
@@ -2836,14 +2876,10 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
         t->elem = group.returnType ? resolveType(*group.returnType) : ty::Int();
         // §6.6.2 restricts a function's result type, and a functional
         // parameter's heading is a function heading — the same rule, so the
-        // same message.
-        if (!t->elem->isOrdinal() && !t->elem->isReal() &&
-            !t->elem->isComplex() && !t->elem->isPointer()) {
-          diags_.error(group.names[0].line, group.names[0].col,
-                       "a function cannot return " + t->elem->name() +
-                           "; use a var parameter");
-          t->elem = ty::Int();
-        }
+        // same check.
+        t->elem = checkedResultType(
+            t->elem, group.returnType && bindableOf(*group.returnType),
+            group.names[0].line, group.names[0].col);
       }
       const DeclName &n = group.names[0];
       Symbol *ps =
@@ -3009,8 +3045,28 @@ void Sema::checkProcBody(ProcDecl &decl) {
   pushScope();
   for (Symbol *p : sym->params)
     scopes_.back()[p->name] = p;
+  // §6.7.2: the result-variable-specification's identifier is a
+  // variable-identifier for the region that is the block. It is the *same*
+  // symbol the function name assigns to, so nothing else has to know which of
+  // the two spellings a body used.
+  if (!decl.resultName.empty() && sym->resultVar)
+    scopes_.back()[decl.resultName] = sym->resultVar;
   checkBlock(*decl.body, sym);
   popScope();
+
+  // ISO 7185 §6.6.2 and ISO/IEC 10206:1991 §6.7.2 both require a function's
+  // block to contain at least one assignment to the function-identifier; with
+  // a result-variable-specification the requirement moves to the result
+  // variable, and "threatens" is a weaker word than "assigns" — a `read` or a
+  // `var` argument counts — so that half is not checked here and the ADR says
+  // so. What is checked is the form that has no other reading: a function
+  // whose body never mentions its own result at all returns whatever the
+  // storage happened to hold.
+  if (sym->kind == SymKind::Func && !sym->resultNamed &&
+      !sym->assignedResult && !sym->resultTypeBad)
+    diags_.error(decl.line, decl.col,
+                 "function '" + decl.name +
+                     "' never assigns its result");
 
   current_ = outerProc;
 }
@@ -3358,15 +3414,24 @@ void Sema::checkStmt(Stmt *s) {
   if (auto *a = as<Assign>(s)) {
     // Assigning to a function's own name sets its result (ISO 7185 §6.8.2.2),
     // so it is redirected before the target is otherwise resolved. Reading the
-    // name, by contrast, is a recursive call — see checkExpr. Only a bare name
-    // can mean this; a function result has no fields to select.
+    // name, by contrast, is a recursive call — see checkExpr. Only a bare
+    // name can mean this.
     if (auto *ref = as<VarRef>(a->target.get())) {
       Symbol *named = lookup(ref->name);
       if (named && named->kind == SymKind::Func) {
         ref->sym = named->resultVar;
         ref->type = named->type;
+        named->assignedResult = true;
         checkExpr(a->value.get());
-        if (!named->resultVar)
+        if (named->resultNamed)
+          // §6.7.2: with a result-variable-specification the block "shall
+          // contain no assignment-statement" to the function-identifier. The
+          // two spellings would mean the same storage, so this is not about
+          // ambiguity — it is the standard keeping one name for one thing.
+          diags_.error(a->line, a->col,
+                       "'" + ref->name + "' names a result variable, so assign "
+                       "to that instead of to the function");
+        else if (!named->resultVar)
           diags_.error(a->line, a->col,
                        "'" + ref->name + "' is not a function with a result");
         else if (!assignable(ref->type, a->value->type))
@@ -4550,6 +4615,24 @@ void Sema::checkWith(WithStmt *w) {
 
 /// Check an argument list against a callable's parameters. A `var` parameter
 /// is bound to a variable, not to a value, so the argument has to be one.
+/// A result that lives in memory has no register form (ADR-0017) and the
+/// callee's activation record dies at the return, so the storage has to be the
+/// caller's. Each call site gets a hidden frame slot for it — the mechanism
+/// ADR-0052 built for `binding(f)` back when that was the only function
+/// returning a record and this compiler returned none.
+///
+/// Per *site*, not per callee: `f(g(x))` and a call in a loop each want their
+/// own, and a frame slot is somewhere both backends can name without an
+/// `alloca` in the middle of a function. A recursive call needs nothing extra,
+/// because each activation brings its own frame and so its own slots.
+void Sema::giveResultSlot(Call *c) {
+  if (!current_ || !c->type || !c->type->isMemory())
+    return;
+  c->resultSlot =
+      addHiddenVar("result$" + std::to_string(current_->frameVars.size()),
+                   SymKind::Var, c->type, current_);
+}
+
 void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                           int col) {
   // Checked against the parameter rather than on its own, because an actual
@@ -4857,6 +4940,7 @@ void Sema::checkCall(Call *c) {
     }
     c->sym = sym;
     c->type = sym->resultType();
+    giveResultSlot(c);
     checkArguments(sym, c->args, c->line, c->col);
     return;
   }
@@ -4867,6 +4951,7 @@ void Sema::checkCall(Call *c) {
     if (sym->isInvocable() && sym->resultType()) {
       c->sym = sym;
       c->type = sym->resultType();
+      giveResultSlot(c);
       checkArguments(sym, c->args, c->line, c->col);
       return;
     }

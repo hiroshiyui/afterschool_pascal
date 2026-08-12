@@ -803,6 +803,10 @@ struct Dumper {
     ++level;
     paramGroups(d.params);
     --level;
+    // ISO/IEC 10206:1991 §6.7.2's result-variable-specification. Printed only
+    // when one was written, so no ISO 7185 dump moves.
+    if (!d.resultName.empty())
+      mark(("result-var " + d.resultName).c_str());
     if (d.returnType) {
       mark("result");
       ++level;

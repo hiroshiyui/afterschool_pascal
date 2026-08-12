@@ -1,0 +1,3 @@
+<source>:20:1: error: a function cannot return point; use a var parameter
+<source>:23:1: error: a function cannot return vec3; use a var parameter
+<source>:26:1: error: a function cannot return digs; use a var parameter
