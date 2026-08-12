@@ -411,10 +411,23 @@ private:
   /// label, a variant's tag value. Reports the type it was written as, so a
   /// mismatch can be named rather than silently coerced.
   bool evalOrdinal(Expr *e, Type *&type, long long &value);
+  /// §6.8.7's structured-value-constructor. One node covers the array-value
+  /// and the record-value alike, because which one a bracketed value is
+  /// cannot be known until the type-name is resolved.
+  void checkStructValue(StructValueExpr *e, Type *want);
+  void checkComponentValue(Expr *v, Type *component, const char *what);
+  void checkArrayValue(StructValueExpr *e, Type *t);
+  void checkRecordValue(StructValueExpr *e, Type *t,
+                        const std::vector<int> &path);
+  void checkVariantPartValue(StructValueExpr *e, Type *t,
+                             const std::vector<int> &path,
+                             const std::vector<Variant> &arms,
+                             const std::vector<Field> &fields, int tagField);
   /// One entry of a case-constant-list, folded to the interval it denotes: a
   /// single constant is [v, v], and Extended Pascal's `lo..hi` is the general
-  /// case. Both the case statement and a variant part read their labels
-  /// through this, so a range is legal in either without a second rule.
+  /// case. The case statement, a variant part and §6.8.7.2's array-value all
+  /// read their labels through this, so a range is legal in each without a
+  /// second rule.
   bool evalLabelRange(CaseLabel &label, const char *constantMsg, Type *&type,
                       LabelRange &r);
   /// The lowest value a new label shares with the ones already accepted, if

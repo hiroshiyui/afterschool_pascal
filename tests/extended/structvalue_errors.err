@@ -1,0 +1,28 @@
+<source>:26:7: error: the value of constant 'k' is not a compile-time constant
+<source>:28:17: error: 'c' has type char, but the fields before it in this value have type integer
+<source>:36:24: error: a structured value cannot be of type vector, because its bounds are not known until it is created
+<source>:36:24: error: the value of an initial-state specifier must not depend on a variable
+<source>:43:8: error: this array value leaves components unspecified, and has no 'otherwise' to give them a value
+<source>:46:12: error: an array value's selector is outside the index type 1..4
+<source>:47:18: error: this component of the array value is given twice
+<source>:48:12: error: an array value's selector must be an ordinal constant
+<source>:50:17: error: nothing may follow the 'otherwise' of an array value
+<source>:52:8: error: the field 'y' of pt has no value in this record value
+<source>:53:17: error: the field 'x' is given twice
+<source>:54:11: error: 'z' is not a field of pt
+<source>:54:8: error: the field 'x' of pt has no value in this record value
+<source>:55:22: error: 'otherwise' belongs to an array value, not a record value
+<source>:57:17: error: a value of type char cannot be the value of a field of type integer
+<source>:60:8: error: this record value must select a variant of shape, with 'case'
+<source>:61:31: error: a variant part's tag value must be of type kinds
+<source>:62:8: error: the tag field of this variant part is 'kind', not 'bad'
+<source>:65:20: error: the tag field 'kind' is given by the 'case' of the variant part, not as a field value
+<source>:66:20: error: 'w' is not a field of this part of shape; a variant's fields belong to its own value
+<source>:68:25: error: this part of plain has no variant part, so a record value for it cannot select one
+<source>:71:8: error: a structured value needs an array or a record type, not colours
+<source>:72:3: error: cannot assign vec to a variable of type integer
+<source>:74:8: error: a structured value cannot be of type ft, because it contains a file
+<source>:76:8: error: 'i' is not a type, so it cannot name a structured value
+<source>:76:3: error: cannot assign integer to a variable of type pt
+<source>:77:8: error: undeclared identifier 'nosuch'
+<source>:77:3: error: cannot assign integer to a variable of type pt

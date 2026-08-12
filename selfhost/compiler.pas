@@ -65,7 +65,7 @@ const
     storage, so they are the fixed-buffer limits ADR-0012 predicted -- and both
     fail loudly rather than silently truncating. }
   poolMax  = 400000; { characters of identifier and literal text }
-  tokMax   = 110000;
+  tokMax   = 130000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
   { The size of a file variable's storage, which is PAS_FILE_SIZE in
     runtime/pasrt.h. The C++ code generator includes that header so the two
@@ -164,6 +164,8 @@ type
     { ISO/IEC 10206:1991 6.7.5.5's two string transfer procedures }
     ctxReadStrOpen, ctxReadStrComma, ctxReadStrArgs,
     ctxWriteStrOpen, ctxWriteStrComma, ctxWriteStrArgs,
+    { ISO/IEC 10206:1991 6.8.7's structured-value-constructor }
+    ctxValueOpen, ctxValueSelector, ctxValueClose, ctxVariantValueOf,
     ctxParenExpr,
     ctxCallArgs, ctxAfterGoto, ctxLabelStart, ctxAfterLabel, ctxLabelDecl,
     ctxAfterLabelPart, ctxFuncParamResult,
@@ -172,6 +174,12 @@ type
     ctxModuleHeader, ctxModuleEnd, ctxModuleBlockClose, ctxToBegin, ctxToEnd,
     ctxExportName, ctxExportOpen, ctxExportClose, ctxExportEnd,
     ctxImportClose, ctxImportEnd);
+
+  { Which construct a case-constant-list belongs to, for the one diagnostic
+    EvalLabelRange writes. 6.8.7.2's array-value names the same production the
+    case statement and the variant part do, so it joins them here rather than
+    getting a folder of its own. }
+  labelWhat = (lwCase, lwVariant, lwArrayValue, lwTagValue);
 
   { `in` is a relational operator (ISO 7185 6.7.2.4) and sits at the same
     precedence as `=`, which is why it belongs here rather than with the
@@ -203,6 +211,12 @@ type
     { expressions }
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
     nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
+    { ISO/IEC 10206:1991 6.8.7's structured-value-constructor, and one
+      array-value-element or field-value of it. The two forms of the
+      constructor -- array-value and record-value -- share the node, because
+      which one a bracketed value is cannot be decided until the type-name
+      has been resolved. }
+    nkStructValue, nkValueElem,
     { statements }
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkGoto, nkLabeled,
@@ -746,6 +760,27 @@ type
         the only rule that reads it is the store, which reads it at run time
         from the same subtraction. }
       nkSubstr:     (ssBase, ssLo, ssHi: nodePtr);
+      { 6.8.7's structured-value-constructor. svAt/svLen is the type-name, and
+        is empty (svLen = 0) for a component-value nested inside another, which
+        takes the type of the component it is for. svTagValue and svVariant are
+        6.8.7.3's variant-part-value: the constant-tag-value and the
+        field-list-value it selects, the latter a structure-value of its own
+        because an arm's field-list may hold a variant part in turn (ADR-0026).
+        svSlot is where the value is built -- an array and a record have no
+        register form (ADR-0017), so a constructor of one needs storage, and it
+        is the hidden frame slot a memory-living function result gets. }
+      nkStructValue: (svAt, svLen: integer; svElems: nodePtr;
+                      svTagAt, svTagLen: integer;
+                      svTagValue, svVariant: nodePtr;
+                      svArm, svTagOrd: integer; svSlot: symPtr);
+      { One element. veLabels holds the selectors -- 6.8.7.2's case-constant
+        list for an array-value and 6.8.7.3's field-identifiers for a
+        record-value, which are the same tokens until the type says which. So
+        only the resolved side is separate: veValues for the folded ranges of
+        an array-value, veFields for the field numbers of a record-value. }
+      nkValueElem:   (veLabels, veValue: nodePtr; veCompleter: boolean;
+                      veValues, veValueTail: rangePtr;
+                      veFields, veFieldTail: numPtr);
       { ISO/IEC 10206:1991 6.8.4's schema-discriminant, `v.n`: the base
         possesses a type produced from a schema and the name is one of that
         schema's formal discriminants. It shares its syntax with a field
@@ -2321,6 +2356,10 @@ begin
     ctxWriteStrOpen:   write('after writestr');
     ctxWriteStrComma:  write('after the string writestr writes to');
     ctxWriteStrArgs:   write('after the arguments of writestr');
+    ctxValueOpen:      write('before a structured value');
+    ctxValueSelector:  write('after the selector of a structured value');
+    ctxValueClose:     write('at the end of a structured value');
+    ctxVariantValueOf: write('after the tag value of a record value');
     ctxParenExpr:      write('after a parenthesised expression');
     ctxCallArgs:       write('after the arguments of a function call');
     ctxFuncParamResult:
@@ -2407,6 +2446,25 @@ begin
                  n^.gtOwner := nil
                end;
     nkLabeled: n^.lbId := -1;
+    nkStructValue: begin
+      n^.svElems := nil;
+      n^.svTagAt := 0;
+      n^.svTagLen := 0;
+      n^.svTagValue := nil;
+      n^.svVariant := nil;
+      n^.svArm := -1;
+      n^.svTagOrd := 0;
+      n^.svSlot := nil
+    end;
+    nkValueElem: begin
+      n^.veLabels := nil;
+      n^.veValue := nil;
+      n^.veCompleter := false;
+      n^.veValues := nil;
+      n^.veValueTail := nil;
+      n^.veFields := nil;
+      n^.veFieldTail := nil
+    end;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr,
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
@@ -2524,6 +2582,8 @@ function ParseTypeDenoter: nodePtr; forward;
 function ParseStatement: nodePtr; forward;
 function ParseBlock: nodePtr; forward;
 function ParseImportPart: nodePtr; forward;
+function ParseComponentValue: nodePtr; forward;
+function ParseStructuredValue(l, c, nameAt, nameLen: integer): nodePtr; forward;
 
 { name-list = identifier (',' identifier)*, as a list of nkDeclName. `what`
   names what was expected; the four callers are the four spellings the C++
@@ -2613,6 +2673,53 @@ begin
     end;
     LooksLikeSubrange := ok
   end
+end;
+
+{ Is the bracketed thing starting at `from` (which indexes the '[') a 6.8.7
+  array-value or record-value rather than a subscript?
+
+  The answer is a bracket-depth walk, the third in this parser after
+  LooksLikeSubrange's and CallTakesCaret's, and it needs no types: a subscript
+  list holds index-expressions, and an index-expression can contain neither a
+  ':' nor a ';' nor the word `otherwise` nor the word `case` at the depth the
+  brackets opened. An empty `[]` counts too -- a subscript list may not be
+  empty, so `t[]` can only be a value.
+
+  6.8.7.4's *set*-value is not implemented (ADR-0061) and could not be decided
+  here if it were: `sieve[2,3]` and `a[2,3]` are the same tokens, so it would
+  have to be told from a subscript by the symbol, in Sema. }
+function LooksLikeStructuredValue(from: integer): boolean;
+var i, depth: integer; ok, done: boolean; k: tokenKind;
+begin
+  ok := false;
+  if (langStd = stdExtended) and (from <= tokCount) and
+     (tok[from].kind = tkLBracket) then begin
+    if (from + 1 <= tokCount) and (tok[from + 1].kind = tkRBracket) then
+      ok := true
+    else begin
+      depth := 0;
+      i := from;
+      done := false;
+      while (not done) and (i <= tokCount) do begin
+        k := tok[i].kind;
+        if (k = tkLParen) or (k = tkLBracket) then
+          depth := depth + 1
+        else if (k = tkRParen) or (k = tkRBracket) then begin
+          depth := depth - 1;
+          if depth = 0 then done := true
+        end
+        else if (depth = 1) and
+                ((k = tkColon) or (k = tkSemi) or (k = tkCase) or
+                 (k = tkOtherwise)) then begin
+          ok := true;
+          done := true
+        end
+        else if k = tkEof then done := true;
+        i := i + 1
+      end
+    end
+  end;
+  LooksLikeStructuredValue := ok
 end;
 
 function ParseEnumType: nodePtr;
@@ -2718,6 +2825,102 @@ begin
     m^.smHi := ParseExpr
   end;
   ParseCaseLabel := m
+end;
+
+{ variant-part-value = 'case' (tag-field-identifier ':')? constant-tag-value
+                       'of' '[' field-list-value ']'
+
+  The optional tag-field-identifier is told from the constant-tag-value by the
+  colon after it, one token of lookahead -- the same shape the variant part of
+  a *type* is told by (6.4.3.3). }
+procedure ParseVariantPartValue(n: nodePtr);
+begin
+  pos := pos + 1;   { the `case`, which the caller has already seen }
+  if Check(tkIdent) and (PeekKind(1) = tkColon) then begin
+    n^.svTagAt := tok[pos].at;
+    n^.svTagLen := tok[pos].len;
+    pos := pos + 2
+  end;
+  n^.svTagValue := ParseExpr;
+  Expect(tkOf, ctxVariantValueOf);
+  n^.svVariant := ParseStructuredValue(CurLine, CurCol, 0, 0)
+end;
+
+{ 6.8.7's array-value and record-value, which share a bracket and are told
+  apart by the type -- so they are parsed into one node and Sema decides.
+
+    array-value  = '[' (element (';' element)* ';'?)? (completer ';'?)? ']'
+    element      = case-constant-list ':' component-value
+    completer    = 'otherwise' component-value
+    record-value = '[' field-list-value ']'
+    field-value  = field-identifier (',' field-identifier)* ':' component-value
+
+  A field-value and an array-value-element differ only in what precedes the
+  colon: names in one, constants in the other. Both are parsed as expressions,
+  and Sema reads a bare name as a field identifier or folds it as a constant
+  according to the type it is building. }
+function ParseStructuredValue;
+var n, elem, tail, lh, lt: nodePtr; done: boolean;
+begin
+  { A component-value may be another bracketed value, and that nesting does not
+    pass through ParsePrimary -- so it needs a guard of its own, exactly as
+    ADR-0020's variant part does for the same reason. }
+  EnterLevel;
+  n := NewNode(nkStructValue, l, c);
+  n^.svAt := nameAt;
+  n^.svLen := nameLen;
+  tail := nil;
+  Expect(tkLBracket, ctxValueOpen);
+  done := false;
+  while (not done) and (not Check(tkRBracket)) and (not Check(tkEof)) and
+        (not aborted) do begin
+    { 6.8.7.3's variant-part-value ends a field-list-value, so nothing may
+      follow it -- which is why it is read here rather than as an element. }
+    if Check(tkCase) then begin
+      ParseVariantPartValue(n);
+      done := true
+    end
+    else begin
+      elem := NewNode(nkValueElem, CurLine, CurCol);
+      if Check(tkOtherwise) then begin
+        pos := pos + 1;
+        elem^.veCompleter := true
+      end
+      else begin
+        lh := nil;
+        lt := nil;
+        repeat
+          Append(lh, lt, ParseCaseLabel)
+        until not Accept(tkComma);
+        elem^.veLabels := lh;
+        Expect(tkColon, ctxValueSelector)
+      end;
+      elem^.veValue := ParseComponentValue;
+      Append(n^.svElems, tail, elem);
+      { The ';' before an array-value-completer is the *trailing* one of the
+        element list and is optional, which is why `[1: a otherwise b]` -- the
+        standard's own example -- has none. So `otherwise` continues the loop
+        on its own. }
+      if not Accept(tkSemi) then
+        if not Check(tkOtherwise) then done := true
+    end
+  end;
+  Expect(tkRBracket, ctxValueClose);
+  LeaveLevels(1);
+  ParseStructuredValue := n
+end;
+
+{ 6.8.7.1's component-value: an expression, or a nested array-value or
+  record-value that takes its type from the component it is for. A nested one
+  is written with no type-name, which is what makes the leading '[' the whole
+  of the decision here -- a set-constructor in this position would be an
+  expression and reaches ParsePrimary. }
+function ParseComponentValue;
+begin
+  if Check(tkLBracket) and LooksLikeStructuredValue(pos) then
+    ParseComponentValue := ParseStructuredValue(CurLine, CurCol, 0, 0)
+  else
+    ParseComponentValue := ParseExpr
 end;
 
 { The `case T of ...` of a record or of one arm of a variant part. Both places
@@ -2912,8 +3115,14 @@ begin
   t := ParseTypeDenoter;
   if t <> nil then t^.nsBindable := bindable_;
   if (t <> nil) and not aborted then
+    { 6.6 NOTE 4: "The component-value of an initial-state-specifier consists
+      of an assignment-compatible expression, an array-value, or a
+      record-value" -- so it is a component-value and not an expression, which
+      is what makes 6.6 NOTE 3's `array [1..8] of char value [1..8: '*']` mean
+      an array of eight stars rather than a set. It needed no new production:
+      ParseComponentValue is 6.8.7.1's. }
     if Accept(tkValue) then
-      t^.nsValue := ParseExpr;
+      t^.nsValue := ParseComponentValue;
   ParseTypeExpr := t
 end;
 
@@ -3212,6 +3421,7 @@ end;
 
 function ParsePrimary: nodePtr;
 var e, call, m: nodePtr; head, tail, memberTail: nodePtr; more: boolean;
+    at, len, l, c: integer;
 begin
   { Every way an expression nests inside an expression -- parentheses, `not`,
     a unary sign, a call's arguments -- passes through here exactly once per
@@ -3357,6 +3567,18 @@ begin
         call^.clArgs := head;
         Expect(tkRParen, ctxCallArgs);
         e := AfterCall(call)
+      end
+      { 6.8.7's structured-value-constructor: a type-name and a bracketed
+        value. It is decided without knowing that the name is a type, because
+        what is inside the brackets is not a subscript list. }
+      else if (PeekKind(1) = tkLBracket) and
+              LooksLikeStructuredValue(pos + 1) then begin
+        at := tok[pos].at;
+        len := tok[pos].len;
+        l := CurLine;
+        c := CurCol;
+        pos := pos + 1;
+        e := ParseStructuredValue(l, c, at, len)
       end
       else begin
         e := NewNode(nkVar, CurLine, CurCol);
@@ -5243,6 +5465,77 @@ begin
   FindField := found
 end;
 
+{ The arm a path names. Each step selects an arm of the variant part it is in;
+  a further step goes into the variant part nested inside that arm. }
+function ArmAt(rec: typePtr; path: numPtr): variantPtr;
+var v: variantPtr; k: integer;
+begin
+  v := rec^.variants;
+  while path <> nil do begin
+    k := 0;
+    while k < path^.value do begin
+      v := v^.next;
+      k := k + 1
+    end;
+    if path^.next <> nil then v := v^.variants;
+    path := path^.next
+  end;
+  ArmAt := v
+end;
+
+{ The arms of the variant part at `path`, the fields of the field-list there,
+  and that variant part's selector. An empty path is the record itself; an
+  arm's field-list is a field-list like any other (ISO 7185 6.4.3.3), which is
+  what makes one set of functions serve both. CodeGen had the first two; Sema
+  wants the same answers to decide whether a 6.8.7 record-value is complete,
+  which is why they live here with the other type queries. }
+function ArmsAt(rec: typePtr; path: numPtr): variantPtr;
+var a: variantPtr;
+begin
+  if path = nil then
+    ArmsAt := rec^.variants
+  else begin
+    a := ArmAt(rec, path);
+    ArmsAt := a^.variants
+  end
+end;
+
+function FieldsAt(rec: typePtr; path: numPtr): fieldPtr;
+var a: variantPtr;
+begin
+  if path = nil then
+    FieldsAt := rec^.fields
+  else begin
+    a := ArmAt(rec, path);
+    FieldsAt := a^.fields
+  end
+end;
+
+{ The index into FieldsAt(path) of the selector's own field, or -1 for a
+  tagless variant part and for a discriminant-selected one (6.4.3.4) -- neither
+  has a field anywhere. }
+function TagFieldAt(rec: typePtr; path: numPtr): integer;
+var a: variantPtr;
+begin
+  if path = nil then
+    TagFieldAt := rec^.tagField
+  else begin
+    a := ArmAt(rec, path);
+    TagFieldAt := a^.tagField
+  end
+end;
+
+function TagTypeAt(rec: typePtr; path: numPtr): typePtr;
+var a: variantPtr;
+begin
+  if path = nil then
+    TagTypeAt := rec^.tagType
+  else begin
+    a := ArmAt(rec, path);
+    TagTypeAt := a^.tagType
+  end
+end;
+
 { ------------------------------------------------------------- type names }
 
 procedure WriteTypeName(t: typePtr); forward;
@@ -5902,6 +6195,9 @@ end;
 { ------------------------------------------------------- constant folding }
 
 procedure CheckExpr(e: nodePtr); forward;
+{ 6.8.7's structured-value-constructor. `want` is the type a nested
+  component-value takes, and is nil at the top, where a type-name says it. }
+procedure CheckStructValue(e: nodePtr; want: typePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
 function InitialStateOf(d: nodePtr): nodePtr; forward;
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
@@ -6096,6 +6392,9 @@ begin
         if langStd = stdExtended then ok := EvalConstBinary(e, res);
       nkCall:
         if langStd = stdExtended then ok := EvalConstCall(e, res);
+      { 6.8.8's structured constants are not implemented (ADR-0061), so a
+        structured value folds to nothing and the context says so. }
+      nkStructValue, nkValueElem,
       nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr, nkDeref,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
@@ -6348,7 +6647,17 @@ end;
   A range is never expanded into its members -- `1..maxint` is two integers
   here and two billion switch cases if expanded, and the code generator tests
   it rather than enumerating it for exactly that reason. }
-function EvalLabelRange(lab: nodePtr; forCase: boolean; var ltype: typePtr;
+procedure WriteLabelWhat(what: labelWhat);
+begin
+  case what of
+    lwCase:       write('a case label');
+    lwVariant:    write('a variant''s label');
+    lwArrayValue: write('an array value''s selector');
+    lwTagValue:   write('a variant part''s tag value')
+  end
+end;
+
+function EvalLabelRange(lab: nodePtr; what: labelWhat; var ltype: typePtr;
                         var lo, hi: integer): boolean;
 var hiType: typePtr; ok: boolean;
 begin
@@ -6359,10 +6668,8 @@ begin
   if not EvalOrdinal(lab^.smLo, ltype, lo) then begin
     if not constReported then begin
       ErrorAt(lab^.smLo^.line, lab^.smLo^.col);
-      if forCase then
-        writeln('a case label must be an ordinal constant')
-      else
-        writeln('a variant''s label must be an ordinal constant')
+      WriteLabelWhat(what);
+      writeln(' must be an ordinal constant')
     end;
     ok := false
   end
@@ -6373,10 +6680,8 @@ begin
       if not EvalOrdinal(lab^.smHi, hiType, hi) then begin
         if not constReported then begin
           ErrorAt(lab^.smHi^.line, lab^.smHi^.col);
-          if forCase then
-            writeln('a case label must be an ordinal constant')
-          else
-            writeln('a variant''s label must be an ordinal constant')
+          WriteLabelWhat(what);
+          writeln(' must be an ordinal constant')
         end;
         ok := false
       end
@@ -7089,7 +7394,7 @@ begin
       while label_ <> nil do begin
         labelType := nil;
         at := 0;
-        if not EvalLabelRange(label_, false, labelType, lo, hi) then begin
+        if not EvalLabelRange(label_, lwVariant, labelType, lo, hi) then begin
           { the diagnostic is EvalLabelRange's; nothing more to say here }
         end
         else if Base(labelType) <> Base(tag) then begin
@@ -7276,6 +7581,7 @@ begin
       end;
       nkSchema: ForgetList(d^.scArgs);
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
+      nkStructValue, nkValueElem,
       nkIndex, nkSubstr, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
       nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
@@ -8118,7 +8424,7 @@ end;
   one is not, because 6.8.2 does not make it so and its body may read
   anything. }
 function Nonvarying(e: nodePtr): boolean;
-var ok: boolean; m: nodePtr;
+var ok: boolean; m, q: nodePtr;
 begin
   if e = nil then
     Nonvarying := false
@@ -8154,6 +8460,33 @@ begin
           Nonvarying := ok
         end
       end;
+      { 6.8.7's structured-value-constructor is nonvarying when everything it
+        is built out of is -- which is what makes 6.6 NOTE 3's
+        `array [1..8] of char value [1..8: '*']` an initial state rather than
+        an error. A field-value's selectors are field *names* and never
+        expressions, so only the labels of an array-value are asked. }
+      nkStructValue: begin
+        ok := true;
+        m := e^.svElems;
+        while (m <> nil) and ok do begin
+          if m^.veFields = nil then begin
+            q := m^.veLabels;
+            while (q <> nil) and ok do begin
+              if not Nonvarying(q^.smLo) then ok := false;
+              if q^.smHi <> nil then
+                if not Nonvarying(q^.smHi) then ok := false;
+              q := q^.next
+            end
+          end;
+          if ok then
+            if not Nonvarying(m^.veValue) then ok := false;
+          m := m^.next
+        end;
+        if ok and (e^.svTagValue <> nil) then
+          ok := Nonvarying(e^.svTagValue) and Nonvarying(e^.svVariant);
+        Nonvarying := ok
+      end;
+      nkValueElem,
       nkSetMember, nkIndex, nkSubstr, nkField, nkDeref, nkWriteArg, nkEmpty,
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
@@ -8203,7 +8536,11 @@ begin
               'because which variant exists is not settled here')
     end
     else begin
-      CheckExpr(v);
+      { 6.6 NOTE 4 makes this a *component-value*, so an array-value or a
+        record-value written here takes its type from the denoter it hangs off
+        rather than from a type-name it does not have (ADR-0061). }
+      if v^.kind = nkStructValue then CheckStructValue(v, t)
+      else CheckExpr(v);
       if not Nonvarying(v) then begin
         ErrorAt(v^.line, v^.col);
         writeln('the value of an initial-state specifier must not depend on ',
@@ -8364,6 +8701,7 @@ begin
           t := ProduceFromSchema(s, nil, d)
       end;
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
+      nkStructValue, nkValueElem,
       nkVar, nkIndex, nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkEmpty, nkAssign, nkWrite, nkRead,
       nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall, nkWith, nkCase,
@@ -8731,9 +9069,11 @@ begin
                 'so the argument must have the same length')
       end
       { A structured value parameter is a copy, so it needs something to copy
-        from: a designator, or a string literal. }
+        from: a designator, a string literal, or -- since ADR-0061 -- a
+        structured-value-constructor, which is not a variable but does have
+        storage, because 6.8.7's value is *built* rather than computed. }
       else if IsStructured(p^.sym^.stype) and not IsDesignator(a) and
-              (a^.kind <> nkStr) then begin
+              (a^.kind <> nkStr) and (a^.kind <> nkStructValue) then begin
         ErrorAt(a^.line, a^.col);
         write('argument ', i:1, ' of ''');
         WritePool(callee^.at, callee^.len);
@@ -9673,6 +10013,468 @@ begin
   end
 end;
 
+{ ------------------------------------------- structured-value-constructors }
+
+procedure CheckRecordValue(e: nodePtr; t: typePtr; path: numPtr); forward;
+
+{ One folded interval onto the end of a list. The same shape AppendNum has, for
+  the list rangeRec makes. }
+procedure AppendRange(var head, tail: rangePtr; lo, hi: integer);
+var r: rangePtr;
+begin
+  new(r);
+  r^.lo := lo;
+  r^.hi := hi;
+  r^.next := nil;
+  if head = nil then head := r else tail^.next := r;
+  tail := r
+end;
+
+{ One component-value: a nested array- or record-value takes the component
+  type, and anything else is an expression that must be assignment-compatible
+  with it (6.8.7.1). }
+procedure CheckComponentValue(v: nodePtr; component: typePtr;
+                              isField: boolean);
+begin
+  if v^.kind = nkStructValue then
+    CheckStructValue(v, component)
+  else begin
+    CheckExpr(v);
+    if (component <> nil) and (v^.ntype <> nil) then
+      if not Assignable(component, v^.ntype) then begin
+        ErrorAt(v^.line, v^.col);
+        write('a value of type ');
+        WriteTypeName(v^.ntype);
+        if isField then write(' cannot be the value of a field of type ')
+        else write(' cannot be a component of type ');
+        WriteTypeName(component);
+        writeln
+      end
+  end
+end;
+
+{ 6.8.7.2's array-value. The selector is a case-constant-list in the standard's
+  own words, so it is folded and overlap-checked by the very functions the case
+  statement and the variant part share (ADR-0035). }
+procedure CheckArrayValue(e: nodePtr; t: typePtr);
+var index, component, ltype: typePtr; el, label_: nodePtr;
+    lo, hi, covered, rlo, rhi, at: integer;
+    completer, last: boolean; seen, seenTail: rangePtr;
+begin
+  { A dynamically bounded array has no compile-time extent, so "every component
+    is specified" is not a question this compiler can answer. It is refused
+    rather than half-checked (ADR-0061). }
+  if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
+    ErrorAt(e^.line, e^.col);
+    write('a structured value cannot be of type ');
+    WriteTypeName(t);
+    writeln(', because its bounds are not known until it is created')
+  end
+  else begin
+    index := t^.indexType;
+    component := t^.elem;
+    if index <> nil then begin
+      lo := OrdinalLo(index);
+      hi := OrdinalHi(index)
+    end
+    else begin
+      lo := 0;
+      hi := -1
+    end;
+    seen := nil;
+    seenTail := nil;
+    covered := 0;
+    completer := false;
+    el := e^.svElems;
+    while el <> nil do begin
+      if el^.veCompleter then begin
+        { The grammar puts the completer last and lets nothing follow it, which
+          is a rule about this list rather than about any one element. }
+        if el^.next <> nil then begin
+          ErrorAt(el^.line, el^.col);
+          writeln('nothing may follow the ''otherwise'' of an array value')
+        end;
+        completer := true;
+        CheckComponentValue(el^.veValue, component, false)
+      end
+      else begin
+        label_ := el^.veLabels;
+        while label_ <> nil do begin
+          ltype := index;
+          last := false;
+          if not EvalLabelRange(label_, lwArrayValue, ltype, rlo, rhi) then
+            last := true;
+          if not last then
+            if (index <> nil) and not Assignable(index, ltype) then begin
+              ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
+              write('an array value''s selector must be of the index type ');
+              WriteTypeName(index);
+              writeln;
+              last := true
+            end;
+          if not last then
+            if (rlo < lo) or (rhi > hi) then begin
+              ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
+              write('an array value''s selector is outside the index type ');
+              WriteTypeName(index);
+              writeln;
+              last := true
+            end;
+          if not last then
+            if Overlaps(seen, rlo, rhi, at) then begin
+              ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
+              writeln('this component of the array value is given twice');
+              last := true
+            end;
+          if not last then begin
+            AppendRange(seen, seenTail, rlo, rhi);
+            covered := covered + rhi - rlo + 1;
+            AppendRange(el^.veValues, el^.veValueTail, rlo, rhi)
+          end;
+          label_ := label_^.next
+        end;
+        CheckComponentValue(el^.veValue, component, false)
+      end;
+      el := el^.next
+    end;
+    { 6.8.7.2 b): "If there is at least one such component, there shall be an
+      array-value-completer." The count is exact because the ranges are known to
+      be disjoint by the time it is taken. }
+    if (not completer) and (hi >= lo) and (covered <> hi - lo + 1) then begin
+      ErrorAt(e^.line, e^.col);
+      write('this array value leaves components unspecified, and has no ');
+      writeln('''otherwise'' to give them a value')
+    end
+  end
+end;
+
+{ 6.8.7.3's variant-part-value. The tag value chooses the arm, and the arm's
+  field-list-value is checked by CheckRecordValue again -- which is what makes
+  a variant part inside a variant part cost nothing (ADR-0026). }
+procedure CheckVariantPartValue(e: nodePtr; t: typePtr; path: numPtr;
+                                arms: variantPtr; fields: fieldPtr;
+                                tagField: integer);
+var tt, ltype: typePtr; f, tf: fieldPtr; a: variantPtr; r: rangePtr;
+    lab: nodePtr; rlo, rhi, i, chosen, completer: integer; done: boolean;
+begin
+  if arms = nil then begin
+    if e^.svTagValue <> nil then begin
+      ErrorAt(e^.svTagValue^.line, e^.svTagValue^.col);
+      write('this part of ');
+      WriteTypeName(t);
+      write(' has no variant part, so a record value for it cannot ');
+      writeln('select one')
+    end
+  end
+  else if e^.svTagValue = nil then begin
+    ErrorAt(e^.line, e^.col);
+    write('this record value must select a variant of ');
+    WriteTypeName(t);
+    writeln(', with ''case''')
+  end
+  else begin
+    tf := nil;
+    if tagField >= 0 then begin
+      f := fields;
+      i := 0;
+      while f <> nil do begin
+        if i = tagField then tf := f;
+        i := i + 1;
+        f := f^.next
+      end
+    end;
+    { 6.8.7.3: "A tag-field-identifier in a variant-part-value shall be the
+      field-identifier associated with the selector." A tagless variant part
+      has no such identifier, so writing one is an error rather than a
+      redundancy. }
+    if e^.svTagLen > 0 then
+      if tf = nil then begin
+        ErrorAt(e^.line, e^.col);
+        write('this variant part has no tag field, so ''');
+        WritePool(e^.svTagAt, e^.svTagLen);
+        writeln(''' names nothing')
+      end
+      else if not PoolSame(tf^.at, tf^.len, e^.svTagAt, e^.svTagLen) then begin
+        ErrorAt(e^.line, e^.col);
+        write('the tag field of this variant part is ''');
+        WritePool(tf^.at, tf^.len);
+        write(''', not ''');
+        WritePool(e^.svTagAt, e^.svTagLen);
+        writeln('''')
+      end;
+
+    tt := TagTypeAt(t, path);
+    ltype := tt;
+    { EvalLabelRange folds a case-constant, and 6.8.7.3's constant-tag-value is
+      one -- so it is wrapped in a label rather than folded a second way. }
+    lab := NewNode(nkSetMember, e^.svTagValue^.line, e^.svTagValue^.col);
+    lab^.smLo := e^.svTagValue;
+    lab^.smHi := nil;
+    done := not EvalLabelRange(lab, lwTagValue, ltype, rlo, rhi);
+    if not done then
+      if (tt <> nil) and not Assignable(tt, ltype) then begin
+        ErrorAt(e^.svTagValue^.line, e^.svTagValue^.col);
+        write('a variant part''s tag value must be of type ');
+        WriteTypeName(tt);
+        writeln;
+        done := true
+      end;
+    if not done then begin
+      chosen := -1;
+      completer := -1;
+      a := arms;
+      i := 0;
+      while a <> nil do begin
+        if a^.isOtherwise then completer := i
+        else begin
+          r := a^.labels;
+          while r <> nil do begin
+            if (rlo >= r^.lo) and (rlo <= r^.hi) then chosen := i;
+            r := r^.next
+          end
+        end;
+        i := i + 1;
+        a := a^.next
+      end;
+      if chosen < 0 then chosen := completer;
+      if chosen < 0 then begin
+        ErrorAt(e^.svTagValue^.line, e^.svTagValue^.col);
+        write('no variant of ');
+        WriteTypeName(t);
+        writeln(' is selected by this tag value')
+      end
+      else begin
+        e^.svArm := chosen;
+        e^.svTagOrd := rlo;
+        { The arm's field-list-value is a value of the record's own type: it
+          fills in part of the same variable. Saying so keeps every expression
+          typed, and CheckRecordValue is entered directly because an arm is a
+          field-list rather than a type and has nothing else to decide. }
+        e^.svVariant^.ntype := t;
+        CheckRecordValue(e^.svVariant, t, PathAppend(path, chosen))
+      end
+    end
+  end
+end;
+
+{ 6.8.7.3's record-value, over the field-list at `path` -- the record's own
+  when the path is empty, and an arm's when a variant-part-value has stepped
+  into one. 6.4.3.3 makes an arm's field-list a field-list like any other, so
+  this procedure is the one that walks both (ADR-0026). }
+procedure CheckRecordValue;
+var fields, f, chosenF: fieldPtr; arms: variantPtr; component: typePtr;
+    el, name: nodePtr; tagField, at, i, n: integer; bad: boolean;
+    given, givenTail, g: numPtr;
+begin
+  fields := FieldsAt(t, path);
+  arms := ArmsAt(t, path);
+  tagField := TagFieldAt(t, path);
+  { A "was this field given" flag apiece. A vector<bool> becomes a list of the
+    field numbers already seen, which is the same question asked of a shape the
+    Pascal has. }
+  given := nil;
+  givenTail := nil;
+  el := e^.svElems;
+  while el <> nil do begin
+    if el^.veCompleter then begin
+      ErrorAt(el^.line, el^.col);
+      writeln('''otherwise'' belongs to an array value, not a record value')
+    end
+    else begin
+      { The parser read every selector as an expression, because `[a: 1]` is an
+        array value when `a` is a constant and a record value when it is a
+        field name. Here the type has answered, so a selector must be a bare
+        name. }
+      component := nil;
+      name := el^.veLabels;
+      while name <> nil do begin
+        bad := false;
+        if (name^.smLo^.kind <> nkVar) or (name^.smHi <> nil) then begin
+          ErrorAt(name^.smLo^.line, name^.smLo^.col);
+          writeln('a record value needs field names before the '':''');
+          bad := true
+        end;
+        if not bad then begin
+          chosenF := nil;
+          at := -1;
+          f := fields;
+          i := 0;
+          while f <> nil do begin
+            if PoolSame(f^.at, f^.len, name^.smLo^.vrAt, name^.smLo^.vrLen)
+            then begin
+              chosenF := f;
+              at := i
+            end;
+            i := i + 1;
+            f := f^.next
+          end;
+          if chosenF = nil then begin
+            { Naming a field of another field-list is worth its own words: the
+              record has the field, but not *here*, and 6.8.7.3 requires the
+              field-list-value to correspond to the field-list. }
+            ErrorAt(name^.smLo^.line, name^.smLo^.col);
+            write('''');
+            WritePool(name^.smLo^.vrAt, name^.smLo^.vrLen);
+            if FindField(t, name^.smLo^.vrAt, name^.smLo^.vrLen) <> nil then
+            begin
+              write(''' is not a field of this part of ');
+              WriteTypeName(t);
+              write('; a variant''s fields belong to its own value')
+            end
+            else begin
+              write(''' is not a field of ');
+              WriteTypeName(t)
+            end;
+            writeln;
+            bad := true
+          end
+          else if at = tagField then begin
+            ErrorAt(name^.smLo^.line, name^.smLo^.col);
+            write('the tag field ''');
+            WritePool(name^.smLo^.vrAt, name^.smLo^.vrLen);
+            write(''' is given by the ''case'' of the variant part, ');
+            writeln('not as a field value');
+            bad := true
+          end
+          else begin
+            g := given;
+            while g <> nil do begin
+              if g^.value = at then bad := true;
+              g := g^.next
+            end;
+            if bad then begin
+              ErrorAt(name^.smLo^.line, name^.smLo^.col);
+              write('the field ''');
+              WritePool(name^.smLo^.vrAt, name^.smLo^.vrLen);
+              writeln(''' is given twice')
+            end
+          end;
+          if not bad then begin
+            AppendNum(given, givenTail, at);
+            AppendNum(el^.veFields, el^.veFieldTail, chosenF^.index);
+            { A field-identifier is not a variable-access, so nothing resolved
+              it -- but every expression leaves Sema with a type, and the
+              field's is the only honest answer. }
+            name^.smLo^.ntype := chosenF^.ftype;
+            { 6.8.7.3 NOTE 1: one field-value's identifiers all denote
+              components of one type, because the component-value has a single
+              type. }
+            if (component <> nil) and (component <> chosenF^.ftype) then begin
+              ErrorAt(name^.smLo^.line, name^.smLo^.col);
+              write('''');
+              WritePool(name^.smLo^.vrAt, name^.smLo^.vrLen);
+              write(''' has type ');
+              WriteTypeName(chosenF^.ftype);
+              write(', but the fields before it in this value have type ');
+              WriteTypeName(component);
+              writeln
+            end
+            else
+              component := chosenF^.ftype
+          end
+        end;
+        name := name^.next
+      end;
+      CheckComponentValue(el^.veValue, component, true)
+    end;
+    el := el^.next
+  end;
+
+  f := fields;
+  n := 0;
+  while f <> nil do begin
+    bad := false;
+    g := given;
+    while g <> nil do begin
+      if g^.value = n then bad := true;
+      g := g^.next
+    end;
+    if (not bad) and (n <> tagField) then begin
+      ErrorAt(e^.line, e^.col);
+      write('the field ''');
+      WritePool(f^.at, f^.len);
+      write(''' of ');
+      WriteTypeName(t);
+      writeln(' has no value in this record value')
+    end;
+    n := n + 1;
+    f := f^.next
+  end;
+
+  CheckVariantPartValue(e, t, path, arms, fields, tagField)
+end;
+
+{ ISO/IEC 10206:1991 6.8.7. A structured-value-constructor is a primary that
+  denotes a value of a named structured type, and a component-value nested
+  inside one is the same node with no type-name -- it takes the type of the
+  component it is for.
+
+  The whole feature is a completeness argument: 6.8.7.2 NOTE and 6.8.7.3 NOTE 2
+  both say every component must be specified, exactly once. So each of the two
+  forms above does the same three things -- resolve each selector, check each
+  component-value against the type it lands in, and then ask whether anything
+  was left out. }
+procedure CheckStructValue;
+var t: typePtr; s: symPtr;
+begin
+  t := want;
+  if e^.svLen > 0 then begin
+    t := BuiltinType(e^.svAt, e^.svLen);
+    if t = nil then begin
+      s := Lookup(e^.svAt, e^.svLen);
+      if s = nil then begin
+        ErrorAt(e^.line, e^.col);
+        write('undeclared identifier ''');
+        WritePool(e^.svAt, e^.svLen);
+        writeln('''')
+      end
+      else if s^.kind <> skType then begin
+        ErrorAt(e^.line, e^.col);
+        write('''');
+        WritePool(e^.svAt, e^.svLen);
+        writeln(''' is not a type, so it cannot name a structured value')
+      end
+      else
+        t := s^.stype
+    end
+  end;
+  { Whatever happens, the node leaves here with a type: CodeGen may not see a
+    nil one, and a placeholder is what an error path gives it. A nested
+    component-value whose parent could not be typed says nothing of its own --
+    the parent has already reported why. }
+  if t <> nil then e^.ntype := t else e^.ntype := intType;
+  if t <> nil then
+    { 6.8.7.1: "That type shall be a type that is permissible as the
+      component-type of a file-type" -- which is ContainsFile exactly, the same
+      predicate 6.4.3.6's component check asks (ADR-0031). }
+    if IsFile(t) or ContainsFile(t) then begin
+      ErrorAt(e^.line, e^.col);
+      write('a structured value cannot be of type ');
+      WriteTypeName(t);
+      writeln(', because it contains a file')
+    end
+    else if IsArray(t) then begin
+      CheckArrayValue(e, t);
+      if (e^.svLen > 0) or (want = nil) then e^.svSlot := NewResultSlot(t)
+    end
+    else if IsRecord(t) then begin
+      CheckRecordValue(e, t, nil);
+      { An array and a record have no register form (ADR-0017), so the value
+        needs storage -- the hidden frame slot a memory-living function result
+        gets. A *nested* value has none: it is built directly into its
+        parent's. }
+      if (e^.svLen > 0) or (want = nil) then e^.svSlot := NewResultSlot(t)
+    end
+    else begin
+      { 6.8.7.4's set-value is not implemented (see ADR-0061), so a set type
+        lands here with every other type that has no structure to construct. }
+      ErrorAt(e^.line, e^.col);
+      write('a structured value needs an array or a record type, not ');
+      WriteTypeName(t);
+      writeln
+    end
+end;
+
 procedure CheckExpr;
 var t, b: typePtr; f: fieldPtr; binding: symPtr; qual: nodePtr;
     p, ds: symListPtr; tv: numPtr; found: boolean;
@@ -9684,6 +10486,9 @@ begin
       nkChar: e^.ntype := charType;
       nkNil:  e^.ntype := nilType;
       nkSet:  CheckSetExpr(e);
+      { 6.8.7's structured-value-constructor, written where an expression is:
+        it names its own type, so nothing is wanted of the context. }
+      nkStructValue: CheckStructValue(e, nil);
 
       { ISO 7185 6.4.3.2: a string literal *is* a packed array of char. Giving
         it that type rather than one of its own is what makes assignment,
@@ -10030,7 +10835,7 @@ begin
       nkBinary: CheckBinary(e);
       nkCall:   CheckCall(e);
 
-      nkSetMember,
+      nkSetMember, nkValueElem,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -10728,7 +11533,7 @@ begin
     while label_ <> nil do begin
       labelType := nil;
       at := 0;
-      if not EvalLabelRange(label_, true, labelType, lo, hi) then begin
+      if not EvalLabelRange(label_, lwCase, labelType, lo, hi) then begin
         { the diagnostic is EvalLabelRange's; nothing more to say here }
       end
       else if (sel <> nil) and not Assignable(sel, labelType) then begin
@@ -11056,6 +11861,7 @@ begin
       end;
 
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+      nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
@@ -13288,7 +14094,7 @@ begin
 end;
 
 procedure DumpExpr;
-var a: nodePtr;
+var a, p, q: nodePtr; r: rangePtr; num: numPtr; k: integer;
 begin
   Pad;
   case n^.kind of
@@ -13374,6 +14180,72 @@ begin
       DumpExpr(n^.ssBase);
       DumpExpr(n^.ssLo);
       DumpExpr(n^.ssHi);
+      level := level - 1
+    end;
+    { 6.8.7's structured-value-constructor. The type-name is part of the head
+      because a nested component-value has none, which is the whole difference
+      between the two forms. An element prints how many selectors it had and,
+      after Sema, what they resolved to -- folded ranges for an array-value and
+      field numbers for a record-value, so a dump says which kind of value the
+      type turned out to name. }
+    nkStructValue: begin
+      write('structvalue');
+      if n^.svLen > 0 then begin
+        write(' ');
+        WritePool(n^.svAt, n^.svLen)
+      end;
+      WritePos(n^.line, n^.col);
+      ExprEnd(n);
+      level := level + 1;
+      p := n^.svElems;
+      while p <> nil do begin
+        Pad;
+        if p^.veCompleter then
+          writeln('otherwise')
+        else begin
+          k := 0;
+          q := p^.veLabels;
+          while q <> nil do begin
+            k := k + 1;
+            q := q^.next
+          end;
+          write('elem ', k:1);
+          if annotate then begin
+            r := p^.veValues;
+            while r <> nil do begin
+              write(' [', r^.lo:1, '..', r^.hi:1, ']');
+              r := r^.next
+            end;
+            num := p^.veFields;
+            while num <> nil do begin
+              write(' #', num^.value:1);
+              num := num^.next
+            end
+          end;
+          writeln
+        end;
+        level := level + 1;
+        q := p^.veLabels;
+        while q <> nil do begin
+          DumpExpr(q^.smLo);
+          if q^.smHi <> nil then DumpExpr(q^.smHi);
+          q := q^.next
+        end;
+        DumpExpr(p^.veValue);
+        level := level - 1;
+        p := p^.next
+      end;
+      if n^.svTagValue <> nil then begin
+        Pad;
+        write('variant ');
+        if n^.svTagLen = 0 then write('-')
+        else WritePool(n^.svTagAt, n^.svTagLen);
+        writeln;
+        level := level + 1;
+        DumpExpr(n^.svTagValue);
+        DumpExpr(n^.svVariant);
+        level := level - 1
+      end;
       level := level - 1
     end;
     nkField: begin
@@ -14462,50 +15334,6 @@ procedure ArmLayoutAt(rec: typePtr; path: numPtr;
 procedure VariantStorageAt(rec: typePtr; path: numPtr;
                            var size, align: integer); forward;
 
-{ The arm a path names. Each step selects an arm of the variant part it is in;
-  a further step goes into the variant part nested inside that arm. }
-function ArmAt(rec: typePtr; path: numPtr): variantPtr;
-var v: variantPtr; k: integer;
-begin
-  v := rec^.variants;
-  while path <> nil do begin
-    k := 0;
-    while k < path^.value do begin
-      v := v^.next;
-      k := k + 1
-    end;
-    if path^.next <> nil then v := v^.variants;
-    path := path^.next
-  end;
-  ArmAt := v
-end;
-
-{ The arms of the variant part at `path`, and the fields of the field-list
-  there. An empty path is the record itself; an arm's field-list is a
-  field-list like any other (ISO 7185 6.4.3.3), which is what makes one pair of
-  functions serve both. }
-function ArmsAt(rec: typePtr; path: numPtr): variantPtr;
-var a: variantPtr;
-begin
-  if path = nil then
-    ArmsAt := rec^.variants
-  else begin
-    a := ArmAt(rec, path);
-    ArmsAt := a^.variants
-  end
-end;
-
-function FieldsAt(rec: typePtr; path: numPtr): fieldPtr;
-var a: variantPtr;
-begin
-  if path = nil then
-    FieldsAt := rec^.fields
-  else begin
-    a := ArmAt(rec, path);
-    FieldsAt := a^.fields
-  end
-end;
-
 { The struct a field-list is: its own fields, and -- when it ends with a
   variant part -- the shared storage for that part as a last member. The record
   and every arm are laid out by this one routine, because they have the same
@@ -15586,6 +16414,10 @@ end;
 
 procedure EmitExpr(e: nodePtr; var v: str); forward;
 procedure EmitAddress(e: nodePtr; var v: str); forward;
+{ 6.8.7's structured-value-constructor, built into `into` -- the hidden frame
+  slot Sema gave it when `into` is empty, and otherwise the component or the
+  variable the value is for. }
+procedure EmitStructValue(e: nodePtr; var into: str); forward;
 
 { The tuple governing a designator, found by walking to the whole variable it
   selects from. One header serves every dimension -- `g^[i][j]` reads `rows`
@@ -17931,6 +18763,17 @@ begin
       in, so it is an address like any designator's. }
     nkCall: EmitCall(e, v);
 
+    { 6.8.7's structured-value-constructor. It is not a variable-access -- it
+      has an address only because an array and a record have no register form
+      (ADR-0017), which is the same reason a memory-living function result has
+      one. IsDesignator still answers false for it, so nothing may assign to
+      one or pass one as a var parameter. }
+    nkStructValue: begin
+      StrClear(v);
+      EmitStructValue(e, v)
+    end;
+
+    nkValueElem,
     nkInt, nkReal, nkChar, nkNil, nkSet, nkSetMember, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
@@ -17996,6 +18839,14 @@ begin
     nkBinary: EmitBinary(e, v);
     nkUnary: EmitUnary(e, v);
     nkCall: EmitCall(e, v);
+    { The value of a structured value is the address of the storage it was
+      built in -- ADR-0017's rule that an array or a record has no register
+      form, which is why this is the same answer EmitAddress gives. }
+    nkStructValue: begin
+      StrClear(v);
+      EmitStructValue(e, v)
+    end;
+    nkValueElem,
     nkSetMember,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
@@ -18057,6 +18908,13 @@ begin
     StrClear(hdr);
     EmitStringStore(dst, t, src, hdr)
   end
+  { 6.8.7's structured-value-constructor is *built*, so it is built here rather
+    than built elsewhere and copied -- which is not only cheaper: a
+    component-value of an initial-state-specifier has no slot of its own to be
+    built in (ADR-0061), because the variable being initialised is the storage
+    it was always going to occupy. }
+  else if src^.kind = nkStructValue then
+    EmitStructValue(src, dst)
   { A whole array or record is copied; ISO 7185 6.8.2.2 makes assignment of a
     structured value a copy of every component, not a sharing of storage. }
   else if IsStructured(t) then
@@ -18073,6 +18931,177 @@ begin
     PutOp(dst);
     writeln(ircode)
   end
+end;
+
+{ ------------------------------------------- structured-value-constructors }
+
+{ One component of a structured value: a nested array- or record-value builds
+  itself into the address, and anything else is the ordinary store -- so a
+  subrange component is range-checked and a string component padded by the code
+  that already does both. }
+procedure EmitComponentValue(var addr: str; t: typePtr; v: nodePtr);
+begin
+  if v^.kind = nkStructValue then EmitStructValue(v, addr)
+  else EmitStore(addr, t, v)
+end;
+
+{ Copy one already-built component onto another. A component-value is one
+  expression however many components it is *for*, so it is emitted once and
+  then copied -- evaluating it once per component would call a function in it
+  once per component. }
+procedure CopyComponent(var dst, src: str; t: typePtr);
+var v: str;
+begin
+  if IsMemory(t) then
+    EmitCopyAt(dst, t, src)
+  else begin
+    Def(v);
+    write(ircode, 'load ');
+    PutLlType(t);
+    write(ircode, ', ptr ');
+    PutOp(src);
+    writeln(ircode);
+    write(ircode, '  store ');
+    PutLlType(t);
+    write(ircode, ' ');
+    PutOp(v);
+    write(ircode, ', ptr ');
+    PutOp(dst);
+    writeln(ircode)
+  end
+end;
+
+procedure ArrayElement(var base: str; arr: typePtr; index: integer;
+                       var v: str);
+begin
+  Def(v);
+  write(ircode, 'getelementptr inbounds ');
+  PutLlType(arr);
+  write(ircode, ', ptr ');
+  PutOp(base);
+  writeln(ircode, ', i32 0, i32 ', index - arr^.lo:1)
+end;
+
+{ 6.8.7.2's array-value. The completer is filled in *first* and the elements
+  written over it, which is what makes "any component not mapped to by an
+  element" need no complement to be computed -- the ranges are disjoint, so
+  every component ends up holding the value the standard says it holds. }
+procedure EmitArrayValue(e: nodePtr; var into: str);
+var arr, comp: typePtr; el: nodePtr; r: rangePtr; src, dst: str;
+    pass, first, i: integer; wanted: boolean;
+begin
+  arr := e^.ntype;
+  comp := arr^.elem;
+  for pass := 0 to 1 do begin
+    el := e^.svElems;
+    while el <> nil do begin
+      wanted := el^.veCompleter = (pass = 0);
+      if wanted then begin
+        { Where the one evaluation lands: the first component this element is
+          for, and then a copy to each of the rest. }
+        if el^.veCompleter or (el^.veValues = nil) then first := arr^.lo
+        else first := el^.veValues^.lo;
+        ArrayElement(into, arr, first, src);
+        EmitComponentValue(src, comp, el^.veValue);
+        if el^.veCompleter then
+          for i := arr^.lo to arr^.hi do begin
+            if i <> first then begin
+              ArrayElement(into, arr, i, dst);
+              CopyComponent(dst, src, comp)
+            end
+          end
+        else begin
+          r := el^.veValues;
+          while r <> nil do begin
+            for i := r^.lo to r^.hi do
+              if i <> first then begin
+                ArrayElement(into, arr, i, dst);
+                CopyComponent(dst, src, comp)
+              end;
+            r := r^.next
+          end
+        end
+      end;
+      el := el^.next
+    end
+  end
+end;
+
+{ 6.8.7.3's record-value over the field-list at `path`. A variant-part-value
+  stores the selector -- when the variant part has a tag field to store it in --
+  and then this same procedure builds the arm's field-list-value, because an
+  arm's field-list is a field-list like any other (ADR-0026). }
+procedure EmitRecordValue(e: nodePtr; rec: typePtr; path: numPtr;
+                          var into: str);
+var fields, f, first: fieldPtr; el: nodePtr; num: numPtr;
+    src, dst, ord_: str; tag, i: integer;
+begin
+  fields := FieldsAt(rec, path);
+  el := e^.svElems;
+  while el <> nil do begin
+    { An element every name of which was refused contributes nothing; Sema has
+      already said why. }
+    if el^.veFields <> nil then begin
+      first := nil;
+      f := fields;
+      while f <> nil do begin
+        if f^.index = el^.veFields^.value then first := f;
+        f := f^.next
+      end;
+      FieldAddress(into, rec, first, src);
+      EmitComponentValue(src, first^.ftype, el^.veValue);
+      num := el^.veFields^.next;
+      while num <> nil do begin
+        f := fields;
+        while f <> nil do begin
+          if f^.index = num^.value then begin
+            FieldAddress(into, rec, f, dst);
+            CopyComponent(dst, src, f^.ftype)
+          end;
+          f := f^.next
+        end;
+        num := num^.next
+      end
+    end;
+    el := el^.next
+  end;
+
+  if e^.svArm >= 0 then begin
+    tag := TagFieldAt(rec, path);
+    if tag >= 0 then begin
+      f := fields;
+      i := 0;
+      first := nil;
+      while f <> nil do begin
+        if i = tag then first := f;
+        i := i + 1;
+        f := f^.next
+      end;
+      FieldAddress(into, rec, first, dst);
+      OpInt(e^.svTagOrd, ord_);
+      write(ircode, '  store ');
+      PutLlType(first^.ftype);
+      write(ircode, ' ');
+      PutOp(ord_);
+      write(ircode, ', ptr ');
+      PutOp(dst);
+      writeln(ircode)
+    end;
+    EmitRecordValue(e^.svVariant, rec, PathAppend(path, e^.svArm), into)
+  end
+end;
+
+{ 6.8.7. A structured-value-constructor has no register form (ADR-0017), so it
+  is *built* rather than computed: the components are stored into the storage
+  the value will occupy, and the expression's value is that storage's address.
+  At the top that storage is the hidden frame slot Sema gave the node; a nested
+  component-value is built directly into the component it is for, which is why
+  nothing here allocates anything. }
+procedure EmitStructValue;
+begin
+  if into.len = 0 then AddressOfSym(e^.svSlot, into);
+  if IsArray(e^.ntype) then EmitArrayValue(e, into)
+  else if IsRecord(e^.ntype) then EmitRecordValue(e, e^.ntype, nil, into)
 end;
 
 { A discriminant may be of any ordinal type, and a message reports it as a
@@ -19194,6 +20223,7 @@ begin
         else if s^.pcSym <> nil then
           EmitUserCall(s^.pcSym, s^.pcArgs, nil, v);
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+      nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,

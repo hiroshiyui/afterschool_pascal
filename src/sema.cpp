@@ -949,6 +949,27 @@ bool Sema::nonvarying(Expr *e) const {
         return false;
     return true;
   }
+  // §6.8.7's structured-value-constructor is nonvarying when everything it is
+  // built out of is — which is what makes §6.6 NOTE 3's
+  // `array [1..8] of char value [1..8: '*']` an initial state rather than an
+  // error. A field-value's selectors are field *names* and never expressions,
+  // so only the labels of an array-value and the component-values are asked.
+  if (auto *sv = as<StructValueExpr>(e)) {
+    for (const ValueElem &el : sv->elems) {
+      if (!el.fieldIndex.empty()) {
+        if (!nonvarying(el.value.get()))
+          return false;
+        continue;
+      }
+      for (const CaseLabel &lab : el.labels)
+        if (!nonvarying(lab.lo.get()) || (lab.hi && !nonvarying(lab.hi.get())))
+          return false;
+      if (!nonvarying(el.value.get()))
+        return false;
+    }
+    return (!sv->tagValue || nonvarying(sv->tagValue.get())) &&
+           (!sv->variant || nonvarying(sv->variant.get()));
+  }
   if (auto *c = as<Call>(e)) {
     // `eof` and `eoln` read a file, which is what varying means.
     if (c->builtin == Builtin::None || c->builtin == Builtin::Eof ||
@@ -992,7 +1013,13 @@ void Sema::checkInitialState(TypeExpr &denoter, Type *t) {
                  "because which variant exists is not settled here");
     return;
   }
-  checkExpr(v);
+  // §6.6 NOTE 4 makes this a *component-value*, so an array-value or a
+  // record-value written here takes its type from the denoter it hangs off
+  // rather than from a type-name it does not have (ADR-0061).
+  if (auto *sv = as<StructValueExpr>(v))
+    checkStructValue(sv, t);
+  else
+    checkExpr(v);
   if (!nonvarying(v)) {
     diags_.error(v->line, v->col,
                  "the value of an initial-state specifier must not depend on "
@@ -3704,6 +3731,338 @@ void Sema::checkStmt(Stmt *s) {
 
 // -------------------------------------------------------------- expressions
 
+// ------------------------------------------- structured-value-constructors
+
+/// ISO/IEC 10206:1991 §6.8.7. A structured-value-constructor is a primary that
+/// denotes a value of a named structured type, and a component-value nested
+/// inside one is the same node with no type-name — it takes the type of the
+/// component it is for. `want` is that type, and is null at the top.
+///
+/// The whole feature is a completeness argument: §6.8.7.2 NOTE and §6.8.7.3
+/// NOTE 2 both say every component must be specified, exactly once. So each of
+/// the two forms below does the same three things — resolve each selector,
+/// check each component-value against the type it lands in, and then ask
+/// whether anything was left out.
+void Sema::checkStructValue(StructValueExpr *e, Type *want) {
+  Type *t = want;
+  if (!e->typeName.empty()) {
+    t = builtinType(e->typeName, std_);
+    if (!t) {
+      Symbol *s = lookup(e->typeName);
+      if (!s)
+        diags_.error(e->line, e->col,
+                     "undeclared identifier '" + e->typeName + "'");
+      else if (s->kind != SymKind::Type)
+        diags_.error(e->line, e->col,
+                     "'" + e->typeName +
+                         "' is not a type, so it cannot name "
+                         "a structured value");
+      else
+        t = s->type;
+    }
+  } else if (!t) {
+    // A nested component-value whose parent could not be typed. The parent has
+    // already reported why, so this one says nothing (ADR-0054's principle).
+  }
+
+  // Whatever happens, the node leaves here with a type: CodeGen may not see a
+  // null one (ADR-0008), and a placeholder is what an error path gives it.
+  e->type = t ? t : ty::Int();
+  if (!t)
+    return;
+
+  // §6.8.7.1: "That type shall be a type that is permissible as the
+  // component-type of a file-type" — which is `containsFile` exactly, the same
+  // predicate §6.4.3.6's component check asks (ADR-0031).
+  if (t->isFile() || containsFile(t)) {
+    diags_.error(e->line, e->col,
+                 "a structured value cannot be of type " + t->name() +
+                     ", because it contains a file");
+    return;
+  }
+
+  if (t->isArray())
+    checkArrayValue(e, t);
+  else if (t->isRecord())
+    checkRecordValue(e, t, {});
+  else {
+    // §6.8.7.4's set-value is not implemented (see ADR-0061), so a set type
+    // lands here with every other type that has no structure to construct.
+    diags_.error(e->line, e->col,
+                 "a structured value needs an array or a record type, not " +
+                     t->name());
+    return;
+  }
+
+  // An array and a record have no register form (ADR-0017), so the value needs
+  // storage — the hidden frame slot ADR-0055 gives a memory-living result. A
+  // *nested* value has none: it is built directly into its parent's.
+  if (!e->typeName.empty() || want == nullptr)
+    e->resultSlot = newResultSlot(t);
+}
+
+/// One component-value: a nested array- or record-value takes the component
+/// type, and anything else is an expression that must be assignment-compatible
+/// with it (§6.8.7.1).
+void Sema::checkComponentValue(Expr *v, Type *component, const char *what) {
+  if (auto *nested = as<StructValueExpr>(v)) {
+    checkStructValue(nested, component);
+    return;
+  }
+  checkExpr(v);
+  if (component && v->type && !assignable(component, v->type))
+    diags_.error(v->line, v->col,
+                 "a value of type " + v->type->name() + " cannot be " + what +
+                     " of type " + component->name());
+}
+
+/// §6.8.7.2's array-value. The selector is a case-constant-list in the
+/// standard's own words, so it is folded and overlap-checked by the very
+/// functions the case statement and the variant part share (ADR-0035).
+void Sema::checkArrayValue(StructValueExpr *e, Type *t) {
+  // A dynamically bounded array has no compile-time extent, so "every
+  // component is specified" is not a question this compiler can answer. It is
+  // refused rather than half-checked (ADR-0061).
+  if (t->dynamicBounds()) {
+    diags_.error(e->line, e->col,
+                 "a structured value cannot be of type " + t->name() +
+                     ", because its bounds are not known until it is created");
+    return;
+  }
+  Type *index = t->indexType;
+  Type *component = t->elem;
+  long long lo = index ? index->ordinalLo() : 0;
+  long long hi = index ? index->ordinalHi() : -1;
+
+  std::vector<LabelRange> seen;
+  long long covered = 0;
+  bool completer = false;
+  for (size_t k = 0; k < e->elems.size(); ++k) {
+    ValueElem &el = e->elems[k];
+    if (el.completer) {
+      // The grammar puts the completer last and lets nothing follow it, which
+      // is a rule about this list rather than about any one element.
+      if (k + 1 != e->elems.size())
+        diags_.error(el.line, el.col,
+                     "nothing may follow the 'otherwise' of an array value");
+      completer = true;
+      checkComponentValue(el.value.get(), component, "a component");
+      continue;
+    }
+    for (CaseLabel &label : el.labels) {
+      Type *lt = index;
+      LabelRange r;
+      long long clash = 0;
+      if (!evalLabelRange(label,
+                          "an array value's selector must be an ordinal "
+                          "constant",
+                          lt, r))
+        continue;
+      if (index && !assignable(index, lt)) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "an array value's selector must be of the index type " +
+                         index->name());
+        continue;
+      }
+      if (r.lo < lo || r.hi > hi) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "an array value's selector is outside the index type " +
+                         (index ? index->name() : std::string("?")));
+        continue;
+      }
+      if (overlaps(seen, r, clash)) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "this component of the array value is given twice");
+        continue;
+      }
+      seen.push_back(r);
+      covered += r.hi - r.lo + 1;
+      el.values.push_back(r);
+    }
+    checkComponentValue(el.value.get(), component, "a component");
+  }
+
+  // §6.8.7.2 b): "If there is at least one such component, there shall be an
+  // array-value-completer." The count is exact because the ranges are known to
+  // be disjoint by the time it is taken.
+  if (!completer && hi >= lo && covered != hi - lo + 1)
+    diags_.error(e->line, e->col,
+                 "this array value leaves components unspecified, and has no "
+                 "'otherwise' to give them a value");
+}
+
+/// §6.8.7.3's record-value, over the field-list at `path` — the record's own
+/// when the path is empty, and an arm's when a variant-part-value has stepped
+/// into one. §6.4.3.3 makes an arm's field-list a field-list like any other,
+/// so this function is the one that walks both (ADR-0026).
+void Sema::checkRecordValue(StructValueExpr *e, Type *t,
+                            const std::vector<int> &path) {
+  const std::vector<Field> &fields = t->fieldsAt(path);
+  const std::vector<Variant> &arms = t->armsAt(path);
+  int tagField = t->tagFieldAt(path);
+
+  std::vector<bool> given(fields.size(), false);
+  for (ValueElem &el : e->elems) {
+    if (el.completer) {
+      diags_.error(el.line, el.col,
+                   "'otherwise' belongs to an array value, not a record value");
+      continue;
+    }
+    // The parser read every selector as an expression, because `[a: 1]` is an
+    // array value when `a` is a constant and a record value when it is a field
+    // name. Here the type has answered, so a selector must be a bare name.
+    Type *component = nullptr;
+    for (CaseLabel &label : el.labels) {
+      auto *name = as<VarRef>(label.lo.get());
+      if (!name || label.hi) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "a record value needs field names before the ':'");
+        continue;
+      }
+      int at = -1;
+      for (size_t i = 0; i < fields.size(); ++i)
+        if (fields[i].name == name->name)
+          at = static_cast<int>(i);
+      if (at < 0) {
+        // Naming a field of another field-list is worth its own words: the
+        // record has the field, but not *here*, and §6.8.7.3 requires the
+        // field-list-value to correspond to the field-list.
+        if (t->findField(name->name))
+          diags_.error(name->line, name->col,
+                       "'" + name->name + "' is not a field of this part of " +
+                           t->name() +
+                           "; a variant's fields belong to its own "
+                           "value");
+        else
+          diags_.error(name->line, name->col,
+                       "'" + name->name + "' is not a field of " + t->name());
+        continue;
+      }
+      if (at == tagField) {
+        diags_.error(name->line, name->col,
+                     "the tag field '" + name->name +
+                         "' is given by the "
+                         "'case' of the variant part, not as a field value");
+        continue;
+      }
+      if (given[at]) {
+        diags_.error(name->line, name->col,
+                     "the field '" + name->name + "' is given twice");
+        continue;
+      }
+      given[at] = true;
+      el.fieldIndex.push_back(fields[at].index);
+      // A field-identifier is not a variable-access, so nothing resolved it —
+      // but ADR-0008 says every expression leaves Sema with a type, and the
+      // field's is the only honest answer.
+      name->type = fields[at].type;
+      // §6.8.7.3 NOTE 1: one field-value's identifiers all denote components
+      // of one type, because the component-value has a single type.
+      if (component && component != fields[at].type)
+        diags_.error(name->line, name->col,
+                     "'" + name->name + "' has type " +
+                         fields[at].type->name() +
+                         ", but the fields before it in this value have type " +
+                         component->name());
+      else
+        component = fields[at].type;
+    }
+    checkComponentValue(el.value.get(), component, "the value of a field");
+  }
+
+  for (size_t i = 0; i < fields.size(); ++i)
+    if (!given[i] && static_cast<int>(i) != tagField)
+      diags_.error(e->line, e->col,
+                   "the field '" + fields[i].name + "' of " + t->name() +
+                       " has no value in this record value");
+
+  checkVariantPartValue(e, t, path, arms, fields, tagField);
+}
+
+/// §6.8.7.3's variant-part-value. The tag value chooses the arm, and the arm's
+/// field-list-value is checked by `checkRecordValue` again — which is what
+/// makes a variant part inside a variant part cost nothing (ADR-0026).
+void Sema::checkVariantPartValue(StructValueExpr *e, Type *t,
+                                 const std::vector<int> &path,
+                                 const std::vector<Variant> &arms,
+                                 const std::vector<Field> &fields,
+                                 int tagField) {
+  if (arms.empty()) {
+    if (e->tagValue)
+      diags_.error(e->tagValue->line, e->tagValue->col,
+                   "this part of " + t->name() +
+                       " has no variant part, so a "
+                       "record value for it cannot select one");
+    return;
+  }
+  if (!e->tagValue) {
+    diags_.error(e->line, e->col,
+                 "this record value must select a variant of " + t->name() +
+                     ", with 'case'");
+    return;
+  }
+  // §6.8.7.3: "A tag-field-identifier in a variant-part-value shall be the
+  // field-identifier associated with the selector." A tagless variant part has
+  // no such identifier, so writing one is an error rather than a redundancy.
+  if (!e->tagField.empty()) {
+    if (tagField < 0)
+      diags_.error(e->line, e->col,
+                   "this variant part has no tag field, so '" + e->tagField +
+                       "' names nothing");
+    else if (fields[tagField].name != e->tagField)
+      diags_.error(e->line, e->col,
+                   "the tag field of this variant part is '" +
+                       fields[tagField].name + "', not '" + e->tagField + "'");
+  }
+
+  CaseLabel tag;
+  tag.lo = std::move(e->tagValue);
+  Type *tt = t->tagTypeAt(path);
+  Type *lt = tt;
+  LabelRange r;
+  bool ok = evalLabelRange(
+      tag, "a variant part's tag value must be an ordinal constant", lt, r);
+  e->tagValue = std::move(tag.lo);
+  if (!ok)
+    return;
+  if (tt && !assignable(tt, lt)) {
+    diags_.error(e->tagValue->line, e->tagValue->col,
+                 "a variant part's tag value must be of type " + tt->name());
+    return;
+  }
+
+  int chosen = -1, completer = -1;
+  for (size_t i = 0; i < arms.size(); ++i) {
+    if (arms[i].isOtherwise) {
+      completer = static_cast<int>(i);
+      continue;
+    }
+    for (const LabelRange &label : arms[i].labels)
+      if (r.lo >= label.lo && r.lo <= label.hi)
+        chosen = static_cast<int>(i);
+  }
+  if (chosen < 0)
+    chosen = completer;
+  if (chosen < 0) {
+    diags_.error(e->tagValue->line, e->tagValue->col,
+                 "no variant of " + t->name() +
+                     " is selected by this tag "
+                     "value");
+    return;
+  }
+  e->armIndex = chosen;
+  e->tagOrdinal = r.lo;
+
+  std::vector<int> sub = path;
+  sub.push_back(chosen);
+  // The arm's field-list-value is a value of the record's own type: it fills
+  // in part of the same variable. Saying so keeps ADR-0008's invariant, and
+  // `checkRecordValue` is entered directly because the arm is a field-list
+  // rather than a type and has nothing else to decide.
+  e->variant->type = t;
+  checkRecordValue(as<StructValueExpr>(e->variant.get()), t, sub);
+}
+
 void Sema::checkExpr(Expr *e) {
   if (!e)
     return;
@@ -3731,6 +4090,11 @@ void Sema::checkExpr(Expr *e) {
       return;
     }
     s->type = stringType(static_cast<long long>(s->value.size()));
+    return;
+  }
+
+  if (auto *sv = as<StructValueExpr>(e)) {
+    checkStructValue(sv, nullptr);
     return;
   }
 
@@ -4986,9 +5350,11 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                        ", and a value parameter is copied rather than padded; "
                        "so the argument must have the same length");
     // A structured value parameter is a copy, so it needs something to copy
-    // from: a designator, or a string literal.
+    // from: a designator, a string literal, or — since ADR-0061 — a
+    // structured-value-constructor, which is not a variable but does have
+    // storage, because §6.8.7's value is *built* rather than computed.
     else if (p->type && p->type->isStructured() && !isDesignator(a) &&
-        !is<StrLit>(a))
+             !is<StrLit>(a) && !is<StructValueExpr>(a))
       diags_.error(a->line, a->col,
                    "argument " + std::to_string(i + 1) + " of '" +
                        callee->name + "' is " + p->type->name() +

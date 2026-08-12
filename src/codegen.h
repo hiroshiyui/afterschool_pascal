@@ -207,6 +207,15 @@ private:
   llvm::Value *frameSlot(Symbol *v);
   /// The address of a variable, wherever in the chain it lives.
   llvm::Value *addressOf(Symbol *v);
+  /// §6.8.7's structured-value-constructor, built into `into` — the hidden
+  /// frame slot Sema gave it, or the component/variable it is a value for.
+  llvm::Value *emitStructValue(StructValueExpr *e, llvm::Value *into);
+  void emitComponentValue(llvm::Value *addr, Type *t, Expr *v);
+  void copyComponent(llvm::Value *dst, llvm::Value *src, Type *t);
+  llvm::Value *arrayElement(llvm::Value *base, Type *arr, long long index);
+  void emitArrayValue(StructValueExpr *e, llvm::Value *into);
+  void emitRecordValue(StructValueExpr *e, Type *rec,
+                       const std::vector<int> &path, llvm::Value *into);
   /// The address of one field of a record, fixed part or variant alike.
   llvm::Value *fieldAddress(llvm::Value *record, Type *type,
                             const Field *field);

@@ -271,6 +271,53 @@ struct Dumper {
       --level;
       break;
     }
+    case NK::StructValue: {
+      StructValueExpr *n = as<StructValueExpr>(e);
+      // The type-name is part of the head because a nested component-value
+      // has none, which is the whole difference between the two forms.
+      headExpr(n->typeName.empty() ? "structvalue"
+                                   : "structvalue " + n->typeName,
+               e);
+      ++level;
+      for (ValueElem &el : n->elems) {
+        pad();
+        // Which of the three selector forms this element used, and after Sema
+        // what it resolved to — an array-value-element prints its folded
+        // ranges and a field-value its field numbers, so a dump says which
+        // kind of value the type turned out to name.
+        if (el.completer)
+          std::printf("otherwise\n");
+        else {
+          std::printf("elem %zu", el.labels.size());
+          if (annotate) {
+            for (const LabelRange &r : el.values)
+              std::printf(" [%lld..%lld]", r.lo, r.hi);
+            for (int ix : el.fieldIndex)
+              std::printf(" #%d", ix);
+          }
+          std::printf("\n");
+        }
+        ++level;
+        for (CaseLabel &lab : el.labels) {
+          expr(lab.lo.get());
+          if (lab.hi)
+            expr(lab.hi.get());
+        }
+        expr(el.value.get());
+        --level;
+      }
+      if (n->tagValue) {
+        pad();
+        std::printf("variant %s\n",
+                    n->tagField.empty() ? "-" : n->tagField.c_str());
+        ++level;
+        expr(n->tagValue.get());
+        expr(n->variant.get());
+        --level;
+      }
+      --level;
+      break;
+    }
     case NK::Field: {
       FieldExpr *n = as<FieldExpr>(e);
       // ISO/IEC 10206:1991 §6.11.3's qualified name shares this node with a

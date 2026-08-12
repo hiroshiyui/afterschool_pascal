@@ -427,6 +427,49 @@ struct Type {
     return nullptr;
   }
 
+  /// The field-list at a variant path: the record's own for an empty path,
+  /// and one arm's for each further index. §6.4.3.3 makes an arm's field-list
+  /// a field-list like any other (ADR-0026), so everything that walks a record
+  /// walks arms with the same three functions — which is why they live on the
+  /// type rather than in one pass. CodeGen had them first; Sema needs the same
+  /// answers to decide whether a §6.8.7 record-value is complete.
+  const std::vector<Variant> &armsAt(const std::vector<int> &path) const {
+    const std::vector<Variant> *arms = &variants;
+    for (int k : path)
+      arms = &(*arms)[k].variants;
+    return *arms;
+  }
+
+  const std::vector<Field> &fieldsAt(const std::vector<int> &path) const {
+    if (path.empty())
+      return fields;
+    const std::vector<Variant> *arms = &variants;
+    for (size_t i = 0; i + 1 < path.size(); ++i)
+      arms = &(*arms)[path[i]].variants;
+    return (*arms)[path.back()].fields;
+  }
+
+  /// The index into `fieldsAt(path)` of the selector's own field, or -1 for a
+  /// tagless variant part and for a discriminant-selected one (§6.4.3.4,
+  /// ADR-0044) — neither has a field anywhere.
+  int tagFieldAt(const std::vector<int> &path) const {
+    if (path.empty())
+      return tagField;
+    const std::vector<Variant> *arms = &variants;
+    for (size_t i = 0; i + 1 < path.size(); ++i)
+      arms = &(*arms)[path[i]].variants;
+    return (*arms)[path.back()].tagField;
+  }
+
+  Type *tagTypeAt(const std::vector<int> &path) const {
+    if (path.empty())
+      return tagType;
+    const std::vector<Variant> *arms = &variants;
+    for (size_t i = 0; i + 1 < path.size(); ++i)
+      arms = &(*arms)[path[i]].variants;
+    return (*arms)[path.back()].tagType;
+  }
+
   /// A description for diagnostics. A named type reports its name; an
   /// anonymous one is spelled out the way the source would have written it.
   std::string name() const {

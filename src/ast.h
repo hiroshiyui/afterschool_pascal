@@ -16,7 +16,7 @@ struct Symbol;
 enum class NK {
   // expressions
   IntLit, RealLit, CharLit, StrLit, NilLit, SetLit, VarRef, Index, Field,
-  Deref, Binary, Unary, Call, Substring,
+  Deref, Binary, Unary, Call, Substring, StructValue,
   // statements
   Empty, Assign, Write, Read, Compound, If, While, Repeat, For, ProcCall, With,
   Case, Goto, Labeled,
@@ -315,6 +315,65 @@ struct Call : Expr {
   std::vector<ExprPtr> args;
 };
 
+/// One case-constant of a case-constant-list. ISO/IEC 10206:1991 generalised
+/// it to an interval (ADR-0035), so `hi` is null for a single constant. It is
+/// declared here rather than beside the case statement because §6.8.7.2's
+/// array-value-element names the same production.
+struct CaseLabel {
+  ExprPtr lo, hi;
+};
+
+/// One array-value-element or field-value of ISO/IEC 10206:1991 §6.8.7: what
+/// the component-value is *for*, and the component-value itself.
+///
+/// The two forms share a node because they share a shape — a selector, a
+/// colon and a value — and because which one a bracketed value is cannot be
+/// decided until the type-name is resolved: `[a: 1]` is an array-value when
+/// `a` is a constant of the index-type and a record-value when it is a field
+/// identifier. Sema answers that once, from the type, and fills in whichever
+/// of `values` and `fieldIndex` the answer calls for.
+struct ValueElem {
+  /// §6.8.7.2's case-constant-list, which is a case-constant-list in the
+  /// standard's own words — so it is the same `CaseLabel` a case statement
+  /// and a variant part use, and Sema folds it with the same function.
+  std::vector<CaseLabel> labels;
+  std::vector<LabelRange> values; // filled in by Sema, for an array-value
+  /// §6.8.7.3's field-identifiers land in `labels` too — a field-value and an
+  /// array-value-element are the same tokens until the type says which — so
+  /// only the resolved side is separate: the field numbers Sema read out of
+  /// them. One field-value may name several fields, and NOTE 1 makes them all
+  /// the same type in consequence.
+  std::vector<int> fieldIndex; // filled in by Sema, for a record-value
+  ExprPtr value;               // the component-value
+  bool completer = false;      // §6.8.7.2's `otherwise`
+  int line = 0, col = 0;
+};
+
+/// §6.8.7's structured-value-constructor, and the array-value or record-value
+/// of a component-value nested inside one — the two differ only in whether a
+/// type-name was written, since a nested value takes its type from the
+/// component it is for.
+struct StructValueExpr : Expr {
+  static constexpr NK NodeKind = NK::StructValue;
+  StructValueExpr() : Expr(NodeKind) {}
+  std::string typeName; // empty for a nested component-value
+  std::vector<ValueElem> elems;
+  /// §6.8.7.3's variant-part-value: `case [tag-field ':'] constant-tag-value
+  /// of '[' field-list-value ']'`. `variant` is that field-list-value, which
+  /// is a StructValueExpr of its own because a variant's field-list may hold
+  /// a variant part in turn (ADR-0026).
+  std::string tagField;
+  ExprPtr tagValue;
+  ExprPtr variant;
+  int armIndex = -1;        // which arm the tag value selected; Sema fills
+  long long tagOrdinal = 0; // and the value itself, for the tag field
+  /// Where the value is built. An array and a record have no register form
+  /// (ADR-0017), so a constructor of one needs storage, and it is the hidden
+  /// frame slot ADR-0055 gives a memory-living function result. Null for a
+  /// nested value, which builds into its parent's.
+  Symbol *resultSlot = nullptr;
+};
+
 // ---------------------------------------------------------------- statements
 
 struct Stmt : Node {
@@ -452,10 +511,6 @@ struct WithStmt : Stmt {
 /// One entry of a case-constant-list: a single constant, or the range `lo..hi`
 /// that ISO/IEC 10206:1991 §6.8.3.5 adds. `hi` is null for a single constant —
 /// the same pair, and the same way of telling the two apart, as SetMember.
-struct CaseLabel {
-  ExprPtr lo, hi;
-};
-
 struct CaseArm {
   std::vector<CaseLabel> labels;
   std::vector<LabelRange> values; // filled in by Sema

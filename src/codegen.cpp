@@ -1108,6 +1108,123 @@ llvm::Value *CodeGen::addressOf(Symbol *v) {
   return slot;
 }
 
+/// ISO/IEC 10206:1991 §6.8.7. A structured-value-constructor has no register
+/// form (ADR-0017), so it is *built* rather than computed: the components are
+/// stored into the storage the value will occupy, and the expression's value
+/// is that storage's address. At the top that storage is the hidden frame slot
+/// Sema gave the node (ADR-0055's mechanism); a nested component-value is
+/// built directly into the component it is for, which is why nothing here
+/// allocates anything.
+llvm::Value *CodeGen::emitStructValue(StructValueExpr *e, llvm::Value *into) {
+  if (!into)
+    into = addressOf(e->resultSlot);
+  if (e->type->isArray())
+    emitArrayValue(e, into);
+  else if (e->type->isRecord())
+    emitRecordValue(e, e->type, {}, into);
+  return into;
+}
+
+/// One component of a structured value: a nested array- or record-value builds
+/// itself into the address, and anything else is the ordinary store — so a
+/// subrange component is range-checked and a string component padded by the
+/// code that already does both.
+void CodeGen::emitComponentValue(llvm::Value *addr, ap::Type *t, Expr *v) {
+  if (auto *nested = as<StructValueExpr>(v)) {
+    emitStructValue(nested, addr);
+    return;
+  }
+  emitStore(addr, t, v);
+}
+
+/// Copy one already-built component onto another. A component-value is one
+/// expression however many components it is *for*, so it is emitted once and
+/// then copied — evaluating it once per component would call a function in it
+/// once per component.
+void CodeGen::copyComponent(llvm::Value *dst, llvm::Value *src, ap::Type *t) {
+  if (t->isMemory())
+    emitCopy(dst, t, src);
+  else
+    b_.CreateStore(b_.CreateLoad(llvmType(t), src, "comp"), dst);
+}
+
+llvm::Value *CodeGen::arrayElement(llvm::Value *base, ap::Type *arr,
+                                   long long index) {
+  return b_.CreateGEP(
+      llvmType(arr), base,
+      {ConstantInt::get(i32(), 0),
+       ConstantInt::get(i32(), static_cast<int>(index - arr->lo))},
+      "velem");
+}
+
+/// §6.8.7.2's array-value. The completer is filled in *first* and the elements
+/// written over it, which is what makes "any component not mapped to by an
+/// element" need no complement to be computed — the ranges are disjoint, so
+/// every component ends up holding the value the standard says it holds.
+void CodeGen::emitArrayValue(StructValueExpr *e, llvm::Value *into) {
+  ap::Type *arr = e->type;
+  ap::Type *comp = arr->elem;
+  for (int pass = 0; pass < 2; ++pass) {
+    for (ValueElem &el : e->elems) {
+      if (el.completer != (pass == 0))
+        continue;
+      // Where the one evaluation lands: the first component this element is
+      // for, and then a copy to each of the rest.
+      long long first = el.completer        ? arr->lo
+                        : el.values.empty() ? arr->lo
+                                            : el.values[0].lo;
+      llvm::Value *src = arrayElement(into, arr, first);
+      emitComponentValue(src, comp, el.value.get());
+      if (el.completer) {
+        for (long long i = arr->lo; i <= arr->hi; ++i)
+          if (i != first)
+            copyComponent(arrayElement(into, arr, i), src, comp);
+        continue;
+      }
+      for (const LabelRange &r : el.values)
+        for (long long i = r.lo; i <= r.hi; ++i)
+          if (i != first)
+            copyComponent(arrayElement(into, arr, i), src, comp);
+    }
+  }
+}
+
+/// §6.8.7.3's record-value over the field-list at `path`. A variant-part-value
+/// stores the selector — when the variant part has a tag field to store it in —
+/// and then this same function builds the arm's field-list-value, because an
+/// arm's field-list is a field-list like any other (ADR-0026).
+void CodeGen::emitRecordValue(StructValueExpr *e, ap::Type *rec,
+                              const std::vector<int> &path, llvm::Value *into) {
+  const std::vector<Field> &fields = rec->fieldsAt(path);
+  for (ValueElem &el : e->elems) {
+    if (el.fieldIndex.empty())
+      continue; // every name in it was refused; Sema has said why
+    const Field *first = nullptr;
+    for (const Field &f : fields)
+      if (f.index == el.fieldIndex[0])
+        first = &f;
+    llvm::Value *src = fieldAddress(into, rec, first);
+    emitComponentValue(src, first->type, el.value.get());
+    for (size_t k = 1; k < el.fieldIndex.size(); ++k)
+      for (const Field &f : fields)
+        if (f.index == el.fieldIndex[k])
+          copyComponent(fieldAddress(into, rec, &f), src, f.type);
+  }
+
+  if (e->armIndex < 0)
+    return;
+  int tag = rec->tagFieldAt(path);
+  if (tag >= 0) {
+    const Field &tf = fields[tag];
+    b_.CreateStore(ConstantInt::get(llvmType(tf.type),
+                                    static_cast<uint64_t>(e->tagOrdinal)),
+                   fieldAddress(into, rec, &tf));
+  }
+  std::vector<int> sub = path;
+  sub.push_back(e->armIndex);
+  emitRecordValue(as<StructValueExpr>(e->variant.get()), rec, sub, into);
+}
+
 /// A field of the fixed part is one index into the record. A field of a
 /// variant is two: to the shared storage, then into the arm laid over it.
 llvm::Value *CodeGen::fieldAddress(llvm::Value *record, ap::Type *type,
@@ -1175,6 +1292,14 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
   // `binding(f).bound` and `b := binding(f)` reach here at all.
   case NK::Call:
     return emitExpr(e);
+  // §6.8.7's structured-value-constructor. It is not a variable-access — it
+  // has an address only because an array and a record have no register form
+  // (ADR-0017), which is the same reason a memory-living function result has
+  // one. `isDesignator` still answers false for it, so nothing may assign to
+  // one or pass one as a var parameter.
+  case NK::StructValue:
+    return emitStructValue(static_cast<StructValueExpr *>(e), nullptr);
+
   case NK::Index: {
     auto *ix = static_cast<IndexExpr *>(e);
     ap::Type *arr = ix->base->type;
@@ -1577,6 +1702,15 @@ void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src,
       (type->isVarString() || from->isVarString() || from->isChar() ||
        type->length() != from->length())) {
     emitStringStore(dst, type, src, header);
+    return;
+  }
+  // §6.8.7's structured-value-constructor is *built*, so it is built here
+  // rather than built elsewhere and copied — which is not only cheaper: a
+  // component-value of an initial-state-specifier has no slot of its own to
+  // be built in (ADR-0061), because the variable being initialised is the
+  // storage it was always going to occupy.
+  if (auto *sv = as<StructValueExpr>(src)) {
+    emitStructValue(sv, dst);
     return;
   }
   // A whole array or record is copied; ISO 7185 §6.8.2.2 makes assignment of a
@@ -2293,6 +2427,8 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
   }
   case NK::Index:
     return emitLoad(e);
+  case NK::StructValue:
+    return emitStructValue(static_cast<StructValueExpr *>(e), nullptr);
   case NK::SetLit: return emitSet(static_cast<SetExpr *>(e));
   case NK::Binary: return emitBinary(static_cast<Binary *>(e));
   case NK::Unary:  return emitUnary(static_cast<Unary *>(e));

@@ -116,6 +116,10 @@ private:
   /// a constant, or `lo..hi` under Extended Pascal. Both places read the same
   /// production, so both get ranges from this one function.
   CaseLabel parseCaseLabel();
+  bool looksLikeStructuredValue(size_t from) const;
+  ExprPtr parseStructuredValue(const Token &at, const std::string &name);
+  ExprPtr parseComponentValue();
+  void parseVariantPartValue(StructValueExpr &n);
   /// True if what follows begins a subrange rather than a type name — that is,
   /// a constant followed by '..'.
   bool looksLikeSubrange() const;

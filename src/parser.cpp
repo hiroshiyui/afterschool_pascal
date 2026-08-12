@@ -684,8 +684,14 @@ TypeExprPtr Parser::parseTypeExpr() {
   // and this token never appears. The lexer's decision is the whole of the
   // feature's language gating — unlike `type of`, whose words are reserved in
   // both languages and which therefore needs an explicit refusal.
+  // §6.6 NOTE 4: "The component-value of an initial-state-specifier consists
+  // of an assignment-compatible expression, an array-value, or a record-value"
+  // — so it is a component-value and not an expression, which is what makes
+  // §6.6 NOTE 3's `array [1..8] of char value [1..8: '*']` mean an array of
+  // eight stars rather than a set. This is ADR-0048's stated deferral, and it
+  // needed no new production: parseComponentValue is §6.8.7.1's.
   if (accept(Tok::KwValue))
-    t->initValue = parseExpr();
+    t->initValue = parseComponentValue();
   return t;
 }
 
@@ -1727,6 +1733,125 @@ ExprPtr Parser::parseFactor() {
   return bin;
 }
 
+/// Is the bracketed thing starting at `from` (which indexes the '[') a
+/// §6.8.7 array-value or record-value rather than a subscript?
+///
+/// The answer is a bracket-depth walk, the third in this parser after
+/// ADR-0054's and ADR-0056's, and it needs no types: a subscript list holds
+/// index-expressions, and an index-expression can contain neither a ':' nor a
+/// ';' nor the word `otherwise` nor the word `case` at the depth the brackets
+/// opened. An empty `[]` counts too — a subscript list may not be empty, so
+/// `t[]` can only be the null-set-value or an empty record-value.
+///
+/// §6.8.7.4's *set*-value is not implemented (ADR-0061) and could not be
+/// decided here if it were: `sieve[2,3]` and `a[2,3]` are the same tokens, so
+/// it would have to be told from a subscript by the symbol — in Sema, as
+/// ADR-0053 tells a qualified name from a field selection. The one spelling
+/// that does arrive here is the empty `t[]`, which Sema then refuses for a set
+/// with the words it gives every unstructured type.
+bool Parser::looksLikeStructuredValue(size_t from) const {
+  if (std_ != Std::Extended || from >= toks_.size() ||
+      toks_[from].kind != Tok::LBracket)
+    return false;
+  if (from + 1 < toks_.size() && toks_[from + 1].kind == Tok::RBracket)
+    return true;
+  int depth = 0;
+  for (size_t i = from; i < toks_.size(); ++i) {
+    Tok k = toks_[i].kind;
+    if (k == Tok::LParen || k == Tok::LBracket)
+      ++depth;
+    else if (k == Tok::RParen || k == Tok::RBracket) {
+      if (--depth == 0)
+        return false;
+    } else if (depth == 1 && (k == Tok::Colon || k == Tok::Semi ||
+                              k == Tok::KwCase || k == Tok::KwOtherwise))
+      return true;
+    else if (k == Tok::Eof)
+      break;
+  }
+  return false;
+}
+
+/// §6.8.7's array-value and record-value, which share a bracket and are told
+/// apart by the type — so they are parsed into one node and Sema decides.
+///
+///   array-value  = '[' [element {';' element} [';']] [completer [';']] ']'
+///   element      = case-constant-list ':' component-value
+///   completer    = 'otherwise' component-value
+///   record-value = '[' field-list-value ']'
+///   field-value  = field-identifier {',' field-identifier} ':' component-value
+///
+/// A field-value and an array-value-element differ only in what precedes the
+/// colon: names in one, constants in the other. Both are parsed as
+/// expressions, and Sema reads a bare name as a field identifier or folds it
+/// as a constant according to the type it is building.
+ExprPtr Parser::parseStructuredValue(const Token &at, const std::string &name) {
+  // A component-value may be another bracketed value, and that nesting does
+  // not pass through parsePrimary — so it needs a guard of its own, exactly as
+  // ADR-0020's variant part does for the same reason.
+  Depth depth(*this);
+  auto n = makeNode<StructValueExpr>(at);
+  n->typeName = name;
+  expect(Tok::LBracket, "before a structured value");
+  while (!check(Tok::RBracket) && !check(Tok::Eof)) {
+    // §6.8.7.3's variant-part-value ends a field-list-value, so nothing may
+    // follow it — which is why it is read here rather than as an element.
+    if (check(Tok::KwCase)) {
+      parseVariantPartValue(*n);
+      break;
+    }
+    ValueElem elem;
+    elem.line = cur().line;
+    elem.col = cur().col;
+    if (check(Tok::KwOtherwise)) {
+      ++pos_;
+      elem.completer = true;
+    } else {
+      do {
+        elem.labels.push_back(parseCaseLabel());
+      } while (accept(Tok::Comma));
+      expect(Tok::Colon, "after the selector of a structured value");
+    }
+    elem.value = parseComponentValue();
+    n->elems.push_back(std::move(elem));
+    // The ';' before an array-value-completer is the *trailing* one of the
+    // element list and is optional, which is why `[1: a otherwise b]` — the
+    // standard's own example in §6.3.2 — has none. So `otherwise` continues
+    // the loop on its own.
+    if (!accept(Tok::Semi) && !check(Tok::KwOtherwise))
+      break;
+  }
+  expect(Tok::RBracket, "at the end of a structured value");
+  return n;
+}
+
+/// §6.8.7.1's component-value: an expression, or a nested array-value or
+/// record-value that takes its type from the component it is for. A nested one
+/// is written with no type-name, which is what makes the leading '[' the whole
+/// of the decision here — a set-constructor in this position would be an
+/// expression and reaches the same node through parseExpr.
+ExprPtr Parser::parseComponentValue() {
+  if (check(Tok::LBracket) && looksLikeStructuredValue(pos_))
+    return parseStructuredValue(cur(), std::string());
+  return parseExpr();
+}
+
+/// variant-part-value = 'case' [tag-field-identifier ':'] constant-tag-value
+///                      'of' '[' field-list-value ']'
+void Parser::parseVariantPartValue(StructValueExpr &n) {
+  ++pos_; // the `case`, which the caller has already seen
+  // The optional tag-field-identifier is told from the constant-tag-value by
+  // the colon after it, one token of lookahead — the same shape the variant
+  // part of a *type* is told by (§6.4.3.3).
+  if (check(Tok::Ident) && peek().kind == Tok::Colon) {
+    n.tagField = cur().text;
+    pos_ += 2;
+  }
+  n.tagValue = parseExpr();
+  expect(Tok::KwOf, "after the tag value of a record value");
+  n.variant = parseStructuredValue(cur(), std::string());
+}
+
 ExprPtr Parser::parsePrimary() {
   // Every way an expression nests inside an expression — parentheses, `not`,
   // a unary sign, a call's arguments — passes through here exactly once per
@@ -1854,6 +1979,15 @@ ExprPtr Parser::parsePrimary() {
       }
       expect(Tok::RParen, "after the arguments of a function call");
       return afterCall(std::move(call));
+    }
+    // §6.8.7's structured-value-constructor: a type-name and a bracketed
+    // value. It is decided without knowing that the name is a type, because
+    // what is inside the brackets is not a subscript list.
+    if (peek().kind == Tok::LBracket && looksLikeStructuredValue(pos_ + 1)) {
+      Token at = t;
+      std::string name = t.text;
+      ++pos_;
+      return parseStructuredValue(at, name);
     }
     auto ref = makeNode<VarRef>(t);
     ref->name = t.text;
