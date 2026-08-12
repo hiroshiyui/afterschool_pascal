@@ -422,6 +422,23 @@ required   maxchar — the largest char; halt — stop the program, closing what
            pred(x, k) — step k places along an ordinal type, in either
            direction; and the operator >< — set symmetric difference. All but
            `><` are required *identifiers*, so a program may declare its own
+time       §6.7.5.8's GetTimeStamp(t) fills a TimeStamp — §6.4.3.4's packed
+           record of DateValid, TimeValid, year, month, day, hour, minute
+           and second — with the current date and time, or with the
+           standard's own fallbacks (January 1, 1 and midnight) and the
+           corresponding flag false. §6.7.6.9's date(t) and time(t) then
+           yield a string; the representation is implementation-defined and
+           here it is ISO 8601, `YYYY-MM-DD` and `HH:MM:SS`. All four names
+           are required *identifiers*, so a program may declare its own.
+           "Current" is also implementation-defined, and here it is the
+           instant SOURCE_DATE_EPOCH names when that variable holds one —
+           read as UTC, so a build is reproducible — and the system clock
+           otherwise. A value that names no calendar date gives the
+           standard's fallbacks with the flags false, rather than quietly
+           reverting to the clock
+           "Current" is the system clock, or the instant SOURCE_DATE_EPOCH
+           names when that variable is set — read as UTC, so a build that
+           fixes it gets the same answer anywhere
 words      otherwise, pow, protected, value, bindable, restricted, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -429,15 +446,15 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            are required *identifiers* rather than word-symbols, and so are
            seekread, seekwrite, seekupdate, update, extend, position,
            lastposition, empty, string, length, index, substr, trim, eq,
-           ne, lt, gt, le, ge, binding, bind and unbind — so a program may
-           still declare its own. So are `interface` and `implementation`:
+           ne, lt, gt, le, ge, binding, bind, unbind, gettimestamp, date
+           and time — so a program may still declare its own. So are
+           `interface` and `implementation`:
            §6.1.5 and §6.1.6 make them *directives*, which are identifiers
            in the one position each may occupy, exactly as `forward` is
 ```
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
-design: the time procedures, §6.8.7.4's set-value, and §6.8.8's structured
-constants.
+design: §6.8.7.4's set-value and §6.8.8's structured constants.
 
 **All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
 though the language is not. A word-symbol is reserved only when the feature

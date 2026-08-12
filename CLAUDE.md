@@ -1168,6 +1168,61 @@ in one language or the other, and the standard is a property of the source.
     implementation-defined default TotalWidth is defined as `ExpDigits + 17`.
   - Stated deviation: **ExpDigits is not a fixed number** — two digits, or
     three past 1e100, because that is what C's `%E` writes.
+- **A time stamp is eight numbers, and the layout stays here** (ADR-0065).
+  §6.7.5.8's `GetTimeStamp` and §6.7.6.9's `date`/`time`, over §6.4.3.4's
+  packed `TimeStamp` record — the last feature on README's list.
+  - **The record's layout never crosses to the runtime, in either
+    direction.** `pas_gettimestamp` samples the clock and
+    `pas_timestamp_field(k)` returns the parts one at a time; the compiler
+    makes the eight stores itself. Passing a pointer to the record was
+    rejected for ADR-0030's reason — a Boolean field is an `i1`, and how an
+    `i1` sits in memory is exactly what neither backend may depend on.
+  - **§6.4.3.4's field order is the interface and three places follow it** —
+    Sema's record, CodeGen's `date`/`time` base indices (2 and 5), and the
+    runtime's slot numbering. They cannot be reduced to one: the runtime has
+    no view of the record, and ADR-0008 forbids CodeGen to look a field up by
+    name. `tests/extended/timestamp_fixed.pas` gives every field a different
+    small number, which is what makes a disagreement visible.
+  - **The six subranges do most of the enforcement** (ADR-0018), which leaves
+    §6.7.6.9's error condition small: February the 30th, and a year the
+    representation cannot write. `year` is the one field whose type does not
+    bound it. The stores need no `checkedForSubrange` — every value the
+    runtime can return is in range by construction, so a check there could
+    not be made to fail. That sentence is true **because of the leap-second
+    clamp below**, which is the one place a calendar offers a number outside a
+    field's type; the two are one decision, not two.
+  - **§6.9.4 f) is the one entry on that list ADR-0046 could not have a call
+    site for**, the procedure not existing then. It still sits beside the
+    `isDesignator` test.
+  - **`date` and `time` are pure**, so `nonvarying` needed no case: the clock
+    is read by `GetTimeStamp`. Both results are **fixed-width**, so the length
+    is a compile-time constant and only the pointer costs a call — the
+    division `pas_str_concat` already made.
+  - A **leap second is clamped** to 59. 60 is not a value of `second`'s
+    subrange, and since the stores carry no check the alternative is not a
+    trap but a 60 sitting in a `0..59` field with nothing reporting it. **No
+    test reaches the clamp and none can** — a POSIX `time_t` cannot name a
+    leap second — so removing it survives every oracle; don't take that as
+    licence to remove it.
+  - **"Current" is `SOURCE_DATE_EPOCH` when that is set, and the system clock
+    otherwise** — read as UTC, because a fixed instant must not vary with the
+    machine's zone. §6.7.5.8 makes the meaning implementation-defined, and this
+    is the only definition under which the eight fields can be checked at all:
+    no program knows what day it is except by asking the same function, so an
+    off-by-one is true of almost every moment. `tests/run_test.sh` and
+    `selfhost/irtest.sh` each export it from a `name.epoch` file, beside the
+    `name.in` convention they already had, and each **unsets** it otherwise so
+    an inherited one cannot replace the clock in the case that is testing the
+    clock. `tests/extended/timestamp_fixed.pas` is the golden that names a
+    date.
+  - **Three answers, not two**, and the third is the one §6.7.5.8 provides
+    for: an epoch that does not parse falls back to the clock
+    (`timestamp_badepoch.pas`), and one that parses but names no calendar date
+    takes the **invalid arm** — `DateValid` false and `January 1, 1`
+    (`timestamp_invalid.pas`). Answering the second with the clock is the bug
+    that was there first: the variable was set and the output still varied
+    from run to run. It is also the only way a program on a working machine
+    reaches that arm, so it is what makes the fallback fields testable at all.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

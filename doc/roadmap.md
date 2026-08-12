@@ -61,7 +61,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 212 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 221 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -792,13 +792,55 @@ they landed — rather than in the standard's.
     is ISO 7185 §6.9.3.6's rule word for word, and §6.10.3.4.1's DecPlaces
     derivation, which the runtime replaced with a hard-coded six.
   - Stated deviation: ExpDigits is not a fixed number.
+- ~~**The time procedures.**~~ Done (ADR-0065). §6.7.5.8's `GetTimeStamp` and
+  §6.7.6.9's `date` and `time`, over §6.4.3.4's packed `TimeStamp` — the only
+  feature in either standard that reads something outside the program which is
+  not a file.
+  - **A time stamp is eight numbers, and the layout stays in the compiler.**
+    The clock is sampled once and read field by field, so what crosses to the
+    runtime is integers; passing the record was rejected for ADR-0030's
+    reason, a Boolean field being an `i1`. §6.4.3.4's field order is then
+    agreed in **three** places — Sema's record, CodeGen's `date`/`time` base
+    indices, and the runtime's slot numbering — and cannot be reduced to one,
+    since the runtime has no view of the record and ADR-0008 forbids CodeGen
+    to look a field up by name. A test that gives every field a different
+    small number is what holds them together.
+  - **The subranges do most of the enforcement** (ADR-0018), which is what
+    leaves §6.7.6.9's error condition small enough to be one function:
+    February the 30th, and a year the fixed-width representation cannot
+    write. `year` is the one field of a TimeStamp whose type does not bound
+    it.
+  - **§6.9.4 f) is the entry on that list ADR-0046 could not have a call site
+    for**, its procedure not existing yet — the only place that record's "each
+    check sits beside an existing `isDesignator` test" had to be written
+    rather than found.
+  - It **reserves nothing**, all four names being required identifiers; and
+    `verify/` gained nothing, the two errors being calendar facts rather than
+    lowering rules.
+  - **The clock had to be made fixable before anything could test it.**
+    Mutation testing found that `tm_mon` written unadjusted survives every
+    oracle: no program knows what day it is except by asking the same
+    function, so a test can assert only what holds at every moment, and an
+    off-by-one holds at almost every moment. §6.7.5.8 leaves "current"
+    implementation-defined, so it is now `SOURCE_DATE_EPOCH` when that is set
+    — read as UTC — and the system clock otherwise. The harnesses gained a
+    `name.epoch` convention beside `name.in`, and the eight fields have a
+    golden file.
+  - **Two of the thirty mutants changed the code rather than the tests**,
+    which is the part worth remembering. An epoch is now rejected unless the
+    conversion consumes the whole word, because C's `strtoll` answers 0 for a
+    word it cannot read and would have dated every program 1970-01-01; and an
+    epoch that parses but names no calendar date now takes §6.7.5.8's
+    **invalid arm** rather than falling through to the clock, since answering
+    a *set* variable with the wall clock made the output vary run to run. Both
+    were wrong answers rather than refused ones, which a corpus of golden
+    files is structurally poor at noticing. The second also made the standard's
+    `DateValid` false arm reachable, and it had never once executed.
+    Counting what the corpus reaches has now turned something up every time it
+    has been done.
 
 **What is left of ISO/IEC 10206:1991**, and it is now a short list:
 
-- **The time procedures** (§6.7.5.8). `GetTimeStamp`, `date` and `time`, with
-  the required type-identifier `TimeStamp` §6.4.3.4 gives them. The only one of
-  these that reads the world outside the program, and the only required record
-  type besides `BindingType` — which is the mechanism it will reuse.
 - **§6.8.7.4's set-value** (ADR-0061). A set is a value and needs none of the
   constructor machinery, and `sieve[2, 3]` cannot be told from `a[2, 3]`
   without the symbol.
@@ -809,6 +851,10 @@ they landed — rather than in the standard's.
   with a *should* rather than a *shall*, and it needs an interface artefact
   this compiler does not define — a second file format, and one the stage-1
   compiler could not write.
+
+**With the time procedures the required procedures and functions are
+complete**, so what is left above is two productions of §6.8 and one *should*
+of §6.13 — no required identifier, no required type, and nothing lexical.
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
 only when the feature needing it lands, so until the list was empty
