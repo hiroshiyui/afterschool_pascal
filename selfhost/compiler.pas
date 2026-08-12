@@ -13539,7 +13539,7 @@ end;
   the variable. }
 procedure CheckImports;
 var spec, item: nodePtr; i: ifacePtr; c, ic: constitPtr; ifaceSym, s: symPtr;
-    known, named: boolean; e: symListPtr; at, len: integer;
+    known, named: boolean; e: symListPtr; at, len: integer; supplied: symPtr;
 begin
   spec := specs;
   while spec <> nil do begin
@@ -13559,15 +13559,24 @@ begin
       else if PoolIsWide(i^.at, i^.len, 'standardoutput  ') then
         i^.items^.sym := EnsureStdFile(false);
 
-      if (i^.owner <> nil) and (i^.owner <> owner) then begin
+      { 6.2.2.13 makes A supply B when B *contains* an applied occurrence of
+        an interface-identifier of A, and 6.2.1 puts an import-part at the head
+        of every block -- so an import inside a procedure is contained by the
+        module-block or main-program-block around it, and it is that block the
+        supply is recorded against. Recording it against `owner` puts it on the
+        procedure, where 6.2.3.6's activation set never looks: the module then
+        compiles, resolves and is never commenced, so its initialization-part
+        does not run and its variables are read at zero. }
+      if curModule <> nil then supplied := curModule else supplied := programSym;
+      if (i^.owner <> nil) and (i^.owner <> supplied) then begin
         known := false;
-        e := owner^.importedFrom;
+        e := supplied^.importedFrom;
         while e <> nil do begin
           if e^.sym = i^.owner then known := true;
           e := e^.next
         end;
         if not known then
-          AppendSym(owner^.importedFrom, owner^.importedTail, i^.owner)
+          AppendSym(supplied^.importedFrom, supplied^.importedTail, i^.owner)
       end;
 
       ifaceSym := NewSymbol;

@@ -2374,13 +2374,22 @@ void Sema::checkImports(const std::vector<ImportSpec> &specs, Symbol *owner) {
     else if (iface.name == "standardoutput")
       iface.items[0].sym = ensureStdFile(false);
 
-    if (iface.module && iface.module != owner) {
+    // §6.2.2.13 makes A supply B when B *contains* an applied occurrence of an
+    // interface-identifier of A, and §6.2.1 puts an import-part at the head of
+    // every block — so an import inside a procedure is contained by the
+    // module-block or main-program-block around it, and it is that block the
+    // supply is recorded against. Recording it against `owner` puts it on the
+    // procedure, where §6.2.3.6's activation set never looks: the module then
+    // compiles, resolves and is never commenced, so its initialization-part
+    // does not run and its variables are read at zero.
+    Symbol *supplied = curModule_ ? curModule_ : program_;
+    if (iface.module && iface.module != supplied) {
       bool known = false;
-      for (Symbol *s : owner->importedFrom)
+      for (Symbol *s : supplied->importedFrom)
         if (s == iface.module)
           known = true;
       if (!known)
-        owner->importedFrom.push_back(iface.module);
+        supplied->importedFrom.push_back(iface.module);
     }
 
     Symbol *ifaceSym = newSymbol();
