@@ -294,6 +294,20 @@ cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
   using `write` without `output` is the error §6.10 says it is.
 - Standard input is opened but not read until the program first asks, or every
   program listing `input` would block before its first statement.
+- **A file need not be an entire variable** (ADR-0070). §6.5.1's own example is
+  `pooltape : array [1..4] of FileOfInteger`, so the prologue walks each
+  variable's *type* and prepares every file it holds — a record over its
+  fields, an array with a real loop, because a length may be a discriminant's
+  and an unrolled run may be enormous. `new` does the same to what it
+  allocated and `dispose` closes it. Selecting frame variables by `isFile`
+  rather than by "holds a file" left such a file with a zeroed `struct
+  pas_file` and segfaulted on the first `f^`, in both compilers and both
+  standards, with nothing in the corpus to notice.
+  - **A file may not be a field of a variant part**, which §6.4.3.4 permits: a
+    file's storage carries a heap buffer and a place on the runtime's
+    open-file list, so two arms holding files at one address would leak the
+    first buffer and link one list node twice. The one shape where "which
+    arm's file is this" has no answer at block entry.
 - A block exit closes the files the block declared, and also frees the buffer
   variable a `file of T` allocated. Pascal has no early return, so the single
   exit point each body already has is the epilogue. A *local* `goto` cannot
@@ -429,6 +443,14 @@ in one language or the other, and the standard is a property of the source.
   lowering is unchanged: an otherwise-part is *what the default block holds*.
   A case with no otherwise-part still traps, and `tests/trap_case.pas` is what
   says so.
+- **The `;` before `otherwise` is optional**, in both the case statement
+  (§6.9.3.5) and the variant part (§6.4.3.4): each writes the completer as
+  `[ [ ';' ] ...completer ]`, and §6.9.3.5's own Example 1 omits it. Both arm
+  loops broke out when a `;` did not follow, so the standard's own example was
+  a syntax error until the grammar sweep compiled it. Under ISO 7185
+  `otherwise` is an ordinary identifier and never that token, so testing for
+  the word-symbol costs that standard nothing —
+  `tests/extended/otherwise_nosemi.pas` is the example transcribed.
 - **The same word ends a variant part** (ADR-0034): `otherwise (fields)` is the
   arm every tag value the labelled arms leave selects. It is an arm with no
   labels — numbered, pathed and laid out like the rest — so **codegen is
