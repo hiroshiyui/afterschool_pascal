@@ -952,6 +952,30 @@ void pas_bind(void *v, const char *name, int len) {
 /* §6.7.5.6: "If the attempt is successful, the variable shall become
  * totally-undefined." NOTE 7 permits it on a variable that is not bound, so
  * there is nothing to report when there was nothing to undo. */
+/* ISO/IEC 10206:1991 6.7.5.7: "Following execution of the control procedure
+ * halt within an activation of a program, no further processing (see 3.6) of
+ * the activation of the program shall occur."
+ *
+ * A halt leaves every block on the way out without running its epilogue, so
+ * the files those blocks declared are closed here instead — the same
+ * obligation ADR-0032's non-local goto discharges, and through the same list,
+ * because "still open" and "abandoned" are the same set once nothing further
+ * will run. 3.6's normal termination is a zero exit status; a halt is not an
+ * error. */
+void pas_halt(void) {
+  /* pas_file_done unlinks as it goes, so this drains the list; the standard
+   * files return early from it without being unlinked, which is why the loop
+   * takes the head each time and stops when only they remain. */
+  struct pas_file *f = pas_open_files;
+  while (f) {
+    struct pas_file *next = f->next_open;
+    pas_file_done(f);
+    f = next;
+  }
+  fflush(NULL);
+  exit(0);
+}
+
 void pas_unbind(void *v) {
   struct pas_file *f = v;
   if (f->fp && f->binding == PAS_BIND_ARG) {
@@ -982,11 +1006,6 @@ const char *pas_binding_name(void *v) {
 int pas_binding_namelen(void *v) {
   struct pas_file *f = v;
   return f->bound_name ? (int)strlen(f->bound_name) : 0;
-}
-
-void pas_halt(int code) {
-  fflush(stdout);
-  exit(code);
 }
 
 /* ---------------------------------------------------------------- complex

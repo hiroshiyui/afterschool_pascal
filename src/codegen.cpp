@@ -1669,6 +1669,15 @@ void CodeGen::emitTupleCheck(Expr *dst, Expr *src) {
 /// domain; `dispose(p)` gives that storage back. The size is a compile-time
 /// constant because the domain type is.
 void CodeGen::emitStdProc(ProcCallStmt *s) {
+  // §6.7.5.7's `halt` is the one required procedure that takes no arguments,
+  // so it is answered before the address of the first one is taken. The
+  // runtime closes what is open and stops; nothing here knows which blocks
+  // were abandoned, and it does not need to — the open-file list is the same
+  // one ADR-0032's non-local goto walks, for the same reason.
+  if (s->standard == StdProc::Halt) {
+    b_.CreateCall(rt("pas_halt", llvm::Type::getVoidTy(ctx_), {}), {});
+    return;
+  }
   Expr *arg = s->args[0].get();
   llvm::Value *slot = emitAddress(arg);
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
@@ -2269,6 +2278,9 @@ llvm::Value *CodeGen::emitSetBinary(Binary *e, llvm::Value *l,
   case BinOp::Add: return b_.CreateOr(l, r, "union");
   case BinOp::Mul: return b_.CreateAnd(l, r, "inter");
   case BinOp::Sub: return b_.CreateAnd(l, b_.CreateNot(r), "diff");
+  // ISO/IEC 10206:1991 §6.8.3.4's symmetric difference: the members of exactly
+  // one operand, which is `xor` and needs no more saying than the other three.
+  case BinOp::SymDiff: return b_.CreateXor(l, r, "symdiff");
   case BinOp::Eq:  return b_.CreateICmpEQ(l, r, "seteq");
   case BinOp::Ne:  return b_.CreateICmpNE(l, r, "setne");
   case BinOp::Le:
@@ -2973,6 +2985,26 @@ llvm::Value *CodeGen::emitCall(Call *e) {
     // which type that is decides where the ends are: `blue` for an
     // enumeration, 9 for a subrange 1..9, maxint for an integer.
     bool up = e->builtin == Builtin::Succ;
+    // ISO/IEC 10206:1991 §6.7.6.4's `succ(x, k)`, and `pred(x, k)` which the
+    // clause defines as `succ(x, -(k))`. The step is computed in i32 whatever
+    // the ordinal's width, because `ord(x) + k` may leave the type in either
+    // direction and the check is a *range* rather than the one-ended
+    // comparison a step of 1 needs — so the arithmetic must not wrap before it
+    // is looked at.
+    if (e->args.size() == 2) {
+      llvm::Value *k = emitExpr(e->args[1].get());
+      llvm::Value *wide =
+          at->isSignedOrdinal() ? b_.CreateSExt(a, i32()) : b_.CreateZExt(a, i32());
+      llvm::Value *sum = up ? b_.CreateAdd(wide, k, "succ.k")
+                            : b_.CreateSub(wide, k, "pred.k");
+      llvm::Value *lo = ConstantInt::getSigned(i32(), at->ordinalLo());
+      llvm::Value *hi = ConstantInt::getSigned(i32(), at->ordinalHi());
+      emitTrapIf(b_.CreateOr(b_.CreateICmpSLT(sum, lo),
+                             b_.CreateICmpSGT(sum, hi), "step.bad"),
+                 std::string(up ? "succ" : "pred") +
+                     ": the result is not a value of " + at->name());
+      return a->getType() == i32() ? sum : b_.CreateTrunc(sum, a->getType());
+    }
     long long end = up ? at->ordinalHi() : at->ordinalLo();
     llvm::Value *limit = at->isSignedOrdinal()
                              ? ConstantInt::getSigned(a->getType(), end)
@@ -2985,6 +3017,14 @@ llvm::Value *CodeGen::emitCall(Call *e) {
     llvm::Value *one = ConstantInt::get(a->getType(), 1);
     return up ? b_.CreateAdd(a, one, "succ") : b_.CreateSub(a, one, "pred");
   }
+  // §6.7.6.3's `card`: the number of members. Every set is one 256-bit word
+  // (ADR-0028), so this is a population count and the standard's "error if no
+  // such value of integer-type exists" cannot arise — the answer is at most
+  // 256.
+  case Builtin::Card:
+    return b_.CreateTrunc(
+        b_.CreateUnaryIntrinsic(Intrinsic::ctpop, a, nullptr, "card"), i32(),
+        "card.i32");
   case Builtin::Sqrt:
     return intrinsicCall(Intrinsic::sqrt, {toReal(a, at)});
   case Builtin::Sin:

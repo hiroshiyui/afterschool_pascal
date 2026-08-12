@@ -1604,6 +1604,9 @@ ExprPtr Parser::parseSimpleExpr() {
     case Tok::KwOr:  op = BinOp::Or; break;
     // and `or else` among the adding-operators, beside `or`
     case Tok::KwOrElse: op = BinOp::OrElse; break;
+    // §6.8.3.4 makes `><` an adding-operator, beside the `+` and `-` that are
+    // already union and difference on sets.
+    case Tok::GtLt: op = BinOp::SymDiff; break;
     default:         return result;
     }
     depth.bump();

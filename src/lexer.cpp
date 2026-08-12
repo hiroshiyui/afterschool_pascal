@@ -38,6 +38,7 @@ const char *tokenName(Tok t) {
   case Tok::Lt: return "'<'";
   case Tok::Le: return "'<='";
   case Tok::Gt: return "'>'";
+  case Tok::GtLt: return "'><'";
   case Tok::Ge: return "'>='";
   case Tok::KwAnd: return "'and'";
   case Tok::KwArray: return "'array'";
@@ -549,6 +550,15 @@ std::vector<Token> Lexer::tokenize() {
       break;
     case '>':
       if (peek() == '=') { advance(); out.push_back(make(Tok::Ge, sl, sc)); }
+      // ISO/IEC 10206:1991 §6.1.2 spells the set symmetric difference `><`.
+      // Under ISO 7185 the two characters can only be `>` followed by `<`,
+      // which no expression admits — `a > <b` is not a program — so the
+      // standard gate is here rather than in the parser, and one token comes
+      // out instead of a cascade.
+      else if (peek() == '<' && std_ == Std::Extended) {
+        advance();
+        out.push_back(make(Tok::GtLt, sl, sc));
+      }
       else out.push_back(make(Tok::Gt, sl, sc));
       break;
     default:

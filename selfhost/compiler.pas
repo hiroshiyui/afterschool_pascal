@@ -116,7 +116,7 @@ type
     { And the one operator ISO/IEC 10206:1991 spells in symbols. It is scanned
       under both standards and refused under ISO 7185, where no valid program
       can hold two adjacent stars outside a comment or a string anyway. }
-    tkStarStar,
+    tkStarStar, tkGtLt,
     { 6.11.2's renaming, in an export-clause and an import-clause alike.
       Scanned under both standards for the reason `**` is: no valid ISO 7185
       program can hold `=>`, so consuming it and refusing it yields one
@@ -184,6 +184,11 @@ type
     thrown away the one fact that says which. }
   binaryOp = (opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
               opExp, opPow, opAndThen, opOrElse,
+              { 6.8.3.4's set symmetric difference: the members of exactly one
+                operand. An *adding*-operator like the + and - that are already
+                union and difference on sets, and one instruction for the same
+                reason. }
+              opSymDiff,
               opEq, opNe, opLt, opLe, opGt, opGe, opIn);
   unaryOp = (opPos, opNeg, opNot);
 
@@ -284,6 +289,11 @@ type
                    standard gives the type no literal -- and re, im and arg are
                    the only way back out to a real. }
                  biCmplx, biPolar, biRe, biIm, biArg,
+                 { 6.7.6.3's card(x): the number of members of a set. One
+                   instruction, and the standard's "error if no such value of
+                   integer-type exists" cannot arise -- every set is 256 bits,
+                   so the count is at most 256 (ADR-0028). }
+                 biCard,
                  { 6.7.6.6's direct-access position functions and 6.7.6.5's
                    `empty`. All three take a file variable, so they join eof
                    and eoln in taking an *address* rather than a value. }
@@ -308,7 +318,11 @@ type
                  spSeekRead, spSeekWrite, spSeekUpdate, spUpdate, spExtend,
                  { 6.7.5.6's binding procedures. bind attaches a variable to an
                    entity outside the program and unbind detaches it. }
-                 spBind, spUnbind);
+                 spBind, spUnbind,
+                 { 6.7.5.7's control procedure: "no further processing of the
+                   activation of the program shall occur". A required
+                   *identifier*, so a program may declare its own halt. }
+                 spHalt);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -2065,6 +2079,14 @@ begin
   end
   else if c = '>' then begin
     if Peek(0) = '=' then begin Advance; AddSimple(sl, sc, tkGe) end
+    { 6.1.2 spells the set symmetric difference `><`. Under ISO 7185 the two
+      characters can only be `>` followed by `<`, which no expression admits --
+      `a > <b` is not a program -- so the standard gate is here rather than in
+      the parser, and one token comes out instead of a cascade. }
+    else if (Peek(0) = '<') and (langStd = stdExtended) then begin
+      Advance;
+      AddSimple(sl, sc, tkGtLt)
+    end
     else AddSimple(sl, sc, tkGt)
   end
   else begin
@@ -2181,6 +2203,7 @@ begin
     tkOnly:      write('''only''');
     tkQualified: write('''qualified''');
     tkStarStar:  write('''**''');
+    tkGtLt:      write('''><''');
     tkAndThen:   write('''and then''');
     tkOrElse:    write('''or else''')
   end
@@ -2202,6 +2225,7 @@ begin
     tkNotEq: write('<>');     tkLt: write('<');
     tkLe: write('<=');        tkGt: write('>');
     tkGe: write('>=');    tkStarStar: write('**');
+    tkGtLt: write('><');
     tkArrow: write('=>');
     tkEof, tkIdent, tkInt, tkReal, tkStr, tkAnd, tkArray, tkBegin, tkCase,
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
@@ -3431,6 +3455,9 @@ begin
     else if Check(tkOr) then op := opOr
     { and `or else` among the adding-operators, beside `or` }
     else if Check(tkOrElse) then op := opOrElse
+    { 6.8.3.4 makes >< an adding-operator, beside the + and - that are already
+      union and difference on sets. }
+    else if Check(tkGtLt) then op := opSymDiff
     else done := true;
     if not done then begin
       levels := levels + 1;
@@ -5889,7 +5916,7 @@ begin
           their host languages do, and the wrapped form would compute the very
           same value -- so no test could ever tell the two spellings apart. }
         out := a mod b;
-    opRealDiv, opAnd, opOr, opExp, opPow, opAndThen, opOrElse,
+    opRealDiv, opAnd, opOr, opExp, opPow, opAndThen, opOrElse, opSymDiff,
     opEq, opNe, opLt, opLe, opGt, opGe, opIn:
       ok := false
   end;
@@ -6068,7 +6095,7 @@ begin
                   opGt: res.boolVal := a > c;
                   opGe: res.boolVal := a >= c;
                   opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-                  opExp, opPow, opAndThen, opOrElse, opIn: ;
+                  opExp, opPow, opAndThen, opOrElse, opSymDiff, opIn: ;
                 end;
                 ok := true
               end;
@@ -6162,9 +6189,9 @@ begin
             end;
           biNone, biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc,
           biRound, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
-          biPosition, biLastPosition, biEmpty, biLength, biIndex, biSubstr,
-          biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe,
-          biBinding: ;
+          biPosition, biLastPosition, biEmpty, biCard, biLength, biIndex,
+          biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
+          biStrGe, biBinding: ;
         end;
   EvalConstCall := ok
 end;
@@ -8693,6 +8720,7 @@ begin
     opPow:     write('pow');
     opAndThen: write('and then');
     opOrElse:  write('or else');
+    opSymDiff: write('><');
     opEq:      write('=');
     opNe:      write('<>');
     opLt:      write('<');
@@ -8873,6 +8901,20 @@ begin
 
       { 6.8.3.3 gives all four the same operands and the same result; they
         part company only over whether the right one is *evaluated*. }
+      { 6.8.3.4 puts >< among the adding-operators with + and -, and it takes
+        sets and nothing else -- where the other three are also arithmetic. }
+      opSymDiff: begin
+        if not IsSet(l) or not IsSet(r) then begin
+          BadOperands(b, l, r, 'set         ');
+          b^.ntype := emptySetType
+        end
+        else if not Assignable(l, r) and not Assignable(r, l) then begin
+          BadOperands(b, l, r, 'compatible  ');
+          if IsSet(l) then b^.ntype := l else b^.ntype := r
+        end
+        else if IsEmptySet(l) then b^.ntype := r
+        else b^.ntype := l
+      end;
       opAnd, opOr, opAndThen, opOrElse: begin
         if not IsBoolean(l) or not IsBoolean(r) then
           BadOperands(b, l, r, 'boolean     ');
@@ -9031,6 +9073,7 @@ begin
   { 6.7.6.2 and 6.7.6.3. Looked up under both standards and refused under
     ISO 7185 where the call is checked: a valid ISO 7185 program may declare a
     function called `re`, so the *name* is not reserved. }
+  else if PoolIs(at, len, 'card     ') then LookupBuiltin := biCard
   else if PoolIs(at, len, 'cmplx    ') then LookupBuiltin := biCmplx
   else if PoolIs(at, len, 'polar    ') then LookupBuiltin := biPolar
   else if PoolIs(at, len, 're       ') then LookupBuiltin := biRe
@@ -9139,7 +9182,7 @@ end;
 
 procedure CheckCall(c: nodePtr);
 var sym: symPtr; a, def, last, root: nodePtr; t: typePtr;
-    n, at2, len2: integer; bad: boolean;
+    n, at2, len2: integer; bad, stepped: boolean;
 begin
   { 6.11.3's qualified name. A required function is never one of the answers,
     so this returns whatever the interface holds or nothing at all. }
@@ -9190,7 +9233,7 @@ begin
     if (langStd = stdIso7185) and
        (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin) or
         IsStringBuiltin(c^.clBuiltin) or
-        IsBindingBuiltin(c^.clBuiltin)) then begin
+        IsBindingBuiltin(c^.clBuiltin) or (c^.clBuiltin = biCard)) then begin
       ErrorAt(c^.line, c^.col);
       write('''');
       WritePool(c^.clAt, c^.clLen);
@@ -9219,6 +9262,18 @@ begin
         last := a;
         a := a^.next
       end;
+      stepped := (langStd = stdExtended) and (n = 2) and
+                 ((c^.clBuiltin = biSucc) or (c^.clBuiltin = biPred));
+      if stepped then
+        if last^.ntype <> nil then
+          if not IsInteger(last^.ntype) then begin
+            ErrorAt(last^.line, last^.col);
+            write('the second argument of ''');
+            WritePool(c^.clAt, c^.clLen);
+            write(''' is how far to step, and must be an integer, found ');
+            WriteTypeName(last^.ntype);
+            writeln
+          end;
 
       { `eof` and `eoln` are the only required functions whose argument may be
         left out, and the only ones taking a file (ISO 7185 6.6.6.5). The
@@ -9412,6 +9467,11 @@ begin
           end
         end
       end
+      { 6.7.6.4: succ(x, k) and pred(x, k) take a second, integer argument --
+        "a value whose ordinal number is ord(x) + k" -- and the one-argument
+        forms are defined as succ(x, 1) and succ(x, -1). They are the only
+        required functions here whose arity is not exactly one, so the gate
+        says so rather than being moved. }
       { 6.7.6.3: cmplx(x, y) and polar(r, t) are the two-argument required
         functions, and the only way to write a complex value at all -- the
         standard gives the type no literal. }
@@ -9439,11 +9499,15 @@ begin
           end
         end
       end
-      else if n <> 1 then begin
+      else if (n <> 1) and not stepped then begin
         ErrorAt(c^.line, c^.col);
         write('''');
         WritePool(c^.clAt, c^.clLen);
-        writeln(''' takes exactly one argument');
+        write(''' takes exactly one argument');
+        if (c^.clBuiltin = biSucc) or (c^.clBuiltin = biPred) then
+          writeln(', or two under --std=extended')
+        else
+          writeln;
         c^.ntype := intType
       end
       else begin
@@ -9453,6 +9517,13 @@ begin
             and so a real -- the one function in the table whose result kind
             changes rather than following its operand. `sqr` keeps its
             operand's type, complex included. }
+          { 6.7.6.3: "this function shall return a result of integer-type that
+            shall equal the number of members of the value of the expression
+            x." }
+          biCard: begin
+            RequireArg(c, IsSet(t), 'a set       ', t);
+            c^.ntype := intType
+          end;
           biAbs: begin
             RequireArg(c, IsArith(t), 'a numeric   ', t);
             if IsComplex(t) or IsReal(t) then c^.ntype := realType
@@ -10128,13 +10199,16 @@ begin
   end
 end;
 
-{ ISO/IEC 10206:1991 6.7.5.2's five. They are required *identifiers* like the
-  complex functions, not word-symbols, so a valid ISO 7185 program may declare
-  a procedure called `update` -- which is why they are recognised only under
-  the standard that has them and only when no declaration was found. }
-function IsDirectAccessProc(at, len: integer): boolean;
+{ The required procedures ISO/IEC 10206:1991 adds: 6.7.5.2's five direct-access
+  ones, 6.7.5.6's two binding ones and 6.7.5.7's halt. All are required
+  *identifiers* like the complex functions, not word-symbols, so a valid ISO
+  7185 program may declare a procedure called `update` or `halt` -- which is
+  why they are recognised only under the standard that has them, and only when
+  no declaration of the name was found. }
+function IsRequiredProc(at, len: integer): boolean;
 begin
-  IsDirectAccessProc := PoolIsWide(at, len, 'bind            ') or
+  IsRequiredProc := PoolIsWide(at, len, 'halt            ') or
+                        PoolIsWide(at, len, 'bind            ') or
                         PoolIsWide(at, len, 'unbind          ') or
                         PoolIsWide(at, len, 'seekread        ') or
                         PoolIsWide(at, len, 'seekwrite       ') or
@@ -10172,6 +10246,8 @@ begin
     p^.pcStd := spBind
   else if PoolIsWide(p^.pcAt, p^.pcLen, 'unbind          ') then
     p^.pcStd := spUnbind
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'halt            ') then
+    p^.pcStd := spHalt
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -10187,6 +10263,19 @@ begin
     a := a^.next
   end;
 
+  { 6.7.5.7: "Following execution of the control procedure halt ... no further
+    processing of the activation of the program shall occur." It takes nothing,
+    and everything about *how* it stops belongs to the runtime -- the files a
+    block exit would have closed are closed there instead, because a halt skips
+    every epilogue on the way out exactly as a non-local goto skips the ones it
+    jumps past (ADR-0032). }
+  if p^.pcStd = spHalt then begin
+    if n <> 0 then begin
+      ErrorAt(p^.line, p^.col);
+      writeln('''halt'' takes no arguments')
+    end
+  end
+  else
   { 6.7.5.2: SeekRead(f, n), SeekWrite(f, n) and SeekUpdate(f, n) take a
     direct-access file and a position; update(f) and extend(f) take a file
     alone. Only extend works on a sequential one. }
@@ -10724,7 +10813,7 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'get      ') or
             PoolIs(s^.pcAt, s^.pcLen, 'put      ') or
             ((langStd = stdExtended) and
-             IsDirectAccessProc(s^.pcAt, s^.pcLen))) then
+             IsRequiredProc(s^.pcAt, s^.pcLen))) then
           CheckStdProc(s)
         else if sym = nil then begin
           ErrorAt(s^.line, s^.col);
@@ -12169,6 +12258,17 @@ begin
   s^.stype := intType;
   s^.intVal := maxint;
 
+  { 6.4.2.2 d): "The value of maxchar shall be the largest value of
+    char-type." A char here is a byte (ADR-0021), so it is 255 -- and it is a
+    required *identifier* declared in the outermost scope, which a program may
+    shadow, rather than a word-symbol. }
+  if langStd = stdExtended then begin
+    InternWord('maxchar  ', at, len);
+    s := Declare(at, len, skConst, 0, 0);
+    s^.stype := charType;
+    s^.charVal := chr(setLimit)
+  end;
+
   { ISO/IEC 10206:1991 6.4.3.3.3: "There shall be a schema that is denoted by
     the required schema-identifier `string`. The schema `string` shall have one
     formal discriminant denoted by the required discriminant-identifier
@@ -12790,6 +12890,7 @@ begin
     opPow:     write('pow');
     opAndThen: write('andthen');
     opOrElse:  write('orelse');
+    opSymDiff: write('symdiff');
     opEq:      write('eq');
     opNe:      write('ne');
     opLt:      write('lt');
@@ -13963,7 +14064,7 @@ begin
       end;
       tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
       tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
-      tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar, tkArrow: begin
+      tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar, tkGtLt, tkArrow: begin
         write('op ');
         WriteOperator(tok[i].kind);
         writeln
@@ -15697,6 +15798,16 @@ begin
       PutOp(r);
       writeln(ircode)
     end;
+    { 6.8.3.4's symmetric difference: the members of exactly one operand, which
+      is xor and needs no more saying than the other three. }
+    opSymDiff: begin
+      Def(v);
+      write(ircode, 'xor i', setBits:1, ' ');
+      PutOp(l);
+      write(ircode, ', ');
+      PutOp(r);
+      writeln(ircode)
+    end;
     opSub: begin
       OpInt(-1, ones);
       Def(notR);
@@ -16067,7 +16178,7 @@ begin
     opGt: write(ircode, 'icmp sgt i32 ');
     opGe: write(ircode, 'icmp sge i32 ');
     opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-            opExp, opPow, opAndThen, opOrElse:
+            opExp, opPow, opAndThen, opOrElse, opSymDiff:
       write(ircode, 'icmp eq i32 ')
   end;
   PutOp(cmp);
@@ -16291,7 +16402,7 @@ begin
       because 6.8.3.5 gives them "any simple-type except complex-type" and
       there is no order on the complex numbers to give them. }
     opEq, opNe, opLt, opLe, opGt, opGe, opIntDiv, opMod, opAnd, opOr,
-    opAndThen, opOrElse, opIn, opExp, opPow: begin
+    opAndThen, opOrElse, opSymDiff, opIn, opExp, opPow: begin
       ReOf(l, a); ImOf(l, b_); ReOf(r, c_); ImOf(r, d_);
       Def(ac);
       write(ircode, 'fcmp oeq double ');
@@ -16587,7 +16698,7 @@ begin
     opGt: write(ircode, 'sgt');
     opGe: write(ircode, 'sge');
     opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr, opAndThen,
-    opOrElse, opIn, opExp, opPow: write(ircode, 'eq')
+    opOrElse, opSymDiff, opIn, opExp, opPow: write(ircode, 'eq')
   end;
   write(ircode, ' i32 ');
   PutOp(cmp);
@@ -16804,7 +16915,7 @@ begin
             opGt: write(ircode, 'fcmp ogt double ');
             opGe: write(ircode, 'fcmp oge double ');
             opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-            opExp, opPow, opAndThen, opOrElse:
+            opExp, opPow, opAndThen, opOrElse, opSymDiff:
               write(ircode, 'fcmp oeq double ')
           end
         end
@@ -16826,7 +16937,7 @@ begin
             opGe: if sign then write(ircode, 'icmp sge ')
                   else write(ircode, 'icmp uge ');
             opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
-            opExp, opPow, opAndThen, opOrElse:
+            opExp, opPow, opAndThen, opOrElse, opSymDiff:
               write(ircode, 'icmp eq ')
           end;
           if IsPointer(lt) and IsPointer(rt) then write(ircode, 'ptr')
@@ -16908,7 +17019,7 @@ begin
 end;
 
 procedure EmitCall(e: nodePtr; var v: str);
-var a, w, lim, tmp, b_, re, im, x, y, c_, d_: str;
+var a, w, lim, tmp, b_, re, im, x, y, c_, d_, k_, sum: str;
     at, idx: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
@@ -17017,7 +17128,8 @@ begin
       biNone, biAbs, biSqr, biOdd, biOrd, biChr, biSucc, biPred, biSqrt,
       biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound, biEof, biEoln,
       biCmplx, biPolar, biRe, biIm, biArg, biPosition, biLastPosition,
-      biEmpty, biLength, biIndex, biSubstr, biTrim: write(ircode, 'eq')
+      biEmpty, biCard, biLength, biIndex, biSubstr, biTrim:
+        write(ircode, 'eq')
     end;
     write(ircode, ' i32 ');
     PutOp(w);
@@ -17197,8 +17309,8 @@ begin
         biArcTan: ComplexCall('pas_carctan     ', a, v);
         biNone, biOdd, biOrd, biChr, biSucc, biPred, biTrunc, biRound,
         biEof, biEoln, biCmplx, biPolar, biPosition, biLastPosition, biEmpty,
-        biLength, biIndex, biSubstr, biTrim, biStrEq, biStrNe, biStrLt,
-        biStrGt, biStrLe, biStrGe:
+        biLength, biIndex, biSubstr, biTrim, biCard, biStrEq, biStrNe,
+        biStrLt, biStrGt, biStrLe, biStrGe:
           OpWord('undef           ', v)
       end
     else
@@ -17280,11 +17392,89 @@ begin
         PutOp(a);
         writeln(ircode, ' to i8')
       end;
+      { 6.7.6.3's card: a population count over the 256-bit word every set is
+        (ADR-0028), so the standard's "error if no such value of integer-type
+        exists" cannot arise -- the answer is at most 256. }
+      biCard: begin
+        Def(w);
+        write(ircode, 'call i', setBits:1, ' @llvm.ctpop.i', setBits:1,
+              '(i', setBits:1, ' ');
+        PutOp(a);
+        writeln(ircode, ')');
+        Def(v);
+        write(ircode, 'trunc i', setBits:1, ' ');
+        PutOp(w);
+        writeln(ircode, ' to i32')
+      end;
       biSucc, biPred: begin
         { succ and pred are errors at the ends of the ordinal type (6.6.6.4),
           and which type that is decides where the ends are: `blue` for an
           enumeration, 9 for a subrange 1..9, maxint for an integer. }
         isSucc := e^.clBuiltin = biSucc;
+        { 6.7.6.4's succ(x, k), and pred(x, k) which the clause defines as
+          succ(x, -(k)). The step is computed in i32 whatever the ordinal's
+          width, because ord(x) + k may leave the type in either direction and
+          the check is a *range* rather than the one-ended comparison a step of
+          1 needs -- so the arithmetic must not wrap before it is looked at. }
+        if e^.clArgs^.next <> nil then begin
+          EmitExpr(e^.clArgs^.next, k_);
+          if IsChar(at) or IsBoolean(at) then begin
+            Def(w);
+            write(ircode, 'zext ');
+            PutLlType(at);
+            write(ircode, ' ');
+            PutOp(a);
+            writeln(ircode, ' to i32')
+          end
+          else
+            w := a;
+          Def(sum);
+          if isSucc then write(ircode, 'add i32 ') else write(ircode, 'sub i32 ');
+          PutOp(w);
+          write(ircode, ', ');
+          PutOp(k_);
+          writeln(ircode);
+          OpInt(OrdinalLo(at), lim);
+          Def(w);
+          write(ircode, 'icmp slt i32 ');
+          PutOp(sum);
+          write(ircode, ', ');
+          PutOp(lim);
+          writeln(ircode);
+          OpInt(OrdinalHi(at), lim);
+          Def(tmp);
+          write(ircode, 'icmp sgt i32 ');
+          PutOp(sum);
+          write(ircode, ', ');
+          PutOp(lim);
+          writeln(ircode);
+          Def(lim);
+          write(ircode, 'or i1 ');
+          PutOp(w);
+          write(ircode, ', ');
+          PutOp(tmp);
+          writeln(ircode);
+          MsgStart;
+          if isSucc then MsgText('succ                                    ')
+          else MsgText('pred                                    ');
+          MsgText(':                                       ');
+          Put(' ');
+          MsgText('the result is not a value of            ');
+          Put(' ');
+          WriteTypeName(at);
+          msg := MsgEnd;
+          EmitTrapIf(lim, msg);
+          if LlSize(at) = 4 then v := sum
+          else begin
+            Def(v);
+            write(ircode, 'trunc i32 ');
+            PutOp(sum);
+            write(ircode, ' to ');
+            PutLlType(at);
+            writeln(ircode)
+          end
+        end
+        else begin
         if isSucc then up := OrdinalHi(at) else up := OrdinalLo(at);
         OpInt(up, lim);
         Def(w);
@@ -17317,6 +17507,7 @@ begin
         write(ircode, ' ');
         PutOp(a);
         writeln(ircode, ', 1')
+        end
       end;
       biSqrt, biSin, biCos, biLn, biExp, biArcTan: begin
         ToReal(a, at);
@@ -18192,6 +18383,14 @@ procedure EmitStdProc(s: nodePtr);
 var slot, block, raw, rec, nameRec, nlen, ndata: str;
     domain, idx: typePtr; head, msg: integer;
 begin
+  { 6.7.5.7's halt is the one required procedure that takes no arguments, so it
+    is answered before the address of the first one is taken. The runtime
+    closes what is open and stops; nothing here knows which blocks were
+    abandoned, and it does not need to -- the open-file list is the same one
+    ADR-0032's non-local goto walks, for the same reason. }
+  if s^.pcStd = spHalt then
+    writeln(ircode, '  call void @pas_halt()')
+  else begin
   EmitAddress(s^.pcArgs, slot);
   case s^.pcStd of
     { 6.7.5.6's bind(f, b). The binding is implementation-defined and here it
@@ -18340,7 +18539,8 @@ begin
       PutOp(slot);
       writeln(ircode)
     end;
-    spNone: { not a standard procedure }
+    spNone, spHalt: { spHalt was answered above; spNone is not a standard one }
+  end
   end
 end;
 
@@ -19437,6 +19637,7 @@ begin
   { ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8's binding operations. }
   writeln(ircode, 'declare void @pas_bind(ptr, ptr, i32)');
   writeln(ircode, 'declare void @pas_unbind(ptr)');
+  writeln(ircode, 'declare void @pas_halt()');
   writeln(ircode, 'declare i32 @pas_binding_bound(ptr)');
   writeln(ircode, 'declare ptr @pas_binding_name(ptr)');
   writeln(ircode, 'declare i32 @pas_binding_namelen(ptr)');
@@ -19477,6 +19678,8 @@ begin
     and the message for a subscript outside its bounds names bounds the
     compiler never had. }
   writeln(ircode, 'declare void @llvm.memcpy.p0.p0.i32(ptr, ptr, i32, i1)');
+  writeln(ircode, 'declare i', setBits:1, ' @llvm.ctpop.i', setBits:1,
+          '(i', setBits:1, ')');
   writeln(ircode, 'declare void @pas_index_error(i32, i32)');
   { 6.4.6 d): an assignment between two types produced from one schema with
     different tuples. The schema and the discriminant are named here; only the

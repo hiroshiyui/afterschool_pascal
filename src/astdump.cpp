@@ -33,6 +33,7 @@ const char *binOpName(BinOp op) {
   case BinOp::Pow: return "pow";
   case BinOp::AndThen: return "andthen";
   case BinOp::OrElse: return "orelse";
+  case BinOp::SymDiff: return "symdiff";
   case BinOp::Eq: return "eq";
   case BinOp::Ne: return "ne";
   case BinOp::Lt: return "lt";

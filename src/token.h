@@ -21,6 +21,8 @@ enum class Tok {
   // under both standards and refused under ISO 7185, where no valid program
   // can contain two adjacent stars outside a comment or a string anyway.
   StarStar,
+  /// ISO/IEC 10206:1991 §6.8.3.4's set symmetric difference.
+  GtLt,
   LParen, RParen, LBracket, RBracket, Caret,
   Eq, NotEq, Lt, Le, Gt, Ge,
   /// ISO/IEC 10206:1991 §6.11.2's renaming, in an export-clause and in an

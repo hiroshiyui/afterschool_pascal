@@ -447,7 +447,7 @@ private:
   void checkCase(CaseStmt *c);
   /// `new` and `dispose`, which are procedures rather than functions and so
   /// never reach checkCall.
-  static bool isDirectAccessProc(const std::string &name);
+  static bool isRequiredProc(const std::string &name);
   void checkStdProc(ProcCallStmt *p);
   void checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                       int col);

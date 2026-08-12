@@ -21,6 +21,7 @@ const char *opName(BinOp op) {
   case BinOp::Pow: return "pow";
   case BinOp::AndThen: return "and then";
   case BinOp::OrElse: return "or else";
+  case BinOp::SymDiff: return "><";
   case BinOp::Eq: return "=";
   case BinOp::Ne: return "<>";
   case BinOp::Lt: return "<";
@@ -58,6 +59,7 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       // ISO 7185 program may declare a function called `re`, so the *name* is
       // not reserved — the refusal happens where the call is checked, and only
       // when no declaration of that name was found.
+      {"card", Builtin::Card},
       {"cmplx", Builtin::Cmplx}, {"polar", Builtin::Polar},
       {"re", Builtin::Re},       {"im", Builtin::Im},
       {"arg", Builtin::Arg},
@@ -1614,6 +1616,17 @@ void Sema::installPredefined() {
   Symbol *m = declare("maxint", SymKind::Const, 0, 0);
   m->type = ty::Int();
   m->intVal = kMaxInt;
+
+  // ISO/IEC 10206:1991 §6.4.2.2 d): "The value of maxchar shall be the largest
+  // value of char-type." A char here is a byte (ADR-0021), so it is 255 — and
+  // it is a required *identifier* declared in the outermost scope, which a
+  // program may shadow, rather than a word-symbol. Under ISO 7185 the name is
+  // an ordinary identifier and nothing declares it.
+  if (std_ == Std::Extended) {
+    Symbol *mc = declare("maxchar", SymKind::Const, 0, 0);
+    mc->type = ty::Char();
+    mc->charVal = static_cast<char>(kSetLimit);
+  }
 
   // ISO/IEC 10206:1991 §6.4.3.3.3: "There shall be a schema that is denoted by
   // the required schema-identifier `string`. The schema `string` shall have
@@ -3607,7 +3620,7 @@ void Sema::checkStmt(Stmt *s) {
     if (!sym && (p->name == "new" || p->name == "dispose" ||
                  p->name == "reset" || p->name == "rewrite" ||
                  p->name == "get" || p->name == "put" ||
-                 (std_ == Std::Extended && isDirectAccessProc(p->name)))) {
+                 (std_ == Std::Extended && isRequiredProc(p->name)))) {
       checkStdProc(p);
       return;
     }
@@ -4065,7 +4078,15 @@ void Sema::checkBinary(Binary *b) {
     return;
   }
 
-  if (b->op == BinOp::Add || b->op == BinOp::Sub || b->op == BinOp::Mul) {
+  // §6.8.3.4 puts `><` among the adding-operators with `+` and `-`, and it
+  // takes sets and nothing else — where the other three are also arithmetic.
+  if (b->op == BinOp::SymDiff && !l->isSet() && !r->isSet()) {
+    bad("set");
+    b->type = ty::EmptySet();
+    return;
+  }
+  if (b->op == BinOp::Add || b->op == BinOp::Sub || b->op == BinOp::Mul ||
+      b->op == BinOp::SymDiff) {
     if (l->isSet() || r->isSet()) {
       if (!assignable(l, r) && !assignable(r, l)) {
         bad("compatible");
@@ -4399,14 +4420,16 @@ void Sema::checkRead(ReadStmt *r) {
   }
 }
 
-/// ISO/IEC 10206:1991 §6.7.5.2's five. They are required *identifiers* like
-/// the complex functions, not word-symbols, so a valid ISO 7185 program may
-/// declare a procedure called `update` — which is why they are recognised only
-/// under the standard that has them and only when no declaration was found.
-bool Sema::isDirectAccessProc(const std::string &name) {
+/// The required procedures ISO/IEC 10206:1991 adds: §6.7.5.2's five
+/// direct-access ones, §6.7.5.6's two binding ones and §6.7.5.7's `halt`. All
+/// are required *identifiers* like the complex functions, not word-symbols, so
+/// a valid ISO 7185 program may declare a procedure called `update` or `halt`
+/// — which is why they are recognised only under the standard that has them,
+/// and only when no declaration of the name was found.
+bool Sema::isRequiredProc(const std::string &name) {
   return name == "seekread" || name == "seekwrite" || name == "seekupdate" ||
          name == "update" || name == "extend" || name == "bind" ||
-         name == "unbind";
+         name == "unbind" || name == "halt";
 }
 
 void Sema::checkStdProc(ProcCallStmt *p) {
@@ -4417,6 +4440,20 @@ void Sema::checkStdProc(ProcCallStmt *p) {
   // `unbind(f)` takes the variable alone. Both are dynamic-violations on a
   // file variable that is not `bindable`, and this compiler restricts them to
   // file variables — the only external entity it has a meaning for.
+  // §6.7.5.7: "Following execution of the control procedure halt ... no
+  // further processing of the activation of the program shall occur." It takes
+  // nothing, and everything about *how* it stops belongs to the runtime — the
+  // files a block exit would have closed are closed there instead, because a
+  // halt skips every epilogue on the way out exactly as a non-local goto skips
+  // the ones it jumps past (ADR-0032).
+  if (p->name == "halt") {
+    p->standard = StdProc::Halt;
+    if (!p->args.empty())
+      diags_.error(p->line, p->col, "'halt' takes no arguments");
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    return;
+  }
   if (p->name == "bind" || p->name == "unbind") {
     p->standard = p->name == "bind" ? StdProc::Bind : StdProc::Unbind;
     for (auto &a : p->args)
@@ -4449,7 +4486,7 @@ void Sema::checkStdProc(ProcCallStmt *p) {
     return;
   }
 
-  if (isDirectAccessProc(p->name)) {
+  if (isRequiredProc(p->name)) {
     bool seeks = p->name != "update" && p->name != "extend";
     p->standard = p->name == "seekread"     ? StdProc::SeekRead
                   : p->name == "seekwrite"  ? StdProc::SeekWrite
@@ -5154,7 +5191,8 @@ void Sema::checkCall(Call *c) {
   // message then says the feature is missing rather than that the name is.
   if (it != builtins().end() && std_ == Std::Iso7185 &&
       (isComplexBuiltin(it->second) || isFileEnquiry(it->second) ||
-       isStringBuiltin(it->second) || isBindingBuiltin(it->second))) {
+       isStringBuiltin(it->second) || isBindingBuiltin(it->second) ||
+       it->second == Builtin::Card)) {
     diags_.error(c->line, c->col,
                  "'" + c->name + "' is an Extended Pascal function; compile "
                  "with --std=extended");
@@ -5267,12 +5305,28 @@ void Sema::checkCall(Call *c) {
     return;
   }
 
-  if (c->args.size() != 1) {
+  // §6.7.6.4: `succ(x, k)` and `pred(x, k)` take a second, integer argument —
+  // "a value whose ordinal number is ord(x) + k" — and the one-argument forms
+  // are defined as `succ(x, 1)` and `succ(x, -1)`. They are the only required
+  // functions here whose arity is not exactly one, so the gate says so rather
+  // than being moved.
+  bool stepped = std_ == Std::Extended && c->args.size() == 2 &&
+                 (c->builtin == Builtin::Succ || c->builtin == Builtin::Pred);
+  if (c->args.size() != 1 && !stepped) {
     diags_.error(c->line, c->col,
-                 "'" + c->name + "' takes exactly one argument");
+                 "'" + c->name + "' takes exactly one argument" +
+                     (c->builtin == Builtin::Succ ||
+                              c->builtin == Builtin::Pred
+                          ? std::string(", or two under --std=extended")
+                          : std::string()));
     c->type = ty::Int();
     return;
   }
+  if (stepped && c->args[1]->type && !c->args[1]->type->isInteger())
+    diags_.error(c->args[1]->line, c->args[1]->col,
+                 "the second argument of '" + c->name +
+                     "' is how far to step, and must be an integer, found " +
+                     c->args[1]->type->name());
 
   Type *a = c->args[0]->type;
   auto require = [&](bool ok, const char *want) {
@@ -5315,6 +5369,12 @@ void Sema::checkCall(Call *c) {
   case Builtin::Chr:
     require(a->isInteger(), "an integer");
     c->type = ty::Char();
+    return;
+  // §6.7.6.3: "this function shall return a result of integer-type that shall
+  // equal the number of members of the value of the expression x."
+  case Builtin::Card:
+    require(a->isSet(), "a set");
+    c->type = ty::Int();
     return;
   case Builtin::Succ:
   case Builtin::Pred:

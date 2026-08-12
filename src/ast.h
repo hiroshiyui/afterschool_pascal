@@ -53,6 +53,10 @@ enum class BinOp {
   // while *requiring* it here, and a tree that spelled both as `And` would
   // have thrown away the one fact that says which.
   AndThen, OrElse,
+  /// ISO/IEC 10206:1991 §6.8.3.4's `><`, the set symmetric difference: the
+  /// members of exactly one operand. It is an *adding* operator like `+` and
+  /// `-` on sets, and one instruction — `xor` — for the same reason those are.
+  SymDiff,
   // `in` is a relational operator in ISO 7185 §6.7.2.4 and sits at the same
   // precedence as `=` and `<`, which is why it belongs here and not with the
   // adding operators despite taking a set on only one side.
@@ -73,6 +77,11 @@ enum class Builtin {
   /// value — the standard gives the type no literal — and `re`, `im` and `arg`
   /// are the only way back out to a real.
   Cmplx, Polar, Re, Im, Arg,
+  /// ISO/IEC 10206:1991 §6.7.6.3's `card(x)`: the number of members of a set.
+  /// One instruction (`llvm.ctpop`), and the standard's "error if no such
+  /// value of integer-type exists" cannot arise here — every set is 256 bits,
+  /// so the count is at most 256 (ADR-0028).
+  Card,
   /// ISO/IEC 10206:1991 §6.7.6.6's direct-access position functions and
   /// §6.7.6.5's `empty`. All three take a file variable, so they join `eof`
   /// and `eoln` in taking an *address* rather than a value.
@@ -478,7 +487,12 @@ enum class StdProc {
   SeekRead, SeekWrite, SeekUpdate, Update, Extend,
   /// ISO/IEC 10206:1991 §6.7.5.6's binding procedures. `bind` attaches a
   /// variable to an entity outside the program and `unbind` detaches it.
-  Bind, Unbind
+  Bind, Unbind,
+  /// ISO/IEC 10206:1991 §6.7.5.7's control procedure: "Following execution of
+  /// the control procedure halt ... no further processing of the activation of
+  /// the program shall occur." It is a required *identifier*, so a program may
+  /// declare its own `halt` and win.
+  Halt
 };
 
 struct ProcCallStmt : Stmt {
