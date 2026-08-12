@@ -1097,6 +1097,23 @@ in one language or the other, and the standard is a property of the source.
     none of this; and `sieve[2,3]` cannot be told from `a[2,3]` without the
     symbol), §6.8.8's structured constants, and a value of a dynamically
     bounded type.
+- **A required real constant is decimal text** (ADR-0062). §6.4.2.2 b)'s
+  `minreal`, `maxreal` and `epsreal`, and the three ADRs that deferred them
+  were all deferring the same thing: ADR-0025 carries a real as the characters
+  that were written and `selfhost` has no floating-point type, so what was
+  missing was never a conversion but somewhere to put twenty-two characters.
+  Each is spelled as the shortest decimal that round-trips to the binary64
+  value it names, **the same characters in both compilers**, and `InternWide2`
+  — two fixed-width literals joined — is the whole of the new machinery.
+  - Required *identifiers*, so declared in the outermost scope and shadowable
+    (ADR-0049's rule); CodeGen and `verify/` are untouched, because a constant
+    of real type already emitted.
+  - The test asserts the **property**, not the characters: `1.0 + epsreal >
+    1.0` and `1.0 + epsreal / 2.0 = 1.0` are the clause's own sentence, and
+    printed digits would pass with any nearby value.
+  - The ISO 7185 gate had to be a *negative* test — the names are ordinary
+    identifiers there, so a program declaring its own compiles under both and
+    distinguishes nothing (ADR-0056's fault, met again).
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

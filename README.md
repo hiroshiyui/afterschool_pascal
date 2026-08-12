@@ -400,6 +400,12 @@ values     a structured-value-constructor denotes a value of a named array or
            component-value may itself be one, so a value nests as the type
            does. An initial-state specifier takes one too, which is what
            makes `array [1..8] of char value [1..8: '*']` eight stars
+minreal    §6.4.2.2 b)'s three required real constants: the largest usable
+maxreal    magnitude, the smallest, and the difference between 1.0 and the
+epsreal    next value above it. A real is an IEEE-754 binary64 here, so they
+           are its largest finite value, its smallest positive normal one,
+           and its epsilon. All three are required *identifiers*, so a
+           program may declare its own
 required   maxchar — the largest char; halt — stop the program, closing what
            is open; card(s) — how many members a set has; succ(x, k) and
            pred(x, k) — step k places along an ordinal type, in either
@@ -419,12 +425,8 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
 ```
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
-design: `minreal`/`maxreal`/`epsreal`, zero field widths in `write`, the time
-procedures, set-member iteration, §6.8.7.4's set-value, and §6.8.8's
-structured constants. The three real constants wait on a
-mechanism rather than on work: a real literal is carried as the text that was
-written and never converted (ADR-0025), so a required real constant has to
-arrive as interned text rather than as a value.
+design: zero field widths in `write`, the time procedures, set-member
+iteration, §6.8.7.4's set-value, and §6.8.8's structured constants.
 
 A word-symbol is reserved only when the feature needing it lands, so until that
 list is empty `--std=extended` accepts some programs a conforming processor

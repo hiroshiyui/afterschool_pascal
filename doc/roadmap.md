@@ -665,6 +665,19 @@ was never written down.
   - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
     so under `--std=extended` a program cannot declare its own — where
     §6.7.5.5 makes them required identifiers.
+- ~~**The three required real constants.**~~ Done (ADR-0062). §6.4.2.2 b)'s
+  `minreal`, `maxreal` and `epsreal`, and the deferral three records had made.
+  - **The text was always the mechanism.** ADR-0025 carries a real as the
+    characters that were written and this compiler has no floating-point type,
+    so what was missing was never a conversion — it was somewhere to put
+    twenty-two characters. Each constant is the shortest decimal that
+    round-trips to the binary64 value it names, spelled identically in both
+    compilers.
+  - Required *identifiers*, so shadowable; CodeGen and `verify/` untouched.
+  - The test asserts the clause's property (`1.0 + epsreal > 1.0` and
+    `1.0 + epsreal / 2.0 = 1.0`), not the printed digits.
+  - A real-valued *constant-expression* is still refused (ADR-0054): these are
+    values a symbol holds, not values an operator can produce.
 - ~~**Structured-value constructors.**~~ Done (ADR-0061). §6.8.7's array-value
   and record-value, and the initial-state form ADR-0048 deferred.
   - **A structured value is built, not computed.** An array and a record have
@@ -697,9 +710,9 @@ was never written down.
   the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
   procedures, and set-member iteration. Most of those have since landed with
-  ADR-0059; `minreal`/`maxreal`/`epsreal`, the field widths, the time
-  procedures and set-member iteration have not, and neither have §6.8.7.4's
-  set-value or §6.8.8's structured constants.
+  ADR-0059 and `minreal`/`maxreal`/`epsreal` with ADR-0062; the field widths,
+  the time procedures and set-member iteration have not, and neither have
+  §6.8.7.4's set-value or §6.8.8's structured constants.
 
 - ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
   halves of it: a function may return anything that is not, and does not
