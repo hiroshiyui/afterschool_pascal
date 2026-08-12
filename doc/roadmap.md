@@ -250,14 +250,18 @@ surprises.
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
 - **Not implemented at all:** nothing. Sets (ADR-0028), `goto` (ADR-0029 and
-  ADR-0032), procedural parameters (ADR-0030), non-text files (ADR-0031) and
-  finally the transfer procedures with `page` (ADR-0067) were this group, and
-  it is now empty — **ISO 7185 is complete**. The last three are worth a
-  sentence: §6.6.5.4's `pack`/`unpack` and §6.9.5's `page` were *missed*, not
-  declined, and three documents asserted completeness while they were absent.
-  No program in the corpus had ever named them, so every oracle agreed. What
-  found them was a documentation audit compiling a probe; what makes the claim
-  true now is `tests/transfer.pas` and the three cases beside it.
+  ADR-0032), procedural parameters (ADR-0030), non-text files (ADR-0031), the
+  transfer procedures with `page` (ADR-0067) and §6.3's string constant
+  (ADR-0068) were this group, and it is now empty — **ISO 7185 is complete**.
+  The last four are worth a sentence, because they arrived the same way twice.
+  §6.6.5.4's `pack`/`unpack` and §6.9.5's `page` were *missed*, not declined,
+  and three documents asserted completeness while they were absent; a
+  documentation audit found them by compiling a probe. `const s = 'hello'` was
+  then found the same way, hours after the `iso-7185-done` tag had been moved
+  to the commit that fixed the first three. No program in the corpus had ever
+  written any of them, so every oracle agreed. What makes the claim true now is
+  `tests/transfer.pas`, `tests/page.pas`, `tests/stringconst.pas` and the cases
+  beside them — not the implementations.
 - **A set's base type must have its values in 0..255**, because every set is
   one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
   this is a permitted limit rather than a deviation — but `set of integer` is a
@@ -622,7 +626,10 @@ they landed — rather than in the standard's.
   `--std=extended`. Refused and stated: real-, set- and string-valued
   constant-expressions — the first because ADR-0025 carries a real literal as
   its source text and neither compiler has a float to fold with, the other
-  two because a `Symbol` has nowhere to keep the value.
+  two because a `Symbol` has nowhere to keep the value. ADR-0068 gave it
+  somewhere for a string, so what is refused there is now the *operation*
+  rather than the value: `const s = 'ab'` folds and `const t = 'a' + 'b'`
+  does not.
 - ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
   halves of it: a function may return anything that is not, and does not
   contain, a file and is not bindable, and a result-variable-specification
@@ -872,13 +879,17 @@ they landed — rather than in the standard's.
 
 **What is left of ISO/IEC 10206:1991**, and it is now a short list:
 
-- **§6.8.8's constant-accesses** (ADR-0061). A `Symbol` has nowhere to keep a
-  value that is not a scalar, which is the same reason ADR-0054 refuses a set-
-  or string-valued constant-expression. §6.8.8.1's own NOTE is what makes this
-  more than storage: given `const c = t[1: 1; 2: 2]`, the constant-access
-  `c[i]` "denotes a different value for each iteration of the loop", so the
-  index need not be constant and the access is a run-time read of somewhere a
-  structured constant lives.
+- **§6.8.8's constant-accesses** (ADR-0061). Half the obstacle is gone:
+  ADR-0068 gave a `Symbol` somewhere to keep a value that is not a scalar, so
+  a string constant now exists and `hex_string` in §6.3.2's example compiles.
+  What is left is an array-, record- or set-valued one — which ADR-0061's
+  constructor can already *build*, into a variable — and then the accesses
+  themselves. §6.8.8.1's own NOTE is what makes those more than storage: given
+  `const c = t[1: 1; 2: 2]`, the constant-access `c[i]` "denotes a different
+  value for each iteration of the loop", so the index need not be constant and
+  the access is a run-time read of wherever the constant lives. The clause adds
+  no new run-time check — D.88 to D.91 are the array, string and substring
+  bounds this compiler already tests.
 - **Separate compilation of program-components** (ADR-0053). §6.13 asks for it
   with a *should* rather than a *shall*, and it needs an interface artefact
   this compiler does not define — a second file format, and one the stage-1

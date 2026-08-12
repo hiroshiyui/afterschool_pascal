@@ -385,13 +385,19 @@ rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
 conformance with ISO 7185.
 
-**ISO 7185 is complete** — and the last three arrived only because an audit
-went looking. §6.6.5.4's `pack`/`unpack` and §6.9.5's `page` were *missed*, not
-declined, while three separate documents asserted completeness: the names were
-in `isRequiredName` so §6.6.3.7 could refuse passing one as a parameter, and
-nowhere else. No corpus program had ever written them, so every oracle agreed.
-The lesson is about the oracles rather than the gap — a claim no test names is
-a claim nothing checks (ADR-0067).
+**ISO 7185 is complete** — and the last four arrived only because someone went
+looking, in two separate rounds. §6.6.5.4's `pack`/`unpack` and §6.9.5's `page`
+were *missed*, not declined, while three separate documents asserted
+completeness: the names were in `isRequiredName` so §6.6.3.7 could refuse
+passing one as a parameter, and nowhere else. Then §6.3's **string constant** —
+`const s = 'hello'`, refused under both standards — was found the same way
+hours after the tag was moved to say the standard was done (ADR-0068).
+
+No corpus program had ever written any of the four, so every oracle agreed. The
+lesson is about the oracles rather than the gaps — a claim no test names is a
+claim nothing checks (ADR-0067) — and the second round is the evidence that
+learning it once is not enough. **Before asserting completeness of anything,
+compile a probe for the clause.**
 
 **Stage 2 has begun** (ADR-0033). `--std=iso7185` is the default and
 `--std=extended` is ISO/IEC 10206:1991. The two are *not* nested: Extended
@@ -895,7 +901,9 @@ in one language or the other, and the standard is a property of the source.
   - Refused and stated: real-, set- and string-valued constant-expressions.
     ADR-0025 carries a real literal as its *source text* into the IR, so
     neither compiler has a float to fold with — refusing in both beats folding
-    in one, the same trade the real-literal range check made.
+    in one, the same trade the real-literal range check made. What is refused
+    is an *operation*: since ADR-0068 a bare string literal is a constant, and
+    always was one in ISO 7185 §6.3, because there is nothing to compute.
 - **A result that lives in memory is the caller's storage** (ADR-0055).
   §6.7.2 lets a function return anything that is not, and does not contain, a
   file and is not bindable — so a record, an array and a set. ADR-0017 gives a

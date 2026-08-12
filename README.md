@@ -85,14 +85,16 @@ procedures new, dispose, reset, rewrite, get, put,
 literals   integers, reals, 'strings', '' escapes, nil,
            [a, b..c] set constructors, and [] the empty set,
            { } and (* *) comments
-constants  named constants, plus predefined true, false, maxint
+constants  named constants — a number, a char, a 'string' of any length, or
+           another constant's name, optionally signed — plus predefined
+           true, false, maxint
 ```
 
-**This is the whole of ISO 7185**, and the last three to arrive were
-§6.6.5.4's `pack` and `unpack` and §6.9.5's `page` — missed rather than
-declined, and found by an audit rather than by a test, because no program in
-the corpus had ever named them. What is left of the language is the next
-standard, not more of this one.
+**This is the whole of ISO 7185.** The last four to arrive were §6.6.5.4's
+`pack` and `unpack`, §6.9.5's `page` and §6.3's string constant — each missed
+rather than declined, and each found by compiling a probe rather than by a
+test, because no program in the corpus had ever written one. What is left of
+the language is the next standard, not more of this one.
 
 Two things this compiler is **more permissive** about than ISO 7185, both
 stated rather than intended. The declaration parts may come in any order and
@@ -383,9 +385,11 @@ const      const n = base * 2 — a constant-expression: wherever ISO 7185
            The operators fold as the emitted code computes them — `mod` is
            non-negative, an overflow is refused rather than wrapped — and
            `abs`, `sqr`, `odd`, `ord`, `chr`, `succ` and `pred` fold with
-           them. A real-, set- or string-valued one is not folded: a real
-           constant is carried as the text that was written and never
-           converted, and there is nowhere to keep the other two
+           them. A real-, set- or string-valued *operation* is not folded: a
+           real constant is carried as the text that was written and never
+           converted, and building characters or a set in the compiler would
+           have to give the same answer in both of them. A string *literal*
+           needs no folding and is a constant in either standard
 funcs      a function may return a record, an array, a set or a string — any
            type that is not, and does not contain, a file, and is not
            bindable. The result travels in storage the *caller* supplies, so
@@ -489,11 +493,13 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
 ```
 
 Also absent: a **structured-valued constant**. `const c = t[1: 1; 2: 2]` is
-refused — there is nowhere to keep an array-, record-, set- or string-valued
-constant — and §6.8.8's constant-access `c[i]` goes with it, whose own NOTE
-points out that the index need not be constant and `c[i]` therefore denotes a
-different value on each iteration of a loop. Assigning such a value to a
-*variable*, `q := t[1: 1; 2: 2]`, does work; it is the constant that does not.
+refused — there is nowhere to keep an array-, record- or set-valued constant —
+and §6.8.8's constant-access `c[i]` goes with it, whose own NOTE points out
+that the index need not be constant and `c[i]` therefore denotes a different
+value on each iteration of a loop. Assigning such a value to a *variable*,
+`q := t[1: 1; 2: 2]`, does work; it is the constant that does not. A
+**string**-valued constant is the one of the four that does work, since
+ISO 7185 §6.3 requires it.
 
 **All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
 though the language is not. A word-symbol is reserved only when the feature
