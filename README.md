@@ -363,6 +363,13 @@ funcs      a function may return a record, an array, a set or a string — any
            `mk := e`, because reading `mk` is a recursive call. With a name
            the function identifier may not be assigned at all, and without
            one the body must assign it at least once
+f(x).y     a selector may follow a call: `mk(7, 8).y` reads a field of a
+           result, `scale(10)[2]` a component, and `alloc(3)^` the variable
+           a returned pointer identifies. Only the last of those is a
+           *variable* — §6.5.1 says so, because what a pointer points at is
+           a variable however the pointer was obtained — so only it may be
+           assigned to, passed as a var parameter or read into. The others
+           are values: a function-access is not a variable-access
 words      otherwise, pow, protected, value, bindable, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -377,9 +384,9 @@ words      otherwise, pow, protected, value, bindable, module, export,
 ```
 
 Not accepted yet, and each its own piece of work: structured-value
-constructors, substring *variables* (`s[i..j]` as an assignment target),
-`readstr`/`writestr`, restricted types, and function-accesses (a selector
-applied to a function call).
+constructors, substring *variables* (`s[i..j]` as an assignment target, which
+is also what a substring of a function's result waits on), `readstr`/`writestr`,
+and restricted types.
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `halt`, `card`, the symmetric difference `><`,

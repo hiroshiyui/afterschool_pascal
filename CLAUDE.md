@@ -921,6 +921,31 @@ in one language or the other, and the standard is a property of the source.
     prevents it: a result-type is a *type-name*, and ADR-0041 withdraws
     §6.2.3.2's permission inside a type definition, so no named type has a
     dynamic extent. That is what lets the caller always size the slot.
+- **A function-access is a parser change** (ADR-0056). §6.8.6 lets a call carry
+  selectors — `mk(7, 8).y`, `scale(10)[2]`, `alloc(3)^` — and the whole feature
+  is `Parser::afterCall` handing a call to `parseSelectors` under
+  `--std=extended`. Nothing downstream is told which of the two it walked.
+  - **Sema and CodeGen needed nothing**, for ADR-0055's reason: a result that
+    lives in memory travels in caller-supplied storage, so a call in that
+    position already yields an address, and `emitAddress` has had a
+    `case NK::Call` since ADR-0052 built `binding(f)` in a frame slot.
+  - **§6.8.6's NOTE was already written, as `isDesignator`.** It answers
+    `false` for a call, and an actual var parameter and a `read` target are two
+    of its call sites; an assignment's target and a `with`'s record are refused
+    a level earlier, by the grammar, because §6.5.1's variable-accesses do not
+    include a record-function-access. No rule was added for any of the four.
+  - **§6.8.6.4 is the exception and it is a variable.** §6.5.1 lists a
+    function-identified-variable, so `alloc(3)^.x := 1` is legal — and a
+    statement beginning with a name and an argument list is therefore no longer
+    certainly a procedure-statement. `callTakesCaret` scans to the *matching*
+    `)`, the second bracket-depth walk in this parser after ADR-0054's.
+  - **The ISO 7185 gate needed a pointer-returning function to test at all.**
+    A record result is refused by §6.6.2 first, so the obvious negative program
+    passes whatever the parser does — ADR-0054's `constexpr_iso.pas` fault, met
+    again. The statement form has a second gate and its own file.
+  - Deferred: **§6.8.6.5's substring-function-access**, with §6.5.6's substring
+    variables, because `parseSelectors` is now shared and would learn the
+    syntax once for both.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

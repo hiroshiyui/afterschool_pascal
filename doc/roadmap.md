@@ -570,8 +570,30 @@ was never written down.
     an interface artefact this compiler does not define; a module variable
     with computed discriminants; and a module-parameter that is neither
     `input` nor `output`, which §6.11.1 NOTE 6 lets go unbound.
+- ~~**Function-accesses.**~~ Done (ADR-0056). §6.8.6: a call may carry
+  selectors, so `mk(7, 8).y`, `scale(10)[2]` and `alloc(3)^` are expressions.
+  It is the smallest feature in this list and the record's title says why —
+  **a parser change**, one function in each compiler, with Sema and CodeGen
+  told nothing. That is ADR-0055's dividend: a result living in memory already
+  travels in caller-supplied storage, so a call in that position already
+  yields an address.
+  - **§6.8.6's NOTE was already written**, as `Sema::isDesignator` answering
+    `false` for a call. An actual var parameter and a `read` target are two of
+    its call sites; an assignment's target and a `with`'s record are refused
+    one level earlier by the grammar, because §6.5.1's variable-accesses do
+    not include a record-function-access. Four refusals, no new rule.
+  - **§6.8.6.4 is the exception and it is a variable**, so `alloc(3)^.x := 1`
+    is legal and a statement beginning with a name and arguments is no longer
+    certainly a procedure-statement. Telling them apart is a scan to the
+    *matching* `)` — the second bracket-depth walk this parser has needed.
+  - The ISO 7185 gate could not be tested with a record result: §6.6.2 refuses
+    that first, so the program would pass whatever the parser did. It returns
+    a **pointer** instead. ADR-0054 found the same fault in
+    `constexpr_iso.pas`; this time it was recognised before it landed.
+  - Deferred with §6.5.6: **§6.8.6.5's substring-function-access**, because
+    `parseSelectors` is now shared and would learn `[i..j]` once for both.
 - Restricted types, structured-value constructors, substring variables,
-  `readstr`/`writestr`, function-accesses. Each needs its own record.
+  `readstr`/`writestr`. Each needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the
