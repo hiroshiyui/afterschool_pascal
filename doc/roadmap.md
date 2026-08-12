@@ -578,11 +578,24 @@ was never written down.
   cost is in the pair of compilers rather than in the design: `halt`, `card`,
   the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
-  procedures, and set-member iteration. Two more are medium and unlock others:
-  **constant-expressions** (§6.8.2), which general subrange bounds, export
-  ranges and a module heading's nonvarying expressions all rest on, and
+  procedures, and set-member iteration. One more is medium and unlocks others:
   **structured function result types** (§6.7.2), which is what lets a function
   return a string.
+
+- ~~**Constant-expressions.**~~ Done (ADR-0054). §6.8.2's
+  `constant-expression = expression`, which replaces ISO 7185 §6.3's and
+  §6.4.2.4's one-token `constant` in every position that asked for one. The
+  feature is one function: `evalConst` already served the constant definition
+  and `evalOrdinal` — a wrapper on it — already served subrange bounds, array
+  bounds, case labels, variant labels and a schema's discriminants, so adding
+  the expression grammar to that one place opened all six at once and no
+  caller changed except to say less. The parser changed in exactly one spot:
+  a bound is no longer two tokens from the `..`, so telling a subrange from a
+  type name is a scan for a `..` at bracket depth zero, and only under
+  `--std=extended`. Refused and stated: real-, set- and string-valued
+  constant-expressions — the first because ADR-0025 carries a real literal as
+  its source text and neither compiler has a float to fold with, the other
+  two because a `Symbol` has nowhere to keep the value.
 
 **And the two things that are not features:**
 

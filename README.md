@@ -344,6 +344,16 @@ modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            nothing is never activated at all. StandardInput and
            StandardOutput are the required interfaces a module imports to
            reach `input` and `output`
+const      const n = base * 2 — a constant-expression: wherever ISO 7185
+           asked for a constant, the whole expression grammar is now
+           admitted, so a subrange bound, an array bound, a case label, a
+           variant label and a schema's discriminants each take one too.
+           The operators fold as the emitted code computes them — `mod` is
+           non-negative, an overflow is refused rather than wrapped — and
+           `abs`, `sqr`, `odd`, `ord`, `chr`, `succ` and `pred` fold with
+           them. A real-, set- or string-valued one is not folded: a real
+           constant is carried as the text that was written and never
+           converted, and there is nowhere to keep the other two
 words      otherwise, pow, protected, value, bindable, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -365,10 +375,9 @@ applied to a function call).
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `halt`, `card`, the symmetric difference `><`,
 `maxchar`/`minreal`/`maxreal`/`epsreal`, the two-argument `succ`/`pred`, zero
-field widths in `write`, the time procedures, and set-member iteration. Two are
-in between and unlock others: **constant-expressions** (§6.8.2), which general
-subrange bounds and export-ranges rest on, and **structured function result
-types** (§6.7.2), which is what would let a function return a string.
+field widths in `write`, the time procedures, and set-member iteration. One is
+in between and unlocks others: **structured function result types** (§6.7.2),
+which is what would let a function return a string.
 
 A word-symbol is reserved only when the feature needing it lands, so until that
 list is empty `--std=extended` accepts some programs a conforming processor

@@ -844,6 +844,41 @@ in one language or the other, and the standard is a property of the source.
     discriminants (its activation outlives the stack the storage would be on),
     and a module-parameter that is not `input`/`output` is bound to nothing
     (§6.11.1 NOTE 6).
+- **A constant-expression is one folder and every context follows**
+  (ADR-0054). §6.8.2 makes `constant-expression = expression`, replacing the
+  one-token `constant` ISO 7185 §6.3 and §6.4.2.4 each asked for. `evalConst`
+  already served the constant definition and `evalOrdinal` — a wrapper on it —
+  already served subrange bounds, array bounds, case labels, variant labels and
+  a schema's discriminants, so the grammar was added to that one function and
+  all six opened at once. No caller changed except to say less.
+  - **Folding is gated on the standard, in the folder.** Everything ISO 7185
+    admits folds under both; `Binary` and `Call` fold only under
+    `--std=extended`, so the ISO 7185 diagnostic is unchanged — the expression
+    still fails to fold and the caller still says what it always said. That
+    gate is invisible to a corpus whose ISO program dies at a *parse* error
+    first, which is why `tests/constexpr_iso_fold.pas` has no subrange in it.
+  - **A folded operator must answer what the emitted one answers**, and the
+    two that can disagree are the two where C differs from Pascal: `mod` is
+    non-negative and `odd` is the low bit. A leading sign binds to the whole
+    term, so a negative left operand has to arrive by name — `down mod 3`,
+    never `-7 mod 3`.
+  - **An error found while folding is a diagnostic, and the vaguer message is
+    suppressed.** Failing to fold has two unrelated causes wanting different
+    words: not constant (the *context* says so) or constant and wrong (only
+    the folder can). `constReported_` is which, and without it the second is
+    reported twice.
+  - **`succ` tests the end before it steps**, because at `maxint` the step
+    itself overflows and the Pascal-hosted folder has no wider type to
+    range-check in afterwards.
+  - The parser changed in **one** place: a bound is no longer two tokens from
+    the `..`, so `looksLikeSubrange` scans for one at bracket depth zero. A
+    schema production is the only name-led denoter with brackets and a set
+    constructor the only way a `..` gets inside them, which is what
+    `tests/extended/constexpr_errors.pas`'s `vec([1..3])` pins.
+  - Refused and stated: real-, set- and string-valued constant-expressions.
+    ADR-0025 carries a real literal as its *source text* into the IR, so
+    neither compiler has a float to fold with — refusing in both beats folding
+    in one, the same trade the real-literal range check made.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
