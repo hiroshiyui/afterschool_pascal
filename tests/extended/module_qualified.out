@@ -1,0 +1,7 @@
+call   20 10
+paramless 7
+read   7
+write  101
+0 1 2 
+bound  4 16
+hello there <- echoed
