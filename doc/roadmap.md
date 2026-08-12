@@ -452,7 +452,8 @@ was never written down.
     a property of the source, made concrete.
   - A component-value may only be an **expression** here; §6.8.7's array-values
     and record-values are the structured-value-constructor feature, which is
-    usable in an ordinary expression too and is therefore its own item.
+    usable in an ordinary expression too and is therefore its own item. That
+    deferral is closed by ADR-0061, below.
 - ~~**Complex numbers.**~~ Done (ADR-0049). §6.4.2.2 e) makes `complex` a
   **simple** type, and that one word decides the feature: a complex is a value,
   assigned with a store and passed in a register, exactly where a set is
@@ -664,7 +665,31 @@ was never written down.
   - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
     so under `--std=extended` a program cannot declare its own — where
     §6.7.5.5 makes them required identifiers.
-- Structured-value constructors. Still needs its own record.
+- ~~**Structured-value constructors.**~~ Done (ADR-0061). §6.8.7's array-value
+  and record-value, and the initial-state form ADR-0048 deferred.
+  - **A structured value is built, not computed.** An array and a record have
+    no register form (ADR-0017), so the components are stored into the storage
+    the value will occupy and the expression's value is that address — the
+    hidden frame slot ADR-0055 gives a memory-living result at the top of an
+    expression, the component itself for a nested value, and the destination
+    for an assignment or an initial state.
+  - **Three of the four productions were already here.** A selector is a
+    case-constant-list (ADR-0035), a field-list-value corresponds to a
+    field-list and an arm's is one too (ADR-0026), and a component-value is
+    what `emitStore` already does — so a subrange component is range-checked
+    and a string component padded by code written for something else.
+  - **The completer is filled in first and the elements written over it**, so
+    §6.8.7.2 b)'s "each component not mapped to by an element" needs no
+    complement computed; and a component-value is emitted **once** however
+    many components it is for, then copied.
+  - **`[a: 1]` cannot be told apart by the parser**: it is an array-value when
+    `a` is a constant and a record-value when it is a field name. Both are
+    parsed as expressions and Sema decides from the type, which is the third
+    bracket-depth lookahead scan in this parser.
+  - Not done, and stated: §6.8.7.4's set-value (a set is a value and needs
+    none of this machinery, and `sieve[2,3]` cannot be told from `a[2,3]`
+    without the symbol), §6.8.8's structured constants, and a value of a
+    dynamically bounded type.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the
@@ -673,7 +698,8 @@ was never written down.
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
   procedures, and set-member iteration. Most of those have since landed with
   ADR-0059; `minreal`/`maxreal`/`epsreal`, the field widths, the time
-  procedures and set-member iteration have not.
+  procedures and set-member iteration have not, and neither have §6.8.7.4's
+  set-value or §6.8.8's structured constants.
 
 - ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
   halves of it: a function may return anything that is not, and does not

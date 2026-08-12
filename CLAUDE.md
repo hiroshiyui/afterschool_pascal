@@ -1056,6 +1056,47 @@ in one language or the other, and the standard is a property of the source.
     are, because the parser has no scope — so under `--std=extended` a program
     cannot declare its own, where §6.7.5.5 makes them required identifiers.
     `tests/readstr_iso.pas` is the half that is a gate.
+- **A structured value is built, not computed** (ADR-0061). §6.8.7's
+  structured-value-constructor: an array and a record have no register form
+  (ADR-0017), so the components are stored into the storage the value will
+  occupy and the expression's value is that address. Nothing is assembled and
+  nothing is copied afterwards.
+  - Where the storage comes from is decided **per position**: the hidden frame
+    slot ADR-0055 gives a memory-living result at the top of an expression,
+    the component itself for a nested component-value, and the **destination**
+    for an assignment — which is what makes §6.6's initial-state form work,
+    since a variable's prologue has no result slot to lend.
+  - **Three of the four productions were already here.** A selector is a
+    case-constant-list (ADR-0035); a field-list-value corresponds to a
+    field-list and an arm's *is* one (ADR-0026), so one `checkRecordValue` and
+    one `emitRecordValue` walk the record and every variant nested in it,
+    keyed by the path `Field::variant` already uses; and a component-value is
+    `emitStore`, so a subrange component is range-checked and a string one
+    padded by code written for something else. `fieldsAt`/`armsAt`/
+    `tagFieldAt`/`tagTypeAt` moved onto `Type` so Sema and CodeGen ask one set
+    of functions.
+  - **The completer is filled in first and the elements written over it**, so
+    §6.8.7.2 b)'s "each component not mapped to by an element" needs no
+    complement computed — the ranges are disjoint by the time it matters. A
+    component-value is emitted **once** however many components it is for and
+    then copied, so a function call in one is called once.
+  - **`[a: 1]` cannot be told apart by the parser** — an array-value when `a`
+    is a constant, a record-value when it is a field name — so both selectors
+    are parsed as expressions and Sema folds or resolves according to the
+    type. Whether the *bracket* is a value at all is the third bracket-depth
+    scan here, after ADR-0054's and ADR-0056's: a `:`, a `;`, `case` or
+    `otherwise` at depth one, or an empty `[]`.
+  - It **retires ADR-0048's deferral**: §6.6 NOTE 4 makes an
+    initial-state-specifier's component-value an array- or record-value too,
+    so `parseExpr` became `parseComponentValue` in `parseTypeExpr` and NOTE
+    3's `array [1..8] of char value [1..8: '*']` is eight stars.
+  - A constructor is **not a designator** and needed no rule saying so; the
+    one rule that *was* needed is the opposite direction, since a structured
+    value parameter had required a designator to copy from.
+  - Refused and stated: §6.8.7.4's **set-value** (a set is a value and needs
+    none of this; and `sieve[2,3]` cannot be told from `a[2,3]` without the
+    symbol), §6.8.8's structured constants, and a value of a dynamically
+    bounded type.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

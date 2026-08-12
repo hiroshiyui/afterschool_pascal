@@ -392,6 +392,14 @@ writestr   were a line of a text file, and writestr(s, p1, ..., pn) writes a
            stops all mean exactly what they mean in `write` and `read`. It
            is an error if readstr runs off the end of the string, or if
            writestr writes more than the destination can hold
+values     a structured-value-constructor denotes a value of a named array or
+           record type: `vec[1: 10; 2..3: 20 otherwise 0]` and
+           `pt[x, y: 9]`, with `case kind: box of [w: 6; h: 7]` selecting a
+           variant. Every component must be specified exactly once, and the
+           `otherwise` gives a value to the ones no element names. A
+           component-value may itself be one, so a value nests as the type
+           does. An initial-state specifier takes one too, which is what
+           makes `array [1..8] of char value [1..8: '*']` eight stars
 required   maxchar — the largest char; halt — stop the program, closing what
            is open; card(s) — how many members a set has; succ(x, k) and
            pred(x, k) — step k places along an ordinal type, in either
@@ -410,11 +418,10 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            in the one position each may occupy, exactly as `forward` is
 ```
 
-Not accepted yet, and its own piece of work: structured-value constructors.
-
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `minreal`/`maxreal`/`epsreal`, zero field widths in `write`, the time
-procedures, and set-member iteration. The three real constants wait on a
+procedures, set-member iteration, §6.8.7.4's set-value, and §6.8.8's
+structured constants. The three real constants wait on a
 mechanism rather than on work: a real literal is carried as the text that was
 written and never converted (ADR-0025), so a required real constant has to
 arrive as interned text rather than as a value.
