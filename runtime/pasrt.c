@@ -424,7 +424,15 @@ void pas_file_done(void *v) {
   if (f->fp) {
     if (f->binding == PAS_BIND_INPUT || f->binding == PAS_BIND_OUTPUT) {
       fflush(f->fp);
-      return; /* the process owns the standard files, and `ch` is not ours */
+      /* The process owns the standard files, and `ch` is not ours to free.
+       *
+       * Returning here rather than closing is load-bearing for a second
+       * reason since modules landed: ISO/IEC 10206:1991 6.2.3.6 terminates the
+       * main-program-block before the finalization of any module, so `main`
+       * runs this over `output` and a module's `to end do` writes to it
+       * afterwards. Closing would make that write undefined.
+       * tests/extended/module.pas and module_order.pas both do it. */
+      return;
     }
     fclose(f->fp);
     f->fp = NULL;
@@ -1076,9 +1084,16 @@ double pas_cpowi_im(double re, double im, int n) {
  * concatenation makes bytes that did not exist, and it takes them from a ring
  * below. A string value's life is one expression evaluation, so a ring is the
  * right shape: the space is reused as soon as the statement that made the
- * value has finished with it. The one thing it cannot survive is a single
- * *statement* that concatenates more than the ring holds, which is stated as
- * an implementation limit rather than being silently wrong. */
+ * value has finished with it.
+ *
+ * The limit is a single *statement* that needs more than the ring holds. Of
+ * the two ways to reach it only one is reported: a single value larger than
+ * the whole arena stops the program, which is what a long concatenation chain
+ * produces, because each step builds the whole prefix again. Several
+ * separately live temporaries summing past the arena would instead wrap in
+ * silence -- no attempt is made to detect that, and nothing in this language
+ * makes it easy to write, since a variable-string cannot be a value parameter
+ * and `write` consumes each of its arguments in turn. */
 
 #define PAS_STR_ARENA (1 << 20)
 static char pas_str_arena[PAS_STR_ARENA];

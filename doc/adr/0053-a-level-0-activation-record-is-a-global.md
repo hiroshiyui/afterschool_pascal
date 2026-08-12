@@ -142,10 +142,16 @@ equivalent — counted twice, because each compiler carries it.**
 The equivalent pair is instructive: taking a callee's static link by walking
 (`frameAt(level - 1)`) instead of from its owner is *indistinguishable* at
 level 1, because a level-1 procedure's static link is never read. Nothing walks
-to level 0 any more — `addressOf` goes straight to the global — so the link a
-level-1 activation stores is dead, and the two expressions differ only there.
-At level 2 and below they are the same expression. Recorded here so the next
-reader does not go looking for the test.
+to level 0 any more — `addressOf` goes straight to the global, and `frameAt`
+has exactly one caller left, for levels above zero — so the link a level-1
+activation stores is dead, and the two expressions differ only there. At level
+2 and below they are the same expression.
+
+It is still *stored*: the prologue writes it as it always did, and `-O0` output
+shows it being written and never read. Removing the store would change the
+calling convention to save nothing an optimiser does not already remove.
+Recorded here so the next reader neither goes looking for the test nor is
+puzzled by the IR.
 
 The first run escaped fifteen of thirty-one, and every one of those was a
 corpus that had not been written yet: no export-range in a *working* program,

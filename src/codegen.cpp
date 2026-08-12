@@ -664,7 +664,12 @@ void CodeGen::declareProcs(Block &block) {
       declareProcs(*decl->body);
 }
 
-void CodeGen::enterFrame(Symbol *proc, Function *fn) {
+/// The facts every emitted function starts from, and the frame it works
+/// through. Split out of `enterFrame` because a module's finalization needs
+/// exactly this and none of the prologue that follows it — no parameters to
+/// copy in, no files to open, no jump record to arm (ISO/IEC 10206:1991
+/// §6.11.1 gives a module-block no label-declaration-part).
+void CodeGen::beginFunction(Symbol *proc, Function *fn) {
   curFn_ = fn;
   // A label belongs to exactly one block, so the map is emptied per function.
   // Sema numbers labels across the whole program, so a stale entry would never
@@ -672,14 +677,21 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   // numbers right.
   labelBlocks_.clear();
   curProc_ = proc;
-  BasicBlock *entry = BasicBlock::Create(ctx_, "entry", fn);
-  b_.SetInsertPoint(entry);
-
-  StructType *frameTy = frameTypes_[proc];
+  b_.SetInsertPoint(BasicBlock::Create(ctx_, "entry", fn));
   // A level-0 block's record is a global: it has one activation, and a
   // module's must outlive the function that initialises it (ADR-0053).
-  curFrame_ = proc->level == 0 ? llvm::cast<llvm::Value>(frameGlobal(proc))
-                               : b_.CreateAlloca(frameTy, nullptr, "frame");
+  curFrame_ = proc->level == 0
+                  ? llvm::cast<llvm::Value>(frameGlobal(proc))
+                  : b_.CreateAlloca(frameTypes_[proc], nullptr, "frame");
+}
+
+void CodeGen::enterFrame(Symbol *proc, Function *fn) {
+  // A label belongs to exactly one block, so the map is emptied per function.
+  // Sema numbers labels across the whole program, so a stale entry would never
+  // be *matched* — this bounds what is kept, and is not what makes the block
+  // numbers right.
+  beginFunction(proc, fn);
+  StructType *frameTy = frameTypes_[proc];
 
   auto arg = fn->arg_begin();
   if (proc->level == 0) {
@@ -1327,11 +1339,7 @@ void CodeGen::emitModule(ModuleDecl &m) {
   Function *fini = Function::Create(ty, Function::InternalLinkage,
                                     "m." + sym->name + ".fini", mod_.get());
   moduleFini_[sym] = fini;
-  curFn_ = fini;
-  curProc_ = sym;
-  curFrame_ = frameGlobal(sym);
-  labelBlocks_.clear();
-  b_.SetInsertPoint(BasicBlock::Create(ctx_, "entry", fini));
+  beginFunction(sym, fini);
   if (m.fini)
     emitStmt(m.fini.get());
   // A module's files are closed when its activation terminates, which is the
@@ -1349,9 +1357,11 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   // Every module's frame type and every procedure of every module, before any
   // body is emitted: the main program may call an imported procedure, and a
   // module written earlier may have been given its body later.
+  // Every ModuleDecl carries its module's symbol by the time Sema is done, and
+  // codegen does not run when Sema found anything — so there is nothing to
+  // guard against here. A split module is two decls sharing one symbol, which
+  // is what the `count` asks about.
   for (auto &m : prog.modules) {
-    if (!m->sym)
-      continue;
     if (!frameTypes_.count(m->sym))
       buildFrameType(m->sym);
     if (m->heading)
@@ -1375,7 +1385,7 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   // symbol, and it has one activation record and one pair of functions. The
   // block is the half that carries them.
   for (auto &m : prog.modules)
-    if (m->sym && m->block)
+    if (m->block)
       emitModule(*m);
 
   enterFrame(programSym, mainFn);

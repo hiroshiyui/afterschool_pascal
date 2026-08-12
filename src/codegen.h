@@ -178,6 +178,9 @@ private:
   /// Emit the body of every procedure in a block, recursively.
   void emitProcs(Block &block);
   void emitProcBody(ProcDecl &decl);
+  /// The opening every emitted function shares: the current function, an entry
+  /// block, and the frame to work through.
+  void beginFunction(Symbol *proc, llvm::Function *fn);
   /// Prologue shared by main and every procedure: alloca the frame, store the
   /// static link, copy the incoming arguments into their slots.
   void enterFrame(Symbol *proc, llvm::Function *fn);

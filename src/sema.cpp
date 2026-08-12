@@ -3353,7 +3353,7 @@ void Sema::checkExpr(Expr *e) {
     // before the base is checked, since an interface-identifier has no type
     // and checking it would report that first.
     if (auto *b = as<VarRef>(fld->base.get()))
-      if (b->sym == nullptr && isInterfaceName(b->name)) {
+      if (isInterfaceName(b->name)) {
         Symbol *sym = lookupName(b->name, fld->field, fld->line, fld->col);
         fld->qualified = sym;
         e->type = ty::Int();
@@ -4416,38 +4416,6 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
 /// The five required functions ISO/IEC 10206:1991 adds for the complex type.
 /// They are grouped because every question anyone asks about them is the same
 /// one: does this standard have them?
-static bool isComplexBuiltin(Builtin b) {
-  return b == Builtin::Cmplx || b == Builtin::Polar || b == Builtin::Re ||
-         b == Builtin::Im || b == Builtin::Arg;
-}
-
-/// §6.7.6.6's two and §6.7.6.5's one. Grouped for the same reason the complex
-/// ones are: the only question anyone asks is whether this standard has them.
-static bool isFileEnquiry(Builtin b) {
-  return b == Builtin::Position || b == Builtin::LastPosition ||
-         b == Builtin::Empty;
-}
-
-/// §6.7.6.8's one. Grouped with the rest for the same reason: the only
-/// question asked of it alone is whether this standard has it.
-static bool isBindingBuiltin(Builtin b) { return b == Builtin::Binding; }
-
-/// §6.7.6.7's ten, grouped for the same reason as the rest: the only question
-/// asked of them together is whether this standard has them.
-static bool isStringBuiltin(Builtin b) {
-  return b == Builtin::Length || b == Builtin::Index || b == Builtin::Substr ||
-         b == Builtin::Trim || b == Builtin::StrEq || b == Builtin::StrNe ||
-         b == Builtin::StrLt || b == Builtin::StrGt || b == Builtin::StrLe ||
-         b == Builtin::StrGe;
-}
-
-/// The six comparison functions of §6.7.6.7, which take two operands where
-/// the other four take one or three.
-static bool isStringCompare(Builtin b) {
-  return b == Builtin::StrEq || b == Builtin::StrNe || b == Builtin::StrLt ||
-         b == Builtin::StrGt || b == Builtin::StrLe || b == Builtin::StrGe;
-}
-
 static bool isRequiredName(const std::string &name) {
   static const char *procs[] = {"new",   "dispose", "reset",  "rewrite",
                                 "get",   "put",     "read",   "readln",
@@ -4503,6 +4471,105 @@ void Sema::checkProcArgument(Symbol *formal, Expr *a, Symbol *callee,
                  "'" + v->name + "' does not match the parameter list of " +
                      (formal->resultType() ? "functional" : "procedural") +
                      " parameter '" + formal->name + "'");
+}
+
+/// ISO/IEC 10206:1991 §6.7.6.5's `empty` and §6.7.6.6's `position` and
+/// `LastPosition`. All three take a file variable and nothing else — no
+/// default, unlike `eof`, because there is no standard direct-access file to
+/// default to.
+void Sema::checkFileEnquiry(Call *c) {
+  c->type = c->builtin == Builtin::Empty ? ty::Bool() : ty::Int();
+  if (c->args.size() != 1) {
+    diags_.error(c->line, c->col,
+                 "'" + c->name + "' takes exactly one file variable");
+    return;
+  }
+  Expr *a = c->args[0].get();
+  checkExpr(a);
+  if (!isDesignator(a) || (a->type && !a->type->isFile())) {
+    diags_.error(a->line, a->col,
+                 "'" + c->name + "' needs a file variable" +
+                     (a->type ? ", found " + a->type->name() : ""));
+    return;
+  }
+  if (a->type && !a->type->isDirectAccess()) {
+    diags_.error(a->line, a->col,
+                 "'" + c->name + "' needs a direct-access file, and " +
+                     a->type->name() + " has no index type");
+    return;
+  }
+  // §6.7.6.6: "shall return a result of type T" — the *index* type, not an
+  // integer. That is the whole reason the index-type is kept on the Type.
+  if (a->type && c->builtin != Builtin::Empty)
+    c->type = a->type->indexType;
+  return;
+}
+
+/// §6.7.6.7's ten string functions. They take one, two or three arguments, so
+/// they are checked apart from the required functions whose arity is one.
+void Sema::checkStringBuiltin(Call *c) {
+  for (auto &a : c->args)
+    checkExpr(a.get());
+  auto stringy = [&](Expr *a) {
+    if (a->type && !a->type->isStringOrChar())
+      diags_.error(a->line, a->col,
+                   "'" + c->name + "' needs a string or a char, found " +
+                       a->type->name());
+  };
+  if (isStringCompare(c->builtin)) {
+    c->type = ty::Bool();
+    if (c->args.size() != 2) {
+      diags_.error(c->line, c->col, "'" + c->name + "' takes two strings");
+      return;
+    }
+    stringy(c->args[0].get());
+    stringy(c->args[1].get());
+    return;
+  }
+  if (c->builtin == Builtin::Index) {
+    c->type = ty::Int();
+    if (c->args.size() != 2) {
+      diags_.error(c->line, c->col, "'index' takes two strings");
+      return;
+    }
+    stringy(c->args[0].get());
+    stringy(c->args[1].get());
+    return;
+  }
+  if (c->builtin == Builtin::Length) {
+    c->type = ty::Int();
+    if (c->args.size() != 1) {
+      diags_.error(c->line, c->col, "'length' takes one string");
+      return;
+    }
+    stringy(c->args[0].get());
+    return;
+  }
+  // §6.7.6.7: `trim` and `substr` "return a result of the
+  // canonical-string-type" — a value with no capacity, because it has no
+  // storage. What it may be assigned to is decided by its *length*, where
+  // the value finally is.
+  c->type = ty::CanonicalString();
+  if (c->builtin == Builtin::Trim) {
+    if (c->args.size() != 1) {
+      diags_.error(c->line, c->col, "'trim' takes one string");
+      return;
+    }
+    stringy(c->args[0].get());
+    return;
+  }
+  if (c->args.size() != 2 && c->args.size() != 3) {
+    diags_.error(c->line, c->col,
+                 "'substr' takes a string and one or two positions");
+    return;
+  }
+  stringy(c->args[0].get());
+  for (size_t i = 1; i < c->args.size(); ++i)
+    if (c->args[i]->type && !c->args[i]->type->isInteger())
+      diags_.error(c->args[i]->line, c->args[i]->col,
+                   "the positions of 'substr' are integers, found " +
+                       c->args[i]->type->name());
+  return;
 }
 
 void Sema::checkCall(Call *c) {
@@ -4575,30 +4642,7 @@ void Sema::checkCall(Call *c) {
   // variable and nothing else — no default, unlike `eof`, because there is no
   // standard direct-access file to default to.
   if (isFileEnquiry(c->builtin)) {
-    c->type = c->builtin == Builtin::Empty ? ty::Bool() : ty::Int();
-    if (c->args.size() != 1) {
-      diags_.error(c->line, c->col,
-                   "'" + c->name + "' takes exactly one file variable");
-      return;
-    }
-    Expr *a = c->args[0].get();
-    checkExpr(a);
-    if (!isDesignator(a) || (a->type && !a->type->isFile())) {
-      diags_.error(a->line, a->col,
-                   "'" + c->name + "' needs a file variable" +
-                       (a->type ? ", found " + a->type->name() : ""));
-      return;
-    }
-    if (a->type && !a->type->isDirectAccess()) {
-      diags_.error(a->line, a->col,
-                   "'" + c->name + "' needs a direct-access file, and " +
-                       a->type->name() + " has no index type");
-      return;
-    }
-    // §6.7.6.6: "shall return a result of type T" — the *index* type, not an
-    // integer. That is the whole reason the index-type is kept on the Type.
-    if (a->type && c->builtin != Builtin::Empty)
-      c->type = a->type->indexType;
+    checkFileEnquiry(c);
     return;
   }
 
@@ -4666,67 +4710,7 @@ void Sema::checkCall(Call *c) {
   // §6.7.6.7's ten. They take one, two or three arguments, so they are
   // checked before the "exactly one" gate below.
   if (isStringBuiltin(c->builtin)) {
-    for (auto &a : c->args)
-      checkExpr(a.get());
-    auto stringy = [&](Expr *a) {
-      if (a->type && !a->type->isStringOrChar())
-        diags_.error(a->line, a->col,
-                     "'" + c->name + "' needs a string or a char, found " +
-                         a->type->name());
-    };
-    if (isStringCompare(c->builtin)) {
-      c->type = ty::Bool();
-      if (c->args.size() != 2) {
-        diags_.error(c->line, c->col, "'" + c->name + "' takes two strings");
-        return;
-      }
-      stringy(c->args[0].get());
-      stringy(c->args[1].get());
-      return;
-    }
-    if (c->builtin == Builtin::Index) {
-      c->type = ty::Int();
-      if (c->args.size() != 2) {
-        diags_.error(c->line, c->col, "'index' takes two strings");
-        return;
-      }
-      stringy(c->args[0].get());
-      stringy(c->args[1].get());
-      return;
-    }
-    if (c->builtin == Builtin::Length) {
-      c->type = ty::Int();
-      if (c->args.size() != 1) {
-        diags_.error(c->line, c->col, "'length' takes one string");
-        return;
-      }
-      stringy(c->args[0].get());
-      return;
-    }
-    // §6.7.6.7: `trim` and `substr` "return a result of the
-    // canonical-string-type" — a value with no capacity, because it has no
-    // storage. What it may be assigned to is decided by its *length*, where
-    // the value finally is.
-    c->type = ty::CanonicalString();
-    if (c->builtin == Builtin::Trim) {
-      if (c->args.size() != 1) {
-        diags_.error(c->line, c->col, "'trim' takes one string");
-        return;
-      }
-      stringy(c->args[0].get());
-      return;
-    }
-    if (c->args.size() != 2 && c->args.size() != 3) {
-      diags_.error(c->line, c->col,
-                   "'substr' takes a string and one or two positions");
-      return;
-    }
-    stringy(c->args[0].get());
-    for (size_t i = 1; i < c->args.size(); ++i)
-      if (c->args[i]->type && !c->args[i]->type->isInteger())
-        diags_.error(c->args[i]->line, c->args[i]->col,
-                     "the positions of 'substr' are integers, found " +
-                         c->args[i]->type->name());
+    checkStringBuiltin(c);
     return;
   }
 

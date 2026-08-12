@@ -419,6 +419,11 @@ private:
   void checkBinary(Binary *b);
   void checkSetExpr(SetExpr *s);
   void checkCall(Call *c);
+  /// Two families of required function lifted out of `checkCall`, which had
+  /// grown past three hundred lines as each Extended Pascal feature added its
+  /// own. Each is independently readable, and independently testable.
+  void checkFileEnquiry(Call *c);
+  void checkStringBuiltin(Call *c);
   void checkWith(WithStmt *w);
   void checkCase(CaseStmt *c);
   /// `new` and `dispose`, which are procedures rather than functions and so

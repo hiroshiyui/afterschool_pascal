@@ -304,8 +304,9 @@ so intermediate hops can load it without knowing the struct type at that level.
 Calling a procedure passes the frame of the block the procedure was *declared*
 in — for a recursive call that is the caller's parent, not the caller, which is
 the one place this is easy to get subtly wrong. A level-1 procedure's link is
-dead since ADR-0053: nothing walks to level 0 any more, because a level-0 frame
-is named directly.
+dead since ADR-0053 — nothing walks to level 0 any more, because a level-0
+frame is named directly — but the prologue still writes it, so it appears in
+the IR and is simply never read.
 
 **Level.** Lexical nesting depth. The program body is level 0.
 

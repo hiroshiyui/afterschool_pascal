@@ -93,6 +93,44 @@ enum class Builtin {
   Binding,
 };
 
+/// Which family a required function belongs to. These live beside the enum
+/// rather than inside one pass because both Sema and CodeGen ask, and two
+/// copies of the same list is exactly the duplicated dispatch this codebase
+/// keeps out of its tree walks. The only question asked of a family as a whole
+/// is whether the selected standard has it.
+inline bool isComplexBuiltin(Builtin b) {
+  return b == Builtin::Cmplx || b == Builtin::Polar || b == Builtin::Re ||
+         b == Builtin::Im || b == Builtin::Arg;
+}
+
+/// §6.7.6.6's two and §6.7.6.5's one. Grouped for the same reason the complex
+/// ones are: the only question anyone asks is whether this standard has them.
+inline bool isFileEnquiry(Builtin b) {
+  return b == Builtin::Position || b == Builtin::LastPosition ||
+         b == Builtin::Empty;
+}
+
+/// §6.7.6.8's one. Grouped with the rest for the same reason: the only
+/// question asked of it alone is whether this standard has it.
+inline bool isBindingBuiltin(Builtin b) { return b == Builtin::Binding; }
+
+/// §6.7.6.7's ten, grouped for the same reason as the rest: the only question
+/// asked of them together is whether this standard has them.
+inline bool isStringBuiltin(Builtin b) {
+  return b == Builtin::Length || b == Builtin::Index || b == Builtin::Substr ||
+         b == Builtin::Trim || b == Builtin::StrEq || b == Builtin::StrNe ||
+         b == Builtin::StrLt || b == Builtin::StrGt || b == Builtin::StrLe ||
+         b == Builtin::StrGe;
+}
+
+/// The six comparison functions of §6.7.6.7, which take two operands where
+/// the other four take one or three.
+inline bool isStringCompare(Builtin b) {
+  return b == Builtin::StrEq || b == Builtin::StrNe || b == Builtin::StrLt ||
+         b == Builtin::StrGt || b == Builtin::StrLe || b == Builtin::StrGe;
+}
+
+
 struct Expr : Node {
   Type *type = nullptr; // filled in by Sema
   using Node::Node;
