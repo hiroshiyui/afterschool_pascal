@@ -1,0 +1,11 @@
+<source>:20:16: error: 's' is a protected parameter, so it cannot be given a time stamp
+<source>:24:3: error: 'GetTimeStamp' takes one TimeStamp variable
+<source>:25:3: error: 'GetTimeStamp' takes one TimeStamp variable
+<source>:26:16: error: 'GetTimeStamp' needs a variable, not a value
+<source>:27:16: error: 'GetTimeStamp' needs a TimeStamp variable, found integer
+<source>:28:16: error: 'GetTimeStamp' needs a TimeStamp variable, found alike
+<source>:29:11: error: undeclared identifier 'date'
+<source>:30:11: error: 'date' takes one TimeStamp
+<source>:31:16: error: 'date' needs a TimeStamp, found integer
+<source>:32:16: error: 'time' needs a TimeStamp, found alike
+<source>:34:19: error: operator '+' needs numeric operands, found string and integer

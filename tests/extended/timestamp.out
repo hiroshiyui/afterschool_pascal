@@ -1,0 +1,15 @@
+fields in range: TRUE
+date agrees with DateValid: TRUE
+time agrees with TimeValid: TRUE
+the clock gives a valid date: TRUE
+the clock gives a valid time: TRUE
+date: [2024-02-29]
+time: [13:05:09]
+lengths: 10 8
+equal: TRUE
+both: 2024-02-29 13:05:09
+narrow: [2024-02]
+wide: [  13:05:09]
+leap century: 2000-02-29
+year end: 2024-12-31
+the fallback date: 0001-01-01 00:00:00

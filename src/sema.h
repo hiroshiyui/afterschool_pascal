@@ -529,6 +529,12 @@ private:
   /// standard has it. Null under ISO 7185, which is what makes every rule
   /// about binding answer "no such type" there rather than needing a flag.
   Type *bindingType_ = nullptr;
+  /// §6.4.3.4's other required record-type, built in `installPredefined` for
+  /// the same reason `BindingType` is: a program cannot write one, because
+  /// two records are the same type only when one identifier denotes both
+  /// (ADR-0017), so the *only* value `GetTimeStamp` will accept is one of the
+  /// type built here.
+  Type *timeStampType_ = nullptr;
   void checkNotThreatened(Expr *e, const std::string &what);
 
   /// True if a value of `from` may be assigned to / compared with `to`.

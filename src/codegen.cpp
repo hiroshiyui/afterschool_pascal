@@ -1833,6 +1833,40 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
     return;
   }
 
+  // §6.7.5.8's `GetTimeStamp(t)`. The clock is sampled once and then read
+  // field by field, which is the shape that keeps the record's *layout* out of
+  // the runtime entirely: what crosses the boundary is eight numbers, and the
+  // stores are made here through the same getelementptrs a field selection
+  // would use.
+  //
+  // The alternative — handing the runtime eight field addresses, or a pointer
+  // to the whole record — was rejected for ADR-0030's reason. A Boolean field
+  // is an `i1`, and how an `i1` sits in memory is precisely the sort of fact
+  // neither backend is allowed to depend on. Nothing about the representation
+  // is decided outside `llvmType` this way.
+  //
+  // The loop is over the *record's own* fields rather than a written-out list,
+  // so the eight `pas_timestamp_field` indices are §6.4.3.4's field order and
+  // that order is stated in exactly one place, `installPredefined`.
+  if (s->standard == StdProc::GetTimeStamp) {
+    ap::Type *tt = arg->type;
+    StructType *st = cast<StructType>(llvmType(tt));
+    b_.CreateCall(rt("pas_gettimestamp", voidTy, {}), {});
+    for (size_t i = 0; i < tt->fields.size(); ++i) {
+      llvm::Value *v = b_.CreateCall(rt("pas_timestamp_field", i32(), {i32()}),
+                                     {ConstantInt::get(i32(), i)}, "stamp");
+      llvm::Value *at = b_.CreateStructGEP(st, slot, static_cast<unsigned>(i),
+                                           tt->fields[i].name);
+      // No `checkedForSubrange`. Every value the runtime can return is inside
+      // the field's bounds by construction — §6.7.5.8 fixes the fallbacks at
+      // `January 1, 1` and midnight, and a calendar supplies no month 13 — so
+      // a check here would be one this compiler could not make fail.
+      b_.CreateStore(
+          b_.CreateZExtOrTrunc(v, llvmType(tt->fields[i].type), "stamp.f"), at);
+    }
+    return;
+  }
+
   // §6.7.5.6's `bind(f, b)`. The binding is implementation-defined and here it
   // is a file name, so what crosses to the runtime is `b.name` as the pointer
   // and length every string value is — `b.bound` is ignored, which NOTE 3 says
@@ -2898,7 +2932,39 @@ void CodeGen::emitString(Expr *e, llvm::Value *&data, llvm::Value *&len) {
     }
   }
 
+  // §6.7.6.9's `date(t)` and `time(t)`. Both are a value of the
+  // canonical-string-type, so both are a pointer and a length like every other
+  // string value — and because the representation is implementation-defined
+  // and this one is fixed-width, the length is a *constant* and only the
+  // characters cost a call. That is the same division `pas_str_concat` makes,
+  // where §6.8.3.6 fixes the length and the runtime returns only the bytes.
+  //
+  // Three fields are loaded and passed as numbers, for the reason
+  // `GetTimeStamp` samples rather than being handed the record: nothing about
+  // how a TimeStamp is laid out crosses to the runtime, in either direction.
   if (auto *c = as<Call>(e)) {
+    if (isTimeBuiltin(c->builtin)) {
+      bool isDate = c->builtin == Builtin::Date;
+      ap::Type *tt = c->args[0]->type;
+      StructType *st = cast<StructType>(llvmType(tt));
+      llvm::Value *rec = emitAddress(c->args[0].get());
+      // year, month, day for `date`; hour, minute, second for `time`.
+      unsigned first = isDate ? 2u : 5u;
+      llvm::Value *f[3];
+      for (unsigned k = 0; k < 3; ++k) {
+        ap::Type *ft = tt->fields[first + k].type;
+        f[k] = b_.CreateZExtOrTrunc(
+            b_.CreateLoad(llvmType(ft),
+                          b_.CreateStructGEP(st, rec, first + k,
+                                             tt->fields[first + k].name)),
+            i32(), "stamp.v");
+      }
+      data = b_.CreateCall(rt(isDate ? "pas_date" : "pas_time", ptr(),
+                              {i32(), i32(), i32()}),
+                           {f[0], f[1], f[2]}, isDate ? "date" : "time");
+      len = ConstantInt::get(i32(), isDate ? kDateLength : kTimeLength);
+      return;
+    }
     if (c->builtin == Builtin::Substr || c->builtin == Builtin::Trim) {
       llvm::Value *sd, *sl;
       emitString(c->args[0].get(), sd, sl);

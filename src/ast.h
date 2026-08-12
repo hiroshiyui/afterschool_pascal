@@ -100,6 +100,16 @@ enum class Builtin {
   /// `b := binding(f)` are both ordinary designators and need no case of their
   /// own anywhere.
   Binding,
+  /// ISO/IEC 10206:1991 §6.7.6.9's time functions. Each takes a `TimeStamp`
+  /// and returns "a result of the canonical-string-type with an
+  /// implementation-defined length" whose characters are an
+  /// implementation-defined representation of the date or the time in it — so
+  /// unlike every other required function here, what these *say* is this
+  /// compiler's choice and not the standard's. Only `date` has an error
+  /// condition: §6.7.6.9 makes it one if the day, month and year do not
+  /// represent a valid calendar date, where an hour, a minute and a second
+  /// cannot fail to, their subranges having already said so.
+  Date, Time,
 };
 
 /// Which family a required function belongs to. These live beside the enum
@@ -122,6 +132,14 @@ inline bool isFileEnquiry(Builtin b) {
 /// §6.7.6.8's one. Grouped with the rest for the same reason: the only
 /// question asked of it alone is whether this standard has it.
 inline bool isBindingBuiltin(Builtin b) { return b == Builtin::Binding; }
+
+/// §6.7.6.9's two. Grouped for the same reason as the rest — but note that
+/// `date` and `time` are names an ISO 7185 program is especially likely to
+/// have used for its own, which is what makes the grouping load-bearing here
+/// rather than tidy: it is the gate that keeps them out of that language.
+inline bool isTimeBuiltin(Builtin b) {
+  return b == Builtin::Date || b == Builtin::Time;
+}
 
 /// §6.7.6.7's ten, grouped for the same reason as the rest: the only question
 /// asked of them together is whether this standard has them.
@@ -560,7 +578,13 @@ enum class StdProc {
   /// the control procedure halt ... no further processing of the activation of
   /// the program shall occur." It is a required *identifier*, so a program may
   /// declare its own `halt` and win.
-  Halt
+  Halt,
+  /// ISO/IEC 10206:1991 §6.7.5.8's time procedure. It is the only required
+  /// procedure that reads something outside the program which is not a file,
+  /// and §6.9.4 f) makes it threaten its argument — the one entry on that
+  /// list ADR-0046 could not have a call site for, because the procedure it
+  /// names did not exist yet.
+  GetTimeStamp
 };
 
 struct ProcCallStmt : Stmt {

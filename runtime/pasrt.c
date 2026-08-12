@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "pasrt.h"
 
@@ -1455,4 +1456,168 @@ void pas_str_write_end(void *v) {
   fclose(f->fp);
   free(f->membuf);
   free(f);
+}
+
+/* ------------------------------------------------------------------- time
+ *
+ * ISO/IEC 10206:1991 §6.7.5.8's `GetTimeStamp` and §6.7.6.9's `date` and
+ * `time`. What crosses this boundary is numbers and characters, never the
+ * shape of a TimeStamp: the compiler holds the record's layout and does the
+ * eight stores itself, so `pas_gettimestamp` samples the clock and
+ * `pas_timestamp_field` hands the parts back one at a time.
+ *
+ * Two calls rather than one filling a caller's buffer, because the Pascal
+ * backend emits sequentially and cannot put an `alloca` in the entry block
+ * after the fact (ADR-0043) — scratch storage for the sample would grow the
+ * stack once per `GetTimeStamp` in a loop. A static costs nothing and there is
+ * no second thread to race it. */
+
+static int pas_stamp[8];
+
+/* §6.7.5.8: the value attributed has DateValid true and the current date, or
+ * DateValid false and 'January 1, 1'; and TimeValid true and the current time,
+ * or TimeValid false and midnight.
+ *
+ * "Current" is implementation-defined (D.36 and D.37 both say so), and this
+ * implementation defines it as **the instant named by SOURCE_DATE_EPOCH when
+ * that variable holds one, and the system clock otherwise**. That is the
+ * reproducible-builds convention, and it is not a testing hook bolted on: it
+ * is the only way anything can check that these eight fields are the *right*
+ * eight numbers. A program cannot know what day it is except by asking this
+ * same function, so without a clock somebody else chooses, an off-by-one in
+ * any field is invisible — `tm_mon` written unadjusted names a different real
+ * month eleven times out of twelve, and every oracle here agrees with it.
+ *
+ * A fixed instant is read as **UTC**, because the point of fixing it is that
+ * the answer not vary, and local time would make it vary with the machine's
+ * zone. A value that does not parse is ignored rather than reported, so the
+ * variable can only ever replace the clock, never break it.
+ *
+ * The two flags are separate in the standard and separate here: neither the
+ * clock failing nor an instant the calendar cannot express supplies a date or
+ * a time, so both go false together. Such a platform therefore reports the
+ * fallbacks the clause names rather than a wrong date, which is the whole
+ * point of having them -- and an unconvertible SOURCE_DATE_EPOCH is the one
+ * way a program can reach that arm on a machine whose clock works, which is
+ * what makes it something a test can check. */
+void pas_gettimestamp(void) {
+  const char *fixed = getenv("SOURCE_DATE_EPOCH");
+  struct tm *t = NULL;
+  /* Whether the variable named an instant at all -- which is what decides
+   * where a failure goes, below. */
+  int named = 0;
+  time_t now;
+  if (fixed && *fixed) {
+    char *end;
+    long long v = strtoll(fixed, &end, 10);
+    /* strtoll answers 0 for a word it cannot read, so "did it consume the
+     * whole word" is the question, not "what did it return": without this the
+     * variable set to anything at all would date the program 1970-01-01. An
+     * empty setting parses as 0 with nothing left over, which is why it is
+     * refused by the test above rather than by this one. */
+    if (*end == '\0') {
+      named = 1;
+      now = (time_t)v;
+      t = gmtime(&now);
+    }
+  }
+  /* The clock is consulted only when no instant was named. A named one that
+   * the calendar cannot express -- a count of seconds whose year does not fit
+   * the representation -- falls to the arm below instead, because answering
+   * with the wall clock would make the output of a program vary from run to
+   * run while the variable that exists to fix it was set. That is the same
+   * kind of wrong answer as 1970: one nothing reports. */
+  if (!t && !named) {
+    now = time(NULL);
+    if (now != (time_t)-1)
+      t = localtime(&now);
+  }
+  if (!t) {
+    pas_stamp[0] = 0; /* DateValid */
+    pas_stamp[1] = 0; /* TimeValid */
+    pas_stamp[2] = 1; /* year   -- 'January 1, 1' */
+    pas_stamp[3] = 1; /* month */
+    pas_stamp[4] = 1; /* day */
+    pas_stamp[5] = 0; /* hour   -- midnight */
+    pas_stamp[6] = 0; /* minute */
+    pas_stamp[7] = 0; /* second */
+    return;
+  }
+  pas_stamp[0] = 1;
+  pas_stamp[1] = 1;
+  pas_stamp[2] = t->tm_year + 1900;
+  pas_stamp[3] = t->tm_mon + 1;
+  pas_stamp[4] = t->tm_mday;
+  pas_stamp[5] = t->tm_hour;
+  pas_stamp[6] = t->tm_min;
+  /* A leap second gives tm_sec 60, which is not a value of the field's
+   * subrange 0..59 — so it is clamped here rather than trapping in a program
+   * that did nothing wrong. §6.4.3.4 NOTE 5 lets a processor report leap
+   * seconds in a field of its own; this one does not have such a field. */
+  pas_stamp[7] = t->tm_sec > 59 ? 59 : t->tm_sec;
+}
+
+int pas_timestamp_field(int k) {
+  if (k < 0 || k > 7)
+    pas_runtime_error("GetTimeStamp: no such field");
+  return pas_stamp[k];
+}
+
+/* §6.7.6.9: "It shall be an error if the fields day, month, and year of t do
+ * not represent a valid calendar date." month and day are already inside
+ * 1..12 and 1..31 -- their subranges saw to that at every store -- so what is
+ * left is the length of the month, February in a leap year, and a year this
+ * representation cannot write.
+ *
+ * The Gregorian rule is the standard's own word ("the current date under the
+ * Gregorian calendar"), and the year range is this implementation's: the
+ * result has one implementation-defined *length*, four digits of year is what
+ * that length allows, and a year outside 1..9999 therefore has no
+ * representation here. The calendar has no year 0 either way. */
+static int pas_days_in_month(int y, int m) {
+  static const int len[13] = {0,  31, 28, 31, 30, 31, 30,
+                              31, 31, 30, 31, 30, 31};
+  if (m == 2 && (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)))
+    return 29;
+  return len[m];
+}
+
+char *pas_date(int y, int m, int d) {
+  char *p;
+  if (y < 1 || y > 9999)
+    pas_runtime_error("date: the year is not one this implementation can "
+                      "write (1 to 9999)");
+  if (m < 1 || m > 12 || d < 1 || d > pas_days_in_month(y, m))
+    pas_runtime_error("date: the day, month and year are not a valid "
+                      "calendar date");
+  p = pas_str_temp(10);
+  /* Written by hand rather than with snprintf, which would need eleven bytes
+   * for its terminator where a string value is exactly its length. */
+  p[0] = (char)('0' + y / 1000);
+  p[1] = (char)('0' + y / 100 % 10);
+  p[2] = (char)('0' + y / 10 % 10);
+  p[3] = (char)('0' + y % 10);
+  p[4] = '-';
+  p[5] = (char)('0' + m / 10);
+  p[6] = (char)('0' + m % 10);
+  p[7] = '-';
+  p[8] = (char)('0' + d / 10);
+  p[9] = (char)('0' + d % 10);
+  return p;
+}
+
+/* §6.7.6.9 gives `time` no error condition, and it needs none: hour, minute
+ * and second are 0..23 and 0..59, so every value the type admits has a
+ * representation. The asymmetry with `date` is the standard's. */
+char *pas_time(int h, int m, int s) {
+  char *p = pas_str_temp(8);
+  p[0] = (char)('0' + h / 10);
+  p[1] = (char)('0' + h % 10);
+  p[2] = ':';
+  p[3] = (char)('0' + m / 10);
+  p[4] = (char)('0' + m % 10);
+  p[5] = ':';
+  p[6] = (char)('0' + s / 10);
+  p[7] = (char)('0' + s % 10);
+  return p;
 }

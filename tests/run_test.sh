@@ -16,6 +16,12 @@
 #   name.in    fed to the program's standard input. Without it stdin is
 #              /dev/null, so a program that reads sees end-of-file at once
 #              rather than waiting for a terminal that is not there.
+#   name.epoch one integer: seconds since 1970-01-01 UTC, exported as
+#              SOURCE_DATE_EPOCH so the program's idea of "now" is fixed.
+#              ISO/IEC 10206:1991 §6.7.5.8 makes the current date and time
+#              implementation-defined, and this implementation defines them
+#              from that variable when it is set — which is what lets a golden
+#              file name a date at all.
 #   arguments  two writable scratch paths are always passed, so a program
 #              whose header names external files has somewhere to put them.
 #              A program that names none simply ignores them.
@@ -32,8 +38,19 @@ standard=${3:-iso7185}
 expected_out="${source_file%.pas}.out"
 expected_err="${source_file%.pas}.err"
 stdin_file="${source_file%.pas}.in"
+epoch_file="${source_file%.pas}.epoch"
 name=$(basename "${source_file%.pas}")
 [[ -f $stdin_file ]] || stdin_file=/dev/null
+# Unset when there is no .epoch file, so every other case runs against the real
+# clock -- and does so whatever the developer happens to have exported, since a
+# fixed instant inherited from the environment would otherwise silently replace
+# the clock in the one case that is testing the clock.
+if [[ -f $epoch_file ]]; then
+  SOURCE_DATE_EPOCH=$(<"$epoch_file")
+  export SOURCE_DATE_EPOCH
+else
+  unset SOURCE_DATE_EPOCH
+fi
 
 if [[ ! -f $expected_out && ! -f $expected_err ]]; then
   echo "missing expected-output file: $expected_out or $expected_err" >&2

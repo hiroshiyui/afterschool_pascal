@@ -68,6 +68,21 @@ inline constexpr int kSetLimit = 255;
 /// more, so the number is this compiler's; it is a file name's worth.
 inline constexpr int kBindingNameCapacity = 255;
 
+/// The lengths of §6.7.6.9's two results. The clause makes each "a result of
+/// the canonical-string-type with an implementation-defined length" — one
+/// length for the implementation, not one per value — so the representations
+/// chosen here are fixed-width: ISO 8601's `YYYY-MM-DD` and `HH:MM:SS`.
+///
+/// Being a compile-time constant is what makes these free: a string value is
+/// a pointer and a length (ADR-0051), and only the pointer needs a call.
+///
+/// It is also where the year's range comes from. `year` is an `integer` and a
+/// four-digit field cannot spell every one of those, so §6.7.6.9's "error if
+/// ... not a valid calendar date" is read to include a year this
+/// representation cannot write. See `pas_date`.
+inline constexpr int kDateLength = 10;
+inline constexpr int kTimeLength = 8;
+
 struct Type;
 struct Symbol;
 

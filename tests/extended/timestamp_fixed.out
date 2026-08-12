@@ -1,0 +1,11 @@
+DateValid: TRUE
+TimeValid: TRUE
+year:      2001
+month:     2
+day:       3
+hour:      4
+minute:    5
+second:    6
+date:      2001-02-03
+time:      04:05:06
+again:     2001-02-03 04:05:06

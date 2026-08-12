@@ -74,6 +74,11 @@ const std::unordered_map<std::string, Builtin> &builtins() {
       {"eq", Builtin::StrEq},      {"ne", Builtin::StrNe},
       {"lt", Builtin::StrLt},      {"gt", Builtin::StrGt},
       {"le", Builtin::StrLe},      {"ge", Builtin::StrGe},
+      // §6.7.6.9. Required identifiers too, and the two here most likely to
+      // collide with a program's own —
+      // `tests/extended/timestamp_redeclared.pas` is a program that declares
+      // all four.
+      {"date", Builtin::Date},     {"time", Builtin::Time},
   };
   return m;
 }
@@ -1725,6 +1730,50 @@ void Sema::installPredefined() {
     Symbol *bts = declare("bindingtype", SymKind::Type, 0, 0);
     bts->type = bt;
     bindingType_ = bt;
+
+    // §6.4.3.4: "There shall be a record-type designated packed and denoted by
+    // the required type-identifier `TimeStamp`. For each of the required
+    // field-identifiers DateValid, TimeValid, year, month, day, hour, minute,
+    // and second, there shall be an associated required field ... and that
+    // field shall have a type denoted by the type-denoter Boolean, Boolean,
+    // integer, 1..12, 1..31, 0..23, 0..59, and 0..59, respectively."
+    //
+    // Written out here rather than parsed from NOTE 4's Pascal because the
+    // field *order* is what CodeGen walks: `GetTimeStamp` fills the record by
+    // index, so the standard's order is the one interface between the two
+    // passes and it is spelled once, here.
+    //
+    // The subranges are what make this record worth the words. A program that
+    // stores 13 into `month` traps at the store like any other subrange
+    // (ADR-0018), and `date(t)` is left with only the errors those bounds
+    // cannot catch — February the 30th, and a year the calendar has not got.
+    auto span = [&](int lo, int hi) {
+      Type *t = newType(TypeKind::Subrange);
+      t->host = ty::Int();
+      t->lo = lo;
+      t->hi = hi;
+      return t;
+    };
+    Type *ts = newType(TypeKind::Record);
+    ts->packed = true;
+    ts->alias = "TimeStamp";
+    struct {
+      const char *name;
+      Type *type;
+    } stamp[] = {{"datevalid", ty::Bool()}, {"timevalid", ty::Bool()},
+                 {"year", ty::Int()},       {"month", span(1, 12)},
+                 {"day", span(1, 31)},      {"hour", span(0, 23)},
+                 {"minute", span(0, 59)},   {"second", span(0, 59)}};
+    for (const auto &f : stamp) {
+      Field fld;
+      fld.name = f.name;
+      fld.type = f.type;
+      fld.index = static_cast<int>(ts->fields.size());
+      ts->fields.push_back(fld);
+    }
+    Symbol *tss = declare("timestamp", SymKind::Type, 0, 0);
+    tss->type = ts;
+    timeStampType_ = ts;
 
     Symbol *str = declare("string", SymKind::Schema, 0, 0);
     str->isStringSchema = true;
@@ -4884,7 +4933,8 @@ void Sema::checkRead(ReadStmt *r) {
 }
 
 /// The required procedures ISO/IEC 10206:1991 adds: §6.7.5.2's five
-/// direct-access ones, §6.7.5.6's two binding ones and §6.7.5.7's `halt`. All
+/// direct-access ones, §6.7.5.6's two binding ones, §6.7.5.7's `halt` and
+/// §6.7.5.8's `GetTimeStamp`. All
 /// are required *identifiers* like the complex functions, not word-symbols, so
 /// a valid ISO 7185 program may declare a procedure called `update` or `halt`
 /// — which is why they are recognised only under the standard that has them,
@@ -4892,7 +4942,7 @@ void Sema::checkRead(ReadStmt *r) {
 bool Sema::isRequiredProc(const std::string &name) {
   return name == "seekread" || name == "seekwrite" || name == "seekupdate" ||
          name == "update" || name == "extend" || name == "bind" ||
-         name == "unbind" || name == "halt";
+         name == "unbind" || name == "halt" || name == "gettimestamp";
 }
 
 void Sema::checkStdProc(ProcCallStmt *p) {
@@ -4917,6 +4967,37 @@ void Sema::checkStdProc(ProcCallStmt *p) {
       checkExpr(a.get());
     return;
   }
+  // §6.7.5.8: `GetTimeStamp(t)` attributes to `t` either the current date and
+  // time with both valid-flags true, or the standard's own fallbacks with the
+  // corresponding flag false. What arrives here is only whether `t` is a
+  // variable of the one type §6.4.3.4 built — every other question about the
+  // value belongs to the runtime, which is where "current" is defined.
+  if (p->name == "gettimestamp") {
+    p->standard = StdProc::GetTimeStamp;
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    if (p->args.size() != 1) {
+      diags_.error(p->line, p->col,
+                   "'GetTimeStamp' takes one TimeStamp variable");
+      return;
+    }
+    Expr *a = p->args[0].get();
+    if (!isDesignator(a)) {
+      diags_.error(a->line, a->col,
+                   "'GetTimeStamp' needs a variable, not a value");
+      return;
+    }
+    // §6.9.4 f): "S is a procedure-statement that specifies activation of the
+    // required procedure GetTimeStamp, and V is the variable-access t." The
+    // only entry on that list with no call site when ADR-0046 landed.
+    checkNotThreatened(a, "it cannot be given a time stamp");
+    if (a->type && a->type != timeStampType_)
+      diags_.error(a->line, a->col,
+                   "'GetTimeStamp' needs a TimeStamp variable, found " +
+                       a->type->name());
+    return;
+  }
+
   if (p->name == "bind" || p->name == "unbind") {
     p->standard = p->name == "bind" ? StdProc::Bind : StdProc::Unbind;
     for (auto &a : p->args)
@@ -5657,7 +5738,7 @@ void Sema::checkCall(Call *c) {
   if (it != builtins().end() && std_ == Std::Iso7185 &&
       (isComplexBuiltin(it->second) || isFileEnquiry(it->second) ||
        isStringBuiltin(it->second) || isBindingBuiltin(it->second) ||
-       it->second == Builtin::Card)) {
+       isTimeBuiltin(it->second) || it->second == Builtin::Card)) {
     diags_.error(c->line, c->col,
                  "'" + c->name + "' is an Extended Pascal function; compile "
                  "with --std=extended");
@@ -5744,6 +5825,27 @@ void Sema::checkCall(Call *c) {
       c->resultSlot = addHiddenVar(
           "binding$" + std::to_string(current_->frameVars.size()),
           SymKind::Var, bindingType_, current_);
+    return;
+  }
+
+  // §6.7.6.9: `date(t)` and `time(t)` "return a result of the
+  // canonical-string-type with an implementation-defined length" from a
+  // TimeStamp. They are the only required functions whose *argument* is a
+  // record, and the type test is identity because §6.4.3.4's record is the one
+  // built in `installPredefined` and ADR-0017 makes no other record that type.
+  if (isTimeBuiltin(c->builtin)) {
+    c->type = ty::CanonicalString();
+    if (c->args.size() != 1) {
+      diags_.error(c->line, c->col, "'" + c->name + "' takes one TimeStamp");
+      return;
+    }
+    // "From the expression t" — an expression, not a variable-access, so
+    // unlike `GetTimeStamp` this needs no designator and threatens nothing.
+    Expr *a = c->args[0].get();
+    if (a->type && a->type != timeStampType_)
+      diags_.error(a->line, a->col,
+                   "'" + c->name + "' needs a TimeStamp, found " +
+                       a->type->name());
     return;
   }
 

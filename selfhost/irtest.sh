@@ -112,6 +112,16 @@ golden() {
     expected_err="${f%.pas}.err"
     stdin_file="${f%.pas}.in"
     [[ -f $stdin_file ]] || stdin_file=/dev/null
+    # The same fixed-clock hook run_test.sh has, and for the same reason: a
+    # golden file that names a date can only be compared against a date
+    # somebody chose. Unset again afterwards so one case cannot leak into
+    # the next.
+    if [[ -f ${f%.pas}.epoch ]]; then
+      SOURCE_DATE_EPOCH=$(<"${f%.pas}.epoch")
+      export SOURCE_DATE_EPOCH
+    else
+      unset SOURCE_DATE_EPOCH
+    fi
 
     # Rejected by the C++ compiler: a diagnostic, not a program. difftest.sh is
     # what compares those, and it compares all of them.

@@ -45,6 +45,13 @@ const
     field "an implementation-defined variable-string-type" and says nothing
     more, so the number is this compiler's; it is a file name's worth. }
   bindNameCap = 255;
+  { 6.7.6.9 gives each result "an implementation-defined length", singular --
+    one length for the implementation and not one per value -- so the two
+    representations are fixed-width ISO 8601: YYYY-MM-DD and HH:MM:SS. Being
+    compile-time constants is what makes them free, since a string value is a
+    pointer and a length and only the pointer needs a call. }
+  dateLen = 10;
+  timeLen = 8;
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
@@ -326,7 +333,14 @@ type
                    is a *record*. It is given a hidden frame slot to be built
                    in -- the same mechanism a `with` binding uses -- so that
                    `b := binding(f)` is an ordinary designator. }
-                 biBinding);
+                 biBinding,
+                 { 6.7.6.9's time functions. Each takes a TimeStamp and returns
+                   the canonical-string-type -- so unlike every other required
+                   function here, what these *say* is this compiler's choice
+                   and not the standard's. Only date has an error condition:
+                   an hour, a minute and a second cannot fail to be a time,
+                   their subranges having already said so. }
+                 biDate, biTime);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
@@ -339,7 +353,11 @@ type
                  { 6.7.5.7's control procedure: "no further processing of the
                    activation of the program shall occur". A required
                    *identifier*, so a program may declare its own halt. }
-                 spHalt);
+                 spHalt,
+                 { 6.7.5.8's time procedure, the only required one that reads
+                   something outside the program which is not a file. 6.9.4 f)
+                   makes it threaten its argument. }
+                 spGetTimeStamp);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -1142,7 +1160,7 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
-  complexType, canonStringType, bindingType: typePtr;
+  complexType, canonStringType, bindingType, timeStampType: typePtr;
   emptySetType: typePtr;
   { the label declaration parts of the blocks currently open, innermost first }
   labelScope: labelScopePtr;
@@ -6615,7 +6633,7 @@ begin
           biRound, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
           biPosition, biLastPosition, biEmpty, biCard, biLength, biIndex,
           biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
-          biStrGe, biBinding: ;
+          biStrGe, biBinding, biDate, biTime: ;
         end;
   EvalConstCall := ok
 end;
@@ -9566,6 +9584,9 @@ begin
   { 6.7.6.8's one. }
   else if PoolIsWide(at, len, 'binding         ') then
     LookupBuiltin := biBinding
+  { 6.7.6.9's two. }
+  else if PoolIs(at, len, 'date     ') then LookupBuiltin := biDate
+  else if PoolIs(at, len, 'time     ') then LookupBuiltin := biTime
   else LookupBuiltin := biNone
 end;
 
@@ -9601,6 +9622,13 @@ end;
   asked of it alone is whether this standard has it. }
 function IsBindingBuiltin(b: builtinKind): boolean;
 begin IsBindingBuiltin := b = biBinding end;
+
+{ 6.7.6.9's two. Grouped for the same reason as the rest -- but note that date
+  and time are names an ISO 7185 program is especially likely to have used for
+  its own, which makes the grouping load-bearing here rather than tidy: it is
+  the gate that keeps them out of that language. }
+function IsTimeBuiltin(b: builtinKind): boolean;
+begin IsTimeBuiltin := (b = biDate) or (b = biTime) end;
 
 function IsStringCompare(b: builtinKind): boolean;
 begin
@@ -9698,7 +9726,8 @@ begin
     if (langStd = stdIso7185) and
        (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin) or
         IsStringBuiltin(c^.clBuiltin) or
-        IsBindingBuiltin(c^.clBuiltin) or (c^.clBuiltin = biCard)) then begin
+        IsBindingBuiltin(c^.clBuiltin) or IsTimeBuiltin(c^.clBuiltin) or
+        (c^.clBuiltin = biCard)) then begin
       ErrorAt(c^.line, c^.col);
       write('''');
       WritePool(c^.clAt, c^.clLen);
@@ -9787,6 +9816,35 @@ begin
                                         currentProc)
             end
           end
+        end
+      end
+      { 6.7.6.9: date(t) and time(t) "return a result of the
+        canonical-string-type with an implementation-defined length" from a
+        TimeStamp. They are the only required functions whose *argument* is a
+        record, and the type test is identity because 6.4.3.4's record is the
+        one built in InstallPredefined and ADR-0017 makes no other record that
+        type. "From the expression t" -- an expression, not a variable-access,
+        so unlike GetTimeStamp this needs no designator and threatens
+        nothing. }
+      else if IsTimeBuiltin(c^.clBuiltin) then begin
+        c^.ntype := canonStringType;
+        if n <> 1 then begin
+          ErrorAt(c^.line, c^.col);
+          write('''');
+          WritePool(c^.clAt, c^.clLen);
+          writeln(''' takes one TimeStamp')
+        end
+        else begin
+          a := c^.clArgs;
+          if a^.ntype <> nil then
+            if a^.ntype <> timeStampType then begin
+              ErrorAt(a^.line, a^.col);
+              write('''');
+              WritePool(c^.clAt, c^.clLen);
+              write(''' needs a TimeStamp, found ');
+              WriteTypeName(a^.ntype);
+              writeln
+            end
         end
       end
       else if IsStringBuiltin(c^.clBuiltin) then begin
@@ -11196,7 +11254,8 @@ begin
                         PoolIsWide(at, len, 'seekwrite       ') or
                         PoolIsWide(at, len, 'seekupdate      ') or
                         PoolIsWide(at, len, 'update          ') or
-                        PoolIsWide(at, len, 'extend          ')
+                        PoolIsWide(at, len, 'extend          ') or
+                        PoolIsWide(at, len, 'gettimestamp    ')
 end;
 
 procedure CheckStdProc(p: nodePtr);
@@ -11230,6 +11289,8 @@ begin
     p^.pcStd := spUnbind
   else if PoolIsWide(p^.pcAt, p^.pcLen, 'halt            ') then
     p^.pcStd := spHalt
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'gettimestamp    ') then
+    p^.pcStd := spGetTimeStamp
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -11255,6 +11316,37 @@ begin
     if n <> 0 then begin
       ErrorAt(p^.line, p^.col);
       writeln('''halt'' takes no arguments')
+    end
+  end
+  else
+  { 6.7.5.8: GetTimeStamp(t) attributes to t either the current date and time
+    with both valid-flags true, or the standard's own fallbacks with the
+    corresponding flag false. What arrives here is only whether t is a variable
+    of the one type 6.4.3.4 built -- every other question about the value
+    belongs to the runtime, which is where "current" is defined. }
+  if p^.pcStd = spGetTimeStamp then begin
+    if n <> 1 then begin
+      ErrorAt(p^.line, p^.col);
+      writeln('''GetTimeStamp'' takes one TimeStamp variable')
+    end
+    else begin
+      a := p^.pcArgs;
+      if not IsDesignator(a) then begin
+        ErrorAt(a^.line, a^.col);
+        writeln('''GetTimeStamp'' needs a variable, not a value')
+      end
+      { 6.9.4 f): "S is a procedure-statement that specifies activation of the
+        required procedure GetTimeStamp, and V is the variable-access t." The
+        only entry on that list with no call site when ADR-0046 landed. }
+      else if Threatened(a) then
+        writeln('it cannot be given a time stamp')
+      else if a^.ntype <> nil then
+        if a^.ntype <> timeStampType then begin
+          ErrorAt(a^.line, a^.col);
+          write('''GetTimeStamp'' needs a TimeStamp variable, found ');
+          WriteTypeName(a^.ntype);
+          writeln
+        end
     end
   end
   else
@@ -13253,8 +13345,45 @@ begin
 end;
 
 procedure InstallPredefined;
-var s, cap: symPtr; at, len: integer;
+var s, cap: symPtr; at, len, stampIndex: integer;
     nameType: typePtr; fld: fieldPtr;
+
+  { 6.4.3.4 gives six of TimeStamp's eight fields a subrange type, and those
+    subranges are what make the record worth the words: a program that stores
+    13 into `month` traps at the store like any other subrange (ADR-0018), and
+    date(t) is left with only the errors those bounds cannot catch. }
+  function Span(lo, hi: integer): typePtr;
+  var t: typePtr;
+  begin
+    t := NewType(tySubrange);
+    t^.host := intType;
+    t^.lo := lo;
+    t^.hi := hi;
+    Span := t
+  end;
+
+  { Appended in 6.4.3.4's order, because that order is the whole interface
+    between Sema and CodeGen here: GetTimeStamp fills the record by index. }
+  procedure StampField(nm: kwLit; ft: typePtr);
+  var f: fieldPtr; a, l: integer;
+  begin
+    new(f);
+    InternWord(nm, a, l);
+    f^.at := a;
+    f^.len := l;
+    f^.ftype := ft;
+    f^.index := stampIndex;
+    f^.variant := nil;
+    f^.line := 0;
+    f^.col := 0;
+    f^.initValue := nil;
+    f^.next := nil;
+    if timeStampType^.fields = nil then timeStampType^.fields := f
+    else timeStampType^.fieldTail^.next := f;
+    timeStampType^.fieldTail := f;
+    stampIndex := stampIndex + 1
+  end;
+
 begin
   InternWord('true     ', at, len);
   s := Declare(at, len, skConst, 0, 0);
@@ -13366,6 +13495,30 @@ begin
     InternWide('BindingType     ', at, len);
     bindingType^.aliasAt := at;
     bindingType^.aliasLen := len;
+
+    { 6.4.3.4: "There shall be a record-type designated packed and denoted by
+      the required type-identifier `TimeStamp`. For each of the required
+      field-identifiers DateValid, TimeValid, year, month, day, hour, minute,
+      and second, there shall be an associated required field ... and that
+      field shall have a type denoted by the type-denoter Boolean, Boolean,
+      integer, 1..12, 1..31, 0..23, 0..59, and 0..59, respectively." }
+    timeStampType := NewType(tyRecord);
+    timeStampType^.isPacked := true;
+    stampIndex := 0;
+    StampField('datevalid', boolType);
+    StampField('timevalid', boolType);
+    StampField('year     ', intType);
+    StampField('month    ', Span(1, 12));
+    StampField('day      ', Span(1, 31));
+    StampField('hour     ', Span(0, 23));
+    StampField('minute   ', Span(0, 59));
+    StampField('second   ', Span(0, 59));
+    InternWide('timestamp       ', at, len);
+    s := Declare(at, len, skType, 0, 0);
+    s^.stype := timeStampType;
+    InternWide('TimeStamp       ', at, len);
+    timeStampType^.aliasAt := at;
+    timeStampType^.aliasLen := len;
 
     InternWord('string   ', at, len);
     s := Declare(at, len, skSchema, 0, 0);
@@ -17539,6 +17692,7 @@ end;
   makes characters that did not exist. }
 procedure EmitString(e: nodePtr; var data, len: str);
 var ad, al, bd, bl, at_, count, hdr, addr, c, one: str; st: typePtr;
+    part: array [0..2] of str; k, first: integer;
 begin
   { 6.4.2.5's states are one-to-one, so a restricted string *is* the string it
     restricts as far as its representation goes. Asked here rather than by
@@ -17568,6 +17722,44 @@ begin
     write(ircode, ', ');
     PutOp(bl);
     writeln(ircode)
+  end
+  { 6.7.6.9's date(t) and time(t). Both are a value of the
+    canonical-string-type, so both are a pointer and a length like every other
+    string value -- and because the representation is fixed-width, the length
+    is a *constant* and only the characters cost a call. That is the same
+    division pas_str_concat makes, where 6.8.3.6 fixes the length and the
+    runtime returns only the bytes.
+
+    Three fields are loaded and passed as numbers, for the reason GetTimeStamp
+    samples rather than being handed the record: nothing about how a TimeStamp
+    is laid out crosses to the runtime, in either direction. All six of the
+    fields either function reads are integers, so no conversion arises. }
+  else if (e^.kind = nkCall) and IsTimeBuiltin(e^.clBuiltin) then begin
+    EmitAddress(e^.clArgs, hdr);
+    if e^.clBuiltin = biDate then first := 2 else first := 5;
+    for k := 0 to 2 do begin
+      Def(addr);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(e^.clArgs^.ntype);
+      write(ircode, ', ptr ');
+      PutOp(hdr);
+      writeln(ircode, ', i32 0, i32 ', first + k:1);
+      Def(part[k]);
+      write(ircode, 'load i32, ptr ');
+      PutOp(addr);
+      writeln(ircode)
+    end;
+    Def(data);
+    if e^.clBuiltin = biDate then write(ircode, 'call ptr @pas_date(i32 ')
+    else write(ircode, 'call ptr @pas_time(i32 ');
+    PutOp(part[0]);
+    write(ircode, ', i32 ');
+    PutOp(part[1]);
+    write(ircode, ', i32 ');
+    PutOp(part[2]);
+    writeln(ircode, ')');
+    if e^.clBuiltin = biDate then OpInt(dateLen, len)
+    else OpInt(timeLen, len)
   end
   else if (e^.kind = nkCall) and
           ((e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim)) then begin
@@ -19799,8 +19991,8 @@ begin
 end;
 
 procedure EmitStdProc(s: nodePtr);
-var slot, block, raw, rec, nameRec, nlen, ndata: str;
-    domain, idx: typePtr; head, msg: integer;
+var slot, block, raw, rec, nameRec, nlen, ndata, part, narrow, at_: str;
+    domain, idx: typePtr; head, msg, k: integer;
 begin
   { 6.7.5.7's halt is the one required procedure that takes no arguments, so it
     is answered before the address of the first one is taken. The runtime
@@ -19863,7 +20055,7 @@ begin
         spUpdate:  write(ircode, 'update');
         spExtend:  write(ircode, 'extend');
         spNone, spNew, spDispose, spSeekRead, spSeekWrite, spSeekUpdate,
-        spBind, spUnbind:
+        spBind, spUnbind, spGetTimeStamp:
           write(ircode, 'get')
       end;
       write(ircode, '(ptr ');
@@ -19892,7 +20084,8 @@ begin
         spSeekWrite:  write(ircode, 'seekwrite');
         spSeekUpdate: write(ircode, 'seekupdate');
         spNone, spNew, spDispose, spReset, spRewrite, spGet, spPut, spUpdate,
-        spExtend, spBind, spUnbind: write(ircode, 'seekread')
+        spExtend, spBind, spUnbind, spGetTimeStamp:
+          write(ircode, 'seekread')
       end;
       write(ircode, '(ptr ');
       PutOp(slot);
@@ -19957,6 +20150,46 @@ begin
       write(ircode, '  store ptr null, ptr ');
       PutOp(slot);
       writeln(ircode)
+    end;
+    { 6.7.5.8's GetTimeStamp(t). The clock is sampled once and then read field
+      by field, which is the shape that keeps the record's *layout* out of the
+      runtime entirely: what crosses the boundary is eight numbers, and the
+      stores are made here.
+
+      The alternative -- handing the runtime eight field addresses, or a
+      pointer to the whole record -- was rejected for ADR-0030's reason. A
+      Boolean field is an i1, and how an i1 sits in memory is precisely the
+      sort of fact neither backend may depend on.
+
+      The first two fields are the Booleans and the other six are integers, so
+      the only conversion is the trunc those two need. }
+    spGetTimeStamp: begin
+      writeln(ircode, '  call void @pas_gettimestamp()');
+      for k := 0 to 7 do begin
+        Def(part);
+        writeln(ircode, 'call i32 @pas_timestamp_field(i32 ', k:1, ')');
+        Def(at_);
+        write(ircode, 'getelementptr inbounds ');
+        PutLlType(s^.pcArgs^.ntype);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 ', k:1);
+        if k < 2 then begin
+          Def(narrow);
+          write(ircode, 'trunc i32 ');
+          PutOp(part);
+          writeln(ircode, ' to i1');
+          write(ircode, '  store i1 ');
+          PutOp(narrow)
+        end
+        else begin
+          write(ircode, '  store i32 ');
+          PutOp(part)
+        end;
+        write(ircode, ', ptr ');
+        PutOp(at_);
+        writeln(ircode)
+      end
     end;
     spNone, spHalt: { spHalt was answered above; spNone is not a standard one }
   end
@@ -21226,6 +21459,11 @@ begin
   writeln(ircode, 'declare i32 @pas_binding_bound(ptr)');
   writeln(ircode, 'declare ptr @pas_binding_name(ptr)');
   writeln(ircode, 'declare i32 @pas_binding_namelen(ptr)');
+  { ISO/IEC 10206:1991 6.7.5.8 and 6.7.6.9's time operations. }
+  writeln(ircode, 'declare void @pas_gettimestamp()');
+  writeln(ircode, 'declare i32 @pas_timestamp_field(i32)');
+  writeln(ircode, 'declare ptr @pas_date(i32, i32, i32)');
+  writeln(ircode, 'declare ptr @pas_time(i32, i32, i32)');
   { ISO/IEC 10206:1991 6.7.5.2 and 6.7.6.6's direct-access operations. }
   writeln(ircode, 'declare void @pas_seekread(ptr, i32)');
   writeln(ircode, 'declare void @pas_seekwrite(ptr, i32)');
