@@ -135,6 +135,8 @@ private:
 
   /// Apply any `[...]` and `.field` selectors following a designator's base.
   ExprPtr parseSelectors(ExprPtr base);
+  ExprPtr afterCall(ExprPtr call);
+  bool callTakesCaret(size_t from) const;
 
   ExprPtr parseExpr();
   ExprPtr parseSimpleExpr();

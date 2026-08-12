@@ -1,0 +1,10 @@
+field  7 8
+index  20
+walk    2 4 6
+chain  100 5
+mixed  9 9
+deref  12
+ptrvar 4 8
+set     0 1
+expr   14
+assign 10

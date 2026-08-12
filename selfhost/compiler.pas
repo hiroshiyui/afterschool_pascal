@@ -3064,6 +3064,25 @@ begin
   ParseSelectors := base
 end;
 
+{ 6.8.6: a function-access may carry selectors, so `mk(7, 8).y`, `scale(10)[2]`
+  and `alloc(3)^` are expressions. Under ISO 7185 6.6.2 a function result is a
+  simple type or a pointer, so only the last could arise and that standard does
+  not offer it either.
+
+  Nothing else in the parser distinguishes a call's selectors from a variable's,
+  and nothing in Sema or CodeGen is told which it walked. That is the whole of
+  the feature: 6.8.6's NOTE ("a function-access is not equivalent to a
+  variable-access") is already spelled by IsDesignator answering false for a
+  call, and every restriction the NOTE names -- an actual var parameter, a
+  `with`'s record, an assignment's target -- is a call site of that predicate. }
+function AfterCall(call: nodePtr): nodePtr;
+begin
+  if langStd = stdExtended then
+    AfterCall := ParseSelectors(call)
+  else
+    AfterCall := call
+end;
+
 function ParsePrimary: nodePtr;
 var e, call, m: nodePtr; head, tail, memberTail: nodePtr; more: boolean;
 begin
@@ -3163,7 +3182,8 @@ begin
         e^.clQualAt := 0;
         e^.clQualLen := 0;
         e^.clArgs := nil;
-        pos := pos + 1
+        pos := pos + 1;
+        e := AfterCall(e)
       end
       { 6.11.3's qualified name in call position. A record field is never
         followed by '(' -- there is no procedure type in the type part -- so
@@ -3188,7 +3208,7 @@ begin
         end;
         call^.clArgs := head;
         Expect(tkRParen, ctxCallArgs);
-        e := call
+        e := AfterCall(call)
       end
       else if PeekKind(1) = tkLParen then begin
         call := NewNode(nkCall, CurLine, CurCol);
@@ -3209,15 +3229,13 @@ begin
         end;
         call^.clArgs := head;
         Expect(tkRParen, ctxCallArgs);
-        e := call
+        e := AfterCall(call)
       end
       else begin
         e := NewNode(nkVar, CurLine, CurCol);
         e^.vrAt := tok[pos].at;
         e^.vrLen := tok[pos].len;
         pos := pos + 1;
-        { Only a variable takes selectors: a function result is a simple type
-          in ISO 7185 6.6.2, so `f(x)[i]` cannot arise. }
         e := ParseSelectors(e)
       end
     end
@@ -3663,6 +3681,46 @@ begin
   ParseRead := s
 end;
 
+{ 6.8.6.4's function-identified-variable, `f(x)^`, is the one function-access
+  6.5.1 admits as a *variable*-access -- so it may be assigned to, and a
+  statement beginning with a name and an argument list is no longer certainly a
+  procedure-statement.
+
+  Every other function-access is refused by the grammar rather than by a rule:
+  an assignment-statement's target is a variable-access and `mk(1, 2).x` is not
+  one, so nothing here needs to say so.
+
+  This scans to the matching ')' -- the same bracket-depth walk
+  LooksLikeSubrange makes, and for the same reason: the token that decides is
+  not a fixed distance away. }
+function CallTakesCaret(from: integer): boolean;
+var i, depth: integer; ok, done: boolean; k: tokenKind;
+begin
+  ok := false;
+  if (langStd = stdExtended) and (from <= tokCount) and
+     (tok[from].kind = tkLParen) then begin
+    depth := 0;
+    i := from;
+    done := false;
+    while (not done) and (i <= tokCount) do begin
+      k := tok[i].kind;
+      if (k = tkLParen) or (k = tkLBracket) then
+        depth := depth + 1
+      else if (k = tkRParen) or (k = tkRBracket) then begin
+        depth := depth - 1;
+        if depth = 0 then begin
+          ok := (i < tokCount) and (tok[i + 1].kind = tkCaret);
+          done := true
+        end
+      end
+      else if k = tkEof then
+        done := true;
+      i := i + 1
+    end
+  end;
+  CallTakesCaret := ok
+end;
+
 function ParseIdentStatement: nodePtr;
 var s, ref, head, tail: nodePtr; l, c, at, len: integer;
     more, handled: boolean; k: tokenKind;
@@ -3685,6 +3743,20 @@ begin
       selectors are what tell the two apart, because only a designator can
       carry them. }
     k := PeekKind(1);
+    { 6.8.6.4, both spellings of it. ParsePrimary builds the call and then its
+      selectors, so the target is assembled by the code that already knows how
+      -- this branch only has to recognise that the statement is one. }
+    if ((k = tkLParen) and CallTakesCaret(pos + 1)) or
+       ((k = tkPeriod) and (PeekKind(2) = tkIdent) and
+        (PeekKind(3) = tkLParen) and CallTakesCaret(pos + 3)) then begin
+      s := NewNode(nkAssign, l, c);
+      s^.asTarget := nil;
+      s^.asValue := nil;
+      s^.asTarget := ParsePrimary;
+      Expect(tkAssign, ctxAssign);
+      s^.asValue := ParseExpr
+    end
+    else
     { 6.11.3's qualified name in a procedure-statement. `a.b` is a field
       selection unless what follows it can neither continue a designator nor
       assign to one -- and those five tokens are the whole of what can, so a

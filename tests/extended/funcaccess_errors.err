@@ -1,0 +1,2 @@
+<source>:35:16: error: argument 1 of 'bump' is a var parameter and needs a variable
+<source>:39:18: error: read needs a variable, not a value

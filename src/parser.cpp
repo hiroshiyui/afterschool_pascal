@@ -1307,6 +1307,35 @@ StmtPtr Parser::parseWith() {
   return body;
 }
 
+/// ISO/IEC 10206:1991 §6.8.6.4's function-identified-variable, `f(x)^`, is the
+/// one function-access §6.5.1 admits as a *variable*-access — so it may be
+/// assigned to, and a statement beginning with a name and an argument list is
+/// no longer certainly a procedure-statement.
+///
+/// Every other function-access is refused by the grammar rather than by a
+/// rule: an assignment-statement's target is a variable-access, and
+/// `mk(1, 2).x` is not one, so nothing here needs to say so.
+///
+/// This scans to the matching `)` — the same bracket-depth walk
+/// `looksLikeSubrange` makes, and for the same reason: the token that decides
+/// is not a fixed distance away.
+bool Parser::callTakesCaret(size_t from) const {
+  if (std_ != Std::Extended || from >= toks_.size() ||
+      toks_[from].kind != Tok::LParen)
+    return false;
+  int depth = 0;
+  for (size_t i = from; i < toks_.size(); ++i) {
+    if (toks_[i].kind == Tok::LParen || toks_[i].kind == Tok::LBracket)
+      ++depth;
+    else if (toks_[i].kind == Tok::RParen || toks_[i].kind == Tok::RBracket) {
+      if (--depth == 0)
+        return i + 1 < toks_.size() && toks_[i + 1].kind == Tok::Caret;
+    } else if (toks_[i].kind == Tok::Eof)
+      break;
+  }
+  return false;
+}
+
 StmtPtr Parser::parseIdentStatement() {
   const Token &id = cur();
   if (id.text == "write")
@@ -1317,6 +1346,19 @@ StmtPtr Parser::parseIdentStatement() {
     return parseRead(false);
   if (id.text == "readln")
     return parseRead(true);
+
+  // §6.8.6.4, both spellings of it. `parsePrimary` builds the call and then
+  // its selectors, so the target is assembled by the code that already knows
+  // how — this branch only has to recognise that the statement is one.
+  if ((peek().kind == Tok::LParen && callTakesCaret(pos_ + 1)) ||
+      (peek().kind == Tok::Period && peek(2).kind == Tok::Ident &&
+       peek(3).kind == Tok::LParen && callTakesCaret(pos_ + 3))) {
+    auto s = makeNode<Assign>(id);
+    s->target = parsePrimary();
+    expect(Tok::Assign, "in an assignment");
+    s->value = parseExpr();
+    return s;
+  }
 
   // ISO/IEC 10206:1991 §6.11.3's qualified name in a procedure-statement.
   // `a.b` is a field selection unless what follows it can neither continue a
@@ -1459,6 +1501,24 @@ ExprPtr Parser::parseSelectors(ExprPtr base) {
     }
     return base;
   }
+}
+
+/// ISO/IEC 10206:1991 §6.8.6: a function-access may carry selectors, so
+/// `mk(7, 8).y`, `scale(10)[2]` and `alloc(3)^` are expressions. Under
+/// ISO 7185 §6.6.2 a function result is a simple type or a pointer, so only
+/// the last of those could arise and the standard does not offer it either.
+///
+/// Nothing else in the parser distinguishes a call's selectors from a
+/// variable's, and nothing in Sema or CodeGen is told which it walked. That is
+/// the whole of the feature: §6.8.6's NOTE ("a function-access is not
+/// equivalent to a variable-access") is already spelled by `Sema::isDesignator`
+/// answering `false` for a call, and every restriction the NOTE names — an
+/// actual var parameter, a `with`'s record, an assignment's target — is a call
+/// site of that one predicate.
+ExprPtr Parser::afterCall(ExprPtr call) {
+  if (std_ != Std::Extended)
+    return call;
+  return parseSelectors(std::move(call));
 }
 
 ExprPtr Parser::parseExpr() {
@@ -1668,7 +1728,7 @@ ExprPtr Parser::parsePrimary() {
       auto call = makeNode<Call>(t);
       call->name = t.text;
       ++pos_;
-      return call;
+      return afterCall(std::move(call));
     }
     // §6.11.3's qualified name in call position. A record field is never
     // followed by `(` — there is no procedure type in the type part — so
@@ -1685,7 +1745,7 @@ ExprPtr Parser::parsePrimary() {
         } while (accept(Tok::Comma));
       }
       expect(Tok::RParen, "after the arguments of a function call");
-      return call;
+      return afterCall(std::move(call));
     }
     if (peek().kind == Tok::LParen) {
       auto call = makeNode<Call>(t);
@@ -1697,13 +1757,11 @@ ExprPtr Parser::parsePrimary() {
         } while (accept(Tok::Comma));
       }
       expect(Tok::RParen, "after the arguments of a function call");
-      return call;
+      return afterCall(std::move(call));
     }
     auto ref = makeNode<VarRef>(t);
     ref->name = t.text;
     ++pos_;
-    // Only a variable takes selectors: a function result is a simple type in
-    // ISO 7185 §6.6.2, so `f(x)[i]` cannot arise.
     return parseSelectors(std::move(ref));
   }
   default:
