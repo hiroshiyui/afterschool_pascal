@@ -1,0 +1,11 @@
+<source>:30:8: error: 'pack' needs an array that is not packed, found small
+<source>:32:14: error: 'pack' needs a packed array, found unpacked
+<source>:33:13: error: 'unpack' needs an array that is not packed, found small
+<source>:35:3: error: 'pack' needs one component type, found record x end and record x end
+<source>:37:11: error: the index must be assignment-compatible with 1..10, found char
+<source>:39:14: error: 'pack' needs a variable, not a value
+<source>:41:3: error: 'pack' takes an unpacked array, an index and a packed array
+<source>:42:3: error: 'unpack' takes a packed array, an unpacked array and an index
+<source>:44:8: error: 'page' needs a text file variable, found file of integer
+<source>:45:8: error: 'page' needs a text file variable, found integer
+<source>:46:3: error: 'page' takes one text file, or none

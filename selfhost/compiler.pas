@@ -78,7 +78,7 @@ const
     runtime/pasrt.h. The C++ code generator includes that header so the two
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
     the number and selfhost/irtest.sh checks that the two still match. }
-  fileSize = 112;
+  fileSize = 120;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh. }
@@ -357,7 +357,12 @@ type
                  { 6.7.5.8's time procedure, the only required one that reads
                    something outside the program which is not a file. 6.9.4 f)
                    makes it threaten its argument. }
-                 spGetTimeStamp);
+                 spGetTimeStamp,
+                 { ISO 7185 6.6.5.4's transfer procedures and 6.9.5's page.
+                   Appended, because the AST dump prints a builtin as its
+                   ordinal and both compilers must agree on the number
+                   (ADR-0067). }
+                 spPack, spUnpack, spPage);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -11434,9 +11439,31 @@ begin
                         PoolIsWide(at, len, 'gettimestamp    ')
 end;
 
+{ The three arguments of 6.6.5.4's transfer procedures, by role rather than by
+  position: pack(a, i, z) and unpack(z, a, i) name the same three things in a
+  different order, and every rule about them is about the roles. }
+procedure TransferArgs(p: nodePtr; var unpackedArg, packedArg, indexArg: nodePtr);
+var a1, a2, a3: nodePtr;
+begin
+  a1 := p^.pcArgs;
+  a2 := a1^.next;
+  a3 := a2^.next;
+  if p^.pcStd = spPack then begin
+    unpackedArg := a1;
+    indexArg := a2;
+    packedArg := a3
+  end
+  else begin
+    packedArg := a1;
+    unpackedArg := a2;
+    indexArg := a3
+  end
+end;
+
 procedure CheckStdProc(p: nodePtr);
 var
   a, value: nodePtr;
+  unpackedArg, packedArg, indexArg: nodePtr;
   n, v, k, chosen: integer;
   domain, tag, valueType: typePtr;
   arms, w: variantPtr;
@@ -11467,6 +11494,9 @@ begin
     p^.pcStd := spHalt
   else if PoolIsWide(p^.pcAt, p^.pcLen, 'gettimestamp    ') then
     p^.pcStd := spGetTimeStamp
+  else if PoolIs(p^.pcAt, p^.pcLen, 'pack     ') then p^.pcStd := spPack
+  else if PoolIs(p^.pcAt, p^.pcLen, 'unpack   ') then p^.pcStd := spUnpack
+  else if PoolIs(p^.pcAt, p^.pcLen, 'page     ') then p^.pcStd := spPage
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -11523,6 +11553,137 @@ begin
           WriteTypeName(a^.ntype);
           writeln
         end
+    end
+  end
+  else
+  { 6.6.5.4: "a shall possess an array-type not designated packed; z shall
+    possess an array-type designated packed; the component-types of the types
+    of a and z shall be the same; and the value of the expression i shall be
+    assignment-compatible with the index-type of the type of a."
+
+    The two statements differ in argument *order* and in which side is
+    written, and in nothing else -- pack(a, i, z) fills z from a and
+    unpack(z, a, i) fills a from z -- so one arm checks both and names the
+    roles rather than the positions. }
+  if (p^.pcStd = spPack) or (p^.pcStd = spUnpack) then begin
+    if n <> 3 then begin
+      ErrorAt(p^.line, p^.col);
+      write('''');
+      WritePool(p^.pcAt, p^.pcLen);
+      if p^.pcStd = spPack then
+        writeln(''' takes an unpacked array, an index and a packed array')
+      else
+        writeln(''' takes a packed array, an unpacked array and an index')
+    end
+    else begin
+      TransferArgs(p, unpackedArg, packedArg, indexArg);
+      stop := false;
+      { Both arrays are variable-accesses whichever way the copy runs: the
+        source is read through a reference and the destination written, and
+        6.6.5.4 asks for a variable-access of each. }
+      if not IsDesignator(unpackedArg) then begin
+        ErrorAt(unpackedArg^.line, unpackedArg^.col);
+        write('''');
+        WritePool(p^.pcAt, p^.pcLen);
+        writeln(''' needs a variable, not a value');
+        stop := true
+      end
+      else if not IsDesignator(packedArg) then begin
+        ErrorAt(packedArg^.line, packedArg^.col);
+        write('''');
+        WritePool(p^.pcAt, p^.pcLen);
+        writeln(''' needs a variable, not a value');
+        stop := true
+      end;
+      { 6.9.4 e): the *destination* is threatened, and only that one -- the
+        source is read. Which side that is, is the whole difference between
+        the two procedures. }
+      if not stop then
+        if p^.pcStd = spPack then begin
+          if Threatened(packedArg) then
+            writeln('it cannot be packed into')
+        end
+        else if Threatened(unpackedArg) then
+          writeln('it cannot be unpacked into');
+      if not stop then
+        if (unpackedArg^.ntype <> nil) and (packedArg^.ntype <> nil) then begin
+          if not IsArray(unpackedArg^.ntype) or
+             unpackedArg^.ntype^.isPacked then begin
+            ErrorAt(unpackedArg^.line, unpackedArg^.col);
+            write('''');
+            WritePool(p^.pcAt, p^.pcLen);
+            write(''' needs an array that is not packed, found ');
+            WriteTypeName(unpackedArg^.ntype);
+            writeln;
+            stop := true
+          end
+          else if not IsArray(packedArg^.ntype) or
+                  not packedArg^.ntype^.isPacked then begin
+            ErrorAt(packedArg^.line, packedArg^.col);
+            write('''');
+            WritePool(p^.pcAt, p^.pcLen);
+            write(''' needs a packed array, found ');
+            WriteTypeName(packedArg^.ntype);
+            writeln;
+            stop := true
+          end
+          { "the component-types ... shall be the same" -- ADR-0017's
+            identity, not assignability, so two separately written component
+            types do not match however alike they look. }
+          else if unpackedArg^.ntype^.elem <> packedArg^.ntype^.elem then begin
+            ErrorAt(p^.line, p^.col);
+            write('''');
+            WritePool(p^.pcAt, p^.pcLen);
+            write(''' needs one component type, found ');
+            WriteTypeName(unpackedArg^.ntype^.elem);
+            write(' and ');
+            WriteTypeName(packedArg^.ntype^.elem);
+            writeln;
+            stop := true
+          end;
+          if not stop then
+            if indexArg^.ntype <> nil then
+              if not Assignable(unpackedArg^.ntype^.indexType,
+                                indexArg^.ntype) then begin
+                ErrorAt(indexArg^.line, indexArg^.col);
+                write('the index must be assignment-compatible with ');
+                WriteTypeName(unpackedArg^.ntype^.indexType);
+                write(', found ');
+                WriteTypeName(indexArg^.ntype);
+                writeln
+              end
+        end
+    end
+  end
+  else
+  { 6.9.5: page(f), or page for output. The pre-assertion is writeln(f)'s, so
+    what is checked here is what writeln checks -- a text file, and one the
+    program has. }
+  if p^.pcStd = spPage then begin
+    if n > 1 then begin
+      ErrorAt(p^.line, p^.col);
+      writeln('''page'' takes one text file, or none')
+    end
+    else if n = 0 then begin
+      { "the program shall contain a program-parameter-list containing an
+        identifier with the spelling output". The file is *supplied* here
+        rather than left for CodeGen to find, because CodeGen never inspects
+        names -- the same StandardFileRef a write with no file gets. }
+      p^.pcArgs := StandardFileRef(false, p^.line, p^.col);
+      CheckExpr(p^.pcArgs)
+    end
+    else begin
+      a := p^.pcArgs;
+      if not IsDesignator(a) or (a^.ntype = nil) then begin
+        ErrorAt(a^.line, a^.col);
+        writeln('''page'' needs a text file variable')
+      end
+      else if not IsTextFile(a^.ntype) then begin
+        ErrorAt(a^.line, a^.col);
+        write('''page'' needs a text file variable, found ');
+        WriteTypeName(a^.ntype);
+        writeln
+      end
     end
   end
   else
@@ -12062,6 +12223,12 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'rewrite  ') or
             PoolIs(s^.pcAt, s^.pcLen, 'get      ') or
             PoolIs(s^.pcAt, s^.pcLen, 'put      ') or
+            { pack, unpack and page are ISO 7185's own (6.6.5.4, 6.9.5), so
+              they are recognised under both standards rather than behind the
+              Extended-only gate -- 10206 keeps all three (ADR-0067). }
+            PoolIs(s^.pcAt, s^.pcLen, 'pack     ') or
+            PoolIs(s^.pcAt, s^.pcLen, 'unpack   ') or
+            PoolIs(s^.pcAt, s^.pcLen, 'page     ') or
             ((langStd = stdExtended) and
              IsRequiredProc(s^.pcAt, s^.pcLen))) then
           CheckStdProc(s)
@@ -20213,6 +20380,107 @@ begin
   writeln(ircode)
 end;
 
+{ ISO 7185 6.6.5.4's pack(a, i, z) and unpack(z, a, i). The clause does not
+  describe an operation -- it gives a *statement sequence* each is equivalent
+  to:
+
+      k := i; for j := u to v do begin zz[j] := aa[k];
+                                       if j <> v then k := succ(k) end
+
+  The bounds are checked once, before anything is copied, rather than at each
+  aa[k]: k runs monotonically from i, so the two ends are the only values that
+  can leave the array, and a partial copy before the trap would be worse than
+  none.
+
+  The copy itself is a memcpy, and that is a fact about *this* compiler rather
+  than a shortcut. 6.4.3.1 leaves `packed` entirely to the implementation and
+  this one packs nothing, so a packed array and an unpacked array of the same
+  component type have the same layout and the representation change these
+  procedures exist to make is vacuous here. What is left of 6.6.5.4 is the
+  index arithmetic and the range check (ADR-0067). }
+procedure EmitTransfer(s: nodePtr);
+var unpackedArg, packedArg, indexArg: nodePtr;
+    ua, pa, idx, wide, lo, hi, last, off, from, below, above, bad: str;
+    ut, pt: typePtr;
+    span, align, msg: integer;
+begin
+  TransferArgs(s, unpackedArg, packedArg, indexArg);
+  ut := unpackedArg^.ntype;
+  pt := packedArg^.ntype;
+  EmitAddress(unpackedArg, ua);
+  EmitAddress(packedArg, pa);
+  EmitExpr(indexArg, idx);
+  { char and boolean subscripts are narrower than i32; widening is exact
+    because their ordinals are non-negative. }
+  if IsChar(indexArg^.ntype) or IsBoolean(indexArg^.ntype) then begin
+    Def(wide);
+    write(ircode, 'zext ');
+    PutLlType(indexArg^.ntype);
+    write(ircode, ' ');
+    PutOp(idx);
+    writeln(ircode, ' to i32');
+    idx := wide
+  end;
+
+  span := pt^.hi - pt^.lo;
+  OpInt(ut^.lo, lo);
+  OpInt(ut^.hi, hi);
+  Def(last);
+  write(ircode, 'add i32 ');
+  PutOp(idx);
+  writeln(ircode, ', ', span:1);
+  Def(below);
+  write(ircode, 'icmp slt i32 ');
+  PutOp(idx);
+  write(ircode, ', ');
+  PutOp(lo);
+  writeln(ircode);
+  Def(above);
+  write(ircode, 'icmp sgt i32 ');
+  PutOp(last);
+  write(ircode, ', ');
+  PutOp(hi);
+  writeln(ircode);
+  Def(bad);
+  write(ircode, 'or i1 ');
+  PutOp(below);
+  write(ircode, ', ');
+  PutOp(above);
+  writeln(ircode);
+  MsgStart;
+  MsgText('array index out of bounds (             ');
+  AppendInt(msgBuf, ut^.lo);
+  MsgText('..                                      ');
+  AppendInt(msgBuf, ut^.hi);
+  Put(')');
+  msg := MsgEnd;
+  EmitTrapIf(bad, msg);
+
+  { k - m, the offset of the first unpacked component. The check above has
+    already made the subtraction sound. }
+  Def(off);
+  write(ircode, 'sub i32 ');
+  PutOp(idx);
+  write(ircode, ', ');
+  PutOp(lo);
+  writeln(ircode);
+  Def(from);
+  write(ircode, 'getelementptr inbounds ');
+  PutLlType(ut);
+  write(ircode, ', ptr ');
+  PutOp(ua);
+  write(ircode, ', i32 0, i32 ');
+  PutOp(off);
+  writeln(ircode);
+
+  align := LlAlign(ut^.elem);
+  write(ircode, '  call void @llvm.memcpy.p0.p0.i64(ptr align ', align:1, ' ');
+  if s^.pcStd = spPack then PutOp(pa) else PutOp(from);
+  write(ircode, ', ptr align ', align:1, ' ');
+  if s^.pcStd = spPack then PutOp(from) else PutOp(pa);
+  writeln(ircode, ', i64 ', LlSize(pt):1, ', i1 false)')
+end;
+
 procedure EmitStdProc(s: nodePtr);
 var slot, block, raw, rec, nameRec, nlen, ndata, part, narrow, at_: str;
     domain, idx: typePtr; head, msg, k: integer;
@@ -20224,6 +20492,11 @@ begin
     ADR-0032's non-local goto walks, for the same reason. }
   if s^.pcStd = spHalt then
     writeln(ircode, '  call void @pas_halt()')
+  { 6.6.5.4's transfer procedures, answered before the first argument's
+    address is taken because *which* argument is the array differs between the
+    two and neither is simply "the file" (ADR-0067). }
+  else if (s^.pcStd = spPack) or (s^.pcStd = spUnpack) then
+    EmitTransfer(s)
   else begin
   EmitAddress(s^.pcArgs, slot);
   case s^.pcStd of
@@ -20386,6 +20659,16 @@ begin
 
       The first two fields are the Booleans and the other six are integers, so
       the only conversion is the trunc those two need. }
+    { 6.9.5's page. The effect on the file is implementation-defined, so it is
+      the runtime's to choose; what the standard fixes is the implicit writeln
+      when the current line is not empty, and that needs the file's own state
+      -- which is the runtime's too. Sema has already supplied output when none
+      was written. }
+    spPage: begin
+      write(ircode, '  call void @pas_page(ptr ');
+      PutOp(slot);
+      writeln(ircode, ')')
+    end;
     spGetTimeStamp: begin
       writeln(ircode, '  call void @pas_gettimestamp()');
       for k := 0 to 7 do begin
@@ -21631,6 +21914,7 @@ begin
   writeln(ircode, 'declare void @pas_write_char(ptr, i8, i32)');
   writeln(ircode, 'declare void @pas_write_str(ptr, ptr, i32, i32)');
   writeln(ircode, 'declare void @pas_writeln(ptr)');
+  writeln(ircode, 'declare void @pas_page(ptr)');
   writeln(ircode, 'declare i8 @pas_read_char(ptr)');
   writeln(ircode, 'declare double @pas_read_real(ptr)');
   writeln(ircode, 'declare i64 @pas_read_int(ptr)');

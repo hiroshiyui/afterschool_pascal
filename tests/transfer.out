@@ -1,0 +1,10 @@
+pack from 3: cdefg
+pack from 1: abcde
+pack from 6: fghij
+pack whole:  abcdefghij
+unpack at 6: abcdeVWXYZ
+unpack at 1: 12345VWXYZ
+integers: 22 33 44
+after unpack: 11 22 33 -1 -2 -3
+from a char index: CD
+unpacked there: Hzz

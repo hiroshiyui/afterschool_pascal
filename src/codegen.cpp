@@ -1809,6 +1809,75 @@ void CodeGen::emitTupleCheck(Expr *dst, Expr *src) {
 /// `new(p)` gives p the address of fresh storage for one variable of its
 /// domain; `dispose(p)` gives that storage back. The size is a compile-time
 /// constant because the domain type is.
+/// ISO 7185 §6.6.5.4's `pack(a, i, z)` and `unpack(z, a, i)`. The clause does
+/// not describe an operation — it gives a *statement sequence* each is
+/// equivalent to:
+///
+///     k := i; for j := u to v do begin zz[j] := aa[k];
+///                                      if j <> v then k := succ(k) end
+///
+/// so that sequence is what is emitted, with `u` and `v` the packed array's
+/// bounds. Two things fall out of taking the equivalence literally rather than
+/// writing a memcpy. The `if j <> v` is the same care the `for` statement
+/// already takes — the step is not made after the last iteration, so `succ`
+/// cannot leave the index type — and the components are copied one at a time,
+/// which is what makes the two arrays' *representations* free to differ. A
+/// packed array of char is bytes and an unpacked one need not be.
+///
+/// The bounds are checked once, before anything is copied, rather than at each
+/// `aa[k]`: `k` runs monotonically from `i`, so the two ends are the only
+/// values that can leave the array, and a partial copy before the trap would
+/// be worse than none.
+///
+/// The copy itself is a `memcpy`, and that is a fact about *this* compiler
+/// rather than a shortcut. §6.4.3.1 leaves `packed` entirely to the
+/// implementation and this one packs nothing — a packed array and an unpacked
+/// array of the same component type have the same layout, which `llvmType`
+/// decides in one place. So the representation change these procedures exist
+/// to make is vacuous here, and what is left of §6.6.5.4 is the index
+/// arithmetic and the range check (ADR-0067). Were `packed` ever to mean
+/// something, this is the function that would have to grow the component-wise
+/// loop back.
+void CodeGen::emitTransfer(ProcCallStmt *s) {
+  bool packing = s->standard == StdProc::Pack;
+  Expr *unpackedArg = s->args[packing ? 0 : 1].get();
+  Expr *packedArg = s->args[packing ? 2 : 0].get();
+  Expr *indexArg = s->args[packing ? 1 : 2].get();
+
+  ap::Type *ut = unpackedArg->type;
+  ap::Type *pt = packedArg->type;
+  llvm::Value *ua = emitAddress(unpackedArg);
+  llvm::Value *pa = emitAddress(packedArg);
+  llvm::Value *idx = emitExpr(indexArg);
+  if (idx->getType() != i32())
+    idx = b_.CreateZExt(idx, i32(), "pk.wide");
+
+  // `v - u` is how far the unpacked index travels from `i`; the packed array's
+  // extent is a compile-time count, being a static array type.
+  long long span = pt->hi - pt->lo;
+  llvm::Value *lo = ConstantInt::getSigned(i32(), ut->lo);
+  llvm::Value *hi = ConstantInt::getSigned(i32(), ut->hi);
+  llvm::Value *last =
+      b_.CreateAdd(idx, ConstantInt::getSigned(i32(), span), "pk.last");
+  emitTrapIf(b_.CreateOr(b_.CreateICmpSLT(idx, lo, "pk.lt"),
+                         b_.CreateICmpSGT(last, hi, "pk.gt"), "pk.bad"),
+             "array index out of bounds (" + std::to_string(ut->lo) + ".." +
+                 std::to_string(ut->hi) + ")");
+
+  // `k - m`, the offset of the first unpacked component. The check above has
+  // already made the subtraction sound, which is ADR-0017's rule for every
+  // subscript and the reason this one carries no `nsw` either.
+  llvm::Value *from = b_.CreateGEP(
+      llvmType(ut), ua,
+      {ConstantInt::get(i32(), 0), b_.CreateSub(idx, lo, "pk.off")}, "pk.a");
+  Align align = mod_->getDataLayout().getABITypeAlign(llvmType(ut->elem));
+  uint64_t bytes = static_cast<uint64_t>(span + 1) * sizeOf(ut->elem);
+  if (packing)
+    b_.CreateMemCpy(pa, align, from, align, bytes);
+  else
+    b_.CreateMemCpy(from, align, pa, align, bytes);
+}
+
 void CodeGen::emitStdProc(ProcCallStmt *s) {
   // §6.7.5.7's `halt` is the one required procedure that takes no arguments,
   // so it is answered before the address of the first one is taken. The
@@ -1819,9 +1888,26 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
     b_.CreateCall(rt("pas_halt", llvm::Type::getVoidTy(ctx_), {}), {});
     return;
   }
+  // ISO 7185 §6.6.5.4's transfer procedures, answered before the first
+  // argument's address is taken because *which* argument is the array differs
+  // between the two and neither is simply "the file".
+  if (s->standard == StdProc::Pack || s->standard == StdProc::Unpack) {
+    emitTransfer(s);
+    return;
+  }
   Expr *arg = s->args[0].get();
   llvm::Value *slot = emitAddress(arg);
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+
+  // §6.9.5's `page`. The effect on the file is implementation-defined, so it
+  // is the runtime's to choose; what the standard fixes is the implicit
+  // `writeln` when the current line is not empty, and that needs the file's
+  // own state — which is the runtime's too (ADR-0021). Sema has already
+  // supplied `output` when none was written.
+  if (s->standard == StdProc::Page) {
+    b_.CreateCall(rt("pas_page", voidTy, {ptr()}), {slot});
+    return;
+  }
 
   // The file primitives are one runtime call each on the file's address.
   const char *fileOp = nullptr;

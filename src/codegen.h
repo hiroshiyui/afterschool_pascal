@@ -268,6 +268,10 @@ private:
   void emitWith(WithStmt *s);
   void emitCase(CaseStmt *s);
   void emitStdProc(ProcCallStmt *s);
+  /// ISO 7185 §6.6.5.4's `pack` and `unpack`, lifted out because which
+  /// argument is which differs between them and neither is the file every
+  /// other required procedure's first argument is.
+  void emitTransfer(ProcCallStmt *s);
   /// Trap unless the value is in `target`'s subrange. A no-op for every other
   /// type, so it can be applied wherever a value is stored.
   llvm::Value *checkedForSubrange(llvm::Value *v, Type *target);

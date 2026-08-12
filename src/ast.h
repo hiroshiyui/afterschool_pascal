@@ -603,7 +603,16 @@ enum class StdProc {
   /// and §6.9.4 f) makes it threaten its argument — the one entry on that
   /// list ADR-0046 could not have a call site for, because the procedure it
   /// names did not exist yet.
-  GetTimeStamp
+  GetTimeStamp,
+  /// ISO 7185 §6.6.5.4's transfer procedures, `pack(a, i, z)` and
+  /// `unpack(z, a, i)`, which copy between an unpacked array and a packed one
+  /// starting at `i`. §6.6.5.4 defines each as a *statement sequence* rather
+  /// than an operation, so what is emitted is that sequence (ADR-0067).
+  Pack, Unpack,
+  /// ISO 7185 §6.9.5's `page(f)`, or `page` for `output`. Its effect on the
+  /// file is implementation-defined; what the standard fixes is the implicit
+  /// `writeln` when the current line is not empty.
+  Page
 };
 
 struct ProcCallStmt : Stmt {

@@ -13,7 +13,7 @@
 #ifndef APASCAL_PASRT_H
 #define APASCAL_PASRT_H
 
-#define PAS_FILE_SIZE 112
+#define PAS_FILE_SIZE 120
 
 /* The storage a block needs to be the target of a non-local `goto`: somewhere
  * to jump back to, and the mark that says which files the jump abandons. It is

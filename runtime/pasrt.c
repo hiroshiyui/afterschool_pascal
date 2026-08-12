@@ -191,6 +191,14 @@ struct pas_file {
   int compsize;  /* the size of one component in bytes; 1 for a text */
   int ateof;     /* non-text: the fetch that filled `have` found no component */
   char ch;       /* the buffer variable of a text file */
+  /* ISO 7185 §6.9.5: `page(f)` performs an implicit `writeln(f)` "if f.L is
+   * not empty and if f.L.last is not the end-of-line component" — so the
+   * one thing it needs to know is whether the current line has anything on
+   * it. Nothing else in the runtime tracked that, because nothing else
+   * needed it. A zero field width may write no characters at all
+   * (§6.10.3.1), which is why this follows what was *written* rather than
+   * merely that a write was attempted. */
+  int atbol;     /* the file is positioned at the start of a line */
   void *buf;     /* the buffer variable f^: &ch for a text, else allocated */
   const char *name; /* what to call this file in a diagnostic */
   /* Every open file, most recent first. A block exit unlinks the files it
@@ -400,6 +408,10 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->compsize = compsize > 0 ? compsize : 1;
   f->ateof = 0;
   f->ch = ' ';
+  /* A file nothing has been written to is at the start of a line, which is
+   * what makes `page` as the first statement write one form feed and no
+   * blank line before it (§6.9.5). */
+  f->atbol = 1;
   f->name = name;
   f->bound_name = NULL;
   f->membuf = NULL;
@@ -804,6 +816,7 @@ void pas_write_int(void *v, long long val, int width) {
    * is what a zero field width means to printf too. */
   if (width < 0) fprintf(o, "%lld", val);
   else fprintf(o, "%*lld", width, val);
+  ((struct pas_file *)v)->atbol = 0; /* a number is never no characters */
 }
 
 /* ISO/IEC 10206:1991 §6.10.3.6, and ISO 7185 §6.9.3.6 before it: a string of
@@ -873,6 +886,7 @@ void pas_write_real(void *v, double val, int width, int prec) {
 void pas_write_bool(void *v, int val, int width) {
   const char *s = val ? "TRUE" : "FALSE";
   pas_write_padded(pas_out(v), s, val ? 4 : 5, width);
+  if (width != 0) ((struct pas_file *)v)->atbol = 0;
 }
 
 void pas_write_char(void *v, char c, int width) {
@@ -881,13 +895,37 @@ void pas_write_char(void *v, char c, int width) {
   if (width == 0) return;
   if (width < 0) putc(c, o);
   else fprintf(o, "%*c", width, c);
+  ((struct pas_file *)v)->atbol = 0;
 }
 
 void pas_write_str(void *v, const char *s, int len, int width) {
   pas_write_padded(pas_out(v), s, len, width);
+  if (width != 0 && !(width < 0 && len == 0))
+    ((struct pas_file *)v)->atbol = 0;
 }
 
-void pas_writeln(void *v) { putc('\n', pas_out(v)); }
+void pas_writeln(void *v) {
+  putc('\n', pas_out(v));
+  ((struct pas_file *)v)->atbol = 1;
+}
+
+/* ISO 7185 §6.9.5. The effect on the file is implementation-defined — "such
+ * that subsequent text written to f will be on a new page if the textfile is
+ * printed on a suitable device" — and here it is the ASCII form feed, which
+ * is what a printer and every other Pascal mean by it.
+ *
+ * What the standard does fix is the rest: the pre-assertion is `writeln(f)`'s,
+ * which `pas_out` checks; the implicit `writeln` happens only when the line
+ * has something on it; and the buffer variable becomes totally-undefined,
+ * which here is the lookahead being dropped. */
+void pas_page(void *v) {
+  struct pas_file *f = v;
+  FILE *o = pas_out(v);
+  if (!f->atbol) putc('\n', o);
+  putc('\f', o);
+  f->atbol = 1;
+  f->have = 0;
+}
 
 /* -------------------------------------------------- the non-local goto ---- */
 

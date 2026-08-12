@@ -3739,10 +3739,15 @@ void Sema::checkStmt(Stmt *s) {
     Symbol *sym = lookup(p->name);
     // A user-declared procedure of the same name wins, exactly as it does for
     // the required functions in checkCall.
-    if (!sym && (p->name == "new" || p->name == "dispose" ||
-                 p->name == "reset" || p->name == "rewrite" ||
-                 p->name == "get" || p->name == "put" ||
-                 (std_ == Std::Extended && isRequiredProc(p->name)))) {
+    // `pack`, `unpack` and `page` are ISO 7185's own (§6.6.5.4, §6.9.5), so
+    // they are recognised under both standards rather than behind the
+    // Extended-only gate below — ISO/IEC 10206:1991 §6.7.5.4 and §6.9.5 keep
+    // all three (ADR-0067).
+    if (!sym &&
+        (p->name == "new" || p->name == "dispose" || p->name == "reset" ||
+         p->name == "rewrite" || p->name == "get" || p->name == "put" ||
+         p->name == "pack" || p->name == "unpack" || p->name == "page" ||
+         (std_ == Std::Extended && isRequiredProc(p->name)))) {
       checkStdProc(p);
       return;
     }
@@ -5136,6 +5141,114 @@ void Sema::checkStdProc(ProcCallStmt *p) {
       diags_.error(a->line, a->col,
                    "'GetTimeStamp' needs a TimeStamp variable, found " +
                        a->type->name());
+    return;
+  }
+
+  // ISO 7185 §6.6.5.4: "a shall possess an array-type not designated packed;
+  // z shall possess an array-type designated packed; the component-types of
+  // the types of a and z shall be the same; and the value of the expression i
+  // shall be assignment-compatible with the index-type of the type of a."
+  //
+  // The two statements differ in argument *order* and in which side is
+  // written, and in nothing else — `pack(a, i, z)` fills z from a and
+  // `unpack(z, a, i)` fills a from z — so one arm checks both and names the
+  // roles rather than the positions.
+  if (p->name == "pack" || p->name == "unpack") {
+    bool packing = p->name == "pack";
+    p->standard = packing ? StdProc::Pack : StdProc::Unpack;
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    if (p->args.size() != 3) {
+      diags_.error(p->line, p->col,
+                   "'" + p->name + "' takes " +
+                       (packing ? "an unpacked array, an index and a packed "
+                                  "array"
+                                : "a packed array, an unpacked array and an "
+                                  "index"));
+      return;
+    }
+    Expr *unpacked = p->args[packing ? 0 : 1].get();
+    Expr *packed = p->args[packing ? 2 : 0].get();
+    Expr *index = p->args[packing ? 1 : 2].get();
+    // Both arrays are variable-accesses whichever way the copy runs: the
+    // source is read through a reference and the destination written, and
+    // §6.6.5.4 asks for a variable-access of each.
+    for (Expr *side : {unpacked, packed})
+      if (!isDesignator(side)) {
+        diags_.error(side->line, side->col,
+                     "'" + p->name + "' needs a variable, not a value");
+        return;
+      }
+    // §6.9.4 e): the *destination* is threatened, and only that one — the
+    // source is read. Which side that is, is the whole difference between the
+    // two procedures (ADR-0046's list, a second call site after ADR-0065's).
+    checkNotThreatened(packing ? packed : unpacked,
+                       packing ? "it cannot be packed into"
+                               : "it cannot be unpacked into");
+    Type *ut = unpacked->type;
+    Type *pt = packed->type;
+    if (!ut || !pt)
+      return;
+    if (!ut->isArray() || ut->packed) {
+      diags_.error(unpacked->line, unpacked->col,
+                   "'" + p->name +
+                       "' needs an array that is not packed, "
+                       "found " +
+                       ut->name());
+      return;
+    }
+    if (!pt->isArray() || !pt->packed) {
+      diags_.error(packed->line, packed->col,
+                   "'" + p->name + "' needs a packed array, found " +
+                       pt->name());
+      return;
+    }
+    // "the component-types ... shall be the same" — ADR-0017's identity, not
+    // assignability, so two separately written component types do not match
+    // however alike they look.
+    if (ut->elem != pt->elem) {
+      diags_.error(p->line, p->col,
+                   "'" + p->name + "' needs one component type, found " +
+                       ut->elem->name() + " and " + pt->elem->name());
+      return;
+    }
+    if (index->type && !assignable(ut->indexType, index->type))
+      diags_.error(index->line, index->col,
+                   "the index must be assignment-compatible with " +
+                       ut->indexType->name() + ", found " +
+                       index->type->name());
+    return;
+  }
+
+  // §6.9.5: `page(f)`, or `page` for `output`. The pre-assertion is
+  // `writeln(f)`'s, so what is checked here is what `writeln` checks — a text
+  // file, and one the program has.
+  if (p->name == "page") {
+    p->standard = StdProc::Page;
+    for (auto &a : p->args)
+      checkExpr(a.get());
+    if (p->args.size() > 1) {
+      diags_.error(p->line, p->col, "'page' takes one text file, or none");
+      return;
+    }
+    if (p->args.empty()) {
+      // "the program shall contain a program-parameter-list containing an
+      // identifier with the spelling output". The file is *supplied* here
+      // rather than left for CodeGen to find, because CodeGen never inspects
+      // names (ADR-0008) — the same `standardFileRef` a `write` with no file
+      // gets, so `page` has one argument by the time anything downstream
+      // looks.
+      p->args.push_back(standardFileRef(false, p->line, p->col));
+      checkExpr(p->args[0].get());
+      return;
+    }
+    Expr *f = p->args[0].get();
+    if (!isDesignator(f) || !f->type || !f->type->isText()) {
+      diags_.error(f->line, f->col,
+                   "'page' needs a text file variable" +
+                       (f->type ? ", found " + f->type->name() : ""));
+      return;
+    }
     return;
   }
 
