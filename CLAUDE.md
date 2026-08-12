@@ -1139,6 +1139,31 @@ in one language or the other, and the standard is a property of the source.
   - Not enforced, and stated: §6.9.4 g) (a body may assign to the control
     variable, in either form) and "the control-variable shall be undefined
     after the loop".
+- **A field width of zero is three different answers** (ADR-0064). §6.10.3.1
+  lowers the least width from one to zero, and every subclause under it then
+  has to say what zero *writes*: nothing for a string, a char or a Boolean
+  (§6.10.3.6, §6.10.3.2, and §6.10.3.5 by delegation), the sign and the digits
+  for an integer (§6.10.3.3 b) applies whenever the width is under
+  IntDigits + 1), and a full representation for a real, because both real
+  forms clamp. Reading it as "suppress" is right three times and wrong twice.
+  - **The bound is checked in the compiler**, because *which* number is least
+    is the one thing the standard decides and the runtime is never told which
+    language it was compiled for. It also keeps `-1` usable as the "no width
+    given" sentinel, which a negative width reaching the runtime would have
+    destroyed. `Sema::std()` is the second whole-program answer CodeGen asks
+    for, after ADR-0053's `activeModules()`.
+  - **§6.10.3.6's truncation was already ISO 7185's rule** (§6.9.3.6, word for
+    word) and this runtime wrote the whole string instead. Fixed in *both*
+    standards; `tests/extended/schema_string.pas` is the golden that moved.
+  - **A FracDigits of zero writes the point** — §6.10.3.4.2's '.' is
+    unconditional and counted in MinNumChars — which C's `%.0f` does not, so
+    that one case is formatted by hand.
+  - **The floating form derives DecPlaces from the width** (`ActWidth −
+    ExpDigits − 5`), which §6.10.3.4.1 always required and the runtime never
+    did: it hard-coded six. The default output is unchanged, because the
+    implementation-defined default TotalWidth is defined as `ExpDigits + 17`.
+  - Stated deviation: **ExpDigits is not a fixed number** — two digits, or
+    three past 1e100, because that is what C's `%E` writes.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
@@ -1225,7 +1250,9 @@ integer` the *same* type rather than two alike ones. The one exception is a
 parameter group naming a schema (ADR-0040): each name there gets its *own*
 type, because each reads its own descriptor. `runtime/pasrt.c`
 holds anything not expressible in IR — formatted output and runtime checks —
-where `width < 0` / `prec < 0` mean "not given".
+where `width < 0` / `prec < 0` mean "not given", and nothing else: a width the
+program *wrote* is checked against §6.9.3.1's or §6.10.3.1's least value
+before it gets there, so the runtime never sees a negative one (ADR-0064).
 
 Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 `ast.h` → `parser.cpp` → `sema.cpp` → `codegen.cpp` → a `tests/` pair, plus

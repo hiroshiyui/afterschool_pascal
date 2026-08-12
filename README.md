@@ -411,6 +411,12 @@ for..in    §6.9.3.9.3's set-member-iteration: `for v in s do` runs the body
            order to the implementation. The set is evaluated once, an empty
            one runs the body no times, and a control variable narrower than
            the set's base type traps on a member outside it
+widths     §6.10.3.1 lowers the least field width from one to zero, and each
+           clause under it says what zero writes: nothing for a string, a
+           char or a Boolean, the digits for an integer, and a full
+           representation for a real, since both real forms clamp. A
+           FracDigits of zero still writes the point, and a width below a
+           string's length truncates it — which ISO 7185 asked for too
 required   maxchar — the largest char; halt — stop the program, closing what
            is open; card(s) — how many members a set has; succ(x, k) and
            pred(x, k) — step k places along an ordinal type, in either
@@ -430,8 +436,8 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
 ```
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
-design: zero field widths in `write`, the time procedures, §6.8.7.4's
-set-value, and §6.8.8's structured constants.
+design: the time procedures, §6.8.7.4's set-value, and §6.8.8's structured
+constants.
 
 A word-symbol is reserved only when the feature needing it lands, so until that
 list is empty `--std=extended` accepts some programs a conforming processor

@@ -665,6 +665,22 @@ was never written down.
   - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
     so under `--std=extended` a program cannot declare its own — where
     §6.7.5.5 makes them required identifiers.
+- ~~**Zero field widths in `write`.**~~ Done (ADR-0064). §6.10.3.1 lowers the
+  least width from one to zero, and every subclause under it then says what
+  zero writes.
+  - **Three different answers**: nothing for a string, a char or a Boolean;
+    the digits for an integer, since §6.10.3.3 b) applies whenever the width
+    is under IntDigits + 1; a full representation for a real, since both real
+    forms clamp.
+  - **The bound is checked in the compiler**, because which number is least is
+    what the standard decides and the runtime is never told which language it
+    was compiled for — and because `-1` has to stay usable as the "no width
+    given" sentinel.
+  - It **fixed two conformance gaps that predate Extended Pascal**:
+    §6.10.3.6's truncation of a string written narrower than its length, which
+    is ISO 7185 §6.9.3.6's rule word for word, and §6.10.3.4.1's DecPlaces
+    derivation, which the runtime replaced with a hard-coded six.
+  - Stated deviation: ExpDigits is not a fixed number.
 - ~~**Set-member iteration.**~~ Done (ADR-0063). §6.9.3.9.3's `for v in s do`,
   the second of the two iteration-clauses §6.9.3.9.1 splits the for-statement
   into.
@@ -724,9 +740,10 @@ was never written down.
   the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
   procedures, and set-member iteration. Most of those have since landed with
-  ADR-0059, `minreal`/`maxreal`/`epsreal` with ADR-0062 and set-member
-  iteration with ADR-0063; the field widths and the time procedures have not,
-  and neither have §6.8.7.4's set-value or §6.8.8's structured constants.
+  ADR-0059, `minreal`/`maxreal`/`epsreal` with ADR-0062, set-member iteration
+  with ADR-0063 and the field widths with ADR-0064; the time procedures have
+  not, and neither have §6.8.7.4's set-value or §6.8.8's structured
+  constants.
 
 - ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
   halves of it: a function may return anything that is not, and does not
