@@ -439,9 +439,11 @@ Also absent, and smaller — the cost is in writing them twice rather than in th
 design: the time procedures, §6.8.7.4's set-value, and §6.8.8's structured
 constants.
 
-A word-symbol is reserved only when the feature needing it lands, so until that
-list is empty `--std=extended` accepts some programs a conforming processor
-would reject.
+**All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
+though the language is not. A word-symbol is reserved only when the feature
+needing it lands, and the last of the thirteen Extended Pascal adds arrived
+with restricted types; nothing still missing needs a fourteenth, the time
+procedures being required *identifiers* rather than word-symbols.
 
 The program-components of a program-block are **not compiled separately**: they
 go in one file, in an order consistent with §6.2.2.9's. §6.13 asks for separate

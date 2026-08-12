@@ -402,10 +402,14 @@ in one language or the other, and the standard is a property of the source.
   parameter, one word. ISO 7185 gives a program no access to its command line
   beyond its program parameters, and those are files; `compiler.pas` cannot
   take a flag. Same constraint as ADR-0024's one source file.
-- **A word-symbol is reserved when the feature needing it lands**, not before.
-  Until the list is complete, `--std=extended` accepts some programs a
-  conforming processor would reject; that is stated, and each feature closes
-  its own part of it.
+- **A word-symbol is reserved when the feature needing it lands**, not before —
+  so until the list was complete, `--std=extended` accepted some programs a
+  conforming processor rejects. **It is complete now**: §6.1.2 adds thirteen
+  word-symbols to ISO 7185's, `restricted` (ADR-0058) was the last, and
+  `and then`/`or else` are reserved by the lexer joining two tokens rather than
+  from a table (ADR-0038). Nothing still unimplemented needs a fourteenth — the
+  time procedures are required *identifiers*, which §6.1.3 makes shadowable.
+  So the lexis is complete even though the language is not.
 - `otherwise` (§case-statement) is the first feature, and it retires ADR-0018's
   "ISO 7185 has no `else` and none is invented" — the standard has one now. The
   lowering is unchanged: an otherwise-part is *what the default block holds*.
