@@ -384,6 +384,14 @@ restricted a restricted type has another type's values and representation
            says "no other operations ... are possible". Its initial state is
            the underlying type's. Two restrictions of one type are still two
            types, and a restricted type is nonbindable
+readstr    readstr(e, v1, ..., vn) reads values out of a string as though it
+writestr   were a line of a text file, and writestr(s, p1, ..., pn) writes a
+           line into one. §6.7.5.5 defines both as `rewrite(f); writeln(f,
+           ...); reset(f); read(f, ...)` over an auxiliary text variable, so
+           a field width, the spelling of a real and where a string read
+           stops all mean exactly what they mean in `write` and `read`. It
+           is an error if readstr runs off the end of the string, or if
+           writestr writes more than the destination can hold
 required   maxchar — the largest char; halt — stop the program, closing what
            is open; card(s) — how many members a set has; succ(x, k) and
            pred(x, k) — step k places along an ordinal type, in either
@@ -402,8 +410,7 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            in the one position each may occupy, exactly as `forward` is
 ```
 
-Not accepted yet, and each its own piece of work: structured-value
-constructors and `readstr`/`writestr`.
+Not accepted yet, and its own piece of work: structured-value constructors.
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `minreal`/`maxreal`/`epsreal`, zero field widths in `write`, the time
