@@ -310,10 +310,22 @@ private:
   Symbol *importedSymbol(const Constituent &c, const std::string &spelling,
                          int line, int col);
   void installRequiredInterfaces();
+  /// Which modules supply the main-program-block, in the order their
+  /// activations must commence (§6.2.3.6). Only those are activated, and that
+  /// matters rather than being a nicety: an unactivated module's
+  /// initialization-part could otherwise write to `output`. Written order is
+  /// already a legal activation order, because §6.2.2.9 requires a supplier to
+  /// come first — so no sort produced this. Run once, after the whole program
+  /// is walked; `activeModules()` is what CodeGen reads (ADR-0053).
   void computeActiveModules();
   /// The modules a block's imports reach, directly or through another module —
   /// §6.2.2.13's "supplies", read backwards.
   std::vector<Symbol *> suppliersOf(Symbol *block) const;
+  /// §6.11.1: two modules may supply each other only through a **split**
+  /// module, and neither part may then carry an initialization- or
+  /// finalization-part — there being no order in which both could commence.
+  /// The one rule here enforced by a reachability check rather than by the
+  /// order the text is written in (ADR-0053).
   void checkMutualSupply();
   /// Whether a name denotes an imported interface. It is what tells a
   /// qualified name from an ordinary field selection, and it is a question

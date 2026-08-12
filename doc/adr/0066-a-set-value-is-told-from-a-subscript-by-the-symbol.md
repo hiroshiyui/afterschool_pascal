@@ -121,7 +121,7 @@ each answer through their `setValue` and are varying without one.
 punctuation and a type name the program already declared. The fourth such
 feature, after `and then`, `type of` and set-member-iteration.
 
-**§6.8.8's structured constants are what is left**, and they are not this. A
+**§6.8.8's constant-accesses are what is left**, and they are not this. A
 constant-access reads a *component* of a constant that has a structured value —
 `c[i]` for a `const c = t[1: 1; 2: 2]` — where the index need not be constant
 at all (§6.8.8.1's own NOTE says so). That needs constants with structure to

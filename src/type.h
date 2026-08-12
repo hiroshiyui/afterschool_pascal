@@ -1,3 +1,14 @@
+// The type system: `Type` and its `TypeKind` tag, `Field`, the `ty::`
+// singletons for the simple types, and `Type::name()` — the spelling every
+// diagnostic uses.
+//
+// Two things here are load-bearing and are decided nowhere else. A structured
+// type has **identity, not structure**: two are the same only when they are
+// the same object, which is ISO 7185 §6.4.5's name equivalence (ADR-0017), so
+// the simple types are shared singletons and every array or record
+// type-denoter allocates one. And `Type::base()` answers for the host of a
+// subrange, which is what lets `1..9` reach arithmetic, `write`, indexing and
+// parameter passing with no case of its own (ADR-0018).
 #pragma once
 #include <string>
 #include <vector>

@@ -6474,7 +6474,7 @@ begin
         if langStd = stdExtended then ok := EvalConstBinary(e, res);
       nkCall:
         if langStd = stdExtended then ok := EvalConstCall(e, res);
-      { 6.8.8's structured constants are not implemented (ADR-0061), so a
+      { 6.8.8's constant-accesses are not implemented (ADR-0061), so a
         structured value folds to nothing and the context says so. }
       nkStructValue, nkValueElem,
       nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr, nkDeref,

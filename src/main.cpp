@@ -16,6 +16,7 @@
 //   pascalc --dump-all hello.pas      all three sections in one run — this is
 //                                     the form selfhost/difftest.sh compares
 //                                     the Pascal compiler against
+//   pascalc -h, --help           write the option list and stop
 //
 // `usage()` below is the authoritative list; keep the two in step.
 
@@ -91,8 +92,8 @@ size_t dumpDiagnostics(const ap::Diagnostics &diags, size_t from) {
 /// Comparing converted doubles would be comparing two languages' float
 /// formatting, which is not what this is testing.
 void dumpTokens(const std::vector<ap::Token> &tokens) {
-  // Errors first and on stdout, not stderr: the Pascal lexer reports as it
-  // goes, so one stream holding both is what the two can be compared on.
+  // Tokens only: this stage's diagnostics were printed by the caller, through
+  // `dumpDiagnostics`, which is where the reason they share stdout is written.
   for (const ap::Token &t : tokens) {
     std::printf("%d %d ", t.line, t.col);
     switch (t.kind) {
@@ -139,7 +140,8 @@ void usage() {
                "  --dump-ast    write the parse tree and stop\n"
                "  --dump-sema   write the tree Sema annotated and stop\n"
                "  --dump-all    write all three dumps and stop\n"
-               "  --std=<name>  iso7185 (default) or extended\n");
+               "  --std=<name>  iso7185 (default) or extended\n"
+               "  -h, --help    write this list and stop\n");
 }
 
 std::string stripExtension(const std::string &path) {

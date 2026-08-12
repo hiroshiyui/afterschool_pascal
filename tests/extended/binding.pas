@@ -129,9 +129,11 @@ begin
 
   { `binding(f)` denotes the hidden slot its result was built in, so it is a
     variable — which is what lets it be copied whole into another BindingType
-    and passed as a value parameter. §6.8.6's function-accesses, which would
-    also let a *field* of it be selected directly, are not implemented, so a
-    program says `b := binding(f)` first. }
+    and passed as a value parameter. Selecting a *field* of it directly,
+    `binding(f).bound`, was refused when this was written and is legal since
+    ADR-0056 landed §6.8.6's function-accesses; it needed nothing of its own,
+    because a call already yielded an address. This assigns first anyway, to
+    keep pinning the whole-record copy. }
   b := binding(f);
   report(binding(f))
 end.

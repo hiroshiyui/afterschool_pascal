@@ -795,7 +795,8 @@ struct ParamGroup {
 
 struct Block;
 
-/// A procedure or a function; `returnTypeName` is empty for a procedure.
+/// A procedure or a function; `returnType` is null for a procedure — and also
+/// in the completion of a forward function, which repeats the name alone.
 /// A `forward` declaration has no body, and the later full declaration
 /// re-uses the same Symbol.
 struct ProcDecl {
@@ -819,8 +820,6 @@ struct ProcDecl {
   Symbol *sym = nullptr; // filled in by Sema
 };
 
-/// The declaration part plus the statement part — the body of the program and
-/// of every procedure alike, which is what makes nesting fall out for free.
 /// One entry of the label declaration part. ISO 7185 §6.1.6 makes a label an
 /// unsigned integer of at most four digits, so the number is what identifies
 /// it and there is no name to intern.
@@ -875,6 +874,8 @@ struct ImportSpec {
   int line = 0, col = 0;
 };
 
+/// The declaration part plus the statement part — the body of the program and
+/// of every procedure alike, which is what makes nesting fall out for free.
 struct Block {
   /// §6.2.1: `block = import-part { ... } statement-part` — the import-part is
   /// first and there is at most one, in every block, not only in a module's.

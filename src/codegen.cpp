@@ -1853,8 +1853,14 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
   // is decided outside `llvmType` this way.
   //
   // The loop is over the *record's own* fields rather than a written-out list,
-  // so the eight `pas_timestamp_field` indices are §6.4.3.4's field order and
-  // that order is stated in exactly one place, `installPredefined`.
+  // so the eight `pas_timestamp_field` indices are §6.4.3.4's field order
+  // without restating it. Three places follow that order and they cannot be
+  // reduced to one (ADR-0065): `installPredefined` builds the record in it,
+  // the `date`/`time` arm below names 2 and 5 as where the year and the hour
+  // begin, and `runtime/pasrt.c` numbers `pas_stamp` the same way — the
+  // runtime having no view of the record, and ADR-0008 forbidding this pass to
+  // look a field up by name. `tests/extended/timestamp_fixed.pas` is what
+  // keeps the three in agreement.
   if (s->standard == StdProc::GetTimeStamp) {
     ap::Type *tt = arg->type;
     StructType *st = cast<StructType>(llvmType(tt));

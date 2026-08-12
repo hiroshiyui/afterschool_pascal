@@ -13,13 +13,17 @@ namespace ap {
 struct ParseAbort {};
 
 /// Recursive-descent parser shaped like the ISO 7185 grammar, so a production
-/// and the function that reads it have the same name and the same nesting —
-/// `expression` calls `simpleExpression` calls `term` calls `factor`.
+/// and the function that reads it have the same shape and the same nesting,
+/// under a `parse` prefix — `parseExpr` calls `parseSimpleExpr` calls
+/// `parseTerm` calls `parseFactor`.
 ///
-/// It also reads the constructs ISO/IEC 10206:1991 adds, under `--std`. The
-/// standard reaches the parser for one purpose only: to say that an Extended
-/// Pascal construct *is* one, rather than reporting the syntax error its
-/// spelling causes under ISO 7185 (ADR-0033).
+/// It also reads the constructs ISO/IEC 10206:1991 adds, under `--std`, and
+/// the standard reaches the parser in two ways. It **gates the productions**
+/// that standard adds — a result-variable-specification, a qualified name,
+/// `for … in`, a structured value, a substring, selectors after a call — which
+/// under ISO 7185 are not read at all; and it lets a construct that is one of
+/// those be *named* rather than reported as the syntax error its spelling
+/// causes under ISO 7185 (ADR-0033).
 class Parser {
 public:
   Parser(std::vector<Token> tokens, Diagnostics &diags,
@@ -165,9 +169,10 @@ private:
 
   std::vector<Token> toks_;
   Diagnostics &diags_;
-  /// Which standard is being parsed. Needed in exactly one place: to say
-  /// that an Extended Pascal construct is one, rather than reporting the
-  /// syntax error its spelling causes under ISO 7185.
+  /// Which standard is being parsed. Read wherever ISO/IEC 10206:1991 adds a
+  /// production this parser must not read under ISO 7185, and where an
+  /// Extended Pascal construct is named rather than reported as the syntax
+  /// error its spelling causes there.
   Std std_ = Std::Iso7185;
   size_t pos_ = 0;
   int depth_ = 0;

@@ -1086,8 +1086,11 @@ Type *Sema::resolveType(TypeExpr &denoter) {
       } else if (sym && sym->kind == SymKind::Schema) {
         // §6.4.8: a schema denotes a type only once its discriminants are
         // given. The bare name is legal in a parameter-form and nowhere else,
-        // and this compiler does not accept it there yet — so the message
-        // says what is missing rather than that the name is unknown.
+        // and a parameter-form never reaches here — `buildFormals` takes that
+        // case before `resolveType` is called (ADR-0040). So a bare schema
+        // name arriving here is in a position the standard does not allow, and
+        // the message says what is missing rather than that the name is
+        // unknown.
         diags_.error(denoter.line, denoter.col,
                      "schema '" + denoter.name +
                          "' needs its discriminants here, as " + denoter.name +
@@ -1749,8 +1752,10 @@ void Sema::installPredefined() {
     //
     // Written out here rather than parsed from NOTE 4's Pascal because the
     // field *order* is what CodeGen walks: `GetTimeStamp` fills the record by
-    // index, so the standard's order is the one interface between the two
-    // passes and it is spelled once, here.
+    // index, so the standard's order is the interface, and this is where it is
+    // decided. Two other places follow it and neither can be derived from this
+    // one (ADR-0065) — the `date`/`time` arm's literal 2 and 5, and the
+    // runtime's `pas_stamp` slots.
     //
     // The subranges are what make this record worth the words. A program that
     // stores 13 into `month` traps at the store like any other subrange

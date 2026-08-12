@@ -128,7 +128,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 368
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 381
    files agree stage for stage today.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
@@ -747,8 +747,9 @@ they landed — rather than in the standard's.
     bracket-depth lookahead scan in this parser.
   - Not done, and stated: §6.8.7.4's set-value (a set is a value and needs
     none of this machinery, and `sieve[2,3]` cannot be told from `a[2,3]`
-    without the symbol), §6.8.8's structured constants, and a value of a
-    dynamically bounded type. The first landed as ADR-0066, below.
+    without the symbol), §6.8.8's constant-accesses — which that record calls
+    "structured constants" — and a value of a dynamically bounded type. The
+    first landed as ADR-0066, below.
 - ~~**§6.8.7.4's set-value.**~~ Done (ADR-0066). The third form of §6.8.7.1's
   structured-value-constructor, and four lines of standard:
   `set-value = set-constructor`, so `digits[1, 3]` is `[1, 3]` with a type name

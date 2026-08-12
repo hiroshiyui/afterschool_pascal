@@ -770,7 +770,10 @@ in one language or the other, and the standard is a property of the source.
     now shows the padding.
   - Deferred, all stated in the ADR: substring *variables* (§6.5.6 as an
     lvalue), `readstr`/`writestr`, a string function result, and §6.10.3.6's
-    zero/truncating field widths.
+    zero/truncating field widths. **All four have since landed** — ADR-0057,
+    ADR-0060, ADR-0055 and ADR-0064 respectively — so nothing on that list is
+    outstanding; the third needed no string-specific work at all, a result
+    living in memory being the caller's storage.
 - **Binding is a file name chosen while the program runs** (ADR-0052).
   §6.7.5.6's `bind`/`unbind`, §6.7.6.8's `binding`, §6.4.3.4's `BindingType` —
   the feature ADR-0051 unblocked, since that record's `name` field needs "an
@@ -797,7 +800,9 @@ in one language or the other, and the standard is a property of the source.
     dump and still disagree about a number no dump prints.
   - Refused, all stated: binding anything but a file, a variable-string as a
     *value* parameter (it would have to convert its argument), and
-    `binding(f).bound` written directly (§6.8.6's function-accesses).
+    `binding(f).bound` written directly (§6.8.6's function-accesses) — the
+    last of which **ADR-0056 retired**, and it needed nothing of its own,
+    because a call already yielded an address.
 - **A level-0 activation record is a global** (ADR-0053), and that one sentence
   is the whole of what §6.11's modules cost the code generator. A module has
   exactly one activation (§6.2.3.6) and it must outlive the function that
@@ -1030,6 +1035,8 @@ in one language or the other, and the standard is a property of the source.
   - Not done and stated: `minreal`/`maxreal`/`epsreal` need interned *text*
     rather than a value, because ADR-0025 never converts a real literal — the
     same reason ADR-0054 refuses a real-valued constant-expression.
+    **ADR-0062 did them**, and by that route: the text was always the
+    mechanism, so what was missing was somewhere to put twenty-two characters.
 - **readstr and writestr are a text file made of memory** (ADR-0060). §6.7.5.5
   does not say what the two procedures compute — it says each is *equivalent
   to* `rewrite(f); writeln(f, ...); reset(f); read(f, ...)` over "an auxiliary
@@ -1099,10 +1106,10 @@ in one language or the other, and the standard is a property of the source.
     value parameter had required a designator to copy from.
   - Refused and stated: §6.8.7.4's **set-value** (a set is a value and needs
     none of this; and `sieve[2,3]` cannot be told from `a[2,3]` without the
-    symbol), §6.8.8's structured constants, and a value of a dynamically
-    bounded type. The first of those landed as ADR-0066, by taking the second
-    half of its own reason seriously: the symbol is what tells them apart, so
-    Sema is where it is told.
+    symbol), §6.8.8's constant-accesses — which that record calls "structured
+    constants" — and a value of a dynamically bounded type. The first of those
+    landed as ADR-0066, by taking the second half of its own reason seriously:
+    the symbol is what tells them apart, so Sema is where it is told.
 - **A set-value is told from a subscript by the symbol** (ADR-0066). §6.8.7.4
   is four lines — `set-value = set-constructor` — so `digits[1, 3]` is `[1, 3]`
   with a type name in front, and what the name adds is a **type**: a bare
@@ -1453,7 +1460,16 @@ actual (ADR-0040) the message is built by the runtime and says the same words. S
 and so does a `case` whose selector matches no label (ADR-0018) — unless it has
 an Extended Pascal `otherwise`, which is the only thing that gives that arm
 something to do (ADR-0033) — a dereference of `nil` (ADR-0019), and a set whose
-members are not values of the target's base type (ADR-0028).
+members are not values of the target's base type (ADR-0028). That last check
+fires at the **store**, because a constructor does not know what it is being
+assigned to — except for §6.8.7.4's set-value, which names its type and is
+therefore checked where it is written (ADR-0066). `tests/extended/trap_setvalue.pas`
+is the program with no assignment in it.
+
+`date(t)` traps when the day, month and year of a `TimeStamp` are not a
+calendar date (§6.7.6.9) — February the 30th, and a year outside 1..9999, that
+bound being what keeps the result fixed-width (ADR-0065). The six subranges of
+§6.4.3.4 do the rest of the enforcement, which is why the check is that small.
 
 **ISO error conditions trap** (ADR-0014, ADR-0015). Integer `+ - *` and `sqr` go
 through `checkedArith` and stop the program on overflow rather than wrapping —
