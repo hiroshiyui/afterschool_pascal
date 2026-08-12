@@ -767,7 +767,13 @@ type
         does. nil unless vrSym is invocable with such a result. }
       nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr;
                      vrSlot: symPtr);
-      nkIndex:      (ixBase, ixIndex: nodePtr);
+      { ixSetValue is 6.8.7.4's set-value, `digits[1, 3]`. Its tokens are a
+        subscript's, so the parser builds this spine and Sema tells the two
+        apart by the symbol at the root of it -- the same shape as
+        fdQualified, and for the same reason (ADR-0066). When it is set the
+        spine is not a designator at all and this is what it means; the member
+        expressions have been moved out of the spine into it. }
+      nkIndex:      (ixBase, ixIndex: nodePtr; ixSetValue: nodePtr);
       { 6.5.6's substring-variable when the base is a string-*variable*, and
         6.8.6.5's substring-function-access when it is a function-access -- one
         kind, because the two differ only in whether the base is a designator,
@@ -776,8 +782,16 @@ type
         fixed-string-type" of capacity ssHi - ssLo + 1, and that capacity is
         not a compile-time number. Nothing observable needs it to be one --
         the only rule that reads it is the store, which reads it at run time
-        from the same subtraction. }
-      nkSubstr:     (ssBase, ssLo, ssHi: nodePtr);
+        from the same subtraction.
+
+        ssSetValue carries the same second reading ixSetValue does: a `..` in
+        brackets is a substring or a member-designator of a set-value, and the
+        parser cannot tell which. ssListed says a comma followed the range in
+        the same brackets, which only a set-value may have -- 6.5.6 gives a
+        substring one range and no list, and without that flag the parser's
+        relaxation would quietly make `s[1..3, 2]` mean `s[1..3][2]`. }
+      nkSubstr:     (ssBase, ssLo, ssHi, ssSetValue: nodePtr;
+                     ssListed: boolean);
       { 6.8.7's structured-value-constructor. svAt/svLen is the type-name, and
         is empty (svLen = 0) for a component-value nested inside another, which
         takes the type of the component it is for. svTagValue and svVariant are
@@ -2507,7 +2521,15 @@ begin
       n^.veFields := nil;
       n^.veFieldTail := nil
     end;
-    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr,
+    { 6.8.7.4's set-value is a second reading of a subscript spine, filled in
+      by Sema, so these two carry a Sema field apiece and leave the group
+      below (ADR-0066). }
+    nkIndex: n^.ixSetValue := nil;
+    nkSubstr: begin
+      n^.ssSetValue := nil;
+      n^.ssListed := false
+    end;
+    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
@@ -2727,9 +2749,11 @@ end;
   brackets opened. An empty `[]` counts too -- a subscript list may not be
   empty, so `t[]` can only be a value.
 
-  6.8.7.4's *set*-value is not implemented (ADR-0061) and could not be decided
-  here if it were: `sieve[2,3]` and `a[2,3]` are the same tokens, so it would
-  have to be told from a subscript by the symbol, in Sema. }
+  6.8.7.4's *set*-value is decided elsewhere, and could not be decided here:
+  `sieve[2,3]` and `a[2,3]` are the same tokens, so it is told from a subscript
+  by the symbol, in Sema (ADR-0066). The one spelling that does arrive here is
+  the empty `t[]`, which is a subscript list a subscript list may not be, so it
+  reaches Sema as a structured value whatever the name turns out to denote. }
 function LooksLikeStructuredValue(from: integer): boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
@@ -3384,10 +3408,16 @@ begin
         l := CurLine;
         c := CurCol;
         ix := ParseExpr;
-        { 6.5.6 and 6.8.6.5. A `..` inside a subscript can only be this: an
-          array's index-expression is a single expression, so the parser
-          decides without knowing any type. The grammar admits exactly one, so
-          no comma may follow. }
+        { 6.5.6 and 6.8.6.5. A `..` inside a subscript is either this or a
+          member-designator of 6.8.7.4's set-value, and the parser decides
+          neither: an array's index-expression is a single expression, so a
+          `..` rules out a subscript and nothing more.
+
+          A comma *may* follow, because a set-value's member-designators are a
+          list -- `digits[1..3, 5]`. 6.5.6 admits only one, so a substring
+          written with a second selector is refused in Sema, which is the pass
+          that knows whether the base is a string or a set-type name
+          (ADR-0066). }
         if (langStd = stdExtended) and Check(tkDotDot) then begin
           n := NewNode(nkSubstr, l, c);
           pos := pos + 1;
@@ -3396,7 +3426,8 @@ begin
           n^.ssHi := ParseExpr;
           base := n;
           isSub := true;
-          more := false
+          more := Accept(tkComma);
+          n^.ssListed := more
         end
         else begin
           n := NewNode(nkIndex, l, c);
@@ -8496,6 +8527,15 @@ begin
         end;
         Nonvarying := ok
       end;
+      { 6.8.7.4's set-value is that same constructor reached through a type
+        name, so it answers the same way (ADR-0066). Asked of the spine the
+        parser built and not of the members directly, because the spine is
+        what the tree holds; a spine that is *not* a set-value has no answer
+        here and is varying, which is what a subscripted variable should say. }
+      nkIndex: Nonvarying := (e^.ixSetValue <> nil) and
+                             Nonvarying(e^.ixSetValue);
+      nkSubstr: Nonvarying := (e^.ssSetValue <> nil) and
+                              Nonvarying(e^.ssSetValue);
       { `eof` and `eoln` read a file, which is what varying means. }
       nkCall: begin
         if (e^.clBuiltin = biNone) or (e^.clBuiltin = biEof) or
@@ -8538,7 +8578,7 @@ begin
         Nonvarying := ok
       end;
       nkValueElem,
-      nkSetMember, nkIndex, nkSubstr, nkField, nkDeref, nkWriteArg, nkEmpty,
+      nkSetMember, nkField, nkDeref, nkWriteArg, nkEmpty,
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
@@ -9290,6 +9330,105 @@ begin
     t^.elem := baseType;
     e^.ntype := t
   end
+end;
+
+{ 6.8.7.4: "set-value = set-constructor", reached through 6.8.7.1's
+  `set-type-name set-value`. The tokens of `digits[1, 3, 5]` are exactly those
+  of a subscripted array, and 6.5.6's substring shares the bracket too -- so
+  the parser builds whichever spine the punctuation suggests and the question
+  "was that a type name?" is asked here, where there are symbols to ask it of.
+  A qualified name is parted from a field selection the same way (ADR-0053),
+  and for the same reason.
+
+  The walk is down the *base* links only. A member-designator may itself be
+  any expression, subscripts and all, and those hang off ixIndex, ssLo and
+  ssHi rather than off a base -- so `sets[a[i]]` asks about `sets` and never
+  about `a`. }
+function SetValueTypeOf(e: nodePtr): typePtr;
+var node: nodePtr; s: symPtr; res: typePtr; done: boolean;
+begin
+  res := nil;
+  if langStd = stdExtended then begin
+    node := e;
+    done := false;
+    while not done do
+      if node^.kind = nkIndex then node := node^.ixBase
+      else if node^.kind = nkSubstr then node := node^.ssBase
+      else done := true;
+    if node^.kind = nkVar then begin
+      { A silent lookup: a name that is not in scope is not a set-value, and
+        the ordinary path is about to report it far better than this could. }
+      s := Lookup(node^.vrAt, node^.vrLen);
+      if s <> nil then
+        if s^.kind = skType then
+          if IsSet(s^.stype) then res := s^.stype
+    end
+  end;
+  SetValueTypeOf := res
+end;
+
+{ Move the member-designators out of a spine SetValueTypeOf accepted and check
+  them against the named type. }
+procedure CheckSetValue(e: nodePtr; named: typePtr);
+var node, m, head, setNode: nodePtr; done: boolean;
+begin
+  { The spine was built outermost-last, so walking it down yields the members
+    in reverse -- and prepending each to the list puts them back into written
+    order without a second pass. They are moved rather than copied, which
+    leaves the spine as the husk that carries the answer. }
+  head := nil;
+  node := e;
+  done := false;
+  while not done do
+    if node^.kind = nkIndex then begin
+      m := NewNode(nkSetMember, node^.line, node^.col);
+      m^.smLo := node^.ixIndex;
+      m^.smHi := nil;
+      node^.ixIndex := nil;
+      m^.next := head;
+      head := m;
+      node := node^.ixBase
+    end
+    else if node^.kind = nkSubstr then begin
+      m := NewNode(nkSetMember, node^.line, node^.col);
+      m^.smLo := node^.ssLo;
+      m^.smHi := node^.ssHi;
+      node^.ssLo := nil;
+      node^.ssHi := nil;
+      m^.next := head;
+      head := m;
+      node := node^.ssBase
+    end
+    else done := true;
+
+  { `node` is now the root of the spine -- the type name. A spine is built
+    outermost-last, so `e` sits at the *last* member; the construct begins at
+    the name, and that is where a complaint about it belongs. }
+  setNode := NewNode(nkSet, node^.line, node^.col);
+  setNode^.seMembers := head;
+  CheckSetExpr(setNode);
+
+  { 6.8.7.4: "The value of the set-constructor of a set-value shall be
+    assignment-compatible with the type of the set-value." Set compatibility is
+    structural and decided on the base type (ADR-0028), so Assignable is the
+    whole of the rule and the empty set passes it for every set type. }
+  if setNode^.ntype <> nil then
+    if not Assignable(named, setNode^.ntype) then begin
+      ErrorAt(setNode^.line, setNode^.col);
+      write('this set value has members of type ');
+      WriteTypeName(setNode^.ntype);
+      write(', which ');
+      WriteTypeName(named);
+      writeln(' cannot hold')
+    end;
+
+  { The type is the *named* one, not the one the members were inferred to
+    have: 6.8.7.1 says the type of a structured-value-constructor is the type
+    its type-name denotes. That is the whole point of writing one -- `[]` alone
+    has no type of its own, and `digits[]` does. }
+  e^.ntype := named;
+  if e^.kind = nkIndex then e^.ixSetValue := setNode
+  else e^.ssSetValue := setNode
 end;
 
 procedure CheckBinary(b: nodePtr);
@@ -10544,6 +10683,21 @@ begin
       WriteTypeName(t);
       writeln(', because it contains a file')
     end
+    { 6.8.7.4's set-value, in the one spelling that reaches the parser as a
+      structured value: `digits[]`. An empty bracket cannot be a subscript
+      list, so it arrives here whatever the name turns out to denote -- and for
+      a set type it is the null-set-value, which is the thing `[]` alone cannot
+      spell, having no type of its own (ADR-0066). Every other spelling was
+      recognised in CheckExpr from the subscript spine the parser built. }
+    else if IsSet(t) then begin
+      if (e^.svElems <> nil) or (e^.svTagValue <> nil) or
+         (e^.svVariant <> nil) then begin
+        ErrorAt(e^.line, e^.col);
+        write('a value of type ');
+        WriteTypeName(t);
+        writeln(' holds members, not components')
+      end
+    end
     else if IsArray(t) then begin
       CheckArrayValue(e, t);
       if (e^.svLen > 0) or (want = nil) then e^.svSlot := NewResultSlot(t)
@@ -10557,17 +10711,16 @@ begin
       if (e^.svLen > 0) or (want = nil) then e^.svSlot := NewResultSlot(t)
     end
     else begin
-      { 6.8.7.4's set-value is not implemented (see ADR-0061), so a set type
-        lands here with every other type that has no structure to construct. }
       ErrorAt(e^.line, e^.col);
-      write('a structured value needs an array or a record type, not ');
+      write('a structured value needs an array, a record or a set type, ');
+      write('not ');
       WriteTypeName(t);
       writeln
     end
 end;
 
 procedure CheckExpr;
-var t, b: typePtr; f: fieldPtr; binding: symPtr; qual: nodePtr;
+var t, b, sv: typePtr; f: fieldPtr; binding: symPtr; qual: nodePtr;
     p, ds: symListPtr; tv: numPtr; found: boolean;
 begin
   if e <> nil then
@@ -10605,6 +10758,21 @@ begin
         which are one kind here because they differ only in what the base is --
         and IsDesignator already asks the base that. }
       nkSubstr: begin
+        { The set-value question, asked before the base is checked: `digits`
+          is a type name, and checking it as a value would report it as one.
+          `digits[1..3]` reaches this arm rather than nkIndex only because a
+          `..` is what the parser saw first (ADR-0066). }
+        sv := SetValueTypeOf(e);
+        if sv <> nil then CheckSetValue(e, sv)
+        else begin
+        { 6.5.6's substring-variable is one range and nothing else. The parser
+          admits a list after it because 6.8.7.4's set-value needs one, and
+          this is where that permission is taken back from everything that is
+          not one. }
+        if e^.ssListed then begin
+          ErrorAt(e^.line, e^.col);
+          writeln('a substring takes one range and nothing after it')
+        end;
         CheckExpr(e^.ssBase);
         CheckExpr(e^.ssLo);
         CheckExpr(e^.ssHi);
@@ -10633,9 +10801,16 @@ begin
             WriteTypeName(e^.ssHi^.ntype);
             writeln
           end
+        end
       end;
 
       nkIndex: begin
+        { 6.8.7.4's set-value shares its tokens with a subscript, so the
+          question is asked before the base is checked -- `digits` is a type
+          name, and checking it as a value would report it as one (ADR-0066). }
+        sv := SetValueTypeOf(e);
+        if sv <> nil then CheckSetValue(e, sv)
+        else begin
         CheckExpr(e^.ixBase);
         CheckExpr(e^.ixIndex);
         b := e^.ixBase^.ntype;
@@ -10674,6 +10849,7 @@ begin
             writeln
           end;
           e^.ntype := b^.elem
+        end
         end
       end;
 
@@ -14408,25 +14584,49 @@ begin
       end;
       ExprEnd(n)
     end;
-    nkIndex: begin
-      write('index');
-      WritePos(n^.line, n^.col);
-      ExprEnd(n);
-      level := level + 1;
-      DumpExpr(n^.ixBase);
-      DumpExpr(n^.ixIndex);
-      level := level - 1
-    end;
-    nkSubstr: begin
-      write('substring');
-      WritePos(n^.line, n^.col);
-      ExprEnd(n);
-      level := level + 1;
-      DumpExpr(n^.ssBase);
-      DumpExpr(n^.ssLo);
-      DumpExpr(n^.ssHi);
-      level := level - 1
-    end;
+    { 6.8.7.4's set-value wore this spine's syntax, and Sema decided it was
+      one -- so it prints as the constructor it is, with no base underneath,
+      exactly as a qualified name does (ADR-0066). The members were moved out
+      of the spine, so there is nothing else left to print. }
+    nkIndex:
+      if n^.ixSetValue <> nil then begin
+        write('setvalue');
+        WritePos(n^.line, n^.col);
+        ExprEnd(n);
+        level := level + 1;
+        a := n^.ixSetValue^.seMembers;
+        DumpExprList(a);
+        level := level - 1
+      end
+      else begin
+        write('index');
+        WritePos(n^.line, n^.col);
+        ExprEnd(n);
+        level := level + 1;
+        DumpExpr(n^.ixBase);
+        DumpExpr(n^.ixIndex);
+        level := level - 1
+      end;
+    nkSubstr:
+      if n^.ssSetValue <> nil then begin
+        write('setvalue');
+        WritePos(n^.line, n^.col);
+        ExprEnd(n);
+        level := level + 1;
+        a := n^.ssSetValue^.seMembers;
+        DumpExprList(a);
+        level := level - 1
+      end
+      else begin
+        write('substring');
+        WritePos(n^.line, n^.col);
+        ExprEnd(n);
+        level := level + 1;
+        DumpExpr(n^.ssBase);
+        DumpExpr(n^.ssLo);
+        DumpExpr(n^.ssHi);
+        level := level - 1
+      end;
     { 6.8.7's structured-value-constructor. The type-name is part of the head
       because a nested component-value has none, which is the whole difference
       between the two forms. An element prints how many selectors it had and,
@@ -19086,7 +19286,25 @@ begin
     nkChar: OpInt(ord(e^.chVal), v);
     nkStr: EmitAddress(e, v);
     nkNil: OpWord('null            ', v);
-    nkDeref, nkIndex: EmitLoad(e, v);
+    nkDeref: EmitLoad(e, v);
+    { 6.8.7.4's set-value wears a subscript's syntax, and Sema hung the
+      constructor it really is on the spine (ADR-0066). A set is a value
+      (ADR-0028), so it is emitted here and never through EmitAddress. }
+    nkIndex:
+      if e^.ixSetValue <> nil then begin
+        EmitSet(e^.ixSetValue, v);
+        CheckedForSetBase(v, e^.ntype)
+      end
+      else EmitLoad(e, v);
+    { The same, for a spine whose outermost selector was a range. A substring
+      proper is a string and leaves through EmitString, so this arm exists for
+      the set-value reading alone. }
+    nkSubstr:
+      if e^.ssSetValue <> nil then begin
+        EmitSet(e^.ssSetValue, v);
+        CheckedForSetBase(v, e^.ntype)
+      end
+      else OpInt(0, v);
     { A schema-discriminant is the value the type was produced with, so it is
       a constant here and there is nothing to load (6.8.4). }
     nkField:
@@ -19134,10 +19352,15 @@ begin
     { The value of a structured value is the address of the storage it was
       built in -- ADR-0017's rule that an array or a record has no register
       form, which is why this is the same answer EmitAddress gives. }
-    nkStructValue: begin
-      StrClear(v);
-      EmitStructValue(e, v)
-    end;
+    nkStructValue:
+      { `digits[]`, the null-set-value. A set has no storage to build into, so
+        this is the one structured value that is a constant rather than an
+        address (ADR-0066). }
+      if IsSet(e^.ntype) then OpInt(0, v)
+      else begin
+        StrClear(v);
+        EmitStructValue(e, v)
+      end;
     nkValueElem,
     nkSetMember,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,

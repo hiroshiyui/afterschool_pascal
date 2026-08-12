@@ -19,10 +19,11 @@
 <source>:65:20: error: the tag field 'kind' is given by the 'case' of the variant part, not as a field value
 <source>:66:20: error: 'w' is not a field of this part of shape; a variant's fields belong to its own value
 <source>:68:25: error: this part of plain has no variant part, so a record value for it cannot select one
-<source>:71:8: error: a structured value needs an array or a record type, not colours
-<source>:72:3: error: cannot assign vec to a variable of type integer
-<source>:74:8: error: a structured value cannot be of type ft, because it contains a file
-<source>:76:8: error: 'i' is not a type, so it cannot name a structured value
-<source>:76:3: error: cannot assign integer to a variable of type pt
-<source>:77:8: error: undeclared identifier 'nosuch'
-<source>:77:3: error: cannot assign integer to a variable of type pt
+<source>:72:8: error: a value of type colours holds members, not components
+<source>:74:8: error: a structured value needs an array, a record or a set type, not integer
+<source>:75:3: error: cannot assign vec to a variable of type integer
+<source>:77:8: error: a structured value cannot be of type ft, because it contains a file
+<source>:79:8: error: 'i' is not a type, so it cannot name a structured value
+<source>:79:3: error: cannot assign integer to a variable of type pt
+<source>:80:8: error: undeclared identifier 'nosuch'
+<source>:80:3: error: cannot assign integer to a variable of type pt

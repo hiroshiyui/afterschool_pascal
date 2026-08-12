@@ -199,6 +199,24 @@ struct Dumper {
 
   // ------------------------------------------------------------ expressions
 
+  /// The members of a set constructor, under whatever head named it. A member
+  /// with a second child is a range and a member with one is a single value,
+  /// so the two tags are what keeps `[a, b]` and `[a..b]` from dumping
+  /// identically. Shared with ISO/IEC 10206:1991 §6.8.7.4's set-value, which
+  /// is the same constructor reached through a type name (ADR-0066).
+  void setMembers(SetExpr *n) {
+    ++level;
+    for (SetMember &m : n->members) {
+      mark(m.hi ? "range" : "member");
+      ++level;
+      expr(m.lo.get());
+      if (m.hi)
+        expr(m.hi.get());
+      --level;
+    }
+    --level;
+  }
+
   void expr(Expr *e) {
     switch (e->kind) {
     case NK::IntLit:
@@ -226,19 +244,7 @@ struct Dumper {
     case NK::SetLit: {
       SetExpr *n = as<SetExpr>(e);
       headExpr("set", e);
-      ++level;
-      // A member with a second child is a range and a member with one is a
-      // single value, so the two tags are what keeps `[a, b]` and `[a..b]`
-      // from dumping identically.
-      for (SetMember &m : n->members) {
-        mark(m.hi ? "range" : "member");
-        ++level;
-        expr(m.lo.get());
-        if (m.hi)
-          expr(m.hi.get());
-        --level;
-      }
-      --level;
+      setMembers(n);
       break;
     }
     case NK::VarRef: {
@@ -254,6 +260,15 @@ struct Dumper {
     }
     case NK::Index: {
       IndexExpr *n = as<IndexExpr>(e);
+      // §6.8.7.4's set-value wore this spine's syntax, and Sema decided it was
+      // one — so it prints as the constructor it is, with no base underneath,
+      // exactly as a qualified name does (ADR-0066). The members were moved
+      // out of the spine, so there is nothing else left to print.
+      if (n->setValue) {
+        headExpr("setvalue", e);
+        setMembers(as<SetExpr>(n->setValue.get()));
+        break;
+      }
       headExpr("index", e);
       ++level;
       expr(n->base.get());
@@ -263,6 +278,11 @@ struct Dumper {
     }
     case NK::Substring: {
       SubstringExpr *n = as<SubstringExpr>(e);
+      if (n->setValue) {
+        headExpr("setvalue", e);
+        setMembers(as<SetExpr>(n->setValue.get()));
+        break;
+      }
       headExpr("substring", e);
       ++level;
       expr(n->base.get());

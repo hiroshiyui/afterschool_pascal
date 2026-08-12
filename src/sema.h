@@ -458,6 +458,16 @@ private:
   void checkExpr(Expr *e);
   void checkBinary(Binary *b);
   void checkSetExpr(SetExpr *s);
+  /// ISO/IEC 10206:1991 §6.8.7.4's set-value. `digits[1, 3, 5]` is a
+  /// subscript spine to the parser, so this asks the symbol at the root of one
+  /// whether it names a set type — the question ADR-0066 says only Sema can
+  /// answer. Null when the spine is an ordinary designator, which is every
+  /// spine under ISO 7185.
+  Type *setValueTypeOf(Expr *e) const;
+  /// Move the member-designators out of a spine `setValueTypeOf` accepted and
+  /// check them against the named type. The resulting `SetExpr` is hung on the
+  /// outermost node of the spine, which is what every later pass reads.
+  void checkSetValue(Expr *e, Type *named);
   void checkCall(Call *c);
   /// Two families of required function lifted out of `checkCall`, which had
   /// grown past three hundred lines as each Extended Pascal feature added its

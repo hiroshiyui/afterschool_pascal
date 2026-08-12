@@ -954,6 +954,15 @@ bool Sema::nonvarying(Expr *e) const {
         return false;
     return true;
   }
+  // §6.8.7.4's set-value is that same constructor reached through a type name,
+  // so it answers the same way (ADR-0066). Asked of the spine the parser built
+  // and not of the members directly, because the spine is what the tree holds;
+  // a spine that is *not* a set-value has no answer here and falls through to
+  // `false`, which is what a subscripted variable should say.
+  if (auto *i = as<IndexExpr>(e))
+    return i->setValue && nonvarying(i->setValue.get());
+  if (auto *sub = as<SubstringExpr>(e))
+    return sub->setValue && nonvarying(sub->setValue.get());
   // §6.8.7's structured-value-constructor is nonvarying when everything it is
   // built out of is — which is what makes §6.6 NOTE 3's
   // `array [1..8] of char value [1..8: '*']` an initial state rather than an
@@ -3885,15 +3894,28 @@ void Sema::checkStructValue(StructValueExpr *e, Type *want) {
     return;
   }
 
+  // §6.8.7.4's set-value, in the one spelling that reaches the parser as a
+  // structured value: `digits[]`. An empty bracket cannot be a subscript list,
+  // so it arrives here whatever the name turns out to denote — and for a set
+  // type it is the null-set-value, which is the thing `[]` alone cannot spell,
+  // having no type of its own (ADR-0066). Every other spelling was recognised
+  // in `checkExpr` from the subscript spine the parser built instead.
+  if (t->isSet()) {
+    if (!e->elems.empty() || e->tagValue || e->variant)
+      diags_.error(e->line, e->col,
+                   "a value of type " + t->name() +
+                       " holds members, not components");
+    return;
+  }
+
   if (t->isArray())
     checkArrayValue(e, t);
   else if (t->isRecord())
     checkRecordValue(e, t, {});
   else {
-    // §6.8.7.4's set-value is not implemented (see ADR-0061), so a set type
-    // lands here with every other type that has no structure to construct.
     diags_.error(e->line, e->col,
-                 "a structured value needs an array or a record type, not " +
+                 "a structured value needs an array, a record or a set type, "
+                 "not " +
                      t->name());
     return;
   }
@@ -4203,6 +4225,13 @@ void Sema::checkExpr(Expr *e) {
   }
 
   if (auto *idx = as<IndexExpr>(e)) {
+    // §6.8.7.4's set-value shares its tokens with a subscript, so the question
+    // is asked before the base is checked — `digits` is a type name, and
+    // checking it as a value would report it as one (ADR-0066).
+    if (Type *named = setValueTypeOf(idx)) {
+      checkSetValue(idx, named);
+      return;
+    }
     checkExpr(idx->base.get());
     checkExpr(idx->index.get());
     Type *base = idx->base->type;
@@ -4237,6 +4266,19 @@ void Sema::checkExpr(Expr *e) {
   // substring-function-access, which are one node here because they differ
   // only in what the base is — and `isDesignator` already asks the base that.
   if (auto *sub = as<SubstringExpr>(e)) {
+    // The same question, for the same reason: `digits[1..3]` is a set-value
+    // whose one member is a range, and it reaches here rather than the arm
+    // above because a `..` is what the parser saw first.
+    if (Type *named = setValueTypeOf(sub)) {
+      checkSetValue(sub, named);
+      return;
+    }
+    // §6.5.6's substring-variable is one range and nothing else. The parser
+    // admits a list after it because §6.8.7.4's set-value needs one, and this
+    // is where that permission is taken back from everything that is not one.
+    if (sub->listed)
+      diags_.error(sub->line, sub->col,
+                   "a substring takes one range and nothing after it");
     checkExpr(sub->base.get());
     checkExpr(sub->lo.get());
     checkExpr(sub->hi.get());
@@ -4481,6 +4523,100 @@ void Sema::checkExpr(Expr *e) {
 /// The members need not be constants, so nothing is folded here: whether a
 /// value lies in the base type of whatever this is finally assigned to is a
 /// run-time question, and codegen asks it.
+/// ISO/IEC 10206:1991 §6.8.7.4: "set-value = set-constructor", reached through
+/// §6.8.7.1's `set-type-name set-value`. The tokens of `digits[1, 3, 5]` are
+/// exactly those of a subscripted array, and §6.5.6's substring shares the
+/// bracket too — so the parser builds whichever spine the punctuation suggests
+/// and the question "was that a type name?" is asked here, where there are
+/// symbols to ask it of. ADR-0053 parts a qualified name from a field
+/// selection the same way, and for the same reason.
+///
+/// The walk is down the *base* links only. A member-designator may itself be
+/// any expression, subscripts and all, and those hang off `index`, `lo` and
+/// `hi` rather than off `base` — so `sets[a[i]]` asks about `sets` and never
+/// about `a`.
+Type *Sema::setValueTypeOf(Expr *e) const {
+  if (std_ != Std::Extended)
+    return nullptr;
+  const Expr *root = e;
+  for (;;) {
+    if (auto *i = as<const IndexExpr>(root)) {
+      root = i->base.get();
+      continue;
+    }
+    if (auto *s = as<const SubstringExpr>(root)) {
+      root = s->base.get();
+      continue;
+    }
+    break;
+  }
+  auto *v = as<const VarRef>(root);
+  if (!v)
+    return nullptr;
+  // A silent lookup: a name that is not in scope is not a set-value, and the
+  // ordinary path is about to report it far better than this could.
+  Symbol *sym = lookup(v->name);
+  if (!sym || sym->kind != SymKind::Type || !sym->type || !sym->type->isSet())
+    return nullptr;
+  return sym->type;
+}
+
+void Sema::checkSetValue(Expr *e, Type *named) {
+  // The spine was built outermost-last, so walking it down yields the members
+  // in reverse; they are moved out rather than copied, which leaves the spine
+  // as the husk that carries the answer.
+  std::vector<SetMember> members;
+  Expr *node = e;
+  for (;;) {
+    if (auto *i = as<IndexExpr>(node)) {
+      SetMember m;
+      m.lo = std::move(i->index);
+      members.push_back(std::move(m));
+      node = i->base.get();
+      continue;
+    }
+    if (auto *s = as<SubstringExpr>(node)) {
+      SetMember m;
+      m.lo = std::move(s->lo);
+      m.hi = std::move(s->hi);
+      members.push_back(std::move(m));
+      node = s->base.get();
+      continue;
+    }
+    break;
+  }
+  // `node` is now the root of the spine — the type name. A spine is built
+  // outermost-last, so `e` sits at the *last* member; the construct begins at
+  // the name, and that is where a complaint about it belongs.
+  auto set = std::make_unique<SetExpr>();
+  set->line = node->line;
+  set->col = node->col;
+  // Reversed by hand rather than with `std::reverse`, because the same walk
+  // has to be written in Pascal and that language has neither the algorithm
+  // nor the iterators (bootstrap constraint 3).
+  for (size_t i = members.size(); i-- > 0;)
+    set->members.push_back(std::move(members[i]));
+  checkSetExpr(set.get());
+
+  // §6.8.7.4: "The value of the set-constructor of a set-value shall be
+  // assignment-compatible with the type of the set-value." Set compatibility
+  // is structural and decided on the base type (ADR-0028), so `assignable` is
+  // the whole of the rule and the empty set passes it for every set type.
+  if (set->type && !assignable(named, set->type))
+    diags_.error(set->line, set->col,
+                 "this set value has members of type " + set->type->name() +
+                     ", which " + named->name() + " cannot hold");
+  // The type is the *named* one, not the one the members were inferred to
+  // have: §6.8.7.1 says the type of a structured-value-constructor is the type
+  // its type-name denotes. That is the whole point of writing one — `[]` alone
+  // has no type of its own, and `digits[]` does.
+  e->type = named;
+  if (auto *i = as<IndexExpr>(e))
+    i->setValue = std::move(set);
+  else
+    as<SubstringExpr>(e)->setValue = std::move(set);
+}
+
 void Sema::checkSetExpr(SetExpr *s) {
   Type *base = nullptr;
   for (SetMember &m : s->members) {

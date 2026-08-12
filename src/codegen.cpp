@@ -376,6 +376,13 @@ llvm::Value *CodeGen::setUniverse(ap::Type *base) {
 /// exactly that. It is one `and` against the base type's universe: the check a
 /// set constructor cannot make for itself, because a constructor does not know
 /// what it is being assigned to.
+///
+/// ISO/IEC 10206:1991 §6.8.7.4's set-value is the exception that proves it.
+/// "The value of the set-constructor of a set-value shall be
+/// assignment-compatible with the type of the set-value" — and a set-value
+/// names its type, so there the constructor *can* ask, and does. That is why
+/// `digits[i]` traps on a stray member with no assignment anywhere in sight
+/// (ADR-0066), where `[i]` alone must wait for one.
 llvm::Value *CodeGen::checkedForSetBase(llvm::Value *v, ap::Type *target) {
   if (!target || !target->isSet() || !target->elem)
     return v;
@@ -2564,8 +2571,26 @@ llvm::Value *CodeGen::emitExpr(Expr *e) {
     return emitLoad(e);
   }
   case NK::Index:
+    // ISO/IEC 10206:1991 §6.8.7.4's set-value wears a subscript's syntax, and
+    // Sema hung the constructor it really is on the spine (ADR-0066). A set is
+    // a value (ADR-0028), so it is emitted here and never through
+    // `emitAddress`.
+    if (Expr *sv = static_cast<IndexExpr *>(e)->setValue.get())
+      return checkedForSetBase(emitExpr(sv), e->type);
     return emitLoad(e);
+  case NK::Substring:
+    // The same, for a spine whose outermost selector was a range. A substring
+    // proper is a string and leaves through `emitString`, so this case exists
+    // for the set-value reading alone.
+    if (Expr *sv = static_cast<SubstringExpr *>(e)->setValue.get())
+      return checkedForSetBase(emitExpr(sv), e->type);
+    return ConstantInt::get(i32(), 0);
   case NK::StructValue:
+    // `digits[]`, the null-set-value. A set has no storage to build into, so
+    // this is the one structured value that is a constant rather than an
+    // address.
+    if (e->type->isSet())
+      return ConstantInt::get(llvmType(e->type), 0);
     return emitStructValue(static_cast<StructValueExpr *>(e), nullptr);
   case NK::SetLit: return emitSet(static_cast<SetExpr *>(e));
   case NK::Binary: return emitBinary(static_cast<Binary *>(e));

@@ -66,9 +66,12 @@ begin
   s := shape[n: 1; w: 2; case box of [w: 1; h: 2]];
   { a record with no variant part cannot select one }
   q := plain[a: 1; case box of [a: 2]];
-  { §6.8.7.4's set-value is not implemented; a set has no components to
-    construct one out of, and neither has any other unstructured type }
-  c := colours[];
+  { §6.8.7.4's set-value is a *set-constructor*, so a set type takes members
+    and never the `selector: value` components of an array- or record-value.
+    `colours[]` and `colours[red]` are legal and live in setvalue.pas. }
+  c := colours[1: 2];
+  { and a type with no structure at all constructs nothing either way }
+  i := integer[];
   i := vec[1..4: 0];
   { §6.8.7.1: the type must be one a file component may have }
   g := ft[f: g.f];

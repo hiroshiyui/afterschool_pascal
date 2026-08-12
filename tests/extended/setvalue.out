@@ -1,0 +1,15 @@
+empty   :
+members : 1 3 5
+range   : 2 3 4
+mixed   : 1 2 3 5 7 8
+initial : 1 3 4
+computed: 2 4 5
+subscript: 2 5
+union   : 1 2 3
+meet    : 4 5
+in: TRUE FALSE
+equal: TRUE
+subset: TRUE
+letters: TRUE FALSE
+enums: TRUE FALSE
+less    : 1 2 3 4 6 7 8 9

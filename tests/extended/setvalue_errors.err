@@ -1,0 +1,13 @@
+<source>:24:8: error: this set value has members of type set of char, which digits cannot hold
+<source>:25:8: error: this set value has members of type set of char, which digits cannot hold
+<source>:26:8: error: this set value has members of type set of integer, which colours cannot hold
+<source>:32:8: error: a value of type digits holds members, not components
+<source>:33:8: error: a value of type colours holds members, not components
+<source>:38:15: error: a set member must have an ordinal type, found real
+<source>:39:18: error: the members of a set must all have one type: this one is char, not integer
+<source>:44:13: error: a substring takes one range and nothing after it
+<source>:49:10: error: this array is indexed by 1..3, but the subscript is char
+<source>:50:8: error: 'vec' is a type and has no value
+<source>:50:12: error: cannot subscript a value of type integer
+<source>:50:15: error: cannot subscript a value of type integer
+<source>:50:3: error: cannot assign integer to a variable of type digits

@@ -74,3 +74,4 @@ the alternatives that were rejected and why.
 | [0063](0063-a-set-iteration-is-a-walk-over-the-bits.md) | A set-member-iteration is a walk over the bits | Accepted |
 | [0064](0064-a-field-width-of-zero-is-three-different-answers.md) | A field width of zero is three different answers | Accepted |
 | [0065](0065-a-time-stamp-is-eight-numbers-and-the-layout-stays-here.md) | A time stamp is eight numbers, and the layout stays here | Accepted |
+| [0066](0066-a-set-value-is-told-from-a-subscript-by-the-symbol.md) | A set-value is told from a subscript by the symbol | Accepted |

@@ -1,0 +1,4 @@
+<source>:17:8: error: 'digits' is a type and has no value
+<source>:17:15: error: cannot subscript a value of type integer
+<source>:17:18: error: cannot subscript a value of type integer
+<source>:17:3: error: cannot assign integer to a variable of type digits

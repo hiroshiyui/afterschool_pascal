@@ -238,6 +238,13 @@ struct IndexExpr : Expr {
   IndexExpr() : Expr(NodeKind) {}
   ExprPtr base;
   ExprPtr index;
+  /// ISO/IEC 10206:1991 §6.8.7.4's set-value, `digits[1, 3, 5]`. The tokens
+  /// are a subscript's, so the parser builds a subscript spine and Sema tells
+  /// the two apart by the symbol at the root of it — the same shape as
+  /// `FieldExpr::qualified`, and for the same reason (ADR-0066). When this is
+  /// set the spine is not a designator at all and this is what it means; the
+  /// member expressions have been moved out of the spine into it.
+  ExprPtr setValue;
 };
 
 /// `base[lo..hi]`. ISO/IEC 10206:1991 §6.5.6's substring-variable when the base
@@ -257,6 +264,18 @@ struct SubstringExpr : Expr {
   ExprPtr base;
   ExprPtr lo;
   ExprPtr hi;
+  /// A `..` in brackets is a substring or a member-designator of §6.8.7.4's
+  /// set-value, and the parser cannot tell which — so this carries the second
+  /// reading exactly as `IndexExpr::setValue` does, and for the same reason
+  /// (ADR-0066). It is the outermost node of the spine that holds it, which
+  /// for `digits[1..3, 5]` is the `IndexExpr` and for `digits[1..3]` is this.
+  ExprPtr setValue;
+  /// Whether a comma followed this range inside the same brackets. §6.5.6
+  /// gives a substring-variable exactly one range and no list, so that is only
+  /// legal as a set-value's member-designators — but the two spellings build
+  /// the same spine, and without this the parser's relaxation would quietly
+  /// make `s[1..3, 2]` mean `s[1..3][2]` for a string (ADR-0066).
+  bool listed = false;
 };
 
 /// `base.field`. Sema resolves the name to the field itself, so codegen

@@ -1561,19 +1561,30 @@ ExprPtr Parser::parseSelectors(ExprPtr base) {
         depth.bump();
         const Token &at = cur();
         ExprPtr index = parseExpr();
-        // ISO/IEC 10206:1991 §6.5.6 and §6.8.6.5. A `..` inside a subscript can
-        // only be this: an array's index-expression is a single expression, so
-        // the parser decides without knowing any type. The grammar admits
-        // exactly one, so no comma may follow.
+        // ISO/IEC 10206:1991 §6.5.6 and §6.8.6.5. A `..` inside a subscript is
+        // either this or a member-designator of §6.8.7.4's set-value, and the
+        // parser decides neither: an array's index-expression is a single
+        // expression, so a `..` rules out a subscript and nothing more.
+        //
+        // A comma *may* follow, because a set-value's member-designators are a
+        // list — `digits[1..3, 5]`. §6.5.6 admits only one, so a substring
+        // written with a second selector is refused in Sema, which is the pass
+        // that knows whether the base is a string or a set-type name
+        // (ADR-0066).
         if (std_ == Std::Extended && check(Tok::DotDot)) {
           auto sub = makeNode<SubstringExpr>(at);
           ++pos_;
           sub->base = std::move(base);
           sub->lo = std::move(index);
           sub->hi = parseExpr();
+          SubstringExpr *made = sub.get();
           base = std::move(sub);
           substring = true;
-          break;
+          // Whether a list followed is the parser's to record and Sema's to
+          // judge: only a set-value may have one here.
+          if (check(Tok::Comma))
+            made->listed = true;
+          continue;
         }
         auto idx = makeNode<IndexExpr>(at);
         idx->base = std::move(base);
@@ -1751,12 +1762,12 @@ ExprPtr Parser::parseFactor() {
 /// opened. An empty `[]` counts too — a subscript list may not be empty, so
 /// `t[]` can only be the null-set-value or an empty record-value.
 ///
-/// §6.8.7.4's *set*-value is not implemented (ADR-0061) and could not be
-/// decided here if it were: `sieve[2,3]` and `a[2,3]` are the same tokens, so
-/// it would have to be told from a subscript by the symbol — in Sema, as
-/// ADR-0053 tells a qualified name from a field selection. The one spelling
-/// that does arrive here is the empty `t[]`, which Sema then refuses for a set
-/// with the words it gives every unstructured type.
+/// §6.8.7.4's *set*-value is decided elsewhere, and could not be decided here:
+/// `sieve[2, 3]` and `a[2, 3]` are the same tokens, so it is told from a
+/// subscript by the symbol — in Sema, as ADR-0053 tells a qualified name from
+/// a field selection (ADR-0066). The one spelling that does arrive here is the
+/// empty `t[]`, which is a subscript list a subscript list may not be, so it
+/// reaches Sema as a structured value whatever `t` turns out to name.
 bool Parser::looksLikeStructuredValue(size_t from) const {
   if (std_ != Std::Extended || from >= toks_.size() ||
       toks_[from].kind != Tok::LBracket)
