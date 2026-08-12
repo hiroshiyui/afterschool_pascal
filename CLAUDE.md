@@ -1006,6 +1006,26 @@ in one language or the other, and the standard is a property of the source.
     dump beside `and then`/`or else`, which are in no table either.
   - **A diagnostic cannot contain `§`** — `char` is a byte, so the Pascal source
     would carry two of them. `difftest` caught it as a one-character diff.
+- **Five required things, and what each cost** (ADR-0059). `maxchar`, `halt`,
+  `card`, the two-argument `succ`/`pred` and `><` — a batch, because each is
+  too small to be a feature and too separate to be part of one.
+  - **`><` is decided in the lexer**: under ISO 7185 the two characters can
+    only be `>` then `<`, which no expression admits, so joining them there
+    would turn one diagnostic into a cascade (ADR-0036's argument).
+  - **`succ(x, k)` widens to i32 and range-checks both ends.** The
+    one-argument form tests one end and steps; `ord(x) + k` may leave the type
+    in either direction and by any amount, so the sum must not wrap first.
+    §6.7.6.4 defines `pred(x, k)` as `succ(x, -(k))`, and this *subtracts*
+    rather than negating — the same thing without negation's edge case.
+  - **`halt` closes the open files through ADR-0032's list**, because it leaves
+    every block without its epilogue, and it is answered before `emitStdProc`
+    takes the address of a first argument it has not got.
+  - **A builtin's enumerator has to be placed, not written where it reads
+    best**: the AST dump prints it as an ordinal, so both compilers must agree
+    on the index. `difftest` caught two as a number one apart.
+  - Not done and stated: `minreal`/`maxreal`/`epsreal` need interned *text*
+    rather than a value, because ADR-0025 never converts a real literal — the
+    same reason ADR-0054 refuses a real-valued constant-expression.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

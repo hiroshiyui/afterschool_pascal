@@ -384,6 +384,11 @@ restricted a restricted type has another type's values and representation
            says "no other operations ... are possible". Its initial state is
            the underlying type's. Two restrictions of one type are still two
            types, and a restricted type is nonbindable
+required   maxchar — the largest char; halt — stop the program, closing what
+           is open; card(s) — how many members a set has; succ(x, k) and
+           pred(x, k) — step k places along an ordinal type, in either
+           direction; and the operator >< — set symmetric difference. All but
+           `><` are required *identifiers*, so a program may declare its own
 words      otherwise, pow, protected, value, bindable, restricted, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -401,9 +406,11 @@ Not accepted yet, and each its own piece of work: structured-value
 constructors and `readstr`/`writestr`.
 
 Also absent, and smaller — the cost is in writing them twice rather than in the
-design: `halt`, `card`, the symmetric difference `><`,
-`maxchar`/`minreal`/`maxreal`/`epsreal`, the two-argument `succ`/`pred`, zero
-field widths in `write`, the time procedures, and set-member iteration.
+design: `minreal`/`maxreal`/`epsreal`, zero field widths in `write`, the time
+procedures, and set-member iteration. The three real constants wait on a
+mechanism rather than on work: a real literal is carried as the text that was
+written and never converted (ADR-0025), so a required real constant has to
+arrive as interned text rather than as a value.
 
 A word-symbol is reserved only when the feature needing it lands, so until that
 list is empty `--std=extended` accepts some programs a conforming processor

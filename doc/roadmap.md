@@ -627,6 +627,24 @@ was never written down.
     `kwLit` is nine wide and `restricted` is ten. Recognised beside the table
     rather than repadding 188 literals, and printed in the token dump beside
     the two-word symbols, which are in no table either.
+- ~~**Five required things.**~~ Done (ADR-0059). `maxchar` (§6.4.2.2 d)),
+  `halt` (§6.7.5.7), `card` (§6.7.6.3), the two-argument `succ`/`pred`
+  (§6.7.6.4) and the set symmetric difference `><` (§6.8.3.4) — each too small
+  to be a feature and too separate to be part of one.
+  - **`><` is decided in the lexer**, because under ISO 7185 the two characters
+    can only be `>` followed by `<`, which no expression admits: joining them
+    there would turn one clear diagnostic into a cascade. ADR-0036's argument
+    again.
+  - **`succ(x, k)` widens to i32 before it checks.** The one-argument form
+    tests one end and steps; `ord(x) + k` may leave the type in either
+    direction and by any amount, so the sum must not wrap before it is looked
+    at.
+  - **`halt` closes the open files through the same list ADR-0032 walks**,
+    because a halt leaves every block without running its epilogue and "still
+    open" and "abandoned" are the same set once nothing further will run.
+  - Two enumerators had to be *placed* rather than written where they read
+    best: the AST dump prints a builtin as its ordinal, so both compilers must
+    agree on the index. `difftest` caught each as a number one apart.
 - Structured-value constructors and `readstr`/`writestr`. Each needs its own
   record.
 
