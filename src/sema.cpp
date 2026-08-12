@@ -193,6 +193,15 @@ Type *Sema::stringType(long long length) {
   return t;
 }
 
+/// The ordinal of a folded value, whichever field its type selected.
+long long Sema::ordinalOf(const Symbol &v) {
+  if (v.type->isChar())
+    return static_cast<unsigned char>(v.charVal);
+  if (v.type->base()->kind == TypeKind::Boolean)
+    return v.boolVal ? 1 : 0;
+  return v.intVal; // integer, and the ordinal of an enumeration constant
+}
+
 bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
   checkExpr(e);
   Symbol out;
@@ -200,12 +209,7 @@ bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
   if (!evalConst(e, out) || !out.type || !out.type->isOrdinal())
     return false;
   type = out.type;
-  if (out.type->isChar())
-    value = static_cast<unsigned char>(out.charVal);
-  else if (out.type->base()->kind == TypeKind::Boolean)
-    value = out.boolVal ? 1 : 0;
-  else
-    value = out.intVal; // integer, and the ordinal of an enumeration constant
+  value = ordinalOf(out);
   return true;
 }
 
@@ -1930,24 +1934,48 @@ Symbol *Sema::lookupWithField(const std::string &name,
   return nullptr;
 }
 
-/// Whether the expression is a constant whose value lives in memory — today
-/// that is ISO 7185 §6.3's string constant, and the predicate is written for
-/// the type rather than for strings so that it needs nothing when another
-/// kind arrives. It is not a variable and never becomes one; what it has is
-/// *storage*, which is what the places that copy a structured value need of
-/// an argument (ADR-0068).
-bool Sema::isMemoryConstant(Expr *e) const {
-  const Symbol *s = nullptr;
+/// ISO/IEC 10206:1991 §6.8.8's constant-access: a constant-name, or a
+/// component selected from one. Structural — it asks what the *root* denotes
+/// and not what the value is, so it neither folds nor diagnoses, which is what
+/// lets it be asked as a question (ADR-0069).
+///
+/// It is the exact counterpart of `isDesignator`: §6.5.1's variable-accesses
+/// and §6.8.8's constant-accesses have the same three selector forms and
+/// differ only in what stands at the bottom.
+bool Sema::isConstantAccess(Expr *e) const {
   if (auto *v = as<VarRef>(e))
-    s = v->withField ? nullptr : v->sym;
-  else if (auto *f = as<FieldExpr>(e))
-    s = f->qualified;
-  return s && s->kind == SymKind::Const && s->type && s->type->isMemory();
+    return !v->withField && v->sym && v->sym->kind == SymKind::Const;
+  if (auto *f = as<FieldExpr>(e))
+    return f->qualified
+               ? f->qualified->kind == SymKind::Const
+               : (!f->isDiscriminant && isConstantAccess(f->base.get()));
+  if (auto *i = as<IndexExpr>(e))
+    return !i->setValue && isConstantAccess(i->base.get());
+  if (auto *s = as<SubstringExpr>(e))
+    return !s->setValue && isConstantAccess(s->base.get());
+  return false;
+}
+
+/// Whether the expression is a constant-access whose value lives in memory. It
+/// is not a variable and never becomes one; what it has is *storage*, which is
+/// what the places that copy a structured value need of an argument
+/// (ADR-0068).
+bool Sema::isMemoryConstant(Expr *e) const {
+  return e->type && e->type->isMemory() && isConstantAccess(e);
 }
 
 bool Sema::isDesignator(Expr *e) const {
-  if (auto *v = as<VarRef>(e))
-    return v->sym && (v->sym->isVariable() || v->withField);
+  if (auto *v = as<VarRef>(e)) {
+    if (!v->sym)
+      return false;
+    // §6.9.3.10 makes a field of a `with` over a *constant*-access a
+    // constant-field-identifier, which denotes a value. The binding is a
+    // `VarParam` either way — it holds an address — so the kind cannot answer
+    // and the binding has to say which of the two it is (ADR-0069).
+    if (v->withField)
+      return !v->sym->isConstBinding;
+    return v->sym->isVariable();
+  }
   if (auto *i = as<IndexExpr>(e))
     return isDesignator(i->base.get());
   // §6.5.6's substring-variable is a variable-access; §6.8.6.5's
@@ -2880,119 +2908,193 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
   resolveGotos();
 }
 
-/// The constant, type and variable definition parts. Shared by a block and by
-/// both halves of a module, which have the same three parts and differ only in
-/// what may surround them.
+/// Whether one written position precedes another. Only ever asked of two
+/// declarations of one block, which are all distinct.
+static bool earlier(int l1, int c1, int l2, int c2) {
+  return l1 != l2 ? l1 < l2 : c1 < c2;
+}
+
+/// The constant, type and variable definition parts, **in the order they were
+/// written**. ISO 7185 §6.2.1 fixes that order — const, then type, then var —
+/// but ISO/IEC 10206:1991 §6.2.1 makes the block a *repetition* of the five
+/// parts in any order, and §6.2.2.9 then requires a defining-point to precede
+/// every applied occurrence of it. So written order is the only order that
+/// works, and it is what `const first = red` after a type part needs, and what
+/// a constant naming a type needs — which is every structured constant
+/// (ADR-0069).
+///
+/// The parts are merged by source position rather than recorded in one list at
+/// parse time: the AST keeps a vector per part, and the positions reconstruct
+/// the interleaving exactly, since one block's declarations are all distinct.
+/// Under ISO 7185 there is at most one of each part in the fixed order, so the
+/// merge is provably the order this always used.
+///
+/// Shared by a block and by both halves of a module, which have the same parts
+/// and differ only in what may surround them.
 void Sema::checkDeclarations(Block &block, Symbol *owner) {
-  for (auto &c : block.consts) {
-    checkExpr(c.value.get());
-    Symbol value;
-    constReported_ = false;
-    if (!evalConst(c.value.get(), value)) {
-      // The folder says why when it can — an overflow, a `chr` out of range —
-      // and this generic message is for when it cannot: the expression was
-      // never constant in the first place.
-      if (!constReported_)
-        diags_.error(c.line, c.col,
-                     "the value of constant '" + c.name +
-                         "' is not a compile-time constant");
-      continue;
+  size_t ci = 0, ti = 0, vi = 0;
+  bool inTypes = false;
+  while (ci < block.consts.size() || ti < block.types.size() ||
+         vi < block.vars.size()) {
+    // Which of the three heads was written first. A variable group is placed
+    // by its first name, the only position it has.
+    int which = -1, line = 0, col = 0;
+    if (ci < block.consts.size()) {
+      which = 0;
+      line = block.consts[ci].line;
+      col = block.consts[ci].col;
     }
-    Symbol *s = declare(c.name, SymKind::Const, c.line, c.col);
-    s->type = value.type;
-    s->intVal = value.intVal;
-    s->realVal = value.realVal;
-    s->charVal = value.charVal;
-    s->boolVal = value.boolVal;
-    s->constValue = value.constValue;
+    if (ti < block.types.size() &&
+        (which < 0 ||
+         earlier(block.types[ti].line, block.types[ti].col, line, col))) {
+      which = 1;
+      line = block.types[ti].line;
+      col = block.types[ti].col;
+    }
+    if (vi < block.vars.size() && !block.vars[vi].names.empty() &&
+        (which < 0 || earlier(block.vars[vi].names[0].line,
+                              block.vars[vi].names[0].col, line, col)))
+      which = 2;
+
+    // §6.4.4's forward-referenced domain is completed at the end of *its*
+    // type-definition-part, so a run of type definitions ending is what
+    // triggers it — not the end of the block, which may hold several.
+    if (which != 1 && inTypes) {
+      resolvePendingPointers();
+      inTypes = false;
+    }
+    if (which == 0)
+      checkConstDecl(block.consts[ci++], owner);
+    else if (which == 1) {
+      inTypes = true;
+      checkTypeDecl(block.types[ti++]);
+    } else if (which == 2)
+      checkVarDecl(block.vars[vi++], owner);
+    else
+      break; // a variable group with no names; the parser makes none
+  }
+  if (inTypes)
+    resolvePendingPointers();
+}
+
+void Sema::checkConstDecl(ConstDecl &c, Symbol *owner) {
+  checkExpr(c.value.get());
+  Symbol value;
+  constReported_ = false;
+  if (!evalConst(c.value.get(), value)) {
+    // The folder says why when it can — an overflow, a `chr` out of range —
+    // and this generic message is for when it cannot: the expression was
+    // never constant in the first place.
+    if (!constReported_)
+      diags_.error(c.line, c.col,
+                   "the value of constant '" + c.name +
+                       "' is not a compile-time constant");
+    return;
+  }
+  Symbol *s = declare(c.name, SymKind::Const, c.line, c.col);
+  s->type = value.type;
+  s->intVal = value.intVal;
+  s->realVal = value.realVal;
+  s->charVal = value.charVal;
+  s->boolVal = value.boolVal;
+  s->constValue = value.constValue;
+  // A §6.8.7 constructor needs its storage filled at run time, and the block
+  // that *defined* it is the one whose prologue does that. The test is
+  // whether this definition is where the node came from: `const b = a` hands
+  // on `a`'s node, so `b` shares `a`'s storage and must not fill it a second
+  // time (ADR-0069).
+  if (s->constValue == c.value.get() && is<StructValueExpr>(s->constValue)) {
+    owner->memoryConsts.push_back(s);
+    // The hidden frame slot ADR-0061 gives a top-level constructor is not
+    // used here — the value is built into the global instead — and a slot
+    // nothing writes to would still appear in the frame layout.
+    static_cast<StructValueExpr *>(s->constValue)->resultSlot = nullptr;
+  }
+}
+
+/// One type-definition or schema-definition. A type name is visible to the
+/// definitions after it, so each is declared as it is resolved.
+void Sema::checkTypeDecl(TypeDecl &t) {
+  // §6.4.7: a schema-definition declares a schema, not a type. Its body is
+  // *not* resolved here — it has no discriminant values yet, and resolving
+  // it once would produce the one type every use then shared.
+  if (!t.discriminants.empty()) {
+    declareSchema(t);
+    return;
+  }
+  Type *resolved = resolveType(*t.type);
+  Symbol *s = declare(t.name, SymKind::Type, t.line, t.col);
+  if (s->type)
+    return; // a duplicate: keep the first definition
+  s->type = resolved;
+  // §6.4.1: a type-name denotes "the type, bindability and initial state"
+  // its definition denoted, so the initial state travels with the name and
+  // every variable of it is initialised.
+  s->initValue = initialStateOf(*t.type);
+  s->isBindable = bindableOf(*t.type);
+  if (resolved->alias.empty())
+    resolved->alias = t.name;
+}
+
+/// One variable-declaration: a group of names sharing a type-denoter.
+void Sema::checkVarDecl(VarDecl &group, Symbol *owner) {
+  // §6.2.3.2: a discriminated schema is the one denoter whose discriminants
+  // may be variables, and only here. The first name is resolved with itself
+  // offered as the variable they would belong to; if they turned out to be
+  // constants the type is an ordinary one and the group shares it, exactly
+  // as before.
+  Symbol *schema = nullptr;
+  if (group.type->kind == TEK::Schema) {
+    Symbol *named = lookupQuiet(group.type->qualifier, group.type->name);
+    if (named && named->kind == SymKind::Schema)
+      schema = named;
+  }
+  if (schema && !group.names.empty()) {
+    const DeclName &n0 = group.names[0];
+    Symbol *first =
+        addFrameVar(n0.name, SymKind::Var, ty::Int(), owner, n0.line, n0.col);
+    dynamicVarFor_ = first;
+    first->type = resolveType(*group.type);
+    dynamicVarFor_ = nullptr;
+    // §6.2.3.2 evaluates the discriminants when the block is entered and the
+    // storage they size lives as long as the activation (ADR-0041). A
+    // module's activation outlives the function that commences it, so there
+    // is nowhere on the stack to put that storage — the tuple has to be
+    // constant here, as it is everywhere except a block's own variables.
+    if (owner->isModuleSym && first->type->isGeneric())
+      diags_.error(n0.line, n0.col,
+                   "the discriminants of a module's variable must be "
+                   "constants, because a module's activation lasts as long "
+                   "as the program");
+    for (size_t i = 1; i < group.names.size(); ++i) {
+      const DeclName &n = group.names[i];
+      Symbol *v =
+          addFrameVar(n.name, SymKind::Var, first->type, owner, n.line, n.col);
+      if (!first->type->isGeneric())
+        continue;
+      // Each name has its own descriptor, so each needs its own type — but
+      // one actual-discriminant-part, evaluated once per variable on entry
+      // from the one tree the group shares.
+      v->type = genericFromSchema(schema, v, *group.type, "variable's type");
+      v->descSchema = first->descSchema;
+      v->discExprs = first->discExprs;
+    }
+    return;
   }
 
-  // A type name is visible to the definitions after it, so each is declared as
-  // it is resolved rather than all at the end.
-  for (auto &t : block.types) {
-    // §6.4.7: a schema-definition declares a schema, not a type. Its body is
-    // *not* resolved here — it has no discriminant values yet, and resolving
-    // it once would produce the one type every use then shared.
-    if (!t.discriminants.empty()) {
-      declareSchema(t);
-      continue;
-    }
-    Type *resolved = resolveType(*t.type);
-    Symbol *s = declare(t.name, SymKind::Type, t.line, t.col);
-    if (s->type)
-      continue; // a duplicate: keep the first definition
-    s->type = resolved;
-    // §6.4.1: a type-name denotes "the type, bindability and initial state"
-    // its definition denoted, so the initial state travels with the name and
-    // every variable of it is initialised.
-    s->initValue = initialStateOf(*t.type);
-    s->isBindable = bindableOf(*t.type);
-    if (resolved->alias.empty())
-      resolved->alias = t.name;
-  }
-  // Every name in the type part is now visible, so the pointers that named one
-  // before it existed can be completed.
-  resolvePendingPointers();
-
-  for (auto &group : block.vars) {
-    // §6.2.3.2: a discriminated schema is the one denoter whose discriminants
-    // may be variables, and only here. The first name is resolved with itself
-    // offered as the variable they would belong to; if they turned out to be
-    // constants the type is an ordinary one and the group shares it, exactly
-    // as before.
-    Symbol *schema = nullptr;
-    if (group.type->kind == TEK::Schema) {
-      Symbol *named = lookupQuiet(group.type->qualifier, group.type->name);
-      if (named && named->kind == SymKind::Schema)
-        schema = named;
-    }
-    if (schema && !group.names.empty()) {
-      const DeclName &n0 = group.names[0];
-      Symbol *first =
-          addFrameVar(n0.name, SymKind::Var, ty::Int(), owner, n0.line, n0.col);
-      dynamicVarFor_ = first;
-      first->type = resolveType(*group.type);
-      dynamicVarFor_ = nullptr;
-      // §6.2.3.2 evaluates the discriminants when the block is entered and the
-      // storage they size lives as long as the activation (ADR-0041). A
-      // module's activation outlives the function that commences it, so there
-      // is nowhere on the stack to put that storage — the tuple has to be
-      // constant here, as it is everywhere except a block's own variables.
-      if (owner->isModuleSym && first->type->isGeneric())
-        diags_.error(n0.line, n0.col,
-                     "the discriminants of a module's variable must be "
-                     "constants, because a module's activation lasts as long "
-                     "as the program");
-      for (size_t i = 1; i < group.names.size(); ++i) {
-        const DeclName &n = group.names[i];
-        Symbol *v =
-            addFrameVar(n.name, SymKind::Var, first->type, owner, n.line, n.col);
-        if (!first->type->isGeneric())
-          continue;
-        // Each name has its own descriptor, so each needs its own type — but
-        // one actual-discriminant-part, evaluated once per variable on entry
-        // from the one tree the group shares.
-        v->type = genericFromSchema(schema, v, *group.type, "variable's type");
-        v->descSchema = first->descSchema;
-        v->discExprs = first->discExprs;
-      }
-      continue;
-    }
-
-    // One denoter for the whole group, so `a, b: array [1..3] of integer`
-    // makes a and b the same type and lets `a := b` through.
-    Type *t = resolveType(*group.type);
-    Expr *init = initialStateOf(*group.type);
-    for (auto &n : group.names) {
-      Symbol *v = addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
-      // §6.2.3.5 creates each local "in its initial state" on entry, so the
-      // whole group shares one value as it shares one type.
-      v->initValue = init;
-      // §6.4.1's `bindable` belongs to the type-denoter, like the initial
-      // state — so the group shares it, and §6.5.1 makes such a variable
-      // totally-undefined until something binds it.
-      v->isBindable = bindableOf(*group.type);
-    }
+  // One denoter for the whole group, so `a, b: array [1..3] of integer`
+  // makes a and b the same type and lets `a := b` through.
+  Type *t = resolveType(*group.type);
+  Expr *init = initialStateOf(*group.type);
+  for (auto &n : group.names) {
+    Symbol *v = addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
+    // §6.2.3.5 creates each local "in its initial state" on entry, so the
+    // whole group shares one value as it shares one type.
+    v->initValue = init;
+    // §6.4.1's `bindable` belongs to the type-denoter, like the initial
+    // state — so the group shares it, and §6.5.1 makes such a variable
+    // totally-undefined until something binds it.
+    v->isBindable = bindableOf(*group.type);
   }
 }
 
@@ -3326,6 +3428,115 @@ void Sema::checkProcBody(ProcDecl &decl) {
   current_ = outerProc;
 }
 
+/// ISO/IEC 10206:1991 §6.8.8.2: the component-value an array-value maps an
+/// index to. §6.8.7.2 b)'s completer covers whatever the labelled elements
+/// leave, so it is the answer only when none of them claimed the index — which
+/// is the same rule CodeGen implements by writing the completer first and the
+/// elements over it, read the other way round.
+static Expr *arrayComponentOf(StructValueExpr *sv, long long idx) {
+  Expr *completer = nullptr;
+  for (ValueElem &el : sv->elems) {
+    if (el.completer) {
+      completer = el.value.get();
+      continue;
+    }
+    for (const LabelRange &r : el.values)
+      if (idx >= r.lo && idx <= r.hi)
+        return el.value.get();
+  }
+  return completer;
+}
+
+/// §6.8.8.3: the component-value a record-value gives a field. `Field::variant`
+/// is the path to the field-list the field lives in (ADR-0026), so this walks
+/// the same path `fieldAddress` walks — and stops where §6.8.8.3's error is:
+/// an arm the value did not select has no component to denote, which is D.90
+/// answered at compile time because a constant's tag is a constant.
+static Expr *recordComponentOf(StructValueExpr *sv, const Field *f,
+                               size_t depth, bool &inactive) {
+  if (depth == f->variant.size()) {
+    for (ValueElem &el : sv->elems)
+      for (int k : el.fieldIndex)
+        if (k == f->index)
+          return el.value.get();
+    return nullptr;
+  }
+  if (sv->armIndex < 0 || !sv->variant || sv->armIndex != f->variant[depth]) {
+    inactive = true;
+    return nullptr;
+  }
+  return recordComponentOf(as<StructValueExpr>(sv->variant.get()), f, depth + 1,
+                           inactive);
+}
+
+/// §6.8.8's constant-access, folded. The value of a constant-access is the
+/// value of the component it selects, and a constant keeps the *node* that
+/// defines it — so selecting is a walk into that node and the answer is
+/// another node, which the ordinary folder then evaluates. §6.8.2 guarantees
+/// the index is itself constant here: a variable index is a variable-access,
+/// which a constant-expression may not contain, so the two readings of `c[i]`
+/// never collide (ADR-0069).
+///
+/// Null means "not a constant-access", which is not an error — the caller's
+/// context says what it wanted.
+Expr *Sema::constAccessNode(Expr *e) {
+  if (auto *v = as<VarRef>(e))
+    return (!v->withField && v->sym && v->sym->kind == SymKind::Const)
+               ? v->sym->constValue
+               : nullptr;
+  if (auto *f = as<FieldExpr>(e)) {
+    if (f->qualified)
+      return f->qualified->kind == SymKind::Const ? f->qualified->constValue
+                                                  : nullptr;
+    if (!f->resolved)
+      return nullptr;
+    Expr *base = constAccessNode(f->base.get());
+    auto *sv = as<StructValueExpr>(base);
+    if (!sv)
+      return nullptr;
+    bool inactive = false;
+    Expr *comp = recordComponentOf(sv, f->resolved, 0, inactive);
+    if (inactive) {
+      diags_.error(f->line, f->col,
+                   "'" + f->field +
+                       "' is a component of a variant the constant does not "
+                       "select");
+      constReported_ = true;
+    }
+    return comp;
+  }
+  if (auto *ix = as<IndexExpr>(e)) {
+    if (ix->setValue)
+      return nullptr; // ADR-0066's set-value: a value, not an access
+    Expr *base = constAccessNode(ix->base.get());
+    if (!base)
+      return nullptr;
+    // Folded rather than `evalOrdinal`'d: that would run `checkExpr` over an
+    // index this pass has already checked, and report anything wrong twice.
+    Type *bt = ix->base->type;
+    Symbol iv;
+    if (!bt || !bt->isArray() || !evalConst(ix->index.get(), iv) || !iv.type ||
+        !iv.type->isOrdinal())
+      return nullptr;
+    long long idx = ordinalOf(iv);
+    // §6.8.8.2 makes the index assignment-compatible with the index-type, and
+    // outside it there is no component — an error whichever way it is written,
+    // so it is reported here rather than left to say "not constant".
+    if (idx < bt->lo || idx > bt->hi) {
+      diags_.error(ix->line, ix->col,
+                   "index " + std::to_string(idx) + " is outside " +
+                       std::to_string(bt->lo) + ".." + std::to_string(bt->hi) +
+                       ", so it selects no component");
+      constReported_ = true;
+      return nullptr;
+    }
+    if (auto *sv = as<StructValueExpr>(base))
+      return arrayComponentOf(sv, idx);
+    return nullptr; // a string constant: its component is a char, not a node
+  }
+  return nullptr;
+}
+
 bool Sema::evalConst(Expr *e, Symbol &out) {
   if (auto *i = as<IntLit>(e)) {
     out.type = ty::Int();
@@ -3352,6 +3563,22 @@ bool Sema::evalConst(Expr *e, Symbol &out) {
     out.constValue = s;
     return true;
   }
+  // ISO/IEC 10206:1991 §6.8.7's structured-value-constructor, named. §6.8.2
+  // makes `nonvarying` the whole test of a constant-expression — not "the
+  // compiler can fold it" — so an array, record or set value whose components
+  // read nothing is a constant, and it keeps the node exactly as a string
+  // constant keeps its literal. A set-value reaches here as the subscript
+  // spine ADR-0066 left behind, which is why the shapes are asked for rather
+  // than the node kinds (ADR-0069).
+  if (is<StructValueExpr>(e) || is<SetExpr>(e) ||
+      (as<IndexExpr>(e) && as<IndexExpr>(e)->setValue) ||
+      (as<SubstringExpr>(e) && as<SubstringExpr>(e)->setValue)) {
+    if (!e->type || !nonvarying(e))
+      return false;
+    out.type = e->type;
+    out.constValue = e;
+    return true;
+  }
   if (auto *v = as<VarRef>(e)) {
     if (!v->sym || v->sym->kind != SymKind::Const)
       return false;
@@ -3362,10 +3589,75 @@ bool Sema::evalConst(Expr *e, Symbol &out) {
   // identifier "a constant-identifier that denotes the value", so it is as
   // constant as the one the module wrote.
   if (auto *f = as<FieldExpr>(e)) {
-    if (!f->qualified || f->qualified->kind != SymKind::Const)
-      return false;
-    out = *f->qualified;
-    return true;
+    if (f->qualified && f->qualified->kind == SymKind::Const) {
+      out = *f->qualified;
+      return true;
+    }
+  }
+  // §6.8.8's constant-access. The component a constant-access selects is
+  // usually a node of the value — an array-value's element or a record-value's
+  // field-value — and then the ordinary folder finishes the job. A component
+  // of a *string* constant is not: the characters are the value, so the two
+  // string forms are computed here (ADR-0069).
+  if (is<IndexExpr>(e) || is<FieldExpr>(e) || is<SubstringExpr>(e)) {
+    if (Expr *node = constAccessNode(e))
+      return evalConst(node, out);
+    if (auto *ix = as<IndexExpr>(e)) {
+      // §6.8.8.2's string-constant form: one index-expression, and what it
+      // selects is a character.
+      auto *lit = as<StrLit>(constAccessNode(ix->base.get()));
+      Symbol iv;
+      if (!lit || !evalConst(ix->index.get(), iv) || !iv.type ||
+          !iv.type->isInteger())
+        return false;
+      long long i = iv.intVal;
+      if (i < 1 || i > static_cast<long long>(lit->value.size())) {
+        diags_.error(ix->line, ix->col,
+                     "index " + std::to_string(i) +
+                         " is outside the string constant's 1.." +
+                         std::to_string(lit->value.size()));
+        constReported_ = true;
+        return false;
+      }
+      out.type = ty::Char();
+      out.charVal = lit->value[static_cast<size_t>(i - 1)];
+      return true;
+    }
+    if (auto *ss = as<SubstringExpr>(e)) {
+      // §6.8.8.4's substring-constant. Its value is characters that are in no
+      // node, so a literal holding them is made — the one place this compiler
+      // builds a piece of tree that the program did not write. Sema owns it,
+      // beside the symbols it owns, because `Symbol::constValue` outlives the
+      // fold and CodeGen reads it.
+      auto *lit = as<StrLit>(constAccessNode(ss->base.get()));
+      Symbol lo, hi;
+      if (!lit || !evalConst(ss->lo.get(), lo) ||
+          !evalConst(ss->hi.get(), hi) || !lo.type || !hi.type ||
+          !lo.type->isInteger() || !hi.type->isInteger())
+        return false;
+      long long n = static_cast<long long>(lit->value.size());
+      if (lo.intVal < 1 || hi.intVal > n || lo.intVal > hi.intVal) {
+        diags_.error(ss->line, ss->col,
+                     "the substring " + std::to_string(lo.intVal) + ".." +
+                         std::to_string(hi.intVal) +
+                         " is not within the string constant's 1.." +
+                         std::to_string(n));
+        constReported_ = true;
+        return false;
+      }
+      auto made = std::make_unique<StrLit>();
+      made->line = ss->line;
+      made->col = ss->col;
+      made->value =
+          lit->value.substr(static_cast<size_t>(lo.intVal - 1),
+                            static_cast<size_t>(hi.intVal - lo.intVal + 1));
+      checkExpr(made.get()); // the literal's type is the literal's business
+      out.type = made->type;
+      out.constValue = made.get();
+      constNodes_.push_back(std::move(made));
+      return true;
+    }
+    return false;
   }
   if (auto *u = as<Unary>(e)) {
     Symbol inner;
@@ -5587,7 +5879,15 @@ void Sema::checkWith(WithStmt *w) {
   checkExpr(w->record.get());
   Type *t = w->record->type;
 
-  if (!isDesignator(w->record.get())) {
+  // §6.9.3.10: `with-element = variable-access | constant-access`. A constant
+  // one binds the same way — the value has storage and the binding is its
+  // address — and differs only in that the field-identifiers it introduces
+  // are constant-field-identifiers, which denote values.
+  // No `--std` test: the only structured constant ISO 7185 has is a string
+  // (ADR-0068), which is not a record, so a constant-access reaching here is
+  // already an Extended Pascal program. A gate would be unreachable.
+  bool constAccess = isConstantAccess(w->record.get());
+  if (!isDesignator(w->record.get()) && !constAccess) {
     diags_.error(w->record->line, w->record->col,
                  "'with' needs a record variable");
     stmtPath_.push_back(w);
@@ -5620,6 +5920,7 @@ void Sema::checkWith(WithStmt *w) {
   // `with p do f := 1` would slip past a rule `p.f := 1` obeys.
   if (Symbol *root = baseSymbol(w->record.get()))
     w->binding->isProtected = root->isProtected;
+  w->binding->isConstBinding = constAccess;
 
   withStack_.push_back(w->binding);
   stmtPath_.push_back(w);

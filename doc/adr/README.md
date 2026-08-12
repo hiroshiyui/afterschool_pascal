@@ -77,3 +77,4 @@ the alternatives that were rejected and why.
 | [0066](0066-a-set-value-is-told-from-a-subscript-by-the-symbol.md) | A set-value is told from a subscript by the symbol | Accepted |
 | [0067](0067-the-transfer-procedures-are-index-arithmetic.md) | The transfer procedures are index arithmetic, and nothing else | Accepted |
 | [0068](0068-a-string-constant-is-its-literal-named.md) | A string constant is its literal, named | Accepted |
+| [0069](0069-a-constant-access-is-a-designator-over-a-constant.md) | A constant-access is a designator over a constant | Accepted |

@@ -19,11 +19,7 @@ var v: vec; p: pt; s: shape; c: colours; q: plain; g: ft; m: mixed; i: integer;
 
 { §6.8.7.3 NOTE 1 makes one field-value's identifiers denote components of one
   type, because the component-value it carries has a single type. }
-{ §6.8.8's constant-accesses are not implemented (ADR-0061), so a
-  constant-definition cannot hold a structured value -- and the folder must
-  say so rather than meet a node it has no case for. }
 procedure fields2;
-const k = vec[1: 1; 2..4: 2];
 begin
   m := mixed[x, c: 1]
 end;

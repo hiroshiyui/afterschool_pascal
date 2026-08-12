@@ -1,0 +1,7 @@
+<source>:17:10: error: unknown type 'late'
+<source>:20:13: error: undeclared identifier 'later'
+<source>:20:3: error: the value of constant 'toosoon' is not a compile-time constant
+<source>:21:13: error: undeclared identifier 'size'
+<source>:21:3: error: the value of constant 'sized' is not a compile-time constant
+<source>:37:15: error: undeclared identifier 'toosoon'
+<source>:38:32: error: undeclared identifier 'sized'

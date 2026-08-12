@@ -71,8 +71,8 @@ const
     Pascal in the tree, and the one that has to keep fitting. Both are frame
     storage, so they are the fixed-buffer limits ADR-0012 predicted -- and both
     fail loudly rather than silently truncating. }
-  poolMax  = 400000; { characters of identifier and literal text }
-  tokMax   = 130000;
+  poolMax  = 440000; { characters of identifier and literal text }
+  tokMax   = 140000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
   { The size of a file variable's storage, which is PAS_FILE_SIZE in
     runtime/pasrt.h. The C++ code generator includes that header so the two
@@ -501,6 +501,10 @@ type
       a constant is *its defining expression, named*, and this is that node.
       The same shape initValue gives 6.6's initial state below. ADR-0068. }
     constValue: nodePtr;
+    { This symbol is a `with` binding over a 6.8.8 constant-access, so the
+      field-identifiers it introduces are 6.9.3.10's constant-field-
+      identifiers: they denote values, and nothing may threaten one. }
+    isConstBinding: boolean;
     { The number this procedure's LLVM function is named with. Nesting allows
       two procedures of the same name in different parents, so the name cannot
       be the Pascal one. }
@@ -512,6 +516,10 @@ type
     params, paramTail: symListPtr;
     frameVars, frameTail: symListPtr;
     frameCount: integer;
+    { The constants this block defined whose value is a 6.8.7 constructor, in
+      definition order. They have storage rather than a frame slot, and the
+      prologue fills it (ADR-0069). }
+    memConsts, memConstTail: symListPtr;
     { The ids of this block's labels that a goto in a *nested* block jumps to.
       Non-empty means the activation record carries a jump record after the
       frame variables, and the prologue arms it and dispatches on it -- so it
@@ -718,6 +726,23 @@ type
     id: integer;
     at, len: integer;
     next: strConstPtr
+  end;
+
+  { The storage of a 6.8.7 constant. A constructor has no storage of its own --
+    ADR-0061 builds one into a hidden frame slot, and a constant cannot use
+    that, because one node serves uses in blocks that have no such frame -- so
+    it gets a global, filled once by the prologue of the block that defined it
+    (ADR-0069). Keyed by the *node*, not by the symbol, so `const b = a` shares
+    a's storage rather than copying it: the two names denote one value, and the
+    folder hands on one node. `at`/`len` is a name for the reader; the number
+    is what makes it unique, since two blocks may each define `c`. }
+  constGlobalPtr = ^constGlobalRec;
+  constGlobalRec = record
+    id: integer;
+    at, len: integer;
+    cvalue: nodePtr;
+    ctype: typePtr;
+    next: constGlobalPtr
   end;
 
   { An argument's operand, held until the whole list is known: the call line
@@ -1181,6 +1206,10 @@ var
     a level-0 record is a global rather than something to walk to. }
   irRoot: symPtr;
   strHead, strTail: strConstPtr;
+  { The storage of the 6.8.7 constants, in the order they were first named.
+    Deferred to the end of the module exactly as the string constants are. }
+  constHead, constTail: constGlobalPtr;
+  nextConst: integer;
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
@@ -5839,6 +5868,8 @@ begin
   s^.frameVars := nil;
   s^.frameTail := nil;
   s^.frameCount := 0;
+  s^.memConsts := nil;
+  s^.memConstTail := nil;
   s^.nlLabels := nil;
   s^.nlTail := nil;
   s^.resultVar := nil;
@@ -5860,6 +5891,7 @@ begin
   s^.isProtected := false;
   s^.initValue := nil;
   s^.constValue := nil;
+  s^.isConstBinding := false;
   s^.isStringSchema := false;
   s^.isBindable := false;
   s^.isModuleSym := false;
@@ -6178,33 +6210,54 @@ end;
 
 { ---------------------------------------------------------- designators -- }
 
-{ Whether the expression is a constant whose value lives in memory -- today
-  that is ISO 7185 6.3's string constant, and the predicate is written for the
-  type rather than for strings so that it needs nothing when another kind
-  arrives. It is not a variable and never becomes one; what it has is
-  *storage*, which is what the places that copy a structured value need of an
-  argument. ADR-0068. }
-function IsMemoryConstant(e: nodePtr): boolean;
-var s: symPtr;
+{ ISO/IEC 10206:1991 6.8.8's constant-access: a constant-name, or a component
+  selected from one. Structural -- it asks what the *root* denotes and not what
+  the value is, so it neither folds nor diagnoses, which is what lets it be
+  asked as a question (ADR-0069).
+
+  It is the exact counterpart of IsDesignator: 6.5.1's variable-accesses and
+  6.8.8's constant-accesses have the same three selector forms and differ only
+  in what stands at the bottom. }
+function IsConstantAccess(e: nodePtr): boolean;
 begin
-  s := nil;
-  if e <> nil then
-    if e^.kind = nkVar then begin
-      if e^.vrField = nil then s := e^.vrSym
-    end
-    else if e^.kind = nkField then
-      s := e^.fdQualified;
-  if s = nil then IsMemoryConstant := false
-  else IsMemoryConstant := (s^.kind = skConst) and IsMemory(s^.stype)
+  if e = nil then IsConstantAccess := false
+  else if e^.kind = nkVar then
+    IsConstantAccess := (e^.vrField = nil) and (e^.vrSym <> nil) and
+                        (e^.vrSym^.kind = skConst)
+  else if e^.kind = nkField then
+    if e^.fdQualified <> nil then
+      IsConstantAccess := e^.fdQualified^.kind = skConst
+    else
+      IsConstantAccess := (not e^.fdIsDisc) and IsConstantAccess(e^.fdBase)
+  else if e^.kind = nkIndex then
+    IsConstantAccess := (e^.ixSetValue = nil) and IsConstantAccess(e^.ixBase)
+  else if e^.kind = nkSubstr then
+    IsConstantAccess := (e^.ssSetValue = nil) and IsConstantAccess(e^.ssBase)
+  else IsConstantAccess := false
+end;
+
+{ Whether the expression is a constant-access whose value lives in memory. It
+  is not a variable and never becomes one; what it has is *storage*, which is
+  what the places that copy a structured value need of an argument. ADR-0068. }
+function IsMemoryConstant(e: nodePtr): boolean;
+begin
+  if e = nil then IsMemoryConstant := false
+  else IsMemoryConstant := IsMemory(e^.ntype) and IsConstantAccess(e)
 end;
 
 function IsDesignator(e: nodePtr): boolean;
 begin
   if e = nil then IsDesignator := false
   else if e^.kind = nkVar then
-    IsDesignator := (e^.vrSym <> nil) and
-                    ((e^.vrSym^.kind = skVar) or (e^.vrSym^.kind = skParam) or
-                     (e^.vrSym^.kind = skVarParam) or (e^.vrField <> nil))
+    if e^.vrSym = nil then IsDesignator := false
+    { 6.9.3.10 makes a field of a `with` over a *constant*-access a
+      constant-field-identifier, which denotes a value. The binding is an
+      skVarParam either way -- it holds an address -- so the kind cannot answer
+      and the binding has to say which of the two it is (ADR-0069). }
+    else if e^.vrField <> nil then
+      IsDesignator := not e^.vrSym^.isConstBinding
+    else
+      IsDesignator := IsVariable(e^.vrSym)
   else if e^.kind = nkIndex then IsDesignator := IsDesignator(e^.ixBase)
   { 6.5.6's substring-variable is a variable-access; 6.8.6.5's
     substring-function-access is a value. The syntax is identical and the base
@@ -6351,6 +6404,15 @@ end;
 function EvalConst(e: nodePtr; var res: symbol): boolean; forward;
 function EvalConstBinary(e: nodePtr; var res: symbol): boolean; forward;
 function EvalConstCall(e: nodePtr; var res: symbol): boolean; forward;
+{ 6.8.8's constant-accesses. The node a constant-access selects out of the
+  value its root was defined by, and the fold that finishes the job -- which is
+  EvalConst again, so the three are one recursion. }
+function ConstAccessNode(e: nodePtr): nodePtr; forward;
+function EvalConstAccess(e: nodePtr; var res: symbol): boolean; forward;
+{ 6.8.2's nonvarying, which is the whole test of whether a 6.8.7 constructor is
+  a constant-expression. It lives with the initial-state-specifier that needed
+  it first. }
+function Nonvarying(e: nodePtr): boolean; forward;
 
 { The ordinal a folded constant carries, whatever field its type selects. }
 function ConstOrdinal(var s: symbol): integer;
@@ -6430,10 +6492,33 @@ begin
   FoldIntOp := ok
 end;
 
+{ 6.8.7's constructor as a constant. The value is the node -- there is no
+  scalar field it could have been folded into -- so what is decided here is
+  only whether it is allowed to be one, which 6.8.2 answers with `nonvarying`.
+  intVal is cleared because a set is not IsMemory: the dump prints a set
+  constant's scalar field, and an uncleared one would print whatever the last
+  fold left there. }
+function EvalConstValue(e: nodePtr; var res: symbol): boolean;
+begin
+  if (e^.ntype = nil) or not Nonvarying(e) then
+    EvalConstValue := false
+  else begin
+    res.stype := e^.ntype;
+    res.constValue := e;
+    res.intVal := 0;
+    EvalConstValue := true
+  end
+end;
+
 function EvalConst;
 var inner: symbol; ok: boolean;
 begin
   ok := false;
+  { The node-valued field is the one no arm has to fill in, so it is emptied
+    here: the C++ folder answers into a freshly constructed Symbol and this one
+    answers into whatever the caller had. A folded `-32.0` that inherited a
+    stale node would be a real constant CodeGen took for a structured one. }
+  res.constValue := nil;
   if e <> nil then
     case e^.kind of
       nkInt: begin
@@ -6453,13 +6538,19 @@ begin
       end;
       { A constant reached through an interface. 6.11.3 makes the imported
         identifier "a constant-identifier that denotes the value", so it is as
-        constant as the one the module wrote. }
-      nkField:
+        constant as the one the module wrote.
+
+        Anything else spelled `a.b` is 6.8.8.3's field-designated-constant, or
+        6.8.4's schema-discriminant, and the constant-access path answers for
+        both. }
+      nkField: begin
         if e^.fdQualified <> nil then
           if e^.fdQualified^.kind = skConst then begin
             res := e^.fdQualified^;
             ok := true
           end;
+        if not ok then ok := EvalConstAccess(e, res)
+      end;
       nkChar: begin
         res.stype := charType;
         res.charVal := e^.chVal;
@@ -6516,10 +6607,25 @@ begin
         if langStd = stdExtended then ok := EvalConstBinary(e, res);
       nkCall:
         if langStd = stdExtended then ok := EvalConstCall(e, res);
-      { 6.8.8's constant-accesses are not implemented (ADR-0061), so a
-        structured value folds to nothing and the context says so. }
-      nkStructValue, nkValueElem,
-      nkNil, nkSet, nkSetMember, nkIndex, nkSubstr, nkDeref,
+      { ISO/IEC 10206:1991 6.8.7's structured-value-constructor, named. 6.8.2
+        makes `nonvarying` the whole test of a constant-expression -- not "the
+        compiler can fold it" -- so an array, record or set value whose
+        components read nothing is a constant, and it keeps the node exactly as
+        a string constant keeps its literal (ADR-0069). }
+      nkStructValue: ok := EvalConstValue(e, res);
+      nkSet: ok := EvalConstValue(e, res);
+      { A set-value reaches here as the subscript spine ADR-0066 left behind,
+        which is why the shape is asked for rather than the node kind. What is
+        not one is 6.8.8.2's indexed-constant or 6.8.8.4's substring-constant,
+        and the constant-access path answers for those. }
+      nkIndex:
+        if e^.ixSetValue <> nil then ok := EvalConstValue(e, res)
+        else ok := EvalConstAccess(e, res);
+      nkSubstr:
+        if e^.ssSetValue <> nil then ok := EvalConstValue(e, res)
+        else ok := EvalConstAccess(e, res);
+      nkValueElem,
+      nkNil, nkSetMember, nkDeref,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -6709,6 +6815,218 @@ begin
           biStrGe, biBinding, biDate, biTime: ;
         end;
   EvalConstCall := ok
+end;
+
+{ ISO/IEC 10206:1991 6.8.8.2: the component-value an array-value maps an index
+  to. 6.8.7.2 b)'s completer covers whatever the labelled elements leave, so it
+  is the answer only when none of them claimed the index -- which is the same
+  rule CodeGen implements by writing the completer first and the elements over
+  it, read the other way round. }
+function ArrayComponentOf(sv: nodePtr; idx: integer): nodePtr;
+var el: nodePtr; r: rangePtr; completer, found: nodePtr;
+begin
+  completer := nil;
+  found := nil;
+  el := sv^.svElems;
+  while (el <> nil) and (found = nil) do begin
+    if el^.veCompleter then
+      completer := el^.veValue
+    else begin
+      r := el^.veValues;
+      while (r <> nil) and (found = nil) do begin
+        if (idx >= r^.lo) and (idx <= r^.hi) then found := el^.veValue;
+        r := r^.next
+      end
+    end;
+    el := el^.next
+  end;
+  if found <> nil then ArrayComponentOf := found
+  else ArrayComponentOf := completer
+end;
+
+{ 6.8.8.3: the component-value a record-value gives a field. fieldRec.variant is
+  the path to the field-list the field lives in (ADR-0026), so this walks the
+  same path FieldAddress walks -- and stops where 6.8.8.3's error is: an arm the
+  value did not select has no component to denote, which is D.90 answered at
+  compile time because a constant's tag is a constant. }
+function RecordComponentOf(sv: nodePtr; f: fieldPtr; path: numPtr;
+                           var inactive: boolean): nodePtr;
+var el: nodePtr; k: numPtr; found: nodePtr;
+begin
+  found := nil;
+  if path = nil then begin
+    el := sv^.svElems;
+    while (el <> nil) and (found = nil) do begin
+      k := el^.veFields;
+      while (k <> nil) and (found = nil) do begin
+        if k^.value = f^.index then found := el^.veValue;
+        k := k^.next
+      end;
+      el := el^.next
+    end;
+    RecordComponentOf := found
+  end
+  else if (sv^.svArm < 0) or (sv^.svVariant = nil) or
+          (sv^.svArm <> path^.value) then begin
+    inactive := true;
+    RecordComponentOf := nil
+  end
+  else
+    RecordComponentOf :=
+      RecordComponentOf(sv^.svVariant, f, path^.next, inactive)
+end;
+
+{ 6.8.8's constant-access, folded. The value of a constant-access is the value
+  of the component it selects, and a constant keeps the *node* that defines it
+  -- so selecting is a walk into that node and the answer is another node, which
+  the ordinary folder then evaluates. 6.8.2 guarantees the index is itself
+  constant here: a variable index is a variable-access, which a
+  constant-expression may not contain, so the two readings of `c[i]` never
+  collide (ADR-0069).
+
+  Nil means "not a constant-access", which is not an error -- the caller's
+  context says what it wanted. }
+function ConstAccessNode;
+var res, base: nodePtr; inactive: boolean; iv: symbol; bt: typePtr;
+    idx: integer;
+begin
+  res := nil;
+  if e <> nil then
+    if e^.kind = nkVar then begin
+      if (e^.vrField = nil) and (e^.vrSym <> nil) then
+        if e^.vrSym^.kind = skConst then res := e^.vrSym^.constValue
+    end
+    else if e^.kind = nkField then begin
+      if e^.fdQualified <> nil then begin
+        if e^.fdQualified^.kind = skConst then
+          res := e^.fdQualified^.constValue
+      end
+      else if e^.fdResolved <> nil then begin
+        base := ConstAccessNode(e^.fdBase);
+        if base <> nil then
+          if base^.kind = nkStructValue then begin
+            inactive := false;
+            res := RecordComponentOf(base, e^.fdResolved,
+                                     e^.fdResolved^.variant, inactive);
+            if inactive then begin
+              ErrorAt(e^.line, e^.col);
+              write('''');
+              WritePool(e^.fdAt, e^.fdLen);
+              writeln(''' is a component of a variant the constant does not ',
+                      'select');
+              constReported := true
+            end
+          end
+      end
+    end
+    else if e^.kind = nkIndex then begin
+      if e^.ixSetValue = nil then begin   { ADR-0066's set-value is a value }
+        base := ConstAccessNode(e^.ixBase);
+        if base <> nil then begin
+          bt := e^.ixBase^.ntype;
+          iv.stype := nil;
+          iv.constValue := nil;
+          { Folded rather than EvalOrdinal'd: that would run CheckExpr over an
+            index this pass has already checked, and report anything wrong
+            twice. }
+          if IsArray(bt) then
+            if EvalConst(e^.ixIndex, iv) then
+              if IsOrdinal(iv.stype) then begin
+                idx := ConstOrdinal(iv);
+                { 6.8.8.2 makes the index assignment-compatible with the
+                  index-type, and outside it there is no component -- an error
+                  whichever way it is written, so it is reported here rather
+                  than left to say "not constant". }
+                if (idx < bt^.lo) or (idx > bt^.hi) then begin
+                  ErrorAt(e^.line, e^.col);
+                  writeln('index ', idx:1, ' is outside ', bt^.lo:1, '..',
+                          bt^.hi:1, ', so it selects no component');
+                  constReported := true
+                end
+                else if base^.kind = nkStructValue then
+                  res := ArrayComponentOf(base, idx)
+                { ...and a string constant answers nothing here: its component
+                  is a char, not a node. }
+              end
+        end
+      end
+    end;
+  ConstAccessNode := res
+end;
+
+{ 6.8.8's constant-access, as a fold. The component a constant-access selects is
+  usually a node of the value -- an array-value's element or a record-value's
+  field-value -- and then the ordinary folder finishes the job. A component of a
+  *string* constant is not: the characters are the value, so the two string
+  forms are computed here (ADR-0069). }
+function EvalConstAccess;
+var node, lit, made: nodePtr; iv, lo, hi: symbol; ok: boolean; i, n: integer;
+begin
+  ok := false;
+  node := ConstAccessNode(e);
+  if node <> nil then
+    ok := EvalConst(node, res)
+  { 6.8.8.2's string-constant form: one index-expression, and what it selects
+    is a character. }
+  else if e^.kind = nkIndex then begin
+    lit := ConstAccessNode(e^.ixBase);
+    if lit <> nil then
+      if lit^.kind = nkStr then begin
+        iv.stype := nil;
+        iv.constValue := nil;
+        if EvalConst(e^.ixIndex, iv) then
+          if IsInteger(iv.stype) then begin
+            i := iv.intVal;
+            if (i < 1) or (i > lit^.stLen) then begin
+              ErrorAt(e^.line, e^.col);
+              writeln('index ', i:1, ' is outside the string constant''s 1..',
+                      lit^.stLen:1);
+              constReported := true
+            end
+            else begin
+              res.stype := charType;
+              res.charVal := pool[lit^.stAt + i - 1];
+              ok := true
+            end
+          end
+      end
+  end
+  { 6.8.8.4's substring-constant. Its value is characters that are in no node,
+    so a literal holding them is made -- the one place this compiler builds a
+    piece of tree the program did not write. The characters are already in the
+    pool, contiguous and in order, because the literal they come from put them
+    there, so the new node is that same run of pool narrowed. }
+  else if e^.kind = nkSubstr then begin
+    lit := ConstAccessNode(e^.ssBase);
+    if lit <> nil then
+      if lit^.kind = nkStr then begin
+        lo.stype := nil;
+        lo.constValue := nil;
+        hi.stype := nil;
+        hi.constValue := nil;
+        if EvalConst(e^.ssLo, lo) and EvalConst(e^.ssHi, hi) then
+          if IsInteger(lo.stype) and IsInteger(hi.stype) then begin
+            n := lit^.stLen;
+            if (lo.intVal < 1) or (hi.intVal > n) or
+               (lo.intVal > hi.intVal) then begin
+              ErrorAt(e^.line, e^.col);
+              writeln('the substring ', lo.intVal:1, '..', hi.intVal:1,
+                      ' is not within the string constant''s 1..', n:1);
+              constReported := true
+            end
+            else begin
+              made := NewNode(nkStr, e^.line, e^.col);
+              made^.stAt := lit^.stAt + lo.intVal - 1;
+              made^.stLen := hi.intVal - lo.intVal + 1;
+              CheckExpr(made);   { the literal's type is the literal's business }
+              res.stype := made^.ntype;
+              res.constValue := made;
+              ok := true
+            end
+          end
+      end
+  end;
+  EvalConstAccess := ok
 end;
 
 { Evaluate a constant that must be ordinal -- a subrange bound, a case label, a
@@ -8547,7 +8865,7 @@ end;
   A required function is nonvarying with nonvarying arguments; a user-declared
   one is not, because 6.8.2 does not make it so and its body may read
   anything. }
-function Nonvarying(e: nodePtr): boolean;
+function Nonvarying;
 var ok: boolean; m, q: nodePtr;
 begin
   if e = nil then
@@ -12086,13 +12404,21 @@ end;
   in the designator are evaluated a single time. }
 procedure CheckWith(w: nodePtr);
 var t: typePtr; at, len: integer; entry: symListPtr; saved: stmtPathPtr;
-    root: nodePtr;
+    root: nodePtr; constAccess: boolean;
 begin
   CheckExpr(w^.wtRecord);
   t := w^.wtRecord^.ntype;
   saved := stmtPath;
 
-  if not IsDesignator(w^.wtRecord) then begin
+  { 6.9.3.10: `with-element = variable-access | constant-access`. A constant one
+    binds the same way -- the value has storage and the binding is its address
+    -- and differs only in that the field-identifiers it introduces are
+    constant-field-identifiers, which denote values.
+    No langStd test: the only structured constant ISO 7185 has is a string
+    (ADR-0068), which is not a record, so a constant-access reaching here is
+    already an Extended Pascal program. A gate would be unreachable. }
+  constAccess := IsConstantAccess(w^.wtRecord);
+  if (not IsDesignator(w^.wtRecord)) and (not constAccess) then begin
     ErrorAt(w^.wtRecord^.line, w^.wtRecord^.col);
     writeln('''with'' needs a record variable');
     stmtPath := PushStmt(stmtPath, w);
@@ -12123,6 +12449,7 @@ begin
       if root^.kind = nkVar then
         if root^.vrSym <> nil then
           entry^.sym^.isProtected := root^.vrSym^.isProtected;
+    entry^.sym^.isConstBinding := constAccess;
     w^.wtBinding := entry^.sym;
     entry^.next := withTop;
     withTop := entry;
@@ -13329,57 +13656,65 @@ begin
   end
 end;
 
-{ The constant, type and variable definition parts. Shared by a block and by
-  both halves of a module, which have the same three parts and differ only in
-  what may surround them. }
-procedure CheckDeclarations(b: nodePtr; owner: symPtr);
-var d, g, n, init: nodePtr; s, schema, named, first: symPtr; t: typePtr;
-    value: symbol;
+{ One constant-definition. }
+procedure CheckConstDecl(d: nodePtr; owner: symPtr);
+var s: symPtr; value: symbol;
 begin
-  d := b^.blConsts;
-  while d <> nil do begin
-    CheckExpr(d^.kdValue);
-    value.stype := nil;
-    { The folder fills in only the field its kind selects, so the one that
-      holds a node has to start empty or a scalar constant inherits whatever
-      the last one left here. }
-    value.constValue := nil;
-    constReported := false;
-    if not EvalConst(d^.kdValue, value) then begin
-      { The folder says why when it can -- an overflow, a `chr` out of range --
-        and this generic message is for when it cannot: the expression was
-        never constant in the first place. }
-      if not constReported then begin
-        ErrorAt(d^.line, d^.col);
-        write('the value of constant ''');
-        WritePool(d^.kdAt, d^.kdLen);
-        writeln(''' is not a compile-time constant')
-      end
+  CheckExpr(d^.kdValue);
+  value.stype := nil;
+  { The folder fills in only the field its kind selects, so the one that
+    holds a node has to start empty or a scalar constant inherits whatever
+    the last one left here. }
+  value.constValue := nil;
+  constReported := false;
+  if not EvalConst(d^.kdValue, value) then begin
+    { The folder says why when it can -- an overflow, a `chr` out of range --
+      and this generic message is for when it cannot: the expression was
+      never constant in the first place. }
+    if not constReported then begin
+      ErrorAt(d^.line, d^.col);
+      write('the value of constant ''');
+      WritePool(d^.kdAt, d^.kdLen);
+      writeln(''' is not a compile-time constant')
     end
-    else begin
-      s := Declare(d^.kdAt, d^.kdLen, skConst, d^.line, d^.col);
-      s^.stype := value.stype;
-      s^.intVal := value.intVal;
-      s^.charVal := value.charVal;
-      s^.boolVal := value.boolVal;
-      s^.realAt := value.realAt;
-      s^.realLen := value.realLen;
-      s^.realNeg := value.realNeg;
-      s^.constValue := value.constValue
-    end;
-    d := d^.next
-  end;
+  end
+  else begin
+    s := Declare(d^.kdAt, d^.kdLen, skConst, d^.line, d^.col);
+    s^.stype := value.stype;
+    s^.intVal := value.intVal;
+    s^.charVal := value.charVal;
+    s^.boolVal := value.boolVal;
+    s^.realAt := value.realAt;
+    s^.realLen := value.realLen;
+    s^.realNeg := value.realNeg;
+    s^.constValue := value.constValue;
+    { A 6.8.7 constructor needs its storage filled at run time, and the block
+      that *defined* it is the one whose prologue does that. The test is
+      whether this definition is where the node came from: `const b = a` hands
+      on `a`'s node, so `b` shares `a`'s storage and must not fill it a second
+      time (ADR-0069). }
+    if s^.constValue = d^.kdValue then
+      if d^.kdValue^.kind = nkStructValue then begin
+        AppendSym(owner^.memConsts, owner^.memConstTail, s);
+        { The hidden frame slot ADR-0061 gives a top-level constructor is not
+          used here -- the value is built into the global instead -- and a slot
+          nothing writes to would still appear in the frame layout. }
+        d^.kdValue^.svSlot := nil
+      end
+  end
+end;
 
-  { A type name is visible to the definitions after it, so each is declared as
-    it is resolved rather than all at the end. }
-  d := b^.blTypes;
-  while d <> nil do begin
-    { 6.4.7: a schema-definition declares a schema, not a type. Its body is
-      *not* resolved here -- it has no discriminant values yet, and resolving
-      it once would produce the one type every use then shared. }
-    if d^.tdDiscs <> nil then
-      DeclareSchema(d)
-    else begin
+{ One type-definition or schema-definition. A type name is visible to the
+  definitions after it, so each is declared as it is resolved. }
+procedure CheckTypeDecl(d: nodePtr);
+var s: symPtr; t: typePtr;
+begin
+  { 6.4.7: a schema-definition declares a schema, not a type. Its body is
+    *not* resolved here -- it has no discriminant values yet, and resolving
+    it once would produce the one type every use then shared. }
+  if d^.tdDiscs <> nil then
+    DeclareSchema(d)
+  else begin
     t := ResolveType(d^.tdType);
     s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
     if s^.stype = nil then begin   { a duplicate: keep the first definition }
@@ -13394,81 +13729,156 @@ begin
         t^.aliasLen := d^.tdLen
       end
     end
-    end;
-    d := d^.next
-  end;
-  { Every name in the type part is now visible, so the pointers that named one
-    before it existed can be completed. }
-  ResolvePendingPointers;
+  end
+end;
 
-  g := b^.blVars;
-  while g <> nil do begin
-    { 6.2.3.2: a discriminated schema is the one denoter whose discriminants
-      may be variables, and only here. The first name is resolved with itself
-      offered as the variable they would belong to; if they turned out to be
-      constants the type is an ordinary one and the group shares it, exactly
-      as before. }
-    schema := nil;
-    if g^.grType^.kind = nkSchema then begin
-      named := LookupQuiet(g^.grType^.scQualAt, g^.grType^.scQualLen,
-                           g^.grType^.scAt, g^.grType^.scLen);
-      if named <> nil then
-        if named^.kind = skSchema then schema := named
+{ One variable-declaration: a group of names sharing a type-denoter. }
+procedure CheckVarDecl(g: nodePtr; owner: symPtr);
+var n, init: nodePtr; s, schema, named, first: symPtr; t: typePtr;
+begin
+  { 6.2.3.2: a discriminated schema is the one denoter whose discriminants
+    may be variables, and only here. The first name is resolved with itself
+    offered as the variable they would belong to; if they turned out to be
+    constants the type is an ordinary one and the group shares it, exactly
+    as before. }
+  schema := nil;
+  if g^.grType^.kind = nkSchema then begin
+    named := LookupQuiet(g^.grType^.scQualAt, g^.grType^.scQualLen,
+                         g^.grType^.scAt, g^.grType^.scLen);
+    if named <> nil then
+      if named^.kind = skSchema then schema := named
+  end;
+  if (schema <> nil) and (g^.grNames <> nil) then begin
+    n := g^.grNames;
+    first := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner, n^.line,
+                         n^.col);
+    dynamicVarFor := first;
+    first^.stype := ResolveType(g^.grType);
+    dynamicVarFor := nil;
+    { 6.2.3.2 evaluates the discriminants when the block is entered and the
+      storage they size lives as long as the activation (ADR-0041). A
+      module's activation outlives the function that commences it, so there
+      is nowhere on the stack to put that storage -- the tuple has to be
+      constant here, as it is everywhere except a block's own variables. }
+    if owner^.isModuleSym and IsGeneric(first^.stype) then begin
+      ErrorAt(n^.line, n^.col);
+      writeln('the discriminants of a module''s variable must be ',
+              'constants, because a module''s activation lasts as long as ',
+              'the program')
     end;
-    if (schema <> nil) and (g^.grNames <> nil) then begin
-      n := g^.grNames;
-      first := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner, n^.line,
-                           n^.col);
-      dynamicVarFor := first;
-      first^.stype := ResolveType(g^.grType);
-      dynamicVarFor := nil;
-      { 6.2.3.2 evaluates the discriminants when the block is entered and the
-        storage they size lives as long as the activation (ADR-0041). A
-        module's activation outlives the function that commences it, so there
-        is nowhere on the stack to put that storage -- the tuple has to be
-        constant here, as it is everywhere except a block's own variables. }
-      if owner^.isModuleSym and IsGeneric(first^.stype) then begin
-        ErrorAt(n^.line, n^.col);
-        writeln('the discriminants of a module''s variable must be ',
-                'constants, because a module''s activation lasts as long as ',
-                'the program')
+    n := n^.next;
+    while n <> nil do begin
+      s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, first^.stype, owner,
+                       n^.line, n^.col);
+      { Each name has its own descriptor, so each needs its own type -- but
+        one actual-discriminant-part, evaluated once per variable on entry
+        from the one tree the group shares. }
+      if IsGeneric(first^.stype) then begin
+        s^.stype := GenericFromSchema(schema, s, g^.grType, nounVarType);
+        s^.descSchema := first^.descSchema;
+        s^.discExprs := first^.discExprs
       end;
-      n := n^.next;
-      while n <> nil do begin
-        s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, first^.stype, owner,
-                         n^.line, n^.col);
-        { Each name has its own descriptor, so each needs its own type -- but
-          one actual-discriminant-part, evaluated once per variable on entry
-          from the one tree the group shares. }
-        if IsGeneric(first^.stype) then begin
-          s^.stype := GenericFromSchema(schema, s, g^.grType, nounVarType);
-          s^.descSchema := first^.descSchema;
-          s^.discExprs := first^.discExprs
-        end;
-        n := n^.next
-      end
+      n := n^.next
     end
-    else begin
-      { One denoter for the whole group, so `a, b: array [1..3] of integer`
-        makes a and b the same type and lets `a := b` through. }
-      t := ResolveType(g^.grType);
-      init := InitialStateOf(g^.grType);
-      n := g^.grNames;
-      while n <> nil do begin
-        s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
-        { 6.2.3.5 creates each local "in its initial state" on entry, so the
-          whole group shares one value as it shares one type. }
-        s^.initValue := init;
-        { 6.4.1's `bindable` belongs to the type-denoter, like the initial
-          state -- so the group shares it, and 6.5.1 makes such a variable
-          totally-undefined until something binds it. }
-        s^.isBindable := BindableOf(g^.grType);
-        n := n^.next
-      end
-    end;
-    g := g^.next
-  end;
+  end
+  else begin
+    { One denoter for the whole group, so `a, b: array [1..3] of integer`
+      makes a and b the same type and lets `a := b` through. }
+    t := ResolveType(g^.grType);
+    init := InitialStateOf(g^.grType);
+    n := g^.grNames;
+    while n <> nil do begin
+      s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
+      { 6.2.3.5 creates each local "in its initial state" on entry, so the
+        whole group shares one value as it shares one type. }
+      s^.initValue := init;
+      { 6.4.1's `bindable` belongs to the type-denoter, like the initial
+        state -- so the group shares it, and 6.5.1 makes such a variable
+        totally-undefined until something binds it. }
+      s^.isBindable := BindableOf(g^.grType);
+      n := n^.next
+    end
+  end
+end;
 
+{ Whether one written position precedes another. Only ever asked of two
+  declarations of one block, which are all distinct. }
+function Earlier(l1, c1, l2, c2: integer): boolean;
+begin
+  if l1 <> l2 then Earlier := l1 < l2 else Earlier := c1 < c2
+end;
+
+{ The constant, type and variable definition parts, **in the order they were
+  written**. ISO 7185 6.2.1 fixes that order -- const, then type, then var --
+  but ISO/IEC 10206:1991 6.2.1 makes the block a *repetition* of the five parts
+  in any order, and 6.2.2.9 then requires a defining-point to precede every
+  applied occurrence of it. So written order is the only order that works, and
+  it is what `const first = red` after a type part needs, and what a constant
+  naming a type needs -- which is every structured constant (ADR-0069).
+
+  The parts are merged by source position rather than recorded in one list at
+  parse time: the tree keeps a list per part, and the positions reconstruct the
+  interleaving exactly, since one block's declarations are all distinct. Under
+  ISO 7185 there is at most one of each part in the fixed order, so the merge is
+  provably the order this always used.
+
+  Shared by a block and by both halves of a module, which have the same parts
+  and differ only in what may surround them. }
+procedure CheckDeclarations(b: nodePtr; owner: symPtr);
+var c, t, g: nodePtr; which, line, col: integer; inTypes, done: boolean;
+begin
+  c := b^.blConsts;
+  t := b^.blTypes;
+  g := b^.blVars;
+  inTypes := false;
+  done := false;
+  while ((c <> nil) or (t <> nil) or (g <> nil)) and not done do begin
+    { Which of the three heads was written first. A variable group is placed by
+      its first name, the only position it has. }
+    which := -1;
+    line := 0;
+    col := 0;
+    if c <> nil then begin
+      which := 0;
+      line := c^.line;
+      col := c^.col
+    end;
+    if t <> nil then
+      if (which < 0) or Earlier(t^.line, t^.col, line, col) then begin
+        which := 1;
+        line := t^.line;
+        col := t^.col
+      end;
+    if g <> nil then
+      if g^.grNames <> nil then
+        if (which < 0) or
+           Earlier(g^.grNames^.line, g^.grNames^.col, line, col) then
+          which := 2;
+
+    { 6.4.4's forward-referenced domain is completed at the end of *its*
+      type-definition-part, so a run of type definitions ending is what triggers
+      it -- not the end of the block, which may hold several. }
+    if (which <> 1) and inTypes then begin
+      ResolvePendingPointers;
+      inTypes := false
+    end;
+    if which = 0 then begin
+      CheckConstDecl(c, owner);
+      c := c^.next
+    end
+    else if which = 1 then begin
+      inTypes := true;
+      CheckTypeDecl(t);
+      t := t^.next
+    end
+    else if which = 2 then begin
+      CheckVarDecl(g, owner);
+      g := g^.next
+    end
+    else
+      done := true   { a variable group with no names; the parser makes none }
+  end;
+  if inTypes then ResolvePendingPointers
 end;
 
 { 6.11.2's export-part. The interface it names is a region of its own, so
@@ -16434,6 +16844,25 @@ begin
   end
 end;
 
+{ The storage of the 6.8.7 constants. It is zeroed here and filled by the
+  prologue of the block that defined each one -- a constructor's components are
+  expressions, and this backend has no way to spell one as an LLVM initialiser
+  (ADR-0069). }
+procedure EmitConstGlobals;
+var g: constGlobalPtr; k: integer;
+begin
+  g := constHead;
+  while g <> nil do begin
+    write(ircode, '@const.');
+    for k := g^.at to g^.at + g^.len - 1 do
+      write(ircode, pool[k]);
+    write(ircode, '.', g^.id:1, ' = internal global ');
+    PutLlType(g^.ctype);
+    writeln(ircode, ' zeroinitializer');
+    g := g^.next
+  end
+end;
+
 { -------------------------------------------------------- traps and checks }
 
 procedure EmitTrapIf(var cond: str; msg: integer);
@@ -17130,24 +17559,60 @@ begin
   end
 end;
 
-{ The storage of a constant whose value does not fit in a register. ISO 7185
-  6.3's string constant is its literal, named, so what it needs is what the
-  literal already had: a private constant global holding the characters.
-  ADR-0068. }
+{ The storage of a constant whose value does not fit in a register.
+
+  A string constant is its literal, named (ADR-0068), so what it needs is what
+  the literal already had: a private constant global holding the characters. A
+  6.8.7 constructor gets a global of its own instead, filled once by the
+  prologue of the block that defined it (ADR-0069) -- memoised on the node, so
+  two names for one value share one global. }
 procedure ConstAddress(s: symPtr; var v: str);
+var g, found: constGlobalPtr; k: integer;
 begin
-  EmitAddress(s^.constValue, v)
+  if s^.constValue^.kind <> nkStructValue then
+    EmitAddress(s^.constValue, v)
+  else begin
+    found := nil;
+    g := constHead;
+    while g <> nil do begin
+      if g^.cvalue = s^.constValue then found := g;
+      g := g^.next
+    end;
+    if found = nil then begin
+      new(found);
+      nextConst := nextConst + 1;
+      found^.id := nextConst;
+      found^.at := s^.at;
+      found^.len := s^.len;
+      found^.cvalue := s^.constValue;
+      found^.ctype := s^.stype;
+      found^.next := nil;
+      if constHead = nil then constHead := found else constTail^.next := found;
+      constTail := found
+    end;
+    StrClear(v);
+    AppendLit(v, '@const.         ');
+    for k := found^.at to found^.at + found^.len - 1 do
+      StrAppend(v, pool[k]);
+    StrAppend(v, '.');
+    AppendInt(v, found^.id)
+  end
 end;
 
 procedure EmitConst(s: symPtr; var v: str);
 var b: typePtr;
 begin
   b := Base(s^.stype);
-  { A value that travels by address has no scalar field to have been folded
-    into, so the constant answers with its storage -- which is what every
-    designator of a structured type answers with (ADR-0017). }
-  if IsMemory(s^.stype) then
-    ConstAddress(s, v)
+  if s^.constValue <> nil then
+    { A value that travels by address answers with its storage, which is what
+      every designator of a structured type answers with (ADR-0017). }
+    if IsMemory(s^.stype) then
+      ConstAddress(s, v)
+    { A set is a *value* and has nowhere to be (ADR-0028), so the constructor is
+      emitted where the constant is named. It reads nothing, so there is no
+      order to get wrong and nothing to initialise ahead of time. }
+    else
+      EmitExpr(s^.constValue, v)
   else if b = nil then
     OpInt(0, v)
   else
@@ -21615,6 +22080,24 @@ begin
   end
 end;
 
+{ ISO/IEC 10206:1991 6.8.7's value built into the storage its constant was
+  given. It runs *before* the initial states, because 6.6's specifier may name a
+  constant, and before anything else because a constant-expression is nonvarying
+  (6.8.2) and so cannot read what the rest of the prologue writes. The order
+  within the list is the order the constants were defined, which is a legal
+  order for the same reason ADR-0053's written order of modules is: a
+  component-value naming another constant names an earlier one (ADR-0069). }
+procedure InitConstants(p: symPtr);
+var l: symListPtr; addr: str;
+begin
+  l := p^.memConsts;
+  while l <> nil do begin
+    ConstAddress(l^.sym, addr);
+    EmitStructValue(l^.sym^.constValue, addr);
+    l := l^.next
+  end
+end;
+
 procedure InitDynamicVars(p: symPtr);
 var l, d: symListPtr; a: nodePtr; slot, half, value, size, storage: str;
     nohdr: str; comp: typePtr; align: integer;
@@ -21877,6 +22360,7 @@ begin
   { After the parameters, because a discriminant may be one of them, and
     before anything that could jump: the storage a dynamically sized variable
     stands for has to exist for the whole activation. }
+  InitConstants(p);
   InitDynamicVars(p);
   InitInitialStates(p);
   InitFiles(p);
@@ -22156,6 +22640,9 @@ begin
   nextStr := 0;
   strHead := nil;
   strTail := nil;
+  nextConst := 0;
+  constHead := nil;
+  constTail := nil;
 
   { The frame types come before any function that indexes one. Every module's
     comes too, and every procedure of every module is declared before any body
@@ -22219,6 +22706,7 @@ begin
 
   writeln(ircode);
   EmitGlobals;
+  EmitConstGlobals;
   EmitDeclares
 end;
 

@@ -1,0 +1,10 @@
+<source>:35:21: error: index 7 is outside 1..4, so it selects no component
+<source>:36:17: error: the substring 0..4 is not within the string constant's 1..10
+<source>:37:17: error: the substring 6..3 is not within the string constant's 1..10
+<source>:39:19: error: 'w' is a component of a variant the constant does not select
+<source>:53:3: error: the value of constant 'varying' is not a compile-time constant
+<source>:59:11: error: the left side of an assignment must be a variable
+<source>:60:9: error: the left side of an assignment must be a variable
+<source>:63:9: error: argument 1 of 'byref' is a var parameter and needs a variable
+<source>:66:16: error: read needs a variable, not a value
+<source>:71:5: error: the left side of an assignment must be a variable

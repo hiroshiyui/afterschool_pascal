@@ -84,6 +84,10 @@ struct Symbol {
   /// The same shape `Symbol::initValue` gives §6.6's initial state: Sema holds
   /// the tree and CodeGen emits it where the value is needed (ADR-0068).
   Expr *constValue = nullptr;
+  /// This symbol is a `with` binding over a §6.8.8 constant-access, so the
+  /// field-identifiers it introduces are §6.9.3.10's constant-field-
+  /// identifiers: they denote values, and nothing may threaten one.
+  bool isConstBinding = false;
 
   // --- lexical position -----------------------------------------------------
   // `level` is the nesting depth: 0 for the program, 1 for a procedure declared
@@ -96,6 +100,10 @@ struct Symbol {
   // --- procedures and functions --------------------------------------------
   std::vector<Symbol *> params;
   std::vector<Symbol *> frameVars; // everything this procedure's frame holds
+  /// The constants this block defined whose value is a §6.8.7 constructor,
+  /// in definition order. They have storage rather than a frame slot, and
+  /// the prologue fills it (ADR-0069).
+  std::vector<Symbol *> memoryConsts;
   Symbol *resultVar = nullptr;     // where a function's result is accumulated
   /// ISO/IEC 10206:1991 §6.7.2: a result-variable-specification was written,
   /// so the body names the result and must *not* assign to the function
@@ -344,6 +352,9 @@ private:
 
   void checkBlock(Block &block, Symbol *owner);
   void checkDeclarations(Block &block, Symbol *owner);
+  void checkConstDecl(ConstDecl &c, Symbol *owner);
+  void checkTypeDecl(TypeDecl &t);
+  void checkVarDecl(VarDecl &group, Symbol *owner);
   void declareProcHeading(ProcDecl &decl, Symbol *owner);
   void checkProcBody(ProcDecl &decl);
   Symbol *addFrameVar(const std::string &name, SymKind kind, Type *type,
@@ -435,7 +446,9 @@ private:
   /// Evaluate a constant that must be ordinal — a subrange bound, a case
   /// label, a variant's tag value. Reports the type it was written as, so a
   /// mismatch can be named rather than silently coerced.
+  static long long ordinalOf(const Symbol &v);
   bool evalOrdinal(Expr *e, Type *&type, long long &value);
+  Expr *constAccessNode(Expr *e);
   /// §6.8.7's structured-value-constructor. One node covers the array-value
   /// and the record-value alike, because which one a bracketed value is
   /// cannot be known until the type-name is resolved.
@@ -535,6 +548,7 @@ private:
   /// True if `e` denotes a variable — a name, or one with subscripts and
   /// fields applied. Assignment targets and `var` arguments must be one.
   bool isDesignator(Expr *e) const;
+  bool isConstantAccess(Expr *e) const;
   bool isMemoryConstant(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
@@ -628,6 +642,10 @@ private:
   Diagnostics &diags_;
   Std std_;
   std::vector<std::unique_ptr<Symbol>> owned_;
+  /// The expression nodes Sema itself built: §6.8.8.4's substring-constant
+  /// has a value that is in no node the program wrote, so a literal for it
+  /// is made here and kept as long as `Symbol::constValue` points at it.
+  std::vector<ExprPtr> constNodes_;
   std::vector<std::unique_ptr<Type>> types_;
   std::vector<PendingPointer> pendingPointers_;
   std::unordered_map<long long, Type *> stringTypes_;

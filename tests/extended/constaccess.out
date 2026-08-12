@@ -1,0 +1,14 @@
+squares 1 4 9 16
+sparse  7 20 7 7
+same    1 4 9 16
+folded  9 7 5 4
+strings 0 0123456789 ABCDEF
+quoted  [it's a 'test'] [it's] [t's] [']
+first   0
+copied  56
+compared
+odds     1 3 5 7 9
+with    12
+row     81
+labelled
+deep     89 89 89

@@ -301,6 +301,7 @@ private:
   llvm::Value *emitCall(Call *e);
   llvm::Value *emitConst(const Symbol &sym);
   llvm::Value *constAddress(const Symbol &sym);
+  void initConstants(Symbol *proc);
 
   /// Widen an integer value to double when Pascal's implicit conversion applies.
   llvm::Value *toReal(llvm::Value *v, Type *from);
@@ -346,6 +347,9 @@ private:
   std::unordered_map<const Symbol *, llvm::Function *> functions_;
   /// The activation records of the level-0 blocks, one global apiece.
   std::unordered_map<const Symbol *, llvm::GlobalVariable *> frameGlobals_;
+  /// The storage of a §6.8.7 constant, keyed by the node so that two names
+  /// for one value share one global (ADR-0069).
+  std::unordered_map<const Expr *, llvm::GlobalVariable *> constGlobals_;
   /// The `init`/`fini` pair of each module, so `main` can call them.
   std::unordered_map<const Symbol *, llvm::Function *> moduleInit_;
   std::unordered_map<const Symbol *, llvm::Function *> moduleFini_;

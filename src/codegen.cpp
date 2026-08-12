@@ -801,6 +801,7 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   // After the parameters, because a discriminant may be one of them, and
   // before anything that could jump: the storage a dynamically sized variable
   // stands for has to exist for the whole activation.
+  initConstants(proc);
   initDynamicVars(proc);
   initInitialStates(proc);
   initFiles(proc);
@@ -895,6 +896,20 @@ void CodeGen::initialStateInto(llvm::Value *addr, ap::Type *t, Expr *init) {
   for (const Field &f : t->fields)
     if (f.initValue || (f.type && f.type->isRecord()))
       initialStateInto(fieldAddress(addr, t, &f), f.type, f.initValue);
+}
+
+/// ISO/IEC 10206:1991 §6.8.7's value built into the storage its constant was
+/// given. It runs *before* the initial states, because §6.6's specifier may
+/// name a constant, and before anything else because a constant-expression is
+/// nonvarying (§6.8.2) and so cannot read what the rest of the prologue
+/// writes. The order within the list is the order the constants were defined,
+/// which is a legal order for the same reason ADR-0053's written order of
+/// modules is: a component-value naming another constant names an earlier one
+/// (ADR-0069).
+void CodeGen::initConstants(Symbol *proc) {
+  for (Symbol *c : proc->memoryConsts)
+    emitStructValue(static_cast<StructValueExpr *>(c->constValue),
+                    constAddress(*c));
 }
 
 void CodeGen::initInitialStates(Symbol *proc) {
@@ -2603,20 +2618,42 @@ void CodeGen::emitFor(ForStmt *s) {
 
 // --------------------------------------------------------------- expressions
 
-/// The storage of a constant whose value does not fit in a register. ISO 7185
-/// §6.3's string constant is its literal, named, so what it needs is what the
-/// literal already had: a private constant global holding the characters
-/// (ADR-0068).
+/// The storage of a constant whose value does not fit in a register.
+///
+/// A string constant is its literal, named (ADR-0068), so what it needs is
+/// what the literal already had. A §6.8.7 constructor has no storage of its
+/// own — ADR-0061 builds one into a hidden frame slot, and a constant cannot
+/// use that, because one node serves uses in blocks that have no such frame —
+/// so it gets a global, filled once by the prologue of the block that defined
+/// it (ADR-0069).
+///
+/// The global is keyed by the *node*, not by the symbol, so `const b = a`
+/// shares `a`'s storage rather than copying it: the two names denote one
+/// value, and the folder hands on one node.
 llvm::Value *CodeGen::constAddress(const Symbol &sym) {
-  return emitAddress(sym.constValue);
+  if (!is<StructValueExpr>(sym.constValue))
+    return emitAddress(sym.constValue);
+  llvm::GlobalVariable *&g = constGlobals_[sym.constValue];
+  if (!g) {
+    llvm::Type *ty = llvmType(sym.type);
+    g = new llvm::GlobalVariable(
+        *mod_, ty, /*isConstant=*/false, llvm::GlobalValue::InternalLinkage,
+        Constant::getNullValue(ty), "const." + sym.name);
+  }
+  return g;
 }
 
 llvm::Value *CodeGen::emitConst(const Symbol &sym) {
-  // A value that travels by address has no scalar field to have been folded
-  // into, so the constant answers with its storage — which is what every
-  // designator of a structured type answers with (ADR-0017).
-  if (sym.type->isMemory())
-    return constAddress(sym);
+  if (sym.constValue) {
+    // A value that travels by address answers with its storage, which is what
+    // every designator of a structured type answers with (ADR-0017).
+    if (sym.type->isMemory())
+      return constAddress(sym);
+    // A set is a *value* and has nowhere to be (ADR-0028), so the constructor
+    // is emitted where the constant is named. It reads nothing, so there is
+    // no order to get wrong and nothing to initialise ahead of time.
+    return emitExpr(sym.constValue);
+  }
   switch (sym.type->base()->kind) {
   case TypeKind::Integer: return ConstantInt::getSigned(i32(), sym.intVal);
   case TypeKind::Real:    return ConstantFP::get(f64(), sym.realVal);
