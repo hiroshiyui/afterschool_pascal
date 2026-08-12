@@ -1364,6 +1364,14 @@ StmtPtr Parser::parseIdentStatement() {
     return parseRead(false);
   if (id.text == "readln")
     return parseRead(true);
+  // ISO/IEC 10206:1991 §6.7.5.5. Recognised by name exactly as `read` and
+  // `write` are — the parser has no scope to ask whether the program declared
+  // its own — so under `--std=extended` the two names are not usable for
+  // anything else, which is the deviation ADR-0060 records.
+  if (std_ == Std::Extended && id.text == "readstr")
+    return parseReadStr();
+  if (std_ == Std::Extended && id.text == "writestr")
+    return parseWriteStr();
 
   // §6.8.6.4, both spellings of it. `parsePrimary` builds the call and then
   // its selectors, so the target is assembled by the code that already knows
@@ -1431,6 +1439,20 @@ StmtPtr Parser::parseIdentStatement() {
   return s;
 }
 
+/// ISO/IEC 10206:1991 §6.10.3's write-parameter: a value and, for a text file,
+/// up to two field widths. Shared with §6.7.5.5's writestr, whose parameters
+/// are write-parameters in the standard's own words.
+WriteArg Parser::parseWriteArg() {
+  WriteArg arg;
+  arg.value = parseExpr();
+  if (accept(Tok::Colon)) {
+    arg.width = parseExpr();
+    if (accept(Tok::Colon))
+      arg.prec = parseExpr();
+  }
+  return arg;
+}
+
 StmtPtr Parser::parseWrite(bool newline) {
   auto s = makeNode<WriteStmt>(cur());
   s->newline = newline;
@@ -1439,14 +1461,7 @@ StmtPtr Parser::parseWrite(bool newline) {
   if (accept(Tok::LParen)) {
     if (!check(Tok::RParen)) {
       do {
-        WriteArg arg;
-        arg.value = parseExpr();
-        if (accept(Tok::Colon)) {
-          arg.width = parseExpr();
-          if (accept(Tok::Colon))
-            arg.prec = parseExpr();
-        }
-        s->args.push_back(std::move(arg));
+        s->args.push_back(parseWriteArg());
       } while (accept(Tok::Comma));
     }
     expect(Tok::RParen, "after the arguments of write");
@@ -1470,6 +1485,48 @@ StmtPtr Parser::parseRead(bool newline) {
     }
     expect(Tok::RParen, "after the arguments of read");
   }
+  return s;
+}
+
+/// ISO/IEC 10206:1991 §6.7.5.5:
+///
+///   readstr-parameter-list = '(' string-expression ',' variable-access
+///                            { ',' variable-access } ')' .
+///
+/// The parameter list is not optional and neither is the first comma — a
+/// readstr with nothing to read into has no reading at all, where `readln`
+/// alone finishes a line. `str` is what tells this ReadStmt from a `read`.
+StmtPtr Parser::parseReadStr() {
+  auto s = makeNode<ReadStmt>(cur());
+  ++pos_; // 'readstr'
+  expect(Tok::LParen, "after readstr");
+  s->str = parseExpr();
+  expect(Tok::Comma, "after the string readstr reads from");
+  do {
+    s->args.push_back(parseExpr());
+  } while (accept(Tok::Comma));
+  expect(Tok::RParen, "after the arguments of readstr");
+  return s;
+}
+
+/// §6.7.5.5's other half:
+///
+///   writestr-parameter-list = '(' string-variable ',' write-parameter
+///                             { ',' write-parameter } ')' .
+///
+/// The string-variable takes no field width — it is written *to*, not written
+/// — so it is parsed as a bare expression and Sema is what insists it is a
+/// variable, exactly as it does for the file of an ordinary `write`.
+StmtPtr Parser::parseWriteStr() {
+  auto s = makeNode<WriteStmt>(cur());
+  ++pos_; // 'writestr'
+  expect(Tok::LParen, "after writestr");
+  s->str = parseExpr();
+  expect(Tok::Comma, "after the string writestr writes to");
+  do {
+    s->args.push_back(parseWriteArg());
+  } while (accept(Tok::Comma));
+  expect(Tok::RParen, "after the arguments of writestr");
   return s;
 }
 

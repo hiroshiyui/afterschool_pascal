@@ -68,3 +68,4 @@ the alternatives that were rejected and why.
 | [0057](0057-a-substring-is-a-pointer-a-length-and-an-address.md) | A substring is a pointer, a length, and somewhere to store | Accepted |
 | [0058](0058-a-restricted-type-is-a-type-kind.md) | A restricted type is a type kind | Accepted |
 | [0059](0059-five-required-things-and-what-each-cost.md) | Five required things, and what each cost | Accepted |
+| [0060](0060-readstr-and-writestr-are-a-text-file-made-of-memory.md) | readstr and writestr are a text file made of memory | Accepted |

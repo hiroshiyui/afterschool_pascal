@@ -645,15 +645,35 @@ was never written down.
   - Two enumerators had to be *placed* rather than written where they read
     best: the AST dump prints a builtin as its ordinal, so both compilers must
     agree on the index. `difftest` caught each as a number one apart.
-- Structured-value constructors and `readstr`/`writestr`. Each needs its own
-  record.
+- ~~**readstr and writestr.**~~ Done (ADR-0060). §6.7.5.5's two string
+  transfer procedures, and the deferral ADR-0051 named: they need a text file
+  over a string buffer, and now they have one.
+  - **The standard defines them as file operations, and so does this
+    compiler.** `fmemopen` and `open_memstream` give the runtime an ordinary
+    `struct pas_file` with no external entity behind it, so every
+    `pas_read_*` and `pas_write_*` primitive is reused *unchanged* — a field
+    width, the spelling of a real and where a string read stops all mean what
+    §6.10 says, because they are the same code.
+  - **writestr's error condition was already emitted.** "eoln(f) is false upon
+    completion" is false exactly when more was written than the destination
+    holds, which is §6.4.6's capacity check every string store already makes.
+  - The characters readstr reads from are **copied**, so `readstr(e, i, e)`
+    reads into the variable it reads from; and the auxiliary file is
+    heap-allocated per statement, so a writestr may appear in the
+    write-parameters of another.
+  - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
+    so under `--std=extended` a program cannot declare its own — where
+    §6.7.5.5 makes them required identifiers.
+- Structured-value constructors. Still needs its own record.
 
   The list above is the one the README carries, and it is not the whole of
   what ISO/IEC 10206:1991 adds. Also absent, and each small enough that the
   cost is in the pair of compilers rather than in the design: `halt`, `card`,
   the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
-  procedures, and set-member iteration.
+  procedures, and set-member iteration. Most of those have since landed with
+  ADR-0059; `minreal`/`maxreal`/`epsreal`, the field widths, the time
+  procedures and set-member iteration have not.
 
 - ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
   halves of it: a function may return anything that is not, and does not

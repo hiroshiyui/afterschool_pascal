@@ -240,7 +240,9 @@ private:
   void emitStmt(Stmt *s);
   void emitAssign(Assign *s);
   void emitWrite(WriteStmt *s);
+  void emitWriteArgs(WriteStmt *s, llvm::Value *file);
   void emitRead(ReadStmt *s);
+  void emitReadArgs(ReadStmt *s, llvm::Value *file);
   /// Open the file variables a frame declares, and close them when it exits.
   /// ISO 7185 ties a file's lifetime to the block that declares it, so this is
   /// the block's own prologue and epilogue rather than anything global.
@@ -301,6 +303,8 @@ private:
   llvm::Value *stringCapacity(Type *t, llvm::Value *addr);
   void emitStringStore(llvm::Value *dst, Type *type, Expr *src,
                        llvm::Value *header);
+  void emitStringStoreValue(llvm::Value *dst, Type *type, llvm::Value *sd,
+                            llvm::Value *sl, llvm::Value *header);
   llvm::Value *emitStringCompare2(Binary *e);
 
   /// Compare two equal-length strings through the runtime helper.

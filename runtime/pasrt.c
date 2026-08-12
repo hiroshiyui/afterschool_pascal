@@ -178,6 +178,15 @@ struct pas_file {
    * a third answer to the question `pas_external` asks, and the only one the
    * running program chooses for itself. */
   char *bound_name;
+  /* ISO/IEC 10206:1991 §6.7.5.5: the auxiliary `text` variable readstr and
+   * writestr are defined in terms of is backed by memory rather than by a
+   * stream the operating system named. `membuf` is that memory — the copy of
+   * the string-expression readstr reads from, or the buffer open_memstream
+   * grows for writestr — and `memlen` is the length open_memstream reports.
+   * Every other field means what it always did, which is the whole point:
+   * the read and write primitives are reused unchanged (ADR-0060). */
+  char *membuf;
+  size_t memlen;
   int compsize;  /* the size of one component in bytes; 1 for a text */
   int ateof;     /* non-text: the fetch that filled `have` found no component */
   char ch;       /* the buffer variable of a text file */
@@ -392,6 +401,8 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->ch = ' ';
   f->name = name;
   f->bound_name = NULL;
+  f->membuf = NULL;
+  f->memlen = 0;
   /* The buffer variable of a text file is the one character `ch` already
    * there; a `file of T` needs T's worth of storage, and malloc is what
    * guarantees it is aligned for any T. It is freed when the block that
@@ -1302,4 +1313,95 @@ void pas_read_str(void *v, void *dst, int cap, int isvar) {
     *(int *)dst = n;
   else
     memset(out + n, ' ', (size_t)(cap - n));
+}
+
+/* ISO/IEC 10206:1991 §6.7.5.5 defines readstr and writestr *as* a sequence of
+ * ordinary file operations on "an auxiliary variable that the program does not
+ * otherwise contain, which possesses the required type text". These four
+ * functions are that auxiliary variable, and nothing else about either
+ * statement is new: the compiler emits the same pas_read_* and pas_write_*
+ * calls it emits for a text file, with the handle these hand back.
+ *
+ * It is heap-allocated rather than a static, because a variable-access or a
+ * write-parameter may call a function that itself contains a readstr; and it
+ * is *not* on the open-file list, because §6.7.5.5 makes it a variable the
+ * program does not contain, so it is none of the business of the block exits
+ * and non-local gotos that list serves (ADR-0032). */
+static struct pas_file *pas_str_file(void) {
+  struct pas_file *f = calloc(1, sizeof *f);
+  if (!f)
+    pas_runtime_error("out of memory for a string transfer");
+  f->lookahead = EOF;
+  f->istext = 1;
+  f->compsize = 1;
+  f->ch = ' ';
+  f->buf = &f->ch;
+  f->name = "a string";
+  return f;
+}
+
+/* `rewrite(f); writeln(f, e); reset(f)` — the line marker writeln appends is
+ * the trailing newline here, and it is what keeps eof false while the values
+ * are being read. The characters are *copied*, so that a readstr may read
+ * into the very variable it reads from. */
+void *pas_str_read_begin(const char *chars, int len) {
+  struct pas_file *f = pas_str_file();
+  f->membuf = malloc((size_t)len + 1);
+  if (!f->membuf)
+    pas_runtime_error("out of memory for a string transfer");
+  memcpy(f->membuf, chars, (size_t)len);
+  f->membuf[len] = '\n';
+  f->fp = fmemopen(f->membuf, (size_t)len + 1, "r");
+  if (!f->fp)
+    pas_runtime_error("cannot read from a string");
+  f->mode = PAS_READING;
+  return f;
+}
+
+/* §6.7.5.5: "It shall be an error if the equivalent of eof(f) is true upon
+ * completion." The line marker is still there when every value had a
+ * representation to read, so eof means the reads ran off the end. */
+void pas_str_read_end(void *v) {
+  struct pas_file *f = v;
+  if (pas_eof(f))
+    pas_runtime_error("readstr: the string ended before every value was read");
+  fclose(f->fp);
+  free(f->membuf);
+  free(f);
+}
+
+void *pas_str_write_begin(void) {
+  struct pas_file *f = pas_str_file();
+  f->fp = open_memstream(&f->membuf, &f->memlen);
+  if (!f->fp)
+    pas_runtime_error("cannot write to a string");
+  f->mode = PAS_WRITING;
+  return f;
+}
+
+/* The `reset(f); read(f, ss)` half: what was written is a string value, which
+ * is a pointer and a length (ADR-0051), so the assignment to the
+ * string-variable is the ordinary string store and needs nothing of its own.
+ * §6.7.5.5's "error if the equivalent of eoln(f) is false upon completion" is
+ * then that store's capacity check, because eoln is false exactly when more
+ * was written than the read could take. */
+int pas_str_write_len(void *v) {
+  struct pas_file *f = v;
+  fflush(f->fp);
+  if (f->memlen > 2147483647u)
+    pas_runtime_error("writestr: too much was written to a string");
+  return (int)f->memlen;
+}
+
+const char *pas_str_write_ptr(void *v) {
+  struct pas_file *f = v;
+  fflush(f->fp);
+  return f->membuf ? f->membuf : "";
+}
+
+void pas_str_write_end(void *v) {
+  struct pas_file *f = v;
+  fclose(f->fp);
+  free(f->membuf);
+  free(f);
 }

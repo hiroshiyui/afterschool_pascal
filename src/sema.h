@@ -433,6 +433,7 @@ private:
 
   void checkStmt(Stmt *s);
   void checkWrite(WriteStmt *w);
+  void checkWriteArgs(WriteStmt *w);
   void checkRead(ReadStmt *r);
   void checkExpr(Expr *e);
   void checkBinary(Binary *b);

@@ -377,6 +377,11 @@ struct WriteStmt : Stmt {
   /// here and leaves `args` holding only the values. Null means `output`,
   /// which Sema then resolves to the program parameter of that name.
   ExprPtr file;
+  /// ISO/IEC 10206:1991 §6.7.5.5's `writestr`: the string-variable written
+  /// to. Non-null makes this statement a writestr rather than a write, and
+  /// then `file` stays null — the file is the auxiliary text variable the
+  /// clause defines the statement in terms of, which the runtime supplies.
+  ExprPtr str;
 };
 
 /// `read` and `readln`. Kept apart from ProcCallStmt for the same reason
@@ -389,6 +394,9 @@ struct ReadStmt : Stmt {
   std::vector<ExprPtr> args;
   bool newline = false; // readln: finish the line after the last variable
   ExprPtr file;         // null means `input`
+  /// §6.7.5.5's `readstr`: the string-expression read from, with the same
+  /// meaning `WriteStmt::str` has — non-null says which statement this is.
+  ExprPtr str;
 };
 
 struct Compound : Stmt {

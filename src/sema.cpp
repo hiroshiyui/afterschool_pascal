@@ -4295,6 +4295,28 @@ void Sema::checkWrite(WriteStmt *w) {
       checkExpr(arg.prec.get());
   }
 
+  // ISO/IEC 10206:1991 §6.7.5.5's writestr: the destination is a string
+  // variable rather than a file, and everything after it is a write-parameter
+  // of the text form — so the file-detection below is skipped and `file` is
+  // left null. What the values are written *into* is the auxiliary text
+  // variable the clause defines the statement in terms of, which is the
+  // runtime's; the string store at the end is the clause's `read(f, ss)`.
+  if (w->str) {
+    checkExpr(w->str.get());
+    Type *st = w->str->type;
+    if (!isDesignator(w->str.get()))
+      diags_.error(w->str->line, w->str->col,
+                   "writestr needs a string variable, not a value");
+    else if (st && !st->isStringType())
+      diags_.error(w->str->line, w->str->col,
+                   "writestr needs a string variable, not " + st->name());
+    else
+      // §6.9.4 d): writestr threatens the string-variable it writes to.
+      checkNotThreatened(w->str.get(), "it cannot be written to");
+    checkWriteArgs(w);
+    return;
+  }
+
   if (!w->args.empty() && !w->args[0].width && w->args[0].value->type &&
       w->args[0].value->type->isFile()) {
     if (!isDesignator(w->args[0].value.get()))
@@ -4333,6 +4355,14 @@ void Sema::checkWrite(WriteStmt *w) {
     return;
   }
 
+  checkWriteArgs(w);
+}
+
+/// The write-parameters of the *text* form, which ISO/IEC 10206:1991 §6.10.3
+/// gives to `write`, `writeln` and §6.7.5.5's `writestr` alike — the last one
+/// writes to an auxiliary text variable, so its parameters are governed by the
+/// same clause and checked by the same code.
+void Sema::checkWriteArgs(WriteStmt *w) {
   for (auto &arg : w->args) {
     Type *t = arg.value->type;
     // ISO 7185 §6.9.3 lists exactly what write accepts: an integer, a real,
@@ -4369,7 +4399,21 @@ void Sema::checkRead(ReadStmt *r) {
   for (auto &a : r->args)
     checkExpr(a.get());
 
-  if (!r->args.empty() && r->args[0]->type && r->args[0]->type->isFile()) {
+  // §6.7.5.5's readstr, the mirror of writestr above: the source is a string
+  // expression rather than a file, and every variable-access after it is read
+  // exactly as it would be from a text file — which is why `file` is left null
+  // and the loop below runs its text branch unchanged.
+  if (r->str) {
+    checkExpr(r->str.get());
+    Type *st = r->str->type;
+    // "The expression of a string-expression shall possess char-type or
+    // canonical-string-type", and §6.4.6 makes every string type's value a
+    // canonical one, so a fixed and a variable string both qualify.
+    if (st && !st->isStringOrChar())
+      diags_.error(r->str->line, r->str->col,
+                   "readstr needs a string to read from, not " + st->name());
+  } else if (!r->args.empty() && r->args[0]->type &&
+             r->args[0]->type->isFile()) {
     if (!isDesignator(r->args[0].get()))
       diags_.error(r->args[0]->line, r->args[0]->col,
                    "the file read from must be a variable");

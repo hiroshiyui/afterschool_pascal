@@ -1911,6 +1911,35 @@ void CodeGen::emitWrite(WriteStmt *s) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   llvm::Value *noWidth = ConstantInt::getSigned(i32(), -1);
 
+  // ISO/IEC 10206:1991 §6.7.5.5: writestr is `rewrite(f); writeln(f, p...);
+  // reset(f); read(f, ss)` over an auxiliary text variable. The runtime is
+  // that variable, so everything between here and the store below is the
+  // ordinary text `write` — emitted by the very same loop.
+  if (s->str) {
+    llvm::Value *aux =
+        b_.CreateCall(rt("pas_str_write_begin", ptr(), {}), {}, "writestr");
+    emitWriteArgs(s, aux);
+    llvm::Value *len =
+        b_.CreateCall(rt("pas_str_write_len", i32(), {ptr()}), {aux}, "len");
+    llvm::Value *data =
+        b_.CreateCall(rt("pas_str_write_ptr", ptr(), {ptr()}), {aux}, "chars");
+    // The `read(f, ss)` half. §6.4.6's capacity check inside the store is
+    // §6.7.5.5's "error if the equivalent of eoln(f) is false upon
+    // completion": more was written than the destination can hold.
+    if (is<SubstringExpr>(s->str.get())) {
+      llvm::Value *td, *tl;
+      emitString(s->str.get(), td, tl);
+      b_.CreateCall(
+          rt("pas_str_store_fixed", voidTy, {ptr(), i32(), ptr(), i32()}),
+          {td, tl, data, len});
+    } else {
+      emitStringStoreValue(emitAddress(s->str.get()), s->str->type, data, len,
+                           heapHeader(s->str.get()));
+    }
+    b_.CreateCall(rt("pas_str_write_end", voidTy, {ptr()}), {aux});
+    return;
+  }
+
   // Sema has always put a file here — the one that was written, or `output`.
   if (!s->file)
     return; // the program parameter was missing; the error is already reported
@@ -1929,6 +1958,19 @@ void CodeGen::emitWrite(WriteStmt *s) {
     }
     return;
   }
+
+  emitWriteArgs(s, file);
+
+  if (s->newline)
+    b_.CreateCall(rt("pas_writeln", voidTy, {ptr()}), {file});
+}
+
+/// The write-parameters of the text form (§6.10.3), emitted into whichever
+/// file is given — the one the statement named, or §6.7.5.5's auxiliary
+/// variable when this is a writestr. Nothing here knows which.
+void CodeGen::emitWriteArgs(WriteStmt *s, llvm::Value *file) {
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+  llvm::Value *noWidth = ConstantInt::getSigned(i32(), -1);
 
   for (auto &arg : s->args) {
     llvm::Value *width = arg.width ? emitExpr(arg.width.get()) : noWidth;
@@ -1968,9 +2010,6 @@ void CodeGen::emitWrite(WriteStmt *s) {
       break;
     }
   }
-
-  if (s->newline)
-    b_.CreateCall(rt("pas_writeln", voidTy, {ptr()}), {file});
 }
 
 /// read/readln. Each variable is filled by the runtime call its type selects,
@@ -1978,6 +2017,24 @@ void CodeGen::emitWrite(WriteStmt *s) {
 /// statement rather than two.
 void CodeGen::emitRead(ReadStmt *s) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
+
+  // §6.7.5.5's readstr: `rewrite(f); writeln(f, e); reset(f); read(f, v...)`.
+  // The string's characters are what the auxiliary text variable holds, so
+  // the variables are read by the very loop below.
+  if (s->str) {
+    llvm::Value *data, *len;
+    emitString(s->str.get(), data, len);
+    llvm::Value *aux =
+        b_.CreateCall(rt("pas_str_read_begin", ptr(), {ptr(), i32()}),
+                      {data, len}, "readstr");
+    emitReadArgs(s, aux);
+    // "It shall be an error if the equivalent of eof(f) is true upon
+    // completion" — the runtime asks, because eof is its question and the
+    // auxiliary variable is not a file the program can name.
+    b_.CreateCall(rt("pas_str_read_end", voidTy, {ptr()}), {aux});
+    return;
+  }
+
   if (!s->file)
     return;
   llvm::Value *file = emitAddress(s->file.get());
@@ -2003,6 +2060,16 @@ void CodeGen::emitRead(ReadStmt *s) {
     return;
   }
 
+  emitReadArgs(s, file);
+
+  if (s->newline)
+    b_.CreateCall(rt("pas_readln", voidTy, {ptr()}), {file});
+}
+
+/// The variables of the text form (§6.10.1), filled from whichever file is
+/// given — the one the statement named, or §6.7.5.5's auxiliary variable.
+void CodeGen::emitReadArgs(ReadStmt *s, llvm::Value *file) {
+  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   for (auto &a : s->args) {
     // §6.5.1 lists a substring-variable among the variable-accesses, so §6.10
     // admits one here. Its capacity is `hi - lo + 1` rather than its type's,
@@ -2049,9 +2116,6 @@ void CodeGen::emitRead(ReadStmt *s) {
     }
     b_.CreateStore(v, slot);
   }
-
-  if (s->newline)
-    b_.CreateCall(rt("pas_readln", voidTy, {ptr()}), {file});
 }
 
 void CodeGen::emitIf(IfStmt *s) {
@@ -2692,6 +2756,15 @@ void CodeGen::emitStringStore(llvm::Value *dst, ap::Type *type, Expr *src,
                               llvm::Value *header) {
   llvm::Value *sd, *sl;
   emitString(src, sd, sl);
+  emitStringStoreValue(dst, type, sd, sl, header);
+}
+
+/// The same three rules, given the value as a pointer and a length rather than
+/// as an expression — which is what §6.7.5.5's writestr has, since its value
+/// was produced by the runtime and no expression in the tree denotes it.
+void CodeGen::emitStringStoreValue(llvm::Value *dst, ap::Type *type,
+                                   llvm::Value *sd, llvm::Value *sl,
+                                   llvm::Value *header) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   if (type->isVarString()) {
     b_.CreateCall(rt("pas_str_store_var", voidTy, {ptr(), i32(), ptr(), i32()}),

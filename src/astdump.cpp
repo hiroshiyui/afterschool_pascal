@@ -389,8 +389,15 @@ struct Dumper {
     }
     case NK::Write: {
       WriteStmt *n = as<WriteStmt>(s);
-      head(n->newline ? "writeln" : "write", s->line, s->col);
+      head(n->str       ? "writestr"
+           : n->newline ? "writeln"
+                        : "write",
+           s->line, s->col);
       ++level;
+      // §6.7.5.5's string-variable, which the parser sets and Sema leaves
+      // alone — unlike the file below, which Sema is what supplies.
+      if (n->str)
+        optionalChild("str", n->str.get());
       // Sema moves a leading file argument out of the list and supplies
       // `output` when there was none, so after it the tree has a shape the
       // parser never built. That change is the thing worth comparing.
@@ -414,8 +421,13 @@ struct Dumper {
     }
     case NK::Read: {
       ReadStmt *n = as<ReadStmt>(s);
-      head(n->newline ? "readln" : "read", s->line, s->col);
+      head(n->str       ? "readstr"
+           : n->newline ? "readln"
+                        : "read",
+           s->line, s->col);
       ++level;
+      if (n->str)
+        optionalChild("str", n->str.get());
       if (annotate)
         optionalChild("file", n->file.get());
       mark("args");

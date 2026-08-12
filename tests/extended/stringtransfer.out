@@ -1,0 +1,20 @@
+note5  [ 0.17  6] 8
+note2  0.0 [-] 4
+kinds  [n=  42 TRUE xy q]
+fixed  [ab7     ]
+var    [ab7] 3
+substr [ABzz  GH]
+parts  [v2] [r 9]
+param  [item 7]
+nested [<1>-<2>]
+two    11 22
+concat 57
+slice  31
+char   8
+str    [hello th] 8
+strfix [pad     ]
+sub    7
+into   12 [ 34] [.QQ.....]
+greedy [c1 c2] [] 0
+self   3 [ 4] 2
+loop   [3^2=9]

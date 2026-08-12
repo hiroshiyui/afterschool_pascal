@@ -1,0 +1,12 @@
+<source>:18:12: error: 'guard' is a protected parameter, so it cannot be written to
+<source>:19:16: error: 'n' is a protected parameter, so it cannot be read into
+<source>:26:12: error: writestr needs a string variable, not integer
+<source>:27:12: error: writestr needs a string variable, not char
+<source>:31:12: error: writestr needs a string variable, not a value
+<source>:32:14: error: writestr needs a string variable, not a value
+<source>:37:11: error: readstr needs a string to read from, not integer
+<source>:38:11: error: readstr needs a string to read from, not text
+<source>:43:15: error: a value of type colour cannot be written
+<source>:44:19: error: only real values take a fraction length
+<source>:45:16: error: a value of type boolean cannot be read
+<source>:46:18: error: read needs a variable, not a value

@@ -71,7 +71,7 @@ const
     runtime/pasrt.h. The C++ code generator includes that header so the two
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
     the number and selfhost/irtest.sh checks that the two still match. }
-  fileSize = 96;
+  fileSize = 112;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh. }
@@ -161,6 +161,9 @@ type
     ctxCompoundStart, ctxCompoundEnd, ctxIf, ctxWhile, ctxRepeatEnd, ctxFor,
     ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxSubstring,
+    { ISO/IEC 10206:1991 6.7.5.5's two string transfer procedures }
+    ctxReadStrOpen, ctxReadStrComma, ctxReadStrArgs,
+    ctxWriteStrOpen, ctxWriteStrComma, ctxWriteStrArgs,
     ctxParenExpr,
     ctxCallArgs, ctxAfterGoto, ctxLabelStart, ctxAfterLabel, ctxLabelDecl,
     ctxAfterLabelPart, ctxFuncParamResult,
@@ -780,9 +783,15 @@ type
                      clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr);
       nkEmpty:      ();
       nkAssign:     (asTarget, asValue: nodePtr);
-      nkWrite:      (wrArgs, wrFile: nodePtr; wrNewline: boolean);
+      { wrStr is 6.7.5.5's writestr: the string-variable written to. Non-nil
+        makes this a writestr rather than a write, and then wrFile stays nil --
+        the file is the auxiliary text variable the clause defines the
+        statement in terms of, which the runtime supplies. }
+      nkWrite:      (wrArgs, wrFile, wrStr: nodePtr; wrNewline: boolean);
       nkWriteArg:   (waValue, waWidth, waPrec: nodePtr);
-      nkRead:       (rdArgs, rdFile: nodePtr; rdNewline: boolean);
+      { rdStr is 6.7.5.5's readstr: the string-expression read from, with the
+        same meaning wrStr has. }
+      nkRead:       (rdArgs, rdFile, rdStr: nodePtr; rdNewline: boolean);
       nkCompound:   (cpBody: nodePtr);
       nkIf:         (ifCond, ifThen, ifElse: nodePtr);
       nkWhile:      (whCond, whBody: nodePtr);
@@ -2306,6 +2315,12 @@ begin
     ctxReadArgs:       write('after the arguments of read');
     ctxSubscript:      write('after a subscript');
     ctxSubstring:      write('after a substring');
+    ctxReadStrOpen:    write('after readstr');
+    ctxReadStrComma:   write('after the string readstr reads from');
+    ctxReadStrArgs:    write('after the arguments of readstr');
+    ctxWriteStrOpen:   write('after writestr');
+    ctxWriteStrComma:  write('after the string writestr writes to');
+    ctxWriteStrArgs:   write('after the arguments of writestr');
     ctxParenExpr:      write('after a parenthesised expression');
     ctxCallArgs:       write('after the arguments of a function call');
     ctxFuncParamResult:
@@ -2360,8 +2375,8 @@ begin
               n^.clSym := nil;
               n^.clSlot := nil
             end;
-    nkWrite: n^.wrFile := nil;
-    nkRead: n^.rdFile := nil;
+    nkWrite: begin n^.wrFile := nil; n^.wrStr := nil end;
+    nkRead: begin n^.rdFile := nil; n^.rdStr := nil end;
     nkProcCall: begin
       n^.pcSym := nil;
       n^.pcStd := spNone;
@@ -3735,8 +3750,27 @@ begin
   ParseWith := NestWith(head, body, l, c)
 end;
 
+{ ISO/IEC 10206:1991 6.10.3's write-parameter: a value and, for a text file,
+  up to two field widths. Shared with 6.7.5.5's writestr, whose parameters are
+  write-parameters in the standard's own words. }
+function ParseWriteArg: nodePtr;
+var a: nodePtr;
+begin
+  a := NewNode(nkWriteArg, CurLine, CurCol);
+  a^.waValue := nil;
+  a^.waWidth := nil;
+  a^.waPrec := nil;
+  a^.waValue := ParseExpr;
+  if Accept(tkColon) then begin
+    a^.waWidth := ParseExpr;
+    if Accept(tkColon) then
+      a^.waPrec := ParseExpr
+  end;
+  ParseWriteArg := a
+end;
+
 function ParseWrite(newlineForm: boolean): nodePtr;
-var s, head, tail, a: nodePtr; more: boolean;
+var s, head, tail: nodePtr; more: boolean;
 begin
   s := NewNode(nkWrite, CurLine, CurCol);
   s^.wrNewline := newlineForm;
@@ -3749,17 +3783,7 @@ begin
     if not Check(tkRParen) then begin
       more := true;
       while more and not aborted do begin
-        a := NewNode(nkWriteArg, CurLine, CurCol);
-        a^.waValue := nil;
-        a^.waWidth := nil;
-        a^.waPrec := nil;
-        a^.waValue := ParseExpr;
-        if Accept(tkColon) then begin
-          a^.waWidth := ParseExpr;
-          if Accept(tkColon) then
-            a^.waPrec := ParseExpr
-        end;
-        Append(head, tail, a);
+        Append(head, tail, ParseWriteArg);
         more := Accept(tkComma)
       end
     end;
@@ -3767,6 +3791,36 @@ begin
   end;
   s^.wrArgs := head;
   ParseWrite := s
+end;
+
+{ ISO/IEC 10206:1991 6.7.5.5:
+
+    writestr-parameter-list = '(' string-variable ','
+                              write-parameter, ... ')' .
+
+  The string-variable takes no field width -- it is written *to*, not written
+  -- so it is parsed as a bare expression and Sema is what insists it is a
+  variable, exactly as it does for the file of an ordinary `write`. }
+function ParseWriteStr: nodePtr;
+var s, head, tail: nodePtr; more: boolean;
+begin
+  s := NewNode(nkWrite, CurLine, CurCol);
+  s^.wrNewline := false;
+  s^.wrArgs := nil;
+  pos := pos + 1;   { 'writestr' }
+  Expect(tkLParen, ctxWriteStrOpen);
+  s^.wrStr := ParseExpr;
+  Expect(tkComma, ctxWriteStrComma);
+  head := nil;
+  tail := nil;
+  more := true;
+  while more and not aborted do begin
+    Append(head, tail, ParseWriteArg);
+    more := Accept(tkComma)
+  end;
+  Expect(tkRParen, ctxWriteStrArgs);
+  s^.wrArgs := head;
+  ParseWriteStr := s
 end;
 
 { read/readln. The arguments are variables to store into, and the first may be
@@ -3794,6 +3848,36 @@ begin
   end;
   s^.rdArgs := head;
   ParseRead := s
+end;
+
+{ ISO/IEC 10206:1991 6.7.5.5:
+
+    readstr-parameter-list = '(' string-expression ','
+                             variable-access, ... ')' .
+
+  The parameter list is not optional and neither is the first comma -- a
+  readstr with nothing to read into has no reading at all, where `readln`
+  alone finishes a line. rdStr is what tells this from a `read`. }
+function ParseReadStr: nodePtr;
+var s, head, tail: nodePtr; more: boolean;
+begin
+  s := NewNode(nkRead, CurLine, CurCol);
+  s^.rdNewline := false;
+  s^.rdArgs := nil;
+  pos := pos + 1;   { 'readstr' }
+  Expect(tkLParen, ctxReadStrOpen);
+  s^.rdStr := ParseExpr;
+  Expect(tkComma, ctxReadStrComma);
+  head := nil;
+  tail := nil;
+  more := true;
+  while more and not aborted do begin
+    Append(head, tail, ParseExpr);
+    more := Accept(tkComma)
+  end;
+  Expect(tkRParen, ctxReadStrArgs);
+  s^.rdArgs := head;
+  ParseReadStr := s
 end;
 
 { 6.8.6.4's function-identified-variable, `f(x)^`, is the one function-access
@@ -3850,6 +3934,14 @@ begin
   else if PoolIs(at, len, 'writeln  ') then s := ParseWrite(true)
   else if PoolIs(at, len, 'read     ') then s := ParseRead(false)
   else if PoolIs(at, len, 'readln   ') then s := ParseRead(true)
+  { ISO/IEC 10206:1991 6.7.5.5. Recognised by name exactly as `read` and
+    `write` are -- the parser has no scope to ask whether the program declared
+    its own -- so under the extended standard the two names are not usable for
+    anything else (ADR-0060). }
+  else if (langStd = stdExtended) and PoolIs(at, len, 'readstr  ') then
+    s := ParseReadStr
+  else if (langStd = stdExtended) and PoolIs(at, len, 'writestr ') then
+    s := ParseWriteStr
   else handled := false;
 
   if not handled then begin
@@ -9951,13 +10043,57 @@ end;
 
 { -------------------------------------------------------------- statements }
 
+{ The write-parameters of the *text* form, which ISO/IEC 10206:1991 6.10.3
+  gives to `write`, `writeln` and 6.7.5.5's `writestr` alike -- the last one
+  writes to an auxiliary text variable, so its parameters are governed by the
+  same clause and checked by the same code. }
+procedure CheckWriteArgs(w: nodePtr);
+var a: nodePtr; t: typePtr;
+begin
+  a := w^.wrArgs;
+  while a <> nil do begin
+    t := a^.waValue^.ntype;
+    { ISO 7185 6.9.3 lists exactly what write accepts: an integer, a real, a
+      boolean, a char, or a packed array of char. An enumeration is not on the
+      list -- the standard gives no spelling for its constants at run time --
+      and neither is any other structured type. ISO/IEC 10206:1991 6.10.3.1
+      has the same list with "a string-type" in place of the packed char
+      array, so a variable-string and a canonical value join it. }
+    if (t <> nil) and not (IsInteger(t) or IsReal(t) or IsBoolean(t) or
+                           IsChar(t) or IsStringType(t)) then begin
+      ErrorAt(a^.waValue^.line, a^.waValue^.col);
+      write('a value of type ');
+      WriteTypeName(t);
+      writeln(' cannot be written')
+    end;
+    if a^.waWidth <> nil then
+      if (a^.waWidth^.ntype <> nil) and not IsInteger(a^.waWidth^.ntype) then
+      begin
+        ErrorAt(a^.waWidth^.line, a^.waWidth^.col);
+        writeln('a field width must be an integer')
+      end;
+    if a^.waPrec <> nil then begin
+      if (a^.waPrec^.ntype <> nil) and not IsInteger(a^.waPrec^.ntype) then
+      begin
+        ErrorAt(a^.waPrec^.line, a^.waPrec^.col);
+        writeln('a fraction length must be an integer')
+      end;
+      if (t <> nil) and not IsReal(t) then begin
+        ErrorAt(a^.waPrec^.line, a^.waPrec^.col);
+        writeln('only real values take a fraction length')
+      end
+    end;
+    a := a^.next
+  end
+end;
+
 { ISO 7185 6.9.3 lets the first argument be a file variable, which says where
   to write rather than what to write; without one the file is `output`. A width
   never follows a file, so the leading argument is a file exactly when it has a
   file type and no width -- and if a program does write `f:8`, the file falls
   through to the value list and is rejected there as unwritable. }
 procedure CheckWrite(w: nodePtr);
-var a: nodePtr; t, wf: typePtr;
+var a: nodePtr; wf, st: typePtr;
 begin
   a := w^.wrArgs;
   while a <> nil do begin
@@ -9967,6 +10103,31 @@ begin
     a := a^.next
   end;
 
+  { ISO/IEC 10206:1991 6.7.5.5's writestr: the destination is a string variable
+    rather than a file, and everything after it is a write-parameter of the
+    text form -- so the file-detection below is skipped and wrFile is left nil.
+    What the values are written *into* is the auxiliary text variable the
+    clause defines the statement in terms of, which is the runtime's; the
+    string store at the end is the clause's `read(f, ss)`. }
+  if w^.wrStr <> nil then begin
+    CheckExpr(w^.wrStr);
+    st := w^.wrStr^.ntype;
+    if not IsDesignator(w^.wrStr) then begin
+      ErrorAt(w^.wrStr^.line, w^.wrStr^.col);
+      writeln('writestr needs a string variable, not a value')
+    end
+    else if (st <> nil) and not IsStringType(st) then begin
+      ErrorAt(w^.wrStr^.line, w^.wrStr^.col);
+      write('writestr needs a string variable, not ');
+      WriteTypeName(st);
+      writeln
+    end
+    { 6.9.4 d): writestr threatens the string-variable it writes to. }
+    else if Threatened(w^.wrStr) then
+      writeln('it cannot be written to');
+    CheckWriteArgs(w)
+  end
+  else begin
   if (w^.wrArgs <> nil) and (w^.wrArgs^.waWidth = nil) and
      IsFile(w^.wrArgs^.waValue^.ntype) then begin
     if not IsDesignator(w^.wrArgs^.waValue) then begin
@@ -10015,49 +10176,15 @@ begin
       a := a^.next
     end
   end
-  else begin
-  a := w^.wrArgs;
-  while a <> nil do begin
-    t := a^.waValue^.ntype;
-    { ISO 7185 6.9.3 lists exactly what write accepts: an integer, a real, a
-      boolean, a char, or a packed array of char. An enumeration is not on the
-      list -- the standard gives no spelling for its constants at run time --
-      and neither is any other structured type. ISO/IEC 10206:1991 6.10.3.1
-      has the same list with "a string-type" in place of the packed char
-      array, so a variable-string and a canonical value join it. }
-    if (t <> nil) and not (IsInteger(t) or IsReal(t) or IsBoolean(t) or
-                           IsChar(t) or IsStringType(t)) then begin
-      ErrorAt(a^.waValue^.line, a^.waValue^.col);
-      write('a value of type ');
-      WriteTypeName(t);
-      writeln(' cannot be written')
-    end;
-    if a^.waWidth <> nil then
-      if (a^.waWidth^.ntype <> nil) and not IsInteger(a^.waWidth^.ntype) then
-      begin
-        ErrorAt(a^.waWidth^.line, a^.waWidth^.col);
-        writeln('a field width must be an integer')
-      end;
-    if a^.waPrec <> nil then begin
-      if (a^.waPrec^.ntype <> nil) and not IsInteger(a^.waPrec^.ntype) then
-      begin
-        ErrorAt(a^.waPrec^.line, a^.waPrec^.col);
-        writeln('a fraction length must be an integer')
-      end;
-      if (t <> nil) and not IsReal(t) then begin
-        ErrorAt(a^.waPrec^.line, a^.waPrec^.col);
-        writeln('only real values take a fraction length')
-      end
-    end;
-    a := a^.next
-  end
+  else
+    CheckWriteArgs(w)
   end
 end;
 
 { ISO 7185 6.9.1. Like write, the first argument may be the file; every other
   one is a *variable* to store into, so each has to be a designator. }
 procedure CheckRead(r: nodePtr);
-var a: nodePtr; t, rf: typePtr; text, okRead: boolean;
+var a: nodePtr; t, rf, st: typePtr; text, okRead: boolean;
 begin
   a := r^.rdArgs;
   while a <> nil do begin
@@ -10065,7 +10192,24 @@ begin
     a := a^.next
   end;
 
-  if (r^.rdArgs <> nil) and IsFile(r^.rdArgs^.ntype) then begin
+  { 6.7.5.5's readstr, the mirror of writestr above: the source is a string
+    expression rather than a file, and every variable-access after it is read
+    exactly as it would be from a text file -- which is why rdFile is left nil
+    and the loop below runs its text branch unchanged. }
+  if r^.rdStr <> nil then begin
+    CheckExpr(r^.rdStr);
+    st := r^.rdStr^.ntype;
+    { "The expression of a string-expression shall possess char-type or
+      canonical-string-type", and 6.4.6 makes every string type's value a
+      canonical one, so a fixed and a variable string both qualify. }
+    if (st <> nil) and not IsStringOrChar(st) then begin
+      ErrorAt(r^.rdStr^.line, r^.rdStr^.col);
+      write('readstr needs a string to read from, not ');
+      WriteTypeName(st);
+      writeln
+    end
+  end
+  else if (r^.rdArgs <> nil) and IsFile(r^.rdArgs^.ntype) then begin
     if not IsDesignator(r^.rdArgs) then begin
       ErrorAt(r^.rdArgs^.line, r^.rdArgs^.col);
       writeln('the file read from must be a variable')
@@ -12930,6 +13074,19 @@ begin
   end
 end;
 
+{ ISO/IEC 10206:1991 6.7.5.5's string-variable or string-expression, which the
+  parser sets and Sema leaves alone -- unlike the file above, which Sema is
+  what supplies. Printed only when there is one, so a write and a writestr
+  differ in their head as well. }
+procedure DumpStrChild(e: nodePtr);
+begin
+  Pad;
+  writeln('str');
+  level := level + 1;
+  DumpExpr(e);
+  level := level - 1
+end;
+
 { Where a field lives: '-' is the record's fixed part, '0' is arm 0 of its
   variant part, '0.1' is arm 1 of the variant part inside arm 0. }
 procedure WriteVariantRef(path: numPtr);
@@ -13364,12 +13521,15 @@ begin
       level := level - 1
     end;
     nkWrite: begin
-      if n^.wrNewline then
+      if n^.wrStr <> nil then
+        write('writestr')
+      else if n^.wrNewline then
         write('writeln')
       else
         write('write');
       At(n^.line, n^.col);
       level := level + 1;
+      if n^.wrStr <> nil then DumpStrChild(n^.wrStr);
       { Sema moves a leading file argument out of the list and supplies
         `output` when there was none, so after it the tree has a shape the
         parser never built. That change is the thing worth comparing. }
@@ -13395,12 +13555,15 @@ begin
       level := level - 1
     end;
     nkRead: begin
-      if n^.rdNewline then
+      if n^.rdStr <> nil then
+        write('readstr')
+      else if n^.rdNewline then
         write('readln')
       else
         write('read');
       At(n^.line, n^.col);
       level := level + 1;
+      if n^.rdStr <> nil then DumpStrChild(n^.rdStr);
       if annotate then DumpOptional(n^.rdFile);
       Pad;
       writeln('args');
@@ -16619,11 +16782,13 @@ end;
   fixed string, exact for a variable one, one character for a char -- and one
   thing they share: it is an *error* if the value is longer than the
   capacity. }
-procedure EmitStringStore(var dst: str; t: typePtr; src: nodePtr;
-                          var hdr: str);
-var sd, sl, cap: str;
+{ The same three rules, given the value as a pointer and a length rather than
+  as an expression -- which is what 6.7.5.5's writestr has, since its value was
+  produced by the runtime and no expression in the tree denotes it. }
+procedure EmitStringStoreValue(var dst: str; t: typePtr; var sd, sl: str;
+                               var hdr: str);
+var cap: str;
 begin
-  EmitString(src, sd, sl);
   if IsVarString(t) then begin
     StringCapacity(t, hdr, cap);
     write(ircode, '  call void @pas_str_store_var(ptr ');
@@ -16657,6 +16822,14 @@ begin
     PutOp(sl);
     writeln(ircode, ')')
   end
+end;
+
+procedure EmitStringStore(var dst: str; t: typePtr; src: nodePtr;
+                          var hdr: str);
+var sd, sl: str;
+begin
+  EmitString(src, sd, sl);
+  EmitStringStoreValue(dst, t, sd, sl, hdr)
 end;
 
 { 6.8.3.5: the relational operators over string types, where the shorter value
@@ -18022,30 +18195,13 @@ begin
   end
 end;
 
-procedure EmitWrite(s: nodePtr);
-var fh, v, width, prec, addr, slen, shdr, sdata: str;
+{ The write-parameters of the text form (6.10.3), emitted into whichever file
+  is given -- the one the statement named, or 6.7.5.5's auxiliary variable when
+  this is a writestr. Nothing here knows which. }
+procedure EmitWriteArgs(s: nodePtr; var fh: str);
+var v, width, prec, addr, slen, shdr, sdata: str;
     a: nodePtr; b: typePtr;
 begin
-  if s^.wrFile <> nil then begin
-    EmitAddress(s^.wrFile, fh);
-    { On a file that is not a text, ISO 7185 6.6.5.2 defines write(f, e) as
-      f^ := e; put(f) -- so it is emitted as exactly that, an assignment to
-      the buffer variable and the primitive. No formatting applies. }
-    if not IsTextFile(s^.wrFile^.ntype) then begin
-      a := s^.wrArgs;
-      while a <> nil do begin
-        Def(addr);
-        write(ircode, 'call ptr @pas_buffer(ptr ');
-        PutOp(fh);
-        writeln(ircode, ')');
-        EmitStore(addr, s^.wrFile^.ntype^.elem, a^.waValue);
-        write(ircode, '  call void @pas_put(ptr ');
-        PutOp(fh);
-        writeln(ircode, ')');
-        a := a^.next
-      end
-    end
-    else begin
     a := s^.wrArgs;
     while a <> nil do begin
       if a^.waWidth <> nil then EmitExpr(a^.waWidth, width)
@@ -18137,61 +18293,88 @@ begin
       end;
       a := a^.next
     end;
-    if s^.wrNewline then begin
-      write(ircode, '  call void @pas_writeln(ptr ');
-      PutOp(fh);
-      writeln(ircode, ')')
-    end
-    end
-  end
 end;
 
-{ Each variable is filled by the runtime call its type selects, and `readln`
-  then finishes the line -- which is what makes readln(x) one statement. }
-procedure EmitRead(s: nodePtr);
-var fh, slot, v, wide, buf, rhdr, rcap: str; a: nodePtr; t, comp: typePtr;
-    needStore: boolean;
+procedure EmitWrite(s: nodePtr);
+var fh, aux, sdata, slen, tdata, tlen, hdr: str;
+    a: nodePtr;
 begin
-  if s^.rdFile <> nil then begin
-    EmitAddress(s^.rdFile, fh);
-    { The mirror of EmitWrite: on a file that is not a text, 6.6.5.2 makes
-      read(f, v) mean v := f^; get(f). The buffer variable is fetched again
-      for each variable because `get` invalidates the previous one. }
-    if not IsTextFile(s^.rdFile^.ntype) then begin
-      comp := s^.rdFile^.ntype^.elem;
-      a := s^.rdArgs;
+  { ISO/IEC 10206:1991 6.7.5.5: writestr is rewrite(f); writeln(f, p...);
+    reset(f); read(f, ss) over an auxiliary text variable. The runtime is that
+    variable, so everything between here and the store below is the ordinary
+    text `write` -- emitted by the very same procedure. }
+  if s^.wrStr <> nil then begin
+    Def(aux);
+    writeln(ircode, 'call ptr @pas_str_write_begin()');
+    EmitWriteArgs(s, aux);
+    Def(slen);
+    write(ircode, 'call i32 @pas_str_write_len(ptr ');
+    PutOp(aux);
+    writeln(ircode, ')');
+    Def(sdata);
+    write(ircode, 'call ptr @pas_str_write_ptr(ptr ');
+    PutOp(aux);
+    writeln(ircode, ')');
+    { The read(f, ss) half. 6.4.6's capacity check inside the store is
+      6.7.5.5's "error if the equivalent of eoln(f) is false upon completion":
+      more was written than the destination can hold. }
+    if s^.wrStr^.kind = nkSubstr then begin
+      EmitString(s^.wrStr, tdata, tlen);
+      write(ircode, '  call void @pas_str_store_fixed(ptr ');
+      PutOp(tdata);
+      write(ircode, ', i32 ');
+      PutOp(tlen);
+      write(ircode, ', ptr ');
+      PutOp(sdata);
+      write(ircode, ', i32 ');
+      PutOp(slen);
+      writeln(ircode, ')')
+    end
+    else begin
+      EmitAddress(s^.wrStr, tdata);
+      HeapHeader(s^.wrStr, hdr);
+      EmitStringStoreValue(tdata, s^.wrStr^.ntype, sdata, slen, hdr)
+    end;
+    write(ircode, '  call void @pas_str_write_end(ptr ');
+    PutOp(aux);
+    writeln(ircode, ')')
+  end
+  else if s^.wrFile <> nil then begin
+    EmitAddress(s^.wrFile, fh);
+    { On a file that is not a text, ISO 7185 6.6.5.2 defines write(f, e) as
+      f^ := e; put(f) -- so it is emitted as exactly that, an assignment to
+      the buffer variable and the primitive. No formatting applies. }
+    if not IsTextFile(s^.wrFile^.ntype) then begin
+      a := s^.wrArgs;
       while a <> nil do begin
-        EmitAddress(a, slot);
-        Def(buf);
+        Def(sdata);
         write(ircode, 'call ptr @pas_buffer(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
-        if IsStructured(a^.ntype) then
-          EmitCopyAt(slot, a^.ntype, buf)
-        else begin
-          Def(v);
-          write(ircode, 'load ');
-          PutLlType(comp);
-          write(ircode, ', ptr ');
-          PutOp(buf);
-          writeln(ircode);
-          ConvertFor(v, comp, a^.ntype);
-          CheckedForStore(v, a^.ntype);
-          write(ircode, '  store ');
-          PutLlType(a^.ntype);
-          write(ircode, ' ');
-          PutOp(v);
-          write(ircode, ', ptr ');
-          PutOp(slot);
-          writeln(ircode)
-        end;
-        write(ircode, '  call void @pas_get(ptr ');
+        EmitStore(sdata, s^.wrFile^.ntype^.elem, a^.waValue);
+        write(ircode, '  call void @pas_put(ptr ');
         PutOp(fh);
         writeln(ircode, ')');
         a := a^.next
       end
     end
     else begin
+      EmitWriteArgs(s, fh);
+      if s^.wrNewline then begin
+        write(ircode, '  call void @pas_writeln(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')')
+      end
+    end
+  end
+end;
+
+{ The variables of the text form (6.10.1), filled from whichever file is given
+  -- the one the statement named, or 6.7.5.5's auxiliary variable. }
+procedure EmitReadArgs(s: nodePtr; var fh: str);
+var slot, v, wide, rhdr, rcap: str; a: nodePtr; t: typePtr;
+    needStore: boolean;
+begin
     a := s^.rdArgs;
     while a <> nil do begin
       { 6.5.1 lists a substring-variable among the variable-accesses, so 6.10
@@ -18275,11 +18458,78 @@ begin
       end;
       a := a^.next
     end;
-    if s^.rdNewline then begin
-      write(ircode, '  call void @pas_readln(ptr ');
-      PutOp(fh);
-      writeln(ircode, ')')
+end;
+
+{ Each variable is filled by the runtime call its type selects, and `readln`
+  then finishes the line -- which is what makes readln(x) one statement. }
+procedure EmitRead(s: nodePtr);
+var fh, slot, v, buf, aux, sdata, slen: str; a: nodePtr; comp: typePtr;
+begin
+  { 6.7.5.5's readstr: rewrite(f); writeln(f, e); reset(f); read(f, v...).
+    The string's characters are what the auxiliary text variable holds, so the
+    variables are read by the very procedure below. }
+  if s^.rdStr <> nil then begin
+    EmitString(s^.rdStr, sdata, slen);
+    Def(aux);
+    write(ircode, 'call ptr @pas_str_read_begin(ptr ');
+    PutOp(sdata);
+    write(ircode, ', i32 ');
+    PutOp(slen);
+    writeln(ircode, ')');
+    EmitReadArgs(s, aux);
+    { "It shall be an error if the equivalent of eof(f) is true upon
+      completion" -- the runtime asks, because eof is its question and the
+      auxiliary variable is not a file the program can name. }
+    write(ircode, '  call void @pas_str_read_end(ptr ');
+    PutOp(aux);
+    writeln(ircode, ')')
+  end
+  else if s^.rdFile <> nil then begin
+    EmitAddress(s^.rdFile, fh);
+    { The mirror of EmitWrite: on a file that is not a text, 6.6.5.2 makes
+      read(f, v) mean v := f^; get(f). The buffer variable is fetched again
+      for each variable because `get` invalidates the previous one. }
+    if not IsTextFile(s^.rdFile^.ntype) then begin
+      comp := s^.rdFile^.ntype^.elem;
+      a := s^.rdArgs;
+      while a <> nil do begin
+        EmitAddress(a, slot);
+        Def(buf);
+        write(ircode, 'call ptr @pas_buffer(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        if IsStructured(a^.ntype) then
+          EmitCopyAt(slot, a^.ntype, buf)
+        else begin
+          Def(v);
+          write(ircode, 'load ');
+          PutLlType(comp);
+          write(ircode, ', ptr ');
+          PutOp(buf);
+          writeln(ircode);
+          ConvertFor(v, comp, a^.ntype);
+          CheckedForStore(v, a^.ntype);
+          write(ircode, '  store ');
+          PutLlType(a^.ntype);
+          write(ircode, ' ');
+          PutOp(v);
+          write(ircode, ', ptr ');
+          PutOp(slot);
+          writeln(ircode)
+        end;
+        write(ircode, '  call void @pas_get(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')');
+        a := a^.next
+      end
     end
+    else begin
+      EmitReadArgs(s, fh);
+      if s^.rdNewline then begin
+        write(ircode, '  call void @pas_readln(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')')
+      end
     end
   end
 end;
@@ -19631,6 +19881,13 @@ begin
   writeln(ircode, 'declare void @pas_str_slice_check(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_str_substr_check(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_str_store_fixed(ptr, i32, ptr, i32)');
+  { 6.7.5.5's auxiliary text variable, which the runtime owns }
+  writeln(ircode, 'declare ptr @pas_str_read_begin(ptr, i32)');
+  writeln(ircode, 'declare void @pas_str_read_end(ptr)');
+  writeln(ircode, 'declare ptr @pas_str_write_begin()');
+  writeln(ircode, 'declare i32 @pas_str_write_len(ptr)');
+  writeln(ircode, 'declare ptr @pas_str_write_ptr(ptr)');
+  writeln(ircode, 'declare void @pas_str_write_end(ptr)');
   writeln(ircode, 'declare void @pas_str_store_var(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare void @pas_str_store_char(ptr, ptr, i32)');
   writeln(ircode, 'declare void @pas_read_str(ptr, ptr, i32, i32)');

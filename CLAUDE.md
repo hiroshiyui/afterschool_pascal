@@ -1026,6 +1026,36 @@ in one language or the other, and the standard is a property of the source.
   - Not done and stated: `minreal`/`maxreal`/`epsreal` need interned *text*
     rather than a value, because ADR-0025 never converts a real literal — the
     same reason ADR-0054 refuses a real-valued constant-expression.
+- **readstr and writestr are a text file made of memory** (ADR-0060). §6.7.5.5
+  does not say what the two procedures compute — it says each is *equivalent
+  to* `rewrite(f); writeln(f, ...); reset(f); read(f, ...)` over "an auxiliary
+  variable that the program does not otherwise contain, which possesses the
+  required type text". So the runtime builds that variable with `fmemopen` and
+  `open_memstream`, and every `pas_read_*` and `pas_write_*` primitive is
+  reused **unchanged**: a field width, the spelling of a real and where a
+  string read stops are §6.10's, because they are the same code.
+  - `WriteStmt::str`/`ReadStmt::str` say which statement it is; Sema then
+    skips the leading-argument-is-a-file detection and leaves `file` null, and
+    CodeGen asks the runtime for the handle. `emitWriteArgs`/`emitReadArgs`
+    take that handle and **do not know which kind of file they were given**.
+  - **The `writeln` in the equivalence is a real newline**, appended after the
+    characters, and that is what keeps `eof` false while the values are read —
+    so "an error if eof(f) is true upon completion" means what it says.
+  - **writestr's error condition is the string store's capacity check.**
+    `eoln(f)` is false afterwards exactly when more was written than the
+    destination holds, which is §6.4.6's rule every string assignment already
+    carries. It needed no code, only the observation.
+  - **The source characters are copied**, so `readstr(e, i, e)` is well
+    defined; and the auxiliary file is heap-allocated **per statement**, not a
+    static, because a `writestr` may appear in the write-parameters of
+    another. It is deliberately not on ADR-0032's open-file list — the program
+    does not contain it, so no block exit is responsible for it.
+  - `PAS_FILE_SIZE` went 96 → 112, and `fileSize` in the Pascal compiler with
+    it; `irtest.sh` is what checks the two still agree.
+  - **Deviation, stated**: both are parsed *by name*, as `read` and `write`
+    are, because the parser has no scope — so under `--std=extended` a program
+    cannot declare its own, where §6.7.5.5 makes them required identifiers.
+    `tests/readstr_iso.pas` is the half that is a gate.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
