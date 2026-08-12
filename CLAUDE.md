@@ -385,15 +385,13 @@ rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
 conformance with ISO 7185.
 
-**ISO 7185 is not quite complete, and the docs said it was.** §6.6.5.4's
-`pack` and `unpack` and §6.9.5's `page` are rejected under both standards.
-They were missed rather than declined — `pack` and `unpack` are in
-`isRequiredName` so §6.6.3.7 can refuse passing one as a parameter, and
-nowhere else; `page` is absent entirely. They are required procedures of
-ISO/IEC 10206:1991 as well (§6.7.5.4, §6.9.5), so it is one gap in both
-standards. A documentation audit found it; three separate documents had
-asserted completeness, which is why the claim is worth re-testing rather than
-inheriting.
+**ISO 7185 is complete** — and the last three arrived only because an audit
+went looking. §6.6.5.4's `pack`/`unpack` and §6.9.5's `page` were *missed*, not
+declined, while three separate documents asserted completeness: the names were
+in `isRequiredName` so §6.6.3.7 could refuse passing one as a parameter, and
+nowhere else. No corpus program had ever written them, so every oracle agreed.
+The lesson is about the oracles rather than the gap — a claim no test names is
+a claim nothing checks (ADR-0067).
 
 **Stage 2 has begun** (ADR-0033). `--std=iso7185` is the default and
 `--std=extended` is ISO/IEC 10206:1991. The two are *not* nested: Extended
@@ -1120,6 +1118,34 @@ in one language or the other, and the standard is a property of the source.
     constants" — and a value of a dynamically bounded type. The first of those
     landed as ADR-0066, by taking the second half of its own reason seriously:
     the symbol is what tells them apart, so Sema is where it is told.
+- **The transfer procedures are index arithmetic, and nothing else**
+  (ADR-0067). ISO 7185 §6.6.5.4's `pack`/`unpack` and §6.9.5's `page`, the
+  three required procedures that were missing.
+  - §6.6.5.4 gives a *statement sequence* each is equivalent to, not an
+    operation — `k := i; for j := u to v do begin zz[j] := aa[k]; if j <> v
+    then k := succ(k) end` — and the `if j <> v` is the same care the `for`
+    statement takes: no step after the last iteration, so `succ` never runs off
+    the index type.
+  - **The copy is a `memcpy` because `packed` means nothing here.** §6.4.3.1
+    leaves it to the implementation and `llvmType` packs nothing, so the two
+    array types have one layout and the conversion these procedures exist to
+    make is vacuous. What is left is the index arithmetic and the range check.
+    `emitTransfer` is the one function that would grow the component-wise loop
+    back if `packed` ever meant something.
+  - **The bounds are checked once, before anything is copied.** `k` runs
+    monotonically from `i`, so the ends are the only values that can leave the
+    array — and a program that stops leaves the destination untouched, where a
+    per-component check would leave a partial copy.
+  - **`i` is checked against the *unpacked* array's index-type**, never the
+    packed one's: the packed bounds say how many components move, `i` says
+    where in `a` they start. The rule a reader is most likely to invert.
+  - **`page` needed per-file state.** §6.9.5's implicit `writeln` happens only
+    "if f.L is not empty", which nothing in the runtime tracked — so
+    `PAS_FILE_SIZE` went 112 → 120 with `fileSize` beside it, and the flag
+    follows what was *written*, since a zero field width may write nothing.
+  - Sema supplies `output` for the bare `page`, through the same
+    `standardFileRef` a `write` with no file gets, because CodeGen never
+    inspects names (ADR-0008).
 - **A set-value is told from a subscript by the symbol** (ADR-0066). §6.8.7.4
   is four lines — `set-value = set-constructor` — so `digits[1, 3]` is `[1, 3]`
   with a type name in front, and what the name adds is a **type**: a bare

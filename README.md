@@ -75,6 +75,11 @@ operators  + - * / div mod, and or not (short-circuiting),
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
            trunc round eof eoln
 procedures new, dispose, reset, rewrite, get, put,
+           pack(a, i, z) and unpack(z, a, i) — copy a run of
+           components between an unpacked array and a packed one,
+           starting at i in the unpacked one,
+           page(f) — a page separator, with an implicit writeln
+           when the line is not empty,
            new(p, c1..cn) and dispose(p, c1..cn) — the variant-selecting
            forms of §6.6.5.3, which allocate only the arms chosen
 literals   integers, reals, 'strings', '' escapes, nil,
@@ -83,11 +88,11 @@ literals   integers, reals, 'strings', '' escapes, nil,
 constants  named constants, plus predefined true, false, maxint
 ```
 
-**Three required procedures of ISO 7185 are still missing**, and they are the
-whole of what is: §6.6.5.4's `pack` and `unpack`, which copy between an
-unpacked array and a packed one, and §6.9.5's `page`, which writes a page
-separator to a text file. Everything else in the standard is implemented, in
-both `--std` modes — the names above are rejected under either.
+**This is the whole of ISO 7185**, and the last three to arrive were
+§6.6.5.4's `pack` and `unpack` and §6.9.5's `page` — missed rather than
+declined, and found by an audit rather than by a test, because no program in
+the corpus had ever named them. What is left of the language is the next
+standard, not more of this one.
 
 Two things this compiler is **more permissive** about than ISO 7185, both
 stated rather than intended. The declaration parts may come in any order and

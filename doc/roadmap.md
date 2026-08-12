@@ -61,7 +61,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 225 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 229 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -128,7 +128,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 381
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 385
    files agree stage for stage today.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
@@ -249,15 +249,15 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **Not implemented at all:** §6.6.5.4's `pack` and `unpack`, and §6.9.5's
-  `page`. Sets (ADR-0028), `goto` (ADR-0029 and ADR-0032), procedural
-  parameters (ADR-0030) and non-text files (ADR-0031) were also in this group
-  and have landed, but the group is **not** empty and ISO 7185 is therefore
-  **not** complete. The three were missed rather than declined: `pack` and
-  `unpack` appear in `isRequiredName` — so that §6.6.3.7 can refuse passing one
-  as a parameter — and nowhere else, and `page` is not there at all. They are
-  required procedures of ISO/IEC 10206:1991 too (§6.7.5.4, §6.9.5), so this is
-  one gap in both standards rather than a stage-1 leftover.
+- **Not implemented at all:** nothing. Sets (ADR-0028), `goto` (ADR-0029 and
+  ADR-0032), procedural parameters (ADR-0030), non-text files (ADR-0031) and
+  finally the transfer procedures with `page` (ADR-0067) were this group, and
+  it is now empty — **ISO 7185 is complete**. The last three are worth a
+  sentence: §6.6.5.4's `pack`/`unpack` and §6.9.5's `page` were *missed*, not
+  declined, and three documents asserted completeness while they were absent.
+  No program in the corpus had ever named them, so every oracle agreed. What
+  found them was a documentation audit compiling a probe; what makes the claim
+  true now is `tests/transfer.pas` and the three cases beside it.
 - **A set's base type must have its values in 0..255**, because every set is
   one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
   this is a permitted limit rather than a deviation — but `set of integer` is a
