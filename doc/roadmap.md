@@ -578,9 +578,21 @@ was never written down.
   cost is in the pair of compilers rather than in the design: `halt`, `card`,
   the symmetric difference `><`, `maxchar`/`minreal`/`maxreal`/`epsreal`, the
   two-argument `succ`/`pred`, zero field widths in `write`, `extend`, the time
-  procedures, and set-member iteration. One more is medium and unlocks others:
-  **structured function result types** (§6.7.2), which is what lets a function
-  return a string.
+  procedures, and set-member iteration.
+
+- ~~**Structured function result types.**~~ Done (ADR-0055). §6.7.2, both
+  halves of it: a function may return anything that is not, and does not
+  contain, a file and is not bindable, and a result-variable-specification
+  (`function mk(a, b: integer) = r: point`) gives the result a name. The two
+  arrive together because §6.8.2.2 makes every *read* of a function identifier
+  a recursive call, so without a name a structured result could be assigned
+  whole and never built a field at a time. The result travels in storage the
+  *caller* supplies — ADR-0052's hidden frame slot, generalised — and the
+  callee binds the incoming address exactly as a `var` parameter does, which
+  is why assignment, copying, subscripting and field selection over a result
+  all needed nothing. It found a real bug in `selfhost/compiler.pas` the day
+  it landed: `ParseTypeDenoter` assigned a *sibling* function's result and
+  never its own, which five oracles had not noticed.
 
 - ~~**Constant-expressions.**~~ Done (ADR-0054). §6.8.2's
   `constant-expression = expression`, which replaces ISO 7185 §6.3's and

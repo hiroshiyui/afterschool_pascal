@@ -354,6 +354,15 @@ const      const n = base * 2 — a constant-expression: wherever ISO 7185
            them. A real-, set- or string-valued one is not folded: a real
            constant is carried as the text that was written and never
            converted, and there is nowhere to keep the other two
+funcs      a function may return a record, an array, a set or a string — any
+           type that is not, and does not contain, a file, and is not
+           bindable. The result travels in storage the *caller* supplies, so
+           nothing about it is limited to small values. `function mk(a, b:
+           integer) = r: point` names the result, which is how one is built a
+           field at a time: without a name the only way to write it is
+           `mk := e`, because reading `mk` is a recursive call. With a name
+           the function identifier may not be assigned at all, and without
+           one the body must assign it at least once
 words      otherwise, pow, protected, value, bindable, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -375,9 +384,7 @@ applied to a function call).
 Also absent, and smaller — the cost is in writing them twice rather than in the
 design: `halt`, `card`, the symmetric difference `><`,
 `maxchar`/`minreal`/`maxreal`/`epsreal`, the two-argument `succ`/`pred`, zero
-field widths in `write`, the time procedures, and set-member iteration. One is
-in between and unlocks others: **structured function result types** (§6.7.2),
-which is what would let a function return a string.
+field widths in `write`, the time procedures, and set-member iteration.
 
 A word-symbol is reserved only when the feature needing it lands, so until that
 list is empty `--std=extended` accepts some programs a conforming processor

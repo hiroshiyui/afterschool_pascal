@@ -879,6 +879,48 @@ in one language or the other, and the standard is a property of the source.
     ADR-0025 carries a real literal as its *source text* into the IR, so
     neither compiler has a float to fold with — refusing in both beats folding
     in one, the same trade the real-literal range check made.
+- **A result that lives in memory is the caller's storage** (ADR-0055).
+  §6.7.2 lets a function return anything that is not, and does not contain, a
+  file and is not bindable — so a record, an array and a set. ADR-0017 gives a
+  structured value no register form and the callee's frame dies at the return,
+  so the caller supplies the storage and its address travels as a hidden
+  argument after the static link; the function returns void.
+  - **The mechanism already existed.** ADR-0052 built `binding(f)`'s record in
+    a hidden frame slot because it was "the only required function returning a
+    record, and this compiler returns none". `Call::resultSlot` is unchanged;
+    a second thing now uses it. Per *call site*, not per callee, so `f(g(x))`
+    and a call in a loop each get their own — and recursion needs nothing,
+    since each activation brings its own frame.
+  - **The callee binds the address as a `var` parameter does.** `resultVar`
+    becomes a `VarParam` and the prologue stores the incoming pointer in its
+    slot; `addressOf` dereferences it without being told why. Assignment,
+    whole-variable copying, subscripting and field selection over a result
+    therefore needed *nothing*. `CodeGen::signature` is the one place the shape
+    is decided, as `appendParamTypes` is for the middle of it.
+  - **Both halves of §6.7.2 arrive together**, because §6.8.2.2 makes every
+    *read* of a function identifier a recursive call. Without a
+    result-variable-specification (`function mk(a, b: integer) = r: point`) a
+    structured result could be assigned whole and never built a field at a
+    time. The name is one scope entry pointing at `resultVar` — the same
+    symbol the function identifier assigns to.
+  - **The two rules about writing the result are exclusive**, so one flag
+    answers both: with a result variable the function identifier may not be
+    assigned, without one it must be assigned at least once. The second is
+    ISO 7185 §6.6.2's rule too, and adding it **found a real bug in
+    `selfhost/compiler.pas`**: `ParseTypeDenoter` ended with `ParseTypeExpr :=
+    t`, assigning a *sibling* function's result and never its own, through a
+    green suite and a closed bootstrap. Don't weaken the check.
+  - A refused result type suppresses the never-assigns message — the body
+    cannot assign a type the heading does not have (ADR-0054's principle).
+  - Not enforced, both stated: the *threatens* half of §6.7.2 (a `read` into a
+    result variable satisfies the standard and not this compiler), and
+    §6.8.2.2's rule that an assignment's function-identifier must be the
+    containing block's, so a sibling assignment is accepted when it is not the
+    only one.
+  - **A dynamically sized result cannot arise**, and the standard is what
+    prevents it: a result-type is a *type-name*, and ADR-0041 withdraws
+    §6.2.3.2's permission inside a type definition, so no named type has a
+    dynamic extent. That is what lets the caller always size the slot.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
