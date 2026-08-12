@@ -1,0 +1,15 @@
+read   [bcd]
+one    [c]
+whole  [abcdefgh]
+cat    [abgh]
+len    4
+exact  [aXYZefgh]
+padded [aXYZep  ]
+expr   [bcde]
+calc   [cdefg]
+fixed  [cde]
+fixed  [ZZcdefgh]
+func   [hello]
+func   [world]
+equal
+less

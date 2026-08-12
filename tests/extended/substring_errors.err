@@ -1,0 +1,6 @@
+<source>:24:5: error: 't' is a protected parameter, so it cannot be assigned to
+<source>:32:13: error: only a string can have a substring taken of it, not array [1..4] of integer
+<source>:36:13: error: a substring is bounded by integers, but this one is char
+<source>:36:18: error: a substring is bounded by integers, but this one is char
+<source>:41:10: error: argument 1 of 'bump' cannot be a substring: a substring's type is a new one, different from every named type, so no var parameter can have it
+<source>:46:12: error: the left side of an assignment must be a variable

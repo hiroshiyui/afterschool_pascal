@@ -16,7 +16,7 @@ struct Symbol;
 enum class NK {
   // expressions
   IntLit, RealLit, CharLit, StrLit, NilLit, SetLit, VarRef, Index, Field,
-  Deref, Binary, Unary, Call,
+  Deref, Binary, Unary, Call, Substring,
   // statements
   Empty, Assign, Write, Read, Compound, If, While, Repeat, For, ProcCall, With,
   Case, Goto, Labeled,
@@ -211,6 +211,25 @@ struct IndexExpr : Expr {
   IndexExpr() : Expr(NodeKind) {}
   ExprPtr base;
   ExprPtr index;
+};
+
+/// `base[lo..hi]`. ISO/IEC 10206:1991 §6.5.6's substring-variable when the base
+/// is a string-*variable*, and §6.8.6.5's substring-function-access when it is
+/// a function-access — one node, because the two differ only in whether the
+/// base is a designator, and `Sema::isDesignator` asks the base that question
+/// anyway.
+///
+/// The type is the canonical-string-type, which is a pointer and a length
+/// (ADR-0051). §6.5.6 calls it "a new fixed-string-type" whose capacity is
+/// `hi - lo + 1`; that capacity is not a compile-time number, and nothing
+/// observable needs it to be one — the only rule that reads it is the store,
+/// which reads it at run time from the same subtraction.
+struct SubstringExpr : Expr {
+  static constexpr NK NodeKind = NK::Substring;
+  SubstringExpr() : Expr(NodeKind) {}
+  ExprPtr base;
+  ExprPtr lo;
+  ExprPtr hi;
 };
 
 /// `base.field`. Sema resolves the name to the field itself, so codegen

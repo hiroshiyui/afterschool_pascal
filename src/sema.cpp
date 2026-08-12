@@ -1713,6 +1713,11 @@ bool Sema::isDesignator(Expr *e) const {
     return v->sym && (v->sym->isVariable() || v->withField);
   if (auto *i = as<IndexExpr>(e))
     return isDesignator(i->base.get());
+  // §6.5.6's substring-variable is a variable-access; §6.8.6.5's
+  // substring-function-access is a value. The syntax is identical and the base
+  // is the whole difference, which is why one node serves both.
+  if (auto *s = as<SubstringExpr>(e))
+    return isDesignator(s->base.get());
   if (auto *f = as<FieldExpr>(e)) {
     // A qualified name is the whole selection, so what it denotes is what
     // decides — there is no base variable underneath it.
@@ -1740,6 +1745,12 @@ Symbol *Sema::baseSymbol(Expr *e) const {
     return v->sym;
   if (auto *i = as<IndexExpr>(e))
     return baseSymbol(i->base.get());
+  // §6.5.6: "A reference or an access to a substring of a variable shall
+  // constitute a reference or access, respectively, to the variable." So a
+  // substring stays inside the variable exactly as a subscript does, and a
+  // protected string cannot be written through one.
+  if (auto *sub = as<SubstringExpr>(e))
+    return baseSymbol(sub->base.get());
   if (auto *f = as<FieldExpr>(e))
     return f->qualified ? f->qualified : baseSymbol(f->base.get());
   return nullptr;
@@ -1751,6 +1762,8 @@ Symbol *Sema::baseSymbol(Expr *e) const {
 static Expr *rootDesignator(Expr *e) {
   if (auto *i = as<IndexExpr>(e))
     return rootDesignator(i->base.get());
+  if (auto *sub = as<SubstringExpr>(e))
+    return rootDesignator(sub->base.get());
   if (auto *f = as<FieldExpr>(e))
     return f->qualified ? e : rootDesignator(f->base.get());
   return e;
@@ -3648,6 +3661,38 @@ void Sema::checkExpr(Expr *e) {
     return;
   }
 
+  // ISO/IEC 10206:1991 §6.5.6's substring-variable and §6.8.6.5's
+  // substring-function-access, which are one node here because they differ
+  // only in what the base is — and `isDesignator` already asks the base that.
+  if (auto *sub = as<SubstringExpr>(e)) {
+    checkExpr(sub->base.get());
+    checkExpr(sub->lo.get());
+    checkExpr(sub->hi.get());
+    Type *base = sub->base->type;
+    // §6.5.6 takes a string-*variable* and §6.8.6.5 a string-function; a char
+    // is a string of length 1 (§6.4.3.3.1) but is not either of those, and
+    // neither is a literal — a substring of a value nothing denotes has
+    // nowhere to be.
+    if (base && !base->isStringType()) {
+      diags_.error(sub->line, sub->col,
+                   "only a string can have a substring taken of it, not " +
+                       base->name());
+      e->type = ty::CanonicalString();
+      return;
+    }
+    for (Expr *ix : {sub->lo.get(), sub->hi.get()})
+      if (ix->type && !ix->type->isInteger())
+        diags_.error(ix->line, ix->col,
+                     "a substring is bounded by integers, but this one is " +
+                         ix->type->name());
+    // §6.5.6 makes it "a new fixed-string-type" of capacity `hi - lo + 1`.
+    // That capacity is not a compile-time number, and the canonical-string-type
+    // is exactly a pointer and a length (ADR-0051) — so the type carries what
+    // is known and the length travels with the value.
+    e->type = ty::CanonicalString();
+    return;
+  }
+
   if (as<NilLit>(e)) {
     e->type = ty::Nil();
     return;
@@ -4706,6 +4751,21 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
       if (!p->isProtected)
         checkNotThreatened(a, "it cannot be passed to the var parameter '" +
                                   p->name + "' of '" + callee->name + "'");
+      // §6.7.3.3 NOTE 3: "An actual variable parameter cannot denote a
+      // substring-variable because the type of a substring-variable is a new
+      // fixed-string-type different from every named type." The rule below
+      // would say so on its own — the canonical-string-type is not any named
+      // type either — but the words it would use name a representation rather
+      // than the reason.
+      if (is<SubstringExpr>(a)) {
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name +
+                         "' cannot be a substring: a substring's type is a new "
+                         "one, different from every named type, so no var "
+                         "parameter can have it");
+        continue;
+      }
       // No implicit conversion is possible through a reference, so the types
       // must be the same rather than merely assignment-compatible.
       if (a->type && p->type && a->type != p->type)

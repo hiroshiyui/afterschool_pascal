@@ -1,0 +1,4 @@
+fixed  [abcd  ]
+var    [hello there] 11
+mixed  42 [ ] [x tail]
+substr [.xyz..]

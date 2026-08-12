@@ -1153,6 +1153,17 @@ llvm::Value *CodeGen::emitAddress(Expr *e) {
   }
 
 
+  // The address of a substring is the address of its first character — the
+  // same pointer `emitString` hands back, and the only sense in which a
+  // substring has one at all. Nothing in the language needs it today; it is
+  // here so that no path can reach this switch and fall out of it with null.
+  case NK::Substring: {
+    llvm::Value *data, *len;
+    emitString(e, data, len);
+    (void)len;
+    return data;
+  }
+
   // §6.7.6.8's `binding(f)` denotes the hidden frame slot its result was built
   // in, so it is an address like any designator's — which is what lets
   // `binding(f).bound` and `b := binding(f)` reach here at all.
@@ -1571,6 +1582,20 @@ void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src,
 /// the ordinary whole-variable one with a length that is computed rather than
 /// written.
 void CodeGen::emitAssign(Assign *s) {
+  // §6.5.6's substring-variable. Its type is "a new fixed-string-type" of
+  // capacity `hi - lo + 1`, and the *fixed*-string store is already exactly
+  // that rule — pad a shorter value with spaces, refuse a longer one — so the
+  // only thing this case supplies is a capacity that is computed rather than
+  // written. `emitString` has done the bounds check and the arithmetic.
+  if (is<SubstringExpr>(s->target.get())) {
+    llvm::Value *td, *tl, *sd, *sl;
+    emitString(s->target.get(), td, tl);
+    emitString(s->value.get(), sd, sl);
+    b_.CreateCall(rt("pas_str_store_fixed", llvm::Type::getVoidTy(ctx_),
+                     {ptr(), i32(), ptr(), i32()}),
+                  {td, tl, sd, sl});
+    return;
+  }
   llvm::Value *dst = emitAddress(s->target.get());
   ap::Type *type = s->target->type;
   // A string is produced from the required schema, so it would otherwise take
@@ -1955,6 +1980,18 @@ void CodeGen::emitRead(ReadStmt *s) {
   }
 
   for (auto &a : s->args) {
+    // §6.5.1 lists a substring-variable among the variable-accesses, so §6.10
+    // admits one here. Its capacity is `hi - lo + 1` rather than its type's,
+    // which is exactly what `emitString` computes — and a substring is a
+    // *fixed*-string-type (§6.5.6), so the flag below is the fixed one and the
+    // tail is padded with spaces.
+    if (is<SubstringExpr>(a.get())) {
+      llvm::Value *data, *len;
+      emitString(a.get(), data, len);
+      b_.CreateCall(rt("pas_read_str", voidTy, {ptr(), ptr(), i32(), i32()}),
+                    {file, data, len, ConstantInt::get(i32(), 0)});
+      continue;
+    }
     llvm::Value *slot = emitAddress(a.get());
     ap::Type *t = a->type;
     // ISO/IEC 10206:1991 §6.10.1 e) and f): reading a string does not skip
@@ -2551,6 +2588,30 @@ void CodeGen::emitString(Expr *e, llvm::Value *&data, llvm::Value *&len) {
       len = count;
       return;
     }
+  }
+
+  // §6.5.6 and §6.8.6.5: `s[i..j]` is `j - i + 1` characters from position i.
+  // Under ADR-0051's representation that is a pointer and a length and nothing
+  // is copied, which is why a substring-*variable* and a substring of a value
+  // are the same three instructions — the difference is only whether anything
+  // may be stored through the pointer, and that was decided in Sema.
+  if (auto *sub = as<SubstringExpr>(e)) {
+    llvm::Value *sd, *sl;
+    emitString(sub->base.get(), sd, sl);
+    llvm::Value *lo = emitExpr(sub->lo.get());
+    llvm::Value *hi = emitExpr(sub->hi.get());
+    llvm::Value *count =
+        b_.CreateAdd(b_.CreateSub(hi, lo), ConstantInt::get(i32(), 1), "sublen");
+    // Not `pas_str_slice_check`. §6.7.6.7 lets `substr(s, i, 0)` yield the
+    // null-string, and §6.5.6 makes `i > j` an error — so the two conditions
+    // differ at exactly the empty case and cannot share a check.
+    b_.CreateCall(rt("pas_str_substr_check", llvm::Type::getVoidTy(ctx_),
+                     {i32(), i32(), i32()}),
+                  {lo, hi, sl});
+    data = b_.CreateGEP(i8(), sd, b_.CreateSub(lo, ConstantInt::get(i32(), 1)),
+                        "substrvar");
+    len = count;
+    return;
   }
 
   // A literal is its own characters and its own length, whatever type it was

@@ -1238,6 +1238,23 @@ void pas_str_store_char(char *dst, const char *src, int len) {
  * an index past the length, and a first index greater than the second. `substr`
  * states them as `i <= 0`, `j < 0` and `i+j-1 > length`, which is the same
  * three once j is a count rather than an end. */
+/* ISO/IEC 10206:1991 6.5.6 and 6.8.6.5: `s[i..j]`. The conditions are "less
+ * than 1", "greater than the length", and "the first greater than the second"
+ * — and that last one is where this parts company with pas_str_slice_check
+ * above. 6.7.6.7 lets `substr(s, i, 0)` yield the null-string, so a count of
+ * zero is legal there; `s[3..2]` has i > j and is an error here. The two
+ * conditions differ at exactly the empty case, which is why they cannot be one
+ * function however alike they look. */
+void pas_str_substr_check(int lo, int hi, int len) {
+  if (lo < 1 || hi > len || lo > hi) {
+    char msg[160];
+    snprintf(msg, sizeof msg,
+             "substring: [%d..%d] is not within a string of length %d", lo, hi,
+             len);
+    pas_runtime_error(msg);
+  }
+}
+
 void pas_str_slice_check(int at, int count, int len) {
   if (at <= 0 || count < 0 || at + count - 1 > len) {
     char msg[160];

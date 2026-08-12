@@ -65,3 +65,4 @@ the alternatives that were rejected and why.
 | [0054](0054-a-constant-expression-is-one-folder-and-every-context-follows.md) | A constant-expression is one folder, and every context follows | Accepted |
 | [0055](0055-a-result-that-lives-in-memory-is-the-callers-storage.md) | A result that lives in memory is the caller's storage | Accepted |
 | [0056](0056-a-function-access-is-a-parser-change.md) | A function-access is a parser change | Accepted |
+| [0057](0057-a-substring-is-a-pointer-a-length-and-an-address.md) | A substring is a pointer, a length, and somewhere to store | Accepted |

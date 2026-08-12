@@ -1467,14 +1467,32 @@ ExprPtr Parser::parseSelectors(ExprPtr base) {
   for (;;) {
     if (check(Tok::LBracket)) {
       ++pos_;
+      bool substring = false;
       do {
         depth.bump();
-        auto idx = makeNode<IndexExpr>(cur());
+        const Token &at = cur();
+        ExprPtr index = parseExpr();
+        // ISO/IEC 10206:1991 §6.5.6 and §6.8.6.5. A `..` inside a subscript can
+        // only be this: an array's index-expression is a single expression, so
+        // the parser decides without knowing any type. The grammar admits
+        // exactly one, so no comma may follow.
+        if (std_ == Std::Extended && check(Tok::DotDot)) {
+          auto sub = makeNode<SubstringExpr>(at);
+          ++pos_;
+          sub->base = std::move(base);
+          sub->lo = std::move(index);
+          sub->hi = parseExpr();
+          base = std::move(sub);
+          substring = true;
+          break;
+        }
+        auto idx = makeNode<IndexExpr>(at);
         idx->base = std::move(base);
-        idx->index = parseExpr();
+        idx->index = std::move(index);
         base = std::move(idx);
       } while (accept(Tok::Comma)); // `a[i, j]` is `a[i][j]`
-      expect(Tok::RBracket, "after a subscript");
+      expect(Tok::RBracket,
+             substring ? "after a substring" : "after a subscript");
       continue;
     }
     if (check(Tok::Caret)) {

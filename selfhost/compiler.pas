@@ -160,7 +160,8 @@ type
     ctxVarDeclEnd, ctxParamList, ctxParamListEnd, ctxProcHeading, ctxProcBody,
     ctxCompoundStart, ctxCompoundEnd, ctxIf, ctxWhile, ctxRepeatEnd, ctxFor,
     ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
-    ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxParenExpr,
+    ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxSubstring,
+    ctxParenExpr,
     ctxCallArgs, ctxAfterGoto, ctxLabelStart, ctxAfterLabel, ctxLabelDecl,
     ctxAfterLabelPart, ctxFuncParamResult,
     { ISO/IEC 10206:1991 6.11's module, its two lists, and the two `to` parts }
@@ -193,7 +194,7 @@ type
   nodeKind = (
     { expressions }
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
-    nkField, nkDeref, nkBinary, nkUnary, nkCall,
+    nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
     { statements }
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkGoto, nkLabeled,
@@ -717,6 +718,16 @@ type
       nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr;
                      vrSlot: symPtr);
       nkIndex:      (ixBase, ixIndex: nodePtr);
+      { 6.5.6's substring-variable when the base is a string-*variable*, and
+        6.8.6.5's substring-function-access when it is a function-access -- one
+        kind, because the two differ only in whether the base is a designator,
+        and IsDesignator asks the base that anyway. The type is the
+        canonical-string-type, a pointer and a length: 6.5.6 calls it "a new
+        fixed-string-type" of capacity ssHi - ssLo + 1, and that capacity is
+        not a compile-time number. Nothing observable needs it to be one --
+        the only rule that reads it is the store, which reads it at run time
+        from the same subtraction. }
+      nkSubstr:     (ssBase, ssLo, ssHi: nodePtr);
       { ISO/IEC 10206:1991 6.8.4's schema-discriminant, `v.n`: the base
         possesses a type produced from a schema and the name is one of that
         schema's formal discriminants. It shares its syntax with a field
@@ -2241,6 +2252,7 @@ begin
     ctxWriteArgs:      write('after the arguments of write');
     ctxReadArgs:       write('after the arguments of read');
     ctxSubscript:      write('after a subscript');
+    ctxSubstring:      write('after a substring');
     ctxParenExpr:      write('after a parenthesised expression');
     ctxCallArgs:       write('after the arguments of a function call');
     ctxFuncParamResult:
@@ -2327,8 +2339,8 @@ begin
                  n^.gtOwner := nil
                end;
     nkLabeled: n^.lbId := -1;
-    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
-    nkBinary, nkUnary,
+    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr,
+    nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry,
@@ -3021,7 +3033,7 @@ end;
   rather than by recursion; each selector wraps the designator one level
   deeper for the tree's walkers, so each counts. }
 function ParseSelectors(base: nodePtr): nodePtr;
-var levels: integer; done, more: boolean; n: nodePtr;
+var levels, l, c: integer; done, more, isSub: boolean; n, ix: nodePtr;
 begin
   levels := 0;
   done := false;
@@ -3029,16 +3041,37 @@ begin
     if Check(tkLBracket) then begin
       pos := pos + 1;
       more := true;
+      isSub := false;
       while more and not aborted do begin
         levels := levels + 1;
         EnterLevel;
-        n := NewNode(nkIndex, CurLine, CurCol);
-        n^.ixBase := base;
-        n^.ixIndex := ParseExpr;
-        base := n;
-        more := Accept(tkComma)   { `a[i, j]` is `a[i][j]` }
+        l := CurLine;
+        c := CurCol;
+        ix := ParseExpr;
+        { 6.5.6 and 6.8.6.5. A `..` inside a subscript can only be this: an
+          array's index-expression is a single expression, so the parser
+          decides without knowing any type. The grammar admits exactly one, so
+          no comma may follow. }
+        if (langStd = stdExtended) and Check(tkDotDot) then begin
+          n := NewNode(nkSubstr, l, c);
+          pos := pos + 1;
+          n^.ssBase := base;
+          n^.ssLo := ix;
+          n^.ssHi := ParseExpr;
+          base := n;
+          isSub := true;
+          more := false
+        end
+        else begin
+          n := NewNode(nkIndex, l, c);
+          n^.ixBase := base;
+          n^.ixIndex := ix;
+          base := n;
+          more := Accept(tkComma)   { `a[i, j]` is `a[i][j]` }
+        end
       end;
-      Expect(tkRBracket, ctxSubscript)
+      if isSub then Expect(tkRBracket, ctxSubstring)
+      else Expect(tkRBracket, ctxSubscript)
     end
     else if Check(tkCaret) then begin
       levels := levels + 1;
@@ -5561,6 +5594,10 @@ begin
                     ((e^.vrSym^.kind = skVar) or (e^.vrSym^.kind = skParam) or
                      (e^.vrSym^.kind = skVarParam) or (e^.vrField <> nil))
   else if e^.kind = nkIndex then IsDesignator := IsDesignator(e^.ixBase)
+  { 6.5.6's substring-variable is a variable-access; 6.8.6.5's
+    substring-function-access is a value. The syntax is identical and the base
+    is the whole difference, which is why one kind serves both. }
+  else if e^.kind = nkSubstr then IsDesignator := IsDesignator(e^.ssBase)
   { 6.8.4 makes a schema-discriminant a *primary*, not a variable-access: it
     is the value the type was produced with, and there is nowhere to store
     into. `v.n := 3` would be asking a variable to change its type. }
@@ -5587,6 +5624,7 @@ function RootDesignator(e: nodePtr): nodePtr;
 begin
   if e = nil then RootDesignator := nil
   else if e^.kind = nkIndex then RootDesignator := RootDesignator(e^.ixBase)
+  else if e^.kind = nkSubstr then RootDesignator := RootDesignator(e^.ssBase)
   else if e^.kind = nkField then
     if e^.fdQualified <> nil then RootDesignator := e
     else RootDesignator := RootDesignator(e^.fdBase)
@@ -5852,7 +5890,7 @@ begin
         if langStd = stdExtended then ok := EvalConstBinary(e, res);
       nkCall:
         if langStd = stdExtended then ok := EvalConstCall(e, res);
-      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkDeref,
+      nkStr, nkNil, nkSet, nkSetMember, nkIndex, nkSubstr, nkDeref,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -7032,7 +7070,7 @@ begin
       end;
       nkSchema: ForgetList(d^.scArgs);
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
-      nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
+      nkIndex, nkSubstr, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
       nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
@@ -7836,7 +7874,8 @@ begin
           Nonvarying := ok
         end
       end;
-      nkSetMember, nkIndex, nkField, nkDeref, nkWriteArg, nkEmpty, nkAssign,
+      nkSetMember, nkIndex, nkSubstr, nkField, nkDeref, nkWriteArg, nkEmpty,
+      nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
@@ -8034,7 +8073,7 @@ begin
           t := ProduceFromSchema(s, nil, d)
       end;
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
-      nkVar, nkIndex, nkField, nkDeref,
+      nkVar, nkIndex, nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkEmpty, nkAssign, nkWrite, nkRead,
       nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall, nkWith, nkCase,
       nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName, nkConstDecl,
@@ -8324,6 +8363,20 @@ begin
           write('argument ', i:1, ' of ''');
           WritePool(callee^.at, callee^.len);
           writeln(''' is a var parameter and needs a variable')
+        end
+        { 6.7.3.3 NOTE 3: "An actual variable parameter cannot denote a
+          substring-variable because the type of a substring-variable is a new
+          fixed-string-type different from every named type." The rule below
+          would say so on its own -- the canonical-string-type is not any named
+          type either -- but the words it would use name a representation
+          rather than the reason. }
+        else if a^.kind = nkSubstr then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          writeln(''' cannot be a substring: a substring''s type is a new ',
+                  'one, different from every named type, so no var parameter ',
+                  'can have it')
         end
         else begin
         { 6.9.4 b) threatens an actual var parameter only when the *formal* is
@@ -9292,6 +9345,40 @@ begin
         else
           e^.ntype := StringType(e^.stLen);
 
+      { 6.5.6's substring-variable and 6.8.6.5's substring-function-access,
+        which are one kind here because they differ only in what the base is --
+        and IsDesignator already asks the base that. }
+      nkSubstr: begin
+        CheckExpr(e^.ssBase);
+        CheckExpr(e^.ssLo);
+        CheckExpr(e^.ssHi);
+        b := e^.ssBase^.ntype;
+        e^.ntype := canonStringType;
+        { 6.5.6 takes a string-*variable* and 6.8.6.5 a string-function; a char
+          is a string of length 1 (6.4.3.3.1) but is not either of those. }
+        if b <> nil then
+          if not IsStringType(b) then begin
+            ErrorAt(e^.line, e^.col);
+            write('only a string can have a substring taken of it, not ');
+            WriteTypeName(b);
+            writeln
+          end;
+        if e^.ssLo^.ntype <> nil then
+          if not IsInteger(e^.ssLo^.ntype) then begin
+            ErrorAt(e^.ssLo^.line, e^.ssLo^.col);
+            write('a substring is bounded by integers, but this one is ');
+            WriteTypeName(e^.ssLo^.ntype);
+            writeln
+          end;
+        if e^.ssHi^.ntype <> nil then
+          if not IsInteger(e^.ssHi^.ntype) then begin
+            ErrorAt(e^.ssHi^.line, e^.ssHi^.col);
+            write('a substring is bounded by integers, but this one is ');
+            WriteTypeName(e^.ssHi^.ntype);
+            writeln
+          end
+      end;
+
       nkIndex: begin
         CheckExpr(e^.ixBase);
         CheckExpr(e^.ixIndex);
@@ -9702,7 +9789,7 @@ end;
 { ISO 7185 6.9.1. Like write, the first argument may be the file; every other
   one is a *variable* to store into, so each has to be a designator. }
 procedure CheckRead(r: nodePtr);
-var a: nodePtr; t, rf: typePtr; text: boolean;
+var a: nodePtr; t, rf: typePtr; text, okRead: boolean;
 begin
   a := r^.rdArgs;
   while a <> nil do begin
@@ -9762,8 +9849,19 @@ begin
       end
     end
     else begin
+      { 6.10.1 a) adds the string types to ISO 7185's list: "each of which
+        shall possess a type that is the real-type, is a string-type, or is
+        compatible with the char-type or with the integer-type". }
       t := a^.ntype;
-      if (t <> nil) and not (IsInteger(t) or IsReal(t) or IsChar(t)) then begin
+      okRead := false;
+      if t <> nil then begin
+        okRead := IsInteger(t) or IsReal(t) or IsChar(t);
+        if (not okRead) and (langStd = stdExtended) then
+          okRead := IsStringType(t)
+      end
+      else
+        okRead := true;
+      if not okRead then begin
         ErrorAt(a^.line, a^.col);
         write('a value of type ');
         WriteTypeName(t);
@@ -10528,7 +10626,7 @@ begin
       end;
 
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
-      nkField, nkDeref,
+      nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
@@ -12806,6 +12904,16 @@ begin
       level := level + 1;
       DumpExpr(n^.ixBase);
       DumpExpr(n^.ixIndex);
+      level := level - 1
+    end;
+    nkSubstr: begin
+      write('substring');
+      WritePos(n^.line, n^.col);
+      ExprEnd(n);
+      level := level + 1;
+      DumpExpr(n^.ssBase);
+      DumpExpr(n^.ssLo);
+      DumpExpr(n^.ssHi);
       level := level - 1
     end;
     nkField: begin
@@ -16085,6 +16193,47 @@ begin
       len := count
     end
   end
+  { 6.5.6 and 6.8.6.5: `s[i..j]` is j - i + 1 characters from position i. Under
+    ADR-0051's representation that is a pointer and a length and nothing is
+    copied, which is why a substring-*variable* and a substring of a value are
+    the same three instructions -- the difference is only whether anything may
+    be stored through the pointer, and that was decided in Sema. }
+  else if e^.kind = nkSubstr then begin
+    EmitString(e^.ssBase, ad, al);
+    EmitExpr(e^.ssLo, bd);
+    EmitExpr(e^.ssHi, bl);
+    Def(count);
+    write(ircode, 'sub i32 ');
+    PutOp(bl);
+    write(ircode, ', ');
+    PutOp(bd);
+    writeln(ircode);
+    Def(at_);
+    write(ircode, 'add i32 ');
+    PutOp(count);
+    writeln(ircode, ', 1');
+    { Not pas_str_slice_check. 6.7.6.7 lets `substr(s, i, 0)` yield the
+      null-string, and 6.5.6 makes i > j an error -- so the two conditions
+      differ at exactly the empty case and cannot share a check. }
+    write(ircode, '  call void @pas_str_substr_check(i32 ');
+    PutOp(bd);
+    write(ircode, ', i32 ');
+    PutOp(bl);
+    write(ircode, ', i32 ');
+    PutOp(al);
+    writeln(ircode, ')');
+    Def(one);
+    write(ircode, 'sub i32 ');
+    PutOp(bd);
+    writeln(ircode, ', 1');
+    Def(data);
+    write(ircode, 'getelementptr inbounds i8, ptr ');
+    PutOp(ad);
+    write(ircode, ', i32 ');
+    PutOp(one);
+    writeln(ircode);
+    len := at_
+  end
   { A literal is its own characters and its own length, whatever type it was
     given -- and the null-string is *why* this comes first: `''` has the
     canonical type, which would otherwise be read as a length in front of
@@ -17391,8 +17540,28 @@ end;
   this is where the tuples meet -- and once they agree the copy is the ordinary
   whole-variable one with a length that is computed rather than written. }
 procedure EmitAssign(s: nodePtr);
-var dst, src, size, hdr: str; t, comp: typePtr; align: integer;
+var dst, src, size, hdr, td, tl, sd, sl: str; t, comp: typePtr;
+    align: integer;
 begin
+  { 6.5.6's substring-variable. Its type is "a new fixed-string-type" of
+    capacity hi - lo + 1, and the *fixed*-string store is already exactly that
+    rule -- pad a shorter value with spaces, refuse a longer one -- so the only
+    thing this case supplies is a capacity that is computed rather than
+    written. EmitString has done the bounds check and the arithmetic. }
+  if s^.asTarget^.kind = nkSubstr then begin
+    EmitString(s^.asTarget, td, tl);
+    EmitString(s^.asValue, sd, sl);
+    write(ircode, '  call void @pas_str_store_fixed(ptr ');
+    PutOp(td);
+    write(ircode, ', i32 ');
+    PutOp(tl);
+    write(ircode, ', ptr ');
+    PutOp(sd);
+    write(ircode, ', i32 ');
+    PutOp(sl);
+    writeln(ircode, ')')
+  end
+  else begin
   EmitAddress(s^.asTarget, dst);
   t := s^.asTarget^.ntype;
   { A string is produced from the required schema, so it would otherwise take
@@ -17429,6 +17598,7 @@ begin
   end
   else
     EmitStore(dst, t, s^.asValue)
+  end
 end;
 
 procedure EmitWrite(s: nodePtr);
@@ -17559,6 +17729,7 @@ end;
   then finishes the line -- which is what makes readln(x) one statement. }
 procedure EmitRead(s: nodePtr);
 var fh, slot, v, wide, buf, rhdr, rcap: str; a: nodePtr; t, comp: typePtr;
+    needStore: boolean;
 begin
   if s^.rdFile <> nil then begin
     EmitAddress(s^.rdFile, fh);
@@ -17602,6 +17773,27 @@ begin
     else begin
     a := s^.rdArgs;
     while a <> nil do begin
+      { 6.5.1 lists a substring-variable among the variable-accesses, so 6.10
+        admits one here. Its capacity is hi - lo + 1 rather than its type's,
+        which is exactly what EmitString computes -- and a substring is a
+        *fixed*-string-type (6.5.6), so the flag is the fixed one and the tail
+        is padded with spaces. }
+      { Pascal has no `continue`, so what the C++ says with one is said here
+        by a flag: the three scalar branches below produce a value to store and
+        the two string branches do not. Without it a `read` of a string stored
+        whatever register the *previous* argument left behind. }
+      needStore := false;
+      if a^.kind = nkSubstr then begin
+        EmitString(a, slot, rcap);
+        write(ircode, '  call void @pas_read_str(ptr ');
+        PutOp(fh);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        write(ircode, ', i32 ');
+        PutOp(rcap);
+        writeln(ircode, ', i32 0)')
+      end
+      else begin
       EmitAddress(a, slot);
       t := a^.ntype;
       { ISO/IEC 10206:1991 6.10.1 e) and f): reading a string does not skip
@@ -17623,18 +17815,21 @@ begin
         else writeln(ircode, ', i32 0)')
       end
       else if IsChar(t) then begin
+        needStore := true;
         Def(v);
         write(ircode, 'call i8 @pas_read_char(ptr ');
         PutOp(fh);
         writeln(ircode, ')')
       end
       else if IsReal(t) then begin
+        needStore := true;
         Def(v);
         write(ircode, 'call double @pas_read_real(ptr ');
         PutOp(fh);
         writeln(ircode, ')')
       end
       else begin
+        needStore := true;
         { The runtime returns i64 and has already rejected anything outside
           -maxint..maxint, so this truncation cannot lose a valid value. }
         Def(wide);
@@ -17646,14 +17841,17 @@ begin
         PutOp(wide);
         writeln(ircode, ' to i32');
         CheckedForSubrange(v, t)
+      end
       end;
-      write(ircode, '  store ');
-      PutLlType(t);
-      write(ircode, ' ');
-      PutOp(v);
-      write(ircode, ', ptr ');
-      PutOp(slot);
-      writeln(ircode);
+      if needStore then begin
+        write(ircode, '  store ');
+        PutLlType(t);
+        write(ircode, ' ');
+        PutOp(v);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode)
+      end;
       a := a^.next
     end;
     if s^.rdNewline then begin
@@ -18316,7 +18514,7 @@ begin
         else if s^.pcSym <> nil then
           EmitUserCall(s^.pcSym, s^.pcArgs, nil, v);
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
-      nkField, nkDeref,
+      nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
@@ -19001,6 +19199,7 @@ begin
   writeln(ircode, 'declare i32 @pas_str_trimlen(ptr, i32)');
   writeln(ircode, 'declare i32 @pas_str_index(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare void @pas_str_slice_check(i32, i32, i32)');
+  writeln(ircode, 'declare void @pas_str_substr_check(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_str_store_fixed(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare void @pas_str_store_var(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare void @pas_str_store_char(ptr, ptr, i32)');

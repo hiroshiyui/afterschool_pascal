@@ -260,6 +260,16 @@ struct Dumper {
       --level;
       break;
     }
+    case NK::Substring: {
+      SubstringExpr *n = as<SubstringExpr>(e);
+      headExpr("substring", e);
+      ++level;
+      expr(n->base.get());
+      expr(n->lo.get());
+      expr(n->hi.get());
+      --level;
+      break;
+    }
     case NK::Field: {
       FieldExpr *n = as<FieldExpr>(e);
       // ISO/IEC 10206:1991 §6.11.3's qualified name shares this node with a
