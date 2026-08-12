@@ -1100,7 +1100,42 @@ in one language or the other, and the standard is a property of the source.
   - Refused and stated: §6.8.7.4's **set-value** (a set is a value and needs
     none of this; and `sieve[2,3]` cannot be told from `a[2,3]` without the
     symbol), §6.8.8's structured constants, and a value of a dynamically
-    bounded type.
+    bounded type. The first of those landed as ADR-0066, by taking the second
+    half of its own reason seriously: the symbol is what tells them apart, so
+    Sema is where it is told.
+- **A set-value is told from a subscript by the symbol** (ADR-0066). §6.8.7.4
+  is four lines — `set-value = set-constructor` — so `digits[1, 3]` is `[1, 3]`
+  with a type name in front, and what the name adds is a **type**: a bare
+  constructor infers one from its members and `[]` has none at all.
+  - **The parser builds a spine and Sema reinterprets it.** `digits[1, 3]` is a
+    subscript chain and `digits[1..3]` a substring, and `setValueTypeOf` walks
+    down the *base* links to the root and asks what that name denotes. Third
+    time the answer is "ask the symbol, not the syntax", after ADR-0053's
+    qualified name and ADR-0044's variant-selector — and the first where the
+    two readings are a value and a *variable*.
+  - **The spine carries the answer rather than being rewritten**, because
+    `checkExpr` takes a raw pointer and cannot replace the node the parent
+    holds. `IndexExpr::setValue`/`SubstringExpr::setValue` is
+    `FieldExpr::qualified`'s shape; the members are *moved* out, so the spine
+    left behind is a husk and every later pass reads the field first.
+  - **Not a designator, and no rule says so**: `checkSetValue` returns before
+    the base is checked, so the root `VarRef`'s symbol stays null and
+    `isDesignator` — which asks the base — answers false. Assignment, a `var`
+    parameter and `read` are all refused by tests that already existed.
+  - **It makes the check ADR-0028 said a constructor could not.**
+    `checkedForSetBase` is "the check a set constructor cannot make for itself,
+    because a constructor does not know what it is being assigned to" — and a
+    set-value *knows*. So `digits[i]` traps on a stray member with no
+    assignment in sight; `tests/extended/trap_setvalue.pas` is that program.
+  - **The parser gave up one rule and Sema took it back.** A set-value's
+    members are a list, so a comma may follow a range; §6.5.6 gives a substring
+    one range and no list. `SubstringExpr::listed` records that a comma
+    followed, and Sema refuses it for anything that is not a set-value —
+    without it the relaxation silently made `s[1..3, 2]` mean `s[1..3][2]`.
+  - The port needed two things the C++ did not: `nkIndex`/`nkSubstr` had to
+    leave `NewNode`'s "nothing of Sema's to clear" group, and `EmitExpr` had no
+    `nkSubstr` arm at all — its `case` was not exhaustive over `nodeKind`, which
+    in Pascal traps at run time rather than warning.
 - **A required real constant is decimal text** (ADR-0062). §6.4.2.2 b)'s
   `minreal`, `maxreal` and `epsreal`, and the three ADRs that deferred them
   were all deferring the same thing: ADR-0025 carries a real as the characters

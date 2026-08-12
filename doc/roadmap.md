@@ -61,7 +61,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 221 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 225 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -748,7 +748,31 @@ they landed — rather than in the standard's.
   - Not done, and stated: §6.8.7.4's set-value (a set is a value and needs
     none of this machinery, and `sieve[2,3]` cannot be told from `a[2,3]`
     without the symbol), §6.8.8's structured constants, and a value of a
-    dynamically bounded type.
+    dynamically bounded type. The first landed as ADR-0066, below.
+- ~~**§6.8.7.4's set-value.**~~ Done (ADR-0066). The third form of §6.8.7.1's
+  structured-value-constructor, and four lines of standard:
+  `set-value = set-constructor`, so `digits[1, 3]` is `[1, 3]` with a type name
+  in front and what the name adds is a **type**.
+  - **The reason it was deferred is the reason it works.** ADR-0061 refused it
+    because `sieve[2, 3]` cannot be told from `a[2, 3]` without the symbol —
+    so the symbol is what tells them apart, in Sema, where ADR-0053 already
+    parts a qualified name from a field selection and ADR-0044 a
+    variant-selector from a tag-type. The parser builds a subscript spine and
+    Sema walks down its base links to the root to ask what the name denotes.
+  - **The spine carries the answer instead of being rewritten**, which is
+    `FieldExpr::qualified`'s shape and forced by the same thing: the checker
+    takes a raw pointer and cannot replace the node its parent holds.
+  - **It makes a check ADR-0028 called impossible.** That record says
+    `checkedForSetBase` is the check "a set constructor cannot make for itself,
+    because a constructor does not know what it is being assigned to" — and a
+    set-value knows, so §6.8.7.4's assignment-compatibility rule is that check
+    moved to the constructor. `digits[i]` traps with no assignment in sight.
+  - **One rule was given up in the parser and taken back in Sema**: a comma may
+    now follow a range in brackets, because a set-value's members are a list
+    and a substring's range is not, and the flag saying one followed is what
+    keeps `s[1..3, 2]` from quietly meaning `s[1..3][2]` for a string.
+  - It reserves nothing, and `verify/` gained nothing — no new arithmetic, and
+    the one error condition is an existing check at a second call site.
 - ~~**The three required real constants.**~~ Done (ADR-0062). §6.4.2.2 b)'s
   `minreal`, `maxreal` and `epsreal`, and the deferral three records had made.
   - **The text was always the mechanism.** ADR-0025 carries a real as the
@@ -841,19 +865,20 @@ they landed — rather than in the standard's.
 
 **What is left of ISO/IEC 10206:1991**, and it is now a short list:
 
-- **§6.8.7.4's set-value** (ADR-0061). A set is a value and needs none of the
-  constructor machinery, and `sieve[2, 3]` cannot be told from `a[2, 3]`
-  without the symbol.
-- **§6.8.8's structured constants** (ADR-0061). A `Symbol` has nowhere to keep
-  a value that is not a scalar, which is the same reason ADR-0054 refuses a
-  set- or string-valued constant-expression.
+- **§6.8.8's constant-accesses** (ADR-0061). A `Symbol` has nowhere to keep a
+  value that is not a scalar, which is the same reason ADR-0054 refuses a set-
+  or string-valued constant-expression. §6.8.8.1's own NOTE is what makes this
+  more than storage: given `const c = t[1: 1; 2: 2]`, the constant-access
+  `c[i]` "denotes a different value for each iteration of the loop", so the
+  index need not be constant and the access is a run-time read of somewhere a
+  structured constant lives.
 - **Separate compilation of program-components** (ADR-0053). §6.13 asks for it
   with a *should* rather than a *shall*, and it needs an interface artefact
   this compiler does not define — a second file format, and one the stage-1
   compiler could not write.
 
 **With the time procedures the required procedures and functions are
-complete**, so what is left above is two productions of §6.8 and one *should*
+complete**, so what is left above is one production of §6.8 and one *should*
 of §6.13 — no required identifier, no required type, and nothing lexical.
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved

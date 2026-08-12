@@ -399,7 +399,13 @@ values     a structured-value-constructor denotes a value of a named array or
            `otherwise` gives a value to the ones no element names. A
            component-value may itself be one, so a value nests as the type
            does. An initial-state specifier takes one too, which is what
-           makes `array [1..8] of char value [1..8: '*']` eight stars
+           makes `array [1..8] of char value [1..8: '*']` eight stars.
+           A named *set* type takes the third form, §6.8.7.4's set-value:
+           `digits[1, 3..5]` is the set-constructor `[1, 3..5]` with a type,
+           and `digits[]` is the empty set of a type that `[]` alone cannot
+           name. Its members are checked against that type, so `digits[i]`
+           stops the program when i is not a value of the base type — the
+           check a constructor with no name on it cannot make
 minreal    §6.4.2.2 b)'s three required real constants: the largest usable
 maxreal    magnitude, the smallest, and the difference between 1.0 and the
 epsreal    next value above it. A real is an IEEE-754 binary64 here, so they
@@ -453,8 +459,10 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            in the one position each may occupy, exactly as `forward` is
 ```
 
-Also absent, and smaller — the cost is in writing them twice rather than in the
-design: §6.8.7.4's set-value and §6.8.8's structured constants.
+Also absent: §6.8.8's constant-accesses — a component of a constant that has a
+structured value, `c[i]` for a `const c = t[1: 1; 2: 2]`, where §6.8.8.1's own
+NOTE points out that the index need not be constant and `c[i]` therefore
+denotes a different value on each iteration of a loop.
 
 **All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
 though the language is not. A word-symbol is reserved only when the feature
