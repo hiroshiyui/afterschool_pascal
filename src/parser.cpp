@@ -1236,13 +1236,21 @@ StmtPtr Parser::parseFor() {
   s->var = makeNode<VarRef>(cur());
   s->var->name = cur().text;
   ++pos_;
-  expect(Tok::Assign, "in a for statement");
-  s->from = parseExpr();
-  if (accept(Tok::KwDownto))
-    s->downto = true;
-  else
-    expect(Tok::KwTo, "in a for statement");
-  s->to = parseExpr();
+  // ISO/IEC 10206:1991 §6.9.3.9.1 makes what follows the control-variable an
+  // *iteration-clause*: `:= initial to final` or `in set-expression`. One
+  // token separates them, and `in` is a word-symbol of ISO 7185 already — so
+  // the feature reserves nothing, exactly as `and then` does (ADR-0038).
+  if (std_ == Std::Extended && accept(Tok::KwIn)) {
+    s->set = parseExpr();
+  } else {
+    expect(Tok::Assign, "in a for statement");
+    s->from = parseExpr();
+    if (accept(Tok::KwDownto))
+      s->downto = true;
+    else
+      expect(Tok::KwTo, "in a for statement");
+    s->to = parseExpr();
+  }
   expect(Tok::KwDo, "in a for statement");
   s->body = parseStatement();
   return s;

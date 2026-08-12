@@ -532,11 +532,20 @@ struct Dumper {
     }
     case NK::For: {
       ForStmt *n = as<ForStmt>(s);
-      head(n->downto ? "for downto" : "for to", s->line, s->col);
+      // §6.9.3.9.1's iteration-clause is what the head names: the two forms
+      // share the node, so the dump has to say which one was written.
+      head(n->set      ? "for in"
+           : n->downto ? "for downto"
+                       : "for to",
+           s->line, s->col);
       ++level;
       expr(n->var.get());
-      expr(n->from.get());
-      expr(n->to.get());
+      if (n->set)
+        expr(n->set.get());
+      else {
+        expr(n->from.get());
+        expr(n->to.get());
+      }
       stmt(n->body.get());
       --level;
       break;

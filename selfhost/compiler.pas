@@ -831,7 +831,12 @@ type
       nkIf:         (ifCond, ifThen, ifElse: nodePtr);
       nkWhile:      (whCond, whBody: nodePtr);
       nkRepeat:     (rpBody, rpCond: nodePtr);
-      nkFor:        (frVar, frFrom, frTo, frBody: nodePtr; frDownto: boolean);
+      { frSet is 6.9.3.9.3's set-member-iteration, `for v in s do`. Non-nil
+        makes this the set form, and then frFrom and frTo are nil: 6.9.3.9.1
+        makes the two an *iteration-clause*, one production with two
+        alternatives, so they are one node with two shapes. }
+      nkFor:        (frVar, frFrom, frTo, frSet, frBody: nodePtr;
+                     frDownto: boolean);
       { pcSelect: `new(p, c1, ..., cn)` -- the arms the tag values select,
         outermost first, as indices into the variant part at each level
         (ISO 7185 6.6.5.3). nil for the one-argument form. }
@@ -3842,6 +3847,7 @@ begin
   s^.frVar := nil;
   s^.frFrom := nil;
   s^.frTo := nil;
+  s^.frSet := nil;
   s^.frBody := nil;
   s^.frDownto := false;
   Expect(tkFor, ctxNone);
@@ -3858,13 +3864,21 @@ begin
       s^.frVar := v;
       pos := pos + 1
     end;
+  { 6.9.3.9.1 makes what follows the control-variable an *iteration-clause*:
+    `:= initial to final` or `in set-expression`. One token separates them, and
+    `in` is a word-symbol of ISO 7185 already -- so the feature reserves
+    nothing, exactly as `and then` does (ADR-0038). }
+  if (langStd = stdExtended) and Accept(tkIn) then
+    s^.frSet := ParseExpr
+  else begin
   Expect(tkAssign, ctxFor);
   s^.frFrom := ParseExpr;
   if Accept(tkDownto) then
     s^.frDownto := true
   else
     Expect(tkTo, ctxFor);
-  s^.frTo := ParseExpr;
+  s^.frTo := ParseExpr
+  end;
   Expect(tkDo, ctxFor);
   s^.frBody := ParseStatement;
   ParseFor := s
@@ -11651,7 +11665,7 @@ begin
 end;
 
 procedure CheckStmt;
-var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr;
+var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
 begin
   if s <> nil then
     case s^.kind of
@@ -11865,6 +11879,35 @@ begin
           writeln('the control variable of a for statement must be an ',
                   'ordinal type')
         end;
+        if s^.frSet <> nil then begin
+          { 6.9.3.9.3: "The set-expression ... shall possess an
+            unpacked-canonical-set-of-T-type or a packed-canonical-set-of-T-
+            type. The type of the control-variable of the for-statement shall
+            be compatible with T." }
+          CheckExpr(s^.frSet);
+          st := s^.frSet^.ntype;
+          if (st <> nil) and not IsSet(st) then begin
+            ErrorAt(s^.frSet^.line, s^.frSet^.col);
+            write('a for statement iterates over a set, not over ');
+            WriteTypeName(st);
+            writeln
+          end
+          else if (st <> nil) and (st^.elem <> nil) and
+                  (s^.frVar^.ntype <> nil) and
+                  not Assignable(s^.frVar^.ntype, st^.elem) then begin
+            ErrorAt(s^.frSet^.line, s^.frSet^.col);
+            write('the control variable of a for statement is ');
+            WriteTypeName(s^.frVar^.ntype);
+            write(', so it cannot take the members of a ');
+            WriteTypeName(st);
+            writeln
+          end
+          { 6.9.3.9.3 makes the *members* assignment-compatible rather than the
+            set, so a control variable narrower than the base type is legal and
+            D.96 makes a member outside it an error -- checked at the store, by
+            the code every other store already goes through. }
+        end
+        else begin
         CheckExpr(s^.frFrom);
         CheckExpr(s^.frTo);
         if not Assignable(s^.frVar^.ntype, s^.frFrom^.ntype) or
@@ -11872,6 +11915,7 @@ begin
           ErrorAt(s^.line, s^.col);
           writeln('the bounds of a for statement must match the type of the ',
                   'control variable')
+        end
         end;
         saved := stmtPath;
         stmtPath := PushStmt(stmtPath, s);
@@ -14535,15 +14579,23 @@ begin
       level := level - 2
     end;
     nkFor: begin
-      if n^.frDownto then
+      { 6.9.3.9.1's iteration-clause is what the head names: the two forms
+        share the node, so the dump has to say which one was written. }
+      if n^.frSet <> nil then
+        write('for in')
+      else if n^.frDownto then
         write('for downto')
       else
         write('for to');
       At(n^.line, n^.col);
       level := level + 1;
       DumpExpr(n^.frVar);
-      DumpExpr(n^.frFrom);
-      DumpExpr(n^.frTo);
+      if n^.frSet <> nil then
+        DumpExpr(n^.frSet)
+      else begin
+        DumpExpr(n^.frFrom);
+        DumpExpr(n^.frTo)
+      end;
       DumpStmt(n^.frBody);
       level := level - 1
     end;
@@ -19981,10 +20033,167 @@ begin
   end
 end;
 
+{ 6.9.3.9.3's set-member-iteration. A set is one 256-bit word with a bit per
+  possible member (ADR-0028), so "for each member" is a walk over the base
+  type's ordinals testing one bit -- the same lshr/and the `in` operator emits,
+  with the member as the loop's own counter rather than as an expression.
+
+  The order is ascending, and the standard leaves it open: 6.9.3.9.3 makes it
+  "implementation-dependent", so this is a documented choice rather than a
+  requirement. Ascending is what a walk over the bits gives. }
+procedure EmitForIn(s: nodePtr);
+var slot, set_, counter, i, hiOp, oneOp, zeroOp, test, widened: str;
+    shifted, bit, hit, now, next: str;
+    t, base: typePtr; condB, testB, bodyB, stepB, endB, lo, hi: integer;
+begin
+  EmitAddress(s^.frVar, slot);
+  t := s^.frVar^.ntype;
+  { "The set-expression shall be evaluated prior to the first execution, if
+    any, of the statement" -- and a set is a value (ADR-0028), so evaluating it
+    here *is* evaluating it once. Nothing in the body can reach the storage it
+    came from. }
+  EmitExpr(s^.frSet, set_);
+
+  { The bits worth testing are the base type's own. An empty-set constructor
+    has no base type to ask, and no members either, so the control variable's
+    range serves and the loop finds nothing. }
+  if (s^.frSet^.ntype <> nil) and (s^.frSet^.ntype^.elem <> nil) then
+    base := s^.frSet^.ntype^.elem
+  else
+    base := t;
+  { ...and clamped to the bits a set actually has. A *constructor* takes its
+    base type from its members, so `[1, 2]` is a set of integer -- a type
+    ADR-0028 refuses to declare but infers here -- and its ordinal range is the
+    whole of `integer`. There is no bit outside 0..setLimit to find a member
+    in. }
+  lo := OrdinalLo(base);
+  if lo < 0 then lo := 0;
+  hi := OrdinalHi(base);
+  if hi > setLimit then hi := setLimit;
+
+  Def(counter);
+  writeln(ircode, 'alloca i32');
+  OpInt(lo, i);
+  write(ircode, '  store i32 ');
+  PutOp(i);
+  write(ircode, ', ptr ');
+  PutOp(counter);
+  writeln(ircode);
+
+  condB := NewBlock;
+  testB := NewBlock;
+  bodyB := NewBlock;
+  stepB := NewBlock;
+  endB := NewBlock;
+  writeln(ircode, '  br label %L', condB:1);
+
+  { `hi` is at most setLimit (ADR-0028), so the counter is an i32 that cannot
+    overflow before the test fails -- which is why this needs none of the
+    sequence form's stop-before-stepping care. }
+  StartBlock(condB);
+  Def(i);
+  write(ircode, 'load i32, ptr ');
+  PutOp(counter);
+  writeln(ircode);
+  OpInt(hi, hiOp);
+  Def(test);
+  write(ircode, 'icmp sle i32 ');
+  PutOp(i);
+  write(ircode, ', ');
+  PutOp(hiOp);
+  writeln(ircode);
+  write(ircode, '  br i1 ');
+  PutOp(test);
+  writeln(ircode, ', label %L', testB:1, ', label %L', endB:1);
+
+  StartBlock(testB);
+  Def(widened);
+  write(ircode, 'zext i32 ');
+  PutOp(i);
+  writeln(ircode, ' to i', setBits:1);
+  Def(shifted);
+  write(ircode, 'lshr i', setBits:1, ' ');
+  PutOp(set_);
+  write(ircode, ', ');
+  PutOp(widened);
+  writeln(ircode);
+  OpInt(1, oneOp);
+  Def(bit);
+  write(ircode, 'and i', setBits:1, ' ');
+  PutOp(shifted);
+  write(ircode, ', ');
+  PutOp(oneOp);
+  writeln(ircode);
+  OpInt(0, zeroOp);
+  Def(hit);
+  write(ircode, 'icmp ne i', setBits:1, ' ');
+  PutOp(bit);
+  write(ircode, ', ');
+  PutOp(zeroOp);
+  writeln(ircode);
+  write(ircode, '  br i1 ');
+  PutOp(hit);
+  writeln(ircode, ', label %L', bodyB:1, ', label %L', stepB:1);
+
+  { D.96: "it is an error if any value that is a member of the value of the
+    set-expression ... is assignment-compatibility-erroneous with respect to
+    the type possessed by the control-variable". 6.9.3.9.3 makes the members
+    assignment-compatible rather than the set, so a control variable narrower
+    than the base type is legal and this is where the rule bites -- through the
+    check every other store makes. }
+  StartBlock(bodyB);
+  { The counter is an i32 and the control variable is its own width -- i8 for a
+    char, i1 for a boolean, i32 for an integer or an enumeration. LLVM has no
+    same-width cast, so the equal case emits nothing at all. }
+  if LlSize(t) >= 4 then
+    now := i
+  else begin
+    Def(now);
+    write(ircode, 'trunc i32 ');
+    PutOp(i);
+    write(ircode, ' to ');
+    PutLlType(t);
+    writeln(ircode)
+  end;
+  CheckedForSubrange(now, t);
+  write(ircode, '  store ');
+  PutLlType(t);
+  write(ircode, ' ');
+  PutOp(now);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+  EmitStmt(s^.frBody);
+  writeln(ircode, '  br label %L', stepB:1);
+
+  StartBlock(stepB);
+  Def(now);
+  write(ircode, 'load i32, ptr ');
+  PutOp(counter);
+  writeln(ircode);
+  OpInt(1, oneOp);
+  Def(next);
+  write(ircode, 'add i32 ');
+  PutOp(now);
+  write(ircode, ', ');
+  PutOp(oneOp);
+  writeln(ircode);
+  write(ircode, '  store i32 ');
+  PutOp(next);
+  write(ircode, ', ptr ');
+  PutOp(counter);
+  writeln(ircode);
+  writeln(ircode, '  br label %L', condB:1);
+
+  StartBlock(endB)
+end;
+
 procedure EmitFor(s: nodePtr);
 var slot, from, toV, limit, cur, lim, test, now, lim2, same, next: str;
     t: typePtr; condB, bodyB, stepB, endB: integer; unsignedOrdinal: boolean;
 begin
+  if s^.frSet <> nil then EmitForIn(s)
+  else begin
   EmitAddress(s^.frVar, slot);
   t := s^.frVar^.ntype;
 
@@ -20101,6 +20310,7 @@ begin
   writeln(ircode, '  br label %L', condB:1);
 
   StartBlock(endB)
+  end
 end;
 
 { The record is designated once and its address kept for the body, so a

@@ -261,6 +261,10 @@ private:
   void emitWhile(WhileStmt *s);
   void emitRepeat(RepeatStmt *s);
   void emitFor(ForStmt *s);
+  /// §6.9.3.9.3's set-member-iteration, which shares the node and nothing
+  /// else: the counter walks the base type's ordinals and the control variable
+  /// takes only the ones the set holds.
+  void emitForIn(ForStmt *s);
   void emitWith(WithStmt *s);
   void emitCase(CaseStmt *s);
   void emitStdProc(ProcCallStmt *s);

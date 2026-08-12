@@ -492,6 +492,11 @@ struct ForStmt : Stmt {
   std::unique_ptr<VarRef> var;
   ExprPtr from, to;
   bool downto = false;
+  /// ISO/IEC 10206:1991 §6.9.3.9.3's set-member-iteration, `for v in s do`.
+  /// Non-null makes this the set form, and then `from` and `to` are null:
+  /// §6.9.3.9.1 makes the two an *iteration-clause*, one production with two
+  /// alternatives, so they are one node with two shapes rather than two nodes.
+  ExprPtr set;
   StmtPtr body;
 };
 

@@ -71,3 +71,4 @@ the alternatives that were rejected and why.
 | [0060](0060-readstr-and-writestr-are-a-text-file-made-of-memory.md) | readstr and writestr are a text file made of memory | Accepted |
 | [0061](0061-a-structured-value-is-built-not-computed.md) | A structured value is built, not computed | Accepted |
 | [0062](0062-a-required-real-constant-is-decimal-text.md) | A required real constant is decimal text | Accepted |
+| [0063](0063-a-set-iteration-is-a-walk-over-the-bits.md) | A set-member-iteration is a walk over the bits | Accepted |

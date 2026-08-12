@@ -3747,13 +3747,36 @@ void Sema::checkStmt(Stmt *s) {
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be an "
                    "ordinal type");
-    checkExpr(f->from.get());
-    checkExpr(f->to.get());
-    if (!assignable(f->var->type, f->from->type) ||
-        !assignable(f->var->type, f->to->type))
-      diags_.error(f->line, f->col,
-                   "the bounds of a for statement must match the type of the "
-                   "control variable");
+    if (f->set) {
+      // ISO/IEC 10206:1991 §6.9.3.9.3: "The set-expression ... shall possess
+      // an unpacked-canonical-set-of-T-type or a packed-canonical-set-of-T-
+      // type. The type of the control-variable of the for-statement shall be
+      // compatible with T."
+      checkExpr(f->set.get());
+      Type *st = f->set->type;
+      if (st && !st->isSet())
+        diags_.error(f->set->line, f->set->col,
+                     "a for statement iterates over a set, not over " +
+                         st->name());
+      else if (st && st->elem && f->var->type &&
+               !assignable(f->var->type, st->elem))
+        diags_.error(f->set->line, f->set->col,
+                     "the control variable of a for statement is " +
+                         f->var->type->name() + ", so it cannot take the " +
+                         "members of a " + st->name());
+      // §6.9.3.9.3 makes the *members* assignment-compatible rather than the
+      // set, so a control variable narrower than the base type is legal and
+      // D.96 makes a member outside it an error — checked at the store, by
+      // the code every other store already goes through.
+    } else {
+      checkExpr(f->from.get());
+      checkExpr(f->to.get());
+      if (!assignable(f->var->type, f->from->type) ||
+          !assignable(f->var->type, f->to->type))
+        diags_.error(f->line, f->col,
+                     "the bounds of a for statement must match the type of the "
+                     "control variable");
+    }
     stmtPath_.push_back(f);
     checkStmt(f->body.get());
     stmtPath_.pop_back();

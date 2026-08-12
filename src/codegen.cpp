@@ -2304,7 +2304,87 @@ void CodeGen::emitRepeat(RepeatStmt *s) {
   b_.SetInsertPoint(endBB);
 }
 
+/// ISO/IEC 10206:1991 §6.9.3.9.3's set-member-iteration. A set is one 256-bit
+/// word with a bit per possible member (ADR-0028), so "for each member" is a
+/// walk over the base type's ordinals testing one bit — the same `lshr`/`and`
+/// the `in` operator emits, with the member as the loop's own counter rather
+/// than as an expression.
+///
+/// **The order is ascending, and the standard leaves it open**: §6.9.3.9.3
+/// makes it "implementation-dependent", so this is a documented choice rather
+/// than a requirement. Ascending is what a walk over the bits gives.
+void CodeGen::emitForIn(ForStmt *s) {
+  llvm::Value *slot = emitAddress(s->var.get());
+  llvm::Type *varTy = llvmType(s->var->type);
+  // "The set-expression shall be evaluated prior to the first execution, if
+  // any, of the statement" — and a set is a value (ADR-0028), so evaluating it
+  // here *is* evaluating it once. Nothing in the body can reach the storage it
+  // came from.
+  llvm::Value *set = emitExpr(s->set.get());
+
+  // The bits worth testing are the base type's own. An empty-set constructor
+  // has no base type to ask, and no members either, so the control variable's
+  // range serves and the loop finds nothing.
+  ap::Type *base =
+      s->set->type && s->set->type->elem ? s->set->type->elem : s->var->type;
+  // ...and clamped to the bits a set actually has. A *constructor* takes its
+  // base type from its members, so `[1, 2]` is a set of integer — a type
+  // ADR-0028 refuses to declare but infers here — and its ordinal range is the
+  // whole of `integer`. There is no bit outside 0..255 to find a member in.
+  long long lo = std::max<long long>(base->ordinalLo(), 0);
+  long long hi = std::min<long long>(base->ordinalHi(), kSetLimit);
+
+  llvm::Value *counter = b_.CreateAlloca(i32(), nullptr, "in.i");
+  b_.CreateStore(ConstantInt::getSigned(i32(), lo), counter);
+
+  BasicBlock *condBB = BasicBlock::Create(ctx_, "in.cond", curFn_);
+  BasicBlock *testBB = BasicBlock::Create(ctx_, "in.test", curFn_);
+  BasicBlock *bodyBB = BasicBlock::Create(ctx_, "in.body", curFn_);
+  BasicBlock *stepBB = BasicBlock::Create(ctx_, "in.step", curFn_);
+  BasicBlock *endBB = BasicBlock::Create(ctx_, "in.end", curFn_);
+
+  b_.CreateBr(condBB);
+  b_.SetInsertPoint(condBB);
+  llvm::Value *i = b_.CreateLoad(i32(), counter, "in.cur");
+  // `hi` is at most 255 (ADR-0028), so the counter is an i32 that cannot
+  // overflow before the test fails — which is why this needs none of the
+  // sequence form's stop-before-stepping care.
+  b_.CreateCondBr(b_.CreateICmpSLE(i, ConstantInt::getSigned(i32(), hi)),
+                  testBB, endBB);
+
+  b_.SetInsertPoint(testBB);
+  llvm::Value *bit =
+      b_.CreateAnd(b_.CreateLShr(set, b_.CreateZExt(i, i256()), "in.shifted"),
+                   ConstantInt::get(i256(), 1), "in.bit");
+  b_.CreateCondBr(b_.CreateICmpNE(bit, ConstantInt::get(i256(), 0)), bodyBB,
+                  stepBB);
+
+  b_.SetInsertPoint(bodyBB);
+  // D.96: "it is an error if any value that is a member of the value of the
+  // set-expression ... is assignment-compatibility-erroneous with respect to
+  // the type possessed by the control-variable". §6.9.3.9.3 makes the members
+  // assignment-compatible rather than the set, so a control variable narrower
+  // than the base type is legal and this is where the rule bites — through
+  // the check every other store makes.
+  b_.CreateStore(
+      checkedForSubrange(b_.CreateZExtOrTrunc(i, varTy), s->var->type), slot);
+  emitStmt(s->body.get());
+  b_.CreateBr(stepBB);
+
+  b_.SetInsertPoint(stepBB);
+  b_.CreateStore(b_.CreateAdd(b_.CreateLoad(i32(), counter, "in.now"),
+                              ConstantInt::get(i32(), 1), "in.inc"),
+                 counter);
+  b_.CreateBr(condBB);
+
+  b_.SetInsertPoint(endBB);
+}
+
 void CodeGen::emitFor(ForStmt *s) {
+  if (s->set) {
+    emitForIn(s);
+    return;
+  }
   llvm::Value *slot = emitAddress(s->var.get());
   llvm::Type *varTy = llvmType(s->var->type);
 

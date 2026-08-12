@@ -1,0 +1,8 @@
+<source>:15:12: error: a for statement iterates over a set, not over integer
+<source>:16:12: error: a for statement iterates over a set, not over char
+<source>:18:12: error: the control variable of a for statement is char, so it cannot take the members of a set of 1..9
+<source>:20:7: error: the control variable of a for statement must be an ordinal type
+<source>:20:12: error: the control variable of a for statement is rec, so it cannot take the members of a set of 1..9
+<source>:22:9: error: the control variable of a for statement cannot be a field of a with statement
+<source>:23:7: error: the control variable of a for statement must be an ordinal type
+<source>:23:12: error: the control variable of a for statement is ^integer, so it cannot take the members of a set of 1..9
