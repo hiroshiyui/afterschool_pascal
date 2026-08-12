@@ -489,6 +489,7 @@ private:
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
   Type *resolveInquiry(TypeExpr &denoter);
+  Type *resolveRestricted(TypeExpr &denoter);
   /// ISO/IEC 10206:1991 §6.6's initial-state-specifier, checked and folded.
   bool nonvarying(Expr *e) const;
   void checkInitialState(TypeExpr &denoter, Type *t);

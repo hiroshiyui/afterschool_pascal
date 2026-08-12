@@ -551,7 +551,12 @@ enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File, Set,
                  /// denotes is the type that variable possesses, which is why
                  /// `name` here is resolved in the ordinary scope rather than
                  /// among the types.
-                 Inquiry };
+                 Inquiry,
+                 /// ISO/IEC 10206:1991 §6.4.2.5's restricted-type,
+                 /// `restricted type-name`. `name` is the underlying-type's,
+                 /// and the syntax admits a *name* and nothing else — so there
+                 /// is no nested denoter here and no recursion to bound.
+                 Restricted };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is

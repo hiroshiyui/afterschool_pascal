@@ -760,6 +760,24 @@ TypeExprPtr Parser::parseTypeDenoter() {
     return t;
   }
 
+  // restricted-type = 'restricted' type-name (§6.4.2.5). The syntax admits a
+  // *name* and nothing else, so there is no nested denoter here — which is
+  // also why a restricted-type cannot be built out of an anonymous one.
+  if (check(Tok::KwRestricted)) {
+    auto t = std::make_unique<TypeExpr>();
+    t->kind = TEK::Restricted;
+    t->line = cur().line;
+    t->col = cur().col;
+    ++pos_;
+    if (!check(Tok::Ident)) {
+      errorAtCur("'restricted' must be followed by a type name");
+      bail();
+    }
+    t->name = cur().text;
+    ++pos_;
+    return t;
+  }
+
   // type-inquiry = 'type' 'of' type-inquiry-object (§6.4.9). Both words are
   // already reserved in ISO 7185, so this feature reserves nothing — the
   // second such after `and then`. There is no ambiguity to resolve either:

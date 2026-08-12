@@ -39,7 +39,7 @@ enum class Tok {
   // ISO/IEC 10206:1991 word-symbols, reserved only under `--std=extended`.
   // Under ISO 7185 the lexer yields these spellings as identifiers, which is
   // what they are in that language.
-  KwOtherwise, KwPow, KwProtected, KwValue, KwBindable,
+  KwOtherwise, KwPow, KwProtected, KwValue, KwBindable, KwRestricted,
   /// §6.11's five. `interface` and `implementation` are deliberately *not*
   /// here: §6.1.5 and §6.1.6 make them *directives*, which are identifiers in
   /// the one position each may occupy — exactly as `forward` is (§6.1.4). So

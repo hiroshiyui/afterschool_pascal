@@ -75,6 +75,7 @@ const char *tokenName(Tok t) {
   case Tok::KwWhile: return "'while'";
   case Tok::KwWith: return "'with'";
   case Tok::KwOtherwise: return "'otherwise'";
+  case Tok::KwRestricted: return "'restricted'";
   case Tok::KwPow: return "'pow'";
   case Tok::KwProtected: return "'protected'";
   case Tok::KwValue: return "'value'";
@@ -126,6 +127,7 @@ const std::unordered_map<std::string, Tok> &extendedKeywords() {
       {"protected", Tok::KwProtected},
       {"value", Tok::KwValue},
       {"bindable", Tok::KwBindable},
+      {"restricted", Tok::KwRestricted},
       {"module", Tok::KwModule},
       {"export", Tok::KwExport},
       {"import", Tok::KwImport},

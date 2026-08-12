@@ -27,6 +27,12 @@ llvm::Type *CodeGen::llvmType(ap::Type *t) {
   // built and taken apart with insertelement/extractelement, both of which the
   // textual backend can spell.
   case TypeKind::Complex: return cplx();
+  // §6.4.2.5 associates a restricted-type's states one-to-one with the
+  // underlying-type's, so the representation *is* the underlying-type's.
+  // CodeGen otherwise knows nothing about the feature: what a program may do
+  // with such a value was settled in Sema, and by the time the tree is here
+  // every remaining operation is one the underlying type would have allowed.
+  case TypeKind::Restricted: return llvmType(t->elem);
   case TypeKind::Boolean: return i1();
   case TypeKind::Char:    return i8();
   case TypeKind::Void:    return llvm::Type::getVoidTy(ctx_);
@@ -1553,14 +1559,23 @@ void CodeGen::emitStmt(Stmt *s) {
 
 void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src,
                         llvm::Value *header) {
+  // §6.4.2.5: "Attribution of a value of a type to a variable possessing the
+  // underlying-type of the type shall constitute the attribution of the
+  // associated value of the underlying-type." So storing a restricted value
+  // *is* storing the underlying one — one line, and it covers a restricted
+  // record, array, string and scalar alike. Without it a restricted
+  // variable-string missed the string path below and stored a scalar over the
+  // length word, because `isStringType` deliberately does not see through:
+  // that predicate grants the string *operators*, which §6.4.2.5 forbids.
+  type = type->underlying();
+  ap::Type *from = src->type ? src->type->underlying() : nullptr;
   // ISO/IEC 10206:1991 §6.4.6: a string destination is not a memcpy. A short
   // value is padded with spaces into a fixed string, kept at its own length in
   // a variable one, and a value longer than the capacity is an *error* — so
   // this is a runtime operation and is taken before the copy below.
-  if (type->isStringType() &&
-      src->type && src->type->isStringOrChar() &&
-      (type->isVarString() || src->type->isVarString() ||
-       src->type->isChar() || type->length() != src->type->length())) {
+  if (type->isStringType() && from && from->isStringOrChar() &&
+      (type->isVarString() || from->isVarString() || from->isChar() ||
+       type->length() != from->length())) {
     emitStringStore(dst, type, src, header);
     return;
   }
@@ -1571,7 +1586,7 @@ void CodeGen::emitStore(llvm::Value *dst, ap::Type *type, Expr *src,
     return;
   }
   llvm::Value *v = emitExpr(src);
-  v = convertFor(v, src->type, type);
+  v = convertFor(v, from, type);
   b_.CreateStore(checkedForStore(v, type), dst);
 }
 
@@ -2543,7 +2558,12 @@ llvm::Value *CodeGen::stringCapacity(ap::Type *t, llvm::Value *header) {
 /// shorter length into the string they came from, and copy nothing. Only `+`
 /// makes characters that did not exist.
 void CodeGen::emitString(Expr *e, llvm::Value *&data, llvm::Value *&len) {
-  ap::Type *t = e->type;
+  // §6.4.2.5's states are one-to-one, so a restricted string *is* the string
+  // it restricts as far as its representation goes. Asked here rather than by
+  // mutating the node's type, and asked at all only because `isStringType`
+  // deliberately does not see through — that predicate grants the string
+  // operators, which §6.4.2.5's NOTE forbids.
+  ap::Type *t = e->type ? e->type->underlying() : nullptr;
 
   // A concatenation, and the one operation that needs storage.
   if (auto *b = as<Binary>(e)) {

@@ -811,6 +811,70 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
 /// type arrived this way, which is exactly what §6.4.9 asks for: `var b: type
 /// of a` makes `b` the *same* type as `a` under §6.4.5's name equivalence,
 /// not a second type that looks like it.
+/// ISO/IEC 10206:1991 §6.4.2.5: `restricted type-name`. The result is a new
+/// type of its own kind whose `elem` is the underlying-type — a *new* type, so
+/// ADR-0017's name equivalence already makes it distinct from the type it
+/// restricts, and no rule about identity had to be touched.
+///
+/// A restricted-type is what the standard's own example uses to hide a
+/// record's structure across a module interface (§6.11): export the restricted
+/// name and not the underlying one, and a user of the interface can pass values
+/// around and do nothing else with them.
+Type *Sema::resolveRestricted(TypeExpr &denoter) {
+  // A required type-identifier is not a symbol in any scope, so the same two
+  // steps `TEK::Named` takes are needed here. Taking only the second one is
+  // worse than an unknown-type diagnostic: the caller writes the new name's
+  // alias onto whatever comes back, so `restricted integer` renamed the shared
+  // `integer` singleton and every later `integer` printed as the restricted
+  // name. A placeholder returned from an error path is only safe while the
+  // path really is an error path.
+  Type *named =
+      denoter.qualifier.empty() ? builtinType(denoter.name, std_) : nullptr;
+  if (!named) {
+    Symbol *sym =
+        lookupName(denoter.qualifier, denoter.name, denoter.line, denoter.col);
+    if (sym && (sym->kind != SymKind::Type || !sym->type)) {
+      diags_.error(denoter.line, denoter.col,
+                   "'restricted' must name a type, and '" + denoter.name +
+                       "' is not one");
+      return ty::Int();
+    }
+    if (!sym)
+      return ty::Int();
+    named = sym->type;
+  }
+  // §6.4.2.5 gives every type an underlying-type — its own, when it is not
+  // restricted — so restricting a restricted type would make a second wrapper
+  // over one underlying-type with nothing to tell the two apart. Refused
+  // rather than silently flattened, because a program that writes it means
+  // something by it.
+  if (named->isRestricted()) {
+    diags_.error(denoter.line, denoter.col,
+                 "'" + denoter.name + "' is already a restricted type");
+    return named;
+  }
+  // §6.4.2.5: "The bindability denoted by a restricted-type shall be
+  // nonbindable." A file has no operation left that §6.4.2.5's NOTE permits —
+  // it is never assigned, never a value parameter and never a result — so a
+  // restricted file would be a variable nothing could do anything with.
+  if (named->isFile()) {
+    diags_.error(denoter.line, denoter.col,
+                 "a file cannot be restricted; there is no operation on one "
+                 "that a restricted type would still allow");
+    return ty::Int();
+  }
+  // §6.4.2.5: "The bindability denoted by a restricted-type shall be
+  // nonbindable." `bindable` precedes the denoter (ADR-0052) so the two can be
+  // written together, and this is the one place that can say they may not be.
+  if (denoter.bindable)
+    diags_.error(denoter.line, denoter.col,
+                 "a restricted type is nonbindable, so 'bindable' cannot "
+                 "precede 'restricted'");
+  Type *t = newType(TypeKind::Restricted);
+  t->elem = named;
+  return t;
+}
+
 Type *Sema::resolveInquiry(TypeExpr &denoter) {
   // §6.4.9 also allows the object to be a parameter of the closest-containing
   // formal-parameter-list, and that needs nothing added: `declareProcHeading`
@@ -1017,6 +1081,9 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   case TEK::Inquiry:
     t = resolveInquiry(denoter);
     break;
+  case TEK::Restricted:
+    t = resolveRestricted(denoter);
+    break;
   case TEK::Schema: {
     Symbol *sym =
         lookupName(denoter.qualifier, denoter.name, denoter.line, denoter.col);
@@ -1068,7 +1135,12 @@ bool Sema::bindableOf(TypeExpr &denoter) {
 Expr *Sema::initialStateOf(TypeExpr &denoter) {
   if (denoter.initOk)
     return denoter.initValue.get();
-  if (denoter.kind == TEK::Named) {
+  // §6.4.2.5: "The initial state denoted by a restricted-type shall be the
+  // state associated with the initial state denoted by the type-name of the
+  // restricted-type." So `restricted count` hands on `count`'s, which is the
+  // same hand-on a type-name makes — and the states are one-to-one, so the
+  // *expression* needs no adjusting on the way through.
+  if (denoter.kind == TEK::Named || denoter.kind == TEK::Restricted) {
     Symbol *s = lookup(denoter.name);
     if (s && s->kind == SymKind::Type)
       return s->initValue;
@@ -1616,6 +1688,21 @@ bool Sema::assignable(Type *to, Type *from) const {
     return false;
   if (to == from)
     return true;
+  // §6.4.2.5: "Attribution of a value of a type to a variable possessing the
+  // underlying-type of the type shall constitute the attribution of the
+  // associated value of the underlying-type", and the sentence after it says
+  // the same in the other direction. So a restricted type and its
+  // underlying-type assign to each other and to nothing else — which is one
+  // line here, because `underlying()` answers for a type that is not
+  // restricted with the type itself.
+  // §6.4.2.5 permits attribution between a restricted type and *its*
+  // underlying-type, in both directions, and says nothing about two restricted
+  // types — so two restrictions of one underlying type stay as distinct as
+  // ADR-0017 makes any two named types, and only one side may be restricted
+  // here. `to == from` was answered above, which is what leaves this to say.
+  if (to->isRestricted() || from->isRestricted())
+    return to->isRestricted() != from->isRestricted() &&
+           to->underlying() == from->underlying();
   // ISO/IEC 10206:1991 §6.4.6 a) is "T1 and T2 are the same type", and §6.4.8
   // makes one schema with one tuple one type — so wherever both tuples are
   // known the line above has already decided this, and two different tuples
@@ -2969,7 +3056,11 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
     // somewhere to build the result that the caller can name. Until it has
     // one, such a parameter is refused rather than copied bytewise from
     // whatever the actual happened to be (ADR-0052).
-    if (t->isVarString() && !group.byRef && !group.names.empty())
+    // Asked of the *underlying* type: §6.4.2.5 makes a restricted string's
+    // states one-to-one with the string's, so it would need exactly the same
+    // conversion and has exactly the same nowhere to build it. A restricted
+    // type does not launder a rule about how a value is passed.
+    if (t->underlying()->isVarString() && !group.byRef && !group.names.empty())
       diags_.error(group.names[0].line, group.names[0].col,
                    "a string parameter must be a var parameter; a value "
                    "parameter would have to convert the argument, and there "
@@ -4125,6 +4216,17 @@ void Sema::checkBinary(Binary *b) {
                          "': use <= and >= for inclusion");
       else if (!assignable(l, r) && !assignable(r, l))
         bad("compatible");
+    } else if (l->isRestricted() || r->isRestricted()) {
+      // §6.4.2.5's NOTE lists what a restricted value may take part in —
+      // assignment, a value parameter, a var parameter, a function result —
+      // and ends "No other operations ... are possible." A comparison is one
+      // of the others, and it needs saying here because `assignable` was just
+      // taught that a restricted type and its underlying-type assign to each
+      // other: without this, `n = 3` would ride in on that permission.
+      diags_.error(b->line, b->col,
+                   "a value of a restricted type cannot be compared; 6.4.2.5 "
+                   "allows only assignment, parameter passing and a function "
+                   "result");
     } else if (l->isFile() || r->isFile()) {
       // §6.7.2.5 gives a file no relational operators at all, and naming the
       // types would just repeat "text and text" back at the programmer.
@@ -4766,6 +4868,18 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                          "parameter can have it");
         continue;
       }
+      // §6.4.2.5's NOTE: "A variable of a restricted-type may be passed as a
+      // variable parameter to a formal-parameter possessing the same type or
+      // its underlying-type." The states are one-to-one and the representation
+      // is the underlying-type's, so nothing is converted through the
+      // reference — which is why this is a widening of the same-type rule and
+      // not an exception to it. It goes one way only: a variable of the
+      // *underlying*-type may not be passed where the restricted one is
+      // expected, or the restriction would be escapable by declaring one
+      // parameter.
+      if (a->type && p->type && a->type != p->type &&
+          a->type->isRestricted() && a->type->underlying() == p->type)
+        continue;
       // No implicit conversion is possible through a reference, so the types
       // must be the same rather than merely assignment-compatible.
       if (a->type && p->type && a->type != p->type)

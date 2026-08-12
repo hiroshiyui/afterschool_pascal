@@ -66,3 +66,4 @@ the alternatives that were rejected and why.
 | [0055](0055-a-result-that-lives-in-memory-is-the-callers-storage.md) | A result that lives in memory is the caller's storage | Accepted |
 | [0056](0056-a-function-access-is-a-parser-change.md) | A function-access is a parser change | Accepted |
 | [0057](0057-a-substring-is-a-pointer-a-length-and-an-address.md) | A substring is a pointer, a length, and somewhere to store | Accepted |
+| [0058](0058-a-restricted-type-is-a-type-kind.md) | A restricted type is a type kind | Accepted |

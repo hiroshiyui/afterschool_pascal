@@ -108,7 +108,7 @@ type
     { ISO/IEC 10206:1991 word-symbols, reserved only under the extended
       standard. Under ISO 7185 the scanner yields these spellings as
       identifiers, which is what they are in that language. }
-    tkOtherwise, tkPow, tkProtected, tkValue, tkBindable,
+    tkOtherwise, tkPow, tkProtected, tkValue, tkBindable, tkRestricted,
     { 6.11's five. `interface` and `implementation` are deliberately not among
       them: 6.1.5 and 6.1.6 make those *directives*, which are identifiers in
       the one position each may occupy -- exactly as `forward` is. }
@@ -210,7 +210,7 @@ type
       *variable*: what it denotes is the type that variable possesses, which is
       why its name is resolved in the ordinary scope rather than among the
       types. }
-    nkInquiry,
+    nkInquiry, nkRestricted,
     { declarations }
     nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
     { ISO/IEC 10206:1991 6.11's module and the two lists that surround it. An
@@ -260,6 +260,7 @@ type
     machinery touches it, exactly as for a set. }
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
               tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc, tyComplex,
+              tyRestricted,
               { ISO/IEC 10206:1991 6.4.3.3.3's variable-string-type: a type
                 produced from the required schema `string`. Its value is a
                 length and that many characters, and the length may be anything
@@ -812,6 +813,10 @@ type
         -- so unlike an expression this needs no help from Sema. }
       nkNamed:      (nmAt, nmLen, nmQualAt, nmQualLen: integer);
       nkInquiry:    (tqAt, tqLen: integer);
+      { 6.4.2.5's restricted-type, `restricted type-name`. The syntax admits a
+        *name* and nothing else, so there is no nested denoter and no recursion
+        to bound. }
+      nkRestricted: (rtAt, rtLen: integer);
       nkSchema:     (scAt, scLen, scQualAt, scQualLen: integer;
                      scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen: integer);
@@ -1570,6 +1575,26 @@ begin
   StrIsLit := same
 end;
 
+{ ...and against a *wider* literal, for the one word-symbol the keyword table
+  cannot hold. 6.4.2.5's `restricted` is ten characters and kwLit is nine wide;
+  widening it would repad every literal in the file for one word, and 10206
+  already forced the same split on the required identifiers, which is why
+  PoolIsWide exists beside PoolIs. }
+function StrIsWide(var s: str; word: msgLit): boolean;
+var n, k: integer; same: boolean;
+begin
+  n := msgWidth;
+  while (n > 0) and (word[n] = ' ') do
+    n := n - 1;
+  same := s.len = n;
+  k := 1;
+  while same and (k <= n) do begin
+    same := s.ch[k] = word[k];
+    k := k + 1
+  end;
+  StrIsWide := same
+end;
+
 { The standard is the first word of the options file. Anything that is not
   `extended` is ISO 7185, which is the default and what an empty file selects
   -- the file is written by the test harness rather than typed, so there is no
@@ -1617,6 +1642,9 @@ begin
         found := kwKind[i]
     end
   end;
+  { The one word-symbol too long for kwLit; see StrIsWide. }
+  if (langStd = stdExtended) and (found = tkIdent) then
+    if StrIsWide(s, 'restricted      ') then found := tkRestricted;
   LookupKeyword := found
 end;
 
@@ -2146,6 +2174,7 @@ begin
     tkProtected: write('''protected''');
     tkValue:     write('''value''');
     tkBindable:  write('''bindable''');
+    tkRestricted: write('''restricted''');
     tkModule:    write('''module''');
     tkExport:    write('''export''');
     tkImport:    write('''import''');
@@ -2343,7 +2372,7 @@ begin
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
-    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry,
+    nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted,
     nkConstDecl, nkTypeDecl, nkLabelDecl,
     nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
     nkImportItem: { nothing of Sema's to clear }
@@ -2903,6 +2932,23 @@ begin
       ErrorAtCur;
       writeln('''packed'' applies only to an array, record, set or file type');
       Bail
+    end
+    { restricted-type = 'restricted' type-name (6.4.2.5). The syntax admits a
+      *name* and nothing else, so there is no nested denoter here -- which is
+      also why a restricted-type cannot be built out of an anonymous one. }
+    else if Check(tkRestricted) then begin
+      t := NewNode(nkRestricted, CurLine, CurCol);
+      pos := pos + 1;
+      if not Check(tkIdent) then begin
+        ErrorAtCur;
+        writeln('''restricted'' must be followed by a type name');
+        Bail
+      end
+      else begin
+        t^.rtAt := tok[pos].at;
+        t^.rtLen := tok[pos].len;
+        pos := pos + 1
+      end
     end
     { pointer-type = '^' type-identifier. ISO 7185 6.4.4 requires a type
       *identifier* rather than a type-denoter, and that restriction is what
@@ -4914,11 +4960,34 @@ begin IsEmptySet := IsSet(t) and (t^.elem = nil) end;
 { A set is not structured either, and for the opposite reason to a file: it
   *is* a value. Every set is one 256-bit integer, so it is assigned, compared
   and passed exactly as an integer is (ADR-0028). }
+function IsRestricted(t: typePtr): boolean;
+begin IsRestricted := (t <> nil) and (t^.kind = tyRestricted) end;
+
+{ 6.4.2.5: "The underlying-type of a type that is not restricted shall be the
+  type." Written so a caller need not ask which it has. }
+function Underlying(t: typePtr): typePtr;
+begin
+  if IsRestricted(t) then Underlying := t^.elem else Underlying := t
+end;
+
+{ 6.4.2.5 associates a restricted-type's states one-to-one with the underlying
+  type's, so *how a value travels* is the underlying type's question -- a
+  restricted record is copied and passed by address exactly as the record is.
+  These two are the only predicates that see through, and that is what confines
+  the feature: everything else answers false and refuses the operation where it
+  stood. }
 function IsStructured(t: typePtr): boolean;
-begin IsStructured := IsArray(t) or IsRecord(t) end;
+begin
+  if IsRestricted(t) then IsStructured := IsArray(t^.elem) or IsRecord(t^.elem)
+  else IsStructured := IsArray(t) or IsRecord(t)
+end;
 
 function IsMemory(t: typePtr): boolean;
-begin IsMemory := IsStructured(t) or IsFile(t) or IsVarString(t) end;
+begin
+  if IsRestricted(t) then
+    IsMemory := IsStructured(t) or IsFile(t^.elem) or IsVarString(t^.elem)
+  else IsMemory := IsStructured(t) or IsFile(t) or IsVarString(t)
+end;
 
 { ISO/IEC 10206:1991 6.4.1: a type is protectable unless it is a file or a
   pointer, or is structured and holds one. The standard's own NOTE gives both
@@ -5125,6 +5194,13 @@ begin
       tyInteger: PutLit('integer         ');
       tyReal:    PutLit('real            ');
       tyComplex: PutLit('complex         ');
+      { 6.4.2.5's own spelling. A restricted-type is nearly always named -- the
+        whole point of one is a type-name whose structure is hidden -- so this
+        is reached mostly by the anonymous form in a diagnostic. }
+      tyRestricted: begin
+        PutLit('restricted      ');
+        WriteTypeName(t^.elem)
+      end;
       tyString:
         if t^.hi < 0 then PutLit('string          ')
         else begin
@@ -5513,6 +5589,17 @@ begin
     Assignable := false
   else if toT = fromT then
     Assignable := true
+  { 6.4.2.5: "Attribution of a value of a type to a variable possessing the
+    underlying-type of the type shall constitute the attribution of the
+    associated value of the underlying-type", and the sentence after it says the
+    same in the other direction. It says nothing about *two* restricted types,
+    so two restrictions of one underlying type stay as distinct as ADR-0017
+    makes any two named types -- which is why only one side may be restricted
+    here. The line above answered the same-type case, which is what leaves this
+    to say. }
+  else if IsRestricted(toT) or IsRestricted(fromT) then
+    Assignable := (IsRestricted(toT) <> IsRestricted(fromT)) and
+                  (Underlying(toT) = Underlying(fromT))
   { 10206 6.4.6 a) is "T1 and T2 are the same type", and 6.4.8 makes one schema
     with one tuple one type -- so wherever both tuples are known the line above
     has already decided this, and two different tuples are two different types.
@@ -5894,7 +5981,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
+      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         ok := false
@@ -7074,7 +7161,8 @@ begin
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
       nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
-      nkPointer, nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
+      nkPointer, nkInquiry, nkRestricted,
+      nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
       nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem: ;
     end
   end
@@ -7541,7 +7629,8 @@ begin
         StaticThroughout := ok
       end;
       tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-      tyPointer, tyProc, tyComplex: StaticThroughout := true
+      tyPointer, tyProc, tyComplex: StaticThroughout := true;
+      tyRestricted: StaticThroughout := StaticThroughout(t^.elem)
     end
 end;
 
@@ -7772,6 +7861,78 @@ end;
   owns, so nothing downstream can tell the type arrived this way: `var b: type
   of a` makes b the *same* type as a under 6.4.5's name equivalence, not a
   second type that looks like it. }
+{ 6.4.2.5: `restricted type-name`. The result is a new type of its own kind
+  whose elem is the underlying-type -- a *new* type, so ADR-0017's name
+  equivalence already makes it distinct from the type it restricts, and no rule
+  about identity had to be touched. }
+function ResolveRestricted(d: nodePtr): typePtr;
+var s: symPtr; named, t: typePtr; done: boolean;
+begin
+  { A required type-identifier is not a symbol in any scope, so the same two
+    steps a named denoter takes are needed here. Taking only the second one is
+    worse than an unknown-type diagnostic: the caller writes the new name's
+    alias onto whatever comes back, so `restricted integer` renamed the shared
+    `integer` singleton and every later `integer` printed as the restricted
+    name. A placeholder returned from an error path is only safe while the path
+    really is an error path. }
+  named := BuiltinType(d^.rtAt, d^.rtLen);
+  done := false;
+  if named = nil then begin
+    s := Lookup(d^.rtAt, d^.rtLen);
+    if s = nil then begin
+      ErrorAt(d^.line, d^.col);
+      write('unknown type ''');
+      WritePool(d^.rtAt, d^.rtLen);
+      writeln('''');
+      ResolveRestricted := intType;
+      done := true
+    end
+    else if (s^.kind <> skType) or (s^.stype = nil) then begin
+      ErrorAt(d^.line, d^.col);
+      write('''restricted'' must name a type, and ''');
+      WritePool(d^.rtAt, d^.rtLen);
+      writeln(''' is not one');
+      ResolveRestricted := intType;
+      done := true
+    end
+    else
+      named := s^.stype
+  end;
+  if not done then begin
+    { Every type has an underlying-type -- its own, when it is not restricted --
+      so a second wrapper over one underlying-type would have nothing to tell it
+      from the first. }
+    if IsRestricted(named) then begin
+      ErrorAt(d^.line, d^.col);
+      write('''');
+      WritePool(d^.rtAt, d^.rtLen);
+      writeln(''' is already a restricted type');
+      ResolveRestricted := named
+    end
+    { 6.4.2.5: "The bindability denoted by a restricted-type shall be
+      nonbindable." A file has no operation left that 6.4.2.5's NOTE permits, so
+      a restricted file would be a variable nothing could do anything with. }
+    else if IsFile(named) then begin
+      ErrorAt(d^.line, d^.col);
+      writeln('a file cannot be restricted; there is no operation on one ',
+              'that a restricted type would still allow');
+      ResolveRestricted := intType
+    end
+    else begin
+      { `bindable` precedes the denoter, so the two can be written together and
+        this is the one place that can say they may not be. }
+      if d^.nsBindable then begin
+        ErrorAt(d^.line, d^.col);
+        writeln('a restricted type is nonbindable, so ''bindable'' cannot ',
+                'precede ''restricted''')
+      end;
+      t := NewType(tyRestricted);
+      t^.elem := named;
+      ResolveRestricted := t
+    end
+  end
+end;
+
 function ResolveInquiry(d: nodePtr): typePtr;
 var s: symPtr; t: typePtr;
 begin
@@ -7879,7 +8040,7 @@ begin
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
+      nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         Nonvarying := false
@@ -7980,6 +8141,16 @@ begin
   if d <> nil then
     if d^.nsOk then
       InitialStateOf := d^.nsValue
+    { 6.4.2.5: "The initial state denoted by a restricted-type shall be the
+      state associated with the initial state denoted by the type-name of the
+      restricted-type." So `restricted count` hands on count's, which is the
+      same hand-on a type-name makes -- and the states are one-to-one, so the
+      *expression* needs no adjusting on the way through. }
+    else if d^.kind = nkRestricted then begin
+      s := Lookup(d^.rtAt, d^.rtLen);
+      if s <> nil then
+        if s^.kind = skType then InitialStateOf := s^.initValue
+    end
     else if d^.kind = nkNamed then begin
       s := Lookup(d^.nmAt, d^.nmLen);
       if s <> nil then
@@ -8044,6 +8215,7 @@ begin
       nkFile:     t := ResolveFile(d);
       nkSetOf:    t := ResolveSet(d);
       nkInquiry:  t := ResolveInquiry(d);
+      nkRestricted: t := ResolveRestricted(d);
       nkSchema: begin
         s := LookupName(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen,
                         d^.line, d^.col);
@@ -8282,7 +8454,7 @@ begin
 end;
 
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
-var a, b: nodePtr; p, q: symListPtr; n, given, i: integer;
+var a, b: nodePtr; p, q: symListPtr; n, given, i: integer; okVar: boolean;
 begin
   { Checked against the parameter rather than on its own, because an actual
     procedural parameter is an identifier and not an expression: `f` there
@@ -8390,9 +8562,22 @@ begin
             WritePool(callee^.at, callee^.len);
             writeln('''')
           end;
+        { 6.4.2.5's NOTE: "A variable of a restricted-type may be passed as a
+          variable parameter to a formal-parameter possessing the same type or
+          its underlying-type." The states are one-to-one and the representation
+          is the underlying type's, so nothing is converted through the
+          reference -- which is why this is a widening of the same-type rule and
+          not an exception to it. It goes one way only: a variable of the
+          *underlying*-type may not be passed where the restricted one is
+          expected, or the restriction would be escapable by declaring one
+          parameter. }
+        okVar := false;
+        if (a^.ntype <> nil) and (p^.sym^.stype <> nil) then
+          if IsRestricted(a^.ntype) then
+            okVar := Underlying(a^.ntype) = p^.sym^.stype;
         { No implicit conversion is possible through a reference, so the types
           must be the same rather than merely assignment-compatible. }
-        if (a^.ntype <> nil) and (p^.sym^.stype <> nil) and
+        if (not okVar) and (a^.ntype <> nil) and (p^.sym^.stype <> nil) and
                 (a^.ntype <> p^.sym^.stype) then begin
           ErrorAt(a^.line, a^.col);
           write('var parameter ''');
@@ -8778,6 +8963,18 @@ begin
           end
           else if not Assignable(l, r) and not Assignable(r, l) then
             BadOperands(b, l, r, 'compatible  ')
+        end
+        else if IsRestricted(l) or IsRestricted(r) then begin
+          { 6.4.2.5's NOTE lists what a restricted value may take part in --
+            assignment, a value parameter, a var parameter, a function result --
+            and ends "No other operations ... are possible." A comparison is one
+            of the others, and it needs saying here because Assignable was just
+            taught that a restricted type and its underlying-type assign to each
+            other: without this, `n = 3` would ride in on that permission. }
+          ErrorAt(b^.line, b^.col);
+          writeln('a value of a restricted type cannot be compared; ',
+                  '6.4.2.5 allows only assignment, parameter passing and a ',
+                  'function result')
         end
         else if IsFile(l) or IsFile(r) then begin
           { 6.7.2.5 gives a file no relational operators at all, and naming the
@@ -9674,7 +9871,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
+      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         { not an expression }
@@ -10629,7 +10826,7 @@ begin
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
       nkImportItem:
         { not a statement }
@@ -10774,7 +10971,12 @@ begin
         conversion needs somewhere to build the result that the caller can
         name. Until it has one, such a parameter is refused rather than copied
         bytewise from whatever the actual happened to be (ADR-0052). }
-      if IsVarString(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+      { Asked of the *underlying* type: 6.4.2.5 makes a restricted string's
+        states one-to-one with the string's, so it would need exactly the same
+        conversion and has exactly the same nowhere to build it. A restricted
+        type does not launder a rule about how a value is passed. }
+      if IsVarString(Underlying(t)) and not g^.grByRef and
+         (g^.grNames <> nil) then begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
         writeln('a string parameter must be a var parameter; a value ',
                 'parameter would have to convert the argument, and there is ',
@@ -13419,6 +13621,12 @@ begin
     { A type-inquiry names a *variable*, so it prints like `named` and means
       something else entirely -- which is why it gets its own tag rather than
       being folded into one. }
+    nkRestricted: begin
+      write('restricted ');
+      WritePool(n^.rtAt, n^.rtLen);
+      WritePos(n^.line, n^.col);
+      TypeEnd(n)
+    end;
     nkInquiry: begin
       write('typeof ');
       WritePool(n^.tqAt, n^.tqLen);
@@ -13770,8 +13978,10 @@ begin
         WriteKeyword(tok[i].kind);
         writeln
       end;
-      { the two-word word-symbols are in no keyword table -- nothing looks
-        them up -- so their spelling is written out here }
+      { the word-symbols in no keyword table -- nothing looks them up -- so
+        their spelling is written out here. Two of them are two words, and the
+        third is one word too long for kwLit (6.4.2.5's `restricted`). }
+      tkRestricted: writeln('kw restricted');
       tkAndThen: writeln('kw and then');
       tkOrElse: writeln('kw or else')
     end
@@ -14127,6 +14337,7 @@ begin
       { <2 x double>: two doubles, and the target aligns a vector to its whole
         size. }
       tyComplex: LlAlign := 16;
+      tyRestricted: LlAlign := LlAlign(b^.elem);
       tyString: LlAlign := 4;
       { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
         it takes the largest one that is named, which is i128's. }
@@ -14155,6 +14366,10 @@ begin
       tyInteger, tyEnum: LlSize := 4;
       tyReal, tyPointer: LlSize := 8;
       tyComplex: LlSize := 16;
+      { 6.4.2.5 makes the states one-to-one, so the representation *is* the
+        underlying type's -- which is the whole of what CodeGen knows about
+        the feature. }
+      tyRestricted: LlSize := LlSize(b^.elem);
       { A length beside a buffer: the shape ADR-0045 made expressible. Rounded
         to the alignment like every other type, and it has to be -- a record
         holding one puts its next field after the *rounded* size, so a short
@@ -14245,6 +14460,7 @@ begin
         struct is passed -- which is the constraint ADR-0030 named and settled
         the same way. }
       tyComplex: write(ircode, '<2 x double>');
+      tyRestricted: PutLlType(b^.elem);
       { 6.4.3.3.3: a variable-string-type's value is a length and that many
         characters. The layout is ADR-0045's -- a length beside a buffer whose
         capacity is the discriminant -- so a string whose capacity arrives with
@@ -15162,7 +15378,7 @@ begin
         else OpWord('false           ', v);
       tyChar: OpInt(ord(s^.charVal), v);
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex:
+      tyComplex, tyRestricted:
         OpInt(0, v)
     end
 end;
@@ -16118,7 +16334,11 @@ end;
 procedure EmitString(e: nodePtr; var data, len: str);
 var ad, al, bd, bl, at_, count, hdr, addr, c, one: str; st: typePtr;
 begin
-  st := e^.ntype;
+  { 6.4.2.5's states are one-to-one, so a restricted string *is* the string it
+    restricts as far as its representation goes. Asked here rather than by
+    changing the node's type, and asked at all only because IsStringType
+    deliberately does not see through. }
+  st := Underlying(e^.ntype);
   { A concatenation, and the one operation that needs storage. }
   if (e^.kind = nkBinary) and (e^.bnOp = opAdd) and IsStringType(st) then begin
     EmitString(e^.bnLhs, ad, al);
@@ -17351,7 +17571,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
+    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpWord('null            ', v)   { Sema has already required a designator }
@@ -17416,7 +17636,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl,
+    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpInt(0, v)
@@ -17451,15 +17671,25 @@ end;
   whole-variable copy -- and `write` to a file that is not a text needs exactly
   it, because 6.6.5.2 defines that write as `f^ := e`. }
 procedure EmitStore(var dst: str; t: typePtr; src: nodePtr);
-var v, hdr: str;
+var v, hdr: str; from: typePtr;
 begin
+  { 6.4.2.5: "Attribution of a value of a type to a variable possessing the
+    underlying-type of the type shall constitute the attribution of the
+    associated value of the underlying-type." So storing a restricted value *is*
+    storing the underlying one -- two lines, and they cover a restricted record,
+    array, string and scalar alike. Without them a restricted variable-string
+    missed the string path below and stored a scalar over the length word,
+    because IsStringType deliberately does not see through: that predicate
+    grants the string *operators*, which 6.4.2.5's NOTE forbids. }
+  t := Underlying(t);
+  from := Underlying(src^.ntype);
   { ISO/IEC 10206:1991 6.4.6: a string destination is not a memcpy. A short
     value is padded with spaces into a fixed string, kept at its own length in
     a variable one, and a value longer than the capacity is an *error* -- so
     this is a runtime operation and is taken before the copy below. }
-  if IsStringType(t) and IsStringOrChar(src^.ntype) and
-     (IsVarString(t) or IsVarString(src^.ntype) or IsChar(src^.ntype) or
-      (TypeLength(t) <> TypeLength(src^.ntype))) then begin
+  if IsStringType(t) and IsStringOrChar(from) and
+     (IsVarString(t) or IsVarString(from) or IsChar(from) or
+      (TypeLength(t) <> TypeLength(from))) then begin
     StrClear(hdr);
     EmitStringStore(dst, t, src, hdr)
   end
@@ -17469,7 +17699,7 @@ begin
     EmitCopy(dst, t, src)
   else begin
     EmitExpr(src, v);
-    ConvertFor(v, src^.ntype, t);
+    ConvertFor(v, from, t);
     CheckedForStore(v, t);
     write(ircode, '  store ');
     PutLlType(t);
@@ -18517,7 +18747,7 @@ begin
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
-      nkFile, nkSetOf, nkSchema, nkInquiry, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem: ;
     end

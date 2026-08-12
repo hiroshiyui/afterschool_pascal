@@ -30,7 +30,30 @@ enum class TypeKind {
   /// **simple-type**." Simple is the operative word — a complex value is
   /// assigned, passed and returned as a value, so none of the by-address
   /// machinery of ADR-0017 touches it, exactly as for a set (ADR-0028).
-  Complex
+  Complex,
+  /// ISO/IEC 10206:1991 §6.4.2.5's restricted-type. "A restricted-type shall
+  /// denote a type whose set of states is associated one-to-one with the
+  /// states determined by another type, designated the underlying-type", and
+  /// the NOTE says what may be done with one: assigned to or from the
+  /// underlying-type, passed as a value parameter to a formal of the
+  /// underlying-type, passed as a var parameter to a formal of the same type
+  /// or the underlying-type, and returned as a function result. "No other
+  /// operations, such as accessing a component of a restricted-type value or
+  /// performing arithmetic, are possible."
+  ///
+  /// Making it a *kind* is what enforces that sentence. Every predicate —
+  /// `isArray`, `isInteger`, `isStringType`, `isOrdinal` — answers `false`,
+  /// so indexing, field selection, arithmetic, comparison, `write`, `case`,
+  /// `for` and the rest each refuse it through the diagnostic they already
+  /// had, naming the type. Only the four permitted operations are written
+  /// down anywhere, which is the same shape ADR-0044's variant-selector and
+  /// ADR-0046's `new(p)` have: refused by construction rather than by a list.
+  ///
+  /// `elem` is the underlying-type. How the value *travels* is still the
+  /// underlying-type's business, so `isMemory` and `isStructured` are the two
+  /// predicates that see through — a restricted record must be copied and
+  /// passed by address exactly as the record is.
+  Restricted
 };
 
 /// ISO 7185 §6.4.3.4 leaves the size of a set to the implementation. This one
@@ -281,11 +304,35 @@ struct Type {
   /// shape as a file's: `isStructured()` grants a whole-variable copy, and a
   /// string assignment is not one — §6.4.6 pads a short value with spaces or
   /// refuses a long one, so it is a runtime operation and not a memcpy.
-  bool isStructured() const { return isArray() || isRecord(); }
+  bool isStructured() const {
+    // §6.4.2.5 associates a restricted-type's states one-to-one with the
+    // underlying-type's, so *how a value travels* is the underlying-type's
+    // question — a restricted record is copied and passed by address exactly
+    // as the record is. This and `isMemory` are the only two predicates that
+    // see through, and that is what confines the feature: everything else
+    // answers `false` and refuses the operation where it stood.
+    if (isRestricted())
+      return elem->isStructured();
+    return isArray() || isRecord();
+  }
+
+  /// ISO/IEC 10206:1991 §6.4.2.5's restricted-type. `elem` is the
+  /// underlying-type.
+  bool isRestricted() const { return kind == TypeKind::Restricted; }
+
+  /// The type a restricted-type restricts, and the type itself otherwise —
+  /// §6.4.2.5: "The underlying-type of a type that is not restricted shall be
+  /// the type." Written so a caller need not ask which it has.
+  const Type *underlying() const { return isRestricted() ? elem : this; }
+  Type *underlying() { return isRestricted() ? elem : this; }
 
   /// True for anything whose value never occupies a register: it is reached
   /// through its address, and a parameter of it arrives as one.
-  bool isMemory() const { return isStructured() || isFile() || isVarString(); }
+  bool isMemory() const {
+    if (isRestricted())
+      return elem->isMemory();
+    return isStructured() || isFile() || isVarString();
+  }
 
   /// ISO/IEC 10206:1991 §6.4.1: a type is protectable unless it is a file or a
   /// pointer, or is structured and holds one. The standard's own NOTE gives
@@ -391,6 +438,11 @@ struct Type {
     case TypeKind::String:
       return hi < 0 ? "string" : "string(" + std::to_string(hi) + ")";
     case TypeKind::Complex: return "complex";
+    // §6.4.2.5's own spelling. A restricted-type is nearly always named — the
+    // whole point of one is a type-name whose structure is hidden — so this is
+    // reached mostly by the anonymous form in a diagnostic about a parameter.
+    case TypeKind::Restricted:
+      return "restricted " + (elem ? elem->name() : std::string("?"));
     case TypeKind::Boolean: return "boolean";
     case TypeKind::Char:    return "char";
     case TypeKind::Void:    return "void";

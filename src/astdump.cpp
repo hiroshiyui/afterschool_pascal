@@ -739,6 +739,9 @@ struct Dumper {
     case TEK::Inquiry:
       headType("typeof " + t->name, t);
       break;
+    case TEK::Restricted:
+      headType("restricted " + t->name, t);
+      break;
     // A discriminated-schema's children are *expressions*, not denoters: it is
     // the only type-denoter whose subtree holds values rather than types.
     case TEK::Schema:
