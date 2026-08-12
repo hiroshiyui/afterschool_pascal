@@ -2106,9 +2106,33 @@ void CodeGen::emitWriteArgs(WriteStmt *s, llvm::Value *file) {
   llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
   llvm::Value *noWidth = ConstantInt::getSigned(i32(), -1);
 
+  // ISO 7185 §6.9.3.1 requires TotalWidth and FracDigits to be at least one;
+  // ISO/IEC 10206:1991 §6.10.3.1 moves the bound to zero — "it shall be an
+  // error if the value is less than zero" — which is what makes `write(e:0)`
+  // legal and D.102/D.103 what makes a negative one an error either way.
+  //
+  // The check is emitted *here* rather than made in the runtime, because the
+  // bound is the one thing about it that the standard decides and the runtime
+  // is never told which standard it was compiled for. It also keeps -1 usable
+  // as the "no width given" sentinel: no width that reaches the runtime is
+  // ever negative, so the two cannot be confused.
+  bool extended = sema_.std() == Std::Extended;
+  long long least = extended ? 0 : 1;
+  auto checkedWidth = [&](llvm::Value *v, const char *what) {
+    emitTrapIf(
+        b_.CreateICmpSLT(v, ConstantInt::getSigned(i32(), least)),
+        std::string("a ") + what +
+            (extended ? " must not be negative" : " must be at least one"));
+    return v;
+  };
+
   for (auto &arg : s->args) {
-    llvm::Value *width = arg.width ? emitExpr(arg.width.get()) : noWidth;
-    llvm::Value *prec = arg.prec ? emitExpr(arg.prec.get()) : noWidth;
+    llvm::Value *width =
+        arg.width ? checkedWidth(emitExpr(arg.width.get()), "field width")
+                  : noWidth;
+    llvm::Value *prec =
+        arg.prec ? checkedWidth(emitExpr(arg.prec.get()), "fraction length")
+                 : noWidth;
 
     // A string is written as its address plus its length — which covers a
     // literal, since that is what a literal's type is, and a variable-string

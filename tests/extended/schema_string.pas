@@ -62,7 +62,9 @@ begin
   against(b);
 
   { A width applies to a string the same way it does to any other written
-    value, and the length it pads to is the one just computed. }
+    value, and the length it pads to is the one just computed. A width *below*
+    that length truncates, which is §6.10.3.6's third case — and ISO 7185
+    §6.9.3.6's before it. }
   writeln('[', short:6, ']');
   writeln('[', short:1, ']');
 

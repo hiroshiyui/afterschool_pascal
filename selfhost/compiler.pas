@@ -19327,15 +19327,55 @@ end;
 { The write-parameters of the text form (6.10.3), emitted into whichever file
   is given -- the one the statement named, or 6.7.5.5's auxiliary variable when
   this is a writestr. Nothing here knows which. }
+{ ISO 7185 6.9.3.1 requires TotalWidth and FracDigits to be at least one;
+  ISO/IEC 10206:1991 6.10.3.1 moves the bound to zero -- "it shall be an error
+  if the value is less than zero" -- which is what makes write(e:0) legal and
+  D.102/D.103 what makes a negative one an error either way.
+
+  The check is emitted here rather than made in the runtime, because the bound
+  is the one thing about it the standard decides and the runtime is never told
+  which standard it was compiled for. It also keeps -1 usable as the "no width
+  given" sentinel: no width that reaches the runtime is ever negative. }
+procedure CheckedWidth(var v: str; isPrec: boolean);
+var least, msg: integer; leastOp, bad: str;
+begin
+  if langStd = stdExtended then least := 0 else least := 1;
+  OpInt(least, leastOp);
+  Def(bad);
+  write(ircode, 'icmp slt i32 ');
+  PutOp(v);
+  write(ircode, ', ');
+  PutOp(leastOp);
+  writeln(ircode);
+  MsgStart;
+  if isPrec then MsgText('a fraction length                       ')
+  else MsgText('a field width                           ');
+  if langStd = stdExtended then
+    MsgText(' must not be negative                   ')
+  else
+    MsgText(' must be at least one                   ');
+  msg := MsgEnd;
+  EmitTrapIf(bad, msg)
+end;
+
+{ The write-parameters of the text form (6.10.3), emitted into whichever file
+  is given -- the one the statement named, or 6.7.5.5's auxiliary variable when
+  this is a writestr. Nothing here knows which. }
 procedure EmitWriteArgs(s: nodePtr; var fh: str);
 var v, width, prec, addr, slen, shdr, sdata: str;
     a: nodePtr; b: typePtr;
 begin
     a := s^.wrArgs;
     while a <> nil do begin
-      if a^.waWidth <> nil then EmitExpr(a^.waWidth, width)
+      if a^.waWidth <> nil then begin
+        EmitExpr(a^.waWidth, width);
+        CheckedWidth(width, false)
+      end
       else OpInt(-1, width);
-      if a^.waPrec <> nil then EmitExpr(a^.waPrec, prec)
+      if a^.waPrec <> nil then begin
+        EmitExpr(a^.waPrec, prec);
+        CheckedWidth(prec, true)
+      end
       else OpInt(-1, prec);
 
       { A packed array of char is written as its address plus its length --

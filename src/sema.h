@@ -254,6 +254,13 @@ public:
   /// supplier is always textually earlier than what it supplies.
   const std::vector<Symbol *> &activeModules() const { return active_; }
 
+  /// Which standard the source was compiled for — the second whole-program
+  /// answer Sema hands over, after `activeModules`. CodeGen needs it for one
+  /// thing only: §6.9.3.1 and §6.10.3.1 give a write-parameter's field width
+  /// different least values, and the check is emitted rather than made in the
+  /// runtime, which is never told which language it was compiled for.
+  Std std() const { return std_; }
+
 private:
   void installPredefined();
   Symbol *declare(const std::string &name, SymKind kind, int line, int col);

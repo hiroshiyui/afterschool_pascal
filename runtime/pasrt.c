@@ -798,41 +798,92 @@ static FILE *pas_out(void *v) {
 
 void pas_write_int(void *v, long long val, int width) {
   FILE *o = pas_out(v);
+  /* §6.10.3.3 b): a TotalWidth of zero is not "suppress" — 0 is always less
+   * than IntDigits + 1, so what is written is the sign and the digits, which
+   * is what a zero field width means to printf too. */
   if (width < 0) fprintf(o, "%lld", val);
   else fprintf(o, "%*lld", width, val);
+}
+
+/* ISO/IEC 10206:1991 §6.10.3.6, and ISO 7185 §6.9.3.6 before it: a string of
+ * length n written with a field width is padded on the left when TotalWidth
+ * exceeds n, *truncated to its first TotalWidth characters* when
+ * 1 <= TotalWidth <= n, and written as no characters at all when TotalWidth is
+ * zero — the last of which is Extended Pascal's addition, since ISO 7185
+ * required TotalWidth >= 1. The truncation is not new: it was always the
+ * rule, and this runtime did not honour it.
+ *
+ * §6.10.3.5 makes a Boolean "equivalent to writing the appropriate
+ * character-string 'True' or 'False' ... with a field-width parameter of
+ * TotalWidth", so it is the same three cases and the same code. */
+static void pas_write_padded(FILE *o, const char *s, int len, int width) {
+  if (width < 0) { /* no width given: the default is the string's own length */
+    fwrite(s, 1, (size_t)len, o);
+    return;
+  }
+  if (width > len) {
+    int pad = width - len;
+    while (pad-- > 0) putc(' ', o);
+    fwrite(s, 1, (size_t)len, o);
+    return;
+  }
+  fwrite(s, 1, (size_t)width, o); /* width == 0 writes nothing */
 }
 
 void pas_write_real(void *v, double val, int width, int prec) {
   FILE *o = pas_out(v);
   if (prec >= 0) {
-    /* fixed-point form: write(x:w:p) */
-    if (width < 0) fprintf(o, "%.*f", prec, val);
-    else fprintf(o, "%*.*f", width, prec, val);
-  } else if (width < 0) {
-    /* default form is floating (scientific), with a slot for the sign */
-    fprintf(o, "% .12E", val);
-  } else {
-    fprintf(o, "%*.6E", width, val);
+    /* Fixed-point form, §6.10.3.4.2. Its representation ends with "the
+     * character '.', the next FracDigits digit-characters", and the '.' is
+     * unconditional — so a FracDigits of zero, which Extended Pascal made
+     * legal, still writes it, where C's "%.0f" does not. MinNumChars counts
+     * that character, which is why the padding is computed around it. */
+    if (prec == 0) {
+      int pad = width - (snprintf(NULL, 0, "%.0f", val) + 1);
+      while (pad-- > 0) putc(' ', o);
+      fprintf(o, "%.0f.", val);
+    } else if (width < 0) {
+      fprintf(o, "%.*f", prec, val);
+    } else {
+      fprintf(o, "%*.*f", width, prec, val);
+    }
+    return;
   }
+  /* Floating-point form, §6.10.3.4.1. ExpDigits is implementation-defined and
+   * here it is what the exponent needs — two digits, or three past 1e100,
+   * which is what C's %E writes. DecPlaces is then ActWidth - ExpDigits - 5,
+   * so the representation is exactly ActWidth characters wide and the width
+   * needs no padding of its own. The space flag supplies §6.10.3.4.1's sign
+   * character, which is a space rather than nothing for a positive value.
+   *
+   * With no width given the default TotalWidth is implementation-defined
+   * (E.24); it is ExpDigits + 17 here, which is what makes DecPlaces 12
+   * whatever the exponent costs. */
+  int expDigits = 2;
+  if (val != 0.0 && !isnan(val) && !isinf(val)) {
+    double mag = fabs(log10(fabs(val)));
+    if (mag >= 100.0) expDigits = 3;
+  }
+  int actWidth = width < 0 ? expDigits + 17 : width;
+  if (actWidth < expDigits + 6) actWidth = expDigits + 6;
+  fprintf(o, "% *.*E", actWidth, actWidth - expDigits - 5, val);
 }
 
 void pas_write_bool(void *v, int val, int width) {
-  FILE *o = pas_out(v);
   const char *s = val ? "TRUE" : "FALSE";
-  if (width < 0) fputs(s, o);
-  else fprintf(o, "%*s", width, s);
+  pas_write_padded(pas_out(v), s, val ? 4 : 5, width);
 }
 
 void pas_write_char(void *v, char c, int width) {
   FILE *o = pas_out(v);
+  /* §6.10.3.2: "if TotalWidth = 0, no characters." */
+  if (width == 0) return;
   if (width < 0) putc(c, o);
   else fprintf(o, "%*c", width, c);
 }
 
 void pas_write_str(void *v, const char *s, int len, int width) {
-  FILE *o = pas_out(v);
-  if (width <= len) fwrite(s, 1, (size_t)len, o);
-  else fprintf(o, "%*.*s", width, len, s);
+  pas_write_padded(pas_out(v), s, len, width);
 }
 
 void pas_writeln(void *v) { putc('\n', pas_out(v)); }
