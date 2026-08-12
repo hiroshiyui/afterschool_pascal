@@ -383,7 +383,17 @@ tracks it.
 bootstrap purposes — and the bar for a new feature has therefore *changed*
 rather than risen. During the bootstrap a feature needed a reason beyond "the
 standard has it"; now that is exactly the reason, because the goal is
-conformance with ISO 7185, and **that is now complete**.
+conformance with ISO 7185.
+
+**ISO 7185 is not quite complete, and the docs said it was.** §6.6.5.4's
+`pack` and `unpack` and §6.9.5's `page` are rejected under both standards.
+They were missed rather than declined — `pack` and `unpack` are in
+`isRequiredName` so §6.6.3.7 can refuse passing one as a parameter, and
+nowhere else; `page` is absent entirely. They are required procedures of
+ISO/IEC 10206:1991 as well (§6.7.5.4, §6.9.5), so it is one gap in both
+standards. A documentation audit found it; three separate documents had
+asserted completeness, which is why the claim is worth re-testing rather than
+inheriting.
 
 **Stage 2 has begun** (ADR-0033). `--std=iso7185` is the default and
 `--std=extended` is ISO/IEC 10206:1991. The two are *not* nested: Extended

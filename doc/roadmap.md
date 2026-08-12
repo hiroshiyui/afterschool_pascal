@@ -249,9 +249,15 @@ surprises.
   several `char` values. That is a deliberate non-decision: encoding is the
   program's business. It does mean a Pascal-hosted lexer sees bytes, which is
   fine while the language it lexes is ASCII.
-- **Not implemented at all:** nothing. Sets (ADR-0028), `goto` (ADR-0029 and
-  ADR-0032), procedural parameters (ADR-0030) and non-text files (ADR-0031)
-  were this group, and it is now empty — **ISO 7185 is complete**.
+- **Not implemented at all:** §6.6.5.4's `pack` and `unpack`, and §6.9.5's
+  `page`. Sets (ADR-0028), `goto` (ADR-0029 and ADR-0032), procedural
+  parameters (ADR-0030) and non-text files (ADR-0031) were also in this group
+  and have landed, but the group is **not** empty and ISO 7185 is therefore
+  **not** complete. The three were missed rather than declined: `pack` and
+  `unpack` appear in `isRequiredName` — so that §6.6.3.7 can refuse passing one
+  as a parameter — and nowhere else, and `page` is not there at all. They are
+  required procedures of ISO/IEC 10206:1991 too (§6.7.5.4, §6.9.5), so this is
+  one gap in both standards rather than a stage-1 leftover.
 - **A set's base type must have its values in 0..255**, because every set is
   one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
   this is a permitted limit rather than a deviation — but `set of integer` is a

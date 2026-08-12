@@ -26,7 +26,14 @@ build/bin/pascalc --emit-llvm hello.pas   # -> hello.ll
 build/bin/pascalc -c hello.pas            # -> hello.o
 build/bin/pascalc -O0 hello.pas           # -O0..-O3, default -O2
 build/bin/pascalc --std=extended hello.pas  # ISO/IEC 10206:1991 instead
+build/bin/pascalc --keep-temps hello.pas  # keep the intermediate .o
+build/bin/pascalc --help                  # the full option list
 ```
+
+`-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
+`--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three;
+they exist so the Pascal compiler can be diffed against this one, and are
+described under "Stage 1" below.
 
 The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
 `pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
@@ -67,16 +74,27 @@ operators  + - * / div mod, and or not (short-circuiting),
            <= >= on sets — inclusion, and `in` — membership
 functions  abs sqr odd ord chr succ pred sqrt sin cos ln exp arctan
            trunc round eof eoln
-procedures new, dispose, reset, rewrite, get, put
+procedures new, dispose, reset, rewrite, get, put,
+           new(p, c1..cn) and dispose(p, c1..cn) — the variant-selecting
+           forms of §6.6.5.3, which allocate only the arms chosen
 literals   integers, reals, 'strings', '' escapes, nil,
            [a, b..c] set constructors, and [] the empty set,
            { } and (* *) comments
 constants  named constants, plus predefined true, false, maxint
 ```
 
-**This is the whole of ISO 7185.** Every feature of the standard is
-implemented; what is left of the language is the next standard, not more of
-this one.
+**Three required procedures of ISO 7185 are still missing**, and they are the
+whole of what is: §6.6.5.4's `pack` and `unpack`, which copy between an
+unpacked array and a packed one, and §6.9.5's `page`, which writes a page
+separator to a text file. Everything else in the standard is implemented, in
+both `--std` modes — the names above are rejected under either.
+
+Two things this compiler is **more permissive** about than ISO 7185, both
+stated rather than intended. The declaration parts may come in any order and
+may repeat, even under `--std=iso7185`, where §6.2.1 fixes them as label,
+const, type, var — that is ISO/IEC 10206:1991's rule, and it is not gated. And
+`packed` is accepted on a `set`, where it has nothing to do: every set is one
+256-bit word whatever is written.
 
 Enumerations and subranges are ordinal types like `char`: they index arrays,
 drive `for` loops, answer `ord`/`succ`/`pred`, and select `case` arms. `succ`
@@ -184,13 +202,16 @@ passes through unchanged, but a multi-byte character is several `char` values:
 language's.
 
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
-A real written without a width comes out in floating form (`5.0E-01` style);
-with a width and a fraction length it comes out fixed-point.
+A real written without a width comes out in floating form with twelve fraction
+digits (` 5.000000000000E-01`); a width narrows the significand (`write(x:8)`
+gives ` 5.0E-01`), and a width with a fraction length gives fixed-point. Under
+`--std=iso7185` a width below 1 is itself an error, and stops the program.
 
 **Errors are detected, not ignored.** ISO 7185 calls integer overflow, an array
 subscript outside its bounds, a value stored outside a subrange, a `case` whose
-selector matches no label, a dereference of `nil`, `chr` of a non-ordinal,
-`succ` past the end of a type, and `trunc` of a real too large *errors*; this
+selector matches no label, a dereference of `nil`, division by zero, `chr` of
+a value that is no character's ordinal, `succ` past the end of a type, and
+`trunc` of a real too large *errors*; this
 compiler stops the program with a message rather than letting it wrap, read
 past the array, or produce an arbitrary value:
 
@@ -317,7 +338,11 @@ strings    string(n) — the required schema of §6.4.3.3.3: a length and up
            trim answer about one, and eq, ne, lt, gt, le, ge compare
            lengths as well as characters — so `eq('ab','ab  ')` is false
            where `'ab' = 'ab  '` is true, which is the standard's own
-           example. '' is the null-string
+           example. '' is the null-string. read(f, s) fills one (§6.10.1):
+           it does not skip leading blanks, never crosses an end-of-line,
+           and takes at most the capacity — a substring target included.
+           A single statement may not concatenate more than the runtime's
+           string arena holds, and stops the program if it does
 binding    var f: bindable text — a variable that may be bound to
            something outside the program. bind(f, b) attaches it to the
            file named by b.name, unbind(f) detaches it, and binding(f)
@@ -343,7 +368,9 @@ modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            finalised in the reverse (§6.2.3.6), and one that supplies
            nothing is never activated at all. StandardInput and
            StandardOutput are the required interfaces a module imports to
-           reach `input` and `output`
+           reach `input` and `output`, or the module-heading may name them
+           itself — `module m(output)`. An import-part may head *any*
+           block (§6.2.1), not only a module's
 const      const n = base * 2 — a constant-expression: wherever ISO 7185
            asked for a constant, the whole expression grammar is now
            admitted, so a subrange bound, an array bound, a case label, a
@@ -442,9 +469,6 @@ time       §6.7.5.8's GetTimeStamp(t) fills a TimeStamp — §6.4.3.4's packed
            otherwise. A value that names no calendar date gives the
            standard's fallbacks with the flags false, rather than quietly
            reverting to the clock
-           "Current" is the system clock, or the instant SOURCE_DATE_EPOCH
-           names when that variable is set — read as UTC, so a build that
-           fixes it gets the same answer anywhere
 words      otherwise, pow, protected, value, bindable, restricted, module, export,
            import, only and qualified are reserved; `and then`,
            `or else` and `type of` reserve nothing new, because all of
@@ -459,10 +483,12 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            in the one position each may occupy, exactly as `forward` is
 ```
 
-Also absent: §6.8.8's constant-accesses — a component of a constant that has a
-structured value, `c[i]` for a `const c = t[1: 1; 2: 2]`, where §6.8.8.1's own
-NOTE points out that the index need not be constant and `c[i]` therefore
-denotes a different value on each iteration of a loop.
+Also absent: a **structured-valued constant**. `const c = t[1: 1; 2: 2]` is
+refused — there is nowhere to keep an array-, record-, set- or string-valued
+constant — and §6.8.8's constant-access `c[i]` goes with it, whose own NOTE
+points out that the index need not be constant and `c[i]` therefore denotes a
+different value on each iteration of a loop. Assigning such a value to a
+*variable*, `q := t[1: 1; 2: 2]`, does work; it is the constant that does not.
 
 **All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
 though the language is not. A word-symbol is reserved only when the feature
@@ -485,9 +511,9 @@ stage-1 compiler could not write. See
 | `src/lexer.cpp` | source text to tokens; folds case, handles both comment forms |
 | `src/parser.cpp` | recursive descent over the ISO grammar, builds the AST |
 | `src/astdump.cpp` | the `--dump-*` format — a specification, since the Pascal compiler writes it too |
-| `src/ast.h` | tag-dispatched nodes (`NK` + `as<T>()`), no C++ RTTI |
+| `src/ast.h` | tag-dispatched nodes — an explicit node tag and a checked downcast helper, no C++ RTTI |
 | `src/sema.cpp` | scopes, name resolution, type checking, constant folding |
-| `src/codegen.cpp` | AST to LLVM IR via `IRBuilder`; `main` is the program body |
+| `src/codegen.cpp` | AST to LLVM IR through LLVM's C++ API; `main` is the program body |
 | `src/main.cpp` | driver: optimisation pipeline, object emission, linking |
 | `runtime/pasrt.c` | formatted output and runtime checks |
 | `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
@@ -654,13 +680,13 @@ parser (one file per message, because the parser stops at its first error) and
 [ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md) and
 [ADR-0024](doc/adr/0024-the-stage-1-compiler-becomes-one-source-file.md).
 
-The AST is where the bootstrap constraints paid off: the `NK` tag of
+The AST is where the bootstrap constraints paid off: the node tag of
 [ADR-0005](doc/adr/0005-tag-dispatched-ast-without-cpp-rtti.md) became a
-variant record's tag and `as<T>()` became the `case` that reads it, with no
-`dynamic_cast` to replace and nothing to redesign.
+variant record's tag and the downcast helper became the `case` that reads it,
+with no `dynamic_cast` to replace and nothing to redesign.
 
 The code generator is the one component that is **not** diffed, and could not
-be: the C++ backend builds an `llvm::Module` through the API while the Pascal
+be: the C++ backend builds the module through LLVM's C++ API while the Pascal
 one prints assembler text, and LLVM's own printer is not a specification — it
 renumbers, reorders and changes between releases. So it is checked by *running*
 what it produces, against the same golden output the C++ compiler is held to,
@@ -713,6 +739,12 @@ file (ADR-0034).
   `/dev/null`, so a program that reads sees end-of-file rather than waiting for
   a terminal. Two writable scratch paths are always passed as arguments, so a
   program whose header names external files has somewhere to put them.
+* `name.epoch` — one integer, seconds since 1970-01-01 UTC, exported as
+  `SOURCE_DATE_EPOCH` so the program's idea of "now" is fixed. Extended
+  Pascal §6.7.5.8 leaves the current date and time implementation-defined and
+  this compiler defines them from that variable, which is what lets a golden
+  file name a date. Without the file the variable is *unset*, so every other
+  case runs against the real clock whatever the environment holds.
 
 `tests/run_test.sh` compiles, runs, and diffs. Source paths are rewritten to
 `<source>` in stderr, so diagnostics can be pinned without depending on where
