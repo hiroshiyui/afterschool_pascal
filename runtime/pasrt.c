@@ -191,6 +191,16 @@ struct pas_file {
   int compsize;  /* the size of one component in bytes; 1 for a text */
   int ateof;     /* non-text: the fetch that filled `have` found no component */
   char ch;       /* the buffer variable of a text file */
+  /* ISO 7185 §6.9.1 c) and d) read the *longest* prefix that forms a number:
+   * "s shall, and s ~ S(t.first) shall not, form a signed-integer" — so `1.`
+   * is the integer 1 followed by a point, because `1.` is not an unsigned-real
+   * (§6.1.5 requires digits after the point). A file offers one character of
+   * lookahead (ADR-0021) and that is one short of deciding: the point has to
+   * be consumed before the character after it can be seen. These two are where
+   * an over-read is given back, most recent first — at most a point, or an
+   * `e` and the sign that followed it. */
+  char pushback[2];
+  unsigned char npush;
   /* ISO 7185 §6.9.5: `page(f)` performs an implicit `writeln(f)` "if f.L is
    * not empty and if f.L.last is not the end-of-line component" — so the
    * one thing it needs to know is whether the current line has anything on
@@ -308,6 +318,7 @@ static void pas_seek(void *v, int n, int mode, const char *op) {
    * new mode is; a read or update then refills it from where we now are. */
   f->have = 0;
   f->ateof = 0;
+  f->npush = 0;
   f->mode = mode;
 }
 
@@ -408,6 +419,7 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->compsize = compsize > 0 ? compsize : 1;
   f->ateof = 0;
   f->ch = ' ';
+  f->npush = 0;
   /* A file nothing has been written to is at the start of a line, which is
    * what makes `page` as the first statement write one form feed and no
    * blank line before it (§6.9.5). */
@@ -488,6 +500,11 @@ void pas_reset(void *v) {
   f->lookahead = EOF;
   f->ateof = 0;
   f->ch = ' ';
+  /* A character given back by a number read belongs to the position it was
+   * read from, so it dies with the position. `reset(input)` returns above
+   * without reaching here, which is what keeps ADR-0073's promise that it
+   * loses nothing. */
+  f->npush = 0;
   switch (f->binding) {
   case PAS_BIND_INPUT: break; /* answered above */
   case PAS_BIND_OUTPUT:
@@ -527,6 +544,11 @@ void pas_rewrite(void *v) {
   f->lookahead = EOF;
   f->ateof = 0;
   f->ch = ' ';
+  /* A character given back by a number read belongs to the position it was
+   * read from, so it dies with the position. `reset(input)` returns above
+   * without reaching here, which is what keeps ADR-0073's promise that it
+   * loses nothing. */
+  f->npush = 0;
   switch (f->binding) {
   case PAS_BIND_INPUT:
     pas_runtime_error("rewrite applied to the standard input");
@@ -569,6 +591,16 @@ static void pas_fill(struct pas_file *f) {
     size_t n = fread(f->buf, 1, (size_t)f->compsize, f->fp);
     f->ateof = n != (size_t)f->compsize;
     f->have = 1;
+    return;
+  }
+  /* A character given back by pas_unread is next, before the stream. The
+   * order is most-recent-first, because an over-read is undone one character
+   * at a time from the end. */
+  if (f->npush) {
+    f->lookahead = (unsigned char)f->pushback[--f->npush];
+    f->have = 1;
+    f->ateof = 0;
+    f->ch = (char)f->lookahead;
     return;
   }
   f->lookahead = getc(f->fp);
@@ -631,6 +663,11 @@ void pas_extend(void *v) {
   f->lookahead = EOF;
   f->ateof = 0;
   f->ch = ' ';
+  /* A character given back by a number read belongs to the position it was
+   * read from, so it dies with the position. `reset(input)` returns above
+   * without reaching here, which is what keeps ADR-0073's promise that it
+   * loses nothing. */
+  f->npush = 0;
   switch (f->binding) {
   case PAS_BIND_INPUT:
     pas_runtime_error("extend applied to the standard input");
@@ -735,6 +772,23 @@ static void pas_skip_blanks(struct pas_file *f) {
   }
 }
 
+/* Give back one character that was consumed while looking for the end of a
+ * number, making it the buffer variable again. Whatever the buffer variable
+ * held has not been consumed by the program either, so it goes behind — which
+ * is why `pushback` is a stack and not a queue. Only ever called with '.',
+ * 'e', 'E', '+' or '-', so `ch` is that character rather than the space a line
+ * marker would show (§6.4.3.5). */
+static void pas_unread(struct pas_file *f, char c) {
+  if (f->have && f->lookahead != EOF) {
+    /* Two is the deepest an over-read goes: `e` and the sign after it. */
+    f->pushback[f->npush++] = (char)f->lookahead;
+  }
+  f->lookahead = (unsigned char)c;
+  f->have = 1;
+  f->ateof = 0;
+  f->ch = c;
+}
+
 long long pas_read_int(void *v) {
   struct pas_file *f = v;
   int negative = 0;
@@ -780,31 +834,56 @@ double pas_read_real(void *v) {
     f->have = 0;
     pas_fill(f);
   }
-  if (f->lookahead == '.' && n + 1 < sizeof buf) {
-    buf[n++] = '.';
+  /* §6.1.5 makes both halves obligatory: `unsigned-real = digit-sequence '.'
+   * fractional-part [...]`, so `1.` is not a signed-number and neither is
+   * `.5`. The point therefore belongs to whatever follows unless digits stand
+   * on both sides of it — and it has to be consumed to find out what is on the
+   * right, which is what the give-back is for. */
+  if (f->lookahead == '.' && digits && n + 1 < sizeof buf) {
     f->have = 0;
     pas_fill(f);
-    while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
-      buf[n++] = (char)f->lookahead;
-      ++digits;
-      f->have = 0;
-      pas_fill(f);
+    if (f->lookahead >= '0' && f->lookahead <= '9') {
+      buf[n++] = '.';
+      while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
+        buf[n++] = (char)f->lookahead;
+        ++digits;
+        f->have = 0;
+        pas_fill(f);
+      }
+    } else {
+      pas_unread(f, '.');
     }
   }
+  /* The same for the scale factor: `scale-factor = [ sign ] digit-sequence`,
+   * so `2e` and `2e+` are the integer 2 followed by characters the program has
+   * not read yet. Up to two are given back, and the order matters — the sign
+   * has to come out before the character that followed it. */
   if ((f->lookahead == 'e' || f->lookahead == 'E') && digits &&
-      n + 1 < sizeof buf) {
-    buf[n++] = 'e';
+      n + 2 < sizeof buf) {
+    /* The `e` given back has to be the one that was written: §6.1.5 admits
+     * either case, and the program reads the character, not its meaning. */
+    char exp = (char)f->lookahead;
+    char sign = '\0';
     f->have = 0;
     pas_fill(f);
-    if ((f->lookahead == '+' || f->lookahead == '-') && n + 1 < sizeof buf) {
-      buf[n++] = (char)f->lookahead;
+    if (f->lookahead == '+' || f->lookahead == '-') {
+      sign = (char)f->lookahead;
       f->have = 0;
       pas_fill(f);
     }
-    while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
-      buf[n++] = (char)f->lookahead;
-      f->have = 0;
-      pas_fill(f);
+    if (f->lookahead >= '0' && f->lookahead <= '9') {
+      buf[n++] = 'e';
+      if (sign)
+        buf[n++] = sign;
+      while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
+        buf[n++] = (char)f->lookahead;
+        f->have = 0;
+        pas_fill(f);
+      }
+    } else {
+      if (sign)
+        pas_unread(f, sign);
+      pas_unread(f, exp);
     }
   }
   if (!digits)
@@ -1057,6 +1136,7 @@ void pas_bind(void *v, const char *name, int len) {
   f->mode = PAS_CLOSED;
   f->have = 0;
   f->ateof = 0;
+  f->npush = 0;
   /* §6.7.5.6 makes a bound file-variable bindable, and §6.10's binding of a
    * program parameter is what this replaces — so it becomes one. */
   f->binding = PAS_BIND_ARG;
@@ -1100,6 +1180,7 @@ void pas_unbind(void *v) {
   f->mode = PAS_CLOSED;
   f->have = 0;
   f->ateof = 0;
+  f->npush = 0;
 }
 
 /* §6.7.6.8: "If the variable is bound to an external entity, the value of
