@@ -942,14 +942,14 @@ type
         is nothing else `a.b` could be there -- a type has no fields to select
         -- so unlike an expression this needs no help from Sema. }
       nkNamed:      (nmAt, nmLen, nmQualAt, nmQualLen: integer);
-      nkInquiry:    (tqAt, tqLen: integer);
+      nkInquiry:    (tqAt, tqLen, tqQualAt, tqQualLen: integer);
       { 6.4.2.5's restricted-type, `restricted type-name`. The syntax admits a
         *name* and nothing else, so there is no nested denoter and no recursion
         to bound. }
-      nkRestricted: (rtAt, rtLen: integer);
+      nkRestricted: (rtAt, rtLen, rtQualAt, rtQualLen: integer);
       nkSchema:     (scAt, scLen, scQualAt, scQualLen: integer;
                      scArgs, scArgTail: nodePtr);
-      nkPointer:    (ptAt, ptLen: integer);
+      nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer);
       nkEnum:       (enConstants: nodePtr);
       nkSubrange:   (sbLo, sbHi: nodePtr);
       nkArray:      (arDims, arElem: nodePtr; arPacked: boolean);
@@ -2753,8 +2753,16 @@ begin
           done := true
         end
       end
+      else if k = tkPeriod then begin
+        { 6.11.3's qualified name puts a `.` *inside* a bound, so it ends the
+          denoter only when no identifier follows it. The program's final
+          `end.` is never reached: `end` stops the scan a token earlier. }
+        if depth = 0 then
+          if not ((i + 1 <= tokCount) and (tok[i + 1].kind = tkIdent)) then
+            done := true
+      end
       else if (k = tkSemi) or (k = tkComma) or (k = tkColon) or (k = tkEq) or
-              (k = tkPeriod) or (k = tkOf) or (k = tkEnd) or (k = tkBegin) or
+              (k = tkOf) or (k = tkEnd) or (k = tkBegin) or
               (k = tkEof) then begin
         if depth = 0 then done := true
       end;
@@ -2980,9 +2988,12 @@ begin
   while (not done) and (not Check(tkRBracket)) and (not Check(tkEof)) and
         (not aborted) do begin
     { 6.8.7.3's variant-part-value ends a field-list-value, so nothing may
-      follow it -- which is why it is read here rather than as an element. }
+      follow it -- which is why it is read here rather than as an element. The
+      trailing `[ ';' ]` of the production sits *outside* the alternation, so
+      it may follow one; it separates nothing, and the ']' is next either way. }
     if Check(tkCase) then begin
       ParseVariantPartValue(n);
+      if Accept(tkSemi) then ;   { taken when written, and nothing follows it }
       done := true
     end
     else begin
@@ -3234,6 +3245,30 @@ begin
   ParseTypeExpr := t
 end;
 
+{ ISO/IEC 10206:1991 6.11.3's optional `imported-interface-identifier '.'`.
+  `type-name`, `schema-name` and `variable-name` all carry it, and a
+  type-denoter is the one place it needs no help from Sema to recognise: a type
+  has no fields to select, so `a.b` there has exactly one reading.
+  Reads the name into `at`/`len` and moves it to the qualifier if one was
+  written. }
+procedure ParseQualifiedName(var qualAt, qualLen, at, len: integer);
+begin
+  at := tok[pos].at;
+  len := tok[pos].len;
+  qualAt := 0;
+  qualLen := 0;
+  pos := pos + 1;
+  if (langStd = stdExtended) and Check(tkPeriod) and
+     (PeekKind(1) = tkIdent) then begin
+    qualAt := at;
+    qualLen := len;
+    pos := pos + 1;
+    at := tok[pos].at;
+    len := tok[pos].len;
+    pos := pos + 1
+  end
+end;
+
 function ParseTypeDenoter;
 var t, n: nodePtr; packed_: boolean;
 begin
@@ -3300,11 +3335,8 @@ begin
         writeln('''restricted'' must be followed by a type name');
         Bail
       end
-      else begin
-        t^.rtAt := tok[pos].at;
-        t^.rtLen := tok[pos].len;
-        pos := pos + 1
-      end
+      else
+        ParseQualifiedName(t^.rtQualAt, t^.rtQualLen, t^.rtAt, t^.rtLen)
     end
     { pointer-type = '^' type-identifier. ISO 7185 6.4.4 requires a type
       *identifier* rather than a type-denoter, and that restriction is what
@@ -3318,11 +3350,8 @@ begin
         writeln('the domain of a pointer type must be a type name');
         Bail
       end
-      else begin
-        t^.ptAt := tok[pos].at;
-        t^.ptLen := tok[pos].len;
-        pos := pos + 1
-      end
+      else
+        ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen)
     end
     { type-inquiry = 'type' 'of' type-inquiry-object (6.4.9). Both words are
       already reserved in ISO 7185, so this feature reserves nothing -- the
@@ -3332,6 +3361,8 @@ begin
       t := NewNode(nkInquiry, CurLine, CurCol);
       t^.tqAt := 0;
       t^.tqLen := 0;
+      t^.tqQualAt := 0;
+      t^.tqQualLen := 0;
       if langStd = stdIso7185 then begin
         ErrorAtCur;
         writeln('a type-inquiry is an Extended Pascal feature; compile with ',
@@ -3347,11 +3378,8 @@ begin
             writeln('''type of'' must name a variable or a parameter');
             Bail
           end
-          else begin
-            t^.tqAt := tok[pos].at;
-            t^.tqLen := tok[pos].len;
-            pos := pos + 1
-          end
+          else
+            ParseQualifiedName(t^.tqQualAt, t^.tqQualLen, t^.tqAt, t^.tqLen)
       end
     end
     else if Check(tkLParen) then
@@ -3373,24 +3401,7 @@ begin
     end
     else begin
       t := NewNode(nkNamed, CurLine, CurCol);
-      t^.nmAt := tok[pos].at;
-      t^.nmLen := tok[pos].len;
-      t^.nmQualAt := 0;
-      t^.nmQualLen := 0;
-      pos := pos + 1;
-
-      { 6.11.3's qualified name. In a type-denoter there is nothing else `a.b`
-        could be -- a type has no fields to select -- so unlike an expression
-        this needs no help from Sema to decide. }
-      if (langStd = stdExtended) and Check(tkPeriod) and
-         (PeekKind(1) = tkIdent) then begin
-        t^.nmQualAt := t^.nmAt;
-        t^.nmQualLen := t^.nmLen;
-        pos := pos + 1;
-        t^.nmAt := tok[pos].at;
-        t^.nmLen := tok[pos].len;
-        pos := pos + 1
-      end;
+      ParseQualifiedName(t^.nmQualAt, t^.nmQualLen, t^.nmAt, t^.nmLen);
 
       { ISO/IEC 10206:1991 6.4.8: a name followed by an actual-discriminant-
         part is a discriminated-schema. Nothing else in a type-denoter
@@ -6386,6 +6397,9 @@ procedure CheckBlock(b: nodePtr; owner: symPtr); forward;
 function IsInterfaceName(at, len: integer): boolean; forward;
 function LookupName(qAt, qLen, at, len, line, col: integer): symPtr; forward;
 function LookupQuiet(qAt, qLen, at, len: integer): symPtr; forward;
+{ 6.9.3.10 binds a schema's discriminants over a `with` statement, and the
+  symbols they bind to were made elsewhere -- which is what BindName is for. }
+procedure BindName(at, len: integer; s: symPtr; line, col: integer); forward;
 procedure CheckImports(specs: nodePtr; owner: symPtr); forward;
 procedure CheckGoto(s: nodePtr); forward;
 procedure CheckLabeled(s: nodePtr); forward;
@@ -7334,7 +7348,10 @@ begin
   t := NewType(tyPointer);
   t^.elem := BuiltinType(d^.ptAt, d^.ptLen);
   if t^.elem = nil then begin
-    s := Lookup(d^.ptAt, d^.ptLen);
+    { 6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
+      6.11.3's optional interface qualifier -- so an imported type may be a
+      pointer's domain, as it may be anything else a type-name reaches. }
+    s := LookupQuiet(d^.ptQualAt, d^.ptQualLen, d^.ptAt, d^.ptLen);
     if (s <> nil) and (s^.kind = skType) then
       t^.elem := s^.stype
     else if (s <> nil) and (s^.kind = skSchema) then begin
@@ -7376,6 +7393,11 @@ begin
       d := NewNode(nkPointer, p^.line, p^.col);
       d^.ptAt := p^.at;
       d^.ptLen := p^.len;
+      { A pending domain keeps the name and not the qualifier: what waits is a
+        name defined later in this very type part, and an interface's
+        constituents are all in place before the type part begins. }
+      d^.ptQualAt := 0;
+      d^.ptQualLen := 0;
       p^.ptype^.elem := HeapFromSchema(s, d)
     end
     else begin
@@ -8766,15 +8788,23 @@ begin
     `integer` singleton and every later `integer` printed as the restricted
     name. A placeholder returned from an error path is only safe while the path
     really is an error path. }
-  named := BuiltinType(d^.rtAt, d^.rtLen);
+  { A qualified name reaches only what an import brought, so a required
+    type-identifier is not among its answers: `i.integer` is not `integer`. }
+  if d^.rtQualLen > 0 then named := nil
+  else named := BuiltinType(d^.rtAt, d^.rtLen);
   done := false;
   if named = nil then begin
-    s := Lookup(d^.rtAt, d^.rtLen);
+    s := LookupName(d^.rtQualAt, d^.rtQualLen, d^.rtAt, d^.rtLen,
+                    d^.line, d^.col);
     if s = nil then begin
-      ErrorAt(d^.line, d^.col);
-      write('unknown type ''');
-      WritePool(d^.rtAt, d^.rtLen);
-      writeln('''');
+      { A qualified name that reached nothing has been reported by LookupName,
+        which knows which of its three ways it failed. }
+      if d^.rtQualLen = 0 then begin
+        ErrorAt(d^.line, d^.col);
+        write('unknown type ''');
+        WritePool(d^.rtAt, d^.rtLen);
+        writeln('''')
+      end;
       ResolveRestricted := intType;
       done := true
     end
@@ -8832,7 +8862,9 @@ begin
     pushes a scope before building the formals, so a parameter declared earlier
     in the same list is already an ordinary lookup by the time a later one's
     type-denoter asks. }
-  s := Lookup(d^.tqAt, d^.tqLen);
+  { 6.4.9's type-inquiry-object is a `variable-name` or a
+    `parameter-identifier`, and a variable-name carries the qualifier too. }
+  s := LookupQuiet(d^.tqQualAt, d^.tqQualLen, d^.tqAt, d^.tqLen);
   if s = nil then begin
     ErrorAt(d^.line, d^.col);
     write('unknown variable ''');
@@ -9881,11 +9913,14 @@ begin
       { 6.8.3.6 gives `+` a second meaning again -- string concatenation -- so
         it is taken before the numeric case, exactly as the set case is. "a + b
         shall denote a value of the canonical-string-type whose length shall be
-        equal to the sum of the length of a and the length of b." }
+        equal to the sum of the length of a and the length of b."
+        Table 7's operands are "Char-type or the canonical-string-type" and the
+        clause says "a and b", so *both* may be char: `c + d` is a two-character
+        string. char has no arithmetic `+` of its own in table 3, so nothing is
+        taken away by reading the table as it is written. }
       opAdd, opSub, opMul:
         if (b^.bnOp = opAdd) and (langStd = stdExtended) and
-           IsStringOrChar(l) and IsStringOrChar(r) and
-           not (IsChar(l) and IsChar(r)) then
+           IsStringOrChar(l) and IsStringOrChar(r) then
           b^.ntype := canonStringType
         else if not IsArith(l) or not IsArith(r) then begin
           BadOperands(b, l, r, 'numeric     ');
@@ -12423,12 +12458,31 @@ begin
   end
 end;
 
+{ Was this discriminant's name already written earlier in the same
+  formal-discriminant-part? A repeat was reported at the schema definition, and
+  naming it again here would report it once more at every `with` over a type
+  that schema produced -- the guard GenericFromSchema makes for the same reason
+  at every parameter naming the schema. }
+function RepeatedDisc(head, node: symListPtr): boolean;
+var q: symListPtr; found: boolean;
+begin
+  found := false;
+  q := head;
+  while (q <> nil) and (q <> node) do begin
+    if PoolSame(q^.sym^.at, q^.sym^.len, node^.sym^.at, node^.sym^.len) then
+      found := true;
+    q := q^.next
+  end;
+  RepeatedDisc := found
+end;
+
 { `with r do S` makes the fields of r visible as bare names throughout S. The
   record is designated once, so the binding holds its address and any subscripts
   in the designator are evaluated a single time. }
 procedure CheckWith(w: nodePtr);
-var t: typePtr; at, len: integer; entry: symListPtr; saved: stmtPathPtr;
-    root: nodePtr; constAccess: boolean;
+var t: typePtr; at, len, i: integer; entry: symListPtr; saved: stmtPathPtr;
+    root: nodePtr; constAccess, scoped: boolean;
+    mark: entryPtr; owner, k, disc: symPtr; p, q, ds: symListPtr; tv: numPtr;
 begin
   CheckExpr(w^.wtRecord);
   t := w^.wtRecord^.ntype;
@@ -12449,9 +12503,18 @@ begin
     CheckStmt(w^.wtBody);
     stmtPath := saved
   end
-  else if not IsRecord(t) then begin
+  { 6.9.3.10: the with-element "shall possess either a type produced from a
+    schema or a record-type" -- so a `vector(4)` is one although it has no
+    fields at all, and what it introduces is its discriminants rather than
+    field-identifiers. }
+  else if not (IsRecord(t) or ((t <> nil) and (t^.schema <> nil))) then begin
     ErrorAt(w^.wtRecord^.line, w^.wtRecord^.col);
-    write('''with'' needs a record variable, found ');
+    { ISO 7185 has no schemata, so naming one there would offer a remedy that
+      language does not have -- the same reason StandardFileRef words its
+      message by standard. }
+    write('''with'' needs a record variable');
+    if langStd = stdExtended then write(' or one produced from a schema');
+    write(', found ');
     if t = nil then write('nothing') else WriteTypeName(t);
     writeln;
     stmtPath := PushStmt(stmtPath, w);
@@ -12475,12 +12538,125 @@ begin
           entry^.sym^.isProtected := root^.vrSym^.isProtected;
     entry^.sym^.isConstBinding := constAccess;
     w^.wtBinding := entry^.sym;
+
+    { 6.9.3.10's other half: an element possessing a type produced from a
+      schema *with a tuple* makes each of the schema's formal discriminants a
+      schema-discriminant-identifier "for the region that is the statement" --
+      so they go in a scope, which is what a region is.
+
+      Each one denotes what `v.d` denotes and is therefore something Sema
+      already has a symbol for in two of the three shapes a produced type has:
+      the tuple's value, or -- where the tuple arrived with a schematic formal
+      parameter -- that parameter's own skDisc symbol, which reads the
+      descriptor. The third is the heap, where the tuple has no name at all;
+      see below. No node kind either way. }
+    scoped := t^.schema <> nil;
+    if scoped then begin
+      mark := scopeTop;
+      scopeDepth := scopeDepth + 1;
+      { 6.9.3.10 makes the field-identifiers *and* the discriminant-identifiers
+        defining-points for one region -- the statement -- and 6.2.2.7 allows a
+        region only one defining-point per spelling. Outside a `with` the two
+        sit in nested regions and the field shadows the discriminant legally
+        (6.2.2.5), so this is the with-statement's error and not the schema's.
+        Reported and then bound anyway: an error is accumulated, not bailed on,
+        and which of the two a later statement resolves to cannot matter once
+        the program has been refused.
+        FindField already walks the fixed part and every arm of every variant
+        part, and an arm's field-identifier is a field-identifier like any
+        other. }
+      if IsRecord(t) then begin
+        q := t^.schema^.discs;
+        while q <> nil do begin
+          if (not RepeatedDisc(t^.schema^.discs, q)) and
+             (FindField(t, q^.sym^.at, q^.sym^.len) <> nil) then begin
+            ErrorAt(w^.wtRecord^.line, w^.wtRecord^.col);
+            write('''');
+            WritePool(q^.sym^.at, q^.sym^.len);
+            write(''' is both a field of ');
+            WriteTypeName(t);
+            write(' and a discriminant of schema ''');
+            WritePool(t^.schema^.at, t^.schema^.len);
+            writeln(''', so ''with'' would give one name two meanings')
+          end;
+          q := q^.next
+        end
+      end;
+      p := t^.schema^.discs;
+      if t^.heapTuple then begin
+        { A heap variable's tuple is a header in front of it (ADR-0043), and
+          `v.d` finds that header by walking *down* the designator to the whole
+          variable. A bare name has no designator to walk, so the binding
+          carries the tuple as well as the address: it becomes the descriptor
+          ADR-0040 gives a schematic formal, and the discriminants are its own,
+          reached by the walk every enclosing variable makes. }
+        entry^.sym^.descSchema := t^.schema;
+        entry^.sym^.discSyms := nil;
+        entry^.sym^.discSymTail := nil;
+        i := 0;
+        while p <> nil do begin
+          disc := NewSymbol;
+          disc^.at := p^.sym^.at;
+          disc^.len := p^.sym^.len;
+          disc^.kind := skDisc;
+          disc^.stype := p^.sym^.stype;
+          disc^.discBinding := true;
+          disc^.owner := entry^.sym^.owner;
+          disc^.level := entry^.sym^.level;
+          disc^.frameIndex := entry^.sym^.frameIndex;
+          disc^.discIndex := i;
+          { Appended whether or not it is bound: discIndex is the header's own
+            numbering, so a skipped name may not shift the ones after it. }
+          AppendSym(entry^.sym^.discSyms, entry^.sym^.discSymTail, disc);
+          if not RepeatedDisc(t^.schema^.discs, p) then
+            BindName(disc^.at, disc^.len, disc, w^.line, w^.col);
+          i := i + 1;
+          p := p^.next
+        end
+      end
+      else if IsGeneric(t) then begin
+        { A schematic formal parameter's discriminants are already symbols with
+          storage -- the descriptor the actual brought -- so the entry is that
+          very symbol and nothing is copied. }
+        owner := nil;
+        root := RootDesignator(w^.wtRecord);
+        if root <> nil then
+          if root^.kind = nkVar then owner := root^.vrSym
+          else if root^.kind = nkField then owner := root^.fdQualified;
+        if owner = nil then ds := nil else ds := owner^.discSyms;
+        while (p <> nil) and (ds <> nil) do begin
+          if not RepeatedDisc(t^.schema^.discs, p) then
+            BindName(p^.sym^.at, p^.sym^.len, ds^.sym, w^.line, w^.col);
+          p := p^.next;
+          ds := ds^.next
+        end
+      end
+      else begin
+        { A tuple written as constants makes each discriminant a constant,
+          which is what 6.4.8 keys the produced type on. }
+        tv := t^.tuple;
+        while (p <> nil) and (tv <> nil) do begin
+          if not RepeatedDisc(t^.schema^.discs, p) then begin
+            k := Declare(p^.sym^.at, p^.sym^.len, skConst, w^.line, w^.col);
+            k^.stype := p^.sym^.stype;
+            k^.intVal := tv^.value
+          end;
+          p := p^.next;
+          tv := tv^.next
+        end
+      end
+    end;
+
     entry^.next := withTop;
     withTop := entry;
     stmtPath := PushStmt(stmtPath, w);
     CheckStmt(w^.wtBody);
     stmtPath := saved;
-    withTop := withTop^.next
+    withTop := withTop^.next;
+    if scoped then begin
+      scopeTop := mark;
+      scopeDepth := scopeDepth - 1
+    end
   end
 end;
 
@@ -13388,7 +13564,7 @@ end;
 { Put an existing symbol into the current scope under a spelling. An import
   does this, and so does a program or module parameter naming a required text
   file -- in each case the symbol was made elsewhere. }
-procedure BindName(at, len: integer; s: symPtr; line, col: integer);
+procedure BindName;
 begin
   if LookupInScope(at, len) <> nil then begin
     ErrorAt(line, col);
@@ -13740,7 +13916,7 @@ end;
 { One type-definition or schema-definition. A type name is visible to the
   definitions after it, so each is declared as it is resolved. }
 procedure CheckTypeDecl(d: nodePtr);
-var s: symPtr; t: typePtr;
+var s, named: symPtr; t: typePtr;
 begin
   { 6.4.7: a schema-definition declares a schema, not a type. Its body is
     *not* resolved here -- it has no discriminant values yet, and resolving
@@ -13748,18 +13924,39 @@ begin
   if d^.tdDiscs <> nil then
     DeclareSchema(d)
   else begin
-    t := ResolveType(d^.tdType);
-    s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
-    if s^.stype = nil then begin   { a duplicate: keep the first definition }
-      s^.stype := t;
-      { 6.4.1: a type-name denotes "the type, bindability and initial state"
-        its definition denoted, so the initial state travels with the name and
-        every variable of it is initialised. }
-      s^.initValue := InitialStateOf(d^.tdType);
-      s^.isBindable := BindableOf(d^.tdType);
-      if t^.aliasLen = 0 then begin
-        t^.aliasAt := d^.tdAt;
-        t^.aliasLen := d^.tdLen
+    { 6.4.7's *first* alternative, `identifier '=' schema-name`. It is the same
+      tokens as a type-definition naming a type, so the symbol decides and not
+      the syntax -- the fourth time here, after ADR-0044's variant-selector,
+      ADR-0053's qualified name and ADR-0066's set-value.
+
+      The clause says the new identifier denotes "the schema denoted by the
+      schema-name", so the two names share one symbol rather than one being a
+      copy of the other: 6.4.8 keys a produced type on (schema, tuple), and a
+      copy would make `vec2(3)` and `vector(3)` two types where the standard
+      has one. }
+    named := nil;
+    if d^.tdType^.kind = nkNamed then begin
+      named := LookupQuiet(d^.tdType^.nmQualAt, d^.tdType^.nmQualLen,
+                           d^.tdType^.nmAt, d^.tdType^.nmLen);
+      if named <> nil then
+        if named^.kind <> skSchema then named := nil
+    end;
+    if named <> nil then
+      BindName(d^.tdAt, d^.tdLen, named, d^.line, d^.col)
+    else begin
+      t := ResolveType(d^.tdType);
+      s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
+      if s^.stype = nil then begin   { a duplicate: keep the first definition }
+        s^.stype := t;
+        { 6.4.1: a type-name denotes "the type, bindability and initial state"
+          its definition denoted, so the initial state travels with the name
+          and every variable of it is initialised. }
+        s^.initValue := InitialStateOf(d^.tdType);
+        s^.isBindable := BindableOf(d^.tdType);
+        if t^.aliasLen = 0 then begin
+          t^.aliasAt := d^.tdAt;
+          t^.aliasLen := d^.tdLen
+        end
       end
     end
   end
@@ -17697,19 +17894,31 @@ procedure EmitStructValue(e: nodePtr; var into: str); forward;
   address it sits in front of, so an inner subscript cannot compute it from
   its own base. Walking down is what stands in for threading it through. }
 procedure HeapHeader(e: nodePtr; var v: str);
-var base: str; walking: boolean;
+var base: str; walking, done: boolean;
 begin
   walking := true;
   while walking do
     if e^.kind = nkIndex then e := e^.ixBase
     else if e^.kind = nkField then e := e^.fdBase
     else walking := false;
-  if (e^.ntype = nil) or not e^.ntype^.heapTuple then
-    StrClear(v)
-  else begin
-    EmitAddress(e, base);
-    HeaderOf(e^.ntype, base, v)
-  end
+  done := false;
+  { A name that was a field of an enclosing `with` has no node standing for the
+    record it came from, so the walk stops one step short of the whole
+    variable: the binding is what holds that address, and its type is what says
+    whether a header is in front of it. }
+  if (e^.kind = nkVar) and (e^.vrField <> nil) and (e^.vrSym <> nil) then
+    if (e^.vrSym^.stype <> nil) and e^.vrSym^.stype^.heapTuple then begin
+      AddressOfSym(e^.vrSym, base);
+      HeaderOf(e^.vrSym^.stype, base, v);
+      done := true
+    end;
+  if not done then
+    if (e^.ntype = nil) or not e^.ntype^.heapTuple then
+      StrClear(v)
+    else begin
+      EmitAddress(e, base);
+      HeaderOf(e^.ntype, base, v)
+    end
 end;
 procedure EmitStmt(s: nodePtr); forward;
 
@@ -21819,15 +22028,75 @@ end;
   subscript in the designator is evaluated a single time (6.8.3.10) and cannot
   see a change the body makes to the subscript's variable. }
 procedure EmitWith(s: nodePtr);
-var addr, slot: str;
+var addr, slot, field, hdr, half, raw, val: str; d: symListPtr; k: integer;
 begin
   EmitAddress(s^.wtRecord, addr);
   FrameSlot(s^.wtBinding, slot);
-  write(ircode, '  store ptr ');
-  PutOp(addr);
-  write(ircode, ', ptr ');
-  PutOp(slot);
-  writeln(ircode);
+  { The binding of a `with` over a heap variable produced from a schema is a
+    descriptor rather than a bare pointer (ADR-0071): its discriminants have no
+    other home, since the header they live in front of is reached from the
+    variable's address and a bare discriminant name has no designator to walk
+    down. The element is evaluated once -- this reads the tuple out of the
+    address just computed, never out of a second evaluation. }
+  if s^.wtBinding^.descSchema = nil then begin
+    write(ircode, '  store ptr ');
+    PutOp(addr);
+    write(ircode, ', ptr ');
+    PutOp(slot);
+    writeln(ircode)
+  end
+  else begin
+    Def(field);
+    write(ircode, 'getelementptr inbounds ');
+    PutDescType(s^.wtBinding);
+    write(ircode, ', ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 0');
+    write(ircode, '  store ptr ');
+    PutOp(addr);
+    write(ircode, ', ptr ');
+    PutOp(field);
+    writeln(ircode);
+    HeaderOf(s^.wtRecord^.ntype, addr, hdr);
+    d := s^.wtBinding^.discSyms;
+    k := 0;
+    while d <> nil do begin
+      Def(half);
+      write(ircode, 'getelementptr i32, ptr ');
+      PutOp(hdr);
+      writeln(ircode, ', i32 ', k:1);
+      Def(raw);
+      write(ircode, 'load i32, ptr ');
+      PutOp(half);
+      writeln(ircode);
+      { The header holds one i32 per discriminant whatever its own type. }
+      if IsChar(d^.sym^.stype) or IsBoolean(d^.sym^.stype) then begin
+        Def(val);
+        write(ircode, 'trunc i32 ');
+        PutOp(raw);
+        write(ircode, ' to ');
+        PutLlType(d^.sym^.stype);
+        writeln(ircode)
+      end
+      else
+        val := raw;
+      Def(field);
+      write(ircode, 'getelementptr inbounds ');
+      PutDescType(s^.wtBinding);
+      write(ircode, ', ptr ');
+      PutOp(slot);
+      writeln(ircode, ', i32 0, i32 ', 1 + k:1);
+      write(ircode, '  store ');
+      PutLlType(d^.sym^.stype);
+      write(ircode, ' ');
+      PutOp(val);
+      write(ircode, ', ptr ');
+      PutOp(field);
+      writeln(ircode);
+      k := k + 1;
+      d := d^.next
+    end
+  end;
   EmitStmt(s^.wtBody)
 end;
 

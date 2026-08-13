@@ -1,0 +1,11 @@
+alias    4.0
+pointer  67
+inquiry  89
+subrange 4 5
+restrict 89
+concat   [xy] 2
+concat   [abx] 3
+value    12
+const    3
+param    3
+string   9

@@ -1,0 +1,6 @@
+<source>:50:5: error: the left side of an assignment must be a variable
+<source>:54:8: error: 'n' is both a field of clash(3) and a discriminant of schema 'clash', so 'with' would give one name two meanings
+<source>:56:8: error: 'k' is both a field of armclash(2) and a discriminant of schema 'armclash', so 'with' would give one name two meanings
+<source>:59:9: error: 'n' is both a field of clash and a discriminant of schema 'clash', so 'with' would give one name two meanings
+<source>:66:5: error: the left side of an assignment must be a variable
+<source>:70:8: error: 'with' needs a record variable or one produced from a schema, found integer

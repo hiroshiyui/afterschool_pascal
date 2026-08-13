@@ -247,7 +247,10 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
     t->elem = builtin;
     return t;
   }
-  Symbol *sym = lookup(denoter.name);
+  // §6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
+  // §6.11.3's optional interface qualifier — so an imported type may be a
+  // pointer's domain, as it may be anything else a type-name reaches.
+  Symbol *sym = lookupQuiet(denoter.qualifier, denoter.name);
   if (sym && sym->kind == SymKind::Type) {
     t->elem = sym->type;
     return t;
@@ -905,7 +908,9 @@ Type *Sema::resolveInquiry(TypeExpr &denoter) {
   // pushes a scope before building the formals, so a parameter declared
   // earlier in the same list is already an ordinary lookup by the time a later
   // one's type-denoter asks.
-  Symbol *sym = lookup(denoter.name);
+  // §6.4.9's type-inquiry-object is a `variable-name` or a
+  // `parameter-identifier`, and a variable-name carries the qualifier too.
+  Symbol *sym = lookupQuiet(denoter.qualifier, denoter.name);
   if (!sym) {
     diags_.error(denoter.line, denoter.col,
                  "unknown variable '" + denoter.name + "' in 'type of'");
@@ -3044,6 +3049,23 @@ void Sema::checkTypeDecl(TypeDecl &t) {
     declareSchema(t);
     return;
   }
+  // §6.4.7's *first* alternative, `identifier '=' schema-name`. It is the same
+  // tokens as a type-definition naming a type, so the symbol decides and not
+  // the syntax — the fourth time here, after ADR-0044's variant-selector,
+  // ADR-0053's qualified name and ADR-0066's set-value.
+  //
+  // The clause says the new identifier denotes "the schema denoted by the
+  // schema-name", so the two names share one symbol rather than one being a
+  // copy of the other: §6.4.8 keys a produced type on (schema, tuple), and a
+  // copy would make `vec2(3)` and `vector(3)` two types where the standard has
+  // one.
+  if (t.type->kind == TEK::Named) {
+    Symbol *named = lookupQuiet(t.type->qualifier, t.type->name);
+    if (named && named->kind == SymKind::Schema) {
+      bindName(t.name, named, t.line, t.col);
+      return;
+    }
+  }
   Type *resolved = resolveType(*t.type);
   Symbol *s = declare(t.name, SymKind::Type, t.line, t.col);
   if (s->type)
@@ -5026,8 +5048,12 @@ void Sema::checkBinary(Binary *b) {
   // is taken before the numeric case, exactly as the set case is. "a + b shall
   // denote a value of the canonical-string-type whose length shall be equal to
   // the sum of the length of a and the length of b."
+  // Table 7's operands are "Char-type or the canonical-string-type" and the
+  // clause says "a and b", so *both* may be char: `c + d` is a two-character
+  // string. char has no arithmetic `+` of its own in table 3, so nothing is
+  // taken away by reading the table as it is written.
   if (b->op == BinOp::Add && std_ == Std::Extended && l->isStringOrChar() &&
-      r->isStringOrChar() && !(l->isChar() && r->isChar())) {
+      r->isStringOrChar()) {
     b->type = ty::CanonicalString();
     return;
   }
@@ -5894,6 +5920,18 @@ void Sema::checkCase(CaseStmt *c) {
   }
 }
 
+/// Was this discriminant's name already written earlier in the same
+/// formal-discriminant-part? A repeat was reported at the schema definition,
+/// and naming it again here would report it once more at every `with` over a
+/// type that schema produced — the guard `genericFromSchema` makes for the
+/// same reason at every parameter naming the schema.
+static bool repeatedDiscriminant(const std::vector<Symbol *> &ds, size_t i) {
+  for (size_t j = 0; j < i; ++j)
+    if (ds[j]->name == ds[i]->name)
+      return true;
+  return false;
+}
+
 /// `with r do S` makes the fields of r visible as bare names throughout S.
 /// The record is designated once, so the binding holds its address and any
 /// subscripts in the designator are evaluated a single time.
@@ -5917,10 +5955,19 @@ void Sema::checkWith(WithStmt *w) {
     stmtPath_.pop_back();
     return;
   }
-  if (!t || !t->isRecord()) {
-    diags_.error(w->record->line, w->record->col,
-                 "'with' needs a record variable, found " +
-                     (t ? t->name() : std::string("nothing")));
+  // §6.9.3.10: the with-element "shall possess either a type produced from a
+  // schema or a record-type" — so a `vector(4)` is one although it has no
+  // fields at all, and what it introduces is its discriminants rather than
+  // field-identifiers.
+  if (!t || !(t->isRecord() || t->isSchematic())) {
+    // ISO 7185 has no schemata, so naming one there would offer a remedy that
+    // language does not have — the same reason `standardFileRef` words its
+    // message by standard.
+    diags_.error(
+        w->record->line, w->record->col,
+        std::string("'with' needs a record variable") +
+            (std_ == Std::Extended ? " or one produced from a schema" : "") +
+            ", found " + (t ? t->name() : std::string("nothing")));
     stmtPath_.push_back(w);
     checkStmt(w->body.get());
     stmtPath_.pop_back();
@@ -5944,11 +5991,91 @@ void Sema::checkWith(WithStmt *w) {
     w->binding->isProtected = root->isProtected;
   w->binding->isConstBinding = constAccess;
 
+  // §6.9.3.10's other half: an element possessing a type produced from a
+  // schema *with a tuple* makes each of the schema's formal discriminants a
+  // schema-discriminant-identifier "for the region that is the statement" —
+  // so they go in a scope, which is what a region is.
+  //
+  // Each one denotes what `v.d` denotes, and in two of the three shapes a
+  // produced type has that is a symbol Sema already holds: the tuple's value,
+  // or — where the tuple arrived with a schematic formal parameter — that
+  // parameter's own `Disc` symbol, which reads the descriptor. The third is
+  // the heap, where the tuple has no name at all; see below. No node kind
+  // either way.
+  bool scoped = t->isSchematic();
+  if (scoped) {
+    pushScope();
+    const std::vector<Symbol *> &ds = t->schema->discriminants;
+    // §6.9.3.10 makes the field-identifiers *and* the discriminant-identifiers
+    // defining-points for one region — the statement — and §6.2.2.7 allows a
+    // region only one defining-point per spelling. Outside a `with` the two
+    // sit in nested regions and the field shadows the discriminant legally
+    // (§6.2.2.5), so this is the with-statement's error and not the schema's.
+    // Reported and then bound anyway: an error is accumulated, not bailed on,
+    // and which of the two a later statement resolves to cannot matter once
+    // the program has been refused. `findField` already searches every arm of
+    // every variant part, which is what makes an arm's field-identifier count
+    // — it is a field-identifier like any other.
+    if (t->isRecord())
+      for (size_t i = 0; i < ds.size(); ++i)
+        if (!repeatedDiscriminant(ds, i) && t->findField(ds[i]->name))
+          diags_.error(w->record->line, w->record->col,
+                       "'" + ds[i]->name + "' is both a field of " + t->name() +
+                           " and a discriminant of schema '" + t->schema->name +
+                           "', so 'with' would give one name two meanings");
+    if (t->heapTuple) {
+      // A heap variable's tuple is a header in front of it (ADR-0043), and
+      // `v.d` finds that header by walking *down* the designator to the whole
+      // variable. A bare name has no designator to walk, so the binding
+      // carries the tuple as well as the address: it becomes the descriptor
+      // ADR-0040 gives a schematic formal, and the discriminants are its own,
+      // reached by the walk every enclosing variable makes.
+      w->binding->descSchema = t->schema;
+      w->binding->discSyms.clear();
+      for (size_t i = 0; i < ds.size(); ++i) {
+        Symbol *d = newSymbol();
+        d->name = ds[i]->name;
+        d->kind = SymKind::Disc;
+        d->type = ds[i]->type;
+        d->discBinding = true;
+        d->owner = w->binding->owner;
+        d->level = w->binding->level;
+        d->frameIndex = w->binding->frameIndex;
+        d->discIndex = static_cast<int>(i);
+        // Pushed whether or not it is bound: `discIndex` is the header's own
+        // numbering, so a skipped name may not shift the ones after it.
+        w->binding->discSyms.push_back(d);
+        if (!repeatedDiscriminant(ds, i))
+          bindName(d->name, d, w->line, w->col);
+      }
+    } else if (t->isGeneric()) {
+      // A schematic formal parameter's discriminants are already symbols with
+      // storage — the descriptor the actual brought — so the entry is that
+      // very symbol and nothing is copied.
+      Symbol *owner = baseSymbol(w->record.get());
+      for (size_t i = 0; i < ds.size() && owner && i < owner->discSyms.size();
+           ++i)
+        if (!repeatedDiscriminant(ds, i))
+          bindName(ds[i]->name, owner->discSyms[i], w->line, w->col);
+    } else {
+      // A tuple written as constants makes each discriminant a constant, which
+      // is what §6.4.8 keys the produced type on.
+      for (size_t i = 0; i < ds.size() && i < t->tuple.size(); ++i)
+        if (!repeatedDiscriminant(ds, i)) {
+          Symbol *k = declare(ds[i]->name, SymKind::Const, w->line, w->col);
+          k->type = ds[i]->type;
+          k->intVal = t->tuple[i];
+        }
+    }
+  }
+
   withStack_.push_back(w->binding);
   stmtPath_.push_back(w);
   checkStmt(w->body.get());
   stmtPath_.pop_back();
   withStack_.pop_back();
+  if (scoped)
+    popScope();
 }
 
 /// Check an argument list against a callable's parameters. A `var` parameter

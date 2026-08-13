@@ -468,6 +468,13 @@ llvm::Value *CodeGen::heapHeader(Expr *e) {
     if (auto *f = as<FieldExpr>(e)) { e = f->base.get(); continue; }
     break;
   }
+  // A name that was a field of an enclosing `with` has no node standing for
+  // the record it came from, so the walk stops one step short of the whole
+  // variable: the binding is what holds that address, and its type is what
+  // says whether a header is in front of it.
+  if (auto *v = as<VarRef>(e))
+    if (v->withField && v->sym->type && v->sym->type->heapTuple)
+      return headerOf(v->sym->type, addressOf(v->sym));
   if (!e->type || !e->type->heapTuple)
     return nullptr;
   return headerOf(e->type, emitAddress(e));
@@ -2269,7 +2276,33 @@ void CodeGen::emitCase(CaseStmt *s) {
 /// subscript in the designator is evaluated a single time (ISO 7185 §6.8.3.10)
 /// and cannot see a change the body makes to the subscript's variable.
 void CodeGen::emitWith(WithStmt *s) {
-  b_.CreateStore(emitAddress(s->record.get()), frameSlot(s->binding));
+  llvm::Value *addr = emitAddress(s->record.get());
+  Symbol *bind = s->binding;
+  // The binding of a `with` over a heap variable produced from a schema is a
+  // descriptor rather than a bare pointer (ADR-0071): its discriminants have
+  // no other home, since the header they live in front of is reached from the
+  // variable's address and a bare discriminant name has no designator to walk
+  // down. The element is evaluated once — this reads the tuple out of the
+  // address just computed, never out of a second evaluation.
+  if (!bind->descSchema) {
+    b_.CreateStore(addr, frameSlot(bind));
+    emitStmt(s->body.get());
+    return;
+  }
+  StructType *desc = descriptorType(bind);
+  llvm::Value *slot = frameSlot(bind);
+  b_.CreateStore(addr, b_.CreateStructGEP(desc, slot, 0, bind->name));
+  llvm::Value *header = headerOf(s->record->type, addr);
+  for (size_t k = 0; k < bind->discSyms.size(); ++k) {
+    Symbol *d = bind->discSyms[k];
+    llvm::Value *v = b_.CreateLoad(
+        i32(), b_.CreateGEP(i32(), header, {ConstantInt::get(i32(), k)}),
+        d->name);
+    llvm::Type *want = llvmType(d->type);
+    if (want != i32())
+      v = b_.CreateTrunc(v, want, d->name);
+    b_.CreateStore(v, b_.CreateStructGEP(desc, slot, 1 + unsigned(k), d->name));
+  }
   emitStmt(s->body.get());
 }
 

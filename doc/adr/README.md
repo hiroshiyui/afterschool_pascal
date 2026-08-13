@@ -79,3 +79,4 @@ the alternatives that were rejected and why.
 | [0068](0068-a-string-constant-is-its-literal-named.md) | A string constant is its literal, named | Accepted |
 | [0069](0069-a-constant-access-is-a-designator-over-a-constant.md) | A constant-access is a designator over a constant | Accepted |
 | [0070](0070-a-file-need-not-be-an-entire-variable.md) | A file need not be an entire variable | Accepted |
+| [0071](0071-five-things-the-grammar-admitted-and-the-compiler-refused.md) | Five things the grammar admitted and the compiler refused | Accepted |

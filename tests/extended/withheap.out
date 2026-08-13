@@ -1,0 +1,11 @@
+array   4 16
+once    4 1
+record  5 2 3
+corner  23
+outside 23 2
+depth   3:30
+depth   2:20
+depth   1:10
+back    1
+back    2
+back    3

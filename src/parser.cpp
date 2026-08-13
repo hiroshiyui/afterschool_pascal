@@ -622,11 +622,18 @@ bool Parser::looksLikeSubrange() const {
         if (depth == 0)
           return true;
         break;
+      case Tok::Period:
+        // §6.11.3's qualified name puts a `.` *inside* a bound, so it ends the
+        // denoter only when no identifier follows it. The program's final
+        // `end.` is never reached: `end` stops the scan a token earlier.
+        if (depth == 0 &&
+            !(i + 1 < toks_.size() && toks_[i + 1].kind == Tok::Ident))
+          return false;
+        break;
       case Tok::Semi:
       case Tok::Comma:
       case Tok::Colon:
       case Tok::Eq:
-      case Tok::Period:
       case Tok::KwOf:
       case Tok::KwEnd:
       case Tok::KwBegin:
@@ -695,6 +702,22 @@ TypeExprPtr Parser::parseTypeExpr() {
   return t;
 }
 
+/// ISO/IEC 10206:1991 §6.11.3's optional `imported-interface-identifier '.'`.
+/// `type-name`, `schema-name` and `variable-name` all carry it, and a
+/// type-denoter is the one place it needs no help from Sema to recognise: a
+/// type has no fields to select, so `a.b` there has exactly one reading.
+/// Reads the name into `name` and moves it to `qualifier` if one was written.
+void Parser::parseQualifiedName(std::string &qualifier, std::string &name) {
+  name = cur().text;
+  ++pos_;
+  if (std_ == Std::Extended && check(Tok::Period) && check(Tok::Ident, 1)) {
+    qualifier = name;
+    ++pos_;
+    name = cur().text;
+    ++pos_;
+  }
+}
+
 TypeExprPtr Parser::parseTypeDenoter() {
   Depth depth(*this); // array-of-array and record fields recurse through here
   bool packed = accept(Tok::KwPacked);
@@ -761,8 +784,7 @@ TypeExprPtr Parser::parseTypeDenoter() {
       errorAtCur("the domain of a pointer type must be a type name");
       bail();
     }
-    t->name = cur().text;
-    ++pos_;
+    parseQualifiedName(t->qualifier, t->name);
     return t;
   }
 
@@ -779,8 +801,7 @@ TypeExprPtr Parser::parseTypeDenoter() {
       errorAtCur("'restricted' must be followed by a type name");
       bail();
     }
-    t->name = cur().text;
-    ++pos_;
+    parseQualifiedName(t->qualifier, t->name);
     return t;
   }
 
@@ -804,8 +825,7 @@ TypeExprPtr Parser::parseTypeDenoter() {
       errorAtCur("'type of' must name a variable or a parameter");
       bail();
     }
-    t->name = cur().text;
-    ++pos_;
+    parseQualifiedName(t->qualifier, t->name);
     return t;
   }
 
@@ -832,18 +852,7 @@ TypeExprPtr Parser::parseTypeDenoter() {
   t->kind = TEK::Named;
   t->line = cur().line;
   t->col = cur().col;
-  t->name = cur().text;
-  ++pos_;
-
-  // §6.11.3's qualified name. In a type-denoter there is nothing else `a.b`
-  // could be — a type has no fields to select — so unlike an expression this
-  // needs no help from Sema to decide.
-  if (std_ == Std::Extended && check(Tok::Period) && check(Tok::Ident, 1)) {
-    t->qualifier = t->name;
-    ++pos_;
-    t->name = cur().text;
-    ++pos_;
-  }
+  parseQualifiedName(t->qualifier, t->name);
 
   // ISO/IEC 10206:1991 §6.4.8: a name followed by an actual-discriminant-part
   // is a discriminated-schema. Nothing else in a type-denoter position can
@@ -1821,9 +1830,12 @@ ExprPtr Parser::parseStructuredValue(const Token &at, const std::string &name) {
   expect(Tok::LBracket, "before a structured value");
   while (!check(Tok::RBracket) && !check(Tok::Eof)) {
     // §6.8.7.3's variant-part-value ends a field-list-value, so nothing may
-    // follow it — which is why it is read here rather than as an element.
+    // follow it — which is why it is read here rather than as an element. The
+    // trailing `[ ';' ]` of the production sits *outside* the alternation, so
+    // it may follow one; it separates nothing, and the `]` is next either way.
     if (check(Tok::KwCase)) {
       parseVariantPartValue(*n);
+      accept(Tok::Semi);
       break;
     }
     ValueElem elem;
