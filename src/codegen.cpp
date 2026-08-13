@@ -684,12 +684,19 @@ void CodeGen::declareProcs(Block &block) {
     buildFrameType(sym);
 
     // Names are mangled with a counter because nesting allows two procedures
-    // of the same name in different parents.
-    std::string name = "p." + sym->name + "." + std::to_string(nextId_++);
+    // of the same name in different parents. An *exported* one instead takes
+    // the name Sema derived from the module-heading (§6.13): a counter is a
+    // fact about the order this translation walked the tree in, which the
+    // translation on the other side of the boundary has no way to reproduce.
+    bool exported = !sym->linkName.empty();
+    std::string name = exported
+                           ? sym->linkName
+                           : "p." + sym->name + "." + std::to_string(nextId_++);
     functions_[sym] = Function::Create(
         signature(sym->kind == SymKind::Func ? sym->type : nullptr,
                   sym->params),
-        Function::InternalLinkage, name, mod_.get());
+        exported ? Function::ExternalLinkage : Function::InternalLinkage, name,
+        mod_.get());
   }
   for (auto &decl : block.procs)
     if (decl->body)
@@ -825,7 +832,7 @@ void CodeGen::enterFrame(Symbol *proc, Function *fn) {
   // prologue just did.
   if (proc == sema_.programSymbol())
     for (Symbol *m : sema_.activeModules())
-      b_.CreateCall(moduleInit_[m]);
+      b_.CreateCall(modulePart(m, /*init=*/true));
   emitJumpDispatch(proc);
 }
 
@@ -1146,12 +1153,45 @@ llvm::GlobalVariable *CodeGen::frameGlobal(Symbol *block) {
   auto found = frameGlobals_.find(block);
   if (found != frameGlobals_.end())
     return found->second;
+  // §6.13: a module whose own component was translated separately has an
+  // activation record this translation never lays out. Nothing here indexes
+  // into it — its variables are reached by name — so all that is needed is
+  // the address, to pass as the static link of a call into it.
+  if (block->compiledElsewhere) {
+    auto *decl = new llvm::GlobalVariable(*mod_, i8(), false,
+                                          llvm::GlobalValue::ExternalLinkage,
+                                          nullptr, "frame." + block->name);
+    frameGlobals_[block] = decl;
+    return decl;
+  }
+
   StructType *ty = frameTypes_[block];
-  auto *g = new llvm::GlobalVariable(*mod_, ty, false,
-                                     llvm::GlobalValue::InternalLinkage,
-                                     Constant::getNullValue(ty),
-                                     "frame." + block->name);
+  // A module's record is externally visible because a call into the module
+  // takes its address as the static link; the program's is not, nothing
+  // outside a program being able to name it.
+  auto *g = new llvm::GlobalVariable(
+      *mod_, ty, false,
+      block->isModuleSym ? llvm::GlobalValue::ExternalLinkage
+                         : llvm::GlobalValue::InternalLinkage,
+      Constant::getNullValue(ty), "frame." + block->name);
   frameGlobals_[block] = g;
+  // §6.13. The record itself stays internal — its layout is nobody else's
+  // business — and each slot another component may reach is given a name of
+  // its own beside it. An alias costs nothing at run time: it is the same
+  // address under a second, external symbol, so an importing translation
+  // needs to know neither the layout nor even that there is a frame.
+  for (Symbol *v : block->frameVars) {
+    if (v->linkName.empty() || v->storageElsewhere)
+      continue;
+    llvm::Constant *at = llvm::ConstantExpr::getInBoundsGetElementPtr(
+        ty, g,
+        llvm::ArrayRef<llvm::Constant *>{
+            ConstantInt::get(i32(), 0),
+            ConstantInt::get(i32(), 1 + v->frameIndex)});
+    llvm::GlobalAlias::create(slotType(v), 0,
+                              llvm::GlobalValue::ExternalLinkage, v->linkName,
+                              at, mod_.get());
+  }
   return g;
 }
 
@@ -1171,7 +1211,25 @@ llvm::Value *CodeGen::frameAt(int level) {
   return frame;
 }
 
+/// The storage of a variable another program-component defines (§6.13). A
+/// frame index is a private fact of the translation that decided the layout,
+/// so what crosses the boundary is the name Sema computed from the
+/// module-heading both ends read — and here nothing is known about the
+/// storage except where it begins.
+llvm::GlobalVariable *CodeGen::externalStorage(Symbol *v) {
+  auto found = externals_.find(v->linkName);
+  if (found != externals_.end())
+    return found->second;
+  auto *g = new llvm::GlobalVariable(*mod_, i8(), false,
+                                     llvm::GlobalValue::ExternalLinkage,
+                                     nullptr, v->linkName);
+  externals_[v->linkName] = g;
+  return g;
+}
+
 llvm::Value *CodeGen::frameSlot(Symbol *v) {
+  if (v->storageElsewhere)
+    return externalStorage(v);
   // Asking the *owner* rather than the level is what lets a name imported from
   // another module resolve: its owner is that module, which is not on this
   // block's static chain and does not need to be.
@@ -1614,14 +1672,25 @@ llvm::Value *CodeGen::emitUserCall(Symbol *callee, std::vector<ExprPtr> &args,
 /// activation record, and the two `to` parts are its commencement and its
 /// finalization — so it comes out as a pair of functions over one global
 /// frame, called by `main` around the program's own body.
+/// A module's commencement and its finalization, as functions the component
+/// holding the main-program-declaration can call — which under §6.13 may be
+/// another translation, so both are external and both are named from the
+/// module's name alone.
+Function *CodeGen::modulePart(Symbol *sym, bool init) {
+  auto &slot = init ? moduleInit_[sym] : moduleFini_[sym];
+  if (slot)
+    return slot;
+  FunctionType *ty = FunctionType::get(llvm::Type::getVoidTy(ctx_), {}, false);
+  slot = Function::Create(ty, Function::ExternalLinkage,
+                          "m." + sym->name + (init ? ".init" : ".fini"),
+                          mod_.get());
+  return slot;
+}
+
 void CodeGen::emitModule(ModuleDecl &m) {
   Symbol *sym = m.sym;
-  llvm::Type *voidTy = llvm::Type::getVoidTy(ctx_);
-  FunctionType *ty = FunctionType::get(voidTy, {}, false);
 
-  Function *init = Function::Create(ty, Function::InternalLinkage,
-                                    "m." + sym->name + ".init", mod_.get());
-  moduleInit_[sym] = init;
+  Function *init = modulePart(sym, /*init=*/true);
   enterFrame(sym, init);
   if (m.init)
     emitStmt(m.init.get());
@@ -1629,9 +1698,7 @@ void CodeGen::emitModule(ModuleDecl &m) {
 
   // The finalization has its own function because §6.2.3.6 runs it after the
   // main-program-block has terminated, not after the initialization.
-  Function *fini = Function::Create(ty, Function::InternalLinkage,
-                                    "m." + sym->name + ".fini", mod_.get());
-  moduleFini_[sym] = fini;
+  Function *fini = modulePart(sym, /*init=*/false);
   beginFunction(sym, fini);
   if (m.fini)
     emitStmt(m.fini.get());
@@ -1646,7 +1713,8 @@ void CodeGen::emitModule(ModuleDecl &m) {
 
 std::unique_ptr<Module> CodeGen::run(Program &prog) {
   Symbol *programSym = sema_.programSymbol();
-  buildFrameType(programSym);
+  if (prog.block)
+    buildFrameType(programSym);
   // Every module's frame type and every procedure of every module, before any
   // body is emitted: the main program may call an imported procedure, and a
   // module written earlier may have been given its body later.
@@ -1655,12 +1723,27 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   // guard against here. A split module is two decls sharing one symbol, which
   // is what the `count` asks about.
   for (auto &m : prog.modules) {
-    if (!frameTypes_.count(m->sym))
+    // A module translated elsewhere gets no frame type here: this translation
+    // has its heading, and a heading does not say what the block declares, so
+    // any layout built from it would be a different one (§6.13).
+    if (!m->sym->compiledElsewhere && !frameTypes_.count(m->sym))
       buildFrameType(m->sym);
     if (m->heading)
       declareProcs(*m->heading);
     if (m->block)
       declareProcs(*m->block);
+  }
+  if (!prog.block) {
+    // §6.13: a component with no main-program-declaration is every module it
+    // carries and nothing else — no `main`, and so no activation of anything.
+    // The component holding the main-program-declaration is what commences
+    // these, and it may be another translation.
+    for (auto &m : prog.modules)
+      if (m->block && !m->sym->compiledElsewhere)
+        emitModule(*m);
+    if (verifyModule(*mod_, &errs()))
+      return nullptr;
+    return std::move(mod_);
   }
   declareProcs(*prog.block);
 
@@ -1678,7 +1761,7 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   // symbol, and it has one activation record and one pair of functions. The
   // block is the half that carries them.
   for (auto &m : prog.modules)
-    if (m->block)
+    if (m->block && !m->sym->compiledElsewhere)
       emitModule(*m);
 
   enterFrame(programSym, mainFn);
@@ -1688,7 +1771,7 @@ std::unique_ptr<Module> CodeGen::run(Program &prog) {
   // activation of A terminates before the finalization of B.
   const std::vector<Symbol *> &active = sema_.activeModules();
   for (auto it = active.rbegin(); it != active.rend(); ++it)
-    b_.CreateCall(moduleFini_[*it]);
+    b_.CreateCall(modulePart(*it, /*init=*/false));
   b_.CreateRet(ConstantInt::get(i32(), 0));
 
   emitProcs(*prog.block);

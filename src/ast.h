@@ -921,6 +921,12 @@ struct ModuleDecl {
   /// rather than the start of a statement.
   StmtPtr init;
   StmtPtr fini;
+  /// §6.13: this program-component was accepted *separately* and is being read
+  /// only for the interfaces its heading exports. Everything it declares is
+  /// resolved as usual — an importer needs the types and the signatures — but
+  /// no code is emitted for it and no diagnostic asks where its block is,
+  /// because its block is another translation's business.
+  bool compiledElsewhere = false;
   int line = 0, col = 0;
   Symbol *sym = nullptr;
 };
@@ -933,6 +939,11 @@ struct Program {
   /// They were accepted and ignored until text files existed to give them a
   /// meaning.
   std::vector<DeclName> params;
+  /// Null when this program-component carries no main-program-declaration.
+  /// §6.13 makes a program-block a *sequence* of components and asks that a
+  /// processor be able to accept them separately, so a source that is all
+  /// modules is a legal submission — it just cannot be linked into a program
+  /// on its own, having no `main` to enter through.
   std::unique_ptr<Block> block;
   /// §6.13's other program-components, in the order they were written. That
   /// order is also a legal *activation* order and no sort is needed to find

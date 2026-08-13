@@ -203,6 +203,11 @@ private:
   /// procedures. §6.2.3.6 makes the two the commencement and the finalization
   /// of the module's one activation.
   void emitModule(ModuleDecl &m);
+  /// One of a module's two activation functions, defined here or declared
+  /// because §6.13 put the module's component in another translation.
+  llvm::Function *modulePart(Symbol *sym, bool init);
+  /// The storage of a variable another program-component defines (§6.13).
+  llvm::GlobalVariable *externalStorage(Symbol *v);
   /// The variable's field in its activation record, without following it.
   llvm::Value *frameSlot(Symbol *v);
   /// The address of a variable, wherever in the chain it lives.
@@ -357,6 +362,10 @@ private:
   /// The `init`/`fini` pair of each module, so `main` can call them.
   std::unordered_map<const Symbol *, llvm::Function *> moduleInit_;
   std::unordered_map<const Symbol *, llvm::Function *> moduleFini_;
+  /// The storage another program-component defines, by linkage name (§6.13).
+  /// Keyed by the name and not by the symbol, because an interface imported
+  /// twice brings two symbols naming one variable.
+  std::unordered_map<std::string, llvm::GlobalVariable *> externals_;
   /// One LLVM type per Pascal type, so a record keeps a single struct type
   /// however many variables have it.
   std::unordered_map<const Type *, llvm::Type *> typeCache_;

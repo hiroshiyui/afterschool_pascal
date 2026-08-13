@@ -2164,6 +2164,19 @@ Symbol *Sema::ensureStdFile(bool input) {
                       program_);
   slot->fileBinding =
       input ? FileBinding::StandardInput : FileBinding::StandardOutput;
+  // §6.13: in a component with no main-program-declaration there is no
+  // program frame for the file to sit in — the component that *has* the
+  // main-program-declaration owns the storage, and this one reaches it by
+  // name. The name is fixed rather than derived from the program's, because
+  // the two translations have no way to agree on anything else: §6.10 and
+  // §6.11.4.2 make these files required, so there is exactly one of each in
+  // a program however it was divided into components.
+  // ISO 7185 has no modules, so nothing there can reach these from outside the
+  // main-program-block and the name would be an export with no importer.
+  if (std_ == Std::Extended) {
+    slot->linkName = input ? "pas.input" : "pas.output";
+    slot->storageElsewhere = !prog_->block;
+  }
   return slot;
 }
 
@@ -2203,6 +2216,20 @@ void Sema::run(Program &prog) {
   for (size_t i = 0; i < prog.modules.size() && i < prog.mainIndex; ++i)
     checkModule(*prog.modules[i]);
 
+  if (!prog.block) {
+    // §6.13: this component carries no main-program-declaration, so there is
+    // no main-program-block to check and no program parameter list to bind.
+    // The modules before and after where it would have stood are one sequence
+    // here, and `mainIndex` is past the end of it.
+    for (size_t i = prog.mainIndex; i < prog.modules.size(); ++i)
+      checkModule(*prog.modules[i]);
+    checkPendingImplementations();
+    computeActiveModules();
+    checkMutualSupply();
+    popScope();
+    return;
+  }
+
   pushScope();
   // `input` and `output` are declared by the program header rather than by the
   // block, so they exist before the declarations are seen. Declaring them only
@@ -2223,12 +2250,7 @@ void Sema::run(Program &prog) {
   for (size_t i = prog.mainIndex; i < prog.modules.size(); ++i)
     checkModule(*prog.modules[i]);
 
-  for (auto &entry : modules_)
-    if (entry.second.headingSeen && !entry.second.blockSeen)
-      diags_.error(entry.second.line, entry.second.col,
-                   "module '" + entry.second.sym->name +
-                       "' has an interface but no implementation");
-
+  checkPendingImplementations();
   computeActiveModules();
   checkMutualSupply();
   popScope();
@@ -2315,6 +2337,23 @@ void Sema::checkMutualSupply() {
   }
 }
 
+/// §6.11.1: a module-heading is a promise that a module-block will be written.
+/// The one thing that discharges it without a block in this translation is
+/// §6.13 — the block is a program-component that was accepted separately, and
+/// asking where it is would be asking about another translation.
+void Sema::checkPendingImplementations() {
+  for (auto &entry : modules_) {
+    ModuleInfo &info = entry.second;
+    if (!info.headingSeen || info.blockSeen)
+      continue;
+    if (info.sym && info.sym->compiledElsewhere)
+      continue;
+    diags_.error(info.line, info.col,
+                 "module '" + info.sym->name +
+                     "' has an interface but no implementation");
+  }
+}
+
 /// §6.11.2's export-part. The interface it names is a region of its own, so
 /// building it adds nothing to the module's scope: an exported name stays
 /// exactly as visible inside the module as it was, and becomes reachable
@@ -2331,7 +2370,32 @@ void Sema::checkExports(ModuleDecl &m, Symbol *module) {
     iface.module = module;
     for (const ExportItem &item : part.items)
       addExportItem(iface, item);
+    nameForLinkage(iface);
     interfaces_[part.name] = std::move(iface);
+  }
+}
+
+/// §6.13's separately accepted components have to agree on a symbol without
+/// exchanging anything, so a linkage name is a function of the *module-heading
+/// alone* — the interface's name and the constituent's spelling, both of which
+/// every translation that imports the interface has read. Nothing else about
+/// the module is available to both ends: the frame layout is decided by the
+/// block, and the block is the half a separate translation does not have.
+///
+/// A constituent exported through two interfaces keeps the first name, which
+/// is the same first for every translation because the export-parts are read
+/// in written order.
+void Sema::nameForLinkage(Interface &iface) {
+  for (Constituent &c : iface.items) {
+    if (!c.sym || !c.sym->linkName.empty())
+      continue;
+    if (c.sym->isVariable())
+      c.sym->linkName = "v." + iface.name + "." + c.name;
+    else if (c.sym->isCallable())
+      c.sym->linkName = "p." + iface.name + "." + c.name;
+    else
+      continue;
+    c.sym->storageElsewhere = iface.module && iface.module->compiledElsewhere;
   }
 }
 
@@ -2601,6 +2665,12 @@ void Sema::checkModule(ModuleDecl &m) {
     moduleOrder_.push_back(info.sym);
   }
   m.sym = info.sym;
+  // §6.13. The flag is set rather than assigned, because a module may arrive
+  // as two components and only one of them be the separately accepted one:
+  // once any component of it is another translation's, this translation emits
+  // none of it.
+  if (m.compiledElsewhere)
+    info.sym->compiledElsewhere = true;
 
   if (m.hasHeading) {
     if (info.headingSeen) {

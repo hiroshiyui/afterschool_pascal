@@ -1,0 +1,8 @@
+tally at commencement: 100
+after bump(7): 107, ticks = 1
+after bump(5): 112, ticks = 2
+after clear: 0, ticks = 0
+after bump(3): 3, ticks = 1
+gauge reading: 15
+program body done
+counter finalizing, tally = 3

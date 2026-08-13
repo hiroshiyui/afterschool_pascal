@@ -72,7 +72,35 @@ run_program() {
     exec "$work/$name" "$work/file1" "$work/file2" <"$stdin_file" )
 }
 
-"$pascalc" "--std=$standard" "$source_file" -o "$work/$name" 2>"$work/compile.err"
+# ISO/IEC 10206:1991 6.13's other program-components, when the case has any:
+# name.components lists them, one path per line, relative to the .pas's own
+# directory. Each is translated on its own first -- which is the whole point of
+# the clause, and the reason they are named here rather than concatenated into
+# the source. They live in a subdirectory so the CMake glob, which is not
+# recursive, does not register a component with no program declaration as a
+# case that fails to run.
+components_file="${source_file%.pas}.components"
+imports=()
+objects=()
+if [[ -f $components_file ]]; then
+  n=0
+  while IFS= read -r rel; do
+    [[ -n $rel ]] || continue
+    comp="$(dirname "$source_file")/$rel"
+    n=$((n + 1))
+    if ! "$pascalc" "--std=$standard" -c "$comp" -o "$work/c$n.o" \
+           2>"$work/compile.err"; then
+      echo "--- $name: component $rel did not translate ---" >&2
+      cat "$work/compile.err" >&2
+      exit 1
+    fi
+    imports+=(--import "$comp")
+    objects+=("$work/c$n.o")
+  done <"$components_file"
+fi
+
+"$pascalc" "--std=$standard" "$source_file" "${imports[@]+"${imports[@]}"}" \
+  "${objects[@]+"${objects[@]}"}" -o "$work/$name" 2>"$work/compile.err"
 compile_status=$?
 
 if [[ ! -f $expected_err ]]; then

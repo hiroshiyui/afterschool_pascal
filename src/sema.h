@@ -96,6 +96,18 @@ struct Symbol {
   int level = 0;
   int frameIndex = -1;
   Symbol *owner = nullptr; // the procedure whose frame holds this variable
+  /// ...unless the storage belongs to another program-component (§6.13). An
+  /// activation record's layout is a private fact of the translation that
+  /// built it, so a frame index cannot cross a component boundary and a *name*
+  /// must: this is the linkage name of the storage, and `owner`/`frameIndex`
+  /// say nothing when it is set. Sema decides it — CodeGen only emits it, as
+  /// with `activeModules()` (ADR-0008).
+  std::string linkName;
+  /// ...and whether the storage that name denotes is defined by *another*
+  /// component. Both ends compute the same `linkName`; this is which end this
+  /// is. Where it is false the name is exported beside the frame slot, where
+  /// it is true nothing but the name is known.
+  bool storageElsewhere = false;
 
   // --- procedures and functions --------------------------------------------
   std::vector<Symbol *> params;
@@ -218,6 +230,11 @@ struct Symbol {
   /// "supplies" is the transitive closure of this, and the program's copy is
   /// what decides which modules are activated at all.
   std::vector<Symbol *> importedFrom;
+  /// This module's own program-component was translated separately (§6.13), so
+  /// this translation has its heading and not its block: no body of its is
+  /// emitted, its activation record is declared rather than defined, and every
+  /// name of its that is reached from here is reached by `linkName`.
+  bool compiledElsewhere = false;
 
   bool isCallable() const {
     return kind == SymKind::Proc || kind == SymKind::Func;
@@ -313,6 +330,10 @@ private:
   void checkModuleHeading(ModuleDecl &m, ModuleInfo &info);
   void checkModuleBlock(ModuleDecl &m, ModuleInfo &info);
   void checkExports(ModuleDecl &m, Symbol *module);
+  /// The linkage name of every constituent of one interface (§6.13).
+  void nameForLinkage(Interface &iface);
+  /// §6.11.1's headings still waiting for a block, less the ones §6.13 excuses.
+  void checkPendingImplementations();
   void addExportItem(Interface &iface, const ExportItem &item);
   /// The import-part of a block, a module-heading or a module-block. `owner`
   /// is the block the names arrive in, and is what records who supplies it.

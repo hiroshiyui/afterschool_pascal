@@ -1163,6 +1163,11 @@ void dumpAst(Program &program) {
   // dump is the source's own order.
   for (size_t i = 0; i < program.modules.size() && i < program.mainIndex; ++i)
     d.module(*program.modules[i]);
+  // §6.13: a component with no main-program-declaration has nothing to print
+  // here, and printing a heading for one would name a program that this
+  // translation has never seen.
+  if (!program.block)
+    return;
   std::printf("program %s\n", program.name.c_str());
   d.level = 1;
   d.mark("params");
@@ -1181,6 +1186,19 @@ void dumpSema(Program &program, Sema &sema) {
   d.annotate = true;
   for (size_t i = 0; i < program.modules.size() && i < program.mainIndex; ++i)
     d.module(*program.modules[i]);
+  if (!program.block) {
+    d.level = 1;
+    d.mark("frames");
+    d.level = 2;
+    for (std::unique_ptr<ModuleDecl> &m : program.modules) {
+      d.frame(m->sym);
+      if (m->heading)
+        d.frames(*m->heading);
+      if (m->block)
+        d.frames(*m->block);
+    }
+    return;
+  }
   std::printf("program %s\n", program.name.c_str());
   d.level = 1;
   d.mark("params");

@@ -76,16 +76,45 @@ standard_of() {
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>
 build() {
-  local cc=$1 src=$2 out=$3
+  local cc=$1 src=$2 out=$3 rel comp n
   rm -f "$work/ir.ll"
   # The Pascal compiler reads the standard from a file, because ISO 7185 gives
   # a program no other channel for it (ADR-0033).
   standard_of "$src" >"$work/options"
+  # ISO/IEC 10206:1991 6.13's already-translated program-components. They reach
+  # the Pascal compiler *concatenated*, as one more program parameter, for the
+  # same reason the standard does: a program has no access to its command line
+  # beyond its parameters, and those are files, so it cannot open one whose
+  # name it computes. Concatenating costs nothing to define, a sequence of
+  # program-components being exactly what a source file already is.
+  #
+  # Each is also translated on its own here, so what is linked is genuinely
+  # several objects and not one -- which is the clause's whole point.
+  : >"$work/imports"
+  local objects=()
+  n=0
+  if [[ -f ${src%.pas}.components ]]; then
+    while IFS= read -r rel; do
+      [[ -n $rel ]] || continue
+      comp="$(dirname "$src")/$rel"
+      cat "$comp" >>"$work/imports"
+      echo >>"$work/imports"
+      n=$((n + 1))
+      rm -f "$work/comp.ll"
+      timeout 600 "$cc" "$comp" "$work/comp.ll" "$work/options" /dev/null \
+          >/dev/null 2>"$work/gen.err" || return 1
+      [[ -s $work/comp.ll ]] || return 1
+      clang -Wno-override-module -fPIC -c "$work/comp.ll" -o "$work/c$n.o" \
+          2>"$work/link.err" || return 2
+      objects+=("$work/c$n.o")
+    done <"${src%.pas}.components"
+  fi
   timeout 600 "$cc" "$src" "$work/ir.ll" "$work/options" \
+    "$work/imports" \
       >/dev/null 2>"$work/gen.err" || return 1
   [[ -s $work/ir.ll ]] || return 1
-  clang -Wno-override-module "$work/ir.ll" "$runtime" -lm -o "$out" \
-      2>"$work/link.err" || return 2
+  clang -Wno-override-module "$work/ir.ll" "${objects[@]+"${objects[@]}"}" \
+      "$runtime" -lm -o "$out" 2>"$work/link.err" || return 2
 }
 
 if ! "$pascalc" "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
@@ -106,6 +135,7 @@ skipped=0
 failed=0
 golden() {
   local cc=$1 stage=$2 f name expected_out expected_err stdin_file status rc
+  local refargs
   for f in "${files[@]}"; do
     name=$(basename "${f%.pas}")
     expected_out="${f%.pas}.out"
@@ -123,9 +153,29 @@ golden() {
       unset SOURCE_DATE_EPOCH
     fi
 
+    # A source with no expectation is not a case: ISO/IEC 10206:1991 6.13's
+    # separately accepted components live under tests/ and are compiled as
+    # part of the cases that import them, never run on their own -- there is
+    # no main-program-declaration in one to enter it through.
+    if [[ ! -f $expected_out && ! -f $expected_err ]]; then
+      [[ $stage == stage1 ]] && skipped=$((skipped + 1))
+      continue
+    fi
+
     # Rejected by the C++ compiler: a diagnostic, not a program. difftest.sh is
-    # what compares those, and it compares all of them.
-    if ! "$pascalc" "--std=$(standard_of "$f")" "$f" -o "$work/ref" \
+    # what compares those, and it compares all of them. A case with components
+    # is offered the same ones the Pascal build gets, or it would be rejected
+    # here for the interfaces it is missing and silently skipped -- which is
+    # how a separately compiled program would have gone untested.
+    refargs=()
+    if [[ -f ${f%.pas}.components ]]; then
+      while IFS= read -r rel; do
+        [[ -n $rel ]] || continue
+        refargs+=(--import "$(dirname "$f")/$rel")
+      done <"${f%.pas}.components"
+    fi
+    if ! "$pascalc" "--std=$(standard_of "$f")" "$f" \
+           "${refargs[@]+"${refargs[@]}"}" -c -o "$work/ref.o" \
            >/dev/null 2>&1; then
       [[ $stage == stage1 ]] && skipped=$((skipped + 1))
       continue

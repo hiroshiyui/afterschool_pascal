@@ -67,6 +67,14 @@ struct Options {
   /// ISO/IEC 10206:1991 reserves words a valid ISO 7185 program may use as
   /// identifiers (ADR-0033).
   ap::Std lang = ap::Std::Iso7185;
+  /// ISO/IEC 10206:1991 §6.13's other program-components, already translated.
+  /// Each is read for the interfaces its module-headings export and for
+  /// nothing else — no code of theirs is emitted here, and where their
+  /// variables and procedures *are* is a question answered by name.
+  std::vector<std::string> imports;
+  /// What to hand the linker beside this component's own object: the objects
+  /// the components named by `--import` were translated into.
+  std::vector<std::string> linkInputs;
 };
 
 /// Diagnostics into the same stream as the dump, and before it. The Pascal
@@ -141,6 +149,8 @@ void usage() {
                "  --dump-sema   write the tree Sema annotated and stop\n"
                "  --dump-all    write all three dumps and stop\n"
                "  --std=<name>  iso7185 (default) or extended\n"
+               "  --import <f>  a program-component already translated; its\n"
+               "                module-headings supply this one's interfaces\n"
                "  -h, --help    write this list and stop\n");
 }
 
@@ -196,12 +206,17 @@ bool parseArgs(int argc, char **argv, Options &opt) {
                      name.c_str());
         return false;
       }
+    } else if (a == "--import" && i + 1 < argc) {
+      opt.imports.push_back(argv[++i]);
     } else if (a == "-h" || a == "--help") {
       usage();
       std::exit(0);
     } else if (!a.empty() && a[0] == '-') {
       std::fprintf(stderr, "pascalc: unknown option '%s'\n", a.c_str());
       return false;
+    } else if (a.size() > 2 && a.compare(a.size() - 2, 2, ".o") == 0) {
+      // An already-translated component, on its way to the linker.
+      opt.linkInputs.push_back(a);
     } else if (opt.input.empty()) {
       opt.input = a;
     } else {
@@ -280,6 +295,57 @@ bool emitObject(llvm::Module &mod, llvm::TargetMachine &tmRef,
   }
   pm.run(mod);
   dest.flush();
+  return true;
+}
+
+/// ISO/IEC 10206:1991 §6.13: read a program-component that has already been
+/// translated, and take its module-headings into `into` as the interfaces this
+/// component imports.
+///
+/// The whole of the interface is in the source, because §6.11.1 makes the
+/// module-heading declare exactly the exported constants, types, variables and
+/// procedure headings — so a separately translated component needs no artefact
+/// beside its source, and this compiler defines no format for one. What the
+/// heading does *not* say is where anything ended up, which is why nothing
+/// numbered may cross the boundary; see `Sema::nameForLinkage`.
+bool readTranslatedComponent(
+    const std::string &path, ap::Std lang,
+    std::vector<std::unique_ptr<ap::ModuleDecl>> &earlier) {
+  std::ifstream in(path, std::ios::binary);
+  if (!in) {
+    std::fprintf(stderr, "pascalc: cannot open %s\n", path.c_str());
+    return false;
+  }
+  std::stringstream buffer;
+  buffer << in.rdbuf();
+
+  ap::Diagnostics diags(path);
+  ap::Lexer lexer(buffer.str(), diags, lang);
+  std::vector<ap::Token> tokens = lexer.tokenize();
+  std::unique_ptr<ap::Program> component;
+  if (!diags.hasErrors()) {
+    try {
+      ap::Parser parser(std::move(tokens), diags, lang);
+      component = parser.parseProgram();
+    } catch (const ap::ParseAbort &) {
+    }
+  }
+  if (diags.hasErrors() || !component) {
+    diags.print();
+    return false;
+  }
+  if (component->block) {
+    std::fprintf(stderr,
+                 "pascalc: %s has a program declaration, so it is not a "
+                 "component this one can import\n",
+                 path.c_str());
+    return false;
+  }
+
+  for (auto &m : component->modules) {
+    m->compiledElsewhere = true;
+    earlier.push_back(std::move(m));
+  }
   return true;
 }
 
@@ -364,6 +430,21 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // §6.13's other program-components, in front of this one's own modules:
+  // §6.2.2.9 puts a module-heading before everything that imports its
+  // interface, and one that was translated separately is earlier still.
+  if (!opt.imports.empty()) {
+    std::vector<std::unique_ptr<ap::ModuleDecl>> earlier;
+    for (const std::string &path : opt.imports)
+      if (!readTranslatedComponent(path, opt.lang, earlier))
+        return 1;
+    size_t n = earlier.size();
+    program->modules.insert(program->modules.begin(),
+                            std::make_move_iterator(earlier.begin()),
+                            std::make_move_iterator(earlier.end()));
+    program->mainIndex += n;
+  }
+
   ap::Sema sema(diags, opt.lang);
   sema.run(*program);
   if (diags.hasErrors()) {
@@ -400,6 +481,19 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  // §6.13: a component with no main-program-declaration translates perfectly
+  // well and simply cannot be entered, so it is an object and never a program.
+  // The message says which component is missing rather than complaining about
+  // this one, because nothing about this one is wrong.
+  if (!program->block && !opt.compileOnly) {
+    std::fprintf(stderr,
+                 "pascalc: %s declares no program, so it can be translated "
+                 "(-c) but not linked; the program-component holding the "
+                 "program declaration is what links it\n",
+                 opt.input.c_str());
+    return 1;
+  }
+
   std::string exePath = opt.output.empty() ? base : opt.output;
   // The object of a `-c` run is the product and is named after the source (or
   // by `-o`). The one a link run leaves behind is a temporary, and it is named
@@ -415,8 +509,10 @@ int main(int argc, char **argv) {
   if (opt.compileOnly)
     return 0;
 
-  std::string cmd = "clang '" + objPath + "' -L'" + runtimeDir() +
-                    "' -lpasrt -lm -o '" + exePath + "'";
+  std::string cmd = "clang '" + objPath + "'";
+  for (const std::string &obj : opt.linkInputs)
+    cmd += " '" + obj + "'";
+  cmd += " -L'" + runtimeDir() + "' -lpasrt -lm -o '" + exePath + "'";
   int rc = std::system(cmd.c_str());
   if (!opt.keepTemps)
     std::remove(objPath.c_str());

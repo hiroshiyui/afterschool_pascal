@@ -66,14 +66,21 @@ std::unique_ptr<Program> Parser::parseProgram() {
     break;
   }
 
-  if (!sawMain) {
-    // The whole source was modules, or began with neither word. Either way the
-    // message that was here before is the right one: something has to start a
-    // program-component, and `program` is the only word that starts the one
-    // every program must have.
+  if (!sawMain && prog->modules.empty()) {
+    // The source began with neither word, so nothing here is a
+    // program-component at all. Under ISO 7185 this is also the *only* way to
+    // arrive with no main-program-declaration: `module` is not a word-symbol
+    // there, so the loop above never took a component and the message that was
+    // here before is still the right one.
     expect(Tok::KwProgram, "at the start of the program");
     bail();
   }
+  // A source that is all modules is a program-component sequence with no
+  // main-program-declaration in it — §6.13's separately accepted component.
+  // Whether that is what the caller wanted is the driver's question, not the
+  // grammar's: there is nothing wrong with the text.
+  if (!sawMain)
+    prog->mainIndex = prog->modules.size();
   if (!check(Tok::Eof))
     errorAtCur("trailing text after the end of the program");
   return prog;

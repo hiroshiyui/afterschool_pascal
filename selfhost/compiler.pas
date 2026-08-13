@@ -1,4 +1,4 @@
-program Compile(output, source, ircode, options);
+program Compile(output, source, ircode, options, imports);
 
 { The self-hosted compiler: stage 1, components 1 to 3 -- the lexer, the parser
   and the AST, and Sema.
@@ -87,6 +87,15 @@ const
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
   setBits  = 256;
+  { Which shape a symbol's linkage name takes (6.13). Only these five cross a
+    program-component boundary; everything else in the emitted text is named
+    with a counter, which is a fact about the order one translation walked the
+    tree in and so cannot be reproduced by another. }
+  lnkNone   = 0;
+  lnkVar    = 1;  { v.<interface>.<constituent> }
+  lnkProc   = 2;  { p.<interface>.<constituent> }
+  lnkStdIn  = 3;  { pas.input }
+  lnkStdOut = 4;  { pas.output }
 
 type
   strLen = 0..strMax;
@@ -616,6 +625,26 @@ type
       what decides which modules are activated at all. }
     importedFrom, importedTail: symListPtr;
 
+    { 6.13. This module's own program-component was translated separately, so
+      this translation has its heading and not its block: no body of its is
+      emitted, its activation record is declared rather than defined, and
+      every name of its reached from here is reached by its linkage name. }
+    compiledElsewhere: boolean;
+    { The linkage name of this symbol's storage, for the one case where a
+      frame index cannot say where something is: the other side of a component
+      boundary decided that layout, and a *name* is all two translations can
+      agree on. linkKind says which shape it takes -- lnkNone, lnkVar and
+      lnkProc build it from the interface and constituent spellings both ends
+      have read, and the two lnkStd forms are the required files, whose names
+      are fixed because 6.10 and 6.11.4.2 make them one per program however
+      the program was divided. }
+    linkKind: integer;
+    linkIfaceAt, linkIfaceLen: integer;
+    linkItemAt, linkItemLen: integer;
+    { ...and whether the storage that name denotes is defined by *another*
+      component. Both ends compute the same name; this is which end this is. }
+    storageElsewhere: boolean;
+
     { ISO/IEC 10206:1991 6.6: the value this variable bears when the block that
       declares it is entered. Borrowed from the AST and read only by the
       prologue -- every expression in one is nonvarying (6.8.2), so it is
@@ -998,7 +1027,11 @@ type
       nkModule:     (mdAt, mdLen: integer;
                      mdParams, mdExports, mdHeading, mdBlock,
                      mdInit, mdFini: nodePtr;
-                     mdHasHeading, mdHasBlock: boolean; mdSym: symPtr);
+                     mdHasHeading, mdHasBlock: boolean;
+                     { 6.13: this program-component was accepted separately
+                       and is read only for the interfaces its heading
+                       exports. }
+                     mdElsewhere: boolean; mdSym: symPtr);
       nkExportPart: (epAt, epLen: integer; epItems: nodePtr);
       { An export-clause and an export-range share this shape: a range is the
         one with eiLastLen > 0, and may not also be renamed, because what it
@@ -1084,6 +1117,9 @@ var
   { --- the lexer's lookahead window; win[0] is the character it looks at --- }
   win: array [0..2] of char;
   winEof: array [0..2] of boolean;
+  { Which program-component the lexer is taking in (6.13): the source named on
+    the command line, or the already-translated ones. }
+  readingImports: boolean;
   line, col: integer;
 
   kwText: array [1..kwCount] of kwLit;
@@ -1195,6 +1231,12 @@ var
     The language deciding the interface is the same constraint that made
     ADR-0024 put the whole compiler in one source file. }
   options: text;
+  { The fourth program parameter: 6.13's already-translated
+    program-components, concatenated. Read for the interfaces their
+    module-headings export and for nothing else -- no code of theirs is
+    emitted here. An empty file means this component imports nothing, which is
+    every source in the corpus. }
+  imports: text;
   langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   curBlock: integer;             { the block being filled, for a phi's label }
@@ -1206,6 +1248,11 @@ var
     a level-0 record is a global rather than something to walk to. }
   irRoot: symPtr;
   strHead, strTail: strConstPtr;
+  { 6.13: the storage, procedures and modules this component names and another
+    one defines, each declared once at the end of the module. }
+  externVars, externVarTail: symListPtr;
+  externProcs, externProcTail: symListPtr;
+  externMods, externModTail: symListPtr;
   { The storage of the 6.8.7 constants, in the order they were first named.
     Deferred to the end of the module exactly as the string constants are. }
   constHead, constTail: constGlobalPtr;
@@ -1333,9 +1380,30 @@ end;
 { One slot of the window, taken from the buffer variable. A text file's line
   marker is not a character the program can see (ISO 7185 6.4.3.5), so it is
   turned back into the newline the lexer counts lines with. }
+{ 6.13: the lexer reads whichever program-component is being taken in. ISO
+  7185 gives a program no way to open a file whose name it computes, so the
+  already-translated components arrive as one more program parameter -- and
+  they arrive *concatenated*, which costs nothing to define because a sequence
+  of program-components is exactly what a source file already is. }
 procedure Refill(k: integer);
 begin
-  if eof(source) then begin
+  if readingImports then begin
+    if eof(imports) then begin
+      win[k] := chr(nul);
+      winEof[k] := true
+    end
+    else if eoln(imports) then begin
+      win[k] := chr(newline);
+      winEof[k] := false;
+      readln(imports)
+    end
+    else begin
+      win[k] := imports^;
+      winEof[k] := false;
+      get(imports)
+    end
+  end
+  else if eof(source) then begin
     win[k] := chr(nul);
     winEof[k] := true
   end
@@ -1354,7 +1422,7 @@ end;
 procedure StartFile;
 var k: integer;
 begin
-  reset(source);
+  if readingImports then reset(imports) else reset(source);
   line := 1;
   col := 1;
   for k := 0 to 2 do
@@ -5170,6 +5238,7 @@ begin
   m^.mdBlock := nil;
   m^.mdInit := nil;
   m^.mdFini := nil;
+  m^.mdElsewhere := false;
   m^.mdHasHeading := false;
   m^.mdHasBlock := false;
   m^.mdSym := nil;
@@ -5342,14 +5411,19 @@ begin
       done := true
   end;
 
-  if (not aborted) and not sawMain then begin
-    { The whole source was modules, or began with neither word. Either way the
-      message that was here before is the right one: something has to start a
-      program-component, and `program` is the only word that starts the one
-      every program must have. }
+  if (not aborted) and (not sawMain) and (count = 0) then begin
+    { The source began with neither word, so nothing here is a
+      program-component at all. Under ISO 7185 this is also the only way to
+      arrive with no main-program-declaration: `module` is not a word-symbol
+      there, so the loop above never took a component. }
     Expect(tkProgram, ctxProgramStart);
     Bail
   end;
+  { A source that is all modules is a program-component sequence with no
+    main-program-declaration in it -- the separately accepted component of
+    6.13. Whether that is what the caller wanted is the driver's question,
+    not the grammar's: there is nothing wrong with the text. }
+  if (not aborted) and not sawMain then progMainIndex := count;
   if (not aborted) and not Check(tkEof) then begin
     ErrorAtCur;
     writeln('trailing text after the end of the program')
@@ -6033,6 +6107,13 @@ begin
   s^.constitTail := nil;
   s^.importedFrom := nil;
   s^.importedTail := nil;
+  s^.compiledElsewhere := false;
+  s^.linkKind := lnkNone;
+  s^.linkIfaceAt := 0;
+  s^.linkIfaceLen := 0;
+  s^.linkItemAt := 0;
+  s^.linkItemLen := 0;
+  s^.storageElsewhere := false;
   NewSymbol := s
 end;
 
@@ -13737,6 +13818,21 @@ end;
   the *program's* frame -- which a module can address because a level-0 frame
   is a global (ADR-0053), and could not otherwise, since a module's static
   chain says nothing about the program. }
+{ 6.13: in a component with no main-program-declaration there is no program
+  frame for a required file to sit in -- the component that *has* the
+  main-program-declaration owns the storage, and this one reaches it by name.
+  The name is fixed rather than derived from the program's, because the two
+  translations have no way to agree on anything else. Under ISO 7185 there are
+  no modules, so nothing can reach these from outside the main-program-block
+  and the name would be an export with no importer. }
+procedure LinkStdFile(s: symPtr; kind: integer);
+begin
+  if langStd = stdExtended then begin
+    s^.linkKind := kind;
+    s^.storageElsewhere := progBlock = nil
+  end
+end;
+
 function EnsureStdFile(wantInput: boolean): symPtr;
 var root: symPtr; at, len: integer;
 begin
@@ -13748,7 +13844,8 @@ begin
     if stdInput = nil then begin
       InternWord('input    ', at, len);
       stdInput := AddHiddenVar(at, len, skVar, textType, programSym);
-      stdInput^.binding := fbStdInput
+      stdInput^.binding := fbStdInput;
+      LinkStdFile(stdInput, lnkStdIn)
     end;
     EnsureStdFile := stdInput
   end
@@ -13756,7 +13853,8 @@ begin
     if stdOutput = nil then begin
       InternWord('output   ', at, len);
       stdOutput := AddHiddenVar(at, len, skVar, textType, programSym);
-      stdOutput^.binding := fbStdOutput
+      stdOutput^.binding := fbStdOutput;
+      LinkStdFile(stdOutput, lnkStdOut)
     end;
     EnsureStdFile := stdOutput
   end
@@ -14485,6 +14583,60 @@ begin
   end
 end;
 
+{ 6.13's separately accepted components have to agree on a symbol without
+  exchanging anything, so a linkage name is a function of the *module-heading
+  alone* -- the interface's name and the constituent's spelling, both of which
+  every translation importing the interface has read. Nothing else about the
+  module is available to both ends: the frame layout is decided by the block,
+  and the block is the half a separate translation does not have.
+
+  A constituent exported through two interfaces keeps the first name, which is
+  the same first for every translation because the export-parts are read in
+  written order. }
+procedure NameForLinkage(i: ifacePtr);
+var c: constitPtr; s: symPtr; k: integer;
+begin
+  c := i^.items;
+  while c <> nil do begin
+    s := c^.sym;
+    if (s <> nil) and (s^.linkKind = lnkNone) then begin
+      k := lnkNone;
+      if IsVariable(s) then k := lnkVar
+      else if (s^.kind = skProc) or (s^.kind = skFunc) then k := lnkProc;
+      if k <> lnkNone then begin
+        s^.linkKind := k;
+        s^.linkIfaceAt := i^.at;
+        s^.linkIfaceLen := i^.len;
+        s^.linkItemAt := c^.at;
+        s^.linkItemLen := c^.len;
+        s^.storageElsewhere :=
+          (i^.owner <> nil) and i^.owner^.compiledElsewhere
+      end
+    end;
+    c := c^.next
+  end
+end;
+
+{ 6.11.1: a module-heading is a promise that a module-block will be written.
+  The one thing that discharges it without a block in this translation is
+  6.13 -- the block is a program-component that was accepted separately, and
+  asking where it is would be asking about another translation. }
+procedure CheckPendingImplementations;
+var info: modRecPtr;
+begin
+  info := modules;
+  while info <> nil do begin
+    if info^.headingSeen and (not info^.blockSeen) and
+       ((info^.sym = nil) or not info^.sym^.compiledElsewhere) then begin
+      ErrorAt(info^.line, info^.col);
+      write('module ''');
+      WritePool(info^.at, info^.len);
+      writeln(''' has an interface but no implementation')
+    end;
+    info := info^.next
+  end
+end;
+
 procedure CheckExports(m: nodePtr; owner: symPtr);
 var part, item: nodePtr; i: ifacePtr;
 begin
@@ -14509,6 +14661,7 @@ begin
         AddExportItem(i, item);
         item := item^.next
       end;
+      NameForLinkage(i);
       if interfaces = nil then interfaces := i
       else interfaceTail^.next := i;
       interfaceTail := i
@@ -14947,6 +15100,11 @@ begin
     AppendSym(moduleOrder, moduleOrderTail, info^.sym)
   end;
   m^.mdSym := info^.sym;
+  { 6.13. The flag is set rather than assigned, because a module may arrive as
+    two components and only one of them be the separately accepted one: once
+    any component of it is another translation's, this translation emits none
+    of it. }
+  if m^.mdElsewhere then info^.sym^.compiledElsewhere := true;
 
   if m^.mdHasHeading then
     if info^.headingSeen then begin
@@ -15172,6 +15330,20 @@ begin
     k := k + 1
   end;
 
+  if progBlock = nil then begin
+    { 6.13: this component carries no main-program-declaration, so there is no
+      main-program-block to check and no program parameter list to bind. The
+      modules before and after where it would have stood are one sequence
+      here, and progMainIndex is past the end of it. }
+    while (m <> nil) and not aborted do begin
+      CheckModule(m);
+      m := m^.next
+    end;
+    CheckPendingImplementations;
+    ComputeActiveModules;
+    CheckMutualSupply
+  end
+  else begin
   scopeDepth := scopeDepth + 1;
   { `input` and `output` are declared by the program header rather than by the
     block, so they exist before the declarations are seen. Declaring them only
@@ -15199,19 +15371,10 @@ begin
     m := m^.next
   end;
 
-  info := modules;
-  while info <> nil do begin
-    if info^.headingSeen and not info^.blockSeen then begin
-      ErrorAt(info^.line, info^.col);
-      write('module ''');
-      WritePool(info^.at, info^.len);
-      writeln(''' has an interface but no implementation')
-    end;
-    info := info^.next
-  end;
-
+  CheckPendingImplementations;
   ComputeActiveModules;
   CheckMutualSupply
+  end
 end;
 
 { ---------------------------------------------------------------- the dump }
@@ -16757,6 +16920,26 @@ procedure DumpProgram;
 var p, m: nodePtr;
 begin
   DumpModulesBefore;
+  { 6.13: a component with no main-program-declaration has nothing to print
+    here, and printing a heading for one would name a program this translation
+    has never seen. The frames are still worth showing: they are what Sema
+    decided about the modules it did see. }
+  if progBlock = nil then begin
+    if annotate then begin
+      level := 1;
+      Pad;
+      writeln('frames');
+      level := 2;
+      m := progModules;
+      while m <> nil do begin
+        DumpFrame(m^.mdSym);
+        if m^.mdHeading <> nil then DumpFrames(m^.mdHeading);
+        if m^.mdBlock <> nil then DumpFrames(m^.mdBlock);
+        m := m^.next
+      end
+    end
+  end
+  else begin
   write('program ');
   WritePool(progAt, progLen);
   writeln;
@@ -16795,6 +16978,7 @@ begin
   level := 1;
   DumpBlock(progBlock);
   DumpModulesAfter
+  end
 end;
 
 { Every stage, in one pass, with a header before each. There is one program
@@ -17129,6 +17313,46 @@ begin
     StrAppend(s, w[k])
 end;
 
+{ A pooled spelling into an IR name. The pool holds identifiers case-folded
+  (the lexer folds as it accumulates), so a name built this way is the same
+  however the two components spelled it -- which is what 6.13 needs of it. }
+procedure AppendPool(var s: str; at, len: integer);
+var k: integer;
+begin
+  for k := at to at + len - 1 do
+    StrAppend(s, pool[k])
+end;
+
+{ 6.13's linkage name, the only kind of name two translations can agree on.
+  Built from the module-heading alone: see NameForLinkage. }
+procedure AppendLinkName(var s: str; sym: symPtr);
+begin
+  if sym^.linkKind = lnkStdIn then AppendLit(s, 'pas.input       ')
+  else if sym^.linkKind = lnkStdOut then AppendLit(s, 'pas.output      ')
+  else begin
+    if sym^.linkKind = lnkVar then StrAppend(s, 'v') else StrAppend(s, 'p');
+    StrAppend(s, '.');
+    AppendPool(s, sym^.linkIfaceAt, sym^.linkIfaceLen);
+    StrAppend(s, '.');
+    AppendPool(s, sym^.linkItemAt, sym^.linkItemLen)
+  end
+end;
+
+{ The name of a procedure's LLVM function. Nesting allows two procedures of
+  the same name in different parents, so ordinarily the name is a counter --
+  but an *exported* one takes the linkage name instead, a counter being a fact
+  about the order this translation walked the tree in and so unreproducible by
+  the translation on the other side of a component boundary (6.13). }
+procedure AppendProcName(var s: str; sym: symPtr);
+begin
+  StrAppend(s, '@');
+  if sym^.linkKind = lnkProc then AppendLinkName(s, sym)
+  else begin
+    StrAppend(s, 'p');
+    AppendInt(s, sym^.irId)
+  end
+end;
+
 procedure OpInt(n: integer; var v: str);
 begin
   StrClear(v);
@@ -17162,6 +17386,25 @@ var k: integer;
 begin
   for k := 1 to v.len do
     write(ircode, v.ch[k])
+end;
+
+{ A pooled spelling straight into the IR. WritePool goes to the diagnostic
+  sink; this is its counterpart for the compiler's product. }
+procedure WritePoolIr(at, len: integer);
+var k: integer;
+begin
+  for k := at to at + len - 1 do
+    write(ircode, pool[k])
+end;
+
+{ 6.13: a module's two activation functions are named from the module, because
+  the component that calls them holds the main-program-declaration and may be
+  another translation. }
+procedure PutModulePart(p: symPtr; init: boolean);
+begin
+  write(ircode, '@m.');
+  WritePoolIr(p^.at, p^.len);
+  if init then write(ircode, '.init') else write(ircode, '.fini')
 end;
 
 { Open an instruction line that defines a fresh value: `  %vN = `. }
@@ -17258,6 +17501,54 @@ begin
   d := v mod 16;
   if d < 10 then write(ircode, chr(ord('0') + d))
   else write(ircode, chr(ord('A') + d - 10))
+end;
+
+{ 6.13: what this translation names but another one defines. Each is recorded
+  the first time it is reached and declared once at the end of the module,
+  which is where this backend puts every global it deferred. The comparison is
+  on the *linkage name's parts* rather than on the symbol, because an
+  interface imported twice brings two symbols naming one variable. }
+function SameLink(a, b: symPtr): boolean;
+begin
+  SameLink := (a^.linkKind = b^.linkKind) and
+              (a^.linkIfaceAt = b^.linkIfaceAt) and
+              (a^.linkIfaceLen = b^.linkIfaceLen) and
+              (a^.linkItemAt = b^.linkItemAt) and
+              (a^.linkItemLen = b^.linkItemLen)
+end;
+
+procedure NeedOne(var head, tail: symListPtr; s: symPtr);
+var e: symListPtr; known: boolean;
+begin
+  known := false;
+  e := head;
+  while e <> nil do begin
+    if SameLink(e^.sym, s) then known := true;
+    e := e^.next
+  end;
+  if not known then AppendSym(head, tail, s)
+end;
+
+procedure NeedExternal(s: symPtr);
+begin
+  NeedOne(externVars, externVarTail, s)
+end;
+
+procedure NeedExternalProc(s: symPtr);
+begin
+  NeedOne(externProcs, externProcTail, s)
+end;
+
+procedure NeedExternalModule(m: symPtr);
+var e: symListPtr; known: boolean;
+begin
+  known := false;
+  e := externMods;
+  while e <> nil do begin
+    if e^.sym = m then known := true;
+    e := e^.next
+  end;
+  if not known then AppendSym(externMods, externModTail, m)
 end;
 
 procedure EmitGlobals;
@@ -17393,7 +17684,17 @@ begin
   StrClear(v);
   StrAppend(v, '@');
   AppendLit(v, 'frame           ');
-  AppendInt(v, b^.irId)
+  { 6.13: a module's record is named from the module rather than from a
+    counter, because a call into the module takes its address as the static
+    link and the counter is a fact about this translation's walk. The
+    program's keeps the counter: nothing outside a program can name it. }
+  if b^.isModuleSym then begin
+    StrAppend(v, '.');
+    AppendPool(v, b^.at, b^.len);
+    if b^.compiledElsewhere then NeedExternalModule(b)
+  end
+  else
+    AppendInt(v, b^.irId)
 end;
 
 procedure FrameAt(lev: integer; var v: str);
@@ -17442,11 +17743,23 @@ end;
 procedure FrameSlot(s: symPtr; var v: str);
 var f: str;
 begin
+  { 6.13: a frame index is a private fact of the translation that decided the
+    layout, so a variable another component defines is reached by the name
+    both ends computed from the module-heading, and nothing here is known
+    about the storage except where it begins. }
+  if s^.storageElsewhere then begin
+    StrClear(v);
+    StrAppend(v, '@');
+    AppendLinkName(v, s);
+    NeedExternal(s)
+  end
+  else begin
   FrameOf(s^.owner, f);
   Def(v);
   write(ircode, 'getelementptr inbounds %frame', s^.owner^.irId:1, ', ptr ');
   PutOp(f);
   writeln(ircode, ', i32 0, i32 ', 1 + s^.frameIndex:1)
+  end
 end;
 
 { The descriptor a schematic formal parameter travels as: the address of the
@@ -18641,9 +18954,9 @@ begin
   end
   else begin
     StrClear(code);
-    StrAppend(code, '@');
-    StrAppend(code, 'p');
-    AppendInt(code, actual^.irId);
+    AppendProcName(code, actual);
+    if (actual^.owner <> nil) and actual^.owner^.compiledElsewhere then
+      NeedExternalProc(actual);
     AppendOpnd(head, tail, code, true, nil);
     FrameOf(actual^.owner, link);
     AppendOpnd(head, tail, link, true, nil)
@@ -18779,9 +19092,8 @@ begin
       enclosing scope -- which for a recursive call is the caller's own
       parent, not the caller. }
     FrameOf(callee^.owner, link);
-    StrAppend(target, '@');
-    StrAppend(target, 'p');
-    AppendInt(target, callee^.irId)
+    AppendProcName(target, callee);
+    if callee^.owner^.compiledElsewhere then NeedExternalProc(callee)
   end;
 
   head := nil;
@@ -23132,7 +23444,9 @@ begin
   if p = programSym then begin
     e := activeModules;
     while e <> nil do begin
-      writeln(ircode, '  call void @m', e^.sym^.irId:1, 'i()');
+      write(ircode, '  call void ');
+      PutModulePart(e^.sym, true);
+      writeln(ircode, '()');
       e := e^.next
     end
   end;
@@ -23140,11 +23454,14 @@ begin
 end;
 
 procedure EmitProcBody(d: nodePtr);
-var p: symPtr; slot, res: str;
+var p: symPtr; slot, res, nm: str;
 begin
   p := d^.pdSym;
   writeln(ircode);
-  write(ircode, 'define internal ');
+  { An exported procedure is externally visible, because 6.13 lets the
+    component that calls it be another translation. }
+  if p^.linkKind = lnkProc then write(ircode, 'define ')
+  else write(ircode, 'define internal ');
   { A result that lives in memory is written into storage the caller supplied,
     so the function returns void and takes its address after the static link.
     It is named rather than numbered so the parameters keep the %a0.. they
@@ -23152,7 +23469,11 @@ begin
     only what it does. }
   if (p^.kind = skFunc) and not IsMemory(p^.stype) then PutLlType(p^.stype)
   else write(ircode, 'void');
-  write(ircode, ' @p', p^.irId:1, '(ptr %link');
+  StrClear(nm);
+  AppendProcName(nm, p);
+  write(ircode, ' ');
+  PutOp(nm);
+  write(ircode, '(ptr %link');
   if p^.kind = skFunc then
     if IsMemory(p^.stype) then write(ircode, ', ptr %res');
   PutParamTypes(p^.params, true);
@@ -23330,10 +23651,93 @@ begin
 end;
 
 { One global activation record. }
-procedure EmitFrameGlobal(p: symPtr);
+{ 6.13: the slots of this record another component may reach, each given a
+  name of its own beside it. The record itself stays where it is and keeps its
+  layout private -- an alias is the same address under a second, external
+  symbol, so the importing translation needs to know neither the layout nor
+  even that there is a frame. }
+procedure EmitFrameAliases(p: symPtr);
+var e: symListPtr; v, g: str;
 begin
-  writeln(ircode, '@frame', p^.irId:1, ' = internal global %frame', p^.irId:1,
-          ' zeroinitializer')
+  FrameGlobal(p, g);
+  e := p^.frameVars;
+  while e <> nil do begin
+    if (e^.sym^.linkKind <> lnkNone) and not e^.sym^.storageElsewhere then begin
+      StrClear(v);
+      StrAppend(v, '@');
+      AppendLinkName(v, e^.sym);
+      PutOp(v);
+      write(ircode, ' = alias ');
+      PutSlotType(e^.sym);
+      write(ircode, ', ptr getelementptr inbounds (%frame', p^.irId:1,
+            ', ptr ');
+      PutOp(g);
+      writeln(ircode, ', i32 0, i32 ', 1 + e^.sym^.frameIndex:1, ')')
+    end;
+    e := e^.next
+  end
+end;
+
+{ 6.13's other side: everything this component names and another one defines.
+  A variable is declared as i8 because nothing here knows its layout and only
+  its address is ever taken; a module's record likewise, it being only a static
+  link to pass. }
+procedure EmitExterns;
+var e: symListPtr; nm: str;
+begin
+  e := externVars;
+  while e <> nil do begin
+    StrClear(nm);
+    StrAppend(nm, '@');
+    AppendLinkName(nm, e^.sym);
+    PutOp(nm);
+    writeln(ircode, ' = external global i8');
+    e := e^.next
+  end;
+  e := externMods;
+  while e <> nil do begin
+    write(ircode, '@frame.');
+    WritePoolIr(e^.sym^.at, e^.sym^.len);
+    writeln(ircode, ' = external global i8');
+    write(ircode, 'declare void ');
+    PutModulePart(e^.sym, true);
+    writeln(ircode, '()');
+    write(ircode, 'declare void ');
+    PutModulePart(e^.sym, false);
+    writeln(ircode, '()');
+    e := e^.next
+  end;
+  e := externProcs;
+  while e <> nil do begin
+    write(ircode, 'declare ');
+    if (e^.sym^.kind = skFunc) and not IsMemory(e^.sym^.stype) then
+      PutLlType(e^.sym^.stype)
+    else
+      write(ircode, 'void');
+    StrClear(nm);
+    AppendProcName(nm, e^.sym);
+    write(ircode, ' ');
+    PutOp(nm);
+    write(ircode, '(ptr');
+    if e^.sym^.kind = skFunc then
+      if IsMemory(e^.sym^.stype) then write(ircode, ', ptr');
+    PutParamTypes(e^.sym^.params, false);
+    writeln(ircode, ')');
+    e := e^.next
+  end
+end;
+
+procedure EmitFrameGlobal(p: symPtr);
+var g: str;
+begin
+  FrameGlobal(p, g);
+  PutOp(g);
+  { A module's record is externally visible because a call into it takes its
+    address as the static link; the program's is not. }
+  if p^.isModuleSym then write(ircode, ' = global %frame', p^.irId:1)
+  else write(ircode, ' = internal global %frame', p^.irId:1);
+  writeln(ircode, ' zeroinitializer');
+  EmitFrameAliases(p)
 end;
 
 { The finalization calls, in the reverse of the list's order. The list is
@@ -23342,7 +23746,9 @@ procedure EmitFinis(e: symListPtr);
 begin
   if e <> nil then begin
     EmitFinis(e^.next);
-    writeln(ircode, '  call void @m', e^.sym^.irId:1, 'f()')
+    write(ircode, '  call void ');
+    PutModulePart(e^.sym, false);
+    writeln(ircode, '()')
   end
 end;
 
@@ -23355,7 +23761,9 @@ var p: symPtr;
 begin
   p := m^.mdSym;
   writeln(ircode);
-  writeln(ircode, 'define internal void @m', p^.irId:1, 'i() {');
+  write(ircode, 'define void ');
+  PutModulePart(p, true);
+  writeln(ircode, '() {');
   EnterFrame(p);
   if m^.mdInit <> nil then EmitStmt(m^.mdInit);
   writeln(ircode, '  ret void');
@@ -23364,7 +23772,9 @@ begin
   { The finalization has its own function because 6.2.3.6 runs it after the
     main-program-block has terminated, not after the initialization. }
   writeln(ircode);
-  writeln(ircode, 'define internal void @m', p^.irId:1, 'f() {');
+  write(ircode, 'define void ');
+  PutModulePart(p, false);
+  writeln(ircode, '() {');
   BeginFunction(p);
   if m^.mdFini <> nil then EmitStmt(m^.mdFini);
   { A module's files are closed when its activation terminates, which is the
@@ -23397,19 +23807,29 @@ begin
   nextConst := 0;
   constHead := nil;
   constTail := nil;
+  externVars := nil;
+  externVarTail := nil;
+  externProcs := nil;
+  externProcTail := nil;
+  externMods := nil;
+  externModTail := nil;
 
   { The frame types come before any function that indexes one. Every module's
     comes too, and every procedure of every module is declared before any body
     is emitted: the main program may call an imported procedure, and a module
     written earlier may have been given its body later. }
-  EmitFrameType(programSym);
+  if progBlock <> nil then EmitFrameType(programSym);
   { Every module node carries its symbol by the time Sema is done, and codegen
     does not run when Sema found anything -- so there is nothing to guard
     against. A split module is two nodes sharing one symbol, which is what the
     irId test asks about. }
   m := progModules;
   while m <> nil do begin
-    if m^.mdSym^.irId = 0 then EmitFrameType(m^.mdSym);
+    { 6.13: a module translated elsewhere gets no frame type here -- this
+      translation has its heading, and a heading does not say what the block
+      declares, so any layout built from it would be a different one. }
+    if (m^.mdSym^.irId = 0) and not m^.mdSym^.compiledElsewhere then
+      EmitFrameType(m^.mdSym);
     m := m^.next
   end;
   m := progModules;
@@ -23418,16 +23838,17 @@ begin
     if m^.mdBlock <> nil then DeclareProcs(m^.mdBlock);
     m := m^.next
   end;
-  DeclareProcs(progBlock);
+  if progBlock <> nil then DeclareProcs(progBlock);
 
   { A level-0 activation record is a global (ADR-0053): the program has one
     activation and so has every module, and a module's must outlive the
     function that initialises it. }
   writeln(ircode);
-  EmitFrameGlobal(programSym);
+  if progBlock <> nil then EmitFrameGlobal(programSym);
   m := progModules;
   while m <> nil do begin
-    if m^.mdBlock <> nil then EmitFrameGlobal(m^.mdSym);
+    if (m^.mdBlock <> nil) and not m^.mdSym^.compiledElsewhere then
+      EmitFrameGlobal(m^.mdSym);
     m := m^.next
   end;
 
@@ -23437,9 +23858,23 @@ begin
     that carries them. }
   m := progModules;
   while m <> nil do begin
-    if m^.mdBlock <> nil then EmitModule(m);
+    if (m^.mdBlock <> nil) and not m^.mdSym^.compiledElsewhere then
+      EmitModule(m);
     m := m^.next
   end;
+
+  { 6.13: a component with no main-program-declaration is every module it
+    carries and nothing else -- no main, and so no activation of anything.
+    The component holding the main-program-declaration is what commences
+    these, and it may be another translation. }
+  if progBlock = nil then begin
+    writeln(ircode);
+    EmitGlobals;
+    EmitConstGlobals;
+    EmitExterns;
+    EmitDeclares
+  end
+  else begin
 
   { main takes the command line, because ISO 7185 6.10 leaves it to the
     implementation to say how a program parameter names an external file and
@@ -23461,11 +23896,62 @@ begin
   writeln(ircode);
   EmitGlobals;
   EmitConstGlobals;
+  EmitExterns;
   EmitDeclares
+  end
+end;
+
+{ 6.13: the already-translated components, taken in before the source. Their
+  module-headings become this translation's interfaces; nothing else of theirs
+  is kept, and nothing of theirs is dumped -- the dumps are what the C++
+  driver writes for the file it was given, and it was given this one.
+
+  What is left behind is the module list, which ParseProgram then clears for
+  the real source, so it is saved across and put back in front afterwards. }
+procedure ReadTranslatedComponents(var head, tail: nodePtr; var count: integer);
+var m: nodePtr;
+begin
+  head := nil;
+  tail := nil;
+  count := 0;
+  { Nothing to take in is the ordinary case -- every source in the corpus is a
+    whole program-block -- and an empty file is not a program-component
+    sequence, so it must not be parsed as one. }
+  reset(imports);
+  if not eof(imports) then begin
+    readingImports := true;
+    Tokenize;
+    if not errorSeen then begin
+      ParseProgram;
+      if not errorSeen then
+        if progBlock <> nil then begin
+          ErrorAt(1, 1);
+          writeln('an already-translated component may not declare a program')
+        end
+        else begin
+          head := progModules;
+          tail := progModuleTail;
+          m := head;
+          while m <> nil do begin
+            m^.mdElsewhere := true;
+            count := count + 1;
+            m := m^.next
+          end
+        end
+    end;
+    readingImports := false;
+    tokCount := 0;
+    pos := 1;
+    depth := 0;
+    aborted := false
+  end
 end;
 
 procedure DumpEverything;
+var earlier, earlierTail: nodePtr; earlierCount: integer;
 begin
+  ReadTranslatedComponents(earlier, earlierTail, earlierCount);
+
   writeln('=== tokens');
   Tokenize;
   DumpTokens;
@@ -23476,6 +23962,15 @@ begin
     built from tokens that were never valid. }
   if not errorSeen then begin
     ParseProgram;
+    { In front of this component's own modules, because 6.2.2.9 puts a
+      module-heading before everything that imports its interface and a
+      separately translated one is earlier still. }
+    if earlier <> nil then begin
+      earlierTail^.next := progModules;
+      progModules := earlier;
+      if progModuleTail = nil then progModuleTail := earlierTail;
+      progMainIndex := progMainIndex + earlierCount
+    end;
     if not errorSeen then begin
       annotate := false;
       DumpProgram
@@ -23513,6 +24008,7 @@ begin
   annotate := false;
   msgOut := false;
   StrClear(msgBuf);
+  readingImports := false;
   scopeTop := nil;
   scopeDepth := 0;
   pendingHead := nil;
