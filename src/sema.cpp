@@ -306,6 +306,45 @@ Type *Sema::resolveSet(TypeExpr &denoter) {
   return t;
 }
 
+/// The missing half of a message that names two types. §6.4.1 of both
+/// standards makes each occurrence of a new-type denote a type distinct from
+/// every other, so two type-denoters written alike denote two types — and
+/// `Type::name()` then prints one spelling twice and the message says nothing
+/// a reader can act on. "cannot assign array [1..3] of integer to a variable
+/// of type array [1..3] of integer" is accurate and useless, which is the same
+/// fault the file case beside the assignment check was given its own message
+/// for.
+///
+/// It is empty whenever the spellings differ, so no message grows where it was
+/// already saying something, and the caller needs no condition of its own.
+///
+/// The question asked is "do these two print alike", and
+/// `selfhost/compiler.pas` has to ask it by rendering both through the `msgBuf`
+/// sink, whose capacity is `strMax` — so a spelling that long cannot be
+/// compared there. Neither compiler says anything about one, because a
+/// diagnostic the two disagree about is worse than a diagnostic neither gives.
+/// That is the coupling `fileSize` has with `PAS_FILE_SIZE`, and `difftest.sh`
+/// is what reports a drift in it.
+static const size_t kTypeNameCompareLimit = 255; // = selfhost's `strMax`
+
+static std::string distinctTypeNote(const Type *a, const Type *b) {
+  if (!a || !b || a == b)
+    return "";
+  std::string an = a->name();
+  if (an.size() >= kTypeNameCompareLimit || an != b->name())
+    return "";
+  // Two anonymous denoters are the shape a reader can act on: the fix is one
+  // named type used twice. Two type-*names* that print alike are distinct for
+  // the very same reason — each type-definition contains its own new-type —
+  // but naming them again is no advice, so that half is left off.
+  if (a->alias.empty() && b->alias.empty())
+    return "; the two are written alike, but 6.4.1 makes each type-denoter "
+           "that is not a type name denote a type of its own, so declare one "
+           "named type and give it to both";
+  return "; the two are written alike, but each was defined separately and "
+         "6.4.1 makes the definitions distinct types";
+}
+
 /// ISO 7185 §6.4.3.5 bars a file from having a file as a component, at any
 /// depth: `file of file of char` and `file of record f: text end` are both out.
 /// The reason is that a file has no value to copy — which is the same fact
@@ -2707,13 +2746,19 @@ void Sema::bindProgramParameters() {
     }
     if (s == stdInput_ || s == stdOutput_)
       continue; // bound by the header itself
-    if (!s->type || !s->type->isFile()) {
-      diags_.error(p.line, p.col,
-                   "a program parameter must be a file variable, but '" +
-                       p.name + "' is " +
-                       (s->type ? s->type->name() : std::string("untyped")));
+    // Neither standard restricts a program-parameter to a file. ISO 7185
+    // §6.10 makes the binding of one that does not possess a file-type
+    // implementation-*dependent*, reserving implementation-defined for the
+    // file case; ISO/IEC 10206:1991 §6.12 drops the distinction and makes
+    // every program-parameter's binding implementation-defined. The binding
+    // chosen here is to no external entity — the variable is an ordinary
+    // variable of the program-block, undefined at activation — which
+    // §6.12's NOTE 2 ("not necessarily bound when the program is activated")
+    // is what makes a permitted answer rather than an omission. It therefore
+    // consumes no command-line argument either, so writing one beside the
+    // file parameters does not move their argument positions.
+    if (!s->type || !s->type->isFile())
       continue;
-    }
     s->fileBinding = FileBinding::Argument;
     s->fileArg = argIndex++;
   }
@@ -4062,7 +4107,8 @@ void Sema::checkStmt(Stmt *s) {
         else if (!assignable(ref->type, a->value->type))
           diags_.error(a->line, a->col,
                        "cannot assign " + a->value->type->name() +
-                           " to a result of type " + ref->type->name());
+                           " to a result of type " + ref->type->name() +
+                           distinctTypeNote(ref->type, a->value->type));
         return;
       }
     }
@@ -4083,7 +4129,8 @@ void Sema::checkStmt(Stmt *s) {
     else if (!assignable(a->target->type, a->value->type))
       diags_.error(a->line, a->col,
                    "cannot assign " + a->value->type->name() +
-                       " to a variable of type " + a->target->type->name());
+                       " to a variable of type " + a->target->type->name() +
+                       distinctTypeNote(a->target->type, a->value->type));
     return;
   }
 
@@ -5060,10 +5107,19 @@ void Sema::checkBinary(Binary *b) {
     return;
   }
 
-  auto bad = [&](const char *want) {
-    diags_.error(b->line, b->col, std::string("operator '") + opName(b->op) +
-                                      "' needs " + want + " operands, found " +
-                                      l->name() + " and " + r->name());
+  // `distinct` asks for §6.4.1's explanation, and only the *compatible* cases
+  // want it: two types written alike can be incompatible, and then their
+  // distinctness is the whole reason. Every other word here — numeric, set,
+  // boolean, comparable — names a property of the type's *kind*, which two
+  // types written alike necessarily share, so the note would be answering a
+  // question the reader did not ask. `if r = s` on two alike records is the
+  // program that makes the difference visible: records have no relational
+  // operators at all, and naming the type would not give them any.
+  auto bad = [&](const char *want, bool distinct = false) {
+    diags_.error(b->line, b->col,
+                 std::string("operator '") + opName(b->op) + "' needs " + want +
+                     " operands, found " + l->name() + " and " + r->name() +
+                     (distinct ? distinctTypeNote(l, r) : std::string()));
   };
 
   // ISO 7185 §6.7.2.3 gives `+`, `-` and `*` a second meaning on sets — union,
@@ -5095,7 +5151,7 @@ void Sema::checkBinary(Binary *b) {
       b->op == BinOp::SymDiff) {
     if (l->isSet() || r->isSet()) {
       if (!assignable(l, r) && !assignable(r, l)) {
-        bad("compatible");
+        bad("compatible", true);
         b->type = l->isSet() ? l : r;
       } else {
         // The result is a set of the operands' common base type, which is
@@ -5233,7 +5289,7 @@ void Sema::checkBinary(Binary *b) {
                      std::string("pointers can only be compared with = and "
                                  "<>, not with '") + opName(b->op) + "'");
       else if (!assignable(l, r) && !assignable(r, l))
-        bad("compatible");
+        bad("compatible", true);
     } else if (l->isSet() || r->isSet()) {
       // ISO 7185 §6.7.2.5: `<=` and `>=` on sets are inclusion, not order, and
       // there is no `<` or `>` at all — a proper subset is not a primitive.
@@ -5242,7 +5298,7 @@ void Sema::checkBinary(Binary *b) {
                      std::string("sets have no '") + opName(b->op) +
                          "': use <= and >= for inclusion");
       else if (!assignable(l, r) && !assignable(r, l))
-        bad("compatible");
+        bad("compatible", true);
     } else if (l->isRestricted() || r->isRestricted()) {
       // §6.4.2.5's NOTE lists what a restricted value may take part in —
       // assignment, a value parameter, a var parameter, a function result —
@@ -5271,12 +5327,12 @@ void Sema::checkBinary(Binary *b) {
                                  "and <>, not with '") + opName(b->op) +
                          "': there is no order on the complex numbers");
       else if (!l->isArith() || !r->isArith())
-        bad("compatible");
+        bad("compatible", true);
     } else if (!(l->isNumeric() && r->isNumeric()) &&
                !assignable(l, r) && !assignable(r, l)) {
       // Compatibility is decided the same way it is for assignment, so a
       // subrange compares with its host type and with its siblings.
-      bad("compatible");
+      bad("compatible", true);
     }
     b->type = ty::Bool();
     return;
@@ -6222,7 +6278,8 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
       if (a->type && p->type && a->type != p->type)
         diags_.error(a->line, a->col,
                      "var parameter '" + p->name + "' is " + p->type->name() +
-                         ", but the argument is " + a->type->name());
+                         ", but the argument is " + a->type->name() +
+                         distinctTypeNote(p->type, a->type));
       continue;
     }
 
@@ -6257,7 +6314,8 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
       diags_.error(a->line, a->col,
                    "argument " + std::to_string(i + 1) + " of '" +
                        callee->name + "' is " + p->type->name() +
-                       ", but the value is " + a->type->name());
+                       ", but the value is " + a->type->name() +
+                       distinctTypeNote(p->type, a->type));
   }
 
   // §6.7.3.3: one formal-parameter-section is one parameter-form, so every

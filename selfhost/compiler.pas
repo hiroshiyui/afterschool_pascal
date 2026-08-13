@@ -5904,6 +5904,55 @@ begin
     end
 end;
 
+{ The missing half of a message that names two types. 6.4.1 of both standards
+  makes each occurrence of a new-type denote a type distinct from every other,
+  so two type-denoters written alike denote two types -- and WriteTypeName then
+  prints one spelling twice while the message says nothing a reader can act on.
+  "cannot assign array [1..3] of integer to a variable of type array [1..3] of
+  integer" is accurate and useless, which is the same fault the file case beside
+  the assignment check was given a message of its own for.
+
+  Nothing is written when the spellings differ, so no message grows where it was
+  already saying something and no caller needs a condition of its own. The
+  question is "do these two print alike", so it is asked by rendering both
+  through the msgBuf sink -- and a spelling that fills the buffer cannot be
+  compared, so neither compiler says anything about one. The C++ carries the
+  same limit under the name kTypeNameCompareLimit; a diagnostic the two
+  disagree about is worse than one neither gives, and difftest is what reports
+  a drift in it. }
+procedure WriteDistinctTypeNote(a, b: typePtr);
+var saved: str; i: integer; same: boolean;
+begin
+  if (a <> nil) and (b <> nil) and (a <> b) then begin
+    msgOut := true;
+    StrClear(msgBuf);
+    WriteTypeName(a);
+    saved := msgBuf;
+    StrClear(msgBuf);
+    WriteTypeName(b);
+    msgOut := false;
+    same := (saved.len < strMax) and (saved.len = msgBuf.len);
+    if same then
+      for i := 1 to saved.len do
+        if saved.ch[i] <> msgBuf.ch[i] then same := false;
+    if same then begin
+      write('; the two are written alike, but ');
+      { Two anonymous denoters are the shape a reader can act on: the fix is
+        one named type used twice. Two type-names that print alike are distinct
+        for the very same reason -- each type-definition contains its own
+        new-type -- but naming them again is no advice, so that half is left
+        off. }
+      if (a^.aliasLen = 0) and (b^.aliasLen = 0) then
+        write('6.4.1 makes each type-denoter that is not a type name denote ',
+              'a type of its own, so declare one named type and give it to ',
+              'both')
+      else
+        write('each was defined separately and 6.4.1 makes the definitions ',
+              'distinct types')
+    end
+  end
+end;
+
 { ---------------------------------------------------------------- symbols }
 
 function NewSymbol: symPtr;
@@ -9334,9 +9383,10 @@ begin
   end
 end;
 
-{ Give the program parameters their meaning: `input` and `output` are the
-  standard files, and every other one must be a file variable the program block
-  declares, bound to a command-line argument. }
+{ Give the program parameters their meaning. Each must be a variable the
+  program block declares (6.10); `input` and `output` are the standard files,
+  one possessing a file-type is bound to a command-line argument in the order
+  written, and one that does not is bound to nothing. }
 procedure BindProgramParameters;
 var p: nodePtr; s: symPtr; argIndex: integer;
 begin
@@ -9358,14 +9408,17 @@ begin
       statement. (This compiler used to reject it, so the condition had to be
       folded into the next test instead.) }
     else if (s = stdInput) or (s = stdOutput) then
-    else if not IsFile(s^.stype) then begin
-      ErrorAt(p^.line, p^.col);
-      write('a program parameter must be a file variable, but ''');
-      WritePool(p^.dnAt, p^.dnLen);
-      write(''' is ');
-      if s^.stype = nil then write('untyped') else WriteTypeName(s^.stype);
-      writeln
-    end
+    { Neither standard restricts a program-parameter to a file. ISO 7185 6.10
+      makes the binding of one that does not possess a file-type
+      implementation-dependent, reserving implementation-defined for the file
+      case; ISO/IEC 10206:1991 6.12 drops the distinction and makes every
+      program-parameter's binding implementation-defined. The binding chosen
+      here is to no external entity -- the variable is an ordinary variable of
+      the program-block, undefined at activation -- which 6.12's NOTE 2 is what
+      makes a permitted answer rather than an omission. It therefore consumes
+      no command-line argument either, so writing one beside the file
+      parameters does not move their argument positions. }
+    else if not IsFile(s^.stype) then
     else begin
       s^.binding := fbArgument;
       s^.fileArg := argIndex;
@@ -9619,6 +9672,7 @@ begin
           WriteTypeName(p^.sym^.stype);
           write(', but the argument is ');
           WriteTypeName(a^.ntype);
+          WriteDistinctTypeNote(p^.sym^.stype, a^.ntype);
           writeln
         end
         end
@@ -9668,6 +9722,7 @@ begin
         WriteTypeName(p^.sym^.stype);
         write(', but the value is ');
         WriteTypeName(a^.ntype);
+        WriteDistinctTypeNote(p^.sym^.stype, a^.ntype);
         writeln
       end;
       i := i + 1;
@@ -9752,7 +9807,16 @@ begin
   for k := 1 to n do write(w[k])
 end;
 
-procedure BadOperands(b: nodePtr; l, r: typePtr; want: wordLit);
+{ `distinct` asks for 6.4.1's explanation, and only the *compatible* cases want
+  it: two types written alike can be incompatible, and then their distinctness
+  is the whole reason. Every other word here -- numeric, set, boolean,
+  comparable -- names a property of the type's kind, which two types written
+  alike necessarily share, so the note would be answering a question the reader
+  did not ask. `if r = s` on two alike records is the program that makes the
+  difference visible: records have no relational operators at all, and naming
+  the type would not give them any. }
+procedure BadOperands(b: nodePtr; l, r: typePtr; want: wordLit;
+                      distinct: boolean);
 begin
   ErrorAt(b^.line, b^.col);
   write('operator ''');
@@ -9763,6 +9827,7 @@ begin
   WriteTypeName(l);
   write(' and ');
   WriteTypeName(r);
+  if distinct then WriteDistinctTypeNote(l, r);
   writeln
 end;
 
@@ -9936,7 +10001,7 @@ begin
           ((b^.bnOp = opAdd) or (b^.bnOp = opSub) or (b^.bnOp = opMul)) then
   begin
     if not Assignable(l, r) and not Assignable(r, l) then begin
-      BadOperands(b, l, r, 'compatible  ');
+      BadOperands(b, l, r, 'compatible  ', true);
       if IsSet(l) then b^.ntype := l else b^.ntype := r
     end
     { The result is a set of the operands' common base type, which is whichever
@@ -9992,7 +10057,7 @@ begin
            IsStringOrChar(l) and IsStringOrChar(r) then
           b^.ntype := canonStringType
         else if not IsArith(l) or not IsArith(r) then begin
-          BadOperands(b, l, r, 'numeric     ');
+          BadOperands(b, l, r, 'numeric     ', false);
           b^.ntype := intType
         end
         else if IsComplex(l) or IsComplex(r) then b^.ntype := complexType
@@ -10001,14 +10066,14 @@ begin
 
       opRealDiv: begin
         if not IsArith(l) or not IsArith(r) then
-          BadOperands(b, l, r, 'numeric     ');
+          BadOperands(b, l, r, 'numeric     ', false);
         if IsComplex(l) or IsComplex(r) then b^.ntype := complexType
         else b^.ntype := realType
       end;
 
       opIntDiv, opMod: begin
         if not IsInteger(l) or not IsInteger(r) then
-          BadOperands(b, l, r, 'integer     ');
+          BadOperands(b, l, r, 'integer     ', false);
         b^.ntype := intType
       end;
 
@@ -10018,11 +10083,11 @@ begin
         sets and nothing else -- where the other three are also arithmetic. }
       opSymDiff: begin
         if not IsSet(l) or not IsSet(r) then begin
-          BadOperands(b, l, r, 'set         ');
+          BadOperands(b, l, r, 'set         ', false);
           b^.ntype := emptySetType
         end
         else if not Assignable(l, r) and not Assignable(r, l) then begin
-          BadOperands(b, l, r, 'compatible  ');
+          BadOperands(b, l, r, 'compatible  ', true);
           if IsSet(l) then b^.ntype := l else b^.ntype := r
         end
         else if IsEmptySet(l) then b^.ntype := r
@@ -10030,7 +10095,7 @@ begin
       end;
       opAnd, opOr, opAndThen, opOrElse: begin
         if not IsBoolean(l) or not IsBoolean(r) then
-          BadOperands(b, l, r, 'boolean     ');
+          BadOperands(b, l, r, 'boolean     ', false);
         b^.ntype := boolType
       end;
 
@@ -10045,14 +10110,14 @@ begin
         rule `pow` has, which is why both ask one question about the left. }
       opExp: begin
         if not IsArith(l) or not IsNumeric(r) then
-          BadOperands(b, l, r, 'numeric     ');
+          BadOperands(b, l, r, 'numeric     ', false);
         if IsComplex(l) then b^.ntype := complexType
         else b^.ntype := realType
       end;
 
       opPow:
         if not IsArith(l) then begin
-          BadOperands(b, l, r, 'numeric     ');
+          BadOperands(b, l, r, 'numeric     ', false);
           b^.ntype := intType
         end
         else begin
@@ -10105,7 +10170,7 @@ begin
             writeln('''')
           end
           else if not Assignable(l, r) and not Assignable(r, l) then
-            BadOperands(b, l, r, 'compatible  ');
+            BadOperands(b, l, r, 'compatible  ', true);
         end
         else if IsSet(l) or IsSet(r) then begin
           { 6.7.2.5: <= and >= on sets are inclusion, not order, and there is
@@ -10117,7 +10182,7 @@ begin
             writeln(''': use <= and >= for inclusion')
           end
           else if not Assignable(l, r) and not Assignable(r, l) then
-            BadOperands(b, l, r, 'compatible  ')
+            BadOperands(b, l, r, 'compatible  ', true)
         end
         else if IsRestricted(l) or IsRestricted(r) then begin
           { 6.4.2.5's NOTE lists what a restricted value may take part in --
@@ -10138,7 +10203,7 @@ begin
           writeln('file variables cannot be compared')
         end
         else if IsMemory(l) or IsMemory(r) then
-          BadOperands(b, l, r, 'comparable  ')
+          BadOperands(b, l, r, 'comparable  ', false)
         { 6.8.3.5, table 6: `=` and `<>` accept any simple type, and the four
           ordering operators accept "any simple-type **except complex-type**".
           There is no order on the complex numbers, so this is the standard
@@ -10152,13 +10217,13 @@ begin
             writeln(''': there is no order on the complex numbers')
           end
           else if not IsArith(l) or not IsArith(r) then
-            BadOperands(b, l, r, 'compatible  ')
+            BadOperands(b, l, r, 'compatible  ', true)
         end
         else if not (IsNumeric(l) and IsNumeric(r)) and
                 not Assignable(l, r) and not Assignable(r, l) then
           { Compatibility is decided the same way it is for assignment, so a
             subrange compares with its host type and with its siblings. }
-          BadOperands(b, l, r, 'compatible  ');
+          BadOperands(b, l, r, 'compatible  ', true);
         b^.ntype := boolType
       end
     end
@@ -12794,6 +12859,7 @@ begin
             WriteTypeName(s^.asValue^.ntype);
             write(' to a result of type ');
             WriteTypeName(s^.asTarget^.ntype);
+            WriteDistinctTypeNote(s^.asTarget^.ntype, s^.asValue^.ntype);
             writeln
           end
         end
@@ -12822,6 +12888,7 @@ begin
             WriteTypeName(s^.asValue^.ntype);
             write(' to a variable of type ');
             WriteTypeName(s^.asTarget^.ntype);
+            WriteDistinctTypeNote(s^.asTarget^.ntype, s^.asValue^.ntype);
             writeln
           end
         end

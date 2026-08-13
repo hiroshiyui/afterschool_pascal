@@ -347,10 +347,10 @@ void Parser::parseMainProgram(Program &prog) {
   prog.name = cur().text;
   ++pos_;
 
-  // The program parameters. `input` and `output` name the standard files;
-  // any other one must be a file variable the block declares, and is bound to
-  // a command-line argument (ISO 7185 §6.10 leaves the binding to the
-  // implementation).
+  // The program parameters. Each must be a variable the block declares
+  // (§6.10); `input` and `output` name the standard files, one possessing a
+  // file-type is bound to a command-line argument, and one that does not is
+  // bound to nothing. §6.10 leaves all three to the implementation.
   if (accept(Tok::LParen)) {
     do {
       if (!check(Tok::Ident)) {

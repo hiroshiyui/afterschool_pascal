@@ -473,9 +473,10 @@ private:
   static bool overlaps(const std::vector<LabelRange> &seen, LabelRange r,
                        long long &at);
 
-  /// Give the program parameters their meaning: `input` and `output` are the
-  /// standard files, and every other one must be a file variable the program
-  /// block declares, bound to a command-line argument.
+  /// Give the program parameters their meaning. Each must be a variable the
+  /// program block declares (§6.10); `input` and `output` are the standard
+  /// files, one possessing a file-type is bound to a command-line argument in
+  /// the order written, and one that does not is bound to nothing.
   void bindProgramParameters();
   /// A reference to `input` or `output` for a read or write that named no
   /// file. Reports if that parameter was not declared, because ISO 7185 §6.10
