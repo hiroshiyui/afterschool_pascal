@@ -1023,6 +1023,21 @@ the same rule. It did not — `const c = 5 mod -3` was a diagnostic and the same
 expression over a variable computed 1. The compiler disagreeing with itself is
 the sharpest form this section's shape takes.
 
+**The second Annex D is the newer language's, and it was almost clean**
+(ADR-0078). ISO/IEC 10206:1991 lists a hundred and five errors — the same sixty
+plus the ones its features brought — and exactly one of the forty-five it adds
+was unreported: `sqr` of a real that overflows, which is in the first annex too
+(D.32). Everything else probed stopped the program already.
+
+Six of sixty against one of forty-five is the interesting number, and the
+difference is not the standards but when the code was written. Every Extended
+Pascal feature here arrived with a record that had to say what it did *not* do,
+and an error condition is the first thing that question turns up. ISO 7185's
+arithmetic predates the practice, so `sqrt`, `ln`, real `/` and `mod` were
+written when the only question was whether they computed the right answer. That
+is the first time one of these sweeps has produced evidence about the method
+rather than about the compiler.
+
 The same sweep found the one §6.8.3.9 restriction that had never been checked:
 a control variable must be declared in the block closest-containing the `for`
 statement, so a procedure looping over the program's `i` is not a program

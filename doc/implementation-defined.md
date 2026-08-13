@@ -124,6 +124,14 @@ Most of them share one cause: the rule is a property of what happens while the
 program runs, and deciding it would need the run time to carry information that
 nothing in this implementation carries.
 
+**Real overflow is not on this list, and is not an omission.** §6.7.2.2 makes
+the accuracy of the real operations implementation-defined rather than making a
+result the type cannot represent an error, so `1e308 * 10.0` yielding an
+infinity breaks no rule — see E.8 in §2 above, which is where that answer
+belongs. The one real operation either standard *does* name this way is
+`sqr` (D.32; D.57 in ISO/IEC 10206:1991, for both types in one sentence), and
+it is checked (ADR-0078).
+
 | Clause | The error, and where it is recorded |
 |---|---|
 | §6.6.5.3 / §6.7.5.3 | A variable created by `new(p, c1, …, cn)` may not be an operand of an assignment nor an actual parameter, its unselected variants not existing. Detecting this needs the pointer's *value* to carry which form created it. ADR-0027. |
@@ -139,7 +147,6 @@ nothing in this implementation carries.
 | §6.11.3 | Where a `qualified` import's names may be written, outside the import-specification itself. ADR-0053. |
 | §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
 | §6.6.5.3 (D.20–D.22) | That `dispose(p)` matches the `new` that created the variable, and that `dispose(p, k1, …, km)` names the same variants with the same count. Same cause as D.25 above: it needs the pointer's *value* to carry which form created it. `dispose` of nil **is** reported (D.23) — that one needs nothing carried. ADR-0027, ADR-0077. |
-| §6.6.6.2 (D.32), §6.7.2.2 (D.47) | An arithmetic operation on **reals** whose result the type cannot represent. Integer `+ - * ` and `sqr` are checked (ADR-0014); a real overflow yields an infinity. Guarding it means a comparison after every real operation rather than one against a zero divisor, which is why it is the entry the Annex D sweep left open rather than answered. ADR-0077. |
 | §6.7.1 (D.43), §6.5.4 (D.4), §6.6.5.3 (D.24) | Using a variable that is undefined — in an expression, as the pointer of an identified-variable, or as `dispose`'s argument. Nothing here tracks definedness at run time, so this is the cause the entries above keep sharing rather than an entry of its own; it is written down because Annex D names it three times and a reader should not have to infer it. ADR-0077. |
 
 ## 4. Implementation-dependent features
