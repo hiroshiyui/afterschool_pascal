@@ -84,3 +84,4 @@ the alternatives that were rejected and why.
 | [0073](0073-writing-the-required-document-found-two-bugs.md) | Writing the required document found two bugs | Accepted |
 | [0074](0074-a-restriction-the-document-invented-and-a-message-that-explained-nothing.md) | A restriction the document invented, and a message that explained nothing | Accepted |
 | [0075](0075-a-constant-may-be-nil.md) | A constant may be nil | Accepted |
+| [0076](0076-a-read-that-took-too-much-and-two-brackets-never-provided.md) | A read that took too much, and two brackets that were never provided | Accepted |

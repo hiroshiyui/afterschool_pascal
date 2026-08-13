@@ -926,8 +926,16 @@ a type produced from a schema, and the `;` after a variant-part-value — and
 one, `array [1..4] of file of integer`, was a segfault (ADR-0070). No corpus
 program wrote any of the six, so every oracle agreed with a compiler that was
 wrong. The sweep also left ~30 accepted-but-unexercised forms and the
-implementation-defined choices of Annex E and F, most of which have no
-document; both are outstanding.
+implementation-defined choices of Annex E and F, most of which had no
+document. ADR-0073 wrote the document; **ADR-0076 is the other list**, and
+working through it found two things that were not merely unchecked but wrong:
+a number read took a character more than §6.9.1 allows — `7..9` read as 7 and
+swallowed a point, so a program reading input that looks like Pascal source
+would have lost the `..` — and §6.1.9's `(.` and `.)` were never provided,
+which that clause requires of every processor whose character set has the
+characters. Five more claims are now pinned by programs rather than asserted,
+including `maxreal` and `minreal`, whose printed text was checked only to
+thirteen digits in either compiler. The list is shorter, not empty.
 
 **And the other direction has been swept once** (ADR-0072): fifteen ISO 7185
 restrictions probed, six unenforced. Three are now checked — an empty argument

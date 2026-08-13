@@ -84,7 +84,14 @@ procedures new, dispose, reset, rewrite, get, put,
            forms of §6.6.5.3, which allocate only the arms chosen
 literals   integers, reals, 'strings', '' escapes, nil,
            [a, b..c] set constructors, and [] the empty set,
-           { } and (* *) comments
+           { } and (* *) comments, either pair closing either opening
+lexis      §6.1.9's alternative representations: (. and .) for [ and ],
+           which are the same tokens and not a second spelling, so
+           a[2.) is a legal subscript. @ for ^ is the one alternative
+           the clause leaves to the implementation, and is not provided
+read       a number read takes the longest prefix that *is* one
+           (§6.9.1): 1. is the integer 1 and then a point, .5 is not a
+           number, and 2e+ is the integer 2 and then two characters
 constants  named constants — a number, a char, a 'string' of any length, or
            another constant's name, optionally signed — plus predefined
            true, false, maxint

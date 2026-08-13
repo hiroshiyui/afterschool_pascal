@@ -41,11 +41,24 @@ Where both ask the same question the answer is given once.
 | 10206 | 7185 | Feature | This processor |
 |---|---|---|---|
 | E.1 | E.1 | which char values the string-elements denote | A string-element is one **byte** of the source, denoting the char whose ordinal is that byte's unsigned value; `''` denotes ordinal 39. A multi-byte UTF-8 character is therefore several string-elements, and a literal holding one byte of it is a `char`. |
-| E.2 | E.2 | provision of `"`, `[`, `]`, `@`, `{`, `}` | `[`, `]`, `{` and `}` are provided; `(*` and `*)` are provided as alternatives for the braces. **`"`, `@`, `(.` and `.)` are not provided**: `"` and `@` are rejected as unexpected characters, and `(.` reaches the parser as `(`. A `"` is an ordinary string-character inside a literal. |
+| E.2 | E.2 | provision of the reference tokens `^`, `[`, `]` and of the alternative token `@` | The three reference tokens **are** provided. The alternative token `@` is **not**: it is rejected as an unexpected character. |
 
-A consequence of E.2 worth stating plainly: a program restricted to the ISO 646
-invariant subset — which has no braces and no `[`, and so needs `(.` and `.)` —
-cannot be written for this processor.
+E.2 asks about four tokens and no more. The clause it comes from, §6.1.9
+(§6.1.11 in ISO/IEC 10206:1991), *requires* the other alternative
+representations of every processor whose character set has the characters —
+`(.` for `[`, `.)` for `]`, `(*` and `*)` for the braces — and requires that
+"the corresponding tokens or separators shall not be distinguished". All four
+are provided here, so `a[2.)` is a legal subscript; `tests/lexalternatives.pas`
+is what says so. That is not an entry in this document, because it is not a
+choice the standard leaves open.
+
+An earlier version of this table said the opposite: that `(.` and `.)` were
+implementation-defined and not provided. It also listed a double quote among
+the tokens, which is an artefact of reading an extraction of the PDF — the
+standard writes the pointer symbol as an up-arrow, and the arrow arrives in the
+text layer as a quote. Pascal has no double quote anywhere; `"` in a program is
+an unexpected character, and inside a literal it is an ordinary
+string-character (E.1).
 
 ### 2.2 The required constants and types
 
@@ -94,8 +107,8 @@ both compilers (ADR-0062).
 | E.22 | — | the length of `time(t)` | 8, fixed. |
 | E.23 | — | the representation `time(t)` returns | ISO 8601 `HH:MM:SS`, 24-hour, zero-padded. |
 | E.31 | — | binding of module parameters | `input` and `output` denote the required text files and are the only way a module reaches the standard streams. **Any other module-parameter is bound to nothing** and behaves as an internal scratch file (§6.11.1 NOTE 6, ADR-0053). |
-| E.32 | E.18 | `reset`, `rewrite`, `extend` on `input` | `reset(input)` **leaves the file exactly as it is** — the standard input cannot be repositioned, and clearing the lookahead would lose a character the stream has already consumed (ADR-0073). `rewrite(input)` and `extend(input)` stop the program with a run-time error. |
-| E.33 | E.18 | the same on `output` | `rewrite(output)` and `extend(output)` have no effect at all — no truncation, no reposition, and the line state `page` consults survives. `reset(output)` stops the program with a run-time error. |
+| E.32 | E.18 | `reset`, `rewrite`, `extend` on `input` | `reset(input)` **leaves the file exactly as it is** — the standard input cannot be repositioned, and clearing the lookahead would lose a character the stream has already consumed (ADR-0073), and `tests/resetinput.pas` pins it. `rewrite(input)` and `extend(input)` stop the program with a run-time error — `tests/trap_rewriteinput.pas` and `tests/extended/trap_extendinput.pas`. |
+| E.33 | E.18 | the same on `output` | `rewrite(output)` and `extend(output)` have no effect at all — no truncation, no reposition, and the line state `page` consults survives, which `tests/rewriteoutput.pas` and `tests/extended/extendoutput.pas` pin by calling `page` afterwards. `reset(output)` stops the program with a run-time error (`tests/trap_resetoutput.pas`). |
 | E.34 | E.17 | binding of program parameters | Bound in the order written, skipping `input` and `output`, to the command-line arguments `argv[1]`, `argv[2]`, … as pathnames. Surplus arguments are ignored; a missing one is a run-time error at the first `reset`, `rewrite` or `extend` of that file. `input` and `output` are the standard streams and consume no argument, and neither does a parameter that does not possess a file-type — see F.10 in §4. |
 | — | E.6 | the characters prohibited from textfiles | Exactly one: `chr(10)`. See §3's F.1 for what attributing it does. |
 

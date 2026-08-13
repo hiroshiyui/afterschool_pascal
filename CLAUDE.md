@@ -1724,6 +1724,21 @@ one-character string literal is a `char`; and a statement may be **empty**
 one — `;` and `end`, but also `else` and `until`, so `if c then ; else s` is
 legal. `tests/empty_statements.pas` pins it.
 
+**A number read takes the longest prefix that *is* a number** (§6.9.1 c) and
+d), ADR-0076), which is one character more than a file's lookahead can decide:
+`1.` is the integer 1 and then a point, `.5` is not a number at all, and `2e+`
+is the integer 2 and then two characters. `struct pas_file` carries a
+two-character give-back for it, and the order is a stack because the sign has
+to come back out before whatever followed it. `tests/readlongest.pas` includes
+`8.5.5`, which was already right, so a fix in the wrong direction fails too.
+
+**`(.` and `.)` are `[` and `]`**, not a second spelling — §6.1.9 says "the
+corresponding tokens or separators shall not be distinguished", so nothing
+after the lexer is told which arrived and `a[2.)` is a legal subscript. Only
+the *reference* tokens and the alternative `@` are implementation-defined
+there; every other alternative representation is required, which is the same
+sentence that requires `(*` and `*)`. `@` is refused, in `torture.pas`.
+
 An array subscript outside its bounds traps (ADR-0017), and a `for` loop over an
 array's own bounds optimises the check away; where the bounds arrived with the
 actual (ADR-0040) the message is built by the runtime and says the same words. Storing outside a subrange traps,
