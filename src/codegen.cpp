@@ -3640,9 +3640,24 @@ llvm::Value *CodeGen::emitCall(Call *e) {
     if (at->isReal())
       return intrinsicCall(Intrinsic::fabs, {a});
     return intrinsicCall(Intrinsic::abs, {a, ConstantInt::get(i1(), 0)});
+  // §6.6.6.2 (D.32, and ISO/IEC 10206:1991's D.57 for both types): "sqr(x)
+  // computes the square of x. It is an error if such a value does not exist."
+  // For an integer that is the overflow `checkedArith` already reports; for a
+  // real it is an infinity where the operand was finite, which is the only
+  // real operation the standard names this way — §6.7.2.2 makes the accuracy
+  // of the others implementation-defined rather than their overflow an error.
   case Builtin::Sqr:
-    if (at->isReal())
-      return b_.CreateFMul(a, a, "sqr");
+    if (at->isReal()) {
+      llvm::Value *sq = b_.CreateFMul(a, a, "sqr");
+      llvm::Value *inf = ConstantFP::getInfinity(f64());
+      // The magnitude, not the value: sqr(-inf) is +inf too, and an operand
+      // that was already infinite is D.74's error rather than this one.
+      llvm::Value *mag = intrinsicCall(Intrinsic::fabs, {a});
+      emitTrapIf(b_.CreateAnd(b_.CreateFCmpOEQ(sq, inf, "sqr.inf"),
+                              b_.CreateFCmpONE(mag, inf, "sqr.finite")),
+                 "real overflow in sqr");
+      return sq;
+    }
     return checkedArith(Intrinsic::smul_with_overflow, a, a,
                         "integer overflow in sqr");
   case Builtin::Odd:

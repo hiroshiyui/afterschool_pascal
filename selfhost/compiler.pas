@@ -19867,6 +19867,7 @@ end;
 
 procedure EmitCall(e: nodePtr; var v: str);
 var a, w, lim, tmp, b_, re, im, x, y, c_, d_, k_, sum: str;
+    sqinf, mag, sqfin, sqbad: str;
     at, idx: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
@@ -20175,6 +20176,15 @@ begin
           PutOp(a);
           writeln(ircode, ', i1 false)')
         end;
+      { 6.6.6.2 (D.32, and ISO/IEC 10206:1991's D.57 for both types): "sqr(x)
+        computes the square of x. It is an error if such a value does not
+        exist." For an integer that is the overflow CheckedArith already
+        reports; for a real it is an infinity where the operand was finite,
+        which is the only real operation the standard names this way --
+        6.7.2.2 makes the accuracy of the others implementation-defined rather
+        than their overflow an error. The magnitude is what is tested, not the
+        value: sqr of minus infinity is plus infinity too, and an operand that
+        was already infinite is D.74's error rather than this one. }
       biSqr:
         if IsReal(at) then begin
           Def(v);
@@ -20182,7 +20192,29 @@ begin
           PutOp(a);
           write(ircode, ', ');
           PutOp(a);
-          writeln(ircode)
+          writeln(ircode);
+          Def(sqinf);
+          write(ircode, 'fcmp oeq double ');
+          PutOp(v);
+          writeln(ircode, ', 0x7FF0000000000000');
+          Def(mag);
+          write(ircode, 'call double @llvm.fabs.f64(double ');
+          PutOp(a);
+          writeln(ircode, ')');
+          Def(sqfin);
+          write(ircode, 'fcmp one double ');
+          PutOp(mag);
+          writeln(ircode, ', 0x7FF0000000000000');
+          Def(sqbad);
+          write(ircode, 'and i1 ');
+          PutOp(sqinf);
+          write(ircode, ', ');
+          PutOp(sqfin);
+          writeln(ircode);
+          MsgStart;
+          MsgText('real overflow in sqr                    ');
+          msg := MsgEnd;
+          EmitTrapIf(sqbad, msg)
         end
         else begin
           MsgStart;
