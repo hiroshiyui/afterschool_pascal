@@ -981,6 +981,37 @@ than reserved. So the lexis is complete even though the language is not.
   available — but the C++ compiler is still what builds stage 1, still what the
   first three components are diffed against, and still the one `verify/` proves.
   Retiring it means giving up all three, and none of them has a replacement yet.
+
+  **The question "how far are we from self-hosting" is therefore answered, and
+  the answer is not a distance.** Writing Pascal directly is done: stage 2
+  equals stage 3, so the source reproduces itself without the C++ compiler
+  taking part in the second reproduction. What is left is a *trade* rather than
+  remaining implementation, and it has four parts, only the last of which is
+  work in the ordinary sense:
+
+  - **No seed is checked in.** The stage-1 binary is built on demand and never
+    committed, so today the Pascal compiler has exactly one ancestor and it is
+    `pascalc`. Retiring stage 0 means committing an artefact — a binary, or the
+    `.ll` stage 0 emits — which is a policy decision about what this repository
+    is willing to carry and to trust, not a technical obstacle.
+  - **`difftest.sh` would have nothing to diff against.** The comparison is
+    two independent implementations answering the same question over 422 files;
+    delete one and it degrades to golden files, which record what the surviving
+    implementation happened to print. That is a strictly weaker oracle, and the
+    counting lesson above says why it matters: the corpus is only worth what it
+    reaches, and a golden file cannot disagree with the program that wrote it.
+  - **`verify/` proves `codegen.cpp`.** See the next entry, which was already
+    about this.
+  - **There is no Pascal `pascalc`.** `selfhost/compiler.pas` is
+    `program Compile(output, source, ircode, options)`: three program
+    parameters, the standard read from a file because ISO 7185 gives a program
+    no command line beyond its parameters (ADR-0033), `.ll` written to the
+    second one, and then it stops. No `--std` flag, no pass pipeline, no
+    TargetMachine, no shelling out to `clang` — `irtest.sh` does the assembling
+    and linking that `main.cpp` does for the C++ compiler. So "write Pascal
+    directly" in the everyday sense of typing one command needs a driver built
+    around the compiler, and that driver is under the same constraint the
+    options file already answers.
 - **Keep the proofs alive across the port.** ADR-0025 made the decision the
   earlier version of this line asked for: the theorems stay attached to the C++
   model, and the Pascal generator is tied to it by *behaviour* — the golden
