@@ -1384,6 +1384,38 @@ in one language or the other, and the standard is a property of the source.
     so a run of type definitions ending is what triggers it. It **tightens**
     too: `var v: t` before `type t` is now the forward reference §6.2.2.9 says
     it is.
+- **Five things the grammar admitted and the compiler refused** (ADR-0071).
+  Not a feature: a sweep of Annex A's 274 productions, each probed with a
+  compiled program, turned up five constructs the standard has and this
+  compiler rejected — and *no corpus program wrote any of them*, so all five
+  oracles agreed. That is the finding; the fixes are small.
+  - `char + char` is a two-character string (§6.8.3.6). Table 7's operands are
+    "Char-type **or** the canonical-string-type" and the clause says *a and b*,
+    so both may be char. An explicit guard refused it, identically in both
+    compilers and commented in neither — while README already documented it as
+    working.
+  - **A qualified name stands wherever a type-name may** (§6.11.3): a pointer
+    domain, a restricted type, a type-inquiry object, and — through a different
+    cause — either bound of a subrange, since `looksLikeSubrange` treated the
+    `.` as the end of the denoter and so never found the `..`.
+  - **A schema may be given a second name** (§6.4.7's first alternative), and
+    the two must share one `Symbol`: §6.4.8 keys a produced type on (schema,
+    tuple), so a copy would make `vec2(3)` and `vector(3)` distinct types.
+    The fourth time "ask the symbol, not the syntax" has been the answer.
+  - **A `with` may take a type produced from a schema** (§6.9.3.10), the
+    discriminants becoming names over the statement. Three shapes, three
+    answers, each already a symbol Sema had — a `Const` for a constant tuple,
+    the parameter's own `Disc` for a schematic formal — **except on the heap**,
+    where the tuple is a header reached by walking *down* a designator and a
+    bare name has none to walk. There the binding becomes ADR-0040's
+    descriptor and the discriminants are its.
+  - **The `;` after a variant-part-value** (§6.8.7.3), which the production
+    puts outside the alternation.
+  - It also uncovered a crash **older than the feature**: a designator rooted
+    at a `with` binding whose bounds are a heap variable's (`with g^ do
+    cells[r, c] := 0`) built its bounds check on a null header. Both compilers
+    were broken the same way, so `difftest` — which compares dumps, not
+    generated code — agreed, and `irtest` had no such program.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

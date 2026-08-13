@@ -286,7 +286,15 @@ types      vector(n: integer) = array [1..n] of real — a schema, and
            not, whatever they look like; v.n is the value a type was
            produced with. A discriminant may also be a variable — `vector(n)`
            in a variable declaration is sized when the block is entered, and
-           the tuple is checked there (§6.2.3.2)
+           the tuple is checked there (§6.2.3.2). `vec2 = vector` gives a
+           schema a second name (§6.4.7), and the two denote *one* schema
+           rather than alike ones — so `vec2(3)` and `vector(3)` are the
+           same type and values move between them
+with v     a with-element may possess a type produced from a schema
+           (§6.9.3.10), and the statement is then the region over which
+           that schema's discriminants are names: `with v do writeln(n)`
+           where v is a `vector(3)`, a schematic formal, or a heap variable
+           the tuple travelled with. They denote values, not variables
 params     procedure p(var v: vector) — a schematic formal parameter, whose
            bounds come from the actual: one body serves every tuple, and
            v.n reads the tuple the argument brought. A value parameter of
@@ -352,7 +360,10 @@ strings    string(n) — the required schema of §6.4.3.3.3: a length and up
            of char` is the other string type and is padded instead, and
            the two are compatible with each other and with char. s[i]
            indexes to the *length*, s.capacity is the type's. + joins
-           any two of them; = < > pad the shorter with spaces (where
+           any two of them, `c + d` of two chars included — table 7's
+           operands are "Char-type or the canonical-string-type" and the
+           clause says *a and b*, so both may be a char and the result is
+           a two-character string; = < > pad the shorter with spaces (where
            ISO 7185 required equal lengths); length, index, substr and
            trim answer about one, and eq, ne, lt, gt, le, ge compare
            lengths as well as characters — so `eq('ab','ab  ')` is false
@@ -389,7 +400,10 @@ modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            StandardOutput are the required interfaces a module imports to
            reach `input` and `output`, or the module-heading may name them
            itself — `module m(output)`. An import-part may head *any*
-           block (§6.2.1), not only a module's
+           block (§6.2.1), not only a module's. A qualified name stands
+           wherever a type-name may (§6.11.3): a pointer's domain, a
+           restricted type, a type-inquiry's object and either bound of a
+           subrange all take `i.t`
 const      const n = base * 2 — a constant-expression: wherever ISO 7185
            asked for a constant, the whole expression grammar is now
            admitted, so a subrange bound, an array bound, a case label, a
@@ -444,7 +458,9 @@ values     a structured-value-constructor denotes a value of a named array or
            record type: `vec[1: 10; 2..3: 20 otherwise 0]` and
            `pt[x, y: 9]`, with `case kind: box of [w: 6; h: 7]` selecting a
            variant. Every component must be specified exactly once, and the
-           `otherwise` gives a value to the ones no element names. A
+           `otherwise` gives a value to the ones no element names. §6.8.7.3
+           puts the closing `;` outside the alternation, so it may follow a
+           variant-part-value as well as a fixed part. A
            component-value may itself be one, so a value nests as the type
            does. An initial-state specifier takes one too, which is what
            makes `array [1..8] of char value [1..8: '*']` eight stars.

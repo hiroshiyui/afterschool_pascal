@@ -128,7 +128,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 396
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 398
    files agree stage for stage today.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
@@ -906,6 +906,19 @@ they landed — rather than in the standard's.
 complete**, and with §6.8.8 the grammar is too — so what is left above is one
 *should* of §6.13, and no production, required identifier, required type or
 lexical rule at all.
+
+**That sentence has since been checked rather than asserted** (ADR-0071).
+Every one of Annex A's 274 productions was probed with a compiled program and
+also looked for in the corpus, which is what ADR-0067 asks for before a claim
+of completeness. It held for 268 of them; five were constructs the standard
+admits and this compiler refused — `char + char`, a qualified name in four
+type positions and in a subrange bound, a schema's second name, a `with` over
+a type produced from a schema, and the `;` after a variant-part-value — and
+one, `array [1..4] of file of integer`, was a segfault (ADR-0070). No corpus
+program wrote any of the six, so every oracle agreed with a compiler that was
+wrong. The sweep also left ~30 accepted-but-unexercised forms and the
+implementation-defined choices of Annex E and F, most of which have no
+document; both are outstanding.
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
 only when the feature needing it lands, so until the list was empty
