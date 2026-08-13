@@ -927,7 +927,8 @@ in one language or the other, and the standard is a property of the source.
     neither compiler has a float to fold with — refusing in both beats folding
     in one, the same trade the real-literal range check made. What is refused
     is an *operation*: since ADR-0068 a bare string literal is a constant, and
-    always was one in ISO 7185 §6.3, because there is nothing to compute.
+    always was one in ISO 7185 §6.3, because there is nothing to compute. Bare
+    `nil` is the same shape and took until ADR-0075.
 - **A result that lives in memory is the caller's storage** (ADR-0055).
   §6.7.2 lets a function return anything that is not, and does not contain, a
   file and is not bindable — so a record, an array and a set. ADR-0017 gives a
@@ -1511,6 +1512,25 @@ in one language or the other, and the standard is a property of the source.
     C++. `fileSize`/`PAS_FILE_SIZE`'s coupling again — and checked, not
     asserted: the test declares a 263-character type name, and dropping the
     limit from one compiler fails both the golden and `difftest`.
+- **A constant may be `nil`** (ADR-0075). §6.7.1 makes it an
+  unsigned-constant, so §6.8.2 admits it — it names a value and reads nothing,
+  which is the whole of nonvarying. ISO 7185 §6.3's `constant` has no `nil`, so
+  the fold is gated on the standard where ADR-0054 gates `Binary` and `Call`.
+  - **The constant keeps the literal's type**, which is why the feature is one
+    arm of one `case`: §6.4.4's NOTE 2 gives the token "a suitable
+    pointer-type", which is ADR-0019's nil-type, so one `q` serves every
+    pointer type and assignment, comparison, a value parameter, an initial
+    state and a `nil` component of a §6.8.7 constructor each needed nothing.
+  - **The dump prints the word, not `intVal`** — a field the fold never writes.
+    The same care the memory case beside it takes, and for ADR-0068's reason.
+  - It gave **`nil^` a way of being written**, which exposed a message naming
+    the wrong rule. The nil-type was always refused there, but through "only a
+    pointer can be dereferenced, found nil"; §6.4.4's NOTE 1 is the rule that
+    applies — the nil-value "does not identify a variable". ADR-0074's lesson
+    in a third form, and equally invisible to every oracle here.
+  - It was found by ADR-0071's sweep and **written into `doc/roadmap.md`
+    instead of fixed**, which is the only reason it outlived two more
+    conformance rounds.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

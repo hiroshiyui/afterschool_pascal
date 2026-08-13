@@ -945,11 +945,16 @@ message asserted a rule neither has. It is accepted now, bound to nothing and
 consuming no argument. The same record adds §6.4.1's reason to the five
 messages that name two types, which had been printing one spelling twice.
 
-One refusal turned up while probing and is **outstanding**: `const q = nil` is
-rejected under both standards. ISO 7185 §6.3's constant has no `nil`, so that
-half is right; ISO/IEC 10206:1991 §6.8.2 makes a constant-expression any
-nonvarying expression and §6.7.1's factor includes `nil`, so that half is a
-gap. It belongs with the unexercised-forms sweep rather than with the laxities.
+**A seventh was the one ADR-0071's sweep turned up and did not fix**
+(ADR-0075): `const q = nil`, rejected under both standards. ISO 7185 §6.3's
+constant has no `nil`, so that half was right; ISO/IEC 10206:1991 §6.7.1 makes
+it an unsigned-constant and §6.8.2 admits any nonvarying expression, so that
+half was a gap — and being written down here rather than fixed is the only
+reason it survived two more conformance rounds. §6.4.4's NOTE 2 gives the
+token the type every pointer assignment accepts, so nothing outside the folder
+changed. It also gave `nil^` a way of being written and so exposed a message
+that named the wrong rule: the nil-value "does not identify a variable"
+(NOTE 1), which is not the same complaint as "not a pointer".
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
 only when the feature needing it lands, so until the list was empty

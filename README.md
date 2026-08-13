@@ -444,7 +444,10 @@ const      const n = base * 2 — a constant-expression: wherever ISO 7185
            real constant is carried as the text that was written and never
            converted, and building characters or a set in the compiler would
            have to give the same answer in both of them. A string *literal*
-           needs no folding and is a constant in either standard
+           needs no folding and is a constant in either standard, and so is
+           `nil` — §6.7.1 makes it an unsigned-constant, and it takes the
+           type every pointer assignment will accept, so one `const q = nil`
+           serves them all
 funcs      a function may return a record, an array, a set or a string — any
            type that is not, and does not contain, a file, and is not
            bindable. The result travels in storage the *caller* supplies, so
