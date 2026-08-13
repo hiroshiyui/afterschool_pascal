@@ -13055,10 +13055,26 @@ begin
           writeln('the control variable of a for statement cannot be a field ',
                   'of a with statement')
         end
+        { 6.8.3.9 does not merely say "a variable": "The control-variable shall
+          be an entire-variable whose identifier is declared in the
+          variable-declaration-part of the block closest-containing the
+          for-statement" -- ISO/IEC 10206:1991 6.9.3.9.2 word for word, but for
+          "a variable-declaration-part", that standard letting the parts
+          repeat. So a parameter is refused, and so is a variable of an
+          enclosing block or one reached through an interface, and the message
+          has to say which rule it is: a value parameter *is* a variable, so
+          "must be a variable" would be naming something that is not the
+          complaint.
+
+          currentProc is the block whose statements these are, which is what
+          the clause means by closest-containing: a nested procedure's body is
+          walked with it set to that procedure. }
         else if (s^.frVar^.vrSym <> nil) and
-                (s^.frVar^.vrSym^.kind <> skVar) then begin
+                ((s^.frVar^.vrSym^.kind <> skVar) or
+                 (s^.frVar^.vrSym^.owner <> currentProc)) then begin
           ErrorAt(s^.frVar^.line, s^.frVar^.col);
-          writeln('the control variable of a for statement must be a variable')
+          writeln('the control variable of a for statement must be a ',
+                  'variable declared in the block containing the statement')
         end;
         if (s^.frVar^.ntype <> nil) and not IsOrdinal(s^.frVar^.ntype) then
         begin

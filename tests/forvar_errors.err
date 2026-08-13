@@ -1,0 +1,5 @@
+<source>:43:7: error: the control variable of a for statement must be a variable declared in the block containing the statement
+<source>:51:7: error: the control variable of a for statement must be a variable declared in the block containing the statement
+<source>:57:7: error: the control variable of a for statement must be a variable declared in the block containing the statement
+<source>:62:7: error: the control variable of a for statement must be an ordinal type
+<source>:68:9: error: the control variable of a for statement cannot be a field of a with statement
