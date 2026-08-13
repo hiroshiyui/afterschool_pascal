@@ -536,7 +536,28 @@ std::vector<Token> Lexer::tokenize() {
         out.push_back(make(Tok::Eq, sl, sc));
       }
       break;
-    case '(': out.push_back(make(Tok::LParen, sl, sc)); break;
+    // ISO 7185 §6.1.9 (ISO/IEC 10206:1991 §6.1.11): `(.` and `.)` are the
+    // alternative representations of `[` and `]`, and "the corresponding
+    // tokens or separators shall not be distinguished" — so they are the same
+    // token, not a second spelling anything downstream can see. Only the
+    // provision of the *reference* representations and of the alternative
+    // token `@` is implementation-defined; these two are required of every
+    // processor whose character set has the characters, which is the same
+    // sentence that requires `(*` and `*)` and is why those were already here.
+    //
+    // Neither is ambiguous. A `(` begins a parenthesised expression, an
+    // argument list, an enumerated type or a field-list, and no expression or
+    // identifier begins with a point; a bare `.` is a field selector, a
+    // qualified name or the program terminator, and none of those is followed
+    // by `)`. `..` is still taken first, so `(.1..3.)` is five tokens.
+    case '(':
+      if (peek() == '.') {
+        advance();
+        out.push_back(make(Tok::LBracket, sl, sc));
+      } else {
+        out.push_back(make(Tok::LParen, sl, sc));
+      }
+      break;
     case ')': out.push_back(make(Tok::RParen, sl, sc)); break;
     case '[': out.push_back(make(Tok::LBracket, sl, sc)); break;
     case ']': out.push_back(make(Tok::RBracket, sl, sc)); break;
@@ -546,8 +567,15 @@ std::vector<Token> Lexer::tokenize() {
       else out.push_back(make(Tok::Colon, sl, sc));
       break;
     case '.':
-      if (peek() == '.') { advance(); out.push_back(make(Tok::DotDot, sl, sc)); }
-      else out.push_back(make(Tok::Period, sl, sc));
+      if (peek() == '.') {
+        advance();
+        out.push_back(make(Tok::DotDot, sl, sc));
+      } else if (peek() == ')') {
+        advance();
+        out.push_back(make(Tok::RBracket, sl, sc));
+      } else {
+        out.push_back(make(Tok::Period, sl, sc));
+      }
       break;
     case '<':
       if (peek() == '=') { advance(); out.push_back(make(Tok::Le, sl, sc)); }

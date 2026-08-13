@@ -2200,7 +2200,26 @@ begin
     if Peek(0) = '>' then begin Advance; AddSimple(sl, sc, tkArrow) end
     else AddSimple(sl, sc, tkEq)
   end
-  else if c = '(' then AddSimple(sl, sc, tkLParen)
+  { ISO 7185 6.1.9 (ISO/IEC 10206:1991 6.1.11): `(.` and `.)` are the
+    alternative representations of `[` and `]`, and "the corresponding tokens
+    or separators shall not be distinguished" -- so they are the same token,
+    not a second spelling anything downstream can see. Only the provision of
+    the *reference* representations and of the alternative token `@` is
+    implementation-defined; these two are required of every processor whose
+    character set has the characters -- the same sentence that requires the
+    star-paren comment delimiters, which is why those were already here. Their
+    spelling cannot be written down in this comment, for the reason ADR-0073
+    gives: a commentary is closed by either delimiter, whichever opened it.
+
+    Neither is ambiguous. A `(` begins a parenthesised expression, an argument
+    list, an enumerated type or a field-list, and no expression or identifier
+    begins with a point; a bare `.` is a field selector, a qualified name or
+    the program terminator, and none of those is followed by `)`. `..` is
+    still taken first, so `(.1..3.)` is five tokens. }
+  else if c = '(' then begin
+    if Peek(0) = '.' then begin Advance; AddSimple(sl, sc, tkLBracket) end
+    else AddSimple(sl, sc, tkLParen)
+  end
   else if c = ')' then AddSimple(sl, sc, tkRParen)
   else if c = '[' then AddSimple(sl, sc, tkLBracket)
   else if c = ']' then AddSimple(sl, sc, tkRBracket)
@@ -2211,6 +2230,7 @@ begin
   end
   else if c = '.' then begin
     if Peek(0) = '.' then begin Advance; AddSimple(sl, sc, tkDotDot) end
+    else if Peek(0) = ')' then begin Advance; AddSimple(sl, sc, tkRBracket) end
     else AddSimple(sl, sc, tkPeriod)
   end
   else if c = '<' then begin

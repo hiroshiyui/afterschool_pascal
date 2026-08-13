@@ -104,6 +104,14 @@ begin
   x := x $ 1;
   x := x " 1;
 
+  { 6.1.9's alternative representations are tokens, so a *lexical* file is
+    where the tokenisation is compared: `(.` and `.)` are `[` and `]`, and
+    `..` is still taken first. `@` is beside them above because it is the one
+    alternative whose provision the clause leaves to the implementation, and
+    this one does not provide it. }
+  x := y(.1..3.);
+  x := y(.i.) + (1 + 2);
+
   { Whitespace that is not a blank. isspace accepts the five control
     characters 9..13, and a lexer that only knows the space character
     lexes all of this differently -- a gap the corpus had until a
