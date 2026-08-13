@@ -97,11 +97,34 @@ test, because no program in the corpus had ever written one. What is left of
 the language is the next standard, not more of this one.
 
 Two things this compiler is **more permissive** about than ISO 7185, both
-stated rather than intended. The declaration parts may come in any order and
-may repeat, even under `--std=iso7185`, where §6.2.1 fixes them as label,
-const, type, var — that is ISO/IEC 10206:1991's rule, and it is not gated. And
-`packed` is accepted on a `set`, where it has nothing to do: every set is one
-256-bit word whatever is written.
+deliberate and both stated here because nothing else would notice them.
+
+An **identifier may contain an underscore**, where §6.1.3 makes one `letter {
+letter | digit }`. It is how this project spells a name that would otherwise
+collide with a word-symbol — `label_`, `set_`, `packed_` — and how a test
+program takes the name of its file. Gating it would rename thirteen identifiers
+in the stage-1 compiler and the program headers of forty-three test programs,
+for a lexical rule that admits no ambiguity; the deviation is one a reader can
+see, so it is written down instead.
+
+**Set compatibility ignores packing.** §6.4.5 c) makes two set-types compatible
+only if both are `packed` or neither is, and here only the base types are
+compared. Every set is one 256-bit word whatever is written, so the two have
+the same representation and the check could only reject programs that work —
+and the standard does not say what packing a *set-constructor* has, so
+requiring agreement would make `s := [1]` depend on how `s` was declared.
+
+This list used to hold the declaration-part order, which is now checked:
+§6.2.1's label, const, type, var, procedures is required again under
+`--std=iso7185`. Two other deviations were closed at the same time and had
+never been on the list at all, which is the more useful thing to know about
+them — a constant may not be selected from, §6.8.8 belonging to the next
+standard, and `f()` is refused in both standards, Pascal having no empty
+argument list. The underscore entry is new here for the same reason. All three
+were found by compiling a probe for a clause rather than by a test, and the
+packing entry above is a narrower and truer statement of what used to be filed
+as "`packed` is accepted on a `set`" — see
+[ADR-0072](doc/adr/0072-three-things-the-compiler-accepted-and-neither-standard-has.md).
 
 Enumerations and subranges are ordinal types like `char`: they index arrays,
 drive `for` loops, answer `ord`/`succ`/`pred`, and select `case` arms. `succ`

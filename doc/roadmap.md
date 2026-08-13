@@ -266,10 +266,19 @@ surprises.
   one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
   this is a permitted limit rather than a deviation — but `set of integer` is a
   legal program this compiler refuses (ADR-0028).
-- **`packed set` is accepted and ignored.** There is nothing to pack: the
-  representation is already one bit per member. §6.4.6 asks that compatible
-  sets agree on packing, which is not checked, and here could only reject
-  programs that would work.
+- **Set compatibility ignores packing.** §6.4.5 c) makes two set-types
+  compatible only if both are `packed` or neither is, and only the base types
+  are compared here. Accepting `packed set` is not the deviation — §6.4.3 makes
+  a set-type a structured-type, so `packed` may precede one — and the earlier
+  wording of this entry named the wrong thing. The representation is one bit
+  per member either way, so the check could only reject programs that work, and
+  the standard does not say what packing a *set-constructor* has, so requiring
+  agreement would make `s := [1]` depend on how `s` was declared (ADR-0072).
+- **An identifier may contain an underscore**, where §6.1.3 makes one `letter {
+  letter | digit }`. It is how a name that would collide with a word-symbol is
+  spelled — `label_`, `set_`, `packed_` — and how a test program takes the name
+  of its file: thirteen identifiers in `selfhost/compiler.pas` and the program
+  headers of forty-three test programs (ADR-0072).
 
 And four from the second standard, each stated in the record that made it:
 
@@ -919,6 +928,20 @@ program wrote any of the six, so every oracle agreed with a compiler that was
 wrong. The sweep also left ~30 accepted-but-unexercised forms and the
 implementation-defined choices of Annex E and F, most of which have no
 document; both are outstanding.
+
+**And the other direction has been swept once** (ADR-0072): fifteen ISO 7185
+restrictions probed, six unenforced. Three are now checked — an empty argument
+list, the order of a block's declaration parts, and selecting from a constant —
+two are the deliberate deviations listed above, and one was a fault in the
+probe rather than in the compiler, `writeln(5:0)` being accepted and then
+trapped, which §6.1 f) permits. Three ISO programs in the corpus were
+themselves out of order, which is why nothing had failed.
+
+One refusal turned up while probing and is **outstanding**: `const q = nil` is
+rejected under both standards. ISO 7185 §6.3's constant has no `nil`, so that
+half is right; ISO/IEC 10206:1991 §6.8.2 makes a constant-expression any
+nonvarying expression and §6.7.1's factor includes `nil`, so that half is a
+gap. It belongs with the unexercised-forms sweep rather than with the laxities.
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
 only when the feature needing it lands, so until the list was empty

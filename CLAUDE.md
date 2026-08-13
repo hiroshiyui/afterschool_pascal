@@ -1416,6 +1416,33 @@ in one language or the other, and the standard is a property of the source.
     cells[r, c] := 0`) built its bounds check on a null header. Both compilers
     were broken the same way, so `difftest` — which compares dumps, not
     generated code — agreed, and `irtest` had no such program.
+- **Three things the compiler accepted and neither standard has** (ADR-0072) —
+  ADR-0071's sweep run in the other direction. Fifteen ISO 7185 restrictions
+  probed, six unenforced, three now checked.
+  - **Pascal has no empty argument list.** `actual-parameter-list` requires at
+    least one parameter in both standards, so `f()` is refused in both. Six
+    copies of the loop wrote `if (!check(Tok::RParen))` around the list, which
+    is the shape that permits the empty one; five are now
+    `parseActualParameters` and `write` keeps its own, sharing only the rule.
+  - **A block's declaration parts have an order** under `--std=iso7185`
+    (§6.2.1), checked in the parser against the **highest** part begun rather
+    than the previous one, so every misplaced part is reported. Two procedures
+    in a row are the one exception, the grammar making that part a list.
+  - **A constant may not be selected from** under ISO 7185; §6.8.8 is the next
+    standard's. Refused in Sema, because a selector over a name is a designator
+    until the symbol says otherwise — "ask the symbol, not the syntax" again.
+    **Two of the three selector forms are checked, not three**: no substring
+    node exists under ISO 7185, so that arm could never fire and is not written.
+  - **The order check was lost by ADR-0069**, which correctly relaxed it for
+    Extended Pascal and relaxed it for both. Three ISO programs in the corpus
+    were themselves out of order, so nothing failed. Their goldens are
+    byte-identical after being rewritten in §6.2.1's order.
+  - **A wrong citation is invisible to every oracle here.**
+    `tests/stringconst.pas` indexed a string constant citing §6.5.3.2, which is
+    about an array-*variable*; it compiled, ran, printed the right answer and
+    both compilers agreed. Nothing but reading the clause catches that.
+  - Two deviations remain and are deliberate: an underscore in an identifier,
+    and set compatibility not requiring §6.4.5 c)'s packing agreement.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
