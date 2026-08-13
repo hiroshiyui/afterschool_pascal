@@ -94,9 +94,15 @@ begin
     refusal is one token rather than a complaint about `>` after `=`. }
   x := 1 => 2;
 
-  { an unexpected character }
+  { An unexpected character. The double quote is here because the document
+    clause 5.1 requires had listed it among 6.1.9's lexical alternatives, which
+    it is not: the standard's own text writes the pointer symbol as an
+    up-arrow, and an extraction of the PDF turns that into a quote. Pascal has
+    no double quote anywhere, so this is the ordinary refusal and not a
+    decision about an alternative representation. }
   x := x @ 1;
   x := x $ 1;
+  x := x " 1;
 
   { Whitespace that is not a blank. isspace accepts the five control
     characters 9..13, and a lexer that only knows the space character

@@ -22,8 +22,19 @@ type
       only: (c: char)
   end;
 var
-  value, module, export: integer;
+  value, module, export, bindable: integer;
   r: tagged;
+
+{ `protected` is the sharpest of the thirteen to place, because Extended
+  Pascal's use of it is exactly here: §6.7.3.1 writes a formal parameter as
+  `[ protected ] identifier-list ':' type`, so under that standard this
+  heading is the word-symbol followed by a missing parameter name. Under
+  ISO 7185 it is the name. `bindable` above is the other one no program in
+  this corpus had ever written as an identifier. }
+function twice(protected: integer): integer;
+begin
+  twice := protected * 2
+end;
 
 { `pow` is a word-symbol of the other standard too, and nothing distinguishes
   this function from any other -- which is the point: reserving a spelling
@@ -49,5 +60,7 @@ begin
   r.n := 30;
   writeln('variant labelled otherwise: ', r.n:1);
   writeln('a function named pow: ', pow(2, 8):1);
+  bindable := 21;
+  writeln('a parameter named protected: ', twice(bindable):1);
   writeln('value=', value:1, ' module=', module:1, ' export=', export:1)
 end.

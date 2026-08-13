@@ -1,4 +1,5 @@
 label named otherwise: 3
 variant labelled otherwise: 30
 a function named pow: 256
+a parameter named protected: 42
 value=1 module=2 export=3
