@@ -15,6 +15,12 @@ const
   folded = base * 2;              { §6.3: a constant, not an expression }
   called = abs(-4);               { §6.8.2 c)'s required functions, likewise }
   compared = base < 20;
+  { §6.3's `constant` is a signed literal or the name of another constant, and
+    `nil` is neither. ISO/IEC 10206:1991 §6.7.1 makes it an unsigned-constant,
+    so there it is a constant-expression like the three above — see
+    `tests/extended/constnil.pas`. It parses under both standards, which is
+    what puts it in this file rather than in `constexpr_iso.pas`. }
+  nilconst = nil;
 
 var i: integer;
 

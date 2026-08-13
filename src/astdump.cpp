@@ -103,6 +103,13 @@ std::string symRef(const Symbol *s) {
     // compilers first disagreed about one.
     if (s->type->isMemory())
       return "const expr";
+    // A pointer constant is `nil` and can be nothing else: §6.4.4 gives the
+    // token one value, and the only pointer a constant-expression can name is
+    // that one. So the word is printed rather than `intVal`, which is a field
+    // the fold never wrote — the same care the memory case above takes, and
+    // for the same reason.
+    if (s->type->isPointer())
+      return "const nil";
     if (s->type->isChar())
       return "const " + std::to_string(static_cast<unsigned char>(s->charVal));
     if (s->type->base()->kind == TypeKind::Boolean)

@@ -1,0 +1,5 @@
+two types: TRUE TRUE TRUE
+one value: TRUE
+param nil is TRUE
+in a record: TRUE 7
+in an array: TRUE TRUE

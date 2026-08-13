@@ -6764,8 +6764,24 @@ begin
       nkSubstr:
         if e^.ssSetValue <> nil then ok := EvalConstValue(e, res)
         else ok := EvalConstAccess(e, res);
+      { 6.7.1 makes `nil` an unsigned-constant, so it is a primary and 6.8.2
+        admits it: it names a value and reads nothing, which is the whole of
+        nonvarying. ISO 7185 6.3's `constant` has no `nil` at all, so the fold
+        is gated like the two above rather than sitting with the literals.
+
+        The constant keeps the literal's own type. 6.4.4's NOTE 2 says the
+        token "does not have a single type, but assumes a suitable pointer-type
+        to satisfy the assignment-compatibility rules", which is ADR-0019's
+        nil-type -- assignable to every pointer-type and nothing assignable to
+        it -- so one `const q = nil` serves them all. }
+      nkNil:
+        if langStd = stdExtended then begin
+          res.stype := e^.ntype;
+          res.constValue := e;
+          ok := true
+        end;
       nkValueElem,
-      nkNil, nkSetMember, nkDeref,
+      nkSetMember, nkDeref,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -11421,7 +11437,18 @@ begin
           if b^.elem <> nil then e^.ntype := b^.elem else e^.ntype := charType
         end
         else if not IsPointer(b) or IsNil(b) then begin
-          if b <> nil then begin
+          { 6.4.4 gives a pointer-type one nil-value and a set of
+            identifying-values, and its NOTE 1 draws the consequence: "Since
+            the nil-value is not an identifying-value, it does not identify a
+            variable." So `nil^` is not a dereference of something that is not
+            a pointer -- it is a pointer with nothing on the other end, and the
+            general message would be naming the wrong rule. Only reachable as a
+            written program since a constant may be `nil`. }
+          if IsNil(b) then begin
+            ErrorAt(e^.line, e^.col);
+            writeln('nil identifies no variable, so it cannot be dereferenced')
+          end
+          else if b <> nil then begin
             ErrorAt(e^.line, e^.col);
             write('only a pointer can be dereferenced, found ');
             WriteTypeName(b);
@@ -15193,6 +15220,12 @@ begin
           print whichever number the field happened to hold, which is how the
           two compilers first disagreed about one. }
         else if IsMemory(s^.stype) then write('const expr')
+        { A pointer constant is `nil` and can be nothing else: 6.4.4 gives the
+          token one value, and the only pointer a constant-expression can name
+          is that one. So the word is printed rather than intVal, which is a
+          field the fold never wrote -- the same care the memory case above
+          takes, and for the same reason. }
+        else if IsPointer(s^.stype) then write('const nil')
         else if IsChar(s^.stype) then write('const ', ord(s^.charVal):1)
         else if IsBoolean(s^.stype) then
           if s^.boolVal then write('const true') else write('const false')
