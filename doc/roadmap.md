@@ -83,7 +83,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 240 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 274 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -150,8 +150,10 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 398
-   files agree stage for stage today.
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 430
+   files agree stage for stage today — every `.pas` in the tree, which is what
+   the number tracks and why it moves with the corpus rather than with the
+   port.
 4. ~~**Port CodeGen against textual IR.**~~ **Done** (ADR-0025) — ADR-0006's
    path. The C++ backend still uses the LLVM API; the Pascal one prints `.ll`
    and `clang` assembles and links it. Binding the LLVM-C API from Pascal
@@ -1103,7 +1105,7 @@ Neither is a language feature, and both are live:
     `.ll` stage 0 emits — which is a policy decision about what this repository
     is willing to carry and to trust, not a technical obstacle.
   - **`difftest.sh` would have nothing to diff against.** The comparison is
-    two independent implementations answering the same question over 422 files;
+    two independent implementations answering the same question over 430 files;
     delete one and it degrades to golden files, which record what the surviving
     implementation happened to print. That is a strictly weaker oracle, and the
     counting lesson above says why it matters: the corpus is only worth what it
