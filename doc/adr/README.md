@@ -87,3 +87,4 @@ the alternatives that were rejected and why.
 | [0076](0076-a-read-that-took-too-much-and-two-brackets-never-provided.md) | A read that took too much, and two brackets that were never provided | Accepted |
 | [0077](0077-annex-d-is-a-checklist.md) | Annex D is a checklist | Accepted |
 | [0078](0078-the-second-annex-d-was-almost-clean.md) | The second Annex D was almost clean | Accepted |
+| [0079](0079-an-interface-is-a-set-of-names.md) | An interface is a set of names | Accepted |

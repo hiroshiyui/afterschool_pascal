@@ -428,6 +428,18 @@ in one language or the other, and the standard is a property of the source.
   **unanchored** on purpose: a file named on the command line arrives relative,
   and `*/tests/extended/*` quietly called it ISO 7185 — which compares two
   identical rejections and passes (ADR-0034).
+- **`tests/extended/components/` holds §6.13's separately translated
+  components**, and the subdirectory is load-bearing: the CMake glob is not
+  recursive, so a source declaring no program is never registered as a case
+  that fails to run. A case that needs one lists it in `name.components`, one
+  path per line relative to the case's own directory, and `run_test.sh` and
+  `irtest.sh` each translate it separately and link the objects. `difftest.sh`
+  *does* recurse and compares both compilers on a component on its own, which
+  is what a module-only source is for.
+  - `irtest.sh` skips a source with **no `.out` and no `.err`**, which is what
+    keeps a component from being run as a program. Selecting by "the C++
+    compiler rejected it" stopped working the moment a component became
+    something the C++ compiler accepts.
 - **The stage-1 compiler reads the standard from a file** — a third program
   parameter, one word. ISO 7185 gives a program no access to its command line
   beyond its program parameters, and those are files; `compiler.pas` cannot
@@ -886,11 +898,42 @@ in one language or the other, and the standard is a property of the source.
   - Five word-symbols, not seven: §6.1.5 and §6.1.6 make `interface` and
     `implementation` *directives*, which are identifiers exactly as `forward`
     is. `tests/module_iso.pas` uses all five reserved ones as variable names.
-  - **Program-components are not compiled separately**, and §6.13 asks for it
-    with a *should*. Refused and stated: a module variable with computed
-    discriminants (its activation outlives the stack the storage would be on),
-    and a module-parameter that is not `input`/`output` is bound to nothing
-    (§6.11.1 NOTE 6).
+  - Refused and stated: a module variable with computed discriminants (its
+    activation outlives the stack the storage would be on), and a
+    module-parameter that is not `input`/`output` is bound to nothing
+    (§6.11.1 NOTE 6). This record also deferred **separate compilation of
+    program-components**, which ADR-0079 has since done — see below.
+- **An interface is a set of names** (ADR-0079). §6.13's separately translated
+  program-components, and the last clause of ISO/IEC 10206:1991. The artefact
+  ADR-0053 said would have to be invented is the **module-heading**: §6.11.1
+  already makes it the whole of what a module exports, it is written in Pascal,
+  and so `--import` reads another component's *source* and no second file
+  format exists. An `.ll` could not serve — IR has no Pascal type system and no
+  representation for ADR-0017's name equivalence, being the product rather than
+  the interface.
+  - **Nothing numbered may cross the boundary**, which is the whole cost. A
+    procedure was `p.<name>.<counter>` and a variable a frame index, and both
+    are facts of *one* translation — a frame's layout is decided by the
+    module-**block**, the half a separate translation does not have.
+    `Sema::nameForLinkage` derives a name from the heading alone, per
+    *interface* rather than per constituent, because §6.2.2.2 makes interfaces
+    disjoint and two modules may both export a `tally`.
+  - **An exported slot is named with an alias.** The record stays internal and
+    keeps its layout private; each reachable slot gets an external symbol
+    beside it at no run-time cost. `nm` on a component is then its interface.
+  - **`input`/`output` carry fixed names** (`pas.input`, `pas.output`), being
+    the one thing a module reaches that the *program* declares. Fixed rather
+    than derived: §6.10 and §6.11.4.2 make them one per program however it was
+    divided. Nothing is emitted under ISO 7185.
+  - The stage-1 compiler takes the other components as **one more program
+    parameter, concatenated** — ADR-0033's constraint a third time — and that
+    costs nothing to define, a sequence of program-components being exactly
+    what a source file already is.
+  - **The two compilers' objects are interchangeable**, which is a sharper
+    statement than either passing its own tests.
+  - Not done and stated: no staleness check (an edited heading relinks
+    cleanly), no search path, and a heading's errors are reported once per
+    importing component.
 - **A constant-expression is one folder and every context follows**
   (ADR-0054). §6.8.2 makes `constant-expression = expression`, replacing the
   one-token `constant` ISO 7185 §6.3 and §6.4.2.4 each asked for. `evalConst`
@@ -1636,14 +1679,21 @@ itself and stage 2 equals stage 3. **It is one source file** — ISO 7185 has no
 include mechanism, so each component was merged in as it was ported rather than
 kept as a program of its own.
 
-It takes three program parameters: `compiler.pas <source> <ircode> <options>`.
+It takes four program parameters:
+`compiler.pas <source> <ircode> <options> <imports>`.
 The dumps go to standard output; the IR goes to the second file, because it is
 the compiler's *product* rather than a dump and has to be assembled. It is
 written on every run, which is what keeps `difftest.sh` exercising the code
 generator on every file in the corpus even though it compares none of it. The third holds
 one word, the standard to compile for — ISO 7185 gives a program no access to
 its command line beyond its program parameters, and those are files, so there
-is no `--std` flag to take (ADR-0033).
+is no `--std` flag to take (ADR-0033). The fourth holds §6.13's
+already-translated program-components, **concatenated**, for that same reason:
+the compiler cannot open a file whose name it computes, so it is handed one
+file holding all of them — which costs nothing to define, a sequence of
+program-components being exactly what a source file already is (ADR-0079). It
+is empty for every file in the corpus but the one case that has components, and
+it must still *exist*, because program parameters bind to arguments in order.
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc

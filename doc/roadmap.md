@@ -83,7 +83,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 274 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 275 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -150,7 +150,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 430
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 433
    files agree stage for stage today — every `.pas` in the tree, which is what
    the number tracks and why it moves with the corpus rather than with the
    port.
@@ -655,8 +655,9 @@ they landed — rather than in the standard's.
     `implementation` directives, which are identifiers exactly as `forward`
     is.
   - Deferred and stated: **separate compilation of program-components**, which
-    §6.13 asks for with a *should* rather than a *shall* and which would need
-    an interface artefact this compiler does not define; a module variable
+    §6.13 asks for with a *should* rather than a *shall* and which was thought
+    to need an interface artefact this compiler does not define — ADR-0079
+    found the artefact was the module-heading and did it; a module variable
     with computed discriminants; and a module-parameter that is neither
     `input` nor `output`, which §6.11.1 NOTE 6 lets go unbound.
 - ~~**Constant-expressions.**~~ Done (ADR-0054). §6.8.2's
@@ -943,17 +944,32 @@ they landed — rather than in the standard's.
 
 ### What is left
 
-**One item:**
+**Nothing.**
 
-- **Separate compilation of program-components** (ADR-0053). §6.13 asks for it
-  with a *should* rather than a *shall*, and it needs an interface artefact
-  this compiler does not define — a second file format, and one the stage-1
-  compiler could not write.
+- ~~**Separate compilation of program-components.**~~ Done (ADR-0079). §6.13's
+  one sentence, and the last item on this list. ADR-0053 deferred it because it
+  "would need an interface artefact this compiler does not define"; the artefact
+  turned out to be the **module-heading**, which §6.11.1 already makes the whole
+  of what a module exports and which is written in Pascal — so `--import` reads
+  another component's *source* and no second file format exists.
+  - **Nothing numbered may cross a component boundary**, which is what the
+    feature actually cost. A procedure was named with a counter from this
+    translation's walk and a variable with a frame index, and a frame's layout
+    is decided by the module-*block* — the half a separate translation does not
+    have. Each exported slot now carries an external name beside the record,
+    which stays internal: `nm` on a component is its interface.
+  - **The two compilers' objects are interchangeable.** A module translated by
+    `selfhost/compiler.pas` links against a program translated by `pascalc`,
+    which is a sharper statement than either passing its own tests.
+  - The stage-1 compiler takes the other components as one more program
+    parameter, **concatenated** — ADR-0033's constraint for the third time —
+    and that costs nothing to define, a sequence of program-components being
+    exactly what a source file already is.
 
 **With the time procedures the required procedures and functions are
-complete**, and with §6.8.8 the grammar is too — so what is left above is one
-*should* of §6.13, and no production, required identifier, required type or
-lexical rule at all.
+complete**, with §6.8.8 the grammar is too, and with §6.13 the last *should*
+is answered — so no production, required identifier, required type, lexical
+rule or clause of ISO/IEC 10206:1991 is outstanding.
 
 ## Conformance sweeps
 
@@ -1105,7 +1121,7 @@ Neither is a language feature, and both are live:
     `.ll` stage 0 emits — which is a policy decision about what this repository
     is willing to carry and to trust, not a technical obstacle.
   - **`difftest.sh` would have nothing to diff against.** The comparison is
-    two independent implementations answering the same question over 430 files;
+    two independent implementations answering the same question over 433 files;
     delete one and it degrades to golden files, which record what the surviving
     implementation happened to print. That is a strictly weaker oracle, and the
     counting lesson above says why it matters: the corpus is only worth what it

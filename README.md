@@ -30,6 +30,16 @@ build/bin/pascalc --keep-temps hello.pas  # keep the intermediate .o
 build/bin/pascalc --help                  # the full option list
 ```
 
+ISO/IEC 10206:1991 §6.13 lets a program's components be translated separately.
+A source that declares only modules is one, and it becomes an object; the
+component that declares the `program` is given the others' *sources*, which is
+where their interfaces are written:
+
+```sh
+build/bin/pascalc --std=extended -c counter.pas -o counter.o
+build/bin/pascalc --std=extended prog.pas --import counter.pas counter.o -o prog
+```
+
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
 `--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three;
 they exist so the Pascal compiler can be diffed against this one, and are
@@ -441,7 +451,12 @@ modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            block (§6.2.1), not only a module's. A qualified name stands
            wherever a type-name may (§6.11.3): a pointer's domain, a
            restricted type, a type-inquiry's object and either bound of a
-           subrange all take `i.t`
+           subrange all take `i.t`. §6.13's program-components may be
+           translated **separately**: a source that is all modules compiles
+           on its own with `-c`, and a component that imports one is given
+           it with `--import`, which reads its module-heading. The heading
+           is the whole interface (§6.11.1), so there is no second file
+           format — what `--import` names is the other component's source
 const      const n = base * 2 — a constant-expression: wherever ISO 7185
            asked for a constant, the whole expression grammar is now
            admitted, so a subrange bound, an array bound, a case label, a

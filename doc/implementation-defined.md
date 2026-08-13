@@ -112,6 +112,27 @@ both compilers (ADR-0062).
 | E.34 | E.17 | binding of program parameters | Bound in the order written, skipping `input` and `output`, to the command-line arguments `argv[1]`, `argv[2]`, … as pathnames. Surplus arguments are ignored; a missing one is a run-time error at the first `reset`, `rewrite` or `extend` of that file. `input` and `output` are the standard streams and consume no argument, and neither does a parameter that does not possess a file-type — see F.10 in §4. |
 | — | E.6 | the characters prohibited from textfiles | Exactly one: `chr(10)`. See §3's F.1 for what attributing it does. |
 
+### 2.5 Accepting the program-components separately
+
+§6.13 asks with a *should* that a processor be able to accept the
+program-components of a program-block separately, and says nothing about how.
+This processor does, and this is the how (ADR-0079).
+
+A component that declares no main-program-declaration is translated with `-c`
+and becomes an object file. A component that imports an interface is given the
+supplying component with `--import <file>`, repeated once per component, and
+the objects are named alongside its own source so they reach the linker. The
+stage-1 compiler takes the same components as its fourth program parameter,
+concatenated into one file, ISO 7185 giving a program no way to open a file
+whose name it computes.
+
+**The artefact is the supplying component's source.** No interface file format
+is defined, and none is needed: §6.11.1 puts the whole of what a module exports
+in its module-heading, so `--import` reads that heading and nothing else of the
+component. The consequence a user sees is that a heading's own errors are
+reported again in each component that imports it, and that nothing detects a
+component whose object is older than its heading.
+
 ## 3. Errors not reported
 
 Clause 5.1 f) 1) permits an error to go unreported provided an accompanying
@@ -216,10 +237,6 @@ none is silent.
 §6.4.5 c) makes two set-types compatible only if both are `packed` or neither
 is, and only the base types are compared here — see ADR-0072 for why that is
 deliberate.
-
-**Program-components are not compiled separately.** §6.13 asks for it with a
-*should* rather than a *shall*; accepting them apart would need an interface
-artefact this compiler does not define (ADR-0053).
 
 **A file may not be a field of a variant part**, which §6.4.3.4 permits. A
 file's storage carries a heap buffer and a place on the runtime's open-file
