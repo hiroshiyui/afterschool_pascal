@@ -15,10 +15,11 @@
   the point of this program is that no operation here needed a case for it. }
 program stringconst(output);
 
-type
-  pair  = packed array [1..2] of char;
-  greet = packed array [1..12] of char;
-
+{ §6.2.1 fixes the order of a block's parts — label, const, type, var, then
+  procedures — so the constants come first here. They were written after the
+  types when this program was new, which ISO 7185 has no grammar for; nothing
+  caught it, because the order was not being checked in either standard
+  (ADR-0072). }
 const
   hello = 'hello, world';
   { A constant may name another constant (§6.3's constant-identifier), and the
@@ -29,6 +30,10 @@ const
   { The characters are the value, so an apostrophe doubled in the source is
     one character in the constant (§6.1.7). }
   quote = 'it''s';
+
+type
+  pair  = packed array [1..2] of char;
+  greet = packed array [1..12] of char;
 
 var
   p: pair;
@@ -61,11 +66,24 @@ begin
   if p <> 'ba' then
     writeln('and unequal to another literal');
 
-  { §6.5.3.2: a constant of an array type is indexed like any other value of
-    it. `hello[1]` is a char, so this writes the string a character at a time
-    and then the length its type gives it. }
+  { A constant may not be *selected from* in this language. §6.5.3.2's
+    indexed-variable takes an array-variable, and §6.7.1 admits a `[` only
+    after a variable-access — a constant-identifier is an unsigned-constant, so
+    `hello[1]` is not a sentence of ISO 7185. Selecting from one is §6.8.8's
+    constant-access, which ISO/IEC 10206:1991 adds; the positive program is
+    `tests/extended/stringconst_ops.pas` and the refusal is in
+    `stringconst_errors.pas`.
+
+    This program indexed `hello` when it was written, with §6.5.3.2 cited as
+    though it permitted it. Nothing caught that: the construct compiled, the
+    output was right, and both compilers agreed — a wrong citation is invisible
+    to every oracle a compiler has (ADR-0072).
+
+    So what is left here is copying the whole constant into a variable, which
+    is what ISO 7185 gives a program that wants its characters. }
+  g := hello;
   for i := 1 to 12 do
-    write(hello[i]);
+    write(g[i]);
   writeln;
-  writeln(ord(hello[1]):1, ' ', hello[12])
+  writeln(ord(g[1]):1, ' ', g[12])
 end.

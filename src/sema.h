@@ -549,6 +549,7 @@ private:
   /// fields applied. Assignment targets and `var` arguments must be one.
   bool isDesignator(Expr *e) const;
   bool isConstantAccess(Expr *e) const;
+  void refuseConstAccess(Expr *base, int line, int col);
   bool isMemoryConstant(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;

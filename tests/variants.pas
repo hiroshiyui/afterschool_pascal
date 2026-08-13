@@ -27,11 +27,16 @@ type
       2: (asReal: real)          { forces the storage to be 8-aligned }
   end;
 
+{ §6.2.1 gives a block one variable-declaration-part and puts it before the
+  procedures, so `a, b, c, d, root` are here rather than in a second `var`
+  after `Show`. That second part was what this program had until the order
+  began to be checked (ADR-0072). }
 var
   tree: array [1..7] of node;
   count: integer;
   s: scalar;
   copy: node;
+  a, b, c, d, root: integer;
 
 function Make(k: nodekind; line: integer): integer;
 begin
@@ -66,9 +71,6 @@ begin
                      write(')') end
     end
 end;
-
-var
-  a, b, c, d, root: integer;
 
 begin
   count := 0;

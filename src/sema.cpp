@@ -1974,6 +1974,30 @@ bool Sema::isConstantAccess(Expr *e) const {
   return false;
 }
 
+/// §6.8.8's constant-access belongs to ISO/IEC 10206:1991 alone. ISO 7185 §6.3
+/// gives a constant no selectors at all — its `unsigned-constant` is a number,
+/// a character-string, a constant-identifier or `nil` — and §6.7.1 admits a
+/// `[`, a `.` or a `^` only after a variable-access, which a constant is not.
+///
+/// It has to be refused *here* rather than in the parser, because a selector
+/// over a name is a designator until the symbol says otherwise, and the parser
+/// has no scope (ADR-0072). Called from the subscript and the field selection
+/// with its own base, so a nested one is reported once, at the outermost.
+///
+/// **Two of §6.8.8's three forms, not three.** §6.8.8.4's substring needs a
+/// `..` inside a subscript, which the parser reads only under `--std=extended`
+/// — so no `SubstringExpr` exists under ISO 7185, and a call from that arm
+/// could never fire in either standard. It was written for symmetry and
+/// deleted for being unreachable; `tests/substring_iso.pas` is where that
+/// half is refused, a stage earlier.
+void Sema::refuseConstAccess(Expr *base, int line, int col) {
+  if (std_ == Std::Extended || !isConstantAccess(base))
+    return;
+  diags_.error(line, col,
+               "selecting from a constant is an Extended Pascal feature; "
+               "compile with --std=extended");
+}
+
 /// Whether the expression is a constant-access whose value lives in memory. It
 /// is not a variable and never becomes one; what it has is *storage*, which is
 /// what the places that copy a structured value need of an argument
@@ -4606,6 +4630,7 @@ void Sema::checkExpr(Expr *e) {
     }
     checkExpr(idx->base.get());
     checkExpr(idx->index.get());
+    refuseConstAccess(idx->base.get(), idx->line, idx->col);
     Type *base = idx->base->type;
     // §6.4.3.3.3 NOTE 1: a variable-string is indexed as an array, and every
     // component is a char. §6.5.3.2 makes the subscript an *integer* — not a
@@ -4746,6 +4771,7 @@ void Sema::checkExpr(Expr *e) {
         return;
       }
     checkExpr(fld->base.get());
+    refuseConstAccess(fld->base.get(), fld->line, fld->col);
     Type *base = fld->base->type;
     // §6.8.4: `v.d` where v possesses a type produced from a schema and d is
     // one of that schema's formal discriminants. It is looked for before the

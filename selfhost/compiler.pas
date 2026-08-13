@@ -3439,6 +3439,45 @@ end;
 
 { ------------------------------------------------------------- expressions }
 
+{ actual-parameter-list = '(' actual-parameter (',' actual-parameter)* ')'
+
+  ISO 7185 6.7.3 and ISO/IEC 10206:1991 6.7.3 spell it identically, and both
+  require at least one parameter. A parameterless call is the bare name --
+  6.8.2.2 makes reading a function identifier a call of it -- so `f` and `f()`
+  are not two spellings of one thing; there is only the one.
+
+  The '(' has been consumed. An empty list is reported once and then treated as
+  the parameterless call it was meant to be, which is what keeps a genuinely
+  parameterless function from collecting a second diagnostic.
+
+  Split from the loop because 6.10.3's write-parameters are their own
+  production -- a value with an optional width -- and share only this rule. }
+function EmptyArgumentList: boolean;
+begin
+  if not Check(tkRParen) then
+    EmptyArgumentList := false
+  else begin
+    ErrorAtCur;
+    writeln('Pascal has no empty argument list; a parameterless call is ',
+            'written as the name alone');
+    pos := pos + 1;
+    EmptyArgumentList := true
+  end
+end;
+
+procedure ParseActualParameters(var head, tail: nodePtr; x: ctxKind);
+var more: boolean;
+begin
+  if not EmptyArgumentList then begin
+    more := true;
+    while more and not aborted do begin
+      Append(head, tail, ParseExpr);
+      more := Accept(tkComma)
+    end;
+    Expect(tkRParen, x)
+  end
+end;
+
 { designator = name selector*
   selector   = '[' expression (',' expression)* ']' | '.' field-name | '^'
 
@@ -3546,7 +3585,7 @@ begin
 end;
 
 function ParsePrimary: nodePtr;
-var e, call, m: nodePtr; head, tail, memberTail: nodePtr; more: boolean;
+var e, call, m: nodePtr; head, tail, memberTail: nodePtr;
     at, len, l, c: integer;
 begin
   { Every way an expression nests inside an expression -- parentheses, `not`,
@@ -3662,15 +3701,8 @@ begin
         pos := pos + 4;
         head := nil;
         tail := nil;
-        if not Check(tkRParen) then begin
-          more := true;
-          while more and not aborted do begin
-            Append(head, tail, ParseExpr);
-            more := Accept(tkComma)
-          end
-        end;
+        ParseActualParameters(head, tail, ctxCallArgs);
         call^.clArgs := head;
-        Expect(tkRParen, ctxCallArgs);
         e := AfterCall(call)
       end
       else if PeekKind(1) = tkLParen then begin
@@ -3683,15 +3715,8 @@ begin
         pos := pos + 2;
         head := nil;
         tail := nil;
-        if not Check(tkRParen) then begin
-          more := true;
-          while more and not aborted do begin
-            Append(head, tail, ParseExpr);
-            more := Accept(tkComma)
-          end
-        end;
+        ParseActualParameters(head, tail, ctxCallArgs);
         call^.clArgs := head;
-        Expect(tkRParen, ctxCallArgs);
         e := AfterCall(call)
       end
       { 6.8.7's structured-value-constructor: a type-name and a bracketed
@@ -4141,16 +4166,15 @@ begin
 
   head := nil;
   tail := nil;
-  if Accept(tkLParen) then begin
-    if not Check(tkRParen) then begin
+  if Accept(tkLParen) then
+    if not EmptyArgumentList then begin
       more := true;
       while more and not aborted do begin
         Append(head, tail, ParseWriteArg);
         more := Accept(tkComma)
-      end
+      end;
+      Expect(tkRParen, ctxWriteArgs)
     end;
-    Expect(tkRParen, ctxWriteArgs)
-  end;
   s^.wrArgs := head;
   ParseWrite := s
 end;
@@ -4189,7 +4213,7 @@ end;
   a file instead -- Sema sorts that out, because telling them apart needs the
   types. `readln` alone, with no list at all, finishes the current line. }
 function ParseRead(newlineForm: boolean): nodePtr;
-var s, head, tail: nodePtr; more: boolean;
+var s, head, tail: nodePtr;
 begin
   s := NewNode(nkRead, CurLine, CurCol);
   s^.rdNewline := newlineForm;
@@ -4198,16 +4222,8 @@ begin
 
   head := nil;
   tail := nil;
-  if Accept(tkLParen) then begin
-    if not Check(tkRParen) then begin
-      more := true;
-      while more and not aborted do begin
-        Append(head, tail, ParseExpr);
-        more := Accept(tkComma)
-      end
-    end;
-    Expect(tkRParen, ctxReadArgs)
-  end;
+  if Accept(tkLParen) then
+    ParseActualParameters(head, tail, ctxReadArgs);
   s^.rdArgs := head;
   ParseRead := s
 end;
@@ -4284,7 +4300,7 @@ end;
 
 function ParseIdentStatement: nodePtr;
 var s, ref, head, tail: nodePtr; l, c, at, len: integer;
-    more, handled: boolean; k: tokenKind;
+    handled: boolean; k: tokenKind;
 begin
   l := CurLine;
   c := CurCol;
@@ -4342,16 +4358,8 @@ begin
       pos := pos + 3;
       head := nil;
       tail := nil;
-      if Accept(tkLParen) then begin
-        if not Check(tkRParen) then begin
-          more := true;
-          while more and not aborted do begin
-            Append(head, tail, ParseExpr);
-            more := Accept(tkComma)
-          end
-        end;
-        Expect(tkRParen, ctxProcCallArgs)
-      end;
+      if Accept(tkLParen) then
+        ParseActualParameters(head, tail, ctxProcCallArgs);
       s^.pcArgs := head
     end
     else if (k = tkAssign) or (k = tkLBracket) or (k = tkPeriod) or
@@ -4379,16 +4387,8 @@ begin
       pos := pos + 1;
       head := nil;
       tail := nil;
-      if Accept(tkLParen) then begin
-        if not Check(tkRParen) then begin
-          more := true;
-          while more and not aborted do begin
-            Append(head, tail, ParseExpr);
-            more := Accept(tkComma)
-          end
-        end;
-        Expect(tkRParen, ctxProcCallArgs)
-      end;
+      if Accept(tkLParen) then
+        ParseActualParameters(head, tail, ctxProcCallArgs);
       s^.pcArgs := head
     end
   end;
@@ -4784,6 +4784,7 @@ end;
   no extra machinery here. }
 function ParseBlock;
 var b, ph, pt, ch, ct, th, tt, vh, vt, lh, lt: nodePtr; done: boolean;
+    part, highest: integer;
 begin
   b := NewNode(nkBlock, CurLine, CurCol);
   b^.blImports := nil;
@@ -4803,22 +4804,58 @@ begin
     `import` is an ordinary identifier and this returns at once. }
   b^.blImports := ParseImportPart;
 
+  { ISO 7185 6.2.1 writes a block as a fixed sequence of five optional parts:
+
+      block = label-declaration-part constant-definition-part
+              type-definition-part variable-declaration-part
+              procedure-and-function-declaration-part statement-part .
+
+    so each part appears at most once and only after the ones before it.
+    ISO/IEC 10206:1991 6.2.1 makes the same five a *repetition* in any order,
+    which is what 6.2.2.9 then needs -- a defining-point must precede its
+    applied occurrences, and interleaving is the only way to write some
+    programs at all (ADR-0069). Reading them in written order is right for
+    both; refusing the orders ISO 7185 has no grammar for is this loop's job,
+    because the parser is where the written order is visible.
+
+    The *highest* part begun so far, not the previous one: once a variable part
+    has been read, a constant part is misplaced however many parts came
+    between, so each misplaced part is reported rather than only the first of a
+    descending run. }
+  highest := -1;
   done := false;
   while not done and not aborted do begin
-    if Check(tkConst) then
-      ParseConstPart(ch, ct)
-    else if Check(tkType) then
-      ParseTypePart(th, tt)
-    else if Check(tkVar) then
-      ParseVarPart(vh, vt)
-    else if Check(tkProcedure) then
-      Append(ph, pt, ParseProcOrFunc(false))
-    else if Check(tkFunction) then
-      Append(ph, pt, ParseProcOrFunc(true))
-    else if Check(tkLabel) then
-      ParseLabelPart(lh, lt)
-    else
+    if Check(tkLabel) then part := 0
+    else if Check(tkConst) then part := 1
+    else if Check(tkType) then part := 2
+    else if Check(tkVar) then part := 3
+    else if Check(tkProcedure) or Check(tkFunction) then part := 4
+    else begin
+      part := -1;
       done := true
+    end;
+    if not done then begin
+      { Strictly increasing, not merely non-decreasing: each `const` after the
+        first is a second constant-definition-*part*, since one call consumes a
+        whole run of definitions. Procedures are the exception the grammar
+        itself makes -- the part holds a list of them. }
+      if (langStd = stdIso7185) and (part <= highest) and
+         not ((part = 4) and (highest = 4)) then begin
+        ErrorAtCur;
+        writeln('the declaration parts of a block are label, const, type, ',
+                'var, then procedures and functions, each at most once; any ',
+                'other order is an Extended Pascal feature, so compile with ',
+                '--std=extended')
+      end;
+      if part > highest then highest := part;
+
+      if part = 0 then ParseLabelPart(lh, lt)
+      else if part = 1 then ParseConstPart(ch, ct)
+      else if part = 2 then ParseTypePart(th, tt)
+      else if part = 3 then ParseVarPart(vh, vt)
+      else if Check(tkFunction) then Append(ph, pt, ParseProcOrFunc(true))
+      else Append(ph, pt, ParseProcOrFunc(false))
+    end
   end;
   b^.blLabels := lh;
   b^.blConsts := ch;
@@ -6253,6 +6290,31 @@ begin
   else if e^.kind = nkSubstr then
     IsConstantAccess := (e^.ssSetValue = nil) and IsConstantAccess(e^.ssBase)
   else IsConstantAccess := false
+end;
+
+{ 6.8.8's constant-access belongs to ISO/IEC 10206:1991 alone. ISO 7185 6.3
+  gives a constant no selectors at all -- its unsigned-constant is a number, a
+  character-string, a constant-identifier or `nil` -- and 6.7.1 admits a `[`, a
+  `.` or a `^` only after a variable-access, which a constant is not.
+
+  It has to be refused *here* rather than in the parser, because a selector
+  over a name is a designator until the symbol says otherwise, and the parser
+  has no scope (ADR-0072). Called from the subscript and the field selection
+  with its own base, so a nested one is reported once, at the outermost.
+
+  *Two* of 6.8.8's three forms, not three. 6.8.8.4's substring needs a `..`
+  inside a subscript, which the parser reads only under --std=extended -- so no
+  substring node exists under ISO 7185, and a call from that arm could never
+  fire in either standard. It was written for symmetry and deleted for being
+  unreachable; tests/substring_iso.pas is where that half is refused, a stage
+  earlier. }
+procedure RefuseConstAccess(base: nodePtr; l, c: integer);
+begin
+  if (langStd <> stdExtended) and IsConstantAccess(base) then begin
+    ErrorAt(l, c);
+    writeln('selecting from a constant is an Extended Pascal feature; ',
+            'compile with --std=extended')
+  end
 end;
 
 { Whether the expression is a constant-access whose value lives in memory. It
@@ -11235,6 +11297,7 @@ begin
         else begin
         CheckExpr(e^.ixBase);
         CheckExpr(e^.ixIndex);
+        RefuseConstAccess(e^.ixBase, e^.line, e^.col);
         b := e^.ixBase^.ntype;
         { 6.4.3.3.3 NOTE 1: a variable-string is indexed as an array, and every
           component is a char. 6.5.3.2 makes the subscript an *integer* -- not
@@ -11342,6 +11405,7 @@ begin
           end;
         if qual = nil then begin
         CheckExpr(e^.fdBase);
+        RefuseConstAccess(e^.fdBase, e^.line, e^.col);
         b := e^.fdBase^.ntype;
         { 6.8.4: `v.d` where v possesses a type produced from a schema and d
           is one of that schema's formal discriminants. Looked for before the

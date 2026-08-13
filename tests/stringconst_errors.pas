@@ -12,11 +12,17 @@
   Sema accumulates rather than bailing, so every message below comes from one
   run. }
 program stringconst_errors(input, output);
-type
-  pair = packed array [1..2] of char;
 const
   ab   = 'ab';
   abc  = 'abc';
+type
+  pair = packed array [1..2] of char;
+  { §6.4.2.4's case-constant and §6.4.3.2's index-type both want an ordinal,
+    and a packed array of char is not one. This sat in a second type part
+    below the procedures, so that its message would come out in source order
+    with the statements — an order §6.2.1 has no grammar for, and one nothing
+    checked until ADR-0072. Its diagnostic now leads the file instead. }
+  bad = array [ab..abc] of integer;
 var
   p: pair;
   i: integer;
@@ -30,12 +36,6 @@ procedure byref(var s: pair);
 begin
   writeln(s)
 end;
-
-{ §6.4.2.4's case-constant and §6.4.3.2's index-type both want an ordinal, and
-  a packed array of char is not one. The declarations are here rather than
-  above so that the two messages come out in source order with the statements. }
-type
-  bad = array [ab..abc] of integer;
 
 begin
   { §6.8.2.2: the left side of an assignment is a variable-access. }
@@ -61,10 +61,14 @@ begin
     ab: writeln('never')
   end;
 
-  { A subscript of a constant is a legal *expression* — `stringconst.pas`
-    writes one — and still not a variable, because `isDesignator` asks the
-    base and the base is a constant. That is one rule answering for both
-    forms rather than a second rule written for components. }
+  { A subscript of a constant is refused twice over, and the two refusals are
+    different rules. §6.7.1 admits a `[` only after a variable-access, so under
+    ISO 7185 the subscript is not a sentence of the language at all — that is
+    §6.8.8's constant-access, which the next standard adds. And even where it
+    *is* one, it is not a variable: `isDesignator` asks the base, and the base
+    is a constant. One rule answers for both forms rather than a second being
+    written for components, which is why the second message is the same one a
+    bare `ab := 'z'` gets. }
   ab[1] := 'z';
 
   { And the component is a char, so the whole constant is not one. }

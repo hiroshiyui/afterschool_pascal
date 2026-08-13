@@ -379,21 +379,67 @@ std::unique_ptr<Block> Parser::parseBlock() {
   // 7185 `import` is an ordinary identifier and this returns at once.
   parseImportPart(block->imports);
 
+  // ISO 7185 §6.2.1 writes a block as a fixed sequence of five optional parts:
+  //
+  //   block = label-declaration-part constant-definition-part
+  //           type-definition-part variable-declaration-part
+  //           procedure-and-function-declaration-part statement-part .
+  //
+  // so each part appears at most once and only after the ones before it.
+  // ISO/IEC 10206:1991 §6.2.1 makes the same five a *repetition* in any order,
+  // which is what §6.2.2.9 then needs — a defining-point must precede its
+  // applied occurrences, and interleaving is the only way to write some
+  // programs at all (ADR-0069). Reading them in written order is right for
+  // both; refusing the orders ISO 7185 has no grammar for is this loop's job,
+  // because the parser is where the written order is visible.
+  //
+  // ADR-0069 relaxed the order for both standards, having found Sema imposing
+  // ISO 7185's on Extended Pascal. It went one step too far and no test
+  // noticed: `procedure-and-function` is index 4 here so a nested block is
+  // unaffected, and no ISO program in the corpus had written the parts out of
+  // order (ADR-0072).
+  // The *highest* part begun so far, not the previous one: once a variable
+  // part has been read, a constant part is misplaced however many parts came
+  // between, so each misplaced part is reported rather than only the first of
+  // a descending run.
+  int highest = -1;
+  static const char *const kPartOrder =
+      "the declaration parts of a block are label, const, type, var, then "
+      "procedures and functions, each at most once; any other order is an "
+      "Extended Pascal feature, so compile with --std=extended";
   for (;;) {
-    if (check(Tok::KwConst)) {
-      parseConstPart(*block);
-    } else if (check(Tok::KwType)) {
-      parseTypePart(*block);
-    } else if (check(Tok::KwVar)) {
-      parseVarPart(*block);
-    } else if (check(Tok::KwProcedure) || check(Tok::KwFunction)) {
-      bool isFunction = check(Tok::KwFunction);
-      block->procs.push_back(parseProcOrFunc(isFunction));
-    } else if (check(Tok::KwLabel)) {
-      parseLabelPart(*block);
-    } else {
+    int part;
+    if (check(Tok::KwLabel))
+      part = 0;
+    else if (check(Tok::KwConst))
+      part = 1;
+    else if (check(Tok::KwType))
+      part = 2;
+    else if (check(Tok::KwVar))
+      part = 3;
+    else if (check(Tok::KwProcedure) || check(Tok::KwFunction))
+      part = 4;
+    else
       break;
-    }
+    // Strictly increasing, not merely non-decreasing: each `const` after the
+    // first is a second constant-definition-*part*, since one call consumes a
+    // whole run of definitions. Procedures are the exception the grammar
+    // itself makes — the part holds a list of them.
+    if (std_ == Std::Iso7185 && part <= highest && !(part == 4 && highest == 4))
+      errorAtCur(kPartOrder);
+    if (part > highest)
+      highest = part;
+
+    if (part == 0)
+      parseLabelPart(*block);
+    else if (part == 1)
+      parseConstPart(*block);
+    else if (part == 2)
+      parseTypePart(*block);
+    else if (part == 3)
+      parseVarPart(*block);
+    else
+      block->procs.push_back(parseProcOrFunc(check(Tok::KwFunction)));
   }
 
   block->body = parseCompound();
@@ -700,6 +746,38 @@ TypeExprPtr Parser::parseTypeExpr() {
   if (accept(Tok::KwValue))
     t->initValue = parseComponentValue();
   return t;
+}
+
+/// `actual-parameter-list = '(' actual-parameter { ',' actual-parameter } ')'`
+/// — ISO 7185 §6.7.3 and ISO/IEC 10206:1991 §6.7.3 spell it identically, and
+/// both require at least one. A parameterless call is the bare name (§6.8.2.2),
+/// so `f` and `f()` are not two spellings of one thing: there is only the one,
+/// and `tests/extended/funcresult_bare.pas` said so in a comment while six
+/// copies of this loop accepted the other.
+///
+/// The `(` has been consumed. An empty list is reported once and then treated
+/// as the parameterless call it was meant to be, which is what keeps a
+/// genuinely parameterless function from collecting a second diagnostic.
+///
+/// Split from the loop because §6.10.3's write-parameters are their own
+/// production — a value with an optional width — and share only this rule.
+bool Parser::emptyArgumentList() {
+  if (!check(Tok::RParen))
+    return false;
+  errorAtCur("Pascal has no empty argument list; a parameterless call is "
+             "written as the name alone");
+  ++pos_;
+  return true;
+}
+
+void Parser::parseActualParameters(std::vector<ExprPtr> &into,
+                                   const char *after) {
+  if (emptyArgumentList())
+    return;
+  do {
+    into.push_back(parseExpr());
+  } while (accept(Tok::Comma));
+  expect(Tok::RParen, after);
 }
 
 /// ISO/IEC 10206:1991 §6.11.3's optional `imported-interface-identifier '.'`.
@@ -1428,12 +1506,7 @@ StmtPtr Parser::parseIdentStatement() {
     s->name = peek(2).text;
     pos_ += 3;
     if (accept(Tok::LParen)) {
-      if (!check(Tok::RParen)) {
-        do {
-          s->args.push_back(parseExpr());
-        } while (accept(Tok::Comma));
-      }
-      expect(Tok::RParen, "after the arguments of a procedure call");
+      parseActualParameters(s->args, "after the arguments of a procedure call");
     }
     return s;
   }
@@ -1459,12 +1532,7 @@ StmtPtr Parser::parseIdentStatement() {
   s->name = id.text;
   ++pos_;
   if (accept(Tok::LParen)) {
-    if (!check(Tok::RParen)) {
-      do {
-        s->args.push_back(parseExpr());
-      } while (accept(Tok::Comma));
-    }
-    expect(Tok::RParen, "after the arguments of a procedure call");
+    parseActualParameters(s->args, "after the arguments of a procedure call");
   }
   return s;
 }
@@ -1488,12 +1556,10 @@ StmtPtr Parser::parseWrite(bool newline) {
   s->newline = newline;
   ++pos_; // 'write' / 'writeln'
 
-  if (accept(Tok::LParen)) {
-    if (!check(Tok::RParen)) {
-      do {
-        s->args.push_back(parseWriteArg());
-      } while (accept(Tok::Comma));
-    }
+  if (accept(Tok::LParen) && !emptyArgumentList()) {
+    do {
+      s->args.push_back(parseWriteArg());
+    } while (accept(Tok::Comma));
     expect(Tok::RParen, "after the arguments of write");
   }
   return s;
@@ -1508,12 +1574,7 @@ StmtPtr Parser::parseRead(bool newline) {
   ++pos_; // 'read' / 'readln'
 
   if (accept(Tok::LParen)) {
-    if (!check(Tok::RParen)) {
-      do {
-        s->args.push_back(parseExpr());
-      } while (accept(Tok::Comma));
-    }
-    expect(Tok::RParen, "after the arguments of read");
+    parseActualParameters(s->args, "after the arguments of read");
   }
   return s;
 }
@@ -1998,24 +2059,16 @@ ExprPtr Parser::parsePrimary() {
       call->qualifier = t.text;
       call->name = peek(2).text;
       pos_ += 4;
-      if (!check(Tok::RParen)) {
-        do {
-          call->args.push_back(parseExpr());
-        } while (accept(Tok::Comma));
-      }
-      expect(Tok::RParen, "after the arguments of a function call");
+      parseActualParameters(call->args,
+                            "after the arguments of a function call");
       return afterCall(std::move(call));
     }
     if (peek().kind == Tok::LParen) {
       auto call = makeNode<Call>(t);
       call->name = t.text;
       pos_ += 2;
-      if (!check(Tok::RParen)) {
-        do {
-          call->args.push_back(parseExpr());
-        } while (accept(Tok::Comma));
-      }
-      expect(Tok::RParen, "after the arguments of a function call");
+      parseActualParameters(call->args,
+                            "after the arguments of a function call");
       return afterCall(std::move(call));
     }
     // §6.8.7's structured-value-constructor: a type-name and a bracketed

@@ -102,6 +102,8 @@ private:
   /// parameter list.
   void parseProcParam(ParamGroup &group, bool isFunction);
 
+  bool emptyArgumentList();
+  void parseActualParameters(std::vector<ExprPtr> &into, const char *after);
   void parseQualifiedName(std::string &qualifier, std::string &name);
   TypeExprPtr parseTypeExpr();
   TypeExprPtr parseTypeDenoter();

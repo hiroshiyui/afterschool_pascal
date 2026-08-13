@@ -1,0 +1,4 @@
+<source>:35:1: error: the declaration parts of a block are label, const, type, var, then procedures and functions, each at most once; any other order is an Extended Pascal feature, so compile with --std=extended
+<source>:39:1: error: the declaration parts of a block are label, const, type, var, then procedures and functions, each at most once; any other order is an Extended Pascal feature, so compile with --std=extended
+<source>:43:1: error: the declaration parts of a block are label, const, type, var, then procedures and functions, each at most once; any other order is an Extended Pascal feature, so compile with --std=extended
+<source>:58:1: error: the declaration parts of a block are label, const, type, var, then procedures and functions, each at most once; any other order is an Extended Pascal feature, so compile with --std=extended
