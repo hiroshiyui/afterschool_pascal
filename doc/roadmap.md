@@ -15,6 +15,28 @@ finished being a means to an end: since then a feature needs no reason beyond
 the standard having it, ISO 7185 was completed on those grounds, and
 ISO/IEC 10206:1991 is being worked through the same way.
 
+**Where things are.** The history is the first half and the live work is the
+second; nothing below "Beyond self-hosting" is finished business.
+
+- [The three-stage build](#the-three-stage-build)
+- [The six bootstrap items](#the-six-bootstrap-items-all-done) — with
+  [text files](#item-5--text-files-done) and
+  [character strings](#item-6--character-strings-decided) written out
+- [Stage 1](#stage-1-done) — the port, and
+  [what it taught](#what-the-port-taught)
+- [Known limitations](#known-limitations) —
+  [ISO 7185](#under-iso-7185) and
+  [ISO/IEC 10206:1991](#under-isoiec-102061991)
+- [Beyond self-hosting](#beyond-self-hosting) —
+  [what ISO 7185 had left](#what-iso-7185-had-left)
+- [Stage 2 — ISO/IEC 10206:1991](#stage-2--isoiec-102061991) —
+  [how it arrives](#how-the-second-standard-arrives),
+  [the features](#the-features-in-the-order-they-landed),
+  [what is left](#what-is-left)
+- [Conformance sweeps](#conformance-sweeps) — what was checked rather than
+  asserted, and what that found
+- [The two things that are not features](#the-two-things-that-are-not-features)
+
 ## The three-stage build
 
 ```
@@ -66,7 +88,7 @@ Alongside the language, 240 ctest cases — the Pascal programs of `tests/` and
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
 
-## Item 5 — text files (done)
+### Item 5 — text files (done)
 
 Delivered as ADR-0021. The two decisions worth remembering:
 
@@ -86,7 +108,7 @@ Everything else about files is a state property and is covered by tests, one of
 which (`files_scratch.pas`, three thousand scratch files) fails by exhausting
 the descriptor table if block exit ever stops closing files.
 
-## Item 6 — character strings (decided)
+### Item 6 — character strings (decided)
 
 Settled as ADR-0012: a length-plus-buffer record in strict ISO Pascal, no
 extension, ADR-0002's conformance untouched. That record named the one thing
@@ -162,6 +184,8 @@ and two say "the sixth". That is what a running tally across records that are
 immutable once accepted does, and it is why the count is not kept here either:
 the number was never the point, and the list above is.
 
+### What the port taught
+
 Three things the lexer port learned, which the next components will meet again
 (ADR-0022):
 
@@ -224,6 +248,8 @@ And four from Sema (ADR-0024):
 Things that are wrong or absent today, listed so they are not rediscovered as
 surprises.
 
+### Under ISO 7185
+
 - **Nesting deeper than 1000 levels is rejected** (ADR-0020). The limit bounds
   the *tree*, not the parser's call depth — the distinction matters because a
   30 000-term `a+b+c+...` chain parses iteratively and used to segfault in
@@ -280,7 +306,9 @@ surprises.
   of its file: thirteen identifiers in `selfhost/compiler.pas` and the program
   headers of forty-three test programs (ADR-0072).
 
-And four from the second standard, each stated in the record that made it:
+### Under ISO/IEC 10206:1991
+
+Four more, each stated in the record that made it:
 
 - **String concatenation draws from a ring.** A string value is a pointer and a
   length (ADR-0051), so only `+` makes characters that did not exist; they come
@@ -312,8 +340,10 @@ compiler's own source needs it — which was the bar during the bootstrap and is
 no longer. Anything the standard lacks waits, and should then be taken from
 Extended Pascal's spelling rather than invented here.
 
-**What ISO 7185 had left**, in the order they were taken — nothing is left now,
-and each entry says what the feature turned out to cost:
+### What ISO 7185 had left
+
+In the order they were taken — nothing is left now, and each entry says what
+the feature turned out to cost:
 
 - ~~**Sets.**~~ Done (ADR-0028): one 256-bit word, with the base type bounded
   at 0..255 under the latitude §6.4.3.4 gives.
@@ -334,12 +364,17 @@ and each entry says what the feature turned out to cost:
   constants the runtime is told. `text` stays a type of its own, because
   §6.4.3.5 makes it one and only it has lines.
 
-**Extended Pascal, and it has begun.** ISO/IEC 10206:1991 is the second stage,
-not an ad-hoc pile of extensions. ADR-0033 settled how it arrives: `--std`
-selects the language per source, ISO 7185 stays the default, and
-`tests/extended/` is the corpus. The two are *not* nested — Extended Pascal
-reserves word-symbols a valid ISO 7185 program may use as identifiers, and the
-stage-1 compiler is such a program.
+## Stage 2 — ISO/IEC 10206:1991
+
+### How the second standard arrives
+
+**Extended Pascal has begun.** It is the second stage, not an ad-hoc pile of
+extensions. ADR-0033 settled how it arrives: `--std` selects the language per
+source, ISO 7185 stays the default, and `tests/extended/` is the corpus. The
+two are *not* nested — Extended Pascal reserves word-symbols a valid ISO 7185
+program may use as identifiers, and the stage-1 compiler is such a program.
+
+### The features, in the order they landed
 
 **Every feature of the second standard gets a record**, including ones that
 decide nothing a later feature has to live with. The point is not that each was
@@ -904,7 +939,9 @@ they landed — rather than in the standard's.
     a conformance fix in its own right, since `const first = red` after a type
     part has no structured constant in it.
 
-**What is left of ISO/IEC 10206:1991**, and it is now one item:
+### What is left
+
+**One item:**
 
 - **Separate compilation of program-components** (ADR-0053). §6.13 asks for it
   with a *should* rather than a *shall*, and it needs an interface artefact
@@ -916,45 +953,74 @@ complete**, and with §6.8.8 the grammar is too — so what is left above is one
 *should* of §6.13, and no production, required identifier, required type or
 lexical rule at all.
 
-**That sentence has since been checked rather than asserted** (ADR-0071).
-Every one of Annex A's 274 productions was probed with a compiled program and
-also looked for in the corpus, which is what ADR-0067 asks for before a claim
-of completeness. It held for 268 of them; five were constructs the standard
-admits and this compiler refused — `char + char`, a qualified name in four
-type positions and in a subrange bound, a schema's second name, a `with` over
-a type produced from a schema, and the `;` after a variant-part-value — and
-one, `array [1..4] of file of integer`, was a segfault (ADR-0070). No corpus
-program wrote any of the six, so every oracle agreed with a compiler that was
-wrong. The sweep also left ~30 accepted-but-unexercised forms and the
-implementation-defined choices of Annex E and F, most of which had no
-document. ADR-0073 wrote the document; **ADR-0076 is the other list**, and
-working through it found two things that were not merely unchecked but wrong:
-a number read took a character more than §6.9.1 allows — `7..9` read as 7 and
-swallowed a point, so a program reading input that looks like Pascal source
-would have lost the `..` — and §6.1.9's `(.` and `.)` were never provided,
-which that clause requires of every processor whose character set has the
-characters. Five more claims are now pinned by programs rather than asserted,
-including `maxreal` and `minreal`, whose printed text was checked only to
-thirteen digits in either compiler. The list is shorter, not empty.
+## Conformance sweeps
 
-**And the other direction has been swept once** (ADR-0072): fifteen ISO 7185
-restrictions probed, six unenforced. Three are now checked — an empty argument
-list, the order of a block's declaration parts, and selecting from a constant —
-two are the deliberate deviations listed above, and one was a fault in the
-probe rather than in the compiler, `writeln(5:0)` being accepted and then
-trapped, which §6.1 f) permits. Three ISO programs in the corpus were
-themselves out of order, which is why nothing had failed.
+**That last sentence has been checked rather than asserted.** Each sweep below
+took a bounded list — a grammar, a set of restrictions, an annex — and put a
+compiled program against every entry, which is what ADR-0067 asks for before
+any claim of completeness. Two ran in each direction: what the standard has and
+this compiler refused, and what it accepts and no standard has.
 
-**A sixth refusal was found by reading §6.10 rather than by probing**
-(ADR-0074): a program-parameter that does not possess a file-type. Neither
+Every sweep found something, and the finding always had the same shape: no
+program in the corpus had written the construct, so all five oracles agreed
+with a compiler that was wrong. That is the reason this section exists as a
+list of dated sweeps rather than as a claim of conformance.
+
+### Annex A, forwards: what the grammar admits and the compiler refused
+
+ADR-0071. Every one of Annex A's 274 productions was probed with a compiled
+program and also looked for in the corpus. It held for 268 of them; five were
+constructs the standard admits and this compiler refused — `char + char`, a
+qualified name in four type positions and in a subrange bound, a schema's
+second name, a `with` over a type produced from a schema, and the `;` after a
+variant-part-value — and one, `array [1..4] of file of integer`, was a segfault
+(ADR-0070).
+
+The sweep left two lists behind: ~30 accepted-but-unexercised forms, and the
+implementation-defined choices of Annexes E and F, most of which had no
+document. Both are taken up below.
+
+### Annex A, backwards: what the compiler accepted and neither standard has
+
+ADR-0072: fifteen ISO 7185 restrictions probed, six unenforced. Three are now
+checked — an empty argument list, the order of a block's declaration parts, and
+selecting from a constant — two are the deliberate deviations listed under
+"Known limitations", and one was a fault in the probe rather than in the
+compiler, `writeln(5:0)` being accepted and then trapped, which §6.1 f)
+permits. Three ISO programs in the corpus were themselves out of order, which
+is why nothing had failed.
+
+### The unexercised forms, and the document clause 5.1 requires
+
+ADR-0073 wrote the document — the compliance level, all 80 Annex E and F
+entries, and the errors that go unreported — and writing it found two bugs,
+since answering an entry meant compiling a probe for it.
+
+**ADR-0076 is the other list.** Working through it found two things that were
+not merely unchecked but wrong: a number read took a character more than §6.9.1
+allows — `7..9` read as 7 and swallowed a point, so a program reading input
+that looks like Pascal source would have lost the `..` — and §6.1.9's `(.` and
+`.)` were never provided, which that clause requires of every processor whose
+character set has the characters. Five more claims are now pinned by programs
+rather than asserted, including `maxreal` and `minreal`, whose printed text was
+checked only to thirteen significant digits in either compiler. The list is
+shorter, not empty.
+
+### Refusals found by reading the clause rather than by probing
+
+Two more constructs the standards have and this compiler rejected. Both are
+rules a *syntactically valid* program passes, so the grammar sweep could not
+have reached the first at all — and did reach the second, wrote it down here as
+outstanding, and left it for two more rounds.
+
+**A program-parameter that does not possess a file-type** (ADR-0074). Neither
 standard restricts the list to files — §6.10 makes the binding of a non-file one
 implementation-*dependent* and §6.12 drops the distinction — and the refusal's
 message asserted a rule neither has. It is accepted now, bound to nothing and
 consuming no argument. The same record adds §6.4.1's reason to the five
 messages that name two types, which had been printing one spelling twice.
 
-**A seventh was the one ADR-0071's sweep turned up and did not fix**
-(ADR-0075): `const q = nil`, rejected under both standards. ISO 7185 §6.3's
+**`const q = nil`** (ADR-0075), rejected under both standards. ISO 7185 §6.3's
 constant has no `nil`, so that half was right; ISO/IEC 10206:1991 §6.7.1 makes
 it an unsigned-constant and §6.8.2 admits any nonvarying expression, so that
 half was a gap — and being written down here rather than fixed is the only
@@ -963,6 +1029,8 @@ token the type every pointer assignment accepts, so nothing outside the folder
 changed. It also gave `nil^` a way of being written and so exposed a message
 that named the wrong rule: the nil-value "does not identify a variable"
 (NOTE 1), which is not the same complaint as "not a pointer".
+
+### The lexis is complete
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
 only when the feature needing it lands, so until the list was empty
@@ -975,7 +1043,9 @@ the rest from a table. Nothing on the list above needs a fourteenth: the time
 procedures are required *identifiers*, which §6.1.3 makes shadowable rather
 than reserved. So the lexis is complete even though the language is not.
 
-**And the two things that are not features:**
+## The two things that are not features
+
+Neither is a language feature, and both are live:
 
 - **Retire stage 0.** The Pascal compiler *is* a fixed point now, so this is
   available — but the C++ compiler is still what builds stage 1, still what the
