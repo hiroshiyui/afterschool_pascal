@@ -1443,6 +1443,33 @@ in one language or the other, and the standard is a property of the source.
     both compilers agreed. Nothing but reading the clause catches that.
   - Two deviations remain and are deliberate: an underscore in an identifier,
     and set compatibility not requiring §6.4.5 c)'s packing agreement.
+- **Writing the document clause 5.1 requires found two bugs** (ADR-0073).
+  `doc/implementation-defined.md` states the compliance level (**level 0** —
+  conformant array parameters are not accepted), answers all 52 entries of
+  ISO/IEC 10206:1991's Annexes E and F and all 28 of ISO 7185's, names the
+  twelve errors that go unreported, and lists the extensions and restrictions.
+  Answering an entry meant compiling a probe, which is what found the two.
+  - **A comment may end with the other delimiter.** §6.1.8 is one production —
+    an opening brace *or* star-paren, a commentary, a closing star-paren *or*
+    brace — and its NOTE 1 says so outright. The lexer had two loops, one per
+    pair. One loop serves both now, because which delimiter closes a commentary
+    does not depend on which one opened it.
+    - The consequence for this corpus: **a grammar production cannot be written
+      inside a Pascal comment**, since neither pair can quote the other's
+      characters. Every production mentioned in a test is described in words.
+      The fix would not compile `selfhost/compiler.pas` until a comment
+      containing `(member (',' member)*)` was rewritten.
+    - **`selfhost/torture.pas` asserted the opposite rule** in its own
+      comments, which is very likely why the two-loop version went
+      unquestioned. A wrong claim in a test is invisible to every oracle here.
+  - **`reset(input)` no longer discards a fetched lookahead.** §6.11.4.2 makes
+    the effect implementation-defined and stdin cannot be repositioned — but
+    clearing `f^` destroyed a character the *stream* had already consumed, so a
+    `reset` between a peek and a read skipped one. It now leaves the file as it
+    is, the only effect available that does not lose input.
+  - Neither was reachable: a comment is invisible after the lexer, so
+    `difftest` compared two compilers wrong in the same way; and no corpus
+    program applied `reset`, `rewrite` or `extend` to a standard file at all.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

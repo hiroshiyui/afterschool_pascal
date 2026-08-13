@@ -668,6 +668,15 @@ short-circuit, and what is still open. Start with
 [ADR-0004](doc/adr/0004-self-hosting-is-the-near-term-goal.md) if you only read
 one.
 
+[`doc/implementation-defined.md`](doc/implementation-defined.md) is the document
+clause 5.1 requires a processor to be accompanied by. It states the compliance
+level — **level 0**, conformant array parameters not being accepted — answers
+every entry of both standards' annexes of implementation-defined and
+implementation-dependent features, names each error this compiler does not
+report, and lists the extensions and restrictions. If you want to know what
+`maxint` is, what order operands are evaluated in, or what `reset(input)` does,
+it is there rather than here.
+
 [doc/glossary.md](doc/glossary.md) defines the terms this codebase uses in a
 specific sense — ordinal, designator, type-denoter, static link, tautological
 rule — and says which decision governs each.
