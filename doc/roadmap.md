@@ -1006,6 +1006,29 @@ rather than asserted, including `maxreal` and `minreal`, whose printed text was
 checked only to thirteen significant digits in either compiler. The list is
 shorter, not empty.
 
+### Annex D: the errors the standard enumerates
+
+ADR-0077. Annex D lists all sixty errors clause 6 defines, which makes it the
+same kind of bounded checklist Annex A's productions were — and one nobody had
+put a program against. Six were answered with a value instead: `ln` of a number
+that is not positive, `sqrt` of a negative one, `x/y` with a zero divisor for
+real *and* for complex, `i mod j` with j negative, and `dispose` of nil. None
+was in the list of errors this processor leaves unreported, so each was
+undocumented as well as unchecked, against a README that has said "ISO error
+conditions trap" since ADR-0014.
+
+`mod` is the one to remember: Sema's folder had always refused a constant
+divisor that is not positive, with a comment saying the emitted code followed
+the same rule. It did not — `const c = 5 mod -3` was a diagnostic and the same
+expression over a variable computed 1. The compiler disagreeing with itself is
+the sharpest form this section's shape takes.
+
+The same sweep found the one §6.8.3.9 restriction that had never been checked:
+a control variable must be declared in the block closest-containing the `for`
+statement, so a procedure looping over the program's `i` is not a program
+either standard has. Nothing in the corpus wrote one — including
+`selfhost/compiler.pas`, whose 274 `for` statements all obey it already.
+
 ### Refusals found by reading the clause rather than by probing
 
 Two more constructs the standards have and this compiler rejected. Both are

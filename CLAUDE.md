@@ -1765,6 +1765,29 @@ The integer type is **-maxint..maxint**, narrower than the `i32` behind it, so
 `INT_MIN` is not a value of the type and a literal above `maxint` is a
 compile-time error.
 
+**Annex D is the checklist** (ADR-0077), and probing it found six errors that
+were answered with a value: `ln` of a number that is not positive, `sqrt` of a
+negative one, `x/y` with a zero divisor for real *and* complex, `i mod j` with
+j negative, and `dispose` of nil. Two are worth remembering rather than
+looking up:
+
+- **`mod` is where the compiler disagreed with itself.** §6.7.2.2 makes a
+  divisor that is zero *or negative* an error; Sema's folder had always said
+  so for a constant, with a comment claiming the emitted code followed the
+  same rule. It did not. The run-time check now uses the folder's words, which
+  is what makes one rule one answer — and it turns `rules.py`'s `j > 0`
+  precondition from an assumption into something the compiler enforces.
+- **`dispose` of nil was checked only for a schema domain**, where stepping
+  back over a tuple header made it a free of an address never allocated.
+  Elsewhere it was a *harmless* error, and harmless is not the test §6.6.5.3
+  sets. Same comparison; only the reason to report it differed.
+
+**A `for` statement's control variable must be declared in its own block**
+(§6.8.3.9, ADR-0077). Not merely "a variable": a procedure looping over the
+program's `i` is refused. The message names where it must be declared rather
+than saying "must be a variable", because a value parameter *is* one — the
+complaint was never about what it is.
+
 A check is omitted only where its absence is *proved* sound — the `for` step and
 unary negation are unchecked, and `verify/` carries the theorems saying they
 cannot overflow. Don't add a check there, and don't remove one elsewhere.

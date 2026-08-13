@@ -264,7 +264,9 @@ gives ` 5.0E-01`), and a width with a fraction length gives fixed-point. Under
 
 **Errors are detected, not ignored.** ISO 7185 calls integer overflow, an array
 subscript outside its bounds, a value stored outside a subrange, a `case` whose
-selector matches no label, a dereference of `nil`, division by zero, `chr` of
+selector matches no label, a dereference of `nil`, division by zero — real as
+well as integer, and `mod` by a divisor that is not *positive* — `sqrt` of a
+negative number, `ln` of one that is not positive, `dispose` of `nil`, `chr` of
 a value that is no character's ordinal, `succ` past the end of a type, and
 `trunc` of a real too large *errors*; this
 compiler stops the program with a message rather than letting it wrap, read
