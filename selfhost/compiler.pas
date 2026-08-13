@@ -18965,6 +18965,60 @@ begin
   EmitTrapIf(zero, msg)
 end;
 
+{ 6.7.2.2 (D.46): "a term of the form i mod j shall be an error if j is zero
+  or negative". Both halves, in the words Sema's folder already uses for a
+  constant divisor -- which is what makes the two answers the same answer.
+  Before this, `const c = 5 mod -3` was a diagnostic and the same expression
+  over a variable quietly computed 1. }
+procedure GuardPositive(var r: str; msg: integer);
+var nonpos: str;
+begin
+  Def(nonpos);
+  write(ircode, 'icmp sle i32 ');
+  PutOp(r);
+  writeln(ircode, ', 0');
+  EmitTrapIf(nonpos, msg)
+end;
+
+{ 6.7.2.2 (D.44): "a term of the form x/y shall be an error if y is zero".
+  IEEE would answer with an infinity, which is not a value of the real-type.
+  The complex division uses this too, on c*c + d*d -- that number is zero
+  exactly when the divisor is, so one comparison serves rather than two. }
+procedure GuardRealNonZero(var r: str; msg: integer);
+var zero: str;
+begin
+  Def(zero);
+  write(ircode, 'fcmp oeq double ');
+  PutOp(r);
+  writeln(ircode, ', 0.0');
+  EmitTrapIf(zero, msg)
+end;
+
+{ 6.6.6.2 (D.34): "for sqrt(x), it is an error if x is negative". Without the
+  check the answer is a NaN, which is not a value of the real-type either. }
+procedure GuardSqrtArg(var x: str; msg: integer);
+var bad: str;
+begin
+  Def(bad);
+  write(ircode, 'fcmp olt double ');
+  PutOp(x);
+  writeln(ircode, ', 0.0');
+  EmitTrapIf(bad, msg)
+end;
+
+{ 6.6.6.2 (D.33): "for ln(x), it is an error if x is not greater than zero" --
+  so zero as well as negative, where sqrt admits zero. That one value is the
+  whole difference between this procedure and the one above it. }
+procedure GuardLnArg(var x: str; msg: integer);
+var bad: str;
+begin
+  Def(bad);
+  write(ircode, 'fcmp ole double ');
+  PutOp(x);
+  writeln(ircode, ', 0.0');
+  EmitTrapIf(bad, msg)
+end;
+
 { ISO 7185 6.6.6.2: trunc and round are errors unless the result is a value of
   the integer type. The bounds are the exactly-representable powers of two just
   outside the range, and the comparisons are *ordered*, so a NaN fails both and
@@ -19084,6 +19138,7 @@ end;
 
 procedure EmitComplexBinary(e: nodePtr; l, r: str; var v: str);
 var a, b_, c_, d_, ac, bd, ad, bc, re, im, den, cc, dd, er, ei: str;
+    cmsg: integer;
 begin
   case e^.bnOp of
     opAdd: begin
@@ -19121,6 +19176,10 @@ begin
       EmitFBin('fmul            ', c_, c_, cc);
       EmitFBin('fmul            ', d_, d_, dd);
       EmitFBin('fadd            ', cc, dd, den);
+      MsgStart;
+      MsgText('division by zero                        ');
+      cmsg := MsgEnd;
+      GuardRealNonZero(den, cmsg);
       EmitFBin('fmul            ', a, c_, ac);
       EmitFBin('fmul            ', b_, d_, bd);
       EmitFBin('fadd            ', ac, bd, er);
@@ -19574,6 +19633,10 @@ begin
       opRealDiv: begin
         ToReal(l, lt);
         ToReal(r, rt);
+        MsgStart;
+        MsgText('division by zero                        ');
+        msg := MsgEnd;
+        GuardRealNonZero(r, msg);
         Def(v);
         write(ircode, 'fdiv double ');
         PutOp(l);
@@ -19652,9 +19715,11 @@ begin
 
       opMod: begin
         MsgStart;
-        MsgText('mod by zero                             ');
+        MsgText('the right operand of mod must be        ');
+        Put(' ');
+        MsgText('positive                                ');
         msg := MsgEnd;
-        GuardNonZero(r, msg);
+        GuardPositive(r, msg);
         { ISO 7185 defines i mod j (for j > 0) as a non-negative result, unlike
           the truncating remainder LLVM gives. }
         Def(rem);
@@ -20293,6 +20358,18 @@ begin
       end;
       biSqrt, biSin, biCos, biLn, biExp, biArcTan: begin
         ToReal(a, at);
+        if e^.clBuiltin = biSqrt then begin
+          MsgStart;
+          MsgText('sqrt of a negative number               ');
+          msg := MsgEnd;
+          GuardSqrtArg(a, msg)
+        end
+        else if e^.clBuiltin = biLn then begin
+          MsgStart;
+          MsgText('ln of a number that is not positive     ');
+          msg := MsgEnd;
+          GuardLnArg(a, msg)
+        end;
         Def(v);
         case e^.clBuiltin of
           biSqrt: write(ircode, 'call double @llvm.sqrt.f64(double ');
@@ -21751,25 +21828,27 @@ begin
       write(ircode, 'load ptr, ptr ');
       PutOp(slot);
       writeln(ircode);
+      { ISO 7185 6.6.5.3 (D.23): "for dispose, it is an error if the parameter
+        of a pointer-type has a nil-value". The check used to be made only for
+        a schema domain, where stepping back over a header turns it into a free
+        of an address that was never allocated; for every other domain it was a
+        harmless error, freeing nil doing nothing. Harmless is not the test the
+        standard sets, and it is the same comparison either way -- the *reason*
+        to report differed, never the rule. }
+      Def(raw);
+      write(ircode, 'icmp eq ptr ');
+      PutOp(block);
+      writeln(ircode, ', null');
+      MsgStart;
+      MsgText('dispose of nil                          ');
+      msg := MsgEnd;
+      EmitTrapIf(raw, msg);
       if HoldsFile(domain) then
         WalkFiles(block, domain, false, 0, 0, 0);
       { What was allocated is the header and the variable together, so what is
         given back has to be the block rather than the variable. }
       head := HeaderSize(s^.pcArgs^.ntype^.elem);
       if head <> 0 then begin
-        { ISO 7185 6.6.5.3 makes disposing nil an error, and until there was a
-          header it was a harmless one -- freeing nil does nothing. Stepping
-          back over a header first turns it into a free of an address that was
-          never allocated, so the check exists where the hazard was introduced
-          rather than being extended to every pointer. }
-        Def(raw);
-        write(ircode, 'icmp eq ptr ');
-        PutOp(block);
-        writeln(ircode, ', null');
-        MsgStart;
-        MsgText('dispose of nil                          ');
-        msg := MsgEnd;
-        EmitTrapIf(raw, msg);
         raw := block;
         Def(block);
         write(ircode, 'getelementptr i8, ptr ');

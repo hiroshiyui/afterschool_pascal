@@ -55,9 +55,17 @@ def real(name):
 def mod(i, j):
     """`BinOp::Mod`: srem, then add the divisor back when the result is negative.
 
+        emitTrapIf(CreateICmpSLE(r, 0), "the right operand of mod ...")
         rem = CreateSRem(l, r)
         neg = CreateICmpSLT(rem, 0)
         CreateSelect(neg, CreateAdd(rem, r), rem)
+
+    The guard is not modelled as a value, because it produces none — it stops
+    the program. What it does is make this model's `j > 0` precondition (see
+    `rules.py`) a statement the compiler enforces rather than one the proofs
+    merely assume. §6.7.2.2 leaves `mod` an error for a divisor that is not
+    positive, and until the guard existed the rules said nothing about the
+    values the compiler was quietly computing there.
     """
     rem = z3.SRem(i, j)
     return z3.If(rem < 0, rem + j, rem)

@@ -2176,17 +2176,19 @@ void CodeGen::emitStdProc(ProcCallStmt *s) {
   }
 
   llvm::Value *block = b_.CreateLoad(ptr(), slot, "old");
+  // ISO 7185 §6.6.5.3 (D.23): "for dispose, it is an error if the parameter of
+  // a pointer-type has a nil-value". The check used to be made only for a
+  // schema domain, where stepping back over a header turns it into a free of
+  // an address that was never allocated; for every other domain it was a
+  // harmless error, `free(nil)` doing nothing. Harmless is not the test the
+  // standard sets, and it is the same comparison either way — the *reason* to
+  // report differed, never the rule.
+  emitTrapIf(b_.CreateIsNull(block, "isnil"), "dispose of nil");
   if (domain && holdsFile(domain))
     walkFiles(block, domain, /*init=*/false, PAS_BIND_INTERNAL, 0, nullptr);
   // What was allocated is the header and the variable together, so what is
   // given back has to be the block rather than the variable.
   if (unsigned head = headerSize(domain)) {
-    // ISO 7185 §6.6.5.3 makes disposing nil an error, and until there was a
-    // header it was a harmless one — `free(nil)` does nothing. Stepping back
-    // over a header first turns it into a free of an address that was never
-    // allocated, so the check exists where the hazard was introduced rather
-    // than being extended to every pointer.
-    emitTrapIf(b_.CreateIsNull(block, "isnil"), "dispose of nil");
     block = b_.CreateGEP(i8(), block,
                          {ConstantInt::getSigned(i32(), -int(head))}, "block");
   }
@@ -2935,12 +2937,16 @@ llvm::Value *CodeGen::emitComplexBinary(Binary *e, llvm::Value *l,
         b_.CreateFAdd(b_.CreateFMul(a, d), b_.CreateFMul(bb, c), "cmul.im"));
   }
   case BinOp::RealDiv: {
-    // (a + bi)/(c + di) = ((ac + bd) + (bc - ad)i) / (c² + d²). Division by a
-    // zero divisor is left to IEEE, exactly as real `/` is: this compiler does
-    // not trap that one either, so trapping here would be the odd one out.
+    // (a + bi)/(c + di) = ((ac + bd) + (bc - ad)i) / (c² + d²).
+    // §6.8.3.2: "A term of the form x/y shall be an error if y is zero", and
+    // table 3 gives `/` a complex operand, so the rule reaches here too. The
+    // divisor is zero exactly when c² + d² is, which is the number already
+    // being computed — one comparison rather than two.
     llvm::Value *a = reOf(l), *bb = imOf(l), *c = reOf(r), *d = imOf(r);
     llvm::Value *den =
         b_.CreateFAdd(b_.CreateFMul(c, c), b_.CreateFMul(d, d), "cdiv.den");
+    emitTrapIf(b_.CreateFCmpOEQ(den, ConstantFP::get(f64(), 0.0), "cdiv.zero"),
+               "division by zero");
     return makeComplex(
         b_.CreateFDiv(
             b_.CreateFAdd(b_.CreateFMul(a, c), b_.CreateFMul(bb, d)), den,
@@ -3096,8 +3102,15 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
     }
   }
 
-  case BinOp::RealDiv:
-    return b_.CreateFDiv(toReal(l, lt), toReal(r, rt_), "div");
+  // ISO 7185 §6.7.2.2 (D.44) and ISO/IEC 10206:1991 §6.8.3.2 both say "a term
+  // of the form x/y shall be an error if y is zero". IEEE would answer with an
+  // infinity, which is a value the real-type does not have.
+  case BinOp::RealDiv: {
+    llvm::Value *d = toReal(r, rt_);
+    emitTrapIf(b_.CreateFCmpOEQ(d, ConstantFP::get(f64(), 0.0), "div.zero"),
+               "division by zero");
+    return b_.CreateFDiv(toReal(l, lt), d, "div");
+  }
 
   // Exponentiation is the one arithmetic operator with no instruction behind
   // it, so all three forms are runtime calls — and the error conditions of
@@ -3128,7 +3141,13 @@ llvm::Value *CodeGen::emitBinary(Binary *e) {
   }
 
   case BinOp::Mod: {
-    r = guardNonZero(r, "mod by zero");
+    // §6.7.2.2 (D.46): "a term of the form i mod j shall be an error if j is
+    // zero or negative". Both halves, in the words Sema's folder already uses
+    // for a constant divisor — which is what makes the two answers the same
+    // answer. Before this, `const c = 5 mod -3` was a diagnostic and the same
+    // expression over a variable quietly computed 1.
+    emitTrapIf(b_.CreateICmpSLE(r, ConstantInt::get(i32(), 0), "mod.nonpos"),
+               "the right operand of mod must be positive");
     // ISO 7185 defines i mod j (for j > 0) as a non-negative result, unlike
     // the truncating remainder LLVM gives us.
     llvm::Value *rem = b_.CreateSRem(l, r, "rem");
@@ -3688,14 +3707,26 @@ llvm::Value *CodeGen::emitCall(Call *e) {
     return b_.CreateTrunc(
         b_.CreateUnaryIntrinsic(Intrinsic::ctpop, a, nullptr, "card"), i32(),
         "card.i32");
-  case Builtin::Sqrt:
-    return intrinsicCall(Intrinsic::sqrt, {toReal(a, at)});
+  // §6.6.6.2 (D.34): "for sqrt(x), it is an error if x is negative". Without
+  // the check the answer is a NaN, which is not a value of the real-type.
+  case Builtin::Sqrt: {
+    llvm::Value *x = toReal(a, at);
+    emitTrapIf(b_.CreateFCmpOLT(x, ConstantFP::get(f64(), 0.0), "sqrt.neg"),
+               "sqrt of a negative number");
+    return intrinsicCall(Intrinsic::sqrt, {x});
+  }
   case Builtin::Sin:
     return intrinsicCall(Intrinsic::sin, {toReal(a, at)});
   case Builtin::Cos:
     return intrinsicCall(Intrinsic::cos, {toReal(a, at)});
-  case Builtin::Ln:
-    return intrinsicCall(Intrinsic::log, {toReal(a, at)});
+  // §6.6.6.2 (D.33): "for ln(x), it is an error if x is not greater than
+  // zero" — so zero as well as negative, where sqrt admits zero.
+  case Builtin::Ln: {
+    llvm::Value *x = toReal(a, at);
+    emitTrapIf(b_.CreateFCmpOLE(x, ConstantFP::get(f64(), 0.0), "ln.nonpos"),
+               "ln of a number that is not positive");
+    return intrinsicCall(Intrinsic::log, {x});
+  }
   case Builtin::Exp:
     return intrinsicCall(Intrinsic::exp, {toReal(a, at)});
   case Builtin::ArcTan:
