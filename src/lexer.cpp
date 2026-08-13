@@ -168,31 +168,37 @@ void Lexer::skipTriviaAndComments() {
     while (!eof() && std::isspace(static_cast<unsigned char>(peek())))
       advance();
 
-    if (peek() == '{') {
+    // §6.1.8 writes a comment as
+    //
+    //   ( '{' | '(*' ) commentary ( '*)' | '}' )
+    //
+    // and its NOTE 1 says in as many words that "a comment may thus commence
+    // with { and end with *), or commence with (* and end with }". The
+    // commentary is any sequence containing neither `}` nor `*)`, so which
+    // delimiter closes it does not depend on which one opened it — one loop
+    // serves both openings, which is why this is not two blocks. Both
+    // standards spell the production identically.
+    //
+    // NOTE 2 is the consequence to keep in mind: `(*)` cannot occur in a
+    // commentary even though `{)` can.
+    bool brace = peek() == '{';
+    if (brace || (peek() == '(' && peek(1) == '*')) {
       int sl = line_, sc = col_;
       advance();
-      while (!eof() && peek() != '}')
+      if (!brace)
+        advance();
+      while (!eof() && peek() != '}' && !(peek() == '*' && peek(1) == ')'))
         advance();
       if (eof()) {
         diags_.error(sl, sc, "unterminated comment");
         return;
       }
-      advance(); // '}'
-      continue;
-    }
-
-    if (peek() == '(' && peek(1) == '*') {
-      int sl = line_, sc = col_;
-      advance();
-      advance();
-      while (!eof() && !(peek() == '*' && peek(1) == ')'))
+      if (peek() == '}') {
         advance();
-      if (eof()) {
-        diags_.error(sl, sc, "unterminated comment");
-        return;
+      } else {
+        advance();
+        advance();
       }
-      advance();
-      advance();
       continue;
     }
     return;

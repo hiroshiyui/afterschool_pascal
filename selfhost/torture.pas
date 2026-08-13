@@ -52,8 +52,11 @@ begin
   writeln('a  b   c');       { runs of blanks inside a literal are kept }
 
   (* the other comment form *)
-  (* containing a { brace } which does not end it *)
-  { containing a (* star-paren *) which does not end it either }
+  (* 6.1.8 NOTE 1: either delimiter closes a commentary whichever one opened
+     it, so this comment ends at the brace on the next line and not here. }
+  { and this one ends at the star-paren, not at a brace. *)
+  (* which means an opening star-paren cannot occur in a commentary at all,
+     NOTE 2, while a lone ) or ] or * is ordinary text. *)
 
   writeln(1e5:1:1);          { adjacent ':' operators after a real }
   writeln(a1..a2);           { nonsense to parse, fine to lex }

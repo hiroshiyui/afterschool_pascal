@@ -470,14 +470,26 @@ void pas_file_done(void *v) {
 
 void pas_reset(void *v) {
   struct pas_file *f = v;
+  /* §6.11.4.2 (and ISO 7185 §6.10) make the effect of `reset` on the required
+   * file `input` implementation-defined, and the standard input cannot be
+   * repositioned. Clearing the buffer here does not merely fail to rewind —
+   * it *loses a character*: ADR-0021's lookahead means `f^` may already hold
+   * one the stream has consumed, and once it is dropped nothing can read it
+   * again. So the definition is that `reset(input)` leaves the file exactly as
+   * it is, which is the only effect available that does not destroy input.
+   * `doc/implementation-defined.md` states it, and `tests/resetinput.pas`
+   * pins it. */
+  if (f->binding == PAS_BIND_INPUT) {
+    f->fp = stdin;
+    f->mode = PAS_READING;
+    return;
+  }
   f->have = 0;
   f->lookahead = EOF;
   f->ateof = 0;
   f->ch = ' ';
   switch (f->binding) {
-  case PAS_BIND_INPUT:
-    f->fp = stdin;
-    break;
+  case PAS_BIND_INPUT: break; /* answered above */
   case PAS_BIND_OUTPUT:
     pas_runtime_error("reset applied to the standard output");
     break;

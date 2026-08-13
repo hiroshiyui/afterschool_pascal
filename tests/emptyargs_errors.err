@@ -1,5 +1,5 @@
-<source>:41:10: error: Pascal has no empty argument list; a parameterless call is written as the name alone
-<source>:42:5: error: Pascal has no empty argument list; a parameterless call is written as the name alone
-<source>:43:8: error: Pascal has no empty argument list; a parameterless call is written as the name alone
-<source>:44:10: error: Pascal has no empty argument list; a parameterless call is written as the name alone
-<source>:45:11: error: Pascal has no empty argument list; a parameterless call is written as the name alone
+<source>:43:10: error: Pascal has no empty argument list; a parameterless call is written as the name alone
+<source>:44:5: error: Pascal has no empty argument list; a parameterless call is written as the name alone
+<source>:45:8: error: Pascal has no empty argument list; a parameterless call is written as the name alone
+<source>:46:10: error: Pascal has no empty argument list; a parameterless call is written as the name alone
+<source>:47:11: error: Pascal has no empty argument list; a parameterless call is written as the name alone

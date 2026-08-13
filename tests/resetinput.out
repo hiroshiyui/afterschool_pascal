@@ -1,0 +1,7 @@
+peek    a
+after   a
+read    a
+next    b
+rest    c d e f
+number  42
+eof     TRUE

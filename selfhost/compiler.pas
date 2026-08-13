@@ -1803,40 +1803,42 @@ end;
 
 { ------------------------------------------------------------- the scanner }
 
+{ 6.1.8 writes a comment as an opening delimiter that is either a brace or a
+  star-paren, a commentary containing neither closing delimiter, and a closing
+  delimiter that is again either -- and its NOTE 1 says so in as many words: a
+  comment may commence with a brace and end with a star-paren, or commence with
+  a star-paren and end with a brace. Which delimiter closes a commentary does
+  not depend on which one opened it, so one loop serves both openings and this
+  is not two blocks. Both standards spell the production identically.
+
+  NOTE 2 is the consequence: an opening star-paren cannot occur in a
+  commentary, because there is no way to write one that does not also end the
+  comment. ADR-0073. }
 procedure SkipTriviaAndComments;
-var sl, sc: integer; done: boolean;
+var sl, sc: integer; done, brace: boolean;
 begin
   done := false;
   while not done do begin
     while (not AtEof) and IsSpace(Peek(0)) do
       Advance;
 
-    if Peek(0) = '{' then begin
+    brace := Peek(0) = '{';
+    if brace or ((Peek(0) = '(') and (Peek(1) = '*')) then begin
       sl := line;
       sc := col;
       Advance;
-      while (not AtEof) and (Peek(0) <> '}') do
+      if not brace then
+        Advance;
+      while (not AtEof) and (Peek(0) <> '}')
+            and not ((Peek(0) = '*') and (Peek(1) = ')')) do
         Advance;
       if AtEof then begin
         ErrorAt(sl, sc);
         writeln('unterminated comment');
         done := true
       end
-      else
+      else if Peek(0) = '}' then
         Advance
-    end
-    else if (Peek(0) = '(') and (Peek(1) = '*') then begin
-      sl := line;
-      sc := col;
-      Advance;
-      Advance;
-      while (not AtEof) and not ((Peek(0) = '*') and (Peek(1) = ')')) do
-        Advance;
-      if AtEof then begin
-        ErrorAt(sl, sc);
-        writeln('unterminated comment');
-        done := true
-      end
       else begin
         Advance;
         Advance
@@ -3650,10 +3652,15 @@ begin
       e := ParseExpr;
       Expect(tkRParen, ctxParenExpr)
     end
-    { set-constructor = '[' (member (',' member)*)? ']',
-      member = expr ('..' expr)?. `[]` is the empty set. A '[' can only start
-      a constructor here: a subscript follows a designator, which
-      ParseSelectors has already consumed by the time a factor is reached. }
+    { A set-constructor is a bracketed list of members separated by commas,
+      each member an expression or a range of two, and an empty bracket pair is
+      the empty set. The production is described rather than written out
+      because 6.1.8 lets either delimiter close a commentary, so a star-paren
+      inside a braced comment ends it -- which is exactly what the regular
+      expression that used to be here did, once the lexer was corrected
+      (ADR-0073). A '[' can only start a constructor here: a subscript follows
+      a designator, which ParseSelectors has already consumed by the time a
+      factor is reached. }
     else if Check(tkLBracket) then begin
       e := NewNode(nkSet, CurLine, CurCol);
       e^.seMembers := nil;
