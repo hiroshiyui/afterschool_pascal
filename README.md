@@ -202,9 +202,15 @@ address. See
 [ADR-0070](doc/adr/0070-a-file-need-not-be-an-entire-variable.md).
 
 Program parameters are the program's only connection to the outside world, as
-ISO 7185 §6.10 has it: `input` and `output` are the standard streams, and every
-other one names a file variable bound to a command-line argument, in the order
-written. A file variable that is *not* a program parameter is a scratch file
+ISO 7185 §6.10 has it: each is a variable the block declares, `input` and
+`output` are the standard streams, and every other one that is a file is bound
+to a command-line argument, in the order written. One that is *not* a file is
+permitted — §6.10 makes its binding implementation-dependent rather than
+restricting the list to files — and is bound to nothing here: an ordinary
+variable, taking no argument, so the file parameters keep the positions they
+would have had without it
+([ADR-0074](doc/adr/0074-a-restriction-the-document-invented-and-a-message-that-explained-nothing.md)).
+A file variable that is *not* a program parameter is a scratch file
 with no external name. Files are closed when the block declaring them exits,
 which is the standard's own rule and needs no `close`. Using `write` without
 `output` in the program header is an error, because §6.10 says it is. See

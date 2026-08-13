@@ -289,9 +289,11 @@ cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
   copying, which a file must never have. `isMemory()` is the one that means
   "travels by address". Assignment, comparison, value parameters and function
   results are all refused for files.
-- Program parameters bind to command-line arguments in order; `input`/`output`
-  are the standard streams, declared *only* when the header lists them, so
-  using `write` without `output` is the error §6.10 says it is.
+- Program parameters that are **files** bind to command-line arguments in order;
+  `input`/`output` are the standard streams, declared *only* when the header
+  lists them, so using `write` without `output` is the error §6.10 says it is.
+  A program parameter that is **not** a file is permitted and bound to nothing,
+  consuming no argument (ADR-0074) — §6.10 restricts the list to files nowhere.
 - Standard input is opened but not read until the program first asks, or every
   program listing `input` would block before its first statement.
 - **A file need not be an entire variable** (ADR-0070). §6.5.1's own example is
@@ -1470,6 +1472,45 @@ in one language or the other, and the standard is a property of the source.
   - Neither was reachable: a comment is invisible after the lexer, so
     `difftest` compared two compilers wrong in the same way; and no corpus
     program applied `reset`, `rewrite` or `extend` to a standard file at all.
+- **A restriction the document invented, and a message that explained nothing**
+  (ADR-0074) — the two worst entries on ADR-0073's own list of unpinned answers,
+  one commit later.
+  - **A program-parameter need not possess a file-type.** §6.10 requires each to
+    be a variable the program-block declares and then makes the binding of one
+    that *does not* possess a file-type implementation-**dependent**, reserving
+    implementation-defined for the file case; §6.12 drops the distinction
+    entirely. The binding here is to **no external entity**, and it **consumes
+    no command-line argument** — which is the half a reader cannot guess, so
+    `tests/progparam_nonfile.pas` writes a non-file parameter *between* two
+    files and requires the second to still be argument two.
+  - **The document had justified the refusal with a citation that says the
+    opposite**: §6.12 requires no bindability of a program-parameter, and
+    §6.5.1 *confers* it ("unless the variable-identifier is a
+    program-parameter … in which case it shall possess the bindability that is
+    bindable"). ADR-0072's wrong-citation lesson, now in the document clause
+    5.1 requires — where it is worse, because that document is what a reader
+    consults instead of the source. Four compiler comments and one glossary
+    entry repeated the invented rule.
+  - **A message naming two types says why they are two.** §6.4.1 makes each
+    occurrence of a new-type a distinct type, so `cannot assign record x end to
+    a variable of type record x end` is accurate and useless. Two forms: both
+    anonymous gets the advice (name the type once), two type-*names* that print
+    alike gets only the reason, since renaming is no advice.
+  - **The note belongs to incompatibility and nothing else, and an existing
+    golden proved it.** Added to every complaint a relational operator makes,
+    it turned `tests/type_errors.pas` red: §6.7.2.5 gives a record no relational
+    operators at all, so naming the type cures nothing. Only *compatible* is a
+    complaint type identity can cause; numeric, set, boolean and comparable name
+    a property of the **kind**, which two types written alike necessarily share.
+  - That same golden had recorded the useless message since structured types
+    landed. Nothing distinguishes a diagnostic that reports a rule from one that
+    explains it, so `difftest` compared two compilers unhelpful in the same way.
+  - **The comparison is capped and both compilers carry the cap**: the Pascal
+    side can only ask "do these print alike" by rendering through `msgBuf`
+    (`strMax`), so `kTypeNameCompareLimit` declines the same question in the
+    C++. `fileSize`/`PAS_FILE_SIZE`'s coupling again — and checked, not
+    asserted: the test declares a 263-character type name, and dropping the
+    limit from one compiler fails both the golden and `difftest`.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

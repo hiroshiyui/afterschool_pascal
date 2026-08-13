@@ -96,7 +96,7 @@ both compilers (ADR-0062).
 | E.31 | — | binding of module parameters | `input` and `output` denote the required text files and are the only way a module reaches the standard streams. **Any other module-parameter is bound to nothing** and behaves as an internal scratch file (§6.11.1 NOTE 6, ADR-0053). |
 | E.32 | E.18 | `reset`, `rewrite`, `extend` on `input` | `reset(input)` **leaves the file exactly as it is** — the standard input cannot be repositioned, and clearing the lookahead would lose a character the stream has already consumed (ADR-0073). `rewrite(input)` and `extend(input)` stop the program with a run-time error. |
 | E.33 | E.18 | the same on `output` | `rewrite(output)` and `extend(output)` have no effect at all — no truncation, no reposition, and the line state `page` consults survives. `reset(output)` stops the program with a run-time error. |
-| E.34 | E.17 | binding of program parameters | Bound in the order written, skipping `input` and `output`, to the command-line arguments `argv[1]`, `argv[2]`, … as pathnames. Surplus arguments are ignored; a missing one is a run-time error at the first `reset`, `rewrite` or `extend` of that file. `input` and `output` are the standard streams and consume no argument. |
+| E.34 | E.17 | binding of program parameters | Bound in the order written, skipping `input` and `output`, to the command-line arguments `argv[1]`, `argv[2]`, … as pathnames. Surplus arguments are ignored; a missing one is a run-time error at the first `reset`, `rewrite` or `extend` of that file. `input` and `output` are the standard streams and consume no argument, and neither does a parameter that does not possess a file-type — see F.10 in §4. |
 | — | E.6 | the characters prohibited from textfiles | Exactly one: `chr(10)`. See §3's F.1 for what attributing it does. |
 
 ## 3. Errors not reported
@@ -168,7 +168,7 @@ excluded from the clause because they *require* it.
 | F.17 | — | whether a numeric read examines the buffer-variable or the first component of `f.R` | The **first component of `f.R`**: the buffer-variable's value is ignored. A store into `f^` before `read(f, i)` is visible when `f^` is read back and has no effect on the number read. |
 | F.18 | F.9 | inspecting a text file `page` was applied to | `page(f)` writes an implicit line terminator when the line is non-empty, then `chr(12)`. On inspection that character is an ordinary component at the start of the next line, and `eoln` and `eof` behave as for any other file. |
 | — | F.1 | attributing a character prohibited from textfiles | The prohibited set is exactly `chr(10)`, and attributing it ends the line: the character is not stored, `eoln` becomes true where it was written, and the line reads back one component shorter. Every other value of `char` — all 256 — survives a line unchanged. `tests/textfile_chars.pas`. |
-| — | F.10 | binding of a **non-file** program parameter | Does not arise: a program parameter that is not a file variable is **refused**. Under Extended Pascal that is right, §6.12 requiring a program-parameter to be bindable and only a file being bindable; under ISO 7185 it is a restriction, §6.10 making the binding of such a parameter implementation-dependent rather than prohibiting it. |
+| — | F.10 | binding of a **non-file** program parameter | **Bound to nothing.** It is an ordinary variable of the program block, totally-undefined until the program assigns it, and it consumes no command-line argument — so the file parameters keep the argument positions they would have had without it. ISO/IEC 10206:1991 §6.12 NOTE 2 ("variables that are program-parameters are not necessarily bound when the program is activated") is what makes that an available answer rather than an omission. `tests/progparam_nonfile.pas`. |
 
 ## 5. Extensions
 
@@ -193,12 +193,6 @@ none is silent.
 §6.4.5 c) makes two set-types compatible only if both are `packed` or neither
 is, and only the base types are compared here — see ADR-0072 for why that is
 deliberate.
-
-**A non-file program parameter is refused.** ISO 7185 §6.10 permits a program
-parameter of any type and makes the binding of a non-file one
-implementation-dependent (its Annex F.10) rather than prohibiting it. Extended
-Pascal §6.12 requires a program-parameter to be *bindable*, which only a file
-is, so the refusal is correct there and a restriction under ISO 7185 alone.
 
 **Program-components are not compiled separately.** §6.13 asks for it with a
 *should* rather than a *shall*; accepting them apart would need an interface

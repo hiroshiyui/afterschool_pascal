@@ -111,11 +111,16 @@ component size, and one flag on the type says which is which. On a `file of T`,
 and `f^ := e; put(f)` — so they carry one component of the file's own type and
 take no field width (ADR-0031).
 
-**Program parameter.** A name in `program P(...)`. ISO 7185 §6.10 makes these
-the program's only connection to anything outside it: `input` and `output` are
-the standard streams, and every other one must be a file variable the block
-declares. This compiler binds those to command-line arguments in the order
-written — a choice the standard leaves open.
+**Program parameter.** A name in `program P(...)`, which §6.10 requires the
+block to declare as a variable. These are the program's only connection to
+anything outside it: `input` and `output` are the standard streams, and this
+compiler binds every other one that possesses a file-type to a command-line
+argument in the order written — a choice the standard leaves open. A
+program-parameter that is *not* a file is permitted too (§6.10 makes its
+binding implementation-dependent rather than restricting the list to files),
+and this compiler binds it to nothing: it is an ordinary variable of the
+program block and takes no argument, so the file parameters keep the positions
+they would have had without it.
 
 **Internal (scratch) file.** A file variable that is *not* a program
 parameter, so it has no external name: a temporary the program writes and reads

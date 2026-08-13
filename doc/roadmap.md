@@ -937,6 +937,14 @@ probe rather than in the compiler, `writeln(5:0)` being accepted and then
 trapped, which §6.1 f) permits. Three ISO programs in the corpus were
 themselves out of order, which is why nothing had failed.
 
+**A sixth refusal was found by reading §6.10 rather than by probing**
+(ADR-0074): a program-parameter that does not possess a file-type. Neither
+standard restricts the list to files — §6.10 makes the binding of a non-file one
+implementation-*dependent* and §6.12 drops the distinction — and the refusal's
+message asserted a rule neither has. It is accepted now, bound to nothing and
+consuming no argument. The same record adds §6.4.1's reason to the five
+messages that name two types, which had been printing one spelling twice.
+
 One refusal turned up while probing and is **outstanding**: `const q = nil` is
 rejected under both standards. ISO 7185 §6.3's constant has no `nil`, so that
 half is right; ISO/IEC 10206:1991 §6.8.2 makes a constant-expression any

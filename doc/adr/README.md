@@ -82,3 +82,4 @@ the alternatives that were rejected and why.
 | [0071](0071-five-things-the-grammar-admitted-and-the-compiler-refused.md) | Five things the grammar admitted and the compiler refused | Accepted |
 | [0072](0072-three-things-the-compiler-accepted-and-neither-standard-has.md) | Three things the compiler accepted and neither standard has | Accepted |
 | [0073](0073-writing-the-required-document-found-two-bugs.md) | Writing the required document found two bugs | Accepted |
+| [0074](0074-a-restriction-the-document-invented-and-a-message-that-explained-nothing.md) | A restriction the document invented, and a message that explained nothing | Accepted |
