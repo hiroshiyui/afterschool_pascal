@@ -1114,6 +1114,46 @@ changed. It also gave `nil^` a way of being written and so exposed a message
 that named the wrong rule: the nil-value "does not identify a variable"
 (NOTE 1), which is not the same complaint as "not a pointer".
 
+### The validation suite's DEVIANCE category
+
+**Twenty-nine programs the suite ran that a conforming processor must refuse,
+and every one is refused now.** ADR-0086 fetched the BSI suite and catalogued
+what this compiler did with all 812; twenty-seven `DEVIANCE` programs ran to
+completion and two more printed PASS. Each was triaged to a clause, then fixed —
+nine records, ADR-0089 to ADR-0099.
+
+The shape of what it found is the point, not the count:
+
+- **Six were one predicate.** §6.4.3.2 designates a string-type by four
+  properties at once and `IsCharArray` asked two of them, so an array whose
+  lower bound was not 1, or whose components were a *subrange* of char, was a
+  string — and §6.9.3.6 gives a whole-array write the same rule (ADR-0090).
+- **Five were a rule whose machinery already existed.** ADR-0046 built §6.9.4's
+  threat list for protected parameters; §6.8.3.9's control-variable rule needed
+  the same call sites to answer yes for a second reason (ADR-0089).
+- **Two retired a deviation this repository had argued for and got wrong.**
+  ADR-0072 declined §6.4.5 c)'s set-packing rule because "the standard does not
+  say what packing a set-constructor has". §6.7.1 says exactly that, in a
+  sentence both standards carry verbatim, and the claim had been copied into
+  three documents and a test written to hold the compiler to it (ADR-0093).
+- **One needed the ceiling raised.** The compiler interns every identifier and
+  literal it reads, without deduplication, and sat 74 characters under
+  `poolMax`; adding diagnostics broke the build with its own out-of-space
+  message. The seed carried the old bound, so the fix was a bump plus an
+  out-of-cycle reseed (ADR-0095).
+
+**Three programs in this tree were wrong, and one was ours.** Two wrote `case
+integer of` with two labels — legal only if every integer is named — while
+testing something else entirely. `tests/extended/bindprogparam.pas` passed a
+component of a packed `BindingType` by reference, illegal from the day ADR-0052
+wrote it, twice, with every oracle agreeing.
+
+**And the suite is not a replacement for reading the clause.** §6.6.3.3's packed
+rule has two readings — the immediate container, or every container on the
+designator — and §6.4.3.1 settles it: packing does not propagate inward. All 812
+programs are silent on the difference; only the test written for it fails the
+wrong reading (ADR-0099). That is ADR-0067's rule where it costs the most.
+
 ### The lexis is complete
 
 **ADR-0033's caveat has expired.** That record said a word-symbol is reserved
