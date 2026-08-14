@@ -51,14 +51,17 @@ When performing release engineering, always follow these steps:
 
    Present the recommendation to the user and confirm before proceeding.
 
-5. **Update the version** — **the `project()` call in `CMakeLists.txt` carries no
-   `VERSION` yet, and `pascalc` has no `--version` flag.** The first release must
-   add both: a compiler that misreports its own version is worse than one that
-   cannot report it at all, so let `pascalc-product` fail rather than editing one
-   of the two by hand.
+5. **Update the version** — it is written in **two** places that must agree:
+   the `VERSION` of `project()` in `CMakeLists.txt`, and what `pascalc
+   --version` prints, which comes from `selfhost/compiler.pas`. `pascalc-product`
+   compares them, so a mismatch fails the suite rather than shipping — let it
+   fail rather than editing one of the two by hand and trusting your eyes.
 
    **Refresh the seed** — `seed/refresh.sh` — at the release commit and nowhere
-   else (ADR-0085). It refuses a candidate that does not reproduce itself.
+   else (ADR-0085). It refuses a candidate that does not reproduce itself, and
+   the `seed-is-current` job in `.github/workflows/ci.yml` checks the same thing
+   at the tag: a stale seed still builds a working compiler, from the *previous*
+   release's source, so nothing else would notice.
 
 6. **Update `CHANGELOG.md`** — add a new version entry at the top following
    [Keep a Changelog](https://keepachangelog.com/), grouped under `Added`,

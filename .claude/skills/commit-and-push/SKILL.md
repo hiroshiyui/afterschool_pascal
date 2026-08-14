@@ -12,11 +12,14 @@ When committing and pushing changes, always follow these steps:
 2. **Stage** all relevant changes with `git add <paths>`. Be deliberate — stage only files related to the current topic. Never blindly use `git add -A` if unrelated changes are present. `build/` is ignored; check `git status --short` for stray `.ll`/`.o` artifacts left by manual runs.
 
 3. **Compose the message** following the [Conventional Commits](https://www.conventionalcommits.org/) standard. Use these scopes for this project:
-   - `lexer` — `src/lexer.*`, `src/token.h`
-   - `parser` — `src/parser.*`, `src/ast.h`
-   - `sema` — `src/sema.*`, `src/type.h`
-   - `codegen` — `src/codegen.*`
-   - `driver` — `src/main.cpp`, `src/diag.*`
+   There is one compiler source, `selfhost/compiler.pas` (ADR-0024), so the
+   scope names the *component* inside it that the change touches — the names
+   CLAUDE.md's "Where things live" uses:
+   - `lexer` — the token kinds, the lexer, the keyword tables
+   - `parser` — the node kinds and the recursive-descent productions
+   - `sema` — scopes, type rules, type-denoter resolution, constant folding
+   - `codegen` — the sequential IR emitter and the layout rules
+   - `driver` — the command line, the dumps, `ErrorAt` and the diagnostics
    - `runtime` — `runtime/`
    - `build` — `CMakeLists.txt`, `.gitignore`
    - `doc` — `doc/**`, `README.md`, `CLAUDE.md`
