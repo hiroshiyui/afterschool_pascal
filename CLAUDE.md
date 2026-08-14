@@ -1218,9 +1218,11 @@ property of the source.
     does not contain it, so no block exit is responsible for it.
   - `PAS_FILE_SIZE` went 96 → 112, and `fileSize` in the Pascal compiler with
     it; `irtest.sh` is what checks the two still agree.
-  - **Deviation, stated**: both are parsed *by name*, as `read` and `write`
-    are, because the parser has no scope — so under `--std=extended` a program
-    cannot declare its own, where §6.7.5.5 makes them required identifiers.
+  - Both are parsed *by name*, as `read` and `write` are, because the parser
+    has no scope. That was a stated **deviation** — a program could not declare
+    its own, where §6.7.5.5 makes them required identifiers — until ADR-0087
+    retired it by moving the question to Sema. The parser still recognises the
+    words; what it no longer decides is what they denote.
     `tests/readstr_iso.pas` is the half that is a gate.
 - **A structured value is built, not computed** (ADR-0061). §6.8.7's
   structured-value-constructor: an array and a record have no register form
@@ -1645,6 +1647,41 @@ property of the source.
   - It was found by ADR-0071's sweep and **written into `doc/roadmap.md`
     instead of fixed**, which is the only reason it outlived two more
     conformance rounds.
+- **A required procedure may be declared away** (ADR-0087). ISO 7185 §6.2.2.10
+  puts the required identifiers' defining-points in "a region enclosing the
+  program", and §6.6.4.1 is the procedures' half — so `procedure write(var a:
+  integer)` in the program-block is what `write(i)` then activates. Found by
+  the BSI suite's CONF116, which this compiler had been running as the
+  required `write`, printing the wrong answer and **reporting nothing**.
+  - **Every other required procedure had this for free.** They are not symbols:
+    `CheckProcCall` reads a `Lookup` that answers nil as "the required one", so
+    a declared `get` wins because the lookup succeeds. Six names could not —
+    `read`, `readln`, `write`, `writeln` and Extended's `readstr`/`writestr` —
+    because §6.8.2.3's procedure-statement is an actual-parameter-list *or* one
+    of four read/write parameter lists, and only a write-parameter-list's field
+    widths tell them apart. So the parser had to recognise the six words, and
+    settled what they *denote* in a pass with no scope.
+  - **The parser decides the statement's shape; Sema decides what the name
+    denotes** — ask the symbol, not the syntax, for the fifth time after
+    ADR-0044, ADR-0053, ADR-0066 and ADR-0071. The parser yields the name
+    whenever what follows it can continue a designator, because `write := 5`
+    and `write[i] := 5` are assignments and no parameter list begins with one;
+    Sema's `RedefinedFamily` looks the name up and hangs the call off the node,
+    which is then a **husk** every later pass reads through. ADR-0066's shape,
+    for ADR-0066's reason.
+  - **§6.7.5.5's two gave up their parameter list's shape**, which is what
+    retired ADR-0060's deviation: a parser that requires the comma in
+    `'(' string-variable ',' ...` has already decided the statement is a
+    writestr, so the list is parsed as an ordinary write-parameter-list and
+    **Sema moves the string out**.
+  - **Nothing new checks a call.** Arity, `var`-parameter and
+    not-a-procedure all come from the ordinary path; the one new message is
+    that a declared `write` takes no field width. §6.6.3.7 came out right
+    untouched — a *declared* `write` is now passable as a procedural parameter
+    and the required one still is not, the rule and the fix being one question.
+  - It made a check reachable that never had been (`writestr(s)` with nothing
+    to write compiled and wrote nothing), and stopped a broken `readstr`
+    demanding `input` — it reads from no file at all.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,
@@ -1798,8 +1835,9 @@ than truncate.
 checked against golden files.** `pascalc --dump-all` writes three sections
 (`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh` diffed them
 against the C++ compiler's over every `.pas` in the tree. That was the strongest
-oracle here and ADR-0085 gave it up with stage 0; what replaced it is 435
-goldens, including the 157 error-path sources difftest was the only reader of.
+oracle here and ADR-0085 gave it up with stage 0; what replaced it is the
+golden files, including the 157 error-path sources difftest was the only reader
+of.
 
 **Know what that means when you change a stage.** A golden agrees with whatever
 wrote it, so a change that is wrong in the dump *and* wrong in the goldens you

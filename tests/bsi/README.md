@@ -25,8 +25,9 @@ Every conformance sweep in `doc/roadmap.md` ends with the same sentence: *no
 program in the corpus had written the construct, so all five oracles agreed
 with a compiler that was wrong.* This is a corpus that was not chosen here.
 
-It earned that on the first run, finding three defects that the 435 goldens,
-the fixed point and 43 proofs all agreed were correct behaviour:
+It earned that on the first run, finding three defects that the goldens, the
+fixed point and 43 proofs all agreed were correct behaviour. All three are
+fixed:
 
 - **§6.6.6.4 + §6.7.1** — `succ`/`pred` ran out at a *subrange's* bounds instead
   of its host type's. `tests/trap_succ_subrange.pas` had asserted the wrong rule
@@ -35,8 +36,11 @@ the fixed point and 43 proofs all agreed were correct behaviour:
   where the clause requires it only "if the statement of the for-statement is
   executed".
 - **§6.6.4.1** — a program may redefine `write` as its own procedure. `get` and
-  `page` already shadow correctly; the `read`/`write` family does not, because
-  the parser recognises those by name (ADR-0060 states the deviation).
+  `page` already shadowed correctly; the `read`/`write` family did not, because
+  the parser recognises those six by name and so decided what they denote in a
+  pass with no scope. Fixed by ADR-0087, which moved that decision to Sema —
+  and the program the suite is made of, CONF116, had been printing the wrong
+  answer with nothing reported.
 
 ## The terms
 

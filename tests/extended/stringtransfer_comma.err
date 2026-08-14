@@ -1,1 +1,1 @@
-<source>:15:15: error: expected ',' after the string readstr reads from, found identifier
+<source>:20:3: error: readstr needs a variable to read into

@@ -1,1 +1,1 @@
-<source>:7:14: error: expected ',' after the string writestr writes to, found integer literal
+<source>:13:3: error: writestr needs something to write

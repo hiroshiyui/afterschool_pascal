@@ -15,10 +15,20 @@ appears below in the release where it still existed.
 
 ### Fixed
 
-Both entries change what an **already-valid program** does, and neither was
-found by a test failing: the BSI Pascal Validation Suite was adopted as a test
-case and disagreed with the compiler on the first run (ADR-0086).
+Every entry changes what an **already-valid program** does, and none was found
+by a test failing: the BSI Pascal Validation Suite was adopted as a test case
+and disagreed with the compiler on the first run (ADR-0086).
 
+- **A program may declare its own `write`** — or `read`, `readln`, `writeln`,
+  and under `--std=extended` `readstr` and `writestr`. ISO 7185 §6.2.2.10 puts
+  the required identifiers in a region enclosing the program and §6.6.4.1 is
+  the procedures' half of it, so a declaration in the program hides one, as it
+  already did for every other required procedure. `write(i)` in a program
+  declaring `procedure write(var a: integer)` used to run the required `write`
+  and report nothing; it now calls the one the program declared. This also
+  makes `write := 5` an assignment where it was a syntax error, and lets a
+  declared `write` be passed as a procedural parameter, which §6.6.3.7 refuses
+  only for the required one. (ADR-0087)
 - **`succ` and `pred` on a subrange run out at the *host's* bounds**, not the
   subrange's. ISO 7185 §6.6.6.4 gives the result "the same type as that of the
   expression (see 6.7.1)", and §6.7.1 says "any factor whose type is S, where S
@@ -32,6 +42,13 @@ case and disagreed with the compiler on the first run (ADR-0086).
   `for i := maxint to maxint - 1 do` over an `i : 0..10` is a legal program with
   an empty loop. It used to stop with a range error. A loop that does run checks
   its bounds exactly as before.
+- **`writestr(s)` with nothing to write is reported.** ISO/IEC 10206:1991
+  §6.7.5.5 requires at least one write-parameter after the string-variable; the
+  statement had been impossible to write, so the check for it existed only on
+  the ordinary `write` path, and it compiled and wrote nothing.
+- **A `readstr` missing its string no longer demands `input`.** It reads from a
+  string and from no file, so the diagnostic named a rule the program was not
+  breaking.
 
 ### Added
 

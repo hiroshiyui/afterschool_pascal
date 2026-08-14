@@ -1,0 +1,6 @@
+<source>:31:11: error: 'write' is declared by this program, so it takes no field width
+<source>:33:3: error: 'write' takes 1 argument(s), but 0 were given
+<source>:34:3: error: 'write' takes 1 argument(s), but 2 were given
+<source>:35:9: error: argument 1 of 'write' is a var parameter and needs a variable
+<source>:37:3: error: 'read' is not a procedure
+<source>:39:3: error: 'readln' is not a procedure

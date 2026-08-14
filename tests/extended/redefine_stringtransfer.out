@@ -1,0 +1,4 @@
+required   4.
+required 12 34
+writestr 3
+readstr  15

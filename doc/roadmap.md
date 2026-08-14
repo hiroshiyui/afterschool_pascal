@@ -791,9 +791,11 @@ they landed — rather than in the standard's.
     reads into the variable it reads from; and the auxiliary file is
     heap-allocated per statement, so a writestr may appear in the
     write-parameters of another.
-  - Deviation, stated: both are parsed *by name*, as `read` and `write` are,
-    so under `--std=extended` a program cannot declare its own — where
-    §6.7.5.5 makes them required identifiers.
+  - Both are parsed *by name*, as `read` and `write` are. That was a stated
+    deviation — under `--std=extended` a program could not declare its own,
+    where §6.7.5.5 makes them required identifiers — and ADR-0087 retired it
+    by leaving the parser only the statement's shape and giving Sema the
+    question of what the name denotes.
 - ~~**Structured-value constructors.**~~ Done (ADR-0061). §6.8.7's array-value
   and record-value, and the initial-state form ADR-0048 deferred.
   - **A structured value is built, not computed.** An array and a record have
@@ -1212,14 +1214,18 @@ Three candidates, cheapest first, and not exclusive:
   cannot be a corpus edit. `tests/bsi/expected.tsv` records what the compiler
   does with every one and fails on any difference **in either direction**, which
   is `verify/`'s rule for a `KNOWN_GAP` that starts holding.
-  - **It found three defects on the first run**, all of which the 437 goldens,
-    the fixed point and the 43 proofs agreed were correct: `succ`/`pred` running
+  - **It found three defects on the first run**, all of which the goldens, the
+    fixed point and the 43 proofs agreed were correct: `succ`/`pred` running
     out at a *subrange's* bounds rather than its host's (§6.6.6.4 with §6.7.1),
     the `for` bounds being range-checked when the loop does not execute
-    (§6.8.3.9), and a program being unable to redefine `write` (§6.6.4.1, still
-    open). The first was wrong in `tests/trap_succ_subrange.pas`'s own comment
-    and in CLAUDE.md as well as in the compiler — which is exactly the shape
-    ADR-0085 said nothing left here could catch.
+    (§6.8.3.9), and a program being unable to redefine `write` (§6.6.4.1). The
+    first was wrong in `tests/trap_succ_subrange.pas`'s own comment and in
+    CLAUDE.md as well as in the compiler — which is exactly the shape ADR-0085
+    said nothing left here could catch.
+  - **All three are fixed**, the third by ADR-0087, which also retired
+    ADR-0060's deviation on `readstr`/`writestr` and found a check that had
+    never been reachable. CONF116 is the only one of the 812 whose verdict has
+    moved since, and the catalogue is what said so.
   - **Level 0 is now confirmed from outside**: all 51 `LEVEL1` programs are
     rejected, as the suite requires of a processor without conformant array
     parameters. The first claim in `doc/implementation-defined.md` §1 that

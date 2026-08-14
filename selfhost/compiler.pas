@@ -198,9 +198,12 @@ type
     ctxCompoundStart, ctxCompoundEnd, ctxIf, ctxWhile, ctxRepeatEnd, ctxFor,
     ctxCaseSelector, ctxCaseLabels, ctxCaseEnd, ctxWith, ctxAssign,
     ctxProcCallArgs, ctxWriteArgs, ctxReadArgs, ctxSubscript, ctxSubstring,
-    { ISO/IEC 10206:1991 6.7.5.5's two string transfer procedures }
-    ctxReadStrOpen, ctxReadStrComma, ctxReadStrArgs,
-    ctxWriteStrOpen, ctxWriteStrComma, ctxWriteStrArgs,
+    { ISO/IEC 10206:1991 6.7.5.5's two string transfer procedures. Their lists
+      are parsed as write- and read-parameter-lists (ADR-0087), so only the
+      closing parenthesis is still theirs to complain about -- but the parser
+      does know which of the six words it read, and a message that named the
+      wrong one would be naming a procedure the program never wrote. }
+    ctxReadStrArgs, ctxWriteStrArgs,
     { ISO/IEC 10206:1991 6.8.7's structured-value-constructor }
     ctxValueOpen, ctxValueSelector, ctxValueClose, ctxVariantValueOf,
     ctxParenExpr,
@@ -938,12 +941,22 @@ type
       { wrStr is 6.7.5.5's writestr: the string-variable written to. Non-nil
         makes this a writestr rather than a write, and then wrFile stays nil --
         the file is the auxiliary text variable the clause defines the
-        statement in terms of, which the runtime supplies. }
-      nkWrite:      (wrArgs, wrFile, wrStr: nodePtr; wrNewline: boolean);
+        statement in terms of, which the runtime supplies. It is *Sema* that
+        moves it out of the argument list, because until the name has been
+        looked up there is no telling a writestr from a call of a procedure
+        the program declared under that name (ADR-0087); wrIsStr is the
+        parser's half of that, and says only which word was written.
+        wrAt/wrLen is that word, and wrCall is the other reading: an
+        nkProcCall Sema builds when the program did declare one, after which
+        the node this hangs off is a husk and every later pass reads the
+        field first. }
+      nkWrite:      (wrArgs, wrFile, wrStr, wrCall: nodePtr;
+                     wrAt, wrLen: integer; wrNewline, wrIsStr: boolean);
       nkWriteArg:   (waValue, waWidth, waPrec: nodePtr);
-      { rdStr is 6.7.5.5's readstr: the string-expression read from, with the
-        same meaning wrStr has. }
-      nkRead:       (rdArgs, rdFile, rdStr: nodePtr; rdNewline: boolean);
+      { rdStr is 6.7.5.5's readstr: the string-expression read from, and
+        rdAt/rdLen/rdCall/rdIsStr have the meanings wrStr's neighbours have. }
+      nkRead:       (rdArgs, rdFile, rdStr, rdCall: nodePtr;
+                     rdAt, rdLen: integer; rdNewline, rdIsStr: boolean);
       nkCompound:   (cpBody: nodePtr);
       nkIf:         (ifCond, ifThen, ifElse: nodePtr);
       nkWhile:      (whCond, whBody: nodePtr);
@@ -2769,11 +2782,7 @@ begin
     ctxReadArgs:       write('after the arguments of read');
     ctxSubscript:      write('after a subscript');
     ctxSubstring:      write('after a substring');
-    ctxReadStrOpen:    write('after readstr');
-    ctxReadStrComma:   write('after the string readstr reads from');
     ctxReadStrArgs:    write('after the arguments of readstr');
-    ctxWriteStrOpen:   write('after writestr');
-    ctxWriteStrComma:  write('after the string writestr writes to');
     ctxWriteStrArgs:   write('after the arguments of writestr');
     ctxValueOpen:      write('before a structured value');
     ctxValueSelector:  write('after the selector of a structured value');
@@ -2833,8 +2842,8 @@ begin
               n^.clSym := nil;
               n^.clSlot := nil
             end;
-    nkWrite: begin n^.wrFile := nil; n^.wrStr := nil end;
-    nkRead: begin n^.rdFile := nil; n^.rdStr := nil end;
+    nkWrite: begin n^.wrFile := nil; n^.wrStr := nil; n^.wrCall := nil end;
+    nkRead: begin n^.rdFile := nil; n^.rdStr := nil; n^.rdCall := nil end;
     nkProcCall: begin
       n^.pcSym := nil;
       n^.pcStd := spNone;
@@ -4485,13 +4494,30 @@ begin
   ParseWriteArg := a
 end;
 
-function ParseWrite(newlineForm: boolean): nodePtr;
-var s, head, tail: nodePtr; more: boolean;
+{ write / writeln, and ISO/IEC 10206:1991 6.7.5.5's writestr:
+
+    writestr-parameter-list = '(' string-variable ','
+                              write-parameter, ... ')' .
+
+  One parse for all three, because the parser cannot know which it has. The
+  string-variable takes no field width -- it is written *to*, not written --
+  but it is written where a write-parameter would be, so it is parsed as one
+  and Sema moves it out; and a program may have declared `writestr` itself
+  (6.2.2.10), in which case there is no string-variable at all and the whole
+  bracket is an actual-parameter-list. Committing here to `'(' expression ','`
+  would decide that question with the one thing the parser does not have,
+  which is the symbol (ADR-0087). }
+function ParseWrite(newlineForm, strForm: boolean): nodePtr;
+var s, head, tail: nodePtr; more: boolean; closer: ctxKind;
 begin
+  if strForm then closer := ctxWriteStrArgs else closer := ctxWriteArgs;
   s := NewNode(nkWrite, CurLine, CurCol);
   s^.wrNewline := newlineForm;
+  s^.wrIsStr := strForm;
+  s^.wrAt := tok[pos].at;
+  s^.wrLen := tok[pos].len;
   s^.wrArgs := nil;
-  pos := pos + 1;   { 'write' / 'writeln' }
+  pos := pos + 1;   { 'write' / 'writeln' / 'writestr' }
 
   head := nil;
   tail := nil;
@@ -4502,89 +4528,39 @@ begin
         Append(head, tail, ParseWriteArg);
         more := Accept(tkComma)
       end;
-      Expect(tkRParen, ctxWriteArgs)
+      Expect(tkRParen, closer)
     end;
   s^.wrArgs := head;
   ParseWrite := s
 end;
 
-{ ISO/IEC 10206:1991 6.7.5.5:
-
-    writestr-parameter-list = '(' string-variable ','
-                              write-parameter, ... ')' .
-
-  The string-variable takes no field width -- it is written *to*, not written
-  -- so it is parsed as a bare expression and Sema is what insists it is a
-  variable, exactly as it does for the file of an ordinary `write`. }
-function ParseWriteStr: nodePtr;
-var s, head, tail: nodePtr; more: boolean;
-begin
-  s := NewNode(nkWrite, CurLine, CurCol);
-  s^.wrNewline := false;
-  s^.wrArgs := nil;
-  pos := pos + 1;   { 'writestr' }
-  Expect(tkLParen, ctxWriteStrOpen);
-  s^.wrStr := ParseExpr;
-  Expect(tkComma, ctxWriteStrComma);
-  head := nil;
-  tail := nil;
-  more := true;
-  while more and not aborted do begin
-    Append(head, tail, ParseWriteArg);
-    more := Accept(tkComma)
-  end;
-  Expect(tkRParen, ctxWriteStrArgs);
-  s^.wrArgs := head;
-  ParseWriteStr := s
-end;
-
-{ read/readln. The arguments are variables to store into, and the first may be
-  a file instead -- Sema sorts that out, because telling them apart needs the
-  types. `readln` alone, with no list at all, finishes the current line. }
-function ParseRead(newlineForm: boolean): nodePtr;
-var s, head, tail: nodePtr;
-begin
-  s := NewNode(nkRead, CurLine, CurCol);
-  s^.rdNewline := newlineForm;
-  s^.rdArgs := nil;
-  pos := pos + 1;   { 'read' / 'readln' }
-
-  head := nil;
-  tail := nil;
-  if Accept(tkLParen) then
-    ParseActualParameters(head, tail, ctxReadArgs);
-  s^.rdArgs := head;
-  ParseRead := s
-end;
-
-{ ISO/IEC 10206:1991 6.7.5.5:
+{ read / readln, and 6.7.5.5's readstr:
 
     readstr-parameter-list = '(' string-expression ','
                              variable-access, ... ')' .
 
-  The parameter list is not optional and neither is the first comma -- a
-  readstr with nothing to read into has no reading at all, where `readln`
-  alone finishes a line. rdStr is what tells this from a `read`. }
-function ParseReadStr: nodePtr;
-var s, head, tail: nodePtr; more: boolean;
+  The arguments are variables to store into, and the first may be a file (or,
+  for a readstr, the string read from) instead -- Sema sorts that out, because
+  telling them apart needs the types, and since ADR-0087 the name as well.
+  `readln` alone, with no list at all, finishes the current line. }
+function ParseRead(newlineForm, strForm: boolean): nodePtr;
+var s, head, tail: nodePtr; closer: ctxKind;
 begin
+  if strForm then closer := ctxReadStrArgs else closer := ctxReadArgs;
   s := NewNode(nkRead, CurLine, CurCol);
-  s^.rdNewline := false;
+  s^.rdNewline := newlineForm;
+  s^.rdIsStr := strForm;
+  s^.rdAt := tok[pos].at;
+  s^.rdLen := tok[pos].len;
   s^.rdArgs := nil;
-  pos := pos + 1;   { 'readstr' }
-  Expect(tkLParen, ctxReadStrOpen);
-  s^.rdStr := ParseExpr;
-  Expect(tkComma, ctxReadStrComma);
+  pos := pos + 1;   { 'read' / 'readln' / 'readstr' }
+
   head := nil;
   tail := nil;
-  more := true;
-  while more and not aborted do begin
-    Append(head, tail, ParseExpr);
-    more := Accept(tkComma)
-  end;
-  Expect(tkRParen, ctxReadStrArgs);
+  if Accept(tkLParen) then
+    ParseActualParameters(head, tail, closer);
   s^.rdArgs := head;
-  ParseReadStr := s
+  ParseRead := s
 end;
 
 { 6.8.6.4's function-identified-variable, `f(x)^`, is the one function-access
@@ -4637,26 +4613,41 @@ begin
   len := tok[pos].len;
   s := nil;
   handled := true;
-  if PoolIs(at, len, 'write    ') then s := ParseWrite(false)
-  else if PoolIs(at, len, 'writeln  ') then s := ParseWrite(true)
-  else if PoolIs(at, len, 'read     ') then s := ParseRead(false)
-  else if PoolIs(at, len, 'readln   ') then s := ParseRead(true)
-  { ISO/IEC 10206:1991 6.7.5.5. Recognised by name exactly as `read` and
-    `write` are -- the parser has no scope to ask whether the program declared
-    its own -- so under the extended standard the two names are not usable for
-    anything else (ADR-0060). }
+  { 6.8.2.3's procedure-statement is a procedure-identifier followed by an
+    actual-parameter-list *or* one of the four read/write parameter lists, and
+    only a write-parameter-list's field widths tell the alternatives apart. So
+    these six names are recognised here by name -- but only as far as the
+    *statement's shape*: whether the required procedure is what the name
+    denotes is 6.2.2.10's question, and Sema answers it, because a program may
+    declare its own (ADR-0087).
+
+    What the parser must still decide is that the statement is a
+    procedure-statement at all. `write := 5`, `write[i] := 5`, `write.f := 5`
+    and `write^ := 5` are assignments to a variable the program declared under
+    the name, and `write(i)^ := 5` is 6.8.6.4's function-identified-variable;
+    none of the five is a statement any parameter list begins, so the family
+    yields whenever what follows the name can continue a designator. }
+  k := PeekKind(1);
+  if (k = tkAssign) or (k = tkLBracket) or (k = tkPeriod) or (k = tkCaret) or
+     ((k = tkLParen) and CallTakesCaret(pos + 1)) then
+    handled := false
+  else if PoolIs(at, len, 'write    ') then s := ParseWrite(false, false)
+  else if PoolIs(at, len, 'writeln  ') then s := ParseWrite(true, false)
+  else if PoolIs(at, len, 'read     ') then s := ParseRead(false, false)
+  else if PoolIs(at, len, 'readln   ') then s := ParseRead(true, false)
+  { ISO/IEC 10206:1991 6.7.5.5's two are required identifiers as well, so they
+    take the same treatment -- which is what retired ADR-0060's deviation. }
   else if (langStd = stdExtended) and PoolIs(at, len, 'readstr  ') then
-    s := ParseReadStr
+    s := ParseRead(false, true)
   else if (langStd = stdExtended) and PoolIs(at, len, 'writestr ') then
-    s := ParseWriteStr
+    s := ParseWrite(false, true)
   else handled := false;
 
   if not handled then begin
     { A statement starting with a designator is an assignment; one starting
       with a bare name or a name and arguments is a procedure call. The
       selectors are what tell the two apart, because only a designator can
-      carry them. }
-    k := PeekKind(1);
+      carry them -- and `k` is already the token they are read from. }
     { 6.8.6.4, both spellings of it. ParsePrimary builds the call and then its
       selectors, so the target is assembled by the code that already knows how
       -- this branch only has to recognise that the statement is one. }
@@ -12088,6 +12079,48 @@ end;
 
 { -------------------------------------------------------------- statements }
 
+{ ISO 7185 6.2.2.10: required identifiers "shall be used as if their
+  defining-points have a region enclosing the program", which 6.6.4.1 is the
+  procedures' half of -- so a declaration in the program-block hides one, and
+  `write` may name whatever the program says it names.
+
+  Every other required procedure has this for free: they are not symbols, and
+  CheckProcCall reads a Lookup that answers nil as "the required one". The
+  read/write family could not, because the parser has to recognise the six
+  names to parse the field widths a write-parameter-list carries -- so the
+  question was settled before there was a scope to ask (ADR-0087). This is
+  where it is settled instead: the same Lookup, one pass later.
+
+  Returns the call the name really denotes, or nil for the required
+  procedure. The node this was called for is then a husk, and every pass after
+  Sema reads the returned node first. }
+function RedefinedFamily(at, len: integer; args: nodePtr;
+                         line, col: integer): nodePtr;
+var sym: symPtr; p: nodePtr;
+begin
+  RedefinedFamily := nil;
+  sym := Lookup(at, len);
+  if sym <> nil then begin
+    p := NewNode(nkProcCall, line, col);
+    p^.pcQualAt := 0;
+    p^.pcQualLen := 0;
+    p^.pcAt := at;
+    p^.pcLen := len;
+    p^.pcArgs := args;
+    if (not IsInvocable(sym)) or (ResultTypeOf(sym) <> nil) then begin
+      ErrorAt(line, col);
+      write('''');
+      WritePool(at, len);
+      writeln(''' is not a procedure')
+    end
+    else begin
+      p^.pcSym := sym;
+      CheckArguments(sym, args, line, col)
+    end;
+    RedefinedFamily := p
+  end
+end;
+
 { The write-parameters of the *text* form, which ISO/IEC 10206:1991 6.10.3
   gives to `write`, `writeln` and 6.7.5.5's `writestr` alike -- the last one
   writes to an auxiliary text variable, so its parameters are governed by the
@@ -12138,8 +12171,50 @@ end;
   file type and no width -- and if a program does write `f:8`, the file falls
   through to the value list and is rejected there as unwritable. }
 procedure CheckWrite(w: nodePtr);
-var a: nodePtr; wf, st: typePtr;
+var a, head, tail: nodePtr; wf, st: typePtr;
 begin
+  { 6.6.4.1: the name may be the program's own, and then none of the rest of
+    this applies -- what the parser recognised as a write-parameter-list is an
+    actual-parameter-list, and 6.8.2.3 gives one no field widths. }
+  w^.wrCall := nil;
+  if Lookup(w^.wrAt, w^.wrLen) <> nil then begin
+    head := nil;
+    tail := nil;
+    a := w^.wrArgs;
+    while a <> nil do begin
+      if a^.waWidth <> nil then begin
+        ErrorAt(a^.waWidth^.line, a^.waWidth^.col);
+        write('''');
+        WritePool(w^.wrAt, w^.wrLen);
+        writeln(''' is declared by this program, so it takes no field width')
+      end;
+      a^.waValue^.next := nil;
+      Append(head, tail, a^.waValue);
+      a := a^.next
+    end;
+    w^.wrArgs := nil;
+    w^.wrCall := RedefinedFamily(w^.wrAt, w^.wrLen, head, w^.line, w^.col)
+  end
+  else begin
+  { 6.7.5.5's writestr writes its string-variable where a write-parameter goes,
+    so the parser left it in the list; moving it out is this pass's job,
+    because until the name was looked up there was no telling the statement
+    from a call. }
+  if w^.wrIsStr then
+    if w^.wrArgs = nil then begin
+      ErrorAt(w^.line, w^.col);
+      writeln('writestr needs a string variable to write to')
+    end
+    else begin
+      if w^.wrArgs^.waWidth <> nil then begin
+        ErrorAt(w^.wrArgs^.waWidth^.line, w^.wrArgs^.waWidth^.col);
+        writeln('the string writestr writes to takes no field width')
+      end;
+      w^.wrStr := w^.wrArgs^.waValue;
+      w^.wrStr^.next := nil;
+      w^.wrArgs := w^.wrArgs^.next
+    end;
+
   a := w^.wrArgs;
   while a <> nil do begin
     CheckExpr(a^.waValue);
@@ -12170,6 +12245,13 @@ begin
     { 6.9.4 d): writestr threatens the string-variable it writes to. }
     else if Threatened(w^.wrStr) then
       writeln('it cannot be written to');
+    { 6.7.5.5's writestr-parameter-list is the string-variable, a comma, and
+      then at least one write-parameter. The comma used to be the parser's
+      business, which made this case unreachable; it is reachable now. }
+    if w^.wrArgs = nil then begin
+      ErrorAt(w^.line, w^.col);
+      writeln('writestr needs something to write')
+    end;
     CheckWriteArgs(w)
   end
   else begin
@@ -12182,12 +12264,16 @@ begin
     w^.wrFile := w^.wrArgs^.waValue;
     w^.wrArgs := w^.wrArgs^.next
   end
-  else
+  else if not w^.wrIsStr then
     w^.wrFile := StandardFileRef(false, w^.line, w^.col);
 
+  { Named rather than spelled: a `writestr` with no parameter list at all
+    reaches this line, having found no string to move out, and a message
+    saying `write` would name a procedure the program never wrote. }
   if (w^.wrArgs = nil) and not w^.wrNewline then begin
     ErrorAt(w^.line, w^.col);
-    writeln('write needs something to write')
+    WritePool(w^.wrAt, w^.wrLen);
+    writeln(' needs something to write')
   end;
 
   { 6.9.3 is the *text* form of write, and everything it says -- the field
@@ -12224,6 +12310,7 @@ begin
   else
     CheckWriteArgs(w)
   end
+  end
 end;
 
 { ISO 7185 6.9.1. Like write, the first argument may be the file; every other
@@ -12231,6 +12318,29 @@ end;
 procedure CheckRead(r: nodePtr);
 var a: nodePtr; t, rf, st: typePtr; text, okRead: boolean;
 begin
+  { 6.6.4.1 again, and read's arguments need no unwrapping: a
+    read-parameter-list and an actual-parameter-list have the same shape, so
+    the list the parser built is already the one a call takes. }
+  r^.rdCall := nil;
+  if Lookup(r^.rdAt, r^.rdLen) <> nil then begin
+    a := r^.rdArgs;
+    r^.rdArgs := nil;
+    r^.rdCall := RedefinedFamily(r^.rdAt, r^.rdLen, a, r^.line, r^.col)
+  end
+  else begin
+  { The mirror of write's split: the string a readstr reads from stands where
+    a variable-access would, and only the name says it is not one. }
+  if r^.rdIsStr then
+    if r^.rdArgs = nil then begin
+      ErrorAt(r^.line, r^.col);
+      writeln('readstr needs a string to read from')
+    end
+    else begin
+      r^.rdStr := r^.rdArgs;
+      r^.rdArgs := r^.rdArgs^.next;
+      r^.rdStr^.next := nil
+    end;
+
   a := r^.rdArgs;
   while a <> nil do begin
     CheckExpr(a);
@@ -12263,14 +12373,19 @@ begin
     r^.rdArgs := r^.rdArgs^.next;
     r^.rdFile^.next := nil
   end
-  else
+  { A readstr reads from no file at all, so a broken one must not be given
+    `input`: the statement would then report that the program does not list it,
+    which is a rule it is not breaking. }
+  else if not r^.rdIsStr then
     r^.rdFile := StandardFileRef(true, r^.line, r^.col);
 
   { `read` must be given somewhere to put what it reads; `readln` may be
-    written alone, and then it only finishes the line. }
+    written alone, and then it only finishes the line. Named, as write's is,
+    so a readstr given only the string it reads from says `readstr`. }
   if (r^.rdArgs = nil) and not r^.rdNewline then begin
     ErrorAt(r^.line, r^.col);
-    writeln('read needs a variable to read into')
+    WritePool(r^.rdAt, r^.rdLen);
+    writeln(' needs a variable to read into')
   end;
 
   { The counterpart of write's split: on a file that is not a text, 6.6.5.2
@@ -12326,6 +12441,7 @@ begin
       end
     end;
     a := a^.next
+  end
   end
 end;
 
@@ -16377,8 +16493,13 @@ begin
       DumpExpr(n^.asValue);
       level := level - 1
     end;
-    nkWrite: begin
-      if n^.wrStr <> nil then
+    { The husk is not printed: Sema decided the name denotes a procedure the
+      program declared, so what the statement *is* is the call (ADR-0087).
+      Only --dump-sema can reach this -- before Sema the field is nil, which
+      is the honest picture of a parser that recognised six names and could
+      not know whether that reading would survive. }
+    nkWrite: if n^.wrCall <> nil then DumpStmt(n^.wrCall) else begin
+      if n^.wrIsStr then
         write('writestr')
       else if n^.wrNewline then
         write('writeln')
@@ -16411,8 +16532,8 @@ begin
       end;
       level := level - 1
     end;
-    nkRead: begin
-      if n^.rdStr <> nil then
+    nkRead: if n^.rdCall <> nil then DumpStmt(n^.rdCall) else begin
+      if n^.rdIsStr then
         write('readstr')
       else if n^.rdNewline then
         write('readln')
@@ -23250,8 +23371,21 @@ begin
         end
       end;
       nkAssign: EmitAssign(s);
-      nkWrite: EmitWrite(s);
-      nkRead: EmitRead(s);
+      { The husk first: 6.6.4.1 lets the program declare its own `write`, and
+        Sema puts the call it really is here (ADR-0087). Nothing below this
+        line knows the name was ever one of the six. }
+      nkWrite:
+        if s^.wrCall <> nil then begin
+          if s^.wrCall^.pcSym <> nil then
+            EmitUserCall(s^.wrCall^.pcSym, s^.wrCall^.pcArgs, nil, v)
+        end
+        else EmitWrite(s);
+      nkRead:
+        if s^.rdCall <> nil then begin
+          if s^.rdCall^.pcSym <> nil then
+            EmitUserCall(s^.rdCall^.pcSym, s^.rdCall^.pcArgs, nil, v)
+        end
+        else EmitRead(s);
       nkIf: EmitIf(s);
       nkWhile: EmitWhile(s);
       nkRepeat: EmitRepeat(s);

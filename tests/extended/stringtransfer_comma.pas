@@ -4,14 +4,19 @@
   no reading in it at all -- unlike `readln`, which may be written with no list
   and only finishes a line.
 
-  A parser stops at its first error, so this is a file of its own; the
-  writestr half of the same rule is in stringtransfer_comma2.pas. Neither is a
-  program a person would write, and that is the point: a corpus that always
-  writes the comma cannot tell a parser that requires it from one that does
-  not. }
+  Since ADR-0087 that is a rule about the *statement* rather than about the
+  tokens. §6.6.4.1 lets a program declare its own `readstr`, so the parser
+  cannot commit to `'(' string-expression ','` -- it reads a plain parameter
+  list and Sema, which by then knows what the name denotes, is what finds the
+  string missing. The rule is unchanged and the message comes from one pass
+  later.
+
+  This is a program a person would not write, and that is the point: a corpus
+  that always writes the comma cannot tell a compiler that requires it from
+  one that does not. The writestr half is in stringtransfer_comma2.pas. }
 program StringTransferComma(output);
 var i: integer;
 begin
-  readstr('1' i);
+  readstr('1 2');
   writeln(i:1)
 end.

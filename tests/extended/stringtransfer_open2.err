@@ -1,1 +1,2 @@
-<source>:6:11: error: expected '(' after writestr, found ';'
+<source>:6:3: error: writestr needs a string variable to write to
+<source>:6:3: error: writestr needs something to write
