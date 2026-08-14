@@ -1,0 +1,52 @@
+maxint > 0: TRUE
+maxchar: 255
+maxreal > minreal: TRUE
+minreal > 0: TRUE
+epsreal: TRUE
+true, false: TRUE FALSE
+integer, real, char: 6 2.5 k
+abs, sqr: 7 25
+sqrt, exp, ln: 3.0 1.0 0.0
+sin, cos, arctan: 0.0 1.0 0.0
+cmplx, re, im: 3.0 4.0
+abs of complex: 5.0
+polar, arg: 1.0 0.0
+trunc, round: 3 4
+ord, chr: 65 B
+card: 4
+succ, pred: 5 7 3 6
+odd: TRUE
+length, capacity: 6 12
+substr, index: bcd 3
+trim: 2
+EQ, NE: TRUE TRUE
+LT, GT: TRUE TRUE
+LE, GE: TRUE TRUE
+readstr: 84
+writestr: 42
+new: 11
+dispose: done
+pack: xy
+unpack: mn
+eof, eoln of a written file: FALSE FALSE
+get, buffer variable: p
+extend: done
+put: done
+empty: TRUE
+SeekRead, position: 20 2
+LastPosition: 2
+SeekUpdate, update: 99
+SeekWrite: 30
+binding of an unbound file: FALSE 0
+bind: TRUE /tmp/apascal_required.txt
+unbind: FALSE
+DateValid, TimeValid: TRUE TRUE
+year, month, day: 2001 9 9
+hour, minute, second: 1 46 40
+date, time: 2001-09-09 01:46:40
+output: named explicitly
+read, readln from input: 7 1.5
+eof(input): FALSE
+StandardOutput: a module reached output
+StandardInput: a module read input: TRUE
+halt: about to
