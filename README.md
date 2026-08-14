@@ -638,19 +638,20 @@ words      otherwise, pow, protected, value, bindable, restricted, module, expor
            in the one position each may occupy, exactly as `forward` is
 ```
 
-**All of §6.1.2's word-symbols are reserved**, so the lexis is complete even
-though the language is not. A word-symbol is reserved only when the feature
-needing it lands, and the last of the thirteen Extended Pascal adds arrived
-with restricted types; nothing still missing needs a fourteenth, the time
-procedures being required *identifiers* rather than word-symbols.
+**All of §6.1.2's word-symbols are reserved**, and the lexis was complete before
+the language was: a word-symbol is reserved only when the feature needing it
+lands, and the last of the thirteen Extended Pascal adds arrived with restricted
+types. Nothing needed a fourteenth, the time procedures being required
+*identifiers* rather than word-symbols.
 
-The program-components of a program-block are **not compiled separately**: they
-go in one file, in an order consistent with §6.2.2.9's. §6.13 asks for separate
-compilation with a *should* rather than a *shall*, and accepting them apart
-means defining an interface artefact — a second file format, and one the
-stage-1 compiler could not write. See
-[ADR-0053](doc/adr/0053-a-level-0-activation-record-is-a-global.md).
-`doc/roadmap.md` has the order and the reasoning.
+**This is the whole of ISO/IEC 10206:1991.** §6.13's separately translated
+program-components were the last clause
+([ADR-0079](doc/adr/0079-an-interface-is-a-set-of-names.md)), and the claim is
+not an impression: Annex A's 274 productions were probed in both directions,
+both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
+-dependent features, and Annex C's 94 required identifiers — each with a
+program compiled and run rather than with a reading. `doc/roadmap.md` records
+what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
 ## How it fits together
 
@@ -662,12 +663,16 @@ stage-1 compiler could not write. See
 | `src/ast.h` | tag-dispatched nodes — an explicit node tag and a checked downcast helper, no C++ RTTI |
 | `src/sema.cpp` | scopes, name resolution, type checking, constant folding |
 | `src/codegen.cpp` | AST to LLVM IR through LLVM's C++ API; `main` is the program body |
-| `src/main.cpp` | driver: optimisation pipeline, object emission, linking |
+| `src/main.cpp` | `pascalc-s0`'s driver: optimisation pipeline, object emission, linking |
 | `runtime/pasrt.c` | formatted output and runtime checks |
 | `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
 | `tests/extended/` | the same, for cases written in Extended Pascal — the directory is what selects `--std` |
 | `verify/` | SMT proofs that the lowering means what ISO 7185 says |
-| `selfhost/compiler.pas` | the same compiler, written in Afterschool Pascal |
+| `selfhost/compiler.pas` | **`pascalc`** — the same compiler, written in Afterschool Pascal, driver included |
+| `selfhost/compiler.std` | one word: which standard that source is written in |
+| `selfhost/difftest.sh` | the two compilers' dumps, diffed over every Pascal source in the tree |
+| `selfhost/irtest.sh` | what `pascalc` *builds*, run against the same goldens — and stage 2 = stage 3 |
+| `selfhost/producttest.sh` | that `build/bin/pascalc` itself exists and works, which the three above cannot see |
 
 Two deliberate constraints, both there for the bootstrap:
 
@@ -770,6 +775,13 @@ stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 b
 identical, byte for byte, checked under `ctest` by
 `selfhost/irtest.sh`.
 
+Stage 0 is **kept rather than retired**, and that is a decision rather than
+inertia: it is the second implementation `selfhost/difftest.sh` compares
+against and the one `verify/` proves, and retiring it would give up both to
+buy a capability the fixed point already provides. What is still open is a
+checked-in seed, and re-pointing the proofs at the Pascal generator —
+`doc/roadmap.md` has both.
+
 Reaching stage 1 means the accepted language has to cover what a compiler is
 written in. In dependency order:
 
@@ -800,8 +812,12 @@ needed them is written.
 ## Stage 1
 
 `selfhost/compiler.pas` is the compiler written in its own language: the lexer,
-the parser, Sema and the code generator, in **one source file**, because ISO
-7185 has no include mechanism and the finished compiler is one source. It is
+the parser, Sema, the code generator and its own driver, in **one source file**,
+because neither standard has an include mechanism and the finished compiler is
+one source. It is itself written in **Extended Pascal** — the language it is
+written in and the language it accepts are independent, and only that standard
+lets a program read its own command line
+([ADR-0082](doc/adr/0082-the-stage-1-compiler-is-extended-pascal.md)). It is
 checked against the C++ stages it was ported from, on every Pascal source in the
 tree, compared stage for stage — the harness prints how many:
 
@@ -860,23 +876,31 @@ identical. A compiler that reproduced itself and nothing else would pass that
 last comparison alone, so stage 2 is put through the golden suite too. See
 [ADR-0025](doc/adr/0025-the-code-generator-is-checked-by-running-it.md).
 
+Done by hand, that is:
+
 ```sh
-build/bin/pascalc-s0 selfhost/compiler.pas -o stage1   # = build/bin/pascalc
-echo iso7185 > std.txt
-: > imports.txt                                    # no imported components
-./stage1 selfhost/compiler.pas stage2.ll std.txt imports.txt
+build/bin/pascalc-s0 --std=extended selfhost/compiler.pas -o stage1
+./stage1 --std=extended selfhost/compiler.pas -o stage2.ll
 clang stage2.ll build/lib/libpasrt.a -lm -o stage2
 ```
 
-The last two arguments are *files*, not flags: ISO 7185 gives a program no
-access to its command line beyond its program parameters, and those are files —
-so the Pascal compiler cannot take a `--std` the way the C++ one does
-(ADR-0033). The third holds one word, the standard to compile for. The fourth
-holds ISO/IEC 10206:1991 §6.13's already-translated program-components,
-concatenated, for the same reason: the compiler cannot open a file whose name it
-computes, so it is handed one file holding all of them (ADR-0079). It is empty
-here and must still exist, because program parameters bind to arguments in
-order.
+`stage1` is `build/bin/pascalc`, built the same way by `cmake --build`.
+
+**A Pascal program has a command line only because ISO/IEC 10206:1991 gives it
+one.** §6.5.1 makes every program-parameter possess "the bindability that is
+bindable" whatever its type says, and §6.7.6.8's NOTE 2 makes `binding(f)`
+report the binding §6.12 made *before the program was activated* — so
+`binding(argk).name` is argument *k*. The compiler declares twelve
+program-parameters, opens none of them, reads their bindings, and then `bind`s
+its source, its output and each imported component to names it computed. An
+unbound parameter is how the argument list ends, there being no other way to
+count. See [ADR-0081](doc/adr/0081-a-program-can-read-its-own-command-line.md)
+and [ADR-0083](doc/adr/0083-the-compiler-has-a-command-line.md).
+
+ISO 7185 has none of that, which is why the compiler took four positional files
+until it was rewritten in the other standard, and why the last line above is
+still `clang`: neither standard has process control, so `pascalc` stops at the
+IR permanently.
 
 [doc/roadmap.md](doc/roadmap.md) expands this: what items 5 and 6 actually
 involve, the order the stage-1 source gets ported in, and the known limitations
