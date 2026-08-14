@@ -150,13 +150,6 @@ in the stage-1 compiler and the program headers of forty-three test programs,
 for a lexical rule that admits no ambiguity; the deviation is one a reader can
 see, so it is written down instead.
 
-**Set compatibility ignores packing.** §6.4.5 c) makes two set-types compatible
-only if both are `packed` or neither is, and here only the base types are
-compared. Every set is one 256-bit word whatever is written, so the two have
-the same representation and the check could only reject programs that work —
-and the standard does not say what packing a *set-constructor* has, so
-requiring agreement would make `s := [1]` depend on how `s` was declared.
-
 This list used to hold the declaration-part order, which is now checked:
 §6.2.1's label, const, type, var, procedures is required again under
 `--std=iso7185`. Two other deviations were closed at the same time and had

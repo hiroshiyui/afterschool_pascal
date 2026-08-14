@@ -301,12 +301,6 @@ These are the other direction: programs the standard admits and this processor
 refuses. Clause 5.1 c) does not permit them, so each is a known deviation and
 none is silent.
 
-**Set compatibility ignores packing**, which is the one entry that goes the
-*permissive* way and so belongs here only for being read beside the rest.
-§6.4.5 c) makes two set-types compatible only if both are `packed` or neither
-is, and only the base types are compared here — see ADR-0072 for why that is
-deliberate.
-
 **A file may not be a field of a variant part**, which §6.4.3.4 permits. A
 file's storage carries a heap buffer and a place on the runtime's open-file
 list, so two arms holding files at one address would leak the first buffer and
@@ -363,5 +357,4 @@ clause does not.
 
 One more of that category's programs is recorded in §3 instead, being an error
 rather than a syntax or type rule: assignment to a sibling function's identifier
-(§6.8.2.2). One is not a deviation at all — set compatibility ignoring packing
-is the first entry of this section.
+(§6.8.2.2).

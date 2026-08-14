@@ -479,6 +479,13 @@ type
       record would do, which is where the C++ one was going. }
     elem, indexType, host, tagType: typePtr;
     isPacked: boolean;
+    { ISO 7185 6.7.1: a set-constructor with members "shall denote either a
+      value of the unpacked-canonical-set-of-T-type or, if the context so
+      requires, the packed-canonical-set-of-T-type". So a constructor's type
+      has not chosen a packing and fits either destination, where 6.4.5 c)
+      makes two *declared* set-types compatible only when they agree.
+      isPacked has two values and this is the third. }
+    setCanonical: boolean;
     { File: this is `text`, not a `file of char`. ISO 7185 6.4.3.5 makes them
       different types and gives only the first one lines, so readln, writeln,
       eoln and reading a number all belong to a text file and to nothing
@@ -5756,6 +5763,7 @@ begin
   t^.host := nil;
   t^.tagType := nil;
   t^.isPacked := false;
+  t^.setCanonical := false;
   t^.isText := false;
   t^.lo := 0;
   t^.hi := -1;
@@ -6285,7 +6293,12 @@ begin
       tySet:
         if t^.elem = nil then PutLit('[]              ')
         else begin
-          PutLit('set of          ');
+          { 6.4.5 c) makes packing part of a set-type's identity for
+            compatibility, so a message leaving the word out would name two
+            different types by one spelling -- and WriteDistinctTypeNote would
+            then offer advice that cannot help (ADR-0074). }
+          if t^.isPacked then PutLit('packed set of   ')
+          else PutLit('set of          ');
           Put(' ');
           WriteTypeName(t^.elem)
         end;
@@ -6783,8 +6796,19 @@ begin
       Assignable := false
     else if IsEmptySet(toT) or IsEmptySet(fromT) then
       Assignable := true
+    { 6.4.5 c) has a second half: "and either both T1 and T2 are designated
+      packed or neither T1 nor T2 is designated packed". ISO/IEC 10206:1991
+      6.4.5 c) is that sentence word for word, so this is gated on neither
+      standard. A set-constructor is exempt because 6.7.1 has not committed it
+      to a packing -- it denotes the unpacked-canonical-set-of-T-type "or, if
+      the context so requires, the packed" one -- so `p := [true]` into a
+      packed set is legal while `p := b` from an unpacked one is not. Every
+      set is one 256-bit word whatever was written (ADR-0028), so this is a
+      type rule with no lowering and CodeGen is untouched. }
     else
-      Assignable := Base(toT^.elem) = Base(fromT^.elem)
+      Assignable := (Base(toT^.elem) = Base(fromT^.elem)) and
+                    (toT^.setCanonical or fromT^.setCanonical or
+                     (toT^.isPacked = fromT^.isPacked))
   end
   else if IsStructured(toT) or IsStructured(fromT) then
     Assignable := IsCharArray(toT) and IsCharArray(fromT) and
@@ -8724,6 +8748,7 @@ begin
   t^.host := src^.host;
   t^.tagType := src^.tagType;
   t^.isPacked := src^.isPacked;
+  t^.setCanonical := src^.setCanonical;
   t^.isText := src^.isText;
   t^.lo := src^.lo;
   t^.hi := src^.hi;
@@ -10560,6 +10585,8 @@ begin
   else begin
     t := NewType(tySet);
     t^.elem := baseType;
+    { 6.7.1 has not committed a constructor to a packing. }
+    t^.setCanonical := true;
     e^.ntype := t
   end
 end;
@@ -10684,8 +10711,14 @@ begin
       if IsSet(l) then b^.ntype := l else b^.ntype := r
     end
     { The result is a set of the operands' common base type, which is whichever
-      of them has one: `s + []` is still a set of s's base. }
+      of them has one: `s + []` is still a set of s's base. Table 5 makes the
+      result "the same as the operands", so where one has committed to a
+      packing and the other has not (6.7.1), the committed one is the faithful
+      answer -- otherwise `[1] + p` would launder a packed operand into a
+      canonical result that compares equal to anything. The `><` site below
+      carries the same line. }
     else if IsEmptySet(l) then b^.ntype := r
+    else if l^.setCanonical and not IsEmptySet(r) then b^.ntype := r
     else b^.ntype := l
   end
   else
@@ -10770,6 +10803,7 @@ begin
           if IsSet(l) then b^.ntype := l else b^.ntype := r
         end
         else if IsEmptySet(l) then b^.ntype := r
+        else if l^.setCanonical and not IsEmptySet(r) then b^.ntype := r
         else b^.ntype := l
       end;
       opAnd, opOr, opAndThen, opOrElse: begin
@@ -16132,6 +16166,7 @@ begin
     type. Unlike nil this is not an exception to name equivalence but the
     ordinary rule of 6.4.6 with nothing to compare. }
   emptySetType := NewType(tySet);
+  emptySetType^.setCanonical := true;
   labelScope := nil;
   stmtPath := nil;
   nextLabelId := 0;

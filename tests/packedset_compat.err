@@ -1,0 +1,6 @@
+<source>:49:13: error: operator '>=' needs compatible operands, found btype and ptype
+<source>:50:13: error: operator '=' needs compatible operands, found ptype and btype
+<source>:51:3: error: cannot assign btype to a variable of type ptype
+<source>:52:3: error: cannot assign ptype to a variable of type btype
+<source>:53:10: error: operator '+' needs compatible operands, found btype and ptype
+<source>:54:13: error: operator '<=' needs compatible operands, found set of boolean and packed set of boolean

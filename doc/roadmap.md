@@ -304,14 +304,6 @@ surprises.
   one 256-bit word. ISO 7185 §6.4.3.4 leaves the size to the implementation, so
   this is a permitted limit rather than a deviation — but `set of integer` is a
   legal program this compiler refuses (ADR-0028).
-- **Set compatibility ignores packing.** §6.4.5 c) makes two set-types
-  compatible only if both are `packed` or neither is, and only the base types
-  are compared here. Accepting `packed set` is not the deviation — §6.4.3 makes
-  a set-type a structured-type, so `packed` may precede one — and the earlier
-  wording of this entry named the wrong thing. The representation is one bit
-  per member either way, so the check could only reject programs that work, and
-  the standard does not say what packing a *set-constructor* has, so requiring
-  agreement would make `s := [1]` depend on how `s` was declared (ADR-0072).
 - **An identifier may contain an underscore**, where §6.1.3 makes one `letter {
   letter | digit }`. It is how a name that would collide with a word-symbol is
   spelled — `label_`, `set_`, `packed_` — and how a test program takes the name
