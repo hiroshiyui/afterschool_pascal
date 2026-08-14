@@ -1566,8 +1566,16 @@ property of the source.
   `doc/implementation-defined.md` states the compliance level (**level 0** —
   conformant array parameters are not accepted), answers all 52 entries of
   ISO/IEC 10206:1991's Annexes E and F and all 28 of ISO 7185's, names the
-  twelve errors that go unreported, and lists the extensions and restrictions.
+  errors that go unreported, and lists the extensions and restrictions.
   Answering an entry meant compiling a probe, which is what found the two.
+  - **The unreported-errors section is keyed to Annex D and regenerable.** Its
+    ISO 7185 half was reconciled against all fifty-nine entries using the BSI
+    suite's `ERROR` category, which has a program per entry; each such row of
+    `tests/bsi/expected.tsv` carries the Annex D number it names, so the list
+    is data rather than prose. Eight entries were missing when that was first
+    done — the section had been written one feature at a time and nothing had
+    read the annex end to end against the compiler. Don't quote a count of
+    them anywhere: it moved once and will again.
   - **A comment may end with the other delimiter.** §6.1.8 is one production —
     an opening brace *or* star-paren, a commentary, a closing star-paren *or*
     brace — and its NOTE 1 says so outright. The lexer had two loops, one per

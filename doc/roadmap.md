@@ -1230,9 +1230,24 @@ Three candidates, cheapest first, and not exclusive:
     rejected, as the suite requires of a processor without conformant array
     parameters. The first claim in `doc/implementation-defined.md` §1 that
     something other than this project has checked.
-  - Outstanding from it: **28 undetected errors against that document's twelve**
-    — the categories are not in one-to-one correspondence, but it is the first
-    independent count of a property written up by hand, one probe at a time.
+  - ~~Outstanding from it: **28 undetected errors against that document's
+    twelve**~~ **Done.** The two numbers were never comparable — 28 is a count
+    of *programs* and the document's rows are *rules* — so the reconciliation
+    was done against Annex D itself, which both sides can be keyed to. The 28
+    programs name fifteen distinct entries, of which
+    `doc/implementation-defined.md` §3 had eight: D.5, D.6, D.12, D.13, D.19,
+    D.27, D.30 and D.48 were missing, each unenforced since the feature it
+    belongs to landed. Every ERROR row of `tests/bsi/expected.tsv` now carries
+    its Annex D number, so the section is regenerable rather than asserted, and
+    D.59 — the one entry the suite has no program for — was probed by hand and
+    is reported.
+  - Two entries the suite *reports* are not enforced either, and the document
+    now says so: an undefined pointer is usually nil here, because a level-0
+    activation record is a global (ADR-0053), so the nil checks catch D.4 and
+    D.24 for the shape where the variable was never assigned and catch neither
+    where the pointer is stale. A check that coincides with a rule is not that
+    rule being enforced, and a green run of those two programs must not be read
+    as one.
 - **A third-party differential.** FPC under `-Miso`, or p5, over the ISO 7185
   half of `tests/`. Not a second implementation to maintain: a second *answer*,
   on programs that already exist. Still worth doing — the suite is a *fixed*

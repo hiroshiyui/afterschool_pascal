@@ -50,6 +50,17 @@ and disagreed with the compiler on the first run (ADR-0086).
   string and from no file, so the diagnostic named a rule the program was not
   breaking.
 
+### Changed
+
+- **`doc/implementation-defined.md` §3 names eight more unreported errors** —
+  ISO 7185's D.5, D.6, D.12, D.13, D.19, D.27, D.30 and D.48. Nothing about the
+  compiler changed: each had been unenforced since the feature it belongs to
+  landed, and the section had been written one feature at a time with nothing
+  reading Annex D end to end against it. It is now keyed to Annex D and
+  regenerable — every `ERROR` row of `tests/bsi/expected.tsv` carries the
+  number it names — and it says which two entries stop the suite's own programs
+  without being enforced.
+
 ### Added
 
 - **`tests/bsi`** — the BSI Pascal Validation Suite 5.7 (© 1982 British
@@ -58,7 +69,10 @@ and disagreed with the compiler on the first run (ADR-0086).
   Running it is **not a validation**; see `tests/bsi/README.md` for BSI's terms.
 - **`.github/workflows/ci.yml`** — build and test on every push in two minimal
   containers, which is what checks that the build needs `cmake`, `make` and
-  `clang` and nothing of LLVM's.
+  `clang` and nothing of LLVM's. A third job fetches the validation suite and
+  runs it, since the case skips wherever nobody has fetched it — which was
+  every container, leaving the newest oracle running only on a developer's
+  machine.
 
 ## [1.0.0] — 2026-08-14
 

@@ -158,12 +158,44 @@ rejects, which a build rule depends on.
 Clause 5.1 f) 1) permits an error to go unreported provided an accompanying
 document says so, and requires the references to appear in a section of their
 own. This is that section. Every entry is a rule of the standard that this
-processor does not enforce; each is recorded in the architecture decision record
-that introduced the feature, and none was omitted silently.
+processor does not enforce.
+
+Most were recorded in the architecture decision record that introduced the
+feature, as they were decided. **Eight were not**, and were added when the list
+was reconciled against Annex D — D.5, D.6, D.12, D.13, D.19, D.27, D.30 and
+D.48. Each had been unenforced since the feature it belongs to landed, and this
+document is where a reader looks instead of the source, so the omission was
+worse here than anywhere else (ADR-0074). What found them is described below;
+what let them sit is that the entries were written one feature at a time and
+nothing had ever read the annex end to end against the compiler.
 
 Most of them share one cause: the rule is a property of what happens while the
 program runs, and deciding it would need the run time to carry information that
 nothing in this implementation carries.
+
+**How the ISO 7185 half of this list was checked.** Annex D restates that
+standard's errors as fifty-nine numbered entries, and each was compiled and run
+rather than read: the BSI Pascal Validation Suite's `ERROR` category has a
+program for fifty-eight of them, each printing `ERROR NOT DETECTED` if it runs
+to completion. Forty-three are reported by every program that names them,
+fourteen by none, and D.4 by one of its two — see the note below. D.59 has no
+program in that category; a probe that `reset`s a program-parameter bound to a
+name which cannot be opened is reported, so it is a forty-fourth. The suite is
+the instrument and not the claim: running it is **not a validation** (`tests/bsi/README.md`
+has BSI's conditions), and the Annex D number of every one of those programs is
+recorded in `tests/bsi/expected.tsv`, so the list below is regenerable rather
+than asserted. The ISO/IEC 10206:1991 entries have no such corpus and were
+probed one clause at a time, as ADR-0073 describes.
+
+**Two entries below stop these particular programs anyway, and that is not
+detection.** An undefined pointer is often *nil* here — a level-0 activation
+record is a global (ADR-0053) and so begins zeroed — and the nil checks on a
+dereference and on `dispose` then fire. That reports D.4 and D.24 for the shape
+where the variable was never assigned at all, and reports neither where the
+pointer holds a stale address, which is the shape both errors are really about.
+Nothing tracks definedness; a check that happens to coincide with one is not the
+rule being enforced, and this is written down so that a green run of those two
+programs is not mistaken for it.
 
 **Real overflow is not on this list, and is not an omission.** §6.7.2.2 makes
 the accuracy of the real operations implementation-defined rather than making a
@@ -175,9 +207,12 @@ it is checked (ADR-0078).
 
 | Clause | The error, and where it is recorded |
 |---|---|
-| §6.6.5.3 / §6.7.5.3 | A variable created by `new(p, c1, …, cn)` may not be an operand of an assignment nor an actual parameter, its unselected variants not existing. Detecting this needs the pointer's *value* to carry which form created it. ADR-0027. |
-| §6.5.4 | Use-after-`dispose` through a *second* pointer to the same storage. `dispose` stores nil back into the variable it was given, which converts the common form into the nil trap, and does nothing for the general one. ADR-0019. |
-| §6.5.3.3 | Reading or writing a field of a variant that is not active. A constant's tag is a constant, so §6.8.8.3's version of this *is* reported (ADR-0069); the rule for a variable has never been checked. ADR-0018, ADR-0056. |
+| §6.6.5.3 / §6.7.5.3 (D.25) | A variable created by `new(p, c1, …, cn)` may not be an operand of an assignment nor an actual parameter, its unselected variants not existing. Detecting this needs the pointer's *value* to carry which form created it. ADR-0027. |
+| §6.6.5.3 (D.19) | For `new(p, c1, …, cn)`, that no variant becomes active other than the ones named — assigning the tag activates whichever the value selects, and the store knows nothing of how the variable was created. Same cause as D.25. ADR-0027. |
+| §6.5.4 (D.4) | Use-after-`dispose` through a *second* pointer to the same storage. `dispose` stores nil back into the variable it was given, which converts the common form into the nil trap, and does nothing for the general one. ADR-0019. |
+| §6.5.4 (D.5) | Removing the identifying-value of a variable while a *reference to it* exists — `dispose(p)` from inside `with p^ do`, or while `p^` is bound to somebody's `var` parameter. What references exist is a run-time fact. The `with` form is lexically visible and the parameter form is not, and a check reporting one of the two would say the rule holds when it does not. ADR-0019. |
+| §6.5.5 (D.6) | Altering a file-variable `f` while a reference to `f^` exists — a `put(f)` from inside `with f^ do`, or while `f^` is somebody's `var` parameter. Exactly D.5's shape, one type along. ADR-0021. |
+| §6.5.3.3 (D.2) | Reading or writing a field of a variant that is not active. A constant's tag is a constant, so §6.8.8.3's version of this *is* reported (ADR-0069); the rule for a variable has never been checked. ADR-0018, ADR-0056. |
 | §6.5.6 | Altering the length of a string-variable while a reference to a substring of it exists. ADR-0057. |
 | §6.7.5.5 | A write-parameter of `writestr` accessing the string-variable being written to. ADR-0060. |
 | §6.4.3.6 | `length(f) > ord(b) - ord(a) + 1` for a direct-access `file [a..b] of T` — an eleventh component written to a `file [1..10]`. Enforcing it is a check per component written. ADR-0050. |
@@ -187,8 +222,12 @@ it is checked (ADR-0078).
 | §6.4.9 | That a type-inquiry's parameter-identifier object is in the closest-containing formal-parameter-list. Ordinary lookup also sees the enclosing list. ADR-0047. |
 | §6.11.3 | Where a `qualified` import's names may be written, outside the import-specification itself. ADR-0053. |
 | §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
+| §6.6.5.2 (D.12) | That the buffer-variable is defined immediately before `put`. Two `put`s in a row is the error: the first leaves `f^` undefined, and nothing here records that. ADR-0021. |
+| §6.6.5.2 (D.13) | That the file is defined immediately before `reset`. This processor prepares every file variable when its block is entered (ADR-0070), so the state the clause calls undefined does not arise: a `reset` of a file never given a name reads an empty scratch file rather than reporting anything. |
+| §6.6.5.4 (D.27, D.30) | That no component `pack` or `unpack` accesses is undefined. `packed` means nothing to the layout here, so the transfer is a `memcpy` and there is no per-component read to attach a check to (ADR-0067) — and the definedness it would need is not carried in any case. |
+| §6.7.3 (D.48) | That a function's result is defined when the activation completes. What is checked is *static*: a function body must contain at least one assignment to the result, or it is refused (ADR-0055). Whether the one it contains is on the path taken is the run-time half, and `if a > 0 then x := … else area := 0` returns whatever the slot held. |
 | §6.6.5.3 (D.20–D.22) | That `dispose(p)` matches the `new` that created the variable, and that `dispose(p, k1, …, km)` names the same variants with the same count. Same cause as D.25 above: it needs the pointer's *value* to carry which form created it. `dispose` of nil **is** reported (D.23) — that one needs nothing carried. ADR-0027, ADR-0077. |
-| §6.7.1 (D.43), §6.5.4 (D.4), §6.6.5.3 (D.24) | Using a variable that is undefined — in an expression, as the pointer of an identified-variable, or as `dispose`'s argument. Nothing here tracks definedness at run time, so this is the cause the entries above keep sharing rather than an entry of its own; it is written down because Annex D names it three times and a reader should not have to infer it. ADR-0077. |
+| §6.7.1 (D.43), §6.6.5.3 (D.24) | Using a variable that is undefined — in an expression, or as `dispose`'s argument. **Nothing here tracks definedness at run time**, which is the cause D.4, D.12, D.13, D.27, D.30 and D.48 above each share rather than an entry of its own; Annex D names it in thirteen of its fifty-nine entries. **Five** of those ask whether a *file* is defined — D.10, D.15, D.40, D.41 and D.57 — and the runtime does carry a file's mode, so those five are reported. The other **eight** are D.4, D.12, D.13, D.24, D.27, D.30, D.43 and D.48, and none of them is enforced; two of the eight nonetheless stop the suite's own program, for the reason given above the table. ADR-0077. |
 
 ## 4. Implementation-dependent features
 
