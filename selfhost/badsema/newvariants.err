@@ -1,9 +1,10 @@
-<source>:31:10: error: a tag value for 'new' must be an ordinal constant
-<source>:33:10: error: this variant part's tag is e, but the value is integer
-<source>:35:10: error: no variant is selected by c
-<source>:37:13: error: this record has no more nested variant parts to select
-<source>:39:16: error: this record has no more nested variant parts to select
-<source>:41:10: error: tag values are only for a pointer to a record with a variant part
-<source>:43:10: error: this record has no variant part
-<source>:45:14: error: a tag value for 'dispose' must be an ordinal constant
-<source>:46:14: error: tag values are only for a pointer to a record with a variant part
+<source>:18:10: error: the tag value c selects no variant of e
+<source>:39:10: error: a tag value for 'new' must be an ordinal constant
+<source>:41:10: error: this variant part's tag is e, but the value is integer
+<source>:43:10: error: no variant is selected by c
+<source>:45:13: error: this record has no more nested variant parts to select
+<source>:47:16: error: this record has no more nested variant parts to select
+<source>:49:10: error: tag values are only for a pointer to a record with a variant part
+<source>:51:10: error: this record has no variant part
+<source>:53:14: error: a tag value for 'dispose' must be an ordinal constant
+<source>:54:14: error: tag values are only for a pointer to a record with a variant part

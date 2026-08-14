@@ -14,10 +14,13 @@ const
   otherwise = 3;
   only = 4;
 type
+  { §6.4.3.3 requires the case-constants to be exactly the tag-type's values,
+    and a tag-type is a type-*identifier*, so the pair needs a name. }
+  pair = otherwise..only;
   { a variant labelled with the constant, which the variant-part-completer of
     ISO/IEC 10206:1991 would otherwise be mistaken for }
   tagged = record
-    case which: integer of
+    case which: pair of
       otherwise: (n: integer);
       only: (c: char)
   end;

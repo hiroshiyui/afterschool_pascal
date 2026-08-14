@@ -8534,8 +8534,9 @@ var
   v, w: variantPtr;
   rg, rseen: rangePtr;
   armPath: numPtr;
-  index, lo, hi, at: integer;
-  claimed: boolean;
+  found: rangePtr;
+  index, lo, hi, at, need: integer;
+  claimed, labelsOk, complete, hasOther: boolean;
 begin
   { 6.4.3.4's third form of variant-selector: a bare name that is one of the
     discriminants the body is being resolved with. It is asked *before* the
@@ -8585,6 +8586,7 @@ begin
     end;
 
     index := 0;
+    labelsOk := true;
     arm := arms;
     while arm <> nil do begin
       new(v);
@@ -8611,6 +8613,7 @@ begin
         at := 0;
         if not EvalLabelRange(label_, lwVariant, labelType, lo, hi) then begin
           { the diagnostic is EvalLabelRange's; nothing more to say here }
+          labelsOk := false
         end
         else if Base(labelType) <> Base(tag) then begin
           ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
@@ -8618,7 +8621,24 @@ begin
           WriteTypeName(tag);
           write(', but the label is ');
           WriteTypeName(labelType);
-          writeln
+          writeln;
+          labelsOk := false
+        end
+        { ISO 7185 6.4.3.3 requires the case-constants to be *equal to* the
+          set of values of the tag-type, and ISO/IEC 10206:1991 6.4.3.4 states
+          this half on its own: "the value denoted by each such case-constant
+          shall be a member of the set of values determined by that type". A
+          variant-part-completer does not excuse it -- an otherwise-arm claims
+          the values nothing names, not values the tag-type does not have. }
+        else if (lo < OrdinalLo(tag)) or (hi > OrdinalHi(tag)) then begin
+          ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
+          write('the tag value ');
+          if lo < OrdinalLo(tag) then WriteOrdinalName(Base(tag), lo)
+          else WriteOrdinalName(Base(tag), hi);
+          write(' is not a value of ');
+          WriteTypeName(tag);
+          writeln;
+          labelsOk := false
         end
         else begin
           { has an earlier arm of *this* variant part already claimed any of
@@ -8636,7 +8656,11 @@ begin
             ErrorAt(label_^.smLo^.line, label_^.smLo^.col);
             write('the tag value ');
             WriteOrdinalName(tag, at);
-            writeln(' already selects an earlier variant')
+            writeln(' already selects an earlier variant');
+            { A rejected range is not recorded, so its non-overlapping tail
+              would read as a gap below and earn a second complaint about a
+              fault already reported. }
+            labelsOk := false
           end
           else begin
             new(rg);
@@ -8705,6 +8729,53 @@ begin
 
       index := index + 1;
       arm := arm^.next
+    end;
+
+    { ISO 7185 6.4.3.3: "the set thereof shall be equal to the set of values
+      specified by the tag-type". ISO/IEC 10206:1991 6.4.3.4 states the same
+      obligation as "each value possessed by the variant-type of a variant-part
+      shall correspond to one and only one variant", and its
+      variant-part-completer is what the values nothing names correspond to --
+      so an otherwise-arm discharges this and no standard has to be consulted.
+
+      The walk asks which range covers `need` rather than counting the values
+      covered, because a tag-type of integer spans more values than an integer
+      can hold. `found^.hi + 1` is reached only when found^.hi is below the
+      type's last value, so it cannot overflow either, and `need` strictly
+      increases, so the loop ends. The ranges are disjoint by the check above,
+      which is what makes one pass over them enough. }
+    hasOther := false;
+    w := variants;
+    while w <> nil do begin
+      if w^.isOtherwise then hasOther := true;
+      w := w^.next
+    end;
+    if labelsOk and not hasOther then begin
+      need := OrdinalLo(tag);
+      complete := false;
+      while not complete do begin
+        found := nil;
+        w := variants;
+        while w <> nil do begin
+          rg := w^.labels;
+          while rg <> nil do begin
+            if (rg^.lo <= need) and (need <= rg^.hi) then found := rg;
+            rg := rg^.next
+          end;
+          w := w^.next
+        end;
+        if found = nil then begin
+          ErrorAt(tagLine, tagCol);
+          write('the tag value ');
+          WriteOrdinalName(Base(tag), need);
+          write(' selects no variant of ');
+          WriteTypeName(tag);
+          writeln;
+          complete := true
+        end
+        else if found^.hi >= OrdinalHi(tag) then complete := true
+        else need := found^.hi + 1
+      end
     end
   end
 end;

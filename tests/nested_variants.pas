@@ -11,6 +11,10 @@ type
   kind = (leaf, branch);
   weight = (light, heavy);
   shade = (red, blue);
+  { §6.4.3.3 requires a variant part's case-constants to be *exactly* the
+    values of its tag-type, so a tagless `case integer of` listing two labels
+    is not one -- the nesting is what this file is about, not the tag type. }
+  oneortwo = 1..2;
 
   node = record
     id: integer;
@@ -26,7 +30,7 @@ type
     uncompiled. `case T of` has the tag as a type but not as a field. }
   deep = record
     tag: char;
-    case integer of
+    case oneortwo of
       1: (a: integer;
           case boolean of
             true: (b: char;

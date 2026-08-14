@@ -104,3 +104,4 @@ the alternatives that were rejected and why.
 | [0093](0093-a-set-constructor-has-not-chosen-a-packing.md) | A set-constructor has not chosen a packing | Accepted |
 | [0094](0094-a-goto-lands-in-a-sequence-and-a-result-belongs-to-its-block.md) | A goto lands in a sequence, and a result belongs to its block | Accepted |
 | [0095](0095-the-string-pool-was-the-ceiling.md) | The string pool was the ceiling | Accepted |
+| [0096](0096-a-variant-part-covers-its-tag-type-exactly.md) | A variant part covers its tag-type exactly | Accepted |

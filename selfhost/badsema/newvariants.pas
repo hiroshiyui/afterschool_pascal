@@ -1,6 +1,14 @@
 { The diagnostics of `new(p, c1, ..., cn)` and `dispose(p, c1, ..., cn)`
   (ISO 7185 6.6.5.3). Sema accumulates, so one file carries all of them --
-  but each `new` stops at its first bad tag value, so each gets its own call. }
+  but each `new` stops at its first bad tag value, so each gets its own call.
+
+  `rec` deliberately omits `c` from its variant part, which since ADR-0096 is
+  itself an error -- §6.4.3.3 requires the case-constants to be exactly the
+  tag-type's values. That is what makes "no variant is selected by c" below
+  reachable *only* in a program that is already ill-formed: under ISO 7185
+  there is no unnamed value left for a `new` to select, and under Extended
+  Pascal a variant-part-completer would claim it. The message is kept because
+  the check is per call and cannot assume the type was well formed. }
 program newvariants(output);
 type
   e = (a, b, c);

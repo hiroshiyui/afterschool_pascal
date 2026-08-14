@@ -340,11 +340,6 @@ the program's definition should win — as it already does for a required
 block** in the way §6.2.2 describes; the occurrence that would show it is a
 pointer domain, which §6.2.2.9 exempts.
 
-**The case-constants of a variant part shall be exactly the tag-type's values**
-(§6.4.3.3) — neither repeated, which *is* checked, nor missing, which is not.
-A tag value no arm names selects no variant, and §6.6.5.3's `new(p, c)` already
-refuses such a value; the type definition itself is accepted.
-
 **An actual variable parameter is restricted two ways this compiler does not
 check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
 the tag-field a variant part is selected by. Both are properties of the
