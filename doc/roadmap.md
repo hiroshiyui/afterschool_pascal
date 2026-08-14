@@ -15,8 +15,10 @@ finished being a means to an end: since then a feature needs no reason beyond
 the standard having it, ISO 7185 was completed on those grounds, and
 ISO/IEC 10206:1991 is being worked through the same way.
 
-**Where things are.** The history is the first half and the live work is the
-second; nothing below "Beyond self-hosting" is finished business.
+**Where things are.** Everything above "What is next" is now history: both
+standards are complete, the sweeps have been run, and the bootstrap stands on
+its own. The live work is that last section, and most of it is not about the
+language.
 
 - [The three-stage build](#the-three-stage-build)
 - [The six bootstrap items](#the-six-bootstrap-items-all-done) — with
@@ -35,7 +37,9 @@ second; nothing below "Beyond self-hosting" is finished business.
   [what is left](#what-is-left)
 - [Conformance sweeps](#conformance-sweeps) — what was checked rather than
   asserted, and what that found
-- [The two things that are not features](#the-two-things-that-are-not-features)
+- [The two things that were not features](#the-two-things-that-were-not-features)
+- [What is next](#what-is-next) — the oracle that was given up, and the five
+  other things worth doing
 
 ## The three-stage build
 
@@ -1163,7 +1167,174 @@ itself, a few hours after being decided the other way. See below.
   earlier version of this line asked for: the theorems stay attached to the C++
   model, and the Pascal generator is tied to it by *behaviour* — the golden
   files carry the traps and their messages, so a lowering that stopped checking
-  fails `irtest.sh`. What that does not give is a proof for every input, which
-  is what `verify/` gives the C++ one. Re-pointing the model at the Pascal
-  source is the work that retiring stage 0 would require, and it is still the
-  most fragile thing about the bootstrap.
+  fails `irtest.sh`.
+
+  **Stage 0 was retired without re-pointing the model, and that was the right
+  call.** `lowering.py` describes an emitted instruction sequence rather than
+  any compiler's internals, so it transferred unchanged (ADR-0085). What it no
+  longer has is a reader: the two backends were *measured* emitting different
+  instruction counts for the same program, so the model could be checked
+  against C++ line by line and cannot be checked against the Pascal emitter
+  that way. The tie is now `--crosscheck`'s 44 adversarial values at `-O0` and
+  `-O2` and the 66 `trap_*.pas` goldens — which is the tie ADR-0013 always
+  specified, and is behavioural rather than structural. A rule can still drift
+  from the emitter it claims to model without any of the 435 cases noticing,
+  and nothing below is aimed at that.
+
+## What is next
+
+Both standards are complete and every sweep above has been run, so only the
+third item below is a language feature. Three of the other four are about
+**oracles** — what could still be wrong with nothing here to say so — and they
+come first because v1.0.0 gave up the strongest oracle this project had and
+nothing has replaced it. The fifth is the platform lock.
+
+Nothing here is scheduled. This section exists so that the reasons are written
+down while they are still live, which is ADR-0001's rule applied to work that
+has not started.
+
+### 1. An oracle nobody here wrote
+
+ADR-0085 states the cost and no entry has answered it. `selfhost/difftest.sh`
+compared two independent implementations over 436 sources; what remains — the
+435 cases, the stage-2/stage-3 fixed point, and 43 SMT rules — all share one
+implementation, and **a golden cannot disagree with the program that wrote
+it**. The defects difftest caught were exactly the ones every other oracle
+agreed about: a builtin's enumerator one apart (ADR-0059), a comment-delimiter
+rule implemented wrongly in *both* compilers (ADR-0073), a diagnostic that
+named two types identically and explained nothing (ADR-0074).
+
+Three candidates, cheapest first, and not exclusive:
+
+- **The Pascal Validation Suite** (Wichmann and Ciechanowicz), around 580
+  programs. It is an ISO 7185 conformance corpus written by people with no
+  stake here, which is the whole of the argument: every sweep above had the
+  same finding — *no program in the corpus had written the construct* — and
+  this is a corpus nobody here chose. It carries the level 1 tests too, so it
+  is item 3's oracle as well.
+- **A third-party differential.** FPC under `-Miso`, or p5, over the ISO 7185
+  half of `tests/`. Not a second implementation to maintain: a second *answer*,
+  on programs that already exist.
+- **Mutation testing, committed to the tree.** It has found something every
+  time it has been run here — the six occasions listed under "Stage 1", and
+  ADR-0065's two mutants that changed the compiler rather than the tests — and
+  it exists only as prose in those records. Two things it needs, both learned
+  the expensive way: a wall-clock and output-size limit per mutant, because a
+  looping mutant fills the disk before anything notices; and a restore that
+  does **not** preserve mtime, or the mutated binary stays in the build tree
+  and the next control run reads as a broken feature.
+
+### 2. Diverse double-compiling, while it is still possible
+
+ADR-0085's sharpest cost is that provenance became "a chain rather than an
+inspection": the first compiler now comes from a committed artefact whose only
+warrant is this repository's history. That is answerable **once**, by David A.
+Wheeler's diverse double-compiling, and `v0.1.0` still holds the second
+implementation it needs.
+
+1. Build `pascalc-s0` from `src/` at `v0.1.0`.
+2. Have it translate today's `selfhost/compiler.pas` — call the result **A**.
+3. Have `seed/pascalc.ll` build a compiler the ordinary way — call it **B**.
+4. Have A and B each translate `compiler.pas`, and compare *those* outputs.
+
+They must be identical, because both are the Pascal backend running on one
+source, while the compilers that produced them came from unrelated
+implementations. A and B cannot be compared to each other — ADR-0025 settled
+that two backends' assembler text is not comparable — which is exactly why the
+comparison is made one stage further on.
+
+**The window closes on its own**, and nothing will announce it: it works only
+while the v0.1.0 C++ compiler still accepts `compiler.pas`, and every feature
+the compiler starts *using* risks ending that. Worth doing now and recording
+the result in `seed/README.md` even if it never runs again — a dated statement
+that the seed carried nothing the C++ compiler did not is worth more than the
+ability to repeat it.
+
+### 3. Conformant array parameters, and level 1
+
+The one language feature here, and the only work that would change the
+compliance level `doc/implementation-defined.md` states.
+
+That document's §1 declares **level 0**, which is a complying level rather than
+a gap: ISO 7185 clause 5.1 a) defines it as clause 6 without §6.6.3.6 e),
+§6.6.3.7 and §6.6.3.8. Accepting those three makes a level 1 processor.
+
+Most of the mechanism is already here. ADR-0040's schematic formal parameter is
+a descriptor beside the address — bounds that travel with the actual — which is
+what a conformant array parameter needs and is why one compiled body can serve
+every extent. What is genuinely new is §6.6.3.7's congruity rules for
+conformant array schemas, which are not ADR-0030's rules for procedural
+parameters however alike the two read.
+
+Worth knowing before starting: a schematic formal already covers this ground in
+Extended Pascal, so the feature buys **conformance and not expressiveness**.
+
+### 4. Nothing can currently measure what the corpus reaches
+
+`gcov` went out with `src/`. CLAUDE.md still says *"don't assume the corpus
+reaches a branch — count it"* and lists six times that counting found
+something, but there is no longer a tool that can count: `selfhost/compiler.pas`
+is compiled by a compiler with no instrumentation, and the `code-review`
+skill's entire coverage step is a `gcov` recipe against files that do not
+exist.
+
+The cheap version costs an afternoon and covers the case this project keeps
+hitting: extract every diagnostic message literal from `compiler.pas` and look
+for each one in the 157 `.err` goldens. That answers "Sema reached 48 of its 85
+messages" mechanically and on every run, which is the exact question that has
+turned something up every time it has been asked. The expensive version is a
+`--coverage` flag in the code generator emitting counters, which is a feature
+in its own right and would want a record.
+
+### 5. The platform lock has a scoped way out
+
+`seed/README.md` states the cost — the repository is x86-64 Linux only, and
+porting needs a working compiler on the new target first. A `--target=` option
+would turn that into "porting needs a cross-assembler": the triple and the
+datalayout are already written out as text (ADR-0028), so the emitter's half is
+small.
+
+What needs investigating rather than promising is everything *else* that
+assumes the target — `fileSize` against `PAS_FILE_SIZE`, the pointer width the
+frame layouts are computed with, and `LlSize`/`LlAlign`. This has an honest
+chance of "more is baked in than it looks", and should be scoped as an
+investigation rather than as a feature.
+
+### What continuous integration does and does not check
+
+`.github/workflows/ci.yml` builds and tests on every push and pull request, in
+two minimal **containers** rather than on a machine with a toolchain already
+installed — which is the whole of what it adds. Every machine this compiler has
+been built on has LLVM 21 and a C++ toolchain, so "the build needs nothing of
+LLVM's" is a claim none of them can test. It also puts an assembler *older*
+than the one that emitted the seed against that seed, a portability property
+nothing else checks; and at a `v*` tag it requires `seed/pascalc.ll` to be what
+the current source produces, which is the one question ADR-0085's
+refresh-at-release-tags policy otherwise leaves to a human to remember.
+
+**It adds no oracle.** It runs the ones that already exist, on a machine that
+has never seen this repository. Item 1 is not something CI can supply.
+
+**Its first two runs each found something**, which is the argument for having
+written it:
+
+- **README.md's build instructions were wrong.** "Requires `clang` on PATH, and
+  nothing else" is false — `--no-install-recommends` gives no `make`, and
+  configure fails before it reaches a compiler. Nobody could have noticed on a
+  machine that has one. The sentence now names `cmake`, `make` and `clang`, and
+  claims *nothing of LLVM's* rather than nothing at all.
+- **Which z3 is installed decides whether the proofs pass.** `verify.py` gives
+  each rule 30 seconds and reports a timeout through the same channel as a
+  counterexample, so Debian trixie's z3 4.13.3 — slow enough to exceed it on
+  the two symbolic 32-bit modulo rules — produces *"verification FAILED:
+  mod-is-non-negative"*. That reads as the compiler getting `mod` wrong, which
+  is ADR-0074's lesson about a message naming the wrong rule, in the one
+  directory whose entire purpose is being sure. CI installs the pip package
+  `verify/README.md` documents, and that README now says which failures to
+  disbelieve; **making a timeout report as something other than a disproof is
+  not done.**
+
+One thing the workflow had to be told explicitly: `verify.py` *skips* when z3
+is absent, which is right for a checkout and wrong for CI — 435 tests would
+report green with the 43 rules never run. It asserts z3 is importable before it
+configures, so a green bar means the proofs ran.
