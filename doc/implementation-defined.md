@@ -347,22 +347,10 @@ the program's definition should win — as it already does for a required
 block** in the way §6.2.2 describes; the occurrence that would show it is a
 pointer domain, which §6.2.2.9 exempts.
 
-**A separator is required between a number and a word-symbol** (§6.1.8). The
-lexer's extended-digit and number scanning is maximal (ADR-0036) but stops at a
-letter for a decimal literal, so `i := 10div 2` lexes as three tokens rather
-than being refused.
-
 **The case-constants of a variant part shall be exactly the tag-type's values**
 (§6.4.3.3) — neither repeated, which *is* checked, nor missing, which is not.
 A tag value no arm names selects no variant, and §6.6.5.3's `new(p, c)` already
 refuses such a value; the type definition itself is accepted.
-
-**A pointer-type's domain-type shall be declared** (§6.4.4). A domain naming a
-type that no type-definition-part ever defines is reported, but §6.2.2.9's own
-exception is where this one lives: the domain may name a type defined later in
-the *same* type-definition-part, and this compiler completes such a name
-against an enclosing one as well (the suite's CONF027 is the program, and it is
-refused for a different reason).
 
 **An actual variable parameter is restricted three ways this compiler does not
 check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
@@ -376,14 +364,6 @@ refused as a value parameter directly (ADR-0021), and a record or array
 
 **Parameter list congruity** (§6.6.3.6) is checked between a procedural
 parameter and its actual (ADR-0030) but not in every place §6.6.3.6 names.
-
-**A procedure-identification shall not be followed by `forward`** (§6.6.1) —
-declaring the body of a forward-declared procedure and then writing `forward`
-again.
-
-**A function-identifier is not the pointer-variable of an identified-variable**
-(§6.5.4): inside `function f: ptr`, `f^` is a read of the function identifier,
-which §6.8.2.2 makes a recursive activation, so it is not a variable-access.
 
 **§6.8.1's rule about where a `goto` may land is enforced by the prefix test**
 (ADR-0029), which admits a jump between the branches of an if-statement; the

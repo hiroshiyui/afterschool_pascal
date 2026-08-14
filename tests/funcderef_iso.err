@@ -1,0 +1,1 @@
+<source>:27:9: error: dereferencing a function result is an Extended Pascal feature; compile with --std=extended

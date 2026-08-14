@@ -2484,7 +2484,21 @@ begin
       writeln
     end;
     AddInt(sl, sc, value_, overflow)
-  end
+  end;
+
+  { ISO 7185 6.1.8, and ISO/IEC 10206:1991 6.1.10 in the same words: "There
+    shall be at least one separator between any pair of consecutive tokens
+    made up of identifiers, word-symbols, labels or unsigned-numbers." So
+    `10div 2` is not `10 div 2`, and the rule is in both standards and gated
+    on neither. Only the decimal form needs it: an extended-digit sequence is
+    maximal and a letter there *is* a digit (ADR-0036), so nothing but a
+    non-letter can follow one. }
+  if not AtEof then
+    if IsAlpha(Peek(0)) then begin
+      ErrorAt(sl, sc);
+      write('a separator is required between a number and the identifier ');
+      writeln('or word-symbol that follows it')
+    end
 
   end
 end;
@@ -12051,6 +12065,24 @@ begin
       nkDeref: begin
         CheckExpr(e^.drBase);
         b := e^.drBase^.ntype;
+        { 6.5.4 makes the pointer-variable of an identified-variable a
+          *variable-access*, and 6.5.1's four are an entire variable, a
+          component, an identified variable and a buffer variable -- a
+          function-designator is none of them, and 6.8.2.2 makes a bare
+          function-identifier a recursive activation, so `f^` would dereference
+          a value. 6.8.6.4's function-identified-variable is Extended Pascal's
+          (ADR-0056), where a call *written with arguments* never reaches here
+          under ISO 7185 because AfterCall does not offer it the selectors. A
+          parameterless function is a bare name and the parser cannot tell, so
+          this is where it is told. }
+        if langStd <> stdExtended then
+          if (e^.drBase^.kind = nkCall) or
+             ((e^.drBase^.kind = nkVar) and IsInvocable(e^.drBase^.vrSym)) then
+          begin
+            ErrorAt(e^.line, e^.col);
+            writeln('dereferencing a function result is an Extended Pascal ',
+                    'feature; compile with --std=extended')
+          end;
         { `f^` on a file is the buffer variable (ISO 7185 6.5.5), not a
           dereference: one component of the file, which for a text file is the
           character it is positioned at. The syntax is shared, so this is the
@@ -14200,6 +14232,18 @@ begin
       WritePool(d^.pdAt, d^.pdLen);
       writeln(''' were already given in its forward declaration')
     end;
+    { 6.6.1: `forward` follows a procedure-*heading*. This is a
+      procedure-identification -- the name alone, resuming a forward
+      declaration -- and the clause gives such an identifier "exactly one of
+      its applied occurrences in a procedure-identification", followed by the
+      block. A second `forward` leaves two headings and no body. }
+    if d^.pdIsForward then begin
+      ErrorAt(d^.line, d^.col);
+      write('''');
+      WritePool(d^.pdAt, d^.pdLen);
+      write(''' was already declared forward, so this declaration needs ');
+      writeln('its body rather than ''forward'' again')
+    end;
     d^.pdSym := existing
   end
   else begin
@@ -15136,7 +15180,16 @@ begin
       done := true   { a variable group with no names; the parser makes none }
   end;
   inTypePart := false;
-  if inTypes then ResolvePendingPointers;
+  { 6.4.4's forward reference is completed where its own type-definition-part
+    ends, which is what the run above does. What can still be pending here is
+    a domain written *outside* one -- a variable's, or a schema body's -- and
+    it has nowhere later to be defined, so draining unconditionally is what
+    reports it. Draining only after a type part carried the list into the next
+    block that happened to have one, where the name was looked up in the wrong
+    scope: a program with no type part at all kept its unknown domain in
+    silence, and a legal self-referential schema in a var part was refused
+    until an unrelated type definition was added after it. }
+  ResolvePendingPointers;
   inTypePart := savedInTypePart
 end;
 

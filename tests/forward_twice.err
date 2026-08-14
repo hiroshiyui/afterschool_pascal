@@ -1,0 +1,1 @@
+<source>:16:1: error: 'pp' was already declared forward, so this declaration needs its body rather than 'forward' again
