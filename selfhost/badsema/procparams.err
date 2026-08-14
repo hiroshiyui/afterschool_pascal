@@ -3,17 +3,18 @@
 <source>:61:8: error: 'p' is a procedure and returns no value
 <source>:68:3: error: 'f' is not a procedure
 <source>:70:8: error: 'f' needs arguments
-<source>:83:15: error: argument 1 of 'takesproc' must be the name of a procedure or function
-<source>:85:13: error: argument 1 of 'takesproc' must be the name of a procedure or function, but 'v' is not one
-<source>:87:13: error: undeclared identifier 'nowhere'
-<source>:89:13: error: 'writeln' is a required procedure or function and cannot be passed as a parameter
-<source>:90:13: error: 'abs' is a required procedure or function and cannot be passed as a parameter
-<source>:92:13: error: 'twoargs' does not match the parameter list of procedural parameter 'p'
-<source>:93:13: error: 'byref' does not match the parameter list of procedural parameter 'p'
-<source>:94:13: error: 'twice' does not match the parameter list of procedural parameter 'p'
-<source>:95:13: error: 'show' does not match the parameter list of functional parameter 'f'
-<source>:96:13: error: 'half' does not match the parameter list of functional parameter 'f'
-<source>:98:13: error: 'charof' does not match the parameter list of functional parameter 'f'
-<source>:99:13: error: 'takeschar' does not match the parameter list of procedural parameter 'p'
-<source>:102:10: error: 'takesproc' does not match the parameter list of procedural parameter 'outer'
-<source>:103:13: error: 'deepdiff' does not match the parameter list of procedural parameter 'outer'
+<source>:96:15: error: argument 1 of 'takesproc' must be the name of a procedure or function
+<source>:98:13: error: argument 1 of 'takesproc' must be the name of a procedure or function, but 'v' is not one
+<source>:100:13: error: undeclared identifier 'nowhere'
+<source>:102:13: error: 'writeln' is a required procedure or function and cannot be passed as a parameter
+<source>:103:13: error: 'abs' is a required procedure or function and cannot be passed as a parameter
+<source>:105:13: error: 'twoargs' does not match the parameter list of procedural parameter 'p'
+<source>:106:13: error: 'byref' does not match the parameter list of procedural parameter 'p'
+<source>:107:13: error: 'twice' does not match the parameter list of procedural parameter 'p'
+<source>:108:13: error: 'show' does not match the parameter list of functional parameter 'f'
+<source>:109:13: error: 'half' does not match the parameter list of functional parameter 'f'
+<source>:111:13: error: 'charof' does not match the parameter list of functional parameter 'f'
+<source>:112:13: error: 'takeschar' does not match the parameter list of procedural parameter 'p'
+<source>:115:10: error: 'takesproc' does not match the parameter list of procedural parameter 'outer'
+<source>:116:13: error: 'deepdiff' does not match the parameter list of procedural parameter 'outer'
+<source>:119:14: error: 'twosections' does not match the parameter list of procedural parameter 'p'

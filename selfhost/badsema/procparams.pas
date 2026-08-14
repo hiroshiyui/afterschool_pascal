@@ -78,6 +78,19 @@ procedure NestedOne(procedure outer(procedure inner(x: integer)));
 begin
 end;
 
+{ 6.6.3.6: "Two formal-parameter-lists shall be congruous if they contain the
+  same number of formal-parameter-sections and if the formal-parameter-sections
+  in corresponding positions match", and b) adds "containing the same number of
+  parameters". `(var a, b: integer)` is one section of two; `(var a: integer;
+  var b: integer)` is two sections of one. }
+procedure OneSection(procedure p(var a, b: integer));
+begin
+end;
+
+procedure TwoSections(var a: integer; var b: integer);
+begin
+end;
+
 begin
   { an actual parameter that is not a name at all }
   TakesProc(n + 1);
@@ -100,5 +113,8 @@ begin
   { and congruity is recursive: TakesProc's list is not Nested's, and
     DeepDiff's differs from NestedOne's only one level down }
   Nested(TakesProc);
-  NestedOne(DeepDiff)
+  NestedOne(DeepDiff);
+  { 6.6.3.6 compares formal-parameter-*sections*: one section of two names is
+    not two sections of one name each, however alike the parameters are }
+  OneSection(TwoSections)
 end.

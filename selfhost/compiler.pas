@@ -858,6 +858,14 @@ type
       be bound to an entity outside the program (6.7.5.6), and 6.5.1 makes it
       totally-undefined until it is. }
     nsBindable: boolean;
+
+    { ISO 7185 6.6.3.3 / ISO/IEC 10206:1991 6.7.3.3: "The actual-parameter
+      shall be a variable-access", and 6.5.1's four variable-accesses do not
+      include a parenthesised expression -- `p((x))` passes a value, and there
+      is nothing to establish a reference to. The parser drops the brackets,
+      `(a + b) * c` being the node `a + b` is, so the node has to remember they
+      were written. Nothing else reads this. }
+    nParen: boolean;
     case kind: nodeKind of
       nkInt:        (intVal: integer);
       { A real literal is kept as its source text and not converted. The
@@ -2880,6 +2888,7 @@ begin
   n^.nsValue := nil;
   n^.nsOk := false;
   n^.nsBindable := false;
+  n^.nParen := false;
   { What Sema will fill in. A C++ struct gets these from its member
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
@@ -4049,7 +4058,11 @@ begin
     else if Check(tkLParen) then begin
       pos := pos + 1;
       e := ParseExpr;
-      Expect(tkRParen, ctxParenExpr)
+      Expect(tkRParen, ctxParenExpr);
+      { 6.5.1 again: the brackets are what stop this being a variable-access,
+        and they are gone by the time anything can ask. ParseExpr yields nil
+        once the parser has aborted. }
+      if e <> nil then e^.nParen := true
     end
     { A set-constructor is a bracketed list of members separated by commas,
       each member an expression or a range of two, and an empty bracket pair is
@@ -6652,6 +6665,18 @@ begin
         different code for each -- so the two cannot stand in for one
         another. }
       if f^.sym^.kind <> a^.sym^.kind then
+        ok := false
+      { 6.6.3.6 is pairwise over formal-parameter-*sections*, not over
+        parameters: "Two formal-parameter-lists shall be congruous if they
+        contain the same number of formal-parameter-sections and if the
+        formal-parameter-sections in corresponding positions match", and b)
+        adds "containing the same number of parameters". So `(var a, b:
+        integer)` is one section of two names and `(var a: integer; var b:
+        integer)` is two sections of one, and the lists are not congruous
+        however alike their parameters are. Given the counts already agree,
+        equal section numbers at every position is exactly that -- the
+        boundaries can only line up one way. }
+      else if f^.sym^.paramSection <> a^.sym^.paramSection then
         ok := false
       { 6.7.3.6: "Either both contain protected or neither contains
         protected." A body written against a protected parameter may not be
@@ -10261,6 +10286,20 @@ begin
           write('argument ', i:1, ' of ''');
           WritePool(callee^.at, callee^.len);
           writeln(''' is a var parameter and needs a variable')
+        end
+        { 6.6.3.3: the actual shall be a variable-access, and 6.5.1's are an
+          entire variable, a component, an identified variable and a buffer
+          variable -- a parenthesised one is none of the four. `p((x))` is an
+          expression whose value happens to be x's, and a reference cannot be
+          established to it. Asked here rather than inside IsDesignator,
+          which answers 6.5.1's question for a dozen constructs and would
+          then be answering it for reasons this clause does not give. }
+        else if a^.nParen then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' is a var parameter and needs a variable; the brackets ');
+          writeln('make this an expression')
         end
         { 6.7.3.3 NOTE 3: "An actual variable parameter cannot denote a
           substring-variable because the type of a substring-variable is a new
@@ -14016,6 +14055,10 @@ begin
         ps^.kind := skProcParam;
         ps^.stype := t
       end;
+      { A procedural parameter is a formal-parameter-section like any other,
+        and 6.6.3.6 compares sections -- so it has to be numbered even though
+        it can never hold a second name. }
+      ps^.paramSection := section;
       { Its own parameters name no frame and are never looked up: the actual
         procedure supplies the names its body uses, and these exist only to be
         compared against that procedure's. Two of them sharing a spelling
@@ -14097,12 +14140,24 @@ begin
           end
         end;
       t := ResolveType(g^.grType);
-      { ISO 7185 6.6.3.3: a file may only be passed by reference. A value
-        parameter is a copy, and a file has no copy -- the position, the buffer
-        and the operating system's handle are one object, not a value. }
-      if IsFile(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+      { ISO 7185 6.6.3.2 and ISO/IEC 10206:1991 6.7.3.2: "The type possessed
+        by the formal-parameter shall be one that is permitted as the
+        component-type of a file-type." ContainsFile is precisely that
+        predicate -- the same one CheckedResultType asks of a result and
+        ResolveFile of a component -- so a record or an array holding a file
+        is refused as well, having no copy for the same reason the file has
+        none: the position, the buffer and the operating system's handle are
+        one object, not a value. The clause is 6.6.3.2 and not 6.6.3.3, which
+        is the variable-parameter clause and says nothing about files. }
+      if ContainsFile(t) and not g^.grByRef and (g^.grNames <> nil) then begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
-        writeln('a file parameter must be a var parameter')
+        if IsFile(t) then
+          writeln('a file parameter must be a var parameter')
+        else begin
+          write('a value parameter cannot be ');
+          WriteTypeName(t);
+          writeln(': it contains a file, and a file has no copy')
+        end
       end;
       { A variable-string value parameter would have to be *converted* at the
         call -- 6.4.6 pads or refuses by length, and the actual may be a

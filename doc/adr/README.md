@@ -100,3 +100,4 @@ the alternatives that were rejected and why.
 | [0089](0089-a-for-control-variable-may-not-be-threatened.md) | A `for` control-variable may not be threatened | Accepted |
 | [0090](0090-a-string-type-is-four-properties-at-once.md) | A string-type is four properties at once | Accepted |
 | [0091](0091-four-structural-rules-the-compiler-did-not-enforce.md) | Four structural rules the compiler did not enforce | Accepted |
+| [0092](0092-three-rules-about-a-parameter-list.md) | Three rules about a parameter list | Accepted |

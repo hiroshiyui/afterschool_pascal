@@ -8,6 +8,10 @@ program FileErrors(output, missing);
 
 type
   rec = record a: integer end;
+  { 6.6.3.2: "The type possessed by the formal-parameter shall be one that is
+    permitted as the component-type of a file-type" -- so a type *containing*
+    a file has no copy either, and is not a value parameter. }
+  book = record id: integer; log: text end;
   logged = record
     a: integer;
     case tagged: boolean of
@@ -32,7 +36,11 @@ var
   nested: file of text;
   buried: file of array [1..2] of logged;
 
-procedure ByValue(h: text);     { 6.6.3.3: a file must be a var parameter }
+procedure ByValueRec(b: book);  { 6.6.3.2: and one that merely holds a file }
+begin
+end;
+
+procedure ByValue(h: text);     { 6.6.3.2: a file must be a var parameter }
 begin
 end;
 

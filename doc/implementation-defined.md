@@ -352,18 +352,10 @@ pointer domain, which §6.2.2.9 exempts.
 A tag value no arm names selects no variant, and §6.6.5.3's `new(p, c)` already
 refuses such a value; the type definition itself is accepted.
 
-**An actual variable parameter is restricted three ways this compiler does not
+**An actual variable parameter is restricted two ways this compiler does not
 check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
-the tag-field a variant part is selected by, nor be written as `(variable)`.
-The first two are properties of the designator and the third is a grammar
-distinction between a variable-access and an expression.
-
-**A value parameter's type shall not contain a file** (§6.6.3.2). A file is
-refused as a value parameter directly (ADR-0021), and a record or array
-*holding* one is not.
-
-**Parameter list congruity** (§6.6.3.6) is checked between a procedural
-parameter and its actual (ADR-0030) but not in every place §6.6.3.6 names.
+the tag-field a variant part is selected by. Both are properties of the
+designator. Being written as `(variable)` is refused (ADR-0092).
 
 **§6.8.1's rule about where a `goto` may land is enforced by the prefix test**
 (ADR-0029), which admits a jump between the branches of an if-statement; the

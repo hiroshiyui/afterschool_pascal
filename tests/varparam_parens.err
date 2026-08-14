@@ -1,0 +1,2 @@
+<source>:25:9: error: argument 1 of 'bump' is a var parameter and needs a variable; the brackets make this an expression
+<source>:26:11: error: argument 1 of 'bump' is a var parameter and needs a variable; the brackets make this an expression
