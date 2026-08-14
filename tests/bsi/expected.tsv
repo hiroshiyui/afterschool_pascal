@@ -44,7 +44,7 @@ CONF023	SAYS-PASS	CONFORM
 CONF024	RAN	CONFORM  the minimal program; it writes nothing, and RAN is the pass
 CONF025	SAYS-PASS	CONFORM
 CONF026	SAYS-PASS	CONFORM
-CONF027	REJECTED	CONFORM  6.2.2 a pointer domain must bind to a type declared later in the SAME type part, not the enclosing one -- unfixed
+CONF027	SAYS-PASS	CONFORM  6.2.2.9 a pointer domain binds to a type of its own type-definition-part (fixed: pointer_domain_shadow.pas)
 CONF028	SAYS-PASS	CONFORM
 CONF029	SAYS-PASS	CONFORM
 CONF030	SAYS-PASS	CONFORM
@@ -146,7 +146,7 @@ CONF125	SAYS-PASS	CONFORM
 CONF126	SAYS-PASS	CONFORM
 CONF127	SAYS-PASS	CONFORM
 CONF128	SAYS-PASS	CONFORM
-CONF129	REJECTED	CONFORM  6.6.5.3 dispose of a function-designator -- unfixed
+CONF129	SAYS-PASS	CONFORM  6.6.5.3 dispose takes an expression, not only a variable (fixed: dispose_expression.pas)
 CONF130	SAYS-PASS	CONFORM
 CONF131	SAYS-PASS	CONFORM
 CONF132	SAYS-PASS	CONFORM

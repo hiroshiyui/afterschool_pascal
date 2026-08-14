@@ -1,6 +1,6 @@
 <source>:38:9: error: the bounds of a subrange must be ordinal constants
 <source>:45:9: error: nil identifies no variable, so it cannot be dereferenced
 <source>:46:7: error: 'new' needs a pointer variable
-<source>:47:11: error: 'dispose' needs a pointer variable
+<source>:47:11: error: 'dispose' needs a pointer, found nil
 <source>:48:11: error: a value of type nil cannot be written
 <source>:50:5: error: a case label must be an ordinal constant

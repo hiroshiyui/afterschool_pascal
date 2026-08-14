@@ -29,6 +29,19 @@ and disagreed with the compiler on the first run (ADR-0086).
   makes `write := 5` an assignment where it was a syntax error, and lets a
   declared `write` be passed as a procedural parameter, which §6.6.3.7 refuses
   only for the required one. (ADR-0087)
+- **A pointer's domain binds to a type of its own type-definition-part.**
+  ISO 7185 §6.2.2.9's one exception says the domain-type may name a type
+  defined later in "the type-definition-part containing the defining-point of
+  the type-identifier" — so an enclosing type of the same spelling does not
+  settle it, the inner one still being possible further down. Such a name was
+  resolved where it stood, so a pointer meant the outer type and every use of
+  it was a type error. Found by the validation suite's CONF027.
+- **`dispose` takes an expression**, where §6.6.5.3 gives `new` a variable and
+  `dispose` "the identifying-value denoted by the expression q" — so
+  `dispose(f(p))` is a conforming statement and was refused. The nil written
+  back into the pointer afterwards still happens wherever there is a variable
+  to write it into. Its diagnostic now names what it found and no longer says
+  "variable". Found by CONF129.
 - **Three programs the standard requires to be rejected now are.** ISO 7185
   §6.6.6.3 gives `trunc` and `round` a parameter of real-type, so an integer is
   no longer accepted and widened; §6.10 requires the program-parameter

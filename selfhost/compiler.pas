@@ -1239,6 +1239,14 @@ var
   scopeTop: entryPtr;
   scopeDepth: integer;
   pendingHead, pendingTail: pendingPtr;
+  { ISO 7185 6.2.2.9's one exception binds a pointer's domain to the
+    type-identifier whose defining-point is in *the type-definition-part
+    containing the pointer*, so a name that also names an enclosing type must
+    wait to see whether this part defines it. True exactly while such a part is
+    open, because outside one there is nothing left to wait for -- a domain in
+    the variable part is resolved where it stands. Saved and restored by
+    CheckDeclarations, which recurses through nested blocks. }
+  inTypePart: boolean;
   heapTypes: heapTypePtr;
   { The tuple `new` is building, for as long as it has nowhere to live: the
     block it will sit in front of is what the tuple is being used to size.
@@ -7825,7 +7833,18 @@ begin
       6.11.3's optional interface qualifier -- so an imported type may be a
       pointer's domain, as it may be anything else a type-name reaches. }
     s := LookupQuiet(d^.ptQualAt, d^.ptQualLen, d^.ptAt, d^.ptLen);
-    if (s <> nil) and (s^.kind = skType) then
+    { 6.2.2.9: the domain binds to a type-identifier of *this* type-definition-
+      part when there is one, and an outer type of the same spelling does not
+      settle the question -- the inner one may still be defined further down.
+      So a name found outside this scope waits with the names found nowhere at
+      all, and ResolvePendingPointers looks it up again once the part is
+      complete, where the inner definition wins by ordinary shadowing. The
+      suite's CONF027 is the program: `p = ^node` beside `node = boolean`,
+      inside a procedure whose program declares `node = integer`. }
+    if (s <> nil) and (s^.kind = skType) and inTypePart and
+       (d^.ptQualLen = 0) and (LookupInScope(d^.ptAt, d^.ptLen) = nil) then
+      PendPointer(t, d, nil)
+    else if (s <> nil) and (s^.kind = skType) then
       t^.elem := s^.stype
     else if (s <> nil) and (s^.kind = skSchema) then begin
       { 6.4.4: a domain-type may be a schema-name. It is resolved here rather
@@ -12963,7 +12982,15 @@ begin
   end
   else begin
     a := p^.pcArgs;
-    if not IsDesignator(a) then begin
+    { 6.6.5.3 asks for different things of the two. `new(p)` "shall attribute
+      to p" the identifying-value, so p is somewhere to store and has to be a
+      variable; `dispose(q)` "shall remove the identifying-value denoted by the
+      *expression* q", which a function-designator is as much as a variable is.
+      Requiring a variable of both refused `dispose(alterptr(ptr1))`, which is
+      the suite's CONF129 -- and there is nothing for the nil-back-store of
+      ADR-0019 to write into there, which is why CodeGen asks the same
+      question rather than assuming an answer. }
+    if (p^.pcStd = spNew) and not IsDesignator(a) then begin
       ErrorAt(a^.line, a^.col);
       write('''');
       WritePool(p^.pcAt, p^.pcLen);
@@ -12974,7 +13001,12 @@ begin
       ErrorAt(a^.line, a^.col);
       write('''');
       WritePool(p^.pcAt, p^.pcLen);
-      write(''' needs a pointer variable, found ');
+      { A variable for `new`, which stores into it; any expression of a
+        pointer-type for `dispose`, which only reads one (6.6.5.3). }
+      if p^.pcStd = spNew then
+        write(''' needs a pointer variable, found ')
+      else
+        write(''' needs a pointer, found ');
       WriteTypeName(a^.ntype);
       writeln
     end
@@ -14813,10 +14845,13 @@ end;
   and differ only in what may surround them. }
 procedure CheckDeclarations(b: nodePtr; owner: symPtr);
 var c, t, g: nodePtr; which, line, col: integer; inTypes, done: boolean;
+    savedInTypePart: boolean;
 begin
   c := b^.blConsts;
   t := b^.blTypes;
   g := b^.blVars;
+  savedInTypePart := inTypePart;
+  inTypePart := false;
   inTypes := false;
   done := false;
   while ((c <> nil) or (t <> nil) or (g <> nil)) and not done do begin
@@ -14846,6 +14881,7 @@ begin
       type-definition-part, so a run of type definitions ending is what triggers
       it -- not the end of the block, which may hold several. }
     if (which <> 1) and inTypes then begin
+      inTypePart := false;
       ResolvePendingPointers;
       inTypes := false
     end;
@@ -14855,6 +14891,7 @@ begin
     end
     else if which = 1 then begin
       inTypes := true;
+      inTypePart := true;
       CheckTypeDecl(t);
       t := t^.next
     end
@@ -14865,7 +14902,9 @@ begin
     else
       done := true   { a variable group with no names; the parser makes none }
   end;
-  if inTypes then ResolvePendingPointers
+  inTypePart := false;
+  if inTypes then ResolvePendingPointers;
+  inTypePart := savedInTypePart
 end;
 
 { 6.11.2's export-part. The interface it names is a region of its own, so
@@ -22520,6 +22559,7 @@ end;
 
 procedure EmitStdProc(s: nodePtr);
 var slot, block, raw, rec, nameRec, nlen, ndata, part, narrow, at_: str;
+    disposeValue: boolean;
     status: str;
     domain, idx: typePtr; head, msg, k: integer;
 begin
@@ -22547,7 +22587,16 @@ begin
   else if (s^.pcStd = spPack) or (s^.pcStd = spUnpack) then
     EmitTransfer(s)
   else begin
-  EmitAddress(s^.pcArgs, slot);
+  { 6.6.5.3's `dispose(q)` removes "the identifying-value denoted by the
+    expression q", so there need be no address to take -- `dispose(f(p))` is a
+    conforming statement (the suite's CONF129). Sema decided this: the question
+    asked here is the structural one it already asked, and the answer decides
+    only whether there is a slot, not what anything means. }
+  disposeValue := (s^.pcStd = spDispose) and not IsDesignator(s^.pcArgs);
+  if disposeValue then
+    EmitExpr(s^.pcArgs, block)
+  else
+    EmitAddress(s^.pcArgs, slot);
   case s^.pcStd of
     { 6.7.5.6's bind(f, b). The binding is implementation-defined and here it
       is a file name, so what crosses to the runtime is b.name as the pointer
@@ -22671,10 +22720,14 @@ begin
     spDispose: begin
       domain := nil;
       if s^.pcArgs^.ntype <> nil then domain := s^.pcArgs^.ntype^.elem;
-      Def(block);
-      write(ircode, 'load ptr, ptr ');
-      PutOp(slot);
-      writeln(ircode);
+      { The value is already in `block` when there was no slot to load it
+        from. }
+      if not disposeValue then begin
+        Def(block);
+        write(ircode, 'load ptr, ptr ');
+        PutOp(slot);
+        writeln(ircode)
+      end;
       { ISO 7185 6.6.5.3 (D.23): "for dispose, it is an error if the parameter
         of a pointer-type has a nil-value". The check used to be made only for
         a schema domain, where stepping back over a header turns it into a free
@@ -22707,10 +22760,14 @@ begin
       writeln(ircode, ')');
       { ISO 7185 6.6.5.3 leaves the pointer undefined afterwards. Setting it to
         nil makes the next dereference trap instead of reading freed storage --
-        stricter than the standard requires, and cheap. }
-      write(ircode, '  store ptr null, ptr ');
-      PutOp(slot);
-      writeln(ircode)
+        stricter than the standard requires, and cheap. An expression that is
+        not a variable has nowhere to put it, and nothing that could read it
+        back, so there is nothing to leave undefined. }
+      if not disposeValue then begin
+        write(ircode, '  store ptr null, ptr ');
+        PutOp(slot);
+        writeln(ircode)
+      end
     end;
     { 6.7.5.8's GetTimeStamp(t). The clock is sampled once and then read field
       by field, which is the shape that keeps the record's *layout* out of the
@@ -24602,6 +24659,7 @@ begin
   scopeDepth := 0;
   pendingHead := nil;
   pendingTail := nil;
+  inTypePart := false;
   withTop := nil;
   producedHead := nil;
   stringSchema := nil;
