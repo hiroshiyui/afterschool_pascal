@@ -29,6 +29,13 @@ and disagreed with the compiler on the first run (ADR-0086).
   makes `write := 5` an assignment where it was a syntax error, and lets a
   declared `write` be passed as a procedural parameter, which §6.6.3.7 refuses
   only for the required one. (ADR-0087)
+- **Three programs the standard requires to be rejected now are.** ISO 7185
+  §6.6.6.3 gives `trunc` and `round` a parameter of real-type, so an integer is
+  no longer accepted and widened; §6.10 requires the program-parameter
+  identifiers to be distinct; and §6.4.3.3 puts the `;` before a variant-part
+  inside the production rather than the brackets, so a record without it is a
+  syntax error. None was written by any program in this corpus, which is why
+  all three had gone unnoticed.
 - **`reset` appends an end-of-line to a text file that does not end in one.**
   ISO 7185 §6.6.5.2's post-assertion requires it whenever the contents are not
   empty and do not already end in one, and this compiler did not: a program
@@ -63,6 +70,11 @@ and disagreed with the compiler on the first run (ADR-0086).
 
 ### Changed
 
+- **`doc/implementation-defined.md` §6 lists the programs this compiler accepts
+  that the standard requires to be rejected**, grouped by cause, where it had
+  named none of them. Clause 5.1 c) requires them to be documented and the
+  largest — §6.2.2.9's rule that a defining-point precedes every applied
+  occurrence in its region — accounts for nine on its own.
 - **`doc/implementation-defined.md` §3 names eight more unreported errors** —
   ISO 7185's D.5, D.6, D.12, D.13, D.19, D.27, D.30 and D.48. Nothing about the
   compiler changed: each had been unenforced since the feature it belongs to

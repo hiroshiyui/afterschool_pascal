@@ -51,7 +51,21 @@ classify() {
   if ! timeout 25 "$pascalcc" "$src" -o "$work/prog" >"$work/msg" 2>&1; then
     echo REJECTED; return
   fi
-  timeout 25 "$work/prog" </dev/null >"$work/out" 2>&1
+  # §6.10 binds a program-parameter that possesses a file-type to a
+  # command-line argument, so a program declaring one needs a name to bind to
+  # or it stops before its first statement. Two of the 812 do (CONF212 and
+  # CONF213, the external-binding tests), and without these they were catalogued
+  # as TRAPPED -- which reads as a defect and was a missing argument.
+  #
+  # Given to every program rather than to those two, because the harness has no
+  # business knowing which is which: a program that declares no file parameter
+  # ignores them, `input` and `output` are the standard streams and never
+  # arguments, and a non-file parameter consumes none (ADR-0074). The directory
+  # is fresh per program, so nothing one leaves behind is another's input.
+  rm -rf "$work/bound"; mkdir -p "$work/bound"
+  timeout 25 "$work/prog" "$work/bound/f1" "$work/bound/f2" \
+                          "$work/bound/f3" "$work/bound/f4" \
+    </dev/null >"$work/out" 2>&1
   local rc=$?
   if   grep -q 'ERROR NOT DETECTED' "$work/out"; then echo NOT-DETECTED
   elif grep -q 'FAIL'               "$work/out"; then echo SAYS-FAIL
@@ -67,6 +81,42 @@ while IFS=$'\t' read -r name verdict why; do
   want[$name]=$verdict
   note[$name]=$why
 done <"$expected"
+
+# A verdict that is not its category's own must carry a note saying why.
+#
+# The suite's DOC/README.TXT is what each category requires: a CONFORM program
+# must print PASS, a DEVIANCE program must be refused or stop, and a LEVEL1
+# program must be refused by a level 0 processor. A row that disagrees is
+# either a defect or a decision, and an unexplained one reads as neither -- it
+# had been four rows of `TRAPPED` with nothing beside them, one of which was a
+# real conformance defect (§6.6.5.2's appended end-of-line) and two of which
+# were the harness giving a program no argument to bind.
+#
+# So this is checked against the catalogue rather than against a run: it costs
+# nothing, it fails before the 812 are compiled, and it cannot be satisfied by
+# editing a verdict. ERROR rows always carry the Annex D number they name, so
+# the category needs no rule here.
+bare=0
+for name in "${!want[@]}"; do
+  case ${note[$name]} in
+    CONFORM*)  expected_verdict=SAYS-PASS ;;
+    DEVIANCE*) expected_verdict='REJECTED|TRAPPED' ;;
+    LEVEL1*)   expected_verdict=REJECTED ;;
+    *)         continue ;;
+  esac
+  [[ ${want[$name]} =~ ^($expected_verdict)$ ]] && continue
+  # Anything after the category word is a note.
+  if [[ ${note[$name]} =~ ^(CONFORM|DEVIANCE|LEVEL1)[[:space:]]*$ ]]; then
+    echo "bsi: $name is ${want[$name]} where its category expects" \
+         "${expected_verdict//|/ or }, and says nothing about why" >&2
+    bare=$((bare + 1))
+  fi
+done
+if (( bare )); then
+  echo "bsi: $bare row(s) of the catalogue need a note. A verdict that is" >&2
+  echo "bsi: not its category's own is a finding or a decision; say which." >&2
+  exit 1
+fi
 
 fail=0; checked=0
 declare -A tally

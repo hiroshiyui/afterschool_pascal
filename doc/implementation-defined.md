@@ -315,3 +315,95 @@ link one list node twice (ADR-0070).
 
 **Conformant array parameters are not accepted**, which is what makes this a
 level 0 processor rather than a deviation — see §1.
+
+### 6.1 Programs accepted that the standard requires to be rejected
+
+The three above are deviations this project chose. These are the other kind:
+rules of ISO 7185 that a program can break without this compiler saying so.
+They were found the way the unreported errors in §3 were — by the BSI Pascal
+Validation Suite's `DEVIANCE` category, whose programs a conforming processor
+must refuse or stop — and, as there, **no program written here had ever
+exercised one**, so every oracle in the repository agreed the compiler was
+right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
+and is where the list is maintained; this is the summary by cause.
+
+**A defining-point must precede every applied occurrence of its identifier in
+the region it belongs to** (§6.2.2.9), so a name may not be used in a block and
+then declared in it. This compiler enforces the rule only where the name
+resolves to *nothing* — ADR-0069's `var v: t` before `type t`. Where it
+resolves to an enclosing declaration or to a required identifier, the earlier
+uses silently keep the outer meaning and the later declaration takes effect
+from its own position: `const ten = ten` shadowing an outer `ten`, a `type x`
+whose own definition names an outer `x`, a procedure called before a nested
+redeclaration of its name, and `procedure integer` after the program has
+already used the type. **This is the largest of these, nine of the suite's
+programs**, and it needs a record of applied occurrences per region rather than
+a check at one site — a defining-point in an *enclosing* block must be refused
+by an applied occurrence in a nested one that has already been left, which no
+existing structure here records.
+
+**A character-string is not compatible with every packed array of char**
+(§6.1.7, §6.4.3.2): its index-type shall be a subrange of integer with a lower
+bound of 1, and its component-type shall be char rather than a subrange of one.
+This compiler compares packed char arrays by length alone (ADR-0017), which is
+the standard's own exception to name equivalence, and does not also check the
+bounds or the component-type.
+
+**A separator is required between a number and a word-symbol** (§6.1.8). The
+lexer's extended-digit and number scanning is maximal (ADR-0036) but stops at a
+letter for a decimal literal, so `i := 10div 2` lexes as three tokens rather
+than being refused.
+
+**The case-constants of a variant part shall be exactly the tag-type's values**
+(§6.4.3.3) — neither repeated, which *is* checked, nor missing, which is not.
+A tag value no arm names selects no variant, and §6.6.5.3's `new(p, c)` already
+refuses such a value; the type definition itself is accepted.
+
+**A pointer-type's domain-type shall be declared** (§6.4.4). A domain naming a
+type that no type-definition-part ever defines is reported, but §6.2.2.9's own
+exception is where this one lives: the domain may name a type defined later in
+the *same* type-definition-part, and this compiler completes such a name
+against an enclosing one as well (the suite's CONF027 is the program, and it is
+refused for a different reason).
+
+**An actual variable parameter is restricted three ways this compiler does not
+check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
+the tag-field a variant part is selected by, nor be written as `(variable)`.
+The first two are properties of the designator and the third is a grammar
+distinction between a variable-access and an expression.
+
+**A value parameter's type shall not contain a file** (§6.6.3.2). A file is
+refused as a value parameter directly (ADR-0021), and a record or array
+*holding* one is not.
+
+**Parameter list congruity** (§6.6.3.6) is checked between a procedural
+parameter and its actual (ADR-0030) but not in every place §6.6.3.6 names.
+
+**A procedure-identification shall not be followed by `forward`** (§6.6.1) —
+declaring the body of a forward-declared procedure and then writing `forward`
+again.
+
+**A function-identifier is not the pointer-variable of an identified-variable**
+(§6.5.4): inside `function f: ptr`, `f^` is a read of the function identifier,
+which §6.8.2.2 makes a recursive activation, so it is not a variable-access.
+
+**§6.8.1's rule about where a `goto` may land is enforced by the prefix test**
+(ADR-0029), which admits a jump between the branches of an if-statement; the
+clause does not.
+
+**A `for` statement's control-variable may not be threatened** (§6.8.3.9) by
+the statement it controls. §3 above records the assignment form as an
+unreported error (ADR-0063); the same is true of a threat through an actual
+variable parameter, through a `read`, and of the variable being reused as the
+control-variable of a nested `for` inside its own loop.
+
+**An array written whole to a textfile shall be a packed array [1..n] of
+char** (§6.9.3.6). This compiler accepts any string-type by the same
+length-based rule §6.1.7 gives, so an array whose lower bound is not 1 is
+written rather than refused.
+
+Two more of that category's programs are recorded in §3 instead, being errors
+rather than syntax or type rules: assignment to a sibling function's identifier
+(§6.8.2.2) and assignment to a `for` control-variable (§6.9.4 g)). One is not a
+deviation at all — set compatibility ignoring packing is the first entry of
+this section.

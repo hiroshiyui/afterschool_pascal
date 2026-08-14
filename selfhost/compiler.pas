@@ -3233,7 +3233,19 @@ begin
         Expect(tkColon, ctxFieldList);
       g^.grType := ParseTypeExpr;
       Append(head, tail, g);
-      more := Accept(tkSemi)
+      more := Accept(tkSemi);
+      { ISO 7185 6.4.3.3 writes the field-list as
+
+          [ ( fixed-part [ ';' variant-part ] | variant-part ) [ ';' ] ]
+
+        so the ';' between a fixed-part and a variant-part is part of the
+        production and not an option -- unlike the trailing one, which the
+        brackets do make optional. Without this line the loop simply ends when
+        no ';' follows and the caller parses the variant part regardless, so
+        the semicolon was optional in practice. The suite's DEV266 is the
+        record that says otherwise. }
+      if (not more) and Check(tkCase) then
+        Expect(tkSemi, ctxFieldList)
     end
   end;
   ParseFieldGroups := head
@@ -9759,8 +9771,29 @@ end;
   one possessing a file-type is bound to a command-line argument in the order
   written, and one that does not is bound to nothing. }
 procedure BindProgramParameters;
-var p: nodePtr; s: symPtr; argIndex: integer;
+var p, q: nodePtr; s: symPtr; argIndex: integer;
 begin
+  { 6.10: "The identifiers contained by the program-parameter-list shall be
+    distinct." Each is a defining-point for the program-block, so a repeat is
+    a redeclaration -- but they are *looked up* rather than declared here, the
+    variable-declaration-part having already made them, so `Declare`'s own
+    check never sees them. Reported once per repeat, against the later one,
+    which is the occurrence a reader would delete. }
+  p := progParams;
+  while p <> nil do begin
+    q := progParams;
+    while q <> p do begin
+      if PoolSame(q^.dnAt, q^.dnLen, p^.dnAt, p^.dnLen) then begin
+        ErrorAt(p^.line, p^.col);
+        write('the program parameter ''');
+        WritePool(p^.dnAt, p^.dnLen);
+        writeln(''' is listed more than once')
+      end;
+      q := q^.next
+    end;
+    p := p^.next
+  end;
+
   { argv[0] is the program itself, so the first file parameter is argv[1]. }
   argIndex := 1;
   p := progParams;
@@ -11172,8 +11205,14 @@ begin
             RequireArg(c, IsOrdinal(t), 'an ordinal  ', t);
             c^.ntype := Base(t)
           end;
+          { 6.6.6.3 spells both the same way: "From the expression x that shall
+            be of real-type". An integer is *not* one -- there is nothing for
+            either function to do to it, which is presumably why the standard
+            did not extend the offer. Accepting one was a permissive deviation
+            with nothing in the corpus to notice it; the suite's DEV158 is what
+            did. ISO/IEC 10206:1991 6.7.6.3 uses the same words. }
           biTrunc, biRound: begin
-            RequireArg(c, IsNumeric(t), 'a real      ', t);
+            RequireArg(c, IsReal(t), 'a real      ', t);
             c^.ntype := intType
           end;
           { 6.7.6.2: sin cos exp ln sqrt arctan take an integer, a real or a

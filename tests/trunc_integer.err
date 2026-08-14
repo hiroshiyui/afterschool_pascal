@@ -1,0 +1,2 @@
+<source>:19:11: error: 'trunc' needs a real argument, found integer
+<source>:20:11: error: 'round' needs a real argument, found integer
