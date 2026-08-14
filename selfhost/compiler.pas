@@ -87,6 +87,11 @@ const
   poolMax  = 440000; { characters of identifier and literal text }
   tokMax   = 140000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
+  { Blocks nest inside that limit and never beyond it: every one is reached
+    through a declaration the parser counted. One more than maxDepth so the
+    outermost scope can be depth 0 and the deepest a block the parser let
+    through. }
+  maxBlockDepth = 1001;
   { The size of a file variable's storage, which is PAS_FILE_SIZE in
     runtime/pasrt.h. The C++ code generator includes that header so the two
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
@@ -669,6 +674,16 @@ type
       component. Both ends compute the same name; this is which end this is. }
     storageElsewhere: boolean;
 
+    { ISO 7185 6.2.2.9: "The defining-point of an identifier or label shall
+      precede all applied occurrences of that identifier or label contained by
+      the program-block". `usedSeq` is when this symbol was last applied, on a
+      counter that only goes up, and `scopeMark[d]` is that counter when the
+      block at depth d was entered -- so "applied inside the block being
+      declared into" is one comparison. The *latest* application is enough:
+      the check runs at a defining-point, so nothing later has happened yet,
+      and if the newest application is not inside this block then none is. }
+    usedSeq: integer;
+
     { ISO/IEC 10206:1991 6.6: the value this variable bears when the block that
       declares it is entered. Borrowed from the AST and read only by the
       prologue -- every expression in one is nonvarying (6.8.2), so it is
@@ -1238,6 +1253,10 @@ var
     current scope from the ones enclosing it. }
   scopeTop: entryPtr;
   scopeDepth: integer;
+  { 6.2.2.9's bookkeeping -- see symRec.usedSeq. applySeq counts applied
+    occurrences and nothing else; scopeMark is indexed by scopeDepth. }
+  applySeq: integer;
+  scopeMark: array [0..maxBlockDepth] of integer;
   pendingHead, pendingTail: pendingPtr;
   { ISO 7185 6.2.2.9's one exception binds a pointer's domain to the
     type-identifier whose defining-point is in *the type-definition-part
@@ -6359,6 +6378,7 @@ begin
   s^.linkItemAt := 0;
   s^.linkItemLen := 0;
   s^.storageElsewhere := false;
+  s^.usedSeq := 0;
   NewSymbol := s
 end;
 
@@ -6387,7 +6407,7 @@ end;
 { Innermost-first lookup, which is what makes an inner declaration shadow an
   outer one of the same name. The scope stack is one chain of bindings, so
   walking it from the top is the search. }
-function Lookup(at, len: integer): symPtr;
+function LookupRaw(at, len: integer): symPtr;
 var e: entryPtr; found: symPtr;
 begin
   found := nil;
@@ -6395,6 +6415,28 @@ begin
   while (e <> nil) and (found = nil) do begin
     if PoolSame(e^.at, e^.len, at, len) then found := e^.sym;
     e := e^.prev
+  end;
+  LookupRaw := found
+end;
+
+{ The same search, and it records that the name was *applied* here -- which is
+  ISO 7185 6.2.2.8's word for an occurrence that is not the defining one. 6.2.2.9
+  then requires the defining-point to precede every such occurrence in its
+  region, and `Declare` is where that is tested.
+
+  Split from LookupRaw rather than given a flag because the two callers want
+  different things and neither should have to say so: every resolution of a
+  name written in the program goes through here, and the places that ask
+  whether a name is *taken* -- Declare itself -- go through the other. Asking
+  the second question through the first would record an applied occurrence for
+  a defining one and refuse every redeclaration. }
+function Lookup(at, len: integer): symPtr;
+var found: symPtr;
+begin
+  found := LookupRaw(at, len);
+  if found <> nil then begin
+    applySeq := applySeq + 1;
+    found^.usedSeq := applySeq
   end;
   Lookup := found
 end;
@@ -6412,7 +6454,7 @@ begin
 end;
 
 function Declare(at, len: integer; k: symKind; line, col: integer): symPtr;
-var s: symPtr;
+var s, outer: symPtr;
 begin
   s := LookupInScope(at, len);
   if s <> nil then begin
@@ -6423,6 +6465,31 @@ begin
     Declare := s
   end
   else begin
+    { 6.2.2.9: "The defining-point of an identifier or label shall precede all
+      applied occurrences of that identifier or label contained by the
+      program-block." An occurrence inside this block that resolved to an
+      *enclosing* declaration is one of those -- 6.2.2.8's NOTE says as much:
+      within the scope of a defining-point there are no applied occurrences of
+      an identifier that cannot be distinguished from it and whose own
+      defining-point is in an enclosing region.
+
+      Enforced until now only where the name resolved to nothing (ADR-0069's
+      `var v: t` before `type t`), because that is the only case anything
+      noticed. Where it resolved to an outer declaration the earlier uses kept
+      the outer meaning and this one silently took effect from here down.
+
+      The comparison is with the block being declared into, not with a depth:
+      a sibling procedure's body is at the same depth and is not in this
+      block, and shadowing there is exactly what the rule permits. }
+    outer := LookupRaw(at, len);
+    if outer <> nil then
+      if outer^.usedSeq > scopeMark[scopeDepth] then begin
+        ErrorAt(line, col);
+        write('''');
+        WritePool(at, len);
+        write(''' is already used in this block, so declaring it here would ');
+        writeln('give one name two meanings')
+      end;
     s := NewSymbol;
     s^.at := at;
     s^.len := len;
@@ -7832,7 +7899,18 @@ begin
     { 6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
       6.11.3's optional interface qualifier -- so an imported type may be a
       pointer's domain, as it may be anything else a type-name reaches. }
-    s := LookupQuiet(d^.ptQualAt, d^.ptQualLen, d^.ptAt, d^.ptLen);
+    { Not through Lookup: 6.2.2.9's exception is that "an identifier can have
+      an applied occurrence in the type-identifier of the domain-type of any
+      new-pointer-types contained by the type-definition-part containing the
+      defining-point of the type-identifier", so this occurrence is the one
+      that does *not* have to be preceded by its defining-point. Recording it
+      as an applied occurrence would make `p = ^node; node = boolean` -- the
+      shape the exception exists for -- refuse itself, which is how this line
+      came to be written: tests/pointer_domain_shadow.pas failed. }
+    if d^.ptQualLen = 0 then
+      s := LookupRaw(d^.ptAt, d^.ptLen)
+    else
+      s := LookupQuiet(d^.ptQualAt, d^.ptQualLen, d^.ptAt, d^.ptLen);
     { 6.2.2.9: the domain binds to a type-identifier of *this* type-definition-
       part when there is one, and an outer type of the same spelling does not
       settle the question -- the inner one may still be defined further down.
@@ -8915,6 +8993,7 @@ begin
             either. }
           mark := scopeTop;
           scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
           p := formals;
           tv := tuple;
           while p <> nil do begin
@@ -9176,6 +9255,7 @@ begin
   else begin
     mark := scopeTop;
     scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
     param^.discSyms := nil;
     param^.discSymTail := nil;
     p := schema^.discs;
@@ -13308,6 +13388,7 @@ begin
     if scoped then begin
       mark := scopeTop;
       scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
       { 6.9.3.10 makes the field-identifiers *and* the discriminant-identifiers
         defining-points for one region -- the statement -- and 6.2.2.7 allows a
         region only one defining-point per spelling. Outside a `with` the two
@@ -13999,6 +14080,7 @@ begin
       but only made visible once its body is entered. }
     mark := scopeTop;
     scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
     BuildFormals(d^.pdParams, sym, sym);
     if sym^.kind = skFunc then begin
       { The result lives in the frame like a local; assigning to the function
@@ -14042,6 +14124,7 @@ begin
 
       mark := scopeTop;
       scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
       p := sym^.params;
       while p <> nil do begin
         Bind(p^.sym^.at, p^.sym^.len, p^.sym);
@@ -15438,6 +15521,7 @@ begin
   curModule := info^.sym;
   mark := scopeTop;
   scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
 
   { 6.11.1: a module-parameter named `input` or `output` denotes the required
     text file, and is what makes it implicitly accessible in the module
@@ -15851,6 +15935,7 @@ begin
   end
   else begin
   scopeDepth := scopeDepth + 1;
+    scopeMark[scopeDepth] := applySeq;
   { `input` and `output` are declared by the program header rather than by the
     block, so they exist before the declarations are seen. Declaring them only
     when they are listed is what makes using `write` without `output` in the
@@ -24657,6 +24742,8 @@ begin
   curFile := '';
   scopeTop := nil;
   scopeDepth := 0;
+  applySeq := 0;
+  scopeMark[0] := 0;
   pendingHead := nil;
   pendingTail := nil;
   inTypePart := false;

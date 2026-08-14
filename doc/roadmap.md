@@ -1241,6 +1241,15 @@ Three candidates, cheapest first, and not exclusive:
     its Annex D number, so the section is regenerable rather than asserted, and
     D.59 — the one entry the suite has no program for — was probed by hand and
     is reported.
+  - The largest of the accepted-but-should-be-rejected group is closed:
+    §6.2.2.9's rule that a defining-point precedes every applied occurrence in
+    its region was nine programs, and five are now refused (ADR-0088). The
+    other four turn on a required identifier being recognised by *name* rather
+    than being a symbol — ADR-0087's seam from the other side. Declaring the
+    required identifiers as symbols in an outermost scope would close those
+    four, §6.2.2.10 for required *types* (`type integer = char` is accepted and
+    then ignored), and the rest of ADR-0087's own deferral, in one change. That
+    is the next thing worth doing here.
   - Two entries the suite *reports* are not enforced either, and the document
     now says so: an undefined pointer is usually nil here, because a level-0
     activation record is a global (ADR-0053), so the nil checks catch D.4 and

@@ -29,6 +29,16 @@ and disagreed with the compiler on the first run (ADR-0086).
   makes `write := 5` an assignment where it was a syntax error, and lets a
   declared `write` be passed as a procedural parameter, which §6.6.3.7 refuses
   only for the required one. (ADR-0087)
+- **A name used in a block may no longer be declared in it.** ISO 7185
+  §6.2.2.9 requires a defining-point to precede every applied occurrence of its
+  identifier in the region it belongs to, and this compiler enforced that only
+  where the name resolved to nothing. Where it resolved to an enclosing
+  declaration the earlier uses kept the outer meaning and the later declaration
+  took effect from its own position — one name with two meanings in one block,
+  reported by nothing. Ordinary shadowing is unaffected: a block that declares
+  a name it had not already used is legal and always was. §6.2.2.9's own
+  exception, a pointer domain naming a type defined later in its own
+  type-definition-part, is exempt. (ADR-0088)
 - **A pointer's domain binds to a type of its own type-definition-part.**
   ISO 7185 §6.2.2.9's one exception says the domain-type may name a type
   defined later in "the type-definition-part containing the defining-point of

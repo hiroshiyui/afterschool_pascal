@@ -1,0 +1,4 @@
+<source>:60:7: error: 'size' is already used in this block, so declaring it here would give one name two meanings
+<source>:68:6: error: 'small' is already used in this block, so declaring it here would give one name two meanings
+<source>:89:3: error: 'outercall' is already used in this block, so declaring it here would give one name two meanings
+<source>:99:29: error: 'small' is already used in this block, so declaring it here would give one name two meanings

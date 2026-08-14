@@ -1690,6 +1690,35 @@ property of the source.
   - It made a check reachable that never had been (`writestr(s)` with nothing
     to write compiled and wrote nothing), and stopped a broken `readstr`
     demanding `input` — it reads from no file at all.
+- **A defining-point precedes its applied occurrences** (ADR-0088). ISO 7185
+  §6.2.2.9: a name used in a block may not then be declared in it. Enforced
+  before only where the name resolved to *nothing* (ADR-0069's `var v: t`
+  before `type t`); where it resolved to an enclosing declaration the earlier
+  uses kept the outer meaning and nothing said so.
+  - **One integer per symbol and one per block.** `Lookup` stamps the symbol it
+    found with a counter; a block entry records the counter; `Declare` asks
+    whether the *outer* symbol of that spelling has been applied since this
+    block was entered. The **latest** application is enough, because the check
+    runs at a defining-point and nothing later has happened yet.
+  - **The comparison is with the block, not the depth.** A sibling procedure's
+    body is at the same depth and is not in this block, and shadowing there is
+    what the rule permits — a depth test reports it, and
+    `tests/definingpoint_order.pas` leads with the two procedures that must not
+    be reported for that reason.
+  - **`Lookup` and `LookupRaw` are split, not flagged.** Resolving a name the
+    program wrote goes through the first; asking whether a name is *taken*
+    goes through the second. Asking the second question through the first
+    records an applied occurrence for a defining one and refuses every
+    redeclaration in the language.
+  - **The exception needed its own line, and another feature's test found it.**
+    A pointer domain may name a type defined later in its own
+    type-definition-part, so `ResolvePointer` looks the name up without
+    recording an application; `tests/pointer_domain_shadow.pas` is what went
+    red first.
+  - Not caught: the same rule where the earlier occurrence is a **required
+    identifier**, which is recognised by name and so is not a symbol to stamp.
+    ADR-0087's seam from the other side, and the answer to both is to declare
+    the required identifiers as symbols.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

@@ -277,22 +277,22 @@ DEV035	REJECTED	DEVIANCE
 DEV036	REJECTED	DEVIANCE
 DEV037	REJECTED	DEVIANCE
 DEV038	REJECTED	DEVIANCE
-DEV039	RAN	DEVIANCE 6.2.2.9 a constant used, then the name redeclared in the same block -- unfixed, see the group note
+DEV039	REJECTED	DEVIANCE 6.2.2.9 a constant used, then the name redeclared in the same block (fixed: definingpoint_order.pas)
 DEV040	REJECTED	DEVIANCE
 DEV041	RAN	DEVIANCE 6.8.2.2 assignment to a sibling function's identifier; a stated unreported error (ADR-0055)
 DEV042	REJECTED	DEVIANCE
-DEV043	RAN	DEVIANCE 6.2.2.9 a field-identifier and a type-identifier of one spelling in one block -- unfixed
-DEV044	RAN	DEVIANCE 6.2.2.9 a type used in a parameter list, then the name redeclared as a parameter -- unfixed
+DEV043	RAN	DEVIANCE 6.2.2 a field-identifier and a type-identifier of one spelling; the pointer domain is 6.2.2.9's own exception -- unfixed
+DEV044	REJECTED	DEVIANCE 6.2.2.9 a type used in a parameter list, then redeclared as a parameter (fixed: same)
 DEV045	REJECTED	DEVIANCE
 DEV046	REJECTED	DEVIANCE
 DEV047	REJECTED	DEVIANCE
 DEV048	REJECTED	DEVIANCE
-DEV049	RAN	DEVIANCE 6.2.2.9 a constant in its own definition, shadowing an outer one -- unfixed
+DEV049	REJECTED	DEVIANCE 6.2.2.9 a constant in its own definition, shadowing an outer one (fixed: same)
 DEV050	REJECTED	DEVIANCE
 DEV051	REJECTED	DEVIANCE
 DEV052	REJECTED	DEVIANCE
 DEV053	REJECTED	DEVIANCE
-DEV054	RAN	DEVIANCE 6.2.2.9 a type in its own definition, shadowing an outer one -- unfixed
+DEV054	REJECTED	DEVIANCE 6.2.2.9 a type in its own definition, shadowing an outer one (fixed: same)
 DEV055	REJECTED	DEVIANCE
 DEV056	REJECTED	DEVIANCE
 DEV057	REJECTED	DEVIANCE
@@ -349,8 +349,8 @@ DEV107	REJECTED	DEVIANCE
 DEV108	REJECTED	DEVIANCE
 DEV109	REJECTED	DEVIANCE
 DEV110	RAN	DEVIANCE 6.5.4 a function-identifier is not the pointer-variable of an identified-variable -- unfixed
-DEV111	RAN	DEVIANCE 6.2.2.9 a procedure called before a nested redeclaration of its name -- unfixed
-DEV112	RAN	DEVIANCE 6.2.2.9 a required function used before the program redeclares it -- unfixed
+DEV111	REJECTED	DEVIANCE 6.2.2.9 a procedure called before a nested redeclaration of its name (fixed: same)
+DEV112	RAN	DEVIANCE 6.2.2.9 for a required *function* -- the earlier use resolves to a builtin, which is not a symbol to mark -- unfixed
 DEV113	REJECTED	DEVIANCE
 DEV114	REJECTED	DEVIANCE
 DEV115	REJECTED	DEVIANCE
@@ -502,8 +502,8 @@ DEV260	REJECTED	DEVIANCE
 DEV261	REJECTED	DEVIANCE
 DEV262	REJECTED	DEVIANCE
 DEV263	REJECTED	DEVIANCE
-DEV264	RAN	DEVIANCE 6.2.2.9 a required type used before the program redeclares the name -- unfixed
-DEV265	RAN	DEVIANCE 6.2.2.9 the same, the applied occurrence being in an earlier procedure -- unfixed
+DEV264	RAN	DEVIANCE 6.2.2.9 for a required *type*, same cause -- and `type integer = char` does not shadow at all -- unfixed
+DEV265	RAN	DEVIANCE 6.2.2.9 for a required type, the use being in an earlier procedure -- same cause -- unfixed
 DEV266	REJECTED	DEVIANCE 6.4.3.3 the ';' before a variant-part is part of the production (fixed: variantpart_semi.pas)
 ERR01P	RAN	ERROR    the pretest
 ERR01T	NOT-DETECTED	ERROR    D.43

@@ -328,19 +328,25 @@ right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
 **A defining-point must precede every applied occurrence of its identifier in
-the region it belongs to** (§6.2.2.9), so a name may not be used in a block and
-then declared in it. This compiler enforces the rule only where the name
-resolves to *nothing* — ADR-0069's `var v: t` before `type t`. Where it
-resolves to an enclosing declaration or to a required identifier, the earlier
-uses silently keep the outer meaning and the later declaration takes effect
-from its own position: `const ten = ten` shadowing an outer `ten`, a `type x`
-whose own definition names an outer `x`, a procedure called before a nested
-redeclaration of its name, and `procedure integer` after the program has
-already used the type. **This is the largest of these, nine of the suite's
-programs**, and it needs a record of applied occurrences per region rather than
-a check at one site — a defining-point in an *enclosing* block must be refused
-by an applied occurrence in a nested one that has already been left, which no
-existing structure here records.
+the region it belongs to** (§6.2.2.9) — enforced since ADR-0088, and *not* where
+the earlier occurrence resolves to a **required identifier**. `ord` used in one
+procedure and then declared by the program, or `integer` used before
+`procedure integer`, are still accepted: the earlier occurrence resolves to a
+built-in that this compiler recognises by name rather than to a symbol, so
+there is nothing for the rule to have seen. That is ADR-0087's seam met from
+the other side, and the fix for both is to declare the required identifiers as
+symbols in an outermost scope.
+
+**A required *type* cannot be redeclared.** `type integer = char` is accepted
+and `var v: integer` still resolves to the built-in, because a type-denoter
+consults `BuiltinType` before the scope. §6.2.2.10 makes required identifiers
+behave as if their defining-points were in a region enclosing the program, so
+the program's definition should win — as it already does for a required
+*function*. Same cause as the entry above.
+
+**A field-identifier and a type-identifier may not share a spelling in one
+block** in the way §6.2.2 describes; the occurrence that would show it is a
+pointer domain, which §6.2.2.9 exempts.
 
 **A character-string is not compatible with every packed array of char**
 (§6.1.7, §6.4.3.2): its index-type shall be a subrange of integer with a lower

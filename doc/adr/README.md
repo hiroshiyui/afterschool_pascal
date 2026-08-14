@@ -96,3 +96,4 @@ the alternatives that were rejected and why.
 | [0085](0085-stage-0-is-retired.md) | Stage 0 is retired | Accepted |
 | [0086](0086-an-oracle-this-project-did-not-write.md) | An oracle this project did not write | Accepted |
 | [0087](0087-a-required-procedure-may-be-declared-away.md) | A required procedure may be declared away | Accepted |
+| [0088](0088-a-defining-point-precedes-its-applied-occurrences.md) | A defining-point precedes its applied occurrences | Accepted |
