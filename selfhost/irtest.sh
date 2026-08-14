@@ -2,7 +2,7 @@
 # The stage-1 code generator, checked by running what it produces -- and then
 # by closing the bootstrap.
 #
-#   irtest.sh <path-to-pascalc-s0> [files...]
+#   irtest.sh <path-to-the-seed-compiler> [files...]
 #
 # Every earlier component was checked by *diffing* it against the C++ one, on a
 # dump both sides write (ADR-0022, ADR-0023, ADR-0024). CodeGen cannot be: the
@@ -20,7 +20,7 @@
 #
 # Then the part that is the point of the whole exercise (ADR-0004):
 #
-#   stage 1 = pascalc-s0(compiler.pas)     built by C++
+#   stage 1 = seed(compiler.pas)           built by the committed seed
 #   stage 2 = stage1(compiler.pas)         built by a compiler C++ built
 #   stage 3 = stage2(compiler.pas)         built by a compiler Pascal built
 #
@@ -29,8 +29,8 @@
 # step earlier, and readable when it fails.
 set -u
 
-pascalc=$1
-shift || { echo "usage: irtest.sh <pascalc-s0> [files...]" >&2; exit 2; }
+seedcc=$1
+shift || { echo "usage: irtest.sh <seed-compiler> [files...]" >&2; exit 2; }
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$here")
@@ -39,7 +39,7 @@ trap 'rm -rf "$work"' EXIT
 
 runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-}
 if [[ -z $runtime ]]; then
-  runtime=$(dirname "$pascalc")/../lib/libpasrt.a
+  runtime=$(dirname "$seedcc")/../lib/libpasrt.a
 fi
 if [[ ! -f $runtime ]]; then
   echo "irtest: cannot find libpasrt.a (looked at $runtime)" >&2
@@ -121,12 +121,14 @@ build() {
       "$runtime" -lm -o "$out" 2>"$work/link.err" || return 2
 }
 
-# The stage-1 compiler is written in Extended Pascal (ADR-0082), which
-# compiler.std says and this reads rather than hard-codes.
-if ! "$pascalc" "--std=$(standard_of "$here/compiler.pas")" \
-     "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
-  echo "--- the Pascal compiler did not compile ---" >&2
-  cat "$work/build.err" >&2
+# Stage 1 is built by the seed -- seed/pascalc.ll assembled into a compiler --
+# where it used to be built by the C++ one. Nothing else about the chain
+# changes: what the fixed point proves is that a compiler built from this
+# source reproduces itself, and which compiler started it off has never been
+# part of that claim (ADR-0004, ADR-0085).
+if ! build "$seedcc" "$here/compiler.pas" "$work/stage1"; then
+  echo "--- the seed could not compile the Pascal compiler ---" >&2
+  head -20 "$work/gen.err" "$work/link.err" >&2
   exit 1
 fi
 
@@ -169,28 +171,23 @@ golden() {
       continue
     fi
 
-    # Rejected by the C++ compiler: a diagnostic, not a program. difftest.sh is
-    # what compares those, and it compares all of them. A case with components
-    # is offered the same ones the Pascal build gets, or it would be rejected
-    # here for the interfaces it is missing and silently skipped -- which is
-    # how a separately compiled program would have gone untested.
-    refargs=()
-    if [[ -f ${f%.pas}.components ]]; then
-      while IFS= read -r rel; do
-        [[ -n $rel ]] || continue
-        refargs+=(--import "$(dirname "$f")/$rel")
-      done <"${f%.pas}.components"
-    fi
-    if ! "$pascalc" "--std=$(standard_of "$f")" "$f" \
-           "${refargs[@]+"${refargs[@]}"}" -c -o "$work/ref.o" \
-           >/dev/null 2>&1; then
-      [[ $stage == stage1 ]] && skipped=$((skipped + 1))
-      continue
-    fi
-
+    # A case that is *meant* not to compile is not this test's business:
+    # tests/run_test.sh compares its diagnostics, and what is checked here is
+    # what the code generator produces for programs there are programs for.
+    #
+    # It used to be told which those were by asking the C++ compiler, which is
+    # gone (ADR-0085). The question is now answered by the outcome and the
+    # expectation together: a build that fails where a .err golden exists is
+    # that case doing what it says; a build that fails with no .err is a
+    # regression, and is reported rather than skipped. Deciding by expectation
+    # alone would let a program that must not compile pass by failing to.
     build "$cc" "$f" "$work/$name"
     rc=$?
     if [[ $rc -ne 0 ]]; then
+      if [[ -f $expected_err ]]; then
+        [[ $stage == stage1 ]] && skipped=$((skipped + 1))
+        continue
+      fi
       case $rc in
         1) echo "--- $stage/$name: the Pascal compiler failed on it ---" >&2
            cat "$work/gen.err" >&2 ;;

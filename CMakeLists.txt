@@ -47,23 +47,32 @@ if(NOT LLVM_ENABLE_RTTI)
   target_compile_options(pascalc-s0 PRIVATE -fno-rtti)
 endif()
 
-# ---- The compiler: written in Afterschool Pascal, built by stage 0 ----
+# ---- The compiler: written in Afterschool Pascal, built by the seed ----
 #
-# `selfhost/compiler.pas` is the compiler this project is for, and until now it
-# was something the test harnesses built for themselves in a temporary
-# directory. Building it here makes it the ordinary product of `cmake --build`
-# and gives it the name a user reaches for.
+# `selfhost/compiler.pas` is the only compiler source in this repository, and
+# there is no C++ one to translate it (ADR-0085). `seed/pascalc.ll` is a working
+# compiler in LLVM IR, committed for exactly this: clang assembles it, and the
+# result translates the current source into the compiler that ships.
 #
-# It is one source file (ADR-0024) and takes ~3 s, so it is rebuilt whenever
-# either the source or stage 0 changes rather than being cached more cleverly.
-#
-# `--std=extended` because the source is Extended Pascal (ADR-0082), which
-# selfhost/compiler.std also says for the shell harnesses. The flag is written
-# out here rather than read from that file because CMake would have to read it
-# at configure time, and a build system that silently changed language when a
-# file changed would be worse than one that says which it means.
+# Two stages, and the second is the point -- what `build/bin/pascalc` is built
+# from is the source in the tree, never the seed. The seed only bootstraps.
+# seed/README.md has its provenance, its target lock and when to refresh it.
+set(APASCAL_SEED_CC ${CMAKE_BINARY_DIR}/bin/pascalc-seed)
 set(APASCAL_PASCALC ${CMAKE_BINARY_DIR}/bin/pascalc)
-#
+
+add_custom_command(
+  OUTPUT ${APASCAL_SEED_CC}
+  # Both binaries, not just this one: if the seed fails to assemble, the rule
+  # below never runs, and without this a stale build/bin/pascalc would survive
+  # for `ctest` to pass against.
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_SEED_CC} ${APASCAL_PASCALC}
+  COMMAND clang -Wno-override-module ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
+          $<TARGET_FILE:pasrt> -lm -o ${APASCAL_SEED_CC}
+  DEPENDS pasrt ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
+  COMMENT "Assembling the seed compiler from seed/pascalc.ll"
+  VERBATIM
+)
+
 # The output is removed first, so a compiler that fails to build leaves nothing
 # behind. Without that, `cmake --build` fails and the *previous* binary stays in
 # build/bin -- and a `ctest` run afterwards passes against a compiler that no
@@ -72,11 +81,14 @@ set(APASCAL_PASCALC ${CMAKE_BINARY_DIR}/bin/pascalc)
 add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
-  COMMAND $<TARGET_FILE:pascalc-s0> --std=extended
-          ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${APASCAL_PASCALC}
-  DEPENDS pascalc-s0 pasrt ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
+  COMMAND ${APASCAL_SEED_CC} --std=extended
+          ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${CMAKE_BINARY_DIR}/pascalc.ll
+  COMMAND clang -Wno-override-module ${CMAKE_BINARY_DIR}/pascalc.ll
+          $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
+  DEPENDS ${APASCAL_SEED_CC} pasrt
+          ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.std
-  COMMENT "Building pascalc from selfhost/compiler.pas with pascalc-s0"
+  COMMENT "Building pascalc from selfhost/compiler.pas with the seed compiler"
   VERBATIM
 )
 add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
@@ -123,8 +135,7 @@ set_tests_properties(selfhost-compiler PROPERTIES TIMEOUT 1800)
 # identical. That last comparison is the point of the whole bootstrap
 # (ADR-0004, ADR-0025).
 add_test(NAME selfhost-codegen
-         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/irtest.sh
-                 $<TARGET_FILE:pascalc-s0>)
+         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/irtest.sh ${APASCAL_SEED_CC})
 set_tests_properties(selfhost-codegen PROPERTIES TIMEOUT 1800)
 
 # The product itself. `irtest.sh` builds a stage-1 compiler of its own in a
