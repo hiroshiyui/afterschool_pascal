@@ -308,8 +308,19 @@ type
     value, a type or anything callable -- its whole job is to be the left half
     of `i.x`, which is the only way to reach a constituent of an interface
     imported `qualified`. }
+  { skRequired is a required function -- 6.2.2.10 puts its defining-point in "a
+    region enclosing the program", so it is a symbol in the outermost scope and
+    a program that declares one of the same name hides it. It is a *marker* and
+    nothing else: IsInvocable is false for it, ResultTypeOf answers nil, and
+    LookupUser turns it back into the nil every caller here reads as "the
+    required one". A real skFunc would send `abs` through CheckArguments, which
+    has no parameter list to check it against. What the symbol buys is a place
+    for 6.2.2.9's applied occurrence to be recorded. }
+  { Appended rather than placed where it reads best: the sema dump prints a
+    symbol kind as an ordinal, so where a name sits in this list is an
+    interface (ADR-0059). }
   symKind = (skConst, skType, skVar, skParam, skVarParam, skProcParam, skDisc,
-             skProc, skFunc, skSchema, skInterface);
+             skProc, skFunc, skSchema, skInterface, skRequired);
 
   { How a file variable reaches something outside the program. ISO 7185 6.10
     makes only a *program parameter* external; every other file variable is a
@@ -6529,6 +6540,20 @@ begin
   Lookup := found
 end;
 
+{ Lookup, with a required *function* answering nil -- the convention every
+  caller that asks "did the program declare one of its own?" was written
+  against, back when a required identifier was not a symbol at all (ADR-0087).
+  The occurrence is still recorded by Lookup, which is what 6.2.2.9 needs and
+  what the marker symbol exists for. }
+function LookupUser(at, len: integer): symPtr;
+var s: symPtr;
+begin
+  s := Lookup(at, len);
+  if s <> nil then
+    if s^.kind = skRequired then s := nil;
+  LookupUser := s
+end;
+
 function LookupInScope(at, len: integer): symPtr;
 var e: entryPtr; found: symPtr;
 begin
@@ -7933,21 +7958,6 @@ begin
   end
 end;
 
-function BuiltinType(at, len: integer): typePtr;
-begin
-  if PoolIs(at, len, 'integer  ') then BuiltinType := intType
-  else if PoolIs(at, len, 'real     ') then BuiltinType := realType
-  else if PoolIs(at, len, 'boolean  ') then BuiltinType := boolType
-  else if PoolIs(at, len, 'char     ') then BuiltinType := charType
-  else if PoolIs(at, len, 'text     ') then BuiltinType := textType
-  { A required type-identifier of ISO/IEC 10206:1991 and an ordinary identifier
-    of ISO 7185, where a program may define a type called `complex` of its own
-    -- which is why this is asked of the standard rather than of the lexer. }
-  else if PoolIs(at, len, 'complex  ') and (langStd = stdExtended) then
-    BuiltinType := complexType
-  else BuiltinType := nil
-end;
-
 { An enumerated type also *declares* its constants, into whatever scope the
   type itself appears in (ISO 7185 6.4.2.3) -- which is why this is done here
   rather than by the declaration part that happens to contain it. }
@@ -8067,8 +8077,10 @@ function ResolvePointer(d: nodePtr): typePtr;
 var t: typePtr; s: symPtr; busy: boolean; l: symListPtr;
 begin
   t := NewType(tyPointer);
-  t^.elem := BuiltinType(d^.ptAt, d^.ptLen);
-  if t^.elem = nil then begin
+  { A required type-identifier is an ordinary symbol in the outermost scope
+    (6.2.2.10), so `^integer` takes the same two steps every other domain does
+    -- and inside a type-definition-part it therefore *pends*, because an
+    `integer` of this part's own may still be defined further down. }
     { 6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
       6.11.3's optional interface qualifier -- so an imported type may be a
       pointer's domain, as it may be anything else a type-name reaches. }
@@ -8115,8 +8127,7 @@ begin
     end
     else
       { Not yet -- it may arrive before the type part ends. }
-      PendPointer(t, d, nil)
-  end;
+      PendPointer(t, d, nil);
   ResolvePointer := t
 end;
 
@@ -8927,11 +8938,9 @@ begin
     s^.schemaBody := d^.tdType;
     g := d^.tdDiscs;
     while g <> nil do begin
-      t := BuiltinType(g^.grType^.nmAt, g^.grType^.nmLen);
-      if t = nil then begin
-        seen := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
-        if (seen <> nil) and (seen^.kind = skType) then t := seen^.stype
-      end;
+      t := nil;
+      seen := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
+      if (seen <> nil) and (seen^.kind = skType) then t := seen^.stype;
       if t = nil then begin
         ErrorAt(g^.line, g^.col);
         write('unknown type ''');
@@ -9626,44 +9635,39 @@ end;
 function ResolveRestricted(d: nodePtr): typePtr;
 var s: symPtr; named, t: typePtr; done: boolean;
 begin
-  { A required type-identifier is not a symbol in any scope, so the same two
-    steps a named denoter takes are needed here. Taking only the second one is
-    worse than an unknown-type diagnostic: the caller writes the new name's
-    alias onto whatever comes back, so `restricted integer` renamed the shared
-    `integer` singleton and every later `integer` printed as the restricted
-    name. A placeholder returned from an error path is only safe while the path
-    really is an error path. }
-  { A qualified name reaches only what an import brought, so a required
-    type-identifier is not among its answers: `i.integer` is not `integer`. }
-  if d^.rtQualLen > 0 then named := nil
-  else named := BuiltinType(d^.rtAt, d^.rtLen);
+  { A required type-identifier is an ordinary symbol in the outermost scope
+    (6.2.2.10), so the lookup below answers for it as it does for any other
+    type-name and no pre-check is needed. It used to take a second step, and
+    that step had a trap in it worth remembering: the caller writes the new
+    name's alias onto whatever comes back, so a `restricted integer` that fell
+    to the error path renamed the shared `integer` singleton and every later
+    `integer` printed as the restricted name. }
+  named := nil;
   done := false;
-  if named = nil then begin
-    s := LookupName(d^.rtQualAt, d^.rtQualLen, d^.rtAt, d^.rtLen,
-                    d^.line, d^.col);
-    if s = nil then begin
-      { A qualified name that reached nothing has been reported by LookupName,
-        which knows which of its three ways it failed. }
-      if d^.rtQualLen = 0 then begin
-        ErrorAt(d^.line, d^.col);
-        write('unknown type ''');
-        WritePool(d^.rtAt, d^.rtLen);
-        writeln('''')
-      end;
-      ResolveRestricted := intType;
-      done := true
-    end
-    else if (s^.kind <> skType) or (s^.stype = nil) then begin
+  s := LookupName(d^.rtQualAt, d^.rtQualLen, d^.rtAt, d^.rtLen,
+                  d^.line, d^.col);
+  if s = nil then begin
+    { A qualified name that reached nothing has been reported by LookupName,
+      which knows which of its three ways it failed. }
+    if d^.rtQualLen = 0 then begin
       ErrorAt(d^.line, d^.col);
-      write('''restricted'' must name a type, and ''');
+      write('unknown type ''');
       WritePool(d^.rtAt, d^.rtLen);
-      writeln(''' is not one');
-      ResolveRestricted := intType;
-      done := true
-    end
-    else
-      named := s^.stype
-  end;
+      writeln('''')
+    end;
+    ResolveRestricted := intType;
+    done := true
+  end
+  else if (s^.kind <> skType) or (s^.stype = nil) then begin
+    ErrorAt(d^.line, d^.col);
+    write('''restricted'' must name a type, and ''');
+    WritePool(d^.rtAt, d^.rtLen);
+    writeln(''' is not one');
+    ResolveRestricted := intType;
+    done := true
+  end
+  else
+    named := s^.stype;
   if not done then begin
     { Every type has an underlying-type -- its own, when it is not restricted --
       so a second wrapper over one underlying-type would have nothing to tell it
@@ -9982,37 +9986,36 @@ begin
     t := nil;
     case d^.kind of
       nkNamed: begin
-        { A qualified name reaches only what an import brought, so a required
-          type-identifier is not among the answers: `i.integer` is not
-          `integer`. }
-        if d^.nmQualLen > 0 then t := nil
-        else t := BuiltinType(d^.nmAt, d^.nmLen);
-        if (t = nil) or (d^.nmQualLen > 0) then begin
-          s := LookupName(d^.nmQualAt, d^.nmQualLen, d^.nmAt, d^.nmLen,
-                          d^.line, d^.col);
-          if (s = nil) and (d^.nmQualLen > 0) then
-            t := intType
-          else if (s <> nil) and (s^.kind = skType) then
-            t := s^.stype
-          { 6.4.8: a schema denotes a type only once its discriminants are
-            given, so the message says what is missing rather than that the
-            name is unknown. }
-          else if (s <> nil) and (s^.kind = skSchema) then begin
-            ErrorAt(d^.line, d^.col);
-            write('schema ''');
-            WritePool(d^.nmAt, d^.nmLen);
-            write(''' needs its discriminants here, as ');
-            WritePool(d^.nmAt, d^.nmLen);
-            writeln('(...)');
-            t := intType
-          end
-          else begin
-            ErrorAt(d^.line, d^.col);
-            write('unknown type ''');
-            WritePool(d^.nmAt, d^.nmLen);
-            writeln('''');
-            t := intType
-          end
+        { A required type-identifier is a symbol in the outermost scope
+          (6.2.2.10), so it is found by the ordinary lookup -- and a program's
+          own `type integer = char` shadows it, which is the whole point of it
+          being a symbol. A qualified name reaches only what an import brought,
+          so `i.integer` is still not `integer`: an import cannot see the
+          outermost scope. }
+        s := LookupName(d^.nmQualAt, d^.nmQualLen, d^.nmAt, d^.nmLen,
+                        d^.line, d^.col);
+        if (s = nil) and (d^.nmQualLen > 0) then
+          t := intType
+        else if (s <> nil) and (s^.kind = skType) then
+          t := s^.stype
+        { 6.4.8: a schema denotes a type only once its discriminants are
+          given, so the message says what is missing rather than that the
+          name is unknown. }
+        else if (s <> nil) and (s^.kind = skSchema) then begin
+          ErrorAt(d^.line, d^.col);
+          write('schema ''');
+          WritePool(d^.nmAt, d^.nmLen);
+          write(''' needs its discriminants here, as ');
+          WritePool(d^.nmAt, d^.nmLen);
+          writeln('(...)');
+          t := intType
+        end
+        else begin
+          ErrorAt(d^.line, d^.col);
+          write('unknown type ''');
+          WritePool(d^.nmAt, d^.nmLen);
+          writeln('''');
+          t := intType
         end
       end;
       nkEnum:     t := ResolveEnum(d);
@@ -10197,9 +10200,11 @@ end;
 function LookupBuiltin(at, len: integer): builtinKind; forward;
 
 { The names ISO 7185 6.6.5 and 6.6.6 reserve for the required procedures and
-  functions. They are not symbols -- the compiler knows them by name -- so a
-  program that tries to pass one gets "undeclared identifier" unless it is
-  recognised here, which would be a baffling way to report 6.6.3.7. }
+  functions. Asked by name, because the answer a caller wants is nil either way:
+  a required procedure is not a symbol at all, and a required function is one
+  that LookupUser turns back into nil (6.2.2.10). So a program that tries to
+  pass one gets "undeclared identifier" unless it is recognised here, which
+  would be a baffling way to report 6.6.3.7. }
 function IsRequiredName(at, len: integer): boolean;
 begin
   IsRequiredName :=
@@ -10230,7 +10235,7 @@ begin
     writeln(''' must be the name of a procedure or function')
   end
   else begin
-    sym := Lookup(a^.vrAt, a^.vrLen);
+    sym := LookupUser(a^.vrAt, a^.vrLen);
     if sym = nil then begin
       ErrorAt(a^.line, a^.col);
       { ISO 7185 6.6.3.7: the actual parameter shall not denote a required
@@ -11185,8 +11190,10 @@ begin
   end
   else begin
   { A user-defined function shadows nothing built in: names are resolved in the
-    scope chain first, so a local `abs` would win. }
-  sym := Lookup(c^.clAt, c^.clLen);
+    scope chain first, so a local `abs` would win. The required one is a symbol
+    too (6.2.2.10), and LookupUser is what turns it back into the nil this
+    branch reads as "not the program's own". }
+  sym := LookupUser(c^.clAt, c^.clLen);
   if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
     c^.ntype := ResultTypeOf(sym);
@@ -12006,24 +12013,22 @@ var t: typePtr; s: symPtr;
 begin
   t := want;
   if e^.svLen > 0 then begin
-    t := BuiltinType(e^.svAt, e^.svLen);
-    if t = nil then begin
-      s := Lookup(e^.svAt, e^.svLen);
-      if s = nil then begin
-        ErrorAt(e^.line, e^.col);
-        write('undeclared identifier ''');
-        WritePool(e^.svAt, e^.svLen);
-        writeln('''')
-      end
-      else if s^.kind <> skType then begin
-        ErrorAt(e^.line, e^.col);
-        write('''');
-        WritePool(e^.svAt, e^.svLen);
-        writeln(''' is not a type, so it cannot name a structured value')
-      end
-      else
-        t := s^.stype
+    t := nil;
+    s := LookupUser(e^.svAt, e^.svLen);
+    if s = nil then begin
+      ErrorAt(e^.line, e^.col);
+      write('undeclared identifier ''');
+      WritePool(e^.svAt, e^.svLen);
+      writeln('''')
     end
+    else if s^.kind <> skType then begin
+      ErrorAt(e^.line, e^.col);
+      write('''');
+      WritePool(e^.svAt, e^.svLen);
+      writeln(''' is not a type, so it cannot name a structured value')
+    end
+    else
+      t := s^.stype
   end;
   { Whatever happens, the node leaves here with a type: CodeGen may not see a
     nil one, and a placeholder is what an error path gives it. A nested
@@ -12404,7 +12409,11 @@ begin
           e^.ntype := e^.vrField^.ftype
         end
         else begin
-          e^.vrSym := Lookup(e^.vrAt, e^.vrLen);
+          { LookupUser, not Lookup: a bare `abs` is not a designator and has no
+            type, and the marker symbol would leave ntype nil -- which breaks
+            the contract that Sema hands CodeGen a type on every node. Nilling
+            it here reproduces the "undeclared identifier" this always said. }
+          e^.vrSym := LookupUser(e^.vrAt, e^.vrLen);
           if e^.vrSym = nil then begin
             ErrorAt(e^.line, e^.col);
             write('undeclared identifier ''');
@@ -12523,7 +12532,7 @@ function RedefinedFamily(at, len: integer; args: nodePtr;
 var sym: symPtr; p: nodePtr;
 begin
   RedefinedFamily := nil;
-  sym := Lookup(at, len);
+  sym := LookupUser(at, len);
   if sym <> nil then begin
     p := NewNode(nkProcCall, line, col);
     p^.pcQualAt := 0;
@@ -12601,7 +12610,7 @@ begin
     this applies -- what the parser recognised as a write-parameter-list is an
     actual-parameter-list, and 6.8.2.3 gives one no field widths. }
   w^.wrCall := nil;
-  if Lookup(w^.wrAt, w^.wrLen) <> nil then begin
+  if LookupUser(w^.wrAt, w^.wrLen) <> nil then begin
     head := nil;
     tail := nil;
     a := w^.wrArgs;
@@ -12746,7 +12755,7 @@ begin
     read-parameter-list and an actual-parameter-list have the same shape, so
     the list the parser built is already the one a call takes. }
   r^.rdCall := nil;
-  if Lookup(r^.rdAt, r^.rdLen) <> nil then begin
+  if LookupUser(r^.rdAt, r^.rdLen) <> nil then begin
     a := r^.rdArgs;
     r^.rdArgs := nil;
     r^.rdCall := RedefinedFamily(r^.rdAt, r^.rdLen, a, r^.line, r^.col)
@@ -13932,7 +13941,7 @@ begin
           end
       end
       else begin
-        sym := Lookup(s^.pcAt, s^.pcLen);
+        sym := LookupUser(s^.pcAt, s^.pcLen);
         { A user-declared procedure of the same name wins, exactly as it does
           for the required functions in CheckCall. }
         if (sym = nil) and
@@ -15774,7 +15783,95 @@ var s, cap: symPtr; at, len, stampIndex: integer;
     stampIndex := stampIndex + 1
   end;
 
+  { 6.2.2.10: "Required identifiers that denote required values, types,
+    procedures, and functions shall be used as if their defining-points have a
+    region enclosing the program." A required *type* is therefore an ordinary
+    type symbol in the outermost scope, and `type integer = char` hides it for
+    the whole program -- which it did not while the type-denoters asked
+    BuiltinType before they asked the scope, and the definition was accepted
+    and then ignored. }
+  procedure RequiredType(nm: kwLit; t: typePtr);
+  begin
+    InternWord(nm, at, len);
+    s := Declare(at, len, skType, 0, 0);
+    s^.stype := t
+  end;
+
+  { ...and a required function is a marker of that same region -- see skRequired.
+    The required *procedures* are deliberately not here: each already yields to
+    a program's own declaration through the `Lookup answered nil` path
+    (ADR-0087), so a symbol would buy no verdict and would cost this compiler
+    the right to declare a procedure named `bind`. }
+  procedure RequiredFunc(nm: kwLit);
+  begin
+    InternWord(nm, at, len);
+    s := Declare(at, len, skRequired, 0, 0)
+  end;
+
+  { `lastposition` is twelve characters and kwLit holds nine. }
+  procedure RequiredFuncWide(nm: msgLit);
+  begin
+    InternWide(nm, at, len);
+    s := Declare(at, len, skRequired, 0, 0)
+  end;
+
 begin
+  { 6.4.1's required type-identifiers. `complex` is 10206's alone, and a valid
+    ISO 7185 program may define a type of that name -- which is why it is asked
+    of the standard here rather than of the lexer. }
+  RequiredType('integer  ', intType);
+  RequiredType('real     ', realType);
+  RequiredType('boolean  ', boolType);
+  RequiredType('char     ', charType);
+  RequiredType('text     ', textType);
+  if langStd = stdExtended then RequiredType('complex  ', complexType);
+
+  { 6.6.6's required functions. The 10206-only ones are declared only under
+    that standard, so an ISO 7185 program may still declare a function called
+    `re` and CheckCall may still say that `re` is an Extended Pascal function
+    rather than that the name is unknown. }
+  RequiredFunc('abs      ');
+  RequiredFunc('sqr      ');
+  RequiredFunc('odd      ');
+  RequiredFunc('ord      ');
+  RequiredFunc('chr      ');
+  RequiredFunc('succ     ');
+  RequiredFunc('pred     ');
+  RequiredFunc('sqrt     ');
+  RequiredFunc('sin      ');
+  RequiredFunc('cos      ');
+  RequiredFunc('ln       ');
+  RequiredFunc('exp      ');
+  RequiredFunc('arctan   ');
+  RequiredFunc('trunc    ');
+  RequiredFunc('round    ');
+  RequiredFunc('eof      ');
+  RequiredFunc('eoln     ');
+  if langStd = stdExtended then begin
+    RequiredFunc('card     ');
+    RequiredFunc('cmplx    ');
+    RequiredFunc('polar    ');
+    RequiredFunc('re       ');
+    RequiredFunc('im       ');
+    RequiredFunc('arg      ');
+    RequiredFunc('position ');
+    RequiredFuncWide('lastposition    ');
+    RequiredFunc('empty    ');
+    RequiredFunc('length   ');
+    RequiredFunc('index    ');
+    RequiredFunc('substr   ');
+    RequiredFunc('trim     ');
+    RequiredFunc('eq       ');
+    RequiredFunc('ne       ');
+    RequiredFunc('lt       ');
+    RequiredFunc('gt       ');
+    RequiredFunc('le       ');
+    RequiredFunc('ge       ');
+    RequiredFunc('binding  ');
+    RequiredFunc('date     ');
+    RequiredFunc('time     ')
+  end;
+
   InternWord('true     ', at, len);
   s := Declare(at, len, skConst, 0, 0);
   s^.stype := boolType;
@@ -16469,7 +16566,12 @@ begin
         if s^.owner = nil then write('?') else WritePool(s^.owner^.at, s^.owner^.len);
         write('/', s^.frameIndex:1, '#', s^.discIndex:1)
       end;
-      skSchema: write('schema')
+      skSchema: write('schema');
+      { A required function reaches no designator -- LookupUser answers nil for
+        it everywhere a name is resolved -- so nothing in a tree ever points
+        here. The arm exists because a Pascal case with no matching label
+        traps. }
+      skRequired: write('required')
     end
 end;
 
@@ -16670,7 +16772,8 @@ begin
     skDisc:     write('disc');
     skProc:     write('proc');
     skFunc:     write('func');
-    skSchema:   write('schema')
+    skSchema:   write('schema');
+    skRequired: write('required')
   end
 end;
 

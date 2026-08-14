@@ -319,22 +319,11 @@ exercised one**, so every oracle in the repository agreed the compiler was
 right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
-**A defining-point must precede every applied occurrence of its identifier in
-the region it belongs to** (§6.2.2.9) — enforced since ADR-0088, and *not* where
-the earlier occurrence resolves to a **required identifier**. `ord` used in one
-procedure and then declared by the program, or `integer` used before
-`procedure integer`, are still accepted: the earlier occurrence resolves to a
-built-in that this compiler recognises by name rather than to a symbol, so
-there is nothing for the rule to have seen. That is ADR-0087's seam met from
-the other side, and the fix for both is to declare the required identifiers as
-symbols in an outermost scope.
-
-**A required *type* cannot be redeclared.** `type integer = char` is accepted
-and `var v: integer` still resolves to the built-in, because a type-denoter
-consults `BuiltinType` before the scope. §6.2.2.10 makes required identifiers
-behave as if their defining-points were in a region enclosing the program, so
-the program's definition should win — as it already does for a required
-*function*. Same cause as the entry above.
+**A type-name is written onto the type it names**, so `type foo = char`
+makes a later bare `char` variable print as `foo` in a diagnostic. The simple
+types are shared singletons (ADR-0017) and the alias is recorded on the type
+rather than beside the name, so the last definition wins for every user of it.
+It affects no program's meaning — only what a message calls the type.
 
 **A field-identifier and a type-identifier may not share a spelling in one
 block** in the way §6.2.2 describes; the occurrence that would show it is a

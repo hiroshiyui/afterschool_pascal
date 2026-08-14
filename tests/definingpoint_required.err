@@ -1,0 +1,2 @@
+<source>:34:3: error: 'ord' is already used in this block, so declaring it here would give one name two meanings
+<source>:45:3: error: 'integer' is already used in this block, so declaring it here would give one name two meanings

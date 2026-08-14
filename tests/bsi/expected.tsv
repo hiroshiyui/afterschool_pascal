@@ -350,7 +350,7 @@ DEV108	REJECTED	DEVIANCE
 DEV109	REJECTED	DEVIANCE
 DEV110	REJECTED	DEVIANCE
 DEV111	REJECTED	DEVIANCE 6.2.2.9 a procedure called before a nested redeclaration of its name (fixed: same)
-DEV112	RAN	DEVIANCE 6.2.2.9 for a required *function* -- the earlier use resolves to a builtin, which is not a symbol to mark -- unfixed
+DEV112	REJECTED	DEVIANCE
 DEV113	REJECTED	DEVIANCE
 DEV114	REJECTED	DEVIANCE
 DEV115	REJECTED	DEVIANCE
@@ -502,8 +502,8 @@ DEV260	REJECTED	DEVIANCE
 DEV261	REJECTED	DEVIANCE
 DEV262	REJECTED	DEVIANCE
 DEV263	REJECTED	DEVIANCE
-DEV264	RAN	DEVIANCE 6.2.2.9 for a required *type*, same cause -- and `type integer = char` does not shadow at all -- unfixed
-DEV265	RAN	DEVIANCE 6.2.2.9 for a required type, the use being in an earlier procedure -- same cause -- unfixed
+DEV264	REJECTED	DEVIANCE
+DEV265	REJECTED	DEVIANCE
 DEV266	REJECTED	DEVIANCE 6.4.3.3 the ';' before a variant-part is part of the production (fixed: variantpart_semi.pas)
 ERR01P	RAN	ERROR    the pretest
 ERR01T	NOT-DETECTED	ERROR    D.43
