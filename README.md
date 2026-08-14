@@ -462,6 +462,10 @@ binding    var f: bindable text — a variable that may be bound to
            the only way a program names a file while it is *running* —
            ISO 7185 binds the program parameters before it starts and
            gives it no other way out
+           A program-parameter is bindable without saying so (§6.5.1),
+           and binding(p).name is the command-line argument it was given
+           (§6.7.6.8) — so a program can read its own command line, and
+           an unbound one is how it counts the arguments there were
 modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            a module: a heading that says what it exports and a block that
            implements it, either written together or as separate

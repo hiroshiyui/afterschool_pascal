@@ -1184,14 +1184,21 @@ second is live:
     ADR-0079), `.ll` is written to the second one, and then it stops.
 
     **Which is an ISO 7185 constraint, and this compiler stopped being an
-    ISO 7185-only processor at ADR-0033.** ISO/IEC 10206:1991 §6.5.1 makes a
-    program-parameter *bindable* whatever its type-denoter says, and §6.7.6.8
-    NOTE 2 says the `binding` function "can also be used to determine the
-    result of any binding of program-parameters prior to activation of the main
-    program". So an Extended Pascal program **can read its own command line** —
-    each argument is the `name` field of a program-parameter's binding — and
-    §6.7.5.6's `bind` lets it open a file whose name it computed. Both were
-    written off here as things Pascal cannot do; only one of them ever was.
+    ISO 7185-only processor at ADR-0033.** An Extended Pascal program **can
+    read its own command line**, and since ADR-0081 this one implements the two
+    clauses that say so: §6.5.1 makes a program-parameter *bindable* whatever
+    its type-denoter says, and §6.7.6.8 NOTE 2 makes `binding` the way to
+    "determine the result of any binding of program-parameters prior to
+    activation of the main program". Each argument is the `name` field of a
+    program-parameter's binding, and §6.7.5.6's `bind` then opens a file whose
+    name the program computed. `tests/extended/bindprogparam.pas`.
+
+    So what stands between `pascalc` and a command line is no longer the
+    language. It is that **`selfhost/compiler.pas` is an ISO 7185 source** and
+    cannot call `binding` at all: taking flags means compiling it as Extended
+    Pascal, and exactly two of its identifiers collide with that language's
+    word-symbols — `value`, 134 uses, and `bindable`, 2. That is the size of
+    the job, and it is a rename rather than a redesign.
 
     What remains genuinely impossible is **spawning the linker**: neither
     standard has process control, and inventing it would be an extension taken
