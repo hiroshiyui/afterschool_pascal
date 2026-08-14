@@ -15966,7 +15966,17 @@ var s, cap: symPtr; at, len, stampIndex: integer;
   begin
     InternWord(nm, at, len);
     s := Declare(at, len, skType, 0, 0);
-    s^.stype := t
+    s^.stype := t;
+    { And the type takes the name too. These are shared singletons, so without
+      this the first `type foo = char` in any program claims the one `char`
+      object's alias and every later `char` variable is *reported* as `foo` --
+      6.4.1 makes them the same type, so nothing is mis-compiled, but the
+      diagnostic names something the program never wrote. `text` has carried
+      its own name since it was created, for the same reason. }
+    if t^.aliasLen = 0 then begin
+      t^.aliasAt := at;
+      t^.aliasLen := len
+    end
   end;
 
   { ...and a required function is a marker of that same region -- see skRequired.
@@ -16739,11 +16749,13 @@ begin
         write('/', s^.frameIndex:1, '#', s^.discIndex:1)
       end;
       skSchema: write('schema');
-      { A required function reaches no designator -- LookupUser answers nil for
-        it everywhere a name is resolved -- so nothing in a tree ever points
-        here. The arm exists because a Pascal case with no matching label
-        traps. }
-      skRequired: write('required')
+      { Neither of these reaches a designator -- LookupUser answers nil for a
+        required function everywhere a name is resolved, and an
+        imported-interface-identifier is told from a field selection before a
+        node is built (ADR-0053) -- so nothing in a tree points at either. The
+        arms exist because a Pascal case with no matching label traps. }
+      skRequired: write('required');
+      skInterface: write('interface')
     end
 end;
 
@@ -16945,7 +16957,11 @@ begin
     skProc:     write('proc');
     skFunc:     write('func');
     skSchema:   write('schema');
-    skRequired: write('required')
+    skRequired: write('required');
+    { Neither can be a frame variable, having no storage; the arms are here
+      because a Pascal case with no matching label traps rather than falls
+      through. }
+    skInterface: write('interface')
   end
 end;
 

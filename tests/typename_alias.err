@@ -1,0 +1,2 @@
+<source>:34:3: error: cannot assign integer to a variable of type char
+<source>:35:3: error: cannot assign char to a variable of type integer

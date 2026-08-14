@@ -4,7 +4,7 @@
 <source>:5:21: error: an array index must be an ordinal type, found real
 <source>:9:10: error: undeclared identifier 'nosuchconstant'
 <source>:9:10: error: a variant's label must be an ordinal constant
-<source>:10:10: error: this variant's tag is colour, but the label is unknown
+<source>:10:10: error: this variant's tag is colour, but the label is integer
 <source>:14:1: error: function 'noresult' needs a result type
 <source>:17:1: error: 'twice' is already declared in this block
 <source>:17:1: error: 'twice' already has a body

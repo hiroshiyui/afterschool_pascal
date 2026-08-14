@@ -319,12 +319,6 @@ exercised one**, so every oracle in the repository agreed the compiler was
 right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
-**A type-name is written onto the type it names**, so `type foo = char`
-makes a later bare `char` variable print as `foo` in a diagnostic. The simple
-types are shared singletons (ADR-0017) and the alias is recorded on the type
-rather than beside the name, so the last definition wins for every user of it.
-It affects no program's meaning — only what a message calls the type.
-
 **ISO/IEC 10206:1991 §6.7.3.3's third restriction is not checked**: an actual
 variable parameter shall not denote a component of a **string-type**. Its
 fixed-string half is covered, a fixed-string-type being a packed array of char;
