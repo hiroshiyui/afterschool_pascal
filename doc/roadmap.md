@@ -57,8 +57,15 @@ feature lands in C++ and in `selfhost/compiler.pas` in the same commit, because
 the differential test compares them on every file in the tree.
 
 The stage-2 ≡ stage-3 comparison is the whole point: stage 2 is built by a
-compiler that was itself built by C++, stage 3 by one built by Pascal. If the
-bytes match, the Pascal source is a fixed point and stage 0 can be retired.
+compiler that was itself built by C++, stage 3 by one built by Pascal. The bytes
+match, so the Pascal source is a fixed point — the C++ compiler takes no part in
+the second reproduction, and stage 0 *could* be retired.
+
+**It is being kept, and not as scaffolding awaiting removal.** See
+[the two things that are not features](#the-two-things-that-are-not-features):
+a second implementation is what `difftest.sh` compares against and what
+`verify/` proves, and retiring stage 0 would give up both to buy a capability
+the fixed point already provides.
 
 ## The six bootstrap items (all done)
 
@@ -1124,25 +1131,24 @@ than reserved. So the lexis is complete even though the language is not.
 
 ## The two things that are not features
 
-Neither is a language feature, and both are live:
+Neither is a language feature. The first has been decided — against, and the
+heading it was written under is what had made it look like one decision; what
+survives it is three smaller things that were never the same question. The
+second is live:
 
-- **Retire stage 0.** The Pascal compiler *is* a fixed point now, so this is
-  available — but the C++ compiler is still what builds stage 1, still what the
-  first three components are diffed against, and still the one `verify/` proves.
-  Retiring it means giving up all three, and none of them has a replacement yet.
+- **Retire stage 0 — decided against.** The heading bundled four decisions, and
+  only one of them was retirement. The other three are additive, independent of
+  each other, and none of them needs the C++ compiler gone.
 
-  **The question "how far are we from self-hosting" is therefore answered, and
-  the answer is not a distance.** Writing Pascal directly is done: stage 2
-  equals stage 3, so the source reproduces itself without the C++ compiler
-  taking part in the second reproduction. What is left is a *trade* rather than
-  remaining implementation, and it has four parts, only the last of which is
-  work in the ordinary sense:
+  **The question "how far are we from self-hosting" is answered, and the answer
+  is not a distance.** Writing Pascal directly is done: stage 2 equals stage 3,
+  so the source reproduces itself without the C++ compiler taking part in the
+  second reproduction. There is no *capability* on the far side of this
+  decision, which is what makes it a trade and not a milestone.
 
-  - **No seed is checked in.** The stage-1 binary is built on demand and never
-    committed, so today the Pascal compiler has exactly one ancestor and it is
-    `pascalc`. Retiring stage 0 means committing an artefact — a binary, or the
-    `.ll` stage 0 emits — which is a policy decision about what this repository
-    is willing to carry and to trust, not a technical obstacle.
+  **The subtraction is refused.** Deleting `src/` costs the two strongest
+  oracles here and buys nothing:
+
   - **`difftest.sh` would have nothing to diff against.** The comparison is
     two independent implementations answering the same question over 434 files;
     delete one and it degrades to golden files, which record what the surviving
@@ -1151,16 +1157,40 @@ Neither is a language feature, and both are live:
     reaches, and a golden file cannot disagree with the program that wrote it.
   - **`verify/` proves `codegen.cpp`.** See the next entry, which was already
     about this.
-  - **There is no Pascal `pascalc`.** `selfhost/compiler.pas` is
-    `program Compile(output, source, ircode, options)`: three program
-    parameters, the standard read from a file because ISO 7185 gives a program
-    no command line beyond its parameters (ADR-0033), `.ll` written to the
-    second one, and then it stops. No `--std` flag, no pass pipeline, no
-    TargetMachine, no shelling out to `clang` — `irtest.sh` does the assembling
-    and linking that `main.cpp` does for the C++ compiler. So "write Pascal
-    directly" in the everyday sense of typing one command needs a driver built
-    around the compiler, and that driver is under the same constraint the
-    options file already answers.
+
+  So **stage 0 is a second implementation that is being kept**, not scaffolding
+  awaiting removal. That is a change to how this repository describes itself
+  and to nothing else. The three additive parts stay open on their own terms:
+
+  - **No seed is checked in.** The stage-1 binary is built on demand and never
+    committed, so today the Pascal compiler has exactly one ancestor and it is
+    `pascalc`. Committing an artefact — a binary, or the `.ll` stage 0 emits —
+    is a policy decision about what this repository is willing to carry and to
+    trust, not a technical obstacle, and nothing else waits on it.
+  - **Re-pointing the proofs at the Pascal generator** is worth doing *while*
+    the C++ compiler stays, rather than as a precondition for removing it: two
+    models disagreeing would be a third oracle. See the next entry.
+  - **A Pascal `pascalc`.** `selfhost/compiler.pas` is
+    `program Compile(output, source, ircode, options, imports)`: the standard
+    and the already-translated components arrive as *files* because ISO 7185
+    gives a program no command line beyond its program parameters (ADR-0033,
+    ADR-0079), `.ll` is written to the second one, and then it stops.
+
+    **Which is an ISO 7185 constraint, and this compiler stopped being an
+    ISO 7185-only processor at ADR-0033.** ISO/IEC 10206:1991 §6.5.1 makes a
+    program-parameter *bindable* whatever its type-denoter says, and §6.7.6.8
+    NOTE 2 says the `binding` function "can also be used to determine the
+    result of any binding of program-parameters prior to activation of the main
+    program". So an Extended Pascal program **can read its own command line** —
+    each argument is the `name` field of a program-parameter's binding — and
+    §6.7.5.6's `bind` lets it open a file whose name it computed. Both were
+    written off here as things Pascal cannot do; only one of them ever was.
+
+    What remains genuinely impossible is **spawning the linker**: neither
+    standard has process control, and inventing it would be an extension taken
+    from nowhere. So a self-hosted driver reaches `.ll` and stops there — a
+    property of the language rather than a shortfall of this compiler, and the
+    only part of `main.cpp`'s job that does not port.
 - **Keep the proofs alive across the port.** ADR-0025 made the decision the
   earlier version of this line asked for: the theorems stay attached to the C++
   model, and the Pascal generator is tied to it by *behaviour* — the golden

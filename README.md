@@ -823,14 +823,20 @@ last comparison alone, so stage 2 is put through the golden suite too. See
 ```sh
 build/bin/pascalc selfhost/compiler.pas -o stage1
 echo iso7185 > std.txt
-./stage1 selfhost/compiler.pas stage2.ll std.txt   # source, IR, and the standard
+: > imports.txt                                    # no imported components
+./stage1 selfhost/compiler.pas stage2.ll std.txt imports.txt
 clang stage2.ll build/lib/libpasrt.a -lm -o stage2
 ```
 
-The third argument is a *file* holding one word, not a flag: ISO 7185 gives a
-program no access to its command line beyond its program parameters, and those
-are files — so the Pascal compiler cannot take a `--std` the way the C++ one
-does (ADR-0033).
+The last two arguments are *files*, not flags: ISO 7185 gives a program no
+access to its command line beyond its program parameters, and those are files —
+so the Pascal compiler cannot take a `--std` the way the C++ one does
+(ADR-0033). The third holds one word, the standard to compile for. The fourth
+holds ISO/IEC 10206:1991 §6.13's already-translated program-components,
+concatenated, for the same reason: the compiler cannot open a file whose name it
+computes, so it is handed one file holding all of them (ADR-0079). It is empty
+here and must still exist, because program parameters bind to arguments in
+order.
 
 [doc/roadmap.md](doc/roadmap.md) expands this: what items 5 and 6 actually
 involve, the order the stage-1 source gets ported in, and the known limitations
