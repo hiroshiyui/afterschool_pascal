@@ -12,7 +12,7 @@ Trace hard bugs in this order. The most important step is the **stuck check (ste
 1. **Classify before explaining — which pass *owns* the bug?** The symptom appears at the end of a pipeline, and **the pass where it is visible is rarely the pass that is wrong**. Wrong program output can come from any of five places, and one command separates them:
 
    ```sh
-   build/bin/pascalc-s0 -O0 --emit-llvm bug.pas -o /dev/stdout
+   tools/pascalcc -O0 --emit-llvm bug.pas -o /dev/stdout
    ```
 
    - **IR looks wrong and matches the source's meaning being misread** → front end. Check the AST shape first: a precedence bug (`-7 mod 3`) is a *parser* bug that looks exactly like a codegen bug in the output.
@@ -43,7 +43,7 @@ Trace hard bugs in this order. The most important step is the **stuck check (ste
 
    Narrow it mechanically:
    ```sh
-   build/bin/pascalc-s0 -O0 --emit-llvm bug.pas -o /tmp/bug.ll
+   tools/pascalcc -O0 --emit-llvm bug.pas -o /tmp/bug.ll
    /usr/lib/llvm-21/bin/opt -O2 -print-changed /tmp/bug.ll -S -o /dev/null | less   # first pass that breaks it
    /usr/lib/llvm-21/bin/lli /tmp/bug.ll                                             # run the IR directly
    ```

@@ -13,39 +13,39 @@ choices that would otherwise look arbitrary.
 
 ```sh
 # configure (LLVM_DIR is required on Debian; llvm-config is not on PATH)
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang on PATH, nothing else
 cmake --build build -j
 
 ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
-tests/run_test.sh build/bin/pascalc-s0 tests/control.pas iso7185   # without ctest
-tests/run_test.sh build/bin/pascalc-s0 tests/extended/otherwise.pas extended
-selfhost/difftest.sh build/bin/pascalc-s0   # the Pascal compiler against the C++ one
-selfhost/irtest.sh build/bin/pascalc-s0     # what the Pascal compiler *builds*, and stage 2 = stage 3
+tests/run_test.sh tools/pascalcc tests/control.pas iso7185   # without ctest
+tests/run_test.sh tools/pascalcc tests/extended/otherwise.pas extended
+selfhost/irtest.sh build/bin/pascalc-seed   # what pascalc *builds*, and stage 2 = stage 3
 selfhost/producttest.sh build/bin/pascalc build/lib   # the built pascalc itself
+seed/refresh.sh                             # regenerate the seed (release only)
 
-build/bin/pascalc-s0 tests/hello.pas -o /tmp/hello && /tmp/hello
-build/bin/pascalc-s0 -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
-build/bin/pascalc-s0 --std=extended prog.pas   # ISO/IEC 10206:1991 instead
+tools/pascalcc tests/hello.pas -o /tmp/hello && /tmp/hello
+tools/pascalcc -S tests/hello.pas -o /dev/stdout   # inspect IR
+tools/pascalcc --std=extended prog.pas   # ISO/IEC 10206:1991 instead
 ```
 
-**The build produces two compilers and they are not interchangeable.**
-`build/bin/pascalc-s0` is the C++ one — it has the command line, it links, and
-it is what every harness above is handed. `build/bin/pascalc` is
-`selfhost/compiler.pas` translated by it, takes four *files* and no flags
-(ADR-0033, ADR-0079), and stops at the IR because no standard Pascal program
-can spawn a linker. Handing one a command meant for the other is the mistake
-this arrangement makes easy, and `verify/verify.py --pascalc` defaulting to the
-wrong one was the first instance.
+**There is one compiler, and it does not link.** `build/bin/pascalc` is
+`selfhost/compiler.pas`, and it writes IR and stops — no standard Pascal program
+can start an assembler. `tools/pascalcc` is where the missing half lives and is
+what every harness is handed; anything wanting an executable goes through it.
+`build/bin/pascalc-seed` is the same compiler built from `seed/pascalc.ll`, and
+exists only to bootstrap: what ships is always built from the source in the tree
+(ADR-0085).
 
 Adding `tests/foo.pas` + `tests/foo.out` requires **re-running `cmake`** — cases
 are registered by a `file(GLOB)` at configure time, and `tests/` and
 `tests/extended/` are globbed separately because they are compiled under
 different standards.
 
-`pascalc-s0` shells out to `clang` to link, and finds `libpasrt.a` through the
-build path baked in as `APASCAL_RUNTIME_DIR`; `AFTERSCHOOL_PASCAL_RUNTIME`
-overrides it.
+`tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009), and
+finds `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and
+`PASCALC` override where it looks for each, which is how CMake points the tests
+at their own build tree.
 
 ## Pipeline and its contracts
 
@@ -386,19 +386,22 @@ what is incomplete, not the docs — and the gap is recorded here so the next
 reader does not conclude otherwise from an empty search. Don't try to repair it
 by rewriting published history.
 
-## Bootstrap constraints (do not casually violate)
+## Bootstrap constraints (what is left of them)
 
-1. **No C++ RTTI in the AST.** `ast.h` tags nodes with `NK` and casts via
-   `as<T>(n)` / `is<T>(n)`, where each node declares `static constexpr NK
-   NodeKind`. Two reasons: Debian's LLVM is built without RTTI, and the eventual
-   Pascal-hosted compiler has no `dynamic_cast` — the tag + variant record is
-   what it will use. Adding a node means adding an `NK` enumerator and the
-   `NodeKind` member.
-2. **Textual `.ll` output stays a first-class path.** A compiler written in
-   Pascal cannot call LLVM's C++ API, so `--emit-llvm` is the backend that
-   survives the rewrite, not a debugging aid.
-3. Prefer C++ that maps onto Pascal — plain structs, tags, explicit control
-   flow — over template or exception machinery in the tree walks.
+The bootstrap is over and stage 0 is retired (ADR-0085), so two of the three
+constraints below constrain nothing any more. They are kept because they explain
+the shape of `selfhost/compiler.pas`, which a reader will otherwise find
+arbitrary.
+
+1. **No C++ RTTI in the AST** — *historical*. `ast.h` tagged nodes with `NK` and
+   cast via `as<T>(n)`, because Debian's LLVM is built without RTTI and because
+   the Pascal compiler has no `dynamic_cast`. That is why the AST here is a tag
+   plus a variant record, and why the port needed nothing redesigned.
+2. **Textual `.ll` output stays a first-class path** — *live, and more so*. It
+   was the backend that had to survive the rewrite; it is now the only backend,
+   and `seed/pascalc.ll` makes it what lets this repository build itself.
+3. **Prefer constructs that map onto Pascal** — *satisfied by construction*.
+   There is no other language here to prefer them over.
 
 Feature priority follows what a compiler is written in (procedures, records,
 pointers, text files, a usable string type), not ISO chapter order. README.md
@@ -453,8 +456,8 @@ property of the source.
   what tells every harness which flag to use — except where a `name.std`
   sidecar overrides it, which is how `selfhost/compiler.pas` says it is
   Extended Pascal from outside that directory (ADR-0082). `run_test.sh` (via CMake),
-  `difftest.sh`, `irtest.sh` and `producttest.sh` each derive it from the path,
-  so the four cannot be told different things about one file. The glob is
+  `irtest.sh` and `producttest.sh` each derive it from the path, so none can be
+  told a different thing about one file. The glob is
   **unanchored** on purpose: a file named on the command line arrives relative,
   and `*/tests/extended/*` quietly called it ISO 7185 — which compares two
   identical rejections and passes (ADR-0034).
@@ -463,9 +466,7 @@ property of the source.
   recursive, so a source declaring no program is never registered as a case
   that fails to run. A case that needs one lists it in `name.components`, one
   path per line relative to the case's own directory, and `run_test.sh` and
-  `irtest.sh` each translate it separately and link the objects. `difftest.sh`
-  *does* recurse and compares both compilers on a component on its own, which
-  is what a module-only source is for.
+  `irtest.sh` each translate it separately and link the objects.
   - `irtest.sh` skips a source with **no `.out` and no `.err`**, which is what
     keeps a component from being run as a program. Selecting by "the C++
     compiler rejected it" stopped working the moment a component became
@@ -1713,7 +1714,7 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 
 `selfhost/compiler.pas` is the stage-1 compiler, written in Afterschool Pascal,
 and since ADR-0083 it is **the compiler this repository produces**: CMake
-translates it with `pascalc-s0` and the result is `build/bin/pascalc`.
+translates it with the seed compiler and the result is `build/bin/pascalc`.
 The lexer (ADR-0022), the parser (ADR-0023), Sema (ADR-0024) and CodeGen
 (ADR-0025) are all done, and **the bootstrap closes**: the compiler compiles
 itself and stage 2 equals stage 3. **It is one source file** — neither standard
@@ -1725,8 +1726,9 @@ harnesses build a stage-1 compiler of their own in a temporary directory, so
 `build/bin/pascalc` could be missing or stale with every one of them green.
 
 It takes a **command line** — `pascalc [options] file.pas`, with `-o`,
-`--std=`, `--import` (repeatable) and `-h`, the same spellings `pascalc-s0`
-uses (ADR-0083). The dumps go to standard output; the IR goes to the file `-o`
+`--std=`, `--import` (repeatable), `--dump-*` and `-h` (ADR-0083). It is quiet
+on success and writes `file:line:col: error: message` on failure, to `output`,
+because no standard Pascal program has a second stream. The dumps go to standard output; the IR goes to the file `-o`
 names, because it is the compiler's *product* rather than a dump and has to be
 assembled. It is written on every run, which is what keeps `difftest.sh`
 exercising the code generator on every file in the corpus even though it
@@ -1751,20 +1753,25 @@ shape ADR-0079 had to defend against the language rather than on its merits.
 Twelve arguments and eight `--import`s are array bounds, and both report rather
 than truncate.
 
-**The first three components are checked against `src/`, not against golden
-files.** `pascalc-s0
---dump-all` and `selfhost/compiler.pas` write the same three sections
-(`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh <pascalc-s0>`
-diffs them over every `.pas` in the tree, under ctest as `selfhost-compiler`.
-If you change what a C++ stage produces, the Pascal one changes in the same
-commit or the test goes red — that is the point of it, not an inconvenience.
+**The first three components used to be checked against `src/`, and are now
+checked against golden files.** `pascalc --dump-all` writes three sections
+(`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh` diffed them
+against the C++ compiler's over every `.pas` in the tree. That was the strongest
+oracle here and ADR-0085 gave it up with stage 0; what replaced it is 435
+goldens, including the 157 error-path sources difftest was the only reader of.
 
-- There is **no mode argument for the dumps** because there is no second
-  binary: the Pascal program runs every stage and dumps all of them. The one
-  thing it *is* told is the standard, and that arrives as a file rather than an
-  argument for the reason above. Each section reports what its
-  own stage found and shows its result only when nothing was found — a stage
-  that failed has nothing to show, and the stages after it do not run.
+**Know what that means when you change a stage.** A golden agrees with whatever
+wrote it, so a change that is wrong in the dump *and* wrong in the goldens you
+regenerate is invisible. Regenerating a golden is a decision to be argued for in
+the commit message, not a step.
+
+- The dumps are **opt-in** — `--dump-tokens`, `--dump-ast`, `--dump-sema`,
+  `--dump-all` — and each stops at the stage it names. They were unconditional
+  while there was a second binary to compare them against, which is the reason
+  ADR-0025 gave for having no mode to select; it expired with stage 0. Each
+  section reports what its own stage found and shows its result only when
+  nothing was found — a stage that failed has nothing to show, and the stages
+  after it do not run.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`

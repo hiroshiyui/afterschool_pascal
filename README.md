@@ -14,55 +14,45 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Requires LLVM 21 development files, a C++20 compiler, and `clang` on PATH for
-linking.
+Requires `clang` on PATH, and nothing else — no LLVM development files and no
+C++ compiler. **The compiler is written in Afterschool Pascal**, and the one
+that builds it is `seed/pascalc.ll`, a working compiler in LLVM IR committed to
+this repository. `clang` assembles the seed; the seed translates
+`selfhost/compiler.pas`; that is `build/bin/pascalc`, and it compiles itself to
+a fixed point.
 
-That builds **two compilers**, and the distinction matters everywhere below:
-
-| | | |
-|---|---|---|
-| `build/bin/pascalc-s0` | written in C++ | stage 0 — it builds the one below |
-| `build/bin/pascalc` | written in Afterschool Pascal | the compiler this project is for |
-
-`pascalc` is `selfhost/compiler.pas` translated by `pascalc-s0`, and it compiles
-itself: stage 2 equals stage 3, so the source is a fixed point. Stage 0 is kept
-rather than retired — it is the second implementation `selfhost/difftest.sh`
-compares against and the one `verify/` proves. [doc/roadmap.md](doc/roadmap.md)
-has that trade in full.
+There was a C++ compiler, `pascalc-s0`, and it was retired once it had nothing
+left to do ([ADR-0085](doc/adr/0085-stage-0-is-retired.md)). What that cost —
+a second implementation to diff against — is written down there rather than
+glossed. Tag `v0.1.0` is the last commit where it existed.
 
 ## Using
 
-`pascalc-s0` does the most, so it is what the examples use — it optimises,
-emits objects and links:
+**`pascalc` writes LLVM IR and stops there.** Neither standard has process
+control, so a compiler written in Pascal cannot start an assembler — a property
+of the language rather than a shortfall of this one. `tools/pascalcc` is where
+the missing half lives, and is what the examples use:
 
 ```sh
-build/bin/pascalc-s0 hello.pas          # -> ./hello
-build/bin/pascalc-s0 -o greet hello.pas
-build/bin/pascalc-s0 --emit-llvm hello.pas   # -> hello.ll
-build/bin/pascalc-s0 -c hello.pas            # -> hello.o
-build/bin/pascalc-s0 -O0 hello.pas           # -O0..-O3, default -O2
-build/bin/pascalc-s0 --std=extended hello.pas  # ISO/IEC 10206:1991 instead
-build/bin/pascalc-s0 --keep-temps hello.pas  # keep the intermediate .o
-build/bin/pascalc-s0 --help                  # the full option list
+tools/pascalcc hello.pas               # -> ./hello
+tools/pascalcc -o greet hello.pas
+tools/pascalcc -S hello.pas            # -> hello.ll, no linking
+tools/pascalcc -c hello.pas            # -> hello.o
+tools/pascalcc -O0 hello.pas           # -O0..-O3, handed to clang
+tools/pascalcc --std=extended hello.pas   # ISO/IEC 10206:1991 instead
 ```
 
-**`pascalc` takes the same flags**, and reads them the only way a Pascal
-program can: §6.5.1 makes every program-parameter bindable and §6.7.6.8 makes
-`binding(p).name` the argument it was bound to, so the compiler asks its own
+The compiler underneath takes the same flags, and reads them the only way a
+Pascal program can: §6.5.1 makes every program-parameter bindable and §6.7.6.8
+makes `binding(p).name` the argument it was bound to, so it asks its own
 program-parameters what it was invoked with (ADR-0081, ADR-0083).
 
 ```sh
 build/bin/pascalc hello.pas                          # -> hello.ll
 build/bin/pascalc --std=extended prog.pas -o prog.ll
 build/bin/pascalc prog.pas --import counter.pas -o prog.ll
-clang hello.ll build/lib/libpasrt.a -lm -o hello     # pascalc stops at the IR
+clang hello.ll build/lib/libpasrt.a -lm -o hello     # the half it cannot do
 ```
-
-That last line is the one part of a driver's job that does not port: neither
-standard has process control, so a compiler written in Pascal cannot spawn the
-linker. It is a property of the language rather than a shortfall of this
-compiler, and it is why `pascalc-s0` — which also optimises, emits objects and
-links — is still what the examples below use.
 
 ISO/IEC 10206:1991 §6.13 lets a program's components be translated separately.
 A source that declares only modules is one, and it becomes an object; the
@@ -70,18 +60,16 @@ component that declares the `program` is given the others' *sources*, which is
 where their interfaces are written:
 
 ```sh
-build/bin/pascalc-s0 --std=extended -c counter.pas -o counter.o
-build/bin/pascalc-s0 --std=extended prog.pas --import counter.pas counter.o -o prog
+tools/pascalcc --std=extended -c counter.pas -o counter.o
+tools/pascalcc --std=extended prog.pas --import counter.pas counter.o -o prog
 ```
 
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
-`--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three;
-they exist so the Pascal compiler can be diffed against this one, and are
-described under "Stage 1" below.
+`--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
 
-The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
-`pascalc-s0` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to
-point somewhere else. `pascalc` never links, so it never looks.
+The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`;
+set `AFTERSCHOOL_PASCAL_RUNTIME` to point `pascalcc` at a copy outside the build
+tree.
 
 The language is selected per source. `--std=iso7185` is the default and is
 what everything below describes; `--std=extended` is ISO/IEC 10206:1991, which
@@ -319,7 +307,7 @@ compiler stops the program with a message rather than letting it wrap, read
 past the array, or produce an arbitrary value:
 
 ```
-$ pascalc-s0 overflow.pas && ./overflow
+$ tools/pascalcc overflow.pas && ./overflow
 runtime error: integer overflow in sqr
 ```
 
@@ -660,31 +648,27 @@ what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
 | File | Role |
 | --- | --- |
-| `src/lexer.cpp` | source text to tokens; folds case, handles both comment forms |
-| `src/parser.cpp` | recursive descent over the ISO grammar, builds the AST |
-| `src/astdump.cpp` | the `--dump-*` format — a specification, since the Pascal compiler writes it too |
-| `src/ast.h` | tag-dispatched nodes — an explicit node tag and a checked downcast helper, no C++ RTTI |
-| `src/sema.cpp` | scopes, name resolution, type checking, constant folding |
-| `src/codegen.cpp` | AST to LLVM IR through LLVM's C++ API; `main` is the program body |
-| `src/main.cpp` | `pascalc-s0`'s driver: optimisation pipeline, object emission, linking |
-| `runtime/pasrt.c` | formatted output and runtime checks |
-| `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
-| `tests/extended/` | the same, for cases written in Extended Pascal — the directory is what selects `--std` |
-| `verify/` | SMT proofs that the lowering means what ISO 7185 says |
-| `selfhost/compiler.pas` | **`pascalc`** — the same compiler, written in Afterschool Pascal, driver included |
+| `selfhost/compiler.pas` | **the compiler** — lexer, parser, Sema, code generator and driver, one source file |
 | `selfhost/compiler.std` | one word: which standard that source is written in |
-| `selfhost/difftest.sh` | the two compilers' dumps, diffed over every Pascal source in the tree |
-| `selfhost/irtest.sh` | what `pascalc` *builds*, run against the same goldens — and stage 2 = stage 3 |
-| `selfhost/producttest.sh` | that `build/bin/pascalc` itself exists and works, which the three above cannot see |
+| `seed/pascalc.ll` | a working compiler in IR, committed, so the tree can build itself |
+| `runtime/pasrt.c` | formatted output and runtime checks |
+| `tools/pascalcc` | compile *and link*, which the compiler cannot do for itself |
+| `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
+| `tests/extended/` | the same, for cases written in Extended Pascal — the directory selects `--std` |
+| `selfhost/badparse/`, `selfhost/badsema/` | one file per diagnostic; the parser stops at its first, Sema accumulates |
+| `verify/` | SMT proofs that the lowering means what ISO 7185 says |
+| `selfhost/irtest.sh` | runs what the compiler builds, and requires stage 2 = stage 3 |
+| `selfhost/producttest.sh` | that `build/bin/pascalc` itself exists, versions itself and reports failure |
 
-Two deliberate constraints, both there for the bootstrap:
+Two constraints shaped this, and only one is still live:
 
-* **No `dynamic_cast`, no exceptions in the AST walk.** Node kinds are explicit
-  tags. Pascal has neither facility, so the C++ code stays within shapes that
-  translate directly into a Pascal variant record.
-* **Textual `.ll` output is a first-class path, not a debugging aid.** A
-  compiler written in Pascal cannot call LLVM's C++ API. Emitting IR text is the
-  backend that survives the rewrite.
+* **Textual `.ll` output is a first-class path, not a debugging aid.** It was
+  the backend that had to survive the rewrite; it is now the backend, and
+  `seed/pascalc.ll` makes it the thing that lets the repository build itself.
+* **No `dynamic_cast`, no exceptions in the AST walk** — a rule about the C++
+  that no longer exists. It is why the AST is a tag and a variant record, which
+  is the shape `selfhost/compiler.pas` still has, so the record explains the
+  code even though it constrains nothing.
 
 ## Verified, not just tested
 
@@ -695,7 +679,7 @@ rather than sampled:
 
 ```sh
 pip install z3-solver
-python3 verify/verify.py --pascalc build/bin/pascalc-s0
+python3 verify/verify.py
 ```
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
@@ -764,26 +748,26 @@ rule — and says which decision governs each.
 
 ## Bootstrap plan
 
-The classic three-stage build. Stage 0 is the C++ compiler in this repository;
-it only has to be good enough to compile the Pascal-written compiler once.
+The classic three-stage build, and it is **finished**. Stage 0 was a compiler
+written in C++, kept only until it had nothing left to do; it was retired once
+the Pascal compiler was the product, and what used to start the chain is now a
+committed artefact:
 
 ```
-stage 0   pascalc-s0 (C++)       — this repo, grown until it accepts the stage-1 source
-stage 1   pascalc1 = stage0(compiler.pas)      this is build/bin/pascalc
+seed      seed/pascalc.ll        — a working compiler, in IR, in this repository
+stage 1   pascalc1 = seed(compiler.pas)         this is build/bin/pascalc
 stage 2   pascalc2 = pascalc1(compiler.pas)
-stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 byte-for-byte
+stage 3   pascalc3 = pascalc2(compiler.pas)     require pascalc2 ≡ pascalc3 byte-for-byte
 ```
 
-**This now holds.** The compiler compiles itself, and stage 2 and stage 3 are
-identical, byte for byte, checked under `ctest` by
-`selfhost/irtest.sh`.
+**This holds.** The compiler compiles itself, and stage 2 and stage 3 are
+identical, byte for byte, checked under `ctest` by `selfhost/irtest.sh`.
 
-Stage 0 is **kept rather than retired**, and that is a decision rather than
-inertia: it is the second implementation `selfhost/difftest.sh` compares
-against and the one `verify/` proves, and retiring it would give up both to
-buy a capability the fixed point already provides. What is still open is a
-checked-in seed, and re-pointing the proofs at the Pascal generator —
-`doc/roadmap.md` has both.
+What the fixed point proves has never depended on which compiler started the
+chain, which is why replacing stage 0 with the seed cost the claim nothing —
+and why retiring stage 0 was possible at all
+([ADR-0085](doc/adr/0085-stage-0-is-retired.md)). What it *did* cost is the
+differential test, and that record says so plainly rather than in passing.
 
 Reaching stage 1 means the accepted language has to cover what a compiler is
 written in. In dependency order:
@@ -821,73 +805,52 @@ one source. It is itself written in **Extended Pascal** — the language it is
 written in and the language it accepts are independent, and only that standard
 lets a program read its own command line
 ([ADR-0082](doc/adr/0082-the-stage-1-compiler-is-extended-pascal.md)). It is
-checked against the C++ stages it was ported from, on every Pascal source in the
-tree, compared stage for stage — the harness prints how many:
+checked by running what it builds against 435 golden files, and then by closing
+the bootstrap.
 
 ```sh
-selfhost/difftest.sh build/bin/pascalc-s0  # also runs under ctest
+selfhost/irtest.sh build/bin/pascalc-seed   # also runs under ctest
 ```
 
-Both write the same three sections, so the comparison is a plain diff:
-
-```
-$ build/bin/pascalc-s0 --dump-tokens tests/hello.pas | head -3
-1 1 kw program
-1 9 ident hello
-1 14 op (
-
-$ build/bin/pascalc-s0 --dump-sema tests/hello.pas | head -6
-program hello
-  params
-    name output @1:15
-  frames
-    frame hello level 0
-      var output #0 : text (stdout 0)
-```
-
-That is the checkpoint rather than a convenience. A disagreement between the
-two is bisectable now; the same disagreement discovered at stage 3 is two
-compiler binaries differing by a byte. The corpus includes the Pascal compiler's
-own source, and three directories cover the error paths a valid program never
-reaches: `selfhost/torture.pas` for the lexer, `selfhost/badparse/` for the
-parser (one file per message, because the parser stops at its first error) and
-`selfhost/badsema/` for Sema (thirteen files, because Sema accumulates). See
-[ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md),
-[ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md) and
-[ADR-0024](doc/adr/0024-the-stage-1-compiler-becomes-one-source-file.md).
-
-The AST is where the bootstrap constraints paid off: the node tag of
-[ADR-0005](doc/adr/0005-tag-dispatched-ast-without-cpp-rtti.md) became a
-variant record's tag and the downcast helper became the `case` that reads it,
-with no `dynamic_cast` to replace and nothing to redesign.
-
-The code generator is the one component that is **not** diffed, and could not
-be: the C++ backend builds the module through LLVM's C++ API while the Pascal
-one prints assembler text, and LLVM's own printer is not a specification — it
-renumbers, reorders and changes between releases. So it is checked by *running*
-what it produces, against the same golden output the C++ compiler is held to,
-and then by closing the bootstrap:
-
-```sh
-selfhost/irtest.sh build/bin/pascalc-s0    # also runs under ctest
-```
-
-That compiles every case in `tests/` with the Pascal compiler, links the IR with
+That compiles every case in `tests/` with the compiler, links the IR with
 `clang`, runs it and compares against `tests/*.out` and `tests/*.err`; then
 compiles the compiler with itself twice and requires stage 2 and stage 3 to be
 identical. A compiler that reproduced itself and nothing else would pass that
 last comparison alone, so stage 2 is put through the golden suite too. See
 [ADR-0025](doc/adr/0025-the-code-generator-is-checked-by-running-it.md).
 
+The error paths a valid program never reaches have a corpus of their own:
+`selfhost/torture.pas` for the lexer, `selfhost/badparse/` for the parser (one
+file per message, because it stops at its first) and `selfhost/badsema/` for
+Sema (which accumulates). Those were compared between two compilers until
+ADR-0085 left one; each is now pinned against a `.err` golden.
+
+**Until then it was checked differentially**, against the C++ compiler it was
+ported from, stage for stage on every Pascal source in the tree — the strongest
+oracle this project had, and the one retiring stage 0 gave up. What it caught is
+worth knowing, because it is the class of defect nothing here can catch now: a
+diagnostic that named two types identically and explained nothing, a
+comment-delimiter rule implemented wrongly in *both* compilers, a builtin's
+enumerator one apart. See
+[ADR-0022](doc/adr/0022-the-lexer-port-is-checked-differentially.md),
+[ADR-0023](doc/adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md),
+[ADR-0024](doc/adr/0024-the-stage-1-compiler-becomes-one-source-file.md) and
+[ADR-0085](doc/adr/0085-stage-0-is-retired.md).
+
+The AST is where the bootstrap constraints paid off: the node tag of
+[ADR-0005](doc/adr/0005-tag-dispatched-ast-without-cpp-rtti.md) became a
+variant record's tag and the downcast helper became the `case` that reads it,
+with no `dynamic_cast` to replace and nothing to redesign.
+
 Done by hand, that is:
 
 ```sh
-build/bin/pascalc-s0 --std=extended selfhost/compiler.pas -o stage1
+clang -Wno-override-module seed/pascalc.ll build/lib/libpasrt.a -lm -o stage1
 ./stage1 --std=extended selfhost/compiler.pas -o stage2.ll
 clang stage2.ll build/lib/libpasrt.a -lm -o stage2
 ```
 
-`stage1` is `build/bin/pascalc`, built the same way by `cmake --build`.
+`stage2` is `build/bin/pascalc`, built the same way by `cmake --build`.
 
 **A Pascal program has a command line only because ISO/IEC 10206:1991 gives it
 one.** §6.5.1 makes every program-parameter possess "the bindability that is

@@ -399,13 +399,18 @@ stopped by a runtime check. A non-zero exit is then required. Source paths are
 rewritten to `<source>`, so diagnostics can be pinned without depending on where
 the checkout lives.
 
-**Differential test.** Comparing the stage-1 compiler against the stage-0 one
-it is a port of, rather than against a recorded expectation.
-`selfhost/difftest.sh <pascalc-s0>` diffs `selfhost/compiler.pas` against
-`pascalc-s0 --dump-all` over every Pascal source in the tree, as
-`selfhost-compiler`. A golden file would pin the port to whatever it did the
-day it was written; the C++ compiler is the specification, so the test says
-"these two agree" instead of "this has not changed" (ADR-0022 to ADR-0024).
+**Differential test.** Comparing two independent implementations of the same
+question, rather than either against a recorded expectation. `difftest.sh` did
+that for this compiler and the C++ one it was ported from, diffing their dumps
+over every Pascal source in the tree; a golden pins a port to whatever it did
+the day it was written, where two implementations say "these two agree"
+(ADR-0022 to ADR-0024).
+
+**It no longer exists.** ADR-0085 retired stage 0, and with it the second
+implementation. The term is kept here because most of this project's findings
+are described in terms of it — "difftest caught it" appears throughout the
+records — and because what it could catch and goldens cannot is the sharpest
+thing to know about the oracles that remain.
 
 **AST dump / Sema dump.** `--dump-ast` is the parse tree as one node per line,
 taken *before Sema*, with `@line:col` printed only where the tree actually

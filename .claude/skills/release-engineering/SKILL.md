@@ -9,10 +9,12 @@ When performing release engineering, always follow these steps:
    directory, then run the suite:
    ```sh
    rm -rf build-rel
-   cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm
+   cmake -S . -B build-rel -DCMAKE_BUILD_TYPE=Release
    cmake --build build-rel -j
    ctest --test-dir build-rel --output-on-failure
    ```
+   No `LLVM_DIR`: nothing links libLLVM since ADR-0085, and what the build needs
+   is `clang` on PATH to assemble the IR the seed and the compiler emit.
    A from-scratch build catches plumbing bugs that an incremental build hides —
    in this project specifically, a `tests/*.pas` pair added without re-running
    `cmake` is invisible until someone configures fresh, and a missing include
@@ -28,7 +30,7 @@ When performing release engineering, always follow these steps:
 
 3. **Sanity-check the compiler by hand** — the suite compares stdout, so it
    cannot see everything a user does. Confirm on a fresh checkout that
-   `pascalc-s0 hello.pas` produces a runnable binary, `--emit-llvm` produces IR that
+   `pascalc hello.pas` produces a runnable binary, `--emit-llvm` produces IR that
    `llc` accepts, the `-h` output matches the flags that actually exist, and a
    deliberately broken program produces a diagnostic and exit status 1 rather
    than a crash.
@@ -50,11 +52,13 @@ When performing release engineering, always follow these steps:
    Present the recommendation to the user and confirm before proceeding.
 
 5. **Update the version** — **the `project()` call in `CMakeLists.txt` carries no
-   `VERSION` yet, and `pascalc-s0` has no `--version` flag.** The first release must
-   add both: `project(afterschool_pascal VERSION X.Y.Z LANGUAGES C CXX)`, a
-   `target_compile_definitions` carrying it into the driver, and a `--version`
-   handler beside `--help`. A compiler that cannot report its own version makes
-   every future bug report worse; do not ship a tag without it.
+   `VERSION` yet, and `pascalc` has no `--version` flag.** The first release must
+   add both: a compiler that misreports its own version is worse than one that
+   cannot report it at all, so let `pascalc-product` fail rather than editing one
+   of the two by hand.
+
+   **Refresh the seed** — `seed/refresh.sh` — at the release commit and nowhere
+   else (ADR-0085). It refuses a candidate that does not reproduce itself.
 
 6. **Update `CHANGELOG.md`** — add a new version entry at the top following
    [Keep a Changelog](https://keepachangelog.com/), grouped under `Added`,
@@ -76,10 +80,11 @@ When performing release engineering, always follow these steps:
 
 9. **Consider what a binary release would even mean** — *only when producing a
    downloadable artifact; the project ships source and tags today, so skip this
-   for a source-only release.* `pascalc-s0` is not self-contained: it links
-   `libLLVM`, it needs `clang` on `PATH` to link programs (ADR-0009), and it
-   needs `libpasrt.a` findable via the baked-in `APASCAL_RUNTIME_DIR` or
-   `AFTERSCHOOL_PASCAL_RUNTIME`. A binary tarball must therefore ship the runtime
+   for a source-only release.* `pascalc` is not self-contained: it emits IR and
+   nothing else, so a user needs `clang` to assemble it (ADR-0009, ADR-0085) and
+   `libpasrt.a` to link against, found through `AFTERSCHOOL_PASCAL_RUNTIME`.
+   `tools/pascalcc` is the piece that ties those together and would have to ship
+   with it. A binary tarball must therefore ship the runtime
    library alongside the compiler and document the `clang` and LLVM runtime
    requirements, or it will fail on the user's first compile in a way that looks
    like a compiler bug. Verify any candidate tarball by unpacking it somewhere

@@ -40,8 +40,8 @@ second; nothing below "Beyond self-hosting" is finished business.
 ## The three-stage build
 
 ```
-stage 0   pascalc-s0 (C++)       — this repo, grown until it accepts the stage-1 source
-stage 1   pascalc1 = stage0(compiler.pas)      this is build/bin/pascalc
+seed      seed/pascalc.ll        — a working compiler, in IR, committed here
+stage 1   pascalc1 = seed(compiler.pas)        this is build/bin/pascalc
 stage 2   pascalc2 = pascalc1(compiler.pas)
 stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 byte-for-byte
 ```
@@ -966,7 +966,8 @@ they landed — rather than in the standard's.
     have. Each exported slot now carries an external name beside the record,
     which stays internal: `nm` on a component is its interface.
   - **The two compilers' objects are interchangeable.** A module translated by
-    `selfhost/compiler.pas` links against a program translated by `pascalc-s0`,
+    `selfhost/compiler.pas` linked against a program translated by the C++
+    compiler,
     which is a sharper statement than either passing its own tests.
   - The stage-1 compiler takes the other components as one more program
     parameter, **concatenated** — ADR-0033's constraint for the third time —
@@ -1129,76 +1130,36 @@ the rest from a table. Nothing on the list above needs a fourteenth: the time
 procedures are required *identifiers*, which §6.1.3 makes shadowable rather
 than reserved. So the lexis is complete even though the language is not.
 
-## The two things that are not features
+## The two things that were not features
 
-Neither is a language feature. The first has been decided — against, and the
-heading it was written under is what had made it look like one decision; what
-survives it is three smaller things that were never the same question. The
-second is live:
+Neither is a language feature, and both are now settled — the first against
+itself, a few hours after being decided the other way. See below.
 
-- **Retire stage 0 — decided against.** The heading bundled four decisions, and
-  only one of them was retirement. The other three are additive, independent of
-  each other, and none of them needs the C++ compiler gone.
+- **Retire stage 0 — done** (ADR-0085). `src/` and `selfhost/difftest.sh` are
+  gone, `seed/pascalc.ll` builds the compiler, and a tree with no C++ compiler
+  and no LLVM development files passes all 435 cases, reaches the
+  stage-2/stage-3 fixed point and proves all 43 rules.
 
-  **The question "how far are we from self-hosting" is answered, and the answer
-  is not a distance.** Writing Pascal directly is done: stage 2 equals stage 3,
-  so the source reproduces itself without the C++ compiler taking part in the
-  second reproduction. There is no *capability* on the far side of this
-  decision, which is what makes it a trade and not a milestone.
+  **This entry decided the opposite a few hours earlier, and the record of why
+  is worth more than the correction.** It weighed the loss of `difftest.sh` and
+  of `verify/`'s subject against "a capability the fixed point already
+  provides", and concluded there was nothing to gain. The gain it missed was not
+  a capability: **every language feature shipped twice**, in C++ and in Pascal,
+  in the same commit, and halving the cost of every future feature is the whole
+  argument. A record framed around capabilities could not see it.
 
-  **The subtraction is refused.** Deleting `src/` costs the two strongest
-  oracles here and buys nothing:
+  The three parts this entry listed as open are all closed by it. A seed is
+  committed and refreshed at release tags. The proofs were re-pointed at the
+  Pascal backend, which needed no change to the model — `lowering.py` describes
+  an emitted instruction sequence, not a compiler's internals — and are now tied
+  to the compiler by `--crosscheck` and the 66 `trap_*.pas` goldens rather than
+  by C++ a person could read. And the driver landed as ADR-0083.
 
-  - **`difftest.sh` would have nothing to diff against.** The comparison is
-    two independent implementations answering the same question over 435 files;
-    delete one and it degrades to golden files, which record what the surviving
-    implementation happened to print. That is a strictly weaker oracle, and the
-    counting lesson above says why it matters: the corpus is only worth what it
-    reaches, and a golden file cannot disagree with the program that wrote it.
-  - **`verify/` proves `codegen.cpp`.** See the next entry, which was already
-    about this.
+  What was given up is stated where it belongs, in ADR-0085: a differential
+  oracle over 436 sources, replaced by goldens that cannot disagree with the
+  program that wrote them; and a repository that is now x86-64 Linux only,
+  because a seed carries a target triple.
 
-  So **stage 0 is a second implementation that is being kept**, not scaffolding
-  awaiting removal. That is a change to how this repository describes itself
-  and to nothing else. The three additive parts stay open on their own terms:
-
-  - **No seed is checked in.** The stage-1 binary is built on demand and never
-    committed, so today the Pascal compiler has exactly one ancestor and it is
-    `pascalc-s0`. Committing an artefact — a binary, or the `.ll` stage 0 emits —
-    is a policy decision about what this repository is willing to carry and to
-    trust, not a technical obstacle, and nothing else waits on it.
-  - **Re-pointing the proofs at the Pascal generator** is worth doing *while*
-    the C++ compiler stays, rather than as a precondition for removing it: two
-    models disagreeing would be a third oracle. See the next entry.
-  - **A Pascal `pascalc` — it exists now, and it is the product.**
-    `build/bin/pascalc` is `selfhost/compiler.pas` translated by
-    `pascalc-s0`, built by `cmake --build` like anything else and checked by
-    `selfhost/producttest.sh`. Naming it that way is the point: the compiler
-    this project is *for* is the one written in its own language, and the C++
-    one is stage 0 and says so.
-
-    **And it is a driver.** `pascalc [options] file.pas`, with `-o`, `--std=`,
-    `--import` and `-h` — the same spellings `pascalc-s0` uses (ADR-0083).
-
-    How a Pascal program has a command line is ADR-0081: §6.5.1 makes every
-    program-parameter bindable and §6.7.6.8's NOTE 2 makes `binding` report the
-    binding §6.12 made before the program started, so `binding(argk).name` is
-    argument *k*. Twelve program-parameters are declared, none is ever opened,
-    and an unbound one is how the list ends. The source, the IR and each
-    imported component are then `bind`-ed to names the compiler computed.
-
-    Getting there needed ADR-0082 — the source had to be Extended Pascal, only
-    that standard having the two clauses — and it retires ADR-0033's constraint
-    for this compiler alone. The options file is gone and so is the
-    concatenated imports file, which is the one design in this repository that
-    had to be defended against the language rather than on its merits.
-
-    What remains genuinely impossible is **spawning the linker**: neither
-    standard has process control, and inventing it would be an extension taken
-    from nowhere. So `pascalc` reaches `.ll` and stops there — a property of the
-    language rather than a shortfall of this compiler, and the only part of
-    `main.cpp`'s job that does not port. Its usage text says so, with the
-    `clang` line a reader needs.
 - **Keep the proofs alive across the port.** ADR-0025 made the decision the
   earlier version of this line asked for: the theorems stay attached to the C++
   model, and the Pascal generator is tied to it by *behaviour* — the golden

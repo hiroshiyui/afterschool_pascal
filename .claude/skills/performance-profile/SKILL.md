@@ -11,7 +11,7 @@ branch, is a regression rather than a win. Every optimization here must leave
 Know which axis you are being asked about before you measure — they have almost
 nothing to do with each other:
 
-- **Axis A — compiler throughput.** How long `pascalc-s0` takes. This is the axis
+- **Axis A — compiler throughput.** How long `pascalc` takes. This is the axis
   the bootstrap cares about: the stage-1/2/3 build compiles the compiler's own
   source three times, so throughput is paid three times per change.
 - **Axis B — generated-code speed.** How fast the compiled Pascal program runs.
@@ -40,10 +40,10 @@ Then take the four numbers that separate the stages, because they attribute cost
 without a profiler:
 
 ```sh
-time build/bin/pascalc-s0 --emit-llvm -O0 /tmp/big.pas -o /dev/null   # front end + codegen only
-time build/bin/pascalc-s0 --emit-llvm -O2 /tmp/big.pas -o /dev/null   # + the pass pipeline
-time build/bin/pascalc-s0 -c            -O2 /tmp/big.pas              # + object emission
-time build/bin/pascalc-s0               -O2 /tmp/big.pas -o /tmp/big  # + the clang link
+time tools/pascalcc --emit-llvm -O0 /tmp/big.pas -o /dev/null   # front end + codegen only
+time tools/pascalcc --emit-llvm -O2 /tmp/big.pas -o /dev/null   # + the pass pipeline
+time tools/pascalcc -c            -O2 /tmp/big.pas              # + object emission
+time tools/pascalcc               -O2 /tmp/big.pas -o /tmp/big  # + the clang link
 ```
 
 Record all four as the baseline. The differences are the attribution:
@@ -62,7 +62,7 @@ not. `perf` needs `perf_event_paranoid ≤ 2` (`sysctl kernel.perf_event_paranoi
 to check). Profile the release binary directly:
 
 ```sh
-perf record -g --call-graph dwarf -- build/bin/pascalc-s0 -O2 --emit-llvm /tmp/big.pas -o /dev/null
+perf record -g --call-graph dwarf -- tools/pascalcc -O2 --emit-llvm /tmp/big.pas -o /dev/null
 perf report --stdio
 ```
 
@@ -86,14 +86,14 @@ Attribute every self-time leader to one of these classes:
 Compile the Pascal benchmark, then profile *it*, not the compiler:
 
 ```sh
-build/bin/pascalc-s0 -O2 bench.pas -o /tmp/bench && perf stat /tmp/bench
+tools/pascalcc -O2 bench.pas -o /tmp/bench && perf stat /tmp/bench
 ```
 
 Compare against the same algorithm in C compiled with `clang -O2`. That
 comparison is the only meaningful reading — it says how much our lowering costs
 relative to what LLVM can do with an equivalent front end's output.
 
-Read the IR before blaming the optimiser: `pascalc-s0 -O0 --emit-llvm` shows what we
+Read the IR before blaming the optimiser: `pascalc -O0 --emit-llvm` shows what we
 handed LLVM, and most generated-code slowness is IR that blocked an optimisation
 rather than a missed pass. Known shapes to look for:
 

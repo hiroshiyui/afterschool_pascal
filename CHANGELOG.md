@@ -5,8 +5,51 @@ All notable changes to this project are documented here. The format follows
 follows [Semantic Versioning](https://semver.org/).
 
 The public interface of a compiler is **the accepted language, the diagnostics
-and the command line** — not the C++ API of `src/`. That is what these entries
-describe and what the version number tracks.
+and the command line**. That is what these entries describe and what the version
+number tracks.
+
+Entries for a released version are left as they were written, so `pascalc-s0`
+appears below in the release where it still existed.
+
+## [Unreleased]
+
+### Removed
+
+- **Stage 0, the C++ compiler.** `src/` and `selfhost/difftest.sh` are deleted;
+  `selfhost/compiler.pas` is the only compiler. `seed/pascalc.ll` — a working
+  compiler in LLVM IR, committed — is what builds it, so a checkout still builds
+  itself. (ADR-0085)
+- **LLVM as a build dependency.** Nothing links `libLLVM`; `cmake` needs no
+  `LLVM_DIR`, only `clang` on PATH to assemble IR.
+- The differential test, which compared two independent implementations over 436
+  sources. Nothing replaces it, and ADR-0085 says what that costs.
+
+### Added
+
+- **`tools/pascalcc`** — compile *and* link. `pascalc` writes IR and stops,
+  permanently: no standard Pascal program can start an assembler.
+- `--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all` on `pascalc`, and
+  157 error-path sources adopted as real test cases with `.err` goldens, taking
+  the suite from 279 to 435.
+
+### Changed
+
+- **`pascalc` is quiet on success** and writes `file:line:col: error: message`
+  on failure, where it used to write three dump sections unconditionally.
+- The repository is **x86-64 Linux only**: the seed carries a target triple.
+  Tag `v0.1.0` is the last commit where a C++ compiler could reproduce a
+  compiler from source alone.
+
+### Fixed
+
+- `cmake --build` left a stale `build/bin/pascalc` when the compiler failed to
+  build, so `ctest` passed against a compiler that did not match the source.
+- A fresh configure could not create `build/bin` once no C++ executable target
+  remained.
+- `selfhost/badparse/variant-in-variant.pas` had been accepted by both compilers
+  since ADR-0026 and was no longer a negative test; a differential oracle cannot
+  see a test that has stopped testing anything. Deleted — the feature is covered
+  by `tests/nested_variants.pas`.
 
 ## [0.1.0] — 2026-08-14
 

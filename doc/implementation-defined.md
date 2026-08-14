@@ -150,8 +150,8 @@ nothing is forbidden. What this processor does:
 either standard and there being no other control procedure. `halt(n)` is this
 processor's extension for exactly that reason — see §5, and ADR-0084 for why
 the rule against inventing extensions does not reach a dimension neither
-standard describes. It is what lets `pascalc` exit 1 for a program it rejects,
-as `pascalc-s0` does.
+standard describes. It is what lets `pascalc` exit 1 for a program it
+rejects, which a build rule depends on.
 
 ## 3. Errors not reported
 

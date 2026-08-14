@@ -4,7 +4,7 @@ description: Perform a project-wide security and safety audit of the Afterschool
 ---
 
 The threat model is worth stating plainly, because it is not the usual one for a
-compiler: **`pascalc-s0` parses untrusted input**. A `.pas` file is attacker-controlled
+compiler: **`pascalc` parses untrusted input**. A `.pas` file is attacker-controlled
 text, and the compiler is C++ with manual memory management. Malformed, hostile,
 or merely enormous source must produce a diagnostic — never a crash, a hang, or
 memory corruption. That is the whole audit in one sentence; the steps below are
@@ -30,7 +30,7 @@ When performing a security audit, always follow these steps:
    - **Unbounded recursion — confirmed, not theoretical.** `parseExpr → parseSimpleExpr → parseTerm → parseFactor → parseExpr` recurses once per nesting level, with no depth limit. Verified 2026-08-09: a program whose `writeln` argument is wrapped in 50 000 parentheses crashes the compiler with SIGSEGV (exit 139), not a diagnostic.
      ```sh
      python3 -c "open('/tmp/deep.pas','w').write('program D(output);\nbegin\n  writeln('+'('*50000+'1'+')'*50000+')\nend.\n')"
-     build/bin/pascalc-s0 --emit-llvm /tmp/deep.pas -o /dev/null; echo $?   # 139
+     tools/pascalcc --emit-llvm /tmp/deep.pas -o /dev/null; echo $?   # 139
      ```
      Standing **Medium** finding (a crash on hostile input, no memory corruption). The fix is a depth counter in the parser reporting "expression nested too deeply" past a few hundred levels. Note that `Sema` and `CodeGen` recurse over the same tree, so the limit has to be low enough to protect them too — a tree the parser accepted can still overflow a later pass.
    - **Memory growth** — a very large source file is read fully into memory and tokenised fully into a `vector<Token>`. Bounded by input size, which is acceptable; note it if the compiler ever grows a mode that reads from a pipe.
@@ -54,7 +54,7 @@ When performing a security audit, always follow these steps:
    for i in $(seq 500); do
      f=$(ls tests/*.pas | shuf -n1)
      head -c $((RANDOM % 2000)) "$f" | tr -d '\0' > /tmp/fuzz.pas
-     build-asan/bin/pascalc-s0 --emit-llvm /tmp/fuzz.pas -o /dev/null 2>/dev/null
+     tools/pascalcc --emit-llvm /tmp/fuzz.pas -o /dev/null 2>/dev/null
      [ $? -gt 1 ] && cp /tmp/fuzz.pas "/tmp/crash-$i.pas"   # exit >1 means signal, not diagnostic
    done
    ```
