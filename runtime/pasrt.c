@@ -208,6 +208,13 @@ struct pas_file {
    * needed it. A zero field width may write no characters at all
    * (§6.10.3.1), which is why this follows what was *written* rather than
    * merely that a write was attempted. */
+  /* It serves the *reading* direction too, and means the same thing there:
+   * ISO 7185 §6.6.5.2's post-assertion for `reset(f)` appends an end-of-line
+   * when f is a text, its contents are not empty, and the last component is
+   * not one already. A stream cannot be asked for its last byte, so the
+   * end-of-line is produced where the read reaches EOF — which is the same
+   * file, one component later. Starting at 1 is what makes an *empty* file
+   * get nothing, the clause requiring the contents to be non-empty. */
   int atbol;     /* the file is positioned at the start of a line */
   void *buf;     /* the buffer variable f^: &ch for a text, else allocated */
   const char *name; /* what to call this file in a diagnostic */
@@ -500,6 +507,9 @@ void pas_reset(void *v) {
   f->lookahead = EOF;
   f->ateof = 0;
   f->ch = ' ';
+  /* Nothing has been delivered from the new position, so it is the start of a
+   * line -- which is what makes an empty file get no end-of-line appended. */
+  f->atbol = 1;
   /* A character given back by a number read belongs to the position it was
    * read from, so it dies with the position. `reset(input)` returns above
    * without reaching here, which is what keeps ADR-0073's promise that it
@@ -549,6 +559,13 @@ void pas_rewrite(void *v) {
    * without reaching here, which is what keeps ADR-0073's promise that it
    * loses nothing. */
   f->npush = 0;
+  /* `atbol` is set per branch and not here, because the branches do not agree
+   * about what rewrite discards. Everywhere but the standard output the file
+   * becomes empty, so the position is the start of a line; on `output` there
+   * is nothing to discard -- the characters are already gone from the
+   * program's reach -- and clearing it would make the next `page` write a
+   * blank line into the middle of the output. `tests/rewriteoutput.pas` is
+   * the program that says so, and it is why this is not one assignment. */
   switch (f->binding) {
   case PAS_BIND_INPUT:
     pas_runtime_error("rewrite applied to the standard input");
@@ -563,6 +580,7 @@ void pas_rewrite(void *v) {
     f->fp = fopen(name, f->direct ? "w+b" : f->istext ? "w" : "wb");
     if (!f->fp)
       pas_error2("cannot open for writing: ", name);
+    f->atbol = 1;
     break;
   }
   default:
@@ -571,6 +589,7 @@ void pas_rewrite(void *v) {
     f->fp = tmpfile();
     if (!f->fp)
       pas_runtime_error("cannot create a temporary file");
+    f->atbol = 1;
     break;
   }
   f->mode = PAS_WRITING;
@@ -604,6 +623,22 @@ static void pas_fill(struct pas_file *f) {
     return;
   }
   f->lookahead = getc(f->fp);
+  /* ISO 7185 §6.6.5.2: `reset(f)` on a text whose contents do not end in an
+   * end-of-line appends one. The stream cannot be asked for its last byte, so
+   * the appended component is produced here, where the read arrives at the
+   * place it would occupy — and produced exactly once, because delivering it
+   * puts the file at the start of a line and the next fill then sees the same
+   * EOF with nothing left to add.
+   *
+   * `write(f, 'A'); reset(f)` is the program this is for: without it the 'A'
+   * is the whole file, `eoln(f)` after reading it is D.42's error, and a
+   * program that reads back what it wrote loses its last line rather than
+   * being told anything. CONF067 and CONF078 of the BSI suite are that
+   * program; `tests/eoln_appended.pas` is this one's. */
+  if (f->lookahead == EOF && !f->atbol)
+    f->lookahead = '\n';
+  if (f->lookahead != EOF)
+    f->atbol = f->lookahead == '\n';
   f->have = 1;
   f->ateof = f->lookahead == EOF;
   /* ISO 7185 §6.4.3.5: at the end of a line the buffer variable is a space.

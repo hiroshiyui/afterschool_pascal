@@ -29,6 +29,17 @@ and disagreed with the compiler on the first run (ADR-0086).
   makes `write := 5` an assignment where it was a syntax error, and lets a
   declared `write` be passed as a procedural parameter, which §6.6.3.7 refuses
   only for the required one. (ADR-0087)
+- **`reset` appends an end-of-line to a text file that does not end in one.**
+  ISO 7185 §6.6.5.2's post-assertion requires it whenever the contents are not
+  empty and do not already end in one, and this compiler did not: a program
+  reading back a file it wrote without a final `writeln` reached end-of-file
+  where a line should have ended, and `eoln` there stopped the program with a
+  run-time error instead of answering `true`. An empty file still gains
+  nothing, the clause requiring the contents to be non-empty. Found by the
+  validation suite's CONF067 and CONF078.
+- **`rewrite` of an ordinary file puts it back at the start of a line**, so a
+  `page` straight after one no longer writes a blank line before its form feed
+  (§6.9.5). `rewrite(output)` is unchanged and must be: it discards nothing.
 - **`succ` and `pred` on a subrange run out at the *host's* bounds**, not the
   subrange's. ISO 7185 §6.6.6.4 gives the result "the same type as that of the
   expression (see 6.7.1)", and §6.7.1 says "any factor whose type is S, where S
