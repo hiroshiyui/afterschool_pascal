@@ -113,6 +113,26 @@ for f in "${files[@]}"; do
   fi
 done
 
+# --- the version it reports is the one the project carries -------------------
+#
+# Pascal has no preprocessor, so CMake cannot substitute the number into
+# compiler.pas: it is written there as a constant and checked here, which is
+# the arrangement `fileSize` and PAS_FILE_SIZE already have for the same
+# reason -- two files that cannot include one another, and a disagreement that
+# is checked rather than trusted. A compiler that misreports its own version
+# makes every bug report worse than no version at all.
+want=$(sed -n 's/^project(afterschool_pascal VERSION \([0-9.]*\).*/\1/p' \
+       "$root/CMakeLists.txt")
+have=$("$pascalc" --version 2>/dev/null | sed -n 's/^pascalc (Afterschool Pascal) //p')
+checked=$((checked + 1))
+if [[ -z $want ]]; then
+  echo "--- version: CMakeLists.txt names no project VERSION ---" >&2
+  failed=$((failed + 1))
+elif [[ $want != "$have" ]]; then
+  echo "--- version: the project is $want but pascalc says '$have' ---" >&2
+  failed=$((failed + 1))
+fi
+
 # --- and that it says so when it does not translate something ---------------
 #
 # A compiler that cannot report failure is not usable from a build rule:

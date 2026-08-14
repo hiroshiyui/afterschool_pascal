@@ -54,6 +54,13 @@ const
     pointer and a length and only the pointer needs a call. }
   dateLen = 10;
   timeLen = 8;
+  { The version this compiler reports, and the one place it is written on this
+    side of the build. Pascal has no preprocessor, so CMake cannot substitute
+    it -- it is checked against `project()`'s VERSION by producttest.sh instead,
+    which is the same arrangement `fileSize` and PAS_FILE_SIZE have for the
+    same reason: two files that cannot include one another, and a disagreement
+    that is checked rather than trusted. }
+  apVersion = '0.1.0';
   { How many --import arguments one translation may be given. Bounded because
     an array is, and generous because 6.13 puts no limit on how many
     program-components a program-block has. }
@@ -1890,6 +1897,11 @@ begin
   Arg := b.bound
 end;
 
+procedure Version;
+begin
+  writeln('pascalc (Afterschool Pascal) ', apVersion)
+end;
+
 procedure Usage;
 begin
   writeln('Afterschool Pascal -- the compiler, written in Afterschool Pascal');
@@ -1899,6 +1911,7 @@ begin
   writeln('  --std=<name>    iso7185 (default) or extended');
   writeln('  --import <f>    a program-component already translated; its');
   writeln('                  module-headings supply this one''s interfaces');
+  writeln('  --version       write the version and stop');
   writeln('  -h, --help      write this list and stop');
   writeln;
   writeln('It writes the token, AST and Sema dumps to standard output and the');
@@ -1931,6 +1944,11 @@ begin
     else if EQ(a, '--std=iso7185') then langStd := stdIso7185
     else if EQ(a, '-h') or EQ(a, '--help') then begin
       Usage;
+      argsOk := false;
+      srcName := ''
+    end
+    else if EQ(a, '--version') then begin
+      Version;
       argsOk := false;
       srcName := ''
     end

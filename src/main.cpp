@@ -22,6 +22,7 @@
 //   pascalc-s0 --dump-all hello.pas     all three sections in one run — this
 //                                     is the form selfhost/difftest.sh
 //                                     compares the Pascal compiler against
+//   pascalc-s0 --version            write the version and stop
 //   pascalc-s0 -h, --help           write the option list and stop
 //
 // `usage()` below is the authoritative list; keep the two in step.
@@ -157,6 +158,7 @@ void usage() {
                "  --std=<name>  iso7185 (default) or extended\n"
                "  --import <f>  a program-component already translated; its\n"
                "                module-headings supply this one's interfaces\n"
+               "  --version     write the version and stop\n"
                "  -h, --help    write this list and stop\n");
 }
 
@@ -214,6 +216,12 @@ bool parseArgs(int argc, char **argv, Options &opt) {
       }
     } else if (a == "--import" && i + 1 < argc) {
       opt.imports.push_back(argv[++i]);
+    } else if (a == "--version") {
+      // A compiler that cannot report its own version makes every bug report
+      // worse. The number is the one `project()` carries, so there is a single
+      // place it is written down.
+      std::printf("pascalc-s0 (Afterschool Pascal) %s\n", APASCAL_VERSION);
+      std::exit(0);
     } else if (a == "-h" || a == "--help") {
       usage();
       std::exit(0);

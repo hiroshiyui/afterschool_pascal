@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(afterschool_pascal LANGUAGES C CXX)
+project(afterschool_pascal VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -38,6 +38,7 @@ target_include_directories(pascalc-s0 PRIVATE src ${LLVM_INCLUDE_DIRS})
 target_compile_definitions(pascalc-s0 PRIVATE
   ${LLVM_DEFINITIONS_LIST}
   APASCAL_RUNTIME_DIR="${CMAKE_BINARY_DIR}/lib"
+  APASCAL_VERSION="${PROJECT_VERSION}"
 )
 target_link_libraries(pascalc-s0 PRIVATE ${APASCAL_LLVM_LIBS})
 add_dependencies(pascalc-s0 pasrt)

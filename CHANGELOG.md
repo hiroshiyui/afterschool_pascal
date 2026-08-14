@@ -1,0 +1,113 @@
+# Changelog
+
+All notable changes to this project are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+follows [Semantic Versioning](https://semver.org/).
+
+The public interface of a compiler is **the accepted language, the diagnostics
+and the command line** — not the C++ API of `src/`. That is what these entries
+describe and what the version number tracks.
+
+## [0.1.0] — 2026-08-14
+
+The first versioned release. It is `0.y.z` rather than `1.0.0` deliberately:
+the language is complete and the bootstrap closes, but `pascalc-s0` is still
+what builds `pascalc`, no seed is checked in, and `pascalc` cannot link. The
+number will reach 1.0.0 when the toolchain stands on its own, not when the
+language does.
+
+### Added
+
+- **The whole of ISO 7185 Standard Pascal**, under `--std=iso7185` (the
+  default): procedures and functions nested to any depth with `forward`,
+  procedural and functional parameters; arrays, records, variant parts, sets,
+  pointers and recursive types; enumerations, subranges, `case` and `with`;
+  text files with the buffer variable `f^`, and `file of T`; `goto`, including
+  the non-local form out of a block into an enclosing one; `pack`, `unpack` and
+  `page`; and string constants.
+- **The whole of ISO/IEC 10206:1991 Extended Pascal**, under `--std=extended`.
+  The two are *not* nested — Extended Pascal reserves word-symbols a valid ISO
+  7185 program may use as identifiers — so the standard is a property of the
+  source. Among what it adds: `otherwise` in a case statement and in a variant
+  part; exponentiation (`**` and `pow`); non-decimal literals; schema types and
+  discriminated schemata; schematic and protected parameters; type inquiry;
+  initial-state specifiers (`value`); `complex`; direct-access files; the
+  `string` schema, substrings, `readstr` and `writestr`; restricted types;
+  structured-value and set-value constructors; constant-accesses; binding
+  (`bind`, `unbind`, `binding`); time stamps; short-circuit `and then` and
+  `or else`; `for … in` over a set; modules with `export`/`import`; and §6.13's
+  separately translated program-components.
+- **`pascalc`, the compiler written in Afterschool Pascal.** `cmake --build`
+  produces it by translating `selfhost/compiler.pas` with `pascalc-s0`. It
+  compiles itself: stage 2 equals stage 3, so the source is a fixed point.
+- **A command line for `pascalc`** — `-o`, `--std=`, `--import`, `--version`,
+  `-h` — read through the binding of its own program-parameters, which is the
+  only channel either standard gives a program to its arguments.
+- **`--version`** on both compilers.
+- **Formal verification** (`verify/`): 43 SMT rules proving the lowering
+  against a property-style statement of the standard, 27 of them for every
+  32-bit input, with no known gaps.
+- **`doc/implementation-defined.md`**, the document clause 5.1 requires: the
+  compliance level (**level 0**), every implementation-defined and
+  -dependent feature of both standards' annexes, every error not reported, and
+  the extensions and restrictions.
+
+### Changed
+
+- **`halt` accepts an optional exit status**, an extension: `halt(1)` was a
+  compile-time error before, so no conforming program is affected, and a bare
+  `halt` still exits 0. Neither standard models an exit status, and without one
+  a compiler written in Pascal cannot report failure. (ADR-0084)
+- **`selfhost/compiler.pas` is written in Extended Pascal**, where it was
+  ISO 7185. This changes nothing about the language the compiler *accepts*.
+  (ADR-0082)
+
+### Fixed
+
+Every entry here changes what an already-valid program does, and each was found
+by compiling a probe for a clause rather than by a test failing.
+
+- **A program-parameter is bindable** (§6.5.1) and **`binding(p)` reports the
+  argument it was bound to** (§6.7.6.8). Both were unimplemented: `binding` on
+  a program-parameter was refused at compile time, and a bound one reported
+  `false` with an empty name.
+- **`unbind` clears the binding made before the program started.** It left a
+  program-parameter reporting `argv[0]` afterwards.
+- **`BindingType.name` is the same type as a program's own `string(255)`.** It
+  was built outside the schema intern table, so §6.4.8's identity rule failed
+  for it and it could not be passed to `procedure p(var s: string)`.
+- **`i mod j` with a negative `j` is an error** (§6.7.2.2), as the constant
+  folder had always said and the emitted code had not.
+- **`ln`, `sqrt`, `x/y` and `dispose(nil)`** report the errors Annex D names,
+  where they had returned a value.
+- **A `for` statement's control variable must be declared in the block that
+  contains the statement** (§6.8.3.9).
+- **A comment may be closed by either delimiter** (§6.1.8): `{ … *)` is one
+  comment, and was two loops that could not.
+- **`reset(input)` no longer discards a character** the stream had consumed.
+- **A field width of zero** writes what §6.10.3 says for each type — three
+  different answers, not one — and a width below a string's length truncates
+  it, in both standards.
+- **`char + char`** is a two-character string (§6.8.3.6).
+- **Declaration parts have an order under `--std=iso7185`** (§6.2.1) and may
+  interleave under `--std=extended` (§6.2.1, §6.2.2.9).
+- **A constant may not be selected from under ISO 7185**, §6.8.8 belonging to
+  the next standard; and **`f()` is refused in both**, Pascal having no empty
+  argument list.
+- **`const q = nil`** is accepted under `--std=extended` (§6.7.1).
+- Crashes fixed: a designator rooted at a `with` binding over a heap variable,
+  and both dumps on a source declaring only modules.
+
+### Known limitations
+
+- `pascalc` writes LLVM IR and **does not link** — neither standard has process
+  control, so assembling is a separate `clang` step. `pascalc-s0` links.
+- Conformant array parameters (§6.6.3.6 e), §6.6.3.7, §6.6.3.8) are not
+  accepted; this is a **level 0** processor.
+- Twelve command-line arguments and eight `--import`s are the limits of
+  `pascalc`; both report rather than truncate.
+- Twelve errors go unreported, each named in `doc/implementation-defined.md`.
+- No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
+  finds `libpasrt.a` through a baked-in path.
+
+[0.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v0.1.0
