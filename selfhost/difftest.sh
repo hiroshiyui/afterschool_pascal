@@ -10,7 +10,7 @@
 # byte mismatch between two compiler binaries with nothing to compare but their
 # output.
 #
-# Both sides write the same format — `pascalc --dump-all` against
+# Both sides write the same format — `pascalc-s0 --dump-all` against
 # selfhost/compiler.pas — so the comparison is a plain diff. ISO 7185 has no
 # include mechanism, so the Pascal side is one program covering every stage
 # ported so far, and it dumps all of them in one pass; there is no mode to

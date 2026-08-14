@@ -11,7 +11,7 @@ program Compile(output,
   everything below it, and by Sema that would have been three copies of the
   lexer. What the merge costs is the ability to run one stage alone, which is
   why the program dumps all three stages in one pass and difftest.sh compares
-  the lot against `pascalc --dump-all`.
+  the lot against `pascalc-s0 --dump-all`.
 
   A port of src/lexer.cpp, src/parser.cpp, src/ast.h, src/sema.cpp and
   src/type.h into the language that compiler accepts, checked by comparing what
@@ -1418,11 +1418,11 @@ end;
 { One slot of the window, taken from the buffer variable. A text file's line
   marker is not a character the program can see (ISO 7185 6.4.3.5), so it is
   turned back into the newline the lexer counts lines with. }
-{ 6.13: the lexer reads whichever program-component is being taken in. ISO
-  7185 gives a program no way to open a file whose name it computes, so the
-  already-translated components arrive as one more program parameter -- and
-  they arrive *concatenated*, which costs nothing to define because a sequence
-  of program-components is exactly what a source file already is. }
+{ 6.13: the lexer reads whichever program-component is being taken in -- the
+  source named on the command line, or one of the already-translated components
+  --import named. Both are bound to computed names (6.7.5.6), which is what
+  replaced the single concatenated file the four-parameter interface needed
+  (ADR-0079, ADR-0081). }
 procedure Refill(k: integer);
 begin
   if readingImports then begin
@@ -1854,10 +1854,6 @@ begin
   StrIsWide := same
 end;
 
-{ The standard is the first word of the options file. Anything that is not
-  `extended` is ISO 7185, which is the default and what an empty file selects
-  -- the file is written by the test harness rather than typed, so there is no
-  spelling to get wrong and no branch here that no run reaches. }
 { Argument k of the command line, or false when there is no such argument.
 
   6.7.6.8's binding(f) answers for a program-parameter the same question it
@@ -16967,7 +16963,7 @@ begin
   level := level - 2
 end;
 
-{ The token stream, in the format `pascalc --dump-tokens` writes. The lexer of
+{ The token stream, in the format `pascalc-s0 --dump-tokens` writes. The lexer of
   component 1 emitted these as it scanned; here they are read back out of the
   table the parser was given, which is the same stream by another route. }
 procedure DumpTokens;
@@ -24215,7 +24211,7 @@ begin
     own rather than to a fourth section: it has to be assembled and linked, and
     two backends' assembler text cannot be diffed the way three stages of a
     tree can (ADR-0025). It is still written on every run, which is what keeps
-    the differential test exercising it on all 207 files. }
+    the differential test exercising it on every file in the corpus. }
   if not errorSeen then RunCodeGen
 end;
 
