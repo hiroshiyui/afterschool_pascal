@@ -49,15 +49,23 @@ at their own build tree.
 
 ## Pipeline and its contracts
 
-`main.cpp` runs: Lexer → Parser → Sema → CodeGen → PassBuilder → TargetMachine →
-`clang` link. Each stage bails before the next if `Diagnostics::hasErrors()`.
+`Compile` runs: Tokenize → ParseProgram → RunSema → RunCodeGen, and each stage
+is guarded by `errorSeen` — a stage that failed has nothing for the next one to
+read. Assembling and linking are *outside* the compiler entirely
+(`tools/pascalcc`), because no standard Pascal program can start another.
 
-The contract that keeps `codegen.cpp` simple: **Sema leaves every `Expr::type`
-non-null and every `VarRef::sym` resolved.** CodeGen therefore never inspects
+The contract that keeps `RunCodeGen` simple: **Sema leaves every node's `ntype`
+non-null and every `nkVar`'s symbol resolved.** CodeGen therefore never inspects
 names, never re-derives types, and reports no user-facing errors — if it needs a
 fact about the source program, that fact belongs in Sema. On an error path Sema
-still assigns a placeholder type rather than null, so codegen can't crash on a
+still assigns a placeholder type rather than nil, so codegen cannot crash on a
 half-checked tree.
+
+This was written about `src/codegen.cpp` and holds unchanged for the Pascal one
+it was ported to; the C++ compiler is gone (ADR-0085) and the contract is the
+thing that survived it. Where a bullet below still names a C++ file, read it as
+naming the component: the port is line-for-line enough that the reasoning
+transfers, which is what ADR-0022 to ADR-0024 were for.
 
 Most of what Sema hands over is *per node*. Since ADR-0053 one thing is not:
 `Sema::activeModules()` is a whole-program answer — which modules supply the
@@ -66,8 +74,10 @@ same side of the contract as everything else (Sema decided it, CodeGen only
 emits calls in that order), and it is worth knowing that the contract has a
 shape other than an annotation on a node.
 
-Errors: the parser throws `ap::ParseAbort` (the only exception in the codebase)
-when it cannot make progress; Sema and the lexer instead accumulate into
+Errors: the parser sets `aborted` when it cannot make progress, and every
+production and loop tests it — Pascal has no exceptions, so what was
+`ap::ParseAbort` in the C++ became a flag (ADR-0023). Sema and the lexer instead
+accumulate into
 `Diagnostics` so one run reports many errors.
 
 **Activation records and static links** (ADR-0016). Every procedure gets a
@@ -122,9 +132,12 @@ own exception and compare by length instead.
   `VarParam`, so the designator is evaluated once and the binding is
   per-invocation. A bare name that is a field of an open `with` resolves to
   that binding plus `VarRef::withField`.
-- The data layout is set on the module *before* codegen (`main.cpp` builds the
-  TargetMachine first), because the size of a record decides what a whole-
-  variable assignment copies.
+- The data layout is **stated by the emitted module itself** (`target datalayout`),
+  because the size of a record decides what a whole-variable assignment copies
+  and the assembler has to lay things out the way `LlSize`/`LlAlign` say it
+  does. The C++ compiler asked a TargetMachine; there is no TargetMachine now,
+  which is why the line is written out — see the CodeGen section, where ADR-0028
+  records the segfault that came of leaving it unstated.
 
 **Ordinal types** (ADR-0018). `Type::base()` returns the host of a subrange and
 the type itself otherwise, and `isInteger()`, `isChar()`, `isNumeric()` and the
@@ -285,8 +298,10 @@ reference, and what makes a recursive type possible. `resolvePointer` records a
 **Text files** (ADR-0021). A file variable's storage is *opaque to the
 compiler*: codegen alloca's `PAS_FILE_SIZE` bytes in the frame and only ever
 passes their address, and `struct pas_file` is private to `runtime/pasrt.c`.
-The size lives in `runtime/pasrt.h`, included by `codegen.cpp`, so the two
-cannot disagree; a `_Static_assert` fails the build if the struct outgrows it.
+The size lives in `runtime/pasrt.h` as `PAS_FILE_SIZE` and in the compiler as
+`fileSize`, in two files that cannot include one another — `selfhost/irtest.sh`
+checks they agree, which is the same arrangement the version number has. A
+`_Static_assert` fails the build if the struct outgrows it.
 
 - The buffer variable `f^` is real, and `read`/`write` are *derived* from
   `get`/`put` in the runtime, as ISO 7185 §6.6.5.2 defines them. This is
@@ -1151,8 +1166,8 @@ property of the source.
     dimension where a run-time error has always exited 1 with no clause saying
     so. It exists because `pascalc` has to be able to report failure, and
     **`selfhost/producttest.sh` is the only thing that checks it does** —
-    deleting the compiler's own `halt(1)` passed all 279 cases, goldens
-    comparing what a program wrote and never how it stopped.
+    deleting the compiler's own `halt(1)` passed the whole suite as it then
+    stood, goldens comparing what a program wrote and never how it stopped.
   - **A builtin's enumerator has to be placed, not written where it reads
     best**: the AST dump prints it as an ordinal, so both compilers must agree
     on the index. `difftest` caught two as a number one apart.
@@ -1676,19 +1691,26 @@ decision being overturned on taste.
 
 ## Where things live
 
-`src/lexer.cpp` case-folds identifiers and knows every reserved word of both
+**Everything is `selfhost/compiler.pas`** — one source file, ~24,000 lines,
+because neither standard has an include mechanism (ADR-0024). The names below
+are the *components* inside it, and where a bullet names a `src/*.cpp` file it
+is naming the component that file used to be: the port is close enough that the
+reasoning transfers, and the C++ is at tag `v0.1.0` if you want to read it.
+
+The **lexer** case-folds identifiers and knows every reserved word of both
 standards, even ones the parser rejects — which of them are *reserved* is the
-one thing `--std` decides in the lexis (ADR-0033). `src/parser.cpp` is recursive descent shaped like the
-ISO grammar (`expression` → `simple-expression` → `term` → `factor`) — note a
-leading sign binds to the whole *term*, so `-7 mod 3` is `-(7 mod 3)`.
-The parser bounds the depth of the tree it builds at 1000 levels (ADR-0020);
+one thing `--std` decides in the lexis (ADR-0033). The **parser** is recursive
+descent shaped like the ISO grammar (`expression` → `simple-expression` →
+`term` → `factor`) — note a leading sign binds to the whole *term*, so
+`-7 mod 3` is `-(7 mod 3)`.
+It bounds the depth of the tree it builds at 1000 levels (ADR-0020);
 the spine-building loops count their iterations toward the same limit, because
-an operator chain is flat for the parser but deep for Sema, CodeGen and the
-destructor — a call-depth-only limit would miss it.
-`src/astdump.cpp` writes the tree in the format `selfhost/compiler.pas` also
-writes, before and after Sema; it is the specification of that format, so
-change it and the Pascal side together.
-`src/sema.cpp` owns scopes, type rules, type-denoter resolution, constant
+an operator chain is flat for the parser but deep for Sema and CodeGen — a
+call-depth-only limit would miss it.
+`DumpProgram` writes the tree before and after Sema, behind `--dump-ast` and
+`--dump-sema`; the format was a specification while two compilers wrote it and
+is now a debugging aid, which is the one thing ADR-0085 made *less* load-bearing.
+**Sema** owns scopes, type rules, type-denoter resolution, constant
 folding, and — since ADR-0039 — the schema intern table, which is the one place
 a type's *identity* is decided by something other than the denoter that built
 it. Since ADR-0053 it also owns the interface table and the module records: an
@@ -1708,9 +1730,12 @@ where `width < 0` / `prec < 0` mean "not given", and nothing else: a width the
 program *wrote* is checked against §6.9.3.1's or §6.10.3.1's least value
 before it gets there, so the runtime never sees a negative one (ADR-0064).
 
-Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
-`ast.h` → `parser.cpp` → `sema.cpp` → `codegen.cpp` → a `tests/` pair, plus
-`runtime/pasrt.c` if it needs library support.
+Adding a language feature usually touches, in order, the components of
+`selfhost/compiler.pas`: the token kinds and the lexer → the node kinds and the
+parser → Sema → CodeGen → a `tests/` pair, plus `runtime/pasrt.c` if it needs
+library support, and `selfhost/badparse/` or `selfhost/badsema/` if it adds a
+diagnostic. It used to touch that list *twice*, once in C++ and once in Pascal,
+in the same commit; halving that is what retiring stage 0 bought (ADR-0085).
 
 `selfhost/compiler.pas` is the stage-1 compiler, written in Afterschool Pascal,
 and since ADR-0083 it is **the compiler this repository produces**: CMake
@@ -1918,7 +1943,8 @@ mechanics.
 
 Three things to know before touching it:
 
-- **`lowering.py` is a model of `codegen.cpp` and must be maintained with it.**
+- **`lowering.py` is a model of the code generator and must be maintained with
+  it.**
   A drifted model keeps passing and proves nothing. When you change a lowering,
   change the model in the same commit.
 - **Specifications state properties, never computations.** Writing `iso.py` so it

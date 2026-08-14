@@ -52,20 +52,15 @@ as binaries, because IR is what the Pascal compiler emits (ADR-0025).
 
 Stage 0 only had to be good enough to compile the Pascal-written compiler
 *once*, which is why the feature list grew in the order it did rather than the
-standard's. It is past that bar now, and both compilers grow together: a
-feature lands in C++ and in `selfhost/compiler.pas` in the same commit, because
-the differential test compares them on every file in the tree.
+standard's. For as long as it existed, both compilers grew together — a feature
+landed in C++ and in `selfhost/compiler.pas` in the same commit, because the
+differential test compared them on every file in the tree. **That is what
+retiring it ended** (ADR-0085): a feature is now written once.
 
-The stage-2 ≡ stage-3 comparison is the whole point: stage 2 is built by a
-compiler that was itself built by C++, stage 3 by one built by Pascal. The bytes
-match, so the Pascal source is a fixed point — the C++ compiler takes no part in
-the second reproduction, and stage 0 *could* be retired.
-
-**It is being kept, and not as scaffolding awaiting removal.** See
-[the two things that are not features](#the-two-things-that-are-not-features):
-a second implementation is what `difftest.sh` compares against and what
-`verify/` proves, and retiring stage 0 would give up both to buy a capability
-the fixed point already provides.
+The stage-2 ≡ stage-3 comparison is the whole point, and it does not depend on
+what started the chain: stage 2 is built by a compiler the seed built, stage 3
+by one that stage 2 built, and both come from the same source. The bytes match,
+so the Pascal source is a fixed point.
 
 ## The six bootstrap items (all done)
 
@@ -90,9 +85,10 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 278 ctest cases — the Pascal programs of `tests/` and
-`tests/extended/`, the verification run, the differential test, the bootstrap
-and the product check — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
+Alongside the language, 435 ctest cases — the Pascal programs of `tests/` and
+`tests/extended/`, the error-path corpus of `selfhost/badparse/` and
+`selfhost/badsema/`, the verification run, the bootstrap and the product check —
+and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
 
 ### Item 5 — text files (done)
@@ -149,8 +145,11 @@ and running against the compiler as it stands.
 
 Nothing in the language was blocking, and these went in this order:
 
-1. ~~**Port the lexer.**~~ **Done** (ADR-0022) — checked against the C++ lexer
-   on every Pascal source in the tree by `selfhost/difftest.sh`, under ctest.
+1. ~~**Port the lexer.**~~ **Done** (ADR-0022) — checked *at the time* against
+   the C++ lexer on every Pascal source in the tree by `selfhost/difftest.sh`.
+   Both are gone (ADR-0085), which is why that record is the one marked
+   superseded: its decision was "not against a golden file", and goldens are
+   what pin the lexer now.
 2. ~~**Port the parser and the AST.**~~ **Done** (ADR-0023) — the bootstrap
    constraints paid: the `NK` tag became a variant record's tag and `as<T>()`
    became the `case` that reads it, with no cleverness needed.
