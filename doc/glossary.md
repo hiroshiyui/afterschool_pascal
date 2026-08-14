@@ -401,8 +401,8 @@ the checkout lives.
 
 **Differential test.** Comparing the stage-1 compiler against the stage-0 one
 it is a port of, rather than against a recorded expectation.
-`selfhost/difftest.sh <pascalc>` diffs `selfhost/compiler.pas` against
-`pascalc --dump-all` over every Pascal source in the tree, as
+`selfhost/difftest.sh <pascalc-s0>` diffs `selfhost/compiler.pas` against
+`pascalc-s0 --dump-all` over every Pascal source in the tree, as
 `selfhost-compiler`. A golden file would pin the port to whatever it did the
 day it was written; the C++ compiler is the specification, so the test says
 "these two agree" instead of "this has not changed" (ADR-0022 to ADR-0024).

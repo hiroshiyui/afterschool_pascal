@@ -27,7 +27,7 @@ When performing a project-wide code review, always follow these steps:
    - **Is a new `BOUNDED` rule justified?** Bounded width is for claims the solver genuinely cannot discharge at 32 bits. Confirm `FULL` was tried and timed out, rather than bounded being chosen for speed.
 
 5. **Generated-code correctness** — the failure mode that tests catch late:
-   - Every new codegen path should be read once at `-O0` (`pascalc -O0 --emit-llvm f.pas -o /dev/stdout`). `verifyModule` catches malformed IR, not *wrong* IR.
+   - Every new codegen path should be read once at `-O0` (`pascalc-s0 -O0 --emit-llvm f.pas -o /dev/stdout`). `verifyModule` catches malformed IR, not *wrong* IR.
    - Signed vs unsigned comparison: `integer` compares signed, `char`/`boolean` unsigned. An `ICmpSLT` on a `char` is a real bug.
    - Integer width: `integer` is `i32`, but the runtime takes `i64` — check the `SExt` is present.
    - Basic-block hygiene: every block ends in exactly one terminator, and `b_.SetInsertPoint` is restored after any helper that creates blocks (`guardNonZero` and the short-circuit path both do).
@@ -57,7 +57,7 @@ When performing a project-wide code review, always follow these steps:
          -DCMAKE_CXX_FLAGS="--coverage -O0 -g" \
          -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm
    cmake --build build-cov -j && ctest --test-dir build-cov
-   gcov -o build-cov/CMakeFiles/pascalc.dir/src src/*.cpp | grep -A1 "File 'src"
+   gcov -o build-cov/CMakeFiles/pascalc-s0.dir/src src/*.cpp | grep -A1 "File 'src"
    ```
    `lcov`/`gcovr` are **not installed** — for an HTML report, `apt install gcovr` first (`gcovr -r . --html-details -o cov.html`); otherwise read the `.gcov` files directly.
    - **Confirm the diff is covered, not just the totals.** Cross-check the `#####` lines in `src/<changed>.cpp.gcov` against the lines this change added — every new production line should be executed by some test. A high file percentage hides one untested new branch.
@@ -73,7 +73,7 @@ When performing a project-wide code review, always follow these steps:
 10. **Code style** — Confirm:
    - **Formatting is incremental, so check the diff and not the tree.** `.clang-format` is plain LLVM style, but the existing sources are not fully conformant — several dispatch tables are hand-aligned into columns that clang-format collapses. Run `git clang-format HEAD~1` (or `git clang-format` against pending work) and confirm it produces no changes for the lines this change touched. A whole-tree `clang-format --dry-run --Werror` will report hundreds of pre-existing violations; do not report those as findings, and do not let a change bundle a tree-wide reflow with real work — that belongs in its own `style:` commit.
    - The build is warning-free. There is no `-Werror` gate yet; if the change adds warnings, that is a finding.
-   - No `printf`/`iostream` output from the compiler except through `Diagnostics` (user-facing errors) or the driver's explicit `fprintf(stderr, "pascalc: ...")`.
+   - No `printf`/`iostream` output from the compiler except through `Diagnostics` (user-facing errors) or the driver's explicit `fprintf(stderr, "pascalc-s0: ...")`.
    - `clang-tidy` is **not installed**; skip it or `apt install clang-tidy-21`.
 
 11. **Report findings** — Present all identified issues grouped by category: Bootstrap Constraints, Conformance, Verification, Generated Code, Correctness, Code Smell, Tests, Documentation, Style. Assign each a severity of **Critical**, **High**, **Medium**, or **Low**. For every finding, include the file path and line number, a clear description, and a concrete recommendation for how to fix it.

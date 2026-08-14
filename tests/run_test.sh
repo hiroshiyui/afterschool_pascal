@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Compile one .pas file, run it, and compare against the expected output.
 #
-#   run_test.sh <path-to-pascalc> <path-to-test.pas> [standard]
+#   run_test.sh <path-to-pascalc-s0> <path-to-test.pas> [standard]
 #
 # Two forms of expectation:
 #

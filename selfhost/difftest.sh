@@ -2,7 +2,7 @@
 # Differential test: a stage-1 component against the stage-0 one it was ported
 # from, on every Pascal source in the repository.
 #
-#   difftest.sh <path-to-pascalc> [files...]
+#   difftest.sh <path-to-pascalc-s0> [files...]
 #
 # The roadmap makes this the checkpoint that comes *before* stage 1 is declared
 # working. A disagreement here is a bug in one of the two implementations,
@@ -21,7 +21,7 @@
 set -u
 
 pascalc=$1
-shift || { echo "usage: difftest.sh <pascalc> [files...]" >&2; exit 2; }
+shift || { echo "usage: difftest.sh <pascalc-s0> [files...]" >&2; exit 2; }
 
 component=compiler
 flag=--dump-all

@@ -40,8 +40,8 @@ second; nothing below "Beyond self-hosting" is finished business.
 ## The three-stage build
 
 ```
-stage 0   pascalc (C++)          — this repo, grown until it accepts the stage-1 source
-stage 1   pascalc1 = stage0(compiler.pas)
+stage 0   pascalc-s0 (C++)       — this repo, grown until it accepts the stage-1 source
+stage 1   pascalc1 = stage0(compiler.pas)      this is build/bin/pascalc
 stage 2   pascalc2 = pascalc1(compiler.pas)
 stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 byte-for-byte
 ```
@@ -966,7 +966,7 @@ they landed — rather than in the standard's.
     have. Each exported slot now carries an external name beside the record,
     which stays internal: `nm` on a component is its interface.
   - **The two compilers' objects are interchangeable.** A module translated by
-    `selfhost/compiler.pas` links against a program translated by `pascalc`,
+    `selfhost/compiler.pas` links against a program translated by `pascalc-s0`,
     which is a sharper statement than either passing its own tests.
   - The stage-1 compiler takes the other components as one more program
     parameter, **concatenated** — ADR-0033's constraint for the third time —
@@ -1164,13 +1164,20 @@ second is live:
 
   - **No seed is checked in.** The stage-1 binary is built on demand and never
     committed, so today the Pascal compiler has exactly one ancestor and it is
-    `pascalc`. Committing an artefact — a binary, or the `.ll` stage 0 emits —
+    `pascalc-s0`. Committing an artefact — a binary, or the `.ll` stage 0 emits —
     is a policy decision about what this repository is willing to carry and to
     trust, not a technical obstacle, and nothing else waits on it.
   - **Re-pointing the proofs at the Pascal generator** is worth doing *while*
     the C++ compiler stays, rather than as a precondition for removing it: two
     models disagreeing would be a third oracle. See the next entry.
-  - **A Pascal `pascalc`.** `selfhost/compiler.pas` is
+  - **A Pascal `pascalc` — it exists now, and it is the product.**
+    `build/bin/pascalc` is `selfhost/compiler.pas` translated by
+    `pascalc-s0`, built by `cmake --build` like anything else and checked by
+    `selfhost/producttest.sh`. Naming it that way is the point: the compiler
+    this project is *for* is the one written in its own language, and the C++
+    one is stage 0 and says so.
+
+    What it is not yet is a driver. It is
     `program Compile(output, source, ircode, options, imports)`: the standard
     and the already-translated components arrive as *files* because ISO 7185
     gives a program no command line beyond its program parameters (ADR-0033,

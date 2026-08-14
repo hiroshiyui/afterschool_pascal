@@ -1,22 +1,28 @@
-// Afterschool Pascal — driver.
+// Afterschool Pascal — the stage-0 driver.
 //
-//   pascalc hello.pas            compile and link to ./hello
-//   pascalc -o out hello.pas     choose the executable name
-//   pascalc --std=extended hello.pas  ISO/IEC 10206:1991 rather than ISO 7185.
-//                                     The two are not nested (ADR-0033), so
-//                                     this selects the *language* and not a
-//                                     set of extensions.
-//   pascalc --emit-llvm hello.pas, -S   write hello.ll and stop
-//   pascalc -c hello.pas         write hello.o and stop
-//   pascalc -O0 .. -O3           optimisation level; the default is -O2
-//   pascalc --keep-temps hello.pas    keep the intermediate object file
-//   pascalc --dump-tokens hello.pas   the token stream, for selfhost/difftest.sh
-//   pascalc --dump-ast hello.pas      the parse tree, before Sema
-//   pascalc --dump-sema hello.pas     the same tree, annotated by Sema
-//   pascalc --dump-all hello.pas      all three sections in one run — this is
-//                                     the form selfhost/difftest.sh compares
-//                                     the Pascal compiler against
-//   pascalc -h, --help           write the option list and stop
+// This is `pascalc-s0`, the compiler written in C++. The compiler this project
+// produces is `pascalc`, which is `selfhost/compiler.pas` translated by this
+// one — see CMakeLists.txt. Stage 0 is kept rather than retired because it is
+// the second implementation `selfhost/difftest.sh` compares against and the
+// one `verify/` proves; doc/roadmap.md has the trade.
+//
+//   pascalc-s0 hello.pas            compile and link to ./hello
+//   pascalc-s0 -o out hello.pas     choose the executable name
+//   pascalc-s0 --std=extended hello.pas  ISO/IEC 10206:1991 rather than
+//                                     ISO 7185. The two are not nested
+//                                     (ADR-0033), so this selects the
+//                                     *language* and not a set of extensions.
+//   pascalc-s0 --emit-llvm hello.pas, -S   write hello.ll and stop
+//   pascalc-s0 -c hello.pas         write hello.o and stop
+//   pascalc-s0 -O0 .. -O3           optimisation level; the default is -O2
+//   pascalc-s0 --keep-temps hello.pas   keep the intermediate object file
+//   pascalc-s0 --dump-tokens hello.pas  the token stream, for difftest.sh
+//   pascalc-s0 --dump-ast hello.pas     the parse tree, before Sema
+//   pascalc-s0 --dump-sema hello.pas    the same tree, annotated by Sema
+//   pascalc-s0 --dump-all hello.pas     all three sections in one run — this
+//                                     is the form selfhost/difftest.sh
+//                                     compares the Pascal compiler against
+//   pascalc-s0 -h, --help           write the option list and stop
 //
 // `usage()` below is the authoritative list; keep the two in step.
 
@@ -137,7 +143,7 @@ void dumpTokens(const std::vector<ap::Token> &tokens) {
 void usage() {
   std::fprintf(stderr,
                "Afterschool Pascal\n"
-               "usage: pascalc [options] file.pas\n"
+               "usage: pascalc-s0 [options] file.pas\n"
                "  -o <file>     name of the output file\n"
                "  --emit-llvm, -S\n"
                "                write LLVM IR (.ll) instead of an executable\n"
@@ -201,7 +207,7 @@ bool parseArgs(int argc, char **argv, Options &opt) {
         opt.lang = ap::Std::Extended;
       } else {
         std::fprintf(stderr,
-                     "pascalc: unknown standard '%s'; "
+                     "pascalc-s0: unknown standard '%s'; "
                      "expected iso7185 or extended\n",
                      name.c_str());
         return false;
@@ -212,7 +218,7 @@ bool parseArgs(int argc, char **argv, Options &opt) {
       usage();
       std::exit(0);
     } else if (!a.empty() && a[0] == '-') {
-      std::fprintf(stderr, "pascalc: unknown option '%s'\n", a.c_str());
+      std::fprintf(stderr, "pascalc-s0: unknown option '%s'\n", a.c_str());
       return false;
     } else if (a.size() > 2 && a.compare(a.size() - 2, 2, ".o") == 0) {
       // An already-translated component, on its way to the linker.
@@ -220,7 +226,7 @@ bool parseArgs(int argc, char **argv, Options &opt) {
     } else if (opt.input.empty()) {
       opt.input = a;
     } else {
-      std::fprintf(stderr, "pascalc: more than one input file given\n");
+      std::fprintf(stderr, "pascalc-s0: more than one input file given\n");
       return false;
     }
   }
@@ -267,7 +273,7 @@ std::unique_ptr<llvm::TargetMachine> createHostTargetMachine() {
   std::string err;
   const llvm::Target *target = llvm::TargetRegistry::lookupTarget(triple, err);
   if (!target) {
-    std::fprintf(stderr, "pascalc: %s\n", err.c_str());
+    std::fprintf(stderr, "pascalc-s0: %s\n", err.c_str());
     return nullptr;
   }
 
@@ -282,7 +288,7 @@ bool emitObject(llvm::Module &mod, llvm::TargetMachine &tmRef,
   std::error_code ec;
   llvm::raw_fd_ostream dest(path, ec, llvm::sys::fs::OF_None);
   if (ec) {
-    std::fprintf(stderr, "pascalc: cannot write %s: %s\n", path.c_str(),
+    std::fprintf(stderr, "pascalc-s0: cannot write %s: %s\n", path.c_str(),
                  ec.message().c_str());
     return false;
   }
@@ -290,7 +296,7 @@ bool emitObject(llvm::Module &mod, llvm::TargetMachine &tmRef,
   llvm::legacy::PassManager pm;
   if (tm->addPassesToEmitFile(pm, dest, nullptr,
                               llvm::CodeGenFileType::ObjectFile)) {
-    std::fprintf(stderr, "pascalc: this target cannot emit object files\n");
+    std::fprintf(stderr, "pascalc-s0: this target cannot emit object files\n");
     return false;
   }
   pm.run(mod);
@@ -313,7 +319,7 @@ bool readTranslatedComponent(
     std::vector<std::unique_ptr<ap::ModuleDecl>> &earlier) {
   std::ifstream in(path, std::ios::binary);
   if (!in) {
-    std::fprintf(stderr, "pascalc: cannot open %s\n", path.c_str());
+    std::fprintf(stderr, "pascalc-s0: cannot open %s\n", path.c_str());
     return false;
   }
   std::stringstream buffer;
@@ -336,7 +342,7 @@ bool readTranslatedComponent(
   }
   if (component->block) {
     std::fprintf(stderr,
-                 "pascalc: %s has a program declaration, so it is not a "
+                 "pascalc-s0: %s has a program declaration, so it is not a "
                  "component this one can import\n",
                  path.c_str());
     return false;
@@ -358,7 +364,7 @@ int main(int argc, char **argv) {
 
   std::ifstream in(opt.input, std::ios::binary);
   if (!in) {
-    std::fprintf(stderr, "pascalc: cannot open %s\n", opt.input.c_str());
+    std::fprintf(stderr, "pascalc-s0: cannot open %s\n", opt.input.c_str());
     return 1;
   }
   std::stringstream buffer;
@@ -461,7 +467,7 @@ int main(int argc, char **argv) {
                  tm->getTargetTriple());
   std::unique_ptr<llvm::Module> mod = cg.run(*program);
   if (!mod) {
-    std::fprintf(stderr, "pascalc: internal error: generated invalid IR\n");
+    std::fprintf(stderr, "pascalc-s0: internal error: generated invalid IR\n");
     return 1;
   }
 
@@ -474,7 +480,7 @@ int main(int argc, char **argv) {
     std::error_code ec;
     llvm::raw_fd_ostream out(path, ec, llvm::sys::fs::OF_Text);
     if (ec) {
-      std::fprintf(stderr, "pascalc: cannot write %s\n", path.c_str());
+      std::fprintf(stderr, "pascalc-s0: cannot write %s\n", path.c_str());
       return 1;
     }
     mod->print(out, nullptr);
@@ -487,7 +493,7 @@ int main(int argc, char **argv) {
   // this one, because nothing about this one is wrong.
   if (!program->block && !opt.compileOnly) {
     std::fprintf(stderr,
-                 "pascalc: %s declares no program, so it can be translated "
+                 "pascalc-s0: %s declares no program, so it can be translated "
                  "(-c) but not linked; the program-component holding the "
                  "program declaration is what links it\n",
                  opt.input.c_str());
@@ -517,7 +523,7 @@ int main(int argc, char **argv) {
   if (!opt.keepTemps)
     std::remove(objPath.c_str());
   if (rc != 0) {
-    std::fprintf(stderr, "pascalc: linking failed\n");
+    std::fprintf(stderr, "pascalc-s0: linking failed\n");
     return 1;
   }
   return 0;

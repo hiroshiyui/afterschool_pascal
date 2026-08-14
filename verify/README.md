@@ -6,7 +6,7 @@ try.
 
 ```sh
 pip install z3-solver
-python3 verify/verify.py --pascalc build/bin/pascalc     # both halves
+python3 verify/verify.py --pascalc build/bin/pascalc-s0  # both halves
 python3 verify/verify.py --prove                         # proofs only
 python3 verify/verify.py --crosscheck                    # the real binary only
 ```

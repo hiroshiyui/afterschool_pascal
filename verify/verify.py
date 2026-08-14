@@ -323,7 +323,7 @@ def run_crosscheck(pascalc):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pascalc", default="build/bin/pascalc",
+    parser.add_argument("--pascalc", default="build/bin/pascalc-s0",
                         help="path to the compiler under test")
     parser.add_argument("--prove", action="store_true")
     parser.add_argument("--crosscheck", action="store_true")

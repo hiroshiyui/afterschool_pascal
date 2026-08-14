@@ -28,7 +28,7 @@ When performing release engineering, always follow these steps:
 
 3. **Sanity-check the compiler by hand** — the suite compares stdout, so it
    cannot see everything a user does. Confirm on a fresh checkout that
-   `pascalc hello.pas` produces a runnable binary, `--emit-llvm` produces IR that
+   `pascalc-s0 hello.pas` produces a runnable binary, `--emit-llvm` produces IR that
    `llc` accepts, the `-h` output matches the flags that actually exist, and a
    deliberately broken program produces a diagnostic and exit status 1 rather
    than a crash.
@@ -50,7 +50,7 @@ When performing release engineering, always follow these steps:
    Present the recommendation to the user and confirm before proceeding.
 
 5. **Update the version** — **the `project()` call in `CMakeLists.txt` carries no
-   `VERSION` yet, and `pascalc` has no `--version` flag.** The first release must
+   `VERSION` yet, and `pascalc-s0` has no `--version` flag.** The first release must
    add both: `project(afterschool_pascal VERSION X.Y.Z LANGUAGES C CXX)`, a
    `target_compile_definitions` carrying it into the driver, and a `--version`
    handler beside `--help`. A compiler that cannot report its own version makes
@@ -76,7 +76,7 @@ When performing release engineering, always follow these steps:
 
 9. **Consider what a binary release would even mean** — *only when producing a
    downloadable artifact; the project ships source and tags today, so skip this
-   for a source-only release.* `pascalc` is not self-contained: it links
+   for a source-only release.* `pascalc-s0` is not self-contained: it links
    `libLLVM`, it needs `clang` on `PATH` to link programs (ADR-0009), and it
    needs `libpasrt.a` findable via the baked-in `APASCAL_RUNTIME_DIR` or
    `AFTERSCHOOL_PASCAL_RUNTIME`. A binary tarball must therefore ship the runtime

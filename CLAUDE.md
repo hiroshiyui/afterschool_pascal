@@ -18,22 +18,32 @@ cmake --build build -j
 
 ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
-tests/run_test.sh build/bin/pascalc tests/control.pas iso7185   # without ctest
-tests/run_test.sh build/bin/pascalc tests/extended/otherwise.pas extended
-selfhost/difftest.sh build/bin/pascalc   # the Pascal compiler against the C++ one
-selfhost/irtest.sh build/bin/pascalc     # what the Pascal compiler *builds*, and stage 2 = stage 3
+tests/run_test.sh build/bin/pascalc-s0 tests/control.pas iso7185   # without ctest
+tests/run_test.sh build/bin/pascalc-s0 tests/extended/otherwise.pas extended
+selfhost/difftest.sh build/bin/pascalc-s0   # the Pascal compiler against the C++ one
+selfhost/irtest.sh build/bin/pascalc-s0     # what the Pascal compiler *builds*, and stage 2 = stage 3
+selfhost/producttest.sh build/bin/pascalc build/lib   # the built pascalc itself
 
-build/bin/pascalc tests/hello.pas -o /tmp/hello && /tmp/hello
-build/bin/pascalc -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
-build/bin/pascalc --std=extended prog.pas   # ISO/IEC 10206:1991 instead
+build/bin/pascalc-s0 tests/hello.pas -o /tmp/hello && /tmp/hello
+build/bin/pascalc-s0 -O0 --emit-llvm tests/hello.pas -o /dev/stdout   # inspect IR
+build/bin/pascalc-s0 --std=extended prog.pas   # ISO/IEC 10206:1991 instead
 ```
+
+**The build produces two compilers and they are not interchangeable.**
+`build/bin/pascalc-s0` is the C++ one — it has the command line, it links, and
+it is what every harness above is handed. `build/bin/pascalc` is
+`selfhost/compiler.pas` translated by it, takes four *files* and no flags
+(ADR-0033, ADR-0079), and stops at the IR because no standard Pascal program
+can spawn a linker. Handing one a command meant for the other is the mistake
+this arrangement makes easy, and `verify/verify.py --pascalc` defaulting to the
+wrong one was the first instance.
 
 Adding `tests/foo.pas` + `tests/foo.out` requires **re-running `cmake`** — cases
 are registered by a `file(GLOB)` at configure time, and `tests/` and
 `tests/extended/` are globbed separately because they are compiled under
 different standards.
 
-`pascalc` shells out to `clang` to link, and finds `libpasrt.a` through the
+`pascalc-s0` shells out to `clang` to link, and finds `libpasrt.a` through the
 build path baked in as `APASCAL_RUNTIME_DIR`; `AFTERSCHOOL_PASCAL_RUNTIME`
 overrides it.
 
@@ -1704,9 +1714,9 @@ is empty for every file in the corpus but the one case that has components, and
 it must still *exist*, because program parameters bind to arguments in order.
 
 **The first three components are checked against `src/`, not against golden
-files.** `pascalc
+files.** `pascalc-s0
 --dump-all` and `selfhost/compiler.pas` write the same three sections
-(`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh <pascalc>`
+(`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh <pascalc-s0>`
 diffs them over every `.pas` in the tree, under ctest as `selfhost-compiler`.
 If you change what a C++ stage produces, the Pascal one changes in the same
 commit or the test goes red — that is the point of it, not an inconvenience.

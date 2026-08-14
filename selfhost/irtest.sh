@@ -2,7 +2,7 @@
 # The stage-1 code generator, checked by running what it produces -- and then
 # by closing the bootstrap.
 #
-#   irtest.sh <path-to-pascalc> [files...]
+#   irtest.sh <path-to-pascalc-s0> [files...]
 #
 # Every earlier component was checked by *diffing* it against the C++ one, on a
 # dump both sides write (ADR-0022, ADR-0023, ADR-0024). CodeGen cannot be: the
@@ -20,7 +20,7 @@
 #
 # Then the part that is the point of the whole exercise (ADR-0004):
 #
-#   stage 1 = pascalc(compiler.pas)        built by C++
+#   stage 1 = pascalc-s0(compiler.pas)     built by C++
 #   stage 2 = stage1(compiler.pas)         built by a compiler C++ built
 #   stage 3 = stage2(compiler.pas)         built by a compiler Pascal built
 #
@@ -30,7 +30,7 @@
 set -u
 
 pascalc=$1
-shift || { echo "usage: irtest.sh <pascalc> [files...]" >&2; exit 2; }
+shift || { echo "usage: irtest.sh <pascalc-s0> [files...]" >&2; exit 2; }
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$here")

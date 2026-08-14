@@ -17,18 +17,51 @@ ctest --test-dir build --output-on-failure
 Requires LLVM 21 development files, a C++20 compiler, and `clang` on PATH for
 linking.
 
+That builds **two compilers**, and the distinction matters everywhere below:
+
+| | | |
+|---|---|---|
+| `build/bin/pascalc-s0` | written in C++ | stage 0 — it builds the one below |
+| `build/bin/pascalc` | written in Afterschool Pascal | the compiler this project is for |
+
+`pascalc` is `selfhost/compiler.pas` translated by `pascalc-s0`, and it compiles
+itself: stage 2 equals stage 3, so the source is a fixed point. Stage 0 is kept
+rather than retired — it is the second implementation `selfhost/difftest.sh`
+compares against and the one `verify/` proves. [doc/roadmap.md](doc/roadmap.md)
+has that trade in full.
+
 ## Using
 
+`pascalc-s0` is the one with a command line, so it is what the examples use:
+
 ```sh
-build/bin/pascalc hello.pas          # -> ./hello
-build/bin/pascalc -o greet hello.pas
-build/bin/pascalc --emit-llvm hello.pas   # -> hello.ll
-build/bin/pascalc -c hello.pas            # -> hello.o
-build/bin/pascalc -O0 hello.pas           # -O0..-O3, default -O2
-build/bin/pascalc --std=extended hello.pas  # ISO/IEC 10206:1991 instead
-build/bin/pascalc --keep-temps hello.pas  # keep the intermediate .o
-build/bin/pascalc --help                  # the full option list
+build/bin/pascalc-s0 hello.pas          # -> ./hello
+build/bin/pascalc-s0 -o greet hello.pas
+build/bin/pascalc-s0 --emit-llvm hello.pas   # -> hello.ll
+build/bin/pascalc-s0 -c hello.pas            # -> hello.o
+build/bin/pascalc-s0 -O0 hello.pas           # -O0..-O3, default -O2
+build/bin/pascalc-s0 --std=extended hello.pas  # ISO/IEC 10206:1991 instead
+build/bin/pascalc-s0 --keep-temps hello.pas  # keep the intermediate .o
+build/bin/pascalc-s0 --help                  # the full option list
 ```
+
+**`pascalc` takes four files and no flags**, which is not an oversight but the
+shape ISO 7185 leaves for a program that wants arguments — a program-parameter
+is a *file*, so the standard to compile for and §6.13's already-translated
+components arrive as files rather than as `--std` and `--import`
+(ADR-0033, ADR-0079):
+
+```sh
+echo iso7185 > std.txt
+: > imports.txt                                     # nothing imported
+build/bin/pascalc hello.pas hello.ll std.txt imports.txt
+clang hello.ll build/lib/libpasrt.a -lm -o hello    # pascalc stops at the IR
+```
+
+That last line is the one part of a driver's job that does not port: neither
+standard has process control, so a compiler written in Pascal cannot spawn the
+linker. It is a property of the language rather than a shortfall of this
+compiler, and it is why `pascalc-s0` is still what the examples use.
 
 ISO/IEC 10206:1991 §6.13 lets a program's components be translated separately.
 A source that declares only modules is one, and it becomes an object; the
@@ -36,8 +69,8 @@ component that declares the `program` is given the others' *sources*, which is
 where their interfaces are written:
 
 ```sh
-build/bin/pascalc --std=extended -c counter.pas -o counter.o
-build/bin/pascalc --std=extended prog.pas --import counter.pas counter.o -o prog
+build/bin/pascalc-s0 --std=extended -c counter.pas -o counter.o
+build/bin/pascalc-s0 --std=extended prog.pas --import counter.pas counter.o -o prog
 ```
 
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
@@ -46,8 +79,8 @@ they exist so the Pascal compiler can be diffed against this one, and are
 described under "Stage 1" below.
 
 The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`.
-`pascalc` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to point
-somewhere else.
+`pascalc-s0` finds it in the build tree; set `AFTERSCHOOL_PASCAL_RUNTIME` to
+point somewhere else. `pascalc` never links, so it never looks.
 
 The language is selected per source. `--std=iso7185` is the default and is
 what everything below describes; `--std=extended` is ISO/IEC 10206:1991, which
@@ -283,7 +316,7 @@ compiler stops the program with a message rather than letting it wrap, read
 past the array, or produce an arbitrary value:
 
 ```
-$ pascalc overflow.pas && ./overflow
+$ pascalc-s0 overflow.pas && ./overflow
 runtime error: integer overflow in sqr
 ```
 
@@ -647,7 +680,7 @@ rather than sampled:
 
 ```sh
 pip install z3-solver
-python3 verify/verify.py --pascalc build/bin/pascalc
+python3 verify/verify.py --pascalc build/bin/pascalc-s0
 ```
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
@@ -720,8 +753,8 @@ The classic three-stage build. Stage 0 is the C++ compiler in this repository;
 it only has to be good enough to compile the Pascal-written compiler once.
 
 ```
-stage 0   pascalc (C++)          — this repo, grown until it accepts the stage-1 source
-stage 1   pascalc1 = stage0(compiler.pas)
+stage 0   pascalc-s0 (C++)       — this repo, grown until it accepts the stage-1 source
+stage 1   pascalc1 = stage0(compiler.pas)      this is build/bin/pascalc
 stage 2   pascalc2 = pascalc1(compiler.pas)
 stage 3   pascalc3 = pascalc2(compiler.pas)      require pascalc2 ≡ pascalc3 byte-for-byte
 ```
@@ -766,18 +799,18 @@ checked against the C++ stages it was ported from, on every Pascal source in the
 tree, compared stage for stage — the harness prints how many:
 
 ```sh
-selfhost/difftest.sh build/bin/pascalc     # also runs under ctest
+selfhost/difftest.sh build/bin/pascalc-s0  # also runs under ctest
 ```
 
 Both write the same three sections, so the comparison is a plain diff:
 
 ```
-$ build/bin/pascalc --dump-tokens tests/hello.pas | head -3
+$ build/bin/pascalc-s0 --dump-tokens tests/hello.pas | head -3
 1 1 kw program
 1 9 ident hello
 1 14 op (
 
-$ build/bin/pascalc --dump-sema tests/hello.pas | head -6
+$ build/bin/pascalc-s0 --dump-sema tests/hello.pas | head -6
 program hello
   params
     name output @1:15
@@ -810,7 +843,7 @@ what it produces, against the same golden output the C++ compiler is held to,
 and then by closing the bootstrap:
 
 ```sh
-selfhost/irtest.sh build/bin/pascalc       # also runs under ctest
+selfhost/irtest.sh build/bin/pascalc-s0    # also runs under ctest
 ```
 
 That compiles every case in `tests/` with the Pascal compiler, links the IR with
@@ -821,7 +854,7 @@ last comparison alone, so stage 2 is put through the golden suite too. See
 [ADR-0025](doc/adr/0025-the-code-generator-is-checked-by-running-it.md).
 
 ```sh
-build/bin/pascalc selfhost/compiler.pas -o stage1
+build/bin/pascalc-s0 selfhost/compiler.pas -o stage1   # = build/bin/pascalc
 echo iso7185 > std.txt
 : > imports.txt                                    # no imported components
 ./stage1 selfhost/compiler.pas stage2.ll std.txt imports.txt
