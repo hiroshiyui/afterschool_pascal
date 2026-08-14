@@ -1262,6 +1262,11 @@ var
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
   complexType, canonStringType, bindingType, timeStampType: typePtr;
   emptySetType: typePtr;
+  { 6.4.3.3.3's required schema `string`. Kept because a type produced from it
+    has to be interned by (schema, tuple) -- 6.4.8 -- and BindingType's `name`
+    field is such a production made where there is no denoter to resolve. See
+    StringOfCapacity. }
+  stringSchema: symPtr;
   { the label declaration parts of the blocks currently open, innermost first }
   labelScope: labelScopePtr;
   stmtPath: stmtPathPtr;
@@ -8421,6 +8426,46 @@ begin
   SameTuple := same
 end;
 
+{ 6.4.3.3.3's `string(cap)`, interned.
+
+  6.4.8 makes one schema with one tuple *one type* however often it is written,
+  so this has to be the only way such a type is made. It is a function of its
+  own because there are two callers and only one of them has a type-denoter to
+  resolve: 6.4.3.4's BindingType gives its `name` field "an
+  implementation-defined variable-string-type", and building that field a
+  second string(255) of its own made binding(f).name a type no program could
+  name -- it printed as string(255), compared unequal to the string(255) a
+  program wrote, and so could not be passed to `procedure p(var s: string)`. }
+function StringOfCapacity(cap: integer): typePtr;
+var pr: producedPtr; t, found: typePtr; tuple: numPtr;
+begin
+  new(tuple);
+  tuple^.value := cap;
+  tuple^.next := nil;
+  found := nil;
+  pr := producedHead;
+  while (pr <> nil) and (found = nil) do begin
+    if (pr^.schema = stringSchema) and SameTuple(pr^.tuple, tuple) then
+      found := pr^.ty;
+    pr := pr^.next
+  end;
+  if found = nil then begin
+    t := NewType(tyString);
+    t^.lo := 1;
+    t^.hi := cap;
+    t^.schema := stringSchema;
+    t^.tuple := tuple;
+    new(pr);
+    pr^.schema := stringSchema;
+    pr^.tuple := tuple;
+    pr^.ty := t;
+    pr^.next := producedHead;
+    producedHead := pr;
+    found := t
+  end;
+  StringOfCapacity := found
+end;
+
 procedure AppendNum(var head, tail: numPtr; v: integer);
 var n: numPtr;
 begin
@@ -8607,19 +8652,7 @@ begin
                   'found ', tuple^.value:1);
           t := intType
         end
-        else begin
-          t := NewType(tyString);
-          t^.lo := 1;
-          t^.hi := tuple^.value;
-          t^.schema := schema;
-          t^.tuple := tuple;
-          new(pr);
-          pr^.schema := schema;
-          pr^.tuple := tuple;
-          pr^.ty := t;
-          pr^.next := producedHead;
-          producedHead := pr
-        end
+        else t := StringOfCapacity(tuple^.value)
       end;
 
       if t = nil then begin
@@ -9524,7 +9557,12 @@ begin
       before the `else` is the nearest thing, and ISO 7185 6.8.1 says it is a
       statement. (This compiler used to reject it, so the condition had to be
       folded into the next test instead.) }
-    else if (s = stdInput) or (s = stdOutput) then
+    else if (s = stdInput) or (s = stdOutput) then begin
+      { 6.5.1: a program-parameter possesses the bindability that is bindable
+        whatever its type-denoter said. Set here as well as below, the two
+        standard files being program-parameters like any other. }
+      if langStd = stdExtended then s^.isBindable := true
+    end
     { Neither standard restricts a program-parameter to a file. ISO 7185 6.10
       makes the binding of one that does not possess a file-type
       implementation-dependent, reserving implementation-defined for the file
@@ -9535,8 +9573,21 @@ begin
       makes a permitted answer rather than an omission. It therefore consumes
       no command-line argument either, so writing one beside the file
       parameters does not move their argument positions. }
-    else if not IsFile(s^.stype) then
+    else if not IsFile(s^.stype) then begin
+      { 6.5.1 confers bindability on a program-parameter whatever its type is,
+        so a non-file one is bindable too -- it is simply bound to nothing. }
+      if langStd = stdExtended then s^.isBindable := true
+    end
     else begin
+      { 6.5.1: "The variable-identifier shall possess the bindability denoted
+        by the type-denoter, unless the variable-identifier is a
+        program-parameter or a module-parameter, in which case the
+        variable-identifier shall possess the bindability that is bindable."
+        So the word `bindable` in the declaration is not how a program-parameter
+        becomes one -- being a program-parameter is. Without this, 6.7.6.8's own
+        NOTE 2 use of `binding` cannot be written, its whole point there being
+        to inspect a binding the program did not make. }
+      if langStd = stdExtended then s^.isBindable := true;
       s^.binding := fbArgument;
       s^.fileArg := argIndex;
       argIndex := argIndex + 1
@@ -14841,11 +14892,26 @@ begin
       The capacity of `name` is the implementation-defined part, and it is what
       made this feature wait for the string type: there was no
       variable-string-type to give the field until 6.4.3.3 landed. }
+    { The schema is declared *first*, although 6.4.3.4 comes before 6.4.3.3.3
+      in the standard, because BindingType has a field produced from it and
+      6.4.8 makes that production the same type as the one a program writes.
+      Ordering the other way is what left the field with a string(255) of its
+      own. }
+    InternWord('string   ', at, len);
+    s := Declare(at, len, skSchema, 0, 0);
+    s^.isStringSchema := true;
+    stringSchema := s;
+    cap := NewSymbol;
+    InternWord('capacity ', at, len);
+    cap^.at := at;
+    cap^.len := len;
+    cap^.kind := skConst;
+    cap^.stype := intType;
+    AppendSym(s^.discs, s^.discTail, cap);
+
     bindingType := NewType(tyRecord);
     bindingType^.isPacked := true;
-    nameType := NewType(tyString);
-    nameType^.lo := 1;
-    nameType^.hi := bindNameCap;
+    nameType := StringOfCapacity(bindNameCap);
     new(fld);
     InternWord('name     ', fld^.at, fld^.len);
     fld^.ftype := nameType;
@@ -14902,16 +14968,6 @@ begin
     timeStampType^.aliasAt := at;
     timeStampType^.aliasLen := len;
 
-    InternWord('string   ', at, len);
-    s := Declare(at, len, skSchema, 0, 0);
-    s^.isStringSchema := true;
-    cap := NewSymbol;
-    InternWord('capacity ', at, len);
-    cap^.at := at;
-    cap^.len := len;
-    cap^.kind := skConst;
-    cap^.stype := intType;
-    AppendSym(s^.discs, s^.discTail, cap)
   end
 end;
 
@@ -14974,6 +15030,10 @@ begin
         WritePool(p^.dnAt, p^.dnLen);
         writeln(''' is not declared as a variable in this module')
       end
+      { 6.5.1 names the module-parameter in the same breath as the
+        program-parameter, so it is bindable for the same reason -- even though
+        this compiler binds it to nothing (NOTE 6). }
+      else s^.isBindable := true
     end;
     p := p^.next
   end;
@@ -24015,6 +24075,7 @@ begin
   pendingTail := nil;
   withTop := nil;
   producedHead := nil;
+  stringSchema := nil;
   producingTop := nil;
   heapTypes := nil;
   newTuple := nil;

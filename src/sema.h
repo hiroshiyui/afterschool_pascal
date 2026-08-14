@@ -420,6 +420,11 @@ private:
   /// noun a diagnostic calls them.
   Type *genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
                           const char *noun);
+  /// §6.4.3.3.3's `string(cap)`, interned by (schema, tuple) as §6.4.8
+  /// requires. The one way such a type is made, so that the field
+  /// `BindingType` gives a variable-string-type is the *same* type as the one
+  /// a program writes.
+  Type *stringOfCapacity(int cap);
   /// A bound inside a schema body being resolved generically: a constant, a
   /// discriminant, or a discriminant with a constant added to or taken from
   /// it. Anything else is refused, because a bound is re-evaluated on entry
@@ -591,6 +596,11 @@ private:
   /// type-denoter, so the word parses there, and it is spelled as a type
   /// definition — so refusing it needs a reason of its own.
   bool schemaBody_ = false;
+  /// ISO/IEC 10206:1991 §6.4.3.3.3's required schema `string`. Kept because a
+  /// type produced from it has to be interned by (schema, tuple) — §6.4.8 —
+  /// and `BindingType`'s `name` field is such a production made where there is
+  /// no denoter to resolve. See `stringOfCapacity`.
+  Symbol *stringSchema_ = nullptr;
   /// ISO/IEC 10206:1991 §6.4.3.4's required `BindingType`, built once when the
   /// standard has it. Null under ISO 7185, which is what makes every rule
   /// about binding answer "no such type" there rather than needing a flag.

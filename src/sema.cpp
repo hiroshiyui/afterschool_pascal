@@ -1457,13 +1457,7 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
                    "found " + std::to_string(tuple[0]));
       return ty::Int();
     }
-    Type *t = newType(TypeKind::String);
-    t->lo = 1;
-    t->hi = tuple[0];
-    t->schema = schema;
-    t->tuple = tuple;
-    produced_[key] = t;
-    return t;
+    return stringOfCapacity(tuple[0]);
   }
 
   // Produce it: the discriminants become ordinary constants for as long as the
@@ -1709,6 +1703,34 @@ Type *Sema::genericFromSchema(Symbol *schema, Symbol *owner, TypeExpr &denoter,
   return t;
 }
 
+/// §6.4.3.3.3's `string(cap)`, interned.
+///
+/// §6.4.8 makes one schema with one tuple **one type** however often it is
+/// written, so this has to be the only way such a type is made. It is a
+/// separate function because there are two callers and only one of them has a
+/// type-denoter to resolve: §6.4.3.4's `BindingType` gives its `name` field
+/// "an implementation-defined variable-string-type", and building that field a
+/// second `string(255)` of its own made `binding(f).name` a type no program
+/// could name — it printed as `string(255)`, compared unequal to the
+/// `string(255)` a program wrote, and so could not be passed to
+/// `procedure p(var s: string)`. Two types that print alike and are not the
+/// same type is ADR-0074's diagnostic problem arriving as a real one.
+Type *Sema::stringOfCapacity(int cap) {
+  Symbol *schema = stringSchema_;
+  std::vector<long long> tuple{cap};
+  auto key = std::make_pair(schema, tuple);
+  auto it = produced_.find(key);
+  if (it != produced_.end())
+    return it->second;
+  Type *t = newType(TypeKind::String);
+  t->lo = 1;
+  t->hi = cap;
+  t->schema = schema;
+  t->tuple = tuple;
+  produced_[key] = t;
+  return t;
+}
+
 void Sema::installPredefined() {
   Symbol *t = declare("true", SymKind::Const, 0, 0);
   t->type = ty::Bool();
@@ -1775,6 +1797,20 @@ void Sema::installPredefined() {
   // §6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define
   // a type of that name.
   if (std_ == Std::Extended) {
+    // The schema is declared *first*, although §6.4.3.4 comes before
+    // §6.4.3.3.3 in the standard, because `BindingType` has a field produced
+    // from it and §6.4.8 makes that production the same type as the one a
+    // program writes. Ordering the other way is what left the field with a
+    // `string(255)` of its own.
+    Symbol *str = declare("string", SymKind::Schema, 0, 0);
+    str->isStringSchema = true;
+    Symbol *cap = newSymbol();
+    cap->name = "capacity";
+    cap->kind = SymKind::Const;
+    cap->type = ty::Int();
+    str->discriminants.push_back(cap);
+    stringSchema_ = str;
+
     // §6.4.3.4: "There shall be a record-type designated packed and denoted by
     // the required type-identifier `BindingType`. For each of the required
     // field-identifiers `name` and `bound`, there shall be an associated
@@ -1787,9 +1823,7 @@ void Sema::installPredefined() {
     Type *bt = newType(TypeKind::Record);
     bt->packed = true;
     bt->alias = "BindingType";
-    Type *nameType = newType(TypeKind::String);
-    nameType->lo = 1;
-    nameType->hi = kBindingNameCapacity;
+    Type *nameType = stringOfCapacity(kBindingNameCapacity);
     Field name;
     name.name = "name";
     name.type = nameType;
@@ -1849,14 +1883,6 @@ void Sema::installPredefined() {
     Symbol *tss = declare("timestamp", SymKind::Type, 0, 0);
     tss->type = ts;
     timeStampType_ = ts;
-
-    Symbol *str = declare("string", SymKind::Schema, 0, 0);
-    str->isStringSchema = true;
-    Symbol *cap = newSymbol();
-    cap->name = "capacity";
-    cap->kind = SymKind::Const;
-    cap->type = ty::Int();
-    str->discriminants.push_back(cap);
   }
 }
 
@@ -2733,6 +2759,11 @@ void Sema::checkModuleHeading(ModuleDecl &m, ModuleInfo &info) {
       diags_.error(p.line, p.col,
                    "the module parameter '" + p.name +
                        "' is not declared as a variable in this module");
+    else
+      // §6.5.1 names the module-parameter in the same breath as the
+      // program-parameter, so it is bindable for the same reason — even
+      // though this compiler binds it to nothing (NOTE 6).
+      s->isBindable = true;
   }
 
   // The export parts are resolved last although they are written first: an
@@ -2814,6 +2845,16 @@ void Sema::bindProgramParameters() {
                        "' is not declared as a variable in the program block");
       continue;
     }
+    // §6.5.1: "The variable-identifier shall possess the bindability denoted
+    // by the type-denoter, unless the variable-identifier is a
+    // program-parameter or a module-parameter, in which case the
+    // variable-identifier shall possess the bindability that is bindable."
+    // So the word `bindable` in the declaration is not how a program-parameter
+    // becomes one — being a program-parameter is. Without this, §6.7.6.8's own
+    // NOTE 2 use of `binding` cannot be written: the whole point of it there is
+    // to inspect a binding the program did not make.
+    if (std_ == Std::Extended)
+      s->isBindable = true;
     if (s == stdInput_ || s == stdOutput_)
       continue; // bound by the header itself
     // Neither standard restricts a program-parameter to a file. ISO 7185

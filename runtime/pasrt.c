@@ -1177,6 +1177,17 @@ void pas_unbind(void *v) {
   }
   free(f->bound_name);
   f->bound_name = NULL;
+  /* §6.7.5.6: "If the attempt is successful, the variable shall become
+   * totally-undefined" — and not bound to anything, which has to include the
+   * binding §6.12 made before the program started. Clearing this is what makes
+   * `binding(f).bound` false afterwards for a program-parameter as well as for
+   * a file the program bound itself, and it is why the field is cleared rather
+   * than left at PAS_BIND_ARG: `pas_bind` sets that to mean "bound to a name",
+   * so the two senses of the constant are only told apart by `bound_name`
+   * being present. A later `reset` therefore opens a scratch file, which is
+   * what an unbound file variable is. */
+  f->binding = PAS_BIND_INTERNAL;
+  f->arg = 0;
   f->mode = PAS_CLOSED;
   f->have = 0;
   f->ateof = 0;
@@ -1186,20 +1197,44 @@ void pas_unbind(void *v) {
 /* §6.7.6.8: "If the variable is bound to an external entity, the value of
  * binding(f).bound shall be true". The name comes back with it, which is what
  * lets the standard's own example read a name into `b.name` and hand the whole
- * record to `bind`. */
-int pas_binding_bound(void *v) {
-  struct pas_file *f = v;
-  return f->bound_name != NULL;
+ * record to `bind`.
+ *
+ * A binding the *program* made is not the only kind. NOTE 2 of that clause says
+ * the value returned "can also be used to determine the result of any binding
+ * of program-parameters prior to activation of the main program (see 6.12)" —
+ * so a program-parameter that was given a command-line argument is bound, and
+ * its name is that argument. That is what lets a program read its own command
+ * line, which is otherwise something neither standard offers: §6.10 and §6.12
+ * bind the parameters before the program starts and give it no other channel.
+ *
+ * The three questions have one answer between them, so they share one. */
+static const char *pas_bound_to(struct pas_file *f) {
+  /* A binding the program made wins, as it does in `pas_external`: §6.7.5.6's
+   * `bind` is a program naming a file it was not started with. */
+  if (f->bound_name)
+    return f->bound_name;
+  if (f->binding == PAS_BIND_ARG && f->arg < pas_argc)
+    return pas_argv[f->arg];
+  /* PAS_BIND_INPUT and PAS_BIND_OUTPUT are bound to an external entity too,
+   * and §6.7.6.8 makes the *value* implementation-defined. The standard files
+   * have no name in the file system to report, and inventing one would be a
+   * name `bind` could not reproduce, so they answer as unbound —
+   * doc/implementation-defined.md states it. A program-parameter with no
+   * argument (PAS_BIND_ARG at or past argc) is genuinely unbound, which is how
+   * a program learns how many arguments it was given. */
+  return NULL;
 }
 
+int pas_binding_bound(void *v) { return pas_bound_to(v) != NULL; }
+
 const char *pas_binding_name(void *v) {
-  struct pas_file *f = v;
-  return f->bound_name ? f->bound_name : "";
+  const char *name = pas_bound_to(v);
+  return name ? name : "";
 }
 
 int pas_binding_namelen(void *v) {
-  struct pas_file *f = v;
-  return f->bound_name ? (int)strlen(f->bound_name) : 0;
+  const char *name = pas_bound_to(v);
+  return name ? (int)strlen(name) : 0;
 }
 
 /* ---------------------------------------------------------------- complex

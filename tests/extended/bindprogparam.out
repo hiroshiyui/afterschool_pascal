@@ -1,0 +1,12 @@
+a bound: TRUE
+a name ends: file1
+a name non-empty: TRUE
+b bound: TRUE
+b name ends: file2
+c bound: FALSE
+c name length: 0
+arguments given: 2
+a bound after unbind: FALSE
+a rebound: TRUE /tmp/apascal_bindprogparam.txt
+read back: written through a rebound program parameter
+a bound at the end: FALSE
