@@ -325,8 +325,9 @@ types are shared singletons (ADR-0017) and the alias is recorded on the type
 rather than beside the name, so the last definition wins for every user of it.
 It affects no program's meaning — only what a message calls the type.
 
-**An actual variable parameter is restricted two ways this compiler does not
-check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
-the tag-field a variant part is selected by. Both are properties of the
-designator. Being written as `(variable)` is refused (ADR-0092).
+**ISO/IEC 10206:1991 §6.7.3.3's third restriction is not checked**: an actual
+variable parameter shall not denote a component of a **string-type**. Its
+fixed-string half is covered, a fixed-string-type being a packed array of char;
+what is not is a component of a *variable*-string. ISO 7185 §6.6.3.3 has only
+the two sentences and both are checked (ADR-0099).
 

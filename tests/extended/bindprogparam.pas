@@ -44,29 +44,40 @@ var
 
   A procedure rather than a function because 6.7.2 makes a result-type a
   type-name: the canonical-string-type has no name to write, and naming a
-  fixed capacity would be the wrong type to return. The parameter is a
-  schematic formal (ADR-0040), so it takes a string of any capacity and this
-  program never writes down the implementation-defined one that BindingType's
-  `name` field has. `var` rather than a value parameter because ADR-0052
-  refuses a variable-string by value. }
-procedure WriteTail(var s: string; k: integer);
+  fixed capacity would be the wrong type to return. It still never writes down
+  the implementation-defined capacity that BindingType's `name` field has.
+
+  It takes the *record* and not the field, and that is the standard's doing
+  rather than a preference. 6.4.3.4 requires BindingType to be "a record-type
+  designated packed", and 6.7.3.3 says an actual variable parameter "shall not
+  denote a component of a variable where that variable possesses a type that is
+  designated packed" -- so `WriteTail(bnd, 5)` is not a legal call, and
+  this file made it twice from the day it was written (ADR-0052) with every
+  oracle agreeing. A whole packed variable may be passed by reference; only a
+  component may not.
+
+  What that costs is the schematic formal `var s: string` this took before,
+  which tests/extended/string.pas demonstrates instead. `var` rather than a
+  value parameter is still ADR-0052's rule: a variable-string by value would
+  have to convert its argument. }
+procedure WriteTail(var b: BindingType; k: integer);
 begin
-  if length(s) < k then write(s)
-  else write(substr(s, length(s) - k + 1, k))
+  if length(b.name) < k then write(b.name)
+  else write(substr(b.name, length(b.name) - k + 1, k))
 end;
 
 begin
   { --- the arguments the harness supplied ---------------------------------- }
   bnd := binding(a);
   writeln('a bound: ', bnd.bound);
-  write('a name ends: '); WriteTail(bnd.name, 5); writeln;
+  write('a name ends: '); WriteTail(bnd, 5); writeln;
   { The name is a real path the harness chose, so its length varies; that it is
     non-empty is the part that is the feature. }
   writeln('a name non-empty: ', length(bnd.name) > 0);
 
   bnd := binding(b);
   writeln('b bound: ', bnd.bound);
-  write('b name ends: '); WriteTail(bnd.name, 5); writeln;
+  write('b name ends: '); WriteTail(bnd, 5); writeln;
 
   { --- one the harness did not supply -------------------------------------- }
   { 6.12's NOTE 2: a program-parameter is "not necessarily bound when the

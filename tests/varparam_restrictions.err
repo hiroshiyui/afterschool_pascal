@@ -1,0 +1,6 @@
+<source>:72:14: error: argument 1 of 'takeshape' cannot be the tag of a variant part
+<source>:75:23: error: argument 1 of 'takeshape' cannot be the tag of a variant part
+<source>:78:12: error: argument 1 of 'takech' cannot be a component of a packed variable
+<source>:79:13: error: argument 1 of 'takeint' cannot be a component of a packed variable
+<source>:80:16: error: argument 1 of 'takeint' cannot be a component of a packed variable
+<source>:81:14: error: argument 1 of 'takerec' cannot be a component of a packed variable

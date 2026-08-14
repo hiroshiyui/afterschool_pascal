@@ -6996,6 +6996,57 @@ begin
   else RootDesignator := e
 end;
 
+{ ISO 7185 6.6.3.3 and ISO/IEC 10206:1991 6.7.3.3 carry these two sentences
+  word for word alike, so neither check is gated on the standard: "An actual
+  variable parameter shall not denote a field that is the selector of a
+  variant-part. An actual variable parameter shall not denote a component of a
+  variable where that variable possesses a type that is designated packed."
+
+  A selector says which arm of the shared block is the live one, so a reference
+  to it outlives the compiler's knowledge of the record's shape; a component of
+  a packed variable need not be addressable at all. }
+
+{ The tag-field's index is the FieldCount of the field-list it heads, and
+  fieldRec.index is that same number, so "is this field the selector" is one
+  comparison. A tagless variant part and a discriminant-selected one (6.4.3.4)
+  each answer -1, which no field's index can equal. }
+function VariantSelector(e: nodePtr): boolean;
+var f: fieldPtr; rec: typePtr;
+begin
+  f := nil;
+  rec := nil;
+  if e <> nil then
+    { a field of an open `with`, whose base is the binding rather than a node }
+    if (e^.kind = nkVar) and (e^.vrField <> nil) and (e^.vrSym <> nil) then
+      begin f := e^.vrField; rec := e^.vrSym^.stype end
+    else if (e^.kind = nkField) and (e^.fdResolved <> nil) and
+            (e^.fdQualified = nil) then
+      begin f := e^.fdResolved; rec := e^.fdBase^.ntype end;
+  VariantSelector := (f <> nil) and IsRecord(rec) and
+                     (TagFieldAt(rec, f^.variant) = f^.index)
+end;
+
+{ The *immediate* container and no further. 6.4.3.1: "if a component is itself
+  structured, the component's representation in data-storage shall be packed
+  only if the type of the component is designated packed" -- so packing does
+  not reach a component's own components, and `a[1][2]` is a component of
+  `a[1]`, which the token `packed` in front of `a` did not designate. The
+  multi-dimensional abbreviation is not an exception: 6.4.3.2 designates every
+  array-type it constructs packed when the original is, which ResolveArray
+  does, so `a[1][2]` over a `packed array [1..3, 1..3]` is caught here. }
+function PackedComponent(e: nodePtr): boolean;
+var c: typePtr;
+begin
+  c := nil;
+  if e <> nil then
+    if (e^.kind = nkVar) and (e^.vrField <> nil) and (e^.vrSym <> nil) then
+      c := e^.vrSym^.stype
+    else if e^.kind = nkIndex then c := e^.ixBase^.ntype
+    else if (e^.kind = nkField) and (e^.fdQualified = nil) and
+            (not e^.fdIsDisc) then c := e^.fdBase^.ntype;
+  PackedComponent := (c <> nil) and c^.isPacked
+end;
+
 { 6.5.1: "No statement shall threaten a variable-access closest-containing a
   protected variable-identifier." 6.9.4 lists what threatens one, and every
   entry on that list is a place this compiler already had to decide the
@@ -10405,6 +10456,28 @@ begin
   c^.clSlot := NewResultSlot(c^.ntype)
 end;
 
+{ The last two sentences of 6.6.3.3 / 6.7.3.3, asked of an actual that is
+  already known to be a variable. True means it was reported. Both branches of
+  CheckArguments that bind a reference ask this one function, because the two
+  clauses are one clause and a schematic formal is a variable parameter. }
+function BadVarActual(a: nodePtr; callee: symPtr; i: integer): boolean;
+begin
+  BadVarActual := true;
+  if VariantSelector(a) then begin
+    ErrorAt(a^.line, a^.col);
+    write('argument ', i:1, ' of ''');
+    WritePool(callee^.at, callee^.len);
+    writeln(''' cannot be the tag of a variant part')
+  end
+  else if PackedComponent(a) then begin
+    ErrorAt(a^.line, a^.col);
+    write('argument ', i:1, ' of ''');
+    WritePool(callee^.at, callee^.len);
+    writeln(''' cannot be a component of a packed variable')
+  end
+  else BadVarActual := false
+end;
+
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a, b: nodePtr; p, q: symListPtr; n, given, i: integer; okVar: boolean;
 begin
@@ -10480,6 +10553,8 @@ begin
           WriteTypeName(a^.ntype);
           writeln
         end
+        else if BadVarActual(a, callee, i) then
+          { the message is BadVarActual's }
       end
       else if p^.sym^.kind = skVarParam then begin
         if not IsDesignator(a) then begin
@@ -10516,6 +10591,8 @@ begin
                   'one, different from every named type, so no var parameter ',
                   'can have it')
         end
+        else if BadVarActual(a, callee, i) then
+          { the message is BadVarActual's }
         else begin
         { 6.9.4 b) threatens an actual var parameter only when the *formal* is
           not itself protected -- which is what lets a protected parameter be

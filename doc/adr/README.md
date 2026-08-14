@@ -107,3 +107,4 @@ the alternatives that were rejected and why.
 | [0096](0096-a-variant-part-covers-its-tag-type-exactly.md) | A variant part covers its tag-type exactly | Accepted |
 | [0097](0097-the-required-identifiers-are-symbols.md) | The required identifiers are symbols | Accepted |
 | [0098](0098-a-record-type-is-a-region.md) | A record type is a region | Accepted |
+| [0099](0099-packing-does-not-reach-a-components-components.md) | Packing does not reach a component's components | Accepted |
