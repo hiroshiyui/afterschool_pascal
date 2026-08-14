@@ -1,0 +1,2 @@
+<source>:4:7: error: a label must be an unsigned integer of at most four digits
+<source>:6:1: error: a label must be an unsigned integer of at most four digits

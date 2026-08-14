@@ -1,0 +1,20 @@
+<source>:10:8: error: 'f' takes 1 argument(s), but 2 were given
+<source>:11:8: error: 'f' needs arguments
+<source>:12:9: error: argument 1 of 'byref' is a var parameter and needs a variable
+<source>:13:9: error: var parameter 'x' is integer, but the argument is real
+<source>:14:9: error: argument 1 of 'byval' is vec, but the value is integer
+<source>:15:8: error: 'noargs' is a procedure and has no value
+<source>:16:3: error: 'noargs' takes 0 argument(s), but 1 were given
+<source>:17:8: error: unknown function 'nosuchfunction'
+<source>:18:8: error: 'abs' takes exactly one argument
+<source>:19:8: error: 'abs' needs a numeric argument, found boolean
+<source>:20:8: error: 'odd' needs an integer argument, found real
+<source>:20:3: error: cannot assign boolean to a variable of type integer
+<source>:21:8: error: 'ord' needs an ordinal argument, found vec
+<source>:22:8: error: 'chr' needs an integer argument, found real
+<source>:23:8: error: 'succ' needs an ordinal argument, found vec
+<source>:23:3: error: cannot assign vec to a variable of type integer
+<source>:24:8: error: 'trunc' needs a real argument, found boolean
+<source>:25:8: error: 'sqrt' needs a numeric argument, found boolean
+<source>:26:8: error: 'eof' takes one file, or none at all
+<source>:27:12: error: 'eof' needs a file variable, found integer

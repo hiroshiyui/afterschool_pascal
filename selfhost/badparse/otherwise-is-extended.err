@@ -1,0 +1,1 @@
+<source>:9:5: error: the 'otherwise' part of a case statement is an Extended Pascal feature; compile with --std=extended

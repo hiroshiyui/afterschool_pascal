@@ -1,0 +1,3 @@
+<source>:8:7: error: the control variable of a for statement must be a variable declared in the block containing the statement
+<source>:11:8: error: 'q' is a procedure and returns no value
+<source>:12:13: error: a case label must be an ordinal constant

@@ -1,0 +1,13 @@
+<source>:3:13: error: undeclared identifier 'notaconstant'
+<source>:3:7: error: the value of constant 'bad' is not a compile-time constant
+<source>:4:16: error: unknown type 'nosuchtype'
+<source>:5:21: error: an array index must be an ordinal type, found real
+<source>:9:10: error: undeclared identifier 'nosuchconstant'
+<source>:9:10: error: a variant's label must be an ordinal constant
+<source>:10:10: error: this variant's tag is colour, but the label is unknown
+<source>:14:1: error: function 'noresult' needs a result type
+<source>:17:1: error: 'twice' is already declared in this block
+<source>:17:1: error: 'twice' already has a body
+<source>:19:1: error: the parameters of 'later' were already given in its forward declaration
+<source>:19:42: error: undeclared identifier 'y'
+<source>:15:1: error: 'never' was declared forward but never given a body

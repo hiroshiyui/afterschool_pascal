@@ -1,0 +1,1 @@
+<source>:4:9: error: a discriminated schema is an Extended Pascal feature; compile with --std=extended

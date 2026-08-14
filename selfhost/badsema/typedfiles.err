@@ -1,0 +1,11 @@
+<source>:14:11: error: the component type of a file must not be, or contain, a file, found text
+<source>:15:11: error: the component type of a file must not be, or contain, a file, found array [1..2] of bad
+<source>:23:3: error: writeln needs a text file, but file of integer has no lines
+<source>:24:3: error: writeln needs a text file, but file of integer has no lines
+<source>:26:17: error: a field width is only for a text file
+<source>:28:15: error: a value of type char cannot be written to a file of integer
+<source>:29:14: error: a value of type integer cannot be written to a file of point
+<source>:32:3: error: readln needs a text file, but file of integer has no lines
+<source>:33:14: error: a variable of type char cannot be read from a file of integer
+<source>:34:13: error: a variable of type integer cannot be read from a file of point
+<source>:36:13: error: 'eoln' needs a text file, but file of integer has no lines

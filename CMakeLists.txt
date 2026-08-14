@@ -63,8 +63,15 @@ endif()
 # at configure time, and a build system that silently changed language when a
 # file changed would be worse than one that says which it means.
 set(APASCAL_PASCALC ${CMAKE_BINARY_DIR}/bin/pascalc)
+#
+# The output is removed first, so a compiler that fails to build leaves nothing
+# behind. Without that, `cmake --build` fails and the *previous* binary stays in
+# build/bin -- and a `ctest` run afterwards passes against a compiler that no
+# longer corresponds to the source. That is how a deliberately broken mutation
+# came back green while this was being written.
 add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
+  COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
   COMMAND $<TARGET_FILE:pascalc-s0> --std=extended
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${APASCAL_PASCALC}
   DEPENDS pascalc-s0 pasrt ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
@@ -142,6 +149,39 @@ endforeach()
 # of the source, not of the case: a program using `otherwise` is not a valid
 # ISO 7185 program, and the directory is what says so to every harness that
 # walks the tree (ADR-0033).
+# The error-path corpus. These 157 sources exist to drive the compiler into a
+# diagnostic -- one file per parser message, because the parser stops at its
+# first (ADR-0023), and thirteen for Sema, which accumulates. Until stage 0 was
+# retired they were compared between the two compilers by difftest.sh and had no
+# goldens of their own; with one compiler left, "the two agree" is not a
+# question any more, so each is pinned against what it reports.
+#
+# That is a weaker oracle and it is the honest one available: a golden cannot
+# disagree with the program that wrote it. What it still catches is a message
+# changing without anyone meaning it to, which is most of what these files were
+# ever for.
+#
+# Prefixed by directory: ctest names must be unique and `sets` and `typedfiles`
+# already exist under tests/.
+foreach(dir badparse badsema)
+  file(GLOB APASCAL_${dir}_TESTS ${CMAKE_SOURCE_DIR}/selfhost/${dir}/*.pas)
+  foreach(t ${APASCAL_${dir}_TESTS})
+    get_filename_component(name ${t} NAME_WE)
+    add_test(NAME ${dir}-${name}
+             COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+                     ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} iso7185)
+    set_tests_properties(${dir}-${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
+  endforeach()
+endforeach()
+
+# The lexer's own corpus: deliberately not a valid program, carrying the
+# lexical corner cases a valid one never reaches.
+add_test(NAME torture
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc
+                 ${CMAKE_SOURCE_DIR}/selfhost/torture.pas iso7185)
+set_tests_properties(torture PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 file(GLOB APASCAL_EXTENDED_TESTS ${CMAKE_SOURCE_DIR}/tests/extended/*.pas)
 foreach(t ${APASCAL_EXTENDED_TESTS})
   get_filename_component(name ${t} NAME_WE)

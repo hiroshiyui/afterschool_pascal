@@ -1,0 +1,10 @@
+<source>:6:3: error: write needs something to write
+<source>:7:11: error: operator '+' needs numeric operands, found text and text
+<source>:8:11: error: a field width must be an integer
+<source>:9:13: error: only real values take a fraction length
+<source>:10:13: error: a fraction length must be an integer
+<source>:11:3: error: read needs a variable to read into
+<source>:12:8: error: read needs a variable, not a value
+<source>:13:8: error: a value of type boolean cannot be read
+<source>:14:9: error: 'reset' needs a file variable, found integer
+<source>:15:3: error: 'get' takes exactly one file variable

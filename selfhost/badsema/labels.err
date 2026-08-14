@@ -1,0 +1,9 @@
+<source>:7:19: error: label 4 is declared twice in this block
+<source>:29:3: error: label 6 is not declared in this block
+<source>:32:3: error: label 7 already labels a statement at line 31
+<source>:16:3: error: label 3 is in an enclosing block, so it must label a statement of that block's statement part and not one inside a statement of it
+<source>:21:3: error: label 5 is not declared in this block or any enclosing one
+<source>:24:3: error: label 3 is inside a statement this goto is not: a goto may leave a structured statement but not enter one
+<source>:27:3: error: label 2 is inside a statement this goto is not: a goto may leave a structured statement but not enter one
+<source>:7:16: error: label 4 is declared but labels no statement of this block
+<source>:7:25: error: label 8 is declared but labels no statement of this block

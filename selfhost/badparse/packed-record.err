@@ -1,0 +1,2 @@
+<source>:4:14: error: undeclared identifier 'x'
+<source>:4:7: error: cannot assign integer to a variable of type char
