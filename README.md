@@ -9,13 +9,15 @@ serve that.
 ## Building
 
 ```sh
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLLVM_DIR=/usr/lib/llvm-21/lib/cmake/llvm
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Requires `clang` on PATH, and nothing else — no LLVM development files and no
-C++ compiler. **The compiler is written in Afterschool Pascal**, and the one
+Requires `cmake`, a `make` and `clang` on PATH, and **nothing of LLVM's** — no
+development files, no `LLVM_DIR`, no C++ compiler. `clang` is wanted as an
+assembler and a linker, not as a compiler front end. **The compiler is written
+in Afterschool Pascal**, and the one
 that builds it is `seed/pascalc.ll`, a working compiler in LLVM IR committed to
 this repository. `clang` assembles the seed; the seed translates
 `selfhost/compiler.pas`; that is `build/bin/pascalc`, and it compiles itself to

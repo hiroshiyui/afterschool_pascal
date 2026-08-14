@@ -1,0 +1,139 @@
+# Continuous integration for Afterschool Pascal.
+#
+# What this checks that a developer's machine cannot: **the build needs cmake,
+# make and clang, and nothing of LLVM's**. That is the claim ADR-0085 made and
+# v1.0.0 shipped, and it is unfalsifiable on a machine that already has LLVM 21
+# and a C++ toolchain installed -- which every machine this compiler has ever
+# been built on does. So the jobs below run in minimal containers and install
+# exactly what the documented build instructions name.
+#
+# That is not decoration: the first run of this workflow failed, because
+# `--no-install-recommends` gives no `make` and README.md had said `clang` and
+# nothing else. A missing dependency fails here and nowhere else.
+#
+# It adds no oracle. It runs the ones that already exist, on a machine that has
+# never seen this repository -- see doc/roadmap.md, "What is next", for what is
+# still missing and why CI does not supply it.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: build and test on ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two images for two clang versions, and that is the point rather than
+        # breadth: seed/pascalc.ll was emitted by clang 21, and whether an
+        # *older* assembler accepts it is a portability property nothing else
+        # here checks. The floor is clang 15 -- the IR uses opaque pointers
+        # (`ptr`), which no earlier release parses.
+        image: ['debian:trixie', 'ubuntu:24.04']
+
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3
+          # z3 for verify/, from pip, which is what verify/README.md documents.
+          # --break-system-packages because Debian and Ubuntu both mark their
+          # Python installations externally managed (PEP 668).
+          #
+          # NOT the distro's python3-z3, and this was measured rather than
+          # assumed: Debian trixie ships z3 4.13.3, which is slow enough on the
+          # two symbolic 32-bit modulo rules that both exceed verify.py's
+          # 30-second per-rule timeout. A timeout is reported through the same
+          # channel as a counterexample, so the run reads "verification FAILED:
+          # mod-is-non-negative" -- a red bar accusing the compiler of getting
+          # `mod` wrong when the solver was merely slower. Which z3 is
+          # installed decides whether the proofs pass; pinning the documented
+          # one is the least surprising way to settle that.
+          apt-get install -y --no-install-recommends python3-pip
+          pip3 install --break-system-packages z3-solver
+
+      - uses: actions/checkout@v4
+
+      - name: Record which toolchain proved it
+        run: |
+          clang --version
+          cmake --version | head -1
+
+      - name: Require z3, so the proofs cannot silently skip
+        run: python3 -c 'import z3; print("z3", z3.get_version_string())'
+        # verify/verify.py *skips* when z3 is absent, so that a checkout
+        # without it still tests green. That is right for a developer and
+        # wrong for CI: it would report 435 passing tests with the 43 SMT
+        # rules never run. This step is what makes the green bar mean they did,
+        # and it is a step of its own so that its name is what fails.
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        # No LLVM_DIR. Nothing links libLLVM since ADR-0085, and if this line
+        # ever needs one again, that is a regression rather than a nuisance.
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+        # 435 cases: the two corpora, the 157 error-path sources, the SMT
+        # rules, the stage-2/stage-3 fixed point, and the product check.
+
+      - name: Compile a program by hand
+        run: |
+          tools/pascalcc tests/hello.pas -o /tmp/hello
+          /tmp/hello
+        # The suite drives pascalcc through run_test.sh with a build tree's
+        # paths in the environment. This is the plain invocation a reader gets
+        # from README.md, with nothing set.
+
+  seed-is-current:
+    # The seed is refreshed at release tags and nowhere else (ADR-0085), which
+    # makes "was it refreshed?" a question only a tag can ask. At a release
+    # commit the committed seed must equal what the compiler built *from* it
+    # emits for the current source -- that is the fixed point, and a seed left
+    # stale by a release breaks it. Nothing else would notice: a stale seed
+    # still builds a working compiler, from the previous release's source.
+    name: the committed seed is the one this source produces
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Regenerate and compare
+        run: |
+          std=$(tr -d '[:space:]' <selfhost/compiler.std)
+          build/bin/pascalc "--std=$std" selfhost/compiler.pas -o /tmp/seed.ll
+          if ! cmp -s /tmp/seed.ll seed/pascalc.ll; then
+            echo "seed/pascalc.ll is not what this source produces." >&2
+            echo "Run seed/refresh.sh and amend the release commit." >&2
+            diff -u seed/pascalc.ll /tmp/seed.ll | head -40 >&2
+            exit 1
+          fi
+          echo "seed/pascalc.ll matches."

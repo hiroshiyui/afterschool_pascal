@@ -13,6 +13,16 @@ python3 verify/verify.py --crosscheck                    # the real binary only
 
 It runs as part of `ctest`, and *skips* rather than fails when z3 is absent.
 
+**Which z3 decides whether the proofs pass, and a slow one looks like a wrong
+compiler.** `verify.py` gives each rule 30 seconds (`--timeout`) and reports
+`unknown` through the same channel as a counterexample — so with Debian
+trixie's z3 4.13.3 the two symbolic 32-bit modulo rules time out and the run
+says *"verification FAILED: mod-is-non-negative"*, which reads as an accusation
+against the compiler rather than against the solver. z3 5.0.0 proves the same
+two in well under a second. Install the pip package above rather than a distro
+one, and if a rule fails, read its detail line before believing it: a
+counterexample names an input, and a timeout says so.
+
 ## What is actually being claimed
 
 A proof is only as good as the honesty about its scope, so:

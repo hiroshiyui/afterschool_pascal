@@ -12,7 +12,7 @@ choices that would otherwise look arbitrary.
 ## Commands
 
 ```sh
-# configure (LLVM_DIR is required on Debian; llvm-config is not on PATH)
+# configure -- no LLVM_DIR: nothing links libLLVM since ADR-0085
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang on PATH, nothing else
 cmake --build build -j
 
