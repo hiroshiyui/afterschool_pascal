@@ -67,6 +67,17 @@ check_size PAS_JUMP_SIZE jumpSize
 # relative path, and a leading-slash pattern would quietly call it ISO 7185 and
 # then compare two identical rejections.
 standard_of() {
+  # A source outside tests/extended/ may still be Extended Pascal, and says so
+  # with a `name.std` file beside it holding one word -- the same sidecar
+  # convention as `name.in`, `name.epoch` and `name.components`. It exists
+  # because selfhost/compiler.pas is Extended Pascal and does not live in the
+  # directory that would otherwise be the only way to say so (ADR-0033).
+  local sidecar="${1%.pas}.std"
+  if [[ -f $sidecar ]]; then
+    tr -d '[:space:]' <"$sidecar"
+    echo
+    return
+  fi
   case $1 in
     *tests/extended/*)  echo extended ;;
     *)                  echo iso7185 ;;
@@ -117,7 +128,10 @@ build() {
       "$runtime" -lm -o "$out" 2>"$work/link.err" || return 2
 }
 
-if ! "$pascalc" "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
+# The stage-1 compiler is written in Extended Pascal (ADR-0082), which
+# compiler.std says and this reads rather than hard-codes.
+if ! "$pascalc" "--std=$(standard_of "$here/compiler.pas")" \
+     "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
   echo "--- the Pascal compiler did not compile ---" >&2
   cat "$work/build.err" >&2
   exit 1

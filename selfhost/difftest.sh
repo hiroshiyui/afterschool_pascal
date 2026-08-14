@@ -32,7 +32,36 @@ root=$(dirname "$here")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-if ! "$pascalc" "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
+# Which standard a source is written in is decided by where it lives:
+# tests/extended/ is ISO/IEC 10206:1991, everything else is ISO 7185. Both
+# compilers are told from the same variable so they cannot drift — the C++ one
+# by --std, the Pascal one through a file, because ISO 7185 gives a program no
+# other channel (ADR-0033).
+# The glob is deliberately unanchored: a file named on the command line arrives
+# as a relative path, and a leading-slash pattern would quietly call it ISO 7185
+# and compare two identical rejections.
+standard_of() {
+  # A source outside tests/extended/ may still be Extended Pascal, and says so
+  # with a `name.std` file beside it holding one word -- the same sidecar
+  # convention as `name.in`, `name.epoch` and `name.components`. It exists
+  # because selfhost/compiler.pas is Extended Pascal and does not live in the
+  # directory that would otherwise be the only way to say so (ADR-0033).
+  local sidecar="${1%.pas}.std"
+  if [[ -f $sidecar ]]; then
+    tr -d '[:space:]' <"$sidecar"
+    echo
+    return
+  fi
+  case $1 in
+    *tests/extended/*)  echo extended ;;
+    *)                  echo iso7185 ;;
+  esac
+}
+
+# The stage-1 compiler is written in Extended Pascal (ADR-0082), which
+# compiler.std says and this reads rather than hard-codes.
+if ! "$pascalc" "--std=$(standard_of "$here/compiler.pas")" \
+     "$here/compiler.pas" -o "$work/stage1" 2>"$work/build.err"; then
   echo "--- the Pascal $component did not compile ---" >&2
   cat "$work/build.err" >&2
   exit 1
@@ -52,20 +81,6 @@ if [[ ${#files[@]} -eq 0 ]]; then
   exit 1
 fi
 
-# Which standard a source is written in is decided by where it lives:
-# tests/extended/ is ISO/IEC 10206:1991, everything else is ISO 7185. Both
-# compilers are told from the same variable so they cannot drift — the C++ one
-# by --std, the Pascal one through a file, because ISO 7185 gives a program no
-# other channel (ADR-0033).
-# The glob is deliberately unanchored: a file named on the command line arrives
-# as a relative path, and a leading-slash pattern would quietly call it ISO 7185
-# and compare two identical rejections.
-standard_of() {
-  case $1 in
-    *tests/extended/*)  echo extended ;;
-    *)                  echo iso7185 ;;
-  esac
-}
 
 checked=0
 failed=0

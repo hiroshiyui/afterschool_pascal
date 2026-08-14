@@ -55,12 +55,19 @@ endif()
 #
 # It is one source file (ADR-0024) and takes ~3 s, so it is rebuilt whenever
 # either the source or stage 0 changes rather than being cached more cleverly.
+#
+# `--std=extended` because the source is Extended Pascal (ADR-0082), which
+# selfhost/compiler.std also says for the shell harnesses. The flag is written
+# out here rather than read from that file because CMake would have to read it
+# at configure time, and a build system that silently changed language when a
+# file changed would be worse than one that says which it means.
 set(APASCAL_PASCALC ${CMAKE_BINARY_DIR}/bin/pascalc)
 add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
-  COMMAND $<TARGET_FILE:pascalc-s0>
+  COMMAND $<TARGET_FILE:pascalc-s0> --std=extended
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${APASCAL_PASCALC}
   DEPENDS pascalc-s0 pasrt ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
+          ${CMAKE_SOURCE_DIR}/selfhost/compiler.std
   COMMENT "Building pascalc from selfhost/compiler.pas with pascalc-s0"
   VERBATIM
 )

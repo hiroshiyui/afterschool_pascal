@@ -46,6 +46,17 @@ fi
 # as in run_test.sh, difftest.sh and irtest.sh -- so the four harnesses cannot
 # be told different things about one file. Unanchored on purpose (ADR-0034).
 standard_of() {
+  # A source outside tests/extended/ may still be Extended Pascal, and says so
+  # with a `name.std` file beside it holding one word -- the same sidecar
+  # convention as `name.in`, `name.epoch` and `name.components`. It exists
+  # because selfhost/compiler.pas is Extended Pascal and does not live in the
+  # directory that would otherwise be the only way to say so (ADR-0033).
+  local sidecar="${1%.pas}.std"
+  if [[ -f $sidecar ]]; then
+    tr -d '[:space:]' <"$sidecar"
+    echo
+    return
+  fi
   case $1 in
     *tests/extended/*)  echo extended ;;
     *)                  echo iso7185 ;;

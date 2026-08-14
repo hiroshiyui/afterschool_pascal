@@ -393,7 +393,7 @@ type
   namePtr = ^nameRec;
   symListPtr = ^symListRec;
 
-  numRec = record value: integer; next: numPtr end;
+  numRec = record value_: integer; next: numPtr end;
   { A folded case-constant: the closed interval it denotes. A single
     constant is lo = hi, so every user of a label list works one way and a
     range is never expanded into its members -- `1..maxint` is one of
@@ -723,7 +723,7 @@ type
   discValPtr = ^discValRec;
   discValRec = record
     idx: integer;
-    value: str;
+    value_: str;
     next: discValPtr
   end;
 
@@ -2056,13 +2056,13 @@ var
   sl, sc, digit, digitAt, base, i: integer;
   text, digits: str;
   isReal, overflow, bad: boolean;
-  value: integer;
+  value_: integer;
   sign: char;
 begin
   sl := line;
   sc := col;
   StrClear(text);
-  value := 0;
+  value_ := 0;
   overflow := false;
 
   while (not AtEof) and IsDigit(Peek(0)) do begin
@@ -2073,17 +2073,17 @@ begin
       traps on integer overflow (ADR-0014), so the C++ lexer's "convert in a
       wider type, then compare" is not available here. }
     if not overflow then
-      if value > (maxint - digit) div 10 then
+      if value_ > (maxint - digit) div 10 then
         overflow := true
       else
-        value := value * 10 + digit
+        value_ := value_ * 10 + digit
   end;
 
   { ISO/IEC 10206:1991 6.1.5: `base#extended-digits`. The digit sequence just
     scanned was the base, and what follows is never real -- only an
     unsigned-integer has this form. }
   if Peek(0) = '#' then begin
-    base := value;
+    base := value_;
     if overflow then base := 0;
     StrAppend(text, Peek(0));
     Advance;
@@ -2102,7 +2102,7 @@ begin
       Advance
     end;
 
-    value := 0;
+    value_ := 0;
     overflow := false;
     bad := false;
     if (base < 2) or (base > 36) then begin
@@ -2127,10 +2127,10 @@ begin
       else if not overflow then
         { the check before the multiply, as above: this compiler traps on
           integer overflow rather than wrapping (ADR-0014) }
-        if value > (maxint - digit) div base then
+        if value_ > (maxint - digit) div base then
           overflow := true
         else
-          value := value * base + digit;
+          value_ := value_ * base + digit;
       i := i + 1
     end;
     if overflow then begin
@@ -2140,8 +2140,8 @@ begin
         write(text.ch[i]);
       writeln
     end;
-    if bad then value := 0;
-    AddInt(sl, sc, value, overflow)
+    if bad then value_ := 0;
+    AddInt(sl, sc, value_, overflow)
   end
   else begin
 
@@ -2199,19 +2199,19 @@ begin
         write(text.ch[digit]);
       writeln
     end;
-    AddInt(sl, sc, value, overflow)
+    AddInt(sl, sc, value_, overflow)
   end
 
   end
 end;
 
 procedure LexString;
-var sl, sc: integer; value: str; done, bad: boolean; c: char;
+var sl, sc: integer; value_: str; done, bad: boolean; c: char;
 begin
   sl := line;
   sc := col;
   Advance; { the opening quote }
-  StrClear(value);
+  StrClear(value_);
   done := false;
   bad := false;
   while not done do begin
@@ -2225,21 +2225,21 @@ begin
       if c = '''' then begin
         { '' inside a literal is one quote }
         if Peek(0) = '''' then begin
-          StrAppend(value, Peek(0));
+          StrAppend(value_, Peek(0));
           Advance
         end
         else
           done := true
       end
       else
-        StrAppend(value, c)
+        StrAppend(value_, c)
     end
   end;
   if bad then begin
     ErrorAt(sl, sc);
     writeln('unterminated string literal')
   end;
-  AddText(sl, sc, tkStr, PoolAdd(value), value.len)
+  AddText(sl, sc, tkStr, PoolAdd(value_), value_.len)
 end;
 
 procedure LexOperator;
@@ -5756,7 +5756,7 @@ begin
   v := rec^.variants;
   while path <> nil do begin
     k := 0;
-    while k < path^.value do begin
+    while k < path^.value_ do begin
       v := v^.next;
       k := k + 1
     end;
@@ -5825,36 +5825,36 @@ procedure WriteTypeName(t: typePtr); forward;
 
 { How a value of an ordinal type is written in source: 7, 'a', true, or an
   enumeration constant's own name. }
-procedure WriteOrdinalName(t: typePtr; value: integer);
+procedure WriteOrdinalName(t: typePtr; value_: integer);
 var b: typePtr; p: namePtr; i: integer; done: boolean;
 begin
   if t = nil then b := nil else b := Base(t);
   if b = nil then
-    PutInt(value)
+    PutInt(value_)
   { A printable character is written as itself; anything else is written as
     chr(n). Not cosmetic: the C++ prints a diagnostic with %s, so a char of
     value 0 written literally would truncate the message at that point. }
   else if b^.kind = tyChar then
-    if (value >= 32) and (value < 127) then begin
+    if (value_ >= 32) and (value_ < 127) then begin
       Put('''');
-      Put(chr(value));
+      Put(chr(value_));
       Put('''')
     end
     else begin
       PutLit('chr(            ');
-      PutInt(value);
+      PutInt(value_);
       Put(')')
     end
   else if b^.kind = tyBoolean then
-    if value <> 0 then PutLit('true            ')
+    if value_ <> 0 then PutLit('true            ')
     else PutLit('false           ')
-  else if (b^.kind = tyEnum) and (value >= 0) and (value < EnumCount(b)) then
+  else if (b^.kind = tyEnum) and (value_ >= 0) and (value_ < EnumCount(b)) then
   begin
     p := b^.enumNames;
     i := 0;
     done := false;
     while not done do
-      if i = value then begin
+      if i = value_ then begin
         WritePool(p^.at, p^.len);
         done := true
       end
@@ -5864,16 +5864,16 @@ begin
       end
   end
   else
-    PutInt(value)
+    PutInt(value_)
 end;
 
 { A description for diagnostics. A named type reports its name; an anonymous
   one is spelled out the way the source would have written it. }
 { How a bound is written when it may be dynamic: a constant as itself, and a
   discriminant as its own name. }
-procedure WriteBoundName(t: typePtr; disc: symPtr; value: integer);
+procedure WriteBoundName(t: typePtr; disc: symPtr; value_: integer);
 begin
-  if disc = nil then WriteOrdinalName(t, value)
+  if disc = nil then WriteOrdinalName(t, value_)
   else WritePool(disc^.at, disc^.len)
 end;
 
@@ -7121,7 +7121,7 @@ begin
     while (el <> nil) and (found = nil) do begin
       k := el^.veFields;
       while (k <> nil) and (found = nil) do begin
-        if k^.value = f^.index then found := el^.veValue;
+        if k^.value_ = f^.index then found := el^.veValue;
         k := k^.next
       end;
       el := el^.next
@@ -7129,7 +7129,7 @@ begin
     RecordComponentOf := found
   end
   else if (sv^.svArm < 0) or (sv^.svVariant = nil) or
-          (sv^.svArm <> path^.value) then begin
+          (sv^.svArm <> path^.value_) then begin
     inactive := true;
     RecordComponentOf := nil
   end
@@ -7294,7 +7294,7 @@ end;
 { Evaluate a constant that must be ordinal -- a subrange bound, a case label, a
   variant's tag value. Reports the type it was written as, so a mismatch can be
   named rather than silently coerced. }
-function EvalOrdinal(e: nodePtr; var t: typePtr; var value: integer): boolean;
+function EvalOrdinal(e: nodePtr; var t: typePtr; var value_: integer): boolean;
 var res: symbol;
 begin
   CheckExpr(e);
@@ -7307,11 +7307,11 @@ begin
   else begin
     t := res.stype;
     if IsChar(res.stype) then
-      value := ord(res.charVal)
+      value_ := ord(res.charVal)
     else if IsBoolean(res.stype) then
-      if res.boolVal then value := 1 else value := 0
+      if res.boolVal then value_ := 1 else value_ := 0
     else
-      value := res.intVal;   { integer, and the ordinal of an enum constant }
+      value_ := res.intVal;   { integer, and the ordinal of an enum constant }
     EvalOrdinal := true
   end
 end;
@@ -7323,11 +7323,11 @@ end;
   is not something a bound may be here or anywhere else. When 6.3's
   constant-expression lands it will land for every bound at once, and the
   descriptor already holds what such an expression would be computed from. }
-function EvalBound(e: nodePtr; var t: typePtr; var value: integer;
+function EvalBound(e: nodePtr; var t: typePtr; var value_: integer;
                    var disc: symPtr): boolean;
 begin
   disc := nil;
-  if EvalOrdinal(e, t, value) then
+  if EvalOrdinal(e, t, value_) then
     EvalBound := true
   { EvalOrdinal has checked the expression already, so the name is resolved
     whether or not it folded to a value. }
@@ -7335,7 +7335,7 @@ begin
     if e^.vrSym^.kind = skDisc then begin
       disc := e^.vrSym;
       t := e^.vrSym^.stype;
-      value := 0;
+      value_ := 0;
       EvalBound := true
     end
     else EvalBound := false
@@ -7985,14 +7985,14 @@ begin
   p := path;
   while p <> nil do begin
     new(n);
-    n^.value := p^.value;
+    n^.value_ := p^.value_;
     n^.next := nil;
     if head = nil then head := n else tail^.next := n;
     tail := n;
     p := p^.next
   end;
   new(n);
-  n^.value := k;
+  n^.value_ := k;
   n^.next := nil;
   if head = nil then head := n else tail^.next := n;
   PathAppend := head
@@ -8418,7 +8418,7 @@ begin
   same := true;
   while same and ((a <> nil) or (b <> nil)) do
     if (a = nil) or (b = nil) then same := false
-    else if a^.value <> b^.value then same := false
+    else if a^.value_ <> b^.value_ then same := false
     else begin
       a := a^.next;
       b := b^.next
@@ -8440,7 +8440,7 @@ function StringOfCapacity(cap: integer): typePtr;
 var pr: producedPtr; t, found: typePtr; tuple: numPtr;
 begin
   new(tuple);
-  tuple^.value := cap;
+  tuple^.value_ := cap;
   tuple^.next := nil;
   found := nil;
   pr := producedHead;
@@ -8470,7 +8470,7 @@ procedure AppendNum(var head, tail: numPtr; v: integer);
 var n: numPtr;
 begin
   new(n);
-  n^.value := v;
+  n^.value_ := v;
   n^.next := nil;
   if head = nil then head := n else tail^.next := n;
   tail := n
@@ -8494,7 +8494,7 @@ end;
   with signatures the C++ side has no counterpart for. }
 function ProduceFromSchema;
 var formals: symListPtr; a, arg: nodePtr; t, given: typePtr;
-    tuple, tupleTail, tv: numPtr; value, count, want, before: integer;
+    tuple, tupleTail, tv: numPtr; value_, count, want, before: integer;
     ok, repeated, dynamic, savedSchemaBody: boolean;
     pr: producedPtr; mark: entryPtr;
     disc, v: symPtr; p, q, push: symListPtr;
@@ -8558,8 +8558,8 @@ begin
     p := formals;
     while a <> nil do begin
       given := nil;
-      value := 0;
-      if not EvalOrdinal(a, given, value) then begin
+      value_ := 0;
+      if not EvalOrdinal(a, given, value_) then begin
         given := a^.ntype;
         if (dynamicVarFor <> nil) and IsOrdinal(given) then
           dynamic := true
@@ -8602,8 +8602,8 @@ begin
         where the value finally is. }
       else if dynamic then
         { checked on entry }
-      else if (value < OrdinalLo(p^.sym^.stype))
-           or (value > OrdinalHi(p^.sym^.stype)) then begin
+      else if (value_ < OrdinalLo(p^.sym^.stype))
+           or (value_ > OrdinalHi(p^.sym^.stype)) then begin
         ErrorAt(a^.line, a^.col);
         write('discriminant ''');
         WritePool(p^.sym^.at, p^.sym^.len);
@@ -8613,7 +8613,7 @@ begin
         ok := false
       end
       else
-        AppendNum(tuple, tupleTail, value);
+        AppendNum(tuple, tupleTail, value_);
       a := a^.next;
       p := p^.next
     end;
@@ -8646,13 +8646,13 @@ begin
         that is a value of integer-type greater than zero". A capacity of zero
         or less is therefore outside the *domain*. }
       if (t = nil) and schema^.isStringSchema then begin
-        if tuple^.value <= 0 then begin
+        if tuple^.value_ <= 0 then begin
           ErrorAt(d^.line, d^.col);
           writeln('the capacity of a string must be greater than zero, ',
-                  'found ', tuple^.value:1);
+                  'found ', tuple^.value_:1);
           t := intType
         end
-        else t := StringOfCapacity(tuple^.value)
+        else t := StringOfCapacity(tuple^.value_)
       end;
 
       if t = nil then begin
@@ -8681,9 +8681,9 @@ begin
                               d^.col);
               disc^.stype := p^.sym^.stype;
               disc^.discBinding := true;
-              disc^.intVal := tv^.value;
-              disc^.charVal := chr(tv^.value mod 256);
-              disc^.boolVal := tv^.value <> 0
+              disc^.intVal := tv^.value_;
+              disc^.charVal := chr(tv^.value_ mod 256);
+              disc^.boolVal := tv^.value_ <> 0
             end;
             p := p^.next;
             tv := tv^.next
@@ -8742,7 +8742,7 @@ begin
               Put(',');
               Put(' ')
             end;
-            WriteOrdinalName(p^.sym^.stype, tv^.value);
+            WriteOrdinalName(p^.sym^.stype, tv^.value_);
             p := p^.next;
             tv := tv^.next
           end;
@@ -11293,7 +11293,7 @@ begin
           else begin
             g := given;
             while g <> nil do begin
-              if g^.value = at then bad := true;
+              if g^.value_ = at then bad := true;
               g := g^.next
             end;
             if bad then begin
@@ -11340,7 +11340,7 @@ begin
     bad := false;
     g := given;
     while g <> nil do begin
-      if g^.value = n then bad := true;
+      if g^.value_ = n then bad := true;
       g := g^.next
     end;
     if (not bad) and (n <> tagField) then begin
@@ -11693,7 +11693,7 @@ begin
               else if tv <> nil then begin
                 found := true;
                 e^.fdIsDisc := true;
-                e^.fdDiscValue := tv^.value;
+                e^.fdDiscValue := tv^.value_;
                 e^.ntype := p^.sym^.stype
               end;
             if p <> nil then begin
@@ -12103,7 +12103,7 @@ end;
   actual-discriminant-part these need not be constants -- the tuple is chosen
   when `new` runs, which is the whole reason the header exists. }
 procedure CheckNewTuple(p: nodePtr; domain: typePtr; n: integer);
-var d: symListPtr; value: nodePtr; count: integer;
+var d: symListPtr; value_: nodePtr; count: integer;
 begin
   if p^.pcStd = spDispose then begin
     ErrorAt(p^.pcArgs^.next^.line, p^.pcArgs^.next^.col);
@@ -12129,11 +12129,11 @@ begin
       { 6.7.5.3: the type of each expression shall be compatible with the type
         of the corresponding formal discriminant. }
       d := domain^.schema^.discs;
-      value := p^.pcArgs^.next;
-      while (d <> nil) and (value <> nil) do begin
-        if (value^.ntype = nil) or not Assignable(d^.sym^.stype, value^.ntype)
+      value_ := p^.pcArgs^.next;
+      while (d <> nil) and (value_ <> nil) do begin
+        if (value_^.ntype = nil) or not Assignable(d^.sym^.stype, value_^.ntype)
         then begin
-          ErrorAt(value^.line, value^.col);
+          ErrorAt(value_^.line, value_^.col);
           write('discriminant ''');
           WritePool(d^.sym^.at, d^.sym^.len);
           write(''' of schema ''');
@@ -12141,12 +12141,12 @@ begin
           write(''' is ');
           WriteTypeName(d^.sym^.stype);
           write(', but the value is ');
-          if value^.ntype = nil then write('untyped')
-          else WriteTypeName(value^.ntype);
+          if value_^.ntype = nil then write('untyped')
+          else WriteTypeName(value_^.ntype);
           writeln
         end;
         d := d^.next;
-        value := value^.next
+        value_ := value_^.next
       end
     end
   end
@@ -12194,7 +12194,7 @@ end;
 
 procedure CheckStdProc(p: nodePtr);
 var
-  a, value: nodePtr;
+  a, value_: nodePtr;
   unpackedArg, packedArg, indexArg: nodePtr;
   n, v, k, chosen: integer;
   domain, tag, valueType: typePtr;
@@ -12604,22 +12604,22 @@ begin
         arms := domain^.variants;
         tag := domain^.tagType;
         discSel := domain^.discSelector;
-        value := a^.next;
+        value_ := a^.next;
         stop := false;
-        while (value <> nil) and not stop do begin
+        while (value_ <> nil) and not stop do begin
           { 6.7.5.3: every variant-part a tag value selects "shall
             closest-contain a tag-type". A discriminant-selected one does not
             -- its selector was fixed by the tuple the type was produced with,
             and this list would be a second, disagreeing answer. }
           if discSel then begin
-            ErrorAt(value^.line, value^.col);
+            ErrorAt(value_^.line, value_^.col);
             writeln('this variant part is selected by a discriminant, so its ',
                     'variant was chosen when the type was produced');
             stop := true
           end
           else if arms = nil then begin
-            ErrorAt(value^.line, value^.col);
-            if value = a^.next then
+            ErrorAt(value_^.line, value_^.col);
+            if value_ = a^.next then
               writeln('this record has no variant part')
             else
               writeln('this record has no more nested variant parts to ',
@@ -12629,8 +12629,8 @@ begin
           else begin
             valueType := nil;
             v := 0;
-            if not EvalOrdinal(value, valueType, v) then begin
-              ErrorAt(value^.line, value^.col);
+            if not EvalOrdinal(value_, valueType, v) then begin
+              ErrorAt(value_^.line, value_^.col);
               write('a tag value for ''');
               WritePool(p^.pcAt, p^.pcLen);
               writeln(''' must be an ordinal constant');
@@ -12638,7 +12638,7 @@ begin
             end
             else if (tag <> nil) and (valueType <> nil) and
                     (Base(valueType) <> Base(tag)) then begin
-              ErrorAt(value^.line, value^.col);
+              ErrorAt(value_^.line, value_^.col);
               write('this variant part''s tag is ');
               WriteTypeName(tag);
               write(', but the value is ');
@@ -12671,7 +12671,7 @@ begin
                 w := w^.next
               end;
               if chosen < 0 then begin
-                ErrorAt(value^.line, value^.col);
+                ErrorAt(value_^.line, value_^.col);
                 write('no variant is selected by ');
                 WriteOrdinalName(tag, v);
                 writeln;
@@ -12686,7 +12686,7 @@ begin
               end
             end
           end;
-          if not stop then value := value^.next
+          if not stop then value_ := value_^.next
         end
       end
     end
@@ -12954,7 +12954,7 @@ begin
           if not RepeatedDisc(t^.schema^.discs, p) then begin
             k := Declare(p^.sym^.at, p^.sym^.len, skConst, w^.line, w^.col);
             k^.stype := p^.sym^.stype;
-            k^.intVal := tv^.value
+            k^.intVal := tv^.value_
           end;
           p := p^.next;
           tv := tv^.next
@@ -13277,7 +13277,7 @@ end;
   parameter is a descriptor only -- it says how the argument travels and what
   type it has, and the frame it will occupy is the frame of whatever procedure
   is eventually passed. Hence `frame` being nil for those. }
-function CheckedResultType(t: typePtr; bindable: boolean;
+function CheckedResultType(t: typePtr; bindable_: boolean;
                           line, col: integer): typePtr; forward;
 
 procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
@@ -13493,7 +13493,7 @@ begin
       writeln('contain, a file');
       CheckedResultType := intType
     end
-    else if bindable then begin
+    else if bindable_ then begin
       ErrorAt(line, col);
       write('a function cannot return a bindable ');
       WriteTypeName(t);
@@ -13834,12 +13834,12 @@ begin
       num := target^.nlLabels;
       known := false;
       while num <> nil do begin
-        if num^.value = found^.id then known := true;
+        if num^.value_ = found^.id then known := true;
         num := num^.next
       end;
       if not known then begin
         new(num);
-        num^.value := found^.id;
+        num^.value_ := found^.id;
         num^.next := nil;
         if target^.nlLabels = nil then target^.nlLabels := num
         else target^.nlTail^.next := num;
@@ -14217,16 +14217,16 @@ end;
 
 { One constant-definition. }
 procedure CheckConstDecl(d: nodePtr; owner: symPtr);
-var s: symPtr; value: symbol;
+var s: symPtr; value_: symbol;
 begin
   CheckExpr(d^.kdValue);
-  value.stype := nil;
+  value_.stype := nil;
   { The folder fills in only the field its kind selects, so the one that
     holds a node has to start empty or a scalar constant inherits whatever
     the last one left here. }
-  value.constValue := nil;
+  value_.constValue := nil;
   constReported := false;
-  if not EvalConst(d^.kdValue, value) then begin
+  if not EvalConst(d^.kdValue, value_) then begin
     { The folder says why when it can -- an overflow, a `chr` out of range --
       and this generic message is for when it cannot: the expression was
       never constant in the first place. }
@@ -14239,14 +14239,14 @@ begin
   end
   else begin
     s := Declare(d^.kdAt, d^.kdLen, skConst, d^.line, d^.col);
-    s^.stype := value.stype;
-    s^.intVal := value.intVal;
-    s^.charVal := value.charVal;
-    s^.boolVal := value.boolVal;
-    s^.realAt := value.realAt;
-    s^.realLen := value.realLen;
-    s^.realNeg := value.realNeg;
-    s^.constValue := value.constValue;
+    s^.stype := value_.stype;
+    s^.intVal := value_.intVal;
+    s^.charVal := value_.charVal;
+    s^.boolVal := value_.boolVal;
+    s^.realAt := value_.realAt;
+    s^.realLen := value_.realLen;
+    s^.realNeg := value_.realNeg;
+    s^.constValue := value_.constValue;
     { A 6.8.7 constructor needs its storage filled at run time, and the block
       that *defined* it is the one whose prologue does that. The test is
       whether this definition is where the node came from: `const b = a` hands
@@ -15613,7 +15613,7 @@ begin
     first := true;
     while path <> nil do begin
       if not first then write('.');
-      write(path^.value:1);
+      write(path^.value_:1);
       first := false;
       path := path^.next
     end
@@ -15951,7 +15951,7 @@ begin
             end;
             num := p^.veFields;
             while num <> nil do begin
-              write(' #', num^.value:1);
+              write(' #', num^.value_:1);
               num := num^.next
             end
           end;
@@ -17173,7 +17173,7 @@ begin
     VariantStorageAt(rec, path, ssize, salign);
     size := RoundUp(size, salign);
     SelectedSize := size +
-        SelectedSize(rec, PathAppend(path, selection^.value), selection^.next)
+        SelectedSize(rec, PathAppend(path, selection^.value_), selection^.next)
   end
 end;
 
@@ -17980,7 +17980,7 @@ begin
       d := newTuple;
       while d <> nil do begin
         if d^.idx = disc^.discIndex then begin
-          v := d^.value;
+          v := d^.value_;
           done := true
         end;
         d := d^.next
@@ -18156,7 +18156,7 @@ begin
     PutOp(cur);
     writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(t, prefix)):1);
     cur := p;
-    prefix := PathAppend(prefix, step^.value);
+    prefix := PathAppend(prefix, step^.value_);
     step := step^.next
   end;
   Def(v);
@@ -19112,7 +19112,7 @@ begin
     tv := e^.ntype^.tuple;
     for i := 1 to k do
       if tv <> nil then tv := tv^.next;
-    if tv = nil then OpInt(0, v) else OpInt(tv^.value, v)
+    if tv = nil then OpInt(0, v) else OpInt(tv^.value_, v)
   end
 end;
 
@@ -21333,7 +21333,7 @@ begin
       first := nil;
       f := fields;
       while f <> nil do begin
-        if f^.index = el^.veFields^.value then first := f;
+        if f^.index = el^.veFields^.value_ then first := f;
         f := f^.next
       end;
       FieldAddress(into, rec, first, src);
@@ -21342,7 +21342,7 @@ begin
       while num <> nil do begin
         f := fields;
         while f <> nil do begin
-          if f^.index = num^.value then begin
+          if f^.index = num^.value_ then begin
             FieldAddress(into, rec, f, dst);
             CopyComponent(dst, src, f^.ftype)
           end;
@@ -21904,16 +21904,16 @@ procedure CheckSchemaDomain(t: typePtr; schema: symPtr;
   forward;
 
 procedure EmitNewTuple(s: nodePtr; domain: typePtr; var slot: str);
-var d: symListPtr; value: nodePtr; v, size, raw, block, vr, nohdr: str;
+var d: symListPtr; value_: nodePtr; v, size, raw, block, vr, nohdr: str;
     k, head: integer; cell, next: discValPtr;
 begin
   newTuple := nil;
   k := 0;
   d := domain^.schema^.discs;
-  value := s^.pcArgs^.next;
-  while (d <> nil) and (value <> nil) do begin
-    EmitExpr(value, v);
-    ConvertFor(v, value^.ntype, d^.sym^.stype);
+  value_ := s^.pcArgs^.next;
+  while (d <> nil) and (value_ <> nil) do begin
+    EmitExpr(value_, v);
+    ConvertFor(v, value_^.ntype, d^.sym^.stype);
     { A discriminant outside its own type is outside 6.4.7's domain, and this
       is where the value enters the variable that holds it -- so the check
       that guards every other such store makes this one too. }
@@ -21929,12 +21929,12 @@ begin
     end;
     new(cell);
     cell^.idx := k;
-    cell^.value := v;
+    cell^.value_ := v;
     cell^.next := newTuple;
     newTuple := cell;
     k := k + 1;
     d := d^.next;
-    value := value^.next
+    value_ := value_^.next
   end;
 
   StrClear(nohdr);
@@ -21963,7 +21963,7 @@ begin
     PutOp(block);
     writeln(ircode, ', i32 ', cell^.idx:1);
     write(ircode, '  store i32 ');
-    PutOp(cell^.value);
+    PutOp(cell^.value_);
     write(ircode, ', ptr ');
     PutOp(vr);
     writeln(ircode);
@@ -23115,8 +23115,8 @@ begin
     writeln(ircode, ', label %L', bodyB:1, ' [');
     num := p^.nlLabels;
     while num <> nil do begin
-      writeln(ircode, '    i32 ', num^.value + 1:1, ', label %L',
-              LabelBlock(num^.value):1);
+      writeln(ircode, '    i32 ', num^.value_ + 1:1, ', label %L',
+              LabelBlock(num^.value_):1);
       num := num^.next
     end;
     writeln(ircode, '  ]');
@@ -23225,7 +23225,7 @@ begin
 end;
 
 procedure InitDynamicVars(p: symPtr);
-var l, d: symListPtr; a: nodePtr; slot, half, value, size, storage: str;
+var l, d: symListPtr; a: nodePtr; slot, half, value_, size, storage: str;
     nohdr: str; comp: typePtr; align: integer;
 begin
   l := p^.frameVars;
@@ -23237,12 +23237,12 @@ begin
       a := l^.sym^.discExprs;
       d := l^.sym^.discSyms;
       while (a <> nil) and (d <> nil) do begin
-        EmitExpr(a, value);
-        ConvertFor(value, a^.ntype, d^.sym^.stype);
+        EmitExpr(a, value_);
+        ConvertFor(value_, a^.ntype, d^.sym^.stype);
         { A discriminant outside its own type is outside 6.4.7's domain. The
           store is where a value enters a variable, so the check that guards
           every other such store is the one that says so here too. }
-        CheckedForStore(value, d^.sym^.stype);
+        CheckedForStore(value_, d^.sym^.stype);
         Def(half);
         write(ircode, 'getelementptr inbounds ');
         PutDescType(l^.sym);
@@ -23252,7 +23252,7 @@ begin
         write(ircode, '  store ');
         PutLlType(d^.sym^.stype);
         write(ircode, ' ');
-        PutOp(value);
+        PutOp(value_);
         write(ircode, ', ptr ');
         PutOp(half);
         writeln(ircode);

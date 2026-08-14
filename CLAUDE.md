@@ -435,12 +435,24 @@ design would have reported a false all-clear, because it asked whether a name
 
 **Stage 2 has begun** (ADR-0033). `--std=iso7185` is the default and
 `--std=extended` is ISO/IEC 10206:1991. The two are *not* nested: Extended
-Pascal reserves word-symbols a valid ISO 7185 program may use as identifiers,
-and `selfhost/compiler.pas` has a field named `value` — so a source is written
-in one language or the other, and the standard is a property of the source.
+Pascal reserves word-symbols a valid ISO 7185 program may use as identifiers —
+so a source is written in one language or the other, and the standard is a
+property of the source.
+
+- **`selfhost/compiler.pas` is itself an Extended Pascal source** (ADR-0082),
+  which reverses the example ADR-0033 gave: it *had* a field named `value`, and
+  that one identifier was quoted here for a long time as the reason the stage-1
+  compiler was ISO 7185. Renaming it and `bindable` — by *token position*, not
+  by text, since both words also appear in the keyword tables the lexer matches
+  against — was the whole of the conversion, and the token stream and Sema dump
+  were byte-identical under the two standards before the harnesses were told.
+  The reason to do it is ADR-0081: only Extended Pascal lets a program read its
+  own command line, so only an Extended Pascal compiler can take a flag.
 
 - **`tests/extended/` is the Extended Pascal corpus**, and the directory is
-  what tells every harness which flag to use. `run_test.sh` (via CMake),
+  what tells every harness which flag to use — except where a `name.std`
+  sidecar overrides it, which is how `selfhost/compiler.pas` says it is
+  Extended Pascal from outside that directory (ADR-0082). `run_test.sh` (via CMake),
   `difftest.sh` and `irtest.sh` each derive it from the path, so the two
   compilers cannot be told different things about one file. The glob is
   **unanchored** on purpose: a file named on the command line arrives relative,
