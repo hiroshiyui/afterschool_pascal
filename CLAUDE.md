@@ -2032,6 +2032,21 @@ program's `i` is refused. The message names where it must be declared rather
 than saying "must be a variable", because a value parameter *is* one — the
 complaint was never about what it is.
 
+**And it may not be *threatened*** (§6.8.3.9, ADR-0089) — assigned to, passed as
+an actual `var` parameter, read into, or reused as the control variable of a
+nested `for`. §6.9.4's list of threats is the one ADR-0046 already walks for a
+protected parameter, so `Threatened` gained a second reason to answer yes and
+the call sites needed nothing; the reason is keyed on the **symbol**, because a
+procedure's own local `i` is not the `i` an enclosing block loops over.
+The clause also reaches "any procedure-and-function-declaration-part of the
+block", where the threat may sit in a procedure that is **never called** — so a
+threat made from a nested block is *recorded on the symbol* when it is seen and
+the for-statement asks afterwards, which works because `CheckBlock` walks every
+nested body before the statement part that loops. Ask the threat questions only
+of a name that could be a control variable: the nested-`for` test calls
+`Threatened` on the control variable itself, and without that guard a loop
+records a threat against itself and then reports it.
+
 A check is omitted only where its absence is *proved* sound — the `for` step and
 unary negation are unchecked, and `verify/` carries the theorems saying they
 cannot overflow. Don't add a check there, and don't remove one elsewhere.

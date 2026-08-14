@@ -623,6 +623,15 @@ type
       is where that name stops being written down. }
     isProtected: boolean;
 
+    { Where a *nested* block threatens this variable, or 0. 6.8.3.9 forbids
+      the procedure-and-function-declaration-part of the block containing a
+      for-statement to threaten its control-variable, and those bodies are
+      walked before the statement part that loops -- so the threat is recorded
+      when it is seen and the for-statement asks afterwards. A threat from the
+      containing block's own statements is *not* recorded: the clause names
+      the for-statement and the declaration part, and nothing else. }
+    threatLine, threatCol: integer;
+
     { ISO/IEC 10206:1991 6.4.3.3.3's *required* schema `string`. It has no
       body: what it produces is a variable-string-type, whose representation
       the compiler fixes rather than the program's text. The flag is what tells
@@ -1278,6 +1287,12 @@ var
   stringCache: array [1..strMax] of typePtr;
   { The bindings of the `with` statements currently open, innermost first. }
   withTop: symListPtr;
+  { The control variables of the for statements whose *bodies* are being
+    walked, innermost first. 6.8.3.9 forbids a statement of the
+    for-statement from threatening the control-variable, and the bounds are
+    expressions rather than statements -- so this is pushed around the body
+    and nothing else. }
+  forTop: symListPtr;
   { Every type produced from a schema so far (6.4.8), and the schemata whose
     bodies are being resolved right now -- 6.4.7 forbids a schema-definition
     from naming itself outside the domain of a pointer, and without that guard
@@ -6379,6 +6394,8 @@ begin
   s^.linkItemLen := 0;
   s^.storageElsewhere := false;
   s^.usedSeq := 0;
+  s^.threatLine := 0;
+  s^.threatCol := 0;
   NewSymbol := s
 end;
 
@@ -6857,18 +6874,75 @@ end;
 
   True means the error's opening was written and the caller supplies the rest,
   which is how the one rule keeps one wording across five places. }
+{ Is this the control variable of a for statement whose body we are inside?
+  Keyed on the symbol and never on the spelling: a procedure's own local `i`
+  is not the `i` an enclosing block loops over, and the BSI suite has twenty
+  programs that differ in exactly that way. }
+function ActiveControl(sym: symPtr): boolean;
+var w: symListPtr; found: boolean;
+begin
+  found := false;
+  w := forTop;
+  while (w <> nil) and not found do begin
+    if w^.sym = sym then found := true;
+    w := w^.next
+  end;
+  ActiveControl := found
+end;
+
+{ Does `inner` lie in the procedure-and-function-declaration-part of `outer`,
+  at any depth? 6.8.3.9 reaches through the whole of that part, a block in it
+  containing blocks of its own. The walk is bounded by the nesting the parser
+  already refuses to exceed. }
+function NestedIn(inner, outer: symPtr): boolean;
+var p: symPtr; found: boolean; guard: integer;
+begin
+  found := false;
+  p := inner;
+  guard := 0;
+  while (p <> nil) and not found and (guard < maxBlockDepth) do begin
+    if p = outer then found := true;
+    p := p^.owner;
+    guard := guard + 1
+  end;
+  NestedIn := found
+end;
+
 function Threatened(e: nodePtr): boolean;
-var r: nodePtr; sym: symPtr;
+var r: nodePtr; sym: symPtr; res: boolean;
 begin
   r := RootDesignator(e);
   sym := nil;
   if r <> nil then
     if r^.kind = nkVar then sym := r^.vrSym
     else if r^.kind = nkField then sym := r^.fdQualified;
-  if (sym = nil) or not sym^.isProtected then
-    Threatened := false
+  res := false;
+  { 6.8.3.9 forbids the declaration part of the block containing a
+    for-statement to threaten its control-variable, and those bodies are
+    walked first -- so a threat made from a nested block is remembered here
+    and the for-statement asks about it afterwards. The first one is kept:
+    naming one line is what the message can do, and a later one says no more.
+    A threat from the containing block's own statements is deliberately not
+    recorded, that block being neither the for-statement nor its declaration
+    part. }
+  if sym <> nil then
+    if (sym^.kind = skVar) and (sym^.threatLine = 0) and
+       (currentProc <> nil) and (currentProc <> sym^.owner) and
+       NestedIn(currentProc, sym^.owner) then begin
+      sym^.threatLine := e^.line;
+      sym^.threatCol := e^.col
+    end;
+  if (sym <> nil) and not sym^.isProtected and ActiveControl(sym) then begin
+    res := true;
+    ErrorAt(e^.line, e^.col);
+    write('''');
+    WritePool(sym^.at, sym^.len);
+    write(''' is the control variable of a for statement, so ')
+  end
+  else if (sym = nil) or not sym^.isProtected then
+    res := false
   else begin
-    Threatened := true;
+    res := true;
     ErrorAt(e^.line, e^.col);
     { A `with` binding is hidden and its name is a frame slot's, not the
       program's -- so naming it would name something the source never wrote.
@@ -6887,7 +6961,10 @@ begin
       if sym^.kind = skVar then write(''' is a protected variable, so ')
                            else write(''' is a protected parameter, so ')
     end
-  end
+  end;
+  { Assigned once, at the end: 6.8.2.2 makes *reading* a function identifier a
+    recursive call, so a chain that tested its own name would not compile. }
+  Threatened := res
 end;
 
 { The field of an enclosing `with` this name refers to, if any. A `with` scope
@@ -13497,6 +13574,7 @@ end;
 
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
+    forEntry: symListPtr;
 begin
   if s <> nil then
     case s^.kind of
@@ -13728,6 +13806,39 @@ begin
           writeln('the control variable of a for statement must be a ',
                   'variable declared in the block containing the statement')
         end;
+        { 6.8.3.9's threats are about *the* control-variable, so they are only
+          asked once the name can be one. Anything refused above has been
+          reported already, and asking a second question of it would report a
+          consequence of the first -- including, for a variable belonging to
+          an enclosing block, a threat this very statement had just recorded
+          against it. }
+        if (s^.frVar^.vrField = nil) and (s^.frVar^.vrSym <> nil) and
+           (s^.frVar^.vrSym^.kind = skVar) and
+           (s^.frVar^.vrSym^.owner = currentProc) then begin
+          { Threat d): the equivalent program fragment the clause gives a
+            for-statement assigns to the control-variable, so a nested
+            for-statement over the same variable threatens the one containing
+            it. The outer loop is pushed by the time this is reached and this
+            one is not -- its own push is below -- so no loop reports itself. }
+          if Threatened(s^.frVar) then
+            writeln('it cannot be the control variable of another one');
+          { The other half of the clause: "Neither a for-statement nor any
+            procedure-and-function-declaration-part of the block that
+            closest-contains a for-statement shall contain a statement
+            threatening the variable". That part is walked before the
+            statements that loop, so the threat is already recorded. The
+            message names the threat's line because the declaration is not
+            where the reader will look -- the statement is legal until this
+            loop makes it not. }
+          if s^.frVar^.vrSym^.threatLine > 0 then begin
+            ErrorAt(s^.frVar^.line, s^.frVar^.col);
+            write('''');
+            WritePool(s^.frVar^.vrSym^.at, s^.frVar^.vrSym^.len);
+            writeln(''' is threatened by a statement at line ',
+                    s^.frVar^.vrSym^.threatLine:1, ', so it cannot be the ',
+                    'control variable of a for statement')
+          end
+        end;
         if (s^.frVar^.ntype <> nil) and not IsOrdinal(s^.frVar^.ntype) then
         begin
           ErrorAt(s^.frVar^.line, s^.frVar^.col);
@@ -13774,7 +13885,18 @@ begin
         end;
         saved := stmtPath;
         stmtPath := PushStmt(stmtPath, s);
+        { 6.8.3.9 forbids a *statement* of the for-statement to threaten the
+          control-variable, and the bounds are expressions -- so the binding
+          covers the body and nothing else. }
+        forEntry := nil;
+        if s^.frVar^.vrSym <> nil then begin
+          new(forEntry);
+          forEntry^.sym := s^.frVar^.vrSym;
+          forEntry^.next := forTop;
+          forTop := forEntry
+        end;
         CheckStmt(s^.frBody);
+        if forEntry <> nil then forTop := forTop^.next;
         stmtPath := saved
       end;
 
@@ -24748,6 +24870,7 @@ begin
   pendingTail := nil;
   inTypePart := false;
   withTop := nil;
+  forTop := nil;
   producedHead := nil;
   stringSchema := nil;
   producingTop := nil;

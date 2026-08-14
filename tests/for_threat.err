@@ -1,0 +1,5 @@
+<source>:67:5: error: 'i' is the control variable of a for statement, so it cannot be assigned to
+<source>:68:9: error: 'i' is the control variable of a for statement, so it cannot be passed to the var parameter 'n' of 'eat'
+<source>:69:13: error: 'i' is the control variable of a for statement, so it cannot be read into
+<source>:70:9: error: 'i' is the control variable of a for statement, so it cannot be the control variable of another one
+<source>:76:7: error: 'hidden' is threatened by a statement at line 54, so it cannot be the control variable of a for statement

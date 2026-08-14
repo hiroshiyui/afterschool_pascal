@@ -3,6 +3,7 @@
 <source>:9:23: error: the condition of a repeat statement must be boolean
 <source>:10:7: error: the control variable of a for statement must be an ordinal type
 <source>:11:3: error: the bounds of a for statement must match the type of the control variable
+<source>:11:25: error: 'i' is the control variable of a for statement, so it cannot be assigned to
 <source>:12:3: error: 'q' is a procedure and has no value
 <source>:12:3: error: the left side of an assignment must be a variable
 <source>:13:3: error: unknown procedure 'nosuchproc'

@@ -218,7 +218,6 @@ it is checked (ADR-0078).
 | §6.4.3.6 | `length(f) > ord(b) - ord(a) + 1` for a direct-access `file [a..b] of T` — an eleventh component written to a `file [1..10]`. Enforcing it is a check per component written. ADR-0050. |
 | §6.7.2 | A function with a result-variable-specification that never *threatens* the result. Only assignment is required here, and §6.9.4's *threatens* is weaker — a `read` into it counts. ADR-0055. |
 | §6.8.2.2 | That an assignment's function-identifier is the containing block's, so a sibling function's is refused. ADR-0055. |
-| §6.9.4 g) | A `for` statement's body assigning to the control variable, in either the sequence or the set-member form. ADR-0063. |
 | §6.4.9 | That a type-inquiry's parameter-identifier object is in the closest-containing formal-parameter-list. Ordinary lookup also sees the enclosing list. ADR-0047. |
 | §6.11.3 | Where a `qualified` import's names may be written, outside the import-specification itself. ADR-0053. |
 | §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
@@ -397,19 +396,12 @@ which §6.8.2.2 makes a recursive activation, so it is not a variable-access.
 (ADR-0029), which admits a jump between the branches of an if-statement; the
 clause does not.
 
-**A `for` statement's control-variable may not be threatened** (§6.8.3.9) by
-the statement it controls. §3 above records the assignment form as an
-unreported error (ADR-0063); the same is true of a threat through an actual
-variable parameter, through a `read`, and of the variable being reused as the
-control-variable of a nested `for` inside its own loop.
-
 **An array written whole to a textfile shall be a packed array [1..n] of
 char** (§6.9.3.6). This compiler accepts any string-type by the same
 length-based rule §6.1.7 gives, so an array whose lower bound is not 1 is
 written rather than refused.
 
-Two more of that category's programs are recorded in §3 instead, being errors
-rather than syntax or type rules: assignment to a sibling function's identifier
-(§6.8.2.2) and assignment to a `for` control-variable (§6.9.4 g)). One is not a
-deviation at all — set compatibility ignoring packing is the first entry of
-this section.
+One more of that category's programs is recorded in §3 instead, being an error
+rather than a syntax or type rule: assignment to a sibling function's identifier
+(§6.8.2.2). One is not a deviation at all — set compatibility ignoring packing
+is the first entry of this section.
