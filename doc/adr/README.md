@@ -93,3 +93,4 @@ the alternatives that were rejected and why.
 | [0082](0082-the-stage-1-compiler-is-extended-pascal.md) | The stage-1 compiler is written in Extended Pascal | Accepted |
 | [0083](0083-the-compiler-has-a-command-line.md) | The compiler has a command line | Accepted |
 | [0084](0084-halt-takes-an-exit-status.md) | `halt` takes an exit status | Accepted |
+| [0085](0085-stage-0-is-retired.md) | Stage 0 is retired | Accepted |
