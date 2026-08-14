@@ -646,6 +646,18 @@ both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 program compiled and run rather than with a reading. `doc/roadmap.md` records
 what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
+Every one of those sweeps was run here, though, and a corpus written here
+cannot escape what its authors thought to write. So the **BSI Pascal Validation
+Suite** — 812 ISO 7185 programs published in 1982, © British Standards
+Institution — is a `ctest` case as well. It is fetched rather than committed
+(`tests/bsi/fetch.sh`), because BSI grants use and not redistribution, and the
+case skips until you fetch it. **Running it is not a validation and nothing
+here claims to be validated**: BSI makes the suite available on the condition
+that no representation suggests a third-party validation was carried out, and
+that any statement of results describes the whole suite rather than selected
+tests. See `tests/bsi/README.md`. It found three real defects on its first run,
+which is the point of having an oracle nobody here wrote.
+
 ## How it fits together
 
 | File | Role |

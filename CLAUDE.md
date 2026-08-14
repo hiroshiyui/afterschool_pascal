@@ -1844,6 +1844,21 @@ wrote it, so a change that is wrong in the dump *and* wrong in the goldens you
 regenerate is invisible. Regenerating a golden is a decision to be argued for in
 the commit message, not a step.
 
+**The one oracle nobody here wrote is the BSI Pascal Validation Suite**
+(ADR-0086), 812 programs from 1982 tied to clauses of ISO 7185. It is
+**fetched, never committed** — BSI grants use and not redistribution — so
+`tests/bsi/fetch.sh` puts it in a gitignored directory and the `ctest` case
+skips when it is absent, exactly as `verify-lowering` skips without z3.
+`tests/bsi/expected.tsv` records what this compiler does with all 812 and
+**any difference fails, in either direction**: a program that starts *passing*
+is as loud as one that starts failing, which is `verify/`'s rule for a
+`KNOWN_GAP` that begins to hold. Fix the catalogue in the change that fixed the
+compiler. Running it is **not a validation** and no document here may say it
+is; `tests/bsi/README.md` has BSI's three terms. It found three defects on its
+first run, all now fixed. Expect it to find little afterwards: it is a **fixed
+corpus**, where difftest compared every source in this tree and grew with the
+language. It is a strong oracle, not a replacement for the one v1.0.0 gave up.
+
 - The dumps are **opt-in** — `--dump-tokens`, `--dump-ast`, `--dump-sema`,
   `--dump-all` — and each stops at the stage it names. They were unconditional
   while there was a second binary to compare them against, which is the reason
