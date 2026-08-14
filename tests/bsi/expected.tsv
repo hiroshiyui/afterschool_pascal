@@ -281,7 +281,7 @@ DEV039	REJECTED	DEVIANCE 6.2.2.9 a constant used, then the name redeclared in th
 DEV040	REJECTED	DEVIANCE
 DEV041	REJECTED	DEVIANCE
 DEV042	REJECTED	DEVIANCE
-DEV043	RAN	DEVIANCE 6.2.2 a field-identifier and a type-identifier of one spelling; the pointer domain is 6.2.2.9's own exception -- unfixed
+DEV043	REJECTED	DEVIANCE
 DEV044	REJECTED	DEVIANCE 6.2.2.9 a type used in a parameter list, then redeclared as a parameter (fixed: same)
 DEV045	REJECTED	DEVIANCE
 DEV046	REJECTED	DEVIANCE

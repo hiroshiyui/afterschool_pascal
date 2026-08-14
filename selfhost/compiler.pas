@@ -432,6 +432,7 @@ type
   rangePtr = ^rangeRec;
   namePtr = ^nameRec;
   symListPtr = ^symListRec;
+  nodeListPtr = ^nodeListRec;
 
   numRec = record value_: integer; next: numPtr end;
   { A folded case-constant: the closed interval it denotes. A single
@@ -441,6 +442,11 @@ type
   rangeRec = record lo, hi: integer; next: rangePtr end;
   nameRec = record at, len: integer; next: namePtr end;
   symListRec = record sym: symPtr; next: symListPtr end;
+  { A stack of record *type-denoters* -- the parse tree, not the resolved
+    type, because a field's defining-point governs the whole record-type
+    (6.4.3.3) including the pointer domains written before the field itself
+    has been added to the type. }
+  nodeListRec = record dn: nodePtr; next: nodeListPtr end;
 
   { One field of a record. `index` is the position in the struct it belongs to,
     which is also the declaration order; `variant` says which struct that is --
@@ -1318,6 +1324,12 @@ var
   stringCache: array [1..strMax] of typePtr;
   { The bindings of the `with` statements currently open, innermost first. }
   withTop: symListPtr;
+  { The record type-denoters being resolved, innermost first. 6.4.3.3 puts a
+    field-identifier's defining-point in the record-type containing it and
+    6.2.2.4 makes the scope all of that region, so a name written anywhere
+    inside one of these -- a pointer's domain-type, in particular -- may be an
+    applied occurrence of a field rather than of a type. The suite's DEV043. }
+  recTop: nodeListPtr;
   { The control variables of the for statements whose *bodies* are being
     walked, innermost first. 6.8.3.9 forbids a statement of the
     for-statement from threatening the control-variable, and the bounds are
@@ -8073,10 +8085,84 @@ begin
   pendingTail := p
 end;
 
+{ Is `at/len` the name of a field of this record type-denoter? Asked of the
+  parse tree rather than of the type, because a pointer's domain is resolved
+  while the record is still being built and the field it names may not have
+  been added yet -- which is the whole of why DEV043 was accepted. The tag of
+  a variant part is a field too when it is written as one (6.4.3.3), and an
+  arm's field-list is a field-list, so this walks the same shape
+  ParseVariantPart builds. }
+function VariantFieldName(v: nodePtr; at, len: integer): boolean; forward;
+
+function GroupFieldName(g: nodePtr; at, len: integer): boolean;
+var n: nodePtr; found: boolean;
+begin
+  found := false;
+  while (g <> nil) and not found do begin
+    n := g^.grNames;
+    while (n <> nil) and not found do begin
+      if PoolSame(n^.dnAt, n^.dnLen, at, len) then found := true;
+      n := n^.next
+    end;
+    g := g^.next
+  end;
+  GroupFieldName := found
+end;
+
+function VariantFieldName;
+var found: boolean;
+begin
+  found := false;
+  while (v <> nil) and not found do begin
+    if GroupFieldName(v^.vaFields, at, len) then found := true
+    else if (v^.vaTagLen > 0) and PoolSame(v^.vaTagAt, v^.vaTagLen, at, len)
+      then found := true
+    else found := VariantFieldName(v^.vaVariants, at, len);
+    v := v^.next
+  end;
+  VariantFieldName := found
+end;
+
+function FieldNameInDenoter(d: nodePtr; at, len: integer): boolean;
+var found: boolean;
+begin
+  found := GroupFieldName(d^.rcFields, at, len);
+  if (not found) and (d^.rcTagLen > 0) then
+    found := PoolSame(d^.rcTagAt, d^.rcTagLen, at, len);
+  if not found then found := VariantFieldName(d^.rcVariants, at, len);
+  FieldNameInDenoter := found
+end;
+
 function ResolvePointer(d: nodePtr): typePtr;
-var t: typePtr; s: symPtr; busy: boolean; l: symListPtr;
+var t: typePtr; s: symPtr; busy, isField: boolean; l: symListPtr;
+    r: nodeListPtr;
 begin
   t := NewType(tyPointer);
+  { 6.4.3.3 gives a field-identifier its defining-point in the record-type
+    closest-containing the field-list, and 6.2.2.4 makes its scope the whole
+    of that region -- so inside a record type-denoter a name spelled like one
+    of its fields is an applied occurrence of the *field*, and 6.4.4's
+    domain-type wants a type-identifier. Every enclosing record is asked, not
+    only the closest, because 6.2.2.4's scope includes "all regions enclosed
+    by that region". This is a question about regions and is not 6.2.2.9's
+    order rule, whose pointer-domain exception below stands untouched. }
+  isField := false;
+  if d^.ptQualLen = 0 then begin
+    r := recTop;
+    while r <> nil do begin
+      if FieldNameInDenoter(r^.dn, d^.ptAt, d^.ptLen) then isField := true;
+      r := r^.next
+    end
+  end;
+  if isField then begin
+    ErrorAt(d^.line, d^.col);
+    write('''');
+    WritePool(d^.ptAt, d^.ptLen);
+    write(''' is a field of this record type, ');
+    writeln('so it does not name a type here');
+    t^.elem := intType   { keep the tree checkable }
+  end
+  else begin
   { A required type-identifier is an ordinary symbol in the outermost scope
     (6.2.2.10), so `^integer` takes the same two steps every other domain does
     -- and inside a type-definition-part it therefore *pends*, because an
@@ -8127,7 +8213,8 @@ begin
     end
     else
       { Not yet -- it may arrive before the type part ends. }
-      PendPointer(t, d, nil);
+      PendPointer(t, d, nil)
+  end;
   ResolvePointer := t
 end;
 
@@ -8792,10 +8879,17 @@ begin
 end;
 
 function ResolveRecord(d: nodePtr): typePtr;
-var t, fieldType: typePtr; g, n, init: nodePtr;
+var t, fieldType: typePtr; g, n, init: nodePtr; push: nodeListPtr;
 begin
   t := NewType(tyRecord);
   t^.isPacked := d^.rcPacked;
+  { The region 6.4.3.3 gives this record's field-identifiers is open from here
+    until the last variant arm is resolved, so a domain-type written anywhere
+    inside it can see them. }
+  new(push);
+  push^.dn := d;
+  push^.next := recTop;
+  recTop := push;
   g := d^.rcFields;
   while g <> nil do begin
     { 6.6: a field's own type-denoter may carry an initial-state-specifier, and
@@ -8816,6 +8910,7 @@ begin
                        d^.rcTagType, d^.rcVariants, t, t^.fields, t^.fieldTail,
                        t^.variants, t^.variantTail, t^.tagField, t^.tagType,
                        t^.discSelector, nil);
+  recTop := recTop^.next;
   ResolveRecord := t
 end;
 
@@ -25280,6 +25375,7 @@ begin
   pendingTail := nil;
   inTypePart := false;
   withTop := nil;
+  recTop := nil;
   forTop := nil;
   producedHead := nil;
   stringSchema := nil;

@@ -1,0 +1,5 @@
+<source>:27:18: error: 'fred' is a field of this record type, so it does not name a type here
+<source>:39:29: error: 'alpha' is a field of this record type, so it does not name a type here
+<source>:40:29: error: 'beta' is a field of this record type, so it does not name a type here
+<source>:51:27: error: 'gamma' is a field of this record type, so it does not name a type here
+<source>:52:27: error: 'tag' is a field of this record type, so it does not name a type here

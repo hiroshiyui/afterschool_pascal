@@ -325,10 +325,6 @@ types are shared singletons (ADR-0017) and the alias is recorded on the type
 rather than beside the name, so the last definition wins for every user of it.
 It affects no program's meaning — only what a message calls the type.
 
-**A field-identifier and a type-identifier may not share a spelling in one
-block** in the way §6.2.2 describes; the occurrence that would show it is a
-pointer domain, which §6.2.2.9 exempts.
-
 **An actual variable parameter is restricted two ways this compiler does not
 check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
 the tag-field a variant part is selected by. Both are properties of the
