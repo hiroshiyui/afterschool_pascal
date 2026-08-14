@@ -1,1 +1,1 @@
-runtime error: succ: 9 has no successor in 1..9
+runtime error: value out of range (1..9)

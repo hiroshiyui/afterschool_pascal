@@ -7274,19 +7274,20 @@ begin
               end;
           biSucc, biPred:
             if IsOrdinal(a.stype) then begin
-              { 6.6.6.4: succ and pred run out at the ends of the operand's
-                *own* type, which for an enumeration is its last constant and
-                not maxint. The end is tested *before* the step, because at
+              { 6.6.6.4: succ and pred run out at the ends of the *host* type
+                -- 6.7.1 treats a factor of a subrange as being of the type the
+                subrange is of -- which for an enumeration is its last constant
+                and not maxint. The end is tested *before* the step, because at
                 maxint the step itself would overflow -- the same reason the
                 emitted code checks first. }
               v := ConstOrdinal(a);
-              if ((e^.clBuiltin = biSucc) and (v >= OrdinalHi(a.stype))) or
-                 ((e^.clBuiltin = biPred) and (v <= OrdinalLo(a.stype))) then
+              if ((e^.clBuiltin = biSucc) and (v >= OrdinalHi(Base(a.stype)))) or
+                 ((e^.clBuiltin = biPred) and (v <= OrdinalLo(Base(a.stype)))) then
               begin
                 ErrorAt(e^.line, e^.col);
                 if e^.clBuiltin = biSucc then write('succ') else write('pred');
                 write(' runs past the end of ');
-                WriteTypeName(a.stype);
+                WriteTypeName(Base(a.stype));
                 writeln(' in a constant expression');
                 constReported := true
               end
@@ -11167,12 +11168,18 @@ begin
             RequireArg(c, IsInteger(t), 'an integer  ', t);
             c^.ntype := charType
           end;
-          { ISO 7185 6.6.6.4 defines succ over any ordinal type and gives the
-            result that same type, so succ runs out at the end of *this* type
-            -- at `blue` for an enumeration, at 9 for a subrange 1..9. }
+          { 6.6.6.4 gives the result "the same type as that of the expression
+            (see 6.7.1)", and the cross-reference is the whole of the rule:
+            6.7.1 says "any factor whose type is S, where S is a subrange of T,
+            shall be treated as if it were of type T". So succ and pred run out
+            at the end of the *host* -- at `blue` for an enumeration, and at
+            maxint for a subrange 1..9 rather than at 9. `pred(orange)` where
+            the operand is of type orange..green is `red`, and the suite's
+            CONF139 is the program that says so. Storing the result back into a
+            subrange variable is what checks the range, and already did. }
           biSucc, biPred: begin
             RequireArg(c, IsOrdinal(t), 'an ordinal  ', t);
-            c^.ntype := t
+            c^.ntype := Base(t)
           end;
           biTrunc, biRound: begin
             RequireArg(c, IsNumeric(t), 'a real      ', t);
@@ -18654,17 +18661,31 @@ begin
     StrAppend(v, pool[at + k - 1])
 end;
 
-{ ISO 7185 6.4.6 makes it an error to store a value outside a subrange's
-  bounds, so every place a value enters a subrange variable comes through here.
-  A subrange covering its whole host needs no check at all, which is what keeps
-  `1..maxint` from paying for one. }
-procedure CheckedForSubrange(var v: str; target: typePtr);
-var host: typePtr; below, above, bad, lo, hi: str; sign: boolean; msg: integer;
+{ Whether a store into this type emits anything. A subrange covering its whole
+  host needs no check, which is what keeps `1..maxint` from paying for one.
+  It is a function of its own because EmitFor has to ask the question *before*
+  emitting the check -- 6.8.3.9 puts the check under the loop's entry test --
+  and a second copy of the condition there could drift from this one. }
+function NeedsSubrangeCheck(target: typePtr): boolean;
+var host: typePtr;
 begin
+  NeedsSubrangeCheck := false;
   if target <> nil then
     if target^.kind = tySubrange then begin
       host := Base(target);
-      if (target^.lo > OrdinalLo(host)) or (target^.hi < OrdinalHi(host)) then
+      NeedsSubrangeCheck :=
+        (target^.lo > OrdinalLo(host)) or (target^.hi < OrdinalHi(host))
+    end
+end;
+
+{ ISO 7185 6.4.6 makes it an error to store a value outside a subrange's
+  bounds, so every place a value enters a subrange variable comes through here. }
+procedure CheckedForSubrange(var v: str; target: typePtr);
+var below, above, bad, lo, hi: str; sign: boolean; msg: integer;
+begin
+  if target <> nil then
+    if target^.kind = tySubrange then begin
+      if NeedsSubrangeCheck(target) then
       begin
         sign := IsInteger(target);
         OpInt(target^.lo, lo);
@@ -20905,7 +20926,12 @@ begin
       biSucc, biPred: begin
         { succ and pred are errors at the ends of the ordinal type (6.6.6.4),
           and which type that is decides where the ends are: `blue` for an
-          enumeration, 9 for a subrange 1..9, maxint for an integer. }
+          enumeration, maxint for an integer -- and for a subrange 1..9 it is
+          the *host's* ends and not 1 and 9, because 6.7.1 treats a factor of a
+          subrange type as being of the type it is a subrange of. Base is what
+          says so; the representation is unaffected, LlSize and PutLlType
+          having looked through it already. }
+        at := Base(at);
         isSucc := e^.clBuiltin = biSucc;
         { 6.7.6.4's succ(x, k), and pred(x, k) which the clause defines as
           succ(x, -(k)). The step is computed in i32 whatever the ordinal's
@@ -22848,7 +22874,9 @@ end;
 
 procedure EmitFor(s: nodePtr);
 var slot, from, toV, limit, cur, lim, test, now, lim2, same, next: str;
-    t: typePtr; condB, bodyB, stepB, endB: integer; unsignedOrdinal: boolean;
+    willRun: str;
+    t: typePtr; condB, bodyB, stepB, endB, checkB, skipB: integer;
+    unsignedOrdinal: boolean;
 begin
   if s^.frSet <> nil then EmitForIn(s)
   else begin
@@ -22856,13 +22884,51 @@ begin
   t := s^.frVar^.ntype;
 
   { Both bounds are checked against the control variable's type, and nothing
-    between them needs checking: the loop never leaves [from, to]. }
+    between them needs checking: the loop never leaves [from, to].
+
+    But 6.8.3.9 checks them *conditionally*: the bounds "shall be
+    assignment-compatible with the type possessed by the control-variable if
+    the statement of the for-statement is executed". So the check belongs after
+    the entry test and not before it -- `for i := maxint to maxint - 1 do` over
+    an `i : 0..10` is a legal program with an empty loop, and checking eagerly
+    stops it. The suite's CONF181 is that program. }
   EmitExpr(s^.frFrom, from);
   ConvertFor(from, s^.frFrom^.ntype, t);
-  CheckedForSubrange(from, t);
   EmitExpr(s^.frTo, toV);
   ConvertFor(toV, s^.frTo^.ntype, t);
-  CheckedForSubrange(toV, t);
+
+  if NeedsSubrangeCheck(t) then begin
+    { The entry test, written once here and again in condB below. It cannot be
+      shared: this one compares two registers before the loop exists, and that
+      one compares what the slot holds against the stored limit. }
+    unsignedOrdinal := not IsInteger(t);
+    Def(willRun);
+    if s^.frDownto then
+      if unsignedOrdinal then write(ircode, 'icmp uge ')
+      else write(ircode, 'icmp sge ')
+    else
+      if unsignedOrdinal then write(ircode, 'icmp ule ')
+      else write(ircode, 'icmp sle ');
+    PutLlType(t);
+    write(ircode, ' ');
+    PutOp(from);
+    write(ircode, ', ');
+    PutOp(toV);
+    writeln(ircode);
+
+    checkB := NewBlock;
+    skipB := NewBlock;
+    write(ircode, '  br i1 ');
+    PutOp(willRun);
+    writeln(ircode, ', label %L', checkB:1, ', label %L', skipB:1);
+
+    StartBlock(checkB);
+    CheckedForSubrange(from, t);
+    CheckedForSubrange(toV, t);
+    writeln(ircode, '  br label %L', skipB:1);
+
+    StartBlock(skipB)
+  end;
 
   { The limit is evaluated exactly once, as ISO 7185 6.8.3.9 requires. }
   Def(limit);

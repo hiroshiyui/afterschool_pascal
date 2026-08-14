@@ -94,3 +94,4 @@ the alternatives that were rejected and why.
 | [0083](0083-the-compiler-has-a-command-line.md) | The compiler has a command line | Accepted |
 | [0084](0084-halt-takes-an-exit-status.md) | `halt` takes an exit status | Accepted |
 | [0085](0085-stage-0-is-retired.md) | Stage 0 is retired | Accepted |
+| [0086](0086-an-oracle-this-project-did-not-write.md) | An oracle this project did not write | Accepted |

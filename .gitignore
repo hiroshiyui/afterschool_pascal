@@ -12,3 +12,6 @@ build-*/
 *.s
 __pycache__/
 *.pyc
+
+# The BSI validation suite is fetched, never committed (tests/bsi/fetch.sh).
+tests/bsi/suite/

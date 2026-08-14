@@ -151,10 +151,26 @@ the distinction asks `isSubrange()`.
   kind comparison.
 - `ordinalLo()`/`ordinalHi()` give a type's first and last values. `succ`/`pred`
   trap at *those*, not at `maxint` — an enumeration ends at its last constant.
+  **For a subrange they are the host's**, because §6.6.6.4 gives the result "the
+  same type as that of the expression (see §6.7.1)" and §6.7.1 is where the rule
+  lives: "any factor whose type is S, where S is a subrange of T, shall be
+  treated as if it were of type T". So `succ` of a `1..9` holding 9 is 10, and
+  what traps is storing it back. This was wrong in both directions for a long
+  time — the compiler trapped, and `tests/trap_succ_subrange.pas` asserted the
+  wrong rule in a comment citing §6.6.6.4 without following its cross-reference,
+  so every oracle agreed. The BSI suite's CONF139 is what disagreed.
 - `checkedForSubrange` is applied where a value *enters* a variable
   (assignment, value parameter, both `for` bounds) and is a no-op for every
   other type, so call sites need no conditional. Nothing between the `for`
   bounds needs a check because the loop never leaves them.
+  - **The `for` bounds are checked under the loop's entry test**, not before
+    it: §6.8.3.9 requires them to be assignment-compatible with the control
+    variable's type *"if the statement of the for-statement is executed"*, so
+    `for i := maxint to maxint - 1 do` over an `i : 0..10` is a legal program
+    with an empty loop. `NeedsSubrangeCheck` exists so that the guard and the
+    check cannot ask the question differently. `tests/for_empty_bounds.pas` and
+    `tests/trap_for_bound.pas` are the two halves, and the second was written
+    because deleting the check outright passed the whole suite without it.
 - `case` is an LLVM switch whose default traps: ISO 7185 §6.8.3.5 has no `else`
   and none is invented.
 - A variant part is one block of shared storage with each arm a struct laid

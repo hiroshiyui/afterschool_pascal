@@ -93,6 +93,19 @@ if(Python3_FOUND)
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 endif()
 
+# The BSI Pascal Validation Suite -- the one oracle here that this project did
+# not write. It skips rather than fails when the suite has not been fetched,
+# exactly as verify-lowering does without z3, because the suite is not in this
+# repository: BSI holds the copyright and grants no redistribution, so
+# tests/bsi/fetch.sh puts it in a gitignored directory. See tests/bsi/README.md.
+add_test(NAME bsi-validation-suite
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/bsi/run.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+set_tests_properties(bsi-validation-suite PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 1800
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # The code generator cannot be diffed against the C++ one — LLVM's own printer
 # is not a specification — so it is checked by *running* what it produces
 # against the same golden output the C++ compiler is held to, and then by

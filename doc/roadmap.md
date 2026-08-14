@@ -1206,15 +1206,32 @@ named two types identically and explained nothing (ADR-0074).
 
 Three candidates, cheapest first, and not exclusive:
 
-- **The Pascal Validation Suite** (Wichmann and Ciechanowicz), around 580
-  programs. It is an ISO 7185 conformance corpus written by people with no
-  stake here, which is the whole of the argument: every sweep above had the
-  same finding — *no program in the corpus had written the construct* — and
-  this is a corpus nobody here chose. It carries the level 1 tests too, so it
-  is item 3's oracle as well.
+- ~~**The Pascal Validation Suite**~~ **Done** (ADR-0086). The BSI suite,
+  version 5.7, 812 programs — fetched rather than committed, because BSI grants
+  use and not redistribution, and pinned to one upstream commit so a red bar
+  cannot be a corpus edit. `tests/bsi/expected.tsv` records what the compiler
+  does with every one and fails on any difference **in either direction**, which
+  is `verify/`'s rule for a `KNOWN_GAP` that starts holding.
+  - **It found three defects on the first run**, all of which the 437 goldens,
+    the fixed point and the 43 proofs agreed were correct: `succ`/`pred` running
+    out at a *subrange's* bounds rather than its host's (§6.6.6.4 with §6.7.1),
+    the `for` bounds being range-checked when the loop does not execute
+    (§6.8.3.9), and a program being unable to redefine `write` (§6.6.4.1, still
+    open). The first was wrong in `tests/trap_succ_subrange.pas`'s own comment
+    and in CLAUDE.md as well as in the compiler — which is exactly the shape
+    ADR-0085 said nothing left here could catch.
+  - **Level 0 is now confirmed from outside**: all 51 `LEVEL1` programs are
+    rejected, as the suite requires of a processor without conformant array
+    parameters. The first claim in `doc/implementation-defined.md` §1 that
+    something other than this project has checked.
+  - Outstanding from it: **28 undetected errors against that document's twelve**
+    — the categories are not in one-to-one correspondence, but it is the first
+    independent count of a property written up by hand, one probe at a time.
 - **A third-party differential.** FPC under `-Miso`, or p5, over the ISO 7185
   half of `tests/`. Not a second implementation to maintain: a second *answer*,
-  on programs that already exist.
+  on programs that already exist. Still worth doing — the suite is a *fixed*
+  corpus from 1982, where difftest compared every source in this tree and grew
+  with the language.
 - **Mutation testing, committed to the tree.** It has found something every
   time it has been run here — the six occasions listed under "Stage 1", and
   ADR-0065's two mutants that changed the compiler rather than the tests — and

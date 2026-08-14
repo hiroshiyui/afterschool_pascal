@@ -11,6 +11,38 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## Unreleased
+
+### Fixed
+
+Both entries change what an **already-valid program** does, and neither was
+found by a test failing: the BSI Pascal Validation Suite was adopted as a test
+case and disagreed with the compiler on the first run (ADR-0086).
+
+- **`succ` and `pred` on a subrange run out at the *host's* bounds**, not the
+  subrange's. ISO 7185 §6.6.6.4 gives the result "the same type as that of the
+  expression (see 6.7.1)", and §6.7.1 says "any factor whose type is S, where S
+  is a subrange of T, shall be treated as if it were of type T". So `succ` of a
+  `1..9` holding 9 is now `10` where it used to stop the program; storing that
+  result back into the subrange is still an error, and is where the check
+  always belonged.
+- **A `for` statement whose body never executes no longer checks its bounds.**
+  §6.8.3.9 requires them to be assignment-compatible with the control
+  variable's type *"if the statement of the for-statement is executed"*, so
+  `for i := maxint to maxint - 1 do` over an `i : 0..10` is a legal program with
+  an empty loop. It used to stop with a range error. A loop that does run checks
+  its bounds exactly as before.
+
+### Added
+
+- **`tests/bsi`** — the BSI Pascal Validation Suite 5.7 (© 1982 British
+  Standards Institution) as a `ctest` case. The suite is **fetched, not
+  committed** (`tests/bsi/fetch.sh`), and the case skips when it is absent.
+  Running it is **not a validation**; see `tests/bsi/README.md` for BSI's terms.
+- **`.github/workflows/ci.yml`** — build and test on every push in two minimal
+  containers, which is what checks that the build needs `cmake`, `make` and
+  `clang` and nothing of LLVM's.
+
 ## [1.0.0] — 2026-08-14
 
 **The toolchain stands on its own.** v0.1.0 said the number would reach 1.0.0
