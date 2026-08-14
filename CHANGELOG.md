@@ -11,7 +11,18 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
-## [Unreleased]
+## [1.0.0] — 2026-08-14
+
+**The toolchain stands on its own.** v0.1.0 said the number would reach 1.0.0
+"when the toolchain stands on its own, not when the language does" — and this is
+that release. `selfhost/compiler.pas` is the only compiler, `seed/pascalc.ll`
+builds it, and a clone with no C++ compiler and no LLVM development files
+compiles the compiler, passes 435 tests, reaches the stage-2/stage-3 fixed point
+and proves 43 SMT rules.
+
+The language is unchanged from 0.1.0 — both standards were already complete. The
+major version is about what it takes to build this, and about `pascalc-s0`
+disappearing from the command line.
 
 ### Removed
 
@@ -153,4 +164,5 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.0.0
 [0.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v0.1.0

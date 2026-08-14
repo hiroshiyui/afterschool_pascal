@@ -60,7 +60,7 @@ const
     which is the same arrangement `fileSize` and PAS_FILE_SIZE have for the
     same reason: two files that cannot include one another, and a disagreement
     that is checked rather than trusted. }
-  apVersion = '0.1.0';
+  apVersion = '1.0.0';
   { How many --import arguments one translation may be given. Bounded because
     an array is, and generous because 6.13 puts no limit on how many
     program-components a program-block has. }
@@ -1943,12 +1943,14 @@ begin
   writeln('  --version       write the version and stop');
   writeln('  -h, --help      write this list and stop');
   writeln;
-  writeln('It writes the token, AST and Sema dumps to standard output and the');
-  writeln('IR to the file -o names. It does not link: no standard Pascal');
-  writeln('program can start another, so assembling what it wrote is a');
-  writeln('separate step --');
+  writeln('It writes LLVM IR to the file -o names, diagnostics to standard');
+  writeln('output, and nothing else unless a --dump flag asks for it. It does');
+  writeln('not link: no standard Pascal program can start another, so');
+  writeln('assembling what it wrote is a separate step --');
   writeln;
-  writeln('  clang out.ll libpasrt.a -lm -o prog')
+  writeln('  clang out.ll libpasrt.a -lm -o prog');
+  writeln;
+  writeln('tools/pascalcc does both, and takes the same flags.')
 end;
 
 { The command line, read once at the start.
