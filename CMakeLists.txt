@@ -7,45 +7,20 @@ set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+# There are no executable *targets* left -- the compiler is produced by custom
+# commands -- so nothing else creates bin/, and clang cannot write into a
+# directory that is not there. Only a fresh configure ever sees this.
+file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
-find_package(LLVM REQUIRED CONFIG)
-message(STATUS "Afterschool Pascal: using LLVM ${LLVM_PACKAGE_VERSION} from ${LLVM_DIR}")
-
-llvm_map_components_to_libnames(APASCAL_LLVM_LIBS core support irreader passes native)
+# LLVM is not a build dependency any more: nothing here links libLLVM. What is
+# needed is `clang` on PATH, to assemble the IR both the seed and the compiler
+# emit (ADR-0009, ADR-0085).
+find_program(APASCAL_CLANG clang REQUIRED)
+message(STATUS "Afterschool Pascal: assembling with ${APASCAL_CLANG}")
 
 # ---- Pascal runtime library (linked into every compiled program) ----
 add_library(pasrt STATIC runtime/pasrt.c)
 target_include_directories(pasrt PUBLIC runtime)
-
-# ---- Stage 0: the compiler written in C++ ----
-#
-# Named for what it is. `pascalc-s0` only ever had to be good enough to compile
-# the Pascal-written compiler once (README's bootstrap plan), and it is long
-# past that bar — but the compiler this repository *produces* is `pascalc`
-# below, which this one builds. Stage 0 is kept rather than retired, because it
-# is the second implementation `selfhost/difftest.sh` compares against and the
-# one `verify/` proves; doc/roadmap.md has that trade in full.
-add_executable(pascalc-s0
-  src/main.cpp
-  src/astdump.cpp
-  src/diag.cpp
-  src/lexer.cpp
-  src/parser.cpp
-  src/sema.cpp
-  src/codegen.cpp
-)
-target_include_directories(pascalc-s0 PRIVATE src ${LLVM_INCLUDE_DIRS})
-target_compile_definitions(pascalc-s0 PRIVATE
-  ${LLVM_DEFINITIONS_LIST}
-  APASCAL_RUNTIME_DIR="${CMAKE_BINARY_DIR}/lib"
-  APASCAL_VERSION="${PROJECT_VERSION}"
-)
-target_link_libraries(pascalc-s0 PRIVATE ${APASCAL_LLVM_LIBS})
-add_dependencies(pascalc-s0 pasrt)
-
-if(NOT LLVM_ENABLE_RTTI)
-  target_compile_options(pascalc-s0 PRIVATE -fno-rtti)
-endif()
 
 # ---- The compiler: written in Afterschool Pascal, built by the seed ----
 #
@@ -66,7 +41,7 @@ add_custom_command(
   # below never runs, and without this a stale build/bin/pascalc would survive
   # for `ctest` to pass against.
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_SEED_CC} ${APASCAL_PASCALC}
-  COMMAND clang -Wno-override-module ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
+  COMMAND ${APASCAL_CLANG} -Wno-override-module ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
           $<TARGET_FILE:pasrt> -lm -o ${APASCAL_SEED_CC}
   DEPENDS pasrt ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
   COMMENT "Assembling the seed compiler from seed/pascalc.ll"
@@ -83,7 +58,7 @@ add_custom_command(
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
   COMMAND ${APASCAL_SEED_CC} --std=extended
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${CMAKE_BINARY_DIR}/pascalc.ll
-  COMMAND clang -Wno-override-module ${CMAKE_BINARY_DIR}/pascalc.ll
+  COMMAND ${APASCAL_CLANG} -Wno-override-module ${CMAKE_BINARY_DIR}/pascalc.ll
           $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
   DEPENDS ${APASCAL_SEED_CC} pasrt
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
@@ -117,16 +92,6 @@ if(Python3_FOUND)
                        TIMEOUT 900
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 endif()
-
-# Stage 1, checked against stage 0: each Pascal component must produce the same
-# output as the C++ one it was ported from, for every Pascal source in the
-# tree. The roadmap makes this the checkpoint that comes *before* stage 1 is
-# declared working — a disagreement here is bisectable, the same disagreement
-# at stage 3 is two binaries differing by a byte.
-add_test(NAME selfhost-compiler
-         COMMAND ${CMAKE_SOURCE_DIR}/selfhost/difftest.sh
-                 $<TARGET_FILE:pascalc-s0>)
-set_tests_properties(selfhost-compiler PROPERTIES TIMEOUT 1800)
 
 # The code generator cannot be diffed against the C++ one — LLVM's own printer
 # is not a specification — so it is checked by *running* what it produces
