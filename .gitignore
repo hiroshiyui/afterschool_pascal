@@ -1,4 +1,8 @@
 build/
+# The release process configures a from-scratch tree beside it
+# (.claude/skills/release-engineering), and a coverage one beside that
+# (.claude/skills/code-review).
+build-*/
 *.o
 *.ll
 *.s

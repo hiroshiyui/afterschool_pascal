@@ -453,8 +453,8 @@ property of the source.
   what tells every harness which flag to use — except where a `name.std`
   sidecar overrides it, which is how `selfhost/compiler.pas` says it is
   Extended Pascal from outside that directory (ADR-0082). `run_test.sh` (via CMake),
-  `difftest.sh` and `irtest.sh` each derive it from the path, so the two
-  compilers cannot be told different things about one file. The glob is
+  `difftest.sh`, `irtest.sh` and `producttest.sh` each derive it from the path,
+  so the four cannot be told different things about one file. The glob is
   **unanchored** on purpose: a file named on the command line arrives relative,
   and `*/tests/extended/*` quietly called it ISO 7185 — which compares two
   identical rejections and passes (ADR-0034).
@@ -1702,12 +1702,18 @@ Adding a language feature usually touches, in order: `token.h`/`lexer.cpp` →
 `ast.h` → `parser.cpp` → `sema.cpp` → `codegen.cpp` → a `tests/` pair, plus
 `runtime/pasrt.c` if it needs library support.
 
-`selfhost/compiler.pas` is the stage-1 compiler, written in Afterschool Pascal.
+`selfhost/compiler.pas` is the stage-1 compiler, written in Afterschool Pascal,
+and since ADR-0083 it is **the compiler this repository produces**: CMake
+translates it with `pascalc-s0` and the result is `build/bin/pascalc`.
 The lexer (ADR-0022), the parser (ADR-0023), Sema (ADR-0024) and CodeGen
 (ADR-0025) are all done, and **the bootstrap closes**: the compiler compiles
-itself and stage 2 equals stage 3. **It is one source file** — ISO 7185 has no
-include mechanism, so each component was merged in as it was ported rather than
-kept as a program of its own.
+itself and stage 2 equals stage 3. **It is one source file** — neither standard
+has an include mechanism, so each component was merged in as it was ported
+rather than kept as a program of its own. `selfhost/compiler.std` is the one
+word that says which standard it is written in, and
+`selfhost/producttest.sh` is what checks the built artefact — the other three
+harnesses build a stage-1 compiler of their own in a temporary directory, so
+`build/bin/pascalc` could be missing or stale with every one of them green.
 
 It takes a **command line** — `pascalc [options] file.pas`, with `-o`,
 `--std=`, `--import` (repeatable) and `-h`, the same spellings `pascalc-s0`

@@ -90,9 +90,9 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 276 ctest cases — the Pascal programs of `tests/` and
-`tests/extended/`, the verification run, the differential test and the
-bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
+Alongside the language, 278 ctest cases — the Pascal programs of `tests/` and
+`tests/extended/`, the verification run, the differential test, the bootstrap
+and the product check — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
 
 ### Item 5 — text files (done)
@@ -1150,7 +1150,7 @@ second is live:
   oracles here and buys nothing:
 
   - **`difftest.sh` would have nothing to diff against.** The comparison is
-    two independent implementations answering the same question over 434 files;
+    two independent implementations answering the same question over 435 files;
     delete one and it degrades to golden files, which record what the surviving
     implementation happened to print. That is a strictly weaker oracle, and the
     counting lesson above says why it matters: the corpus is only worth what it

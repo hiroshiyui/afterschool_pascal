@@ -122,9 +122,10 @@ A component that declares no main-program-declaration is translated with `-c`
 and becomes an object file. A component that imports an interface is given the
 supplying component with `--import <file>`, repeated once per component, and
 the objects are named alongside its own source so they reach the linker. The
-stage-1 compiler takes the same components as its fourth program parameter,
-concatenated into one file, ISO 7185 giving a program no way to open a file
-whose name it computes.
+stage-1 compiler takes `--import` too, once per component: it used to take them
+concatenated into a single program parameter, ISO 7185 giving a program no way
+to open a file whose name it computes, and since ADR-0081 it names them
+(§6.7.5.6's `bind`).
 
 **The artefact is the supplying component's source.** No interface file format
 is defined, and none is needed: §6.11.1 puts the whole of what a module exports
@@ -132,6 +133,27 @@ in its module-heading, so `--import` reads that heading and nothing else of the
 component. The consequence a user sees is that a heading's own errors are
 reported again in each component that imports it, and that nothing detects a
 component whose object is older than its heading.
+
+### 2.6 How a program terminates
+
+Neither standard models a process exit status, so nothing here is required and
+nothing is forbidden. What this processor does:
+
+| Situation | Status |
+|---|---|
+| the program-block completes | 0 |
+| §6.7.5.7's `halt` | 0 — 3.6 makes it normal termination, not an error |
+| a run-time error (Annex D, a failed range check, a trap) | 1, with a message on standard error |
+
+**A program has no way to choose.** `halt` takes no parameter in either
+standard and there is no other control procedure, so a Pascal program that
+wants to report failure to whatever invoked it cannot. The consequence is
+visible in this repository's own compiler: `pascalc` writes its diagnostics and
+**exits 0 even when it rejects the program**, where `pascalc-s0` exits 1. What
+it does instead is write **no IR at all**, so a build rule depending on the
+`.ll` still fails. Inventing a status-returning `halt` was declined for the
+reason §5 gives for every extension here: one not taken from
+ISO/IEC 10206:1991's own spelling is not added.
 
 ## 3. Errors not reported
 
