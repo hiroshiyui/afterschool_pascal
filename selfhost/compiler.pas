@@ -1148,6 +1148,11 @@ type
     isDefined: boolean;
     line, col, defLine, defCol: integer;
     path: stmtPathPtr;
+    { The labelled statement itself. 6.8.1 a) admits a goto that the labelled
+      statement *contains*, which the path cannot answer -- the path says
+      which statements contain the label, not whether the label contains the
+      goto. }
+    lnode: nodePtr;
     owner: symPtr;
     next: labelInfoPtr
   end;
@@ -13707,7 +13712,7 @@ end;
 
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
-    forEntry: symListPtr;
+    forEntry: symListPtr; owning: symPtr; badFunc: boolean;
 begin
   if s <> nil then
     case s^.kind of
@@ -13731,6 +13736,7 @@ begin
       nkLabeled: CheckLabeled(s);
 
       nkAssign: begin
+        badFunc := false;
         { Assigning to a function's own name sets its result (ISO 7185
           6.8.2.2), so it is redirected before the target is otherwise
           resolved. Reading the name is a recursive call -- see CheckExpr.
@@ -13739,6 +13745,29 @@ begin
         if s^.asTarget^.kind = nkVar then begin
           named := Lookup(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
           if (named <> nil) and (named^.kind <> skFunc) then named := nil
+        end;
+        { 6.8.2.2: "The function-block associated with the function-identifier
+          of an assignment-statement shall *contain* the assignment-statement."
+          Contain, not be -- a procedure nested inside f may write f's result,
+          reaching it through the static chain as it reaches any enclosing
+          variable -- so the test is the owner chain and not `= currentProc`.
+          A sibling function's name, or a nested one's from outside it, is
+          refused. Setting named to nil then leaves the ordinary variable path
+          to run, and assignedResult is deliberately *not* set: a function
+          whose only assignment is a sibling's still never assigns its own. }
+        if named <> nil then begin
+          owning := currentProc;
+          while (owning <> nil) and (owning <> named) do
+            owning := owning^.owner;
+          if owning = nil then begin
+            ErrorAt(s^.line, s^.col);
+            write('''');
+            WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
+            write(''' is not this block''s function, so its result cannot ');
+            writeln('be assigned here');
+            named := nil;
+            badFunc := true
+          end
         end;
         if named <> nil then begin
           s^.asTarget^.vrSym := named^.resultVar;
@@ -13779,7 +13808,11 @@ begin
           { 6.9.4 a): an assignment-statement threatens its target. }
           if Threatened(s^.asTarget) then
             writeln('it cannot be assigned to');
-          if not IsDesignator(s^.asTarget) then begin
+          { badFunc means 6.8.2.2 has already reported this target, and what
+            is left to say about it -- that a function identifier is not a
+            variable -- is a consequence of that fault rather than a second
+            one (ADR-0054). }
+          if not IsDesignator(s^.asTarget) and not badFunc then begin
             ErrorAt(s^.asTarget^.line, s^.asTarget^.col);
             writeln('the left side of an assignment must be a variable')
           end
@@ -14488,6 +14521,7 @@ begin
       info^.defLine := 0;
       info^.defCol := 0;
       info^.path := nil;
+      info^.lnode := nil;
       info^.owner := owner;
       info^.next := nil;
       if sc^.labels = nil then sc^.labels := info
@@ -14524,6 +14558,7 @@ begin
     found^.defLine := s^.line;
     found^.defCol := s^.col;
     found^.path := stmtPath;
+    found^.lnode := s;
     s^.lbId := found^.id
   end;
 
@@ -14565,6 +14600,7 @@ end;
 procedure ResolveGotos;
 var pending, moved: pendingGotoPtr; found, info: labelInfoPtr;
     sc, home: labelScopePtr; p: stmtPathPtr; reachable, known: boolean;
+    inside, sameChain: boolean;
     target: symPtr; num: numPtr;
 begin
   pending := labelScope^.gotos;
@@ -14606,15 +14642,44 @@ begin
               ' is declared but labels no statement')
     end
     else if not pending^.fromInner then begin
+      { 6.8.1 admits a label three ways, and the prefix test alone is only two
+        of them: a) the labelled statement contains the goto; b) the label is
+        a statement of a statement-sequence containing the goto; c) it is a
+        statement of the block's statement-part. Only a compound-statement and
+        a repeat-statement hold a statement-*sequence* -- a branch of an if, a
+        loop body, a with body and a case arm are each a single statement --
+        so a label inside one of those is reachable only from within it, which
+        is a). That is what makes DEV190's jump from one branch of an if to a
+        label in the other satisfy none of the three. }
+      inside := false;
+      p := pending^.gpath;
+      while p <> nil do begin
+        if p^.stmt = found^.lnode then inside := true;
+        p := p^.next
+      end;
       p := pending^.gpath;
       while PathDepth(p) > PathDepth(found^.path) do
         p := p^.next;
-      reachable := p = found^.path;
+      sameChain := p = found^.path;
+      if inside then
+        reachable := true
+      else if not sameChain then
+        reachable := false
+      else if found^.path = nil then
+        reachable := true
+      else
+        reachable := (found^.path^.stmt^.kind = nkCompound) or
+                     (found^.path^.stmt^.kind = nkRepeat);
       if not reachable then begin
         ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
-        writeln('label ', pending^.gnode^.gtLabel:1, ' is inside a statement ',
-                'this goto is not: a goto may leave a structured statement ',
-                'but not enter one')
+        if sameChain then
+          writeln('label ', pending^.gnode^.gtLabel:1, ' prefixes a statement',
+                  ' that is not one of a statement-sequence, so only a goto ',
+                  'inside that statement may reach it')
+        else
+          writeln('label ', pending^.gnode^.gtLabel:1, ' is inside a ',
+                  'statement this goto is not: a goto may leave a structured ',
+                  'statement but not enter one')
       end
       else begin
         pending^.gnode^.gtId := found^.id;

@@ -4,4 +4,5 @@
 <source>:31:1: error: a function cannot return a bindable bpoint: only a variable can be bound to something outside the program
 <source>:37:17: error: 'named' names a result variable, so assign to that instead of to the function
 <source>:40:1: error: function 'silent' never assigns its result
-<source>:46:1: error: function 'other' never assigns its result
+<source>:53:7: error: 'silent' is not this block's function, so its result cannot be assigned here
+<source>:52:1: error: function 'other' never assigns its result

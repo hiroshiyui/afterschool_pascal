@@ -279,7 +279,7 @@ DEV037	REJECTED	DEVIANCE
 DEV038	REJECTED	DEVIANCE
 DEV039	REJECTED	DEVIANCE 6.2.2.9 a constant used, then the name redeclared in the same block (fixed: definingpoint_order.pas)
 DEV040	REJECTED	DEVIANCE
-DEV041	RAN	DEVIANCE 6.8.2.2 assignment to a sibling function's identifier; a stated unreported error (ADR-0055)
+DEV041	REJECTED	DEVIANCE
 DEV042	REJECTED	DEVIANCE
 DEV043	RAN	DEVIANCE 6.2.2 a field-identifier and a type-identifier of one spelling; the pointer domain is 6.2.2.9's own exception -- unfixed
 DEV044	REJECTED	DEVIANCE 6.2.2.9 a type used in a parameter list, then redeclared as a parameter (fixed: same)
@@ -428,7 +428,7 @@ DEV186	REJECTED	DEVIANCE
 DEV187	REJECTED	DEVIANCE
 DEV188	REJECTED	DEVIANCE
 DEV189	REJECTED	DEVIANCE
-DEV190	RAN	DEVIANCE 6.8.1 a goto between the branches of an if-statement -- unfixed
+DEV190	REJECTED	DEVIANCE
 DEV191	REJECTED	DEVIANCE
 DEV192	REJECTED	DEVIANCE
 DEV193	REJECTED	DEVIANCE

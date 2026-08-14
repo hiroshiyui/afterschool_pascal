@@ -1,0 +1,2 @@
+<source>:46:5: error: label 1 prefixes a statement that is not one of a statement-sequence, so only a goto inside that statement may reach it
+<source>:50:8: error: label 2 is inside a statement this goto is not: a goto may leave a structured statement but not enter one

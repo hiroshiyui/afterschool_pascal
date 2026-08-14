@@ -41,8 +41,14 @@ function silent: point;
 begin end;
 
 { A function whose body assigns a *sibling* function's result never assigns its
-  own. This is the shape the check was written for, and it found one in
-  selfhost/compiler.pas the day it landed. }
+  own. This is the shape the never-assigns check was written for, and it found
+  one in selfhost/compiler.pas the day it landed.
+
+  Since ADR-0094 the sibling assignment is itself refused: §6.8.2.2 requires
+  the function-block of the assignment's function-identifier to *contain* the
+  assignment, and `other`'s block does not contain `silent`'s. Both messages
+  are here, and they are two rules rather than one -- the second would still
+  fire if the body assigned nothing at all. }
 function other: integer;
 begin silent := p end;
 

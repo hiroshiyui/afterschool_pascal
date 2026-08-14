@@ -217,7 +217,6 @@ it is checked (ADR-0078).
 | §6.7.5.5 | A write-parameter of `writestr` accessing the string-variable being written to. ADR-0060. |
 | §6.4.3.6 | `length(f) > ord(b) - ord(a) + 1` for a direct-access `file [a..b] of T` — an eleventh component written to a `file [1..10]`. Enforcing it is a check per component written. ADR-0050. |
 | §6.7.2 | A function with a result-variable-specification that never *threatens* the result. Only assignment is required here, and §6.9.4's *threatens* is weaker — a `read` into it counts. ADR-0055. |
-| §6.8.2.2 | That an assignment's function-identifier is the containing block's, so a sibling function's is refused. ADR-0055. |
 | §6.4.9 | That a type-inquiry's parameter-identifier object is in the closest-containing formal-parameter-list. Ordinary lookup also sees the enclosing list. ADR-0047. |
 | §6.11.3 | Where a `qualified` import's names may be written, outside the import-specification itself. ADR-0053. |
 | §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
@@ -351,10 +350,3 @@ check** (§6.6.3.3): it shall not denote a component of a packed variable, nor
 the tag-field a variant part is selected by. Both are properties of the
 designator. Being written as `(variable)` is refused (ADR-0092).
 
-**§6.8.1's rule about where a `goto` may land is enforced by the prefix test**
-(ADR-0029), which admits a jump between the branches of an if-statement; the
-clause does not.
-
-One more of that category's programs is recorded in §3 instead, being an error
-rather than a syntax or type rule: assignment to a sibling function's identifier
-(§6.8.2.2).
