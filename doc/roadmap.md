@@ -83,7 +83,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 275 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 276 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the verification run, the differential test and the
 bootstrap — and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
@@ -150,7 +150,7 @@ Nothing in the language was blocking, and these went in this order:
 3. ~~**Port Sema**, including the type arena.~~ **Done** (ADR-0024) — and with
    it the stage-1 sources merged into one `selfhost/compiler.pas`, because ISO
    has no include mechanism and a third program would have carried a third copy
-   of the lexer. It dumps every stage in one pass, against `--dump-all`; 433
+   of the lexer. It dumps every stage in one pass, against `--dump-all`; 434
    files agree stage for stage today — every `.pas` in the tree, which is what
    the number tracks and why it moves with the corpus rather than with the
    port.
@@ -1062,6 +1062,29 @@ statement, so a procedure looping over the program's `i` is not a program
 either standard has. Nothing in the corpus wrote one — including
 `selfhost/compiler.pas`, whose 274 `for` statements all obey it already.
 
+### Annex C: the required identifiers
+
+ADR-0080, and the sweep that had never been run. Annex C enumerates all 94
+required identifiers with the clause defining each, and every one was probed
+with a program that *uses it* — compiled, run, and its answer checked. **All 94
+pass**, and so do the three required directives. It is the first sweep here to
+find nothing, which is the first evidence that the corpus has caught up with
+the standard rather than a wasted afternoon.
+
+It was run because the claim above — no required identifier outstanding — was
+the one part of it backed by a reading rather than by probes, and because that
+is the list that failed before: `pack`, `unpack` and `page` were missing from
+ISO 7185 while three documents said otherwise, their names present in
+`isRequiredName` and nowhere else. `tests/extended/required_identifiers.pas`
+is what the sweep left behind, so the claim is now a test.
+
+**The sweep's own first design would have passed a compiler that was wrong.**
+It asked whether a name *resolves* and required two probes to agree before
+reporting a gap, so a parse error in one masked the other — ADR-0034's fault,
+two rejections compared and passing. "Is the name in scope" is not what a
+required identifier means, which is precisely what `pack` and `page` had
+already demonstrated.
+
 ### Refusals found by reading the clause rather than by probing
 
 Two more constructs the standards have and this compiler rejected. Both are
@@ -1121,7 +1144,7 @@ Neither is a language feature, and both are live:
     `.ll` stage 0 emits — which is a policy decision about what this repository
     is willing to carry and to trust, not a technical obstacle.
   - **`difftest.sh` would have nothing to diff against.** The comparison is
-    two independent implementations answering the same question over 433 files;
+    two independent implementations answering the same question over 434 files;
     delete one and it degrades to golden files, which record what the surviving
     implementation happened to print. That is a strictly weaker oracle, and the
     counting lesson above says why it matters: the corpus is only worth what it

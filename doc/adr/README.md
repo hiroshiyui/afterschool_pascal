@@ -88,3 +88,4 @@ the alternatives that were rejected and why.
 | [0077](0077-annex-d-is-a-checklist.md) | Annex D is a checklist | Accepted |
 | [0078](0078-the-second-annex-d-was-almost-clean.md) | The second Annex D was almost clean | Accepted |
 | [0079](0079-an-interface-is-a-set-of-names.md) | An interface is a set of names | Accepted |
+| [0080](0080-the-sweep-that-found-nothing.md) | The sweep that found nothing | Accepted |
