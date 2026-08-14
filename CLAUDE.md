@@ -1142,7 +1142,16 @@ property of the source.
     rather than negating — the same thing without negation's edge case.
   - **`halt` closes the open files through ADR-0032's list**, because it leaves
     every block without its epilogue, and it is answered before `emitStdProc`
-    takes the address of a first argument it has not got.
+    takes the address of a first argument — which since ADR-0084 it *may* have,
+    an optional exit status being the second of this processor's two documented
+    extensions. §6.7.5.7 gives `halt` no parameters and neither standard models
+    an exit status at all, so `halt(1)` was a compile-time error and no
+    conforming program contains one; what is extended is the processor, in the
+    dimension where a run-time error has always exited 1 with no clause saying
+    so. It exists because `pascalc` has to be able to report failure, and
+    **`selfhost/producttest.sh` is the only thing that checks it does** —
+    deleting the compiler's own `halt(1)` passed all 279 cases, goldens
+    comparing what a program wrote and never how it stopped.
   - **A builtin's enumerator has to be placed, not written where it reads
     best**: the AST dump prints it as an ordinal, so both compilers must agree
     on the index. `difftest` caught two as a number one apart.

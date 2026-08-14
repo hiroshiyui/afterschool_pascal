@@ -1269,7 +1269,10 @@ var
   srcName, outName: nameStr;
   importName: array [1..maxImports] of nameStr;
   importCount: integer;
-  argsOk: boolean;
+  { Whether there is anything to translate, and whether the command line was
+    *wrong* -- which are different questions, because -h answers the first with
+    no and the second with no as well. }
+  argsOk, argsBad: boolean;
   langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   curBlock: integer;             { the block being filled, for a phi's label }
@@ -1921,6 +1924,7 @@ begin
   outName := '';
   importCount := 0;
   argsOk := true;
+  argsBad := false;
   k := 1;
   while Arg(k, a) and argsOk do begin
     if EQ(a, '--std=extended') then langStd := stdExtended
@@ -1934,18 +1938,21 @@ begin
       k := k + 1;
       if not Arg(k, outName) then begin
         writeln('pascalc: -o needs a file name');
-        argsOk := false
+        argsOk := false;
+        argsBad := true
       end
     end
     else if EQ(a, '--import') then begin
       k := k + 1;
       if importCount >= maxImports then begin
         writeln('pascalc: more than ', maxImports:1, ' --import arguments');
-        argsOk := false
+        argsOk := false;
+        argsBad := true
       end
       else if not Arg(k, a) then begin
         writeln('pascalc: --import needs a file name');
-        argsOk := false
+        argsOk := false;
+        argsBad := true
       end
       else begin
         importCount := importCount + 1;
@@ -1955,11 +1962,13 @@ begin
     else if length(a) > 0 then
       if a[1] = '-' then begin
         writeln('pascalc: unknown option ', a);
-        argsOk := false
+        argsOk := false;
+        argsBad := true
       end
       else if length(srcName) > 0 then begin
         writeln('pascalc: more than one input file given');
-        argsOk := false
+        argsOk := false;
+        argsBad := true
       end
       else srcName := a;
     k := k + 1
@@ -1967,7 +1976,8 @@ begin
 
   if argsOk and (length(srcName) = 0) then begin
     Usage;
-    argsOk := false
+    argsOk := false;
+    argsBad := true
   end;
 
   { The default output is the source with its extension replaced, which is the
@@ -12400,16 +12410,32 @@ begin
   end;
 
   { 6.7.5.7: "Following execution of the control procedure halt ... no further
-    processing of the activation of the program shall occur." It takes nothing,
-    and everything about *how* it stops belongs to the runtime -- the files a
-    block exit would have closed are closed there instead, because a halt skips
-    every epilogue on the way out exactly as a non-local goto skips the ones it
-    jumps past (ADR-0032). }
+    processing of the activation of the program shall occur." Everything about
+    *how* it stops belongs to the runtime -- the files a block exit would have
+    closed are closed there instead, because a halt skips every epilogue on the
+    way out exactly as a non-local goto skips the ones it jumps past
+    (ADR-0032). }
+  { The optional status is an *extension* (ADR-0084): 6.7.5.7's halt takes no
+    parameters, so `halt(1)` is not a conforming program and no conforming
+    program's meaning changes. Neither standard models a process exit status at
+    all, which is why there is nothing in either to take a spelling from -- and
+    why a Pascal program otherwise has no way to tell whatever invoked it that
+    it failed. This compiler is the program that needed it. }
   if p^.pcStd = spHalt then begin
-    if n <> 0 then begin
+    if n > 1 then begin
       ErrorAt(p^.line, p^.col);
-      writeln('''halt'' takes no arguments')
+      writeln('''halt'' takes at most one argument, the exit status')
     end
+    else if n = 1 then
+      { `a` is nil here -- the counting loop above walked it off the end -- so
+        the argument is taken from the node again. }
+      if (p^.pcArgs^.ntype <> nil) and not IsInteger(p^.pcArgs^.ntype) then
+      begin
+        ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+        write('the exit status of ''halt'' must be an integer, found ');
+        WriteTypeName(p^.pcArgs^.ntype);
+        writeln
+      end
   end
   else
   { 6.7.5.8: GetTimeStamp(t) attributes to t either the current date and time
@@ -22244,15 +22270,27 @@ end;
 
 procedure EmitStdProc(s: nodePtr);
 var slot, block, raw, rec, nameRec, nlen, ndata, part, narrow, at_: str;
+    status: str;
     domain, idx: typePtr; head, msg, k: integer;
 begin
-  { 6.7.5.7's halt is the one required procedure that takes no arguments, so it
-    is answered before the address of the first one is taken. The runtime
-    closes what is open and stops; nothing here knows which blocks were
-    abandoned, and it does not need to -- the open-file list is the same one
-    ADR-0032's non-local goto walks, for the same reason. }
-  if s^.pcStd = spHalt then
-    writeln(ircode, '  call void @pas_halt()')
+  { 6.7.5.7's halt takes no *variable*, so it is answered before the address of
+    a first argument is taken. The runtime closes what is open and stops;
+    nothing here knows which blocks were abandoned, and it does not need to --
+    the open-file list is the same one ADR-0032's non-local goto walks, for the
+    same reason. The optional exit status is the extension ADR-0084 documents;
+    omitted, it is the 0 a conforming program always gets. }
+  if s^.pcStd = spHalt then begin
+    { The operand is computed first: the emitter is sequential, so anything
+      EmitExpr writes has to come out before the call line is begun. }
+    if s^.pcArgs = nil then begin
+      StrClear(status);
+      StrAppend(status, '0')
+    end
+    else EmitExpr(s^.pcArgs, status);
+    write(ircode, '  call void @pas_halt(i32 ');
+    PutOp(status);
+    writeln(ircode, ')')
+  end
   { 6.6.5.4's transfer procedures, answered before the first argument's
     address is taken because *which* argument is the array differs between the
     two and neither is simply "the file" (ADR-0067). }
@@ -23808,7 +23846,7 @@ begin
   { ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8's binding operations. }
   writeln(ircode, 'declare void @pas_bind(ptr, ptr, i32)');
   writeln(ircode, 'declare void @pas_unbind(ptr)');
-  writeln(ircode, 'declare void @pas_halt()');
+  writeln(ircode, 'declare void @pas_halt(i32)');
   writeln(ircode, 'declare i32 @pas_binding_bound(ptr)');
   writeln(ircode, 'declare ptr @pas_binding_name(ptr)');
   writeln(ircode, 'declare i32 @pas_binding_namelen(ptr)');
@@ -24256,5 +24294,13 @@ begin
   if argsOk then begin
     BindTo(source, srcName);
     DumpEverything
-  end
+  end;
+
+  { Report the outcome to whatever invoked this. A conforming Pascal program
+    cannot -- 6.7.5.7's halt takes no parameters and there is no other control
+    procedure -- so the status is the one extension this compiler needs and the
+    only one it adds beyond the underscore in an identifier (ADR-0084). Without
+    it `pascalc bad.pas && clang ...` runs the linker on a file that was never
+    written. }
+  if errorSeen or argsBad then halt(1)
 end.

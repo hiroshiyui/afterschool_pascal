@@ -142,18 +142,16 @@ nothing is forbidden. What this processor does:
 | Situation | Status |
 |---|---|
 | the program-block completes | 0 |
-| §6.7.5.7's `halt` | 0 — 3.6 makes it normal termination, not an error |
+| §6.7.5.7's bare `halt` | 0 — 3.6 makes it normal termination, not an error |
+| `halt(n)` — an extension, §5 | `n` |
 | a run-time error (Annex D, a failed range check, a trap) | 1, with a message on standard error |
 
-**A program has no way to choose.** `halt` takes no parameter in either
-standard and there is no other control procedure, so a Pascal program that
-wants to report failure to whatever invoked it cannot. The consequence is
-visible in this repository's own compiler: `pascalc` writes its diagnostics and
-**exits 0 even when it rejects the program**, where `pascalc-s0` exits 1. What
-it does instead is write **no IR at all**, so a build rule depending on the
-`.ll` still fails. Inventing a status-returning `halt` was declined for the
-reason §5 gives for every extension here: one not taken from
-ISO/IEC 10206:1991's own spelling is not added.
+**A conforming program has no way to choose**, `halt` taking no parameter in
+either standard and there being no other control procedure. `halt(n)` is this
+processor's extension for exactly that reason — see §5, and ADR-0084 for why
+the rule against inventing extensions does not reach a dimension neither
+standard describes. It is what lets `pascalc` exit 1 for a program it rejects,
+as `pascalc-s0` does.
 
 ## 3. Errors not reported
 
@@ -239,7 +237,18 @@ excluded from the clause because they *require* it.
 ## 5. Extensions
 
 Clause 5.1 g) requires extensions to be described as *extensions to Pascal as
-specified by ISO/IEC 7185*. There is one.
+specified by ISO/IEC 7185*. There are two.
+
+**`halt` takes an optional integer argument, the exit status**, where
+§6.7.5.7 gives it no parameters. `halt` alone exits 0, as it always did;
+`halt(n)` exits with `n`. Neither standard models a process exit status at all,
+so there was no spelling to take from either — and without one a Pascal program
+cannot tell whatever invoked it that it failed, which a compiler written in
+Pascal has to be able to do. No conforming program's meaning changes: `halt(1)`
+was a compile-time error until this landed, so no valid program contains it, and
+every path that reached `halt` before still exits 0. Under `--std=iso7185`
+nothing changes, that standard having no `halt`. ADR-0084;
+`tests/extended/halt_status.pas`.
 
 **An identifier may contain an underscore**, where §6.1.3 makes an identifier
 `letter { letter | digit }`. It is how this project spells a name that would

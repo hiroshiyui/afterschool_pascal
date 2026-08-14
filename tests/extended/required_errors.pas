@@ -18,8 +18,13 @@ begin
   c := succ(red, 1, 2);
 
   { §6.4.2.2 d) makes maxchar a *value*, not a variable. }
-  { §6.7.5.7's halt takes nothing. }
-  halt(1);
+  { §6.7.5.7's halt takes no parameters. `halt(1)` is this processor's one
+    language extension -- an exit status, because neither standard models one
+    and a Pascal program otherwise cannot report failure (ADR-0084) -- so it is
+    accepted, and the boundary moved rather than disappearing: at most one
+    argument, and it must be an integer. }
+  halt(1, 2);
+  halt(1.0);
 
   r := 0.0;
   s := [];

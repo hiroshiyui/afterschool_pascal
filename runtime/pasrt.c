@@ -1153,9 +1153,14 @@ void pas_bind(void *v, const char *name, int len) {
  * the files those blocks declared are closed here instead — the same
  * obligation ADR-0032's non-local goto discharges, and through the same list,
  * because "still open" and "abandoned" are the same set once nothing further
- * will run. 3.6's normal termination is a zero exit status; a halt is not an
- * error. */
-void pas_halt(void) {
+ * will run.
+ *
+ * The status is the *extension* (ADR-0084). §6.7.5.7's halt takes no
+ * parameters and neither standard models a process exit status at all, so a
+ * conforming program reaches this with 0 and cannot tell the difference. What
+ * it buys is a program that can report failure to whatever invoked it, which
+ * a compiler written in Pascal has to be able to do. */
+void pas_halt(int status) {
   /* pas_file_done unlinks as it goes, so this drains the list; the standard
    * files return early from it without being unlinked, which is why the loop
    * takes the head each time and stops when only they remain. */
@@ -1166,7 +1171,7 @@ void pas_halt(void) {
     f = next;
   }
   fflush(NULL);
-  exit(0);
+  exit(status);
 }
 
 void pas_unbind(void *v) {

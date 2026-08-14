@@ -113,8 +113,49 @@ for f in "${files[@]}"; do
   fi
 done
 
+# --- and that it says so when it does not translate something ---------------
+#
+# A compiler that cannot report failure is not usable from a build rule:
+# `pascalc bad.pas && clang bad.ll ...` would run the linker on a file that was
+# never written. ISO/IEC 10206:1991 §6.7.5.7's `halt` takes no parameters and
+# neither standard models an exit status, so this is the one language extension
+# this processor adds for its own sake (ADR-0084) -- and *nothing else checks
+# it*. Removing `halt(1)` from compiler.pas passed all 279 cases, the golden
+# files comparing what a program wrote and never how it stopped.
+cat >"$work/rejected.pas" <<'PAS'
+program Rejected(output);
+begin
+  undeclared := 1
+end.
+PAS
+: >"$work/ir.ll"
+"$pascalc" "$work/rejected.pas" -o "$work/ir.ll" >"$work/rej.txt" 2>&1
+status=$?
+checked=$((checked + 1))
+if [[ $status -eq 0 ]]; then
+  echo "--- rejected: pascalc exited 0 for a program it refused ---" >&2
+  failed=$((failed + 1))
+elif [[ -s $work/ir.ll ]]; then
+  echo "--- rejected: pascalc wrote IR for a program it refused ---" >&2
+  failed=$((failed + 1))
+elif ! grep -q "undeclared identifier" "$work/rej.txt"; then
+  echo "--- rejected: pascalc gave no diagnostic naming the fault ---" >&2
+  cat "$work/rej.txt" >&2
+  failed=$((failed + 1))
+fi
+
+# The other half of the same contract: a successful run must exit 0, or a build
+# rule would stop on every program it compiled.
+"$pascalc" "$root/tests/hello.pas" -o "$work/ir.ll" >/dev/null 2>&1
+status=$?
+checked=$((checked + 1))
+if [[ $status -ne 0 ]]; then
+  echo "--- accepted: pascalc exited $status for a program it translated ---" >&2
+  failed=$((failed + 1))
+fi
+
 if [[ $failed -ne 0 ]]; then
   echo "producttest: $failed of $((checked + failed)) failed" >&2
   exit 1
 fi
-echo "producttest: $checked programs built and run by pascalc"
+echo "producttest: $checked checks passed against the built pascalc"

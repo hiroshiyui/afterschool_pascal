@@ -5706,12 +5706,25 @@ void Sema::checkStdProc(ProcCallStmt *p) {
   // files a block exit would have closed are closed there instead, because a
   // halt skips every epilogue on the way out exactly as a non-local goto skips
   // the ones it jumps past (ADR-0032).
+  //
+  // **The optional status is an extension** (ADR-0084): §6.7.5.7's halt takes
+  // no parameters, so `halt(1)` is not a conforming program and no conforming
+  // program's meaning changes. Neither standard models a process exit status
+  // at all, which is why there is nothing in either to take a spelling from —
+  // and why a Pascal program otherwise has no way to tell whatever invoked it
+  // that it failed. `doc/implementation-defined.md` §5 is where it is stated.
   if (p->name == "halt") {
     p->standard = StdProc::Halt;
-    if (!p->args.empty())
-      diags_.error(p->line, p->col, "'halt' takes no arguments");
+    if (p->args.size() > 1)
+      diags_.error(p->line, p->col,
+                   "'halt' takes at most one argument, the exit status");
     for (auto &a : p->args)
       checkExpr(a.get());
+    if (p->args.size() == 1 && p->args[0]->type &&
+        !p->args[0]->type->isInteger())
+      diags_.error(p->args[0]->line, p->args[0]->col,
+                   "the exit status of 'halt' must be an integer, found " +
+                       p->args[0]->type->name());
     return;
   }
   // §6.7.5.8: `GetTimeStamp(t)` attributes to `t` either the current date and

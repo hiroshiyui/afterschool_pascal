@@ -103,7 +103,12 @@ for f in "${files[@]}"; do
     failed=$((failed + 1))
     continue
   fi
-  if [[ $status -ne 0 ]]; then
+  # 1 is a *rejection*, not a crash: since ADR-0084 the Pascal compiler reports
+  # the outcome the way the C++ one always has, and a large part of this corpus
+  # -- badparse/, badsema/, torture.pas and every tests/*.err case -- is meant
+  # to be rejected. The dumps are what decide whether the two agree about it,
+  # and they are compared below either way. Anything else is a crash.
+  if [[ $status -ne 0 && $status -ne 1 ]]; then
     echo "--- $(basename "$f"): the Pascal $component exited with $status ---" >&2
     cat "$work/pas.err" >&2
     failed=$((failed + 1))

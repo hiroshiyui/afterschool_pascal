@@ -606,7 +606,10 @@ widths     §6.10.3.1 lowers the least field width from one to zero, and each
            FracDigits of zero still writes the point, and a width below a
            string's length truncates it — which ISO 7185 asked for too
 required   maxchar — the largest char; halt — stop the program, closing what
-           is open; card(s) — how many members a set has; succ(x, k) and
+           is open, and halt(n) to stop with exit status n, which is an
+           extension because neither standard models one at all and a
+           Pascal program otherwise cannot report failure;
+           card(s) — how many members a set has; succ(x, k) and
            pred(x, k) — step k places along an ordinal type, in either
            direction; and the operator >< — set symmetric difference. All but
            `><` are required *identifiers*, so a program may declare its own

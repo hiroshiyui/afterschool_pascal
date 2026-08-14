@@ -2059,13 +2059,18 @@ void CodeGen::emitTransfer(ProcCallStmt *s) {
 }
 
 void CodeGen::emitStdProc(ProcCallStmt *s) {
-  // §6.7.5.7's `halt` is the one required procedure that takes no arguments,
-  // so it is answered before the address of the first one is taken. The
-  // runtime closes what is open and stops; nothing here knows which blocks
-  // were abandoned, and it does not need to — the open-file list is the same
-  // one ADR-0032's non-local goto walks, for the same reason.
+  // §6.7.5.7's `halt` takes no *variable*, so it is answered before the
+  // address of a first argument is taken. The runtime closes what is open and
+  // stops; nothing here knows which blocks were abandoned, and it does not
+  // need to — the open-file list is the same one ADR-0032's non-local goto
+  // walks, for the same reason. The optional exit status is the extension
+  // ADR-0084 documents; omitted, it is the 0 a conforming program always gets.
   if (s->standard == StdProc::Halt) {
-    b_.CreateCall(rt("pas_halt", llvm::Type::getVoidTy(ctx_), {}), {});
+    llvm::Value *status =
+        s->args.empty() ? b_.getInt32(0) : emitExpr(s->args[0].get());
+    b_.CreateCall(
+        rt("pas_halt", llvm::Type::getVoidTy(ctx_), {b_.getInt32Ty()}),
+        {status});
     return;
   }
   // ISO 7185 §6.6.5.4's transfer procedures, answered before the first
