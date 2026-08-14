@@ -1709,21 +1709,32 @@ itself and stage 2 equals stage 3. **It is one source file** — ISO 7185 has no
 include mechanism, so each component was merged in as it was ported rather than
 kept as a program of its own.
 
-It takes four program parameters:
-`compiler.pas <source> <ircode> <options> <imports>`.
-The dumps go to standard output; the IR goes to the second file, because it is
-the compiler's *product* rather than a dump and has to be assembled. It is
-written on every run, which is what keeps `difftest.sh` exercising the code
-generator on every file in the corpus even though it compares none of it. The third holds
-one word, the standard to compile for — ISO 7185 gives a program no access to
-its command line beyond its program parameters, and those are files, so there
-is no `--std` flag to take (ADR-0033). The fourth holds §6.13's
-already-translated program-components, **concatenated**, for that same reason:
-the compiler cannot open a file whose name it computes, so it is handed one
-file holding all of them — which costs nothing to define, a sequence of
-program-components being exactly what a source file already is (ADR-0079). It
-is empty for every file in the corpus but the one case that has components, and
-it must still *exist*, because program parameters bind to arguments in order.
+It takes a **command line** — `pascalc [options] file.pas`, with `-o`,
+`--std=`, `--import` (repeatable) and `-h`, the same spellings `pascalc-s0`
+uses (ADR-0083). The dumps go to standard output; the IR goes to the file `-o`
+names, because it is the compiler's *product* rather than a dump and has to be
+assembled. It is written on every run, which is what keeps `difftest.sh`
+exercising the code generator on every file in the corpus even though it
+compares none of it.
+
+**How a Pascal program has a command line at all** is the part worth knowing.
+§6.5.1 makes every program-parameter possess "the bindability that is
+bindable", and §6.7.6.8's NOTE 2 makes `binding(f)` report the binding §6.12
+made *before the program was activated* — so `binding(argk).name` is argument
+*k*. The compiler declares twelve program-parameters, opens none of them, and
+reads their bindings; an unbound one is how the list ends, there being no other
+way to count arguments (ADR-0081). The files it then works on are `bind`-ed to
+names it computed, which is the same clause's other half.
+
+That retires ADR-0033's constraint **for this compiler only**: "ISO 7185 gives
+a program no access to its command line beyond its program parameters, and
+those are files" is still every word true of ISO 7185, and this compiler is
+simply no longer written in it (ADR-0082). Until then the standard arrived in a
+file holding one word and §6.13's components arrived *concatenated* into a
+fifth, because a program that cannot name a file cannot open several — the
+shape ADR-0079 had to defend against the language rather than on its merits.
+Twelve arguments and eight `--import`s are array bounds, and both report rather
+than truncate.
 
 **The first three components are checked against `src/`, not against golden
 files.** `pascalc-s0

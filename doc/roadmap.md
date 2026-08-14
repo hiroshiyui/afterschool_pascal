@@ -1177,34 +1177,28 @@ second is live:
     this project is *for* is the one written in its own language, and the C++
     one is stage 0 and says so.
 
-    What it is not yet is a driver. It is
-    `program Compile(output, source, ircode, options, imports)`: the standard
-    and the already-translated components arrive as *files* because ISO 7185
-    gives a program no command line beyond its program parameters (ADR-0033,
-    ADR-0079), `.ll` is written to the second one, and then it stops.
+    **And it is a driver.** `pascalc [options] file.pas`, with `-o`, `--std=`,
+    `--import` and `-h` — the same spellings `pascalc-s0` uses (ADR-0083).
 
-    **Which is an ISO 7185 constraint, and this compiler stopped being an
-    ISO 7185-only processor at ADR-0033.** An Extended Pascal program **can
-    read its own command line**, and since ADR-0081 this one implements the two
-    clauses that say so: §6.5.1 makes a program-parameter *bindable* whatever
-    its type-denoter says, and §6.7.6.8 NOTE 2 makes `binding` the way to
-    "determine the result of any binding of program-parameters prior to
-    activation of the main program". Each argument is the `name` field of a
-    program-parameter's binding, and §6.7.5.6's `bind` then opens a file whose
-    name the program computed. `tests/extended/bindprogparam.pas`.
+    How a Pascal program has a command line is ADR-0081: §6.5.1 makes every
+    program-parameter bindable and §6.7.6.8's NOTE 2 makes `binding` report the
+    binding §6.12 made before the program started, so `binding(argk).name` is
+    argument *k*. Twelve program-parameters are declared, none is ever opened,
+    and an unbound one is how the list ends. The source, the IR and each
+    imported component are then `bind`-ed to names the compiler computed.
 
-    So what stands between `pascalc` and a command line is no longer the
-    language. It is that **`selfhost/compiler.pas` is an ISO 7185 source** and
-    cannot call `binding` at all: taking flags means compiling it as Extended
-    Pascal, and exactly two of its identifiers collide with that language's
-    word-symbols — `value`, 134 uses, and `bindable`, 2. That is the size of
-    the job, and it is a rename rather than a redesign.
+    Getting there needed ADR-0082 — the source had to be Extended Pascal, only
+    that standard having the two clauses — and it retires ADR-0033's constraint
+    for this compiler alone. The options file is gone and so is the
+    concatenated imports file, which is the one design in this repository that
+    had to be defended against the language rather than on its merits.
 
     What remains genuinely impossible is **spawning the linker**: neither
     standard has process control, and inventing it would be an extension taken
-    from nowhere. So a self-hosted driver reaches `.ll` and stops there — a
-    property of the language rather than a shortfall of this compiler, and the
-    only part of `main.cpp`'s job that does not port.
+    from nowhere. So `pascalc` reaches `.ll` and stops there — a property of the
+    language rather than a shortfall of this compiler, and the only part of
+    `main.cpp`'s job that does not port. Its usage text says so, with the
+    `clang` line a reader needs.
 - **Keep the proofs alive across the port.** ADR-0025 made the decision the
   earlier version of this line asked for: the theorems stay attached to the C++
   model, and the Pascal generator is tied to it by *behaviour* — the golden

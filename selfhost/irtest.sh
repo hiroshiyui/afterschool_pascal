@@ -87,32 +87,25 @@ standard_of() {
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>
 build() {
-  local cc=$1 src=$2 out=$3 rel comp n
+  local cc=$1 src=$2 out=$3 rel comp n std
   rm -f "$work/ir.ll"
-  # The Pascal compiler reads the standard from a file, because ISO 7185 gives
-  # a program no other channel for it (ADR-0033).
-  standard_of "$src" >"$work/options"
-  # ISO/IEC 10206:1991 6.13's already-translated program-components. They reach
-  # the Pascal compiler *concatenated*, as one more program parameter, for the
-  # same reason the standard does: a program has no access to its command line
-  # beyond its parameters, and those are files, so it cannot open one whose
-  # name it computes. Concatenating costs nothing to define, a sequence of
-  # program-components being exactly what a source file already is.
-  #
-  # Each is also translated on its own here, so what is linked is genuinely
-  # several objects and not one -- which is the clause's whole point.
-  : >"$work/imports"
-  local objects=()
+  std=$(standard_of "$src")
+  # ISO/IEC 10206:1991 6.13's already-translated program-components. Each is
+  # named with its own --import, and each is also translated on its own here,
+  # so what is linked is genuinely several objects and not one -- which is the
+  # clause's whole point. They used to reach the Pascal compiler concatenated
+  # into a single program parameter, a program that cannot name a file being
+  # unable to open several; ADR-0081 gave it names.
+  local objects=() imports=()
   n=0
   if [[ -f ${src%.pas}.components ]]; then
     while IFS= read -r rel; do
       [[ -n $rel ]] || continue
       comp="$(dirname "$src")/$rel"
-      cat "$comp" >>"$work/imports"
-      echo >>"$work/imports"
+      imports+=(--import "$comp")
       n=$((n + 1))
       rm -f "$work/comp.ll"
-      timeout 600 "$cc" "$comp" "$work/comp.ll" "$work/options" /dev/null \
+      timeout 600 "$cc" "--std=$std" "$comp" -o "$work/comp.ll" \
           >/dev/null 2>"$work/gen.err" || return 1
       [[ -s $work/comp.ll ]] || return 1
       clang -Wno-override-module -fPIC -c "$work/comp.ll" -o "$work/c$n.o" \
@@ -120,8 +113,8 @@ build() {
       objects+=("$work/c$n.o")
     done <"${src%.pas}.components"
   fi
-  timeout 600 "$cc" "$src" "$work/ir.ll" "$work/options" \
-    "$work/imports" \
+  timeout 600 "$cc" "--std=$std" "$src" -o "$work/ir.ll" \
+    "${imports[@]+"${imports[@]}"}" \
       >/dev/null 2>"$work/gen.err" || return 1
   [[ -s $work/ir.ll ]] || return 1
   clang -Wno-override-module "$work/ir.ll" "${objects[@]+"${objects[@]}"}" \

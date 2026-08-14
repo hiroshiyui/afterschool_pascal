@@ -32,7 +32,8 @@ has that trade in full.
 
 ## Using
 
-`pascalc-s0` is the one with a command line, so it is what the examples use:
+`pascalc-s0` does the most, so it is what the examples use — it optimises,
+emits objects and links:
 
 ```sh
 build/bin/pascalc-s0 hello.pas          # -> ./hello
@@ -45,23 +46,23 @@ build/bin/pascalc-s0 --keep-temps hello.pas  # keep the intermediate .o
 build/bin/pascalc-s0 --help                  # the full option list
 ```
 
-**`pascalc` takes four files and no flags**, which is not an oversight but the
-shape ISO 7185 leaves for a program that wants arguments — a program-parameter
-is a *file*, so the standard to compile for and §6.13's already-translated
-components arrive as files rather than as `--std` and `--import`
-(ADR-0033, ADR-0079):
+**`pascalc` takes the same flags**, and reads them the only way a Pascal
+program can: §6.5.1 makes every program-parameter bindable and §6.7.6.8 makes
+`binding(p).name` the argument it was bound to, so the compiler asks its own
+program-parameters what it was invoked with (ADR-0081, ADR-0083).
 
 ```sh
-echo iso7185 > std.txt
-: > imports.txt                                     # nothing imported
-build/bin/pascalc hello.pas hello.ll std.txt imports.txt
-clang hello.ll build/lib/libpasrt.a -lm -o hello    # pascalc stops at the IR
+build/bin/pascalc hello.pas                          # -> hello.ll
+build/bin/pascalc --std=extended prog.pas -o prog.ll
+build/bin/pascalc prog.pas --import counter.pas -o prog.ll
+clang hello.ll build/lib/libpasrt.a -lm -o hello     # pascalc stops at the IR
 ```
 
 That last line is the one part of a driver's job that does not port: neither
 standard has process control, so a compiler written in Pascal cannot spawn the
 linker. It is a property of the language rather than a shortfall of this
-compiler, and it is why `pascalc-s0` is still what the examples use.
+compiler, and it is why `pascalc-s0` — which also optimises, emits objects and
+links — is still what the examples below use.
 
 ISO/IEC 10206:1991 §6.13 lets a program's components be translated separately.
 A source that declares only modules is one, and it becomes an object; the
@@ -85,9 +86,11 @@ point somewhere else. `pascalc` never links, so it never looks.
 The language is selected per source. `--std=iso7185` is the default and is
 what everything below describes; `--std=extended` is ISO/IEC 10206:1991, which
 is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`,
-…) that a valid ISO 7185 program may use as ordinary identifiers, and this
-compiler's own stage-1 source does. See
+…) that a valid ISO 7185 program may use as ordinary identifiers. See
 [ADR-0033](doc/adr/0033-extended-pascal-is-a-second-language-behind-std.md).
+`selfhost/compiler.pas` used to be the example of that and is now written in
+Extended Pascal itself ([ADR-0082](doc/adr/0082-the-stage-1-compiler-is-extended-pascal.md)),
+because only that standard lets a program read its own command line.
 
 ## What the compiler accepts today, with `--std=iso7185`
 

@@ -13,8 +13,7 @@
 # and the stage-2/stage-3 fixed point already cover.
 #
 # It is deliberately small for that reason. Two programs, one per standard,
-# because the standard reaches the Pascal compiler through a file rather than a
-# flag (ADR-0033) and that file is part of the interface being checked.
+# because --std is part of the interface being checked.
 set -u
 
 pascalc=${1:-}
@@ -74,15 +73,11 @@ for f in "${files[@]}"; do
     continue
   fi
 
-  # The four program parameters, in order: source, IR, the standard, and
-  # §6.13's already-translated components. The last two are files rather than
-  # flags because ISO 7185 gives a program no command line beyond its program
-  # parameters (ADR-0033, ADR-0079), and the fourth must exist even when it is
-  # empty, parameters binding to arguments in order.
-  standard_of "$f" >"$work/options"
-  : >"$work/imports"
-  if ! timeout 120 "$pascalc" "$f" "$work/ir.ll" "$work/options" \
-       "$work/imports" >/dev/null 2>"$work/gen.err"; then
+  # A command line, since ADR-0081: the compiler reads its own arguments
+  # through the binding of its program-parameters, so --std and -o are flags
+  # like any other compiler's rather than the files they used to be.
+  if ! timeout 120 "$pascalc" "--std=$(standard_of "$f")" "$f" \
+       -o "$work/ir.ll" >/dev/null 2>"$work/gen.err"; then
     echo "--- $name: pascalc did not translate it ---" >&2
     cat "$work/gen.err" >&2
     failed=$((failed + 1))

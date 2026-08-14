@@ -1,4 +1,6 @@
-program Compile(output, source, ircode, options, imports);
+program Compile(output,
+                arg1, arg2, arg3, arg4, arg5, arg6,
+                arg7, arg8, arg9, arg10, arg11, arg12);
 
 { The self-hosted compiler: stage 1, components 1 to 3 -- the lexer, the parser
   and the AST, and Sema.
@@ -52,6 +54,10 @@ const
     pointer and a length and only the pointer needs a call. }
   dateLen = 10;
   timeLen = 8;
+  { How many --import arguments one translation may be given. Bounded because
+    an array is, and generous because 6.13 puts no limit on how many
+    program-components a program-block has. }
+  maxImports = 8;
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
@@ -99,6 +105,14 @@ const
 
 type
   strLen = 0..strMax;
+  { A file name or a command-line argument. 6.7.3.1 makes a parameter's type a
+    type-*name*, so the production needs a name of its own before it can be
+    passed; the schema-name `string` would take any capacity but then the
+    variables holding one would each need their own descriptor. }
+  nameStr = string(strMax);
+  { A bindable text, named because 6.7.3.1 wants a type-name here too and
+    because 6.4.1 makes `bindable` part of the type-denoter (ADR-0052). }
+  bindText = bindable text;
   str = record
     len: strLen;
     ch: packed array [1..strMax] of char
@@ -1112,7 +1126,29 @@ type
 
 
 var
-  source: text;
+  { The command line. ISO 7185 gives a program no access to it beyond its
+    program-parameters, and those are files -- which is what made this compiler
+    take four positional files and no flags for as long as it was an ISO 7185
+    source (ADR-0033).
+
+    ISO/IEC 10206:1991 gives a way. 6.5.1 makes every program-parameter possess
+    "the bindability that is bindable" whatever its type-denoter says, and
+    6.7.6.8's NOTE 2 makes binding(f) report "the result of any binding of
+    program-parameters prior to activation of the main program" -- so the
+    *name* each of these was bound to is the corresponding argument, and none of
+    them is ever opened. An unbound one is how the list ends, there being no
+    other way to count them (ADR-0081, ADR-0082).
+
+    Twelve is the limit on how many arguments this compiler can be given, and
+    it is a real limit rather than a notional one: a program-parameter list is
+    written out, so the count is fixed when the compiler is compiled. }
+  arg1, arg2, arg3, arg4, arg5, arg6: text;
+  arg7, arg8, arg9, arg10, arg11, arg12: text;
+
+  { The source being translated, bound to the name the command line gave rather
+    than to an argument position (6.7.5.6). `bindable` is needed here and not
+    on the twelve above, which are program-parameters and so bindable already. }
+  source: bindText;
 
   { --- the lexer's lookahead window; win[0] is the character it looks at --- }
   win: array [0..2] of char;
@@ -1223,20 +1259,17 @@ var
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
   { --- CodeGen --- }
-  ircode: text;             { the second program parameter: where the IR goes }
-  { The third program parameter: one word, the standard to compile for.
-    ISO 7185 gives a program no access to its command line beyond its program
-    parameters, and those are *files* -- so the stage-1 compiler cannot take a
-    `--std` flag the way the C++ driver does, and reads it from a file instead.
-    The language deciding the interface is the same constraint that made
-    ADR-0024 put the whole compiler in one source file. }
-  options: text;
-  { The fourth program parameter: 6.13's already-translated
-    program-components, concatenated. Read for the interfaces their
-    module-headings export and for nothing else -- no code of theirs is
-    emitted here. An empty file means this component imports nothing, which is
-    every source in the corpus. }
-  imports: text;
+  ircode: bindText;         { where the IR goes: the name -o gave }
+  { 6.13's already-translated program-components. Each --import names one, and
+    this is bound to them in turn -- where the four-file interface took them
+    concatenated into a single program parameter, because a program that cannot
+    name a file cannot open several (ADR-0079). It can now. }
+  imports: bindText;
+  { The command line, once read. }
+  srcName, outName: nameStr;
+  importName: array [1..maxImports] of nameStr;
+  importCount: integer;
+  argsOk: boolean;
   langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   curBlock: integer;             { the block being filled, for a phi's label }
@@ -1260,7 +1293,7 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
-  complexType, canonStringType, bindingType, timeStampType: typePtr;
+  complexType, canonStringType, bindingTy, timeStampType: typePtr;
   emptySetType: typePtr;
   { 6.4.3.3.3's required schema `string`. Kept because a type produced from it
     has to be interned by (schema, tuple) -- 6.4.8 -- and BindingType's `name`
@@ -1825,17 +1858,143 @@ end;
   `extended` is ISO 7185, which is the default and what an empty file selects
   -- the file is written by the test harness rather than typed, so there is no
   spelling to get wrong and no branch here that no run reaches. }
-procedure ReadOptions;
-var word: str; c: char;
+{ Argument k of the command line, or false when there is no such argument.
+
+  6.7.6.8's binding(f) answers for a program-parameter the same question it
+  answers for a file the program bound itself: whether it is bound, and to what.
+  6.12 binds the program-parameters before the program is activated, so `bound`
+  is false exactly for the positions no argument reached -- which is what makes
+  a *variable* number of arguments readable from a *fixed* parameter list.
+
+  The case statement is the whole cost of the approach: a program-parameter is a
+  name, not a subscript, so there is no way to say "the k'th". Twelve arms. }
+function Arg(k: integer; var s: nameStr): boolean;
+var b: BindingType;
 begin
-  StrClear(word);
-  reset(options);
-  while (not eof(options)) and (not eoln(options)) do begin
-    read(options, c);
-    if c <> ' ' then StrAppend(word, c)
+  b.bound := false;
+  case k of
+    1:  b := binding(arg1);
+    2:  b := binding(arg2);
+    3:  b := binding(arg3);
+    4:  b := binding(arg4);
+    5:  b := binding(arg5);
+    6:  b := binding(arg6);
+    7:  b := binding(arg7);
+    8:  b := binding(arg8);
+    9:  b := binding(arg9);
+    10: b := binding(arg10);
+    11: b := binding(arg11);
+    12: b := binding(arg12);
+    otherwise
   end;
-  if StrIsLit(word, 'extended ') then langStd := stdExtended
-  else langStd := stdIso7185
+  if b.bound then s := b.name else s := '';
+  Arg := b.bound
+end;
+
+procedure Usage;
+begin
+  writeln('Afterschool Pascal -- the compiler, written in Afterschool Pascal');
+  writeln('usage: pascalc [options] file.pas');
+  writeln('  -o <file>       where to write the LLVM IR');
+  writeln('                  (the source name with .ll, by default)');
+  writeln('  --std=<name>    iso7185 (default) or extended');
+  writeln('  --import <f>    a program-component already translated; its');
+  writeln('                  module-headings supply this one''s interfaces');
+  writeln('  -h, --help      write this list and stop');
+  writeln;
+  writeln('It writes the token, AST and Sema dumps to standard output and the');
+  writeln('IR to the file -o names. It does not link: no standard Pascal');
+  writeln('program can start another, so assembling what it wrote is a');
+  writeln('separate step --');
+  writeln;
+  writeln('  clang out.ll libpasrt.a -lm -o prog')
+end;
+
+{ The command line, read once at the start.
+
+  Every flag is an exact word and every value is the argument after it, which
+  is `pascalc-s0`'s shape and is what lets the whole of this be equality on
+  strings. EQ rather than `=` because 6.8.3.5's operators pad the shorter
+  operand with spaces and 6.7.6.7's EQ compares the lengths too: `-o` and
+  `-o ` are not the same flag. }
+procedure ParseArgs;
+var k: integer; a: nameStr; dot: integer;
+begin
+  langStd := stdIso7185;
+  srcName := '';
+  outName := '';
+  importCount := 0;
+  argsOk := true;
+  k := 1;
+  while Arg(k, a) and argsOk do begin
+    if EQ(a, '--std=extended') then langStd := stdExtended
+    else if EQ(a, '--std=iso7185') then langStd := stdIso7185
+    else if EQ(a, '-h') or EQ(a, '--help') then begin
+      Usage;
+      argsOk := false;
+      srcName := ''
+    end
+    else if EQ(a, '-o') then begin
+      k := k + 1;
+      if not Arg(k, outName) then begin
+        writeln('pascalc: -o needs a file name');
+        argsOk := false
+      end
+    end
+    else if EQ(a, '--import') then begin
+      k := k + 1;
+      if importCount >= maxImports then begin
+        writeln('pascalc: more than ', maxImports:1, ' --import arguments');
+        argsOk := false
+      end
+      else if not Arg(k, a) then begin
+        writeln('pascalc: --import needs a file name');
+        argsOk := false
+      end
+      else begin
+        importCount := importCount + 1;
+        importName[importCount] := a
+      end
+    end
+    else if length(a) > 0 then
+      if a[1] = '-' then begin
+        writeln('pascalc: unknown option ', a);
+        argsOk := false
+      end
+      else if length(srcName) > 0 then begin
+        writeln('pascalc: more than one input file given');
+        argsOk := false
+      end
+      else srcName := a;
+    k := k + 1
+  end;
+
+  if argsOk and (length(srcName) = 0) then begin
+    Usage;
+    argsOk := false
+  end;
+
+  { The default output is the source with its extension replaced, which is the
+    one piece of name arithmetic here. A source with no dot gets .ll appended
+    rather than being refused. }
+  if argsOk and (length(outName) = 0) then begin
+    dot := length(srcName);
+    while (dot > 0) and (srcName[dot] <> '.') do dot := dot - 1;
+    if dot > 0 then outName := substr(srcName, 1, dot) + 'll'
+    else outName := srcName + '.ll'
+  end
+end;
+
+{ Bind a file variable to a name the command line gave. 6.7.5.6's bind is the
+  only way a program names a file while it is running, and this compiler could
+  not have been written without it: every name below was computed. }
+procedure BindTo(var f: bindText; var n: nameStr);
+var b: BindingType;
+begin
+  b := binding(f);
+  if b.bound then unbind(f);
+  b.name := n;
+  bind(f, b)
 end;
 
 procedure WriteKwWord(i: integer);
@@ -10641,7 +10800,7 @@ begin
         value is built in a hidden frame slot and the call *is* that
         designator, which is what makes `b := binding(f)` need no case. }
       if c^.clBuiltin = biBinding then begin
-        c^.ntype := bindingType;
+        c^.ntype := bindingTy;
         if n <> 1 then begin
           ErrorAt(c^.line, c^.col);
           writeln('''binding'' takes one bindable variable')
@@ -10675,7 +10834,7 @@ begin
                   end;
             if not bad then begin
               InternBindingName(currentProc^.frameCount, at2, len2);
-              c^.clSlot := AddHiddenVar(at2, len2, skVar, bindingType,
+              c^.clSlot := AddHiddenVar(at2, len2, skVar, bindingTy,
                                         currentProc)
             end
           end
@@ -12463,7 +12622,7 @@ begin
               end;
         if p^.pcStd = spBind then
           if a^.next^.ntype <> nil then
-            if a^.next^.ntype <> bindingType then begin
+            if a^.next^.ntype <> bindingTy then begin
               ErrorAt(a^.next^.line, a^.next^.col);
               write('the second argument of ''bind'' is a BindingType, ',
                     'found ');
@@ -14909,8 +15068,8 @@ begin
     cap^.stype := intType;
     AppendSym(s^.discs, s^.discTail, cap);
 
-    bindingType := NewType(tyRecord);
-    bindingType^.isPacked := true;
+    bindingTy := NewType(tyRecord);
+    bindingTy^.isPacked := true;
     nameType := StringOfCapacity(bindNameCap);
     new(fld);
     InternWord('name     ', fld^.at, fld^.len);
@@ -14921,8 +15080,8 @@ begin
     fld^.col := 0;
     fld^.initValue := nil;
     fld^.next := nil;
-    bindingType^.fields := fld;
-    bindingType^.fieldTail := fld;
+    bindingTy^.fields := fld;
+    bindingTy^.fieldTail := fld;
     new(fld);
     InternWord('bound    ', fld^.at, fld^.len);
     fld^.ftype := boolType;
@@ -14932,17 +15091,17 @@ begin
     fld^.col := 0;
     fld^.initValue := nil;
     fld^.next := nil;
-    bindingType^.fieldTail^.next := fld;
-    bindingType^.fieldTail := fld;
+    bindingTy^.fieldTail^.next := fld;
+    bindingTy^.fieldTail := fld;
     InternWide('bindingtype     ', at, len);
     s := Declare(at, len, skType, 0, 0);
-    s^.stype := bindingType;
+    s^.stype := bindingTy;
     { The name is folded for lookup, as every identifier is, but a diagnostic
       spells it the way 6.4.3.4 does -- so the alias is interned separately in
       the standard's own capitals. Nothing ever looks that copy up. }
     InternWide('BindingType     ', at, len);
-    bindingType^.aliasAt := at;
-    bindingType^.aliasLen := len;
+    bindingTy^.aliasAt := at;
+    bindingTy^.aliasLen := len;
 
     { 6.4.3.4: "There shall be a record-type designated packed and denoted by
       the required type-identifier `TimeStamp`. For each of the required
@@ -23849,6 +24008,7 @@ end;
 procedure RunCodeGen;
 var m: nodePtr;
 begin
+  BindTo(ircode, outName);
   rewrite(ircode);
   { The layout LlSize and LlAlign model, stated so the assembler uses the same
     one. Without it LLVM falls back to its own defaults, and the two disagree
@@ -23969,16 +24129,20 @@ end;
   What is left behind is the module list, which ParseProgram then clears for
   the real source, so it is saved across and put back in front afterwards. }
 procedure ReadTranslatedComponents(var head, tail: nodePtr; var count: integer);
-var m: nodePtr;
+var m: nodePtr; i: integer;
 begin
   head := nil;
   tail := nil;
   count := 0;
   { Nothing to take in is the ordinary case -- every source in the corpus is a
-    whole program-block -- and an empty file is not a program-component
-    sequence, so it must not be parsed as one. }
-  reset(imports);
-  if not eof(imports) then begin
+    whole program-block. Each --import names one component and is bound in
+    turn, where the four-file interface took them concatenated because a
+    program that cannot name a file cannot open several (ADR-0079, ADR-0081).
+    The modules accumulate across them: two components may each supply an
+    interface this one imports. }
+  for i := 1 to importCount do begin
+    BindTo(imports, importName[i]);
+    reset(imports);
     readingImports := true;
     Tokenize;
     if not errorSeen then begin
@@ -23989,9 +24153,10 @@ begin
           writeln('an already-translated component may not declare a program')
         end
         else begin
-          head := progModules;
-          tail := progModuleTail;
-          m := head;
+          if head = nil then head := progModules
+          else tail^.next := progModules;
+          if progModules <> nil then tail := progModuleTail;
+          m := progModules;
           while m <> nil do begin
             m^.mdElsewhere := true;
             count := count + 1;
@@ -24055,7 +24220,7 @@ begin
 end;
 
 begin
-  ReadOptions;
+  ParseArgs;
   InstallKeywords;
   poolLen := 0;
   tokCount := 0;
@@ -24088,5 +24253,12 @@ begin
   for stringIndex := 1 to strMax do
     stringCache[stringIndex] := nil;
 
-  DumpEverything
+  { A command line that did not parse has already said why, or has written the
+    option list because -h asked for it. Either way there is nothing to
+    translate, and Pascal has no early return -- so the whole of the work is
+    inside the test. }
+  if argsOk then begin
+    BindTo(source, srcName);
+    DumpEverything
+  end
 end.

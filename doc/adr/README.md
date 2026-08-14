@@ -91,3 +91,4 @@ the alternatives that were rejected and why.
 | [0080](0080-the-sweep-that-found-nothing.md) | The sweep that found nothing | Accepted |
 | [0081](0081-a-program-can-read-its-own-command-line.md) | A program can read its own command line | Accepted |
 | [0082](0082-the-stage-1-compiler-is-extended-pascal.md) | The stage-1 compiler is written in Extended Pascal | Accepted |
+| [0083](0083-the-compiler-has-a-command-line.md) | The compiler has a command line | Accepted |
