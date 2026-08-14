@@ -6,7 +6,7 @@ try.
 
 ```sh
 pip install z3-solver
-python3 verify/verify.py --pascalc build/bin/pascalc-s0  # both halves
+python3 verify/verify.py                                 # both halves
 python3 verify/verify.py --prove                         # proofs only
 python3 verify/verify.py --crosscheck                    # the real binary only
 ```
@@ -20,12 +20,12 @@ A proof is only as good as the honesty about its scope, so:
 | | |
 | --- | --- |
 | `iso.py` | the specification — ISO 7185 semantics as **properties** (a range, a divisibility, a uniqueness), never as a second implementation |
-| `lowering.py` | a **model** of what `codegen.cpp` emits, written to mirror it instruction for instruction |
+| `lowering.py` | a **model** of what the code generator emits, written to mirror it instruction for instruction |
 | `rules.py` | the catalogue pairing the two, with the status of each claim |
 | `verify.py` | the runner: proves each rule, then cross-checks the real compiler |
 
 The specification says *what must be true of an answer* rather than computing
-one. That is deliberate: if `iso.py` calculated `mod` the way `codegen.cpp` does,
+one. That is deliberate: if `iso.py` calculated `mod` the way the compiler does,
 proving them equal would prove nothing, and the circularity would be invisible.
 Instead the solver is asked whether any input makes the lowering fall outside the
 range ISO requires, or break the divisibility ISO requires.
@@ -33,7 +33,8 @@ range ISO requires, or break the divisibility ISO requires.
 ## The gap this approach has, and what closes it
 
 **The proofs reason about `lowering.py`, not about the compiler.** If the model
-drifts from `codegen.cpp`, the proofs keep passing and start being about nothing.
+drifts from `selfhost/compiler.pas`, the proofs keep passing and start being
+about nothing.
 A stale proof is worse than no proof, because it reassures.
 
 `--crosscheck` is the countermeasure: it compiles and runs a real Pascal program
@@ -70,7 +71,7 @@ the same change that fixes the gap.
 
 ## Adding a rule
 
-1. Model the lowering in `lowering.py`, naming the `codegen.cpp` construct.
+1. Model the lowering in `lowering.py`, naming the construct it emits.
 2. State the ISO property in `iso.py` — a property, not a computation.
 3. Add a `Rule` to `rules.py` with its ISO clause, its source reference, and its
    status. Start at `FULL` width; move to `BOUNDED` only when the solver times

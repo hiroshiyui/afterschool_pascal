@@ -1,9 +1,25 @@
-"""What `src/codegen.cpp` actually emits, expressed in Z3.
+"""What the compiler actually emits, expressed in Z3.
 
-This file is a *mirror* of the compiler, and the whole approach depends on it
-staying one. Every function here names the `codegen.cpp` construct it models;
-when that construct changes, this changes with it, and `verify.py --crosscheck`
-is what catches the two drifting apart.
+This file is a *mirror* of the code generator, and the whole approach depends on
+it staying one. When a lowering changes, this changes with it, and
+`verify.py --crosscheck` is what catches the two drifting apart.
+
+The generator it mirrors is `selfhost/compiler.pas`, which since ADR-0085 is the
+only one. It was written against `src/codegen.cpp` and re-pointed when stage 0
+was retired; the model needed no change, because what it describes is the
+*emitted instruction sequence* and not any compiler's internals.
+
+**The tie to the compiler is behavioural, and that is weaker than it was.**
+While both compilers existed the model could be read against C++ that a person
+could check line by line. It cannot be read against the Pascal emitter that way:
+the two backends were measured emitting different instruction counts for the
+same program -- LLVM's IRBuilder constant-folds a getelementptr where a textual
+emitter writes one out -- so "the same lowering" was never a claim about the
+text. What holds the model to the compiler is `--crosscheck`, which runs the
+adversarial point of every rule at -O0 and -O2, and the 66 `trap_*.pas` goldens,
+which pin exactly the conditions these rules say the checks fire on. A change
+that altered a lowering without failing either would leave this file describing
+a compiler that no longer exists, and nothing would say so.
 
 Representations follow `CodeGen::llvmType`:
 

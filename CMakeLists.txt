@@ -77,16 +77,26 @@ add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
 # ---- Tests ----
 enable_testing()
 
+# Every case is compiled by `pascalc` -- the Pascal compiler -- through
+# tools/pascalcc, which adds the linking half a Pascal program cannot do. The
+# environment is how pascalcc is told which build tree to use, so a fresh
+# configure under another name (build-rel/) drives its own compiler and not
+# whatever happens to be in build/.
+set(APASCAL_TEST_ENV
+    PASCALC=${APASCAL_PASCALC}
+    AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib)
+
 # Formal verification of the lowering rules (verify/). Skips rather than fails
 # when z3 is absent, so a checkout without it still builds and tests green.
 find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_FOUND)
   add_test(NAME verify-lowering
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/verify/verify.py
-                   --pascalc $<TARGET_FILE:pascalc-s0>)
+                   --pascalc ${CMAKE_SOURCE_DIR}/tools/pascalcc)
   set_tests_properties(verify-lowering PROPERTIES
                        SKIP_RETURN_CODE 77
-                       TIMEOUT 900)
+                       TIMEOUT 900
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
 endif()
 
 # Stage 1, checked against stage 0: each Pascal component must produce the same
@@ -124,7 +134,8 @@ foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                   $<TARGET_FILE:pascalc-s0> ${t} iso7185)
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} iso7185)
+  set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()
 
 # ISO/IEC 10206:1991 cases. They live apart because the standard is a property
@@ -136,5 +147,6 @@ foreach(t ${APASCAL_EXTENDED_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                   $<TARGET_FILE:pascalc-s0> ${t} extended)
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} extended)
+  set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()

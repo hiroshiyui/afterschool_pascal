@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Compile and link a Pascal program with `pascalc`.
+#
+#   pascalcc [options] file.pas
+#
+#     -o <file>       the executable, object or IR to write
+#     -c              write an object file and stop
+#     --emit-llvm,-S  write the IR and stop
+#     -O0 .. -O3      optimisation level, handed to clang (default -O2)
+#     --std=<name>    iso7185 (default) or extended
+#     --import <f>    a program-component already translated
+#     <file>.o        an object to link, from a component compiled with -c
+#
+# `pascalc` writes LLVM IR and stops there, permanently: neither ISO 7185 nor
+# ISO/IEC 10206:1991 has process control, so a compiler written in Pascal
+# cannot start an assembler. That is a property of the language rather than a
+# shortfall, and this is where the missing half lives -- everything below the
+# IR is `clang`, and this script is the seam.
+#
+# It exists because four harnesses need that seam and would otherwise each grow
+# their own: tests/run_test.sh, selfhost/irtest.sh, selfhost/producttest.sh and
+# verify/verify.py. Giving them one command line shaped like the C++ driver's
+# is what let them keep their logic when stage 0 was retired.
+#
+# Everything it does not pass on it refuses. A driver that silently ignored an
+# option would make a harness look like it had tested something it had not.
+set -u
+
+self=$(cd "$(dirname "$0")" && pwd)
+root=$(dirname "$self")
+
+# Where the compiler and the runtime are. Both are overridable so a build tree
+# with another name, or an installed copy, can be driven by the same script.
+pascalc=${PASCALC:-$root/build/bin/pascalc}
+runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-$root/build/lib}
+
+die() { echo "pascalcc: $*" >&2; exit 1; }
+
+std=iso7185
+out=
+mode=link          # link | object | ir
+opt=-O2
+source_file=
+imports=()
+objects=()
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -o)            [[ $# -ge 2 ]] || die "-o needs a file name"; out=$2; shift 2 ;;
+    -c)            mode=object; shift ;;
+    --emit-llvm|-S) mode=ir; shift ;;
+    -O0|-O1|-O2|-O3) opt=$1; shift ;;
+    --std=*)       std=${1#--std=}; shift ;;
+    --import)      [[ $# -ge 2 ]] || die "--import needs a file name"
+                   imports+=(--import "$2"); shift 2 ;;
+    --help|-h)     sed -n '2,20p' "$0"; exit 0 ;;
+    -*)            die "unknown option '$1'" ;;
+    *.o)           objects+=("$1"); shift ;;
+    *)             [[ -z $source_file ]] || die "more than one input file given"
+                   source_file=$1; shift ;;
+  esac
+done
+
+[[ -n $source_file ]] || die "no input file"
+[[ -x $pascalc ]] || die "$pascalc is not executable -- was it built?"
+
+case $std in
+  iso7185|extended) ;;
+  *) die "unknown standard '$std'; expected iso7185 or extended" ;;
+esac
+
+base=$(basename "${source_file%.pas}")
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# The IR first. `pascalc` writes its diagnostics to standard *output* -- no
+# standard Pascal program has a second stream -- so they are passed through to
+# this script's stderr, which is where a caller expects a compiler's complaints
+# and where the golden .err files are compared from.
+ir=$work/$base.ll
+if ! "$pascalc" "--std=$std" "$source_file" "${imports[@]+"${imports[@]}"}" \
+     -o "$ir" >"$work/diag.txt" 2>&1; then
+  cat "$work/diag.txt" >&2
+  exit 1
+fi
+cat "$work/diag.txt" >&2
+[[ -s $ir ]] || die "$pascalc exited 0 and wrote no IR"
+
+if [[ $mode == ir ]]; then
+  cp "$ir" "${out:-$base.ll}"
+  exit 0
+fi
+
+# -Wno-override-module: the IR names its own target triple, which clang would
+# otherwise warn about when it agrees with its own.
+if [[ $mode == object ]]; then
+  exec clang -Wno-override-module "$opt" -fPIC -c "$ir" -o "${out:-$base.o}"
+fi
+
+exec clang -Wno-override-module "$opt" "$ir" \
+     "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm \
+     -o "${out:-$base}"
