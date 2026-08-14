@@ -10263,7 +10263,16 @@ end;
   program block declares (6.10); `input` and `output` are the standard files,
   one possessing a file-type is bound to a command-line argument in the order
   written, and one that does not is bound to nothing. }
-procedure BindProgramParameters;
+{ `report` is whether every declaration of the program-block has been seen.
+  ISO/IEC 10206:1991 6.2.1 lets a variable-declaration-part follow a procedure,
+  so this may have to run twice: once before the first body, to confer 6.5.1's
+  bindability on what is declared by then -- a body may ask binding(f) of a
+  program-parameter, and only one declared before the body can be named in it --
+  and once at the end, where the complete set is known and the diagnostics
+  belong. The binding itself is idempotent, so the second pass simply repeats
+  it. In the fixed ISO 7185 order there is nothing after the declarations and
+  one reporting pass does everything, exactly as before. }
+procedure BindProgramParameters(report: boolean);
 var p, q: nodePtr; s: symPtr; argIndex: integer;
 begin
   { 6.10: "The identifiers contained by the program-parameter-list shall be
@@ -10272,6 +10281,7 @@ begin
     variable-declaration-part having already made them, so `Declare`'s own
     check never sees them. Reported once per repeat, against the later one,
     which is the occurrence a reader would delete. }
+  if report then begin
   p := progParams;
   while p <> nil do begin
     q := progParams;
@@ -10285,19 +10295,26 @@ begin
       q := q^.next
     end;
     p := p^.next
+  end
   end;
 
   { argv[0] is the program itself, so the first file parameter is argv[1]. }
   argIndex := 1;
   p := progParams;
   while p <> nil do begin
-    s := Lookup(p^.dnAt, p^.dnLen);
+    { The pre-pass asks LookupRaw: a name it does not find yet may still be
+      declared further down, and recording an applied occurrence for it would
+      make 6.2.2.9 refuse that declaration. }
+    if report then s := Lookup(p^.dnAt, p^.dnLen)
+    else s := LookupRaw(p^.dnAt, p^.dnLen);
     if (s = nil) or not ((s^.kind = skVar) or (s^.kind = skParam) or
                          (s^.kind = skVarParam)) then begin
-      ErrorAt(p^.line, p^.col);
-      write('the program parameter ''');
-      WritePool(p^.dnAt, p^.dnLen);
-      writeln(''' is not declared as a variable in the program block')
+      if report then begin
+        ErrorAt(p^.line, p^.col);
+        write('the program parameter ''');
+        WritePool(p^.dnAt, p^.dnLen);
+        writeln(''' is not declared as a variable in the program block')
+      end
     end
     { `input` and `output` are bound by the header itself. The C++ writes this
       as a `continue`, which Pascal has no equivalent of; an empty statement
@@ -15524,20 +15541,34 @@ end;
   ISO 7185 there is at most one of each part in the fixed order, so the merge is
   provably the order this always used.
 
+  The procedure-and-function-declaration-part is merged in the same way, and
+  that is what makes 6.2.2.9 reach a body: every variable used to be declared
+  before any body was checked, so `procedure p; begin writeln(zz) end; var zz:
+  integer` looked well formed. A heading is declared and its body checked where
+  the source puts them, so a variable written after the procedure is not yet
+  declared when the body is walked -- the same consequence ADR-0069 already
+  produced for `var v: t` before `type t`.
+
+  `procs` is nil where the caller declares the headings itself: a module-heading
+  has no bodies, so nothing there can observe the interleaving.
+
   Shared by a block and by both halves of a module, which have the same parts
   and differ only in what may surround them. }
-procedure CheckDeclarations(b: nodePtr; owner: symPtr);
-var c, t, g: nodePtr; which, line, col: integer; inTypes, done: boolean;
-    savedInTypePart: boolean;
+procedure CheckDeclarations(b: nodePtr; owner: symPtr; procs: nodePtr);
+var c, t, g, p: nodePtr; which, line, col: integer; inTypes, done: boolean;
+    savedInTypePart, bound: boolean;
 begin
   c := b^.blConsts;
   t := b^.blTypes;
   g := b^.blVars;
+  p := procs;
+  bound := owner <> programSym;   { only the program has parameters to bind }
   savedInTypePart := inTypePart;
   inTypePart := false;
   inTypes := false;
   done := false;
-  while ((c <> nil) or (t <> nil) or (g <> nil)) and not done do begin
+  while ((c <> nil) or (t <> nil) or (g <> nil) or (p <> nil)) and not done do
+  begin
     { Which of the three heads was written first. A variable group is placed by
       its first name, the only position it has. }
     which := -1;
@@ -15557,8 +15588,14 @@ begin
     if g <> nil then
       if g^.grNames <> nil then
         if (which < 0) or
-           Earlier(g^.grNames^.line, g^.grNames^.col, line, col) then
+           Earlier(g^.grNames^.line, g^.grNames^.col, line, col) then begin
           which := 2;
+          line := g^.grNames^.line;
+          col := g^.grNames^.col
+        end;
+    if p <> nil then
+      if (which < 0) or Earlier(p^.line, p^.col, line, col) then
+        which := 3;
 
     { 6.4.4's forward-referenced domain is completed at the end of *its*
       type-definition-part, so a run of type definitions ending is what triggers
@@ -15568,6 +15605,11 @@ begin
       ResolvePendingPointers;
       inTypes := false
     end;
+    { A procedure-declaration ends the type-definition-part before it, and its
+      body is checked in a scope of its own -- so anything still pending has to
+      be resolved in *this* block's scope now, or the nested block's own drain
+      would look the name up in the wrong one (ADR-0091). }
+    if which = 3 then ResolvePendingPointers;
     if which = 0 then begin
       CheckConstDecl(c, owner);
       c := c^.next
@@ -15581,6 +15623,33 @@ begin
     else if which = 2 then begin
       CheckVarDecl(g, owner);
       g := g^.next
+    end
+    else if which = 3 then begin
+      { 6.10's parameters are bound before the first body is checked: a body may
+        ask binding(f) of one, and 6.5.1 confers bindability on the declaration
+        rather than on a position. Only a parameter whose defining-point is
+        already here can be named in the body -- that is 6.2.2.9 -- so what is
+        declared by now is enough, and the diagnostics wait for the rest. }
+      if not bound then begin
+        if (c = nil) and (t = nil) and (g = nil) then begin
+          BindProgramParameters(true);
+          bound := true
+        end
+        { At *every* procedure-declaration with declarations still to come,
+          not once: a program-parameter written between two procedures is not
+          there to bind when the first is reached, and the body of the second
+          may still ask binding() of it. The call is idempotent over the
+          binding -- it recomputes the same argument positions from whatever
+          is declared by now -- so repeating it costs a walk and settles the
+          parameters that have appeared since. }
+        else
+          BindProgramParameters(false)
+      end;
+      { Headings one at a time, in order, so that a procedure cannot call one
+        declared after it without `forward`. }
+      DeclareProcHeading(p, owner);
+      if p^.pdBody <> nil then CheckProcBody(p);
+      p := p^.next
     end
     else
       done := true   { a variable group with no names; the parser makes none }
@@ -15596,7 +15665,11 @@ begin
     silence, and a legal self-referential schema in a var part was refused
     until an unrelated type definition was added after it. }
   ResolvePendingPointers;
-  inTypePart := savedInTypePart
+  inTypePart := savedInTypePart;
+  { Every declaration of the program-block has been seen now, which is what
+    6.10's checks need: a parameter may be declared after the procedure that
+    made the pre-pass necessary. }
+  if not bound then BindProgramParameters(true)
 end;
 
 { 6.11.2's export-part. The interface it names is a region of its own, so
@@ -15865,24 +15938,10 @@ begin
   { 6.2.1 puts the import-part at the head of every block. }
   CheckImports(b^.blImports, owner);
   CheckLabelPart(b, owner);
-  CheckDeclarations(b, owner);
-
-  { The variables exist now, so the program header's parameters can be matched
-    against them -- before the statements, so a use of an unbound file is
-    reported after the reason it is unbound rather than before it. }
-  if owner = programSym then
-    BindProgramParameters;
-
-  { Headings first, then bodies. Declaring every heading in this block before
-    checking any body would let a procedure call one declared after it without
-    `forward`, so headings are declared one at a time, in order, and each body
-    is checked as it is reached. }
-  d := b^.blProcs;
-  while d <> nil do begin
-    DeclareProcHeading(d, owner);
-    if d^.pdBody <> nil then CheckProcBody(d);
-    d := d^.next
-  end;
+  { The procedure-and-function-declaration-part is walked *inside* this, merged
+    with the other parts by source position, and the program header's parameters
+    are bound there too -- both for 6.2.2.9's sake. }
+  CheckDeclarations(b, owner, b^.blProcs);
 
   d := b^.blProcs;
   while d <> nil do begin
@@ -16244,7 +16303,7 @@ begin
   end;
 
   CheckImports(m^.mdHeading^.blImports, info^.sym);
-  CheckDeclarations(m^.mdHeading, info^.sym);
+  CheckDeclarations(m^.mdHeading, info^.sym, nil);
   d := m^.mdHeading^.blProcs;
   while d <> nil do begin
     DeclareProcHeading(d, info^.sym);
@@ -16305,14 +16364,8 @@ begin
   scopeDepth := info^.savedDepth;
 
   CheckImports(m^.mdBlock^.blImports, info^.sym);
-  CheckDeclarations(m^.mdBlock, info^.sym);
+  CheckDeclarations(m^.mdBlock, info^.sym, m^.mdBlock^.blProcs);
 
-  d := m^.mdBlock^.blProcs;
-  while d <> nil do begin
-    DeclareProcHeading(d, info^.sym);
-    if d^.pdBody <> nil then CheckProcBody(d);
-    d := d^.next
-  end;
   d := m^.mdBlock^.blProcs;
   while d <> nil do begin
     if d^.pdSym <> nil then

@@ -1,8 +1,8 @@
 <source>:11:8: error: unknown variable 'nosuch' in 'type of'
 <source>:14:8: error: 'type of' names a variable or a parameter, and 'point' is not one
 <source>:16:8: error: 'type of' names a variable or a parameter, and 'maxint' is not one
-<source>:45:17: error: an array index must be an ordinal type, found point
 <source>:20:24: error: 'type of x' names the very parameter it is the type of
 <source>:20:24: error: unknown variable 'x' in 'type of'
 <source>:29:46: error: unknown variable 'y' in 'type of'
 <source>:38:41: error: 'type of v' would need the discriminants that arrive with 'v', which is not supported
+<source>:45:17: error: an array index must be an ordinal type, found point

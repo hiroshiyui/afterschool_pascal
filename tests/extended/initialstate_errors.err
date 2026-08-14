@@ -4,6 +4,6 @@
 <source>:26:19: error: a file variable has no initial value
 <source>:31:35: error: a field of a variant part cannot have an initial value, because which variant exists is not settled here
 <source>:34:36: error: cannot give record m end an initial value of type integer
+<source>:45:22: error: the value of an initial-state specifier must not depend on a variable
 <source>:11:51: error: a schema's body cannot carry an initial-state specifier: every discriminant tuple produces its own type, and the value would have to be attributed once for each
 <source>:50:8: error: no type is produced from schema 'vec' with these discriminants
-<source>:45:22: error: the value of an initial-state specifier must not depend on a variable
