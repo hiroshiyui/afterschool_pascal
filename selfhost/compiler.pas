@@ -1280,6 +1280,21 @@ var
     *wrong* -- which are different questions, because -h answers the first with
     no and the second with no as well. }
   argsOk, argsBad: boolean;
+  { Which stages to dump, if any. Dumping is *off* by default: a compiler is
+    quiet when it succeeds. It was on unconditionally for as long as there were
+    two compilers to compare, because the dumps are what selfhost/difftest.sh
+    diffed and there was no second binary to select a mode on (ADR-0025) -- and
+    that reason expired with stage 0.
+
+    `dumping` decides the diagnostic format as well as the sections. Inside a
+    dump a diagnostic is `line col error message`, which is the format the two
+    compilers agreed on; outside one it is `file:line:col: error: message`,
+    which is what a person reads and what tests/*.err holds. }
+  dumpTokensOpt, dumpAstOpt, dumpSemaOpt, dumpAllOpt, dumping: boolean;
+  { The file a diagnostic belongs to: the source, or whichever already-
+    translated component is being read (6.13). Only the human-readable format
+    names it -- inside a dump the file is the one the harness passed. }
+  curFile: nameStr;
   langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   curBlock: integer;             { the block being filled, for a phi's label }
@@ -1505,6 +1520,15 @@ end;
 
 { ------------------------------------------------------------- diagnostics }
 
+{ Begin a diagnostic. Every one in this compiler starts here, which is what
+  makes the format a single decision.
+
+  Two formats, and the mode picks: inside a dump it is `line col error msg`,
+  the shape the dumps have always had; outside one it is
+  `file:line:col: error: msg`, which is what a person reads and what the
+  tests/*.err goldens hold. Both go to `output` -- neither standard gives a
+  program a second stream, and adding one would be a second invented extension
+  for the sake of tidiness (ADR-0084 is the first and it earned its place). }
 procedure ErrorAt(l, c: integer);
 begin
   errorSeen := true;
@@ -1512,7 +1536,8 @@ begin
     whether *its* resolution reported anything, so that the tuple that chose
     it can be named too (6.4.7's domain). }
   errorCount := errorCount + 1;
-  write(l:1, ' ', c:1, ' error ')
+  if dumping then write(l:1, ' ', c:1, ' error ')
+  else write(curFile, ':', l:1, ':', c:1, ': error: ')
 end;
 
 { -------------------------------------------------------------- the pool -- }
@@ -1911,6 +1936,10 @@ begin
   writeln('  --std=<name>    iso7185 (default) or extended');
   writeln('  --import <f>    a program-component already translated; its');
   writeln('                  module-headings supply this one''s interfaces');
+  writeln('  --dump-tokens   write the token stream and stop');
+  writeln('  --dump-ast      write the parse tree and stop');
+  writeln('  --dump-sema     write the tree Sema annotated and stop');
+  writeln('  --dump-all      write all three, with section headers');
   writeln('  --version       write the version and stop');
   writeln('  -h, --help      write this list and stop');
   writeln;
@@ -1938,9 +1967,22 @@ begin
   importCount := 0;
   argsOk := true;
   argsBad := false;
+  dumpTokensOpt := false;
+  dumpAstOpt := false;
+  dumpSemaOpt := false;
+  dumpAllOpt := false;
   k := 1;
   while Arg(k, a) and argsOk do begin
-    if EQ(a, '--std=extended') then langStd := stdExtended
+    if EQ(a, '--dump-tokens') then dumpTokensOpt := true
+    else if EQ(a, '--dump-ast') then dumpAstOpt := true
+    else if EQ(a, '--dump-sema') then dumpSemaOpt := true
+    else if EQ(a, '--dump-all') then begin
+      dumpAllOpt := true;
+      dumpTokensOpt := true;
+      dumpAstOpt := true;
+      dumpSemaOpt := true
+    end
+    else if EQ(a, '--std=extended') then langStd := stdExtended
     else if EQ(a, '--std=iso7185') then langStd := stdIso7185
     else if EQ(a, '-h') or EQ(a, '--help') then begin
       Usage;
@@ -1997,6 +2039,8 @@ begin
     argsOk := false;
     argsBad := true
   end;
+
+  dumping := dumpTokensOpt or dumpAstOpt or dumpSemaOpt or dumpAllOpt;
 
   { The default output is the source with its extension replaced, which is the
     one piece of name arithmetic here. A source with no dot gets .ll appended
@@ -24193,6 +24237,7 @@ begin
     The modules accumulate across them: two components may each supply an
     interface this one imports. }
   for i := 1 to importCount do begin
+    curFile := importName[i];
     BindTo(imports, importName[i]);
     reset(imports);
     readingImports := true;
@@ -24217,6 +24262,7 @@ begin
         end
     end;
     readingImports := false;
+    curFile := srcName;
     tokCount := 0;
     pos := 1;
     depth := 0;
@@ -24224,51 +24270,75 @@ begin
   end
 end;
 
-procedure DumpEverything;
-var earlier, earlierTail: nodePtr; earlierCount: integer;
+{ The pipeline. What it *writes* depends on which dumps were asked for; what
+  it *runs* is decided the same way, because a dump flag stops at the stage it
+  names -- `--dump-tokens` does not parse, which is how the C++ driver behaves
+  and the only way a dump of a stage can be taken of a program the next stage
+  would reject.
+
+  `--dump-all` is the exception and runs everything, including the code
+  generator: that is the form selfhost/difftest.sh compares, and generating the
+  IR on every file in the corpus is free coverage of the backend. }
+procedure Compile;
+var earlier, earlierTail: nodePtr; earlierCount: integer; go: boolean;
 begin
   ReadTranslatedComponents(earlier, earlierTail, earlierCount);
 
-  writeln('=== tokens');
+  { --- lex ---------------------------------------------------------------- }
+  if dumpAllOpt then writeln('=== tokens');
   Tokenize;
-  DumpTokens;
+  if dumpTokensOpt then DumpTokens;
+  { A dump flag stops at the stage it names, which is how the C++ driver
+    behaves -- and the only way a stage can be dumped for a program the next
+    stage would reject. Pascal has no early return, so "stop" is a flag every
+    later stage is guarded by. `--dump-all` is not a stop: it is the whole
+    pipeline with every section shown. }
+  go := not (dumpTokensOpt and not dumpAllOpt);
 
-  writeln('=== ast');
-  { The C++ driver stops after lexing when the lexer found anything wrong, so a
-    f with a bad token is compared on its diagnostics and not on a tree
-    built from tokens that were never valid. }
-  if not errorSeen then begin
-    ParseProgram;
-    { In front of this component's own modules, because 6.2.2.9 puts a
-      module-heading before everything that imports its interface and a
-      separately translated one is earlier still. }
-    if earlier <> nil then begin
-      earlierTail^.next := progModules;
-      progModules := earlier;
-      if progModuleTail = nil then progModuleTail := earlierTail;
-      progMainIndex := progMainIndex + earlierCount
+  { --- parse -------------------------------------------------------------- }
+  if go then begin
+    if dumpAllOpt then writeln('=== ast');
+    { Lexing is where this stops when the lexer found anything wrong, so a
+      source with a bad token is reported on its diagnostics and not on a tree
+      built from tokens that were never valid. }
+    if not errorSeen then begin
+      ParseProgram;
+      { In front of this component's own modules, because 6.2.2.9 puts a
+        module-heading before everything that imports its interface and a
+        separately translated one is earlier still. }
+      if earlier <> nil then begin
+        earlierTail^.next := progModules;
+        progModules := earlier;
+        if progModuleTail = nil then progModuleTail := earlierTail;
+        progMainIndex := progMainIndex + earlierCount
+      end;
+      if (not errorSeen) and (dumpAstOpt or dumpAllOpt) then begin
+        annotate := false;
+        DumpProgram
+      end
     end;
-    if not errorSeen then begin
-      annotate := false;
-      DumpProgram
-    end
+    go := not (dumpAstOpt and not dumpAllOpt)
   end;
 
-  writeln('=== sema');
-  if not errorSeen then begin
-    RunSema;
+  { --- check -------------------------------------------------------------- }
+  if go then begin
+    if dumpAllOpt then writeln('=== sema');
     if not errorSeen then begin
-      annotate := true;
-      DumpProgram
-    end
+      RunSema;
+      if (not errorSeen) and (dumpSemaOpt or dumpAllOpt) then begin
+        annotate := true;
+        DumpProgram
+      end
+    end;
+    go := not (dumpSemaOpt and not dumpAllOpt)
   end;
 
+  { --- emit --------------------------------------------------------------- }
   { The IR is the compiler's *product*, not a dump, so it goes to a file of its
     own rather than to a fourth section: it has to be assembled and linked, and
     two backends' assembler text cannot be diffed the way three stages of a
-    tree can (ADR-0025). It is still written on every run, which is what keeps
-    the differential test exercising it on every file in the corpus. }
-  if not errorSeen then RunCodeGen
+    tree can (ADR-0025). }
+  if go and not errorSeen then RunCodeGen
 end;
 
 begin
@@ -24286,6 +24356,7 @@ begin
   msgOut := false;
   StrClear(msgBuf);
   readingImports := false;
+  curFile := '';
   scopeTop := nil;
   scopeDepth := 0;
   pendingHead := nil;
@@ -24310,8 +24381,9 @@ begin
     translate, and Pascal has no early return -- so the whole of the work is
     inside the test. }
   if argsOk then begin
+    curFile := srcName;
     BindTo(source, srcName);
-    DumpEverything
+    Compile
   end;
 
   { Report the outcome to whatever invoked this. A conforming Pascal program

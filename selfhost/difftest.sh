@@ -94,8 +94,12 @@ for f in "${files[@]}"; do
   # here compares it -- selfhost/irtest.sh is what runs it -- but generating
   # it on every file is free coverage: a code generator that crashes or
   # loops on a corpus file fails here, on the file that did it.
-  timeout 120 "$work/stage1" "--std=$standard" "$f" -o "$work/ir.ll" \
-      >"$work/pas.txt" 2>"$work/pas.err"
+  # --dump-all on both sides: the dumps are what this compares, and they are
+  # opt-in on the Pascal side since it grew a compiler's ordinary quiet-on-
+  # success behaviour. The IR is still written, which is what keeps the code
+  # generator exercised on every file here even though none of it is compared.
+  timeout 120 "$work/stage1" "--std=$standard" --dump-all "$f" \
+    -o "$work/ir.ll" >"$work/pas.txt" 2>"$work/pas.err"
   status=$?
   checked=$((checked + 1))
   if [[ $status -eq 124 ]]; then
