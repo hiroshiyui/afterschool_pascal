@@ -5928,10 +5928,36 @@ begin
 end;
 
 { A `packed array [1..n] of char` -- the type ISO 7185 6.4.3.2 gives a string
-  literal, and the only structured type with its own operators. }
+  literal, and the only structured type with its own operators.
+
+  6.4.3.2 designates a string-type by four properties at once: "Any type
+  designated packed and denoted by an array-type having as its index-type a
+  denotation of a subrange-type specifying a smallest value of 1 and a largest
+  value of greater than 1, and having as its component-type a denotation of
+  the char-type, shall be designated a string-type." ISO/IEC 10206:1991
+  6.4.3.3.2 says the same of its fixed-string-type with one clause dropped --
+  the first bound must be nonvarying, contain no discriminant-identifier and
+  denote 1, and *nothing* is required of the largest value -- so
+  `packed array [1..1] of char` is a fixed-string-type there and is not a
+  string-type here. That one clause is the whole of what --std decides.
+
+  Two of these are easy to get wrong. IsChar is not what the component asks:
+  it sees through a subrange to its host, and `packed array [1..4] of 'A'..'Z'`
+  denotes no char-type at all. And the smallest *value* is not the smallest
+  ordinal -- ord(blue) is 1 for an index-type of `blue..green`, so the
+  index-type has to be an integer one before its lower bound means anything. }
 function IsCharArray(t: typePtr): boolean;
+var ok: boolean;
 begin
-  IsCharArray := IsArray(t) and t^.isPacked and IsChar(t^.elem)
+  ok := IsArray(t) and t^.isPacked;
+  if ok then ok := (t^.elem <> nil) and (t^.elem^.kind = tyChar);
+  if ok then
+    ok := IsInteger(t^.indexType) and (t^.loDisc = nil) and (t^.lo = 1);
+  { A schema may bound an array above (ADR-0040) and never below, so the
+    largest value is a number wherever this clause applies. }
+  if ok and (langStd = stdIso7185) then
+    ok := (t^.hiDisc = nil) and (t^.hi > 1);
+  IsCharArray := ok
 end;
 
 { 6.4.3.3.1: "A string-type shall be a fixed-string-type or a
@@ -6649,8 +6675,10 @@ function IsGeneric(t: typePtr): boolean; forward;
 
 { ISO 7185 6.4.5 makes two structured types the same only when one type
   identifier denotes both, so they compare by identity here. String types are
-  the documented exception: packed char arrays of equal length are compatible
-  however they were written. }
+  the documented exception: two packed char arrays of equal length are
+  compatible whatever names they were given -- but only where both are
+  string-types, which 6.4.3.2 decides by four properties at once and
+  IsCharArray asks. }
 function Assignable(toT, fromT: typePtr): boolean;
 var tb, fb: typePtr;
 begin

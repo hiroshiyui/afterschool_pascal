@@ -347,13 +347,6 @@ the program's definition should win — as it already does for a required
 block** in the way §6.2.2 describes; the occurrence that would show it is a
 pointer domain, which §6.2.2.9 exempts.
 
-**A character-string is not compatible with every packed array of char**
-(§6.1.7, §6.4.3.2): its index-type shall be a subrange of integer with a lower
-bound of 1, and its component-type shall be char rather than a subrange of one.
-This compiler compares packed char arrays by length alone (ADR-0017), which is
-the standard's own exception to name equivalence, and does not also check the
-bounds or the component-type.
-
 **A separator is required between a number and a word-symbol** (§6.1.8). The
 lexer's extended-digit and number scanning is maximal (ADR-0036) but stops at a
 letter for a decimal literal, so `i := 10div 2` lexes as three tokens rather
@@ -395,11 +388,6 @@ which §6.8.2.2 makes a recursive activation, so it is not a variable-access.
 **§6.8.1's rule about where a `goto` may land is enforced by the prefix test**
 (ADR-0029), which admits a jump between the branches of an if-statement; the
 clause does not.
-
-**An array written whole to a textfile shall be a packed array [1..n] of
-char** (§6.9.3.6). This compiler accepts any string-type by the same
-length-based rule §6.1.7 gives, so an array whose lower bound is not 1 is
-written rather than refused.
 
 One more of that category's programs is recorded in §3 instead, being an error
 rather than a syntax or type rule: assignment to a sibling function's identifier

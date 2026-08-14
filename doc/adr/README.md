@@ -98,3 +98,4 @@ the alternatives that were rejected and why.
 | [0087](0087-a-required-procedure-may-be-declared-away.md) | A required procedure may be declared away | Accepted |
 | [0088](0088-a-defining-point-precedes-its-applied-occurrences.md) | A defining-point precedes its applied occurrences | Accepted |
 | [0089](0089-a-for-control-variable-may-not-be-threatened.md) | A `for` control-variable may not be threatened | Accepted |
+| [0090](0090-a-string-type-is-four-properties-at-once.md) | A string-type is four properties at once | Accepted |
