@@ -4,7 +4,14 @@ Date: 2026-08-10
 
 ## Status
 
-Accepted
+Superseded by [ADR-0085](0085-stage-0-is-retired.md).
+
+The decision here was "checked against the C++ lexer, **not** against a golden
+file", and retiring stage 0 left no C++ lexer to check against. The lexer is now
+pinned by goldens — including `selfhost/torture.pas`, which this record
+introduced and which survived as a case of its own. What that trade costs is
+argued in ADR-0085; the reasoning below is why it was worth not making for as
+long as it could be avoided.
 
 ## Context
 

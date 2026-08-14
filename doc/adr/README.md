@@ -30,7 +30,7 @@ the alternatives that were rejected and why.
 | [0019](0019-pointers-and-the-only-forward-reference.md) | Pointers, and the language's only forward reference | Accepted |
 | [0020](0020-the-parser-bounds-tree-depth.md) | The parser bounds tree depth, for every walker at once | Accepted |
 | [0021](0021-text-files-keep-the-buffer-variable.md) | Text files keep the buffer variable, and program parameters name them | Accepted |
-| [0022](0022-the-lexer-port-is-checked-differentially.md) | The lexer port is checked differentially, not by golden output | Accepted |
+| [0022](0022-the-lexer-port-is-checked-differentially.md) | The lexer port is checked differentially, not by golden output | Superseded by [0085](0085-stage-0-is-retired.md) |
 | [0023](0023-the-ast-is-a-variant-record-and-a-sibling-list.md) | The AST is a variant record and a sibling list, and the parser port is checked the same way | Accepted |
 | [0024](0024-the-stage-1-compiler-becomes-one-source-file.md) | The stage-1 compiler becomes one source file, and Sema is checked on the tree it annotates | Accepted |
 | [0025](0025-the-code-generator-is-checked-by-running-it.md) | The code generator is checked by running it, and the bootstrap closes | Accepted |
