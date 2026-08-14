@@ -103,3 +103,4 @@ the alternatives that were rejected and why.
 | [0092](0092-three-rules-about-a-parameter-list.md) | Three rules about a parameter list | Accepted |
 | [0093](0093-a-set-constructor-has-not-chosen-a-packing.md) | A set-constructor has not chosen a packing | Accepted |
 | [0094](0094-a-goto-lands-in-a-sequence-and-a-result-belongs-to-its-block.md) | A goto lands in a sequence, and a result belongs to its block | Accepted |
+| [0095](0095-the-string-pool-was-the-ceiling.md) | The string pool was the ceiling | Accepted |

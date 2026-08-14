@@ -84,7 +84,7 @@ const
     Pascal in the tree, and the one that has to keep fitting. Both are frame
     storage, so they are the fixed-buffer limits ADR-0012 predicted -- and both
     fail loudly rather than silently truncating. }
-  poolMax  = 440000; { characters of identifier and literal text }
+  poolMax  = 700000; { characters of identifier and literal text }
   tokMax   = 140000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
   { Blocks nest inside that limit and never beyond it: every one is reached
