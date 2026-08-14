@@ -5,6 +5,10 @@ build/
 build-*/
 *.o
 *.ll
+# ...except the seed, which is a committed compiler and the one thing that lets
+# this repository build itself (ADR-0085). It was silently skipped by `git add`
+# for one commit, and a clean clone could not be built.
+!seed/*.ll
 *.s
 __pycache__/
 *.pyc
