@@ -15,3 +15,12 @@ __pycache__/
 
 # The BSI validation suite is fetched, never committed (tests/bsi/fetch.sh).
 tests/bsi/suite/
+
+# The standards themselves, likewise. The online copies carry "Do not modify
+# this document. Do not include this document in another software product", so
+# they are read here and never redistributed; tests/spec/clauses/ holds the
+# clause numbers and headings a citation needs and no text at all.
+#
+# This rule was in .git/info/exclude, which is not committed -- so the whole
+# protection lived on one machine and no clone had it.
+doc/vendor/

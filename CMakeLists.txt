@@ -146,6 +146,24 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
+# The specification suite: scenarios written against clauses of the two
+# standards, in a subset of Gherkin (ADR-0105). Every other oracle here starts
+# from the compiler and asks whether it still does what it did; this one starts
+# from a clause. One case per feature file, so a failure names the clause area.
+#
+# It drives tools/pascalcc rather than pascalc, because a scenario that says
+# "and run" needs a linked program.
+file(GLOB APASCAL_SPEC_FEATURES ${CMAKE_SOURCE_DIR}/tests/spec/features/*.feature)
+if(Python3_FOUND)
+  foreach(f ${APASCAL_SPEC_FEATURES})
+    get_filename_component(name ${f} NAME_WE)
+    add_test(NAME spec-${name}
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/spec/run.py
+                     --pascalcc ${CMAKE_SOURCE_DIR}/tools/pascalcc ${f})
+    set_tests_properties(spec-${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
+  endforeach()
+endif()
+
 # The --dump flags. Their walkers were entered by no case at all until
 # procedure-coverage found it: four documented flags and nothing checking they
 # did not crash. A dump case compares what the *compiler* writes to standard
