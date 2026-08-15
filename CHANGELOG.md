@@ -11,6 +11,38 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## [Unreleased]
+
+Nothing a program can use: the language, the diagnostics and the command line
+are unchanged. What changed is that coverage is a number rather than an
+argument, and the first measurement of it found four documented flags nothing
+tested.
+
+### Added
+
+- **`procedure-coverage`**, a `ctest` case that measures how much of the
+  compiler the corpus enters — 554 of 556 procedures — and fails when a
+  procedure stops being entered *or* when one argued unreachable starts being.
+  It instruments the emitted IR with clang's SanitizerCoverage, which is
+  possible only because the backend is textual (ADR-0103).
+- **`tests/dumps/`**, five cases and a harness for `--dump-tokens`,
+  `--dump-ast`, `--dump-sema` and `--dump-all`. No case in the corpus had ever
+  passed any of them, so nothing checked they did not crash.
+- **`tests/extended/schema_simple_body.pas`**, for a schema whose body is a
+  simple type (`counter(limit: integer) = integer`). Every schema in the corpus
+  produced an array or a record, leaving the one place a type is copied rather
+  than interned exercised by nothing.
+- `pascalc -h` is now checked to document every flag `ParseArgs` accepts —
+  derived from the parser rather than compared against a golden, since the two
+  agreeing is the thing worth knowing. It was a manual release-checklist step.
+- Each function in the emitted IR carries a comment naming the Pascal procedure
+  it came from and the line it starts on, which is what makes `-S` output
+  readable and what the coverage mapping reads.
+
+### Removed
+
+- `StrIsLit`, which had no callers.
+
 ## [1.1.1] — 2026-08-15
 
 A patch release: one crash fixed, and the rest is what looks for the next one.

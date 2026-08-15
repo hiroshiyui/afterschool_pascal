@@ -51,6 +51,11 @@ for least: the corpus compiles at `-O2` and should go on doing so, but a defect
 in *storage* is invisible there, LLVM being free to hoist an alloca whose
 address does not escape — see ADR-0102 and the two `-O0` cases it added.
 
+`tests/dumps/` is a corpus apart, with its own harness and its own sidecars
+(`foo.dump`, `foo.flags`) — the `--dump` flags write to standard output, so
+what a case there compares is what the *compiler* wrote and not what a program
+did (ADR-0103).
+
 `tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009), and
 finds `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and
 `PASCALC` override where it looks for each, which is how CMake points the tests
@@ -414,8 +419,23 @@ disproportionate to the change they guard.
 The one sentence it rests on: **a green suite is not evidence; evidence is a
 named case that fails without the change.** This repository has been green over
 a `verify/` model describing a compiler that had been replaced, over a stack
-leak the default `-O2` optimised out of sight, and over 32 diagnostics nothing
-named.
+leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
+named, and over four documented `--dump` flags no case ever passed.
+
+Three gates make that mechanical, and each fails in **both** directions — a
+claim that stops being true is as loud as one that was never true, which is
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to three catalogues:
+
+| Gate | Catalogue | Asks |
+| --- | --- | --- |
+| `diagnostic-coverage` | `tests/checks/unreachable_diagnostics.txt` | is every message named by a golden? |
+| `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
+| `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen change without `verify/`? |
+
+The first two are `ctest` cases, so they run before a push rather than
+reporting after one. **What `procedure-coverage` cannot see** is a branch — a
+procedure entered once counts — and what the shell harnesses drive, since it
+enumerates the corpus by glob; both are rows in `doc/sop.md` §7.
 
 `.claude/skills/change-lifecycle/` is the same procedure in the order an agent
 executes it, and dispatches to the specialist skills — `code-review`,
@@ -1943,6 +1963,18 @@ language. It is a strong oracle, not a replacement for the one v1.0.0 gave up.
   section reports what its own stage found and shows its result only when
   nothing was found — a stage that failed has nothing to show, and the stages
   after it do not run.
+  - **`=== tokens` belongs to `--dump-all`**, which has three sections and so
+    needs them separated; a single-stage flag writes its one section bare. A
+    test comment asserted the opposite and was believed until the golden was
+    taken (ADR-0103).
+  - **`tests/dumps/` is their corpus, and it exists because they had none.**
+    Until ADR-0103 measured procedure coverage, no case in the tree passed any
+    `--dump` flag — thirty-one walker procedures entered by nothing, four
+    documented flags, and no check that they did not crash. A dump case
+    compares what the *compiler* writes to standard output, so it needs its own
+    harness (`tests/dumps/run.sh`): every case under `tests/` compares what the
+    compiled *program* writes. Sidecars are `name.dump` (the golden),
+    `name.flags` (the flag, `--dump-all` by default) and `name.std`.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`

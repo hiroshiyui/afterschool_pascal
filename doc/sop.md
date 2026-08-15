@@ -161,8 +161,8 @@ Rules learned the hard way:
 
 ## 5. Counting, not assuming
 
-Coverage here is argued, not measured — there is no coverage tool, `gcov`
-having gone with `src/`. So the argument has to be concrete.
+Coverage here is measured at one granularity and argued at every other. The
+argument has to be concrete.
 
 - **Name the case that reaches each new branch.** "Covered by the suite" is not
   a claim; `tests/foo.pas:12 takes the else` is.
@@ -197,6 +197,43 @@ The filter that separates diagnostics from `--help` text lives inside the
 script, and it is part of the tool rather than a convenience: without it the
 sweep reports thirty lines of usage text as thirty gaps, and a check that cries
 wolf gets ignored — which is worse than no check.
+
+**Procedure coverage is measured** (ADR-0103), and it is the one number this
+document could previously only argue for. `procedure-coverage` is a `ctest`
+case; the tool is `tests/checks/coverage.py`:
+
+```sh
+python3 tests/checks/coverage.py --report   # the breakdown, always exit 0
+python3 tests/checks/coverage.py            # the gate
+```
+
+It builds an instrumented copy of the compiler with clang's SanitizerCoverage —
+an **IR** pass, so it applies to the textual `.ll` this compiler emits with no
+front end and no debug info — runs the whole corpus through it, and maps the
+addresses reached back to the procedures `selfhost/compiler.pas` declares. That
+mapping exists only because `EmitProcBody` writes each procedure's spelling and
+line as a comment beside its `define`; the LLVM name is a counter following the
+order CodeGen walked the tree, and cannot be recovered from the source.
+
+Same rule as the diagnostics: it fails in **both directions**, against
+`tests/checks/uncovered_procedures.txt`, and an entry there is an argument
+rather than an exemption.
+
+**Know what it does not measure.** Two things, both deliberate:
+
+- **A procedure entered once counts as covered.** The `case` arm nobody reaches
+  is invisible. Basic-block coverage was measured and rejected as the headline:
+  8,304 of the compiler's own 26,655 blocks are the bounds-check and nil-check
+  failure paths CodeGen emits for its own subscripts, which a correct run never
+  enters *by design*, so a third of the denominator is unreachable and the
+  percentage means nothing. The honest denominator is lines a human wrote, and
+  reaching it needs the compiler to emit line information — a feature, not a
+  script.
+- **It sees the sources, not the harnesses.** The corpus is enumerated by glob,
+  so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is
+  invisible to it. A procedure only those reach is reported uncovered and must
+  be listed — which is how `Usage` and `Version` were found, and why the script
+  runs `-h` and `--version` itself now.
 
 ## 6. Cadence
 
@@ -235,7 +272,8 @@ from it when one is closed.
 | `-O0` and `-O2` are each run, never **compared** | the whole corpus now runs at both, so a level-specific crash or wrong answer fails — but a case where the two *differ* and both look plausible passes twice. Only `--crosscheck` compares them, over its own generated program | §6 |
 | `-O1` and `-O3` are unexercised | a defect at an intermediate level has nothing looking for it. Judged not worth a third and fourth sweep | — |
 | BSI corpus is fixed | it does not grow with the language, and covers ISO 7185 only | ADR-0086 |
-| No coverage measurement | §5 is an argument, not a number. Diagnostics are the exception and are now enforced | — |
+| Coverage is measured per **procedure**, not per branch | a procedure entered once counts, so the `case` arm nobody reaches is invisible. Block coverage cannot replace it — a third of the compiler's own blocks are trap paths unreachable by design — and the honest denominator needs the compiler to emit line information | ADR-0103 |
+| `coverage.py` sees the sources, not the harnesses | it enumerates the corpus by glob, so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is invisible; a procedure only those reach reports as uncovered | ADR-0103 |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |
 | One rule of §6.4.3.3 enforced only for a pointer domain | a program can break it and be accepted | ADR-0101 |
 
@@ -248,6 +286,11 @@ only grows is a register nobody trusts:
 - *Four diagnostics counted but unenforced.* `tests/checks/unreachable_diagnostics.txt`
   is now a catalogue with an argument per entry, and the `diagnostic-coverage`
   case fails in both directions (§5).
+- *"§5 is an argument, not a number."* There is a number now —
+  `procedure-coverage`, 554 of 556 — and the two rows above are what is left of
+  that gap rather than the gap itself. Measuring it found the dumps: four
+  documented flags whose thirty-one walker procedures were entered by no case
+  at all, so nothing checked they did not crash (ADR-0103).
 
 ## 8. What this document is not
 

@@ -111,3 +111,4 @@ the alternatives that were rejected and why.
 | [0100](0100-a-procedure-declaration-is-a-declaration.md) | A procedure declaration is a declaration | Accepted |
 | [0101](0101-what-an-independent-reading-found.md) | What an independent reading found | Accepted |
 | [0102](0102-an-alloca-belongs-where-it-is-claimed-once.md) | An alloca belongs where it is claimed once | Accepted |
+| [0103](0103-coverage-is-an-ir-pass-and-a-comment.md) | Coverage is an IR pass and a comment | Accepted |
