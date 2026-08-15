@@ -136,6 +136,18 @@ def corpus(root):
     # case enters these procedures.
     jobs.append((None, ["--version"]))
     jobs.append((None, ["-h"]))
+
+    # The command-line error paths, for the same reason and with the same
+    # caveat: producttest.sh is what asserts each message and its non-zero
+    # exit. They are here because nothing else drives them --
+    # diagnostic_coverage.py filters `pascalc: ` messages out as driver output,
+    # so the gate that counts messages is blind to these by construction, and
+    # line_coverage.py is what found the branches unrun (ADR-0104).
+    hello = str(root / "tests" / "hello.pas")
+    jobs.append((None, ["--no-such-flag", hello]))
+    jobs.append((None, [hello, "-o"]))       # -o with nothing after it
+    jobs.append((None, [hello, "--import"]))  # --import with nothing after it
+    jobs.append((None, [hello, str(root / "tests" / "arith.pas")]))
     return jobs
 
 
@@ -235,12 +247,12 @@ def sweep(exe, jobs, work):
         env = dict(os.environ, PASCOV_OUT=str(out))
         if idx == 0:
             env["PASCOV_PCS"] = str(work / "pcs.txt")
-        # A job with no source compiles nothing (--version, -h); it still gets
-        # -o, which those flags stop before ever reaching.
+        # A job with no source carries its *complete* argument list, so that a
+        # case testing a missing operand ("-o" with nothing after it) is not
+        # quietly repaired by an appended one.
         argv = [str(exe), *flags]
         if src is not None:
-            argv.append(str(src))
-        argv += ["-o", str(work / f"o{idx}.ll")]
+            argv += [str(src), "-o", str(work / f"o{idx}.ll")]
         try:
             subprocess.run(argv, capture_output=True, timeout=300, env=env)
         except subprocess.TimeoutExpired:

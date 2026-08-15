@@ -25,6 +25,8 @@
 #     -O0 .. -O3      optimisation level, handed to clang (default -O2)
 #     --std=<name>    iso7185 (default) or extended
 #     --import <f>    a program-component already translated
+#     --coverage      emit statement counters; the compiled program then
+#                     writes the lines it ran to $PASCOV_LINES
 #     <file>.o        an object to link, from a component compiled with -c
 #
 # `pascalc` writes LLVM IR and stops there, permanently: neither ISO 7185 nor
@@ -57,6 +59,7 @@ out=
 mode=link          # link | object | ir
 opt=-O2
 source_file=
+covflag=()
 imports=()
 objects=()
 
@@ -69,6 +72,7 @@ while [[ $# -gt 0 ]]; do
     --std=*)       std=${1#--std=}; shift ;;
     --import)      [[ $# -ge 2 ]] || die "--import needs a file name"
                    imports+=(--import "$2"); shift 2 ;;
+    --coverage)    covflag=(--coverage); shift ;;
     --help|-h)     sed -n '2,20p' "$0"; exit 0 ;;
     -*)            die "unknown option '$1'" ;;
     *.o)           objects+=("$1"); shift ;;
@@ -94,7 +98,8 @@ trap 'rm -rf "$work"' EXIT
 # this script's stderr, which is where a caller expects a compiler's complaints
 # and where the golden .err files are compared from.
 ir=$work/$base.ll
-if ! "$pascalc" "--std=$std" "$source_file" "${imports[@]+"${imports[@]}"}" \
+if ! "$pascalc" "--std=$std" "${covflag[@]+"${covflag[@]}"}" "$source_file" \
+     "${imports[@]+"${imports[@]}"}" \
      -o "$ir" >"$work/diag.txt" 2>&1; then
   cat "$work/diag.txt" >&2
   exit 1

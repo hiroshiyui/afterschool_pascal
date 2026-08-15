@@ -1420,6 +1420,12 @@ var
     compilers agreed on; outside one it is `file:line:col: error: message`,
     which is what a person reads and what tests/*.err holds. }
   dumpTokensOpt, dumpAstOpt, dumpSemaOpt, dumpAllOpt, dumping: boolean;
+  { --coverage: emit a call to pas_cov_hit before every statement, carrying the
+    line it begins on (ADR-0104). What is *executable* is decided here and
+    nowhere else -- the runtime counts what it is told and the denominator is
+    read back out of the emitted IR, so the two halves of a coverage figure
+    come from one artefact and cannot disagree about what was instrumented. }
+  covOpt: boolean;
   { The file a diagnostic belongs to: the source, or whichever already-
     translated component is being read (6.13). Only the human-readable format
     names it -- inside a dump the file is the one the harness passed. }
@@ -2073,6 +2079,8 @@ begin
   writeln('  --dump-ast      write the parse tree and stop');
   writeln('  --dump-sema     write the tree Sema annotated and stop');
   writeln('  --dump-all      write all three, with section headers');
+  writeln('  --coverage      emit statement counters; the program then');
+  writeln('                  writes the lines it ran to PASCOV_LINES');
   writeln('  --version       write the version and stop');
   writeln('  -h, --help      write this list and stop');
   writeln;
@@ -2106,6 +2114,7 @@ begin
   dumpAstOpt := false;
   dumpSemaOpt := false;
   dumpAllOpt := false;
+  covOpt := false;
   k := 1;
   while Arg(k, a) and argsOk do begin
     if EQ(a, '--dump-tokens') then dumpTokensOpt := true
@@ -2117,6 +2126,7 @@ begin
       dumpAstOpt := true;
       dumpSemaOpt := true
     end
+    else if EQ(a, '--coverage') then covOpt := true
     else if EQ(a, '--std=extended') then langStd := stdExtended
     else if EQ(a, '--std=iso7185') then langStd := stdIso7185
     else if EQ(a, '-h') or EQ(a, '--help') then begin
@@ -24463,7 +24473,19 @@ end;
 procedure EmitStmt;
 var sub: nodePtr; v: str;
 begin
-  if s <> nil then
+  if s <> nil then begin
+    { --coverage (ADR-0104). One counter per statement, before the statement's
+      own code, so a statement that traps still counts as reached -- which is
+      what makes a coverage report usable on a program that stops.
+
+      Two kinds are skipped and both would be noise rather than information: an
+      empty statement (6.8.1 makes one legal wherever a statement may stand, and
+      it emits nothing) and a compound, whose line is the `begin` and whose
+      constituents are each counted already. A node with no recorded position is
+      skipped too, since a line of 0 names nothing in the source. }
+    if covOpt and (s^.line > 0)
+       and (s^.kind <> nkEmpty) and (s^.kind <> nkCompound) then
+      writeln(ircode, '  call void @pas_cov_hit(i32 ', s^.line:1, ')');
     case s^.kind of
       nkEmpty: ;
       nkCompound: begin
@@ -24510,6 +24532,7 @@ begin
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem: ;
     end
+  end
 end;
 
 { ============================== procedures =============================== }
@@ -25155,6 +25178,9 @@ end;
 procedure EmitDeclares;
 begin
   writeln(ircode);
+  { Only under --coverage, so an ordinary module names nothing it does not use
+    and every program's IR is exactly what it was before the flag existed. }
+  if covOpt then writeln(ircode, 'declare void @pas_cov_hit(i32)');
   writeln(ircode, 'declare void @pas_runtime_error(ptr)');
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
   writeln(ircode,

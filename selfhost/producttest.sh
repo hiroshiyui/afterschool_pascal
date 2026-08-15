@@ -228,6 +228,42 @@ if [[ $status -ne 0 ]]; then
   failed=$((failed + 1))
 fi
 
+# --- a misused command line is reported, and reported as a failure ----------
+#
+# The command line is part of the interface (CHANGELOG says so in as many
+# words), and none of it was tested. It could not be: these messages carry the
+# `pascalc: ` prefix, which tests/checks/diagnostic_coverage.py filters out as
+# driver output rather than a diagnostic about a program -- so the one gate
+# that counts messages is blind to them by construction, and
+# tests/checks/line_coverage.py is what found the branches unrun (ADR-0104).
+#
+# Each case asserts the message *and* a non-zero exit, for the reason the
+# rejected-program check above gives: a driver that misreports a bad flag as
+# success is worse than one that says nothing.
+cli_check() { # <expected substring> <args...>
+  local want=$1; shift
+  checked=$((checked + 1))
+  "$pascalc" "$@" >"$work/cli.txt" 2>&1
+  local st=$?
+  if [[ $st -eq 0 ]]; then
+    echo "--- cli: '$*' exited 0 ---" >&2
+    failed=$((failed + 1))
+  elif ! grep -qF -- "$want" "$work/cli.txt"; then
+    echo "--- cli: '$*' did not report '$want' ---" >&2
+    cat "$work/cli.txt" >&2
+    failed=$((failed + 1))
+  fi
+}
+cli_check "unknown option"            --no-such-flag "$root/tests/hello.pas"
+cli_check "-o needs a file name"      "$root/tests/hello.pas" -o
+cli_check "--import needs a file name" "$root/tests/hello.pas" --import
+cli_check "more than one input file"  "$root/tests/hello.pas" "$root/tests/arith.pas"
+# With no source at all pascalc writes the usage rather than a message, which
+# is the one case here that is not a complaint -- and worth pinning, because
+# "prints help" and "silently succeeds" are indistinguishable without the exit
+# status this function also checks.
+cli_check "usage: pascalc"            -o "$work/ir.ll"
+
 if [[ $failed -ne 0 ]]; then
   echo "producttest: $failed of $((checked + failed)) failed" >&2
   exit 1

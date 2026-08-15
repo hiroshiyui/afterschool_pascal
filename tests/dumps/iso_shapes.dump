@@ -382,40 +382,44 @@
 95 11 ident p
 95 12 op )
 95 13 op ;
-96 1 int 1
-96 2 op :
-97 3 ident writeln
-97 10 op (
-97 11 ident add
-97 14 op (
-97 15 ident i
-97 16 op ,
-97 18 ident j
-97 19 op )
-97 21 op :
-97 23 int 4
-97 24 op ,
-97 26 str [ ]
-97 29 op ,
-97 31 ident x
-97 33 op :
-97 35 int 6
-97 37 op :
-97 39 int 2
-97 40 op ,
-97 42 str [ ]
-97 45 op ,
-97 47 ident greeting
-97 55 op ,
-97 57 str [ ]
-97 60 op ,
-97 62 ident sh
-97 64 op .
-97 65 ident side
-97 69 op )
-98 1 kw end
-98 4 op .
-99 1 eof
+97 3 ident p
+97 5 op :=
+97 8 kw nil
+97 11 op ;
+98 1 int 1
+98 2 op :
+99 3 ident writeln
+99 10 op (
+99 11 ident add
+99 14 op (
+99 15 ident i
+99 16 op ,
+99 18 ident j
+99 19 op )
+99 21 op :
+99 23 int 4
+99 24 op ,
+99 26 str [ ]
+99 29 op ,
+99 31 ident x
+99 33 op :
+99 35 int 6
+99 37 op :
+99 39 int 2
+99 40 op ,
+99 42 str [ ]
+99 45 op ,
+99 47 ident greeting
+99 55 op ,
+99 57 str [ ]
+99 60 op ,
+99 62 ident sh
+99 64 op .
+99 65 ident side
+99 69 op )
+100 1 kw end
+100 4 op .
+101 1 eof
 === ast
 program shapes
   params
@@ -753,29 +757,32 @@ program shapes
         proccall dispose @95:3
           args
             var p @95:11
-        label 1 @96:1
-          writeln @97:3
+        assign @97:3
+          var p @97:3
+          nil @97:8
+        label 1 @98:1
+          writeln @99:3
             arg w -
-              call add @97:11
+              call add @99:11
                 args
-                  var i @97:15
-                  var j @97:18
-              int 4 @97:23
+                  var i @99:15
+                  var j @99:18
+              int 4 @99:23
             arg - -
-              char 32 @97:26
+              char 32 @99:26
             arg w p
-              var x @97:31
-              int 6 @97:35
-              int 2 @97:39
+              var x @99:31
+              int 6 @99:35
+              int 2 @99:39
             arg - -
-              char 32 @97:42
+              char 32 @99:42
             arg - -
-              var greeting @97:47
+              var greeting @99:47
             arg - -
-              char 32 @97:57
+              char 32 @99:57
             arg - -
-              field side @97:64
-                var sh @97:62
+              field side @99:64
+                var sh @99:62
 === sema
 program shapes
   params
@@ -1159,28 +1166,31 @@ program shapes
         proccall dispose -> standard 2 @95:3
           args
             var p @95:11 -> shapes/8 : link
-        label 1 @96:1 -> #0
-          writeln @97:3
+        assign @97:3
+          var p @97:3 -> shapes/8 : link
+          nil @97:8 : nil
+        label 1 @98:1 -> #0
+          writeln @99:3
             file
-              var output @97:3 -> shapes/0 : text
+              var output @99:3 -> shapes/0 : text
             arg w -
-              call add @97:11 -> func add : integer
+              call add @99:11 -> func add : integer
                 args
-                  var i @97:15 -> shapes/1 : integer
-                  var j @97:18 -> shapes/2 : integer
-              int 4 @97:23 : integer
+                  var i @99:15 -> shapes/1 : integer
+                  var j @99:18 -> shapes/2 : integer
+              int 4 @99:23 : integer
             arg - -
-              char 32 @97:26 : char
+              char 32 @99:26 : char
             arg w p
-              var x @97:31 -> shapes/10 : real
-              int 6 @97:35 : integer
-              int 2 @97:39 : integer
+              var x @99:31 -> shapes/10 : real
+              int 6 @99:35 : integer
+              int 2 @99:39 : integer
             arg - -
-              char 32 @97:42 : char
+              char 32 @99:42 : char
             arg - -
-              var greeting @97:47 -> const expr : packed array [1..2] of char
+              var greeting @99:47 -> const expr : packed array [1..2] of char
             arg - -
-              char 32 @97:57 : char
+              char 32 @99:57 : char
             arg - -
-              field side @97:64 -> #0/0 : integer
-                var sh @97:62 -> shapes/7 : shape
+              field side @99:64 -> #0/0 : integer
+                var sh @99:62 -> shapes/7 : shape

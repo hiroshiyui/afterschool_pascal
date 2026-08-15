@@ -132,268 +132,367 @@
 42 13 op ..
 42 16 int 9
 42 17 op ;
-46 3 ident token
-46 9 op =
-46 11 kw record
-47 13 kw case
-47 18 ident kind
-47 22 op :
-47 24 ident small
-47 30 kw of
-48 15 int 1
-48 17 op ..
-48 20 int 3
-48 21 op :
-48 26 op (
-48 27 ident n
-48 28 op :
-48 30 ident integer
-48 37 op )
-48 38 op ;
-49 15 int 4
-49 16 op :
-49 26 op (
-49 27 ident c
-49 28 op :
-49 30 ident colour
-49 36 op )
-49 37 op ;
-50 15 kw otherwise
-50 26 op (
-50 27 ident s
-50 28 op :
-50 30 ident real
-50 34 op )
-51 11 kw end
-51 14 op ;
-53 1 kw var
-54 3 ident v
-54 4 op :
-54 6 ident vec4
-54 10 op ;
-55 3 ident t
-55 4 op :
-55 6 ident token
-55 11 op ;
-56 3 ident s
-56 4 op :
-56 6 ident name
-56 10 op ;
-57 3 ident i
-57 4 op ,
-57 6 ident k
-57 7 op :
-57 9 ident integer
-57 16 op ;
-58 3 ident cc
-58 5 op :
-58 7 ident colour
-58 13 op ;
-59 3 ident b
-59 4 op :
-59 6 ident boolean
-59 13 op ;
-60 3 ident x
+45 3 ident hue
+45 7 op =
+45 9 kw set
+45 13 kw of
+45 16 ident colour
+45 22 op ;
+48 3 ident counted
+48 11 op =
+48 13 kw restricted
+48 24 ident integer
+48 31 op ;
+52 3 ident token
+52 9 op =
+52 11 kw record
+53 13 kw case
+53 18 ident kind
+53 22 op :
+53 24 ident small
+53 30 kw of
+54 15 int 1
+54 17 op ..
+54 20 int 3
+54 21 op :
+54 26 op (
+54 27 ident n
+54 28 op :
+54 30 ident integer
+54 37 op )
+54 38 op ;
+55 15 int 4
+55 16 op :
+55 26 op (
+55 27 ident c
+55 28 op :
+55 30 ident colour
+55 36 op )
+55 37 op ;
+56 15 kw otherwise
+56 26 op (
+56 27 ident s
+56 28 op :
+56 30 ident real
+56 34 op )
+57 11 kw end
+57 14 op ;
+59 1 kw var
+60 3 ident v
 60 4 op :
-60 6 ident real
+60 6 ident vec4
 60 10 op ;
-64 1 kw procedure
-64 11 ident fill
-64 15 op (
-64 16 kw var
-64 20 ident q
-64 21 op :
-64 23 ident vector
-64 29 op ;
-64 31 ident with_
-64 36 op :
-64 38 ident integer
-64 45 op )
-64 46 op ;
-65 1 kw var
-65 5 ident m
-65 6 op :
-65 8 ident integer
-65 15 op ;
-66 1 kw begin
-67 3 kw for
-67 7 ident m
-67 9 op :=
-67 12 int 1
-67 14 kw to
-67 17 ident q
-67 18 op .
-67 19 ident len
-67 23 kw do
-67 26 ident q
-67 27 op [
-67 28 ident m
-67 29 op ]
-67 31 op :=
-67 34 ident with_
-68 1 kw end
-68 4 op ;
-70 1 kw begin
-71 3 ident fill
-71 7 op (
-71 8 ident v
-71 9 op ,
-71 11 int 7
-71 12 op )
-71 13 op ;
-72 3 ident s
-72 5 op :=
-72 8 str [shapes]
-72 16 op ;
-73 3 ident i
-73 5 op :=
-73 8 int 2
-73 9 op ;
-74 3 ident x
-74 5 op :=
-74 8 int 2
-74 10 op **
-74 13 int 3
-74 14 op ;
-75 3 ident k
-75 5 op :=
-75 8 int 2
-75 10 kw pow
-75 14 int 3
-75 15 op ;
-76 3 ident b
-76 5 op :=
-76 8 op (
-76 9 ident i
-76 11 op >
-76 13 int 0
-76 14 op )
-76 16 kw and then
-76 25 op (
-76 26 ident v
-76 27 op [
-76 28 ident i
-76 29 op ]
-76 31 op =
-76 33 int 7
-76 34 op )
-76 35 op ;
-77 3 ident b
-77 5 op :=
-77 8 ident b
-77 10 kw or else
-77 18 op (
-77 19 ident i
-77 21 op <
-77 23 int 0
-77 24 op )
-77 25 op ;
-78 3 ident t
-78 4 op .
-78 5 ident kind
-78 10 op :=
-78 13 int 5
-78 14 op ;
-79 3 ident t
-79 4 op .
-79 5 ident s
-79 7 op :=
-79 10 real 1.5
-79 13 op ;
-82 3 kw case
-82 8 ident i
-82 10 kw of
-83 5 int 1
+61 3 ident t
+61 4 op :
+61 6 ident token
+61 11 op ;
+62 3 ident s
+62 4 op :
+62 6 ident name
+62 10 op ;
+63 3 ident i
+63 4 op ,
+63 6 ident k
+63 7 op :
+63 9 ident integer
+63 16 op ;
+64 3 ident cc
+64 5 op :
+64 7 ident colour
+64 13 op ;
+65 3 ident b
+65 4 op :
+65 6 ident boolean
+65 13 op ;
+66 3 ident x
+66 4 op :
+66 6 ident real
+66 10 op ;
+67 3 ident h
+67 4 op :
+67 6 ident hue
+67 9 op ;
+68 3 ident z
+68 4 op :
+68 6 ident complex
+68 13 op ;
+69 3 ident ct
+69 5 op :
+69 7 ident counted
+69 14 op ;
+70 3 ident pt
+70 5 op :
+70 7 op ^
+70 8 ident token
+70 13 op ;
+75 1 kw type
+76 3 ident likei
+76 9 op =
+76 11 kw type
+76 16 kw of
+76 19 ident i
+76 20 op ;
+77 1 kw var
+78 3 ident i2
+78 5 op :
+78 7 ident likei
+78 12 op ;
+82 1 kw procedure
+82 11 ident fill
+82 15 op (
+82 16 kw var
+82 20 ident q
+82 21 op :
+82 23 ident vector
+82 29 op ;
+82 31 ident with_
+82 36 op :
+82 38 ident integer
+82 45 op )
+82 46 op ;
+83 1 kw var
+83 5 ident m
 83 6 op :
-83 8 ident writeln
-83 15 op (
-83 16 str [one]
-83 21 op )
-83 22 op ;
-84 5 int 2
-84 6 op :
-84 8 ident writeln
-84 15 op (
-84 16 str [two]
-84 21 op )
-85 5 kw otherwise
-85 15 ident writeln
-85 22 op (
-85 23 str [many]
-85 29 op )
-86 3 kw end
-86 6 op ;
-88 3 kw for
-88 7 ident cc
-88 10 kw in
-88 13 op [
-88 14 ident red
-88 17 op ,
-88 19 ident blue
-88 23 op ]
-88 25 kw do
-88 28 ident write
-88 33 op (
-88 34 ident ord
-88 37 op (
-88 38 ident cc
-88 40 op )
-88 42 op :
-88 44 int 2
-88 45 op )
-88 46 op ;
-89 3 ident writeln
-89 10 op ;
-93 3 ident writestr
-93 11 op (
-93 12 ident s
-93 13 op ,
-93 15 ident i
-93 17 op :
-93 19 int 3
-93 20 op ,
-93 22 str [ ]
-93 25 op ,
-93 27 ident k
-93 29 op :
-93 31 int 2
-93 32 op )
-93 33 op ;
-94 3 ident readstr
-94 10 op (
-94 11 ident s
-94 12 op ,
-94 14 ident i
-94 15 op )
-94 16 op ;
-95 3 ident writeln
-95 10 op (
-95 11 ident s
-95 12 op ,
-95 14 str [ ]
-95 17 op ,
-95 19 ident v
-95 20 op [
-95 21 int 1
-95 22 op ]
-95 24 op :
-95 26 int 1
-95 27 op ,
-95 29 str [ ]
-95 32 op ,
-95 34 ident x
-95 36 op :
-95 38 int 4
-95 40 op :
-95 42 int 1
-95 43 op ,
-95 45 str [ ]
-95 48 op ,
-95 50 ident b
-95 51 op )
-96 1 kw end
-96 4 op .
-97 1 eof
+83 8 ident integer
+83 15 op ;
+84 1 kw begin
+85 3 kw for
+85 7 ident m
+85 9 op :=
+85 12 int 1
+85 14 kw to
+85 17 ident q
+85 18 op .
+85 19 ident len
+85 23 kw do
+85 26 ident q
+85 27 op [
+85 28 ident m
+85 29 op ]
+85 31 op :=
+85 34 ident with_
+86 1 kw end
+86 4 op ;
+88 1 kw begin
+89 3 ident fill
+89 7 op (
+89 8 ident v
+89 9 op ,
+89 11 int 7
+89 12 op )
+89 13 op ;
+90 3 ident s
+90 5 op :=
+90 8 str [shapes]
+90 16 op ;
+91 3 ident h
+91 5 op :=
+91 8 ident hue
+91 11 op [
+91 12 ident red
+91 15 op ,
+91 17 ident blue
+91 21 op ]
+91 22 op ;
+92 3 ident z
+92 5 op :=
+92 8 ident cmplx
+92 13 op (
+92 14 real 1.0
+92 17 op ,
+92 19 real 2.0
+92 22 op )
+92 23 op ;
+93 3 ident ct
+93 6 op :=
+93 9 int 3
+93 10 op ;
+94 3 ident pt
+94 6 op :=
+94 9 kw nil
+94 12 op ;
+95 3 ident i2
+95 6 op :=
+95 9 int 9
+95 10 op ;
+96 3 ident i
+96 5 op :=
+96 8 int 2
+96 9 op ;
+97 3 ident x
+97 5 op :=
+97 8 int 2
+97 10 op **
+97 13 int 3
+97 14 op ;
+98 3 ident k
+98 5 op :=
+98 8 int 2
+98 10 kw pow
+98 14 int 3
+98 15 op ;
+99 3 ident b
+99 5 op :=
+99 8 op (
+99 9 ident i
+99 11 op >
+99 13 int 0
+99 14 op )
+99 16 kw and then
+99 25 op (
+99 26 ident v
+99 27 op [
+99 28 ident i
+99 29 op ]
+99 31 op =
+99 33 int 7
+99 34 op )
+99 35 op ;
+100 3 ident b
+100 5 op :=
+100 8 ident b
+100 10 kw or else
+100 18 op (
+100 19 ident i
+100 21 op <
+100 23 int 0
+100 24 op )
+100 25 op ;
+101 3 ident t
+101 4 op .
+101 5 ident kind
+101 10 op :=
+101 13 int 5
+101 14 op ;
+102 3 ident t
+102 4 op .
+102 5 ident s
+102 7 op :=
+102 10 real 1.5
+102 13 op ;
+105 3 kw case
+105 8 ident i
+105 10 kw of
+106 5 int 1
+106 6 op :
+106 8 ident writeln
+106 15 op (
+106 16 str [one]
+106 21 op )
+106 22 op ;
+107 5 int 2
+107 6 op :
+107 8 ident writeln
+107 15 op (
+107 16 str [two]
+107 21 op )
+108 5 kw otherwise
+108 15 ident writeln
+108 22 op (
+108 23 str [many]
+108 29 op )
+109 3 kw end
+109 6 op ;
+111 3 kw for
+111 7 ident cc
+111 10 kw in
+111 13 op [
+111 14 ident red
+111 17 op ,
+111 19 ident blue
+111 23 op ]
+111 25 kw do
+111 28 ident write
+111 33 op (
+111 34 ident ord
+111 37 op (
+111 38 ident cc
+111 40 op )
+111 42 op :
+111 44 int 2
+111 45 op )
+111 46 op ;
+112 3 ident writeln
+112 10 op ;
+116 3 ident writestr
+116 11 op (
+116 12 ident s
+116 13 op ,
+116 15 ident i
+116 17 op :
+116 19 int 3
+116 20 op ,
+116 22 str [ ]
+116 25 op ,
+116 27 ident k
+116 29 op :
+116 31 int 2
+116 32 op )
+116 33 op ;
+117 3 ident readstr
+117 10 op (
+117 11 ident s
+117 12 op ,
+117 14 ident i
+117 15 op )
+117 16 op ;
+118 3 ident writeln
+118 10 op (
+118 11 ident s
+118 12 op ,
+118 14 str [ ]
+118 17 op ,
+118 19 ident v
+118 20 op [
+118 21 int 1
+118 22 op ]
+118 24 op :
+118 26 int 1
+118 27 op ,
+118 29 str [ ]
+118 32 op ,
+118 34 ident x
+118 36 op :
+118 38 int 4
+118 40 op :
+118 42 int 1
+118 43 op ,
+118 45 str [ ]
+118 48 op ,
+118 50 ident b
+118 51 op )
+118 52 op ;
+119 3 ident writeln
+119 10 op (
+119 11 ident re
+119 13 op (
+119 14 ident z
+119 15 op )
+119 17 op :
+119 19 int 3
+119 21 op :
+119 23 int 1
+119 24 op ,
+119 26 str [ ]
+119 29 op ,
+119 31 ident i2
+119 34 op :
+119 36 int 1
+119 37 op ,
+119 39 str [ ]
+119 42 op ,
+119 44 ident ord
+119 47 op (
+119 48 ident red
+119 52 kw in
+119 55 ident h
+119 56 op )
+119 58 op :
+119 60 int 1
+119 61 op )
+120 1 kw end
+120 4 op .
+121 1 eof
 === ast
 module shapes_mod @11:1
   params
@@ -497,89 +596,121 @@ program shapes_ext
         subrange @42:11
           int 1 @42:11
           int 9 @42:16
-      type token @46:3
-        record @46:11
+      type hue @45:3
+        set @45:9
+          named colour @45:16
+      type counted @48:3
+        restricted integer @48:13
+      type token @52:3
+        record @52:11
           fields
-          tag kind @47:18
-            named small @47:24
-            arm @48:15
+          tag kind @53:18
+            named small @53:24
+            arm @54:15
               labels
                 range
-                  int 1 @48:15
-                  int 3 @48:20
+                  int 1 @54:15
+                  int 3 @54:20
               fields
                 group
                   names
-                    name n @48:27
+                    name n @54:27
                   type
-                    named integer @48:30
-            arm @49:15
+                    named integer @54:30
+            arm @55:15
               labels
-                int 4 @49:15
+                int 4 @55:15
               fields
                 group
                   names
-                    name c @49:27
+                    name c @55:27
                   type
-                    named colour @49:30
-            arm @50:15
+                    named colour @55:30
+            arm @56:15
               otherwise
               fields
                 group
                   names
-                    name s @50:27
+                    name s @56:27
                   type
-                    named real @50:30
+                    named real @56:30
+      type likei @76:3
+        typeof i @76:11
     vars
       var
         names
-          name v @54:3
+          name v @60:3
         type
-          named vec4 @54:6
+          named vec4 @60:6
       var
         names
-          name t @55:3
+          name t @61:3
         type
-          named token @55:6
+          named token @61:6
       var
         names
-          name s @56:3
+          name s @62:3
         type
-          named name @56:6
+          named name @62:6
       var
         names
-          name i @57:3
-          name k @57:6
+          name i @63:3
+          name k @63:6
         type
-          named integer @57:9
+          named integer @63:9
       var
         names
-          name cc @58:3
+          name cc @64:3
         type
-          named colour @58:7
+          named colour @64:7
       var
         names
-          name b @59:3
+          name b @65:3
         type
-          named boolean @59:6
+          named boolean @65:6
       var
         names
-          name x @60:3
+          name x @66:3
         type
-          named real @60:6
+          named real @66:6
+      var
+        names
+          name h @67:3
+        type
+          named hue @67:6
+      var
+        names
+          name z @68:3
+        type
+          named complex @68:6
+      var
+        names
+          name ct @69:3
+        type
+          named counted @69:7
+      var
+        names
+          name pt @70:3
+        type
+          pointer token @70:7
+      var
+        names
+          name i2 @78:3
+        type
+          named likei @78:7
     procs
-      proc fill @64:1
+      proc fill @82:1
         params
           group var
             names
-              name q @64:20
+              name q @82:20
             type
-              named vector @64:23
+              named vector @82:23
           group
             names
-              name with_ @64:31
+              name with_ @82:31
             type
-              named integer @64:38
+              named integer @82:38
         block
           imports
           labels
@@ -588,139 +719,182 @@ program shapes_ext
           vars
             var
               names
-                name m @65:5
+                name m @83:5
               type
-                named integer @65:8
+                named integer @83:8
           procs
           body
-            compound @66:1
-              for to @67:3
-                var m @67:7
-                int 1 @67:12
-                field len @67:18
-                  var q @67:17
-                assign @67:26
-                  index @67:28
-                    var q @67:26
-                    var m @67:28
-                  var with_ @67:34
+            compound @84:1
+              for to @85:3
+                var m @85:7
+                int 1 @85:12
+                field len @85:18
+                  var q @85:17
+                assign @85:26
+                  index @85:28
+                    var q @85:26
+                    var m @85:28
+                  var with_ @85:34
     body
-      compound @70:1
-        proccall fill @71:3
+      compound @88:1
+        proccall fill @89:3
           args
-            var v @71:8
-            int 7 @71:11
-        assign @72:3
-          var s @72:3
-          str [shapes] @72:8
-        assign @73:3
-          var i @73:3
-          int 2 @73:8
-        assign @74:3
-          var x @74:3
-          binary exp @74:10
-            int 2 @74:8
-            int 3 @74:13
-        assign @75:3
-          var k @75:3
-          binary pow @75:10
-            int 2 @75:8
-            int 3 @75:14
-        assign @76:3
-          var b @76:3
-          binary andthen @76:16
-            binary gt @76:11
-              var i @76:9
-              int 0 @76:13
-            binary eq @76:31
-              index @76:28
-                var v @76:26
-                var i @76:28
-              int 7 @76:33
-        assign @77:3
-          var b @77:3
-          binary orelse @77:10
-            var b @77:8
-            binary lt @77:21
-              var i @77:19
-              int 0 @77:23
-        assign @78:3
-          field kind @78:4
-            var t @78:3
-          int 5 @78:13
-        assign @79:3
-          field s @79:4
-            var t @79:3
-          real 1.5 @79:10
-        case @82:3
-          var i @82:8
-          arm @83:5
+            var v @89:8
+            int 7 @89:11
+        assign @90:3
+          var s @90:3
+          str [shapes] @90:8
+        assign @91:3
+          var h @91:3
+          index @91:17
+            index @91:12
+              var hue @91:8
+              var red @91:12
+            var blue @91:17
+        assign @92:3
+          var z @92:3
+          call cmplx @92:8
+            args
+              real 1.0 @92:14
+              real 2.0 @92:19
+        assign @93:3
+          var ct @93:3
+          int 3 @93:9
+        assign @94:3
+          var pt @94:3
+          nil @94:9
+        assign @95:3
+          var i2 @95:3
+          int 9 @95:9
+        assign @96:3
+          var i @96:3
+          int 2 @96:8
+        assign @97:3
+          var x @97:3
+          binary exp @97:10
+            int 2 @97:8
+            int 3 @97:13
+        assign @98:3
+          var k @98:3
+          binary pow @98:10
+            int 2 @98:8
+            int 3 @98:14
+        assign @99:3
+          var b @99:3
+          binary andthen @99:16
+            binary gt @99:11
+              var i @99:9
+              int 0 @99:13
+            binary eq @99:31
+              index @99:28
+                var v @99:26
+                var i @99:28
+              int 7 @99:33
+        assign @100:3
+          var b @100:3
+          binary orelse @100:10
+            var b @100:8
+            binary lt @100:21
+              var i @100:19
+              int 0 @100:23
+        assign @101:3
+          field kind @101:4
+            var t @101:3
+          int 5 @101:13
+        assign @102:3
+          field s @102:4
+            var t @102:3
+          real 1.5 @102:10
+        case @105:3
+          var i @105:8
+          arm @106:5
             labels
-              int 1 @83:5
+              int 1 @106:5
             body
-              writeln @83:8
+              writeln @106:8
                 arg - -
-                  str [one] @83:16
-          arm @84:5
+                  str [one] @106:16
+          arm @107:5
             labels
-              int 2 @84:5
+              int 2 @107:5
             body
-              writeln @84:8
+              writeln @107:8
                 arg - -
-                  str [two] @84:16
+                  str [two] @107:16
           otherwise
-            writeln @85:15
+            writeln @108:15
               arg - -
-                str [many] @85:23
-        for in @88:3
-          var cc @88:7
-          set @88:13
+                str [many] @108:23
+        for in @111:3
+          var cc @111:7
+          set @111:13
             member
-              var red @88:14
+              var red @111:14
             member
-              var blue @88:19
-          write @88:28
+              var blue @111:19
+          write @111:28
             arg w -
-              call ord @88:34
+              call ord @111:34
                 args
-                  var cc @88:38
-              int 2 @88:44
-        writeln @89:3
-        writestr @93:3
+                  var cc @111:38
+              int 2 @111:44
+        writeln @112:3
+        writestr @116:3
           arg - -
-            var s @93:12
+            var s @116:12
           arg w -
-            var i @93:15
-            int 3 @93:19
+            var i @116:15
+            int 3 @116:19
           arg - -
-            char 32 @93:22
+            char 32 @116:22
           arg w -
-            var k @93:27
-            int 2 @93:31
-        readstr @94:3
+            var k @116:27
+            int 2 @116:31
+        readstr @117:3
           args
-            var s @94:11
-            var i @94:14
-        writeln @95:3
+            var s @117:11
+            var i @117:14
+        writeln @118:3
           arg - -
-            var s @95:11
+            var s @118:11
           arg - -
-            char 32 @95:14
+            char 32 @118:14
           arg w -
-            index @95:21
-              var v @95:19
-              int 1 @95:21
-            int 1 @95:26
+            index @118:21
+              var v @118:19
+              int 1 @118:21
+            int 1 @118:26
           arg - -
-            char 32 @95:29
+            char 32 @118:29
           arg w p
-            var x @95:34
-            int 4 @95:38
-            int 1 @95:42
+            var x @118:34
+            int 4 @118:38
+            int 1 @118:42
           arg - -
-            char 32 @95:45
+            char 32 @118:45
           arg - -
-            var b @95:50
+            var b @118:50
+        writeln @119:3
+          arg w p
+            call re @119:11
+              args
+                var z @119:14
+            int 3 @119:19
+            int 1 @119:23
+          arg - -
+            char 32 @119:26
+          arg w -
+            var i2 @119:31
+            int 1 @119:36
+          arg - -
+            char 32 @119:39
+          arg w -
+            call ord @119:44
+              args
+                binary in @119:52
+                  var red @119:48
+                  var h @119:55
+            int 1 @119:60
 === sema
 module shapes_mod @11:1
   params
@@ -802,7 +976,12 @@ program shapes_ext
       var cc #6 : colour
       var b #7 : boolean
       var x #8 : real
-      var for$9 #9 : integer
+      var h #9 : hue
+      var z #10 : complex
+      var ct #11 : counted
+      var pt #12 : ^token
+      var i2 #13 : integer
+      var for$14 #14 : integer
     frame shapes_mod level 0
       var total #0 : integer
     frame bump level 1
@@ -848,8 +1027,13 @@ program shapes_ext
         subrange @42:11 = small
           int 1 @42:11 : integer
           int 9 @42:16 : integer
-      type token @46:3
-        record @46:11 = token
+      type hue @45:3
+        set @45:9 = hue
+          named colour @45:16 = colour
+      type counted @48:3
+        restricted integer @48:13 = counted
+      type token @52:3
+        record @52:11 = token
           layout
             field kind #0/- : small
             tagfield #0
@@ -860,86 +1044,113 @@ program shapes_ext
             variant 2 otherwise
               field s #0/2 : real
           fields
-          tag kind @47:18
-            named small @47:24 = small
-            arm @48:15
+          tag kind @53:18
+            named small @53:24 = small
+            arm @54:15
               labels
                 range
-                  int 1 @48:15 : integer
-                  int 3 @48:20 : integer
+                  int 1 @54:15 : integer
+                  int 3 @54:20 : integer
               fields
                 group
                   names
-                    name n @48:27
+                    name n @54:27
                   type
-                    named integer @48:30 = integer
-            arm @49:15
+                    named integer @54:30 = integer
+            arm @55:15
               labels
-                int 4 @49:15 : integer
+                int 4 @55:15 : integer
               fields
                 group
                   names
-                    name c @49:27
+                    name c @55:27
                   type
-                    named colour @49:30 = colour
-            arm @50:15
+                    named colour @55:30 = colour
+            arm @56:15
               otherwise
               fields
                 group
                   names
-                    name s @50:27
+                    name s @56:27
                   type
-                    named real @50:30 = real
+                    named real @56:30 = real
+      type likei @76:3
+        typeof i @76:11 = integer
     vars
       var
         names
-          name v @54:3
+          name v @60:3
         type
-          named vec4 @54:6 = vector(4)
+          named vec4 @60:6 = vector(4)
       var
         names
-          name t @55:3
+          name t @61:3
         type
-          named token @55:6 = token
+          named token @61:6 = token
       var
         names
-          name s @56:3
+          name s @62:3
         type
-          named name @56:6 = name
+          named name @62:6 = name
       var
         names
-          name i @57:3
-          name k @57:6
+          name i @63:3
+          name k @63:6
         type
-          named integer @57:9 = integer
+          named integer @63:9 = integer
       var
         names
-          name cc @58:3
+          name cc @64:3
         type
-          named colour @58:7 = colour
+          named colour @64:7 = colour
       var
         names
-          name b @59:3
+          name b @65:3
         type
-          named boolean @59:6 = boolean
+          named boolean @65:6 = boolean
       var
         names
-          name x @60:3
+          name x @66:3
         type
-          named real @60:6 = real
+          named real @66:6 = real
+      var
+        names
+          name h @67:3
+        type
+          named hue @67:6 = hue
+      var
+        names
+          name z @68:3
+        type
+          named complex @68:6 = complex
+      var
+        names
+          name ct @69:3
+        type
+          named counted @69:7 = counted
+      var
+        names
+          name pt @70:3
+        type
+          pointer token @70:7 = ^token
+      var
+        names
+          name i2 @78:3
+        type
+          named likei @78:7 = integer
     procs
-      proc fill @64:1
+      proc fill @82:1
         params
           group var
             names
-              name q @64:20
+              name q @82:20
             type
-              named vector @64:23 = vector
+              named vector @82:23 = vector
           group
             names
-              name with_ @64:31
+              name with_ @82:31
             type
-              named integer @64:38 = integer
+              named integer @82:38 = integer
         block
           imports
           labels
@@ -948,153 +1159,198 @@ program shapes_ext
           vars
             var
               names
-                name m @65:5
+                name m @83:5
               type
-                named integer @65:8 = integer
+                named integer @83:8 = integer
           procs
           body
-            compound @66:1
-              for to @67:3
-                var m @67:7 -> fill/2 : integer
-                int 1 @67:12 : integer
-                discriminant len @67:18 -> fill/0#0 : integer
-                  var q @67:17 -> fill/0 : vector
-                assign @67:26
-                  index @67:28 : integer
-                    var q @67:26 -> fill/0 : vector
-                    var m @67:28 -> fill/2 : integer
-                  var with_ @67:34 -> fill/1 : integer
+            compound @84:1
+              for to @85:3
+                var m @85:7 -> fill/2 : integer
+                int 1 @85:12 : integer
+                discriminant len @85:18 -> fill/0#0 : integer
+                  var q @85:17 -> fill/0 : vector
+                assign @85:26
+                  index @85:28 : integer
+                    var q @85:26 -> fill/0 : vector
+                    var m @85:28 -> fill/2 : integer
+                  var with_ @85:34 -> fill/1 : integer
     body
-      compound @70:1
-        proccall fill -> proc fill @71:3
+      compound @88:1
+        proccall fill -> proc fill @89:3
           args
-            var v @71:8 -> shapes_ext/1 : vector(4)
-            int 7 @71:11 : integer
-        assign @72:3
-          var s @72:3 -> shapes_ext/3 : name
-          str [shapes] @72:8 : packed array [1..6] of char
-        assign @73:3
-          var i @73:3 -> shapes_ext/4 : integer
-          int 2 @73:8 : integer
-        assign @74:3
-          var x @74:3 -> shapes_ext/8 : real
-          binary exp @74:10 : real
-            int 2 @74:8 : integer
-            int 3 @74:13 : integer
-        assign @75:3
-          var k @75:3 -> shapes_ext/5 : integer
-          binary pow @75:10 : integer
-            int 2 @75:8 : integer
-            int 3 @75:14 : integer
-        assign @76:3
-          var b @76:3 -> shapes_ext/7 : boolean
-          binary andthen @76:16 : boolean
-            binary gt @76:11 : boolean
-              var i @76:9 -> shapes_ext/4 : integer
-              int 0 @76:13 : integer
-            binary eq @76:31 : boolean
-              index @76:28 : integer
-                var v @76:26 -> shapes_ext/1 : vector(4)
-                var i @76:28 -> shapes_ext/4 : integer
-              int 7 @76:33 : integer
-        assign @77:3
-          var b @77:3 -> shapes_ext/7 : boolean
-          binary orelse @77:10 : boolean
-            var b @77:8 -> shapes_ext/7 : boolean
-            binary lt @77:21 : boolean
-              var i @77:19 -> shapes_ext/4 : integer
-              int 0 @77:23 : integer
-        assign @78:3
-          field kind @78:4 -> #0/- : small
-            var t @78:3 -> shapes_ext/2 : token
-          int 5 @78:13 : integer
-        assign @79:3
-          field s @79:4 -> #0/2 : real
-            var t @79:3 -> shapes_ext/2 : token
-          real 1.5 @79:10 : real
-        case @82:3
-          var i @82:8 -> shapes_ext/4 : integer
-          arm @83:5
+            var v @89:8 -> shapes_ext/1 : vector(4)
+            int 7 @89:11 : integer
+        assign @90:3
+          var s @90:3 -> shapes_ext/3 : name
+          str [shapes] @90:8 : packed array [1..6] of char
+        assign @91:3
+          var h @91:3 -> shapes_ext/9 : hue
+          setvalue @91:17 : hue
+            member
+              var red @91:12 -> const 0 : colour
+            member
+              var blue @91:17 -> const 2 : colour
+        assign @92:3
+          var z @92:3 -> shapes_ext/10 : complex
+          call cmplx @92:8 -> builtin 18 : complex
+            args
+              real 1.0 @92:14 : real
+              real 2.0 @92:19 : real
+        assign @93:3
+          var ct @93:3 -> shapes_ext/11 : counted
+          int 3 @93:9 : integer
+        assign @94:3
+          var pt @94:3 -> shapes_ext/12 : ^token
+          nil @94:9 : nil
+        assign @95:3
+          var i2 @95:3 -> shapes_ext/13 : integer
+          int 9 @95:9 : integer
+        assign @96:3
+          var i @96:3 -> shapes_ext/4 : integer
+          int 2 @96:8 : integer
+        assign @97:3
+          var x @97:3 -> shapes_ext/8 : real
+          binary exp @97:10 : real
+            int 2 @97:8 : integer
+            int 3 @97:13 : integer
+        assign @98:3
+          var k @98:3 -> shapes_ext/5 : integer
+          binary pow @98:10 : integer
+            int 2 @98:8 : integer
+            int 3 @98:14 : integer
+        assign @99:3
+          var b @99:3 -> shapes_ext/7 : boolean
+          binary andthen @99:16 : boolean
+            binary gt @99:11 : boolean
+              var i @99:9 -> shapes_ext/4 : integer
+              int 0 @99:13 : integer
+            binary eq @99:31 : boolean
+              index @99:28 : integer
+                var v @99:26 -> shapes_ext/1 : vector(4)
+                var i @99:28 -> shapes_ext/4 : integer
+              int 7 @99:33 : integer
+        assign @100:3
+          var b @100:3 -> shapes_ext/7 : boolean
+          binary orelse @100:10 : boolean
+            var b @100:8 -> shapes_ext/7 : boolean
+            binary lt @100:21 : boolean
+              var i @100:19 -> shapes_ext/4 : integer
+              int 0 @100:23 : integer
+        assign @101:3
+          field kind @101:4 -> #0/- : small
+            var t @101:3 -> shapes_ext/2 : token
+          int 5 @101:13 : integer
+        assign @102:3
+          field s @102:4 -> #0/2 : real
+            var t @102:3 -> shapes_ext/2 : token
+          real 1.5 @102:10 : real
+        case @105:3
+          var i @105:8 -> shapes_ext/4 : integer
+          arm @106:5
             labels
-              int 1 @83:5 : integer
+              int 1 @106:5 : integer
             values 1
             body
-              writeln @83:8
+              writeln @106:8
                 file
-                  var output @83:8 -> shapes_ext/0 : text
+                  var output @106:8 -> shapes_ext/0 : text
                 arg - -
-                  str [one] @83:16 : packed array [1..3] of char
-          arm @84:5
+                  str [one] @106:16 : packed array [1..3] of char
+          arm @107:5
             labels
-              int 2 @84:5 : integer
+              int 2 @107:5 : integer
             values 2
             body
-              writeln @84:8
+              writeln @107:8
                 file
-                  var output @84:8 -> shapes_ext/0 : text
+                  var output @107:8 -> shapes_ext/0 : text
                 arg - -
-                  str [two] @84:16 : packed array [1..3] of char
+                  str [two] @107:16 : packed array [1..3] of char
           otherwise
-            writeln @85:15
+            writeln @108:15
               file
-                var output @85:15 -> shapes_ext/0 : text
+                var output @108:15 -> shapes_ext/0 : text
               arg - -
-                str [many] @85:23 : packed array [1..4] of char
-        for in @88:3
-          var cc @88:7 -> shapes_ext/6 : colour
-          set @88:13 : set of colour
+                str [many] @108:23 : packed array [1..4] of char
+        for in @111:3
+          var cc @111:7 -> shapes_ext/6 : colour
+          set @111:13 : set of colour
             member
-              var red @88:14 -> const 0 : colour
+              var red @111:14 -> const 0 : colour
             member
-              var blue @88:19 -> const 2 : colour
-          write @88:28
+              var blue @111:19 -> const 2 : colour
+          write @111:28
             file
-              var output @88:28 -> shapes_ext/0 : text
+              var output @111:28 -> shapes_ext/0 : text
             arg w -
-              call ord @88:34 -> builtin 4 : integer
+              call ord @111:34 -> builtin 4 : integer
                 args
-                  var cc @88:38 -> shapes_ext/6 : colour
-              int 2 @88:44 : integer
-        writeln @89:3
+                  var cc @111:38 -> shapes_ext/6 : colour
+              int 2 @111:44 : integer
+        writeln @112:3
           file
-            var output @89:3 -> shapes_ext/0 : text
-        writestr @93:3
+            var output @112:3 -> shapes_ext/0 : text
+        writestr @116:3
           str
-            var s @93:12 -> shapes_ext/3 : name
+            var s @116:12 -> shapes_ext/3 : name
           no-file
           arg w -
-            var i @93:15 -> shapes_ext/4 : integer
-            int 3 @93:19 : integer
+            var i @116:15 -> shapes_ext/4 : integer
+            int 3 @116:19 : integer
           arg - -
-            char 32 @93:22 : char
+            char 32 @116:22 : char
           arg w -
-            var k @93:27 -> shapes_ext/5 : integer
-            int 2 @93:31 : integer
-        readstr @94:3
+            var k @116:27 -> shapes_ext/5 : integer
+            int 2 @116:31 : integer
+        readstr @117:3
           str
-            var s @94:11 -> shapes_ext/3 : name
+            var s @117:11 -> shapes_ext/3 : name
           no-file
           args
-            var i @94:14 -> shapes_ext/4 : integer
-        writeln @95:3
+            var i @117:14 -> shapes_ext/4 : integer
+        writeln @118:3
           file
-            var output @95:3 -> shapes_ext/0 : text
+            var output @118:3 -> shapes_ext/0 : text
           arg - -
-            var s @95:11 -> shapes_ext/3 : name
+            var s @118:11 -> shapes_ext/3 : name
           arg - -
-            char 32 @95:14 : char
+            char 32 @118:14 : char
           arg w -
-            index @95:21 : integer
-              var v @95:19 -> shapes_ext/1 : vector(4)
-              int 1 @95:21 : integer
-            int 1 @95:26 : integer
+            index @118:21 : integer
+              var v @118:19 -> shapes_ext/1 : vector(4)
+              int 1 @118:21 : integer
+            int 1 @118:26 : integer
           arg - -
-            char 32 @95:29 : char
+            char 32 @118:29 : char
           arg w p
-            var x @95:34 -> shapes_ext/8 : real
-            int 4 @95:38 : integer
-            int 1 @95:42 : integer
+            var x @118:34 -> shapes_ext/8 : real
+            int 4 @118:38 : integer
+            int 1 @118:42 : integer
           arg - -
-            char 32 @95:45 : char
+            char 32 @118:45 : char
           arg - -
-            var b @95:50 -> shapes_ext/7 : boolean
+            var b @118:50 -> shapes_ext/7 : boolean
+        writeln @119:3
+          file
+            var output @119:3 -> shapes_ext/0 : text
+          arg w p
+            call re @119:11 -> builtin 20 : real
+              args
+                var z @119:14 -> shapes_ext/10 : complex
+            int 3 @119:19 : integer
+            int 1 @119:23 : integer
+          arg - -
+            char 32 @119:26 : char
+          arg w -
+            var i2 @119:31 -> shapes_ext/13 : integer
+            int 1 @119:36 : integer
+          arg - -
+            char 32 @119:39 : char
+          arg w -
+            call ord @119:44 -> builtin 4 : integer
+              args
+                binary in @119:52 : boolean
+                  var red @119:48 -> const 0 : colour
+                  var h @119:55 -> shapes_ext/9 : hue
+            int 1 @119:60 : integer

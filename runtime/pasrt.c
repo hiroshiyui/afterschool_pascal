@@ -46,6 +46,64 @@ void pas_runtime_error(const char *msg) {
   exit(1);
 }
 
+/* --- statement coverage, for `pascalc --coverage` (ADR-0104) --------------
+ *
+ * The compiler emits one call to pas_cov_hit per statement, carrying the line
+ * the statement begins on. Nothing here decides what is executable: the
+ * *denominator* is the set of lines the compiler emitted a call for, which is
+ * readable from the IR it wrote, so the two halves of a coverage figure come
+ * from the same artefact and cannot disagree about what was instrumented.
+ *
+ * A program not compiled with --coverage calls none of this, and the table is
+ * allocated on the first call, so an ordinary program pays a symbol in
+ * libpasrt.a and nothing else -- no BSS, no atexit, no startup cost. */
+static unsigned char *pas_cov_seen;
+static int pas_cov_cap;
+static int pas_cov_high;
+static int pas_cov_armed;
+
+/* Written at exit rather than per hit, because a compiler run makes millions of
+ * hits and one line's first is the only one that matters. Appended, so a corpus
+ * of runs accumulates into one file the way SanitizerCoverage's does. */
+static void pas_cov_dump(void) {
+  const char *path = getenv("PASCOV_LINES");
+  FILE *f;
+  int i;
+
+  if (!path || !pas_cov_seen) return;
+  f = fopen(path, "a");
+  if (!f) return;
+  for (i = 0; i <= pas_cov_high; i++)
+    if (pas_cov_seen[i]) fprintf(f, "%d\n", i);
+  fclose(f);
+}
+
+/* Line numbers arrive in no particular order and the highest is not known in
+ * advance, so the table grows. Doubling from the largest line seen keeps this
+ * O(1) amortised over a run that calls it millions of times. */
+void pas_cov_hit(int line) {
+  if (line < 0) return;
+  if (line >= pas_cov_cap) {
+    int want = pas_cov_cap ? pas_cov_cap : 1024;
+    unsigned char *grown;
+    while (want <= line) want *= 2;
+    grown = realloc(pas_cov_seen, (size_t)want);
+    if (!grown) return; /* measurement must never break the program */
+    memset(grown + pas_cov_cap, 0, (size_t)(want - pas_cov_cap));
+    pas_cov_seen = grown;
+    pas_cov_cap = want;
+    /* Its own flag rather than "is the table empty": the table grows more than
+     * once, and line 0 is a legal hit, so neither the capacity nor the highest
+     * line seen can answer whether this has already been done. */
+    if (!pas_cov_armed) {
+      pas_cov_armed = 1;
+      atexit(pas_cov_dump);
+    }
+  }
+  pas_cov_seen[line] = 1;
+  if (line > pas_cov_high) pas_cov_high = line;
+}
+
 /// The same message the compiler writes for an array whose bounds it knows,
 /// for one whose bounds arrive with the actual (ISO/IEC 10206:1991 §6.7.3.3).
 /// A schematic formal parameter is compiled once for every tuple, so the text

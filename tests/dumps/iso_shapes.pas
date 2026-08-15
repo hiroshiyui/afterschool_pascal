@@ -93,6 +93,8 @@ begin
   new(p);
   p^.datum := i;
   dispose(p);
+  { §6.4.4's nil, which is an unsigned-constant and so a factor of its own. }
+  p := nil;
 1:
   writeln(add(i, j) : 4, ' ', x : 6 : 2, ' ', greeting, ' ', sh.side)
 end.

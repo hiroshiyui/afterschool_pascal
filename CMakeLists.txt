@@ -128,6 +128,24 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
+# ...and the finer measurement procedure coverage cannot make: which
+# *statements* the corpus runs. This one needs no sanitizer -- the compiler
+# instruments itself under --coverage (ADR-0104), so the denominator is the
+# statements a human wrote rather than blocks CodeGen generated.
+#
+# A ratchet rather than an allowlist, and the weaker instrument for it: a
+# per-line argument is not writable at this scale. doc/sop.md §7 carries the
+# row saying so.
+if(Python3_FOUND)
+  add_test(NAME line-coverage
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/line_coverage.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(line-coverage PROPERTIES
+                       SKIP_RETURN_CODE 77
+                       TIMEOUT 900)
+endif()
+
 # The --dump flags. Their walkers were entered by no case at all until
 # procedure-coverage found it: four documented flags and nothing checking they
 # did not crash. A dump case compares what the *compiler* writes to standard

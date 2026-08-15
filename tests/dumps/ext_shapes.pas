@@ -40,6 +40,12 @@ type
   name = string(16);
   colour = (red, green, blue);
   small = 1 .. 9;
+  { §6.8.7.4's set-value names its type, which is what lets it be checked where
+    it is written rather than where it is stored (ADR-0066). }
+  hue = set of colour;
+  { §6.4.2.5: a restricted type has its underlying type's values and almost
+    none of its operations (ADR-0058). }
+  counted = restricted integer;
   { §6.4.3.4's variant-part-completer: an arm with no labels, selected by every
     tag value the labelled arms leave (ADR-0034). A *range* label is Extended
     Pascal's too (ADR-0035), so both are here. }
@@ -58,6 +64,18 @@ var
   cc: colour;
   b: boolean;
   x: real;
+  h: hue;
+  z: complex;
+  ct: counted;
+  pt: ^token;
+
+{ §6.4.9's type-inquiry, and a second declaration part: §6.2.1 lets the five
+  parts repeat in any order, so a type may be declared after the variable it
+  inquires about (ADR-0069). }
+type
+  likeI = type of i;
+var
+  i2: likeI;
 
 { A schematic formal parameter: one body serves every length, the tuple
   travelling beside the address (ADR-0040). }
@@ -70,6 +88,11 @@ end;
 begin
   fill(v, 7);
   s := 'shapes';
+  h := hue[red, blue];
+  z := cmplx(1.0, 2.0);
+  ct := 3;
+  pt := nil;
+  i2 := 9;
   i := 2;
   x := 2 ** 3;
   k := 2 pow 3;
@@ -92,5 +115,6 @@ begin
     walkers therefore write through a path nothing else takes. }
   writestr(s, i : 3, ' ', k : 2);
   readstr(s, i);
-  writeln(s, ' ', v[1] : 1, ' ', x : 4 : 1, ' ', b)
+  writeln(s, ' ', v[1] : 1, ' ', x : 4 : 1, ' ', b);
+  writeln(re(z) : 3 : 1, ' ', i2 : 1, ' ', ord(red in h) : 1)
 end.
