@@ -1,0 +1,2 @@
+<source>:52:10: error: argument 1 of 'bump' cannot be a component of a string
+<source>:56:10: error: argument 1 of 'bump' cannot be a component of a packed variable

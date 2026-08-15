@@ -1,0 +1,1 @@
+<source>:46:3: error: label 3 is inside a statement this goto is not: a goto may leave a structured statement but not enter one

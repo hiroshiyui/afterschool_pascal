@@ -1149,6 +1149,11 @@ type
   stmtPathPtr = ^stmtPathRec;
   stmtPathRec = record
     stmt: nodePtr;
+    { True when this entry holds a *statement-sequence*, which 6.8.1 b) is
+      about. A compound-statement and a repeat-statement hold one; so does
+      ISO/IEC 10206:1991 6.9.3.5's case-statement-completer, which has no node
+      of its own and so cannot be told from its case statement by kind. }
+    seq: boolean;
     depth: integer;
     next: stmtPathPtr
   end;
@@ -7034,6 +7039,31 @@ end;
   multi-dimensional abbreviation is not an exception: 6.4.3.2 designates every
   array-type it constructs packed when the original is, which ResolveArray
   does, so `a[1][2]` over a `packed array [1..3, 1..3]` is caught here. }
+{ The container of a component, or nil: 6.6.3.3 asks what the variable a
+  component belongs to *possesses*, and that is one step, never a walk. }
+function ContainerOf(e: nodePtr): typePtr;
+var c: typePtr;
+begin
+  c := nil;
+  if e <> nil then
+    if (e^.kind = nkVar) and (e^.vrField <> nil) and (e^.vrSym <> nil) then
+      c := e^.vrSym^.stype
+    else if e^.kind = nkIndex then c := e^.ixBase^.ntype
+    else if (e^.kind = nkField) and (e^.fdQualified = nil) and
+            (not e^.fdIsDisc) then c := e^.fdBase^.ntype;
+  ContainerOf := c
+end;
+
+{ ISO/IEC 10206:1991 6.7.3.3's third sentence: "An actual variable parameter
+  shall not denote a component of a string-type." ISO 7185 6.6.3.3 has only
+  the first two, and needs no third -- every string-type there is a packed
+  array of char, so the packed rule already reaches it. What this adds is the
+  *variable*-string, which is not packed. }
+function StringComponent(e: nodePtr): boolean;
+begin
+  StringComponent := IsStringType(ContainerOf(e))
+end;
+
 function PackedComponent(e: nodePtr): boolean;
 var c: typePtr;
 begin
@@ -7204,9 +7234,20 @@ var c: stmtPathPtr;
 begin
   new(c);
   c^.stmt := n;
+  c^.seq := (n^.kind = nkCompound) or (n^.kind = nkRepeat);
   c^.next := p;
   if p = nil then c^.depth := 1 else c^.depth := p^.depth + 1;
   PushStmt := c
+end;
+
+{ The same, for a sequence that is not a node of its own -- 6.9.3.5's
+  completer, whose statements hang off the case statement that carries it. }
+function PushSeq(p: stmtPathPtr; n: nodePtr): stmtPathPtr;
+var c: stmtPathPtr;
+begin
+  c := PushStmt(p, n);
+  c^.seq := true;
+  PushSeq := c
 end;
 
 function PathDepth(p: stmtPathPtr): integer;
@@ -10492,6 +10533,14 @@ begin
     WritePool(callee^.at, callee^.len);
     writeln(''' cannot be a component of a packed variable')
   end
+  { Asked after the packed one, so a fixed-string component keeps the message
+    that names the rule ISO 7185 also has. }
+  else if StringComponent(a) then begin
+    ErrorAt(a^.line, a^.col);
+    write('argument ', i:1, ' of ''');
+    WritePool(callee^.at, callee^.len);
+    writeln(''' cannot be a component of a string')
+  end
   else BadVarActual := false
 end;
 
@@ -11394,6 +11443,21 @@ begin
     write('''');
     WritePool(c^.clAt, c^.clLen);
     writeln(''' is a procedure and returns no value');
+    c^.ntype := intType
+  end
+  { 6.2.2.11: "Whatever an identifier or label denotes at its defining-point
+    shall be denoted at all applied occurrences of that identifier or label."
+    So a program that declares `ord` a variable has no `ord` function in that
+    block -- LookupBuiltin resolves by *spelling* and cannot see that, which
+    left `var ord: array [1..3] of integer` and `ord('a')` meaning two things
+    at once. The required *procedures* never had this: their path has no
+    fallback and reports here, which is the asymmetry 6.2.2.10 does not
+    license, both being named in its one sentence. }
+  else if sym <> nil then begin
+    ErrorAt(c^.line, c^.col);
+    write('''');
+    WritePool(c^.clAt, c^.clLen);
+    writeln(''' is not a function');
     c^.ntype := intType
   end
   else begin
@@ -13707,11 +13771,23 @@ var
 begin
   CheckExpr(c^.csSelector);
   { The otherwise-part is a statement-sequence like any other; nothing about it
-    depends on the selector, because it is what runs when *no* label does. }
+    depends on the selector, because it is what runs when *no* label does.
+
+    It is on the containment chain, and ISO/IEC 10206:1991 6.9.3.5 spells it
+    `case-statement-completer = 'otherwise' statement-sequence` -- so 6.9.1 b)
+    reaches a label at its top level from a goto the *completer* contains, and
+    from nowhere else. Without the push a label here read as if it sat at the
+    case statement's own level and a goto outside could enter it; without the
+    sequence mark a goto inside it could not reach one. }
   arm := c^.csOtherwise;
-  while arm <> nil do begin
-    CheckStmt(arm);
-    arm := arm^.next
+  if arm <> nil then begin
+    saved := stmtPath;
+    stmtPath := PushSeq(stmtPath, c);
+    while arm <> nil do begin
+      CheckStmt(arm);
+      arm := arm^.next
+    end;
+    stmtPath := saved
   end;
   sel := c^.csSelector^.ntype;
   if (sel <> nil) and not IsOrdinal(sel) then begin
@@ -14937,8 +15013,7 @@ begin
       else if found^.path = nil then
         reachable := true
       else
-        reachable := (found^.path^.stmt^.kind = nkCompound) or
-                     (found^.path^.stmt^.kind = nkRepeat);
+        reachable := found^.path^.seq;
       if not reachable then begin
         ErrorAt(pending^.gnode^.line, pending^.gnode^.col);
         if sameChain then
