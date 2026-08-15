@@ -29,6 +29,7 @@ blind spot in this table, and a new gate is only worth adding if it closes one.
 | **`verify.py --crosscheck`** | the model against the real binary, at `-O0` and `-O2` | only the points its generated program actually exercises. It ran `succ` on enumerations alone for a long time — the one ordinal type where a wrong reading and a right one agree |
 | **`selfhost/irtest.sh`** (380 programs, stage 2 = stage 3) | that the compiler is a fixed point under self-application | a bug that is **stable** under self-application. A compiler can miscompile consistently and still reproduce itself |
 | **`selfhost/producttest.sh`** (5 checks) | that the artefact actually built is the one described | anything the five checks do not ask |
+| **`tests/spec/`** (43 scenarios, 13 clauses) | what the compiler does about a **named clause**, in the standard's terms rather than the implementation's | a **misreading**, still — the scenario is written by the same reader. What it changes is that the reading is attached to the clause it is about, so it is findable by someone holding the standard (ADR-0105) |
 | **ADRs, `README`, `CLAUDE.md`** | the reasoning | a **misreading**. No oracle here can contradict a reading of the standard — which is why ADR-0072's wrong justification survived in four documents and a purpose-written test |
 
 Two consequences worth stating plainly, because they are counter-intuitive:
@@ -297,6 +298,7 @@ from it when one is closed.
 | `-O1` and `-O3` are unexercised | a defect at an intermediate level has nothing looking for it. Judged not worth a third and fourth sweep | — |
 | BSI corpus is fixed | it does not grow with the language, and covers ISO 7185 only | ADR-0086 |
 | Coverage is measured per **statement**, not per branch | `if c then a else b` on one line counts as covered when either arm runs, and a multi-statement line counts once. Statement coverage is not branch coverage | ADR-0104 |
+| Clause coverage has an **untriaged denominator** | `tests/spec/` cites 13 of 292 clause headings, but many are structural — definitions, grammar, the shape of the document — and will never carry a scenario. The figure is a report and is not gated, because a percentage over an untriaged denominator is one nobody can act on | ADR-0105 |
 | The statement-coverage gate is a **ratchet**, not an allowlist | it cannot fail in both directions, so a line that becomes covered says nothing, and 650 uncovered lines carry no argument between them. The per-procedure breakdown is what makes a regression nameable | ADR-0104 |
 | `coverage.py` sees the sources, not the harnesses | it enumerates the corpus by glob, so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is invisible; a procedure only those reach reports as uncovered | ADR-0103 |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |

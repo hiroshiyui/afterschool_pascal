@@ -20,6 +20,11 @@ tested.
 
 ### Added
 
+- **`tests/spec/`**, a specification suite: 43 scenarios written against 13
+  clauses of the two standards, in a subset of Gherkin, with a runner of its own
+  and no new dependency. Every other test here starts from the compiler; a
+  scenario starts from a clause and states the requirement in the standard's
+  terms (ADR-0105). Clause coverage is reported, not gated.
 - **`--coverage`**, a new flag: the compiled program records which of its own
   statements ran and appends their line numbers to `$PASCOV_LINES`. What was
   instrumented is in the IR the same compilation wrote, so the two halves of a

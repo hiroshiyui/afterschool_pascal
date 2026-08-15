@@ -113,3 +113,4 @@ the alternatives that were rejected and why.
 | [0102](0102-an-alloca-belongs-where-it-is-claimed-once.md) | An alloca belongs where it is claimed once | Accepted |
 | [0103](0103-coverage-is-an-ir-pass-and-a-comment.md) | Coverage is an IR pass and a comment | Accepted |
 | [0104](0104-the-compiler-instruments-itself.md) | The compiler instruments itself | Accepted |
+| [0105](0105-scenarios-start-from-the-clause.md) | Scenarios start from the clause | Accepted |
