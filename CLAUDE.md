@@ -1881,6 +1881,16 @@ wrote it, so a change that is wrong in the dump *and* wrong in the goldens you
 regenerate is invisible. Regenerating a golden is a decision to be argued for in
 the commit message, not a step.
 
+**And no oracle here can contradict a *reading*.** The goldens agree with
+whoever wrote them, `tests/bsi/expected.tsv` records what this compiler does,
+and `verify/` proves the lowering matches a model of the lowering — so a
+misread clause is invisible to all of them at once, which is how ADR-0072's
+set-packing deviation survived in four documents and a purpose-written test.
+`.claude/skills/langspec-audit/SKILL.md` is the substitute: independent readers
+given the behaviour and not the reasoning, told to prove the compiler wrong from
+the standards text. ADR-0101 is what it found the first time — eleven readings
+confirmed and three under-strict gaps.
+
 **The one oracle nobody here wrote is the BSI Pascal Validation Suite**
 (ADR-0086), 812 programs from 1982 tied to clauses of ISO 7185. It is
 **fetched, never committed** — BSI grants use and not redistribution — so
