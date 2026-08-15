@@ -109,6 +109,37 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR})
 endif()
 
+# ...and every procedure of the compiler is entered by some case, or argued not
+# to be. The number doc/sop.md §5 could only argue for: an instrumented copy of
+# the compiler is built with clang's SanitizerCoverage -- an IR pass, so it
+# applies to the textual .ll this compiler emits with no front end and no debug
+# info -- and run over the whole corpus. Skips (77) when clang cannot build it.
+#
+# It fails in both directions, like diagnostic-coverage, and for the same
+# reason. It is a ctest case rather than a CI job because it needs no git and
+# no network and takes about two seconds.
+if(Python3_FOUND)
+  add_test(NAME procedure-coverage
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/coverage.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(procedure-coverage PROPERTIES
+                       SKIP_RETURN_CODE 77
+                       TIMEOUT 900)
+endif()
+
+# The --dump flags. Their walkers were entered by no case at all until
+# procedure-coverage found it: four documented flags and nothing checking they
+# did not crash. A dump case compares what the *compiler* writes to standard
+# output, which is why it cannot be a tests/run_test.sh sidecar -- every case
+# there compares what the compiled *program* writes.
+file(GLOB APASCAL_DUMP_TESTS ${CMAKE_SOURCE_DIR}/tests/dumps/*.pas)
+foreach(t ${APASCAL_DUMP_TESTS})
+  get_filename_component(name ${t} NAME_WE)
+  add_test(NAME dump-${name}
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/dumps/run.sh ${APASCAL_PASCALC} ${t})
+endforeach()
+
 # Formal verification of the lowering rules (verify/). Skips rather than fails
 # when z3 is absent, so a checkout without it still builds and tests green.
 if(Python3_FOUND)

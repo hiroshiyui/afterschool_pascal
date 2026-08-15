@@ -1,0 +1,79 @@
+program frames
+  params
+    name output @7:16
+  frames
+    frame frames level 0
+      var output #0 : text (stdout 0)
+      var outer #1 : integer
+    frame p level 1
+      param k #0 : integer
+      var local #1 : integer
+    frame q level 2
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+      var
+        names
+          name outer @8:5
+        type
+          named integer @8:12 = integer
+    procs
+      proc p @10:1
+        params
+          group
+            names
+              name k @10:13
+            type
+              named integer @10:16 = integer
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+            var
+              names
+                name local @11:5
+              type
+                named integer @11:12 = integer
+          procs
+            proc q @13:3
+              params
+              block
+                imports
+                labels
+                consts
+                types
+                vars
+                procs
+                body
+                  compound @14:3
+                    assign @15:5
+                      var local @15:5 -> p/1 : integer
+                      binary add @15:20 : integer
+                        var outer @15:14 -> frames/1 : integer
+                        var k @15:22 -> p/0 : integer
+          body
+            compound @18:1
+              assign @19:3
+                var local @19:3 -> p/1 : integer
+                int 0 @19:12 : integer
+              proccall q -> proc q @20:3
+                args
+              writeln @21:3
+                file
+                  var output @21:3 -> frames/0 : text
+                arg w -
+                  var local @21:11 -> p/1 : integer
+                  int 1 @21:19 : integer
+    body
+      compound @24:1
+        assign @25:3
+          var outer @25:3 -> frames/1 : integer
+          int 4 @25:12 : integer
+        proccall p -> proc p @26:3
+          args
+            int 2 @26:5 : integer

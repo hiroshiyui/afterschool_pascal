@@ -149,6 +149,44 @@ elif [[ $want != "$have" ]]; then
   failed=$((failed + 1))
 fi
 
+# --- and that -h documents every flag it accepts ----------------------------
+#
+# Derived from ParseArgs rather than compared against a golden, because the
+# thing worth knowing is not what the help text says -- it is whether the help
+# text and the argument parser still describe the same compiler. A golden would
+# agree with whichever of the two was edited last.
+#
+# Until this was written the release checklist said "confirm the -h output
+# matches the flags that actually exist" and a person did it by eye, once a
+# release. tests/checks/coverage.py is what surfaced it: `Usage` was entered by
+# no case in the corpus, so nothing ran -h at all.
+#
+# --std= is the one flag whose accepted spellings are the whole word
+# (--std=iso7185, --std=extended) while the help text writes the placeholder
+# form, so it is matched by its prefix.
+help_text=$("$pascalc" -h 2>/dev/null)
+checked=$((checked + 1))
+if [[ -z $help_text ]]; then
+  echo "--- help: pascalc -h wrote nothing ---" >&2
+  failed=$((failed + 1))
+else
+  undocumented=""
+  while IFS= read -r flag; do
+    [[ -n $flag ]] || continue
+    probe=$flag
+    [[ $flag == --std=* ]] && probe="--std="
+    case $help_text in
+      *"$probe"*) ;;
+      *) undocumented="$undocumented $flag" ;;
+    esac
+  done < <(grep -o "EQ(a, '-[^']*')" "$root/selfhost/compiler.pas" |
+           sed "s/EQ(a, '//; s/')//" | sort -u)
+  if [[ -n $undocumented ]]; then
+    echo "--- help: pascalc accepts flags -h does not mention:$undocumented ---" >&2
+    failed=$((failed + 1))
+  fi
+fi
+
 # --- and that it says so when it does not translate something ---------------
 #
 # A compiler that cannot report failure is not usable from a build rule:

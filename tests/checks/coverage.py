@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+# Afterschool Pascal -- an ISO 7185 / ISO/IEC 10206:1991 Pascal compiler.
+# Copyright (C) 2026 Hui-Hong You
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+"""Every procedure of the compiler is entered by some case, or argued not to be.
+
+doc/sop.md §5 says coverage here is argued rather than measured, and the
+blind-spot register says the same thing in one line: "§5 is an argument, not a
+number." This is the number, for the one granularity at which it can be had
+without changing what the compiler emits.
+
+**How it is possible at all.** `-fsanitize-coverage=` is an LLVM *IR* pass, so
+clang applies it to the textual .ll this compiler produces -- no front end, no
+debug info, no DWARF. That is the whole trick, and it is available only because
+ADR-0006 kept textual .ll a first-class output.
+
+**What it measures, and what it does not.** A procedure is covered when some
+run entered it. That is coarse: a two-hundred-line procedure entered once
+counts, and the `case` arm nobody reaches is invisible. Basic-block coverage
+was measured and rejected as a headline -- 8,304 of the compiler's own 26,655
+blocks are the bounds-check and nil-check failure paths CodeGen emits for its
+own subscripts, which a correct run never enters *by design*, so a third of the
+denominator is unreachable and the percentage means nothing. The honest
+denominator is lines a human wrote, and reaching it needs the compiler to emit
+line information, which is a feature and not a script. Until then: procedures.
+
+**Why an allowlist and not a percentage.** Same rule as
+unreachable_diagnostics.txt and verify/'s KNOWN_GAP (ADR-0013): this fails in
+**both** directions. A procedure that stops being covered fails, and one listed
+here that *becomes* covered fails just as loudly, because the list has then
+stopped describing this compiler. A bare percentage would hide which procedure
+was lost, and §5's whole argument is that a count nobody names is a claim
+nothing checks.
+
+Usage:
+
+    python3 tests/checks/coverage.py [repo-root] [--build DIR] [--report]
+
+`--report` prints the covered/uncovered breakdown and always exits 0; without
+it the exit status is the gate. Exits 77 (ctest's skip) when clang cannot build
+an instrumented compiler.
+"""
+
+import argparse
+import bisect
+import concurrent.futures
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+SKIP = 77
+
+# `; <spelling> <line>` immediately before the function it names -- written by
+# EmitProcBody, which is the only place that knows both. The counter in @pNNN
+# follows the order CodeGen walked the tree, so it cannot be recovered from the
+# source; this comment is the only mapping that exists.
+NAMED = re.compile(r"^; ([a-z_][a-z_0-9]*) (\d+)\n"
+                   r"define [^@]*@(p\d+)\(", re.MULTILINE)
+
+DECL = re.compile(r"^\s*(?:procedure|function)\s+([A-Za-z_][A-Za-z_0-9]*)",
+                  re.IGNORECASE)
+
+
+def run(*args, **kw):
+    return subprocess.run(args, capture_output=True, text=True, **kw)
+
+
+def corpus(root):
+    """Every source the suite compiles, with the flags it compiles it under.
+
+    Mirrors what CMakeLists.txt registers rather than re-deciding it: the
+    directory picks the standard (ADR-0033), a name.std sidecar overrides that
+    (ADR-0082), and a name.components case is translated with its components
+    imported, because that path is reached in no other way.
+    """
+    jobs = []
+    groups = [
+        ("iso7185", sorted((root / "tests").glob("*.pas"))),
+        ("extended", sorted((root / "tests" / "extended").glob("*.pas"))),
+        ("extended",
+         sorted((root / "tests" / "extended" / "components").glob("*.pas"))),
+        ("iso7185", sorted((root / "selfhost" / "badparse").glob("*.pas"))),
+        ("iso7185", sorted((root / "selfhost" / "badsema").glob("*.pas"))),
+        ("iso7185", [root / "selfhost" / "torture.pas"]),
+        ("extended", [root / "selfhost" / "compiler.pas"]),
+    ]
+    for std, files in groups:
+        for f in files:
+            if not f.exists():
+                continue
+            sidecar = f.with_suffix(".std")
+            if sidecar.exists():
+                std = sidecar.read_text().strip() or std
+            flags = [f"--std={std}"]
+            comps = f.with_suffix(".components")
+            if comps.exists():
+                for rel in comps.read_text().split():
+                    flags += ["--import", str(f.parent / rel)]
+            jobs.append((f, flags))
+
+    # The dump cases carry their own flag, and it is the reason they exist: the
+    # dumps are reached by no ordinary case, which is what this harness found.
+    for f in sorted((root / "tests" / "dumps").glob("*.pas")):
+        sidecar = f.with_suffix(".std")
+        std = sidecar.read_text().strip() if sidecar.exists() else "iso7185"
+        flags = f.with_suffix(".flags")
+        jobs.append((f, [f"--std={std}",
+                         flags.read_text().strip() if flags.exists()
+                         else "--dump-all"]))
+
+    # Two invocations that compile nothing. They are here because this harness
+    # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
+    # producttest.sh, verify.py, the BSI runner -- drive the compiler in ways
+    # no glob finds. That is a limitation of the instrument and is recorded in
+    # doc/sop.md §7; these two are added rather than left to misreport, because
+    # `--version` *is* asserted (producttest.sh compares it against
+    # CMakeLists.txt) and `-h` is too (producttest.sh checks it documents every
+    # flag ParseArgs accepts). Running them here claims only what is true: some
+    # case enters these procedures.
+    jobs.append((None, ["--version"]))
+    jobs.append((None, ["-h"]))
+    return jobs
+
+
+def build_instrumented(root, build, work):
+    """An instrumented copy of the compiler, from IR the *current* source
+    produced.
+
+    Not build/pascalc.ll: that is what the seed emitted, and the seed is the
+    previous release's compiler (ADR-0085), so it predates any change being
+    measured -- including the name comments this harness reads. Stage 2 is the
+    compiler built from the source in the tree, so stage 2 is what gets
+    measured."""
+    pascalc = build / "bin" / "pascalc"
+    pasrt = build / "lib" / "libpasrt.a"
+    if not pascalc.exists() or not pasrt.exists():
+        print(f"coverage: no compiler at {pascalc} -- build first", file=sys.stderr)
+        return None
+    if not shutil.which("clang"):
+        print("coverage: clang is not on PATH", file=sys.stderr)
+        return None
+
+    ir = work / "compiler.ll"
+    std = (root / "selfhost" / "compiler.std").read_text().strip()
+    r = run(str(pascalc), f"--std={std}",
+            str(root / "selfhost" / "compiler.pas"), "-o", str(ir))
+    if r.returncode != 0 or not ir.exists():
+        print("coverage: the compiler failed to translate itself\n" + r.stdout,
+              file=sys.stderr)
+        return None
+
+    covo, shim, exe = work / "cov.o", work / "covrt.o", work / "pascalc-cov"
+    # Compiled and linked in two steps on purpose: passing -fsanitize-coverage
+    # to the *link* makes clang add libclang_rt.ubsan_standalone.a, which
+    # Debian's packages do not ship. The pass is applied at compile time and
+    # the callbacks come from covrt.c, so the link needs nothing.
+    steps = [
+        ("instrumenting", ("clang", "-Wno-override-module", "-c", "-O0",
+                           "-fsanitize-coverage=func,trace-pc-guard,pc-table",
+                           str(ir), "-o", str(covo))),
+        ("the callback shim", ("clang", "-c", "-O1",
+                               str(root / "tests" / "checks" / "covrt.c"),
+                               "-o", str(shim))),
+        # -no-pie so a reported address is the one `nm` prints, with no load
+        # base to subtract and no chance of subtracting the wrong one.
+        ("linking", ("clang", "-no-pie", str(covo), str(shim), str(pasrt),
+                     "-lm", "-o", str(exe))),
+    ]
+    for what, cmd in steps:
+        r = run(*cmd)
+        if r.returncode != 0:
+            print(f"coverage: {what} failed\n{r.stderr}", file=sys.stderr)
+            return None
+    return exe, ir
+
+
+def procedures(ir, root):
+    """pNNN -> (spelling, line), with the spelling as the source writes it.
+
+    The comment carries the case-folded spelling, the lexer having folded it
+    (§6.1.3), so the *line* is what recovers the original -- and checking that
+    the declaration on that line folds to the same word is what keeps this a
+    mapping rather than a guess. A disagreement means the comment and the
+    source have drifted, which is worth failing over rather than papering."""
+    src = (root / "selfhost" / "compiler.pas").read_text().splitlines()
+    out = {}
+    for folded, line, sym in NAMED.findall(ir.read_text()):
+        n = int(line)
+        spelling = folded
+        if 1 <= n <= len(src):
+            m = DECL.match(src[n - 1])
+            if m and m.group(1).lower() == folded:
+                spelling = m.group(1)
+        out[sym] = (spelling, n)
+    return out
+
+
+def symbols(exe):
+    """Every pNNN in the binary, sorted by address, for mapping a PC back."""
+    r = run("nm", "--defined-only", str(exe))
+    syms = []
+    for line in r.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[1] in "tT" and re.fullmatch(r"p\d+", parts[2]):
+            syms.append((int(parts[0], 16), parts[2]))
+    syms.sort()
+    return syms
+
+
+def sweep(exe, jobs, work):
+    """Run the corpus, and return every address reached.
+
+    Compile failures are expected and ignored: a third of the corpus exists to
+    be rejected, and those runs reach error paths nothing else does."""
+    def one(idx_job):
+        idx, (src, flags) = idx_job
+        out = work / f"hit{idx}.txt"
+        env = dict(os.environ, PASCOV_OUT=str(out))
+        if idx == 0:
+            env["PASCOV_PCS"] = str(work / "pcs.txt")
+        # A job with no source compiles nothing (--version, -h); it still gets
+        # -o, which those flags stop before ever reaching.
+        argv = [str(exe), *flags]
+        if src is not None:
+            argv.append(str(src))
+        argv += ["-o", str(work / f"o{idx}.ll")]
+        try:
+            subprocess.run(argv, capture_output=True, timeout=300, env=env)
+        except subprocess.TimeoutExpired:
+            print(f"coverage: {src} timed out", file=sys.stderr)
+        return out
+
+    hits = set()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=os.cpu_count()) as ex:
+        for out in ex.map(one, enumerate(jobs)):
+            if out.exists():
+                hits.update(int(x, 16) for x in out.read_text().split())
+    return hits
+
+
+def allowed(root):
+    """The procedures accepted as unentered, each with the argument for it."""
+    path = root / "tests" / "checks" / "uncovered_procedures.txt"
+    if not path.exists():
+        return set()
+    return {line[2:].strip() for line in path.read_text().splitlines()
+            if line.startswith("= ")}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("root", nargs="?", default=None)
+    ap.add_argument("--build", default=None)
+    ap.add_argument("--report", action="store_true")
+    args = ap.parse_args()
+
+    root = pathlib.Path(args.root or
+                        pathlib.Path(__file__).resolve().parents[2]).resolve()
+    build = pathlib.Path(args.build or root / "build").resolve()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work = pathlib.Path(tmp)
+        built = build_instrumented(root, build, work)
+        if built is None:
+            print("coverage: skipped")
+            return SKIP
+        exe, ir = built
+
+        names = procedures(ir, root)
+        syms = symbols(exe)
+        if not syms or not names:
+            print("coverage: no instrumented procedures found -- the IR or the "
+                  "name comments changed shape; see NAMED in this script",
+                  file=sys.stderr)
+            return 1
+
+        addrs = [a for a, _ in syms]
+        hits = sweep(exe, corpus(root), work)
+        entered = set()
+        for pc in hits:
+            i = bisect.bisect_right(addrs, pc) - 1
+            if i >= 0:
+                entered.add(syms[i][1])
+
+    total = len(syms)
+    covered = len(entered)
+    # Keyed on the spelling, not on the line: a line number moves with every
+    # edit above it, and an allowlist that churned on unrelated changes would
+    # be rewritten without being read.
+    uncovered = {names.get(sym, (sym, 0))[0]
+                 for _, sym in syms if sym not in entered}
+    listed = allowed(root)
+
+    if args.report:
+        print(f"procedures: {covered}/{total} entered "
+              f"({100.0 * covered / total:.1f}%)")
+        for name in sorted(uncovered, key=str.lower):
+            line = next((l for n, l in names.values() if n == name), 0)
+            mark = " " if name in listed else "*"
+            print(f"  {mark} {name}  (compiler.pas:{line})")
+        print("\n* = not in tests/checks/uncovered_procedures.txt")
+        return 0
+
+    missing = sorted(uncovered - listed, key=str.lower)
+    revived = sorted(listed - uncovered, key=str.lower)
+
+    for name in missing:
+        line = next((l for n, l in names.values() if n == name), 0)
+        print(f"no case enters this procedure (compiler.pas:{line}): {name}")
+    for name in revived:
+        print("listed as unentered, but some case now enters it -- either the "
+              f"corpus grew or the argument was wrong: {name}")
+
+    if missing or revived:
+        print()
+        print(f"coverage: {covered}/{total} procedures entered "
+              f"({100.0 * covered / total:.1f}%); "
+              f"{len(missing)} unentered and unlisted, "
+              f"{len(revived)} wrongly listed")
+        print("Write a case, or -- if no program can reach it -- add it to "
+              "tests/checks/uncovered_procedures.txt with the argument for "
+              "why. See doc/sop.md §5.")
+        return 1
+
+    print(f"coverage: {covered}/{total} procedures entered "
+          f"({100.0 * covered / total:.1f}%), "
+          f"{len(listed)} argued unreachable, none unlisted")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -2002,24 +2002,7 @@ begin
   DefineKeyword(45, 'qualified', tkQualified)
 end;
 
-{ A str against a space-padded literal, which is the comparison LookupKeyword
-  does over the keyword table. }
-function StrIsLit(var s: str; word: kwLit): boolean;
-var n, k: integer; same: boolean;
-begin
-  n := kwWidth;
-  while (n > 0) and (word[n] = ' ') do
-    n := n - 1;
-  same := s.len = n;
-  k := 1;
-  while same and (k <= n) do begin
-    same := s.ch[k] = word[k];
-    k := k + 1
-  end;
-  StrIsLit := same
-end;
-
-{ ...and against a *wider* literal, for the one word-symbol the keyword table
+{ A str against a *wide* literal, for the one word-symbol the keyword table
   cannot hold. 6.4.2.5's `restricted` is ten characters and kwLit is nine wide;
   widening it would repad every literal in the file for one word, and 10206
   already forced the same split on the required identifiers, which is why
@@ -19156,6 +19139,12 @@ end;
 
 { And again for 6.7.2.5's equal-length requirement, where one of the lengths is
   a discriminant and neither is known until the program runs. }
+{ No program reaches this, and tests/checks/uncovered_procedures.txt carries
+  the argument: the guard that selects EmitStringCompare requires both operands
+  to have static bounds, which is DynamicExtent being false, and the one other
+  arm that calls it cannot be reached at all. Kept because relaxing that guard
+  -- so two schematic char arrays may be compared -- is a feature, and this is
+  the check it would need. }
 procedure EmitTrapLength(var cond, left, right: str);
 var t, c: integer;
 begin
@@ -21359,7 +21348,13 @@ end;
   equal, and this compiler said so. }
 { A concatenation appearing where a *value* is wanted rather than where a
   string is: only a string context can consume one, so the pair is built and
-  the pointer stands for it. Sema has already refused every other use. }
+  the pointer stands for it. Sema has already refused every other use.
+
+  Which is why no program enters this, and why the entry in
+  tests/checks/uncovered_procedures.txt says its argument is empirical: every
+  context that admits a string-valued expression routes it through EmitString
+  before EmitExpr, and eighteen were compiled to check. A nineteenth would
+  retire the entry -- and want a case, not an edit. }
 procedure EmitStringValue(e: nodePtr; var v: str);
 var d, l: str;
 begin
@@ -25083,6 +25078,19 @@ var p: symPtr; slot, res, nm: str;
 begin
   p := d^.pdSym;
   writeln(ircode);
+  { The Pascal name this function was written under, and the line it starts
+    on. The *name* is a counter (AppendProcName says why it has to be), which
+    makes -S output unreadable and leaves anything mapping a symbol back to
+    the source with nothing to map through -- so the spelling is carried in a
+    comment, where it costs no linkage and no assembler can act on it.
+
+    tests/checks/coverage.py is what reads it: it maps the procedures a corpus
+    run entered back to the ones this file declares, which cannot be inferred
+    from the counter, since irId follows the order CodeGen walked the tree and
+    not the order the source declares. }
+  write(ircode, '; ');
+  WritePoolIr(p^.at, p^.len);
+  writeln(ircode, ' ', d^.line:1);
   { An exported procedure is externally visible, because 6.13 lets the
     component that calls it be another translation. }
   if p^.linkKind = lnkProc then write(ircode, 'define ')

@@ -1,0 +1,55 @@
+# Procedures no case enters, because no program can reach them.
+#
+# A catalogue of arguments, not a list of exemptions -- the same instrument
+# tests/checks/unreachable_diagnostics.txt is, for the same reason and with the
+# same rule: tests/checks/coverage.py fails in BOTH directions, so a procedure
+# listed here that *becomes* entered is as loud as one that quietly stops
+# being. That is verify/'s KNOWN_GAP rule (ADR-0013), and its reason is that an
+# entry which has stopped being true is describing a compiler that no longer
+# exists.
+#
+# Adding an entry is a decision to argue for in the commit message. "I could
+# not write the program" is not the argument; "no program can be written" is.
+# Where an entry falls short of that, it says so in as many words rather than
+# reading as though it did not -- a claim nothing checks is exactly what this
+# file exists to stop (ADR-0067), and overstating one here would be the
+# ADR-0072 fault in a new place.
+#
+# Format: `= ` then the procedure's name as selfhost/compiler.pas spells it.
+# Everything else is commentary.
+
+# EmitStringCompare traps when the two operands' run-time lengths differ, which
+# it can only be asked for when one of them has a dynamic extent. It cannot be:
+#
+#   - EmitBinary reaches EmitStringCompare from two places. The first requires
+#     `loDisc = nil` and `hiDisc = nil` on *both* operands, which is precisely
+#     DynamicExtent being false for a char array -- so the trap is dead on that
+#     path by the guard that selected it.
+#   - The second is `else if IsCharArray(l) and IsCharArray(r)`, and that arm
+#     is itself unreachable: IsStringType is `IsVarString or IsCharArray`, so
+#     IsCharArray implies IsStringOrChar, so two char arrays always satisfy the
+#     *earlier* condition and never fall through to it.
+#
+# Both halves would have to change together for this to fire -- relaxing the
+# first guard to admit a dynamic extent is what it is written for, and that is
+# a feature (comparing two schematic char arrays), not an accident.
+= EmitTrapLength
+
+# A concatenation emitted where a general *value* is wanted rather than where a
+# string is. Every context in the language that admits a string-valued
+# expression takes it through EmitString before EmitExpr is ever called, and
+# EmitExpr's nkBinary arm is the only caller of EmitBinary -- so the arm is
+# defensive, which is what the comment at its site has always said ("Sema has
+# already refused every other use").
+#
+# **This argument is empirical, not structural, and is the weaker of the two
+# entries here.** Eighteen candidate positions were compiled and none reached
+# it: assignment, a parenthesised assignment, a comparison, a write parameter,
+# a writestr parameter, a record field, a record-value component, an
+# array-value component, a function result, an initial-state value, a
+# structured constant, a concatenation of substrings, a concatenation of a
+# function result, a nested concatenation, a substring destination, and the
+# arguments of substr, trim, length, index and EQ. What would retire this entry
+# is a nineteenth position, not a proof -- so if one is found, the fix is a
+# case, not an edit here.
+= EmitStringValue

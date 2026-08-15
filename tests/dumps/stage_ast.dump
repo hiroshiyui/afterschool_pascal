@@ -1,0 +1,41 @@
+program shapes
+  params
+    name output @7:16
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+      var
+        names
+          name a @8:5
+          name b @8:8
+        type
+          named integer @8:11
+    procs
+    body
+      compound @9:1
+        assign @10:3
+          var a @10:3
+          int 1 @10:8
+        assign @11:3
+          var b @11:3
+          binary sub @11:20
+            binary mul @11:10
+              var a @11:8
+              binary add @11:15
+                var a @11:13
+                int 2 @11:17
+            int 3 @11:22
+        if @12:3
+          binary gt @12:8
+            var b @12:6
+            var a @12:10
+          writeln @12:17
+            arg - -
+              str [gt] @12:25
+          else
+          writeln @12:36
+            arg - -
+              str [le] @12:44
