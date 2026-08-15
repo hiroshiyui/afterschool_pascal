@@ -4,10 +4,17 @@ Scenarios written against **clauses of the two standards**, in a subset of
 Gherkin, run by `run.py`.
 
 ```sh
-ctest --test-dir build -R '^spec-'          # as part of an ordinary run
+ctest --test-dir build -R '^spec-'            # as part of an ordinary run
 python3 tests/spec/run.py --pascalcc tools/pascalcc
-python3 tests/spec/run.py --coverage        # which clauses are cited
+python3 tests/spec/run.py --coverage          # which clauses are cited
+python3 tests/spec/run.py --check-clauses     # the traceability gate
+python3 tests/spec/run.py --write-pending     # after adding a citation
 ```
+
+`clauses/pending.txt` is the work queue: the testable clauses no scenario cites
+yet. Adding one is the ordinary way to grow this suite — write the scenario,
+tag it, then regenerate the pending list and say in the commit message which
+clause gained one.
 
 ## Why it exists
 
@@ -94,8 +101,9 @@ Two rules that keep a scenario honest:
 - **Not a replacement for `tests/`.** The golden corpus is far larger and
   covers the compiler; this covers *readings*. A feature landing still needs
   its `tests/*.pas` pair.
-- **Not complete, and its denominator is untriaged.** `--coverage` reports
-  which clauses are cited out of all 292, but many are structural — definitions,
-  grammar productions, the shape of the document — and will never carry a
-  scenario. The percentage is a report, not a target, and `doc/sop.md` §7 says
-  so.
+- **Not complete, and citation is not depth.** `--coverage` reports 13 of the
+  **189 testable** clauses — the denominator is triaged in
+  `clauses/triage.tsv` (ADR-0106), so the 93 structural headings and the 10 for
+  conformant array parameters are excluded rather than counted as gaps. But a
+  clause with one scenario counts as cited, and §6.8.3.9 alone has more
+  requirements than the six here. `doc/sop.md` §7 carries that caveat.

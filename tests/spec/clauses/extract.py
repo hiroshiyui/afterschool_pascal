@@ -56,7 +56,13 @@ LIGATURES = [
     (r"identi ed", "identified"),
     (r"Identi ed", "Identified"),
     (r"\bxed-point\b", "fixed-point"),
+    # "The floating-point ..." loses both the ligature and the space.
+    (r"\bTheoating-point\b", "The floating-point"),
+    (r"\bThe oating-point\b", "The floating-point"),
     (r"speci cation", "specification"),
+    # ff goes the same way as fi and fl.
+    (r"\bBu er\b", "Buffer"),
+    (r"\bo set\b", "offset"),
 ]
 
 

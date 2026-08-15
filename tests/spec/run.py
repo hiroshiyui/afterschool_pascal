@@ -294,6 +294,93 @@ def run(scenario, pascalcc, work):
 # clause coverage
 
 
+def triage():
+    """clause -> (class, reason), per standard. ADR-0106 has the argument for
+    why the denominator needs triaging at all."""
+    path = HERE / "clauses" / "triage.tsv"
+    out = {}
+    if not path.exists():
+        return out
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        std, clause, klass, reason = (line.split("\t") + ["", "", ""])[:4]
+        out.setdefault(std, {})[clause] = (klass, reason)
+    return out
+
+
+def pending_file():
+    return HERE / "clauses" / "pending.txt"
+
+
+def read_pending():
+    path = pending_file()
+    if not path.exists():
+        return None
+    return {line.strip() for line in path.read_text().splitlines()
+            if line.strip() and not line.startswith("#")}
+
+
+def check_clauses(scenarios):
+    """The gate: fails in both directions, as uncovered_procedures.txt does.
+
+    A clause that stops being cited is a scenario lost. A clause cited that the
+    triage calls structural or unimplemented is either a mis-tagged scenario or
+    a wrong triage, and both are worth hearing about. A clause that *starts*
+    being cited is not a failure to be fixed but a list to regenerate -- said
+    in those words, so nobody reads it as a defect."""
+    tri, cited = triage(), coverage(scenarios)
+    problems = []
+
+    for std, clauses in cited.items():
+        known = tri.get(std, {})
+        for clause in sorted(clauses):
+            if clause not in known:
+                problems.append(f"{std} §{clause} is cited by "
+                                f"{clauses[clause][0].name!r} but is not a clause "
+                                "of that standard")
+                continue
+            klass, reason = known[clause]
+            if klass != "testable":
+                problems.append(
+                    f"{std} §{clause} is cited by {clauses[clause][0].name!r} "
+                    f"but is triaged {klass}: {reason}")
+
+    testable = {f"{std}:{c}" for std, rows in tri.items()
+                for c, (k, _) in rows.items() if k == "testable"}
+    covered = {f"{std}:{c}" for std, rows in cited.items() for c in rows}
+    now_pending = testable - covered
+
+    recorded = read_pending()
+    if recorded is None:
+        print("spec: no pending list recorded; run --write-pending",
+              file=sys.stderr)
+        return 1
+
+    lost = sorted(now_pending - recorded)
+    gained = sorted(recorded - now_pending)
+
+    for c in lost:
+        problems.append(f"{c} was cited by a scenario and is not any more")
+
+    for p in problems:
+        print(f"spec: {p}")
+    if problems:
+        print(f"\nspec: {len(problems)} clause-traceability problems")
+        return 1
+
+    if gained:
+        print(f"spec: {len(gained)} newly cited clause(s): "
+              + ", ".join(gained))
+        print("      regenerate the pending list: "
+              "python3 tests/spec/run.py --write-pending")
+        return 0
+
+    print(f"spec: {len(covered)}/{len(testable)} testable clauses cited, "
+          f"{len(now_pending)} pending, none lost or mis-tagged")
+    return 0
+
+
 def inventory():
     out = {}
     for name, std in (("iso7185", "iso7185"), ("iso10206", "extended")):
@@ -319,7 +406,7 @@ def coverage(scenarios):
 
 
 def report(scenarios):
-    inv, cited = inventory(), coverage(scenarios)
+    inv, cited, tri = inventory(), coverage(scenarios), triage()
     print(f"specification suite: {len(scenarios)} scenarios\n")
     for std, label in (("iso7185", "ISO 7185:1990"),
                        ("extended", "ISO/IEC 10206:1991")):
@@ -327,15 +414,19 @@ def report(scenarios):
         have = cited.get(std, {})
         known = [c for c in have if c in clauses]
         unknown = sorted(c for c in have if c not in clauses)
-        pct = 100.0 * len(known) / len(clauses) if clauses else 0.0
-        print(f"{label}: {len(known)}/{len(clauses)} clauses cited "
+        rows = tri.get(std, {})
+        testable = [c for c, (k, _) in rows.items() if k == "testable"]
+        other = len(rows) - len(testable)
+        hit = [c for c in known if rows.get(c, ("", ""))[0] == "testable"]
+        pct = 100.0 * len(hit) / len(testable) if testable else 0.0
+        print(f"{label}: {len(hit)}/{len(testable)} testable clauses cited "
               f"({pct:.1f}%), {sum(len(v) for v in have.values())} citations")
+        print(f"  {other} of its {len(clauses)} headings carry no requirement a "
+              "scenario could exercise")
         for c in unknown:
             print(f"  ! {c} is cited but is not a clause of this standard")
-    print("\nMany clauses are structural -- definitions, grammar, the shape of "
-          "the document -- \nand will never carry a scenario. This is a report, "
-          "not a target: doc/sop.md §7\nrecords that the denominator is "
-          "untriaged.")
+    print("\nThe denominator is the *testable* clauses, triaged in "
+          "clauses/triage.tsv (ADR-0106).\nRun --check-clauses for the gate.")
 
 
 # --------------------------------------------------------------------------
@@ -345,6 +436,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pascalcc", default=None)
     ap.add_argument("--coverage", action="store_true")
+    ap.add_argument("--check-clauses", action="store_true",
+                    help="the traceability gate; needs no compiler")
+    ap.add_argument("--write-pending", action="store_true")
     ap.add_argument("-k", default=None, help="only scenarios whose name matches")
     ap.add_argument("feature", nargs="*",
                     help="feature files to run; all of them when none is named")
@@ -369,6 +463,31 @@ def main():
     if args.coverage:
         report(scenarios)
         return 0
+
+    if args.write_pending:
+        tri, cited = triage(), coverage(scenarios)
+        testable = {f"{std}:{c}" for std, rows in tri.items()
+                    for c, (k, _) in rows.items() if k == "testable"}
+        covered = {f"{std}:{c}" for std, rows in cited.items() for c in rows}
+        rest = sorted(testable - covered,
+                      key=lambda s: (s.split(":")[0],
+                                     [int(x) for x in s.split(":")[1].split(".")]))
+        pending_file().write_text(
+            "# Testable clauses no scenario cites yet (ADR-0106).\n"
+            "#\n"
+            "# Not a list of gaps to be ashamed of -- it is the work queue, and\n"
+            "# the gate reads it so that a clause leaving this list without the\n"
+            "# list being regenerated fails. Regenerate deliberately:\n"
+            "#\n"
+            "#     python3 tests/spec/run.py --write-pending\n"
+            "#\n"
+            "# and say in the commit message which clause gained a scenario.\n\n"
+            + "\n".join(rest) + "\n")
+        print(f"spec: {len(rest)} clauses pending -> {pending_file().name}")
+        return 0
+
+    if args.check_clauses:
+        return check_clauses(scenarios)
 
     if not args.pascalcc:
         print("spec: --pascalcc is required to run scenarios", file=sys.stderr)

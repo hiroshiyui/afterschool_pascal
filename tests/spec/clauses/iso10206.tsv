@@ -61,7 +61,7 @@
 6.5.3.2	Indexed-variables
 6.5.3.3	Field-designators
 6.5.4	Identified-variables
-6.5.5	Bu er-variables
+6.5.5	Buffer-variables
 6.5.6	Substring-variables
 6.6	Initial states
 6.7	Procedure and function declarations
@@ -157,7 +157,7 @@
 6.10.3.2	Char-type
 6.10.3.3	Integer-type
 6.10.3.4	Real-type
-6.10.3.4.1	The oating-point representation
+6.10.3.4.1	The floating-point representation
 6.10.3.4.2	The fixed-point representation
 6.10.3.5	Boolean-type
 6.10.3.6	String-types

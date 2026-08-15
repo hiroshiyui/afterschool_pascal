@@ -162,6 +162,15 @@ if(Python3_FOUND)
                      --pascalcc ${CMAKE_SOURCE_DIR}/tools/pascalcc ${f})
     set_tests_properties(spec-${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
   endforeach()
+
+  # ...and that every clause a scenario cites is one that can carry a scenario
+  # (ADR-0106). Needs no compiler: it compares the citations against
+  # clauses/triage.tsv and clauses/pending.txt, and fails in both directions --
+  # a clause that stops being cited, and a clause cited that the triage calls
+  # structural or unimplemented.
+  add_test(NAME spec-clause-traceability
+           COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/spec/run.py
+                   --check-clauses)
 endif()
 
 # The --dump flags. Their walkers were entered by no case at all until

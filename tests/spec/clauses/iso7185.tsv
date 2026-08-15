@@ -110,7 +110,7 @@
 6.9.3.2	Char-type
 6.9.3.3	Integer-type
 6.9.3.4	Real-type
-6.9.3.4.1	Theoating-point representation
+6.9.3.4.1	The floating-point representation
 6.9.3.4.2	The fixed-point representation
 6.9.3.5	Boolean-type
 6.9.3.6	String-types
