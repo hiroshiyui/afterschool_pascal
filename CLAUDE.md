@@ -403,6 +403,27 @@ buffer variable are one implementation with a text branch each, not two.
   test defends this; it is ADR-0017's rule that a structured value has no
   register form, and that rule is what lets both backends share one copy path.
 
+## How a change lands
+
+`doc/sop.md` is the standard operating procedure: how a change is classified,
+what its class has to satisfy, and — the part worth reading before anything
+else — **what each oracle here cannot see**. Every gate in it exists because of
+a blind spot in that table, and the table is why the gates look
+disproportionate to the change they guard.
+
+The one sentence it rests on: **a green suite is not evidence; evidence is a
+named case that fails without the change.** This repository has been green over
+a `verify/` model describing a compiler that had been replaced, over a stack
+leak the default `-O2` optimised out of sight, and over 32 diagnostics nothing
+named.
+
+`.claude/skills/change-lifecycle/` is the same procedure in the order an agent
+executes it, and dispatches to the specialist skills — `code-review`,
+`langspec-audit`, `tracing-thoroughly`, `release-engineering`,
+`docs-engineering`, `commit-and-push`, `performance-profile`, `security-audit`.
+`doc/sop.md` §7 is a live register of what is currently *not* checked; add to it
+when a gate is declined.
+
 ## Decisions
 
 `doc/adr/` holds the architecture decision records. Read them before undoing
