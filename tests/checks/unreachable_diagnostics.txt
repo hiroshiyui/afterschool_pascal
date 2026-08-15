@@ -1,0 +1,38 @@
+# Diagnostics no golden names, because no program can reach them.
+#
+# This is a catalogue of arguments, not a list of exemptions. Each entry says
+# what would have to change for the branch to fire, and the same argument is
+# written at the branch itself in selfhost/compiler.pas -- so a reader who
+# arrives from either direction finds it.
+#
+# tests/checks/diagnostic_coverage.py fails in BOTH directions: a message here
+# that acquires a golden is as loud as a message with neither. That is
+# verify/'s KNOWN_GAP rule (ADR-0013) applied to a second catalogue, and for
+# its reason -- an entry that has stopped being true is describing a compiler
+# that no longer exists.
+#
+# Adding an entry is a decision to argue for in the commit message. "I could
+# not write the program" is not the argument; "no program can be written" is.
+#
+# Format: `= ` then the message exactly, so that a leading space -- which the
+# tail of a two-part diagnostic has -- survives. Everything else is commentary.
+
+# ParseLabel writes its context only when the token is *not* an integer, and
+# the one call site passing this context is guarded by Check(tkInt). It would
+# fire if that guard were loosened, which is why the context is kept rather
+# than replaced by ctxNone.
+= at the start of a labelled statement
+
+# ADR-0096 made a variant part's labels cover its tag-type exactly, so a tag
+# value that is in the type always selects an arm and one that is not has been
+# reported a few lines earlier. What is left is a record whose variant part was
+# already rejected, where this would be a second complaint about the first
+# mistake. It would fire again if the coverage rule were relaxed.
+=  is selected by this tag value
+
+# No file-valued expression that is not a designator can be written: §6.7.2
+# refuses a result type that is or contains a file -- which rules out a call
+# and every selector over one -- and there is neither a file literal nor a
+# file-valued constant. These would fire if a file result were ever permitted.
+= the file written to must be a variable
+= the file read from must be a variable
