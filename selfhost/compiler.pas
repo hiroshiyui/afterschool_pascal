@@ -1038,7 +1038,17 @@ type
         makes the two an *iteration-clause*, one production with two
         alternatives, so they are one node with two shapes. }
       nkFor:        (frVar, frFrom, frTo, frSet, frBody: nodePtr;
-                     frDownto: boolean);
+                     frDownto: boolean;
+                     { `for v in s` walks the base type's ordinals in a counter
+                       the program cannot name and that has to survive from one
+                       iteration to the next, so it needs storage. That storage
+                       is a frame slot -- the shape a `with` binding already
+                       has -- rather than an alloca, because an alloca is
+                       written wherever the emitter has reached and a
+                       `for ... in` nested in another loop would claim a fresh
+                       one on every iteration of the outer one. nil for the
+                       sequence form, whose limit needs no storage at all. }
+                     frCounter: symPtr);
       { pcSelect: `new(p, c1, ..., cn)` -- the arms the tag values select,
         outermost first, as indices into the variant part at each level
         (ISO 7185 6.6.5.3). nil for the one-argument form. }
@@ -1867,6 +1877,27 @@ begin
   until v = 0;
   for k := n downto 1 do PoolPut(digits[k]);
   len := 5 + n
+end;
+
+{ The name of the ordinal counter a `for v in s` walks its base type with. It
+  is a frame variable so that it survives the iteration and so that a nested
+  `for ... in` does not allocate one per iteration of the loop around it; the
+  program cannot name it, and the `$` is what keeps it out of reach of a source
+  identifier. }
+procedure InternForName(slot: integer; var at, len: integer);
+var digits: array [1..12] of char; n, v, k: integer;
+begin
+  at := poolLen + 1;
+  PoolPut('f'); PoolPut('o'); PoolPut('r'); PoolPut('$');
+  n := 0;
+  v := slot;
+  repeat
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  until v = 0;
+  for k := n downto 1 do PoolPut(digits[k]);
+  len := 4 + n
 end;
 
 { ------------------------------------------------------ the token table -- }
@@ -2970,6 +3001,11 @@ begin
       n^.pcStd := spNone;
       n^.pcSelect := nil
     end;
+    { `for v in s` gained a frame slot for its counter, so nkFor left the
+      "nothing of Sema's to clear" group below -- the move ADR-0066 made for
+      nkIndex and nkSubstr, for the same reason: the dump reads the field
+      whether or not Sema ran. }
+    nkFor: n^.frCounter := nil;
     nkCase: begin n^.csOtherwise := nil; n^.csHasOtherwise := false end;
     nkCaseArm: begin n^.caValues := nil; n^.caValueTail := nil end;
     nkGroup: begin
@@ -3024,7 +3060,7 @@ begin
     end;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
-    nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
+    nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
     nkSubrange, nkArray, nkRecord, nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted,
     nkConstDecl, nkTypeDecl, nkLabelDecl,
@@ -14074,6 +14110,7 @@ end;
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
     forEntry: symListPtr; owning: symPtr; badFunc: boolean;
+    counterAt, counterLen: integer;
 begin
   if s <> nil then
     case s^.kind of
@@ -14394,11 +14431,21 @@ begin
             write(', so it cannot take the members of a ');
             WriteTypeName(st);
             writeln
-          end
+          end;
           { 6.9.3.9.3 makes the *members* assignment-compatible rather than the
             set, so a control variable narrower than the base type is legal and
             D.96 makes a member outside it an error -- checked at the store, by
             the code every other store already goes through. }
+
+          { The ordinal counter CodeGen walks the base type's values with. A
+            frame slot is Sema's to give, so it is given here; and it is given
+            per *statement*, so two for-in statements -- nested or merely
+            adjacent -- cannot share one. }
+          if currentProc <> nil then begin
+            InternForName(currentProc^.frameCount, counterAt, counterLen);
+            s^.frCounter :=
+              AddHiddenVar(counterAt, counterLen, skVar, intType, currentProc)
+          end
         end
         else begin
         CheckExpr(s^.frFrom);
@@ -23921,8 +23968,15 @@ begin
   hi := OrdinalHi(base);
   if hi > setLimit then hi := setLimit;
 
-  Def(counter);
-  writeln(ircode, 'alloca i32');
+  { The counter lives in a frame slot Sema gave this statement, not in an
+    alloca. It has to survive from one iteration to the next, so it needs
+    storage -- but an alloca is emitted wherever the sequential emitter has
+    reached (ADR-0025), so a `for ... in` inside another loop would claim a
+    fresh one on every iteration of the outer loop and, at -O0 where nothing
+    promotes it away, exhaust the stack. A frame slot is claimed once per
+    activation, which is the same reason ADR-0043 gives for not putting `new`'s
+    scratch storage on the stack. }
+  FrameSlot(s^.frCounter, counter);
   OpInt(lo, i);
   write(ircode, '  store i32 ');
   PutOp(i);
@@ -24039,7 +24093,7 @@ begin
 end;
 
 procedure EmitFor(s: nodePtr);
-var slot, from, toV, limit, cur, lim, test, now, lim2, same, next: str;
+var slot, from, toV, cur, test, now, same, next: str;
     willRun: str;
     t: typePtr; condB, bodyB, stepB, endB, checkB, skipB: integer;
     unsignedOrdinal: boolean;
@@ -24096,18 +24150,19 @@ begin
     StartBlock(skipB)
   end;
 
-  { The limit is evaluated exactly once, as ISO 7185 6.8.3.9 requires. }
-  Def(limit);
-  write(ircode, 'alloca ');
-  PutLlType(t);
-  writeln(ircode);
-  write(ircode, '  store ');
-  PutLlType(t);
-  write(ircode, ' ');
-  PutOp(toV);
-  write(ircode, ', ptr ');
-  PutOp(limit);
-  writeln(ircode);
+  { The limit is evaluated exactly once, as ISO 7185 6.8.3.9 requires, and
+    `toV` *is* that evaluation -- so it needs no storage of its own. It is
+    defined before any of the loop's blocks exist, which is what makes it
+    dominate every use inside them however the to-expression was emitted.
+
+    It used to be stored into an alloca and loaded back twice per iteration.
+    That alloca is written where the emitter has reached rather than in the
+    entry block -- the emitter is sequential and cannot go back (ADR-0025) --
+    so a `for` inside any loop claimed a fresh one on every iteration of the
+    outer one, and at -O0, where nothing promotes it away, a long-running
+    nested loop exhausted the stack. ADR-0043 names that hazard for `new` and
+    avoids it there; this is the same hazard, and the answer here is that there
+    was never anything to store. }
   write(ircode, '  store ');
   PutLlType(t);
   write(ircode, ' ');
@@ -24129,12 +24184,6 @@ begin
   write(ircode, ', ptr ');
   PutOp(slot);
   writeln(ircode);
-  Def(lim);
-  write(ircode, 'load ');
-  PutLlType(t);
-  write(ircode, ', ptr ');
-  PutOp(limit);
-  writeln(ircode);
   { Integer is the only ordinal with negative values; char, boolean and
     enumerations all order as unsigned. }
   unsignedOrdinal := not IsInteger(t);
@@ -24149,7 +24198,7 @@ begin
   write(ircode, ' ');
   PutOp(cur);
   write(ircode, ', ');
-  PutOp(lim);
+  PutOp(toV);
   writeln(ircode);
   write(ircode, '  br i1 ');
   PutOp(test);
@@ -24165,19 +24214,13 @@ begin
   write(ircode, ', ptr ');
   PutOp(slot);
   writeln(ircode);
-  Def(lim2);
-  write(ircode, 'load ');
-  PutLlType(t);
-  write(ircode, ', ptr ');
-  PutOp(limit);
-  writeln(ircode);
   Def(same);
   write(ircode, 'icmp eq ');
   PutLlType(t);
   write(ircode, ' ');
   PutOp(now);
   write(ircode, ', ');
-  PutOp(lim2);
+  PutOp(toV);
   writeln(ircode);
   write(ircode, '  br i1 ');
   PutOp(same);

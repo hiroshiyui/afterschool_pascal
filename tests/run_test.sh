@@ -38,6 +38,11 @@
 #              implementation-defined, and this implementation defines them
 #              from that variable when it is set — which is what lets a golden
 #              file name a date at all.
+#   name.opt   one word: the optimisation flag to compile this case with, where
+#              the default -O2 would hide what it is testing. Storage is the
+#              only thing that has needed it -- an alloca inside a loop is
+#              invisible at -O2, LLVM being free to hoist one whose address
+#              does not escape, so a leak of it can only be seen at -O0.
 #   arguments  two writable scratch paths are always passed, so a program
 #              whose header names external files has somewhere to put them.
 #              A program that names none simply ignores them.
@@ -55,6 +60,7 @@ expected_out="${source_file%.pas}.out"
 expected_err="${source_file%.pas}.err"
 stdin_file="${source_file%.pas}.in"
 epoch_file="${source_file%.pas}.epoch"
+opt_file="${source_file%.pas}.opt"
 name=$(basename "${source_file%.pas}")
 [[ -f $stdin_file ]] || stdin_file=/dev/null
 # Unset when there is no .epoch file, so every other case runs against the real
@@ -83,8 +89,15 @@ normalise() { sed "s|$source_file|<source>|g" "$1"; }
 # that opens thousands of scratch files in sequence (files_scratch.pas,
 # goto_files.pas) can only fail if the table can actually run out, and on a
 # machine whose default limit is half a million it never would.
+#
+# The stack is bounded for the same reason and it is the same argument: a test
+# that leaks stack per iteration can only fail where the stack can actually run
+# out, and 8 MB is the ordinary Linux default -- so this changes nothing for
+# every other case and makes for_nested_stack.pas mean something wherever it
+# runs, including a container that inherited no limit at all.
 run_program() {
   ( ulimit -n 256
+    ulimit -s 8192
     exec "$work/$name" "$work/file1" "$work/file2" <"$stdin_file" )
 }
 
@@ -115,7 +128,11 @@ if [[ -f $components_file ]]; then
   done <"$components_file"
 fi
 
-"$pascalc" "--std=$standard" "$source_file" "${imports[@]+"${imports[@]}"}" \
+optflag=()
+[[ -f $opt_file ]] && optflag=("$(tr -d '[:space:]' <"$opt_file")")
+
+"$pascalc" "--std=$standard" "${optflag[@]+"${optflag[@]}"}" "$source_file" \
+  "${imports[@]+"${imports[@]}"}" \
   "${objects[@]+"${objects[@]}"}" -o "$work/$name" 2>"$work/compile.err"
 compile_status=$?
 
