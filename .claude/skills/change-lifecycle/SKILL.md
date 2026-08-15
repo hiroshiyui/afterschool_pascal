@@ -73,20 +73,35 @@ When landing a change, always follow these steps:
    breaks the build proves nothing — it has to produce a working compiler with
    the defect back in it.
 
-6. **Count what you added.** If the change introduced diagnostics, run the
-   sweep in `doc/sop.md` §5 and account for every message it prints: write the
-   case, or prove the branch unreachable and **comment it at its site** with
-   what would have to change for it to fire. Do not leave a message merely
-   unmentioned.
-
-   `grep` here is `ugrep` and its `--include` does not filter as expected. Pass
-   an explicit file list, or the sweep will match `compiler.pas` itself and
-   report everything covered.
-
-7. **Run the oracles the change can reach**, not just `ctest`:
+6. **Count what you added.** For diagnostics this is now mechanical — the
+   `diagnostic-coverage` case runs with every `ctest`, or on its own:
 
    ```sh
-   ctest --test-dir build --output-on-failure      # 497 cases
+   python3 tests/checks/diagnostic_coverage.py
+   ```
+
+   Account for every message it names: write the case, or prove the branch
+   unreachable, **comment it at its site** with what would have to change, and
+   add it to `tests/checks/unreachable_diagnostics.txt` with that argument.
+   "I could not write the program" is not the argument; "no program can be
+   written" is. The check fails in both directions, so an entry that later
+   acquires a golden is as loud as a message with none.
+
+   For anything the check does not cover, count by hand and **beware the
+   tools**: `grep` here is `ugrep`, whose `--include` does not filter as
+   expected — a sweep written with it silently matched `compiler.pas` itself
+   and reported everything covered.
+
+7. **Run the oracles the change can reach**, not just `ctest`. Three gates are
+   now mechanical and will fail without you: `diagnostic-coverage` is a `ctest`
+   case, and CI carries `model-drift` (a CodeGen change with no `verify/`
+   change and no `Model-unchanged:` trailer) and `unoptimised` (the corpus at
+   `-O0`). Run the last one locally before pushing a CodeGen change —
+   `AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build` — rather than learning
+   it from CI:
+
+   ```sh
+   ctest --test-dir build --output-on-failure      # 498 cases
    python3 verify/verify.py --pascalc tools/pascalcc --crosscheck
    selfhost/irtest.sh build/bin/pascalc            # stage 2 = stage 3
    selfhost/producttest.sh build/bin/pascalc build/lib

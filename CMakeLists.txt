@@ -96,9 +96,21 @@ set(APASCAL_TEST_ENV
     PASCALC=${APASCAL_PASCALC}
     AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib)
 
+# Every diagnostic the compiler can write is named by some golden (doc/sop.md
+# §5). A ctest case rather than a CI-only job on purpose: it needs no git and
+# no network, so it is a check a developer can run before pushing rather than
+# one that reports after. It fails in both directions -- a message with no
+# golden, and a message listed as unreachable that acquires one.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+  add_test(NAME diagnostic-coverage
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/diagnostic_coverage.py
+                   ${CMAKE_SOURCE_DIR})
+endif()
+
 # Formal verification of the lowering rules (verify/). Skips rather than fails
 # when z3 is absent, so a checkout without it still builds and tests green.
-find_package(Python3 COMPONENTS Interpreter QUIET)
 if(Python3_FOUND)
   add_test(NAME verify-lowering
            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/verify/verify.py

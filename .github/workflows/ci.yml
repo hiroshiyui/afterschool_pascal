@@ -192,3 +192,79 @@ jobs:
             exit 1
           fi
           echo "seed/pascalc.ll matches."
+
+  unoptimised:
+    # The corpus compiles at -O2, which is pascalcc's default and what a user
+    # gets. That left `-O0` almost unexercised, and a codegen defect visible
+    # only without the optimiser had nothing looking for it: ADR-0102's storage
+    # leak survived 495 tests, the validation suite and the SMT proofs, because
+    # LLVM hoists an alloca whose address does not escape and the whole leak
+    # disappears at -O2.
+    #
+    # So this job runs the same suite with AFTERSCHOOL_PASCAL_OPT=-O0. A case
+    # with a name.opt sidecar keeps its own level -- a case pins one because
+    # the *other* cannot see what it is testing, and a sweep must not undo
+    # that.
+    #
+    # It is a job rather than a second local ctest run because it doubles the
+    # time and finds nothing on most changes. Run it by hand before touching
+    # CodeGen: AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build
+    name: the corpus at -O0
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Test at -O0
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+        env:
+          AFTERSCHOOL_PASCAL_OPT: -O0
+
+  model-drift:
+    # doc/sop.md gate A1, made mechanical: verify/lowering.py is a model of the
+    # code generator, and the rules prove that model against a statement of the
+    # standard -- neither touches the compiler. So a lowering that changes
+    # without its model keeps passing while describing a compiler that no
+    # longer exists, which is exactly what happened to succ and pred between
+    # v1.1.0 and the release after it.
+    #
+    # The check cannot decide which CodeGen changes touch a modelled lowering;
+    # it asks for that judgement to be written down as a `Model-unchanged:`
+    # trailer. One line, and it is the line a reviewer reads first.
+    name: a lowering change carries its model
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # the check needs the range, not just the tip
+
+      - name: Compare the range against verify/
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base='${{ github.event.pull_request.base.sha }}'
+          else
+            base='${{ github.event.before }}'
+          fi
+          # A new branch, a tag, or a force-push reports an all-zero or missing
+          # base. There is no range to judge then, so fall back to the single
+          # commit rather than guessing at one -- a check with no range must not
+          # invent one and must not silently pass a lowering change either.
+          case "$base" in
+            ''|0000000000000000000000000000000000000000) base="${{ github.sha }}^" ;;
+          esac
+          git rev-parse --verify "$base" >/dev/null 2>&1 || base="${{ github.sha }}^"
+          echo "range: $base..${{ github.sha }}"
+          python3 tests/checks/model_drift.py "$base" "${{ github.sha }}"

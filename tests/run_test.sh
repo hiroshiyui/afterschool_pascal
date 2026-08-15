@@ -136,8 +136,23 @@ if [[ -f $components_file ]]; then
   done <"$components_file"
 fi
 
+# Which optimisation level to compile at, most specific first:
+#
+#   name.opt                  this case pins one, because the default hides
+#                             what it is testing
+#   AFTERSCHOOL_PASCAL_OPT    the whole run wants one -- which is how the
+#                             corpus is swept at -O0 without 497 sidecars
+#   neither                   pascalcc's own default, -O2
+#
+# The sidecar wins so that a case pinning -O0 still means -O0 during an -O2
+# sweep, and vice versa: a case that pins a level does so because the other one
+# cannot see the defect, and a sweep must not quietly undo that.
 optflag=()
-[[ -f $opt_file ]] && optflag=("$(tr -d '[:space:]' <"$opt_file")")
+if [[ -f $opt_file ]]; then
+  optflag=("$(tr -d '[:space:]' <"$opt_file")")
+elif [[ -n ${AFTERSCHOOL_PASCAL_OPT:-} ]]; then
+  optflag=("$AFTERSCHOOL_PASCAL_OPT")
+fi
 
 "$pascalc" "--std=$standard" "${optflag[@]+"${optflag[@]}"}" "$source_file" \
   "${imports[@]+"${imports[@]}"}" \

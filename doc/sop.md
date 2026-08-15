@@ -23,7 +23,7 @@ blind spot in this table, and a new gate is only worth adding if it closes one.
 
 | Oracle | What it checks | What it is blind to |
 | --- | --- | --- |
-| **`ctest` goldens** (497 cases) | that a named program still behaves as recorded | anything **no case names**. A golden agrees with whoever wrote it, so it cannot report that the recorded answer is wrong |
+| **`ctest` goldens** (498 cases, run at `-O2` and again at `-O0`) | that a named program still behaves as recorded | anything **no case names**. A golden agrees with whoever wrote it, so it cannot report that the recorded answer is wrong |
 | **BSI validation suite** (812 programs) | conformance against a corpus nobody here wrote | it is **fixed** — it does not grow with the language, covers ISO 7185 only, and `expected.tsv` records what *this* compiler does |
 | **`verify/`** (43 rules, 27 at full 32-bit width, 0 known gaps) | that the lowering matches a property-style statement of the standard | **drift**. It proves the *model* against the *specification*; neither touches the compiler, so a lowering that changes without its model stays green |
 | **`verify.py --crosscheck`** | the model against the real binary, at `-O0` and `-O2` | only the points its generated program actually exercises. It ran `succ` on enumerations alone for a long time — the one ordinal type where a wrong reading and a right one agree |
@@ -61,16 +61,30 @@ A change is often two classes. ADR-0102's was A and D: it changed a lowering
 
 ### A — Lowering
 
-- **A1. `verify/lowering.py` changes in the same commit**, or the operation
-  genuinely has no rule and the commit says which. A lowering change with an
-  unchanged model is the failure mode this project has actually suffered, and
-  it stays green while suffering it.
+- **A1. `verify/lowering.py` changes in the same commit**, or the change says
+  why it needs no model change, as a trailer:
+
+      Model-unchanged: emits a new statement kind; no rule covers it
+
+  **Enforced** by the `model-drift` CI job, which fails a range that touches
+  `selfhost/compiler.pas` below the CodeGen banner without touching `verify/`
+  and without that trailer. It cannot decide *which* CodeGen changes reach a
+  modelled lowering — that is a judgement — so it requires the judgement to be
+  written down. A lowering change with an unchanged model is the failure mode
+  this project has actually suffered, and it stays green while suffering it.
 - **A2. If the change alters *which* values reach a check, extend
   `--crosscheck`.** The rule quantifies symbolically and will keep proving
   something true; the crosscheck is the only thing comparing model to binary.
 - **A3. Read the emitted IR once at `-O0`** (`tools/pascalcc -S f.pas -o
-  /dev/stdout`). Nothing verifies the module — `clang` refusing to assemble
-  catches *malformed*, never *wrong*.
+  /dev/stdout`), and run the corpus there before pushing:
+
+      AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build
+
+  Nothing verifies the module — `clang` refusing to assemble catches
+  *malformed*, never *wrong* — and the default `-O2` hides a whole class of
+  storage defect, which is how ADR-0102's survived every oracle at once. CI
+  runs this sweep on every push (`unoptimised`); doing it locally is what stops
+  the round trip.
 - **A4. Storage: no `alloca` outside a prologue** (ADR-0102). Anywhere a
   statement can sit inside a loop, storage that must survive is a frame slot
   and storage that need not is an SSA value.
@@ -92,7 +106,8 @@ A change is often two classes. ADR-0102's was A and D: it changed a lowering
   release.
 - **B4. Every new diagnostic gets a case** — `selfhost/badparse/` (one file per
   message; the parser stops at its first error) or `selfhost/badsema/` (shared
-  files; Sema accumulates). Then **count** (§5).
+  files; Sema accumulates). **Enforced** by the `diagnostic-coverage` case,
+  which is part of an ordinary `ctest` run (§5).
 - **B5. Mutation-check** (§4).
 
 ### C — Runtime
@@ -158,42 +173,38 @@ having gone with `src/`. So the argument has to be concrete.
   does not filter as expected — a coverage sweep silently matched the compiler
   source and reported everything covered. Pass an explicit file list.
 
-The diagnostic-coverage sweep, which is worth re-running after any batch of
-new messages:
+**Diagnostic coverage is enforced, not remembered.** It is a `ctest` case —
+`diagnostic-coverage` — and the tool behind it is
+`tests/checks/diagnostic_coverage.py`, runnable on its own:
 
 ```sh
-python3 - <<'PY'
-import re, pathlib
-src = pathlib.Path('selfhost/compiler.pas').read_text()
-msgs = {m.group(1) for m in re.finditer(r"write(?:ln)?\('([^']{20,})'", src)}
-blob = '\n'.join(p.read_text() for p in
-                 list(pathlib.Path('tests').rglob('*.err')) +
-                 list(pathlib.Path('selfhost').rglob('*.err')))
-# --help text, driver messages and the two capacity limits are not diagnostics
-# about a program and have no .err golden by design. Everything else printed
-# here is either a case to write or a branch to prove unreachable.
-noise = re.compile(r"^ {4,}"                      # --help, which is indented
-                   r"|^\s*(-|clang out|It writes|not link|output, and"
-                   r"|assembling|tools/pascalcc|usage:|Afterschool|pascalc:"
-                   r"|pascalc \(|out of string space|too many tokens)")
-for t in sorted(m for m in msgs if m not in blob and not noise.match(m)):
-    print(t)
-PY
+python3 tests/checks/diagnostic_coverage.py
 ```
 
-The filter is part of the tool, not a convenience: without it the sweep prints
-thirty lines of `--help` text and reads as thirty gaps, and a check that cries
-wolf gets ignored, which is worse than not having it.
+It fails in **both directions**, which is `verify/`'s `KNOWN_GAP` rule
+(ADR-0013) applied to a second catalogue. A message with no golden fails,
+because coverage was lost. A message listed in
+`tests/checks/unreachable_diagnostics.txt` that *acquires* a golden also fails,
+because the argument for its being unreachable has stopped being true and the
+list is now describing a compiler that no longer exists.
 
-Anything it prints is either a case to write or a branch to prove unreachable
-**and comment as such at its site**, with what would have to change for it to
-fire. Four are currently in the second category (§7).
+Adding an entry to that list is a decision to argue for in the commit message,
+and the argument goes both there and at the branch itself. **"I could not write
+the program" is not the argument; "no program can be written" is.** Four
+entries are currently on it (§7).
+
+The filter that separates diagnostics from `--help` text lives inside the
+script, and it is part of the tool rather than a convenience: without it the
+sweep reports thirty lines of usage text as thirty gaps, and a check that cries
+wolf gets ignored — which is worse than no check.
 
 ## 6. Cadence
 
 | When | Do |
 | --- | --- |
-| Every change | §3 gates, §4 mutation, `commit-and-push` |
+| Every change | §3 gates, §4 mutation, `commit-and-push`. `ctest` now
+carries `diagnostic-coverage`; CI carries `model-drift` and the `-O0` sweep |
+| Before pushing a CodeGen change | `AFTERSCHOOL_PASCAL_OPT=-O0 ctest --test-dir build`, so the `-O0` job is not the first to know |
 | A batch of conformance work, or before a release | `code-review`; re-run the §5 sweep |
 | After conformance work whose clauses admit more than one reading | `langspec-audit` — independent readers given the behaviour and **not** the reasoning |
 | Before a release | `release-engineering`: from-scratch build, seed refresh at the release commit, version agreement in two places, breaking changes called out |
@@ -220,12 +231,23 @@ from it when one is closed.
 
 | Blind spot | Consequence | Recorded |
 | --- | --- | --- |
-| `-O0` is two cases wide | a codegen bug visible only without the optimiser has very little looking for it | ADR-0102 |
 | No differential oracle | nothing can contradict a reading except `langspec-audit` | ADR-0085 |
-| Four diagnostics unreachable | counted, uncovered, commented at their sites | §5 sweep |
+| `-O0` and `-O2` are each run, never **compared** | the whole corpus now runs at both, so a level-specific crash or wrong answer fails — but a case where the two *differ* and both look plausible passes twice. Only `--crosscheck` compares them, over its own generated program | §6 |
+| `-O1` and `-O3` are unexercised | a defect at an intermediate level has nothing looking for it. Judged not worth a third and fourth sweep | — |
 | BSI corpus is fixed | it does not grow with the language, and covers ISO 7185 only | ADR-0086 |
-| No coverage measurement | §5 is an argument, not a number | — |
+| No coverage measurement | §5 is an argument, not a number. Diagnostics are the exception and are now enforced | — |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |
+| One rule of §6.4.3.3 enforced only for a pointer domain | a program can break it and be accepted | ADR-0101 |
+
+**Closed since this document was written**, kept here because a register that
+only grows is a register nobody trusts:
+
+- *`-O0` was two cases wide.* The `unoptimised` CI job now runs the whole
+  corpus at `-O0`, and `AFTERSCHOOL_PASCAL_OPT=-O0 ctest` does it locally. What
+  is left of that gap is the first two rows above.
+- *Four diagnostics counted but unenforced.* `tests/checks/unreachable_diagnostics.txt`
+  is now a catalogue with an argument per entry, and the `diagnostic-coverage`
+  case fails in both directions (§5).
 
 ## 8. What this document is not
 
