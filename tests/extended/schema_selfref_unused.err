@@ -1,0 +1,1 @@
+<source>:8:48: error: schema 's' is defined in terms of itself; only the domain of a pointer may name a schema being defined

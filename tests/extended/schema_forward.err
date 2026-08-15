@@ -1,0 +1,1 @@
+<source>:10:33: error: 'inner' is not declared yet; a schema's body may name only what is already declared, except in a pointer's domain

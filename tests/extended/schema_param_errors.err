@@ -1,3 +1,4 @@
+<source>:32:41: error: schema 'selfish' is defined in terms of itself; only the domain of a pointer may name a schema being defined
 <source>:56:4: error: the left side of an assignment must be a variable
 <source>:58:9: error: 'bogus' is not a discriminant of schema 'vector'
 <source>:64:27: error: schema 'boxed' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
@@ -5,8 +6,6 @@
 <source>:70:29: error: schema 'tagged' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
 <source>:73:32: error: schema 'untagged' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
 <source>:76:29: error: schema 'sized' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
-<source>:32:41: error: schema 'selfish' is defined in terms of itself; only the domain of a pointer may name a schema being defined
-<source>:79:28: error: no type is produced from schema 'selfish' for this parameter form
 <source>:97:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is real
 <source>:98:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is other(3)
 <source>:100:8: error: argument 1 of 'good' needs a variable produced from schema 'vector'

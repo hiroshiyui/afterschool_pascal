@@ -9162,6 +9162,123 @@ begin
   end
 end;
 
+{ 6.2.2.9 and 6.4.7, asked of the schema-*definition* rather than of a
+  production. Both are rules about the text of the definition, and both were
+  invisible because the body is resolved lazily: the first production is what
+  looks a name up, and by then a definition written *after* this one exists,
+  so the forward reference resolves cleanly and a schema that never produces a
+  type is never examined at all (ADR-0107).
+
+  The pointer domain is the exception each rule states -- 6.2.2.9 a) and
+  6.4.7's "except for applied occurrences in the domain-type of a
+  new-pointer-type" -- and it is honoured by not descending into nkPointer,
+  the same omission ForgetResolved makes and for a related reason.
+
+  This asks only whether a defining-point exists *yet*; what the name means is
+  still decided at production. So the lookup is LookupRaw, which does not
+  record an applied occurrence (ADR-0088) -- recording one here would make the
+  production's own lookup the second use of a name whose first use was this
+  question. }
+procedure CheckSchemaArms(v: nodePtr; self: symPtr); forward;
+
+{ A discriminant is a symbol that lives outside every scope (see DeclareSchema),
+  so no lookup finds one -- and 6.4.3.4's third form of a variant-selector is a
+  discriminant-identifier, which puts one exactly where this walk looks for a
+  type-name. Asking the schema's own list is the only way to tell that name
+  from an undeclared one. }
+function IsOwnDiscriminant(self: symPtr; at, len: integer): boolean;
+var p: symListPtr; found: boolean;
+begin
+  found := false;
+  if self <> nil then begin
+    p := self^.discs;
+    while (p <> nil) and not found do begin
+      if PoolSame(p^.sym^.at, p^.sym^.len, at, len) then found := true;
+      p := p^.next
+    end
+  end;
+  IsOwnDiscriminant := found
+end;
+
+procedure CheckSchemaBodyNames(d: nodePtr; self: symPtr);
+var g: nodePtr; found: symPtr; at, len, qLen: integer;
+begin
+  if d <> nil then begin
+    at := 0;
+    len := 0;
+    qLen := 1;   { anything non-zero: "qualified, so not ours to check" }
+    if d^.kind = nkNamed then begin
+      at := d^.nmAt; len := d^.nmLen; qLen := d^.nmQualLen
+    end
+    else if d^.kind = nkSchema then begin
+      at := d^.scAt; len := d^.scLen; qLen := d^.scQualLen
+    end
+    { 6.4.2.5's `restricted T` names its underlying type rather than holding a
+      denoter, so the name to ask about is its own. }
+    else if d^.kind = nkRestricted then begin
+      at := d^.rtAt; len := d^.rtLen; qLen := d^.rtQualLen
+    end;
+    { A qualified name reaches an interface, whose defining-points are the
+      importing block's by 6.11.3, so 6.2.2.9's ordering says nothing here. }
+    if (len > 0) and (qLen = 0) and not IsOwnDiscriminant(self, at, len) then begin
+      found := LookupRaw(at, len);
+      if found = self then begin
+        ErrorAt(d^.line, d^.col);
+        write('schema ''');
+        WritePool(at, len);
+        writeln(''' is defined in terms of itself; only the domain of a ',
+                'pointer may name a schema being defined')
+      end
+      else if found = nil then begin
+        ErrorAt(d^.line, d^.col);
+        write('''');
+        WritePool(at, len);
+        writeln(''' is not declared yet; a schema''s body may name only ',
+                'what is already declared, except in a pointer''s domain')
+      end
+    end;
+    case d^.kind of
+      nkArray: CheckSchemaBodyNames(d^.arElem, self);
+      nkFile: begin
+        CheckSchemaBodyNames(d^.flElem, self);
+        CheckSchemaBodyNames(d^.flIndex, self)
+      end;
+      nkSetOf: CheckSchemaBodyNames(d^.soElem, self);
+      nkRecord: begin
+        g := d^.rcFields;
+        while g <> nil do begin
+          CheckSchemaBodyNames(g^.grType, self);
+          g := g^.next
+        end;
+        CheckSchemaBodyNames(d^.rcTagType, self);
+        CheckSchemaArms(d^.rcVariants, self)
+      end;
+      { An array's dimensions and a subrange's bounds are expressions, not
+        denoters, and a schema's arguments likewise -- 6.2.2.9 reaches those
+        through the ordinary expression path when they are checked. nkPointer
+        is the exception both clauses state, and is deliberately not walked. }
+      otherwise ;
+    end
+  end
+end;
+
+{ An arm's field-list is a field-list, walked exactly as the record's is
+  (ADR-0026), which is the same shape ForgetArms has. }
+procedure CheckSchemaArms;
+var g: nodePtr;
+begin
+  while v <> nil do begin
+    g := v^.vaFields;
+    while g <> nil do begin
+      CheckSchemaBodyNames(g^.grType, self);
+      g := g^.next
+    end;
+    CheckSchemaBodyNames(v^.vaTagType, self);
+    CheckSchemaArms(v^.vaVariants, self);
+    v := v^.next
+  end
+end;
+
 { 6.4.7's schema-definition. The formal discriminants are given names and
   ordinal types here and values only when a type is produced, so they are
   symbols that live outside every scope -- a discriminant is not in scope in
@@ -9228,7 +9345,10 @@ begin
       write('schema ''');
       WritePool(d^.tdAt, d^.tdLen);
       writeln(''' has no discriminants')
-    end
+    end;
+    { Last, so that the discriminants are declared first: a body naming one of
+      them is naming something whose defining-point precedes it. }
+    CheckSchemaBodyNames(d^.tdType, s)
   end
 end;
 
@@ -9359,14 +9479,14 @@ begin
     two schemata is the same mistake and is caught by the same test. It comes
     before the tuple because a schema resolved *generically* has discriminants
     that are not constants, and reporting that instead would name a symptom. }
-  else if SchemaIsBusy(schema) then begin
-    ErrorAt(d^.line, d^.col);
-    write('schema ''');
-    WritePool(d^.scAt, d^.scLen);
-    writeln(''' is defined in terms of itself; only the domain of a ',
-            'pointer may name a schema being defined');
+  { Silent, and that is the whole of what changed here: CheckSchemaBodyNames
+    has already reported this at the same position, because it walks the same
+    applied occurrence at the definition rather than waiting for a production
+    (ADR-0107). What is left is the recursion guard -- Sema accumulates errors
+    and goes on, so a production may still be attempted after the report, and
+    without this it would recurse until the stack ran out. }
+  else if SchemaIsBusy(schema) then
     t := intType
-  end
   else begin
     tuple := nil;
     tupleTail := nil;
