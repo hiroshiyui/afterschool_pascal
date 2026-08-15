@@ -51,19 +51,35 @@ When performing a project-wide code review, always follow these steps:
    - A new test requires re-running `cmake` to register — confirm the reviewer actually ran it.
    - Diagnostics are part of the interface: a change to an error message or a new error condition should come with a case, once the negative-test form exists (noted as a gap in ADR-0011 — if the change adds errors, say so).
 
-   **There is no coverage tool.** `gcov` measured `src/*.cpp` and there is no
-   `src/`; nothing instruments a Pascal program here, and writing that is not a
-   review's job. So coverage is argued rather than measured, and the argument
-   has to be concrete:
+   **There is a coverage tool now, and it answers a narrower question than the
+   one a review asks.** `gcov` went out with `src/`, but `pascalc --coverage`
+   (ADR-0104) instruments the compiler with itself, and three `ctest` cases read
+   it: `diagnostic-coverage`, `procedure-coverage` and `line-coverage`. Run them
+   before arguing about coverage — they are seconds, and they turn "is this
+   reached?" into a fact for whole procedures and whole statements.
+
+   What they do **not** answer is the question a review usually has, which is
+   about a *branch*. `line-coverage` counts a statement, so `if c then a else b`
+   on one line is covered when either arm runs, and `procedure-coverage` says
+   only that a procedure was entered. So coverage of the thing under review is
+   still argued, and the argument has to be concrete:
 
    - **Name the case that reaches each new branch.** "Covered by the suite" is
      not a claim; `tests/foo.pas:12 takes the else` is. A branch you cannot name
      a case for is uncovered, and that is a **Tests** finding with the `.pas`
-     file to add.
+     file to add. The gates cannot make this claim for you — that is the gap
+     `doc/sop.md` §7 records.
    - **Count, don't assume.** This project's history is a list of things nobody
      had counted: no file had a tab, no file had a parse error, Sema reached 48
-     of its 85 messages. `grep -c` on the corpus for the construct under review
-     is thirty seconds and has been wrong more often than not.
+     of its 85 messages, four documented `--dump` flags no case had ever passed.
+     `grep -c` on the corpus for the construct under review is thirty seconds
+     and has been wrong more often than not.
+   - **A new procedure argued unreachable goes in a catalogue, not in a
+     comment.** `tests/checks/uncovered_procedures.txt` fails in both
+     directions, so an entry that starts being reached is as loud as a procedure
+     that stops being. Say in the entry whether the argument is a proof or an
+     observation — the two already there are one of each, and they are not worth
+     the same.
    - **A diagnostic needs a case in `selfhost/badparse/` or `selfhost/badsema/`**,
      one file per message for the parser (it stops at its first) and shared
      files for Sema (it accumulates). Since ADR-0085 those are ordinary ctest

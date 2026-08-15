@@ -45,8 +45,12 @@ different standards.
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and
 a non-zero exit is then required), `foo.in` (standard input), `foo.epoch` (a
 fixed `SOURCE_DATE_EPOCH`), `foo.components` (§6.13's other program-components,
-one path per line), `foo.std` (the standard, overriding the directory) and
-`foo.opt` (an optimisation level). The last is the newest and the one to reach
+one path per line) and
+`foo.opt` (an optimisation level). **`foo.std` is not one of them** — for a case
+under `tests/` the directory decides and `run_test.sh` never looks, taking the
+standard as an argument CMake passes by glob. The sidecar is real but belongs to
+`tests/dumps/` and to the selfhost harnesses, which is how `selfhost/compiler.std`
+speaks for a source outside `tests/extended/`. `foo.opt` is the newest and the one to reach
 for least: the corpus compiles at `-O2` and should go on doing so, but a defect
 in *storage* is invisible there, LLVM being free to hoist an alloca whose
 address does not escape — see ADR-0102 and the two `-O0` cases it added.

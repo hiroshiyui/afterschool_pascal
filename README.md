@@ -684,6 +684,10 @@ which is the point of having an oracle nobody here wrote.
 | `tests/` | one `.pas` per case, with expected stdout in `.out` or an expected failure in `.err` |
 | `tests/extended/` | the same, for cases written in Extended Pascal — the directory selects `--std` |
 | `selfhost/badparse/`, `selfhost/badsema/` | one file per diagnostic; the parser stops at its first, Sema accumulates |
+| `tests/dumps/` | what the *compiler* writes under a `--dump` flag, rather than what a program wrote |
+| `tests/spec/` | scenarios written against clauses of the two standards, each tagged with its clause |
+| `tests/bsi/` | the fetched validation suite, and a catalogue of what this compiler does with all 812 |
+| `tests/checks/` | the coverage gates — which diagnostics, procedures and statements the corpus reaches |
 | `verify/` | SMT proofs that the lowering means what ISO 7185 says |
 | `selfhost/irtest.sh` | runs what the compiler builds, and requires stage 2 = stage 3 |
 | `selfhost/producttest.sh` | that `build/bin/pascalc` itself exists, versions itself and reports failure |
@@ -752,6 +756,17 @@ the adversarial points, at both `-O0` and `-O2`, because a proof about a model o
 the compiler is only worth what keeps it tied to the compiler. See
 [ADR-0013](doc/adr/0013-formal-verification-of-the-lowering.md) for what this
 does and does not establish.
+
+A proof and a golden both cover only what they *name*, so how much of the
+compiler the corpus actually reaches is measured rather than assumed. Three
+`ctest` cases answer it — which diagnostics are printed by some case, which
+procedures are entered, and which statements are run — and each fails when
+coverage is lost. Counting for the first time is what tends to find things: 32
+diagnostics nothing named, four documented `--dump` flags no case had ever
+passed. `pascalc --coverage` is the product feature underneath the third and
+works on any Pascal program. `doc/sop.md` §7 keeps the standing list of what
+none of this sees — statement coverage is not branch coverage, and a clause
+cited by a scenario is not a clause covered in depth.
 
 ## Decisions
 
@@ -926,10 +941,31 @@ file (ADR-0034).
   this compiler defines them from that variable, which is what lets a golden
   file name a date. Without the file the variable is *unset*, so every other
   case runs against the real clock whatever the environment holds.
+* `name.components` — the other program-components this one is translated
+  against, one path per line, relative to the case's own directory. Extended
+  Pascal §6.13 separates translation from linking, and each component is
+  compiled on its own and the objects linked together.
+* `name.opt` — one word, the optimisation flag to compile this case with. Reach
+  for it least: the corpus compiles at `-O2` and should go on doing so, but a
+  defect in *storage* is invisible there, since LLVM may hoist an `alloca` whose
+  address never escapes. The two cases that pin one both say `-O0` and would
+  pass at `-O2` while the bug was present.
 
 `tests/run_test.sh` compiles, runs, and diffs. Source paths are rewritten to
 `<source>` in stderr, so diagnostics can be pinned without depending on where
 the checkout lives.
+
+Two smaller corpora have harnesses of their own, because what they compare is
+not what a compiled program wrote:
+
+* **`tests/dumps/`** compares what the *compiler* writes to standard output
+  under `--dump-tokens`, `--dump-ast`, `--dump-sema` and `--dump-all`. Sidecars
+  are `name.dump` (the golden), `name.flags` (which flag, `--dump-all` by
+  default) and `name.std` (the standard, `iso7185` when absent).
+* **`tests/spec/`** is written against *clauses* rather than against the
+  compiler: scenarios in a subset of Gherkin, each tagged with the clause of
+  ISO 7185 or ISO/IEC 10206:1991 whose requirement it states. Its README says
+  how to add one, and what the suite deliberately is not.
 
 ## Licence
 

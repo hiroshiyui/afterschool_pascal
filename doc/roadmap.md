@@ -38,8 +38,8 @@ language.
 - [Conformance sweeps](#conformance-sweeps) — what was checked rather than
   asserted, and what that found
 - [The two things that were not features](#the-two-things-that-were-not-features)
-- [What is next](#what-is-next) — the oracle that was given up, and the five
-  other things worth doing
+- [What is next](#what-is-next) — the oracle that was given up, and the four
+  other things worth doing; measuring what the corpus reaches is done
 
 ## The three-stage build
 
@@ -1218,10 +1218,15 @@ itself, a few hours after being decided the other way. See below.
 ## What is next
 
 Both standards are complete and every sweep above has been run, so only the
-third item below is a language feature. Three of the other four are about
-**oracles** — what could still be wrong with nothing here to say so — and they
-come first because v1.0.0 gave up the strongest oracle this project had and
-nothing has replaced it. The fifth is the platform lock.
+third item below is a language feature. Two of the others are about **oracles**
+— what could still be wrong with nothing here to say so — and they come first
+because v1.0.0 gave up the strongest oracle this project had and nothing has
+replaced it. The fifth is the platform lock.
+
+**The fourth is done**, and is left in place rather than deleted because what it
+found is the argument for the two above it: every one of those measurements
+turned something up on its first run, which is what an unasked question looks
+like from the outside.
 
 Nothing here is scheduled. This section exists so that the reasons are written
 down while they are still live, which is ADR-0001's rule applied to work that
@@ -1348,22 +1353,35 @@ parameters however alike the two read.
 Worth knowing before starting: a schematic formal already covers this ground in
 Extended Pascal, so the feature buys **conformance and not expressiveness**.
 
-### 4. Nothing can currently measure what the corpus reaches
+### 4. ~~Nothing can currently measure what the corpus reaches~~ Done
 
-`gcov` went out with `src/`. CLAUDE.md still says *"don't assume the corpus
-reaches a branch — count it"* and lists six times that counting found
-something, but there is no longer a tool that can count: `selfhost/compiler.pas`
-is compiled by a compiler with no instrumentation, and the `code-review`
-skill's entire coverage step is a `gcov` recipe against files that do not
-exist.
+Both versions this entry proposed were built, and each found something the run
+before it could not see.
 
-The cheap version costs an afternoon and covers the case this project keeps
-hitting: extract every diagnostic message literal from `compiler.pas` and look
-for each one in the 157 `.err` goldens. That answers "Sema reached 48 of its 85
-messages" mechanically and on every run, which is the exact question that has
-turned something up every time it has been asked. The expensive version is a
-`--coverage` flag in the code generator emitting counters, which is a feature
-in its own right and would want a record.
+- **The cheap version** — every diagnostic literal looked for in the `.err`
+  goldens — landed in v1.1.1 as `diagnostic-coverage`. It found **32 messages
+  nothing named** at once; 26 cases were written and four are argued unreachable
+  in a catalogue that fails in both directions.
+- **`procedure-coverage`** (ADR-0103) instruments the *emitted IR* with clang's
+  SanitizerCoverage, which is possible only because the backend is textual.
+  554 of 556 procedures are entered. It found four documented `--dump` flags no
+  case had ever passed, and `tests/dumps/` exists because of it.
+- **The expensive version** — `pascalc --coverage` (ADR-0104) — landed in
+  v1.2.0 and did want a record. The compiler instruments itself, one counter per
+  statement, and the *denominator* is read back from the same `.ll` the
+  compilation wrote, so the two halves of a figure cannot disagree about which
+  lines were executable. 12,708 of 13,358 statements are run by the corpus.
+- **`tests/spec/`** (ADR-0105, ADR-0106) is the same question asked of the
+  *standards* rather than of the compiler: 13 of 189 testable clauses cited,
+  with the other 103 headings triaged out as structural or unimplemented so the
+  denominator means something.
+
+**Two things it did not buy, both in `doc/sop.md` §7.** A statement is not a
+branch — `if c then a else b` on one line is covered when either arm runs — and
+the line-coverage gate is a **ratchet** rather than an allowlist, so it notices
+a loss and cannot argue that what is uncovered ought to be. The corpus is also
+enumerated by glob, so the shell harnesses are invisible to it; that is how
+`Usage` and `Version` first read as unreached.
 
 ### 5. The platform lock has a scoped way out
 
