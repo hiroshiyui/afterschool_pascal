@@ -13,10 +13,19 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
-Nothing a program can use: the language, the diagnostics and the command line
-are unchanged. What changed is that coverage is a number rather than an
-argument, and the first measurement of it found four documented flags nothing
-tested.
+## [1.2.0] — 2026-08-15
+
+**The language is unchanged** — no new syntax, no new diagnostic, and nothing a
+working program does differently. What makes this a minor release rather than a
+patch is one new flag, `--coverage`, and it is a flag for the same reason
+everything else here is: coverage in this repository was an argument, and this
+release makes it a number.
+
+Three of them, each gating in both directions: which procedures the corpus
+enters, which statements it runs, and which clauses of the two standards a
+scenario cites. The first measurement of any of them found four documented
+`--dump` flags no test had ever passed and a procedure argued unreachable that
+turned out to be exactly that.
 
 ### Added
 
