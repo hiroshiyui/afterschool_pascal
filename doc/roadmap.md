@@ -40,6 +40,69 @@ compilation** (ADR-0053, ADR-0079) mean a standard library needs no new language
 mechanism to exist, and `runtime/pasrt.c` is where the outside world already
 enters. Those two are most of a library's scaffolding, finished and tested.
 
+### The enabler: a foreign-function interface
+
+Everything above needs to call code this compiler did not emit. Today the only
+route is a hand-written `pas_*` primitive in `runtime/pasrt.c`, which is right
+for the twenty-odd things the standards require and does not scale to sockets,
+locales, threads and clocks. **So FFI comes first**, not because it is the most
+interesting but because the rest is blocked on it.
+
+Three things make it cheaper here than it looks, and one makes it dangerous.
+
+- **The calling convention already exists.** The compiler emits textual LLVM IR
+  and already calls C functions by name with C types — every `write` is one.
+  What is missing is a *language surface* for declaring one, not a mechanism.
+- **The grammar already has the shape.** §6.1.5 and §6.1.6 make `forward` a
+  **directive** — an identifier in the one position it may occupy — and ADR-0053
+  noted that `interface` and `implementation` are directives too, not reserved
+  words. A declaration ending in a directive is therefore an established form,
+  and an `external` directive costs the lexis nothing.
+- **Modules give it somewhere to live** (ADR-0053, ADR-0079). A binding is a
+  module that exports Pascal procedures and imports C ones; nothing about
+  separate compilation changes.
+- **It is a hole in every safety property the goal asks for.** A foreign call
+  can do anything, so an FFI surface and the memory-safety model must be
+  designed as one thing. Rust and Zig both answer this by making the boundary
+  *lexically visible* rather than by trying to check across it, and that is the
+  answer most likely to fit here.
+
+The real work is the **type mapping** — what a C `int`, `size_t`, `char *` or
+struct pointer is in Pascal, and which Pascal types may cross at all. That is a
+document before it is code.
+
+### Where the ideas come from
+
+Rust, Swift and Zig are the reference points, and the honest position is that
+they do not all fit equally. Pascal's grain is value semantics, explicitness and
+a small orthogonal core; that is close to Zig and Swift and further from Rust.
+Each borrowing below is tied to the open decision it would settle.
+
+| Idea | From | Settles | Fit here |
+| --- | --- | --- | --- |
+| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Excellent, and already the house style.** ADR-0051 made a string exactly this, and ADR-0030, ADR-0040 and ADR-0049 each reached for a two-scalar value for the same reason: nothing may depend on how a struct is passed. A general slice is that shape a fourth time |
+| **Explicit allocator passing** | Zig | part of memory safety | **Excellent, and free.** A library convention, not a language feature — it needs no compiler change at all, and it is the cheapest thing on this list |
+| **`defer`** | Zig, Swift | resource safety | **Good.** Pascal has no early return, so a block already has one exit and the epilogue is already where files close (ADR-0021, ADR-0032). `defer` generalises a mechanism that exists |
+| **Error unions / `Result`** | Zig, Rust | error handling | **Good, and the biggest practical gap.** Pascal has *no* error handling — no exceptions, no result convention. It needs sum types with payloads, which variant records nearly are. Independent of the memory-safety fork, so it can proceed while that is open |
+| **Optionals, and no bare null** | Swift, Rust | pointer safety | **Good.** `nil` already has a type of its own (ADR-0019) and every dereference is already checked; an optional type makes the check a *type* question instead of a run-time one |
+| **Unicode-correct `String`** | Swift | the text model | **The model to copy.** Swift's is the best-considered answer to "what is a character" in any mainstream language, and the question is exactly the one ADR-0109 leaves open |
+| **ARC** | Swift | memory safety | **Plausible.** Needs retain/release in CodeGen and a runtime, but no borrow checker, no lifetime inference, and stays self-hostable and cheap to mirror in `src/` |
+| **Ownership and borrowing** | Rust | memory safety | **Strongest guarantee, worst fit.** Lifetime inference is a large Sema, the most expensive thing here to mirror in the C++ front end (ADR-0108), and the furthest from anything recognisably Pascal |
+| **Traits / protocols** | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039); this is the next layer, not the first |
+| **`comptime`** | Zig | metaprogramming | **Later.** ADR-0054 gave the language constant-expressions everywhere; `comptime` is a much larger idea and nothing yet needs it |
+| **Actors / `Send`+`Sync`** | Swift, Rust | concurrency | **Blocked**, and rightly: it cannot be designed before the memory model, and the memory model cannot be designed before the safety model |
+
+Two conclusions worth stating rather than leaving implicit:
+
+- **The cheap items are not the small ones.** Slices, an allocator convention,
+  `defer` and error unions between them cover most of what "daily practical
+  development" means, and none requires settling the memory-safety fork.
+- **ARC and borrowing are not equally costly here**, and the difference is not
+  only implementation effort. Borrowing would make ADR-0108's C++ mirror
+  prohibitively expensive and would likely force the decision to freeze it —
+  so the safety choice and the oracle question are the same question asked
+  twice.
+
 One option **closes** as the language diverges: a third-party differential (FPC
 under `-Miso`, or p5) can only ever check the ISO 7185 core, because nobody else
 implements this dialect. Worth spending while it is still worth anything.
