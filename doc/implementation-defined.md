@@ -319,9 +319,10 @@ exercised one**, so every oracle in the repository agreed the compiler was
 right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
-**ISO/IEC 10206:1991 §6.7.3.3's third restriction is not checked**: an actual
-variable parameter shall not denote a component of a **string-type**. Its
-fixed-string half is covered, a fixed-string-type being a packed array of char;
-what is not is a component of a *variable*-string. ISO 7185 §6.6.3.3 has only
-the two sentences and both are checked (ADR-0099).
+**§6.4.3.3's record region is enforced only for a pointer domain.** A
+field-identifier's defining-point has the region that is the record-type
+containing it, so a name spelled like a field denotes the field throughout the
+record — but only `^fred` is refused, while `record a: fred; fred: integer end`
+and an array whose index-type names a field are accepted. Same clause, same
+region; only the occurrence differs (ADR-0101).
 

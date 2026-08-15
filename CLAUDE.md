@@ -2057,6 +2057,54 @@ of a name that could be a control variable: the nested-`for` test calls
 `Threatened` on the control variable itself, and without that guard a loop
 records a threat against itself and then reports it.
 
+**A variant part's labels are exactly its tag-type's values** (§6.4.3.3,
+ADR-0096) — no value outside the type, and none of the type left unnamed. This
+is the one that surprises: `case tag: integer of 1: …; 2: …` is **refused**,
+because `integer` has other values, and the conforming spellings are a covering
+tag-type (`type sel = 1..2`) or Extended Pascal's `otherwise`. It was audited
+because it looks over-strict, and BSI's own DEV073 header settles it — that
+test was *reclassified from CONFORMANCE to DEVIANCE by DP7185*. An `otherwise`
+discharges coverage and never membership.
+
+**A string-type is four properties at once** (§6.4.3.2, ADR-0090): packed, an
+index-type that is an integer subrange, a smallest *value* of 1 — not a
+smallest ordinal, which is why an enum index fails even when `ord` of its lower
+bound is 1 — and a component that is `char` and not a subrange of one. ISO 7185
+adds a largest value above 1; ISO/IEC 10206:1991 §6.4.3.3.2 drops that clause
+and nothing else, so it is the only one `--std` decides. That gate is what lets
+the compiler compile itself, its schema strings having a discriminant bound.
+
+**Packing decides set compatibility and does not propagate** — two rules that
+read alike and are not. §6.4.5 c) makes two set-types compatible only when they
+agree on packing, while §6.7.1 leaves a *set-constructor* uncommitted so
+`p := [true]` fits either (ADR-0093). §6.4.3.1 then says packing affects one
+type's representation only, so §6.6.3.3's "component of a packed variable" is
+the **immediate** container: `pa[1].f` over a `packed array of rec` is legal
+because `pa[1]` is an unpacked record (ADR-0099).
+
+**Where a goto may land is three conditions, not a prefix test** (§6.8.1,
+ADR-0094 and ADR-0101). Only a compound-statement, a repeat-statement and
+Extended Pascal's `otherwise` completer hold a *statement-sequence*; a branch of
+an if, a loop body, a with body and a case arm are each a single statement, so a
+label in one is reachable only from inside it. The completer has no node of its
+own, so `stmtPathRec` carries a flag rather than the rule asking a node's kind.
+
+**The required identifiers are symbols in a scope enclosing the program**
+(§6.2.2.10, ADR-0097), so `type integer = char` takes effect and §6.2.2.9 can
+see an applied occurrence of one. `LookupUser` answers nil for them, which is
+the convention every "did the program declare one?" branch was written against.
+A name that resolves to something **not invocable** must not fall back to a
+builtin lookup by spelling — that is §6.2.2.11, and it let `var ord: …` and
+`ord('a')` mean two things in one block (ADR-0101). The required *procedures*
+are still not symbols.
+
+**A record type is a region** (§6.4.3.3, ADR-0098): inside a record's denoter a
+name spelled like one of its fields denotes the field, so `^fred` beside a field
+`fred` names no type. Asked of the *denoter*, because the field does not exist
+on the type yet. **Declarations interleave by source position** — constants,
+types, variables *and procedures* (ADR-0100) — which is what lets §6.2.2.9 see a
+body using a variable declared after it.
+
 A check is omitted only where its absence is *proved* sound — the `for` step and
 unary negation are unchecked, and `verify/` carries the theorems saying they
 cannot overflow. Don't add a check there, and don't remove one elsewhere.

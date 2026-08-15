@@ -139,8 +139,8 @@ rather than declined, and each found by compiling a probe rather than by a
 test, because no program in the corpus had ever written one. What is left of
 the language is the next standard, not more of this one.
 
-Two things this compiler is **more permissive** about than ISO 7185, both
-deliberate and both stated here because nothing else would notice them.
+One thing this compiler is **more permissive** about than ISO 7185, deliberate
+and stated here because nothing else would notice it.
 
 An **identifier may contain an underscore**, where §6.1.3 makes one `letter {
 letter | digit }`. It is how this project spells a name that would otherwise
@@ -157,10 +157,16 @@ never been on the list at all, which is the more useful thing to know about
 them — a constant may not be selected from, §6.8.8 belonging to the next
 standard, and `f()` is refused in both standards, Pascal having no empty
 argument list. The underscore entry is new here for the same reason. All three
-were found by compiling a probe for a clause rather than by a test, and the
-packing entry above is a narrower and truer statement of what used to be filed
-as "`packed` is accepted on a `set`" — see
+were found by compiling a probe for a clause rather than by a test — see
 [ADR-0072](doc/adr/0072-three-things-the-compiler-accepted-and-neither-standard-has.md).
+
+It also used to hold **set compatibility ignoring packing**, and that entry was
+wrong rather than merely out of date. It was justified by the claim that the
+standard does not say what packing a set-constructor has; §6.7.1 says exactly
+that, in a sentence both standards carry word for word, and the claim had been
+copied into three documents and a test written to hold the compiler to it.
+§6.4.5 c) is checked now — see
+[ADR-0093](doc/adr/0093-a-set-constructor-has-not-chosen-a-packing.md).
 
 Enumerations and subranges are ordinal types like `char`: they index arrays,
 drive `for` loops, answer `ord`/`succ`/`pred`, and select `case` arms. `succ`

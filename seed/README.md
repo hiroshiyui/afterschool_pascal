@@ -39,15 +39,32 @@ cross-compiling this IR. That cost is stated here rather than discovered.
 
 ## Refreshing it
 
-**At release tags, not per commit.** The file is 6.3 MB and 153,000 lines;
+**At release tags, not per commit.** The file is 6.5 MB and 157,000 lines;
 regenerating it whenever the compiler changes would rewrite all of it on every
 commit that touches `selfhost/compiler.pas`, which is most of them.
 
 Nothing forces a refresh, and nothing needs to: an older seed builds a newer
-compiler for as long as `selfhost/compiler.pas` stays within the language the
-seed accepts. When it does not — a source using a feature the seed's compiler
-does not have — the build fails at the first stage with an ordinary diagnostic,
-and the fix is to refresh from the last commit that did build.
+compiler for as long as `selfhost/compiler.pas` stays within what the seed
+accepts. When it does not, the build fails at the first stage with an ordinary
+diagnostic, and the fix is to refresh from the last commit that did build.
+
+**Two different things can put a source outside it, and only one is a
+language feature.** The obvious one is a source using something the seed's
+compiler cannot parse. The other is **capacity**: the seed carries its own
+fixed table bounds, and `poolMax` — the characters of identifier and literal
+text one compilation may intern — is the one that has actually run out, because
+the compiler is its own largest input and `PoolAdd` does not deduplicate. The
+symptom is the seed reporting *"out of string space"* against
+`selfhost/compiler.pas`, and raising the constant in the source does **not**
+help: the seed still holds the old bound and is what has to read the file.
+
+That is the one case where a refresh is not optional and cannot wait for a
+release tag, because until it happens no diagnostic can be added to the
+compiler at all. Do it on a tree that *builds* — the last green commit plus the
+one-line bound — so the artefact being trusted is the product of a green tree.
+[ADR-0095](../doc/adr/0095-the-string-pool-was-the-ceiling.md) is the record of
+the time this happened, and argues why a policy about rewrite noise should not
+become a policy about capability.
 
 ```sh
 seed/refresh.sh          # regenerate from the current source, then verify
