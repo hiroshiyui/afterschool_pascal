@@ -11,32 +11,50 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
-## Unreleased
+## [1.1.1] — 2026-08-15
+
+A patch release: one crash fixed, and the rest is what looks for the next one.
+The language is unchanged — no new syntax, no new flag, and nothing a working
+program does differently.
 
 ### Fixed
 
-- **A `for` statement inside another loop no longer leaks stack.** Both forms
-  claimed storage on every iteration of the loop around them, so a
-  long-running nested loop compiled at `-O0` died on a stack overflow. The
-  answer computed was never wrong, and at the default `-O2` the leak is
-  optimised away — which is why 495 tests, the validation suite and the SMT
-  proofs were all green over it. (ADR-0102)
-- **`verify/`'s model of `succ` and `pred` described the compiler that v1.1.0
-  replaced**, claiming a subrange runs out at its own last value where §6.7.1
-  makes it the host's. Nothing failed, because those rules prove the model
-  against the specification and neither touches the compiler; the crosscheck,
-  which does, exercised only enumerations — the one ordinal type for which the
-  old and new readings agree.
+- **A `for` statement inside another loop no longer exhausts the stack.** Both
+  forms of the statement claimed storage on *every iteration of the loop around
+  them*, so a long-running nested loop compiled with `-O0` died on a stack
+  overflow. Programs built at the default `-O2` were never affected: LLVM
+  hoists an alloca whose address does not escape, and the leak disappears with
+  it. The answer computed was correct either way — the program simply ran out
+  of stack first, which is why 495 tests, the validation suite, the SMT proofs
+  and the stage-2/stage-3 fixed point were all green over it. (ADR-0102)
+- **`verify/`'s model of `succ` and `pred` described the compiler v1.1.0
+  replaced.** It claimed a subrange runs out at its own last value, where
+  §6.7.1 makes it the host's — so `succ(9)` of a `1..9` is 10 and not an error.
+  No proof failed and none could: those rules prove the *model* against the
+  *specification*, and neither touches the compiler. The one check that does
+  compare them exercised `succ` on enumerations alone, which is the single
+  ordinal type where the wrong reading and the right one agree.
 
 ### Added
 
-- **`name.opt`**, a per-case optimisation level for the test harness, and a
-  bounded stack for the programs it runs. Both exist so a storage defect can
-  fail a test at all.
-- **26 cases naming diagnostics no test had ever named.** Counting the
-  compiler's messages against the goldens found 32 unreached; four remain and
-  each is now commented at its site as unreachable, with what would have to
-  change for it to fire.
+Nothing a program can use. Everything here exists to make the next defect of
+these kinds fail a test instead of shipping.
+
+- **The whole corpus now runs at `-O0` as well as `-O2`**, in CI and on demand
+  with `AFTERSCHOOL_PASCAL_OPT=-O0 ctest`. A `name.opt` sidecar pins a single
+  case's level where a sweep would hide what it is testing, and the test
+  harness bounds the stack so a storage leak can actually fail something.
+- **`diagnostic-coverage`**, a test that every message the compiler can write
+  is named by some golden. Counting them found 32 unreached at once; 26 cases
+  were written, and the remaining four are argued unreachable in
+  `tests/checks/unreachable_diagnostics.txt` and commented at their branches.
+  It fails in both directions — an entry that later acquires a golden is as
+  loud as a message with none.
+- **`model-drift`**, a CI check that a change to the code generator either
+  changes `verify/` or says in its commit message why it need not.
+- **`doc/sop.md`** and the `change-lifecycle` skill: the standard operating
+  procedure, organised around what each oracle in this repository *cannot* see,
+  with a live register of what is still unchecked.
 
 ## [1.1.0] — 2026-08-15
 
@@ -441,6 +459,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.1.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.1.1
 [1.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.1.0
 [1.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.0.0
 [0.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v0.1.0

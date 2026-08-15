@@ -15,7 +15,7 @@
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.20)
-project(afterschool_pascal VERSION 1.1.0 LANGUAGES C)
+project(afterschool_pascal VERSION 1.1.1 LANGUAGES C)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
