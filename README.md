@@ -1,10 +1,24 @@
 # Afterschool Pascal
 
-An ISO 7185 Standard Pascal compiler with an LLVM backend.
+A Pascal compiler, written in Pascal, that compiles itself — conforming to
+ISO 7185 and to ISO/IEC 10206:1991 (Extended Pascal), both complete.
 
-The long-term goal is **bootstrapping**: Afterschool Pascal should be written in
-Afterschool Pascal and able to compile itself. Everything below is arranged to
-serve that.
+**The long-term goal is a Pascal you can get work done in**: a dialect and a
+standard core library for the things modern programs actually do — networking,
+internationalisation, concurrent execution, and memory safety as a property of
+the language rather than a convention. See
+[ADR-0109](doc/adr/0109-the-goal-is-a-practical-pascal.md) for what that commits
+to and what it leaves open.
+
+The two conformance modes are not going anywhere. `--std=iso7185` and
+`--std=extended` stay exactly what they are — they are the only part of this
+compiler with an external specification, and they are what every check here is
+calibrated against. The dialect is a third mode beside them, not a relaxation
+of either.
+
+Bootstrapping was the previous long-term goal and it is **done**: the compiler
+compiles itself, and stage 2 equals stage 3. It is now a constraint on the order
+features can land in rather than a destination.
 
 ## Building
 

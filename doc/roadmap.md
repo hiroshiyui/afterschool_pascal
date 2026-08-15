@@ -3,6 +3,47 @@
 Where the compiler is, how it got there, and what is deliberately not being
 done yet.
 
+## The goal, restated (ADR-0109)
+
+**A Pascal you can get daily work done in**: a dialect and a standard core
+library for networking, internationalisation (l10n/i18n/m17n), concurrent
+execution, and memory safety as a property of the language rather than a
+convention.
+
+Everything below this section was written under the two goals that came before
+it — bootstrapping, then conformance — and both are **finished**. The compiler
+compiles itself, ISO 7185 is complete, and ISO/IEC 10206:1991 is complete to its
+last clause. That history is kept because it explains why the compiler has the
+shape it has, and because the conformance modes it produced are not going away:
+`--std=iso7185` and `--std=extended` stay exactly as they are, and the dialect
+is a third mode beside them (ADR-0033's construction, used a third time).
+
+Four decisions this forces, none of them yet made, each to get its own record:
+
+- **The memory-safety model.** ADR-0019 says use-after-`dispose` is not
+  detected; "memory safety first" is incompatible with that sentence. Checked
+  pointers with regions, ownership and borrowing, or a tracing collector differ
+  in what a pointer *means*. The most expensive decision here to reverse.
+- **The text model.** `char` is a byte and nothing consults the locale
+  (documented, deliberate). Real i18n needs a wider character type or a text
+  type distinct from §6.4.3.3's strings.
+- **The memory model.** Pascal has none, and concurrency cannot be specified
+  without one. It must be designed *with* the safety model, because shared
+  mutable state is where the two meet.
+- **How far the C++ reference front end follows** (ADR-0108). It came back one
+  commit before this goal changed, on the reasoning that the language was
+  finished and slow-changing. Freezing it at the conformance surface is the
+  obvious answer and is not the decided one.
+
+What is already in hand and was not built for this: **modules and separate
+compilation** (ADR-0053, ADR-0079) mean a standard library needs no new language
+mechanism to exist, and `runtime/pasrt.c` is where the outside world already
+enters. Those two are most of a library's scaffolding, finished and tested.
+
+One option **closes** as the language diverges: a third-party differential (FPC
+under `-Miso`, or p5) can only ever check the ISO 7185 core, because nobody else
+implements this dialect. Worth spending while it is still worth anything.
+
 **The bootstrap has closed** — the compiler compiles itself and stage 2 equals
 stage 3 — so the question this file used to answer, what is left before it can
 compile itself, is answered. What it tracks now is the second standard.

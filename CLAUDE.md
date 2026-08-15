@@ -4,10 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Afterschool Pascal: an ISO 7185 Standard Pascal compiler with an LLVM backend,
-written in C++20 against the LLVM 21 C++ API. The near-term goal is
-**self-hosting** — see "Bootstrap constraints" below, which govern design
-choices that would otherwise look arbitrary.
+Afterschool Pascal: a Pascal compiler **written in Pascal** and compiled by
+itself. `selfhost/compiler.pas` is the compiler and the only compiler source;
+it emits textual LLVM IR and links nothing (ADR-0085). Both standards are
+complete — ISO 7185 and ISO/IEC 10206:1991.
+
+Since ADR-0108 there is a second C++ implementation in `src/`, but it is a
+**reference front end** and not the compiler: lexer, parser and Sema only, no
+code generator, no LLVM. It exists so `selfhost/difftest.sh` has two answers to
+compare. Read a mention of C++ below as naming that, or as history.
+
+**The long-term goal is a practical Pascal** (ADR-0109): a dialect and a
+standard core library for networking, internationalisation, concurrency and
+memory safety, as a third `--std` beside the two conformance modes, which stay
+exactly as they are. Bootstrapping was the previous goal and is done; it is now
+a constraint on the *order* features land in — a dialect feature must be
+expressible in what `seed/pascalc.ll` accepts, or the seed is refreshed first.
 
 ## Commands
 
