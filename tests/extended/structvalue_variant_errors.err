@@ -1,0 +1,4 @@
+<source>:27:14: error: a value of type char cannot be a component of type integer
+<source>:28:9: error: this variant part has no tag field, so 'tg' names nothing
+<source>:29:12: error: a record value needs field names before the ':'
+<source>:29:9: error: the field 'f' of rr has no value in this record value

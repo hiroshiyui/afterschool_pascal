@@ -82,7 +82,15 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-normalise() { sed "s|$source_file|<source>|g" "$1"; }
+# The source path is rewritten so a golden does not depend on where the
+# checkout lives. A diagnostic may also name one of §6.13's *other*
+# program-components -- an --import reports a heading's errors against the file
+# that wrote it -- so the case's own directory is rewritten too, which leaves
+# such a path as <dir>/components/name.pas and portable with it.
+normalise() {
+  sed -e "s|$source_file|<source>|g" \
+      -e "s|$(dirname "$source_file")/|<dir>/|g" "$1"
+}
 
 # The compiled program runs with a deliberately small descriptor table. Closing
 # a file at block exit is ISO's rule and this compiler's obligation — a test

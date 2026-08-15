@@ -1,0 +1,2 @@
+<source>:19:24: error: the bounds of a subrange in a schematic formal parameter must be ordinal constants or discriminants
+<source>:27:27: error: no type is produced from schema 's' for this parameter form

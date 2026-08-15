@@ -4921,6 +4921,12 @@ begin
     else if Check(tkInt) then begin
       s := NewNode(nkLabeled, CurLine, CurCol);
       s^.lbStmt := nil;
+      { ctxLabelStart cannot print. ParseLabel writes its context only when the
+        token is *not* an integer, and the branch guard is that it is one, so
+        this argument is a placeholder the signature asks for. Kept rather than
+        replaced by ctxNone: if the guard is ever loosened the right phrase is
+        already here. Counted and left uncovered on purpose -- no test can
+        reach it. }
       s^.lbLabel := ParseLabel(ctxLabelStart);
       Expect(tkColon, ctxAfterLabel);
       s^.lbStmt := ParseStatement
@@ -12136,6 +12142,12 @@ begin
         a := a^.next
       end;
       if chosen < 0 then chosen := completer;
+      { Defensive since ADR-0096, and no test reaches it. 6.4.3.3 now requires
+        the labels of a variant part to name every value of the tag-type
+        exactly once, so a tag value that is *in* the type always selects an
+        arm, and one that is not has been reported a few lines above. What is
+        left is a record whose variant part was already rejected, where this
+        would be a second complaint about the first mistake. }
       if chosen < 0 then begin
         ErrorAt(e^.svTagValue^.line, e^.svTagValue^.col);
         write('no variant of ');
@@ -12995,6 +13007,12 @@ begin
   else begin
   if (w^.wrArgs <> nil) and (w^.wrArgs^.waWidth = nil) and
      IsFile(w^.wrArgs^.waValue^.ntype) then begin
+    { Defensive, and no test reaches it: nothing this language can write
+      produces a file-valued expression that is not a designator. 6.7.2 refuses
+      a result type that is or contains a file, which rules out a call and every
+      selector over one, and there is no file literal and no file-valued
+      constant. Kept because the alternative is trusting that sentence to stay
+      true of a language that is still gaining forms. }
     if not IsDesignator(w^.wrArgs^.waValue) then begin
       ErrorAt(w^.wrArgs^.waValue^.line, w^.wrArgs^.waValue^.col);
       writeln('the file written to must be a variable')
@@ -13103,6 +13121,8 @@ begin
     end
   end
   else if (r^.rdArgs <> nil) and IsFile(r^.rdArgs^.ntype) then begin
+    { Defensive for the same reason as the write side above, and equally
+      unreachable today. }
     if not IsDesignator(r^.rdArgs) then begin
       ErrorAt(r^.rdArgs^.line, r^.rdArgs^.col);
       writeln('the file read from must be a variable')

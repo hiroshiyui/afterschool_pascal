@@ -1,0 +1,2 @@
+<source>:21:14: error: 'z' is a protected parameter, so it cannot be packed into
+<source>:28:13: error: 'a' is a protected parameter, so it cannot be unpacked into

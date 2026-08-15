@@ -1,0 +1,3 @@
+<source>:22:5: error: the discriminants of a module's variable must be constants, because a module's activation lasts as long as the program
+<source>:15:10: error: the module parameter 'nosuch' is not declared as a variable in this module
+<source>:17:9: error: an export range is written between two constants
