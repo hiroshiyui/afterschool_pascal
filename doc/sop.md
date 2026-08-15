@@ -298,7 +298,7 @@ from it when one is closed.
 | `-O1` and `-O3` are unexercised | a defect at an intermediate level has nothing looking for it. Judged not worth a third and fourth sweep | — |
 | BSI corpus is fixed | it does not grow with the language, and covers ISO 7185 only | ADR-0086 |
 | Coverage is measured per **statement**, not per branch | `if c then a else b` on one line counts as covered when either arm runs, and a multi-statement line counts once. Statement coverage is not branch coverage | ADR-0104 |
-| Clause coverage has an **untriaged denominator** | `tests/spec/` cites 13 of 292 clause headings, but many are structural — definitions, grammar, the shape of the document — and will never carry a scenario. The figure is a report and is not gated, because a percentage over an untriaged denominator is one nobody can act on | ADR-0105 |
+| Clause **citation is presence, not depth** | a clause with one scenario counts as cited, though §6.8.3.9 alone has six requirements this suite checks and more it does not. The same caution statement coverage carries, one level further out | ADR-0106 |
 | The statement-coverage gate is a **ratchet**, not an allowlist | it cannot fail in both directions, so a line that becomes covered says nothing, and 650 uncovered lines carry no argument between them. The per-procedure breakdown is what makes a regression nameable | ADR-0104 |
 | `coverage.py` sees the sources, not the harnesses | it enumerates the corpus by glob, so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is invisible; a procedure only those reach reports as uncovered | ADR-0103 |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |
@@ -313,6 +313,11 @@ only grows is a register nobody trusts:
 - *Four diagnostics counted but unenforced.* `tests/checks/unreachable_diagnostics.txt`
   is now a catalogue with an argument per entry, and the `diagnostic-coverage`
   case fails in both directions (§5).
+- *Clause coverage had an untriaged denominator.* All 292 headings are now
+  classified testable, structural or not-implemented
+  (`tests/spec/clauses/triage.tsv`), so the figure is 13 of **189 testable**
+  clauses rather than 13 of 292 headings, and `spec-clause-traceability` gates
+  it in both directions (ADR-0106). What is left of that gap is the row above.
 - *"§5 is an argument, not a number."* There is a number now —
   `procedure-coverage`, 554 of 556 — and the two rows above are what is left of
   that gap rather than the gap itself. Measuring it found the dumps: four
