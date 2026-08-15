@@ -116,3 +116,4 @@ the alternatives that were rejected and why.
 | [0105](0105-scenarios-start-from-the-clause.md) | Scenarios start from the clause | Accepted |
 | [0106](0106-the-denominator-is-triaged.md) | The denominator is triaged | Accepted |
 | [0107](0107-what-the-second-independent-reading-found.md) | What the second independent reading found | Accepted |
+| [0108](0108-the-reference-front-end-comes-back.md) | The reference front end comes back | Accepted |

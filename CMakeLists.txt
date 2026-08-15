@@ -15,7 +15,7 @@
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.20)
-project(afterschool_pascal VERSION 1.2.0 LANGUAGES C)
+project(afterschool_pascal VERSION 1.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +37,27 @@ message(STATUS "Afterschool Pascal: assembling with ${APASCAL_CLANG}")
 # ---- Pascal runtime library (linked into every compiled program) ----
 add_library(pasrt STATIC runtime/pasrt.c)
 target_include_directories(pasrt PUBLIC runtime)
+
+# ---- The reference front end (ADR-0108) ----
+#
+# `src/` is a second implementation of the lexer, the parser and Sema, in C++.
+# It is NOT the compiler and generates no code: `selfhost/difftest.sh` compares
+# the three `--dump` sections, and code generation was never among them (two
+# backends' assembler text is not comparable, ADR-0025). So it links no LLVM,
+# which is what makes a second implementation affordable to keep.
+#
+# It exists because a golden agrees with whoever wrote it. It is the only thing
+# here that can disagree about the *front end* without being asked a question
+# someone here composed.
+add_executable(pascalc-s0
+  src/lexer.cpp src/parser.cpp src/sema.cpp src/astdump.cpp src/diag.cpp
+  src/main.cpp)
+target_include_directories(pascalc-s0 PRIVATE src)
+target_compile_features(pascalc-s0 PRIVATE cxx_std_20)
+target_compile_definitions(pascalc-s0 PRIVATE
+  APASCAL_VERSION="${PROJECT_VERSION}")
+set_target_properties(pascalc-s0 PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # ---- The compiler: written in Afterschool Pascal, built by the seed ----
 #
