@@ -81,6 +81,19 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 
+# Where a machine-readable list of the disagreeing files goes, if anything asked
+# for one. tests/checks/difftest_check.py is what asks: the set of files that
+# disagree is a *baseline* that may shrink and may not grow, so what it needs is
+# which files, not how many -- the same reason line_coverage.txt records the
+# per-procedure breakdown rather than only a count.
+list_out=${DIFFTEST_LIST:-}
+: >"${list_out:-/dev/null}"
+
+note_differs() {
+  [[ -n $list_out ]] && printf '%s\n' "${1#"$root/"}" >>"$list_out"
+  return 0
+}
+
 checked=0
 failed=0
 for f in "${files[@]}"; do
@@ -103,6 +116,7 @@ for f in "${files[@]}"; do
   checked=$((checked + 1))
   if [[ $status -eq 124 ]]; then
     echo "--- $(basename "$f"): the Pascal $component did not terminate ---" >&2
+    note_differs "$f"
     failed=$((failed + 1))
     continue
   fi
@@ -114,6 +128,7 @@ for f in "${files[@]}"; do
   if [[ $status -ne 0 && $status -ne 1 ]]; then
     echo "--- $(basename "$f"): the Pascal $component exited with $status ---" >&2
     cat "$work/pas.err" >&2
+    note_differs "$f"
     failed=$((failed + 1))
     continue
   fi
@@ -122,6 +137,7 @@ for f in "${files[@]}"; do
   if [[ ! -s "$work/cpp.txt" ]]; then
     echo "--- $(basename "$f"): the C++ $component produced nothing to compare ---" >&2
     cat "$work/cpp.err" >&2
+    note_differs "$f"
     failed=$((failed + 1))
     continue
   fi
@@ -129,6 +145,7 @@ for f in "${files[@]}"; do
           "$work/cpp.txt" "$work/pas.txt" >"$work/delta"; then
     echo "--- $(basename "$f"): the two ${component}s disagree ---" >&2
     head -40 "$work/delta" >&2
+    note_differs "$f"
     failed=$((failed + 1))
   fi
 done

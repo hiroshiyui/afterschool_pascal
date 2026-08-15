@@ -149,6 +149,24 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
+# ...and the oracle ADR-0085 gave up and ADR-0108 brought back: two independent
+# implementations of the front end, compared over every Pascal source in the
+# tree. Nothing else here can disagree with the compiler without being asked a
+# question someone here composed.
+#
+# It runs RED on purpose. 89 of 731 files disagree -- the Sema drift the C++
+# never received -- and that set is a baseline that may shrink and may not grow.
+# Waiting for zero before wiring it up would leave the 600-odd files that
+# already agree guarded by nothing for as long as the catch-up takes. Skips (77)
+# when either binary is missing.
+if(Python3_FOUND)
+  add_test(NAME difftest
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/difftest_check.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(difftest PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800)
+endif()
+
 # ...and the finer measurement procedure coverage cannot make: which
 # *statements* the corpus runs. This one needs no sanitizer -- the compiler
 # instruments itself under --coverage (ADR-0104), so the denominator is the

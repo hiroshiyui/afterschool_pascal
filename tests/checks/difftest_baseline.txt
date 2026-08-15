@@ -1,0 +1,100 @@
+# Files on which the C++ reference front end (src/) and the Pascal compiler
+# disagree, as compared by selfhost/difftest.sh over every Pascal source in
+# the tree.
+#
+# A baseline, not a target: this list may shrink and may not grow (ADR-0108).
+# Each entry is drift the C++ never received -- the Sema work since v1.0.0 --
+# and clearing one means porting that rule into src/ and deleting its line.
+#
+# Regenerate with:  python3 tests/checks/difftest_check.py --write-baseline
+# Doing so is a decision to argue for in the commit message: it is correct for
+# progress, and it is also how a regression would be hidden.
+selfhost/badsema/decls.pas
+selfhost/badsema/misc.pas
+selfhost/badsema/newvariants.pas
+selfhost/badsema/procparams.pas
+selfhost/badsema/statements.pas
+tests/bsi/suite/CONFORM/CONF003.pas
+tests/bsi/suite/CONFORM/CONF027.pas
+tests/bsi/suite/CONFORM/CONF041.pas
+tests/bsi/suite/CONFORM/CONF046.pas
+tests/bsi/suite/CONFORM/CONF063.pas
+tests/bsi/suite/CONFORM/CONF066.pas
+tests/bsi/suite/CONFORM/CONF069.pas
+tests/bsi/suite/CONFORM/CONF070.pas
+tests/bsi/suite/CONFORM/CONF071.pas
+tests/bsi/suite/CONFORM/CONF072.pas
+tests/bsi/suite/CONFORM/CONF073.pas
+tests/bsi/suite/CONFORM/CONF074.pas
+tests/bsi/suite/CONFORM/CONF075.pas
+tests/bsi/suite/CONFORM/CONF084.pas
+tests/bsi/suite/CONFORM/CONF088.pas
+tests/bsi/suite/CONFORM/CONF111.pas
+tests/bsi/suite/CONFORM/CONF116.pas
+tests/bsi/suite/CONFORM/CONF129.pas
+tests/bsi/suite/CONFORM/CONF139.pas
+tests/bsi/suite/CONFORM/CONF147.pas
+tests/bsi/suite/CONFORM/CONF158.pas
+tests/bsi/suite/CONFORM/CONF216.pas
+tests/bsi/suite/ppg/temp.pas
+tests/definingpoint_order.pas
+tests/definingpoint_required.pas
+tests/dispose_expression.pas
+tests/dumps/ext_shapes.pas
+tests/extended/constnil_errors.pas
+tests/extended/definingpoint_interleaved.pas
+tests/extended/forin_nested_stack.pas
+tests/extended/funcresult_errors.pas
+tests/extended/goto_completer.pas
+tests/extended/initialstate.pas
+tests/extended/initialstate_errors.pas
+tests/extended/number_separator_ext.pas
+tests/extended/redefine_stringtransfer.pas
+tests/extended/required_identifiers.pas
+tests/extended/restricted.pas
+tests/extended/restricted_errors.pas
+tests/extended/schema_assign.pas
+tests/extended/schema_enum_body.pas
+tests/extended/schema_errors.pas
+tests/extended/schema_forward.pas
+tests/extended/schema_param_errors.pas
+tests/extended/schema_selfpointer_var.pas
+tests/extended/schema_selfref_unused.pas
+tests/extended/setiter.pas
+tests/extended/stringtransfer.pas
+tests/extended/stringtransfer_comma.pas
+tests/extended/stringtransfer_comma2.pas
+tests/extended/stringtransfer_errors.pas
+tests/extended/stringtransfer_open.pas
+tests/extended/stringtransfer_open2.pas
+tests/extended/trap_readstr_eof.pas
+tests/extended/trap_setiter.pas
+tests/extended/trap_writestr_capacity.pas
+tests/extended/typeinquiry_errors.pas
+tests/extended/varparam_string.pas
+tests/extended/writestr_width.pas
+tests/file_errors.pas
+tests/for_threat.pas
+tests/forward_twice.pas
+tests/funcassign_sibling.pas
+tests/funcderef_iso.pas
+tests/goto_branches.pas
+tests/number_separator.pas
+tests/packedset.pas
+tests/packedset_compat.pas
+tests/pointer_domain_field.pas
+tests/pointer_domain_missing.pas
+tests/pointer_domain_shadow.pas
+tests/progparam_duplicate.pas
+tests/redefine_required.pas
+tests/redefine_required_errors.pas
+tests/required_shadow.pas
+tests/required_shadow_errors.pas
+tests/stringtype_errors.pas
+tests/trap_succ_subrange.pas
+tests/trunc_integer.pas
+tests/typename_alias.pas
+tests/variant_complete.pas
+tests/variantpart_semi.pas
+tests/varparam_parens.pas
+tests/varparam_restrictions.pas

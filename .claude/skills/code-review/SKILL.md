@@ -10,7 +10,7 @@ When performing a project-wide code review, always follow these steps:
 2. **The constraints that are still live** — recorded in `doc/adr/` and load-bearing; a change that violates one is a **High** finding unless it comes with a superseding ADR:
    - **Textual `.ll` stays a working output** (ADR-0006). This got *more* load-bearing when stage 0 was retired: `seed/pascalc.ll` is the committed compiler, so the textual backend is now what makes the repository buildable at all (ADR-0085).
    - **The seed is refreshed at release tags, not per commit** (ADR-0085). A change that regenerates `seed/pascalc.ll` outside a release is 6 MB of churn and a finding.
-   - **`selfhost/compiler.pas` is one source file** (ADR-0024), written in Extended Pascal (ADR-0082), and is the only compiler. There is no second implementation to fall back on and no differential test — which is exactly why the review below matters more than it used to.
+   - **`selfhost/compiler.pas` is one source file** (ADR-0024), written in Extended Pascal (ADR-0082), and is the compiler. Since ADR-0108 `src/` is back as a **reference front end** — lexer, parser, Sema, no code generator, no LLVM — so `difftest` compares two implementations again over tokens/AST/Sema. It is red by design (89 of 731) and gates on a baseline. **A lexer, parser or Sema change lands in both**, or `difftest` fails; a CodeGen change lands in one, because difftest never compared generated code.
    - ADR-0005's *no C++ RTTI, no new exception types* is **historical**: it constrained `src/`, which no longer exists. It is why the AST is a tag and a variant record, and reading it explains the shape of `selfhost/compiler.pas`; it constrains nothing now.
 
 3. **ISO 7185 conformance** — The project's design axis is conformance over convenience. Review for:
@@ -85,10 +85,13 @@ When performing a project-wide code review, always follow these steps:
      files for Sema (it accumulates). Since ADR-0085 those are ordinary ctest
      cases with `.err` goldens, so adding one is adding a file and re-running
      `cmake`.
-   - **Remember what the goldens cannot do.** There is no second implementation
-     and no differential test any more. A golden agrees with whatever wrote it,
-     so "the tests pass" says nothing about a construct no test *names*. That is
-     the gap every conformance sweep in `doc/roadmap.md` was opened by.
+   - **Remember what the goldens cannot do.** A golden agrees with whatever
+     wrote it, so "the tests pass" says nothing about a construct no test
+     *names*. That is the gap every conformance sweep in `doc/roadmap.md` was
+     opened by. `difftest` closes part of it — a second implementation disagrees
+     without being asked a question someone here composed — but only for the
+     **front end**, and only for *slips*: both sides are written by one author
+     from one reading, which is how ADR-0073's comment rule was wrong in both.
 
 9. **Documentation quality** — Confirm:
    - New non-obvious behaviour carries a comment naming the ISO clause or the reason (the `mod` adjustment and the `for` limit-then-step both do).

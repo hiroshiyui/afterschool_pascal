@@ -438,15 +438,16 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Three gates make that mechanical, and each fails in **both** directions — a
+Four gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to three catalogues:
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to four catalogues:
 
 | Gate | Catalogue | Asks |
 | --- | --- | --- |
 | `diagnostic-coverage` | `tests/checks/unreachable_diagnostics.txt` | is every message named by a golden? |
 | `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
 | `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
+| `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — red by design at 89, so the baseline may shrink and may not grow |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen change without `verify/`? |
 
 All but the last are `ctest` cases, so they run before a push rather than
