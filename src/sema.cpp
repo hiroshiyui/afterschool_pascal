@@ -4151,14 +4151,14 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
     if (!a.type->isOrdinal())
       return false;
     long long v = ordinal();
-    // §6.6.6.4: succ and pred run out at the ends of the operand's *own* type,
-    // which for an enumeration is its last constant and not maxint. The end is
-    // tested *before* the step, because at maxint the step itself would
-    // overflow — the same reason the emitted code checks first, and what lets
-    // the Pascal-hosted folder reach the same answer without a wider type.
+    // The ends are the *host's* (§6.6.6.4 with §6.7.1), so a subrange does not
+    // stop succ — only an enumeration does, having no host. The end is tested
+    // *before* the step, because at maxint the step itself would overflow —
+    // the same reason the emitted code checks first, and what lets the
+    // Pascal-hosted folder reach the same answer without a wider type.
     bool up = c->builtin == Builtin::Succ;
-    if ((up && v >= a.type->ordinalHi()) ||
-        (!up && v <= a.type->ordinalLo())) {
+    if ((up && v >= a.type->base()->ordinalHi()) ||
+        (!up && v <= a.type->base()->ordinalLo())) {
       diags_.error(c->line, c->col,
                    std::string(c->builtin == Builtin::Succ ? "succ" : "pred") +
                        " runs past the end of " + a.type->name() +
@@ -6927,11 +6927,16 @@ void Sema::checkCall(Call *c) {
     return;
   case Builtin::Succ:
   case Builtin::Pred:
-    // ISO 7185 §6.6.6.4 defines succ over any ordinal type and gives the
-    // result that same type, so succ runs out at the end of *this* type —
-    // at `blue` for an enumeration, at 9 for a subrange 1..9.
+    // §6.6.6.4 gives the result "the same type as that of the expression (see
+    // 6.7.1)", and that cross-reference is the whole rule: §6.7.1 says "any
+    // factor whose type is S, where S is a subrange of T, shall be treated as
+    // if it were of type T". So the result of succ on a `1..9` is an *integer*
+    // and succ(9) is 10; what fails is storing it back. An enumeration has no
+    // host to be promoted to, so it still ends at its last constant — the
+    // asymmetry is the standard's, and BSI asserts both halves in one release
+    // (CONF139 and ERR56T).
     require(a->isOrdinal(), "an ordinal");
-    c->type = a;
+    c->type = a->base();
     return;
   case Builtin::Trunc:
   case Builtin::Round:
