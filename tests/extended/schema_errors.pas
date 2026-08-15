@@ -21,8 +21,8 @@ type
   alike(n: integer) = array [1..n] of real;
   { §6.4.7: the type of a discriminant is an *ordinal* type name }
   wrong(x: real) = array [1..3] of integer;
-  { each production would declare aa and bb again, into a scope that lasts
-    only as long as the production }
+  { legal since ADR-0107: 6.4.2.3 puts these constants' defining-point in
+    the block, so one declaration serves every production }
   enumerated(n: integer) = record c: (aa, bb) end;
   { §6.4.7 lets a schema name itself only in the domain of a pointer }
   selfish(n: integer) = array [1..n] of selfish(n);

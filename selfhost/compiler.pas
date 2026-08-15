@@ -8119,16 +8119,18 @@ end;
 function ResolveEnum(d: nodePtr): typePtr;
 var t: typePtr; n: nodePtr; s: symPtr; e: namePtr;
 begin
-  { An enumerated type declares its constants into the scope the *type*
-    appears in, and a schema's body is resolved once per discriminant tuple --
-    so s(1) and s(2) would each want to declare them, into a scope that exists
-    only while the type is being produced. 6.4.7 gives no answer to that, and
-    silently losing the constants is worse than saying so. }
-  if producingTop <> nil then begin
-    ErrorAt(d^.line, d^.col);
-    writeln('a schema''s type cannot contain an enumerated type: its ',
-            'constants would be declared once per set of discriminants')
-  end;
+  { 6.4.2.3 puts the defining-point of an enumerated-type's constants in "the
+    block, module-heading, or module-block closest-containing the
+    enumerated-type" -- the block, not the production. So an enumerated type
+    in a schema's body is resolved once, at the schema-definition, into the
+    block's own scope, and every production reuses it (ADR-0107). That is what
+    DeclareSchema's walk does, and what keeps ForgetResolved from clearing an
+    nkEnum's ntype: a second resolution would declare the constants again,
+    into a scope that lives only as long as the production.
+
+    This was refused outright, on the argument that the constants would be
+    declared once per tuple. They are declared once per *block*, which is the
+    clause's own answer to that. }
   t := NewType(tyEnum);
   n := d^.enConstants;
   while n <> nil do begin
@@ -9111,7 +9113,12 @@ procedure ForgetResolved;
 var g: nodePtr;
 begin
   if d <> nil then begin
-    d^.ntype := nil;
+    { 6.4.2.3's defining-point is the block's, so an enumerated-type in a
+      schema body denotes one type however many tuples the schema has -- and
+      its constants were declared, once, when the schema was defined. Clearing
+      this would resolve it again into the production's temporary scope and
+      lose them, which is the shape the old refusal was guarding against. }
+    if d^.kind <> nkEnum then d^.ntype := nil;
     case d^.kind of
       nkArray: begin
         ForgetList(d^.arDims);
@@ -9201,7 +9208,7 @@ begin
 end;
 
 procedure CheckSchemaBodyNames(d: nodePtr; self: symPtr);
-var g: nodePtr; found: symPtr; at, len, qLen: integer;
+var g: nodePtr; found: symPtr; at, len, qLen: integer; enum: typePtr;
 begin
   if d <> nil then begin
     at := 0;
@@ -9253,6 +9260,11 @@ begin
         CheckSchemaBodyNames(d^.rcTagType, self);
         CheckSchemaArms(d^.rcVariants, self)
       end;
+      { 6.4.2.3: the constants belong to the block, so they are declared here,
+        once, rather than once per production into a scope that does not
+        outlive it. ResolveType memoises on the node and ForgetResolved leaves
+        an nkEnum alone, so every production of this schema gets this type. }
+      nkEnum: enum := ResolveType(d);
       { An array's dimensions and a subrange's bounds are expressions, not
         denoters, and a schema's arguments likewise -- 6.2.2.9 reaches those
         through the ordinary expression path when they are checked. nkPointer

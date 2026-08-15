@@ -10,8 +10,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 650
-instrumented 13358
+uncovered 649
+instrumented 13401
 
 accept 0/4
 activecontrol 0/6
@@ -95,6 +95,8 @@ checkprocargument 0/35
 checkprocbody 0/28
 checkread 3/73
 checkrecordvalue 0/92
+checkschemaarms 0/8
+checkschemabodynames 0/34
 checkschemadomain 0/21
 checksetexpr 0/14
 checksetmember 0/15
@@ -127,7 +129,7 @@ curline 0/1
 declare 0/21
 declareprocheading 0/47
 declareprocs 0/10
-declareschema 9/48
+declareschema 9/49
 def 0/5
 definekeyword 0/2
 discselectorfor 0/4
@@ -324,6 +326,7 @@ ismemoryconstant 0/2
 isnil 0/1
 isnumeric 0/1
 isordinal 1/5
+isowndiscriminant 0/7
 ispointer 0/1
 isproctype 0/1
 isreal 0/1
@@ -455,7 +458,7 @@ poolis 0/11
 pooliswide 0/9
 poolput 0/3
 poolsame 0/8
-producefromschema 0/166
+producefromschema 0/162
 protectable 1/14
 pushseq 0/3
 pushstmt 0/6
@@ -489,7 +492,7 @@ requiredfunc 0/2
 requiredfuncwide 0/137
 requiredtype 0/6
 resolvearray 0/24
-resolveenum 0/18
+resolveenum 0/15
 resolvefile 1/20
 resolvegotos 3/79
 resolveinquiry 1/25
@@ -499,7 +502,7 @@ resolverecord 0/19
 resolverestricted 13/36
 resolveset 1/22
 resolvesubrange 14/72
-resolvetype 8/56
+resolvetype 7/56
 resolvevariantpart 1/135
 resulttypeof 0/5
 rootdesignator 0/7
