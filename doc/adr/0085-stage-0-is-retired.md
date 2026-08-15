@@ -4,7 +4,13 @@ Date: 2026-08-14
 
 ## Status
 
-Accepted.
+Accepted. Its seed-refresh policy — *at release tags, not per commit* — has one
+documented exception, argued in **ADR-0095**: the seed carries the string
+pool's bound baked in, so when the compiler outgrew it no further diagnostic
+could be added to the compiler at all until the seed was regenerated. A policy
+about *noise* should not become a policy about *capability*, and a refresh that
+unblocks the tree is not the churn this one was written to prevent. Nothing
+else here is qualified.
 
 ## Context
 

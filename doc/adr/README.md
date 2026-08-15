@@ -68,7 +68,7 @@ the alternatives that were rejected and why.
 | [0057](0057-a-substring-is-a-pointer-a-length-and-an-address.md) | A substring is a pointer, a length, and somewhere to store | Accepted |
 | [0058](0058-a-restricted-type-is-a-type-kind.md) | A restricted type is a type kind | Accepted |
 | [0059](0059-five-required-things-and-what-each-cost.md) | Five required things, and what each cost | Accepted |
-| [0060](0060-readstr-and-writestr-are-a-text-file-made-of-memory.md) | readstr and writestr are a text file made of memory | Accepted |
+| [0060](0060-readstr-and-writestr-are-a-text-file-made-of-memory.md) | readstr and writestr are a text file made of memory | Accepted; its parser deviation retired by [0087](0087-a-required-procedure-may-be-declared-away.md) |
 | [0061](0061-a-structured-value-is-built-not-computed.md) | A structured value is built, not computed | Accepted |
 | [0062](0062-a-required-real-constant-is-decimal-text.md) | A required real constant is decimal text | Accepted |
 | [0063](0063-a-set-iteration-is-a-walk-over-the-bits.md) | A set-member-iteration is a walk over the bits | Accepted |
@@ -80,7 +80,7 @@ the alternatives that were rejected and why.
 | [0069](0069-a-constant-access-is-a-designator-over-a-constant.md) | A constant-access is a designator over a constant | Accepted |
 | [0070](0070-a-file-need-not-be-an-entire-variable.md) | A file need not be an entire variable | Accepted |
 | [0071](0071-five-things-the-grammar-admitted-and-the-compiler-refused.md) | Five things the grammar admitted and the compiler refused | Accepted |
-| [0072](0072-three-things-the-compiler-accepted-and-neither-standard-has.md) | Three things the compiler accepted and neither standard has | Accepted |
+| [0072](0072-three-things-the-compiler-accepted-and-neither-standard-has.md) | Three things the compiler accepted and neither standard has | Accepted; its set-packing deviation retired by [0093](0093-a-set-constructor-has-not-chosen-a-packing.md) |
 | [0073](0073-writing-the-required-document-found-two-bugs.md) | Writing the required document found two bugs | Accepted |
 | [0074](0074-a-restriction-the-document-invented-and-a-message-that-explained-nothing.md) | A restriction the document invented, and a message that explained nothing | Accepted |
 | [0075](0075-a-constant-may-be-nil.md) | A constant may be nil | Accepted |
@@ -93,7 +93,7 @@ the alternatives that were rejected and why.
 | [0082](0082-the-stage-1-compiler-is-extended-pascal.md) | The stage-1 compiler is written in Extended Pascal | Accepted |
 | [0083](0083-the-compiler-has-a-command-line.md) | The compiler has a command line | Accepted |
 | [0084](0084-halt-takes-an-exit-status.md) | `halt` takes an exit status | Accepted |
-| [0085](0085-stage-0-is-retired.md) | Stage 0 is retired | Accepted |
+| [0085](0085-stage-0-is-retired.md) | Stage 0 is retired | Accepted; seed-refresh policy has one exception, [0095](0095-the-string-pool-was-the-ceiling.md) |
 | [0086](0086-an-oracle-this-project-did-not-write.md) | An oracle this project did not write | Accepted |
 | [0087](0087-a-required-procedure-may-be-declared-away.md) | A required procedure may be declared away | Accepted |
 | [0088](0088-a-defining-point-precedes-its-applied-occurrences.md) | A defining-point precedes its applied occurrences | Accepted |
@@ -110,3 +110,4 @@ the alternatives that were rejected and why.
 | [0099](0099-packing-does-not-reach-a-components-components.md) | Packing does not reach a component's components | Accepted |
 | [0100](0100-a-procedure-declaration-is-a-declaration.md) | A procedure declaration is a declaration | Accepted |
 | [0101](0101-what-an-independent-reading-found.md) | What an independent reading found | Accepted |
+| [0102](0102-an-alloca-belongs-where-it-is-claimed-once.md) | An alloca belongs where it is claimed once | Accepted |

@@ -4,7 +4,17 @@ Date: 2026-08-13
 
 ## Status
 
-Accepted.
+Accepted, with one of its two deliberate deviations **retired by ADR-0093** —
+and retired because the reasoning recorded here for it was wrong, not because
+the trade-off was later judged differently. This record argues that §6.4.5 c)'s
+packing agreement could not be required because "the standard does not say what
+packing a set-constructor has"; §6.7.1 says exactly that, in a sentence both
+standards carry. Read the set-packing paragraph below as the mistake ADR-0093
+diagnoses rather than as the reason for anything.
+
+The other deviation — an underscore in an identifier — stands. So does
+everything else here: the three rules this record added are unchanged, and
+ADR-0099 later sharpened one of them without overturning it.
 
 ## Context
 

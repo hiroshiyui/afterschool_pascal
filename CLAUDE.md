@@ -42,6 +42,15 @@ are registered by a `file(GLOB)` at configure time, and `tests/` and
 `tests/extended/` are globbed separately because they are compiled under
 different standards.
 
+A case may carry sidecars named after it: `foo.err` (expected diagnostics, and
+a non-zero exit is then required), `foo.in` (standard input), `foo.epoch` (a
+fixed `SOURCE_DATE_EPOCH`), `foo.components` (§6.13's other program-components,
+one path per line), `foo.std` (the standard, overriding the directory) and
+`foo.opt` (an optimisation level). The last is the newest and the one to reach
+for least: the corpus compiles at `-O2` and should go on doing so, but a defect
+in *storage* is invisible there, LLVM being free to hoist an alloca whose
+address does not escape — see ADR-0102 and the two `-O0` cases it added.
+
 `tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009), and
 finds `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and
 `PASCALC` override where it looks for each, which is how CMake points the tests
@@ -1952,6 +1961,19 @@ compiling the compiler with itself twice and requiring the results to match.
   LLVM's assembler is the `strtod`. The one adjustment is that LLVM's float
   syntax needs a decimal point where Pascal's `1e6` has none. Three ADRs
   deferred a conversion that turned out never to be needed.
+- **An `alloca` is only safe where the emitter reaches it once per activation**
+  — a prologue (ADR-0102). The emitter is sequential and cannot go back to the
+  entry block, so an `alloca` written for a statement that may sit inside a
+  loop is claimed again on every iteration, and at `-O0` the stack runs out.
+  Storage that must survive the iteration is a **frame slot** (the shape a
+  `with` binding has); storage that need not is an **SSA value**, which
+  dominates the loop because it is defined before the loop's blocks exist.
+  ADR-0043 wrote this rule for `new` and the `for` statement broke it in both
+  its forms for a long time — with the whole suite green, because `-O2` hoists
+  such an alloca away and the corpus compiles at `-O2`. The two cases that can
+  see it are `tests/for_nested_stack.pas` and
+  `tests/extended/forin_nested_stack.pas`, and each needs a `name.opt` sidecar
+  saying `-O0` to mean anything at all.
 - The layout rules are written out (`LlSize`/`LlAlign`) because there is no
   `DataLayout` to ask. They are needed in exactly two places — a whole-variable
   copy's length and the size `new` allocates. `fileSize` must equal

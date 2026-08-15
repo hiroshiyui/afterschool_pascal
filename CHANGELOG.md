@@ -11,6 +11,33 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## Unreleased
+
+### Fixed
+
+- **A `for` statement inside another loop no longer leaks stack.** Both forms
+  claimed storage on every iteration of the loop around them, so a
+  long-running nested loop compiled at `-O0` died on a stack overflow. The
+  answer computed was never wrong, and at the default `-O2` the leak is
+  optimised away — which is why 495 tests, the validation suite and the SMT
+  proofs were all green over it. (ADR-0102)
+- **`verify/`'s model of `succ` and `pred` described the compiler that v1.1.0
+  replaced**, claiming a subrange runs out at its own last value where §6.7.1
+  makes it the host's. Nothing failed, because those rules prove the model
+  against the specification and neither touches the compiler; the crosscheck,
+  which does, exercised only enumerations — the one ordinal type for which the
+  old and new readings agree.
+
+### Added
+
+- **`name.opt`**, a per-case optimisation level for the test harness, and a
+  bounded stack for the programs it runs. Both exist so a storage defect can
+  fail a test at all.
+- **26 cases naming diagnostics no test had ever named.** Counting the
+  compiler's messages against the goldens found 32 unreached; four remain and
+  each is now commented at its site as unreachable, with what would have to
+  change for it to fire.
+
 ## [1.1.0] — 2026-08-15
 
 **A conformance release, and the first one that refuses programs 1.0.0

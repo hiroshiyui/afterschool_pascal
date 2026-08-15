@@ -4,7 +4,11 @@ Date: 2026-08-12
 
 ## Status
 
-Accepted.
+Accepted. The one deviation it records — that `readstr` and `writestr` are
+recognised *by name* in the parser, so a program could not declare its own
+where §6.7.5.5 makes them required identifiers — was **retired by ADR-0087**,
+which moved the question of what the name denotes into Sema and left the parser
+deciding only the statement's shape. Everything else here stands unchanged.
 
 ## Context
 
