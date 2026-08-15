@@ -11,7 +11,21 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
-## Unreleased
+## [1.1.0] — 2026-08-15
+
+**A conformance release, and the first one that refuses programs 1.0.0
+compiled.** The language did not grow: no syntax was added and no flag. What
+changed is that thirty conformance defects were found and fixed, and most of
+them are rules the compiler was not enforcing — so a program relying on one now
+gets a diagnostic where it used to get a binary. **Read "Changed" before
+upgrading**; it lists every construct that stops compiling and, for each, what
+to write instead.
+
+None of this was found by a test failing. The BSI Pascal Validation Suite was
+adopted as a test case (ADR-0086) and disagreed with the compiler on its first
+run; ADR-0085 had retired the differential oracle in 1.0.0, and this release is
+what filled the hole it left — first with the suite, then with an adversarial
+re-reading of the compiler's own interpretations (ADR-0101).
 
 ### Added
 
@@ -22,6 +36,22 @@ appears below in the release where it still existed.
   `COPYING.RUNTIME`. The compiler itself carries no exception. The BSI
   validation suite and the standards under `doc/vendor/` are neither ours nor
   distributed, and `tests/bsi/README.md` states BSI's own three conditions.
+- **`tests/bsi`** — the BSI Pascal Validation Suite 5.7 (© 1982 British
+  Standards Institution) as a `ctest` case. The suite is **fetched, not
+  committed** (`tests/bsi/fetch.sh`), and the case skips when it is absent.
+  Running it is **not a validation**; see `tests/bsi/README.md` for BSI's terms.
+- **`.github/workflows/ci.yml`** — build and test on every push in two minimal
+  containers, which is what checks that the build needs `cmake`, `make` and
+  `clang` and nothing of LLVM's. A third job fetches the validation suite and
+  runs it, since the case skips wherever nobody has fetched it — which was
+  every container, leaving the newest oracle running only on a developer's
+  machine.
+- **`.claude/skills/langspec-audit`** — the procedure that produced ADR-0101:
+  independent readers given the compiler's behaviour and not its reasoning, and
+  told to prove it wrong from the standards text. It exists because no oracle in
+  this repository can contradict a *misreading* — the goldens agree with
+  whoever wrote them, and the validation-suite catalogue records what this
+  compiler does.
 
 ### Fixed
 
@@ -100,8 +130,122 @@ and disagreed with the compiler on the first run (ADR-0086).
 - **A `readstr` missing its string no longer demands `input`.** It reads from a
   string and from no file, so the diagnostic named a rule the program was not
   breaking.
+- **A program-parameter declared after a procedure is now bound.** Under
+  `--std=extended` a variable-declaration-part may follow a procedure (§6.2.1),
+  and the pass that binds program-parameters ran once, before the first body —
+  so anything declared later was never bound and `binding(f)` reported nothing.
+  It now binds at each procedure declaration and reports once the declarations
+  are complete; every program that does not interleave is unaffected, the two
+  passes collapsing into the single one that was there before. (ADR-0100)
+- **A procedure body sees only what precedes it** under `--std=extended`
+  (§6.2.2.9). Every variable of a block used to exist before any body was
+  checked, whatever the source order, so a body could read a variable declared
+  after it. `--std=iso7185` was never affected: §6.2.1's fixed order refuses it
+  a clause earlier. (ADR-0100)
+- **A diagnostic names a required type by its own name.** `integer`, `real`,
+  `char`, `boolean` and `text` became symbols in this release (ADR-0097), and
+  without an alias the message for a mismatch printed the type's structure
+  instead of the word the program wrote.
+- **The compiler no longer runs out of string space compiling itself.** The
+  lexer interns every *occurrence* of every identifier and literal into one
+  fixed array, which grows with the size of the source; the compiler is its own
+  largest input and had reached 74 characters under the bound. Raised from
+  440,000 to 700,000 and the seed refreshed to match — the seed carries the old
+  bound, so this was the one change that could not wait for a release tag.
+  A large program that failed with *"out of string space"* now compiles.
+  (ADR-0095)
 
 ### Changed
+
+#### Programs that used to compile and no longer do
+
+Each of these is a rule the standard states and this compiler was not applying.
+The construct compiled and ran; it now produces a diagnostic. They are ordered
+by how likely they are to appear in code somebody has already written.
+
+- **A `for` statement's control variable may not be *threatened*** — assigned
+  to, passed as an actual `var` parameter, read into, or used as the control
+  variable of a nested `for` — anywhere in the block, "including any
+  procedure-and-function-declaration-part of the block" (ISO 7185 §6.8.3.9).
+  **This is the entry most likely to reject working code**: a block-level
+  counter that any procedure in the same block assigns is now refused, even
+  when that procedure is never called from the loop and even when it is never
+  called at all. Give the loop a variable nothing else writes. (ADR-0089)
+- **A variant part's labels must be exactly the values of its tag-type** — no
+  value outside the type, and none of the type left unnamed (§6.4.3.3). So
+  `case tag: integer of 1: (…); 2: (…)` is now refused, because `integer` has
+  other values. Write a tag-type that covers the arms (`type sel = 1..2`), or
+  under `--std=extended` add an `otherwise` — which discharges coverage but
+  never membership. This one looks over-strict and is not: BSI's DEV073 header
+  records that its own test was *"reclassified from CONFORMANCE to DEVIANCE due
+  to change in DP7185"*, so the permissive reading is pre-standard. (ADR-0096,
+  audited in ADR-0101)
+- **A `goto` may not jump into a branch, a loop body, a `with` body or a case
+  arm.** §6.8.1 admits a label only where it is a statement of a
+  *statement-sequence* containing the goto, and only a compound-statement, a
+  repeat-statement and Extended Pascal's `otherwise` completer hold one. Two
+  labels at the same depth in different branches of one `if` used to be mutually
+  reachable. (ADR-0094, with the completer in ADR-0101)
+- **A name used in a block may not then be declared in it** (§6.2.2.9) — see
+  "Fixed" below; this was enforced only where the name resolved to nothing, and
+  now covers the case where it resolved to an enclosing declaration.
+- **A required identifier may be declared away, and then means what the program
+  said.** `integer`, `ord`, `text` and the rest are now symbols in a region
+  enclosing the program (§6.2.2.10), so `type integer = char` takes effect. The
+  reverse also holds: a name that resolves to something *not invocable* no
+  longer falls back to the required function of the same spelling, so a program
+  declaring `var ord: array [1..3] of integer` can no longer also call
+  `ord('a')` — §6.2.2.11 forbids one identifier denoting two things in one
+  block. Required *procedures* are still not symbols. (ADR-0097, ADR-0101)
+- **Inside a record's declaration a field name denotes the field** (§6.4.3.3
+  makes the record-type a region), so a pointer domain spelled like a field of
+  that record — or of any record it is written inside — no longer finds the type
+  of that name. (ADR-0098)
+- **An actual `var` parameter may not denote a component of a packed variable,
+  the selector of a variant part, or a component of a string-type** (§6.6.3.3;
+  the third sentence is ISO/IEC 10206:1991 §6.7.3.3 and reaches variable-strings).
+  Packing does **not** propagate inward: `pa[1].f` over a `packed array of rec`
+  is still legal, because `pa[1]` possesses an unpacked record. (ADR-0099,
+  ADR-0101)
+- **A set-type's packing decides compatibility** (§6.4.5 c). `set of boolean`
+  and `packed set of false..true` are no longer compatible. A set-*constructor*
+  is exempt and always was — §6.7.1 leaves it uncommitted — so `p := [true]`
+  fits either. (ADR-0093)
+- **A string-type is four properties at once** (§6.4.3.2): packed, an integer
+  subrange index, a smallest index *value* of 1, and a component that is `char`
+  and not a subrange of one. ISO 7185 adds a largest value above 1;
+  ISO/IEC 10206:1991 §6.4.3.3.2 drops that clause and nothing else. An array
+  meeting only some of these is no longer treated as a string. (ADR-0090)
+- **A value parameter's type may not contain a file** (§6.6.3.2) — the check
+  asked whether the type *was* a file, so a record or array holding one was
+  copied. (ADR-0092)
+- **An actual `var` parameter may not be written `(x)`** (§6.5.1 lists no
+  parenthesised variable-access). The parser had been discarding the brackets,
+  so `p((x))` and `p(x)` were the same tree. (ADR-0092)
+- **Congruity is over parameter *sections*, not parameters** (§6.6.3.6), so
+  `(var a, b: integer)` and `(var a: integer; var b: integer)` are not congruous
+  and a procedural parameter may not be passed where the other is expected.
+  (ADR-0092)
+- **A `forward` directive must follow a heading, not a procedure-identification**
+  (§6.6.1); the compiler recognised the resumption and never looked at the
+  directive. (ADR-0091)
+- **A pointer's domain-type must be declared** even in a block with no type
+  part (§6.4.4) — the check ran only when a run of type definitions ended, so
+  such a program kept an unknown domain in silence. (ADR-0091)
+- **A separator is required between a number and a following identifier,
+  word-symbol or number** (§6.1.10), so `1two` is no longer two tokens. Only the
+  decimal form: an extended-digit sequence is maximal, a letter being a digit
+  there. (ADR-0091)
+- **A parameterless function identifier is not a pointer-variable** (§6.5.4), so
+  `f^` where `f` is a function is refused. ADR-0056's parser gate cannot see this
+  shape — a parameterless call is a bare identifier — so Sema decides it.
+  (ADR-0091)
+- **An assignment to a function identifier must be inside that function**
+  (§6.8.2.2 says *contain*), so a sibling procedure assigning another function's
+  result is refused. A procedure *nested* inside the function may still do it,
+  and always could. (ADR-0094)
+
+#### Documentation of what is not enforced
 
 - **`doc/implementation-defined.md` §6 lists the programs this compiler accepts
   that the standard requires to be rejected**, grouped by cause, where it had
@@ -116,19 +260,6 @@ and disagreed with the compiler on the first run (ADR-0086).
   regenerable — every `ERROR` row of `tests/bsi/expected.tsv` carries the
   number it names — and it says which two entries stop the suite's own programs
   without being enforced.
-
-### Added
-
-- **`tests/bsi`** — the BSI Pascal Validation Suite 5.7 (© 1982 British
-  Standards Institution) as a `ctest` case. The suite is **fetched, not
-  committed** (`tests/bsi/fetch.sh`), and the case skips when it is absent.
-  Running it is **not a validation**; see `tests/bsi/README.md` for BSI's terms.
-- **`.github/workflows/ci.yml`** — build and test on every push in two minimal
-  containers, which is what checks that the build needs `cmake`, `make` and
-  `clang` and nothing of LLVM's. A third job fetches the validation suite and
-  runs it, since the case skips wherever nobody has fetched it — which was
-  every container, leaving the newest oracle running only on a developer's
-  machine.
 
 ## [1.0.0] — 2026-08-14
 
@@ -283,5 +414,6 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.1.0
 [1.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.0.0
 [0.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v0.1.0
