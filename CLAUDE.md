@@ -430,12 +430,20 @@ claim that stops being true is as loud as one that was never true, which is
 | --- | --- | --- |
 | `diagnostic-coverage` | `tests/checks/unreachable_diagnostics.txt` | is every message named by a golden? |
 | `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
+| `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen change without `verify/`? |
 
-The first two are `ctest` cases, so they run before a push rather than
-reporting after one. **What `procedure-coverage` cannot see** is a branch — a
-procedure entered once counts — and what the shell harnesses drive, since it
-enumerates the corpus by glob; both are rows in `doc/sop.md` §7.
+All but the last are `ctest` cases, so they run before a push rather than
+reporting after one. **What none of them sees** is a branch: `line-coverage`
+counts a statement, so `if c then a else b` on one line is covered when either
+arm runs. That, and the corpus being enumerated by glob so the shell harnesses
+are invisible to it, are rows in `doc/sop.md` §7.
+
+`pascalc --coverage` is the product feature behind the last one (ADR-0104), and
+it works on any Pascal program: one counter per statement, the lines reached
+appended to `$PASCOV_LINES`, and the *denominator* readable from the same `.ll`
+the compilation wrote — so nothing keeps a second idea of which lines were
+executable.
 
 `.claude/skills/change-lifecycle/` is the same procedure in the order an agent
 executes it, and dispatches to the specialist skills — `code-review`,

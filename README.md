@@ -69,6 +69,21 @@ tools/pascalcc --std=extended prog.pas --import counter.pas counter.o -o prog
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
 `--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
 
+`--coverage` compiles a program that records which of its own statements ran.
+Set `PASCOV_LINES` when running it and the line numbers are appended there, one
+per line, for every statement the run reached:
+
+```sh
+tools/pascalcc --coverage prog.pas -o prog
+PASCOV_LINES=prog.cov ./prog
+```
+
+What was *instrumented* is in the IR the same compilation wrote — one
+`call void @pas_cov_hit(i32 <line>)` per statement — so the two halves of a
+coverage figure come from one artefact and cannot disagree about which lines
+were executable. `tests/checks/line_coverage.py` is this repository's own use
+of it.
+
 The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`;
 set `AFTERSCHOOL_PASCAL_RUNTIME` to point `pascalcc` at a copy outside the build
 tree.

@@ -20,6 +20,19 @@ tested.
 
 ### Added
 
+- **`--coverage`**, a new flag: the compiled program records which of its own
+  statements ran and appends their line numbers to `$PASCOV_LINES`. What was
+  instrumented is in the IR the same compilation wrote, so the two halves of a
+  coverage figure come from one artefact (ADR-0104). It works on any Pascal
+  program; this repository's own use of it is one caller.
+- **`line-coverage`**, a `ctest` case built on that flag: 12,708 of 13,358
+  statements of the compiler are run by the corpus, and the count may not grow.
+  Unlike `procedure-coverage` it is a ratchet rather than an allowlist, which
+  `doc/sop.md` §7 records as the weaker instrument.
+- `pascalc`'s command-line error paths are tested — an unknown option, a missing
+  `-o` or `--import` operand, two input files, none. Nothing had ever run them,
+  and the gate that counts diagnostics is blind to them by construction: it
+  filters `pascalc: ` messages out as driver output.
 - **`procedure-coverage`**, a `ctest` case that measures how much of the
   compiler the corpus enters — 554 of 556 procedures — and fails when a
   procedure stops being entered *or* when one argued unreachable starts being.

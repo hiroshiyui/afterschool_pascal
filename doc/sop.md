@@ -235,6 +235,30 @@ rather than an exemption.
   be listed — which is how `Usage` and `Version` were found, and why the script
   runs `-h` and `--version` itself now.
 
+**Statement coverage is measured too** (ADR-0104), and it is the first of those
+two that is now answered rather than only recorded. The compiler instruments
+itself:
+
+```sh
+python3 tests/checks/line_coverage.py --report --by-procedure
+python3 tests/checks/line_coverage.py            # the ratchet
+```
+
+`pascalc --coverage` emits one counter per statement, so **the denominator is
+the statements a human wrote** — not blocks CodeGen generated, which is what
+made block coverage uninterpretable. And the compiler is the only thing that
+decides what is executable: the denominator is read back out of the `.ll` that
+same compilation wrote, so the two halves of a figure cannot disagree about
+which lines were executable. There is no second notion of executability to
+drift.
+
+**Its gate is a ratchet, and that is weaker than an allowlist.** A per-line
+argument is not writable at 650 lines. `tests/checks/line_coverage.txt` records
+the count *and* the per-procedure breakdown, so a regression names the
+procedures that moved; regenerating it is a decision to argue for in the commit
+message. Where `uncovered_procedures.txt` fails in both directions, this one
+only ratchets down — which §7 records rather than glosses.
+
 ## 6. Cadence
 
 | When | Do |
@@ -272,7 +296,8 @@ from it when one is closed.
 | `-O0` and `-O2` are each run, never **compared** | the whole corpus now runs at both, so a level-specific crash or wrong answer fails — but a case where the two *differ* and both look plausible passes twice. Only `--crosscheck` compares them, over its own generated program | §6 |
 | `-O1` and `-O3` are unexercised | a defect at an intermediate level has nothing looking for it. Judged not worth a third and fourth sweep | — |
 | BSI corpus is fixed | it does not grow with the language, and covers ISO 7185 only | ADR-0086 |
-| Coverage is measured per **procedure**, not per branch | a procedure entered once counts, so the `case` arm nobody reaches is invisible. Block coverage cannot replace it — a third of the compiler's own blocks are trap paths unreachable by design — and the honest denominator needs the compiler to emit line information | ADR-0103 |
+| Coverage is measured per **statement**, not per branch | `if c then a else b` on one line counts as covered when either arm runs, and a multi-statement line counts once. Statement coverage is not branch coverage | ADR-0104 |
+| The statement-coverage gate is a **ratchet**, not an allowlist | it cannot fail in both directions, so a line that becomes covered says nothing, and 650 uncovered lines carry no argument between them. The per-procedure breakdown is what makes a regression nameable | ADR-0104 |
 | `coverage.py` sees the sources, not the harnesses | it enumerates the corpus by glob, so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is invisible; a procedure only those reach reports as uncovered | ADR-0103 |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |
 | One rule of §6.4.3.3 enforced only for a pointer domain | a program can break it and be accepted | ADR-0101 |
