@@ -142,7 +142,13 @@ def is_a_value_of_the_subrange(v, lo, hi):
 def has_a_successor_in(i, lo, hi):
     """ISO 7185 §6.6.6.4 — succ(x) exists when x is not the last value of its
     own ordinal type. Stated over the type's own bounds rather than the machine
-    type's, which is the whole difference an enumeration makes."""
+    type's, which is the whole difference an enumeration makes.
+
+    Which type is "its own" is §6.7.1's answer, not the denoter's: a factor of
+    a subrange type "shall be treated as if it were of type T", so for a
+    subrange the bounds here are the host's. §6.6.6.4 says the result has "the
+    same type as that of the expression (see 6.7.1)" and that cross-reference
+    is the whole of the rule."""
     return z3.And(wide(i) >= wide(lo), wide(i) < wide(hi))
 
 

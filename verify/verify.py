@@ -240,6 +240,19 @@ def build_crosscheck_program():
     lines.append("  writeln(j);")
     expected.append("45")
 
+    # §6.7.1's substitution, which is what decides where succ and pred run out
+    # and is the one thing the enumeration lines above cannot show: an
+    # enumeration is its own base, so it ends where it is written to end, and
+    # the two readings agree. A subrange's do not. `succ` of a 1..9 holding 9
+    # is 10 because §6.7.1 treats the factor as an integer, and a compiler that
+    # trapped at the subrange's own end would stop this program rather than
+    # print anything — which is what makes this line tie `succ_traps_at`'s
+    # `end` to what the compiler actually compares against.
+    lines.append("  d := 9; i := succ(d);")
+    lines.append("  d := 1; j := pred(d);")
+    lines.append("  writeln(i, ' ', j);")
+    expected.append("10 0")
+
     # Every arm of a case, selected in turn.
     lines.append("  for i := 1 to 4 do")
     lines.append("    case i of")

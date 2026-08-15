@@ -364,9 +364,18 @@ def _succ_traps_exactly_at_the_end_of_its_type(w):
     """succ over an arbitrary ordinal type, not just integer: it traps exactly
     at the type's last value, and elsewhere gives the next one.
 
-    The bounds are symbolic, so an enumeration ending at 4 and a subrange
-    ending at 9 are both covered — the case the old integer-only rule could
-    not see, because it hard-coded maxint as the end.
+    The bounds are symbolic, so this is one theorem about every ordinal type
+    rather than about whichever ones a test happens to declare — the case the
+    old integer-only rule could not see, because it hard-coded maxint as the
+    end.
+
+    `lo` and `hi` are the bounds of the type ISO 7185 §6.7.1 substitutes: an
+    enumeration's own, and for a subrange its *host's*. A subrange does not end
+    its own `succ` — `succ(9)` of a `1..9` is 10, and what is an error there is
+    storing the 10 back, which `_store_check_fires_exactly_on_the_values_iso_
+    calls_an_error` covers. So instantiating this rule with 1 and 9 would be
+    describing a compiler this one is not; instantiating it with the host's
+    bounds is what makes it true of the emitted code.
     """
     i = low.integer("i", w)
     lo, hi = low.integer("lo", w), low.integer("hi", w)

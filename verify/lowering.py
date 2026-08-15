@@ -257,9 +257,20 @@ def traps_subrange_store(v, lo, hi):
 
 
 def succ_traps_at(i, end):
-    """`Builtin::Succ`, generalised to any ordinal type: equality with the last
-    value of *that* type, which for an enumeration or a subrange is not
-    maxint. The addition afterwards is a bare CreateAdd."""
+    """`succ`, generalised to any ordinal type: equality with the last value of
+    the type, the addition afterwards being a bare add.
+
+    `end` is the last value of the type ISO 7185 §6.7.1 *substitutes*, which is
+    what the compiler computes with `Base(t)` before asking for the bounds. An
+    enumeration is its own base and so ends at its last constant. A subrange is
+    not: §6.7.1 says "any factor whose type is S, where S is a subrange of T,
+    shall be treated as if it were of type T", so `succ` of a `1..9` holding 9
+    is 10 and traps at nothing. What traps for that value is storing it back,
+    which is `traps_store_outside_subrange` and a separate rule.
+
+    Reading `end` as the subrange's own 9 would describe the compiler this one
+    was until the §6.7.1 reading was applied.
+    """
     return i == end
 
 
