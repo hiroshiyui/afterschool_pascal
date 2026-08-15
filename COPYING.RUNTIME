@@ -1,0 +1,39 @@
+Afterschool Pascal Runtime Library Exception
+============================================
+
+Additional permission under section 7 of the GNU General Public License,
+version 3, granted for `runtime/pasrt.c`, `runtime/pasrt.h`, and the library
+built from them (`libpasrt.a`) — together, "the Runtime Library".
+
+    As a special exception, if you link the Runtime Library with other files
+    to produce an executable, that does not by itself cause the resulting
+    executable to be covered by the GNU General Public License. This
+    exception does not however invalidate any other reasons why the
+    executable file might be covered by the GNU General Public License.
+
+
+Why this exists
+---------------
+
+The Runtime Library is linked into *every* program this compiler builds: it
+carries the formatted output, the file machinery and the run-time checks that
+ISO 7185 requires, none of which can be expressed in the emitted IR. Without
+this exception, compiling an ordinary Pascal program with `pascalcc` would put
+that program under the GPL, which is not the intent — a compiler should not
+decide the licence of what it compiles.
+
+The same reasoning is why GCC ships the GCC Runtime Library Exception, and why
+GNAT and libstdc++ carry exceptions of their own. This one is the simpler,
+long-established linking-exception wording rather than GCC's, because this
+runtime has no notion of eligible compilation processes or target code to
+qualify.
+
+**The compiler itself is not covered by this exception.** `selfhost/compiler.pas`,
+`tools/pascalcc`, the build files and everything else in this repository are
+under the GNU General Public License version 3 or later, with no additional
+permissions. Modifying the compiler and distributing it means distributing your
+changes under the same terms.
+
+**Nor does it grant anything about the compiler's *output* beyond linking.**
+The IR `pascalc` writes is derived from your source, not from the compiler, so
+it was never covered in the first place.

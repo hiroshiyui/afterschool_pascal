@@ -915,3 +915,38 @@ file (ADR-0034).
 `tests/run_test.sh` compiles, runs, and diffs. Source paths are rewritten to
 `<source>` in stderr, so diagnostics can be pinned without depending on where
 the checkout lives.
+
+## Licence
+
+**GNU General Public License, version 3 or later.** `LICENSE` carries the text;
+`Copyright (C) 2026 Hui-Hong You`.
+
+**The runtime carries an exception, and it is the part most people need.**
+`runtime/pasrt.c` is linked into every program this compiler builds — it holds
+the formatted output, the file machinery and the run-time checks ISO 7185
+requires, none of which can be expressed in the emitted IR. Without an
+exception, compiling an ordinary Pascal program with `pascalcc` would place
+that program under the GPL. It does not:
+
+> As a special exception, if you link the Runtime Library with other files to
+> produce an executable, that does not by itself cause the resulting executable
+> to be covered by the GNU General Public License.
+
+`COPYING.RUNTIME` has the full wording and the reasoning. **Your programs are
+yours** — the IR `pascalc` writes is derived from your source rather than from
+the compiler, so it was never covered in the first place.
+
+**The compiler itself has no such exception.** `selfhost/compiler.pas`,
+`tools/pascalcc`, the build files and the proofs in `verify/` are GPLv3-or-later
+outright: modify the compiler and distribute it, and your changes travel under
+the same terms. `seed/pascalc.ll` is the compiler in another form — generated
+from `selfhost/compiler.pas`, which is the corresponding source the GPL asks
+for, and committed beside it.
+
+**Two things in this repository are not covered by it, and neither is
+distributed.** The BSI Pascal Validation Suite is *(C) Copyright 1982, British
+Standards Institution*, used under terms that grant use and **not**
+redistribution — `tests/bsi/README.md` states all three conditions, and
+`tests/bsi/fetch.sh` puts it in a gitignored directory for that reason. The
+standards themselves live in `doc/vendor/`, also gitignored. Nothing in either
+place is ours to relicense.

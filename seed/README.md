@@ -37,6 +37,17 @@ LLVM and a C++ compiler supported. Porting means generating a seed on the new
 target, which needs a working compiler there first — from `v0.1.0`'s C++, or by
 cross-compiling this IR. That cost is stated here rather than discovered.
 
+## Its licence
+
+The seed is `selfhost/compiler.pas` in another form, so it is under the same
+GNU General Public License version 3 or later, and `selfhost/compiler.pas` is
+the corresponding source the GPL asks for — committed beside it, in this
+repository, at the commit the seed was generated from. It carries **no** file
+header of its own: it is generated, and a notice written into it would be
+rewritten by the next refresh. `../LICENSE` and `../COPYING.RUNTIME` are the
+authority. Note the runtime exception does *not* reach the seed — the seed is
+the compiler, not the runtime.
+
 ## Refreshing it
 
 **At release tags, not per commit.** The file is 6.5 MB and 157,000 lines;

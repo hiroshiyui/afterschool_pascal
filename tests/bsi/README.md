@@ -44,6 +44,11 @@ fixed:
 
 ## The terms
 
+These are BSI's, and they are not this repository's licence. Afterschool Pascal
+is GPLv3-or-later (see `../../LICENSE`); the suite is *(C) Copyright 1982,
+British Standards Institution* and is fetched rather than committed precisely
+because redistribution is the one thing its terms do not grant.
+
 BSI makes the suite available "as is" on three conditions:
 
 - that BSI's copyright is acknowledged;

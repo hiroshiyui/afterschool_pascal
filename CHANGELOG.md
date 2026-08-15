@@ -13,6 +13,16 @@ appears below in the release where it still existed.
 
 ## Unreleased
 
+### Added
+
+- **A licence.** GPLv3-or-later, `Copyright (C) 2026 Hui-Hong You`, with a
+  linking exception on the runtime: `runtime/pasrt.c` is linked into every
+  program this compiler builds, and without the exception compiling an ordinary
+  Pascal program would place that program under the GPL. It does not — see
+  `COPYING.RUNTIME`. The compiler itself carries no exception. The BSI
+  validation suite and the standards under `doc/vendor/` are neither ours nor
+  distributed, and `tests/bsi/README.md` states BSI's own three conditions.
+
 ### Fixed
 
 Every entry changes what an **already-valid program** does, and none was found
