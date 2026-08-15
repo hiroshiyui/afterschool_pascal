@@ -32,6 +32,15 @@ scenario names the clause it claims to be about, so someone holding the
 standard can check the claim against the text rather than against the compiler.
 That is the whole of the improvement, and ADR-0105 argues it is worth having.
 
+**What attacks a scenario is `.claude/skills/langspec-audit/`**, and the two are
+built to fit: an audit sends readers who have not seen this project's reasoning
+to prove a reading wrong from the standards text, and a cited clause is the
+easiest target it has — the claim is written down and filed under the clause it
+is about. A scenario that has survived one is a different thing from a scenario
+that has only ever passed, so say which in the commit message. The audit also
+checks `clauses/triage.tsv`, since a requirement filed `structural` leaves the
+denominator and is never asked for again.
+
 It is also why the scenarios are phrased as the *requirement*, not as the
 implementation: "the bounds are checked only if the statement is executed" is a
 sentence about §6.8.3.9, and "the for loop emits its check inside the entry
