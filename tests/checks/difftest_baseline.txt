@@ -10,7 +10,6 @@
 # Doing so is a decision to argue for in the commit message: it is correct for
 # progress, and it is also how a regression would be hidden.
 selfhost/badsema/decls.pas
-selfhost/badsema/misc.pas
 selfhost/badsema/newvariants.pas
 selfhost/badsema/procparams.pas
 selfhost/badsema/statements.pas
@@ -21,15 +20,12 @@ tests/bsi/suite/CONFORM/CONF066.pas
 tests/bsi/suite/CONFORM/CONF084.pas
 tests/bsi/suite/CONFORM/CONF088.pas
 tests/bsi/suite/CONFORM/CONF116.pas
-tests/bsi/suite/CONFORM/CONF129.pas
 tests/bsi/suite/CONFORM/CONF147.pas
 tests/bsi/suite/CONFORM/CONF216.pas
 tests/bsi/suite/ppg/temp.pas
 tests/definingpoint_order.pas
 tests/definingpoint_required.pas
-tests/dispose_expression.pas
 tests/dumps/ext_shapes.pas
-tests/extended/constnil_errors.pas
 tests/extended/definingpoint_interleaved.pas
 tests/extended/forin_nested_stack.pas
 tests/extended/funcresult_errors.pas

@@ -5979,7 +5979,15 @@ void Sema::checkStdProc(ProcCallStmt *p) {
   }
 
   Expr *a = p->args[0].get();
-  if (!isDesignator(a)) {
+  // §6.6.5.3 asks for different things of the two. `new(p)` "shall attribute
+  // to p" the identifying-value, so p is somewhere to store and has to be a
+  // variable; `dispose(q)` "shall remove the identifying-value denoted by the
+  // *expression* q", which a function-designator is as much as a variable is.
+  // Requiring a variable of both refused `dispose(alterptr(ptr1))`, which is
+  // the suite's CONF129 — and there is nothing for the nil-back-store of
+  // ADR-0019 to write into there, which is why CodeGen asks the same question
+  // rather than assuming an answer.
+  if (p->standard == StdProc::New && !isDesignator(a)) {
     diags_.error(a->line, a->col,
                  "'" + p->name + "' needs a pointer variable");
     return;
@@ -5990,8 +5998,13 @@ void Sema::checkStdProc(ProcCallStmt *p) {
   // no designator that reaches here can have a protected variable under it.
   // Enforced by construction, the way ADR-0044's dynamic-violation is.
   if (a->type && (!a->type->isPointer() || a->type->isNil())) {
+    // A variable for `new`, which stores into it; any expression of a
+    // pointer-type for `dispose`, which only reads one (§6.6.5.3).
     diags_.error(a->line, a->col,
-                 "'" + p->name + "' needs a pointer variable, found " +
+                 "'" + p->name +
+                     (p->standard == StdProc::New
+                          ? "' needs a pointer variable, found "
+                          : "' needs a pointer, found ") +
                      a->type->name());
     return;
   }
