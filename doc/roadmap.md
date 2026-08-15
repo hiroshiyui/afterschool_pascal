@@ -1372,7 +1372,7 @@ before it could not see.
   compilation wrote, so the two halves of a figure cannot disagree about which
   lines were executable. 12,708 of 13,358 statements are run by the corpus.
 - **`tests/spec/`** (ADR-0105, ADR-0106) is the same question asked of the
-  *standards* rather than of the compiler: 13 of 189 testable clauses cited,
+  *standards* rather than of the compiler: 13 of 207 testable clauses cited,
   with the other 103 headings triaged out as structural or unimplemented so the
   denominator means something.
 

@@ -1973,13 +1973,13 @@ scenario that asserts nothing.
   `.git/info/exclude`, so no clone had it.
 - **The denominator is triaged** (ADR-0106): every one of the 292 headings is
   classified `testable`, `structural` or `not-implemented` in
-  `clauses/triage.tsv`, so coverage is 13 of **189 testable** clauses rather
+  `clauses/triage.tsv`, so coverage is 13 of **207 testable** clauses rather
   than 13 of 292. `spec-clause-traceability` gates it — a clause that stops
   being cited fails, and so does a scenario citing a clause the triage says
   cannot carry one, which is what keeps the triage itself honest. A clause that
   *starts* being cited does not fail; it asks for `--write-pending`, because a
   gate that punished progress would train people to avoid it.
-- `clauses/pending.txt` is the **work queue**: the 176 testable clauses no
+- `clauses/pending.txt` is the **work queue**: the 194 testable clauses no
   scenario cites yet.
 
 **The one oracle nobody here wrote is the BSI Pascal Validation Suite**

@@ -111,8 +111,9 @@ Two rules that keep a scenario honest:
   covers the compiler; this covers *readings*. A feature landing still needs
   its `tests/*.pas` pair.
 - **Not complete, and citation is not depth.** `--coverage` reports 13 of the
-  **189 testable** clauses — the denominator is triaged in
-  `clauses/triage.tsv` (ADR-0106), so the 93 structural headings and the 10 for
-  conformant array parameters are excluded rather than counted as gaps. But a
+  **207 testable** clauses — the denominator is triaged in
+  `clauses/triage.tsv` (ADR-0106, corrected by ADR-0107), so the 75 structural
+  headings and the 10 for conformant array parameters are excluded rather than
+  counted as gaps. But a
   clause with one scenario counts as cited, and §6.8.3.9 alone has more
   requirements than the six here. `doc/sop.md` §7 carries that caveat.

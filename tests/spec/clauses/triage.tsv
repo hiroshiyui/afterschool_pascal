@@ -36,7 +36,7 @@ iso7185	3.5	structural	defines a term the rest of the standard uses
 iso7185	5.1	structural	states what a processor or a program is, not what either does
 iso7185	5.2	structural	states what a processor or a program is, not what either does
 iso7185	6.1	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.1.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.1.1	testable	Lexical tokens / General
 iso7185	6.1.2	testable	Special-symbols
 iso7185	6.1.3	testable	Identifiers
 iso7185	6.1.4	testable	Directives
@@ -51,9 +51,9 @@ iso7185	6.2.2	testable	Scopes
 iso7185	6.2.3	testable	Activations
 iso7185	6.3	testable	Constant-definitions
 iso7185	6.4	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.4.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.4.1	testable	Type-definitions / General
 iso7185	6.4.2	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.4.2.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.4.2.1	testable	Simple-types / General
 iso7185	6.4.2.2	testable	Required simple-types
 iso7185	6.4.2.3	testable	Enumerated-types
 iso7185	6.4.2.4	testable	Subrange-types
@@ -71,7 +71,7 @@ iso7185	6.5	structural	introduces the subclauses below it; states no requirement
 iso7185	6.5.1	testable	Variable-declarations
 iso7185	6.5.2	testable	Entire-variables
 iso7185	6.5.3	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.5.3.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.5.3.1	testable	Component-variables / General
 iso7185	6.5.3.2	testable	Indexed-variables
 iso7185	6.5.3.3	testable	Field-designators
 iso7185	6.5.4	testable	Identified-variables
@@ -80,7 +80,7 @@ iso7185	6.6	structural	introduces the subclauses below it; states no requirement
 iso7185	6.6.1	testable	Procedure-declarations
 iso7185	6.6.2	testable	Function-declarations
 iso7185	6.6.3	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.6.3.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.6.3.1	testable	Parameters / General
 iso7185	6.6.3.2	testable	Value parameters
 iso7185	6.6.3.3	testable	Variable parameters
 iso7185	6.6.3.4	testable	Procedural parameters
@@ -115,12 +115,12 @@ iso7185	6.7.3	testable	Function-designators
 iso7185	6.8	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.8.1	testable	General
 iso7185	6.8.2	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.8.2.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.8.2.1	testable	Simple-statements / General
 iso7185	6.8.2.2	testable	Assignment-statements
 iso7185	6.8.2.3	testable	Procedure-statements
 iso7185	6.8.2.4	testable	Goto-statements
 iso7185	6.8.3	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.8.3.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.8.3.1	testable	Structured-statements / General
 iso7185	6.8.3.2	testable	Compound-statements
 iso7185	6.8.3.3	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.8.3.4	testable	If-statements
@@ -137,7 +137,7 @@ iso7185	6.9.3	testable	The procedure write
 iso7185	6.9.3.1	testable	Write-parameters
 iso7185	6.9.3.2	testable	Char-type
 iso7185	6.9.3.3	testable	Integer-type
-iso7185	6.9.3.4	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.9.3.4	testable	Write-parameters, real-type
 iso7185	6.9.3.4.1	testable	The floating-point representation
 iso7185	6.9.3.4.2	testable	The fixed-point representation
 iso7185	6.9.3.5	testable	Boolean-type
@@ -156,7 +156,7 @@ extended	3.6	structural	defines a term the rest of the standard uses
 extended	5.1	structural	states what a processor or a program is, not what either does
 extended	5.2	structural	states what a processor or a program is, not what either does
 extended	6.1	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.1.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.1.1	testable	Lexical tokens / General
 extended	6.1.2	testable	Special-symbols
 extended	6.1.3	testable	Identifiers
 extended	6.1.4	testable	Remote-directives
@@ -178,7 +178,7 @@ extended	6.3.2	structural	the standard's own illustration, not a requirement
 extended	6.4	structural	introduces the subclauses below it; states no requirement of its own
 extended	6.4.1	testable	Type-definitions
 extended	6.4.2	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.4.2.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.4.2.1	testable	Simple-types / General
 extended	6.4.2.2	testable	Required simple-types and associated constants
 extended	6.4.2.3	testable	Enumerated-types
 extended	6.4.2.4	testable	Subrange-types
@@ -187,7 +187,7 @@ extended	6.4.3	structural	introduces the subclauses below it; states no requirem
 extended	6.4.3.1	testable	General
 extended	6.4.3.2	testable	Array-types
 extended	6.4.3.3	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.4.3.3.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.4.3.3.1	testable	String-types / General
 extended	6.4.3.3.2	testable	Fixed-string-types
 extended	6.4.3.3.3	testable	Variable-string-types
 extended	6.4.3.4	testable	Record-types
@@ -204,7 +204,7 @@ extended	6.5	structural	introduces the subclauses below it; states no requiremen
 extended	6.5.1	testable	Variable-declarations
 extended	6.5.2	testable	Entire-variables
 extended	6.5.3	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.5.3.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.5.3.1	testable	Component-variables / General
 extended	6.5.3.2	testable	Indexed-variables
 extended	6.5.3.3	testable	Field-designators
 extended	6.5.4	testable	Identified-variables
@@ -259,13 +259,13 @@ extended	6.8.3.6	testable	String operator
 extended	6.8.4	testable	Schema-discriminants
 extended	6.8.5	testable	Function-designators
 extended	6.8.6	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.8.6.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.8.6.1	testable	Function-accesses / General
 extended	6.8.6.2	testable	Indexed-function-accesses
 extended	6.8.6.3	testable	Record-function-accesses
 extended	6.8.6.4	testable	Function-identified-variables
 extended	6.8.6.5	testable	Substring-function-accesses
 extended	6.8.7	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.8.7.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.8.7.1	testable	Structured-value-constructors / General
 extended	6.8.7.2	testable	Array-values
 extended	6.8.7.3	testable	Record-values
 extended	6.8.7.4	testable	Set-values
@@ -277,12 +277,12 @@ extended	6.8.8.4	testable	Substring-constants
 extended	6.9	structural	introduces the subclauses below it; states no requirement of its own
 extended	6.9.1	testable	General
 extended	6.9.2	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.9.2.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.9.2.1	testable	Simple-statements / General
 extended	6.9.2.2	testable	Assignment-statements
 extended	6.9.2.3	testable	Procedure-statements
 extended	6.9.2.4	testable	Goto-statements
 extended	6.9.3	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.9.3.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.9.3.1	testable	Structured-statements / General
 extended	6.9.3.2	testable	Compound-statements
 extended	6.9.3.3	structural	introduces the subclauses below it; states no requirement of its own
 extended	6.9.3.4	testable	If-statements
@@ -291,7 +291,7 @@ extended	6.9.3.6	structural	introduces the subclauses below it; states no requir
 extended	6.9.3.7	testable	Repeat-statements
 extended	6.9.3.8	testable	While-statements
 extended	6.9.3.9	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.9.3.9.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.9.3.9.1	testable	For-statements / General
 extended	6.9.3.9.2	testable	Sequence-iteration
 extended	6.9.3.9.3	testable	Set-member-iteration
 extended	6.9.3.10	testable	With-statements
@@ -303,7 +303,7 @@ extended	6.10.3	testable	The procedure write
 extended	6.10.3.1	testable	Write-parameters
 extended	6.10.3.2	testable	Char-type
 extended	6.10.3.3	testable	Integer-type
-extended	6.10.3.4	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.10.3.4	testable	Write-parameters, real-type
 extended	6.10.3.4.1	testable	The floating-point representation
 extended	6.10.3.4.2	testable	The fixed-point representation
 extended	6.10.3.5	testable	Boolean-type

@@ -115,3 +115,4 @@ the alternatives that were rejected and why.
 | [0104](0104-the-compiler-instruments-itself.md) | The compiler instruments itself | Accepted |
 | [0105](0105-scenarios-start-from-the-clause.md) | Scenarios start from the clause | Accepted |
 | [0106](0106-the-denominator-is-triaged.md) | The denominator is triaged | Accepted |
+| [0107](0107-what-the-second-independent-reading-found.md) | What the second independent reading found | Accepted |

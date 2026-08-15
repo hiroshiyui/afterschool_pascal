@@ -294,6 +294,8 @@ from it when one is closed.
 | Blind spot | Consequence | Recorded |
 | --- | --- | --- |
 | No differential oracle | nothing can contradict a reading except `langspec-audit` | ADR-0085 |
+| `langspec-audit`'s readers are **not isolated** | the harness injects `CLAUDE.md` — including the reasoning for the clauses under audit — before a reader's first turn, and it cannot decline. All seven readers of the second run disclosed it. A CONFIRMED verdict therefore means "no independent oracle contradicts it", not "an uninfluenced reader agreed"; the *disagreements* are the trustworthy part | ADR-0107 |
+| Four conformance defects are **known and unfixed** | found by the second audit and recorded with a probe and a clause each: a non-constant discriminant refused outside a variable declaration, an enumerated type refused in a schema body, a forward schema reference accepted, an unused self-referential schema accepted | ADR-0107 |
 | `-O0` and `-O2` are each run, never **compared** | the whole corpus now runs at both, so a level-specific crash or wrong answer fails — but a case where the two *differ* and both look plausible passes twice. Only `--crosscheck` compares them, over its own generated program | §6 |
 | `-O1` and `-O3` are unexercised | a defect at an intermediate level has nothing looking for it. Judged not worth a third and fourth sweep | — |
 | BSI corpus is fixed | it does not grow with the language, and covers ISO 7185 only | ADR-0086 |
@@ -315,7 +317,7 @@ only grows is a register nobody trusts:
   case fails in both directions (§5).
 - *Clause coverage had an untriaged denominator.* All 292 headings are now
   classified testable, structural or not-implemented
-  (`tests/spec/clauses/triage.tsv`), so the figure is 13 of **189 testable**
+  (`tests/spec/clauses/triage.tsv`), so the figure is 13 of **207 testable**
   clauses rather than 13 of 292 headings, and `spec-clause-traceability` gates
   it in both directions (ADR-0106). What is left of that gap is the row above.
 - *"§5 is an argument, not a number."* There is a number now —
