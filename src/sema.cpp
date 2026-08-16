@@ -4991,6 +4991,15 @@ void Sema::checkStmt(Stmt *s) {
       // set, so a control variable narrower than the base type is legal and
       // D.96 makes a member outside it an error — checked at the store, by
       // the code every other store already goes through.
+
+      // The ordinal counter CodeGen walks the base type's values with. A frame
+      // slot is Sema's to give, so it is given here; and it is given per
+      // *statement*, so two for-in statements — nested or merely adjacent —
+      // cannot share one (ADR-0102).
+      if (current_)
+        f->counter =
+            addHiddenVar("for$" + std::to_string(current_->frameVars.size()),
+                         SymKind::Var, ty::Int(), current_);
     } else {
       checkExpr(f->from.get());
       checkExpr(f->to.get());

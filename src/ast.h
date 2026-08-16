@@ -567,6 +567,11 @@ struct ForStmt : Stmt {
   /// alternatives, so they are one node with two shapes rather than two nodes.
   ExprPtr set;
   StmtPtr body;
+  /// The ordinal counter CodeGen walks the base type's values with, for the
+  /// set form only. A frame slot rather than an `alloca`, per ADR-0102: the
+  /// emitter is sequential, so storage written for a statement that may sit
+  /// inside a loop is claimed again on every iteration.
+  Symbol *counter = nullptr;
 };
 
 /// `with r do S` — inside S the fields of r are visible as bare names. The

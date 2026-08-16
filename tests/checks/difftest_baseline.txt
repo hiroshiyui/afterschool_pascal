@@ -12,13 +12,9 @@
 selfhost/badsema/procparams.pas
 tests/bsi/suite/CONFORM/CONF063.pas
 tests/bsi/suite/ppg/temp.pas
-tests/dumps/ext_shapes.pas
 tests/extended/definingpoint_interleaved.pas
-tests/extended/forin_nested_stack.pas
 tests/extended/initialstate_errors.pas
 tests/extended/schema_assign.pas
-tests/extended/setiter.pas
-tests/extended/trap_setiter.pas
 tests/extended/typeinquiry_errors.pas
 tests/file_errors.pas
 tests/funcderef_iso.pas
