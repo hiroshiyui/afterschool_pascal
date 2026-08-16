@@ -453,6 +453,7 @@ private:
   /// §6.4.7's schema-definition: a name, its formal discriminants, and the
   /// body kept unresolved until a tuple arrives.
   void declareSchema(TypeDecl &decl);
+  void checkSchemaBodyNames(TypeExpr *d, Symbol *self);
   /// §6.4.8: the type this schema maps the given actual-discriminant-part to.
   /// Interned, because §6.4.8 makes one tuple denote one type however many
   /// times it is written.

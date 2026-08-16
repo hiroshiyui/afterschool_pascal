@@ -241,15 +241,18 @@ bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
 /// type itself appears in (ISO 7185 §6.4.2.3) — which is why this is done here
 /// rather than by the declaration part that happens to contain it.
 Type *Sema::resolveEnum(TypeExpr &denoter) {
-  // An enumerated type declares its constants into the scope the *type*
-  // appears in, and a schema's body is resolved once per discriminant tuple —
-  // so `s(1)` and `s(2)` would each want to declare them, into a scope that
-  // exists only while the type is being produced. §6.4.7 gives no answer to
-  // that, and silently losing the constants is worse than saying so.
-  if (!producing_.empty())
-    diags_.error(denoter.line, denoter.col,
-                 "a schema's type cannot contain an enumerated type: its "
-                 "constants would be declared once per set of discriminants");
+  // §6.4.2.3 puts the defining-point of an enumerated-type's constants in "the
+  // block, module-heading, or module-block closest-containing the
+  // enumerated-type" — the block, not the production. So an enumerated type in
+  // a schema's body is resolved once, at the schema-definition, into the
+  // block's own scope, and every production reuses it (ADR-0107). That is what
+  // `checkSchemaBodyNames` does, and what keeps `forgetResolved` from clearing
+  // an Enum's `resolved`: a second resolution would declare the constants
+  // again, into a scope that lives only as long as the production.
+  //
+  // This was refused outright, on the argument that the constants would be
+  // declared once per tuple. They are declared once per *block*, which is the
+  // clause's own answer to that.
   Type *t = newType(TypeKind::Enum);
   for (DeclName &n : denoter.constants) {
     Symbol *s = declare(n.name, SymKind::Const, n.line, n.col);
@@ -1292,7 +1295,13 @@ Expr *Sema::initialStateOf(TypeExpr &denoter) {
 static void forgetResolved(TypeExpr *denoter) {
   if (!denoter)
     return;
-  denoter->resolved = nullptr;
+  // §6.4.2.3's defining-point is the block's, so an enumerated-type in a
+  // schema body denotes one type however many tuples the schema has — and its
+  // constants were declared, once, when the schema was defined. Clearing this
+  // would resolve it again into the production's temporary scope and lose
+  // them, which is the shape the old refusal was guarding against (ADR-0107).
+  if (denoter->kind != TEK::Enum)
+    denoter->resolved = nullptr;
   for (auto &d : denoter->dims)
     forgetResolved(d.get());
   forgetResolved(denoter->elem.get());
@@ -1310,6 +1319,106 @@ static void forgetResolved(TypeExpr *denoter) {
     forgetResolved(arms[i]->tagType.get());
     for (auto &v : arms[i]->variants)
       arms.push_back(&v);
+  }
+}
+
+/// A discriminant is a symbol that lives outside every scope (see
+/// `declareSchema`), so no lookup finds one — and §6.4.3.4's third form of a
+/// variant-selector is a discriminant-identifier, which puts one exactly where
+/// the walk below looks for a type-name. Asking the schema's own list is the
+/// only way to tell that name from an undeclared one.
+static bool isOwnDiscriminant(Symbol *self, const std::string &name) {
+  if (!self)
+    return false;
+  for (Symbol *d : self->discriminants)
+    if (d->name == name)
+      return true;
+  return false;
+}
+
+/// §6.2.2.9 and §6.4.7, asked of the schema-*definition* rather than of a
+/// production. Both are rules about the text of the definition, and both were
+/// invisible because the body is resolved lazily: the first production is what
+/// looks a name up, and by then a definition written *after* this one exists,
+/// so the forward reference resolves cleanly and a schema that never produces
+/// a type is never examined at all (ADR-0107).
+///
+/// The pointer domain is the exception each rule states — §6.2.2.9 a) and
+/// §6.4.7's "except for applied occurrences in the domain-type of a
+/// new-pointer-type" — and it is honoured by not descending into a Pointer,
+/// the same omission `forgetResolved` makes and for a related reason.
+///
+/// This asks only whether a defining-point exists *yet*; what the name means
+/// is still decided at production. So the lookup is `lookupRaw`, which does
+/// not record an applied occurrence (ADR-0088) — recording one here would make
+/// the production's own lookup the second use of a name whose first use was
+/// this question.
+void Sema::checkSchemaBodyNames(TypeExpr *d, Symbol *self) {
+  if (!d)
+    return;
+  // §6.4.2.5's `restricted T` names its underlying type rather than holding a
+  // denoter, so the name to ask about is its own.
+  bool names = d->kind == TEK::Named || d->kind == TEK::Schema ||
+               d->kind == TEK::Restricted;
+  // A qualified name reaches an interface, whose defining-points are the
+  // importing block's by §6.11.3, so §6.2.2.9's ordering says nothing here.
+  if (names && !d->name.empty() && d->qualifier.empty() &&
+      !isOwnDiscriminant(self, d->name)) {
+    Symbol *found = lookupRaw(d->name);
+    if (found == self)
+      diags_.error(d->line, d->col,
+                   "schema '" + d->name + "' is defined in terms of itself; "
+                   "only the domain of a pointer may name a schema being "
+                   "defined");
+    else if (!found)
+      diags_.error(d->line, d->col,
+                   "'" + d->name + "' is not declared yet; a schema's body "
+                   "may name only what is already declared, except in a "
+                   "pointer's domain");
+  }
+
+  switch (d->kind) {
+  case TEK::Array:
+    checkSchemaBodyNames(d->elem.get(), self);
+    break;
+  case TEK::File:
+    checkSchemaBodyNames(d->elem.get(), self);
+    checkSchemaBodyNames(d->index.get(), self);
+    break;
+  case TEK::Set:
+    checkSchemaBodyNames(d->elem.get(), self);
+    break;
+  case TEK::Record: {
+    for (FieldGroup &g : d->fields)
+      checkSchemaBodyNames(g.type.get(), self);
+    checkSchemaBodyNames(d->tagType.get(), self);
+    // An arm's field-list is a field-list, walked exactly as the record's is
+    // (ADR-0026), which is the same shape `forgetResolved` has.
+    std::vector<VariantArm *> arms;
+    for (auto &v : d->variants)
+      arms.push_back(&v);
+    for (size_t i = 0; i < arms.size(); ++i) {
+      for (FieldGroup &g : arms[i]->fields)
+        checkSchemaBodyNames(g.type.get(), self);
+      checkSchemaBodyNames(arms[i]->tagType.get(), self);
+      for (auto &v : arms[i]->variants)
+        arms.push_back(&v);
+    }
+    break;
+  }
+  case TEK::Enum:
+    // §6.4.2.3: the constants belong to the block, so they are declared here,
+    // once, rather than once per production into a scope that does not outlive
+    // it. `resolveType` memoises on the node and `forgetResolved` leaves an
+    // Enum alone, so every production of this schema gets this type.
+    resolveType(*d);
+    break;
+  default:
+    // An array's dimensions and a subrange's bounds are expressions, not
+    // denoters, and a schema's arguments likewise — §6.2.2.9 reaches those
+    // through the ordinary expression path when they are checked. Pointer is
+    // the exception both clauses state, and is deliberately not walked.
+    break;
   }
 }
 
@@ -1360,6 +1469,9 @@ void Sema::declareSchema(TypeDecl &decl) {
   if (s->discriminants.empty())
     diags_.error(decl.line, decl.col,
                  "schema '" + decl.name + "' has no discriminants");
+  // Last, so that the discriminants are declared first: a body naming one of
+  // them is naming something whose defining-point precedes it.
+  checkSchemaBodyNames(decl.type.get(), s);
 }
 
 Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
@@ -1381,19 +1493,16 @@ Type *Sema::produceFromSchema(Symbol *schema, TypeExpr &denoter) {
   }
 
   // §6.4.7: outside the domain of a pointer, a schema-definition may not name
-  // itself. It is checked here rather than at the definition because that is
-  // where the recursion would actually happen — and mutual recursion between
-  // two schemata is the same mistake and is caught by the same test. It comes
-  // before the tuple because a schema resolved *generically* has discriminants
-  // that are not constants, and reporting that instead would name a symptom.
+  // itself. Silent, and that is the whole of what is left here:
+  // `checkSchemaBodyNames` has already reported this at the same position,
+  // because it walks the same applied occurrence at the definition rather than
+  // waiting for a production (ADR-0107). What remains is the recursion guard —
+  // Sema accumulates errors and goes on, so a production may still be
+  // attempted after the report, and without this it would recurse until the
+  // stack ran out.
   for (Symbol *busy : producing_)
-    if (busy == schema) {
-      diags_.error(denoter.line, denoter.col,
-                   "schema '" + schema->name +
-                       "' is defined in terms of itself; only the domain of a "
-                       "pointer may name a schema being defined");
+    if (busy == schema)
       return ty::Int();
-    }
 
   std::vector<long long> tuple;
   bool ok = true;

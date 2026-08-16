@@ -27,12 +27,7 @@ tests/extended/initialstate_errors.pas
 tests/extended/number_separator_ext.pas
 tests/extended/redefine_stringtransfer.pas
 tests/extended/schema_assign.pas
-tests/extended/schema_enum_body.pas
-tests/extended/schema_errors.pas
-tests/extended/schema_forward.pas
-tests/extended/schema_param_errors.pas
 tests/extended/schema_selfpointer_var.pas
-tests/extended/schema_selfref_unused.pas
 tests/extended/setiter.pas
 tests/extended/trap_setiter.pas
 tests/extended/typeinquiry_errors.pas
