@@ -25,7 +25,7 @@ expressible in what `seed/pascalc.ll` accepts, or the seed is refreshed first.
 
 ```sh
 # configure -- no LLVM_DIR: nothing links libLLVM since ADR-0085
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang on PATH, nothing else
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang and a C++20 compiler
 cmake --build build -j
 
 ctest --test-dir build --output-on-failure

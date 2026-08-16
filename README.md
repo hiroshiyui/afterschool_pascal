@@ -28,19 +28,26 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Requires `cmake`, a `make` and `clang` on PATH, and **nothing of LLVM's** — no
-development files, no `LLVM_DIR`, no C++ compiler. `clang` is wanted as an
-assembler and a linker, not as a compiler front end. **The compiler is written
-in Afterschool Pascal**, and the one
-that builds it is `seed/pascalc.ll`, a working compiler in LLVM IR committed to
-this repository. `clang` assembles the seed; the seed translates
-`selfhost/compiler.pas`; that is `build/bin/pascalc`, and it compiles itself to
-a fixed point.
+Requires `cmake`, a `make`, `clang` and a **C++20 compiler** on PATH, and
+**nothing of LLVM's** — no development files, no `LLVM_DIR`. `clang` is wanted
+as an assembler and a linker, not as a compiler front end: **the compiler is
+written in Afterschool Pascal**, and the one that builds it is
+`seed/pascalc.ll`, a working compiler in LLVM IR committed to this repository.
+`clang` assembles the seed; the seed translates `selfhost/compiler.pas`; that is
+`build/bin/pascalc`, and it compiles itself to a fixed point.
 
-There was a C++ compiler, `pascalc-s0`, and it was retired once it had nothing
-left to do ([ADR-0085](doc/adr/0085-stage-0-is-retired.md)). What that cost —
-a second implementation to diff against — is written down there rather than
-glossed. Tag `v0.1.0` is the last commit where it existed.
+The C++ compiler is for something else. `src/` builds `pascalc-s0`, which is
+**not a compiler**: lexer, parser and Sema only, no code generator and no LLVM.
+It exists so that `selfhost/difftest.sh` has a second answer to compare — two
+independent front ends over every Pascal source in the tree, agreeing token for
+token, node for node ([ADR-0108](doc/adr/0108-the-reference-front-end-comes-back.md)).
+Nothing it produces ships, and `build/bin/pascalc` does not depend on it.
+
+It was a whole compiler once, and was retired when it had nothing left to do
+([ADR-0085](doc/adr/0085-stage-0-is-retired.md)); what that cost is written down
+there rather than glossed, and getting it back — as a front end, at a fraction
+of the size — is what ADR-0108 answers. Tag `v0.1.0` is the last commit where it
+generated code.
 
 ## Using
 
