@@ -83,19 +83,12 @@ const std::unordered_map<std::string, Builtin> &builtins() {
   return m;
 }
 
-Type *builtinType(const std::string &name, Std std) {
-  if (name == "integer") return ty::Int();
-  if (name == "real")    return ty::Real();
-  // A required type-identifier of ISO/IEC 10206:1991 and an ordinary
-  // identifier of ISO 7185, where a program may define a type called
-  // `complex` of its own — which is why this is asked of the standard rather
-  // than of the lexer.
-  if (name == "complex" && std == Std::Extended) return ty::Complex();
-  if (name == "boolean") return ty::Bool();
-  if (name == "char")    return ty::Char();
-  if (name == "text")    return ty::Text();
-  return nullptr;
-}
+// There was a `builtinType(name, std)` here, resolving a required
+// type-identifier by *spelling* before the scope was consulted. §6.2.2.10 puts
+// those defining-points in a region enclosing the program, so they belong in
+// the outermost scope and nowhere else: while the type-denoters asked this
+// function first, `type integer = char` was accepted and then ignored
+// (ADR-0097). `installPredefined` is where the six names live now.
 
 } // namespace
 
@@ -140,6 +133,11 @@ Symbol *Sema::lookup(const std::string &name) const {
       return it->second;
   }
   return nullptr;
+}
+
+Symbol *Sema::lookupUser(const std::string &name) const {
+  Symbol *s = lookup(name);
+  return (s && s->kind == SymKind::Required) ? nullptr : s;
 }
 
 /// Declare a variable, parameter, or function result and give it a slot in the
@@ -243,10 +241,6 @@ Type *Sema::resolveEnum(TypeExpr &denoter) {
 /// a record can contain a pointer to itself.
 Type *Sema::resolvePointer(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Pointer);
-  if (Type *builtin = builtinType(denoter.name, std_)) {
-    t->elem = builtin;
-    return t;
-  }
   // §6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
   // §6.11.3's optional interface qualifier — so an imported type may be a
   // pointer's domain, as it may be anything else a type-name reaches.
@@ -887,16 +881,14 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
 /// name and not the underlying one, and a user of the interface can pass values
 /// around and do nothing else with them.
 Type *Sema::resolveRestricted(TypeExpr &denoter) {
-  // A required type-identifier is not a symbol in any scope, so the same two
-  // steps `TEK::Named` takes are needed here. Taking only the second one is
-  // worse than an unknown-type diagnostic: the caller writes the new name's
-  // alias onto whatever comes back, so `restricted integer` renamed the shared
-  // `integer` singleton and every later `integer` printed as the restricted
-  // name. A placeholder returned from an error path is only safe while the
-  // path really is an error path.
-  Type *named =
-      denoter.qualifier.empty() ? builtinType(denoter.name, std_) : nullptr;
-  if (!named) {
+  // A required type-identifier is an ordinary symbol in the outermost scope
+  // (ADR-0097), so one lookup answers for it as for any other name. Returning
+  // the placeholder off a path that is *not* an error matters here: the caller
+  // writes the new name's alias onto whatever comes back, so `restricted
+  // integer` would rename the shared `integer` singleton and every later
+  // `integer` would print as the restricted name.
+  Type *named = nullptr;
+  {
     Symbol *sym =
         lookupName(denoter.qualifier, denoter.name, denoter.line, denoter.col);
     if (sym && (sym->kind != SymKind::Type || !sym->type)) {
@@ -1134,10 +1126,12 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   Type *t = nullptr;
   switch (denoter.kind) {
   case TEK::Named:
-    // A qualified name reaches only what an import brought, so a required
-    // type-identifier is not among the answers: `i.integer` is not `integer`.
-    if (!denoter.qualifier.empty() ||
-        (t = builtinType(denoter.name, std_)) == nullptr) {
+    // A required type-identifier is a symbol in the outermost scope, so this
+    // is one lookup and not two (ADR-0097) — and a qualified name reaches only
+    // what an import brought, which that scope is not: `i.integer` is still
+    // not `integer`, now because the qualifier is honoured rather than because
+    // a spelling test was skipped.
+    {
       Symbol *sym = lookupName(denoter.qualifier, denoter.name, denoter.line,
                                denoter.col);
       if (!sym && !denoter.qualifier.empty()) {
@@ -1295,12 +1289,10 @@ void Sema::declareSchema(TypeDecl &decl) {
   s->schemaBody = decl.type.get();
 
   for (DiscriminantGroup &g : decl.discriminants) {
-    Type *t = builtinType(g.typeName, std_);
-    if (!t) {
-      Symbol *named = lookup(g.typeName);
-      if (named && named->kind == SymKind::Type)
+    Type *t = nullptr;
+    if (Symbol *named = lookup(g.typeName))
+      if (named->kind == SymKind::Type)
         t = named->type;
-    }
     if (!t) {
       diags_.error(g.line, g.col, "unknown type '" + g.typeName + "'");
       t = ty::Int();
@@ -1732,6 +1724,57 @@ Type *Sema::stringOfCapacity(int cap) {
 }
 
 void Sema::installPredefined() {
+  // §6.2.2.10: "Required identifiers that denote required values, types,
+  // procedures, and functions shall be used as if their defining-points have a
+  // region enclosing the program." A required *type* is therefore an ordinary
+  // type symbol in the outermost scope, and `type integer = char` hides it for
+  // the whole program.
+  auto requiredType = [&](const char *name, Type *t) {
+    declare(name, SymKind::Type, 0, 0)->type = t;
+    // And the type takes the name too. These are shared singletons, so without
+    // this the first `type foo = char` in any program claims the one `char`
+    // object's alias and every later `char` variable is *reported* as `foo` —
+    // §6.4.1 makes them the same type, so nothing is mis-compiled, but the
+    // diagnostic names something the program never wrote. `text` has carried
+    // its own name since it was created, for the same reason.
+    if (t->alias.empty())
+      t->alias = name;
+  };
+
+  // ...and a required function is a marker of that same region — see
+  // SymKind::Required. The required *procedures* are deliberately not here:
+  // each already yields to a program's own declaration through the "lookup
+  // answered null" path (ADR-0087), so a symbol would buy no verdict.
+  auto requiredFunc = [&](const char *name) {
+    declare(name, SymKind::Required, 0, 0);
+  };
+
+  // §6.4.1's required type-identifiers. `complex` is 10206's alone, and a
+  // valid ISO 7185 program may define a type of that name — which is why it is
+  // asked of the standard here rather than of the lexer.
+  requiredType("integer", ty::Int());
+  requiredType("real", ty::Real());
+  requiredType("boolean", ty::Bool());
+  requiredType("char", ty::Char());
+  requiredType("text", ty::Text());
+  if (std_ == Std::Extended)
+    requiredType("complex", ty::Complex());
+
+  // §6.6.6's required functions. The 10206-only ones are declared only under
+  // that standard, so an ISO 7185 program may still declare a function called
+  // `re` and checkCall may still say that `re` is an Extended Pascal function
+  // rather than that the name is unknown.
+  for (const char *n : {"abs", "sqr", "odd", "ord", "chr", "succ", "pred",
+                        "sqrt", "sin", "cos", "ln", "exp", "arctan", "trunc",
+                        "round", "eof", "eoln"})
+    requiredFunc(n);
+  if (std_ == Std::Extended)
+    for (const char *n : {"card", "cmplx", "polar", "re", "im", "arg",
+                          "position", "lastposition", "empty", "length",
+                          "index", "substr", "trim", "eq", "ne", "lt", "gt",
+                          "le", "ge", "binding", "date", "time"})
+      requiredFunc(n);
+
   Symbol *t = declare("true", SymKind::Const, 0, 0);
   t->type = ty::Bool();
   t->boolVal = true;
@@ -4444,8 +4487,8 @@ void Sema::checkStmt(Stmt *s) {
 void Sema::checkStructValue(StructValueExpr *e, Type *want) {
   Type *t = want;
   if (!e->typeName.empty()) {
-    t = builtinType(e->typeName, std_);
-    if (!t) {
+    t = nullptr;
+    {
       Symbol *s = lookup(e->typeName);
       if (!s)
         diags_.error(e->line, e->col,
@@ -5036,7 +5079,11 @@ void Sema::checkExpr(Expr *e) {
       v->type = v->withField->type;
       return;
     }
-    v->sym = lookup(v->name);
+    // `lookupUser`, not `lookup`: a bare `abs` is not a designator and has no
+    // type, and the marker symbol would leave `type` null — which breaks the
+    // contract that Sema hands CodeGen a type on every node. Nulling it here
+    // reproduces the "undeclared identifier" this always said.
+    v->sym = lookupUser(v->name);
     if (!v->sym) {
       diags_.error(v->line, v->col, "undeclared identifier '" + v->name + "'");
       v->type = ty::Int();
@@ -6567,8 +6614,10 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
 }
 
 /// The names ISO 7185 §6.6.5 and §6.6.6 reserve for the required procedures
-/// and functions. They are not symbols — the compiler knows them by name — so
-/// a program that tries to pass one gets "undeclared identifier" unless it is
+/// and functions. Asked by name, because the answer a caller wants is null
+/// either way: a required procedure is not a symbol at all, and a required
+/// function is one that `lookupUser` turns back into null (§6.2.2.10). So a
+/// program that tries to pass one gets "undeclared identifier" unless it is
 /// recognised here, which would be a baffling way to report §6.6.3.7.
 /// The five required functions ISO/IEC 10206:1991 adds for the complex type.
 /// They are grouped because every question anyone asks about them is the same
@@ -6599,7 +6648,10 @@ void Sema::checkProcArgument(Symbol *formal, Expr *a, Symbol *callee,
     return;
   }
 
-  Symbol *sym = lookup(v->name);
+  // `lookupUser`: §6.6.3.7's answer is the same whether the name is a required
+  // procedure (not a symbol at all) or a required function (a marker symbol),
+  // so both must arrive here as null for `isRequiredName` to speak for them.
+  Symbol *sym = lookupUser(v->name);
   if (!sym) {
     // ISO 7185 §6.6.3.7: the actual parameter shall not denote a required
     // procedure or function. There is nothing to pass — `write` takes a
@@ -6753,7 +6805,9 @@ void Sema::checkCall(Call *c) {
 
   // A user-defined function shadows nothing built in: names are resolved in
   // the scope chain first, so a local `abs` would win.
-  if (Symbol *sym = lookup(c->name)) {
+  // The required one is a symbol too (§6.2.2.10), and `lookupUser` is what
+  // turns it back into the null this branch reads as "not the program's own".
+  if (Symbol *sym = lookupUser(c->name)) {
     if (sym->isInvocable() && sym->resultType()) {
       c->sym = sym;
       c->type = sym->resultType();
@@ -6767,6 +6821,18 @@ void Sema::checkCall(Call *c) {
       c->type = ty::Int();
       return;
     }
+    // §6.2.2.11: "Whatever an identifier or label denotes at its
+    // defining-point shall be denoted at all applied occurrences of that
+    // identifier or label." So a program that declares `ord` a variable has no
+    // `ord` function in that block — the builtin table below resolves by
+    // *spelling* and cannot see that, which left `var ord: array [1..3] of
+    // integer` and `ord('a')` meaning two things at once. The required
+    // *procedures* never had this: their path has no fallback and reports
+    // here, which is the asymmetry §6.2.2.10 does not license, both being
+    // named in its one sentence.
+    diags_.error(c->line, c->col, "'" + c->name + "' is not a function");
+    c->type = ty::Int();
+    return;
   }
 
   auto it = builtins().find(c->name);

@@ -66,6 +66,9 @@ const char *symKindName(SymKind k) {
   case SymKind::Disc:     return "disc";
   case SymKind::Proc:     return "proc";
   case SymKind::Func:     return "func";
+  // Neither can be a frame variable, having no storage.
+  case SymKind::Required: return "required";
+  case SymKind::Interface: return "interface";
   }
   return "?";
 }

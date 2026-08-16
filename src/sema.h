@@ -43,6 +43,20 @@ enum class SymKind {
   /// left half of `i.x`, which is the only way to reach a constituent of an
   /// interface imported `qualified`.
   Interface,
+  /// A required *function*. ISO 7185 §6.2.2.10 puts its defining-point in "a
+  /// region enclosing the program", so it is a symbol in the outermost scope
+  /// and a program declaring one of the same name hides it. It is a *marker*
+  /// and nothing else: `isInvocable` is false for it, `resultType` answers
+  /// null, and `lookupUser` turns it back into the null every caller here
+  /// reads as "the required one". A real `Func` would send `abs` through
+  /// `checkArguments`, which has no parameter list to check it against. What
+  /// the symbol buys is a place for §6.2.2.9's applied occurrence to be
+  /// recorded (ADR-0097).
+  ///
+  /// Appended rather than placed where it reads best, for the reason ADR-0059
+  /// gives a builtin's enumerator: where a name sits in this list is an
+  /// interface between the two compilers' dumps.
+  Required,
 };
 
 /// How a file variable reaches something outside the program. ISO 7185 §6.10
@@ -296,6 +310,12 @@ private:
   void installPredefined();
   Symbol *declare(const std::string &name, SymKind kind, int line, int col);
   Symbol *lookup(const std::string &name) const;
+  /// `lookup`, with a required *function* answering null — the convention
+  /// every caller that asks "did the program declare one of its own?" was
+  /// written against, back when a required identifier was not a symbol at all
+  /// (ADR-0097). The occurrence is still recorded by `lookup`, which is what
+  /// §6.2.2.9 needs and what the marker symbol exists for.
+  Symbol *lookupUser(const std::string &name) const;
   Symbol *newSymbol();
 
   void pushScope() { scopes_.emplace_back(); }

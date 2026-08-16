@@ -9,19 +9,14 @@
 # Regenerate with:  python3 tests/checks/difftest_check.py --write-baseline
 # Doing so is a decision to argue for in the commit message: it is correct for
 # progress, and it is also how a regression would be hidden.
-selfhost/badsema/decls.pas
 selfhost/badsema/newvariants.pas
 selfhost/badsema/procparams.pas
 selfhost/badsema/statements.pas
 tests/bsi/suite/CONFORM/CONF003.pas
 tests/bsi/suite/CONFORM/CONF027.pas
 tests/bsi/suite/CONFORM/CONF063.pas
-tests/bsi/suite/CONFORM/CONF066.pas
-tests/bsi/suite/CONFORM/CONF084.pas
-tests/bsi/suite/CONFORM/CONF088.pas
 tests/bsi/suite/CONFORM/CONF116.pas
 tests/bsi/suite/CONFORM/CONF147.pas
-tests/bsi/suite/CONFORM/CONF216.pas
 tests/bsi/suite/ppg/temp.pas
 tests/definingpoint_order.pas
 tests/definingpoint_required.pas
@@ -30,12 +25,9 @@ tests/extended/definingpoint_interleaved.pas
 tests/extended/forin_nested_stack.pas
 tests/extended/funcresult_errors.pas
 tests/extended/goto_completer.pas
-tests/extended/initialstate.pas
 tests/extended/initialstate_errors.pas
 tests/extended/number_separator_ext.pas
 tests/extended/redefine_stringtransfer.pas
-tests/extended/restricted.pas
-tests/extended/restricted_errors.pas
 tests/extended/schema_assign.pas
 tests/extended/schema_enum_body.pas
 tests/extended/schema_errors.pas
@@ -62,11 +54,8 @@ tests/pointer_domain_shadow.pas
 tests/progparam_duplicate.pas
 tests/redefine_required.pas
 tests/redefine_required_errors.pas
-tests/required_shadow.pas
-tests/required_shadow_errors.pas
 tests/stringtype_errors.pas
 tests/trunc_integer.pas
-tests/typename_alias.pas
 tests/variant_complete.pas
 tests/variantpart_semi.pas
 tests/varparam_parens.pas
