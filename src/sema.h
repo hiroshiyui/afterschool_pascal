@@ -427,7 +427,8 @@ private:
                      int line, int col);
 
   void checkBlock(Block &block, Symbol *owner);
-  void checkDeclarations(Block &block, Symbol *owner);
+  void checkDeclarations(Block &block, Symbol *owner,
+                         std::vector<std::unique_ptr<ProcDecl>> *procs = nullptr);
   void checkConstDecl(ConstDecl &c, Symbol *owner);
   void checkTypeDecl(TypeDecl &t);
   void checkVarDecl(VarDecl &group, Symbol *owner);
@@ -563,7 +564,7 @@ private:
   /// program block declares (§6.10); `input` and `output` are the standard
   /// files, one possessing a file-type is bound to a command-line argument in
   /// the order written, and one that does not is bound to nothing.
-  void bindProgramParameters();
+  void bindProgramParameters(bool report);
   /// A reference to `input` or `output` for a read or write that named no
   /// file. Reports if that parameter was not declared, because ISO 7185 §6.10
   /// makes using a standard file without listing it an error.

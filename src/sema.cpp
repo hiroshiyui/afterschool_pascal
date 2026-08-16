@@ -3284,7 +3284,7 @@ void Sema::checkModuleBlock(ModuleDecl &m, ModuleInfo &info) {
   curModule_ = saveModule;
 }
 
-void Sema::bindProgramParameters() {
+void Sema::bindProgramParameters(bool report) {
   if (!prog_)
     return;
   // §6.10: "The identifiers contained by the program-parameter-list shall be
@@ -3293,7 +3293,7 @@ void Sema::bindProgramParameters() {
   // variable-declaration-part having already made them, so `declare`'s own
   // check never sees them. Reported once per repeat, against the later one,
   // which is the occurrence a reader would delete.
-  for (size_t i = 0; i < prog_->params.size(); ++i)
+  for (size_t i = 0; report && i < prog_->params.size(); ++i)
     for (size_t j = 0; j < i; ++j)
       if (prog_->params[j].name == prog_->params[i].name) {
         diags_.error(prog_->params[i].line, prog_->params[i].col,
@@ -3304,11 +3304,15 @@ void Sema::bindProgramParameters() {
   // argv[0] is the program itself, so the first file parameter is argv[1].
   int argIndex = 1;
   for (DeclName &p : prog_->params) {
-    Symbol *s = lookup(p.name);
+    // The pre-pass asks `lookupRaw`: a name it does not find yet may still be
+    // declared further down, and recording an applied occurrence for it would
+    // make §6.2.2.9 refuse that declaration.
+    Symbol *s = report ? lookup(p.name) : lookupRaw(p.name);
     if (!s || !s->isVariable()) {
-      diags_.error(p.line, p.col,
-                   "the program parameter '" + p.name +
-                       "' is not declared as a variable in the program block");
+      if (report)
+        diags_.error(p.line, p.col,
+                     "the program parameter '" + p.name +
+                         "' is not declared as a variable in the program block");
       continue;
     }
     // §6.5.1: "The variable-identifier shall possess the bindability denoted
@@ -3573,23 +3577,9 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
   // ISO/IEC 10206:1991 §6.2.1 puts the import-part at the head of every block.
   checkImports(block.imports, owner);
   checkLabelPart(block, owner);
-  checkDeclarations(block, owner);
-
-  // The variables exist now, so the program header's parameters can be matched
-  // against them — before the statements, so a use of an unbound file is
-  // reported after the reason it is unbound rather than before it.
-  if (owner == program_)
-    bindProgramParameters();
-
-  // Headings first, then bodies. Declaring every heading in this block before
-  // checking any body would let a procedure call one declared after it without
-  // `forward`, so headings are declared one at a time, in order, and each body
-  // is checked as it is reached.
-  for (auto &proc : block.procs) {
-    declareProcHeading(*proc, owner);
-    if (proc->body)
-      checkProcBody(*proc);
-  }
+  // The procedures are merged into the walk by source position, so the
+  // headings are declared and the bodies checked from inside it.
+  checkDeclarations(block, owner, &block.procs);
 
   for (auto &proc : block.procs)
     if (proc->sym && !proc->sym->defined)
@@ -3634,17 +3624,32 @@ static bool earlier(int l1, int c1, int l2, int c2) {
 /// Under ISO 7185 there is at most one of each part in the fixed order, so the
 /// merge is provably the order this always used.
 ///
+/// The procedure-and-function-declaration-part is merged in the same way, and
+/// that is what makes §6.2.2.9 reach a body: every variable used to be declared
+/// before any body was checked, so `procedure p; begin writeln(zz) end; var zz:
+/// integer` looked well formed. A heading is declared and its body checked
+/// where the source puts them, so a variable written after the procedure is not
+/// yet declared when the body is walked — the same consequence ADR-0069 already
+/// produced for `var v: t` before `type t` (ADR-0100).
+///
+/// `procs` is null where the caller declares the headings itself: a
+/// module-heading has no bodies, so nothing there can observe the interleaving.
+///
 /// Shared by a block and by both halves of a module, which have the same parts
 /// and differ only in what may surround them.
-void Sema::checkDeclarations(Block &block, Symbol *owner) {
-  size_t ci = 0, ti = 0, vi = 0;
+void Sema::checkDeclarations(Block &block, Symbol *owner,
+                             std::vector<std::unique_ptr<ProcDecl>> *procs) {
+  size_t ci = 0, ti = 0, vi = 0, pi = 0;
+  size_t np = procs ? procs->size() : 0;
+  // Only the program has parameters to bind.
+  bool bound = owner != program_;
   bool inTypes = false;
   // A nested block's declarations are checked from inside this walk, so the
   // flag has to be saved rather than simply cleared on the way out.
   bool savedInTypePart = inTypePart_;
   inTypePart_ = false;
   while (ci < block.consts.size() || ti < block.types.size() ||
-         vi < block.vars.size()) {
+         vi < block.vars.size() || pi < np) {
     // Which of the three heads was written first. A variable group is placed
     // by its first name, the only position it has.
     int which = -1, line = 0, col = 0;
@@ -3662,8 +3667,14 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
     }
     if (vi < block.vars.size() && !block.vars[vi].names.empty() &&
         (which < 0 || earlier(block.vars[vi].names[0].line,
-                              block.vars[vi].names[0].col, line, col)))
+                              block.vars[vi].names[0].col, line, col))) {
       which = 2;
+      line = block.vars[vi].names[0].line;
+      col = block.vars[vi].names[0].col;
+    }
+    if (pi < np && (which < 0 || earlier((*procs)[pi]->line, (*procs)[pi]->col,
+                                         line, col)))
+      which = 3;
 
     // §6.4.4's forward-referenced domain is completed at the end of *its*
     // type-definition-part, so a run of type definitions ending is what
@@ -3673,6 +3684,12 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
       resolvePendingPointers();
       inTypes = false;
     }
+    // A procedure-declaration ends the type-definition-part before it, and its
+    // body is checked in a scope of its own — so anything still pending has to
+    // be resolved in *this* block's scope now, or the nested block's own drain
+    // would look the name up in the wrong one (ADR-0091).
+    if (which == 3)
+      resolvePendingPointers();
     if (which == 0)
       checkConstDecl(block.consts[ci++], owner);
     else if (which == 1) {
@@ -3681,7 +3698,35 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
       checkTypeDecl(block.types[ti++]);
     } else if (which == 2)
       checkVarDecl(block.vars[vi++], owner);
-    else
+    else if (which == 3) {
+      // §6.10's parameters are bound before the first body is checked: a body
+      // may ask `binding(f)` of one, and §6.5.1 confers bindability on the
+      // declaration rather than on a position. Only a parameter whose
+      // defining-point is already here can be named in the body — that is
+      // §6.2.2.9 — so what is declared by now is enough, and the diagnostics
+      // wait for the rest.
+      if (!bound) {
+        if (ci == block.consts.size() && ti == block.types.size() &&
+            vi == block.vars.size()) {
+          bindProgramParameters(true);
+          bound = true;
+        } else
+          // At *every* procedure-declaration with declarations still to come,
+          // not once: a program-parameter written between two procedures is
+          // not there to bind when the first is reached, and the body of the
+          // second may still ask `binding()` of it. The call is idempotent
+          // over the binding — it recomputes the same argument positions from
+          // whatever is declared by now — so repeating it costs a walk and
+          // settles the parameters that have appeared since.
+          bindProgramParameters(false);
+      }
+      // Headings one at a time, in order, so that a procedure cannot call one
+      // declared after it without `forward`.
+      ProcDecl &proc = *(*procs)[pi++];
+      declareProcHeading(proc, owner);
+      if (proc.body)
+        checkProcBody(proc);
+    } else
       break; // a variable group with no names; the parser makes none
   }
   inTypePart_ = false;
@@ -3696,6 +3741,11 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
   // until an unrelated type definition was added after it (ADR-0091).
   resolvePendingPointers();
   inTypePart_ = savedInTypePart;
+  // Every declaration of the program-block has been seen now, which is what
+  // §6.10's checks need: a parameter may be declared after the procedure that
+  // made the pre-pass necessary.
+  if (!bound)
+    bindProgramParameters(true);
 }
 
 void Sema::checkConstDecl(ConstDecl &c, Symbol *owner) {
