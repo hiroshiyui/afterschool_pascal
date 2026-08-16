@@ -5693,7 +5693,59 @@ void Sema::checkBinary(Binary *b) {
 /// A width never follows a file, so the leading argument is a file exactly when
 /// it has a file type and no width — and if a program does write `f:8`, the
 /// file falls through to the value list and is rejected there as unwritable.
+/// ISO 7185 §6.2.2.10 puts the required identifiers' defining-points in "a
+/// region enclosing the program", and §6.6.4.1 is the procedures' half — so
+/// `procedure write(var a: integer)` in the program-block is what `write(i)`
+/// then activates, and `write` may name whatever the program says it names.
+///
+/// Every other required procedure has this for free: they are not symbols, and
+/// `checkProcCall` reads a lookup that answers null as "the required one". The
+/// read/write family could not, because the parser has to recognise the six
+/// names to parse the field widths a write-parameter-list carries — so the
+/// question was settled before there was a scope to ask (ADR-0087). This is
+/// where it is settled instead: the same lookup, one pass later.
+///
+/// Returns the call the name really denotes, or null for the required
+/// procedure. The node this was called for is then a husk, and every pass
+/// after Sema reads the returned node first.
+StmtPtr Sema::redefinedFamily(const std::string &name,
+                              std::vector<ExprPtr> args, int line, int col) {
+  Symbol *sym = lookupUser(name);
+  if (!sym)
+    return nullptr;
+  auto p = std::make_unique<ProcCallStmt>();
+  p->line = line;
+  p->col = col;
+  p->name = name;
+  p->args = std::move(args);
+  if (!sym->isInvocable() || sym->resultType())
+    diags_.error(line, col, "'" + name + "' is not a procedure");
+  else {
+    p->sym = sym;
+    checkArguments(sym, p->args, line, col);
+  }
+  return p;
+}
+
 void Sema::checkWrite(WriteStmt *w) {
+  // ISO 7185 §6.6.4.1: the name may be the program's own, and then none of the
+  // rest of this applies — what the parser recognised as a write-parameter-
+  // list is an actual-parameter-list, and §6.8.2.3 gives one no field widths.
+  if (lookupUser(w->name())) {
+    std::vector<ExprPtr> args;
+    for (WriteArg &a : w->args) {
+      if (a.width)
+        diags_.error(a.width->line, a.width->col,
+                     "'" + std::string(w->name()) +
+                         "' is declared by this program, so it takes no field "
+                         "width");
+      args.push_back(std::move(a.value));
+    }
+    w->args.clear();
+    w->call = redefinedFamily(w->name(), std::move(args), w->line, w->col);
+    return;
+  }
+
   // §6.7.5.5's writestr writes its string-variable where a write-parameter
   // goes, so the parser left it in the list; moving it out is this pass's job,
   // because until the name was looked up there was no telling the statement
@@ -5763,8 +5815,7 @@ void Sema::checkWrite(WriteStmt *w) {
   // reach here — and a `writestr` whose string never arrived is one of them.
   if (w->args.empty() && !w->newline)
     diags_.error(w->line, w->col,
-                 std::string(w->isStr ? "writestr" : "write") +
-                     " needs something to write");
+                 std::string(w->name()) + " needs something to write");
 
   // §6.9.3 is the *text* form of write, and everything it says — the field
   // width, the external representation of a number, the line `writeln`
@@ -5831,6 +5882,15 @@ void Sema::checkWriteArgs(WriteStmt *w) {
 /// `read` reads a char, an integer or a real — a text file has no other
 /// external representation to read.
 void Sema::checkRead(ReadStmt *r) {
+  // §6.6.4.1 again, and read's arguments need no unwrapping: a
+  // read-parameter-list and an actual-parameter-list have the same shape, so
+  // the list the parser built is already the one a call takes.
+  if (lookupUser(r->name())) {
+    r->call = redefinedFamily(r->name(), std::move(r->args), r->line, r->col);
+    r->args.clear();
+    return;
+  }
+
   // The mirror of write's split: the string a readstr reads from stands where
   // a variable-access would, and only the name says it is not one (ADR-0087).
   if (r->isStr) {
@@ -5877,8 +5937,7 @@ void Sema::checkRead(ReadStmt *r) {
   // so a readstr given only the string it reads from says `readstr`.
   if (r->args.empty() && !r->newline)
     diags_.error(r->line, r->col,
-                 std::string(r->isStr ? "readstr" : "read") +
-                     " needs a variable to read into");
+                 std::string(r->name()) + " needs a variable to read into");
 
   // The counterpart of write's split: on a file that is not a text, §6.6.5.2
   // makes `read(f, v)` mean `v := f^; get(f)`, so the variable takes the

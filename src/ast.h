@@ -484,6 +484,20 @@ struct WriteStmt : Stmt {
   /// until Sema has moved it. A `writestr` with an empty parameter list has no
   /// string to move and must still be diagnosed as a writestr.
   bool isStr = false;
+  /// ISO 7185 §6.6.4.1: the program may have declared a procedure of this
+  /// name, and then this statement is a call of it and none of the rest of
+  /// this node means anything. The parser had to recognise the six read/write
+  /// spellings to parse a write-parameter-list's field widths at all, so it
+  /// settled what they *denote* in a pass with no scope; Sema hangs the real
+  /// call here and the node is a **husk** every later pass reads through
+  /// (ADR-0087).
+  StmtPtr call;
+  /// The spelling the program wrote, which a diagnostic must name: a message
+  /// saying `write` for a `writestr` names a procedure the program never
+  /// wrote, and §6.6.4.1's lookup is by this name.
+  const char *name() const {
+    return isStr ? "writestr" : newline ? "writeln" : "write";
+  }
 };
 
 /// `read` and `readln`. Kept apart from ProcCallStmt for the same reason
@@ -500,6 +514,10 @@ struct ReadStmt : Stmt {
   /// for the reason `WriteStmt::str` is.
   ExprPtr str;
   bool isStr = false; // as WriteStmt::isStr
+  StmtPtr call;       // as WriteStmt::call
+  const char *name() const { // as WriteStmt::name
+    return isStr ? "readstr" : newline ? "readln" : "read";
+  }
 };
 
 struct Compound : Stmt {

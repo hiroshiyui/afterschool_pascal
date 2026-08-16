@@ -1471,20 +1471,35 @@ bool Parser::callTakesCaret(size_t from) const {
 
 StmtPtr Parser::parseIdentStatement() {
   const Token &id = cur();
-  if (id.text == "write")
-    return parseWrite(false, false);
-  if (id.text == "writeln")
-    return parseWrite(true, false);
-  if (id.text == "read")
-    return parseRead(false, false);
-  if (id.text == "readln")
-    return parseRead(true, false);
-  // ISO/IEC 10206:1991 §6.7.5.5's two are required identifiers as well, so they
-  // take the same treatment — which is what retired ADR-0060's deviation.
-  if (std_ == Std::Extended && id.text == "readstr")
-    return parseRead(false, true);
-  if (std_ == Std::Extended && id.text == "writestr")
-    return parseWrite(false, true);
+  // ISO 7185 §6.2.2.10 lets the program declare a procedure named `write`, and
+  // §6.6.4.1 then makes `write(i)` a call of it. Which one it is is a question
+  // about the *symbol* and Sema answers it (ADR-0087). What the parser must
+  // still decide is that the statement is a procedure-statement at all:
+  // `write := 5`, `write[i] := 5`, `write.f := 5` and `write^ := 5` are
+  // assignments to a variable the program declared under the name, and
+  // `write(i)^ := 5` is §6.8.6.4's function-identified-variable — none of the
+  // five is a statement any parameter list begins, so the family yields
+  // whenever what follows the name can continue a designator.
+  Tok k = peek().kind;
+  bool designator = k == Tok::Assign || k == Tok::LBracket ||
+                    k == Tok::Period || k == Tok::Caret ||
+                    (k == Tok::LParen && callTakesCaret(pos_ + 1));
+  if (!designator) {
+    if (id.text == "write")
+      return parseWrite(false, false);
+    if (id.text == "writeln")
+      return parseWrite(true, false);
+    if (id.text == "read")
+      return parseRead(false, false);
+    if (id.text == "readln")
+      return parseRead(true, false);
+    // ISO/IEC 10206:1991 §6.7.5.5's two are required identifiers as well, so
+    // they take the same treatment — which retired ADR-0060's deviation.
+    if (std_ == Std::Extended && id.text == "readstr")
+      return parseRead(false, true);
+    if (std_ == Std::Extended && id.text == "writestr")
+      return parseWrite(false, true);
+  }
 
   // §6.8.6.4, both spellings of it. `parsePrimary` builds the call and then
   // its selectors, so the target is assembled by the code that already knows

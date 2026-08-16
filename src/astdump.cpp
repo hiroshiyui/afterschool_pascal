@@ -473,6 +473,15 @@ struct Dumper {
     }
     case NK::Write: {
       WriteStmt *n = as<WriteStmt>(s);
+      // The husk is not printed: Sema decided the name denotes a procedure the
+      // program declared, so what the statement *is* is the call (ADR-0087).
+      // Only --dump-sema can reach this — before Sema the field is null, which
+      // is the honest picture of a parser that recognised six names and could
+      // not know whether that reading would survive.
+      if (n->call) {
+        stmt(n->call.get());
+        break;
+      }
       // Asked of the flag and not of `str`, which is null until Sema moves it
       // out of the argument list (ADR-0087) — so before Sema a writestr is
       // still a writestr and prints as one.
@@ -508,6 +517,10 @@ struct Dumper {
     }
     case NK::Read: {
       ReadStmt *n = as<ReadStmt>(s);
+      if (n->call) { // as the write side above
+        stmt(n->call.get());
+        break;
+      }
       head(n->isStr     ? "readstr" // as the write side above
            : n->newline ? "readln"
                         : "read",
