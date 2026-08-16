@@ -270,17 +270,26 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates cmake make clang git python3
-          # The one package no other job here may have. `llc` is the driver;
-          # the version is the distro's, which is the same LLVM the container's
-          # clang is built on -- so this compares two *configurations* of one
-          # LLVM and not two LLVMs. The check says so itself rather than
-          # claiming to be a second reader of the IR.
+          # The one package no other job here may have. Deliberately *not*
+          # pinned to a version: it comes from the same distro package set as
+          # this container's clang, so both are 19.1.7 and the check compares
+          # two configurations of one LLVM rather than two LLVMs. Pinning a
+          # second version would make it a genuine second reader of the IR --
+          # and would put an apt repository into the one job whose premise is
+          # that the documented build needs nothing of LLVM's. That trade needs
+          # an ADR before it is made, not a commit.
           apt-get install -y --no-install-recommends llvm
 
       - uses: actions/checkout@v4
 
-      - name: Record which LLVM proved it
-        run: llc --version | head -3
+      - name: Record which LLVM proved it, and that it is one and not two
+        run: |
+          llc --version | head -3
+          clang --version | head -1
+        # Both, because the check's strength depends on the answer: equal
+        # versions means one LLVM in two configurations, and the comparison is
+        # only a second *reader* of the IR if they ever diverge. A reader of a
+        # green bar should not have to guess which it was.
 
       - name: Build
         run: |

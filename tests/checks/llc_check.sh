@@ -19,11 +19,29 @@
 #
 # **What it is not.** `llc` is not a stronger validity check on the IR than
 # `clang` is: they share LLVM's parser and verifier, and reject the same module
-# with the same message. Nor does it add relocation-model coverage -- the object
-# path of `tools/pascalcc` already passes `-fPIC` and the executable path links
-# PIE, so the whole corpus is built as position-independent code today. Don't
-# add this to the list of oracles in doc/sop.md as "a second reader of the IR";
-# it is one reader configured two ways.
+# with the same message -- measured on a type mismatch and a function
+# redefinition, not assumed. Nor does it add relocation-model coverage -- the
+# object path of `tools/pascalcc` already passes `-fPIC` and the executable path
+# links PIE, so the whole corpus is built as position-independent code today.
+# Don't add this to the list of oracles in doc/sop.md as "a second reader of the
+# IR"; **within one run it is one LLVM configured two ways**, because `llc` and
+# `clang` come from one distribution package set and are the same version.
+#
+# **Which LLVM that is varies by where this runs, and that is worth knowing.**
+# The `second-backend` CI job is debian:trixie, where both are 19.1.7; a
+# developer's machine at the time of writing had 21.1.8; `seed/pascalc.ll` was
+# emitted by clang 21. So the comparison is repeated on different LLVMs over
+# time rather than made between two at once, which is a weaker thing than it
+# sounds like and still not nothing: a miscompilation that hides here has to be
+# present in every version this has run under. That is why the version is
+# printed on every invocation -- a green bar means nothing without knowing which
+# LLVM produced it, and this check is the one place that is the whole story.
+#
+# Don't "strengthen" this by pinning a second LLVM version alongside the first.
+# It would be a genuine second reader, and it would also put an apt repository
+# and a version pin into a job whose entire justification is that the documented
+# build needs nothing of LLVM's (ADR-0085). If that trade is ever made, it needs
+# a record saying so.
 #
 # It skips when `llc` is absent, as verify-lowering does without z3 and
 # bsi-validation-suite does without the suite: `llc` comes from LLVM, and
