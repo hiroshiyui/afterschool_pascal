@@ -1472,21 +1472,19 @@ bool Parser::callTakesCaret(size_t from) const {
 StmtPtr Parser::parseIdentStatement() {
   const Token &id = cur();
   if (id.text == "write")
-    return parseWrite(false);
+    return parseWrite(false, false);
   if (id.text == "writeln")
-    return parseWrite(true);
+    return parseWrite(true, false);
   if (id.text == "read")
-    return parseRead(false);
+    return parseRead(false, false);
   if (id.text == "readln")
-    return parseRead(true);
-  // ISO/IEC 10206:1991 §6.7.5.5. Recognised by name exactly as `read` and
-  // `write` are — the parser has no scope to ask whether the program declared
-  // its own — so under `--std=extended` the two names are not usable for
-  // anything else, which is the deviation ADR-0060 records.
+    return parseRead(true, false);
+  // ISO/IEC 10206:1991 §6.7.5.5's two are required identifiers as well, so they
+  // take the same treatment — which is what retired ADR-0060's deviation.
   if (std_ == Std::Extended && id.text == "readstr")
-    return parseReadStr();
+    return parseRead(false, true);
   if (std_ == Std::Extended && id.text == "writestr")
-    return parseWriteStr();
+    return parseWrite(false, true);
 
   // §6.8.6.4, both spellings of it. `parsePrimary` builds the call and then
   // its selectors, so the target is assembled by the code that already knows
@@ -1558,73 +1556,54 @@ WriteArg Parser::parseWriteArg() {
   return arg;
 }
 
-StmtPtr Parser::parseWrite(bool newline) {
+/// write / writeln, and ISO/IEC 10206:1991 §6.7.5.5's writestr:
+///
+///   writestr-parameter-list = '(' string-variable ','
+///                             write-parameter, ... ')' .
+///
+/// One parse for all three, because the parser cannot know which it has. The
+/// string-variable takes no field width — it is written *to*, not written —
+/// but it is written where a write-parameter would be, so it is parsed as one
+/// and Sema moves it out; and a program may have declared `writestr` itself
+/// (§6.2.2.10), in which case there is no string-variable at all and the whole
+/// bracket is an actual-parameter-list. Committing here to `'(' expression ','`
+/// would decide that question with the one thing the parser does not have,
+/// which is the symbol (ADR-0087).
+StmtPtr Parser::parseWrite(bool newline, bool strForm) {
   auto s = makeNode<WriteStmt>(cur());
   s->newline = newline;
-  ++pos_; // 'write' / 'writeln'
+  s->isStr = strForm;
+  ++pos_; // 'write' / 'writeln' / 'writestr'
 
   if (accept(Tok::LParen) && !emptyArgumentList()) {
     do {
       s->args.push_back(parseWriteArg());
     } while (accept(Tok::Comma));
-    expect(Tok::RParen, "after the arguments of write");
+    expect(Tok::RParen, strForm ? "after the arguments of writestr"
+                                : "after the arguments of write");
   }
   return s;
 }
 
-/// read/readln. The arguments are variables to store into, and the first may
-/// be a file instead — Sema sorts that out, because telling them apart needs
-/// the types. `readln` alone, with no list at all, finishes the current line.
-StmtPtr Parser::parseRead(bool newline) {
+/// read / readln, and §6.7.5.5's readstr:
+///
+///   readstr-parameter-list = '(' string-expression ','
+///                            variable-access, ... ')' .
+///
+/// The arguments are variables to store into, and the first may be a file (or,
+/// for a readstr, the string read from) instead — Sema sorts that out, because
+/// telling them apart needs the types, and since ADR-0087 the name as well.
+/// `readln` alone, with no list at all, finishes the current line.
+StmtPtr Parser::parseRead(bool newline, bool strForm) {
   auto s = makeNode<ReadStmt>(cur());
   s->newline = newline;
-  ++pos_; // 'read' / 'readln'
+  s->isStr = strForm;
+  ++pos_; // 'read' / 'readln' / 'readstr'
 
   if (accept(Tok::LParen)) {
-    parseActualParameters(s->args, "after the arguments of read");
+    parseActualParameters(s->args, strForm ? "after the arguments of readstr"
+                                           : "after the arguments of read");
   }
-  return s;
-}
-
-/// ISO/IEC 10206:1991 §6.7.5.5:
-///
-///   readstr-parameter-list = '(' string-expression ',' variable-access
-///                            { ',' variable-access } ')' .
-///
-/// The parameter list is not optional and neither is the first comma — a
-/// readstr with nothing to read into has no reading at all, where `readln`
-/// alone finishes a line. `str` is what tells this ReadStmt from a `read`.
-StmtPtr Parser::parseReadStr() {
-  auto s = makeNode<ReadStmt>(cur());
-  ++pos_; // 'readstr'
-  expect(Tok::LParen, "after readstr");
-  s->str = parseExpr();
-  expect(Tok::Comma, "after the string readstr reads from");
-  do {
-    s->args.push_back(parseExpr());
-  } while (accept(Tok::Comma));
-  expect(Tok::RParen, "after the arguments of readstr");
-  return s;
-}
-
-/// §6.7.5.5's other half:
-///
-///   writestr-parameter-list = '(' string-variable ',' write-parameter
-///                             { ',' write-parameter } ')' .
-///
-/// The string-variable takes no field width — it is written *to*, not written
-/// — so it is parsed as a bare expression and Sema is what insists it is a
-/// variable, exactly as it does for the file of an ordinary `write`.
-StmtPtr Parser::parseWriteStr() {
-  auto s = makeNode<WriteStmt>(cur());
-  ++pos_; // 'writestr'
-  expect(Tok::LParen, "after writestr");
-  s->str = parseExpr();
-  expect(Tok::Comma, "after the string writestr writes to");
-  do {
-    s->args.push_back(parseWriteArg());
-  } while (accept(Tok::Comma));
-  expect(Tok::RParen, "after the arguments of writestr");
   return s;
 }
 

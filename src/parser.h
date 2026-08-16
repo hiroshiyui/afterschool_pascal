@@ -141,11 +141,9 @@ private:
   StmtPtr parseCase();
   StmtPtr parseIdentStatement();
   StmtPtr parseWith();
-  StmtPtr parseWrite(bool newline);
-  StmtPtr parseRead(bool newline);
+  StmtPtr parseWrite(bool newline, bool strForm);
+  StmtPtr parseRead(bool newline, bool strForm);
   WriteArg parseWriteArg();
-  StmtPtr parseWriteStr();
-  StmtPtr parseReadStr();
 
   /// Apply any `[...]` and `.field` selectors following a designator's base.
   ExprPtr parseSelectors(ExprPtr base);

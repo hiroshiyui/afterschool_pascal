@@ -474,10 +474,16 @@ struct WriteStmt : Stmt {
   /// which Sema then resolves to the program parameter of that name.
   ExprPtr file;
   /// ISO/IEC 10206:1991 §6.7.5.5's `writestr`: the string-variable written
-  /// to. Non-null makes this statement a writestr rather than a write, and
-  /// then `file` stays null — the file is the auxiliary text variable the
-  /// clause defines the statement in terms of, which the runtime supplies.
+  /// to, which Sema moves here out of `args` — the parser cannot, because the
+  /// string-variable stands exactly where a write-parameter does and only the
+  /// *name* says it is not one (ADR-0087). Then `file` stays null: the file is
+  /// the auxiliary text variable the clause defines the statement in terms of,
+  /// which the runtime supplies.
   ExprPtr str;
+  /// Which of the three statements the parser read, since `str` cannot say so
+  /// until Sema has moved it. A `writestr` with an empty parameter list has no
+  /// string to move and must still be diagnosed as a writestr.
+  bool isStr = false;
 };
 
 /// `read` and `readln`. Kept apart from ProcCallStmt for the same reason
@@ -490,9 +496,10 @@ struct ReadStmt : Stmt {
   std::vector<ExprPtr> args;
   bool newline = false; // readln: finish the line after the last variable
   ExprPtr file;         // null means `input`
-  /// §6.7.5.5's `readstr`: the string-expression read from, with the same
-  /// meaning `WriteStmt::str` has — non-null says which statement this is.
+  /// §6.7.5.5's `readstr`: the string-expression read from, moved here by Sema
+  /// for the reason `WriteStmt::str` is.
   ExprPtr str;
+  bool isStr = false; // as WriteStmt::isStr
 };
 
 struct Compound : Stmt {

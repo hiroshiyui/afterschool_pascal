@@ -5502,6 +5502,22 @@ void Sema::checkBinary(Binary *b) {
 /// it has a file type and no width — and if a program does write `f:8`, the
 /// file falls through to the value list and is rejected there as unwritable.
 void Sema::checkWrite(WriteStmt *w) {
+  // §6.7.5.5's writestr writes its string-variable where a write-parameter
+  // goes, so the parser left it in the list; moving it out is this pass's job,
+  // because until the name was looked up there was no telling the statement
+  // from a call (ADR-0087).
+  if (w->isStr) {
+    if (w->args.empty())
+      diags_.error(w->line, w->col, "writestr needs a string variable to write to");
+    else {
+      if (w->args[0].width)
+        diags_.error(w->args[0].width->line, w->args[0].width->col,
+                     "the string writestr writes to takes no field width");
+      w->str = std::move(w->args[0].value);
+      w->args.erase(w->args.begin());
+    }
+  }
+
   for (auto &arg : w->args) {
     checkExpr(arg.value.get());
     if (arg.width)
@@ -5528,6 +5544,11 @@ void Sema::checkWrite(WriteStmt *w) {
     else
       // §6.9.4 d): writestr threatens the string-variable it writes to.
       checkNotThreatened(w->str.get(), "it cannot be written to");
+    // §6.7.5.5's writestr-parameter-list is the string-variable, a comma, and
+    // then at least one write-parameter. The comma used to be the parser's
+    // business, which made this case unreachable; it is reachable now.
+    if (w->args.empty())
+      diags_.error(w->line, w->col, "writestr needs something to write");
     checkWriteArgs(w);
     return;
   }
@@ -5539,12 +5560,19 @@ void Sema::checkWrite(WriteStmt *w) {
                    "the file written to must be a variable");
     w->file = std::move(w->args[0].value);
     w->args.erase(w->args.begin());
-  } else {
+  } else if (!w->isStr) {
     w->file = standardFileRef(false, w->line, w->col);
   }
 
+  // Named rather than spelled: a `writestr` with no parameter list at all
+  // reaches this line, having found no string to move out, and a message
+  // saying `write` would name a procedure the program never wrote.
+  // `writeln` may be written alone, so only the two spellings that may not
+  // reach here — and a `writestr` whose string never arrived is one of them.
   if (w->args.empty() && !w->newline)
-    diags_.error(w->line, w->col, "write needs something to write");
+    diags_.error(w->line, w->col,
+                 std::string(w->isStr ? "writestr" : "write") +
+                     " needs something to write");
 
   // §6.9.3 is the *text* form of write, and everything it says — the field
   // width, the external representation of a number, the line `writeln`
@@ -5611,6 +5639,17 @@ void Sema::checkWriteArgs(WriteStmt *w) {
 /// `read` reads a char, an integer or a real — a text file has no other
 /// external representation to read.
 void Sema::checkRead(ReadStmt *r) {
+  // The mirror of write's split: the string a readstr reads from stands where
+  // a variable-access would, and only the name says it is not one (ADR-0087).
+  if (r->isStr) {
+    if (r->args.empty())
+      diags_.error(r->line, r->col, "readstr needs a string to read from");
+    else {
+      r->str = std::move(r->args[0]);
+      r->args.erase(r->args.begin());
+    }
+  }
+
   for (auto &a : r->args)
     checkExpr(a.get());
 
@@ -5634,14 +5673,20 @@ void Sema::checkRead(ReadStmt *r) {
                    "the file read from must be a variable");
     r->file = std::move(r->args[0]);
     r->args.erase(r->args.begin());
-  } else {
+  } else if (!r->isStr) {
+    // A readstr reads from no file at all, so a broken one must not be given
+    // `input`: the statement would then report that the program does not list
+    // it, which is a rule it is not breaking.
     r->file = standardFileRef(true, r->line, r->col);
   }
 
   // `read` must be given somewhere to put what it reads; `readln` may be
-  // written alone, and then it only finishes the line.
+  // written alone, and then it only finishes the line. Named, as write's is,
+  // so a readstr given only the string it reads from says `readstr`.
   if (r->args.empty() && !r->newline)
-    diags_.error(r->line, r->col, "read needs a variable to read into");
+    diags_.error(r->line, r->col,
+                 std::string(r->isStr ? "readstr" : "read") +
+                     " needs a variable to read into");
 
   // The counterpart of write's split: on a file that is not a text, §6.6.5.2
   // makes `read(f, v)` mean `v := f^; get(f)`, so the variable takes the

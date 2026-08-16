@@ -470,13 +470,16 @@ struct Dumper {
     }
     case NK::Write: {
       WriteStmt *n = as<WriteStmt>(s);
-      head(n->str       ? "writestr"
+      // Asked of the flag and not of `str`, which is null until Sema moves it
+      // out of the argument list (ADR-0087) — so before Sema a writestr is
+      // still a writestr and prints as one.
+      head(n->isStr     ? "writestr"
            : n->newline ? "writeln"
                         : "write",
            s->line, s->col);
       ++level;
-      // §6.7.5.5's string-variable, which the parser sets and Sema leaves
-      // alone — unlike the file below, which Sema is what supplies.
+      // §6.7.5.5's string-variable, which Sema supplies exactly as it does the
+      // file below.
       if (n->str)
         optionalChild("str", n->str.get());
       // Sema moves a leading file argument out of the list and supplies
@@ -502,7 +505,7 @@ struct Dumper {
     }
     case NK::Read: {
       ReadStmt *n = as<ReadStmt>(s);
-      head(n->str       ? "readstr"
+      head(n->isStr     ? "readstr" // as the write side above
            : n->newline ? "readln"
                         : "read",
            s->line, s->col);
