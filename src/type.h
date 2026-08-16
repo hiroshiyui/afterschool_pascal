@@ -167,6 +167,13 @@ struct Type {
   /// file is not an array.
   Type *indexType = nullptr;
   bool packed = false;
+  /// ISO 7185 §6.7.1: a set-constructor with members "shall denote either a
+  /// value of the unpacked-canonical-set-of-T-type or, if the context so
+  /// requires, the packed-canonical-set-of-T-type". So a constructor's type
+  /// has not chosen a packing and fits either destination, where §6.4.5 c)
+  /// makes two *declared* set-types compatible only when they agree. `packed`
+  /// has two values and this is the third (ADR-0093).
+  bool setCanonical = false;
   bool textFile = false; // File: this is `text`, not a `file of char`
 
   /// Array: the index bounds. Subrange: the bounds themselves. Both inclusive.
@@ -542,8 +549,13 @@ struct Type {
                  : "file of " + (elem ? elem->name() : "?");
     // The type of `[]` names no base type because it has none; it is written
     // the way the source writes it.
+    // §6.4.5 c) makes packing part of a set-type's identity for compatibility,
+    // so a message leaving the word out would name two different types by one
+    // spelling — and `distinctTypeNote` would then offer advice that cannot
+    // help (ADR-0074).
     case TypeKind::Set:
-      return elem ? "set of " + elem->name() : "[]";
+      return elem ? (packed ? "packed set of " : "set of ") + elem->name()
+                  : "[]";
     // Two procedural parameters differ by their *parameter lists*, and ISO
     // 7185 §6.6.3.6 compares those pairwise rather than as a whole; the
     // congruity diagnostic names the parameter that failed, so spelling a

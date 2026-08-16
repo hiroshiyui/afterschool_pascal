@@ -2272,7 +2272,18 @@ bool Sema::assignable(Type *to, Type *from) const {
       return false;
     if (to->isEmptySet() || from->isEmptySet())
       return true;
-    return to->elem->base() == from->elem->base();
+    // §6.4.5 c) has a second half: "and either both T1 and T2 are designated
+    // packed or neither T1 nor T2 is designated packed". ISO/IEC 10206:1991
+    // §6.4.5 c) is that sentence word for word, so this is gated on neither
+    // standard. A set-constructor is exempt because §6.7.1 has not committed
+    // it to a packing — it denotes the unpacked-canonical-set-of-T-type "or,
+    // if the context so requires, the packed" one — so `p := [true]` into a
+    // packed set is legal while `p := b` from an unpacked one is not. Every
+    // set is one 256-bit word whatever was written (ADR-0028), so this is a
+    // type rule with no lowering and CodeGen is untouched (ADR-0093).
+    return to->elem->base() == from->elem->base() &&
+           (to->setCanonical || from->setCanonical ||
+            to->packed == from->packed);
   }
   // ISO/IEC 10206:1991 §6.4.5 d): "T1 is either a string-type or the char-type
   // and T2 is either a string-type or the char-type." *All* of them are
@@ -5795,6 +5806,7 @@ void Sema::checkSetExpr(SetExpr *s) {
   }
   Type *t = newType(TypeKind::Set);
   t->elem = base;
+  t->setCanonical = true; // §6.7.1 has not committed a constructor to a packing
   s->type = t;
 }
 
