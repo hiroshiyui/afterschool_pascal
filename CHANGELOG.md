@@ -13,6 +13,73 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-08-16
+
+**The differential oracle is green.** ADR-0108 brought the C++ front end back
+one release ago and it arrived red: 89 of 731 files on which it and the compiler
+disagreed, the drift of twenty-four Sema commits it never received. All 89 are
+closed, one commit per rule, each naming the clause it ports. Two independent
+front ends now agree on every Pascal source in the tree — 732 of them, token for
+token and node for node.
+
+Almost none of that is visible from a Pascal program: the reference front end
+generates no code and nothing it produces ships. What *is* visible is small and
+is listed below, and one item can break a build that used to work.
+
+### Changed
+
+- **Two schema definitions that used to compile are now refused**, and a build
+  containing either will fail. Both were illegal and neither was detected,
+  because a schema's body is resolved lazily at its first production, so nothing
+  ever looked at the text of the definition:
+  - a schema naming another **defined after it** (§6.2.2.9 requires a
+    defining-point to precede every applied occurrence, with only a pointer
+    domain and an export-list excepted), and
+  - a schema **naming itself** outside a pointer domain, where it was never used
+    (§6.4.7 states that as a rule about the definition, so it does not wait for
+    a production).
+
+  The fix is to reorder the definitions, or to write the self-reference through
+  a pointer domain, which is the form §6.4.7 allows.
+- **The build now requires a C++20 compiler**, for `src/`. Nothing it produces
+  ships and `build/bin/pascalc` does not depend on it — it builds `pascalc-s0`,
+  which is a lexer, parser and Sema with no code generator, and exists so
+  `selfhost/difftest.sh` has a second answer to compare. README said "no C++
+  compiler" until this release.
+- `--dump-sema` prints a **redefined `write` or `read`** at the statement's real
+  depth. Sema hangs the resolved call off the write statement as a husk
+  (ADR-0087) and the dump padded for both nodes, so a `proccall` printed two
+  levels deeper than its own arguments. `--dump-ast` runs before Sema and never
+  had the husk, so it is unaffected. The reference front end is what caught it:
+  the *product* was the wrong one, and copying its output into `src/` to make
+  four files agree would have been ADR-0073's failure exactly.
+
+### Added
+
+- **An enumerated type may appear in a schema body.** §6.4.2.3 puts the
+  defining-point of an enumerated type's constants in "the block, module-heading
+  or module-block closest-containing the enumerated-type" — the block, not the
+  production — so `t(n: one) = record c: (red, green); a: array [1..n] of
+  integer end` is a legal program, and it was rejected. The constants are now
+  declared once, in the block, and every production shares the one type.
+
+### Fixed
+
+- Every conformance rule the reference front end lacked is ported into it — 25
+  commits, each naming the clause it carries — so `difftest` compares them
+  again. Among them: §6.6.6.4's `succ`/`pred` host type, §6.7.5.5's
+  `readstr`/`writestr`, §6.2.2.10's required identifiers as symbols, §6.6.4.1's
+  redefinable read/write family, §6.2.2.9's defining-point order and its pointer
+  domain exception, §6.6.5.3's `dispose`, §6.4.5 c)'s set packing, §6.6.3.3's
+  var-parameter restrictions, §6.1.8's comment delimiters, §6.8.1's three goto
+  conditions, §6.4.3.3's variant labels and record-as-region, §6.8.3.9's
+  for-statement threats, §6.2.1's declaration interleaving, §6.6.3.2's value
+  parameter containing a file, §6.6.3.6's congruity over parameter *sections*,
+  §6.5.4's function result, and §6.4.3.2's four properties of a string-type.
+  **None changes what `pascalc` accepts**; each closes a place where the two
+  front ends disagreed. Eleven programs of the BSI validation suite came back
+  with them, CONF027 and CONF116 among them.
+
 ## [1.2.0] — 2026-08-15
 
 **The language is unchanged** — no new syntax, no new diagnostic, and nothing a
