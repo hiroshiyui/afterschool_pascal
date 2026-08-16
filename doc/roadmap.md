@@ -1338,14 +1338,27 @@ has not started.
 
 ### 1. An oracle nobody here wrote
 
-ADR-0085 states the cost and no entry has answered it. `selfhost/difftest.sh`
-compared two independent implementations over 436 sources; what remains — the
-435 cases, the stage-2/stage-3 fixed point, and 43 SMT rules — all share one
-implementation, and **a golden cannot disagree with the program that wrote
-it**. The defects difftest caught were exactly the ones every other oracle
-agreed about: a builtin's enumerator one apart (ADR-0059), a comment-delimiter
-rule implemented wrongly in *both* compilers (ADR-0073), a diagnostic that
-named two types identically and explained nothing (ADR-0074).
+ADR-0085 stated the cost, and **two entries have since answered it** — this
+section is kept because the reasoning is what justifies the third candidate
+below, which is still open.
+
+`selfhost/difftest.sh` compared two independent implementations over 436
+sources; what ADR-0085 left — the 435 cases, the stage-2/stage-3 fixed point,
+and 43 SMT rules — all shared one implementation, and **a golden cannot
+disagree with the program that wrote it**. The defects difftest caught were
+exactly the ones every other oracle agreed about: a builtin's enumerator one
+apart (ADR-0059), a comment-delimiter rule implemented wrongly in *both*
+compilers (ADR-0073), a diagnostic that named two types identically and
+explained nothing (ADR-0074).
+
+Both restorations have now paid. The BSI suite found three defects on its first
+run (below), and the returned front end found a **dump defect in the product**
+that no golden could have: `pascalc` padded twice for a redefined `write`,
+once for the husk node and once for the call it looks through, so a `proccall`
+printed two levels deeper than its own arguments. Copying that into `src/`
+would have closed four files and been ADR-0073's failure exactly — two
+compilers wrong the same way, difftest agreeing happily —
+so the Pascal was fixed and `tests/dumps/redefine_family.pas` pins it.
 
 Three candidates, cheapest first, and not exclusive:
 
@@ -1398,11 +1411,23 @@ Three candidates, cheapest first, and not exclusive:
     where the pointer is stale. A check that coincides with a rule is not that
     rule being enforced, and a green run of those two programs must not be read
     as one.
+- ~~**The reference front end**~~ **Done** (ADR-0108). `src/` came back as
+  `pascalc-s0` — lexer, parser and Sema, no code generator — so
+  `selfhost/difftest.sh` compares tokens, AST and Sema over every source in the
+  tree again. It arrived red at **89 of 731** files, the drift of twenty-four
+  Sema commits, and the baseline is **now empty** over 732: every one of those
+  rules was ported into `src/`, one commit per rule naming its clause. Eleven
+  BSI CONFORM programs came back with them, CONF027 and CONF116 among them.
+  - **It is a `ctest` case and an ordinary regression gate**, so any file the
+    baseline names is a disagreement the change under review introduced.
+  - What it still cannot do is contradict a **reading**: both sides are written
+    by one author from one reading, which is why the candidate below is not
+    struck through.
 - **A third-party differential.** FPC under `-Miso`, or p5, over the ISO 7185
   half of `tests/`. Not a second implementation to maintain: a second *answer*,
-  on programs that already exist. Still worth doing — the suite is a *fixed*
-  corpus from 1982, where difftest compared every source in this tree and grew
-  with the language.
+  on programs that already exist. **The only candidate here that would
+  contradict a misreading** — the BSI suite is a *fixed* corpus from 1982, and
+  difftest compares this project against itself.
 - **Mutation testing, committed to the tree.** It has found something every
   time it has been run here — the six occasions listed under "Stage 1", and
   ADR-0065's two mutants that changed the compiler rather than the tests — and

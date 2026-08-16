@@ -7,9 +7,11 @@ This is not a code review and not a test run. It audits **interpretations** — 
 sentences of the standard that a conformance decision turned on — by asking
 readers who have not seen the reasoning to reach their own verdict and disagree.
 
-**Why it has to exist here.** ADR-0085 retired `difftest.sh`, and with it the only
-oracle that could contradict a *reading*: two independent implementations. What
-is left all descends from one source. The goldens were written from this
+**Why it has to exist here.** No oracle here can contradict a *reading*. What
+they all have is one source. `difftest.sh` is back since ADR-0108 and green
+over every file, but its two implementations are written by one author from one
+reading — which is how ADR-0073's comment-delimiter rule came to be wrong in
+*both*, with the oracle comparing them happily. The goldens were written from this
 compiler's output, so they agree with whoever wrote them. `tests/bsi/expected.tsv`
 is a catalogue of what this compiler does, edited by the person who changed it.
 `verify/` proves the lowering matches a model of the lowering. None of them can

@@ -447,7 +447,7 @@ claim that stops being true is as loud as one that was never true, which is
 | `diagnostic-coverage` | `tests/checks/unreachable_diagnostics.txt` | is every message named by a golden? |
 | `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
 | `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
-| `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — red by design at 89, so the baseline may shrink and may not grow |
+| `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen change without `verify/`? |
 
 All but the last are `ctest` cases, so they run before a push rather than
@@ -1943,22 +1943,26 @@ shape ADR-0079 had to defend against the language rather than on its merits.
 Twelve arguments and eight `--import`s are array bounds, and both report rather
 than truncate.
 
-**The first three components used to be checked against `src/`, and are now
-checked against golden files.** `pascalc --dump-all` writes three sections
-(`=== tokens`, `=== ast`, `=== sema`), and `selfhost/difftest.sh` diffed them
-against the C++ compiler's over every `.pas` in the tree. That was the strongest
-oracle here and ADR-0085 gave it up with stage 0; what replaced it is the
-golden files, including the 157 error-path sources difftest was the only reader
-of.
+**The first three components are checked twice: against `src/`, and against
+golden files.** `pascalc --dump-all` writes three sections (`=== tokens`,
+`=== ast`, `=== sema`), and `selfhost/difftest.sh` diffs them against the
+reference front end's over every `.pas` in the tree. That was the strongest
+oracle here, ADR-0085 gave it up with stage 0, and ADR-0108 brought it back —
+so the goldens are no longer the only reader of the 157 error-path sources, but
+they are still what covers CodeGen, which difftest never compared.
 
 **Know what that means when you change a stage.** A golden agrees with whatever
 wrote it, so a change that is wrong in the dump *and* wrong in the goldens you
 regenerate is invisible. Regenerating a golden is a decision to be argued for in
-the commit message, not a step.
+the commit message, not a step. Difftest is the check that does not have that
+weakness — and the one time it mattered, the *product* was the wrong one: the
+Pascal padded twice for a redefined `write`, and copying that into `src/` to
+make four files agree would have been ADR-0073's failure exactly.
 
 **And no oracle here can contradict a *reading*.** The goldens agree with
 whoever wrote them, `tests/bsi/expected.tsv` records what this compiler does,
-and `verify/` proves the lowering matches a model of the lowering — so a
+`verify/` proves the lowering matches a model of the lowering, and difftest's
+two implementations are written by one author from one reading — so a
 misread clause is invisible to all of them at once, which is how ADR-0072's
 set-packing deviation survived in four documents and a purpose-written test.
 `.claude/skills/langspec-audit/SKILL.md` is the substitute: independent readers

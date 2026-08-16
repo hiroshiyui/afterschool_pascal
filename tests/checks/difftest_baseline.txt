@@ -6,6 +6,11 @@
 # Each entry is drift the C++ never received -- the Sema work since v1.0.0 --
 # and clearing one means porting that rule into src/ and deleting its line.
 #
+# It is EMPTY, which is what makes this an ordinary regression gate rather
+# than a ratchet: the two front ends agree on every source in the tree, so any
+# entry appearing here is a disagreement this change introduced.  It was 89
+# when the file was written.
+#
 # Regenerate with:  python3 tests/checks/difftest_check.py --write-baseline
 # Doing so is a decision to argue for in the commit message: it is correct for
 # progress, and it is also how a regression would be hidden.
