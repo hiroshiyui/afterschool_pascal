@@ -301,7 +301,11 @@ public:
   /// either language — a valid ISO 7185 program may declare a function called
   /// `re` — so this is not a lexical question and the lexer cannot answer it.
   explicit Sema(Diagnostics &diags, Std std = Std::Iso7185)
-      : diags_(diags), std_(std) {}
+      : diags_(diags), std_(std) {
+    // §6.4.3.2's largest-value clause is the one thing a *type* predicate has
+    // to know the standard for; `ty::typeStd` is where it reads it.
+    typeStd() = std;
+  }
 
   void run(Program &prog);
 

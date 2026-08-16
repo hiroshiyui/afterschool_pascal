@@ -10,10 +10,22 @@
 // subrange, which is what lets `1..9` reach arithmetic, `write`, indexing and
 // parameter passing with no case of its own (ADR-0018).
 #pragma once
+#include "token.h"
 #include <string>
 #include <vector>
 
 namespace ap {
+
+/// Which standard a *type* is being asked about. Only one predicate needs it —
+/// `isCharArray`, for §6.4.3.2's largest-value clause, which ISO/IEC
+/// 10206:1991 §6.4.3.3.2 drops — but that predicate is behind `isStringType`
+/// and so is reached from everywhere, which is why the answer lives beside the
+/// type system rather than being threaded through as a parameter. Sema sets it
+/// once, from the same `Std` it was constructed with.
+inline Std &typeStd() {
+  static Std s = Std::Iso7185;
+  return s;
+}
 
 /// ISO 7185 §6.4.2.2 — the integer type is the range -maxint..maxint. Note
 /// this is narrower than the i32 the compiler represents it with: INT_MIN fits
@@ -430,10 +442,34 @@ struct Type {
 
   long long length() const { return hi - lo + 1; }
 
-  /// A `packed array [m..n] of char` — the type ISO 7185 §6.4.3.2 gives a
+  /// A `packed array [1..n] of char` — the type ISO 7185 §6.4.3.2 gives a
   /// string literal, and the only structured type with its own operators.
+  ///
+  /// §6.4.3.2 is four properties at once: "Any type designated packed and
+  /// denoted by an array-type having as its index-type a denotation of a
+  /// subrange-type specifying a smallest value of 1 and a largest value of
+  /// greater than 1, and having as its component-type a denotation of the
+  /// char-type". So the lower bound must be 1, the index-type must be an
+  /// *integer* subrange before a bound means anything — `ord(blue)` is 1 while
+  /// the smallest *value* is `blue` — and the component must be `char` itself
+  /// and not a subrange of one, which is why the test is on the kind rather
+  /// than through `isChar()` (ADR-0090).
+  ///
+  /// The largest-value clause is the only one `--std` decides: ISO/IEC
+  /// 10206:1991 §6.4.3.3.2 drops it and nothing else, so `packed array [1..1]
+  /// of char` is a fixed-string-type there and is not a string-type here.
   bool isCharArray() const {
-    return isArray() && packed && elem && elem->isChar();
+    if (!isArray() || !packed)
+      return false;
+    if (!elem || elem->kind != TypeKind::Char)
+      return false;
+    if (!indexType || !indexType->isInteger() || loDisc || lo != 1)
+      return false;
+    // A schema may bound an array above (ADR-0040) and never below, so the
+    // largest value is a number wherever this clause applies.
+    if (typeStd() == Std::Iso7185 && (hiDisc || hi <= 1))
+      return false;
+    return true;
   }
 
   /// ISO 7185 §6.4.3.3 requires every field name in a record to be distinct,
