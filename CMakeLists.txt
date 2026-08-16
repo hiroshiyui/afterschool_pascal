@@ -249,6 +249,23 @@ set_tests_properties(bsi-validation-suite PROPERTIES
                      TIMEOUT 1800
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+# A second backend configuration, and the one thing it can say that
+# selfhost-codegen cannot: that the compiler *binary* is not miscompiled. That
+# check compiles the compiler with itself twice, but both stages come from one
+# binary, so a clang that got a corner of compiler.pas wrong would build a wrong
+# compiler that reproduced itself exactly. This builds it a second way and
+# requires the two to translate the same source to the same IR.
+#
+# Skips without llc, as verify-lowering does without z3: llc is LLVM's, and
+# ADR-0085's claim is that the build needs nothing of LLVM's.
+add_test(NAME llc-second-backend
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/llc_check.sh
+                 ${CMAKE_BINARY_DIR})
+set_tests_properties(llc-second-backend PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 900
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # The code generator cannot be diffed against the C++ one — LLVM's own printer
 # is not a specification — so it is checked by *running* what it produces
 # against the same golden output the C++ compiler is held to, and then by

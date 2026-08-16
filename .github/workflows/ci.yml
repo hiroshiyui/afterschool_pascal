@@ -22,6 +22,14 @@
 # and runs it. A clone of the upstream repository takes about five seconds, so
 # it is not cached: a cache would put a copy of somebody else's corpus on a
 # third service, and BSI grants use rather than redistribution.
+#
+# Two jobs exist because a `ctest` case that *skips* is reported as a pass, and
+# a skip is how a check silently stops being one: `validation-suite` and
+# `second-backend` each install what their case needs and then grep the log to
+# refuse a green bar that skipped. `second-backend` is also the one job that
+# installs something the documented build does not need -- `llvm`, for `llc` --
+# which is exactly why it is a job and not a step of `test`: putting it there
+# would falsify the claim the first paragraph makes, with nothing to report it.
 
 name: CI
 
@@ -231,6 +239,68 @@ jobs:
         run: ctest --test-dir build --output-on-failure -j"$(nproc)"
         env:
           AFTERSCHOOL_PASCAL_OPT: -O0
+
+  second-backend:
+    # Is the compiler *binary* miscompiled? Nothing else here can ask.
+    # `selfhost/irtest.sh` compiles the compiler with itself twice and requires
+    # stage 2 to equal stage 3 -- but both stages come from one binary, so a
+    # clang that got a corner of selfhost/compiler.pas wrong would build a wrong
+    # compiler that reproduced itself exactly, and every golden would agree
+    # because that binary wrote them. This builds the compiler a second way,
+    # through `llc` at a different optimisation level, and requires the two to
+    # translate the same source to byte-identical IR.
+    #
+    # **A job of its own, and that is the whole reason it is not a step of
+    # `test`.** It needs `llvm`, which the documented build does not -- ADR-0085's
+    # claim is that nothing here needs anything of LLVM's, and this workflow
+    # exists to keep that claim falsifiable. Adding `llvm` to the `test` job's
+    # install line would destroy the property those containers are there to
+    # check, and nothing would report it: the suite would still pass.
+    #
+    # The ctest case skips when llc is absent, exactly as verify-lowering does
+    # without z3, so a developer needs none of this. This job is what makes it
+    # run somewhere.
+    name: a second backend disagrees about nothing
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies, and LLVM on top
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3
+          # The one package no other job here may have. `llc` is the driver;
+          # the version is the distro's, which is the same LLVM the container's
+          # clang is built on -- so this compares two *configurations* of one
+          # LLVM and not two LLVMs. The check says so itself rather than
+          # claiming to be a second reader of the IR.
+          apt-get install -y --no-install-recommends llvm
+
+      - uses: actions/checkout@v4
+
+      - name: Record which LLVM proved it
+        run: llc --version | head -3
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Run it, and refuse to pass by skipping
+        run: |
+          set -o pipefail
+          ctest --test-dir build -R llc-second-backend --output-on-failure \
+            2>&1 | tee /tmp/llc.log
+          # The case skips (exit 77) without llc and ctest reports a skip as
+          # success, so this job would go green having assembled nothing. The
+          # install above is what makes it run; this is what makes a silent
+          # skip impossible. Same shape as the validation suite's guard, and
+          # for the same reason.
+          if grep -q 'Skipped' /tmp/llc.log; then
+            echo "llc was not found, so this job proved nothing" >&2
+            exit 1
+          fi
 
   model-drift:
     # doc/sop.md gate A1, made mechanical: verify/lowering.py is a model of the

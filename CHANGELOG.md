@@ -13,6 +13,25 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **`llc-second-backend`**, a `ctest` case and a CI job, asking the one question
+  no oracle here could: **is the compiler binary miscompiled?**
+  `selfhost/irtest.sh` compiles the compiler with itself twice and requires
+  stage 2 to equal stage 3, but both stages come from one binary — so a `clang`
+  that got a corner of `selfhost/compiler.pas` wrong would build a wrong
+  compiler that reproduced itself exactly, and every golden would agree, having
+  been written by it. The check builds the compiler a second way, through `llc`
+  at `-O0` and `-O2`, and requires both to translate `compiler.pas` to
+  byte-identical IR.
+  - It **skips without `llc`**, as `verify-lowering` does without z3: `llc` is
+    LLVM's, and ADR-0085's claim is that the build needs nothing of LLVM's.
+    The CI job installs it, in a container of its own for that reason, and
+    greps the log to refuse a green bar that skipped.
+  - It is **not** a second reader of the IR, and the script says so: `llc` and
+    `clang` share LLVM's parser and verifier and reject the same module with
+    the same message. What it varies is the backend configuration.
+
 ## [1.3.0] — 2026-08-16
 
 **The differential oracle is green.** ADR-0108 brought the C++ front end back

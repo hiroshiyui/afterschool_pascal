@@ -438,9 +438,9 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Four gates make that mechanical, and each fails in **both** directions — a
+Five gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to four catalogues:
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to five catalogues:
 
 | Gate | Catalogue | Asks |
 | --- | --- | --- |
@@ -2057,6 +2057,19 @@ text is not comparable — the C++ builds an `llvm::Module` and LLVM's printer i
 not a specification — so it is checked by *running* what it produces against the
 same `tests/*.out` and `tests/*.err` the C++ compiler is held to, and then by
 compiling the compiler with itself twice and requiring the results to match.
+
+**That fixed point cannot see a miscompilation of the compiler**, and
+`llc-second-backend` is what does. Stage 2 and stage 3 come from *one binary*,
+so a `clang` that got a corner of `compiler.pas` wrong would build a wrong
+compiler that reproduced itself exactly — and every golden would agree, having
+been written by it. So `tests/checks/llc_check.sh` builds the compiler a second
+way, through `llc` at `-O0` and at `-O2`, and requires both to translate
+`compiler.pas` to byte-identical IR. It **skips without `llc`**, as
+`verify-lowering` does without z3, because ADR-0085's claim is that the build
+needs nothing of LLVM's; the `second-backend` CI job installs it and refuses to
+pass by skipping. Don't file it as "a second reader of the IR" — `llc` and
+`clang` share LLVM's parser and verifier and reject the same module with the
+same message, so what it varies is the *backend configuration* and nothing else.
 
 - The emitter is **sequential**, with no instruction list: the C++ builder never
   returns to a block it has left, so the order it emits in is the order text can

@@ -25,10 +25,11 @@ blind spot in this table, and a new gate is only worth adding if it closes one.
 | --- | --- | --- |
 | **`ctest` goldens** (498 cases, run at `-O2` and again at `-O0`) | that a named program still behaves as recorded | anything **no case names**. A golden agrees with whoever wrote it, so it cannot report that the recorded answer is wrong |
 | **BSI validation suite** (812 programs) | conformance against a corpus nobody here wrote | it is **fixed** — it does not grow with the language, covers ISO 7185 only, and `expected.tsv` records what *this* compiler does |
-| **`selfhost/difftest.sh`** (731 files, two independent front ends) | that the C++ reference front end and the Pascal compiler agree on **tokens, AST and Sema** | the **code generator**, which it never compared (ADR-0025) — and a **misreading**, because both sides are written by the same author from the same reading. That is how ADR-0073's comment rule came to be wrong in *both*. The baseline is **empty** — it was 89 — so any entry appearing in it is a disagreement the change under review introduced |
+| **`selfhost/difftest.sh`** (732 files, two independent front ends) | that the C++ reference front end and the Pascal compiler agree on **tokens, AST and Sema** | the **code generator**, which it never compared (ADR-0025) — and a **misreading**, because both sides are written by the same author from the same reading. That is how ADR-0073's comment rule came to be wrong in *both*. The baseline is **empty** — it was 89 — so any entry appearing in it is a disagreement the change under review introduced |
 | **`verify/`** (43 rules, 27 at full 32-bit width, 0 known gaps) | that the lowering matches a property-style statement of the standard | **drift**. It proves the *model* against the *specification*; neither touches the compiler, so a lowering that changes without its model stays green |
 | **`verify.py --crosscheck`** | the model against the real binary, at `-O0` and `-O2` | only the points its generated program actually exercises. It ran `succ` on enumerations alone for a long time — the one ordinal type where a wrong reading and a right one agree |
-| **`selfhost/irtest.sh`** (380 programs, stage 2 = stage 3) | that the compiler is a fixed point under self-application | a bug that is **stable** under self-application. A compiler can miscompile consistently and still reproduce itself |
+| **`selfhost/irtest.sh`** (380 programs, stage 2 = stage 3) | that the compiler is a fixed point under self-application | a bug that is **stable** under self-application. A compiler can miscompile consistently and still reproduce itself — and both stages come from *one binary*, so a `clang` that got a corner of `compiler.pas` wrong is invisible to it. The row below is what closes that half |
+| **`tests/checks/llc_check.sh`** (`llc-second-backend`; skips without `llc`) | that the compiler **binary** is not miscompiled: built a second way, through `llc` at `-O0` and `-O2`, it must translate `compiler.pas` to byte-identical IR | a miscompilation **both** configurations share — it is two configurations of one LLVM, not two LLVMs. It is **not** a second reader of the IR: `llc` and `clang` share LLVM's parser and verifier and reject the same module with the same message |
 | **`selfhost/producttest.sh`** (5 checks) | that the artefact actually built is the one described | anything the five checks do not ask |
 | **`tests/spec/`** (43 scenarios, 13 clauses) | what the compiler does about a **named clause**, in the standard's terms rather than the implementation's | a **misreading**, still — the scenario is written by the same reader. What it changes is that the reading is attached to the clause it is about, so it is findable by someone holding the standard (ADR-0105) |
 | **ADRs, `README`, `CLAUDE.md`** | the reasoning | a **misreading**. No oracle here can contradict a reading of the standard — which is why ADR-0072's wrong justification survived in four documents and a purpose-written test |
@@ -41,16 +42,16 @@ Two consequences worth stating plainly, because they are counter-intuitive:
 - **The strongest oracle this project ever had is back, for half the compiler.**
   `difftest.sh` compared two independent implementations over 436 sources and
   was retired with stage 0 (ADR-0085); ADR-0108 restored `src/` as a *front end*
-  and it now compares 731 files. Two things it still cannot do, and both matter:
+  and it now compares 732 files. Two things it still cannot do, and both matter:
   it says nothing about the **code generator**, which it never compared, and it
   cannot contradict a **reading**, because one author writes both sides. Keep
   `langspec-audit` for the second and running programs for the first.
-- **It is red, and that is the design rather than a backlog.** 89 files
-  disagree — the Sema work the C++ never received — and the gate holds that set
-  as a *baseline*: a file that agreed and now disagrees fails, a file that
-  starts agreeing asks for the baseline to be rewritten. Waiting for zero would
-  have left the 642 agreeing files guarded by nothing for as long as the
-  catch-up takes.
+- **It arrived red on purpose, and is green now.** 89 files disagreed — the
+  Sema work the C++ never received — and the gate held that set as a *baseline*
+  rather than waiting for zero, which would have left the 642 agreeing files
+  guarded by nothing for as long as the catch-up took. The catch-up is done and
+  the baseline is empty, so it is an ordinary regression gate: any file it names
+  is one the change under review broke.
 
 ## 2. Classify the change
 
