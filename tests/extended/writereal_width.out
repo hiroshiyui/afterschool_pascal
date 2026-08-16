@@ -1,0 +1,12 @@
+9.99e-100:20   20  ok=TRUE
+5.0e-100:20    20  ok=TRUE
+1.5e-100:25    25  ok=TRUE
+1.0e-100:20    20  ok=TRUE
+9.99e-99:20    20  ok=TRUE
+9.99e99:20     20  ok=TRUE
+1.0e100:20     20  ok=TRUE
+1.0:20         20  ok=TRUE
+-1.0:20        20  ok=TRUE
+0.0:20         20  ok=TRUE
+1.5e-100:1      9  ok=TRUE
+1.5e-10:1       8  ok=TRUE

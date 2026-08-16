@@ -1,0 +1,11 @@
+    3.50
+after a fixed-point real
+   1.5
+after a widened real
+ 2.500000000000E+00
+after a floating-point real
+   4.5
+after a writeln
+   5.5[eoln]
+[ff]z[eoln]
+file done

@@ -932,20 +932,68 @@ long long pas_read_int(void *v) {
   return negative ? -value : value;
 }
 
+/* The characters of the number being read.
+ *
+ * §6.1.5 puts no bound on a digit-sequence, so neither can this. It was a
+ * `char buf[64]` and every loop below carried `n + 1 < sizeof buf` -- which
+ * stopped the *loop* and not the *read*, leaving the digits past the
+ * sixty-third in the file to become the next value the program read. A
+ * seventy-digit number was read as its first sixty-three digits and the input
+ * was silently desynchronised from there on; `tests/readlongreal.pas` is the
+ * program that shows it, and `pas_read_int` had always reported its own
+ * overflow rather than truncating.
+ *
+ * The small buffer is the whole of the common case -- no number a program
+ * means to write reaches it -- and the heap is only for the pathological one,
+ * which is why this is not simply a malloc. */
+struct pas_numbuf {
+  char *p;
+  size_t n, cap;
+  char small[64];
+};
+
+static void pas_numbuf_init(struct pas_numbuf *b) {
+  b->p = b->small;
+  b->n = 0;
+  b->cap = sizeof b->small;
+}
+
+/* One character, with room kept for the terminator strtod needs -- so `n` is
+ * always a legal index and the caller never checks. */
+static void pas_numbuf_put(struct pas_numbuf *b, char c) {
+  if (b->n + 1 >= b->cap) {
+    size_t want = b->cap * 2;
+    char *grown = b->p == b->small ? malloc(want) : realloc(b->p, want);
+    if (!grown)
+      pas_runtime_error("out of memory reading a number");
+    if (b->p == b->small)
+      memcpy(grown, b->small, b->n);
+    b->p = grown;
+    b->cap = want;
+  }
+  b->p[b->n++] = c;
+}
+
+static void pas_numbuf_done(struct pas_numbuf *b) {
+  if (b->p != b->small)
+    free(b->p);
+}
+
 double pas_read_real(void *v) {
   struct pas_file *f = v;
-  char buf[64];
-  size_t n = 0;
+  struct pas_numbuf buf;
   int digits = 0;
+  double result;
 
+  pas_numbuf_init(&buf);
   pas_skip_blanks(f);
   if (f->lookahead == '+' || f->lookahead == '-') {
-    buf[n++] = (char)f->lookahead;
+    pas_numbuf_put(&buf, (char)f->lookahead);
     f->have = 0;
     pas_fill(f);
   }
-  while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
-    buf[n++] = (char)f->lookahead;
+  while (f->lookahead >= '0' && f->lookahead <= '9') {
+    pas_numbuf_put(&buf, (char)f->lookahead);
     ++digits;
     f->have = 0;
     pas_fill(f);
@@ -955,13 +1003,13 @@ double pas_read_real(void *v) {
    * `.5`. The point therefore belongs to whatever follows unless digits stand
    * on both sides of it — and it has to be consumed to find out what is on the
    * right, which is what the give-back is for. */
-  if (f->lookahead == '.' && digits && n + 1 < sizeof buf) {
+  if (f->lookahead == '.' && digits) {
     f->have = 0;
     pas_fill(f);
     if (f->lookahead >= '0' && f->lookahead <= '9') {
-      buf[n++] = '.';
-      while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
-        buf[n++] = (char)f->lookahead;
+      pas_numbuf_put(&buf, '.');
+      while (f->lookahead >= '0' && f->lookahead <= '9') {
+        pas_numbuf_put(&buf, (char)f->lookahead);
         ++digits;
         f->have = 0;
         pas_fill(f);
@@ -974,8 +1022,7 @@ double pas_read_real(void *v) {
    * so `2e` and `2e+` are the integer 2 followed by characters the program has
    * not read yet. Up to two are given back, and the order matters — the sign
    * has to come out before the character that followed it. */
-  if ((f->lookahead == 'e' || f->lookahead == 'E') && digits &&
-      n + 2 < sizeof buf) {
+  if ((f->lookahead == 'e' || f->lookahead == 'E') && digits) {
     /* The `e` given back has to be the one that was written: §6.1.5 admits
      * either case, and the program reads the character, not its meaning. */
     char exp = (char)f->lookahead;
@@ -988,11 +1035,11 @@ double pas_read_real(void *v) {
       pas_fill(f);
     }
     if (f->lookahead >= '0' && f->lookahead <= '9') {
-      buf[n++] = 'e';
+      pas_numbuf_put(&buf, 'e');
       if (sign)
-        buf[n++] = sign;
-      while (f->lookahead >= '0' && f->lookahead <= '9' && n + 1 < sizeof buf) {
-        buf[n++] = (char)f->lookahead;
+        pas_numbuf_put(&buf, sign);
+      while (f->lookahead >= '0' && f->lookahead <= '9') {
+        pas_numbuf_put(&buf, (char)f->lookahead);
         f->have = 0;
         pas_fill(f);
       }
@@ -1002,10 +1049,14 @@ double pas_read_real(void *v) {
       pas_unread(f, exp);
     }
   }
-  if (!digits)
+  if (!digits) {
+    pas_numbuf_done(&buf);
     pas_runtime_error("expected a number in the input");
-  buf[n] = '\0';
-  return strtod(buf, NULL);
+  }
+  buf.p[buf.n] = '\0';
+  result = strtod(buf.p, NULL);
+  pas_numbuf_done(&buf);
+  return result;
 }
 
 /* ------------------------------------------------------------------ output */
@@ -1053,6 +1104,16 @@ static void pas_write_padded(FILE *o, const char *s, int len, int width) {
 
 void pas_write_real(void *v, double val, int width, int prec) {
   FILE *o = pas_out(v);
+  /* ISO 7185 §6.9.5's `page` needs to know whether the current line has
+   * anything on it, and every other write primitive says so. This one did not,
+   * so a real was the one value that could be written and leave the line
+   * looking empty -- `write(1.5); page` then wrote the form feed with no line
+   * terminator before it. Unconditional, unlike the char and Boolean cases:
+   * both forms below always write at least one character, the fixed-point one
+   * because a digit and a point are not suppressible and the floating-point
+   * one because ActWidth is clamped to ExpDigits + 6 further down.
+   * `tests/page_after_real.pas` is the program that says so. */
+  ((struct pas_file *)v)->atbol = 0;
   if (prec >= 0) {
     /* Fixed-point form, §6.10.3.4.2. Its representation ends with "the
      * character '.', the next FracDigits digit-characters", and the '.' is
@@ -1082,8 +1143,21 @@ void pas_write_real(void *v, double val, int width, int prec) {
    * whatever the exponent costs. */
   int expDigits = 2;
   if (val != 0.0 && !isnan(val) && !isinf(val)) {
-    double mag = fabs(log10(fabs(val)));
-    if (mag >= 100.0) expDigits = 3;
+    /* The exponent written is floor(log10(|val|)) -- the one `%E` prints --
+     * and *not* the magnitude of log10, which is what this asked for until
+     * `tests/extended/writereal_width.pas` was written. The two differ for a
+     * value in [1e-100, 1e-99): log10(9.99e-100) is -99.0004, so the magnitude
+     * is under 100 while the printed exponent is E-100. Budgeting two digits
+     * for a three-digit exponent made the representation one character wider
+     * than TotalWidth, which is the one thing §6.10.3.4.1 fixes.
+     *
+     * Rounding in log10 can only move this by one, and it is safe in that
+     * direction: an ExpDigits that is one too *large* makes DecPlaces one too
+     * small, and the field width then pads the difference, so the
+     * representation is still exactly ActWidth characters. One too small is
+     * what overflows the field, and floor is what cannot produce it. */
+    int e10 = (int)floor(log10(fabs(val)));
+    if (e10 >= 100 || e10 <= -100) expDigits = 3;
   }
   int actWidth = width < 0 ? expDigits + 17 : width;
   if (actWidth < expDigits + 6) actWidth = expDigits + 6;
@@ -1277,9 +1351,11 @@ void pas_bind(void *v, const char *name, int len) {
  * it buys is a program that can report failure to whatever invoked it, which
  * a compiler written in Pascal has to be able to do. */
 void pas_halt(int status) {
-  /* pas_file_done unlinks as it goes, so this drains the list; the standard
-   * files return early from it without being unlinked, which is why the loop
-   * takes the head each time and stops when only they remain. */
+  /* pas_file_done unlinks every file it is given -- the standard ones too,
+   * before it returns early without closing them -- so this walks the list by
+   * saving the next pointer first, exactly as pas_jump_go does. Taking the
+   * head each time would work for the ordinary files and loop forever if a
+   * file were ever left linked. */
   struct pas_file *f = pas_open_files;
   while (f) {
     struct pas_file *next = f->next_open;
@@ -1464,6 +1540,18 @@ double pas_cpowi_im(double re, double im, int n) {
  * makes it easy to write, since a variable-string cannot be a value parameter
  * and `write` consumes each of its arguments in turn. */
 
+/* A variable-string variable is `{ i32, [capacity x i8] }` -- the current
+ * length, then the characters. The compiler emits that layout (the `{ i32, [`
+ * in CodeGen) and this reads it, and the two files cannot include one another,
+ * which is the same bind `PAS_FILE_SIZE` and `fileSize` are in. So it gets the
+ * same treatment they get: a name, and an assertion that the name is right.
+ * It was a bare `4` at both use sites and nothing tied it to anything. */
+#define PAS_STR_LENGTH_BYTES 4
+
+_Static_assert(sizeof(int) == PAS_STR_LENGTH_BYTES,
+               "the compiler writes a variable-string length as an LLVM i32, "
+               "which this runtime reads through an int");
+
 #define PAS_STR_ARENA (1 << 20)
 static char pas_str_arena[PAS_STR_ARENA];
 static int pas_str_at;
@@ -1588,7 +1676,7 @@ void pas_str_store_fixed(char *dst, int cap, const char *src, int len) {
 void pas_str_store_var(void *dst, int cap, const char *src, int len) {
   pas_str_fits(len, cap);
   *(int *)dst = len;
-  memmove((char *)dst + 4, src, (size_t)len);
+  memmove((char *)dst + PAS_STR_LENGTH_BYTES, src, (size_t)len);
 }
 
 /* §6.4.6 again: a char is a string of capacity 1. A null-string padded to that
@@ -1639,7 +1727,7 @@ void pas_str_slice_check(int at, int count, int len) {
  * then padded with spaces and a variable one gets exactly what was read. */
 void pas_read_str(void *v, void *dst, int cap, int isvar) {
   struct pas_file *f = v;
-  char *out = isvar ? (char *)dst + 4 : (char *)dst;
+  char *out = isvar ? (char *)dst + PAS_STR_LENGTH_BYTES : (char *)dst;
   int n = 0;
   while (n < cap) {
     pas_fill(f);
