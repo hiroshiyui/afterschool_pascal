@@ -107,6 +107,25 @@ Symbol *Sema::declare(const std::string &name, SymKind kind, int line,
     diags_.error(line, col, "'" + name + "' is already declared in this block");
     return it->second;
   }
+  // ISO 7185 §6.2.2.9: "The defining-point of an identifier or label shall
+  // precede all applied occurrences of that identifier or label contained by
+  // the program-block". So a name already used in this block may not now be
+  // declared in it, even where the earlier use resolved and its defining-point
+  // is in an enclosing region.
+  //
+  // Enforced until now only where the name resolved to nothing (ADR-0069's
+  // `var v: t` before `type t`), because that is the only case anything
+  // noticed. Where it resolved to an outer declaration the earlier uses kept
+  // the outer meaning and this one silently took effect from here down.
+  //
+  // The comparison is with the block being declared into, not with a depth: a
+  // sibling procedure's body is at the same depth and is not in this block,
+  // and shadowing there is exactly what the rule permits (ADR-0088).
+  if (Symbol *outer = lookupRaw(name))
+    if (outer->usedSeq > scopeMark_.back())
+      diags_.error(line, col,
+                   "'" + name + "' is already used in this block, so "
+                   "declaring it here would give one name two meanings");
   Symbol *s = newSymbol();
   s->name = name;
   s->kind = kind;
@@ -126,7 +145,7 @@ void Sema::bindName(const std::string &name, Symbol *sym, int line, int col) {
 
 /// Innermost-first lookup, which is what makes an inner declaration shadow an
 /// outer one of the same name.
-Symbol *Sema::lookup(const std::string &name) const {
+Symbol *Sema::lookupRaw(const std::string &name) const {
   for (auto scope = scopes_.rbegin(); scope != scopes_.rend(); ++scope) {
     auto it = scope->find(name);
     if (it != scope->end())
@@ -135,7 +154,14 @@ Symbol *Sema::lookup(const std::string &name) const {
   return nullptr;
 }
 
-Symbol *Sema::lookupUser(const std::string &name) const {
+Symbol *Sema::lookup(const std::string &name) {
+  Symbol *found = lookupRaw(name);
+  if (found)
+    found->usedSeq = ++applySeq_;
+  return found;
+}
+
+Symbol *Sema::lookupUser(const std::string &name) {
   Symbol *s = lookup(name);
   return (s && s->kind == SymKind::Required) ? nullptr : s;
 }
@@ -244,7 +270,17 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
   // §6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
   // §6.11.3's optional interface qualifier — so an imported type may be a
   // pointer's domain, as it may be anything else a type-name reaches.
-  Symbol *sym = lookupQuiet(denoter.qualifier, denoter.name);
+  //
+  // `lookupRaw`, because §6.2.2.9 a) excepts "the domain-type of any
+  // new-pointer-types contained by the type-definition-part containing the
+  // defining-point of the type-identifier": this occurrence is the one that
+  // does *not* have to be preceded by its defining-point. Recording it as an
+  // applied occurrence would make `p = ^node; node = boolean` — the shape the
+  // exception exists for — refuse itself, which is how this line came to be
+  // written: tests/pointer_domain_shadow.pas failed (ADR-0088).
+  Symbol *sym = denoter.qualifier.empty()
+                    ? lookupRaw(denoter.name)
+                    : lookupQuiet(denoter.qualifier, denoter.name);
   if (sym && sym->kind == SymKind::Type) {
     t->elem = sym->type;
     return t;
@@ -2676,7 +2712,7 @@ Symbol *Sema::importedSymbol(const Constituent &c, const std::string &spelling,
 /// rather than resolved, so that the one place that resolves it says whatever
 /// has to be said exactly once.
 Symbol *Sema::lookupQuiet(const std::string &qualifier,
-                          const std::string &name) const {
+                          const std::string &name) {
   if (qualifier.empty())
     return lookup(name);
   Symbol *iface = lookup(qualifier);
@@ -2688,7 +2724,7 @@ Symbol *Sema::lookupQuiet(const std::string &qualifier,
   return nullptr;
 }
 
-bool Sema::isInterfaceName(const std::string &name) const {
+bool Sema::isInterfaceName(const std::string &name) {
   Symbol *s = lookup(name);
   return s && s->kind == SymKind::Interface;
 }
@@ -5180,7 +5216,7 @@ void Sema::checkExpr(Expr *e) {
 /// any expression, subscripts and all, and those hang off `index`, `lo` and
 /// `hi` rather than off `base` — so `sets[a[i]]` asks about `sets` and never
 /// about `a`.
-Type *Sema::setValueTypeOf(Expr *e) const {
+Type *Sema::setValueTypeOf(Expr *e) {
   if (std_ != Std::Extended)
     return nullptr;
   const Expr *root = e;

@@ -225,6 +225,16 @@ struct Symbol {
   /// is where that name stops being written down.
   bool isProtected = false;
 
+  /// ISO 7185 §6.2.2.9: "The defining-point of an identifier or label shall
+  /// precede all applied occurrences of that identifier or label contained by
+  /// the program-block". This is when the symbol was last *applied*, on a
+  /// counter that only goes up, and `Sema::scopeMark_[d]` is that counter when
+  /// the block at depth d was entered — so "applied inside the block being
+  /// declared into" is one comparison. The *latest* application is enough: the
+  /// check runs at a defining-point, so nothing later has happened yet, and if
+  /// the newest application is not inside this block then none is (ADR-0088).
+  int usedSeq = 0;
+
   /// §6.11.1's module. It is a `Proc` because it owns an activation record and
   /// procedures nest inside it exactly as they nest inside the program — but
   /// it is never called, and it has exactly one activation, which is what lets
@@ -309,17 +319,36 @@ public:
 private:
   void installPredefined();
   Symbol *declare(const std::string &name, SymKind kind, int line, int col);
-  Symbol *lookup(const std::string &name) const;
+  /// Innermost-first lookup, recording nothing. This is the one to ask when
+  /// the question is whether a name is *taken* — `declare` itself, and the two
+  /// places that resolve a name before its meaning is settled.
+  Symbol *lookupRaw(const std::string &name) const;
+  /// The same search, recording that the name was *applied* here — which is
+  /// ISO 7185 §6.2.2.8's word for an occurrence that is not the defining one.
+  ///
+  /// Split from `lookupRaw` rather than given a flag because the two callers
+  /// want different things and neither should have to say so: every resolution
+  /// of a name written in the program goes through here, and the places that
+  /// ask whether a name is taken go through the other. Asking the second
+  /// question through the first would record an applied occurrence for a
+  /// defining one and refuse every redeclaration in the language (ADR-0088).
+  Symbol *lookup(const std::string &name);
   /// `lookup`, with a required *function* answering null — the convention
   /// every caller that asks "did the program declare one of its own?" was
   /// written against, back when a required identifier was not a symbol at all
   /// (ADR-0097). The occurrence is still recorded by `lookup`, which is what
   /// §6.2.2.9 needs and what the marker symbol exists for.
-  Symbol *lookupUser(const std::string &name) const;
+  Symbol *lookupUser(const std::string &name);
   Symbol *newSymbol();
 
-  void pushScope() { scopes_.emplace_back(); }
-  void popScope() { scopes_.pop_back(); }
+  void pushScope() {
+    scopes_.emplace_back();
+    scopeMark_.push_back(applySeq_);
+  }
+  void popScope() {
+    scopes_.pop_back();
+    scopeMark_.pop_back();
+  }
 
   // --- modules (ISO/IEC 10206:1991 §6.11) -----------------------------------
   /// §6.2.2.2 makes an interface a region that "shall not be a part of the
@@ -385,9 +414,8 @@ private:
   /// Whether a name denotes an imported interface. It is what tells a
   /// qualified name from an ordinary field selection, and it is a question
   /// about the *symbol* — the syntax of the two is identical.
-  bool isInterfaceName(const std::string &name) const;
-  Symbol *lookupQuiet(const std::string &qualifier,
-                      const std::string &name) const;
+  bool isInterfaceName(const std::string &name);
+  Symbol *lookupQuiet(const std::string &qualifier, const std::string &name);
   Symbol *lookupName(const std::string &qualifier, const std::string &name,
                      int line, int col);
 
@@ -541,7 +569,7 @@ private:
   /// whether it names a set type — the question ADR-0066 says only Sema can
   /// answer. Null when the spine is an ordinary designator, which is every
   /// spine under ISO 7185.
-  Type *setValueTypeOf(Expr *e) const;
+  Type *setValueTypeOf(Expr *e);
   /// Move the member-designators out of a spine `setValueTypeOf` accepted and
   /// check them against the named type. The resulting `SetExpr` is hung on the
   /// outermost node of the spine, which is what every later pass reads.
@@ -703,6 +731,11 @@ private:
   std::vector<PendingPointer> pendingPointers_;
   std::unordered_map<long long, Type *> stringTypes_;
   std::vector<std::unordered_map<std::string, Symbol *>> scopes_;
+  /// ISO 7185 §6.2.2.9's bookkeeping — see `Symbol::usedSeq`. `applySeq_`
+  /// counts applied occurrences and only goes up; `scopeMark_[d]` is its value
+  /// when the scope at depth d was entered.
+  int applySeq_ = 0;
+  std::vector<int> scopeMark_;
   /// Every type produced from a schema, keyed by the schema and the tuple.
   /// §6.4.8 says a type produced with one tuple is distinct from one produced
   /// with any other and from every type of any other schema — so this map is
