@@ -3219,6 +3219,20 @@ void Sema::checkModuleBlock(ModuleDecl &m, ModuleInfo &info) {
 void Sema::bindProgramParameters() {
   if (!prog_)
     return;
+  // §6.10: "The identifiers contained by the program-parameter-list shall be
+  // distinct." Each is a defining-point for the program-block, so a repeat is
+  // a redeclaration — but they are *looked up* rather than declared here, the
+  // variable-declaration-part having already made them, so `declare`'s own
+  // check never sees them. Reported once per repeat, against the later one,
+  // which is the occurrence a reader would delete.
+  for (size_t i = 0; i < prog_->params.size(); ++i)
+    for (size_t j = 0; j < i; ++j)
+      if (prog_->params[j].name == prog_->params[i].name) {
+        diags_.error(prog_->params[i].line, prog_->params[i].col,
+                     "the program parameter '" + prog_->params[i].name +
+                         "' is listed more than once");
+        break;
+      }
   // argv[0] is the program itself, so the first file parameter is argv[1].
   int argIndex = 1;
   for (DeclName &p : prog_->params) {
@@ -3779,6 +3793,15 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
       diags_.error(decl.line, decl.col,
                    "the parameters of '" + decl.name +
                        "' were already given in its forward declaration");
+    // §6.6.1: `forward` follows a procedure-*heading*. This is a
+    // procedure-identification — the name alone, resuming a forward
+    // declaration — and the clause gives such an identifier "exactly one of
+    // its applied occurrences in a procedure-identification", followed by the
+    // block. A second `forward` leaves two headings and no body.
+    if (decl.isForward)
+      diags_.error(decl.line, decl.col,
+                   "'" + decl.name + "' was already declared forward, so this "
+                   "declaration needs its body rather than 'forward' again");
     decl.sym = existing;
     existing->decl = &decl;
     return;
@@ -4609,13 +4632,37 @@ void Sema::checkStmt(Stmt *s) {
   }
 
   if (auto *a = as<Assign>(s)) {
+    bool badFunc = false;
     // Assigning to a function's own name sets its result (ISO 7185 §6.8.2.2),
     // so it is redirected before the target is otherwise resolved. Reading the
     // name, by contrast, is a recursive call — see checkExpr. Only a bare
     // name can mean this.
     if (auto *ref = as<VarRef>(a->target.get())) {
       Symbol *named = lookup(ref->name);
-      if (named && named->kind == SymKind::Func) {
+      if (named && named->kind != SymKind::Func)
+        named = nullptr;
+      // §6.8.2.2: "The function-block associated with the function-identifier
+      // of an assignment-statement shall *contain* the assignment-statement."
+      // Contain, not be — a procedure nested inside f may write f's result,
+      // reaching it through the static chain as it reaches any enclosing
+      // variable — so the test is the owner chain and not `== current_`. A
+      // sibling function's name, or a nested one's from outside it, is
+      // refused. Clearing `named` then leaves the ordinary variable path to
+      // run, and `assignedResult` is deliberately *not* set: a function whose
+      // only assignment is a sibling's still never assigns its own.
+      if (named) {
+        Symbol *owning = current_;
+        while (owning && owning != named)
+          owning = owning->owner;
+        if (!owning) {
+          diags_.error(a->line, a->col,
+                       "'" + ref->name + "' is not this block's function, so "
+                       "its result cannot be assigned here");
+          named = nullptr;
+          badFunc = true;
+        }
+      }
+      if (named) {
         ref->sym = named->resultVar;
         ref->type = named->type;
         named->assignedResult = true;
@@ -4644,7 +4691,10 @@ void Sema::checkStmt(Stmt *s) {
     checkExpr(a->value.get());
     // §6.9.4 a): an assignment-statement threatens its target.
     checkNotThreatened(a->target.get(), "it cannot be assigned to");
-    if (!isDesignator(a->target.get()))
+    // `badFunc` means §6.8.2.2 has already reported this target, and what is
+    // left to say about it — that a function identifier is not a variable — is
+    // a consequence of that fault rather than a second one (ADR-0054).
+    if (!isDesignator(a->target.get()) && !badFunc)
       diags_.error(a->target->line, a->target->col,
                    "the left side of an assignment must be a variable");
     // Without this the message would read "cannot assign text to a variable of
@@ -7534,9 +7584,15 @@ void Sema::checkCall(Call *c) {
     require(a->isOrdinal(), "an ordinal");
     c->type = a->base();
     return;
+  // §6.6.6.3 spells both the same way: "From the expression x that shall be of
+  // real-type". An integer is *not* one — there is nothing for either function
+  // to do to it, which is presumably why the standard did not extend the
+  // offer. Accepting one was a permissive deviation with nothing in the corpus
+  // to notice it; the suite's DEV158 is what did. ISO/IEC 10206:1991 §6.7.6.3
+  // uses the same words.
   case Builtin::Trunc:
   case Builtin::Round:
-    require(a->isNumeric(), "a real");
+    require(a->isReal(), "a real");
     c->type = ty::Int();
     return;
   default:
