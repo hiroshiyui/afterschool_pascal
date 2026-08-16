@@ -6,9 +6,7 @@ ISO 7185 and to ISO/IEC 10206:1991 (Extended Pascal), both complete.
 **The long-term goal is a Pascal you can get work done in**: a dialect and a
 standard core library for the things modern programs actually do — networking,
 internationalisation, concurrent execution, and memory safety as a property of
-the language rather than a convention. See
-[ADR-0109](doc/adr/0109-the-goal-is-a-practical-pascal.md) for what that commits
-to and what it leaves open.
+the language rather than a convention.
 
 The two conformance modes are not going anywhere. `--std=iso7185` and
 `--std=extended` stay exactly what they are — they are the only part of this
@@ -61,7 +59,7 @@ tools/pascalcc --std=extended hello.pas   # ISO/IEC 10206:1991 instead
 The compiler underneath takes the same flags, and reads them the only way a
 Pascal program can: §6.5.1 makes every program-parameter bindable and §6.7.6.8
 makes `binding(p).name` the argument it was bound to, so it asks its own
-program-parameters what it was invoked with (ADR-0081, ADR-0083).
+program-parameters what it was invoked with.
 
 ```sh
 build/bin/pascalc hello.pas                          # -> hello.ll
@@ -104,11 +102,10 @@ tree.
 The language is selected per source. `--std=iso7185` is the default and is
 what everything below describes; `--std=extended` is ISO/IEC 10206:1991, which
 is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`,
-…) that a valid ISO 7185 program may use as ordinary identifiers. See
-[ADR-0033](doc/adr/0033-extended-pascal-is-a-second-language-behind-std.md).
+…) that a valid ISO 7185 program may use as ordinary identifiers.
 `selfhost/compiler.pas` used to be the example of that and is now written in
-Extended Pascal itself ([ADR-0082](doc/adr/0082-the-stage-1-compiler-is-extended-pascal.md)),
-because only that standard lets a program read its own command line.
+Extended Pascal itself, because only that standard lets a program read its own
+command line.
 
 ## What the compiler accepts today, with `--std=iso7185`
 
@@ -185,31 +182,27 @@ never been on the list at all, which is the more useful thing to know about
 them — a constant may not be selected from, §6.8.8 belonging to the next
 standard, and `f()` is refused in both standards, Pascal having no empty
 argument list. The underscore entry is new here for the same reason. All three
-were found by compiling a probe for a clause rather than by a test — see
-[ADR-0072](doc/adr/0072-three-things-the-compiler-accepted-and-neither-standard-has.md).
+were found by compiling a probe for a clause rather than by a test.
 
 It also used to hold **set compatibility ignoring packing**, and that entry was
 wrong rather than merely out of date. It was justified by the claim that the
 standard does not say what packing a set-constructor has; §6.7.1 says exactly
 that, in a sentence both standards carry word for word, and the claim had been
 copied into three documents and a test written to hold the compiler to it.
-§6.4.5 c) is checked now — see
-[ADR-0093](doc/adr/0093-a-set-constructor-has-not-chosen-a-packing.md).
+§6.4.5 c) is checked now.
 
 Enumerations and subranges are ordinal types like `char`: they index arrays,
 drive `for` loops, answer `ord`/`succ`/`pred`, and select `case` arms. `succ`
 runs out at the end of its own type — at `blue`, or at 9 for a `1..9` — not at
 `maxint`. A record may have a variant part, tagged or not, which is what makes
-a tag-plus-variant AST node expressible. See
-[ADR-0018](doc/adr/0018-ordinal-types-and-variant-records.md).
+a tag-plus-variant AST node expressible.
 
 A set is one 256-bit word — a bit per possible member — so its base type's
 values must lie in 0..255, and `set of integer` is refused rather than
 truncated. That makes a set a *value*: it is assigned, compared and passed
 exactly as an integer is, and the operators are one instruction each. Set
 compatibility is decided on the base type structurally, which is ISO 7185's own
-departure from the name equivalence it gives every other structured type. See
-[ADR-0028](doc/adr/0028-a-set-is-one-256-bit-word.md).
+departure from the name equivalence it gives every other structured type.
 
 Arrays and records assign whole (`b := a` copies every component), pass as
 value parameters by copy and as `var` parameters by reference, and nest freely
@@ -219,8 +212,7 @@ that type with no special case anywhere.
 
 Two types are the same only when one type identifier denotes both, as
 ISO 7185 §6.4.5 requires, so two separately written `array [1..3] of integer`
-are different types. See
-[ADR-0017](doc/adr/0017-structured-types-use-name-equivalence.md).
+are different types.
 
 A pointer's domain may name a type defined *later* in the same type part —
 the only forward reference in the language, and what lets a record contain a
@@ -235,8 +227,7 @@ type
 Every dereference is checked against `nil`, and `dispose(p)` sets `p` to nil so
 the commonest use-after-dispose becomes that same check. Use-after-dispose
 through a *second* pointer to the same storage is not detected, and nothing here
-claims it is — see
-[ADR-0019](doc/adr/0019-pointers-and-the-only-forward-reference.md).
+claims it is.
 
 A text file has a **buffer variable** `f^` — one character of lookahead — and
 ISO's primitives `get` and `put` are what `read` and `write` are built from,
@@ -268,8 +259,7 @@ place a file may **not** go is a **variant part**, which §6.4.3.4 permits and
 this compiler refuses: the arms share one block of storage, and a file's
 storage is not just bytes — the runtime gives it a buffer and a place on the
 list of open files — so two arms holding files cannot both be set up at one
-address. See
-[ADR-0070](doc/adr/0070-a-file-need-not-be-an-entire-variable.md).
+address.
 
 Program parameters are the program's only connection to the outside world, as
 ISO 7185 §6.10 has it: each is a variable the block declares, `input` and
@@ -278,13 +268,11 @@ to a command-line argument, in the order written. One that is *not* a file is
 permitted — §6.10 makes its binding implementation-dependent rather than
 restricting the list to files — and is bound to nothing here: an ordinary
 variable, taking no argument, so the file parameters keep the positions they
-would have had without it
-([ADR-0074](doc/adr/0074-a-restriction-the-document-invented-and-a-message-that-explained-nothing.md)).
+would have had without it.
 A file variable that is *not* a program parameter is a scratch file
 with no external name. Files are closed when the block declaring them exits,
 which is the standard's own rule and needs no `close`. Using `write` without
-`output` in the program header is an error, because §6.10 says it is. See
-[ADR-0021](doc/adr/0021-text-files-keep-the-buffer-variable.md).
+`output` in the program header is an error, because §6.10 says it is.
 
 A **`file of T`** is the same thing with the component type changed. It has no
 lines and no external representation of a number, so `readln`, `writeln` and
@@ -309,8 +297,7 @@ end.
 ```
 
 `text` is **not** `file of char`: §6.4.3.5 makes them different types, and only
-the first has lines. See
-[ADR-0031](doc/adr/0031-a-file-of-t-is-a-text-with-two-constants-changed.md).
+the first has lines.
 
 **Characters are bytes.** `char` is one octet with an ordinal of 0..255, and
 nothing in the compiler or the runtime consults the locale — `write` emits the
@@ -342,21 +329,17 @@ runtime error: integer overflow in sqr
 
 The integer type is `-maxint..maxint`, which is narrower than the machine word
 it lives in — so `2147483648` is rejected at compile time rather than silently
-becoming `-2147483648`. See
-[ADR-0014](doc/adr/0014-iso-error-conditions-trap-at-run-time.md) and
-[ADR-0015](doc/adr/0015-real-to-integer-conversions-are-range-checked.md).
+becoming `-2147483648`.
 
 The last of ISO 7185 to arrive was the non-local `goto`, which leaves a block
 rather than a statement: the target's activation record carries somewhere to
 jump back to, and the jump closes the files of every block it abandons — the
-work those blocks' own exits would have done
-([ADR-0032](doc/adr/0032-a-non-local-goto-is-a-jump-record-in-the-target-frame.md)).
+work those blocks' own exits would have done.
 
 One implementation limit: nesting deeper
 than 1000 levels — parentheses, statements, type denoters, or the depth of the
 *tree* an operator chain builds — is a compile-time error rather than a stack
-overflow, in the parser or in any walk after it. See
-[ADR-0020](doc/adr/0020-the-parser-bounds-tree-depth.md).
+overflow, in the parser or in any walk after it.
 
 ## What `--std=extended` adds
 
@@ -665,9 +648,8 @@ types. Nothing needed a fourteenth, the time procedures being required
 *identifiers* rather than word-symbols.
 
 **This is the whole of ISO/IEC 10206:1991.** §6.13's separately translated
-program-components were the last clause
-([ADR-0079](doc/adr/0079-an-interface-is-a-set-of-names.md)), and the claim is
-not an impression: Annex A's 274 productions were probed in both directions,
+program-components were the last clause, and the claim is not an
+impression: Annex A's 274 productions were probed in both directions,
 both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 -dependent features, and Annex C's 94 required identifiers — each with a
 program compiled and run rather than with a reading. `doc/roadmap.md` records
@@ -710,8 +692,14 @@ specific sense — ordinal, designator, type-denoter, static link, tautological
 rule — and says which decision governs each.
 
 [doc/developer-guide.md](doc/developer-guide.md) is for working on the compiler:
-the repository layout, the bootstrap, how each part is checked, how to add a
-test, and where the decisions are recorded.
+the repository layout, the bootstrap, how each part is checked, and how to add a
+test.
+
+**Why any of it is the way it is** is in [doc/adr/](doc/adr/) — one record per
+decision, what it costs, and the alternatives that were rejected; the index
+lists all of them by title. [`doc/design-digest.md`](doc/design-digest.md) is
+the condensed form, a paragraph per mechanism. Nothing above cites a record by
+number: this document says what the compiler does, and those say why.
 
 ## Licence
 
