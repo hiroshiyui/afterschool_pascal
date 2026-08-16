@@ -4094,12 +4094,23 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
                            "' names the very parameter it is the type of");
 
     Type *t = resolveType(*group.type);
-    // ISO 7185 §6.6.3.3: a file may only be passed by reference. A value
-    // parameter is a copy, and a file has no copy — the position, the buffer
-    // and the operating system's handle are one object, not a value.
-    if (t->isFile() && !group.byRef && !group.names.empty())
+    // ISO 7185 §6.6.3.2 and ISO/IEC 10206:1991 §6.7.3.2: "The type possessed
+    // by the formal-parameter shall be one that is permitted as the
+    // component-type of a file-type." `containsFile` is precisely that
+    // predicate — the same one `checkedResultType` asks of a result and
+    // `resolveFile` of a component — so a record or an array holding a file is
+    // refused as well, having no copy for the same reason the file has none:
+    // the position, the buffer and the operating system's handle are one
+    // object, not a value. The clause is §6.6.3.2 and not §6.6.3.3, which is
+    // the variable-parameter clause and says nothing about files.
+    if ((t->isFile() || containsFile(t)) && !group.byRef &&
+        !group.names.empty()) {
       diags_.error(group.names[0].line, group.names[0].col,
-                   "a file parameter must be a var parameter");
+                   t->isFile() ? "a file parameter must be a var parameter"
+                               : "a value parameter cannot be " + t->name() +
+                                     ": it contains a file, and a file has no "
+                                     "copy");
+    }
     // A variable-string value parameter would have to be *converted* at the
     // call — §6.4.6 pads or refuses by length, and the actual may be a literal,
     // a fixed string or a string of another capacity — and a conversion needs
@@ -4158,6 +4169,17 @@ bool Sema::congruous(Symbol *formal, Symbol *actual) const {
     // variable and a value parameter copies one, and the caller emits
     // different code for each — so the two cannot stand in for one another.
     if (f->kind != a->kind)
+      return false;
+    // §6.6.3.6 is pairwise over formal-parameter-*sections*, not over
+    // parameters: "Two formal-parameter-lists shall be congruous if they
+    // contain the same number of formal-parameter-sections and if the
+    // formal-parameter-sections in corresponding positions match", and b) adds
+    // "containing the same number of parameters". So `(var a, b: integer)` is
+    // one section of two names and `(var a: integer; var b: integer)` is two
+    // sections of one, and the lists are not congruous however alike their
+    // parameters are. Given the counts already agree, equal section numbers at
+    // every position is exactly that — the boundaries can only line up one way.
+    if (f->paramSection != a->paramSection)
       return false;
     // §6.7.3.6: "Either both contain protected or neither contains
     // protected." A body written against a protected parameter may not be
