@@ -1157,7 +1157,8 @@ void pas_write_real(void *v, double val, int width, int prec) {
      * representation is still exactly ActWidth characters. One too small is
      * what overflows the field, and floor is what cannot produce it. */
     int e10 = (int)floor(log10(fabs(val)));
-    if (e10 >= 100 || e10 <= -100) expDigits = 3;
+    if (e10 >= 100 || e10 <= -100)
+      expDigits = 3;
   }
   int actWidth = width < 0 ? expDigits + 17 : width;
   if (actWidth < expDigits + 6) actWidth = expDigits + 6;
