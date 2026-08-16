@@ -655,6 +655,16 @@ both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 program compiled and run rather than with a reading. `doc/roadmap.md` records
 what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
+**One construct of it is refused**, and it is the one most likely to be met:
+a discriminant or subrange bound that is not a constant, outside a variable
+declaration — `var a: array [1..m] of real` inside a procedure, with `m` a
+value parameter. §6.2.3.8 b) evaluates those at block commencement, *after* the
+value parameters are attributed, so they are legal. This is a defect rather
+than a decision; `doc/implementation-defined.md` §6 states it with the clause,
+and it is feature-sized rather than deferred on merit. Conformant array
+parameters are not accepted either, which is what makes this a level 0
+processor — that one is the standard's own option rather than a shortfall.
+
 ## What backs the answers
 
 A compiler is the one program whose bugs are inherited by everything it builds,

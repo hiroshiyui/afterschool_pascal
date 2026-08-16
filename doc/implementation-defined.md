@@ -308,10 +308,27 @@ link one list node twice (ADR-0070).
 **Conformant array parameters are not accepted**, which is what makes this a
 level 0 processor rather than a deviation — see §1.
 
+**A discriminant or subrange bound that is not a constant is refused outside a
+variable declaration.** `var a: array [1..m] of real` and `type t = vector(m)`
+inside a procedure, with `m` a value parameter, are legal and are refused with
+*the bounds of a subrange must be ordinal constants*. §6.2.3.8 b) puts "each
+actual-discriminant-part or subrange-bound not contained by a schema-definition
+and closest-contained by … the block" in the block's commencement, and orders it
+*after* the attribution of formal value parameters; §6.4.2.4 writes
+`subrange-bound = expression` and gives varying bounds a dynamic-violation
+branch of their own, which would be meaningless if they were illegal.
+
+This one is unfixed rather than chosen, and it is feature-sized: the
+per-variable descriptor of ADR-0040 is keyed on a *schema*, and a bare array
+bound has none. It is the finding of the second independent reading most likely
+to break a real program (ADR-0107), and `doc/sop.md` §7 carries it as a live
+gap rather than a closed one.
+
 ### 6.1 Programs accepted that the standard requires to be rejected
 
-The three above are deviations this project chose. These are the other kind:
-rules of ISO 7185 that a program can break without this compiler saying so.
+The first two above are deviations this project chose and the third is a defect
+it has not fixed. These are the other kind: rules of ISO 7185 that a program can
+break without this compiler saying so.
 They were found the way the unreported errors in §3 were — by the BSI Pascal
 Validation Suite's `DEVIANCE` category, whose programs a conforming processor
 must refuse or stop — and, as there, **no program written here had ever
