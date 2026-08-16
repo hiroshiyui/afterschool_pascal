@@ -32,6 +32,46 @@ appears below in the release where it still existed.
     `clang` share LLVM's parser and verifier and reject the same module with
     the same message. What it varies is the backend configuration.
 
+### Fixed
+
+- **`page` after writing a real** wrote no line terminator. ISO 7185 §6.9.5
+  performs an implicit `writeln(f)` when the current line is not empty, and
+  five of the six write primitives recorded that the line had something on it.
+  `write(1.5); page` therefore wrote the form feed straight after the value and
+  stranded it on the previous page. Six programs in the corpus call `page` and
+  none wrote a real first, so every oracle agreed —
+  `doc/implementation-defined.md` E.30 included, which had stated the rule the
+  code did not keep. `tests/page_after_real.pas` pins all three forms a real
+  can be written in.
+- **`read` of a real longer than 63 characters** returned the wrong value *and*
+  desynchronised the input. §6.9.1 c) and d) take the longest sequence that
+  forms a number; the runtime accumulated into a fixed buffer and stopped the
+  loop rather than the read, so the digits past the sixty-third stayed in the
+  file and became the next value read. A seventy-digit number came back as its
+  first sixty-three digits — wrong by seven orders of magnitude — and every
+  subsequent read was one number out of step. `tests/readlongreal.pas`.
+- **A real in `[1e-100, 1e-99)` was written one character wider than the
+  field**, against §6.10.3.4.1's requirement that the floating-point form
+  occupy exactly TotalWidth characters. The exponent's width was taken from the
+  magnitude of `log10` rather than from the exponent actually written, and for
+  that band the two differ. `doc/implementation-defined.md` E.25 and E.27 had
+  always described the intended rule correctly; nothing checked it.
+  `tests/extended/writereal_width.pas` now does, by measuring the
+  representation rather than pinning digits.
+- **`pascalcc --help`** printed the licence header and stopped one line before
+  the first option, so every option was invisible — including `-c`, `-O0..-O3`
+  and `<file>.o`, which `pascalc -h` does not know about and which are
+  documented nowhere else.
+
+### Changed
+
+- **`pascalc-s0` refuses the options it cannot honour** rather than accepting
+  and ignoring them. `-o`, `-S`, `-c`, `-O0..-O3`, `--keep-temps` and
+  `--import` each set a field nothing read, so `pascalc-s0 -o out.txt -S -c
+  hello.pas` exited 0 and wrote no `out.txt`. They are residue from when `src/`
+  was the compiler; since ADR-0108 it is a front end and generates no code.
+  This binary is not the compiler and nothing shipped depends on it.
+
 ## [1.3.0] — 2026-08-16
 
 **The differential oracle is green.** ADR-0108 brought the C++ front end back

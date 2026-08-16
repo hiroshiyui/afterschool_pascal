@@ -85,12 +85,12 @@ both compilers (ADR-0062).
 | 10206 | 7185 | Feature | This processor |
 |---|---|---|---|
 | E.24 | E.10 | default TotalWidth for integer | The exact number of characters the value needs — its digits, preceded by `-` when negative. Nothing is padded. |
-| E.25 | E.11 | default TotalWidth for real | ExpDigits + 17: nineteen characters, or twenty when the exponent needs three digits. DecPlaces follows §6.10.3.4.1's `ActWidth − ExpDigits − 5`, giving twelve fractional digits. |
+| E.25 | E.11 | default TotalWidth for real | ExpDigits + 17: nineteen characters, or twenty when the exponent needs three digits. DecPlaces follows §6.10.3.4.1's `ActWidth − ExpDigits − 5`, giving twelve fractional digits. `tests/extended/writereal_width.pas` measures the representation rather than pinning its digits, which is what makes this an answer and not a claim. |
 | E.26 | E.12 | default TotalWidth for Boolean | The length of the word written — 4 for `TRUE`, 5 for `FALSE`. Nothing is padded. |
-| E.27 | E.13 | ExpDigits | **2, except that an exponent of magnitude 100 or more is written with 3.** §6.10.3.4.1 reads as though ExpDigits were a fixed number; it is not here, because C's `%E` writes as many digits as the exponent needs. Stated as a deviation in ADR-0064. |
+| E.27 | E.13 | ExpDigits | **2, except that an exponent of magnitude 100 or more is written with 3.** §6.10.3.4.1 reads as though ExpDigits were a fixed number; it is not here, because C's `%E` writes as many digits as the exponent needs. Stated as a deviation in ADR-0064. This wording was right and the code was not: the width was taken from the magnitude of `log10` rather than from the exponent written, which differ for a value in [1e-100, 1e-99), and the field came out one character too wide. Nothing had probed it. `tests/extended/writereal_width.pas`. |
 | E.28 | E.14 | the exponent character | `E`, upper case, always. |
 | E.29 | E.15 | the case of `True` and `False` | Every letter upper case: `TRUE` and `FALSE`. With an explicit width the value is padded on the left and truncated from the left; at width 0 nothing is written. |
-| E.30 | E.16 | the effect of `page(f)` | Writes `chr(12)`, preceded by an implicit `writeln(f)` when the current line is not empty (§6.9.5's own rule). Refused at compile time for any file that is not a `text`. |
+| E.30 | E.16 | the effect of `page(f)` | Writes `chr(12)`, preceded by an implicit `writeln(f)` when the current line is not empty (§6.9.5's own rule). Refused at compile time for any file that is not a `text`. `tests/page.pas` pins it for a string and a char; `tests/page_after_real.pas` for a real, which was the one value that did not mark the line as written. |
 
 ### 2.4 Files and binding
 
