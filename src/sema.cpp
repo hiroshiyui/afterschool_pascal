@@ -3268,7 +3268,7 @@ void Sema::checkModuleBlock(ModuleDecl &m, ModuleInfo &info) {
   // two statements are checked against is deliberately empty: a `goto` in an
   // initialization-part has nowhere in the module to land, and says so.
   // `resolveGotos` pops both, as it does for every block.
-  std::vector<Stmt *> outerPath;
+  std::vector<PathEntry> outerPath;
   outerPath.swap(stmtPath_);
   labelScopes_.emplace_back();
   gotoScopes_.emplace_back();
@@ -3431,10 +3431,14 @@ void Sema::checkLabeled(LabeledStmt *l) {
     found->defLine = l->line;
     found->defCol = l->col;
     found->path = stmtPath_;
+    // §6.8.1 a) admits a goto the labelled statement *contains*, which the
+    // path cannot answer: it says what contains the label, not what the label
+    // contains.
+    found->node = l;
     l->id = found->id;
   }
 
-  stmtPath_.push_back(l);
+  stmtPath_.push_back({l, false});
   checkStmt(l->body.get());
   stmtPath_.pop_back();
 }
@@ -3493,14 +3497,42 @@ void Sema::resolveGotos() {
     }
 
     if (!pending.fromInnerBlock) {
-      bool reachable = found->path.size() <= pending.path.size();
-      for (size_t i = 0; reachable && i < found->path.size(); ++i)
-        reachable = found->path[i] == pending.path[i];
+      // §6.8.1 admits a label three ways, and the prefix test alone is only
+      // two of them: a) the labelled statement contains the goto; b) the
+      // label is a statement of a statement-sequence containing the goto;
+      // c) it is a statement of the block's statement-part. Only a
+      // compound-statement and a repeat-statement hold a statement-*sequence*
+      // — a branch of an if, a loop body, a with body and a case arm are each
+      // a single statement — so a label inside one of those is reachable only
+      // from within it, which is a). That is what makes DEV190's jump from one
+      // branch of an if to a label in the other satisfy none of the three
+      // (ADR-0094, ADR-0101).
+      bool inside = false;
+      for (const PathEntry &p : pending.path)
+        inside = inside || p.stmt == found->node;
+      bool sameChain = found->path.size() <= pending.path.size();
+      for (size_t i = 0; sameChain && i < found->path.size(); ++i)
+        sameChain = found->path[i] == pending.path[i];
+      bool reachable;
+      if (inside)
+        reachable = true;
+      else if (!sameChain)
+        reachable = false;
+      else if (found->path.empty())
+        reachable = true; // c): the block's statement-part
+      else
+        reachable = found->path.back().seq;
       if (!reachable) {
         diags_.error(g->line, g->col,
-                     "label " + std::to_string(g->label) + " is inside a "
-                     "statement this goto is not: a goto may leave a "
-                     "structured statement but not enter one");
+                     sameChain
+                         ? "label " + std::to_string(g->label) +
+                               " prefixes a statement that is not one of a "
+                               "statement-sequence, so only a goto inside that "
+                               "statement may reach it"
+                         : "label " + std::to_string(g->label) +
+                               " is inside a statement this goto is not: a "
+                               "goto may leave a structured statement but not "
+                               "enter one");
         continue;
       }
     } else if (!found->path.empty()) {
@@ -3567,7 +3599,7 @@ void Sema::checkBlock(Block &block, Symbol *owner) {
 
   // The statement path is per block: a goto in a nested procedure is not
   // inside the enclosing block's statements, whatever they are.
-  std::vector<Stmt *> outerPath;
+  std::vector<PathEntry> outerPath;
   outerPath.swap(stmtPath_);
   // The statement part *is* the block's outermost statement-sequence, so it is
   // walked without joining the path — a label at the top of it has no
@@ -4681,8 +4713,9 @@ void Sema::checkStmt(Stmt *s) {
   if (auto *c = as<Compound>(s)) {
     // A compound statement is a statement-sequence, and §6.8.1 is stated over
     // those — so it joins the path like any other statement that contains
-    // one, and a goto into a `begin ... end` from outside it is refused.
-    stmtPath_.push_back(c);
+    // one, and a goto into a `begin ... end` from outside it is refused. It is
+    // one of the three places `seq` is true.
+    stmtPath_.push_back({c, true});
     for (auto &sub : c->body)
       checkStmt(sub.get());
     stmtPath_.pop_back();
@@ -4848,7 +4881,7 @@ void Sema::checkStmt(Stmt *s) {
     if (i->cond->type && !i->cond->type->isBoolean())
       diags_.error(i->cond->line, i->cond->col,
                    "the condition of an if statement must be boolean");
-    stmtPath_.push_back(i);
+    stmtPath_.push_back({i, false});
     checkStmt(i->thenBranch.get());
     checkStmt(i->elseBranch.get());
     stmtPath_.pop_back();
@@ -4860,14 +4893,14 @@ void Sema::checkStmt(Stmt *s) {
     if (w->cond->type && !w->cond->type->isBoolean())
       diags_.error(w->cond->line, w->cond->col,
                    "the condition of a while statement must be boolean");
-    stmtPath_.push_back(w);
+    stmtPath_.push_back({w, false});
     checkStmt(w->body.get());
     stmtPath_.pop_back();
     return;
   }
 
   if (auto *r = as<RepeatStmt>(s)) {
-    stmtPath_.push_back(r);
+    stmtPath_.push_back({r, true}); // a repeat-statement holds a sequence
     for (auto &sub : r->body)
       checkStmt(sub.get());
     stmtPath_.pop_back();
@@ -4967,7 +5000,7 @@ void Sema::checkStmt(Stmt *s) {
                      "the bounds of a for statement must match the type of the "
                      "control variable");
     }
-    stmtPath_.push_back(f);
+    stmtPath_.push_back({f, false});
     // §6.8.3.9 forbids a *statement* of the for-statement to threaten the
     // control-variable, and the bounds are expressions — so the binding covers
     // the body and nothing else.
@@ -6804,8 +6837,15 @@ void Sema::checkCase(CaseStmt *c) {
   checkExpr(c->selector.get());
   // The otherwise-part is a statement-sequence like any other; nothing about
   // it depends on the selector, because it is what runs when *no* label does.
+  //
+  // ISO/IEC 10206:1991 §6.9.3.5's case-statement-completer has no node of its
+  // own, so it cannot be told from its case statement by kind — the flag is
+  // what carries the fact that this entry holds a *sequence* where the arms
+  // above hold single statements (ADR-0094).
+  stmtPath_.push_back({c, true});
   for (StmtPtr &st : c->otherwise)
     checkStmt(st.get());
+  stmtPath_.pop_back();
   Type *sel = c->selector->type;
   if (sel && !sel->isOrdinal()) {
     diags_.error(c->selector->line, c->selector->col,
@@ -6839,7 +6879,7 @@ void Sema::checkCase(CaseStmt *c) {
       seen.push_back(r);
       arm.values.push_back(r);
     }
-    stmtPath_.push_back(c);
+    stmtPath_.push_back({c, false});
     checkStmt(arm.body.get());
     stmtPath_.pop_back();
   }
@@ -6875,7 +6915,7 @@ void Sema::checkWith(WithStmt *w) {
   if (!isDesignator(w->record.get()) && !constAccess) {
     diags_.error(w->record->line, w->record->col,
                  "'with' needs a record variable");
-    stmtPath_.push_back(w);
+    stmtPath_.push_back({w, false});
     checkStmt(w->body.get());
     stmtPath_.pop_back();
     return;
@@ -6893,7 +6933,7 @@ void Sema::checkWith(WithStmt *w) {
         std::string("'with' needs a record variable") +
             (std_ == Std::Extended ? " or one produced from a schema" : "") +
             ", found " + (t ? t->name() : std::string("nothing")));
-    stmtPath_.push_back(w);
+    stmtPath_.push_back({w, false});
     checkStmt(w->body.get());
     stmtPath_.pop_back();
     return;
@@ -6995,7 +7035,7 @@ void Sema::checkWith(WithStmt *w) {
   }
 
   withStack_.push_back(w->binding);
-  stmtPath_.push_back(w);
+  stmtPath_.push_back({w, false});
   checkStmt(w->body.get());
   stmtPath_.pop_back();
   withStack_.pop_back();

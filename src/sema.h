@@ -688,13 +688,28 @@ private:
   /// when every statement containing the label also contains the goto. A label
   /// at the top of a block's statement part has an empty path, and that is
   /// also the only kind a goto from a *nested block* may reach.
+  /// One statement containing the one being checked. `seq` is true when this
+  /// entry holds a *statement-sequence*, which §6.8.1 b) is about: only a
+  /// compound-statement and a repeat-statement hold one, and so does
+  /// ISO/IEC 10206:1991 §6.9.3.5's case-statement-completer, which has no node
+  /// of its own and so cannot be told from its case statement by kind
+  /// (ADR-0094, ADR-0101).
+  struct PathEntry {
+    Stmt *stmt = nullptr;
+    bool seq = false;
+    bool operator==(const PathEntry &o) const { return stmt == o.stmt; }
+  };
   struct LabelInfo {
     int number = 0;
     int id = -1;
     bool defined = false;
     int line = 0, col = 0;
     int defLine = 0, defCol = 0;
-    std::vector<Stmt *> path;
+    std::vector<PathEntry> path;
+    /// The labelled statement itself. §6.8.1 a) admits a goto that the
+    /// labelled statement *contains*, which the path cannot answer — the path
+    /// says what contains the label, not what the label contains.
+    Stmt *node = nullptr;
     Symbol *owner = nullptr;
   };
   /// A goto whose target is not resolved until the whole block has been
@@ -702,7 +717,7 @@ private:
   /// so a forward jump cannot be checked where it is written.
   struct PendingGoto {
     GotoStmt *node = nullptr;
-    std::vector<Stmt *> path;
+    std::vector<PathEntry> path;
     /// True once the goto has been handed outwards because its label belongs
     /// to an enclosing block. The hand-off is what makes the diagnostic
     /// right: a nested procedure's body is checked *before* the statements of
@@ -787,7 +802,7 @@ private:
   /// walked. `stmtPath_` is the statements containing the one being checked.
   std::vector<std::vector<LabelInfo>> labelScopes_;
   std::vector<std::vector<PendingGoto>> gotoScopes_;
-  std::vector<Stmt *> stmtPath_;
+  std::vector<PathEntry> stmtPath_;
   int nextLabelId_ = 0;
   Symbol *program_ = nullptr;
   Symbol *current_ = nullptr; // the procedure whose body is being checked
