@@ -2323,6 +2323,90 @@ bool Sema::isMemoryConstant(Expr *e) const {
   return e->type && e->type->isMemory() && isConstantAccess(e);
 }
 
+/// ISO 7185 §6.6.3.3: an actual variable parameter shall not denote a field
+/// that is the tag-field of a variant-part. Assigning through the reference
+/// could select a different variant while the arm's own fields were live.
+static bool variantSelector(Expr *e) {
+  const Field *f = nullptr;
+  Type *rec = nullptr;
+  if (auto *v = as<VarRef>(e)) {
+    // a field of an open `with`, whose base is the binding rather than a node
+    if (v->withField && v->sym) {
+      f = v->withField;
+      rec = v->sym->type;
+    }
+  } else if (auto *fe = as<FieldExpr>(e)) {
+    if (fe->resolved && !fe->qualified) {
+      f = fe->resolved;
+      rec = fe->base->type;
+    }
+  }
+  return f && rec && rec->isRecord() &&
+         rec->tagFieldAt(f->variant) == f->index;
+}
+
+/// The container of a component, or null: §6.6.3.3 asks what the variable a
+/// component belongs to *possesses*, and that is one step, never a walk.
+///
+/// The *immediate* container and no further. §6.4.3.1: "if a component is
+/// itself structured, the component's representation in data-storage shall be
+/// packed only if the type of the component is designated packed" — so packing
+/// does not reach a component's own components, and `a[1][2]` is a component
+/// of `a[1]`, which the token `packed` in front of `a` did not designate. The
+/// multi-dimensional abbreviation is not an exception: §6.4.3.2 designates
+/// every array-type it constructs packed when the original is, which
+/// `resolveArray` does, so `a[1][2]` over a `packed array [1..3, 1..3]` is
+/// caught here (ADR-0099).
+static Type *containerOf(Expr *e) {
+  if (auto *v = as<VarRef>(e))
+    return (v->withField && v->sym) ? v->sym->type : nullptr;
+  if (auto *ix = as<IndexExpr>(e))
+    return ix->base->type;
+  if (auto *fe = as<FieldExpr>(e))
+    return (!fe->qualified && !fe->isDiscriminant) ? fe->base->type : nullptr;
+  return nullptr;
+}
+
+/// ISO/IEC 10206:1991 §6.7.3.3's third sentence: "An actual variable parameter
+/// shall not denote a component of a string-type." ISO 7185 §6.6.3.3 has only
+/// the first two, and needs no third — every string-type there is a packed
+/// array of char, so the packed rule already reaches it. What this adds is the
+/// *variable*-string, which is not packed.
+static bool stringComponent(Expr *e) {
+  Type *c = containerOf(e);
+  return c && c->isStringType();
+}
+
+static bool packedComponent(Expr *e) {
+  Type *c = containerOf(e);
+  return c && c->packed;
+}
+
+/// The last two sentences of §6.6.3.3 / §6.7.3.3, asked of an actual that is
+/// already known to be a variable. True means it was reported. Both branches
+/// of `checkArguments` that bind a reference ask this one function, because
+/// the two clauses are one clause and a schematic formal is a var parameter.
+bool Sema::badVarActual(Expr *a, Symbol *callee, int i) {
+  std::string where =
+      "argument " + std::to_string(i) + " of '" + callee->name + "'";
+  if (variantSelector(a)) {
+    diags_.error(a->line, a->col, where + " cannot be the tag of a variant part");
+    return true;
+  }
+  if (packedComponent(a)) {
+    diags_.error(a->line, a->col,
+                 where + " cannot be a component of a packed variable");
+    return true;
+  }
+  // Asked after the packed one, so a fixed-string component keeps the message
+  // that names the rule ISO 7185 also has.
+  if (stringComponent(a)) {
+    diags_.error(a->line, a->col, where + " cannot be a component of a string");
+    return true;
+  }
+  return false;
+}
+
 bool Sema::isDesignator(Expr *e) const {
   if (auto *v = as<VarRef>(e)) {
     if (!v->sym)
@@ -6784,6 +6868,8 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                          callee->name + "' must be produced from schema '" +
                          p->descSchema->name + "', but the argument is " +
                          (a->type ? a->type->name() : std::string("untyped")));
+      else
+        badVarActual(a, callee, i + 1);
       continue;
     }
 
@@ -6795,12 +6881,21 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                          "' is a var parameter and needs a variable");
         continue;
       }
-      // §6.9.4 b) threatens an actual var parameter only when the *formal* is
-      // not itself protected — which is what lets a protected parameter be
-      // handed on, and is the base case that makes the rule usable at all.
-      if (!p->isProtected)
-        checkNotThreatened(a, "it cannot be passed to the var parameter '" +
-                                  p->name + "' of '" + callee->name + "'");
+      // §6.6.3.3: the actual shall be a variable-access, and §6.5.1's are an
+      // entire variable, a component, an identified variable and a buffer
+      // variable — a parenthesised one is none of the four. `p((x))` is an
+      // expression whose value happens to be x's, and a reference cannot be
+      // established to it. Asked here rather than inside `isDesignator`, which
+      // answers §6.5.1's question for a dozen constructs and would then be
+      // answering it for reasons this clause does not give.
+      if (a->paren) {
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name +
+                         "' is a var parameter and needs a variable; the "
+                         "brackets make this an expression");
+        continue;
+      }
       // §6.7.3.3 NOTE 3: "An actual variable parameter cannot denote a
       // substring-variable because the type of a substring-variable is a new
       // fixed-string-type different from every named type." The rule below
@@ -6816,6 +6911,14 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                          "parameter can have it");
         continue;
       }
+      if (badVarActual(a, callee, i + 1))
+        continue;
+      // §6.9.4 b) threatens an actual var parameter only when the *formal* is
+      // not itself protected — which is what lets a protected parameter be
+      // handed on, and is the base case that makes the rule usable at all.
+      if (!p->isProtected)
+        checkNotThreatened(a, "it cannot be passed to the var parameter '" +
+                                  p->name + "' of '" + callee->name + "'");
       // §6.4.2.5's NOTE: "A variable of a restricted-type may be passed as a
       // variable parameter to a formal-parameter possessing the same type or
       // its underlying-type." The states are one-to-one and the representation

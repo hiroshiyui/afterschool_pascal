@@ -2019,6 +2019,11 @@ ExprPtr Parser::parsePrimary() {
     ++pos_;
     ExprPtr e = parseExpr();
     expect(Tok::RParen, "after a parenthesised expression");
+    // §6.5.1 again: the brackets are what stop this being a variable-access,
+    // and they are gone by the time anything can ask. `parseExpr` yields null
+    // once the parser has aborted.
+    if (e)
+      e->paren = true;
     return e;
   }
   // set-constructor = '[' (member (',' member)*)? ']', member = expr ('..'

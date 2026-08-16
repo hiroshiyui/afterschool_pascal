@@ -456,6 +456,7 @@ private:
   void checkSchemaBodyNames(TypeExpr *d, Symbol *self);
   StmtPtr redefinedFamily(const std::string &name, std::vector<ExprPtr> args,
                           int line, int col);
+  bool badVarActual(Expr *a, Symbol *callee, int i);
   /// §6.4.8: the type this schema maps the given actual-discriminant-part to.
   /// Interned, because §6.4.8 makes one tuple denote one type however many
   /// times it is written.

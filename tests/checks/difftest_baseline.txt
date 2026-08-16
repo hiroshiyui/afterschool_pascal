@@ -27,7 +27,6 @@ tests/extended/schema_assign.pas
 tests/extended/setiter.pas
 tests/extended/trap_setiter.pas
 tests/extended/typeinquiry_errors.pas
-tests/extended/varparam_string.pas
 tests/file_errors.pas
 tests/for_threat.pas
 tests/forward_twice.pas
@@ -42,5 +41,3 @@ tests/stringtype_errors.pas
 tests/trunc_integer.pas
 tests/variant_complete.pas
 tests/variantpart_semi.pas
-tests/varparam_parens.pas
-tests/varparam_restrictions.pas

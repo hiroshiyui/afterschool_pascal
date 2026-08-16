@@ -160,6 +160,13 @@ inline bool isStringCompare(Builtin b) {
 
 struct Expr : Node {
   Type *type = nullptr; // filled in by Sema
+  /// ISO 7185 §6.6.3.3 / ISO/IEC 10206:1991 §6.7.3.3: "The actual-parameter
+  /// shall be a variable-access", and §6.5.1's four variable-accesses do not
+  /// include a parenthesised expression — `p((x))` passes a value, and there
+  /// is nothing to establish a reference to. The parser drops the brackets,
+  /// `(a + b) * c` being the node `a + b` is, so the node has to remember they
+  /// were written. Nothing else reads this.
+  bool paren = false;
   using Node::Node;
 };
 using ExprPtr = std::unique_ptr<Expr>;
