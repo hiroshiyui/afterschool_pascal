@@ -5575,6 +5575,24 @@ void Sema::checkExpr(Expr *e) {
   if (auto *d = as<DerefExpr>(e)) {
     checkExpr(d->base.get());
     Type *base = d->base->type;
+    // §6.5.4 makes the pointer-variable of an identified-variable a
+    // *variable-access*, and §6.5.1's four are an entire variable, a
+    // component, an identified variable and a buffer variable — a
+    // function-designator is none of them, and §6.8.2.2 makes a bare
+    // function-identifier a recursive activation, so `f^` would dereference a
+    // value. §6.8.6.4's function-identified-variable is Extended Pascal's
+    // (ADR-0056), where a call *written with arguments* never reaches here
+    // under ISO 7185 because `afterCall` does not offer it the selectors. A
+    // parameterless function is a bare name and the parser cannot tell, so
+    // this is where it is told.
+    if (std_ != Std::Extended) {
+      auto *v = as<VarRef>(d->base.get());
+      if (is<Call>(d->base.get()) ||
+          (v && v->sym && v->sym->isInvocable()))
+        diags_.error(d->line, d->col,
+                     "dereferencing a function result is an Extended Pascal "
+                     "feature; compile with --std=extended");
+    }
     // `f^` on a file is the buffer variable (ISO 7185 §6.5.5), not a
     // dereference: one component of the file, which for a text file is the
     // character the file is positioned at. The syntax is shared, so this is
