@@ -37,7 +37,6 @@ tests/goto_branches.pas
 tests/number_separator.pas
 tests/packedset.pas
 tests/packedset_compat.pas
-tests/pointer_domain_field.pas
 tests/progparam_duplicate.pas
 tests/stringtype_errors.pas
 tests/trunc_integer.pas

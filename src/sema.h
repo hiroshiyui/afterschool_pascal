@@ -743,6 +743,10 @@ private:
   /// a pointer's domain-type is bounded by that part, so a domain written in
   /// the *variable* part has no later definition to wait for (ADR-0091).
   bool inTypePart_ = false;
+  /// The record type-denoters whose region is currently open (§6.4.3.3), from
+  /// outermost to innermost. A record type *is* a region, so a name spelled
+  /// like one of its fields denotes the field and names no type (ADR-0098).
+  std::vector<const TypeExpr *> openRecords_;
   /// Every type produced from a schema, keyed by the schema and the tuple.
   /// §6.4.8 says a type produced with one tuple is distinct from one produced
   /// with any other and from every type of any other schema — so this map is

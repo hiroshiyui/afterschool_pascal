@@ -265,11 +265,57 @@ Type *Sema::resolveEnum(TypeExpr &denoter) {
   return t;
 }
 
+/// Whether `name` is a field-identifier of this record type-denoter — a field
+/// of the fixed part, a tag-field, or either inside any variant arm. Asked of
+/// the *denoter* rather than of the `Type`, because the field does not exist
+/// on the type yet: this runs while the record is being resolved (ADR-0098).
+static bool fieldNameInDenoter(const TypeExpr *d, const std::string &name) {
+  for (const FieldGroup &g : d->fields)
+    for (const DeclName &n : g.names)
+      if (n.name == name)
+        return true;
+  if (!d->tagName.empty() && d->tagName == name)
+    return true;
+  std::vector<const VariantArm *> arms;
+  for (const VariantArm &v : d->variants)
+    arms.push_back(&v);
+  for (size_t i = 0; i < arms.size(); ++i) {
+    for (const FieldGroup &g : arms[i]->fields)
+      for (const DeclName &n : g.names)
+        if (n.name == name)
+          return true;
+    if (!arms[i]->tagName.empty() && arms[i]->tagName == name)
+      return true;
+    for (const VariantArm &v : arms[i]->variants)
+      arms.push_back(&v);
+  }
+  return false;
+}
+
 /// A pointer's domain is a type identifier, and it may be one defined later in
 /// the same type part — the language's only forward reference, and the reason
 /// a record can contain a pointer to itself.
 Type *Sema::resolvePointer(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Pointer);
+
+  // §6.4.3.3 gives a field-identifier its defining-point in the record-type
+  // closest-containing the field-list, and §6.2.2.4 makes its scope the whole
+  // of that region — so inside a record type-denoter a name spelled like one
+  // of its fields is an applied occurrence of the *field*, and §6.4.4's
+  // domain-type wants a type-identifier. Every enclosing record is asked, not
+  // only the closest, because §6.2.2.4's scope includes "all regions enclosed
+  // by that region". This is a question about regions and is not §6.2.2.9's
+  // order rule, whose pointer-domain exception below stands untouched.
+  if (denoter.qualifier.empty())
+    for (const TypeExpr *r : openRecords_)
+      if (fieldNameInDenoter(r, denoter.name)) {
+        diags_.error(denoter.line, denoter.col,
+                     "'" + denoter.name + "' is a field of this record type, "
+                     "so it does not name a type here");
+        t->elem = ty::Int(); // keep the tree checkable
+        return t;
+      }
+
   // §6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
   // §6.11.3's optional interface qualifier — so an imported type may be a
   // pointer's domain, as it may be anything else a type-name reaches.
@@ -770,6 +816,10 @@ Symbol *Sema::discSelectorFor(TypeExpr *denoter) {
 Type *Sema::resolveRecord(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Record);
   t->packed = denoter.packed;
+  // The region §6.4.3.3 gives this record's field-identifiers is open from
+  // here until the last variant arm is resolved, so a domain-type written
+  // anywhere inside it can see them (ADR-0098).
+  openRecords_.push_back(&denoter);
   for (FieldGroup &group : denoter.fields) {
     // §6.6: a field's own type-denoter may carry an initial-state-specifier,
     // and then the record's initial state has that field bearing that value.
@@ -786,6 +836,7 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
                        denoter.tagCol, t, t->fields, t->variants,
                        t->tagField, t->tagType, t->discSelector, path);
   }
+  openRecords_.pop_back();
   return t;
 }
 
