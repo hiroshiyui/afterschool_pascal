@@ -195,14 +195,18 @@ claim that stops being true is as loud as one that was never true, which is
 | `diagnostic-coverage` | `tests/checks/unreachable_diagnostics.txt` | is every message named by a golden? |
 | `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
 | `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
-| `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced |
-| `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen change without `verify/`? |
+| `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced. It also checks *how many* files were compared, an empty list being what a clean run and a run that reached nothing both produce |
+| `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? |
 
 All but the last are `ctest` cases, so they run before a push rather than
 reporting after one. **What none of them sees** is a branch: `line-coverage`
 counts a statement, so `if c then a else b` on one line is covered when either
-arm runs. That, and the corpus being enumerated by glob so the shell harnesses
-are invisible to it, are rows in `doc/sop.md` §7.
+arm runs. That, and the corpus being enumerated by glob so the harnesses that
+build a compiler of their own — `irtest.sh`, `producttest.sh`, `verify.py`, the
+BSI runner — are invisible to it, are rows in `doc/sop.md` §7. The *flags* half
+of that second gap is closed: the coverage corpus now sweeps `--dump-all` the
+way `difftest.sh` drives it, which was worth 195 statements reported unreached
+while an oracle reached them on every run.
 
 `pascalc --coverage` is the product feature behind the last one (ADR-0104), and
 it works on any Pascal program: one counter per statement, the lines reached

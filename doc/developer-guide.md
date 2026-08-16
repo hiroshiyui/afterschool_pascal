@@ -28,10 +28,11 @@ procedure — how a change is classified, what its class has to satisfy, and, in
 | `tests/dumps/` | what the *compiler* writes under a `--dump` flag, rather than what a program wrote |
 | `tests/spec/` | scenarios written against clauses of the two standards, each tagged with its clause |
 | `tests/bsi/` | the fetched validation suite, and a catalogue of what this compiler does with all 812 |
-| `tests/checks/` | the coverage gates — which diagnostics, procedures and statements the corpus reaches |
+| `tests/checks/` | the gates and their catalogues — which diagnostics, procedures and statements the corpus reaches, whether the two front ends still agree, whether a lowering changed without its model, and whether a second backend builds the same compiler |
 | `verify/` | SMT proofs that the lowering means what ISO 7185 says |
+| `selfhost/difftest.sh` | the two front ends' `--dump` output, over every Pascal source in the tree |
 | `selfhost/irtest.sh` | runs what the compiler builds, and requires stage 2 = stage 3 |
-| `selfhost/producttest.sh` | that `build/bin/pascalc` itself exists, versions itself and reports failure |
+| `selfhost/producttest.sh` | that `build/bin/pascalc` itself exists, versions itself, reports failure, and that both it and `tools/pascalcc` document every option they accept |
 
 Two constraints shaped this, and only one is still live:
 
@@ -118,7 +119,7 @@ one source. It is itself written in **Extended Pascal** — the language it is
 written in and the language it accepts are independent, and only that standard
 lets a program read its own command line
 ([ADR-0082](adr/0082-the-stage-1-compiler-is-extended-pascal.md)). It is
-checked by running what it builds against 435 golden files, and then by closing
+checked by running what it builds against 392 golden files, and then by closing
 the bootstrap.
 
 ```sh
@@ -138,13 +139,20 @@ file per message, because it stops at its first) and `selfhost/badsema/` for
 Sema (which accumulates). Those were compared between two compilers until
 ADR-0085 left one; each is now pinned against a `.err` golden.
 
-**Until then it was checked differentially**, against the C++ compiler it was
-ported from, stage for stage on every Pascal source in the tree — the strongest
-oracle this project had, and the one retiring stage 0 gave up. What it caught is
-worth knowing, because it is the class of defect nothing here can catch now: a
-diagnostic that named two types identically and explained nothing, a
-comment-delimiter rule implemented wrongly in *both* compilers, a builtin's
-enumerator one apart. See
+**It is also checked differentially**, against a second implementation of the
+front end, stage for stage on every Pascal source in the tree — the strongest
+oracle this project has. It was written against the C++ compiler stage 1 was
+ported from; retiring stage 0 gave it up (ADR-0085) and ADR-0108 brought it
+back, `src/` now being a lexer, parser and Sema with no code generator. What it
+catches is worth knowing, because nothing else here catches it: a diagnostic
+that named two types identically and explained nothing, a comment-delimiter
+rule implemented wrongly in *both* compilers, a builtin's enumerator one apart.
+
+Two things it still cannot do. It says nothing about the **code generator**,
+which it never compared — two backends' assembler text is not comparable — and
+it cannot contradict a **reading**, because one author writes both sides. The
+`.err` goldens above are what covers the first; `langspec-audit` is what
+covers the second. See
 [ADR-0022](adr/0022-the-lexer-port-is-checked-differentially.md),
 [ADR-0023](adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md),
 [ADR-0024](adr/0024-the-stage-1-compiler-becomes-one-source-file.md) and

@@ -400,17 +400,22 @@ rewritten to `<source>`, so diagnostics can be pinned without depending on where
 the checkout lives.
 
 **Differential test.** Comparing two independent implementations of the same
-question, rather than either against a recorded expectation. `difftest.sh` did
-that for this compiler and the C++ one it was ported from, diffing their dumps
-over every Pascal source in the tree; a golden pins a port to whatever it did
-the day it was written, where two implementations say "these two agree"
+question, rather than either against a recorded expectation. `difftest.sh` does
+that for this compiler and the reference front end in `src/`, diffing their
+dumps over every Pascal source in the tree; a golden pins a port to whatever it
+did the day it was written, where two implementations say "these two agree"
 (ADR-0022 to ADR-0024).
 
-**It no longer exists.** ADR-0085 retired stage 0, and with it the second
-implementation. The term is kept here because most of this project's findings
-are described in terms of it — "difftest caught it" appears throughout the
-records — and because what it could catch and goldens cannot is the sharpest
-thing to know about the oracles that remain.
+**It was gone for a while.** ADR-0085 retired stage 0 and the second
+implementation with it, and ADR-0108 brought it back as a front end — lexer,
+parser and Sema, no code generator — which is the half a dump can compare
+anyway. It covers **tokens, AST and Sema** and never the code generator, and it
+cannot contradict a *reading*, one author writing both sides.
+
+**A count, not only a set.** The baseline records which files disagree and is
+empty, so an empty result is a pass — and an empty result is also what a run
+that reached no files produces. The number of files compared is checked against
+the corpus for that reason.
 
 **AST dump / Sema dump.** `--dump-ast` is the parse tree as one node per line,
 taken *before Sema*, with `@line:col` printed only where the tree actually
