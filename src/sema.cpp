@@ -5958,11 +5958,19 @@ void Sema::checkBinary(Binary *b) {
       if (!assignable(l, r) && !assignable(r, l)) {
         bad("compatible", true);
         b->type = l->isSet() ? l : r;
-      } else {
+      } else if (l->isEmptySet())
+        b->type = r;
+      // Table 5 makes the result "the same as the operands", so where one has
+      // committed to a packing and the other has not (§6.7.1), the committed
+      // one is the faithful answer — otherwise `[1] + p` would launder a
+      // packed operand into a canonical result that compares equal to
+      // anything (ADR-0093).
+      else if (l->setCanonical && !r->isEmptySet())
+        b->type = r;
+      else
         // The result is a set of the operands' common base type, which is
         // whichever of them has one: `s + []` is still a set of s's base.
-        b->type = l->isEmptySet() ? r : l;
-      }
+        b->type = l;
       return;
     }
   }
