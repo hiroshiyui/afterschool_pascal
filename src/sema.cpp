@@ -2487,8 +2487,56 @@ static Expr *rootDesignator(Expr *e) {
 /// and a field selection stay inside the same variable, and a dereference
 /// leaves it. Nothing is lost there, because §6.4.1 makes a pointer type
 /// unprotectable and so a protected parameter can never be one.
+/// Is this the control variable of a for statement whose body we are inside?
+/// Keyed on the symbol and never on the spelling: a procedure's own local `i`
+/// is not the `i` an enclosing block loops over, and the BSI suite has twenty
+/// programs that differ in exactly that way (ADR-0089).
+bool Sema::activeControl(Symbol *sym) const {
+  for (Symbol *s : forControls_)
+    if (s == sym)
+      return true;
+  return false;
+}
+
+/// Does `inner` lie in the procedure-and-function-declaration-part of `outer`,
+/// at any depth? §6.8.3.9 reaches through the whole of that part, a block in
+/// it containing blocks of its own.
+static bool nestedIn(Symbol *inner, Symbol *outer) {
+  for (Symbol *p = inner; p; p = p->owner)
+    if (p == outer)
+      return true;
+  return false;
+}
+
 void Sema::checkNotThreatened(Expr *e, const std::string &what) {
   Symbol *s = baseSymbol(e);
+
+  // §6.8.3.9 forbids the declaration part of the block containing a
+  // for-statement to threaten its control-variable, and those bodies are
+  // walked first — so a threat made from a nested block is remembered here and
+  // the for-statement asks about it afterwards. The first one is kept: naming
+  // one line is what the message can do, and a later one says no more. A
+  // threat from the containing block's own statements is deliberately not
+  // recorded, that block being neither the for-statement nor its declaration
+  // part.
+  if (s && s->kind == SymKind::Var && s->threatLine == 0 && current_ &&
+      current_ != s->owner && nestedIn(current_, s->owner)) {
+    s->threatLine = e->line;
+    s->threatCol = e->col;
+  }
+
+  // §6.8.3.9: "Neither a for-statement nor any procedure-and-function-
+  // declaration-part ... shall contain a statement threatening the variable",
+  // where §6.9.4's list of threats is the one §6.5.1 already walks for a
+  // protected parameter. So this function gained a second reason to answer
+  // yes, and its call sites needed nothing (ADR-0089).
+  if (s && !s->isProtected && activeControl(s)) {
+    diags_.error(e->line, e->col,
+                 "'" + s->name +
+                     "' is the control variable of a for statement, so " +
+                     what);
+    return;
+  }
   if (!s || !s->isProtected)
     return;
   // A `with` binding is hidden and its name is a frame slot's, not the
@@ -4738,6 +4786,35 @@ void Sema::checkStmt(Stmt *s) {
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be a variable "
                    "declared in the block containing the statement");
+    // §6.8.3.9's threats are about *the* control-variable, so they are only
+    // asked once the name can be one. Anything refused above has been reported
+    // already, and asking a second question of it would report a consequence
+    // of the first — including, for a variable belonging to an enclosing
+    // block, a threat this very statement had just recorded against it.
+    if (!f->var->withField && f->var->sym &&
+        f->var->sym->kind == SymKind::Var && f->var->sym->owner == current_) {
+      // Threat d): the equivalent program fragment the clause gives a
+      // for-statement assigns to the control-variable, so a nested
+      // for-statement over the same variable threatens the one containing it.
+      // The outer loop is pushed by the time this is reached and this one is
+      // not — its own push is below — so no loop reports itself.
+      if (activeControl(f->var->sym))
+        checkNotThreatened(f->var.get(),
+                           "it cannot be the control variable of another one");
+      // The other half of the clause: "Neither a for-statement nor any
+      // procedure-and-function-declaration-part of the block that
+      // closest-contains a for-statement shall contain a statement threatening
+      // the variable". That part is walked before the statements that loop, so
+      // the threat is already recorded. The message names the threat's line
+      // because the declaration is not where the reader will look — the
+      // statement is legal until this loop makes it not.
+      if (f->var->sym->threatLine > 0)
+        diags_.error(f->var->line, f->var->col,
+                     "'" + f->var->sym->name + "' is threatened by a statement "
+                     "at line " + std::to_string(f->var->sym->threatLine) +
+                     ", so it cannot be the control variable of a for "
+                     "statement");
+    }
     if (f->var->type && !f->var->type->isOrdinal())
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be an "
@@ -4773,7 +4850,15 @@ void Sema::checkStmt(Stmt *s) {
                      "control variable");
     }
     stmtPath_.push_back(f);
+    // §6.8.3.9 forbids a *statement* of the for-statement to threaten the
+    // control-variable, and the bounds are expressions — so the binding covers
+    // the body and nothing else.
+    bool bound = f->var->sym != nullptr;
+    if (bound)
+      forControls_.push_back(f->var->sym);
     checkStmt(f->body.get());
+    if (bound)
+      forControls_.pop_back();
     stmtPath_.pop_back();
     return;
   }

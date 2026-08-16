@@ -11,7 +11,6 @@
 # progress, and it is also how a regression would be hidden.
 selfhost/badsema/newvariants.pas
 selfhost/badsema/procparams.pas
-selfhost/badsema/statements.pas
 tests/bsi/suite/CONFORM/CONF003.pas
 tests/bsi/suite/CONFORM/CONF063.pas
 tests/bsi/suite/CONFORM/CONF147.pas
@@ -27,7 +26,6 @@ tests/extended/setiter.pas
 tests/extended/trap_setiter.pas
 tests/extended/typeinquiry_errors.pas
 tests/file_errors.pas
-tests/for_threat.pas
 tests/forward_twice.pas
 tests/funcassign_sibling.pas
 tests/funcderef_iso.pas

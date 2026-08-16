@@ -234,6 +234,13 @@ struct Symbol {
   /// check runs at a defining-point, so nothing later has happened yet, and if
   /// the newest application is not inside this block then none is (ADR-0088).
   int usedSeq = 0;
+  /// Where a statement in a *nested* block threatened this variable, or 0.
+  /// §6.8.3.9 reaches "any procedure-and-function-declaration-part of the
+  /// block that closest-contains a for-statement", where the threat may sit in
+  /// a procedure that is never called — and those bodies are walked before the
+  /// statement part that loops, so the threat is recorded when it is seen and
+  /// the for-statement asks afterwards (ADR-0089).
+  int threatLine = 0, threatCol = 0;
 
   /// §6.11.1's module. It is a `Proc` because it owns an activation record and
   /// procedures nest inside it exactly as they nest inside the program — but
@@ -457,6 +464,7 @@ private:
   StmtPtr redefinedFamily(const std::string &name, std::vector<ExprPtr> args,
                           int line, int col);
   bool badVarActual(Expr *a, Symbol *callee, int i);
+  bool activeControl(Symbol *sym) const;
   /// §6.4.8: the type this schema maps the given actual-discriminant-part to.
   /// Interned, because §6.4.8 makes one tuple denote one type however many
   /// times it is written.
@@ -748,6 +756,11 @@ private:
   /// outermost to innermost. A record type *is* a region, so a name spelled
   /// like one of its fields denotes the field and names no type (ADR-0098).
   std::vector<const TypeExpr *> openRecords_;
+  /// The control variables of the for-statements whose *bodies* are being
+  /// checked. §6.8.3.9's threats are about the statement of the for-statement,
+  /// and the bounds are expressions, so the binding covers the body and
+  /// nothing else (ADR-0089).
+  std::vector<Symbol *> forControls_;
   /// Every type produced from a schema, keyed by the schema and the tuple.
   /// §6.4.8 says a type produced with one tuple is distinct from one produced
   /// with any other and from every type of any other schema — so this map is
