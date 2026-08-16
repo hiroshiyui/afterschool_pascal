@@ -890,6 +890,11 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
   }
 
   std::vector<LabelRange> claimed; // the tag values earlier arms have taken
+  // A label that failed to evaluate, or that named a value the tag-type does
+  // not have, leaves `claimed` incomplete — so the coverage question below
+  // would report values that *are* named, in a program already reported on.
+  bool labelsOk = true;
+  bool hasOther = false;
   for (VariantArm &arm : arms) {
     Variant v;
     v.line = arm.line;
@@ -898,18 +903,38 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
     // still an arm in every other respect — one struct laid over the shared
     // block, numbered like the rest — which is why the layout is unchanged.
     v.isOtherwise = arm.isOtherwise;
+    hasOther = hasOther || arm.isOtherwise;
     int index = static_cast<int>(variants.size());
 
     for (CaseLabel &label : arm.labels) {
       Type *labelType = nullptr;
       LabelRange r;
       if (!evalLabelRange(label, "a variant's label must be an ordinal constant",
-                          labelType, r))
+                          labelType, r)) {
+        labelsOk = false;
         continue;
+      }
       if (labelType->base() != tag->base()) {
         diags_.error(label.lo->line, label.lo->col,
                      "this variant's tag is " + tag->name() +
                          ", but the label is " + labelType->name());
+        labelsOk = false;
+        continue;
+      }
+      // ISO 7185 §6.4.3.3 requires the case-constants to be *equal to* the
+      // set of values of the tag-type, and ISO/IEC 10206:1991 §6.4.3.4 states
+      // this half on its own: "the value denoted by each such case-constant
+      // shall be a member of the set of values determined by that type". A
+      // variant-part-completer does not excuse it — an otherwise-arm claims
+      // the values nothing names, not values the tag-type does not have.
+      if (r.lo < tag->ordinalLo() || r.hi > tag->ordinalHi()) {
+        diags_.error(label.lo->line, label.lo->col,
+                     "the tag value " +
+                         Type::ordinalName(tag->base(), r.lo < tag->ordinalLo()
+                                                            ? r.lo
+                                                            : r.hi) +
+                         " is not a value of " + tag->name());
+        labelsOk = false;
         continue;
       }
       long long at = 0;
@@ -917,6 +942,10 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
         diags_.error(label.lo->line, label.lo->col,
                      "the tag value " + Type::ordinalName(tag, at) +
                          " already selects an earlier variant");
+        // A rejected range is not recorded, so its non-overlapping tail would
+        // read as a gap below and earn a second complaint about a fault
+        // already reported.
+        labelsOk = false;
         continue;
       }
       claimed.push_back(r);
@@ -960,6 +989,34 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
                          variants[index].tagField, variants[index].tagType,
                          variants[index].discSelector, path);
     path.pop_back();
+  }
+
+  // ISO 7185 §6.4.3.3: "the case-constants ... shall denote a set of values
+  // equal to the set of values specified by the tag-type" — so every value of
+  // the tag-type must be named by some arm, and `case tag: integer of 1: …`
+  // is refused because `integer` has other values. That looks over-strict and
+  // is not: BSI's own DEV073 header records that test as reclassified *from
+  // CONFORMANCE to DEVIANCE by DP7185*. The conforming spellings are a
+  // covering tag-type (`type sel = 1..2`) or Extended Pascal's `otherwise`,
+  // which discharges coverage and never membership (ADR-0096).
+  if (labelsOk && !hasOther) {
+    long long need = tag->ordinalLo();
+    for (;;) {
+      const LabelRange *found = nullptr;
+      for (const Variant &w : variants)
+        for (const LabelRange &rg : w.labels)
+          if (rg.lo <= need && need <= rg.hi)
+            found = &rg;
+      if (!found) {
+        diags_.error(tagLine, tagCol,
+                     "the tag value " + Type::ordinalName(tag->base(), need) +
+                         " selects no variant of " + tag->name());
+        break;
+      }
+      if (found->hi >= tag->ordinalHi())
+        break;
+      need = found->hi + 1;
+    }
   }
 }
 
