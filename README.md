@@ -797,6 +797,12 @@ short-circuit, and what is still open. Start with
 [ADR-0004](doc/adr/0004-self-hosting-is-the-near-term-goal.md) if you only read
 one.
 
+[`doc/design-digest.md`](doc/design-digest.md) is the condensed form: a
+paragraph per mechanism — activation records, designators, schemata, strings,
+modules, and every feature of both standards as it landed — each citing the
+record behind it. It is where to look when you know the area but not the
+number.
+
 [`doc/implementation-defined.md`](doc/implementation-defined.md) is the document
 clause 5.1 requires a processor to be accompanied by. It states the compliance
 level — **level 0**, conformant array parameters not being accepted — answers
