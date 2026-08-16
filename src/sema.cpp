@@ -284,6 +284,19 @@ Type *Sema::resolvePointer(TypeExpr &denoter) {
   Symbol *sym = denoter.qualifier.empty()
                     ? lookupRaw(denoter.name)
                     : lookupQuiet(denoter.qualifier, denoter.name);
+  // §6.2.2.9: the domain binds to a type-identifier of *this* type-definition-
+  // part when there is one, and an outer type of the same spelling does not
+  // settle the question — the inner one may still be defined further down. So
+  // a name found outside this scope waits with the names found nowhere at all,
+  // and `resolvePendingPointers` looks it up again once the part is complete,
+  // where the inner definition wins by ordinary shadowing. The suite's CONF027
+  // is the program: `p = ^node` beside `node = boolean`, inside a procedure
+  // whose program declares `node = integer`.
+  if (sym && sym->kind == SymKind::Type && inTypePart_ &&
+      denoter.qualifier.empty() && !scopes_.back().count(denoter.name)) {
+    pendingPointers_.push_back({t, denoter.name, denoter.line, denoter.col});
+    return t;
+  }
   if (sym && sym->kind == SymKind::Type) {
     t->elem = sym->type;
     return t;
@@ -3329,6 +3342,10 @@ static bool earlier(int l1, int c1, int l2, int c2) {
 void Sema::checkDeclarations(Block &block, Symbol *owner) {
   size_t ci = 0, ti = 0, vi = 0;
   bool inTypes = false;
+  // A nested block's declarations are checked from inside this walk, so the
+  // flag has to be saved rather than simply cleared on the way out.
+  bool savedInTypePart = inTypePart_;
+  inTypePart_ = false;
   while (ci < block.consts.size() || ti < block.types.size() ||
          vi < block.vars.size()) {
     // Which of the three heads was written first. A variable group is placed
@@ -3355,6 +3372,7 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
     // type-definition-part, so a run of type definitions ending is what
     // triggers it — not the end of the block, which may hold several.
     if (which != 1 && inTypes) {
+      inTypePart_ = false;
       resolvePendingPointers();
       inTypes = false;
     }
@@ -3362,14 +3380,25 @@ void Sema::checkDeclarations(Block &block, Symbol *owner) {
       checkConstDecl(block.consts[ci++], owner);
     else if (which == 1) {
       inTypes = true;
+      inTypePart_ = true;
       checkTypeDecl(block.types[ti++]);
     } else if (which == 2)
       checkVarDecl(block.vars[vi++], owner);
     else
       break; // a variable group with no names; the parser makes none
   }
-  if (inTypes)
-    resolvePendingPointers();
+  inTypePart_ = false;
+  // §6.4.4's forward reference is completed where its own type-definition-part
+  // ends, which is what the run above does. What can still be pending here is
+  // a domain written *outside* one — a variable's, or a schema body's — and it
+  // has nowhere later to be defined, so draining unconditionally is what
+  // reports it. Draining only after a type part carried the list into the next
+  // block that happened to have one, where the name was looked up in the wrong
+  // scope: a program with no type part at all kept its unknown domain in
+  // silence, and a legal self-referential schema in a var part was refused
+  // until an unrelated type definition was added after it (ADR-0091).
+  resolvePendingPointers();
+  inTypePart_ = savedInTypePart;
 }
 
 void Sema::checkConstDecl(ConstDecl &c, Symbol *owner) {

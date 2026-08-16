@@ -13,7 +13,6 @@ selfhost/badsema/newvariants.pas
 selfhost/badsema/procparams.pas
 selfhost/badsema/statements.pas
 tests/bsi/suite/CONFORM/CONF003.pas
-tests/bsi/suite/CONFORM/CONF027.pas
 tests/bsi/suite/CONFORM/CONF063.pas
 tests/bsi/suite/CONFORM/CONF147.pas
 tests/bsi/suite/ppg/temp.pas
@@ -25,7 +24,6 @@ tests/extended/goto_completer.pas
 tests/extended/initialstate_errors.pas
 tests/extended/number_separator_ext.pas
 tests/extended/schema_assign.pas
-tests/extended/schema_selfpointer_var.pas
 tests/extended/setiter.pas
 tests/extended/trap_setiter.pas
 tests/extended/typeinquiry_errors.pas
@@ -40,8 +38,6 @@ tests/number_separator.pas
 tests/packedset.pas
 tests/packedset_compat.pas
 tests/pointer_domain_field.pas
-tests/pointer_domain_missing.pas
-tests/pointer_domain_shadow.pas
 tests/progparam_duplicate.pas
 tests/stringtype_errors.pas
 tests/trunc_integer.pas

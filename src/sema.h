@@ -739,6 +739,10 @@ private:
   /// when the scope at depth d was entered.
   int applySeq_ = 0;
   std::vector<int> scopeMark_;
+  /// Whether a type-definition-part is being checked. §6.2.2.9's exception for
+  /// a pointer's domain-type is bounded by that part, so a domain written in
+  /// the *variable* part has no later definition to wait for (ADR-0091).
+  bool inTypePart_ = false;
   /// Every type produced from a schema, keyed by the schema and the tuple.
   /// §6.4.8 says a type produced with one tuple is distinct from one produced
   /// with any other and from every type of any other schema — so this map is
