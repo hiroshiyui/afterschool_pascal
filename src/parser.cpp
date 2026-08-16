@@ -1019,8 +1019,21 @@ TypeExprPtr Parser::parseRecordType(bool packed) {
     expect(Tok::Colon, "in a record field list");
     group.type = parseTypeExpr();
     t->fields.push_back(std::move(group));
-    if (!accept(Tok::Semi))
+    if (!accept(Tok::Semi)) {
+      // ISO 7185 §6.4.3.3 writes the field-list as
+      //
+      //   [ ( fixed-part [ ';' variant-part ] | variant-part ) [ ';' ] ]
+      //
+      // so the ';' between a fixed-part and a variant-part is part of the
+      // production and not an option — unlike the trailing one, which the
+      // brackets do make optional. Without this the loop simply ends when no
+      // ';' follows and the caller parses the variant part regardless, so the
+      // semicolon was optional in practice. The suite's DEV266 is the record
+      // that says otherwise.
+      if (check(Tok::KwCase))
+        expect(Tok::Semi, "in a record field list");
       break;
+    }
   }
 
   expect(Tok::KwEnd, "at the end of a record type");

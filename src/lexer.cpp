@@ -351,6 +351,18 @@ Token Lexer::lexNumber() {
       diags_.error(sl, sc, "integer literal out of range (maxint is " +
                                std::to_string(kMaxInt) + "): " + text);
   }
+
+  // ISO 7185 §6.1.8, and ISO/IEC 10206:1991 §6.1.10 in the same words: "There
+  // shall be at least one separator between any pair of consecutive tokens
+  // made up of identifiers, word-symbols, labels or unsigned-numbers." So
+  // `10div 2` is not `10 div 2`, and the rule is in both standards and gated
+  // on neither. Only the decimal form needs it: an extended-digit sequence is
+  // maximal and a letter there *is* a digit (ADR-0036), so nothing but a
+  // non-letter can follow one.
+  if (!eof() && std::isalpha(static_cast<unsigned char>(peek(0))))
+    diags_.error(sl, sc,
+                 "a separator is required between a number and the identifier "
+                 "or word-symbol that follows it");
   return t;
 }
 

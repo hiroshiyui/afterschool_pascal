@@ -22,7 +22,6 @@ tests/extended/forin_nested_stack.pas
 tests/extended/funcresult_errors.pas
 tests/extended/goto_completer.pas
 tests/extended/initialstate_errors.pas
-tests/extended/number_separator_ext.pas
 tests/extended/schema_assign.pas
 tests/extended/setiter.pas
 tests/extended/trap_setiter.pas
@@ -33,11 +32,9 @@ tests/forward_twice.pas
 tests/funcassign_sibling.pas
 tests/funcderef_iso.pas
 tests/goto_branches.pas
-tests/number_separator.pas
 tests/packedset.pas
 tests/packedset_compat.pas
 tests/progparam_duplicate.pas
 tests/stringtype_errors.pas
 tests/trunc_integer.pas
 tests/variant_complete.pas
-tests/variantpart_semi.pas
