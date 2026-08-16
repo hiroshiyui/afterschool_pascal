@@ -150221,7 +150221,7 @@ L47:
 @s238 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s239 = private unnamed_addr constant [1 x i8] c"\00"
 @s240 = private unnamed_addr constant [30 x i8] c"pascalc (Afterschool Pascal) \00"
-@s241 = private unnamed_addr constant [6 x i8] c"1.3.0\00"
+@s241 = private unnamed_addr constant [6 x i8] c"1.3.1\00"
 @s242 = private unnamed_addr constant [66 x i8] c"Afterschool Pascal -- the compiler, written in Afterschool Pascal\00"
 @s243 = private unnamed_addr constant [34 x i8] c"usage: pascalc [options] file.pas\00"
 @s244 = private unnamed_addr constant [45 x i8] c"  -o <file>       where to write the LLVM IR\00"

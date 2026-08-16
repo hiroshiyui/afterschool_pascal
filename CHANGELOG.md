@@ -13,6 +13,20 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-08-17
+
+**Three of the fixes below change what an already-valid program prints or
+reads.** A patch release does not normally do that, and this one does: each was
+a defect against a clause of the standard, and correcting it necessarily
+changes the output of a program that met the defect. The affected programs are
+
+- any that writes a `real` and then calls `page` on the same file,
+- any that reads a `real` written with more than 63 characters,
+- any that writes a `real` in `[1e-100, 1e-99)` with an explicit field width.
+
+Nothing else changes. If you have goldens recorded against 1.3.0 for programs
+of those shapes, they will move, and the new value is the conforming one.
+
 ### Added
 
 - **`llc-second-backend`**, a `ctest` case and a CI job, asking the one question
@@ -647,6 +661,9 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.3.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.1
+[1.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.0
+[1.2.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.2.0
 [1.1.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.1.1
 [1.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.1.0
 [1.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.0.0
