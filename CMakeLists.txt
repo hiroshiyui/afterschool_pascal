@@ -34,9 +34,23 @@ file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 find_program(APASCAL_CLANG clang REQUIRED)
 message(STATUS "Afterschool Pascal: assembling with ${APASCAL_CLANG}")
 
+# Warnings, for the two targets built from C and C++ here. There were none set
+# at all, so the three the compiler had to say went unheard: two functions in
+# src/main.cpp left over from when it drove the assembler, and a Sema parameter
+# that had stopped being read. All three are gone, and `runtime/pasrt.c` was
+# already clean, so this costs nothing to keep on.
+#
+# Not -Werror. doc/sop.md's gates fail a developer's `ctest` before a push, and
+# a warning introduced by a *newer* compiler than the one a change was written
+# against would fail the build rather than the suite -- which is a different
+# thing from a defect and would be met by turning this off again. CI is where
+# it would belong if it is ever wanted.
+set(APASCAL_WARNINGS -Wall -Wextra)
+
 # ---- Pascal runtime library (linked into every compiled program) ----
 add_library(pasrt STATIC runtime/pasrt.c)
 target_include_directories(pasrt PUBLIC runtime)
+target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 
 # ---- The reference front end (ADR-0108) ----
 #
@@ -54,6 +68,7 @@ add_executable(pascalc-s0
   src/main.cpp)
 target_include_directories(pascalc-s0 PRIVATE src)
 target_compile_features(pascalc-s0 PRIVATE cxx_std_20)
+target_compile_options(pascalc-s0 PRIVATE ${APASCAL_WARNINGS})
 target_compile_definitions(pascalc-s0 PRIVATE
   APASCAL_VERSION="${PROJECT_VERSION}")
 set_target_properties(pascalc-s0 PROPERTIES

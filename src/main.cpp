@@ -1,21 +1,19 @@
-// Afterschool Pascal — the stage-0 driver.
+// Afterschool Pascal — the reference front end's driver.
 //
-// This is `pascalc-s0`, the compiler written in C++. The compiler this project
-// produces is `pascalc`, which is `selfhost/compiler.pas` translated by this
-// one — see CMakeLists.txt. Stage 0 is kept rather than retired because it is
-// the second implementation `selfhost/difftest.sh` compares against and the
-// one `verify/` proves; doc/roadmap.md has the trade.
+// This is `pascalc-s0`, and it is **not a compiler**: lexer, parser and Sema,
+// no code generator and no LLVM (ADR-0108). The compiler this project produces
+// is `pascalc`, built from `selfhost/compiler.pas` by the seed (ADR-0085). This
+// binary exists so `selfhost/difftest.sh` has a second implementation of the
+// front end to compare the three `--dump` sections against — the only thing
+// here that can disagree with the compiler without being asked a question
+// someone here composed.
 //
-//   pascalc-s0 hello.pas            compile and link to ./hello
-//   pascalc-s0 -o out hello.pas     choose the executable name
+// So the only options it has are the ones a front end can honour:
+//
 //   pascalc-s0 --std=extended hello.pas  ISO/IEC 10206:1991 rather than
 //                                     ISO 7185. The two are not nested
 //                                     (ADR-0033), so this selects the
 //                                     *language* and not a set of extensions.
-//   pascalc-s0 --emit-llvm hello.pas, -S   write hello.ll and stop
-//   pascalc-s0 -c hello.pas         write hello.o and stop
-//   pascalc-s0 -O0 .. -O3           optimisation level; the default is -O2
-//   pascalc-s0 --keep-temps hello.pas   keep the intermediate object file
 //   pascalc-s0 --dump-tokens hello.pas  the token stream, for difftest.sh
 //   pascalc-s0 --dump-ast hello.pas     the parse tree, before Sema
 //   pascalc-s0 --dump-sema hello.pas    the same tree, annotated by Sema
@@ -24,6 +22,15 @@
 //                                     compares the Pascal compiler against
 //   pascalc-s0 --version            write the version and stop
 //   pascalc-s0 -h, --help           write the option list and stop
+//
+// It used to accept `-o`, `-S`, `-c`, `-O0..-O3`, `--keep-temps` and
+// `--import` as well, from when this *was* the compiler. Every one of them set
+// a field nothing read: `pascalc-s0 -o out.txt -S -c hello.pas` exited 0,
+// wrote no out.txt and dumped to stdout. They are refused now rather than
+// deleted from the parser, because `tools/pascalcc` states the rule they broke
+// — "a driver that silently ignored an option would make a harness look like
+// it had tested something it had not" — and a refusal says which option and
+// why, where an "unknown option" would only say it is gone.
 //
 // `usage()` below is the authoritative list; keep the two in step.
 
@@ -46,11 +53,6 @@ namespace {
 
 struct Options {
   std::string input;
-  std::string output;
-  bool emitLLVM = false;
-  bool compileOnly = false;
-  unsigned optLevel = 2;
-  bool keepTemps = false;
   bool dumpTokens = false;
   bool dumpAst = false;
   bool dumpSema = false;
@@ -64,14 +66,6 @@ struct Options {
   /// ISO/IEC 10206:1991 reserves words a valid ISO 7185 program may use as
   /// identifiers (ADR-0033).
   ap::Std lang = ap::Std::Iso7185;
-  /// ISO/IEC 10206:1991 §6.13's other program-components, already translated.
-  /// Each is read for the interfaces its module-headings export and for
-  /// nothing else — no code of theirs is emitted here, and where their
-  /// variables and procedures *are* is a question answered by name.
-  std::vector<std::string> imports;
-  /// What to hand the linker beside this component's own object: the objects
-  /// the components named by `--import` were translated into.
-  std::vector<std::string> linkInputs;
 };
 
 /// Diagnostics into the same stream as the dump, and before it. The Pascal
@@ -133,46 +127,50 @@ void dumpTokens(const std::vector<ap::Token> &tokens) {
 
 void usage() {
   std::fprintf(stderr,
-               "Afterschool Pascal\n"
+               "Afterschool Pascal -- the reference front end\n"
                "usage: pascalc-s0 [options] file.pas\n"
-               "  -o <file>     name of the output file\n"
-               "  --emit-llvm, -S\n"
-               "                write LLVM IR (.ll) instead of an executable\n"
-               "  -c            write an object file (.o) and stop\n"
-               "  -O0..-O3      optimisation level (default -O2)\n"
-               "  --keep-temps  do not delete the intermediate object file\n"
+               "\n"
+               "It lexes, parses and analyses; it generates no code, so it\n"
+               "writes only a dump and its diagnostics (ADR-0108).\n"
+               "\n"
                "  --dump-tokens write the token stream and stop\n"
                "  --dump-ast    write the parse tree and stop\n"
                "  --dump-sema   write the tree Sema annotated and stop\n"
                "  --dump-all    write all three dumps and stop\n"
                "  --std=<name>  iso7185 (default) or extended\n"
-               "  --import <f>  a program-component already translated; its\n"
-               "                module-headings supply this one's interfaces\n"
                "  --version     write the version and stop\n"
                "  -h, --help    write this list and stop\n");
 }
 
-std::string stripExtension(const std::string &path) {
-  size_t slash = path.find_last_of('/');
-  size_t dot = path.find_last_of('.');
-  if (dot == std::string::npos || (slash != std::string::npos && dot < slash))
-    return path;
-  return path.substr(0, dot);
-}
-
-/// Where libpasrt.a lives. The build directory is baked in, but an installed
-/// compiler can be pointed elsewhere.
 bool parseArgs(int argc, char **argv, Options &opt) {
   for (int i = 1; i < argc; ++i) {
     std::string a = argv[i];
-    if (a == "-o" && i + 1 < argc) {
-      opt.output = argv[++i];
-    } else if (a == "--emit-llvm" || a == "-S") {
-      opt.emitLLVM = true;
-    } else if (a == "-c") {
-      opt.compileOnly = true;
-    } else if (a == "--keep-temps") {
-      opt.keepTemps = true;
+    // The options this binary cannot honour, named one by one so the message
+    // says why rather than "unknown option". Each of them used to be accepted
+    // and ignored.
+    if (a == "-o" || a == "--emit-llvm" || a == "-S" || a == "-c" ||
+        a == "--keep-temps" ||
+        (a.size() == 3 && a.rfind("-O", 0) == 0 && a[2] >= '0' &&
+         a[2] <= '3')) {
+      std::fprintf(stderr,
+                   "pascalc-s0: '%s' asks for output this binary does not "
+                   "produce; it is a front end and generates no code "
+                   "(ADR-0108). Use `pascalc` -- or tools/pascalcc, which "
+                   "links.\n",
+                   a.c_str());
+      return false;
+    } else if (a == "--import") {
+      // §6.13's components are the one refusal here that is a *gap* rather
+      // than a category error: a front end could read a translated component
+      // for the interfaces its module-headings export, and this one had the
+      // routine to do it and never called it. Refused rather than ignored so
+      // that a harness which starts passing --import fails instead of
+      // comparing dumps built without the imports. doc/sop.md §7 carries it.
+      std::fprintf(stderr,
+                   "pascalc-s0: '--import' is not implemented in the reference "
+                   "front end, so the interfaces a component exports would be "
+                   "missing rather than merely unused\n");
+      return false;
     } else if (a == "--dump-tokens") {
       opt.dumpTokens = true;
     } else if (a == "--dump-ast") {
@@ -182,9 +180,6 @@ bool parseArgs(int argc, char **argv, Options &opt) {
     } else if (a == "--dump-all") {
       opt.dumpTokens = opt.dumpAst = opt.dumpSema = true;
       opt.dumpAll = true;
-    } else if (a.size() == 3 && a.rfind("-O", 0) == 0 && a[2] >= '0' &&
-               a[2] <= '3') {
-      opt.optLevel = static_cast<unsigned>(a[2] - '0');
     } else if (a.rfind("--std=", 0) == 0) {
       std::string name = a.substr(6);
       if (name == "iso7185") {
@@ -198,8 +193,6 @@ bool parseArgs(int argc, char **argv, Options &opt) {
                      name.c_str());
         return false;
       }
-    } else if (a == "--import" && i + 1 < argc) {
-      opt.imports.push_back(argv[++i]);
     } else if (a == "--version") {
       // A compiler that cannot report its own version makes every bug report
       // worse. The number is the one `project()` carries, so there is a single
@@ -212,9 +205,6 @@ bool parseArgs(int argc, char **argv, Options &opt) {
     } else if (!a.empty() && a[0] == '-') {
       std::fprintf(stderr, "pascalc-s0: unknown option '%s'\n", a.c_str());
       return false;
-    } else if (a.size() > 2 && a.compare(a.size() - 2, 2, ".o") == 0) {
-      // An already-translated component, on its way to the linker.
-      opt.linkInputs.push_back(a);
     } else if (opt.input.empty()) {
       opt.input = a;
     } else {
@@ -225,47 +215,6 @@ bool parseArgs(int argc, char **argv, Options &opt) {
   if (opt.input.empty()) {
     usage();
     return false;
-  }
-  return true;
-}
-
-bool readTranslatedComponent(
-    const std::string &path, ap::Std lang,
-    std::vector<std::unique_ptr<ap::ModuleDecl>> &earlier) {
-  std::ifstream in(path, std::ios::binary);
-  if (!in) {
-    std::fprintf(stderr, "pascalc-s0: cannot open %s\n", path.c_str());
-    return false;
-  }
-  std::stringstream buffer;
-  buffer << in.rdbuf();
-
-  ap::Diagnostics diags(path);
-  ap::Lexer lexer(buffer.str(), diags, lang);
-  std::vector<ap::Token> tokens = lexer.tokenize();
-  std::unique_ptr<ap::Program> component;
-  if (!diags.hasErrors()) {
-    try {
-      ap::Parser parser(std::move(tokens), diags, lang);
-      component = parser.parseProgram();
-    } catch (const ap::ParseAbort &) {
-    }
-  }
-  if (diags.hasErrors() || !component) {
-    diags.print();
-    return false;
-  }
-  if (component->block) {
-    std::fprintf(stderr,
-                 "pascalc-s0: %s has a program declaration, so it is not a "
-                 "component this one can import\n",
-                 path.c_str());
-    return false;
-  }
-
-  for (auto &m : component->modules) {
-    m->compiledElsewhere = true;
-    earlier.push_back(std::move(m));
   }
   return true;
 }

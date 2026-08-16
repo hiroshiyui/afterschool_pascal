@@ -2979,7 +2979,7 @@ void Sema::addExportItem(Interface &iface, const ExportItem &item) {
 /// constituents arrive and under what spelling; what arrives is the module's
 /// own symbol, so an imported procedure is the procedure and an imported
 /// variable is the variable.
-void Sema::checkImports(const std::vector<ImportSpec> &specs, Symbol *owner) {
+void Sema::checkImports(const std::vector<ImportSpec> &specs) {
   for (const ImportSpec &spec : specs) {
     auto found = interfaces_.find(spec.interfaceName);
     if (found == interfaces_.end()) {
@@ -3001,10 +3001,15 @@ void Sema::checkImports(const std::vector<ImportSpec> &specs, Symbol *owner) {
     // interface-identifier of A, and §6.2.1 puts an import-part at the head of
     // every block — so an import inside a procedure is contained by the
     // module-block or main-program-block around it, and it is that block the
-    // supply is recorded against. Recording it against `owner` puts it on the
-    // procedure, where §6.2.3.6's activation set never looks: the module then
-    // compiles, resolves and is never commenced, so its initialization-part
-    // does not run and its variables are read at zero.
+    // supply is recorded against.
+    //
+    // Which is why this takes no `owner`, though all three call sites have one
+    // to hand and passed it for a long time. Recording the supply against the
+    // enclosing *procedure* puts it where §6.2.3.6's activation set never
+    // looks: the module then compiles, resolves and is never commenced, so its
+    // initialization-part does not run and its variables are read at zero. The
+    // parameter went unread rather than wrong, which is the same defect one
+    // step earlier — a caller cannot tell those apart.
     Symbol *supplied = curModule_ ? curModule_ : program_;
     if (iface.module && iface.module != supplied) {
       bool known = false;
@@ -3193,7 +3198,7 @@ void Sema::checkModuleHeading(ModuleDecl &m, ModuleInfo &info) {
     if (p.name == "input" || p.name == "output")
       bindName(p.name, ensureStdFile(p.name == "input"), p.line, p.col);
 
-  checkImports(m.heading->imports, info.sym);
+  checkImports(m.heading->imports);
   checkDeclarations(*m.heading, info.sym);
   for (auto &proc : m.heading->procs)
     declareProcHeading(*proc, info.sym);
@@ -3239,7 +3244,7 @@ void Sema::checkModuleBlock(ModuleDecl &m, ModuleInfo &info) {
   curModule_ = info.sym;
   scopes_.push_back(info.scope);
 
-  checkImports(m.block->imports, info.sym);
+  checkImports(m.block->imports);
   checkDeclarations(*m.block, info.sym);
 
   for (auto &proc : m.block->procs) {
@@ -3575,7 +3580,7 @@ void Sema::resolveGotos() {
 
 void Sema::checkBlock(Block &block, Symbol *owner) {
   // ISO/IEC 10206:1991 §6.2.1 puts the import-part at the head of every block.
-  checkImports(block.imports, owner);
+  checkImports(block.imports);
   checkLabelPart(block, owner);
   // The procedures are merged into the walk by source position, so the
   // headings are declared and the bodies checked from inside it.

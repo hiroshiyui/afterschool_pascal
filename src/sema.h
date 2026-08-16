@@ -397,7 +397,7 @@ private:
   void addExportItem(Interface &iface, const ExportItem &item);
   /// The import-part of a block, a module-heading or a module-block. `owner`
   /// is the block the names arrive in, and is what records who supplies it.
-  void checkImports(const std::vector<ImportSpec> &specs, Symbol *owner);
+  void checkImports(const std::vector<ImportSpec> &specs);
   /// The imported form of a constituent. A variable is *copied* — same owner,
   /// level and frame index, so it names the same storage — because the
   /// importer's spelling and its protection are properties of the import and

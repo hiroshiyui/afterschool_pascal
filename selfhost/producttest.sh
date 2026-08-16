@@ -187,6 +187,61 @@ else
   fi
 fi
 
+# --- and the same question of the driver ------------------------------------
+#
+# `tools/pascalcc` is the half of the compiler that links, so it is where -c,
+# -O0..-O3 and <file>.o are documented and nowhere else -- `pascalc -h` is the
+# compiler's own help and knows nothing about them. Its --help printed the
+# licence header and stopped one line before the first option, because it was a
+# line range (`sed -n '2,20p'`) into a file whose lines had moved. Every option
+# was invisible and nothing here asked, while the check directly above had been
+# asking the same question of the compiler for a release.
+#
+# Same derivation as above and for the same reason: the flags come from the
+# case arms that parse them, so this compares the help text against the
+# argument parser rather than against a golden that would agree with whichever
+# was edited last.
+#
+# Two arms are written as a family rather than as themselves, in the help text
+# and in the parser both, so they are matched by the prefix they share:
+# `--std=*` against `--std=` as the check above does it, and `-O0|-O1|-O2|-O3`
+# against `-O`, which the text spells `-O0 .. -O3`. The catch-all arms (`-*`,
+# `*.o`, `*`) name no option and are dropped.
+driver=$root/tools/pascalcc
+help_text=$("$driver" --help 2>/dev/null)
+checked=$((checked + 1))
+if [[ -z $help_text ]]; then
+  echo "--- help: pascalcc --help wrote nothing ---" >&2
+  failed=$((failed + 1))
+else
+  undocumented=""
+  while IFS= read -r flag; do
+    [[ -n $flag ]] || continue
+    # A substring test is not enough here and the check above gets away with
+    # it only because its flags are long: `-c` occurs inside `--coverage`, so
+    # deleting the line that documents `-c` left this passing. The flag has to
+    # stand as a token -- at the start of a line or after a space or comma, and
+    # ended the same way -- which is how the text actually writes it
+    # (`--emit-llvm,-S`, `-h, --help`).
+    if [[ $flag == --std=* ]]; then
+      found=$help_text; probe="--std="
+      [[ $found == *"$probe"* ]] || undocumented="$undocumented $flag"
+    elif [[ $flag == -O[0-9] ]]; then
+      # Written as the range `-O0 .. -O3` rather than one line per level.
+      [[ $help_text == *"-O"* ]] || undocumented="$undocumented $flag"
+    elif ! printf '%s\n' "$help_text" |
+           grep -qE "(^|[[:space:],])$flag([[:space:],]|\$)"; then
+      undocumented="$undocumented $flag"
+    fi
+  done < <(sed -n '/^while \[\[ \$# -gt 0 \]\]/,/^done$/p' "$driver" |
+           sed -n 's/^ *\(-[^)]*\)).*/\1/p' | tr '|' '\n' |
+           sed 's/^ *//; s/ *$//' | grep -v '\*' | sort -u)
+  if [[ -n $undocumented ]]; then
+    echo "--- help: pascalcc accepts options --help does not mention:$undocumented ---" >&2
+    failed=$((failed + 1))
+  fi
+fi
+
 # --- and that it says so when it does not translate something ---------------
 #
 # A compiler that cannot report failure is not usable from a build rule:

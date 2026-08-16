@@ -15,6 +15,15 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+# The two markers below delimit what `--help` prints, and they exist because a
+# line range did not: it was `sed -n '2,20p'`, which printed the fifteen lines
+# of licence above and then stopped one line short of the first option. Every
+# option was invisible, and this is the only place `-c`, `-O0..-O3` and
+# `<file>.o` are documented at all -- `pascalc -h` is the compiler's help and
+# does not know about the half that links. Nothing caught it: producttest.sh
+# checks that `pascalc -h` names every flag ParseArgs accepts, and there was no
+# such check for the driver. There is now, in the same file.
+# >>> usage
 # Compile and link a Pascal program with `pascalc`.
 #
 #   pascalcc [options] file.pas
@@ -27,7 +36,9 @@
 #     --import <f>    a program-component already translated
 #     --coverage      emit statement counters; the compiled program then
 #                     writes the lines it ran to $PASCOV_LINES
+#     -h, --help      write this list and stop
 #     <file>.o        an object to link, from a component compiled with -c
+# <<< usage
 #
 # `pascalc` writes LLVM IR and stops there, permanently: neither ISO 7185 nor
 # ISO/IEC 10206:1991 has process control, so a compiler written in Pascal
@@ -73,7 +84,9 @@ while [[ $# -gt 0 ]]; do
     --import)      [[ $# -ge 2 ]] || die "--import needs a file name"
                    imports+=(--import "$2"); shift 2 ;;
     --coverage)    covflag=(--coverage); shift ;;
-    --help|-h)     sed -n '2,20p' "$0"; exit 0 ;;
+    --help|-h)     sed -n '/^# >>> usage$/,/^# <<< usage$/p' "$0" |
+                     sed '1d; $d; s/^#\( \|$\)//'
+                   exit 0 ;;
     -*)            die "unknown option '$1'" ;;
     *.o)           objects+=("$1"); shift ;;
     *)             [[ -z $source_file ]] || die "more than one input file given"
