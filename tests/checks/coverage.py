@@ -125,6 +125,29 @@ def corpus(root):
                          flags.read_text().strip() if flags.exists()
                          else "--dump-all"]))
 
+    # ...and the same corpus again under --dump-all, because that is what
+    # `selfhost/difftest.sh` does with it on every run: it compares the three
+    # dump sections of both front ends over every Pascal source in the tree.
+    #
+    # Without this the measurement said the dump walkers were barely reached --
+    # `dumpexpr` 75 statements never run of 186, `dumpstmt` 11, `dumpgroup` 18
+    # -- because the only dump flags here were the six cases in tests/dumps/.
+    # Sweeping the corpus the way difftest drives it leaves `dumpexpr` at 1 and
+    # `dumpstmt` and `dumpgroup` at 0, and takes the whole figure from 649
+    # statements never run to 454. Those 195 were reported as unreached while
+    # an oracle in the suite reached them every time it ran.
+    #
+    # That is doc/sop.md §7's "coverage.py sees the sources, not the harnesses"
+    # closed for the one harness whose flags this file can mirror. It matters
+    # more than the number: the dumps *are* difftest's comparison surface, so
+    # phantom slack there is slack in the thing that guards the front end. The
+    # shell harnesses that build their own compilers -- irtest.sh,
+    # producttest.sh, verify.py, the BSI runner -- stay invisible, and the row
+    # stays for them.
+    for src, flags in list(jobs):
+        if src is not None and not any(f.startswith("--dump") for f in flags):
+            jobs.append((src, flags + ["--dump-all"]))
+
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
     # producttest.sh, verify.py, the BSI runner -- drive the compiler in ways

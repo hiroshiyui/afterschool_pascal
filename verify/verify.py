@@ -28,7 +28,9 @@ Two halves, and neither is sufficient alone:
                 computed independently in Python.
 
 The proof half reasons about `lowering.py`, which is a hand-written model of
-`codegen.cpp`. That model can drift from the compiler, and a proof about a stale
+CodeGen -- of `selfhost/compiler.pas` since ADR-0085, and of `src/codegen.cpp`
+before it, which is a file that no longer exists. That model can drift from the
+compiler, and a proof about a stale
 model is worse than no proof because it is reassuring. The cross-check is what
 detects the drift: it runs the actual binary. Treat a cross-check failure as
 evidence that the model is lying, not merely that a test broke.

@@ -16,9 +16,23 @@ The point of running it red is that it protects the agreeing majority *today*.
 Waiting for zero disagreements before wiring it up would leave the 600-odd
 files that already agree guarded by nothing for as long as the catch-up takes.
 
-The baseline records **which** files, not how many.  A count cannot tell a
-regression from a coincidence -- one file fixed and one broken leaves the number
-unchanged -- and this project has been caught by exactly that shape before.
+The baseline records **which** files disagree, not how many.  A count cannot
+tell a regression from a coincidence -- one file fixed and one broken leaves
+the number unchanged -- and this project has been caught by exactly that shape
+before.
+
+What the baseline cannot carry is the **denominator**.  An empty disagreement
+list is what a clean run produces, and it is also what a run that compared
+nothing produces: if `difftest.sh`'s `find` stopped matching a directory, the
+disagreeing set would still be empty and this would still pass with several
+hundred files guarded by nothing.
+
+So the count is checked, and against the corpus rather than against a recorded
+number.  This globs the same two directories `difftest.sh` walks and requires
+the two to agree exactly -- which needs no baseline to grow when a case is
+added, and says something a stored floor could not: that the corpus a fresh
+checkout compares is the whole of it.  `tests/bsi/suite/` is fetched and never
+committed (ADR-0086), so both sides simply see it or do not.
 
 Exit codes: 0 pass (or progress), 1 regression, 77 skip (nothing to run with).
 """
@@ -26,6 +40,7 @@ Exit codes: 0 pass (or progress), 1 regression, 77 skip (nothing to run with).
 import argparse
 import os
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -50,6 +65,8 @@ HEADER = """\
 # progress, and it is also how a regression would be hidden.
 """
 
+COMPARED = re.compile(r"^difftest-compared: (\d+)$", re.MULTILINE)
+
 
 def read_baseline(path):
     if not path.exists():
@@ -59,6 +76,13 @@ def read_baseline(path):
         for line in path.read_text().splitlines()
         if line.strip() and not line.startswith("#")
     }
+
+
+def corpus_size(root):
+    """The files difftest.sh walks: `find $root/tests $root/selfhost -name
+    '*.pas'`, stated a second time so the two have to agree."""
+    return sum(1 for d in ("tests", "selfhost")
+               for _ in (root / d).rglob("*.pas"))
 
 
 def main():
@@ -85,18 +109,39 @@ def main():
 
     listing = build / "difftest-differs.txt"
     env = dict(os.environ, DIFFTEST_LIST=str(listing))
-    # The script's exit status is the count of disagreements, which is exactly
-    # what is *expected* to be non-zero here -- the baseline decides pass or
-    # fail, not the status.  Its stderr carries the diffs and is passed through.
-    subprocess.run(
+    # The script exits 1 when anything disagreed, which is not by itself a
+    # failure here -- the baseline decides that, not the status.  Its stdout is
+    # captured for the `difftest-compared:` line and its stderr, which carries
+    # the diffs, is passed through.
+    proc = subprocess.run(
         ["bash", str(script), str(s0), str(pascalc)],
-        env=env, cwd=str(root), stdout=subprocess.DEVNULL,
+        env=env, cwd=str(root), stdout=subprocess.PIPE, text=True,
     )
 
     if not listing.exists():
         print("difftest: produced no list; did it run at all?", file=sys.stderr)
         return 1
     now = {ln.strip() for ln in listing.read_text().splitlines() if ln.strip()}
+
+    # How many files it walked.  Absent means it did not reach the end, which
+    # an empty disagreement list would otherwise read as a clean run.
+    seen = COMPARED.search(proc.stdout or "")
+    if not seen:
+        print("difftest: the run did not report how many files it compared, "
+              "so it did not finish; an empty result here is not a pass.",
+              file=sys.stderr)
+        print(proc.stdout, file=sys.stderr)
+        return 1
+    compared, expected = int(seen.group(1)), corpus_size(root)
+    if compared != expected:
+        print(f"difftest: it compared {compared} files and there are "
+              f"{expected} under tests/ and selfhost/.", file=sys.stderr)
+        print("An empty disagreement list means nothing if the run did not "
+              "reach the files.\nIf the corpus really moved, difftest.sh's "
+              "`find` and corpus_size() here have\nto be changed together -- "
+              "they are one claim written twice on purpose.",
+              file=sys.stderr)
+        return 1
 
     if args.write_baseline:
         baseline_path.write_text(HEADER + "".join(f"{f}\n" for f in sorted(now)))

@@ -25,7 +25,7 @@ blind spot in this table, and a new gate is only worth adding if it closes one.
 | --- | --- | --- |
 | **`ctest` goldens** (498 cases, run at `-O2` and again at `-O0`) | that a named program still behaves as recorded | anything **no case names**. A golden agrees with whoever wrote it, so it cannot report that the recorded answer is wrong |
 | **BSI validation suite** (812 programs) | conformance against a corpus nobody here wrote | it is **fixed** — it does not grow with the language, covers ISO 7185 only, and `expected.tsv` records what *this* compiler does |
-| **`selfhost/difftest.sh`** (732 files, two independent front ends) | that the C++ reference front end and the Pascal compiler agree on **tokens, AST and Sema** | the **code generator**, which it never compared (ADR-0025) — and a **misreading**, because both sides are written by the same author from the same reading. That is how ADR-0073's comment rule came to be wrong in *both*. The baseline is **empty** — it was 89 — so any entry appearing in it is a disagreement the change under review introduced |
+| **`selfhost/difftest.sh`** (every Pascal source in the tree — 511 committed, 735 once the BSI suite is fetched — and two independent front ends) | that the C++ reference front end and the Pascal compiler agree on **tokens, AST and Sema** | the **code generator**, which it never compared (ADR-0025) — and a **misreading**, because both sides are written by the same author from the same reading. That is how ADR-0073's comment rule came to be wrong in *both*. The baseline is **empty** — it was 89 — so any entry appearing in it is a disagreement the change under review introduced |
 | **`verify/`** (43 rules, 27 at full 32-bit width, 0 known gaps) | that the lowering matches a property-style statement of the standard | **drift**. It proves the *model* against the *specification*; neither touches the compiler, so a lowering that changes without its model stays green |
 | **`verify.py --crosscheck`** | the model against the real binary, at `-O0` and `-O2` | only the points its generated program actually exercises. It ran `succ` on enumerations alone for a long time — the one ordinal type where a wrong reading and a right one agree |
 | **`selfhost/irtest.sh`** (380 programs, stage 2 = stage 3) | that the compiler is a fixed point under self-application | a bug that is **stable** under self-application. A compiler can miscompile consistently and still reproduce itself — and both stages come from *one binary*, so a `clang` that got a corner of `compiler.pas` wrong is invisible to it. The row below is what closes that half |
@@ -42,7 +42,8 @@ Two consequences worth stating plainly, because they are counter-intuitive:
 - **The strongest oracle this project ever had is back, for half the compiler.**
   `difftest.sh` compared two independent implementations over 436 sources and
   was retired with stage 0 (ADR-0085); ADR-0108 restored `src/` as a *front end*
-  and it now compares 732 files. Two things it still cannot do, and both matter:
+  and it now compares every Pascal source in the tree. Two things it still
+  cannot do, and both matter:
   it says nothing about the **code generator**, which it never compared, and it
   cannot contradict a **reading**, because one author writes both sides. Keep
   `langspec-audit` for the second and running programs for the first.
@@ -79,11 +80,20 @@ A change is often two classes. ADR-0102's was A and D: it changed a lowering
       Model-unchanged: emits a new statement kind; no rule covers it
 
   **Enforced** by the `model-drift` CI job, which fails a range that touches
-  `selfhost/compiler.pas` below the CodeGen banner without touching `verify/`
-  and without that trailer. It cannot decide *which* CodeGen changes reach a
-  modelled lowering — that is a judgement — so it requires the judgement to be
-  written down. A lowering change with an unchanged model is the failure mode
-  this project has actually suffered, and it stays green while suffering it.
+  `selfhost/compiler.pas` in a modelled region without touching
+  `verify/lowering.py` and without that trailer. It cannot decide *which*
+  changes reach a modelled lowering — that is a judgement — so it requires the
+  judgement to be written down. A lowering change with an unchanged model is
+  the failure mode this project has actually suffered, and it stays green while
+  suffering it.
+
+  Two regions, not one. CodeGen is the obvious one; **the constant folder** is
+  the other, because it decides the same clauses a second time for an
+  expression that folds — and the two have disagreed, which is what ADR-0077
+  found in `mod`. The gate watched only CodeGen until then, so a regression in
+  the folder was caught by neither the rules (which model the lowering) nor
+  this. It also asked only whether *something* under `verify/` changed, which
+  editing `verify/README.md` satisfied.
 - **A2. If the change alters *which* values reach a check, extend
   `--crosscheck`.** The rule quantifies symbolically and will keep proving
   something true; the crosscheck is the only thing comparing model to binary.
@@ -311,7 +321,7 @@ from it when one is closed.
 
 | Blind spot | Consequence | Recorded |
 | --- | --- | --- |
-| The differential oracle covers the **front end only** | `src/` is back as `pascalc-s0` — lexer, parser, Sema, no code generator and no LLVM — so `selfhost/difftest.sh` compares tokens/AST/Sema over 732 files again, and the baseline is now **empty**: it reported 89 disagreements when it returned, the drift of 24 Sema commits, and those are ported. What it still cannot see is the **code generator**, which it never compared (ADR-0025), and a **misreading** — both sides are written by one author from one reading, which is how ADR-0073's comment rule was wrong in both | ADR-0108 |
+| The differential oracle covers the **front end only** | `src/` is back as `pascalc-s0` — lexer, parser, Sema, no code generator and no LLVM — so `selfhost/difftest.sh` compares tokens/AST/Sema over every Pascal source in the tree again, and the baseline is now **empty**: it reported 89 disagreements when it returned, the drift of 24 Sema commits, and those are ported. What it still cannot see is the **code generator**, which it never compared (ADR-0025), and a **misreading** — both sides are written by one author from one reading, which is how ADR-0073's comment rule was wrong in both | ADR-0108 |
 | `langspec-audit`'s readers are **not isolated** | the harness injects `CLAUDE.md` — including the reasoning for the clauses under audit — before a reader's first turn, and it cannot decline. All seven readers of the second run disclosed it. A CONFIRMED verdict therefore means "no independent oracle contradicts it", not "an uninfluenced reader agreed"; the *disagreements* are the trustworthy part | ADR-0107 |
 | One conformance defect is **known and unfixed**: a non-constant discriminant or subrange bound is refused outside a variable declaration | §6.2.3.8 b) puts "each actual-discriminant-part **or subrange-bound** not contained by a schema-definition and closest-contained by … the block" in the block's commencement, *after* value parameters are attributed, so `var a: array [1..m] of real` and `type t = vector(m)` inside a procedure are legal and are refused. Feature-sized rather than deferred on merit: the per-variable descriptor ADR-0041 built is keyed on a **schema**, and a bare array bound has none, while a *named* type with a dynamic extent breaks ADR-0055's reason a function result can always be sized. The other three findings of that audit are fixed | ADR-0107 |
 | `-O0` and `-O2` are each run, never **compared** | the whole corpus now runs at both, so a level-specific crash or wrong answer fails — but a case where the two *differ* and both look plausible passes twice. Only `--crosscheck` compares them, over its own generated program | §6 |

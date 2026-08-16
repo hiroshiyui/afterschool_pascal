@@ -169,11 +169,14 @@ endif()
 # tree. Nothing else here can disagree with the compiler without being asked a
 # question someone here composed.
 #
-# It runs RED on purpose. 89 of 731 files disagree -- the Sema drift the C++
-# never received -- and that set is a baseline that may shrink and may not grow.
-# Waiting for zero before wiring it up would leave the 600-odd files that
-# already agree guarded by nothing for as long as the catch-up takes. Skips (77)
-# when either binary is missing.
+# It arrived red on purpose -- 89 of the then 731 files disagreed, the drift the
+# C++ never received -- and held that set as a baseline rather than waiting for
+# zero, which would have left the 642 agreeing files guarded by nothing for as
+# long as the catch-up took. The catch-up is done: the baseline is **empty**, so
+# this is an ordinary regression gate and any file it names is one the change
+# under review broke. It also checks how many files were compared, because an
+# empty disagreement list is what a clean run and a run that compared nothing
+# both produce. Skips (77) when either binary is missing.
 if(Python3_FOUND)
   add_test(NAME difftest
            COMMAND ${Python3_EXECUTABLE}

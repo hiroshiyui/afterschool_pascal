@@ -150,6 +150,17 @@ for f in "${files[@]}"; do
   fi
 done
 
+# How many files were compared, in a fixed form and on every path -- the
+# summary lines below say it too, but one of them goes to stderr and they word
+# it differently, so neither is something another program should read.
+#
+# tests/checks/difftest_check.py is what reads this, and it is the denominator
+# the baseline could not carry: the baseline records *which* files disagree, so
+# a run that compared far fewer files and found no disagreement among them was
+# indistinguishable from a clean one. `find` matching one directory less is all
+# that would take.
+echo "difftest-compared: $checked"
+
 if [[ $failed -ne 0 ]]; then
   echo "differential $component test: $failed of $checked files disagree" >&2
   exit 1

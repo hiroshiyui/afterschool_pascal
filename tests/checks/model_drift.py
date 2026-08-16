@@ -49,12 +49,36 @@ import sys
 
 TRAILER = re.compile(r"^Model-unchanged:\s*\S", re.MULTILINE)
 
-# The banner that opens the code generator inside the one source file. Found by
-# text rather than by line number, because the line number moves with every
-# change and this check would then be measuring the wrong thing.
-CODEGEN_BANNER = "CodeGen -- the annotated tree, written out as textual LLVM IR"
+# The regions of the one source file that a `verify/` rule can be about. Found
+# by banner text rather than by line number, because the line numbers move with
+# every change and this check would then be measuring the wrong thing.
+#
+# CodeGen is the obvious one and was the only one for a long time. The constant
+# folder is here because it is a *second* implementation of the same clauses:
+# §6.7.2.2's `mod` and `div`, and the overflow conditions of §6.7.2.2 and
+# Annex D, are decided once in the emitted code and again in Sema for an
+# expression that folds. The two have disagreed -- ADR-0077 found the folder
+# refusing a negative `mod` divisor while the code it emitted did not -- and a
+# regression in the folder is caught by neither the rules (which model the
+# lowering) nor this gate as it was.
+#
+# An end banner means the region is the section and not "everything after it";
+# CodeGen has none because it runs to the end of the file.
+REGIONS = [
+    ("CodeGen",
+     "CodeGen -- the annotated tree, written out as textual LLVM IR",
+     None),
+    ("the constant folder",
+     "------- constant folding }",
+     "------ type resolution -- }"),
+]
 
 COMPILER = "selfhost/compiler.pas"
+
+# What has to change with a lowering. A `verify/` path is not enough: the
+# proofs are about `lowering.py`, and editing verify/README.md discharged this
+# gate until the test was narrowed.
+MODEL = "verify/lowering.py"
 
 
 def run(*args):
@@ -62,29 +86,43 @@ def run(*args):
                           check=True).stdout
 
 
-def codegen_starts_at(rev):
-    """The line the code generator begins on, in the *new* revision -- so a
-    hunk's new-file line number can be compared against it."""
-    src = run("git", "show", f"{rev}:{COMPILER}")
-    for n, line in enumerate(src.splitlines(), 1):
-        if CODEGEN_BANNER in line:
-            return n
-    raise SystemExit(
-        f"model-drift: the CodeGen banner is not in {COMPILER} at {rev}.\n"
-        "If the file was reorganised, update CODEGEN_BANNER in this script --"
-        " a check that cannot find its landmark must fail loudly, not pass.")
+def region_bounds(rev):
+    """Each watched region as (name, first line, last line) in the *new*
+    revision -- so a hunk's new-file line number can be compared against it."""
+    lines = run("git", "show", f"{rev}:{COMPILER}").splitlines()
+    bounds = []
+    for name, opener, closer in REGIONS:
+        start = next((n for n, l in enumerate(lines, 1) if opener in l), None)
+        if start is None:
+            raise SystemExit(
+                f"model-drift: the banner for {name} is not in {COMPILER} at "
+                f"{rev}.\nIf the file was reorganised, update REGIONS in this "
+                "script -- a check that cannot find its landmark must fail "
+                "loudly, not pass.")
+        end = len(lines)
+        if closer is not None:
+            end = next((n for n, l in enumerate(lines, 1)
+                        if n > start and closer in l), None)
+            if end is None:
+                raise SystemExit(
+                    f"model-drift: {name} has no closing banner in {COMPILER} "
+                    f"at {rev}. Update REGIONS in this script.")
+            end -= 1
+        bounds.append((name, start, end))
+    return bounds
 
 
-def touched_codegen(base, head):
-    """The new-file line numbers of hunks that land at or after the banner."""
-    boundary = codegen_starts_at(head)
+def touched_regions(base, head):
+    """The watched regions this range edited, each with the hunk lines."""
+    bounds = region_bounds(head)
     diff = run("git", "diff", "-U0", f"{base}..{head}", "--", COMPILER)
-    hit = []
+    hit = {name: [] for name, _, _ in bounds}
     for m in re.finditer(r"^@@ -\S+ \+(\d+)", diff, re.MULTILINE):
         start = int(m.group(1))
-        if start >= boundary:
-            hit.append(start)
-    return hit, boundary
+        for name, lo, hi in bounds:
+            if lo <= start <= hi:
+                hit[name].append(start)
+    return {k: v for k, v in hit.items() if v}, bounds
 
 
 def main():
@@ -96,30 +134,35 @@ def main():
         print("model-drift: the compiler did not change")
         return 0
 
-    hunks, boundary = touched_codegen(base, head)
-    if not hunks:
-        print(f"model-drift: {COMPILER} changed, but not below the CodeGen "
-              f"banner (line {boundary})")
+    hit, bounds = touched_regions(base, head)
+    where = ", ".join(f"{n} ({lo}-{hi})" for n, lo, hi in bounds)
+    if not hit:
+        print(f"model-drift: {COMPILER} changed, but not in a modelled "
+              f"region -- {where}")
         return 0
 
-    if any(f.startswith("verify/") for f in changed):
-        print(f"model-drift: CodeGen changed ({len(hunks)} hunks) and verify/ "
-              "changed with it")
+    what = "; ".join(f"{name}, {len(lines)} hunks" for name, lines in
+                     hit.items())
+    if MODEL in changed:
+        print(f"model-drift: {what} -- and {MODEL} changed with it")
         return 0
 
     log = run("git", "log", "--format=%B", f"{base}..{head}")
     if TRAILER.search(log):
-        print(f"model-drift: CodeGen changed ({len(hunks)} hunks) with no "
-              "verify/ change, and the range says why")
+        print(f"model-drift: {what} -- no {MODEL} change, and the range "
+              "says why")
         return 0
 
-    print(f"model-drift: {COMPILER} changed below the CodeGen banner "
-          f"(line {boundary}) at lines {', '.join(map(str, hunks[:8]))}"
-          f"{' ...' if len(hunks) > 8 else ''}")
-    print("            and nothing under verify/ changed.")
+    for name, lines in hit.items():
+        print(f"model-drift: {COMPILER} changed in {name} at lines "
+              f"{', '.join(map(str, lines[:8]))}"
+              f"{' ...' if len(lines) > 8 else ''}")
+    print(f"            and {MODEL} did not change.")
     print()
-    print("verify/lowering.py models the code generator. The rules prove that")
-    print("model against the specification -- neither touches the compiler --")
+    print("verify/lowering.py models the arithmetic this compiler emits, and")
+    print("the constant folder decides the same clauses a second time for an")
+    print("expression that folds. The rules prove the model against the")
+    print("specification -- neither touches the compiler --")
     print("so a lowering that changes without its model keeps passing while")
     print("describing a compiler that no longer exists. That has happened.")
     print()
