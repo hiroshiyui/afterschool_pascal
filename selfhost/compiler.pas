@@ -17677,6 +17677,18 @@ end;
 procedure DumpStmt;
 var p: nodePtr; rng: rangePtr;
 begin
+  { Look through the husk *before* anything is printed. Sema decided the name
+    denotes a procedure the program declared, so what the statement is is the
+    call (ADR-0087) -- and the indentation belongs to the statement that is
+    really there. Recursing from inside the case instead padded twice, once
+    for the husk and once for the call, so the head line sat two levels deeper
+    than its own arguments. `n` is a value parameter, so this is a local view
+    of the node and the caller's list walk is untouched. }
+  if n^.kind = nkWrite then begin
+    if n^.wrCall <> nil then n := n^.wrCall
+  end
+  else if n^.kind = nkRead then
+    if n^.rdCall <> nil then n := n^.rdCall;
   Pad;
   case n^.kind of
     nkEmpty: begin
@@ -17712,12 +17724,10 @@ begin
       DumpExpr(n^.asValue);
       level := level - 1
     end;
-    { The husk is not printed: Sema decided the name denotes a procedure the
-      program declared, so what the statement *is* is the call (ADR-0087).
-      Only --dump-sema can reach this -- before Sema the field is nil, which
-      is the honest picture of a parser that recognised six names and could
-      not know whether that reading would survive. }
-    nkWrite: if n^.wrCall <> nil then DumpStmt(n^.wrCall) else begin
+    { Only --dump-sema can reach the husk above -- before Sema the field is
+      nil, which is the honest picture of a parser that recognised six names
+      and could not know whether that reading would survive. }
+    nkWrite: begin
       if n^.wrIsStr then
         write('writestr')
       else if n^.wrNewline then
@@ -17751,7 +17761,7 @@ begin
       end;
       level := level - 1
     end;
-    nkRead: if n^.rdCall <> nil then DumpStmt(n^.rdCall) else begin
+    nkRead: begin
       if n^.rdIsStr then
         write('readstr')
       else if n^.rdNewline then

@@ -1,0 +1,50 @@
+program redefinefamily
+  params
+    name output @19:24
+  frames
+    frame redefinefamily level 0
+      var output #0 : text (stdout 0)
+      var i #1 : integer
+    frame write level 1
+      varparam a #0 : integer
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+      var
+        names
+          name i @20:5
+        type
+          named integer @20:8 = integer
+    procs
+      proc write @22:1
+        params
+          group var
+            names
+              name a @22:21
+            type
+              named integer @22:24 = integer
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @23:1
+              assign @24:3
+                var a @24:3 -> write/0 : integer
+                binary add @24:10 : integer
+                  var a @24:8 -> write/0 : integer
+                  int 1 @24:12 : integer
+    body
+      compound @27:1
+        assign @28:3
+          var i @28:3 -> redefinefamily/1 : integer
+          int 1 @28:8 : integer
+        proccall write -> proc write @29:3
+          args
+            var i @29:9 -> redefinefamily/1 : integer
