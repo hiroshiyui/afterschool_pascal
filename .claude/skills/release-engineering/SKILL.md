@@ -31,11 +31,28 @@ When performing release engineering, always follow these steps:
    release, never inside it.
 
 3. **Sanity-check the compiler by hand** — the suite compares stdout, so it
-   cannot see everything a user does. Confirm on a fresh checkout that
-   `pascalc hello.pas` produces a runnable binary, `--emit-llvm` produces IR that
-   `llc` accepts, the `-h` output matches the flags that actually exist, and a
-   deliberately broken program produces a diagnostic and exit status 1 rather
-   than a crash.
+   cannot see everything a user does. Confirm on a fresh checkout that:
+   - `tools/pascalcc hello.pas -o hello` produces a runnable binary. **`pascalc`
+     itself does not** — it writes IR and stops (ADR-0085), so there is no
+     `--emit-llvm` flag and never was: emitting IR is the whole of what it does.
+   - `llc` accepts that IR. Pass **`-relocation-model=pic`**, or link the result
+     with `clang -no-pie`: `llc` defaults to a non-PIC model and the system
+     linker defaults to PIE, so the mismatch produces
+     `relocation R_X86_64_32 against '.bss' can not be used when making a PIE
+     object` — which looks like a compiler defect and is an `llc` invocation.
+     `clang` compiling the `.ll` directly is what the suite and `tools/pascalcc`
+     use, and it picks the model itself, which is why this only ever bites here.
+   - the `-h` output matches the flags `ParseArgs` accepts — there is a `ctest`
+     case for this since v1.2.0, so it is a spot check rather than the check.
+   - a deliberately broken program produces a diagnostic and **exit status 1**
+     rather than a crash.
+
+   `llc` is worth running over more than `hello.pas`, because it is a second
+   reader of the emitted IR and the only one that is not `clang`: the corpus
+   (both standards), the committed seed, and `selfhost/compiler.pas` itself. The
+   strongest form is to link `llc`'s output into a compiler and have it
+   translate `compiler.pas` — the IR must be byte-identical to what the
+   clang-built compiler produced, since the two are the same program.
 
 4. **Determine the release type** — review all unreleased commits since the last
    tag (`git log --oneline $(git describe --tags --abbrev=0 2>/dev/null)..HEAD`,
