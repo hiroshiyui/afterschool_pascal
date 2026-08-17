@@ -13,6 +13,33 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-08-18
+
+**One of the changes below turns a wrong answer into an error, and three
+refuse a program that compiled before.** None of them removes language you
+could rely on — in each case the program was already being compiled into
+something other than what it said — but a compiler that changes its mind about
+a source you have is the thing worth reading before upgrading:
+
+- a statement whose live string values exceed the arena **stopped being
+  silently wrong**. It used to wrap and write one live value over another, so
+  `a + a = b + b` over two 512K strings compared a buffer with itself and
+  called two values differing in every character equal, exit status 0. There is
+  no repair that keeps an answer, so it is now an error;
+- an identifier or a character-string longer than 255 characters is refused
+  rather than truncated. Truncation made two names one, and printed 255
+  characters of a 300-character literal;
+- a type-name written inside a record type-denoter that is also one of that
+  record's fields is refused wherever it appears, where only `^fred` was
+  refused before;
+- a program's own block now costs one nesting level, so 999 remain inside it.
+
+Each is a defect against a clause, and every one of them was found by an
+oracle rather than by a user: a security audit drove untrusted input at the
+front end, and an independent reading of the standards went looking for the
+other two. `doc/implementation-defined.md` §6 now states every limit this
+processor imposes, which clause 5.1 c) requires and which it had been missing.
+
 ### Added
 
 - **A subrange bound in a variable's own type-denoter may be an expression**,
@@ -731,6 +758,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.4.0
 [1.3.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.1
 [1.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.0
 [1.2.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.2.0
