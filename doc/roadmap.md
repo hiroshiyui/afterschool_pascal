@@ -373,7 +373,10 @@ surprises.
   recursive walkers (parser, Sema, CodeGen, the AST destructor) with an order
   of magnitude of headroom against the tightest measured crash point, ~19 000
   levels on an 8 MiB stack. The cost: legal machine-generated programs with
-  chains beyond 1000 terms are refused.
+  chains beyond 1000 terms are refused. Since ADR-0110 a **block** is one of
+  the levels it counts, which it always should have been — so 999 remain inside
+  the program's own, and nested declarations past the bound reach this
+  diagnostic instead of running the scope stack off its end.
 - **A variable created by `new(p, c1, ..., cn)` may still be assigned or
   passed.** ISO 7185 §6.6.5.3 forbids it, because the unselected variants do
   not exist; detecting it needs the pointer's *value* to carry which form
@@ -416,12 +419,26 @@ surprises.
 
 ### Under ISO/IEC 10206:1991
 
-Four more, each stated in the record that made it:
+Five more, each stated in the record that made it:
 
-- **String concatenation draws from a ring.** A string value is a pointer and a
-  length (ADR-0051), so only `+` makes characters that did not exist; they come
-  from a fixed buffer in the runtime. One *statement* concatenating more than
-  the ring holds is the limit, and it is stated rather than silently wrong.
+- **String concatenation draws from an arena.** A string value is a pointer and
+  a length (ADR-0051), so only `+` makes characters that did not exist; they
+  come from a fixed buffer in the runtime. One *statement* holding more live
+  string values than the arena holds is the limit.
+  - It was a **ring**, and the sentence here used to end "stated rather than
+    silently wrong". That was the reverse of the truth: a wrap wrote one live
+    value over another, so `a + a = b + b` over two 512K strings compared a
+    buffer with itself, printed EQUAL and exited 0. ADR-0111 made it a stack
+    whose end CodeGen supplies — a release emitted after any statement that
+    took storage — and both ways of exhausting it are reported now.
+- **A subrange bound that is not a constant is refused in a
+  *type-definition*.** §6.2.3.8 b) evaluates one at the block's commencement,
+  so `type t = array [1..m] of integer` and `type t = vector(m)` inside a
+  procedure are legal. The **variable** half landed as ADR-0113 and is the half
+  most likely to be met; what is left is a different decision rather than the
+  rest of the same one, since a variable's descriptor belongs to the variable
+  and a type's would belong to the block. Found by ADR-0107's independent
+  reading; the one conformance defect that is known and unfixed.
 - **ExpDigits is not a fixed number** (ADR-0064). §6.10.3.4.1 makes it one
   implementation-defined value; here it is what C's `%E` writes — two digits,
   or three past 1e100 — so a representation stays exactly ActWidth wide while
@@ -1493,16 +1510,16 @@ before it could not see.
   in a catalogue that fails in both directions.
 - **`procedure-coverage`** (ADR-0103) instruments the *emitted IR* with clang's
   SanitizerCoverage, which is possible only because the backend is textual.
-  554 of 556 procedures are entered. It found four documented `--dump` flags no
+  563 of 565 procedures are entered. It found four documented `--dump` flags no
   case had ever passed, and `tests/dumps/` exists because of it.
 - **The expensive version** — `pascalc --coverage` (ADR-0104) — landed in
   v1.2.0 and did want a record. The compiler instruments itself, one counter per
   statement, and the *denominator* is read back from the same `.ll` the
   compilation wrote, so the two halves of a figure cannot disagree about which
-  lines were executable. 12,708 of 13,358 statements are run by the corpus.
+  lines were executable. 12,949 of 13,403 statements are run by the corpus.
 - **`tests/spec/`** (ADR-0105, ADR-0106) is the same question asked of the
   *standards* rather than of the compiler: 13 of 207 testable clauses cited,
-  with the other 103 headings triaged out as structural or unimplemented so the
+  with 85 of the 292 headings triaged out as structural or unimplemented so the
   denominator means something.
 
 **Two things it did not buy, both in `doc/sop.md` §7.** A statement is not a
