@@ -337,9 +337,10 @@ jump back to, and the jump closes the files of every block it abandons — the
 work those blocks' own exits would have done.
 
 One implementation limit: nesting deeper
-than 1000 levels — parentheses, statements, type denoters, or the depth of the
-*tree* an operator chain builds — is a compile-time error rather than a stack
-overflow, in the parser or in any walk after it.
+than 1000 levels — parentheses, statements, type denoters, blocks, or the
+depth of the *tree* an operator chain builds — is a compile-time error rather
+than a stack overflow, in the parser or in any walk after it. A program's own
+block is one of those levels, so 999 remain inside it.
 
 ## What `--std=extended` adds
 

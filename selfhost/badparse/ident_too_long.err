@@ -1,0 +1,2 @@
+<source>:13:5: error: identifier is too long: this compiler keeps 255 characters and every one of them is significant
+<source>:15:3: error: identifier is too long: this compiler keeps 255 characters and every one of them is significant

@@ -324,10 +324,32 @@ bound has none. It is the finding of the second independent reading most likely
 to break a real program (ADR-0107), and `doc/sop.md` §7 carries it as a live
 gap rather than a closed one.
 
+**An identifier or a character-string longer than 255 characters is
+refused.** §6.1.3 makes every character of an identifier significant and
+§6.1.7 puts no bound on a character-string, so both limits are this
+processor's. Each is *reported*: `identifier is too long: this compiler keeps
+255 characters and every one of them is significant`, and `string literal is
+too long: this compiler keeps 255 characters`.
+
+Until a security audit found it they were applied by silent truncation
+instead, which is a worse thing than a limit. Two identifiers agreeing in
+their first 255 characters became one name, so a program could assign to one
+and read the other with nothing said; and `writeln` of a 300-character literal
+printed 255 of them, so a program's output did not match its source.
+`selfhost/badparse/ident_too_long.pas` and `string_too_long.pas` pin both.
+
+**Nesting deeper than 1000 levels is refused** (ADR-0020) —
+parentheses, statements, type denoters, blocks, or the depth of the tree an
+operator chain builds. The bound is on the *tree* rather than on the parser's
+own recursion, because a long `a+b+c+…` chain parses iteratively and is deep
+only for the walkers after it. A program's own block is one of the levels, so
+999 remain inside it. Blocks began to count only after the same audit found
+1001 nested procedures indexing Sema's scope stack off its end.
+
 ### 6.1 Programs accepted that the standard requires to be rejected
 
-The first two above are deviations this project chose and the third is a defect
-it has not fixed. These are the other kind: rules of ISO 7185 that a program can
+The first two above are deviations this project chose, the third is a defect it
+has not fixed, and the last two are limits it states rather than hides. These are the other kind: rules of ISO 7185 that a program can
 break without this compiler saying so.
 They were found the way the unreported errors in §3 were — by the BSI Pascal
 Validation Suite's `DEVIANCE` category, whose programs a conforming processor

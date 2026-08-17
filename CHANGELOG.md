@@ -13,6 +13,25 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **An identifier or a character-string longer than 255 characters is now an
+  error** rather than being silently shortened to 255. A program containing one
+  compiled before and does not now, and that is the point: the limit was being
+  applied by dropping the tail, so two identifiers agreeing in their first 255
+  characters were *one name* — a program could assign to one and read the other
+  with nothing said — and `writeln` of a 300-character literal printed 255 of
+  them, so its output did not match its source. Found by a security audit;
+  ADR-0110 records why the limit is reported rather than raised, and
+  `doc/implementation-defined.md` §6 now states it as clause 5.1 c) requires.
+- **A block counts as one nesting level**, so 999 remain inside a program's own
+  block where 1000 did before. Nothing counted a block, so a procedure
+  declaration nested a scope without nesting anything the parser measured: 1001
+  nested procedures indexed Sema's scope stack off its end and stopped the
+  compiler with `array index out of bounds (0..1001)` on **stderr**, where its
+  diagnostics go to stdout — a caller redirecting stderr got a non-zero exit
+  and no message. It is now the ordinary `nesting is too deep` diagnostic.
+
 ## [1.3.1] — 2026-08-17
 
 **Three of the fixes below change what an already-valid program prints or

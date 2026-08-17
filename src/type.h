@@ -33,6 +33,15 @@ inline Std &typeStd() {
 /// would produce it is an error.
 inline constexpr int kMaxInt = 2147483647;
 
+/// The longest identifier or character-string this processor keeps, which is
+/// `strMax` in selfhost/compiler.pas. Both keep it and *both report* what does
+/// not fit: 6.1.3 makes every character of an identifier significant, so
+/// truncating in silence made two names one, and 6.1.7 bounds a
+/// character-string not at all, so truncating one made a program print
+/// something its source did not say. doc/implementation-defined.md 6 states
+/// the restriction.
+inline constexpr int kStrMax = 255;
+
 enum class TypeKind {
   Void, Integer, Real, Boolean, Char, Enum, Subrange, Array, Record, Pointer,
   File, Set, Proc,

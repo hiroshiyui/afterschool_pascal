@@ -380,6 +380,12 @@ void Parser::parseMainProgram(Program &prog) {
 /// The same production serves the program and every procedure, so nesting
 /// needs no extra machinery here.
 std::unique_ptr<Block> Parser::parseBlock() {
+  // A block is a level of the tree, and it is the level a scope stack is
+  // indexed by. Nothing counted it, so a procedure declaration nested a scope
+  // without nesting anything the parser was measuring — in the Pascal compiler
+  // that drove `scopeDepth` past `scopeMark`'s end and stopped it with an
+  // array-bounds trap. selfhost/badparse/nesting_blocks.pas is the program.
+  Depth guard(*this);
   auto block = std::make_unique<Block>();
 
   // §6.2.1 puts the import-part first, and there is at most one. Under ISO

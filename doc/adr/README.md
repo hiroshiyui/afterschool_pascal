@@ -118,3 +118,4 @@ the alternatives that were rejected and why.
 | [0107](0107-what-the-second-independent-reading-found.md) | What the second independent reading found | Accepted |
 | [0108](0108-the-reference-front-end-comes-back.md) | The reference front end comes back | Accepted |
 | [0109](0109-the-goal-is-a-practical-pascal.md) | The goal is a practical Pascal | Accepted |
+| [0110](0110-a-limit-is-reported-not-applied-in-silence.md) | A limit is reported, not applied in silence | Accepted |

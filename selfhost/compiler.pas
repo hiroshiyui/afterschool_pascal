@@ -103,10 +103,14 @@ const
   poolMax  = 700000; { characters of identifier and literal text }
   tokMax   = 140000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
-  { Blocks nest inside that limit and never beyond it: every one is reached
-    through a declaration the parser counted. One more than maxDepth so the
-    outermost scope can be depth 0 and the deepest a block the parser let
-    through. }
+  { Blocks nest inside that limit and never beyond it, because ParseBlock
+    counts one -- which it did not until a security audit wrote 1001 nested
+    procedures and indexed `scopeMark` off its end. The claim this comment
+    makes is the only thing standing between scopeDepth and that array, so it
+    is load-bearing prose: if a block is ever parsed by a path that does not
+    call EnterLevel, this is wrong again and nothing else will say so.
+    One more than maxDepth so the outermost scope can be depth 0 and the
+    deepest a block the parser let through. }
   maxBlockDepth = 1001;
   { The size of a file variable's storage, which is PAS_FILE_SIZE in
     runtime/pasrt.h. The C++ code generator includes that header so the two
@@ -2295,14 +2299,31 @@ begin
 end;
 
 procedure LexIdentOrKeyword;
-var sl, sc: integer; text: str; k, joined: tokenKind;
+var sl, sc: integer; text: str; k, joined: tokenKind; seen: integer;
 begin
   sl := line;
   sc := col;
   StrClear(text);
+  seen := 0;
   while (not AtEof) and (IsAlnum(Peek(0)) or (Peek(0) = '_')) do begin
     StrAppend(text, Lower(Peek(0)));
+    seen := seen + 1;
     Advance
+  end;
+  { 6.1.3 makes every character of an identifier significant, so two names
+    agreeing in their first strMax characters and differing after are two
+    names. StrAppend keeps strMax and drops the rest *in silence*, which made
+    them one: a program could assign to one and read the other, and nothing
+    said so -- the source read one way and compiled another.
+
+    Counted rather than asked of `text`, because `text.len` is what was kept
+    and the question is what was written. Reported and not truncated silently,
+    which is what poolMax and tokMax already do; the restriction is stated in
+    doc/implementation-defined.md 6. }
+  if seen > strMax then begin
+    ErrorAt(sl, sc);
+    writeln('identifier is too long: this compiler keeps ', strMax:1,
+            ' characters and every one of them is significant')
   end;
   k := LookupKeyword(text);
 
@@ -2592,12 +2613,13 @@ begin
 end;
 
 procedure LexString;
-var sl, sc: integer; value_: str; done, bad: boolean; c: char;
+var sl, sc: integer; value_: str; done, bad: boolean; c: char; seen: integer;
 begin
   sl := line;
   sc := col;
   Advance; { the opening quote }
   StrClear(value_);
+  seen := 0;
   done := false;
   bad := false;
   while not done do begin
@@ -2612,18 +2634,32 @@ begin
         { '' inside a literal is one quote }
         if Peek(0) = '''' then begin
           StrAppend(value_, Peek(0));
+          seen := seen + 1;
           Advance
         end
         else
           done := true
       end
-      else
-        StrAppend(value_, c)
+      else begin
+        StrAppend(value_, c);
+        seen := seen + 1
+      end
     end
   end;
   if bad then begin
     ErrorAt(sl, sc);
     writeln('unterminated string literal')
+  end;
+  { Neither standard bounds a character-string -- 6.1.7 is a sequence of
+    string-elements and stops -- so this length is this implementation's, and
+    it was being applied by dropping the tail in silence. `writeln` of a
+    300-character literal printed 255 of them and said nothing, which is a
+    program whose output does not match its source. Same rule as the
+    identifier above, and stated in the same place. }
+  if (not bad) and (seen > strMax) then begin
+    ErrorAt(sl, sc);
+    writeln('string literal is too long: this compiler keeps ', strMax:1,
+            ' characters')
   end;
   AddText(sl, sc, tkStr, PoolAdd(value_), value_.len)
 end;
@@ -5278,6 +5314,19 @@ function ParseBlock;
 var b, ph, pt, ch, ct, th, tt, vh, vt, lh, lt: nodePtr; done: boolean;
     part, highest: integer;
 begin
+  { A block is a level of the tree, and it is the level Sema's scope stack is
+    indexed by. Nothing counted it: a procedure declaration nested a *scope*
+    without nesting anything the parser was measuring, so 1001 of them drove
+    scopeDepth past `scopeMark`'s end and the compiler stopped with an array
+    bounds trap on stderr -- where its diagnostics go to stdout, so a caller
+    redirecting stderr got a non-zero exit and no message.
+    `selfhost/badparse/nesting_blocks.pas` is that program.
+
+    Counting it here is what makes maxBlockDepth's comment true rather than
+    hopeful, and it is the whole guard: `while not done and not aborted` below
+    stops the loop that would recurse, so Bail inside EnterLevel unwinds
+    without another level being claimed. }
+  EnterLevel;
   b := NewNode(nkBlock, CurLine, CurCol);
   b^.blImports := nil;
   b^.blLabels := nil;
@@ -5356,6 +5405,7 @@ begin
   b^.blProcs := ph;
 
   b^.blBody := ParseCompound;
+  LeaveLevels(1);
   ParseBlock := b
 end;
 

@@ -213,6 +213,22 @@ Token Lexer::lexIdentOrKeyword() {
     text += static_cast<char>(
         std::tolower(static_cast<unsigned char>(advance())));
 
+  // 6.1.3: every character of an identifier is significant, so a name longer
+  // than this processor keeps is reported rather than quietly shortened into
+  // a different one.
+  if (static_cast<int>(text.size()) > kStrMax) {
+    diags_.error(sl, sc,
+                 "identifier is too long: this compiler keeps " +
+                     std::to_string(kStrMax) +
+                     " characters and every one of them is "
+                     "significant");
+    // ...and then keeps exactly what it says it keeps. The Pascal lexer's
+    // `str` is a fixed array and stops at strMax; this one would carry the
+    // whole name into the token and the two dumps would differ on a file both
+    // have already rejected.
+    text.resize(kStrMax);
+  }
+
   auto it = keywords().find(text);
   Tok kind = it != keywords().end() ? it->second : Tok::Ident;
   if (kind == Tok::Ident && std_ == Std::Extended) {
@@ -440,9 +456,11 @@ Token Lexer::lexString() {
   int sl = line_, sc = col_;
   advance(); // opening quote
   std::string value;
+  bool bad = false;
   for (;;) {
     if (eof() || peek() == '\n') {
       diags_.error(sl, sc, "unterminated string literal");
+      bad = true;
       break;
     }
     char c = advance();
@@ -454,6 +472,14 @@ Token Lexer::lexString() {
       break;
     }
     value += c;
+  }
+  // 6.1.7 puts no bound on a character-string, so this one is the
+  // implementation's and is reported rather than applied by truncation.
+  if (!bad && static_cast<int>(value.size()) > kStrMax) {
+    diags_.error(sl, sc,
+                 "string literal is too long: this compiler keeps " +
+                     std::to_string(kStrMax) + " characters");
+    value.resize(kStrMax); // as above: keep what the other lexer keeps
   }
   Token t = make(Tok::StrLit, sl, sc);
   t.text = std::move(value);

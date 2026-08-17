@@ -1,1 +1,1 @@
-<source>:8:2006: error: nesting is too deep: this compiler accepts 1000 levels
+<source>:8:2004: error: nesting is too deep: this compiler accepts 1000 levels
