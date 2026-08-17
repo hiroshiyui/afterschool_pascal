@@ -374,10 +374,24 @@ exercised one**, so every oracle in the repository agreed the compiler was
 right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
-**§6.4.3.3's record region is enforced only for a pointer domain.** A
-field-identifier's defining-point has the region that is the record-type
-containing it, so a name spelled like a field denotes the field throughout the
-record — but only `^fred` is refused, while `record a: fred; fred: integer end`
-and an array whose index-type names a field are accepted. Same clause, same
-region; only the occurrence differs (ADR-0101).
+**There is currently one, and it is narrow.** §6.4.3.3's record region is
+enforced at every occurrence of a *type-name* inside the record — a field's own
+denoter, an array's index-type and component-type, a set's base-type, a file's
+component-type, a pointer's domain-type and a schema-name (ADR-0112). It is
+**not** enforced at a *constant* occurrence: in
+
+```pascal
+const fred = 3;
+type r = record a: array [1..fred] of integer; fred: integer end;
+```
+
+the bound `fred` is the field by §6.2.2.4, and this processor reads it as the
+constant. Those occurrences go through the expression checker rather than
+type-denoter resolution, and reach it for a different purpose.
+
+The larger half of this entry was the whole of it until ADR-0112: only `^fred`
+was refused, while `record a: fred; fred: integer end`, an array whose
+index-type names a field, and a field named `integer` taking that spelling from
+the required identifiers were all accepted. Same clause, same region; only the
+occurrence differed (ADR-0101).
 

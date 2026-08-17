@@ -120,3 +120,4 @@ the alternatives that were rejected and why.
 | [0109](0109-the-goal-is-a-practical-pascal.md) | The goal is a practical Pascal | Accepted |
 | [0110](0110-a-limit-is-reported-not-applied-in-silence.md) | A limit is reported, not applied in silence | Accepted |
 | [0111](0111-a-string-temporary-lives-for-one-statement.md) | A string temporary lives for one statement | Accepted |
+| [0112](0112-a-record-is-a-region-at-every-occurrence.md) | A record is a region at every occurrence | Accepted |

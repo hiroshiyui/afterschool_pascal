@@ -1568,6 +1568,30 @@ able to make.
     identifier**, which is recognised by name and so is not a symbol to stamp.
     ADR-0087's seam from the other side, and the answer to both is to declare
     the required identifiers as symbols.
+- **A record type is a region** (ADR-0098, ADR-0112). §6.4.3.3 gives a
+  field-identifier its defining-point in the record-type, and §6.2.2.4 makes its
+  scope that whole region "and all regions enclosed by that region" — so a
+  spelling written anywhere inside the denoter is an applied occurrence of the
+  *field*, and a field is not a type.
+  - **Asked of the denoter, not of the type.** The fields do not exist as
+    symbols yet; the record is being resolved. That is also why the *whole*
+    denoter is scanned rather than the part already seen —
+    `record a: fred; fred: integer end` is refused for a field declared after
+    the occurrence, the region being the record and not the text before the
+    point.
+  - **One function, asked at three occurrences** — a pointer's domain-type, a
+    type-name and a schema-name. It was only the first for a long time, because
+    that is where BSI's DEV043 pointed; the clause names no production, so
+    enforcing it there alone was a different rule (`tests/record_region_field.pas`,
+    `tests/extended/record_region_schema.pas`).
+  - **Asked *before* the lookup**, because a field's defining-point is nearer
+    than the region enclosing the program where the required identifiers live —
+    which is what makes `record f: integer; integer: real end` refuse its own
+    first field. Resolving first and testing afterwards would make the answer
+    depend on whether a type of that name happened to exist.
+  - Not caught: a **constant** occurrence — `array [1..fred]`, a field's
+    initial-state expression — which goes through the expression checker and is
+    not asked. `doc/implementation-defined.md` §6.1 carries it.
 - **A word-symbol may be two words** (ADR-0038). §6.1.2 spells the
   short-circuit operators `and then` and `or else` — one word-symbol apiece,
   written as two words. Not `and_then`: there is no underscore in the standard,

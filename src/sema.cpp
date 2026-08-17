@@ -292,29 +292,52 @@ static bool fieldNameInDenoter(const TypeExpr *d, const std::string &name) {
   return false;
 }
 
+// §6.4.3.3 gives a field-identifier its defining-point in the record-type
+// closest-containing the field-list, and §6.2.2.4 makes its scope the whole of
+// that region — so a spelling written anywhere inside a record type-denoter is
+// an applied occurrence of the *field*, whatever else the program declared
+// under that name outside, and a field is not a type. Every enclosing record is
+// asked and not only the closest, because §6.2.2.4's scope includes "all
+// regions enclosed by that region".
+//
+// Asked of the *denoter*, because the field does not exist on the type yet:
+// this runs while the record is being resolved, which is also why the whole
+// denoter is scanned rather than the part already seen. `record a: fred; fred:
+// integer end` is refused for the field declared *after* the occurrence — the
+// region is the record and not the text before the point (ADR-0098).
+//
+// A qualified name is nobody's field: §6.11.3's qualifier reaches an interface,
+// and an interface has no fields.
+bool Sema::fieldOfOpenRecord(const std::string &qualifier,
+                             const std::string &name) const {
+  if (!qualifier.empty())
+    return false;
+  for (const TypeExpr *r : openRecords_)
+    if (fieldNameInDenoter(r, name))
+      return true;
+  return false;
+}
+
+void Sema::errorFieldNotAType(int line, int col, const std::string &name) {
+  diags_.error(line, col,
+               "'" + name + "' is a field of this record type, "
+               "so it does not name a type here");
+}
+
 /// A pointer's domain is a type identifier, and it may be one defined later in
 /// the same type part — the language's only forward reference, and the reason
 /// a record can contain a pointer to itself.
 Type *Sema::resolvePointer(TypeExpr &denoter) {
   Type *t = newType(TypeKind::Pointer);
 
-  // §6.4.3.3 gives a field-identifier its defining-point in the record-type
-  // closest-containing the field-list, and §6.2.2.4 makes its scope the whole
-  // of that region — so inside a record type-denoter a name spelled like one
-  // of its fields is an applied occurrence of the *field*, and §6.4.4's
-  // domain-type wants a type-identifier. Every enclosing record is asked, not
-  // only the closest, because §6.2.2.4's scope includes "all regions enclosed
-  // by that region". This is a question about regions and is not §6.2.2.9's
-  // order rule, whose pointer-domain exception below stands untouched.
-  if (denoter.qualifier.empty())
-    for (const TypeExpr *r : openRecords_)
-      if (fieldNameInDenoter(r, denoter.name)) {
-        diags_.error(denoter.line, denoter.col,
-                     "'" + denoter.name + "' is a field of this record type, "
-                     "so it does not name a type here");
-        t->elem = ty::Int(); // keep the tree checkable
-        return t;
-      }
+  // §6.4.4's domain-type wants a type-identifier, and this is a question about
+  // regions rather than §6.2.2.9's order rule — whose pointer-domain exception
+  // below stands untouched.
+  if (fieldOfOpenRecord(denoter.qualifier, denoter.name)) {
+    errorFieldNotAType(denoter.line, denoter.col, denoter.name);
+    t->elem = ty::Int(); // keep the tree checkable
+    return t;
+  }
 
   // §6.4.4's domain-type is a `type-name` or a `schema-name`, and both carry
   // §6.11.3's optional interface qualifier — so an imported type may be a
@@ -1291,6 +1314,17 @@ Type *Sema::resolveType(TypeExpr &denoter) {
     // what an import brought, which that scope is not: `i.integer` is still
     // not `integer`, now because the qualifier is honoured rather than because
     // a spelling test was skipped.
+    //
+    // §6.4.3.3's region is asked first and outranks every one of those: inside
+    // a record, a spelling that is one of its fields denotes the field and so
+    // names nothing here — including where the spelling is a required
+    // type-identifier, since a field's defining-point is nearer than the region
+    // enclosing the program (ADR-0112).
+    if (fieldOfOpenRecord(denoter.qualifier, denoter.name)) {
+      errorFieldNotAType(denoter.line, denoter.col, denoter.name);
+      t = ty::Int();
+      break;
+    }
     {
       Symbol *sym = lookupName(denoter.qualifier, denoter.name, denoter.line,
                                denoter.col);
@@ -1346,6 +1380,17 @@ Type *Sema::resolveType(TypeExpr &denoter) {
     t = resolveRestricted(denoter);
     break;
   case TEK::Schema: {
+    // The region rule again, and for the same reason: §6.4.3.3 does not care
+    // which production the occurrence sits in, only that it is inside the
+    // record (ADR-0112). The discriminants are still checked, so a mistake in
+    // one of them is reported in the same run.
+    if (fieldOfOpenRecord(denoter.qualifier, denoter.name)) {
+      errorFieldNotAType(denoter.line, denoter.col, denoter.name);
+      for (auto &a : denoter.args)
+        checkExpr(a.get());
+      t = ty::Int();
+      break;
+    }
     Symbol *sym =
         lookupName(denoter.qualifier, denoter.name, denoter.line, denoter.col);
     if (!denoter.qualifier.empty() && !sym) {

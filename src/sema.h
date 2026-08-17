@@ -504,6 +504,15 @@ private:
   Type *resolveEnum(TypeExpr &denoter);
   Type *resolveSubrange(TypeExpr &denoter);
   Type *resolvePointer(TypeExpr &denoter);
+  /// Whether an unqualified `name` written inside the record type-denoter now
+  /// being resolved is a field-identifier of it, or of any record enclosing
+  /// it — §6.4.3.3's region, which every occurrence inside the record is
+  /// subject to and not only a pointer's domain (ADR-0112).
+  bool fieldOfOpenRecord(const std::string &qualifier,
+                         const std::string &name) const;
+  /// The one message the region rule refuses with, so the three occurrences
+  /// that ask cannot drift into saying it three ways.
+  void errorFieldNotAType(int line, int col, const std::string &name);
   /// §6.4.4's domain-type written as a schema-name. One type per schema, so a
   /// schema that names itself in a pointer domain terminates.
   Type *heapFromSchema(Symbol *schema, TypeExpr &denoter);

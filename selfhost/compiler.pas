@@ -8340,33 +8340,56 @@ begin
   FieldNameInDenoter := found
 end;
 
-function ResolvePointer(d: nodePtr): typePtr;
-var t: typePtr; s: symPtr; busy, isField: boolean; l: symListPtr;
-    r: nodeListPtr;
+{ 6.4.3.3 gives a field-identifier its defining-point in the record-type
+  closest-containing the field-list, and 6.2.2.4 makes its scope the whole of
+  that region -- so a spelling written anywhere inside a record type-denoter is
+  an applied occurrence of the *field*, whatever else the program declared
+  under that name outside, and a field is not a type. Every enclosing record is
+  asked and not only the closest, because 6.2.2.4's scope includes "all regions
+  enclosed by that region".
+
+  Asked of the *denoter*, because the field does not exist on the type yet:
+  this runs while the record is being resolved, which is also why the whole
+  denoter is scanned rather than the part already seen. `record a: fred; fred:
+  integer end` is refused for the field declared *after* the occurrence -- the
+  region is the record and not the text before the point (ADR-0098).
+
+  A qualified name is nobody's field: 6.11.3's qualifier reaches an interface,
+  and an interface has no fields. }
+function FieldOfOpenRecord(qualLen, at, len: integer): boolean;
+var r: nodeListPtr; found: boolean;
 begin
-  t := NewType(tyPointer);
-  { 6.4.3.3 gives a field-identifier its defining-point in the record-type
-    closest-containing the field-list, and 6.2.2.4 makes its scope the whole
-    of that region -- so inside a record type-denoter a name spelled like one
-    of its fields is an applied occurrence of the *field*, and 6.4.4's
-    domain-type wants a type-identifier. Every enclosing record is asked, not
-    only the closest, because 6.2.2.4's scope includes "all regions enclosed
-    by that region". This is a question about regions and is not 6.2.2.9's
-    order rule, whose pointer-domain exception below stands untouched. }
-  isField := false;
-  if d^.ptQualLen = 0 then begin
+  found := false;
+  if qualLen = 0 then begin
     r := recTop;
     while r <> nil do begin
-      if FieldNameInDenoter(r^.dn, d^.ptAt, d^.ptLen) then isField := true;
+      if FieldNameInDenoter(r^.dn, at, len) then found := true;
       r := r^.next
     end
   end;
-  if isField then begin
-    ErrorAt(d^.line, d^.col);
-    write('''');
-    WritePool(d^.ptAt, d^.ptLen);
-    write(''' is a field of this record type, ');
-    writeln('so it does not name a type here');
+  FieldOfOpenRecord := found
+end;
+
+{ One message for every occurrence the region rule refuses, so the three that
+  ask cannot drift into saying it three ways (ADR-0112). }
+procedure ErrorFieldNotAType(line, col, at, len: integer);
+begin
+  ErrorAt(line, col);
+  write('''');
+  WritePool(at, len);
+  write(''' is a field of this record type, ');
+  writeln('so it does not name a type here')
+end;
+
+function ResolvePointer(d: nodePtr): typePtr;
+var t: typePtr; s: symPtr; busy: boolean; l: symListPtr;
+begin
+  t := NewType(tyPointer);
+  { 6.4.4's domain-type wants a type-identifier, and this is a question about
+    regions rather than 6.2.2.9's order rule -- whose pointer-domain exception
+    below stands untouched. }
+  if FieldOfOpenRecord(d^.ptQualLen, d^.ptAt, d^.ptLen) then begin
+    ErrorFieldNotAType(d^.line, d^.col, d^.ptAt, d^.ptLen);
     t^.elem := intType   { keep the tree checkable }
   end
   else begin
@@ -10423,7 +10446,18 @@ begin
           own `type integer = char` shadows it, which is the whole point of it
           being a symbol. A qualified name reaches only what an import brought,
           so `i.integer` is still not `integer`: an import cannot see the
-          outermost scope. }
+          outermost scope.
+
+          6.4.3.3's region is asked first, and it outranks every one of those:
+          inside a record, a spelling that is one of its fields denotes the
+          field and so names nothing here -- including where the spelling is a
+          required type-identifier, since a field's defining-point is nearer
+          than the region enclosing the program (ADR-0112). }
+        if FieldOfOpenRecord(d^.nmQualLen, d^.nmAt, d^.nmLen) then begin
+          ErrorFieldNotAType(d^.line, d^.col, d^.nmAt, d^.nmLen);
+          t := intType
+        end
+        else begin
         s := LookupName(d^.nmQualAt, d^.nmQualLen, d^.nmAt, d^.nmLen,
                         d^.line, d^.col);
         if (s = nil) and (d^.nmQualLen > 0) then
@@ -10449,6 +10483,7 @@ begin
           writeln('''');
           t := intType
         end
+        end
       end;
       nkEnum:     t := ResolveEnum(d);
       nkSubrange: t := ResolveSubrange(d);
@@ -10460,6 +10495,20 @@ begin
       nkInquiry:  t := ResolveInquiry(d);
       nkRestricted: t := ResolveRestricted(d);
       nkSchema: begin
+        { The region rule again, and for the same reason: 6.4.3.3 does not care
+          which production the occurrence sits in, only that it is inside the
+          record (ADR-0112). The discriminants are still checked, so a mistake
+          in one of them is reported in the same run. }
+        if FieldOfOpenRecord(d^.scQualLen, d^.scAt, d^.scLen) then begin
+          ErrorFieldNotAType(d^.line, d^.col, d^.scAt, d^.scLen);
+          n := d^.scArgs;
+          while n <> nil do begin
+            CheckExpr(n);
+            n := n^.next
+          end;
+          t := intType
+        end
+        else begin
         s := LookupName(d^.scQualAt, d^.scQualLen, d^.scAt, d^.scLen,
                         d^.line, d^.col);
         if (s = nil) and (d^.scQualLen > 0) then begin
@@ -10486,6 +10535,7 @@ begin
         end
         else
           t := ProduceFromSchema(s, nil, d)
+        end
       end;
       nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
       nkStructValue, nkValueElem,

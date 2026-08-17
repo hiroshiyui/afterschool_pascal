@@ -787,10 +787,15 @@ builtin lookup by spelling — that is §6.2.2.11, and it let `var ord: …` and
 `ord('a')` mean two things in one block (ADR-0101). The required *procedures*
 are still not symbols.
 
-**A record type is a region** (§6.4.3.3, ADR-0098): inside a record's denoter a
-name spelled like one of its fields denotes the field, so `^fred` beside a field
-`fred` names no type. Asked of the *denoter*, because the field does not exist
-on the type yet. **Declarations interleave by source position** — constants,
+**A record type is a region** (§6.4.3.3, ADR-0098, ADR-0112): inside a record's
+denoter a name spelled like one of its fields denotes the field, so `^fred`
+beside a field `fred` names no type — and neither does `a: fred`, `array [fred]`,
+`set of fred` or `fred(3)`. Asked of the *denoter*, because the field does not
+exist on the type yet, and of the **whole** denoter, because the region is the
+record and not the text before the point. Asked **before** the lookup: a field's
+defining-point is nearer than the region enclosing the program, so a field named
+`integer` takes that spelling inside its own record. One function, three call
+sites; a *constant* occurrence is still not asked (`doc/sop.md` §7). **Declarations interleave by source position** — constants,
 types, variables *and procedures* (ADR-0100) — which is what lets §6.2.2.9 see a
 body using a variable declared after it.
 

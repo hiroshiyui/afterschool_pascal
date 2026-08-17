@@ -24,6 +24,18 @@ appears below in the release where it still existed.
   them, so its output did not match its source. Found by a security audit;
   ADR-0110 records why the limit is reported rather than raised, and
   `doc/implementation-defined.md` §6 now states it as clause 5.1 c) requires.
+- **A type-name inside a record type-denoter that is also one of the record's
+  fields is now refused**, wherever it is written. §6.4.3.3 puts a field's
+  defining-point in the region that is the record-type and §6.2.2.4 makes its
+  scope that whole region, so `record a: fred; fred: integer end` names the
+  field and not the type — as do `array [fred]`, `set of fred`, `file of fred`
+  and `fred(3)`, and a field named `integer` takes that spelling from the
+  required identifiers inside its own record. Only a pointer's domain-type
+  (`^fred`) was refused before, which is the occurrence BSI's DEV043 pointed
+  at; the clause names no production. A program that uses a type-name inside a
+  record and also has a field of that spelling compiled before and does not
+  now. ADR-0112; `doc/implementation-defined.md` §6.1 records the one occurrence
+  still not asked, which is a *constant* one.
 - **A statement whose string values need more than 1 048 576 characters at once
   now stops the program** with `more string values are live at once than the
   string arena holds`. The storage was a ring: on exhaustion it wrapped to the
