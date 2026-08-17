@@ -62,7 +62,11 @@ compare and assign by length rather than by identity.
 `record len; ch: packed array [1..n] of char end` convention the stage-1 source
 uses, since ISO has no string type (ADR-0012). Its one cost is that a literal
 must be *padded* to a fixed width to be passed to a procedure, which is why the
-keyword tables in the Pascal source will read `'begin       '`.
+keyword tables in the Pascal source read `'begin       '`. The compiler is
+written in Extended Pascal now (ADR-0082), so it *could* spell one
+`string(255)`, and in one place it must: `nameStr` is a file name, and
+§6.4.3.4's `BindingType.name` is a variable-string, so everything reaching
+`bind` is one (ADR-0052). Everything else is still the record.
 
 **String type.** Under ISO 7185, `packed array [1..n] of char` and nothing
 else. A string literal is given that type in Sema rather than one of its own, so
@@ -86,6 +90,15 @@ to an identifier that names one. Represented by `TypeExpr`, deliberately not an
 when one type identifier denotes both. Implemented as pointer identity —
 `assignable` compares `Type *` with `==` — so two separately written
 `array [1..3] of integer` are different types (ADR-0017).
+
+**Region.** §6.2.2's unit of scope, and not the same thing as a block: a
+record-type is one, an interface is one, and a with-statement over a schematic
+type is one. What makes the word worth having is §6.2.2.4, which extends a
+defining-point's scope over "that region and all regions enclosed by it" — so a
+field-identifier's spelling denotes the *field* anywhere inside the record's
+type-denoter, including places a type name would otherwise be looked up
+(ADR-0098, ADR-0112), and the required identifiers live in a region enclosing
+the program so that `type integer = char` can take effect (ADR-0097).
 
 **Domain.** What a pointer points *at*. ISO writes it as a type *identifier*,
 not a denoter, and allows it to name a type defined later in the same type part
@@ -192,7 +205,18 @@ type, because it has none until a tuple arrives (ADR-0039).
 **Discriminant.** One of a schema's formal parameters, and the value a produced
 type was made with. `v.n` reads it, and where it is not a compile-time constant
 it is a `SymKind::Disc` symbol with storage inside the descriptor of whatever
-it belongs to (ADR-0040, ADR-0041).
+it belongs to (ADR-0040, ADR-0041). Since ADR-0113 a **subrange bound** that is
+not a constant becomes one too, so `var a: array [1..m] of real` is the
+descriptor machinery with no schema written anywhere.
+
+**Anonymous schema.** What a variable with such a bound is given: a schema
+symbol with the discriminants its bounds became, **no name and no body**
+(ADR-0113). Both absences are load-bearing. Nothing looks it up, the program
+having written no name — and a name invented for it would be named in a
+diagnostic about a program that does not contain it, which is ADR-0074's
+mistake. Nothing produces a second type from it either, since the only type it
+describes is that variable's, so there is no syntax to keep. The empty spelling
+is what selects §6.4.7's domain message for an array rather than for a schema.
 
 **Production.** The act of turning a schema and a tuple into a type, and the
 type that results. §6.4.8 makes one tuple one type however many times it is
@@ -208,7 +232,9 @@ schematic formal parameter has; `isGeneric()` asks.
 address of the actual, then its tuple, one field per discriminant. Like a
 procedure value it never exists as an LLVM aggregate — the parts are stored and
 loaded through their own getelementptrs and travel as separate arguments, so
-nothing depends on how a struct is passed (ADR-0040).
+nothing depends on how a struct is passed (ADR-0040). A **variable** whose
+type-denoter has a non-constant bound has one too, filled in when the block is
+entered rather than by a caller (ADR-0113).
 
 **Protected.** ISO/IEC 10206:1991 §6.7.3.1's parameter qualifier and §6.11.2's
 export qualifier. A Sema-only flag: it says nothing about how the argument
@@ -262,13 +288,40 @@ not have and ISO/IEC 10206:1991 does. It is *what the default block of the
 switch holds*: without one that block traps, which is ISO 7185's rule that a
 selector matching no label is an error (ADR-0018).
 
+**Completer.** ISO/IEC 10206:1991's name for the last, unlabelled arm of three
+different constructs, each spelled `otherwise`: the **variant-part-completer**
+(§6.4.3.3), the **case-statement-completer** (§6.9.3.5) and the
+**array-value-completer** (§6.8.7.2). None of the three is a construct of its
+own — the first is a variant whose case-constant-list is empty (ADR-0034), the
+third is the component every element not written over gets, and it is filled in
+*first* for that reason (ADR-0061). The variant one discharges §6.4.3.3's
+requirement that the labels cover the tag-type and never the requirement that
+no label fall outside it (ADR-0096). The case one has **no node**, so §6.8.1's
+rule about where a `goto` may land — it is one of the three things holding a
+statement-sequence — carries a flag rather than asking a node's kind
+(ADR-0094).
+
 ## The pipeline
 
-**Stage.** One of Lexer → Parser → Sema → CodeGen → PassBuilder → TargetMachine
-→ link. Each bails before the next if `Diagnostics::hasErrors()`.
+**Stage.** One of Tokenize → ParseProgram → RunSema → RunCodeGen, each guarded
+by `errorSeen` so that a stage which failed has nothing for the next one to
+read. It used to end `→ PassBuilder → TargetMachine → link`; those were the C++
+back end's, and since ADR-0085 the compiler stops at the IR. Assembling and
+linking are outside it entirely, because no standard Pascal program can start
+another (ADR-0009).
 
 **Sema.** Semantic analysis: scopes, name resolution, type rules, type-denoter
 resolution, constant folding. Owns the type arena `types_`.
+
+**Husk.** What a parser node becomes when Sema has decided the construct is
+something else. Five constructs the parser cannot tell apart and Sema can,
+because it can look the name up — a qualified name against a field selection, a
+variant-selector against a tag-type, a set-value against a subscript, a
+schema's second name, a redefined `write` — and in each the real operands are
+*moved out* into a field of the node the parser built, which every later pass
+reads first. The tree is not rewritten: `checkExpr` takes a raw pointer and
+cannot replace the node its parent holds (ADR-0044, ADR-0053, ADR-0066,
+ADR-0071, ADR-0087).
 
 **Annotated tree.** The contract between Sema and CodeGen (ADR-0008): Sema
 leaves every `Expr::type` non-null and every `VarRef::sym` resolved. CodeGen
@@ -276,23 +329,39 @@ therefore never inspects names, never re-derives types, and reports no
 user-facing errors. On an error path Sema still assigns a placeholder type
 rather than null, so codegen cannot crash on a half-checked tree.
 
-**`ParseAbort`.** The only exception in the codebase, thrown when the parser
-cannot make progress. Sema and the lexer instead accumulate into `Diagnostics`,
-so one run reports many errors.
+**`ParseAbort` / `aborted`.** What a parser that cannot make progress does. In
+`src/` it is the codebase's only exception; in the compiler it is a flag every
+production and loop tests, Pascal having no exceptions (ADR-0023). Sema and the
+lexer instead accumulate into `Diagnostics`, so one run reports many errors.
 
 **`NK` / `as<T>()`.** The node-kind tag and the checked downcast that replace
 C++ RTTI in the AST. Each node declares `static constexpr NK NodeKind`. Two
-reasons: Debian's LLVM is built without RTTI, and the eventual Pascal-hosted
-compiler has no `dynamic_cast` — a tag plus a variant record is what it will use
-(ADR-0005).
+reasons, and only the first was ever about C++: Debian's LLVM is built without
+RTTI, and a Pascal-hosted compiler has no `dynamic_cast`. It has one now, and a
+tag plus a variant record is exactly what it uses, so the port needed nothing
+redesigned (ADR-0005).
 
-**Textual IR.** `--emit-llvm`. Not a debugging aid but the backend that survives
-the rewrite: a compiler written in Pascal cannot call LLVM's C++ API (ADR-0006).
+**Textual IR.** The compiler's product, not a mode of it: `pascalc` writes a
+`.ll` and stops, so there is no flag asking for one. `pascalcc`'s `--emit-llvm`
+(`-S`) is the *driver* stopping there instead of going on to assemble and link.
+It was the backend that had to survive the rewrite, because a compiler written
+in Pascal cannot call LLVM's C++ API (ADR-0006); since ADR-0085 it is the only
+one, which is what lets `seed/pascalc.ll` build the tree.
 
 **Runtime.** `runtime/pasrt.c`, linked as `libpasrt.a`. Holds anything not
 expressible in IR — formatted output, `pas_runtime_error`, `pas_new`/
 `pas_dispose`, `pas_str_compare`. In its formatting entry points `width < 0` and
 `prec < 0` mean "not given" (ADR-0007).
+
+**String arena.** Where a string value with no variable to live in is put —
+what `+` produces, a char standing where a string does, and `date`/`time`. It
+is a **stack**, and the runtime cannot see when a value dies, so CodeGen is
+what says: `@pas_str_at` is read in every prologue and stored back at the end
+of any statement that took storage (ADR-0111). `pas_str_at` is the one datum
+the generated code shares with `runtime/pasrt.c` by name rather than through a
+call. It was a **ring** until then and wrapped in silence, writing one live
+value over another; both ways of exhausting it are reported now, which is
+ADR-0110's rule, and the size is in `doc/implementation-defined.md` §6.
 
 ## Activation records
 
@@ -354,9 +423,12 @@ result*, never a computation of it. Writing `iso.py` so it computes the answer
 the way the compiler does would make every proof circular and the circularity
 invisible.
 
-**Lowering model (`lowering.py`).** A model of `codegen.cpp`, maintained with
-it. A drifted model keeps passing and proves nothing — when a lowering changes,
-the model changes in the same commit.
+**Lowering model (`lowering.py`).** A model of the code generator in
+`selfhost/compiler.pas` — it was written against `codegen.cpp`, which ADR-0085
+retired — maintained with it. A drifted model keeps passing and proves nothing,
+so when a lowering changes the model changes in the same commit. Nothing reads
+the two against each other any more, which is why `--crosscheck` and the
+`trap_*.pas` goldens are the whole of what ties the model to the compiler.
 
 **`MUST_HOLD` / `KNOWN_GAP`.** A rule's expected verdict. A `KNOWN_GAP` that
 starts holding *fails the build*, because it means the compiler was fixed and
@@ -364,7 +436,9 @@ the catalogue is now describing a compiler that no longer exists.
 
 **Full vs bounded.** A rule proved at 32 bits holds for every machine integer;
 a bounded rule is checked at narrower widths where the full query does not
-solve. Twenty-five of the twenty-nine rules are full.
+solve — a symbolic division or multiplication over 32 bits, or a symbolic shift
+over the 256 bits of a set. Most of the catalogue is full; `README.md` carries
+the count, which is one place for it to move rather than three.
 
 **Symbolic bounds.** Quantifying over an array's or an enumeration's bounds
 rather than writing sampled ones in, so a rule says something about *every*
@@ -423,8 +497,11 @@ records a position. `--dump-sema` is the same tree through the same walker,
 plus what Sema alone knows: the frame layouts, the type of every expression,
 the frame slot every name resolved to, and every record's field and variant
 numbering. `--dump-all` writes both with the token stream, in three sections,
-and is what the differential test compares. `src/astdump.cpp` is the
-specification of the format and `selfhost/compiler.pas` reproduces it.
+and is what the differential test compares. `src/astdump.cpp` and the Pascal
+walker have to agree, and **which of them is the specification reversed**: the
+C++ defined the format while it was the compiler being ported from, and since
+ADR-0085 the Pascal compiler is the product, so ADR-0108's returning front end
+is what was brought into line with it.
 
 **Torture file.** `selfhost/torture.pas` — deliberately not a valid program,
 carrying the lexical error paths and corner cases that valid test programs
@@ -436,16 +513,21 @@ first error, so one file can carry only one message.
 **Behavioural test (of a port).** What replaces a differential test when the
 two implementations cannot produce comparable output. `selfhost/irtest.sh`
 compiles every case in `tests/` with the Pascal compiler, links the IR with
-`clang`, runs it, and compares against the *same* `.out`/`.err` the C++ compiler
-is held to. LLVM's own printer is not a specification, so the assembler text of
-two backends cannot be diffed; their programs' behaviour can (ADR-0025).
+`clang`, runs it, and compares against the *same* `.out`/`.err` every other
+harness is held to. LLVM's own printer is not a specification, so the assembler
+text of two backends cannot be diffed; their programs' behaviour can
+(ADR-0025). It is the whole of what covers the code generator, which the
+differential test never compared.
 
-**Fixed point.** Stage 2 equals stage 3 — the compiler built by a
-C++-built compiler and the compiler built by a Pascal-built one are the same.
-Compared as IR rather than as binaries, because IR is what the Pascal compiler
-emits. Checked by `selfhost/irtest.sh` under `ctest`, together with the golden
-suite, because a compiler that reproduced itself and nothing else would pass the
-comparison alone.
+**Fixed point.** Stage 2 equals stage 3 — the compiler built by the seed and
+the compiler built by *that* one are the same. Compared as IR rather than as
+binaries, because IR is what the compiler emits. Checked by
+`selfhost/irtest.sh` under `ctest`, together with the golden suite, because a
+compiler that reproduced itself and nothing else would pass the comparison
+alone. What the claim rests on never depended on which compiler started the
+chain, which is why replacing stage 0 with a committed seed cost it nothing
+(ADR-0085) — and what it *cannot* see is a miscompilation of the compiler,
+both stages coming from one binary. `llc-second-backend` is what closes that.
 
 **Coverage gap.** A branch the corpus never reaches, which a differential test
 cannot compare and will silently report as agreement. Found by mutating the
@@ -465,13 +547,22 @@ green bar that never ran the new case is not a green bar.
 
 ## The bootstrap
 
-**Stage 0 / 1 / 2 / 3.** The classic three-stage build. Stage 0 is the C++
-compiler in this repository; stage 1 is what it produces from the Pascal source;
-stages 2 and 3 are that source compiled by its own output, and must be
-identical. They now are. See [roadmap.md](roadmap.md).
+**Stage 0 / 1 / 2 / 3.** The classic three-stage build, and it is finished.
+Stage 0 *was* the C++ compiler in this repository and is retired (ADR-0085);
+what starts the chain now is `seed/pascalc.ll`, a working compiler in IR,
+committed. Stage 1 is what the seed produces from `selfhost/compiler.pas` and
+is `build/bin/pascalc`; stages 2 and 3 are that source compiled by its own
+output, and must be identical. They are. See [roadmap.md](roadmap.md).
+
+**Seed.** The committed artefact stage 0 became — 6.6 MB of IR that nobody
+reads and that builds the compiler, which is a supply-chain surface by
+construction. Refreshed at release tags rather than per commit, and
+`seed/README.md` is what a reader consults before trusting it.
 
 **Bootstrap constraint.** A design choice made to keep the C++ source
 translatable into Pascal — no RTTI in the AST, textual IR as a supported output,
 plain structs and explicit control flow over template or exception machinery.
 Most of the odd-looking decisions here are one of these, and each ADR says what
-it costs.
+it costs. Two of the three now constrain nothing and are kept because they
+explain the shape `selfhost/compiler.pas` has; the textual IR one got *more*
+load-bearing, not less.
