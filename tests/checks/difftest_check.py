@@ -28,7 +28,7 @@ disagreeing set would still be empty and this would still pass with several
 hundred files guarded by nothing.
 
 So the count is checked, and against the corpus rather than against a recorded
-number.  This globs the same two directories `difftest.sh` walks and requires
+number.  This globs the same three directories `difftest.sh` walks and requires
 the two to agree exactly -- which needs no baseline to grow when a case is
 added, and says something a stored floor could not: that the corpus a fresh
 checkout compares is the whole of it.  `tests/bsi/suite/` is fetched and never
@@ -79,9 +79,14 @@ def read_baseline(path):
 
 
 def corpus_size(root):
-    """The files difftest.sh walks: `find $root/tests $root/selfhost -name
-    '*.pas'`, stated a second time so the two have to agree."""
-    return sum(1 for d in ("tests", "selfhost")
+    """The files difftest.sh walks: `find $root/tests $root/lib $root/selfhost
+    -name '*.pas'`, stated a second time so the two have to agree.
+
+    `lib/` joined the walk with the standard library (ADR-0114).  A library
+    module is ordinary Extended Pascal and the front ends have every reason to
+    be compared on it -- it is the first Pascal here written to be *read* by
+    other programs rather than to test the compiler."""
+    return sum(1 for d in ("tests", "lib", "selfhost")
                for _ in (root / d).rglob("*.pas"))
 
 
@@ -135,7 +140,7 @@ def main():
     compared, expected = int(seen.group(1)), corpus_size(root)
     if compared != expected:
         print(f"difftest: it compared {compared} files and there are "
-              f"{expected} under tests/ and selfhost/.", file=sys.stderr)
+              f"{expected} under tests/, lib/ and selfhost/.", file=sys.stderr)
         print("An empty disagreement list means nothing if the run did not "
               "reach the files.\nIf the corpus really moved, difftest.sh's "
               "`find` and corpus_size() here have\nto be changed together -- "

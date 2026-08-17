@@ -122,3 +122,4 @@ the alternatives that were rejected and why.
 | [0111](0111-a-string-temporary-lives-for-one-statement.md) | A string temporary lives for one statement | Accepted |
 | [0112](0112-a-record-is-a-region-at-every-occurrence.md) | A record is a region at every occurrence | Accepted |
 | [0113](0113-a-bound-that-is-not-a-constant-is-a-discriminant.md) | A bound that is not a constant is a discriminant | Accepted |
+| [0114](0114-the-standard-library-begins-in-what-is-already-conforming.md) | The standard library begins in what is already conforming | Accepted |

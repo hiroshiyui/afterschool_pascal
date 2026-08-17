@@ -72,7 +72,18 @@ else
   # Every Pascal source in the tree, the stage-1 sources included: they are the
   # largest and most varied Pascal in the repository, and the shape the rest of
   # the port will take.
-  mapfile -t files < <(find "$root/tests" "$here" -name '*.pas' | sort)
+  #
+  # lib/ is the standard library (ADR-0114) and is walked for the same reason as
+  # everything else: it is ordinary Extended Pascal, and a front end that read
+  # it differently would be a front-end bug found on a small file. Each module
+  # there carries a `name.std` sidecar, because standard_of() decides from the
+  # path and lib/ is not tests/extended/ -- the same reason
+  # selfhost/compiler.std exists.
+  #
+  # tests/checks/difftest_check.py globs these same three directories and
+  # requires the count to match. Changing one without the other is what that
+  # check is for.
+  mapfile -t files < <(find "$root/tests" "$root/lib" "$here" -name '*.pas' | sort)
 fi
 
 if [[ ${#files[@]} -eq 0 ]]; then

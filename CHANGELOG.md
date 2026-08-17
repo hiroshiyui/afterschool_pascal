@@ -13,6 +13,34 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **`lib/` — the beginning of a standard library** (ADR-0114), and it widens
+  what the sentence above calls the public interface: until now this project
+  shipped a compiler, and it now also ships Pascal that other programs import.
+  Three modules, in ordinary Extended Pascal:
+  - `PasStrings` — `Upper`, `Lower`, `StartsWith`, `EndsWith`, `IndexOf`,
+    `PadLeft`, `PadRight`, `Times`, `Reverse`, `Replace`;
+  - `PasSort` — `SortIndexed` and `LowerBound` over positions rather than
+    elements, so one body serves any element type; `SortInts` and the
+    `IntVector` schema for the common case;
+  - `PasMath` — `IMin`, `IMax`, `Gcd`, `Lcm`, `ISqrt` and a seedable Lehmer
+    generator, each written so no intermediate leaves `-maxint..maxint`.
+
+  **The compiler is unchanged**: a library module is a §6.11 module translated
+  as a §6.13 program-component, both of which were already implemented, so
+  neither `--std=iso7185` nor `--std=extended` accepts or refuses anything
+  different. There is no install location and no resolution by name —
+  `--import` takes a path — so a program outside this repository names paths
+  into a checkout.
+
+  Two things a caller should read first, both consequences of existing
+  behaviour rather than of this change: **a string argument must be a string
+  variable**, never a literal and never another function's result, because a
+  variable-string may not be a value parameter (ADR-0052); and an exported
+  function assigns its own identifier once at the end, §6.11.1 making its
+  heading a `forward` whose body cannot see a result-variable-specification.
+
 ## [1.4.0] — 2026-08-18
 
 **One of the changes below turns a wrong answer into an error, and three

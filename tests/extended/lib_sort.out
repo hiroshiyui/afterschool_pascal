@@ -1,0 +1,21 @@
+unsorted:
+  5  3  9  1  9  2  8  3  7
+ascending:
+  1  2  3  3  5  7  8  9  9
+again:
+  1  2  3  3  5  7  8  9  9
+descending:
+  9  9  8  7  5  3  3  2  1
+n=0 and n=1 called nothing:
+keys:
+ 10 20 30 40 50 60 70 80 90
+tags followed their keys:
+  2  5  3  1  4  7  6  9  8
+ascending again:
+  1  2  3  3  5  7  8  9  9
+lower bound of 1  is 1
+lower bound of 3  is 3
+lower bound of 4  is 5
+lower bound of 0  is 1
+lower bound of 99 is 10
+lower bound over n=0 is 1
