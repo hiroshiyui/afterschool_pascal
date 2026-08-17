@@ -7,7 +7,7 @@ ctest --test-dir build -R bsi --output-on-failure
 
 **Fetching is the opt-in.** The case skips when `tests/bsi/suite/` is absent, so
 a fresh clone pays nothing; once fetched it runs with every `ctest`, and it
-takes minutes where the other 437 cases take twenty-five seconds. It compiles,
+takes minutes where the other 536 cases take about half of one. It compiles,
 links and runs 812 programs. Delete the directory to opt back out.
 
 Version 5.7, **(C) Copyright 1982, British Standards Institution**. 812 programs

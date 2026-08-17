@@ -119,7 +119,7 @@ one source. It is itself written in **Extended Pascal** — the language it is
 written in and the language it accepts are independent, and only that standard
 lets a program read its own command line
 ([ADR-0082](adr/0082-the-stage-1-compiler-is-extended-pascal.md)). It is
-checked by running what it builds against 392 golden files, and then by closing
+checked by running what it builds against 404 golden files, and then by closing
 the bootstrap.
 
 ```sh
