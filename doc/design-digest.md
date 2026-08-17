@@ -474,6 +474,36 @@ able to make.
     scope that dies with the production), and a schema **naming itself**
     outside a pointer domain (§6.4.7 does require this; without it the
     production recurses forever).
+- **A subrange bound may be an expression too, and becomes a discriminant**
+  (ADR-0113). §6.4.2.4 writes `subrange-bound = expression` and §6.2.3.8 b)
+  commences a bound in the same place it commences an actual-discriminant-part,
+  so `var a: array [1..m] of real` inside a procedure is the entry above with
+  no schema written anywhere. Extended Pascal only: ISO 7185 §6.4.2.4 is
+  `constant '..' constant`.
+  - **The type representation was already there.** `resolveSubrange` has
+    carried `loDisc`/`hiDisc` — a bound read from a descriptor — since ADR-0040,
+    and CodeGen has lowered it since. What was missing was the *offer*: the
+    descriptor was handed only to a denoter that was a schema-name.
+  - **The variable is given an anonymous schema**, with no body and no name.
+    `isGeneric()` is "a schema and no tuple", the descriptor is laid out from
+    `descSchema`'s discriminants, and the domain check and size walk are each
+    handed one — thirty-odd sites across two front ends that a bare array would
+    otherwise have had to teach about a null schema. No body is needed because
+    nothing produces a second type from it, and no name because nothing looks
+    it up.
+  - **The empty name is load-bearing.** A tuple outside §6.4.7's domain is
+    reported by naming the schema; with none to name, a zero-length spelling
+    selects *this array has no components: its upper bound is below its lower
+    bound* instead. `tests/extended/dynbounds_empty.pas`.
+  - **Each bound carries its own expression**, on the discriminant, where a
+    written actual-discriminant-part is a list on the variable. The group's
+    second and later names re-resolve the same denoter, so a list built by
+    chaining nodes the parser did not chain would be built twice over the same
+    nodes.
+  - Refused, and each in `doc/implementation-defined.md` §6: the same bound in
+    a type-definition, in a record field, and in a module's variable
+    (`tests/extended/dynbounds_errors.pas`,
+    `tests/extended/module_sema_errors.pas`).
 - **An assignment between two schematic types compares the tuples**
   (ADR-0042), and that is the *whole* of the feature: §6.4.6 a) is "the same
   type" and §6.4.8 makes one schema with one tuple one type, so `assignable`

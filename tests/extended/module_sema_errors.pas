@@ -11,7 +11,10 @@
   A module's activation lasts as long as the program (6.2.3.6), so its
   variables outlive any stack -- which is why a discriminant of one has to be
   constant, where 6.2.3.2 lets an ordinary block compute one on entry
-  (ADR-0053). }
+  (ADR-0053). The same holds of a subrange-bound that is not a constant, which
+  6.2.3.8 b) commences in the same place and for the same reason: the two are
+  one rule about where sized-on-entry storage can live, so they are written as
+  two messages only because each names what the program wrote (ADR-0113). }
 module m(nosuch);
 export
   mi = (a..b);
@@ -20,5 +23,6 @@ type vec(n: integer) = array [1..n] of integer;
 var a, b: integer;
     k: integer;
     v: vec(k);
+    w: array [1..k] of integer;
 end;
 end.

@@ -13,6 +13,32 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A subrange bound in a variable's own type-denoter may be an expression**,
+  under `--std=extended`, so `var a: array [1..m] of real` inside a procedure
+  is accepted and the array is sized when the procedure is entered:
+
+  ```pascal
+  procedure p(m: integer);
+  var a: array [1..m] of real;
+  ```
+
+  ISO/IEC 10206:1991 §6.4.2.4 writes `subrange-bound = expression` and
+  §6.2.3.8 b) evaluates one at the block's commencement, after the formal value
+  parameters are attributed. Either end may be one, both may be, they may
+  appear at more than one level (`array [1..m] of array [1..k] of real`), and
+  each name of a declaration group is sized for itself. A bound outside the
+  domain — `1..0` — stops the program on entry, and every subscript is bounds
+  checked against the bounds the descriptor holds. **ISO 7185 is unchanged**:
+  §6.4.2.4 there writes `subrange-type = constant '..' constant`, and
+  `--std=iso7185` refuses it as before. ADR-0113.
+
+  Still refused, and recorded in `doc/implementation-defined.md` §6: the same
+  bound in a *type-definition* (`type t = array [1..m] of integer`) or in a
+  record field, and in a module's variables, whose activation lasts as long as
+  the program.
+
 ### Changed
 
 - **An identifier or a character-string longer than 255 characters is now an

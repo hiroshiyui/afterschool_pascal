@@ -187,6 +187,13 @@ struct Symbol {
   /// Empty for a schematic formal parameter, whose tuple the caller brings,
   /// which is what tells the two apart wherever it matters.
   std::vector<Expr *> discExprs;
+  /// The one bound *this* `Disc` reads, for a variable whose type has no
+  /// schema in the source: `var a: array [1..m] of real` has an
+  /// actual-discriminant-part nowhere, so there is no list to walk in step and
+  /// each discriminant carries its own bound instead (ADR-0113). Null for
+  /// every discriminant that came from a written schema, where `discExprs`
+  /// above is the list.
+  Expr *discExpr = nullptr;
   /// Which discriminant of `owner`'s parameter this is, for a `Disc`.
   int discIndex = -1;
   /// A `Disc` whose storage is not in any activation record: the tuple of a
@@ -495,6 +502,13 @@ private:
   /// it. Anything else is refused, because a bound is re-evaluated on entry
   /// and this is the whole of what the descriptor can answer.
   bool evalBound(Expr *e, Type *&type, long long &value, Symbol *&disc);
+  /// A subrange-bound of a variable's own denoter that is not a constant: it
+  /// becomes a discriminant of that variable, evaluated at the block's
+  /// commencement (§6.2.3.8 b), ADR-0113).
+  Symbol *dynBoundDisc(Expr *e);
+  /// The anonymous schema a variable with non-constant bounds is given, so
+  /// that everything keyed on a schema keeps working (ADR-0113).
+  void boundSchemaFor(Symbol *v);
   /// True when nothing inside this type depends on a discriminant. Arrays are
   /// where a dynamic bound is allowed; this asks about everywhere else.
   bool staticThroughout(Type *t) const;
@@ -800,6 +814,16 @@ private:
   /// else, so this is what separates `var s: vector(n)` from every other
   /// position the same denoter could have been written in.
   Symbol *dynamicVarFor_ = nullptr;
+  /// The variable whose own type-denoter may take a subrange-bound that is not
+  /// a constant (ADR-0113). ISO/IEC 10206:1991 §6.4.2.4 writes `subrange-bound
+  /// = expression` and §6.2.3.8 b) evaluates one "not contained by a
+  /// schema-definition and closest-contained by … the block" at the block's
+  /// commencement, after the value parameters are attributed — so `var a:
+  /// array [1..m] of real` is legal in a procedure and this is the offer that
+  /// makes it so. Separate from `dynamicVarFor_`, which offers the same thing
+  /// to a *schema's* actual-discriminant-part: the same clause, different
+  /// denoters, and a bare bound has no schema to be keyed on.
+  Symbol *dynBoundsFor_ = nullptr;
   /// The schemata whose bodies are being resolved right now. §6.4.7 forbids a
   /// schema-definition from containing an applied occurrence of its own
   /// identifier anywhere but the domain of a pointer, and this is that rule:

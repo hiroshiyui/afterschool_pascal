@@ -1,0 +1,9 @@
+plain 4 1 16
+plain 2 1 4
+group 3 30
+nested 203 203
+both 5 8
+recur 1 11
+recur 2 22
+recur 3 33
+constant 42

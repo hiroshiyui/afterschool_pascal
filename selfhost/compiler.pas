@@ -642,6 +642,13 @@ type
       (6.2.3.2). Nil for a schematic formal parameter, whose tuple the caller
       brings, which is what tells the two apart wherever it matters. }
     discExprs: nodePtr;
+    { The one expression *this* skDisc reads, for a variable whose type has no
+      schema in the source: `var a: array [1..m] of real` has an
+      actual-discriminant-part nowhere, so there is no list to walk in step and
+      each discriminant carries its own bound instead (ADR-0113). Nil for every
+      discriminant that came from a written schema, where discExprs above is
+      the list. }
+    discExpr: nodePtr;
     discIndex, paramSection: integer;
 
     { A skDisc whose storage is not in any activation record: the tuple of a
@@ -1382,6 +1389,16 @@ var
     else, so this is what separates `var s: vector(n)` from every other
     position the same denoter could have been written in. }
   dynamicVarFor: symPtr;
+  { The variable whose own type-denoter may take a subrange-bound that is not a
+    constant (ADR-0113). ISO/IEC 10206:1991 6.4.2.4 writes `subrange-bound =
+    expression` and 6.2.3.8 b) evaluates one "not contained by a
+    schema-definition and closest-contained by ... the block" at the block's
+    commencement, after the value parameters are attributed -- so
+    `var a: array [1..m] of real` is legal in a procedure and this is the offer
+    that makes it so. Separate from dynamicVarFor, which offers the same thing
+    to a *schema's* actual-discriminant-part: the two are the same clause and
+    different denoters, and a bound has no schema to be keyed on. }
+  dynBoundsFor: symPtr;
   { True while a field of a *variant part* is being resolved, where 6.5.1 makes
     the initial state conditional on the selector. There is no flag for "this
     position admits a specifier at all": the parser settles that, by stopping
@@ -6581,6 +6598,7 @@ begin
   s^.discSyms := nil;
   s^.discSymTail := nil;
   s^.discExprs := nil;
+  s^.discExpr := nil;
   s^.discIndex := -1;
   s^.heapDisc := false;
   s^.discBinding := false;
@@ -8039,6 +8057,46 @@ begin
   end
 end;
 
+{ A subrange-bound of a variable's own type-denoter that is not a constant
+  (ADR-0113). ISO/IEC 10206:1991 6.2.3.8 b) evaluates it at the block's
+  commencement, so the value is not known here and the bound becomes a
+  discriminant like any other: a slot in this variable's descriptor, read
+  wherever the bound is wanted.
+
+  The difference from GenericFromSchema's discriminants is where they come
+  from. There a schema-definition wrote the formals and they are *bound by
+  name* so the body can find them; here there is no schema and no name -- the
+  bound expression is the only thing that exists, so the symbol is made on
+  sight and carries that expression itself. Nothing ever looks one up, which is
+  why it is left unnamed. }
+function DynBoundDisc(e: nodePtr): symPtr;
+var disc: symPtr; l: symListPtr; k: integer;
+begin
+  disc := NewSymbol;
+  disc^.kind := skDisc;
+  { The host, so a bound written with a subrange type stores as the type its
+    values are of -- the same reduction Base() makes everywhere else. }
+  disc^.stype := Base(e^.ntype);
+  disc^.discBinding := true;
+  { The descriptor lives in the variable's own frame slot, in front of the
+    address, and is reached exactly as the variable is -- so a recursive
+    procedure reads the descriptor of the invocation it is running in
+    (ADR-0016, ADR-0041). }
+  disc^.owner := dynBoundsFor^.owner;
+  disc^.level := dynBoundsFor^.level;
+  disc^.frameIndex := dynBoundsFor^.frameIndex;
+  k := 0;
+  l := dynBoundsFor^.discSyms;
+  while l <> nil do begin
+    k := k + 1;
+    l := l^.next
+  end;
+  disc^.discIndex := k;
+  disc^.discExpr := e;
+  AppendSym(dynBoundsFor^.discSyms, dynBoundsFor^.discSymTail, disc);
+  DynBoundDisc := disc
+end;
+
 { A bound of a schema body being resolved for a schematic formal parameter. It
   is a constant, or one of the discriminants the descriptor holds. There is
   deliberately no third form: ISO 7185 has no constant-expression -- a bound is
@@ -8054,14 +8112,27 @@ begin
     EvalBound := true
   { EvalOrdinal has checked the expression already, so the name is resolved
     whether or not it folded to a value. }
-  else if (e^.kind = nkVar) and (e^.vrSym <> nil) then
-    if e^.vrSym^.kind = skDisc then begin
-      disc := e^.vrSym;
-      t := e^.vrSym^.stype;
-      value_ := 0;
-      EvalBound := true
-    end
-    else EvalBound := false
+  else if (e^.kind = nkVar) and (e^.vrSym <> nil)
+          and (e^.vrSym^.kind = skDisc) then begin
+    disc := e^.vrSym;
+    t := e^.vrSym^.stype;
+    value_ := 0;
+    EvalBound := true
+  end
+  { A bound of a *variable's own* denoter that did not fold. 6.2.3.8 b) puts it
+    in the block's commencement, so it becomes a discriminant of that variable
+    and the descriptor holds what it evaluated to (ADR-0113). Any ordinal
+    expression will do, where a schema body's bound must *name* a discriminant:
+    there the tuple is the caller's and only a name can reach it, here the
+    expression is evaluated on the spot and nothing else needs to know how it
+    was written. }
+  else if (dynBoundsFor <> nil) and (e^.ntype <> nil)
+          and IsOrdinal(e^.ntype) then begin
+    disc := DynBoundDisc(e);
+    t := disc^.stype;
+    value_ := 0;
+    EvalBound := true
+  end
   else
     EvalBound := false
 end;
@@ -8617,14 +8688,24 @@ begin
   { A schematic formal parameter's bounds arrive with the actual, so inside
     one -- and nowhere else -- a bound may name a discriminant. Everything the
     subrange means is otherwise unchanged, which is why this is one call
-    swapped for another rather than a second resolver. }
-  if genericFor <> nil then begin
+    swapped for another rather than a second resolver.
+
+    A variable's own denoter takes the same path (ADR-0113): there a bound that
+    is not a constant becomes a discriminant of the variable instead of naming
+    one, which is a difference EvalBound absorbs. Everything after it -- the
+    dynamic flag, the skipped emptiness check, loDisc and hiDisc on the type --
+    is the same for both, and that is the point of joining them here rather
+    than writing a third resolver. }
+  if (genericFor <> nil) or (dynBoundsFor <> nil) then begin
     ok := EvalBound(d^.sbLo, loType, lo, loDisc);
     if ok then ok := EvalBound(d^.sbHi, hiType, hi, hiDisc);
     if not ok then begin
       ErrorAt(d^.line, d^.col);
-      writeln('the bounds of a subrange in a schematic formal parameter ',
-              'must be ordinal constants or discriminants')
+      if genericFor <> nil then
+        writeln('the bounds of a subrange in a schematic formal parameter ',
+                'must be ordinal constants or discriminants')
+      else
+        writeln('the bounds of a subrange must be ordinal')
     end
     else if Base(loType) <> Base(hiType) then begin
       ErrorAt(d^.line, d^.col);
@@ -10426,7 +10507,7 @@ begin
 end;
 
 function ResolveType;
-var t: typePtr; s, savedDynamic: symPtr; n: nodePtr;
+var t: typePtr; s, savedDynamic, savedBounds: symPtr; n: nodePtr;
 begin
   if d^.ntype <> nil then
     ResolveType := d^.ntype
@@ -10438,6 +10519,16 @@ begin
       exactly as it was. }
     savedDynamic := dynamicVarFor;
     if d^.kind <> nkSchema then dynamicVarFor := nil;
+    { The same withdrawal for a non-constant *bound* (ADR-0113), and it reaches
+      one denoter further: an array's index-type is a subrange and its
+      component-type may be another array, so `array [1..m] of array [1..k] of
+      real` is one variable with two discriminants. Everything else -- a record
+      field, a file component, a set base, a pointer domain -- is on the way to
+      a type of its own, whose storage is not this variable's to size, so the
+      offer stops there and the bound must be constant exactly as before. }
+    savedBounds := dynBoundsFor;
+    if (d^.kind <> nkArray) and (d^.kind <> nkSubrange) then
+      dynBoundsFor := nil;
     t := nil;
     case d^.kind of
       nkNamed: begin
@@ -10548,6 +10639,7 @@ begin
         t := intType
     end;
     dynamicVarFor := savedDynamic;
+    dynBoundsFor := savedBounds;
     CheckInitialState(d, t);
     d^.ntype := t;
     ResolveType := t
@@ -15846,9 +15938,43 @@ begin
   end
 end;
 
+{ The anonymous schema a variable with non-constant bounds is given (ADR-0113).
+  Everything downstream of a dynamically sized variable is keyed on a schema --
+  IsGeneric is "a schema and no tuple", the descriptor is laid out from
+  descSchema^.discs, the domain check and the size walk are handed it -- and a
+  bare `array [1..m]` has none. Rather than teach a dozen sites to work without
+  one, the variable is given one.
+
+  It has **no body and no name**, and needs neither: nothing looks it up, the
+  program having never written it, and nothing produces a second type from it,
+  because the only type it describes is this variable's. What a schema is for
+  here is the list of discriminants -- and CheckSchemaDomain reads the empty
+  spelling to know it must describe the array the program wrote rather than
+  name a schema that does not exist. }
+procedure BoundSchemaFor(v: symPtr);
+var synth: symPtr; l: symListPtr;
+begin
+  synth := NewSymbol;
+  synth^.kind := skSchema;
+  l := v^.discSyms;
+  while l <> nil do begin
+    { The same symbols, in a list of their own: a descriptor's fields are the
+      discriminants, and here they are one and the same rather than formals
+      matched against actuals. }
+    AppendSym(synth^.discs, synth^.discTail, l^.sym);
+    l := l^.next
+  end;
+  v^.descSchema := synth;
+  { The extent is not known until the descriptor is filled, which is exactly
+    what IsGeneric asks. }
+  v^.stype^.schema := synth;
+  v^.stype^.tuple := nil
+end;
+
 { One variable-declaration: a group of names sharing a type-denoter. }
 procedure CheckVarDecl(g: nodePtr; owner: symPtr);
-var n, init: nodePtr; s, schema, named, first: symPtr; t: typePtr;
+var n, init: nodePtr; s, schema, named, first, firstDyn: symPtr; t: typePtr;
+    dynamic: boolean;
 begin
   { 6.2.3.2: a discriminated schema is the one denoter whose discriminants
     may be variables, and only here. The first name is resolved with itself
@@ -15896,13 +16022,69 @@ begin
     end
   end
   else begin
+    { ISO/IEC 10206:1991 6.4.2.4 writes a subrange-bound as an expression, and
+      6.2.3.8 b) evaluates one that is "closest-contained by ... the block" at
+      the block's commencement, after the value parameters are attributed -- so
+      `var a: array [1..m] of real` is legal inside a procedure and its storage
+      is sized on entry (ADR-0113). The first name is resolved with itself
+      offered as the variable the bounds would belong to, exactly as a schema's
+      discriminants are above; if every bound folded, nothing was created and
+      the group is an ordinary one that shares one type.
+
+      ISO 7185 6.4.2.4 writes `subrange-type = constant '..' constant`, so the
+      offer is not made in that language and a bound that is not a constant is
+      the error it has always been. }
+    dynamic := false;
+    firstDyn := nil;
+    if (langStd = stdExtended) and (g^.grNames <> nil) then begin
+      n := g^.grNames;
+      firstDyn := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner,
+                              n^.line, n^.col);
+      dynBoundsFor := firstDyn;
+      t := ResolveType(g^.grType);
+      dynBoundsFor := nil;
+      firstDyn^.stype := t;
+      dynamic := firstDyn^.discSyms <> nil;
+      if dynamic then begin
+        BoundSchemaFor(firstDyn);
+        { 6.2.3.2's storage lives as long as the activation, and a module's
+          outlives the function that commences it -- the same reason a module's
+          variable may not have a non-constant discriminant (ADR-0041). }
+        if owner^.isModuleSym then begin
+          ErrorAt(n^.line, n^.col);
+          writeln('the bounds of a module''s variable must be constants, ',
+                  'because a module''s activation lasts as long as the ',
+                  'program')
+        end
+      end
+    end
+    else
+      t := ResolveType(g^.grType);
     { One denoter for the whole group, so `a, b: array [1..3] of integer`
-      makes a and b the same type and lets `a := b` through. }
-    t := ResolveType(g^.grType);
+      makes a and b the same type and lets `a := b` through -- and where the
+      bounds are not constants it makes them two types, because each name needs
+      a descriptor of its own and a type that reads it. }
     init := InitialStateOf(g^.grType);
     n := g^.grNames;
     while n <> nil do begin
-      s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
+      if firstDyn <> nil then begin
+        s := firstDyn;
+        firstDyn := nil
+      end
+      else if dynamic then begin
+        s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner,
+                         n^.line, n^.col);
+        { The one denoter resolved again, with the bounds belonging to this
+          name. Same shape as the schema group above and for the same reason:
+          two descriptors cannot share a type however alike they look. }
+        ForgetResolved(g^.grType);
+        dynBoundsFor := s;
+        s^.stype := ResolveType(g^.grType);
+        dynBoundsFor := nil;
+        BoundSchemaFor(s)
+      end
+      else
+        s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
       { 6.2.3.5 creates each local "in its initial state" on entry, so the
         whole group shares one value as it shares one type. }
       s^.initValue := init;
@@ -25032,9 +25214,21 @@ begin
         PutOp(lo);
         writeln(ircode);
         MsgStart;
-        MsgText('no type is produced from schema ''       ');
-        WritePool(schema^.at, schema^.len);
-        MsgText(''' with these discriminants              ');
+        { An anonymous schema has no spelling, because the program wrote no
+          schema (ADR-0113). Naming one would be naming something the source
+          does not contain, so the message describes the array instead -- the
+          same condition, said in the words of what was written. }
+        if schema^.len = 0 then begin
+          { MsgText drops a piece's trailing blanks, so a space that has to
+            survive a join goes at the *start* of the next piece. }
+          MsgText('this array has no components: its upper ');
+          MsgText(' bound is below its lower bound         ')
+        end
+        else begin
+          MsgText('no type is produced from schema ''       ');
+          WritePool(schema^.at, schema^.len);
+          MsgText(''' with these discriminants              ')
+        end;
         msg := MsgEnd;
         EmitTrapIf(bad, msg)
       end;
@@ -25107,21 +25301,39 @@ begin
   end
 end;
 
+{ Whether this frame variable fills its own descriptor when the block is
+  entered, as against a schematic formal parameter's, which the caller brings
+  already filled. Two shapes say yes: a variable written with a schema whose
+  actual-discriminant-part was not constant (discExprs), and one whose *bounds*
+  were not constants, which has no actual-discriminant-part anywhere and whose
+  discriminants each carry the bound they were made from (ADR-0113). }
+function FillsOwnDescriptor(s: symPtr): boolean;
+begin
+  if s^.descSchema = nil then FillsOwnDescriptor := false
+  else if s^.discExprs <> nil then FillsOwnDescriptor := true
+  else if s^.discSyms = nil then FillsOwnDescriptor := false
+  else FillsOwnDescriptor := s^.discSyms^.sym^.discExpr <> nil
+end;
+
 procedure InitDynamicVars(p: symPtr);
-var l, d: symListPtr; a: nodePtr; slot, half, value_, size, storage: str;
+var l, d: symListPtr; a, e: nodePtr; slot, half, value_, size, storage: str;
     nohdr: str; comp: typePtr; align: integer;
 begin
   l := p^.frameVars;
   while l <> nil do begin
-    if (l^.sym^.descSchema <> nil) and (l^.sym^.discExprs <> nil) then begin
+    if FillsOwnDescriptor(l^.sym) then begin
       Def(slot);
       writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
               ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
       a := l^.sym^.discExprs;
       d := l^.sym^.discSyms;
-      while (a <> nil) and (d <> nil) do begin
-        EmitExpr(a, value_);
-        ConvertFor(value_, a^.ntype, d^.sym^.stype);
+      while d <> nil do begin
+        { The written actual-discriminant-part, walked in step -- or, where
+          there was no schema to write one, the bound this discriminant was
+          made from (ADR-0113). }
+        if a <> nil then e := a else e := d^.sym^.discExpr;
+        EmitExpr(e, value_);
+        ConvertFor(value_, e^.ntype, d^.sym^.stype);
         { A discriminant outside its own type is outside 6.4.7's domain. The
           store is where a value enters a variable, so the check that guards
           every other such store is the one that says so here too. }
@@ -25139,7 +25351,7 @@ begin
         write(ircode, ', ptr ');
         PutOp(half);
         writeln(ircode);
-        a := a^.next;
+        if a <> nil then a := a^.next;
         d := d^.next
       end;
       StrClear(nohdr);
@@ -26035,6 +26247,7 @@ begin
   newTuple := nil;
   genericFor := nil;
   dynamicVarFor := nil;
+  dynBoundsFor := nil;
   variantField := false;
   inSchemaBody := false;
   stdInput := nil;

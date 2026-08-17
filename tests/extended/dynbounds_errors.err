@@ -1,0 +1,3 @@
+<source>:16:17: error: the bounds of a subrange must be ordinal constants
+<source>:17:26: error: the bounds of a subrange must be ordinal constants
+<source>:19:16: error: the bounds of a subrange must be ordinal

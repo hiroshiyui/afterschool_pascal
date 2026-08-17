@@ -610,6 +610,38 @@ std::string Type::boundName(const Type *t, const Symbol *disc,
 /// so `n - 1` is not something a bound may be here or anywhere else. When
 /// §6.3's constant-expression lands it will land for every bound at once, and
 /// the descriptor already holds what such an expression would be computed from.
+/// A subrange-bound of a variable's own type-denoter that is not a constant
+/// (ADR-0113). §6.2.3.8 b) evaluates it at the block's commencement, so the
+/// value is not known here and the bound becomes a discriminant like any
+/// other: a slot in this variable's descriptor, read wherever the bound is
+/// wanted.
+///
+/// The difference from `genericFromSchema`'s discriminants is where they come
+/// from. There a schema-definition wrote the formals and they are *bound by
+/// name* so the body can find them; here there is no schema and no name — the
+/// bound expression is the only thing that exists, so the symbol is made on
+/// sight and carries that expression itself. Nothing ever looks one up, which
+/// is why it is left unnamed.
+Symbol *Sema::dynBoundDisc(Expr *e) {
+  Symbol *disc = newSymbol();
+  disc->kind = SymKind::Disc;
+  // The host, so a bound written with a subrange type stores as the type its
+  // values are of — the same reduction `base()` makes everywhere else.
+  disc->type = e->type->base();
+  disc->discBinding = true;
+  // The descriptor lives in the variable's own frame slot, in front of the
+  // address, and is reached exactly as the variable is — so a recursive
+  // procedure reads the descriptor of the invocation it is running in
+  // (ADR-0016, ADR-0041).
+  disc->owner = dynBoundsFor_->owner;
+  disc->level = dynBoundsFor_->level;
+  disc->frameIndex = dynBoundsFor_->frameIndex;
+  disc->discIndex = static_cast<int>(dynBoundsFor_->discSyms.size());
+  disc->discExpr = e;
+  dynBoundsFor_->discSyms.push_back(disc);
+  return disc;
+}
+
 bool Sema::evalBound(Expr *e, Type *&type, long long &value, Symbol *&disc) {
   disc = nullptr;
   if (evalOrdinal(e, type, value))
@@ -623,6 +655,19 @@ bool Sema::evalBound(Expr *e, Type *&type, long long &value, Symbol *&disc) {
       value = 0;
       return true;
     }
+  // A bound of a *variable's own* denoter that did not fold. §6.2.3.8 b) puts
+  // it in the block's commencement, so it becomes a discriminant of that
+  // variable and the descriptor holds what it evaluated to (ADR-0113). Any
+  // ordinal expression will do, where a schema body's bound must *name* a
+  // discriminant: there the tuple is the caller's and only a name can reach
+  // it, here the expression is evaluated on the spot and nothing else needs to
+  // know how it was written.
+  if (dynBoundsFor_ && e->type && e->type->isOrdinal()) {
+    disc = dynBoundDisc(e);
+    type = disc->type;
+    value = 0;
+    return true;
+  }
   return false;
 }
 
@@ -637,12 +682,21 @@ Type *Sema::resolveSubrange(TypeExpr &denoter) {
   // one — and nowhere else — a bound may name a discriminant. Everything the
   // subrange means is otherwise unchanged, which is why this is one call
   // swapped for another rather than a second resolver.
-  if (genericFor_) {
+  //
+  // A variable's own denoter takes the same path (ADR-0113): there a bound that
+  // is not a constant becomes a discriminant of the variable instead of naming
+  // one, which is a difference `evalBound` absorbs. Everything after it — the
+  // dynamic flag, the skipped emptiness check, loDisc and hiDisc on the type —
+  // is the same for both, and that is the point of joining them here rather
+  // than writing a third resolver.
+  if (genericFor_ || dynBoundsFor_) {
     if (!evalBound(denoter.lo.get(), loType, lo, loDisc) ||
         !evalBound(denoter.hi.get(), hiType, hi, hiDisc)) {
       diags_.error(denoter.line, denoter.col,
-                   "the bounds of a subrange in a schematic formal "
-                   "parameter must be ordinal constants or discriminants");
+                   genericFor_
+                       ? "the bounds of a subrange in a schematic formal "
+                         "parameter must be ordinal constants or discriminants"
+                       : "the bounds of a subrange must be ordinal");
       ok = false;
     } else if (loType->base() != hiType->base()) {
       diags_.error(denoter.line, denoter.col,
@@ -1305,6 +1359,16 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   Symbol *savedDynamic = dynamicVarFor_;
   if (denoter.kind != TEK::Schema)
     dynamicVarFor_ = nullptr;
+  // The same withdrawal for a non-constant *bound* (ADR-0113), and it reaches
+  // one denoter further: an array's index-type is a subrange and its
+  // component-type may be another array, so `array [1..m] of array [1..k] of
+  // real` is one variable with two discriminants. Everything else — a record
+  // field, a file component, a set base, a pointer domain — is on the way to a
+  // type of its own, whose storage is not this variable's to size, so the offer
+  // stops there and the bound must be constant exactly as before.
+  Symbol *savedBounds = dynBoundsFor_;
+  if (denoter.kind != TEK::Array && denoter.kind != TEK::Subrange)
+    dynBoundsFor_ = nullptr;
 
   Type *t = nullptr;
   switch (denoter.kind) {
@@ -1413,6 +1477,7 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   }
 
   dynamicVarFor_ = savedDynamic;
+  dynBoundsFor_ = savedBounds;
   checkInitialState(denoter, t);
   denoter.resolved = t;
   return t;
@@ -3920,12 +3985,67 @@ void Sema::checkVarDecl(VarDecl &group, Symbol *owner) {
     return;
   }
 
+  // ISO/IEC 10206:1991 §6.4.2.4 writes a subrange-bound as an expression, and
+  // §6.2.3.8 b) evaluates one that is "closest-contained by … the block" at the
+  // block's commencement, after the value parameters are attributed — so `var
+  // a: array [1..m] of real` is legal inside a procedure and its storage is
+  // sized on entry (ADR-0113). The first name is resolved with itself offered
+  // as the variable the bounds would belong to, exactly as a schema's
+  // discriminants are above; if every bound folded, nothing was created and the
+  // group is an ordinary one that shares one type.
+  //
+  // ISO 7185 §6.4.2.4 writes `subrange-type = constant '..' constant`, so the
+  // offer is not made in that language and a bound that is not a constant is
+  // the error it has always been.
+  Type *t = nullptr;
+  Symbol *firstDyn = nullptr;
+  bool dynamic = false;
+  if (std_ == Std::Extended && !group.names.empty()) {
+    const DeclName &n0 = group.names[0];
+    firstDyn =
+        addFrameVar(n0.name, SymKind::Var, ty::Int(), owner, n0.line, n0.col);
+    dynBoundsFor_ = firstDyn;
+    t = resolveType(*group.type);
+    dynBoundsFor_ = nullptr;
+    firstDyn->type = t;
+    dynamic = !firstDyn->discSyms.empty();
+    if (dynamic) {
+      boundSchemaFor(firstDyn);
+      // §6.2.3.2's storage lives as long as the activation, and a module's
+      // outlives the function that commences it — the same reason a module's
+      // variable may not have a non-constant discriminant (ADR-0041).
+      if (owner->isModuleSym)
+        diags_.error(n0.line, n0.col,
+                     "the bounds of a module's variable must be constants, "
+                     "because a module's activation lasts as long as the "
+                     "program");
+    }
+  } else {
+    t = resolveType(*group.type);
+  }
   // One denoter for the whole group, so `a, b: array [1..3] of integer`
-  // makes a and b the same type and lets `a := b` through.
-  Type *t = resolveType(*group.type);
+  // makes a and b the same type and lets `a := b` through — and where the
+  // bounds are not constants it makes them two types, because each name needs
+  // a descriptor of its own and a type that reads it.
   Expr *init = initialStateOf(*group.type);
   for (auto &n : group.names) {
-    Symbol *v = addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
+    Symbol *v;
+    if (firstDyn) {
+      v = firstDyn;
+      firstDyn = nullptr;
+    } else if (dynamic) {
+      v = addFrameVar(n.name, SymKind::Var, ty::Int(), owner, n.line, n.col);
+      // The one denoter resolved again, with the bounds belonging to this
+      // name. Same shape as the schema group above and for the same reason:
+      // two descriptors cannot share a type however alike they look.
+      forgetResolved(group.type.get());
+      dynBoundsFor_ = v;
+      v->type = resolveType(*group.type);
+      dynBoundsFor_ = nullptr;
+      boundSchemaFor(v);
+    } else {
+      v = addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
+    }
     // §6.2.3.5 creates each local "in its initial state" on entry, so the
     // whole group shares one value as it shares one type.
     v->initValue = init;
@@ -3934,6 +4054,33 @@ void Sema::checkVarDecl(VarDecl &group, Symbol *owner) {
     // totally-undefined until something binds it.
     v->isBindable = bindableOf(*group.type);
   }
+}
+
+/// The anonymous schema a variable with non-constant bounds is given
+/// (ADR-0113). Everything downstream of a dynamically sized variable is keyed
+/// on a schema — `isGeneric()` is "a schema and no tuple", the descriptor is
+/// laid out from `descSchema->discriminants`, the domain check and the size
+/// walk are handed it — and a bare `array [1..m]` has none. Rather than teach a
+/// dozen sites to work without one, the variable is given one.
+///
+/// It has **no body and no name**, and needs neither: nothing looks it up, the
+/// program having never written it, and nothing produces a second type from it,
+/// because the only type it describes is this variable's. What a schema is for
+/// here is the list of discriminants — and the code generator reads the empty
+/// spelling to know it must describe the array the program wrote rather than
+/// name a schema that does not exist.
+void Sema::boundSchemaFor(Symbol *v) {
+  Symbol *synth = newSymbol();
+  synth->kind = SymKind::Schema;
+  // The same symbols, in a list of their own: a descriptor's fields are the
+  // discriminants, and here they are one and the same rather than formals
+  // matched against actuals.
+  synth->discriminants = v->discSyms;
+  v->descSchema = synth;
+  // The extent is not known until the descriptor is filled, which is exactly
+  // what isGeneric() asks.
+  v->type->schema = synth;
+  v->type->tuple.clear();
 }
 
 /// What a function may return. The two standards draw the line in opposite

@@ -308,21 +308,28 @@ link one list node twice (ADR-0070).
 **Conformant array parameters are not accepted**, which is what makes this a
 level 0 processor rather than a deviation — see §1.
 
-**A discriminant or subrange bound that is not a constant is refused outside a
-variable declaration.** `var a: array [1..m] of real` and `type t = vector(m)`
-inside a procedure, with `m` a value parameter, are legal and are refused with
-*the bounds of a subrange must be ordinal constants*. §6.2.3.8 b) puts "each
-actual-discriminant-part or subrange-bound not contained by a schema-definition
-and closest-contained by … the block" in the block's commencement, and orders it
-*after* the attribution of formal value parameters; §6.4.2.4 writes
-`subrange-bound = expression` and gives varying bounds a dynamic-violation
-branch of their own, which would be meaningless if they were illegal.
+**A discriminant or subrange bound that is not a constant is refused in a
+*type-definition*.** `type t = vector(m)` and `type t = array [1..m] of real`
+inside a procedure, with `m` a value parameter, are legal and are refused.
+§6.2.3.8 b) puts "each actual-discriminant-part or subrange-bound not contained
+by a schema-definition and closest-contained by … the block" in the block's
+commencement, and orders it *after* the attribution of formal value parameters;
+§6.4.2.4 writes `subrange-bound = expression` and gives varying bounds a
+dynamic-violation branch of their own, which would be meaningless if they were
+illegal.
 
-This one is unfixed rather than chosen, and it is feature-sized: the
-per-variable descriptor of ADR-0040 is keyed on a *schema*, and a bare array
-bound has none. It is the finding of the second independent reading most likely
-to break a real program (ADR-0107), and `doc/sop.md` §7 carries it as a live
-gap rather than a closed one.
+The **variable-declaration** half of this entry is fixed: `var v: vector(m)` has
+always worked and `var a: array [1..m] of real` works since ADR-0113, in
+`--std=extended` only, ISO 7185 §6.4.2.4 writing `subrange-type = constant '..'
+constant`. What is left is the type-definition, and it is a different decision
+rather than the rest of the same one: a variable's descriptor belongs to the
+variable, while a type's would belong to the *block* and be shared by every
+variable of it. A record field is refused for a related reason — its storage is
+sized where the record is.
+
+Unfixed rather than chosen. It was the finding of the second independent reading
+most likely to break a real program (ADR-0107), and `doc/sop.md` §7 carries what
+remains of it.
 
 **An identifier or a character-string longer than 255 characters is
 refused.** §6.1.3 makes every character of an identifier significant and
