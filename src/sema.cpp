@@ -320,8 +320,9 @@ bool Sema::fieldOfOpenRecord(const std::string &qualifier,
 
 void Sema::errorFieldNotAType(int line, int col, const std::string &name) {
   diags_.error(line, col,
-               "'" + name + "' is a field of this record type, "
-               "so it does not name a type here");
+               "'" + name +
+                   "' is a field of this record type, "
+                   "so it does not name a type here");
 }
 
 /// A pointer's domain is a type identifier, and it may be one defined later in
