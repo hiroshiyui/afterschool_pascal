@@ -1527,19 +1527,28 @@ double pas_cpowi_im(double re, double im, int n) {
  *
  * `substr` and `trim` need no storage at all under that representation: they
  * are a pointer and a shorter length into the string they came from. Only
- * concatenation makes bytes that did not exist, and it takes them from a ring
- * below. A string value's life is one expression evaluation, so a ring is the
- * right shape: the space is reused as soon as the statement that made the
- * value has finished with it.
+ * concatenation makes bytes that did not exist, and it takes them from the
+ * arena below. A string value's life is one expression evaluation, so the
+ * arena is a *stack*: everything a statement allocated is dead when that
+ * statement finishes, and the generated code says so by restoring
+ * `pas_str_at`.
  *
- * The limit is a single *statement* that needs more than the ring holds. Of
- * the two ways to reach it only one is reported: a single value larger than
- * the whole arena stops the program, which is what a long concatenation chain
- * produces, because each step builds the whole prefix again. Several
- * separately live temporaries summing past the arena would instead wrap in
- * silence -- no attempt is made to detect that, and nothing in this language
- * makes it easy to write, since a variable-string cannot be a value parameter
- * and `write` consumes each of its arguments in turn. */
+ * Nothing in this file can know when a value dies -- a pointer here is
+ * indistinguishable from any other -- so the boundary has to come from the
+ * compiler. ADR-0111 has the emission: `pas_str_at` is read once into an SSA
+ * value at each function's entry and stored back at the end of every statement
+ * that allocated, and `while` and `repeat` do the same for their conditions,
+ * which are the one expression a statement evaluates more than once.
+ *
+ * It was a *ring* until ADR-0111, and wrapped in silence when one statement
+ * asked for more than it holds: `a + a = b + b` over two 512K strings wrote
+ * the second concatenation over the first, so the comparison had one address
+ * twice and reported two values that differ everywhere as equal, with exit
+ * status 0. The reasoning that stood here for why no program could reach it
+ * -- a variable-string cannot be a value parameter, `write` consumes its
+ * arguments in turn -- overlooked that a relational operator holds two string
+ * values at once, which is `tests/extended/str_arena_overflow.pas`. Both ways
+ * of exhausting the arena are now reported (ADR-0110). */
 
 /* A variable-string variable is `{ i32, [capacity x i8] }` -- the current
  * length, then the characters. The compiler emits that layout (the `{ i32, [`
@@ -1555,15 +1564,29 @@ _Static_assert(sizeof(int) == PAS_STR_LENGTH_BYTES,
 
 #define PAS_STR_ARENA (1 << 20)
 static char pas_str_arena[PAS_STR_ARENA];
-static int pas_str_at;
 
+/* How much of the arena is in use, and the one datum the generated code shares
+ * with this file rather than reaching through a function. It is named
+ * `@pas_str_at = external global i32` in the emitted module, so the release at
+ * a statement's end is a store and costs nothing in a program that never
+ * concatenates -- where a call would have to be emitted in every prologue and
+ * could not be optimised away. It is an `int` for the same reason a
+ * variable-string's length is: the compiler writes both as an LLVM i32, and
+ * the assertion above is what ties the two spellings together. */
+int pas_str_at;
+
+/* Both ways to run out are errors, and they are different mistakes: one value
+ * too big for the arena however empty it is, against a statement holding more
+ * live values at once than the arena has room for. */
 static char *pas_str_temp(int n) {
   if (n < 0)
     n = 0;
   if (n > PAS_STR_ARENA)
     pas_runtime_error("a single string value is larger than the string arena");
+  /* Neither term exceeds PAS_STR_ARENA, so the sum cannot overflow an int. */
   if (pas_str_at + n > PAS_STR_ARENA)
-    pas_str_at = 0;
+    pas_runtime_error("more string values are live at once than the string "
+                      "arena holds");
   char *p = pas_str_arena + pas_str_at;
   pas_str_at += n;
   return p;

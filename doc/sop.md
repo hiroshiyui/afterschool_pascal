@@ -334,6 +334,7 @@ from it when one is closed.
 | `coverage.py` sees the sources, not the harnesses that build their own compiler | it enumerates the corpus by glob, so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is invisible; a procedure only those reach reports as uncovered. The **flags** half of this is closed: the corpus now sweeps `--dump-all` as `difftest.sh` does, which had been worth 195 statements reported unreached while an oracle reached them every run — `dumpexpr` alone read 75 of 186 rather than 1 | ADR-0103 |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |
 | One rule of §6.4.3.3 enforced only for a pointer domain | a program can break it and be accepted | ADR-0101 |
+| Nothing checks that every string-arena producer is **counted** | the release CodeGen emits at the end of a statement is driven by a counter the three arms of `EmitString` bump. A new producer added to `runtime/pasrt.c` and emitted from somewhere else would allocate without bumping it, and the statement holding it would write no release — a leak that reports only once the arena is gone. The three that exist are pinned by `tests/extended/str_arena_loop.pas`, one loop each; a fourth would have nothing looking for it | ADR-0111 |
 
 **Closed since this document was written**, kept here because a register that
 only grows is a register nobody trusts:

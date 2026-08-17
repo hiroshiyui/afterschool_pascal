@@ -629,6 +629,18 @@ same message, so what it varies is the *backend configuration* and nothing else.
   see it are `tests/for_nested_stack.pas` and
   `tests/extended/forin_nested_stack.pas`, and each needs a `name.opt` sidecar
   saying `-O0` to mean anything at all.
+- **A string temporary lives for one statement, and CodeGen is what says so**
+  (ADR-0111). The runtime's arena is a stack; it cannot see when a value dies,
+  so `@pas_str_at` is read in every prologue and stored back at the end of any
+  statement that took storage — and after a `while` or `repeat` condition,
+  which is the one expression a statement evaluates more than once. Which
+  statements need it is a *counter* the three allocating arms of `EmitString`
+  bump, not a predicate over the tree: the emitter already knows what it
+  emitted, and a predicate would be a second opinion free to drift. **Add an
+  arena producer and you must bump the counter** — nothing checks it
+  (`doc/sop.md` §7). It was a ring that wrapped in silence until a security
+  audit's follow-up probe; `a + a = b + b` over two 512K strings called two
+  different values equal and exited 0.
 - The layout rules are written out (`LlSize`/`LlAlign`) because there is no
   `DataLayout` to ask. They are needed in exactly two places — a whole-variable
   copy's length and the size `new` allocates. `fileSize` must equal

@@ -1437,6 +1437,18 @@ var
   langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   curBlock: integer;             { the block being filled, for a phi's label }
+  { The string arena's level at this function's entry (ADR-0111). A string
+    value's life is one statement, and the runtime cannot see when one ends, so
+    the release is emitted here: this value is read once in the prologue --
+    where it dominates every block, an SSA value and not an alloca (ADR-0102)
+    -- and stored back wherever a statement has finished with what it took. }
+  strBase: str;
+  { How many arena allocations EmitString has written, ever. Only differences
+    are read: a statement took storage exactly when this moved while it was
+    being emitted. Counting is what keeps the question off a predicate over the
+    tree -- the emitter already knows what it emitted, and a predicate would be
+    a second opinion free to drift from it. }
+  strTemps: integer;
   nextProcId, nextStr: integer;
   irProc: symPtr;                { the procedure being emitted }
   irLevel: integer;
@@ -19141,6 +19153,20 @@ begin
   curBlock := b
 end;
 
+{ Give back everything the string arena lent since this function was entered
+  (ADR-0111). Correct at the end of any statement, because nothing a statement
+  allocated outlives it: a string-valued function result is a variable-string
+  and is copied into the caller's storage, never returned as a pointer into the
+  arena. A callee's own statements restore the *callee's* level, which is above
+  anything live in the caller, so the discipline nests without a stack of marks
+  having to be kept anywhere. }
+procedure ReleaseStrTemps;
+begin
+  write(ircode, '  store i32 ');
+  PutOp(strBase);
+  writeln(ircode, ', ptr @pas_str_at')
+end;
+
 { The block a label denotes. Created on first mention, which may be either the
   labelled statement or a goto to it -- a forward jump reaches here before the
   statement it targets exists. }
@@ -21291,6 +21317,7 @@ begin
   if (e^.kind = nkBinary) and (e^.bnOp = opAdd) and IsStringType(st) then begin
     EmitString(e^.bnLhs, ad, al);
     EmitString(e^.bnRhs, bd, bl);
+    strTemps := strTemps + 1;   { ADR-0111: this statement must release }
     Def(data);
     write(ircode, 'call ptr @pas_str_concat(ptr ');
     PutOp(ad);
@@ -21323,6 +21350,7 @@ begin
     is laid out crosses to the runtime, in either direction. All six of the
     fields either function reads are integers, so no conversion arises. }
   else if (e^.kind = nkCall) and IsTimeBuiltin(e^.clBuiltin) then begin
+    strTemps := strTemps + 1;   { ADR-0111: pas_date and pas_time take arena }
     EmitAddress(e^.clArgs, hdr);
     if e^.clBuiltin = biDate then first := 2 else first := 5;
     for k := 0 to 2 do begin
@@ -21452,6 +21480,7 @@ begin
     address -- this is where it gets one. }
   else if IsChar(st) then begin
     EmitExpr(e, c);
+    strTemps := strTemps + 1;   { ADR-0111: a char given an address is arena }
     Def(data);
     write(ircode, 'call ptr @pas_str_char(i8 ');
     PutOp(c);
@@ -24063,14 +24092,21 @@ begin
 end;
 
 procedure EmitWhile(s: nodePtr);
-var cond: str; condB, bodyB, endB: integer;
+var cond: str; condB, bodyB, endB, mark: integer;
 begin
   condB := NewBlock;
   bodyB := NewBlock;
   endB := NewBlock;
   writeln(ircode, '  br label %L', condB:1);
   StartBlock(condB);
+  { A loop's condition is the one expression a statement evaluates more than
+    once, so the release EmitStmt writes after the whole while-statement comes
+    too late for it -- an iteration's worth of arena would be kept for every
+    iteration (ADR-0111). It goes here instead, after the condition has been
+    reduced to an i1 and therefore needs nothing the arena holds. }
+  mark := strTemps;
   EmitExpr(s^.whCond, cond);
+  if strTemps > mark then ReleaseStrTemps;
   write(ircode, '  br i1 ');
   PutOp(cond);
   writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
@@ -24083,7 +24119,7 @@ begin
 end;
 
 procedure EmitRepeat(s: nodePtr);
-var cond: str; bodyB, endB: integer; sub: nodePtr;
+var cond: str; bodyB, endB, mark: integer; sub: nodePtr;
 begin
   bodyB := NewBlock;
   endB := NewBlock;
@@ -24095,7 +24131,12 @@ begin
     sub := sub^.next
   end;
   { repeat runs until the condition becomes true }
+  mark := strTemps;
   EmitExpr(s^.rpCond, cond);
+  { Re-evaluated per iteration, exactly as a while's condition is, and released
+    for the same reason (ADR-0111). The body's own statements do not cover it:
+    a body that concatenates nothing writes no release at all. }
+  if strTemps > mark then ReleaseStrTemps;
   write(ircode, '  br i1 ');
   PutOp(cond);
   writeln(ircode, ', label %L', endB:1, ', label %L', bodyB:1);
@@ -24663,9 +24704,14 @@ begin
 end;
 
 procedure EmitStmt;
-var sub: nodePtr; v: str;
+var sub: nodePtr; v: str; mark: integer;
 begin
   if s <> nil then begin
+    { What the string arena stood at before this statement was emitted
+      (ADR-0111). Compared against the same counter afterwards, it says whether
+      anything below took storage -- from this statement or from any expression
+      inside it -- and so whether a release has to be written. }
+    mark := strTemps;
     { --coverage (ADR-0104). One counter per statement, before the statement's
       own code, so a statement that traps still counts as reached -- which is
       what makes a coverage report usable on a program that stops.
@@ -24723,7 +24769,19 @@ begin
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem: ;
-    end
+    end;
+    { The release goes *after* the statement, which is where the emitter can
+      still write: it cannot go back to put a mark in front of one, and every
+      statement leaves a block open behind it -- EmitGoto starts a fresh one
+      precisely so that what follows a goto has somewhere to live.
+
+      A compound is skipped because its constituents each release already; a
+      structured statement is not, since only that release reclaims what its
+      *own* controlling expression took. A goto out of a statement skips the
+      release it was inside, and nothing is lost by it: the next statement that
+      allocates restores this level before going on. }
+    if (strTemps > mark) and (s^.kind <> nkCompound) then
+      ReleaseStrTemps
   end
 end;
 
@@ -25083,7 +25141,16 @@ begin
   while irRoot^.owner <> nil do irRoot := irRoot^.owner;
   nextReg := 0;
   nextBlock := 0;
-  StartBlock(NewBlock)
+  StartBlock(NewBlock);
+  { The arena level this activation inherits, read before anything can add to
+    it (ADR-0111). Emitted in every function and not only in the ones that
+    concatenate, because the emitter is sequential and the prologue is written
+    before the body that would answer the question. It costs nothing where it
+    is unused: a load from a global with no reader is deleted, which a call
+    would not have been -- and that, rather than tidiness, is why the runtime
+    shares this one datum as a global instead of a mark/release pair. }
+  Def(strBase);
+  writeln(ircode, 'load i32, ptr @pas_str_at')
 end;
 
 procedure EnterFrame(p: symPtr);
@@ -25424,6 +25491,13 @@ begin
     aggregate. }
   writeln(ircode, 'declare ptr @pas_str_char(i8)');
   writeln(ircode, 'declare ptr @pas_str_concat(ptr, i32, ptr, i32)');
+  { How much of the runtime's string arena is in use -- the one thing this
+    module names in the runtime that is not a function (ADR-0111). It is data
+    rather than a mark/release pair so that the read every prologue makes is a
+    load with no reader in a program that never concatenates, and is deleted;
+    the calls it replaces would have been emitted and kept in every function of
+    every program. `int` on that side, i32 here, asserted there. }
+  writeln(ircode, '@pas_str_at = external global i32');
   writeln(ircode, 'declare i32 @pas_str_cmp_pad(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare i32 @pas_str_cmp_exact(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare i32 @pas_str_trimlen(ptr, i32)');
@@ -25654,6 +25728,7 @@ begin
   writeln(ircode);
   nextProcId := 1;
   nextStr := 0;
+  strTemps := 0;
   strHead := nil;
   strTail := nil;
   nextConst := 0;

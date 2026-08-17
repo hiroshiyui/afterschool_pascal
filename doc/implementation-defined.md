@@ -338,6 +338,22 @@ and read the other with nothing said; and `writeln` of a 300-character literal
 printed 255 of them, so a program's output did not match its source.
 `selfhost/badparse/ident_too_long.pas` and `string_too_long.pas` pin both.
 
+**A statement whose string values need more than 1 048 576 characters at once
+is refused**, at run time, with *more string values are live at once than the
+string arena holds*. ISO/IEC 10206:1991 §6.8.3.6 puts no bound on the length of
+a concatenation, so the number is this processor's. Only what a *statement*
+holds counts: the storage is given back when the statement finishes, so a loop
+may concatenate without limit, and `tests/extended/str_arena_loop.pas` passes
+four megabytes through the arena. A single value larger than the whole arena is
+reported separately, as *a single string value is larger than the string
+arena*.
+
+Until ADR-0111 the storage was a ring and this was the second limit ADR-0110
+found applied in silence — the wrap wrote one value over another, so
+`a + a = b + b` over two 512K strings reported two values differing in every
+character as equal, and exited 0.
+`tests/extended/str_arena_overflow.pas` is that program.
+
 **Nesting deeper than 1000 levels is refused** (ADR-0020) —
 parentheses, statements, type denoters, blocks, or the depth of the tree an
 operator chain builds. The bound is on the *tree* rather than on the parser's
@@ -349,7 +365,7 @@ only for the walkers after it. A program's own block is one of the levels, so
 ### 6.1 Programs accepted that the standard requires to be rejected
 
 The first two above are deviations this project chose, the third is a defect it
-has not fixed, and the last two are limits it states rather than hides. These are the other kind: rules of ISO 7185 that a program can
+has not fixed, and the last three are limits it states rather than hides. These are the other kind: rules of ISO 7185 that a program can
 break without this compiler saying so.
 They were found the way the unreported errors in §3 were — by the BSI Pascal
 Validation Suite's `DEVIANCE` category, whose programs a conforming processor

@@ -24,6 +24,19 @@ appears below in the release where it still existed.
   them, so its output did not match its source. Found by a security audit;
   ADR-0110 records why the limit is reported rather than raised, and
   `doc/implementation-defined.md` §6 now states it as clause 5.1 c) requires.
+- **A statement whose string values need more than 1 048 576 characters at once
+  now stops the program** with `more string values are live at once than the
+  string arena holds`. The storage was a ring: on exhaustion it wrapped to the
+  start and wrote one live value over another, so `a + a = b + b` over two
+  512K strings compared one buffer with itself and reported two values
+  differing in every character as **equal**, exit status 0. There is no repair
+  that keeps an answer — a wrap only happens when the values do not fit — so
+  what changes is that a wrong answer becomes an error. Concatenating in a loop
+  is unaffected and was the reason the wrap looked harmless: a statement's
+  string values are released when the statement finishes, so four megabytes go
+  through the one-megabyte arena without trouble. ADR-0111 has the mechanism,
+  ADR-0110 the rule it applies, and `doc/implementation-defined.md` §6 states
+  the limit.
 - **A block counts as one nesting level**, so 999 remain inside a program's own
   block where 1000 did before. Nothing counted a block, so a procedure
   declaration nested a scope without nesting anything the parser measured: 1001

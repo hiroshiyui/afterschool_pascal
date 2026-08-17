@@ -687,9 +687,27 @@ able to make.
   types, and the third time this project has reached for ADR-0030's
   two-scalar shape — nothing may depend on how a two-word value is passed.
   - **`substr` and `trim` copy nothing** — a pointer into the string they came
-    from and a shorter length. Only `+` makes new characters, from a ring in
-    the runtime whose one limit (a single *statement* concatenating more than
-    it holds) is stated rather than silently wrong.
+    from and a shorter length. Only `+` makes new characters, and only three
+    things in the whole compiler take arena storage: concatenation, a char
+    given an address so it can stand where a string does, and §6.7.6.9's `date`
+    and `time`. All three are arms of `EmitString`.
+  - **A string temporary lives for one statement, and CodeGen says so**
+    (ADR-0111). The arena is a stack: `@pas_str_at` is read into an SSA value in
+    every prologue and stored back at the end of any statement that took
+    storage, and after a `while` or `repeat` condition, which is the one
+    expression a statement evaluates twice. Which statements need it is
+    answered by a *counter* the three `EmitString` arms bump — the emitter's own
+    account of what it emitted, rather than a predicate over the tree free to
+    disagree with it — and the store goes *after* the statement because a
+    sequential emitter cannot go back to put a mark in front of one.
+    `tests/extended/str_arena_loop.pas` fails without it, at about 52 000 of its
+    200 000 iterations.
+  - **It was a ring until then, and wrapped in silence.** A wrap wrote one live
+    value over another, so `a + a = b + b` over two 512K strings compared one
+    buffer with itself and called two different values equal, exit status 0
+    (`tests/extended/str_arena_overflow.pas`). Both ways of exhausting the arena
+    are now reported, which is ADR-0110's rule; the limit is
+    `doc/implementation-defined.md` §6.
   - **A variable-string is `{ i32, [cap x i8] }`** — ADR-0045's
     flexible-array-member record — so `dynSize` needed nothing and
     `procedure p(var s: string)` is ADR-0040's descriptor with the capacity as
