@@ -9,12 +9,16 @@ attacker-controlled text. Malformed, hostile, or merely enormous source must
 produce a diagnostic — never a crash, a hang, or memory corruption. That is the
 whole audit in one sentence; the steps below are how it gets checked.
 
-**What the compiler is made of decides where the risk lives** (ADR-0085). There
-is no C++ any more. `build/bin/pascalc` is `selfhost/compiler.pas` translated by
+**What the compiler is made of decides where the risk lives** (ADR-0085). No
+C++ is in it: `build/bin/pascalc` is `selfhost/compiler.pas` translated by
 `seed/pascalc.ll`, so the front end is a Pascal program with array bounds
 checked, subranges checked, and every pointer dereference nil-checked — the
 class of bug this audit used to be mostly about is now diagnosed by the compiler
-that compiled it. What is left is where those checks do not reach:
+that compiled it. `src/` is C++ again since ADR-0108, and is **not** in this
+threat model: `pascalc-s0` is built for `difftest` alone, ships nothing, and
+nothing a user runs links it. A crash in it is a broken oracle, not a
+vulnerability — report it as a Tests finding. What is left is where those checks
+do not reach:
 
 - **`runtime/pasrt.c`** — the one piece of C, linked into *every* program this
   compiler builds. A bug here is inherited by all of them.

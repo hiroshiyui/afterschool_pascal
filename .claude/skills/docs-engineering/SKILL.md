@@ -55,7 +55,7 @@ When performing documentation engineering, always follow these steps:
    - When a new pass or source file is added, add it to `CLAUDE.md`'s "Where things live" *and* the developer guide's layout table, and give it a header comment.
    - When a decision is made that constrains future work, write the ADR **while the alternatives are still live** — a record written afterwards justifies rather than explains (ADR-0001).
    - When a Pascal semantic is encoded or changed, update `CLAUDE.md`'s "Pascal semantics already encoded" list *and* confirm a test pins it. Documentation of a semantic with no test behind it is a finding.
-   - Treat a stale comment that contradicts the code as worse than a missing one — fix or delete it. Adding or correcting a comment must not change code: a doc-only pass leaves `ctest` output identical. There is no `clang-format` step any more — there is no C++ — but the rule it protected still holds: a comment fix and a code change do not travel together.
+   - Treat a stale comment that contradicts the code as worse than a missing one — fix or delete it. Adding or correcting a comment must not change code: a doc-only pass leaves `ctest` output identical. There *is* a `clang-format` step again — ADR-0108 brought `src/` back as a reference front end, so a comment touched there is checked like any other line, incrementally (`git clang-format` against the diff, never the tree). The rule it protects is the same either way: a comment fix and a code change do not travel together.
 
 4. **Remove completed items** from any TODO list. If a brief summary of completed work is warranted, add it to `README.md` or the relevant ADR's consequences before deleting the entry.
 
