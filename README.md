@@ -371,7 +371,12 @@ types      vector(n: integer) = array [1..n] of real — a schema, and
            not, whatever they look like; v.n is the value a type was
            produced with. A discriminant may also be a variable — `vector(n)`
            in a variable declaration is sized when the block is entered, and
-           the tuple is checked there (§6.2.3.2). `vec2 = vector` gives a
+           the tuple is checked there (§6.2.3.2). A plain subrange bound may
+           be a variable in the same place — `var a: array [1..m] of real`
+           inside a procedure, sized on entry and bounds-checked against what
+           the entry computed. Either end, both ends, an expression rather
+           than a name, and at more than one level (§6.4.2.4, §6.2.3.8 b).
+           `vec2 = vector` gives a
            schema a second name (§6.4.7), and the two denote *one* schema
            rather than alike ones — so `vec2(3)` and `vector(3)` are the
            same type and values move between them
@@ -656,15 +661,16 @@ both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 program compiled and run rather than with a reading. `doc/roadmap.md` records
 what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
-**One construct of it is refused**, and it is the one most likely to be met:
-a discriminant or subrange bound that is not a constant, outside a variable
-declaration — `var a: array [1..m] of real` inside a procedure, with `m` a
-value parameter. §6.2.3.8 b) evaluates those at block commencement, *after* the
-value parameters are attributed, so they are legal. This is a defect rather
-than a decision; `doc/implementation-defined.md` §6 states it with the clause,
-and it is feature-sized rather than deferred on merit. Conformant array
-parameters are not accepted either, which is what makes this a level 0
-processor — that one is the standard's own option rather than a shortfall.
+**One construct of it is refused**: a discriminant or subrange bound that is not
+a constant, in a **type-definition** — `type t = array [1..m] of integer` or
+`type t = vector(m)` inside a procedure, with `m` a value parameter. §6.2.3.8 b)
+evaluates those at block commencement, *after* the value parameters are
+attributed, so they are legal. The same bound in a *variable* declaration is
+accepted, which was the half most likely to be met. This is a defect rather than
+a decision; `doc/implementation-defined.md` §6 states it with the clause.
+Conformant array parameters are not accepted either, which is what makes this a
+level 0 processor — that one is the standard's own option rather than a
+shortfall.
 
 ## What backs the answers
 
