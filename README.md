@@ -107,6 +107,62 @@ is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`
 Extended Pascal itself, because only that standard lets a program read its own
 command line.
 
+## The standard library
+
+`lib/` holds the beginning of one (ADR-0114). It is ordinary Extended Pascal —
+§6.11 modules, translated separately as §6.13 program-components — so it needed
+no compiler change and changes nothing about what either conformance mode
+accepts. Three modules so far:
+
+| Module | What it has |
+| --- | --- |
+| `lib/passtrings.pas` | `Upper`, `Lower`, `StartsWith`, `EndsWith`, `IndexOf`, `PadLeft`, `PadRight`, `Times`, `Reverse`, `Replace` |
+| `lib/passort.pas` | `SortIndexed` and `LowerBound` over positions, `SortInts` over an integer array, and the `IntVector` schema |
+| `lib/pasmath.pas` | `IMin`, `IMax`, `Gcd`, `Lcm`, `ISqrt`, and a seedable Lehmer generator |
+
+Use one the way §6.13 asks: translate it, then hand the program its *source*,
+which is where the interface is written.
+
+```sh
+tools/pascalcc --std=extended -c lib/passtrings.pas -o passtrings.o
+tools/pascalcc --std=extended prog.pas --import lib/passtrings.pas passtrings.o -o prog
+```
+
+**Three conventions, and each is forced by the language rather than chosen.**
+They are why the library looks the way it does, and the first one is what a
+caller notices:
+
+- **A string argument must be a string *variable*.** A read-only string
+  parameter is `protected s: string`, because a variable-string may not be a
+  value parameter (ADR-0052) — so neither a literal nor another function's
+  result is a legal actual. `StartsWith(s, 'Hello')` and `Upper(Reverse(s))` do
+  not compile, and the caller names an intermediate:
+
+  ```pascal
+  var s, prefix: Line;
+  begin
+    s := 'Hello, World';
+    prefix := 'Hello';
+    writeln(StartsWith(s, prefix))
+  end.
+  ```
+
+- **Two string parameters are two groups**, never `protected s, prefix: string`:
+  a parameter group naming a schema gives its names one type (ADR-0040), which
+  would force both arguments to the same capacity.
+
+- **An exported function assigns its own identifier once, at the end.** §6.8.2.2
+  makes every *read* of it a recursive call, and the other way to accumulate —
+  a result-variable-specification — is unavailable to an exported function,
+  §6.11.1 making its heading a `forward` whose body cannot see that name.
+
+**There is no install location and no resolution by name.** `--import` takes a
+path, so a program outside this checkout names paths into it, and `maxImports`
+bounds one program at eight components. Sockets, locales, threads and containers
+are all absent: the first three wait on a foreign-function interface, and a
+container waits on something to parameterise a type by a type, which schemata do
+not do. `doc/roadmap.md` has the ordering.
+
 ## What the compiler accepts today, with `--std=iso7185`
 
 ```
@@ -684,7 +740,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 537 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 540 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.

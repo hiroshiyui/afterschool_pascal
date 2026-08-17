@@ -40,6 +40,34 @@ compilation** (ADR-0053, ADR-0079) mean a standard library needs no new language
 mechanism to exist, and `runtime/pasrt.c` is where the outside world already
 enters. Those two are most of a library's scaffolding, finished and tested.
 
+### The first increment (done)
+
+`lib/` exists (ADR-0114): three modules — `PasStrings`, `PasSort`, `PasMath` —
+in ordinary Extended Pascal, translated as §6.13 program-components and imported
+by path. **No compiler change and no third `--std`**, which is the point: a
+library module is a §6.11 module, so nothing about what either conformance mode
+accepts moved.
+
+It **qualifies the ordering below.** "FFI comes first" is true of the
+outward-facing half — sockets, clocks, locales — and was never true of the
+inward-facing one, and building that first bought three facts about this
+language that no amount of design would have produced:
+
+- **A string argument must be a variable** (the limitation now listed under
+  ISO/IEC 10206:1991, below). It is the biggest obstacle to a usable library and
+  it is *conformance* work, not dialect work.
+- **A `forward`-declared function loses its result-variable-specification**, and
+  §6.11.1 makes every exported function a `forward` — so an exported function
+  accumulates into a local. Possibly a defect; `doc/sop.md` §7 carries it as a
+  reading nobody has taken.
+- **No generics is survivable by phrasing algorithms over positions.**
+  `SortIndexed` takes `less(i, j)` and `swap(i, j)` and never sees an element,
+  so one body sorts an array, several parallel arrays, or anything else the
+  caller's closures reach.
+
+What it did **not** do: no install location, no resolution by name, no
+containers, and nothing touching the operating system.
+
 ### The enabler: a foreign-function interface
 
 Everything above needs to call code this compiler did not emit. Today the only
@@ -193,7 +221,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 435 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 540 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the error-path corpus of `selfhost/badparse/` and
 `selfhost/badsema/`, the verification run, the bootstrap and the product check —
 and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
@@ -419,8 +447,20 @@ surprises.
 
 ### Under ISO/IEC 10206:1991
 
-Five more, each stated in the record that made it:
+Six more, each stated in the record that made it:
 
+- **A variable-string may not be a value parameter**, so every string parameter
+  is a `var` or `protected` one and every actual is a string *variable* — never a
+  literal, never another function's result. §6.4.6 pads or refuses by length and
+  the actual may be a literal or a string of another capacity, so such a
+  parameter would have to be *converted* at the call and there is nowhere to
+  build the result (ADR-0052).
+  - It was recorded from the *compiler's* side and its cost to a **caller** was
+    not written down until a library was built on it (ADR-0114):
+    `StartsWith(s, 'Hello')` and `Upper(Reverse(s))` do not compile, and
+    composing two string functions needs a named intermediate. This is now the
+    highest-value conformance gap here, because it is the one a program written
+    against the library meets on its first line.
 - **String concatenation draws from an arena.** A string value is a pointer and
   a length (ADR-0051), so only `+` makes characters that did not exist; they
   come from a fixed buffer in the runtime. One *statement* holding more live
