@@ -6,6 +6,13 @@ Accepted. First increment of the goal ADR-0109 set; decides nothing about the
 dialect mode, the memory-safety model, the text model or the foreign-function
 interface, all of which stay open.
 
+The first of the three API conventions it records -- that a string argument
+must be a string *variable* -- is retired by
+[ADR-0115](0115-a-string-value-parameter-is-converted-by-the-callee.md),
+which fixed the defect underneath it. The library was the evidence that the
+defect was worth fixing, so the convention is left written here rather than
+edited away: it is why the fix happened.
+
 ## Context
 
 ADR-0109 made the long-term goal a practical Pascal with a standard core library

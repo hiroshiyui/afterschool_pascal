@@ -4,7 +4,13 @@ Date: 2026-08-12
 
 ## Status
 
-Accepted.
+Accepted. The *reason* its passing rule gives is superseded by
+[ADR-0115](0115-a-string-value-parameter-is-converted-by-the-callee.md):
+there is somewhere to build the conversion now, so a `restricted string(12)`
+value parameter is refused pending a reading of whether a restricted value
+may be copied at all, rather than for want of a mechanism. The rule itself,
+and the point that a restricted type does not launder a rule about passing,
+stand.
 
 ## Context
 

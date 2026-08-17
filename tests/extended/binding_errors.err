@@ -1,4 +1,3 @@
-<source>:13:17: error: a string parameter must be a var parameter; a value parameter would have to convert the argument, and there is nowhere yet to build the conversion
 <source>:32:8: error: 'f' is not bindable; only a variable of a bindable type can be bound to something outside the program
 <source>:33:10: error: 'f' is not bindable; only a variable of a bindable type can be bound to something outside the program
 <source>:34:16: error: 'f' is not bindable; only a variable of a bindable type can be bound to something outside the program

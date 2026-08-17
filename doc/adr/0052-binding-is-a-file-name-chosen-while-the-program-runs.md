@@ -6,6 +6,12 @@ Date: 2026-08-11
 
 Accepted. It is the feature ADR-0051 unblocked.
 
+Its deferral of a **variable-string value parameter** is retired by
+[ADR-0115](0115-a-string-value-parameter-is-converted-by-the-callee.md):
+the conversion needed somewhere with the *formal's* capacity, which is the
+callee's own slot, not somewhere the caller could name. The rest of this
+record stands.
+
 ## Context
 
 ISO/IEC 10206:1991 §6.7.5.6 gives `bind(f, b)` and `unbind(f)`, §6.7.6.8 gives

@@ -1,7 +1,7 @@
 <source>:24:21: error: a restricted type is nonbindable, so 'bindable' cannot precede 'restricted'
 <source>:28:12: error: 'widget' is already a restricted type
 <source>:32:12: error: a file cannot be restricted; there is no operation on one that a restricted type would still allow
-<source>:48:19: error: a string parameter must be a var parameter; a value parameter would have to convert the argument, and there is nowhere yet to build the conversion
+<source>:48:19: error: a restricted string parameter must be a var parameter; whether a restricted value may be copied into a value parameter is not decided here
 <source>:48:43: error: a value of type stag cannot be written
 <source>:52:10: error: operator '+' needs numeric operands, found ri and integer
 <source>:55:12: error: cannot select a field of a value of type widget

@@ -53,9 +53,11 @@ outward-facing half — sockets, clocks, locales — and was never true of the
 inward-facing one, and building that first bought three facts about this
 language that no amount of design would have produced:
 
-- **A string argument must be a variable** (the limitation now listed under
-  ISO/IEC 10206:1991, below). It is the biggest obstacle to a usable library and
-  it is *conformance* work, not dialect work.
+- **A string argument had to be a variable**, which was the biggest obstacle to
+  a usable library and was *conformance* work rather than dialect work. It is
+  **fixed** (ADR-0115), in the change after the one that found it: the library
+  is what turned a limitation recorded from the compiler's side into one a
+  caller could feel.
 - **A `forward`-declared function loses its result-variable-specification**, and
   §6.11.1 makes every exported function a `forward` — so an exported function
   accumulates into a local. Possibly a defect; `doc/sop.md` §7 carries it as a
@@ -221,7 +223,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 540 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 542 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the error-path corpus of `selfhost/badparse/` and
 `selfhost/badsema/`, the verification run, the bootstrap and the product check —
 and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
@@ -447,20 +449,15 @@ surprises.
 
 ### Under ISO/IEC 10206:1991
 
-Six more, each stated in the record that made it:
+Five more, each stated in the record that made it. A sixth was listed here for
+exactly one commit and is **fixed**: a variable-string may now be a value
+parameter (ADR-0115), so a string argument may be a literal, another function's
+result or a string of any capacity. It is worth a sentence because of how it was
+found — ADR-0052 recorded the refusal from the *compiler's* side and no document
+carried its cost to a **caller** until a library was built on it, at which point
+`StartsWith(s, 'Hello')` not compiling stopped looking like a house style and
+started looking like what it was.
 
-- **A variable-string may not be a value parameter**, so every string parameter
-  is a `var` or `protected` one and every actual is a string *variable* — never a
-  literal, never another function's result. §6.4.6 pads or refuses by length and
-  the actual may be a literal or a string of another capacity, so such a
-  parameter would have to be *converted* at the call and there is nowhere to
-  build the result (ADR-0052).
-  - It was recorded from the *compiler's* side and its cost to a **caller** was
-    not written down until a library was built on it (ADR-0114):
-    `StartsWith(s, 'Hello')` and `Upper(Reverse(s))` do not compile, and
-    composing two string functions needs a named intermediate. This is now the
-    highest-value conformance gap here, because it is the one a program written
-    against the library meets on its first line.
 - **String concatenation draws from an arena.** A string value is a pointer and
   a length (ADR-0051), so only `+` makes characters that did not exist; they
   come from a fixed buffer in the runtime. One *statement* holding more live

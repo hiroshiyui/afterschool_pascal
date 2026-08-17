@@ -8,8 +8,8 @@ var f: text;
     b: BindingType;
     s: string(5);
 
-{ a value parameter of a variable-string type would have to convert its
-  argument, and there is nowhere yet to build the conversion (ADR-0052) }
+{ legal since ADR-0115: the callee's prologue converts, so this contributes no
+  diagnostic -- unlike `padded` below, which is copied and cannot be padded }
 procedure takes(v: string(5));
 begin
   writeln(v)

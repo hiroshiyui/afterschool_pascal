@@ -14992,22 +14992,28 @@ begin
           writeln(': it contains a file, and a file has no copy')
         end
       end;
-      { A variable-string value parameter would have to be *converted* at the
-        call -- 6.4.6 pads or refuses by length, and the actual may be a
-        literal, a fixed string or a string of another capacity -- and a
-        conversion needs somewhere to build the result that the caller can
-        name. Until it has one, such a parameter is refused rather than copied
-        bytewise from whatever the actual happened to be (ADR-0052). }
-      { Asked of the *underlying* type: 6.4.2.5 makes a restricted string's
-        states one-to-one with the string's, so it would need exactly the same
-        conversion and has exactly the same nowhere to build it. A restricted
-        type does not launder a rule about how a value is passed. }
-      if IsVarString(Underlying(t)) and not g^.grByRef and
+      { A variable-string value parameter is converted rather than copied --
+        6.4.6 pads a shorter value with spaces and refuses a longer one -- and
+        ADR-0052 refused it because "a conversion needs somewhere to build the
+        result that the caller can name". It has somewhere now, and it is not
+        the caller: the *callee's* slot for the parameter is an ordinary frame
+        field of the formal's type, so the prologue stores the pair the caller
+        passed exactly as `s := expr` does (ADR-0115).
+
+        A restricted one is still refused, and no longer for that reason.
+        6.4.2.5 makes a restricted string's states one-to-one with the
+        string's, so the conversion is available to it too; what is not settled
+        is whether a clause that forbids assigning a restricted value permits
+        copying one into a parameter, and a reading nobody has taken is not a
+        thing to decide inside a lowering. Asked of the *underlying* type,
+        because a restricted type does not launder a rule about how a value is
+        passed. }
+      if IsRestricted(t) and IsVarString(Underlying(t)) and not g^.grByRef and
          (g^.grNames <> nil) then begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
-        writeln('a string parameter must be a var parameter; a value ',
-                'parameter would have to convert the argument, and there is ',
-                'nowhere yet to build the conversion')
+        writeln('a restricted string parameter must be a var parameter; ',
+                'whether a restricted value may be copied into a value ',
+                'parameter is not decided here')
       end;
       { 6.4.1: a file or a pointer is not protectable, and neither is anything
         holding one. The standard's own reason is that protecting either would
@@ -20406,6 +20412,11 @@ procedure EmitAddress(e: nodePtr; var v: str); forward;
   slot Sema gave it when `into` is empty, and otherwise the component or the
   variable the value is for. }
 procedure EmitStructValue(e: nodePtr; var into: str); forward;
+{ A string value as ADR-0051 defines one: a pointer and a length, produced for
+  any string expression at all -- a literal, a variable, a substring or a
+  concatenation. Forward because EmitUserCall needs it and is written first: a
+  variable-string *value* parameter travels as exactly this pair (ADR-0115). }
+procedure EmitString(e: nodePtr; var data, len: str); forward;
 
 { The tuple governing a designator, found by walking to the whole variable it
   selects from. One header serves every dimension -- `g^[i][j]` reads `rows`
@@ -21059,7 +21070,7 @@ end;
   (6.7.2); nil for every other call, and unread for them. }
 procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
                        var v: str);
-var link, a, slot, half, target, resAddr: str; head, tail, o: opndPtr;
+var link, a, alen, slot, half, target, resAddr: str; head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
     byAddr: boolean;
 begin
@@ -21117,6 +21128,16 @@ begin
         k := k + 1;
         dp := dp^.next
       end
+    end
+    else if (p^.sym^.kind <> skVarParam) and IsVarString(p^.sym^.stype) then
+    begin
+      { The pair, not an address: the actual need not be a variable and need
+        not have the formal's capacity, so what travels is the value 6.4.6
+        will store (ADR-0115). The conversion is the callee's, because only
+        its slot has the capacity to pad to. }
+      EmitString(arg, a, alen);
+      AppendOpnd(head, tail, a, true, nil);
+      AppendOpnd(head, tail, alen, false, intType)
     end
     else begin
       if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
@@ -21545,7 +21566,7 @@ end;
   The pair is what makes `substr` and `trim` free: they are a pointer and a
   shorter length into the string they came from, and copy nothing. Only `+`
   makes characters that did not exist. }
-procedure EmitString(e: nodePtr; var data, len: str);
+procedure EmitString;
 var ad, al, bd, bl, at_, count, hdr, addr, c, one: str; st: typePtr;
     part: array [0..2] of str; k, first: integer;
 begin
@@ -25059,6 +25080,20 @@ begin
         k := k + 1;
         write(ircode, ', ptr')
       end
+      { A variable-string value parameter is the second thing here that is two
+        arguments, and for ADR-0030's reason rather than by analogy: a string
+        *value* is a pointer and a length (ADR-0051), and the actual may be a
+        literal, a fixed string or a string of another capacity -- so there is
+        no single object whose address could be passed instead. The callee's
+        prologue converts the pair into its own slot, which is where 6.4.6's
+        padding has somewhere to happen (ADR-0115). }
+      else if (p^.sym^.kind <> skVarParam) and IsVarString(p^.sym^.stype) then
+      begin
+        write(ircode, 'ptr');
+        if named then write(ircode, ' %a', k:1);
+        k := k + 1;
+        write(ircode, ', i32')
+      end
       else if (p^.sym^.kind = skVarParam) or IsMemory(p^.sym^.stype) then
         write(ircode, 'ptr')
       else
@@ -25426,7 +25461,7 @@ end;
 
 procedure EnterFrame(p: symPtr);
 var l, d, e: symListPtr; link, slot, arg, half, actual, size, copy: str;
-    nohdr: str; k, align: integer; comp: typePtr;
+    nohdr, arglen, shdr: str; k, align: integer; comp: typePtr;
 begin
   BeginFunction(p);
   { A level-0 block's record is a global: it has one activation, and a
@@ -25568,6 +25603,22 @@ begin
         write(ircode, ', ptr ');
         PutOp(half);
         writeln(ircode)
+      end
+      else if (l^.sym^.kind <> skVarParam) and IsVarString(l^.sym^.stype) then
+      begin
+        { 6.4.6's store, from the pair the caller passed into the slot this
+          activation owns: shorter is padded with spaces, longer is refused,
+          and the capacity is the *formal's* -- which is the whole reason the
+          conversion happens here and not at the call (ADR-0115). It is the
+          same call `s := expr` compiles to, so a value parameter and an
+          assignment cannot disagree about 6.4.6. }
+        k := k + 1;
+        StrClear(arglen);
+        StrAppend(arglen, '%');
+        StrAppend(arglen, 'a');
+        AppendInt(arglen, k);
+        StrClear(shdr);
+        EmitStringStoreValue(slot, l^.sym^.stype, arg, arglen, shdr)
       end
       else if (l^.sym^.kind <> skVarParam) and IsStructured(l^.sym^.stype) then
       begin

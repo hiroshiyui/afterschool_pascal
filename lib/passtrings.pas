@@ -6,29 +6,24 @@
   the operations a program that reads a line and decides something about it
   needs on its first page.
 
-  Three conventions govern every function here, and each is forced rather than
-  chosen. ADR-0114 writes them out with the probes that found them; the short
-  form:
+  Two conventions govern every function here, and both are forced rather than
+  chosen.
 
-  - **A read-only string parameter is `protected s: string`** -- the bare
-    schema-name, which is a schematic formal and therefore travels as an
-    address and a capacity (ADR-0040). It is not a value parameter because a
-    variable-string may not be one (ADR-0052), and it is not grouped with a
-    second string because a parameter group naming a schema gives its names one
-    type, which would force two arguments to the same capacity.
-
-  - **An argument must be a string *variable*.** Neither a literal nor another
-    function's result is a variable produced from the schema, so `StartsWith(v,
-    'hello')` and `Upper(Reverse(v))` are both unwritable today and the caller
-    assigns to a named variable first. This is ADR-0052's deviation seen from
-    the outside and is the largest thing standing between this library and a
-    comfortable one.
+  - **A string parameter is an ordinary value parameter of type `Line`.** It
+    was `protected s: string` when this module was written, because a
+    variable-string could not be a value parameter and every actual therefore
+    had to be a *variable* -- `StartsWith(s, 'hello')` did not compile.
+    ADR-0115 retired that, so an argument may now be a literal, another
+    function's result, a concatenation or a string of any capacity, and 6.4.6
+    converts it on the way in. A value longer than `LineMax` is an error at the
+    call, which is the same rule an assignment to a `Line` obeys.
 
   - **A function accumulates into a local and assigns its identifier once.**
     6.8.2.2 makes every *read* of the identifier a recursive call, so
     `Upper := Upper + c` is a recursion rather than an append; the other way to
     accumulate is a result-variable-specification, and 6.11.1 makes a heading
-    in a module-heading a `forward`, whose body cannot see that name.
+    in a module-heading a `forward`, whose body cannot see that name. That one
+    is still a live limitation and doc/sop.md 7 carries it.
 
   A result is `Line`, a fixed-capacity string the interface exports so a caller
   has something to declare. Every function whose result can grow -- `PadLeft`,
@@ -50,36 +45,34 @@ const
 type
   Line = string(LineMax);
 
-function Upper(protected s: string): Line;
-function Lower(protected s: string): Line;
+function Upper(s: Line): Line;
+function Lower(s: Line): Line;
 
-function StartsWith(protected s: string; protected prefix: string): boolean;
-function EndsWith(protected s: string; protected suffix: string): boolean;
+function StartsWith(s, prefix: Line): boolean;
+function EndsWith(s, suffix: Line): boolean;
 
 { The position of the first occurrence of `needle` in `s`, or 0 when there is
   none. A null needle occurs at 1, which is what makes `IndexOf(s, n) > 0` and
   "n is a substring of s" the same question for every n. }
-function IndexOf(protected s: string; protected needle: string): integer;
+function IndexOf(s, needle: Line): integer;
 
 { `s` padded with spaces to `w` characters, on the left and on the right. A
   string already that long or longer is returned unchanged -- these pad and do
   not truncate, so nothing here can lose a character. }
-function PadLeft(protected s: string; w: integer): Line;
-function PadRight(protected s: string; w: integer): Line;
+function PadLeft(s: Line; w: integer): Line;
+function PadRight(s: Line; w: integer): Line;
 
 { `s` repeated `n` times; the null string for n <= 0. }
-function Times(protected s: string; n: integer): Line;
+function Times(s: Line; n: integer): Line;
 
-function Reverse(protected s: string): Line;
+function Reverse(s: Line): Line;
 
 { Every occurrence of `needle` in `s` replaced by `repl`, scanning left to
   right and never rescanning what a replacement produced. A null needle
   matches nothing here, which is the one place this disagrees with `IndexOf`
   above: the alternative is an insertion between every pair of characters, and
   no caller wants it. }
-function Replace(protected s: string;
-                 protected needle: string;
-                 protected repl: string): Line;
+function Replace(s, needle, repl: Line): Line;
 
 end;
 

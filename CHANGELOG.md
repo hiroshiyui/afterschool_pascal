@@ -34,12 +34,33 @@ appears below in the release where it still existed.
   `--import` takes a path — so a program outside this repository names paths
   into a checkout.
 
-  Two things a caller should read first, both consequences of existing
-  behaviour rather than of this change: **a string argument must be a string
-  variable**, never a literal and never another function's result, because a
-  variable-string may not be a value parameter (ADR-0052); and an exported
-  function assigns its own identifier once at the end, §6.11.1 making its
-  heading a `forward` whose body cannot see a result-variable-specification.
+  One thing a caller should read first, a consequence of existing behaviour
+  rather than of this change: an exported function assigns its own identifier
+  once at the end, §6.11.1 making its heading a `forward` whose body cannot see
+  a result-variable-specification.
+
+### Fixed
+
+- **A variable-string may now be a value parameter**, so a string argument may
+  be a literal, another function's result, a concatenation, or a string of a
+  different capacity — `StartsWith(s, 'Hello')` and `Upper(Reverse(s))` compile,
+  and neither did before. ISO/IEC 10206:1991 §6.6.3.2 with §6.4.6 requires it;
+  this compiler refused it and said the conversion had "nowhere to build the
+  result that the caller can name".
+
+  The premise was wrong in one word. The conversion needs somewhere with the
+  **formal's** capacity, which is the callee's own frame slot for the
+  parameter — so the caller passes a pointer and a length (the string value
+  §6.4.6 will store) and the callee's prologue makes the same store `s := expr`
+  makes. A value longer than the formal's capacity is an error at the call, with
+  the message an assignment gives, because it is the same check.
+
+  A **restricted** string value parameter is still refused, and now says so in
+  its own words: whether a clause forbidding assignment of a restricted value
+  permits copying one into a parameter is a reading nobody has taken. A
+  **fixed**-string value parameter is unchanged — `packed array [1..8] of char`
+  is copied rather than converted, so an actual must still have the same length.
+  ADR-0115.
 
 ## [1.4.0] — 2026-08-18
 

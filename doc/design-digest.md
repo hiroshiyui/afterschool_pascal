@@ -67,6 +67,16 @@ own exception and compare by length instead.
 - A structured parameter always travels as an address: a `var` parameter binds
   to it, a value parameter is copied by the callee's prologue. `paramType`
   differs from `slotType` for exactly this reason.
+- A **variable-string value parameter is the exception**, and it is two
+  arguments rather than an address: a pointer and a length (ADR-0051's string
+  value). An actual of a different capacity has a different layout, so there is
+  no object whose address could be passed and no memcpy that would be right —
+  which is why a string is `isMemory` and deliberately *not* `isStructured`.
+  The callee's prologue makes §6.4.6's store into its own slot, through the same
+  `pas_str_store_var` an assignment uses, so a value parameter and an assignment
+  cannot disagree about padding or about refusing an over-long value. ADR-0115;
+  a *restricted* one is still refused, pending a reading rather than a
+  mechanism.
 - A string literal is typed `packed array [1..n] of char` in Sema, not given a
   type of its own, so `write`, assignment, comparison, and argument passing need
   no literal-shaped special case.

@@ -368,7 +368,11 @@ feature, because each was arrived at more than once:
   procedural parameter's code-and-link pair, a schematic formal's
   address-and-discriminants, a string's pointer-and-length and `complex`'s two
   doubles all travel as separate arguments, so the textual `.ll` backend needs
-  no opinion about the C ABI (ADR-0030, ADR-0040, ADR-0049, ADR-0051).
+  no opinion about the C ABI (ADR-0030, ADR-0040, ADR-0049, ADR-0051). A
+  variable-string **value parameter** is the fifth, and the first where the
+  shape was forced rather than chosen: an actual of a different capacity has a
+  different layout, so no address would have served and the callee's prologue
+  converts the pair into its own slot (ADR-0115).
 - **A permission granted in a shared predicate leaks to every caller.**
   `assignable` is asked by the relational operators too, which is why
   ADR-0058 had to write the comparison refusal out separately.

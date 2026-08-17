@@ -128,33 +128,30 @@ tools/pascalcc --std=extended -c lib/passtrings.pas -o passtrings.o
 tools/pascalcc --std=extended prog.pas --import lib/passtrings.pas passtrings.o -o prog
 ```
 
-**Three conventions, and each is forced by the language rather than chosen.**
-They are why the library looks the way it does, and the first one is what a
-caller notices:
+Strings are passed by value, so an argument may be a literal, another
+function's result, a concatenation, or a string of any capacity:
 
-- **A string argument must be a string *variable*.** A read-only string
-  parameter is `protected s: string`, because a variable-string may not be a
-  value parameter (ADR-0052) — so neither a literal nor another function's
-  result is a legal actual. `StartsWith(s, 'Hello')` and `Upper(Reverse(s))` do
-  not compile, and the caller names an intermediate:
+```pascal
+var s: Line;
+begin
+  s := 'Hello, World';
+  writeln(StartsWith(s, 'Hello'));
+  writeln(Upper(Reverse(s)))
+end.
+```
 
-  ```pascal
-  var s, prefix: Line;
-  begin
-    s := 'Hello, World';
-    prefix := 'Hello';
-    writeln(StartsWith(s, prefix))
-  end.
-  ```
+Neither of those lines compiled when the library was written: a variable-string
+could not be a value parameter, so every string formal was `protected s: string`
+and every actual had to be a *variable*. ADR-0115 fixed that, and the library's
+own test was rewritten to the form above **without its golden changing** — same
+answers, and the interface stopped documenting a compiler defect as a house
+style.
 
-- **Two string parameters are two groups**, never `protected s, prefix: string`:
-  a parameter group naming a schema gives its names one type (ADR-0040), which
-  would force both arguments to the same capacity.
-
-- **An exported function assigns its own identifier once, at the end.** §6.8.2.2
-  makes every *read* of it a recursive call, and the other way to accumulate —
-  a result-variable-specification — is unavailable to an exported function,
-  §6.11.1 making its heading a `forward` whose body cannot see that name.
+One convention is still forced by the language: **an exported function assigns
+its own identifier once, at the end.** §6.8.2.2 makes every *read* of it a
+recursive call, and the other way to accumulate — a result-variable-specification
+— is unavailable to an exported function, §6.11.1 making its heading a `forward`
+whose body cannot see that name.
 
 **There is no install location and no resolution by name.** `--import` takes a
 path, so a program outside this checkout names paths into it, and `maxImports`
@@ -740,7 +737,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 540 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 542 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.

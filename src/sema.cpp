@@ -4309,21 +4309,28 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
                                      ": it contains a file, and a file has no "
                                      "copy");
     }
-    // A variable-string value parameter would have to be *converted* at the
-    // call — §6.4.6 pads or refuses by length, and the actual may be a literal,
-    // a fixed string or a string of another capacity — and a conversion needs
-    // somewhere to build the result that the caller can name. Until it has
-    // one, such a parameter is refused rather than copied bytewise from
-    // whatever the actual happened to be (ADR-0052).
-    // Asked of the *underlying* type: §6.4.2.5 makes a restricted string's
-    // states one-to-one with the string's, so it would need exactly the same
-    // conversion and has exactly the same nowhere to build it. A restricted
-    // type does not launder a rule about how a value is passed.
-    if (t->underlying()->isVarString() && !group.byRef && !group.names.empty())
+    // A variable-string value parameter is converted rather than copied —
+    // §6.4.6 pads a shorter value with spaces and refuses a longer one — and
+    // ADR-0052 refused it because "a conversion needs somewhere to build the
+    // result that the caller can name". It has somewhere now, and it is not
+    // the caller: the *callee's* slot for the parameter is an ordinary frame
+    // field of the formal's type, so the prologue stores the pair the caller
+    // passed exactly as `s := expr` does (ADR-0115).
+    //
+    // A restricted one is still refused, and no longer for that reason.
+    // §6.4.2.5 makes a restricted string's states one-to-one with the
+    // string's, so the conversion is available to it too; what is not settled
+    // is whether a clause that forbids assigning a restricted value permits
+    // copying one into a parameter, and a reading nobody has taken is not a
+    // thing to decide inside a lowering. Asked of the *underlying* type,
+    // because a restricted type does not launder a rule about how a value is
+    // passed.
+    if (t->isRestricted() && t->underlying()->isVarString() && !group.byRef &&
+        !group.names.empty())
       diags_.error(group.names[0].line, group.names[0].col,
-                   "a string parameter must be a var parameter; a value "
-                   "parameter would have to convert the argument, and there "
-                   "is nowhere yet to build the conversion");
+                   "a restricted string parameter must be a var parameter; "
+                   "whether a restricted value may be copied into a value "
+                   "parameter is not decided here");
     // §6.4.1: a file or a pointer is not protectable, and neither is anything
     // holding one. The standard's own reason is that protecting either would
     // protect nothing — a file is modified by nearly every operation on it,
