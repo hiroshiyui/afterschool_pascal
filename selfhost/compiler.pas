@@ -57,7 +57,12 @@ program Compile(output,
   compiler has one copy of it. }
 
 const
-  strMax   = 255;    { longest identifier or string literal kept }
+  { The longest identifier or character-string this compiler accepts. Not
+    "kept": exceeding it is diagnosed where the scanner counts, never applied
+    by truncating, which is what it used to do -- see ADR-0110 and the comment
+    in LexIdentOrKeyword. Stated in doc/implementation-defined.md 6, which
+    5.1 c) asks for. }
+  strMax   = 255;
   kwWidth  = 9;      { 'procedure', the longest reserved word }
   { The capacity of BindingType.name. ISO/IEC 10206:1991 6.4.3.4 makes the
     field "an implementation-defined variable-string-type" and says nothing
@@ -1507,6 +1512,10 @@ begin
   s.len := 0
 end;
 
+{ Drops what will not fit, in silence, and that is deliberate (ADR-0110): this
+  is the generic append and builds diagnostic messages as well as tokens, where
+  there is no source position to attribute and no error to raise. Whoever knows
+  what is being scanned does the reporting -- LexIdentOrKeyword and LexString. }
 procedure StrAppend(var s: str; c: char);
 begin
   if s.len < strMax then begin

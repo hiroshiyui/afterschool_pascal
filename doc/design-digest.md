@@ -1643,6 +1643,44 @@ able to make.
     distinguishes them** — the AST dump and a diagnostic are the only two
     places, which is why `tests/extended/shortcircuit_errors.pas` is the
     load-bearing half of the pair rather than a companion to it.
+- **A limit is reported, not applied in silence** (ADR-0110). A security audit
+  found three fixed bounds that were reached without a word, and none of them
+  was memory-unsafe — what they were is worse in a different way, a compiler
+  quietly disagreeing with its own input. `strMax` kept the first 255
+  characters of an identifier and dropped the rest, so §6.1.3 making *every*
+  character significant meant two names became one and a program could assign
+  to one and read the other; the same bound truncated a character-string, so
+  `writeln` of a 300-character literal printed 255 and the output did not match
+  the source; and `ParseBlock` counted no nesting level, so 1001 nested
+  procedure declarations indexed the scope stack off its end and the user got
+  `array index out of bounds` on **stderr**, where this compiler's diagnostics
+  go to stdout — a caller redirecting stderr saw a non-zero exit and no message.
+  - **Reported, and not raised.** `strMax` bounds a `packed array [1..strMax]
+    of char` that is frame storage in the lexer and in every routine holding a
+    `str`, so raising it multiplies stack use across the compiler for a case no
+    real program has, and whatever it became a program could still exceed.
+    Reporting costs one comparison per token.
+  - **`StrAppend` still drops in silence, deliberately.** It is the generic
+    append and serves message construction too, where there is no source
+    position to attribute and no error to raise. The check belongs where the
+    scanner knows what it is scanning — and it **counts** rather than asking
+    the buffer, because `text.len` is what was kept and the question is what
+    was written.
+  - **A block is one of the levels the bound was always meant to measure**, so
+    a program's own block now costs one and 999 remain inside it.
+    `tests/deep_chain.err` and `tests/deep_nesting.err` move by a column or
+    two, which is the previous count having been short rather than a
+    regression. `selfhost/badparse/ident_too_long.pas`,
+    `string_too_long.pas` and `nesting_blocks.pas` are the three that fail
+    without it.
+  - Every such limit is now stated in `doc/implementation-defined.md` §6, which
+    clause 5.1 c) requires and which had none of them. The **runtime's** limits
+    were outside this — `pas_str_temp`'s ring wrapped in silence and the record
+    called probing it the obvious next thing, which ADR-0111 then did.
+  - Not done: a sweep of the remaining fixed arrays. Two were checked
+    (`maxImports` and the twelve command-line arguments) and both already
+    report; the rest are bounded by construction or by a limit checked
+    elsewhere, and the record says so rather than implying an audit happened.
 - **A non-decimal literal is lexical and nothing else** (ADR-0036). `16#ff` reaches the
   parser as an integer literal, so no later rule knows it was written that way.
   Two things the code says and a reader might undo: the extended-digit sequence
