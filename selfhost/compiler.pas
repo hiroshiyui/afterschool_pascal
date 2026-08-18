@@ -2252,6 +2252,30 @@ begin
   bind(f, b)
 end;
 
+{ True for every mode that has ISO/IEC 10206:1991 -- Extended Pascal, and
+  anything built on it. Asked at every site that used to compare langStd
+  against stdExtended for equality, all of which meant "does this mode have
+  Extended Pascal?" (ADR-0117).
+
+  The distinction is invisible while stdKind has two values, `>=` and `=` being
+  the same test, and that is the point: the conversion lands as a refactor with
+  no behaviour to change, so it is reviewable on its own. It stops being the
+  same test the day a third mode is added, and on that day 38 sites would
+  otherwise have switched Extended Pascal *off* for the dialect -- schemata,
+  `otherwise`, string types, `**`, binding, modules -- with nothing failing to
+  compile.
+
+  Two sites ask the negation and are `not HasExtended(...)` rather than
+  `= stdIso7185`: each guards a refusal of an Extended Pascal feature, so what
+  it wants is "this mode does not have Extended Pascal". The twelve sites
+  spelled `= stdIso7185` are asking a different question -- "is this exactly
+  ISO 7185?", in order to name --std=extended in a diagnostic -- and are left
+  alone. }
+function HasExtended(s: stdKind): boolean;
+begin
+  HasExtended := s >= stdExtended
+end;
+
 procedure WriteKwWord(i: integer);
 var n, k: integer;
 begin
@@ -2266,7 +2290,7 @@ begin
   found := tkIdent;
   { Reserving ISO 10206's word-symbols unconditionally would reject valid ISO
     7185 programs -- including this one. }
-  if langStd = stdExtended then limit := kwCount else limit := isoKwCount;
+  if HasExtended(langStd) then limit := kwCount else limit := isoKwCount;
   for i := 1 to limit do begin
     n := kwWidth;
     while (n > 0) and (kwText[i][n] = ' ') do
@@ -2283,7 +2307,7 @@ begin
     end
   end;
   { The one word-symbol too long for kwLit; see StrIsWide. }
-  if (langStd = stdExtended) and (found = tkIdent) then
+  if (HasExtended(langStd)) and (found = tkIdent) then
     if StrIsWide(s, 'restricted      ') then found := tkRestricted;
   LookupKeyword := found
 end;
@@ -2777,7 +2801,7 @@ begin
       characters can only be `>` followed by `<`, which no expression admits --
       `a > <b` is not a program -- so the standard gate is here rather than in
       the parser, and one token comes out instead of a cascade. }
-    else if (Peek(0) = '<') and (langStd = stdExtended) then begin
+    else if (Peek(0) = '<') and (HasExtended(langStd)) then begin
       Advance;
       AddSimple(sl, sc, tkGtLt)
     end
@@ -3286,7 +3310,7 @@ end;
 function LooksLikeSubrange: boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     { 6.4.2.4 makes a subrange-bound a constant-expression (6.8.2), so the
       `..` is no longer two tokens away -- `base - 9 .. base + 1` is a subrange
       and `base` alone is a type name. What still separates them is a `..`
@@ -3362,7 +3386,7 @@ function LooksLikeStructuredValue(from: integer): boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
   ok := false;
-  if (langStd = stdExtended) and (from <= tokCount) and
+  if (HasExtended(langStd)) and (from <= tokCount) and
      (tok[from].kind = tkLBracket) then begin
     if (from + 1 <= tokCount) and (tok[from + 1].kind = tkRBracket) then
       ok := true
@@ -3827,7 +3851,7 @@ begin
   qualAt := 0;
   qualLen := 0;
   pos := pos + 1;
-  if (langStd = stdExtended) and Check(tkPeriod) and
+  if (HasExtended(langStd)) and Check(tkPeriod) and
      (PeekKind(1) = tkIdent) then begin
     qualAt := at;
     qualLen := len;
@@ -4079,7 +4103,7 @@ begin
           written with a second selector is refused in Sema, which is the pass
           that knows whether the base is a string or a set-type name
           (ADR-0066). }
-        if (langStd = stdExtended) and Check(tkDotDot) then begin
+        if (HasExtended(langStd)) and Check(tkDotDot) then begin
           n := NewNode(nkSubstr, l, c);
           pos := pos + 1;
           n^.ssBase := base;
@@ -4147,7 +4171,7 @@ end;
   `with`'s record, an assignment's target -- is a call site of that predicate. }
 function AfterCall(call: nodePtr): nodePtr;
 begin
-  if langStd = stdExtended then
+  if HasExtended(langStd) then
     AfterCall := ParseSelectors(call)
   else
     AfterCall := call
@@ -4573,7 +4597,7 @@ begin
     `:= initial to final` or `in set-expression`. One token separates them, and
     `in` is a word-symbol of ISO 7185 already -- so the feature reserves
     nothing, exactly as `and then` does (ADR-0038). }
-  if (langStd = stdExtended) and Accept(tkIn) then
+  if (HasExtended(langStd)) and Accept(tkIn) then
     s^.frSet := ParseExpr
   else begin
   Expect(tkAssign, ctxFor);
@@ -4819,7 +4843,7 @@ function CallTakesCaret(from: integer): boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
   ok := false;
-  if (langStd = stdExtended) and (from <= tokCount) and
+  if (HasExtended(langStd)) and (from <= tokCount) and
      (tok[from].kind = tkLParen) then begin
     depth := 0;
     i := from;
@@ -4877,9 +4901,9 @@ begin
   else if PoolIs(at, len, 'readln   ') then s := ParseRead(true, false)
   { ISO/IEC 10206:1991 6.7.5.5's two are required identifiers as well, so they
     take the same treatment -- which is what retired ADR-0060's deviation. }
-  else if (langStd = stdExtended) and PoolIs(at, len, 'readstr  ') then
+  else if (HasExtended(langStd)) and PoolIs(at, len, 'readstr  ') then
     s := ParseRead(false, true)
-  else if (langStd = stdExtended) and PoolIs(at, len, 'writestr ') then
+  else if (HasExtended(langStd)) and PoolIs(at, len, 'writestr ') then
     s := ParseWrite(false, true)
   else handled := false;
 
@@ -5286,7 +5310,7 @@ begin
     `f` a recursive call -- so a structured result could be assigned whole and
     never built a field at a time. This is the standard's own answer to that,
     which is why the two halves of 6.7.2 arrive together. }
-  if (not aborted) and isFunction and (langStd = stdExtended)
+  if (not aborted) and isFunction and (HasExtended(langStd))
       and Accept(tkEq) then begin
     if not Check(tkIdent) then begin
       ErrorAtCur;
@@ -6968,7 +6992,7 @@ begin
     the required schema is what it is about. Two chars are not this rule --
     they are the ordinary compatibility further down, and routing them here
     would answer a different question. }
-  else if (langStd = stdExtended) and
+  else if (HasExtended(langStd)) and
           (IsStringType(toT) or IsStringType(fromT)) and
           IsStringOrChar(toT) and IsStringOrChar(fromT) then
     Assignable := true
@@ -7074,7 +7098,7 @@ end;
   earlier. }
 procedure RefuseConstAccess(base: nodePtr; l, c: integer);
 begin
-  if (langStd <> stdExtended) and IsConstantAccess(base) then begin
+  if (not HasExtended(langStd)) and IsConstantAccess(base) then begin
     ErrorAt(l, c);
     writeln('selecting from a constant is an Extended Pascal feature; ',
             'compile with --std=extended')
@@ -7599,9 +7623,9 @@ begin
         signed literal or a name -- and these two are the rest of an
         expression, so the standard decides which language is being folded. }
       nkBinary:
-        if langStd = stdExtended then ok := EvalConstBinary(e, res);
+        if HasExtended(langStd) then ok := EvalConstBinary(e, res);
       nkCall:
-        if langStd = stdExtended then ok := EvalConstCall(e, res);
+        if HasExtended(langStd) then ok := EvalConstCall(e, res);
       { ISO/IEC 10206:1991 6.8.7's structured-value-constructor, named. 6.8.2
         makes `nonvarying` the whole test of a constant-expression -- not "the
         compiler can fold it" -- so an array, record or set value whose
@@ -7630,7 +7654,7 @@ begin
         nil-type -- assignable to every pointer-type and nothing assignable to
         it -- so one `const q = nil` serves them all. }
       nkNil:
-        if langStd = stdExtended then begin
+        if HasExtended(langStd) then begin
           res.stype := e^.ntype;
           res.constValue := e;
           ok := true
@@ -10676,7 +10700,7 @@ begin
     { 6.11.4.2 gives Extended Pascal three more ways to make the file
       implicitly accessible than 6.10's one, so the message lists them --
       otherwise it names the only remedy a module cannot use. }
-    if langStd = stdExtended then begin
+    if HasExtended(langStd) then begin
       write(' must be listed as a program parameter or a module parameter, ',
             'or imported through ');
       if wantInput then write('StandardInput') else write('StandardOutput');
@@ -10762,7 +10786,7 @@ begin
       { 6.5.1: a program-parameter possesses the bindability that is bindable
         whatever its type-denoter said. Set here as well as below, the two
         standard files being program-parameters like any other. }
-      if langStd = stdExtended then s^.isBindable := true
+      if HasExtended(langStd) then s^.isBindable := true
     end
     { Neither standard restricts a program-parameter to a file. ISO 7185 6.10
       makes the binding of one that does not possess a file-type
@@ -10777,7 +10801,7 @@ begin
     else if not IsFile(s^.stype) then begin
       { 6.5.1 confers bindability on a program-parameter whatever its type is,
         so a non-file one is bindable too -- it is simply bound to nothing. }
-      if langStd = stdExtended then s^.isBindable := true
+      if HasExtended(langStd) then s^.isBindable := true
     end
     else begin
       { 6.5.1: "The variable-identifier shall possess the bindability denoted
@@ -10788,7 +10812,7 @@ begin
         becomes one -- being a program-parameter is. Without this, 6.7.6.8's own
         NOTE 2 use of `binding` cannot be written, its whole point there being
         to inspect a binding the program did not make. }
-      if langStd = stdExtended then s^.isBindable := true;
+      if HasExtended(langStd) then s^.isBindable := true;
       s^.binding := fbArgument;
       s^.fileArg := argIndex;
       argIndex := argIndex + 1
@@ -11322,7 +11346,7 @@ function SetValueTypeOf(e: nodePtr): typePtr;
 var node: nodePtr; s: symPtr; res: typePtr; done: boolean;
 begin
   res := nil;
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     node := e;
     done := false;
     while not done do
@@ -11480,7 +11504,7 @@ begin
         string. char has no arithmetic `+` of its own in table 3, so nothing is
         taken away by reading the table as it is written. }
       opAdd, opSub, opMul:
-        if (b^.bnOp = opAdd) and (langStd = stdExtended) and
+        if (b^.bnOp = opAdd) and (HasExtended(langStd)) and
            IsStringOrChar(l) and IsStringOrChar(r) then
           b^.ntype := canonStringType
         else if not IsArith(l) or not IsArith(r) then begin
@@ -11568,7 +11592,7 @@ begin
           the shorter operand is padded with spaces. Under ISO 7185 the lengths
           had to be equal and this compiler said so; that check now applies
           only to the language that has the rule. }
-        if (langStd = stdExtended) and IsStringOrChar(l) and
+        if (HasExtended(langStd)) and IsStringOrChar(l) and
            IsStringOrChar(r) and not (IsChar(l) and IsChar(r)) then
           { padded comparison: nothing to check }
         else if IsCharArray(l) and IsCharArray(r) then begin
@@ -11896,7 +11920,7 @@ begin
         last := a;
         a := a^.next
       end;
-      stepped := (langStd = stdExtended) and (n = 2) and
+      stepped := (HasExtended(langStd)) and (n = 2) and
                  ((c^.clBuiltin = biSucc) or (c^.clBuiltin = biPred));
       if stepped then
         if last^.ntype <> nil then
@@ -12884,7 +12908,7 @@ begin
           under ISO 7185 because AfterCall does not offer it the selectors. A
           parameterless function is a bare name and the parser cannot tell, so
           this is where it is told. }
-        if langStd <> stdExtended then
+        if not HasExtended(langStd) then
           if (e^.drBase^.kind = nkCall) or
              ((e^.drBase^.kind = nkVar) and IsInvocable(e^.drBase^.vrSym)) then
           begin
@@ -13524,7 +13548,7 @@ begin
       okRead := false;
       if t <> nil then begin
         okRead := IsInteger(t) or IsReal(t) or IsChar(t);
-        if (not okRead) and (langStd = stdExtended) then
+        if (not okRead) and (HasExtended(langStd)) then
           okRead := IsStringType(t)
       end
       else
@@ -14317,7 +14341,7 @@ begin
       language does not have -- the same reason StandardFileRef words its
       message by standard. }
     write('''with'' needs a record variable');
-    if langStd = stdExtended then write(' or one produced from a schema');
+    if HasExtended(langStd) then write(' or one produced from a schema');
     write(', found ');
     if t = nil then write('nothing') else WriteTypeName(t);
     writeln;
@@ -14633,7 +14657,7 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'pack     ') or
             PoolIs(s^.pcAt, s^.pcLen, 'unpack   ') or
             PoolIs(s^.pcAt, s^.pcLen, 'page     ') or
-            ((langStd = stdExtended) and
+            ((HasExtended(langStd)) and
              IsRequiredProc(s^.pcAt, s^.pcLen))) then
           CheckStdProc(s)
         else if sym = nil then begin
@@ -15080,7 +15104,7 @@ end;
 function CheckedResultType;
 begin
   CheckedResultType := t;
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     if IsFile(t) or ContainsFile(t) then begin
       ErrorAt(line, col);
       write('a function cannot return ');
@@ -15519,7 +15543,7 @@ end;
   and the name would be an export with no importer. }
 procedure LinkStdFile(s: symPtr; kind: integer);
 begin
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     s^.linkKind := kind;
     s^.storageElsewhere := progBlock = nil
   end
@@ -15586,7 +15610,7 @@ end;
 procedure InstallRequiredInterfaces;
 var i: ifacePtr; c: constitPtr; at, len: integer;
 begin
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     new(i);
     InternWide('standardinput   ', i^.at, i^.len);
     i^.owner := nil;
@@ -16051,7 +16075,7 @@ begin
       the error it has always been. }
     dynamic := false;
     firstDyn := nil;
-    if (langStd = stdExtended) and (g^.grNames <> nil) then begin
+    if (HasExtended(langStd)) and (g^.grNames <> nil) then begin
       n := g^.grNames;
       firstDyn := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner,
                               n^.line, n^.col);
@@ -16657,7 +16681,7 @@ begin
   RequiredType('boolean  ', boolType);
   RequiredType('char     ', charType);
   RequiredType('text     ', textType);
-  if langStd = stdExtended then RequiredType('complex  ', complexType);
+  if HasExtended(langStd) then RequiredType('complex  ', complexType);
 
   { 6.6.6's required functions. The 10206-only ones are declared only under
     that standard, so an ISO 7185 program may still declare a function called
@@ -16680,7 +16704,7 @@ begin
   RequiredFunc('round    ');
   RequiredFunc('eof      ');
   RequiredFunc('eoln     ');
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     RequiredFunc('card     ');
     RequiredFunc('cmplx    ');
     RequiredFunc('polar    ');
@@ -16724,7 +16748,7 @@ begin
     char-type." A char here is a byte (ADR-0021), so it is 255 -- and it is a
     required *identifier* declared in the outermost scope, which a program may
     shadow, rather than a word-symbol. }
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     InternWord('maxchar  ', at, len);
     s := Declare(at, len, skConst, 0, 0);
     s^.stype := charType;
@@ -16769,7 +16793,7 @@ begin
     scope, where a program may shadow it -- and not as a word-symbol, because
     6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define a
     type of that name. }
-  if langStd = stdExtended then begin
+  if HasExtended(langStd) then begin
     { 6.4.3.4: "There shall be a record-type designated packed and denoted by
       the required type-identifier `BindingType`. For each of the required
       field-identifiers `name` and `bound`, there shall be an associated
@@ -23501,7 +23525,7 @@ end;
 procedure CheckedWidth(var v: str; isPrec: boolean);
 var least, msg: integer; leastOp, bad: str;
 begin
-  if langStd = stdExtended then least := 0 else least := 1;
+  if HasExtended(langStd) then least := 0 else least := 1;
   OpInt(least, leastOp);
   Def(bad);
   write(ircode, 'icmp slt i32 ');
@@ -23512,7 +23536,7 @@ begin
   MsgStart;
   if isPrec then MsgText('a fraction length                       ')
   else MsgText('a field width                           ');
-  if langStd = stdExtended then
+  if HasExtended(langStd) then
     MsgText(' must not be negative                   ')
   else
     MsgText(' must be at least one                   ');
