@@ -5,7 +5,9 @@ description: Audit and update all project documentation to stay in sync with the
 
 When performing documentation engineering, always follow these steps:
 
-1. **Survey recent changes** — run `git log --oneline -20` and skim the diffs of recent `feat(...)` commits. This surfaces new language features, new builtins, new diagnostics, and changed semantics that documentation may not yet reflect. Note which bootstrap milestone each commit advances.
+1. **Survey recent changes** — run `git log --oneline -20` and skim the diffs of every commit that could change what the compiler *accepts*, not just the `feat(...)` ones. This surfaces new language features, new builtins, new diagnostics, and changed semantics that documentation may not yet reflect. Note which bootstrap milestone each commit advances.
+
+   **A `fix:` counts.** Now that both standards are complete, a conformance fix is the commonest way the accepted language grows: `4257de8` struck an entire limitation from README and from `doc/roadmap.md` while reading as a bug fix, and this step — which said `feat(...)` — is why nothing flagged that it had no `docs:` commit after it. The test is whether a program that did not compile now does. `refactor:` and `chore:` are the ones that genuinely cannot move the contract; everything else is worth the diff.
 
 2. **Audit** all documentation against the current codebase. Every tracked document is in scope — `git ls-files '*.md'` is the list, and a document absent from the sections below is a gap in *this skill* to be fixed rather than a document to skip. **Each has one audience and one job**, and the commonest defect is not staleness but a paragraph in the wrong file: detail that belongs to a contributor drifting into the user's document, or a feature's mechanism drifting into the file every session loads.
 
@@ -60,6 +62,6 @@ When performing documentation engineering, always follow these steps:
 4. **Remove completed items** from any TODO list. If a brief summary of completed work is warranted, add it to `README.md` or the relevant ADR's consequences before deleting the entry.
 
 5. **Commit** documentation changes using the `commit-and-push` skill with scope `doc`, grouped by topic. Don't mix unrelated documentation changes in a single commit. A natural split:
-   - **Per-feature README flip**: when a feature commit lands, the immediately-following `docs:` commit moves the feature from "not yet" to "accepted" and nothing else. Keep that cadence — it makes the language's growth greppable from `docs:` alone.
+   - **Per-feature README flip**: when a commit lands that changes what the compiler accepts — a `feat:`, but a `fix:` just as much — the immediately-following `docs:` commit moves the feature from "not yet" to "accepted" and nothing else. Keep that cadence — it makes the language's growth greppable from `docs:` alone.
    - **Periodic doc sync**: README, the developer guide, the digest and CLAUDE.md brought back in line with reality after a milestone; these cluster naturally and ship as one commit.
    - **A new ADR is its own commit**, or travels with the change that motivated it. Never bundle an ADR with unrelated doc edits — it should be reviewable on its own.

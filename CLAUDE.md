@@ -249,6 +249,15 @@ what is incomplete, not the docs — and the gap is recorded here so the next
 reader does not conclude otherwise from an empty search. Don't try to repair it
 by rewriting published history.
 
+**And a ninth, `4257de8`** (a variable-string may be a value parameter), which
+is worth its own sentence because it failed differently: it is a `fix:`. The
+rule above says "feature" and the skill's survey step read `feat(...)` commits
+only, so a *conformance fix that changes what the compiler accepts* fell
+between them — and this one struck a whole limitation from README and from
+`doc/roadmap.md`, which is as much language growth as any `feat:`. **The test
+is whether a program that did not compile now does, not what the type prefix
+says.** The survey step has been widened; the commit stands as it is.
+
 ## Bootstrap constraints (what is left of them)
 
 The bootstrap is over and stage 0 is retired (ADR-0085), so two of the three
