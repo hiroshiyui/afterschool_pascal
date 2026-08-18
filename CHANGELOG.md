@@ -107,6 +107,26 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **A function's result may be a structured value parameter's actual.**
+  §6.6.3.2 makes a value parameter's actual an *expression* and §6.7.1 makes a
+  function-designator one, so `SumPoint(MakePoint(3, 4))` is legal wherever
+  `SumPoint(q)` is. It was refused whenever the formal was structured —
+  *argument 1 of 'sumpoint' is point and needs a variable* — and the refusal was
+  undocumented, which is consistent with its being a defect rather than a
+  decision.
+
+  The compiler had disagreed with itself: `q := MakePoint(3, 4)` already copied
+  a record out of a call's storage, and `MakePoint(9, 1).x` already selected
+  from one, so the address a value parameter needs to copy from was there all
+  along. What kept a call off the list of things Sema would copy from was
+  `isDesignator` answering false for one — the right answer to the question a
+  **var** parameter asks, where there is no variable to bind, and the wrong
+  question for a value parameter.
+
+  This is the idiom a `Result`-shaped record exists for: handing one function's
+  result straight to another. Both front ends changed, since this is the
+  conformance surface the reference implementation still follows.
+
 - **A schema type containing a string may now be allocated.** `new(p, d)` where
   the domain is a schema whose component contains a variable-string — the shape
   a keyed container wants, `array [1..cap] of record key: string(k); … end` —

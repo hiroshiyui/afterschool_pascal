@@ -790,7 +790,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 547 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 548 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.
