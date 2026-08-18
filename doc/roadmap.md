@@ -70,6 +70,39 @@ language that no amount of design would have produced:
 What it did **not** do: no install location, no resolution by name, no
 containers, and nothing touching the operating system.
 
+### The second increment (done)
+
+`PasVector`, `PasMap` and `PasText` (ADR-0116) — a growable sequence, a
+string-keyed dictionary, and the splitting, joining and parsing that turns one
+string into several and back. Still no compiler change *in the increment*,
+though it exposed one: a schema whose component contains a variable-string
+stopped the compiler outright, and no program in the corpus had ever written
+one, so every oracle agreed it worked. That is the third defect a library has
+found and the first that was a crash.
+
+It bought three more facts, and one of them **corrects the table below**:
+
+- **A container cannot use the positions trick.** `SortIndexed` never sees an
+  element, so it needs no element type; a container *holds* them, so their type
+  is part of its layout. `PasVector` holds integers and the documented answer
+  for another element type is to copy the file. This is where "no generics"
+  actually bites, and it bites libraries harder than programs.
+- **Explicit allocator passing does not survive contact** — the row below,
+  rewritten. It was the cheapest thing on the list and is now behind the FFI
+  with everything else.
+- **A library may not halt**, which is a sharper constraint than it sounds.
+  §6.9.1's read of an integer is an *error* when the text is not a number and
+  stops the program (ADR-0076), so nothing built on `readstr` can offer "parse
+  this if it is a number" — `TryParseInt` inspects the characters itself. The
+  same rule decides that `VecNew` clamps a bad capacity and that `MapGet` takes
+  a default rather than reporting. **This is the strongest argument yet for
+  sum types with payloads**: every routine that can fail currently invents its
+  own ad-hoc shape, and there are already two.
+
+What it still did **not** do: no install location, no resolution by name, no
+error-handling convention, no second element type, and nothing touching the
+operating system.
+
 ### The enabler: a foreign-function interface
 
 Everything above needs to call code this compiler did not emit. Today the only
@@ -111,7 +144,7 @@ Each borrowing below is tied to the open decision it would settle.
 | Idea | From | Settles | Fit here |
 | --- | --- | --- | --- |
 | **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Excellent, and already the house style.** ADR-0051 made a string exactly this, and ADR-0030, ADR-0040 and ADR-0049 each reached for a two-scalar value for the same reason: nothing may depend on how a struct is passed. A general slice is that shape a fourth time |
-| **Explicit allocator passing** | Zig | part of memory safety | **Excellent, and free.** A library convention, not a language feature — it needs no compiler change at all, and it is the cheapest thing on this list |
+| **Explicit allocator passing** | Zig | part of memory safety | **Tried, and it does not survive contact** (ADR-0116). An allocator *record* is not expressible — a record field may not have a procedure type, neither standard having general procedure types. A per-type allocator *parameter* is, and compiles; but `new` is the only origin of a typed pointer and there is no pointer arithmetic or cast, so it can only recycle blocks `new` produced rather than carve one into several. And the capacity it serves is unchecked: a pool asked for 9 may return a block of 4, whose own discriminant then answers `p^.cap`. Not unsafe — the bounds check reads the served block — but the central contract is unenforced. **This needs the FFI too**, which moves it from "cheapest on the list" to behind the same gate as everything else |
 | **`defer`** | Zig, Swift | resource safety | **Good.** Pascal has no early return, so a block already has one exit and the epilogue is already where files close (ADR-0021, ADR-0032). `defer` generalises a mechanism that exists |
 | **Error unions / `Result`** | Zig, Rust | error handling | **Good, and the biggest practical gap.** Pascal has *no* error handling — no exceptions, no result convention. It needs sum types with payloads, which variant records nearly are. Independent of the memory-safety fork, so it can proceed while that is open |
 | **Optionals, and no bare null** | Swift, Rust | pointer safety | **Good.** `nil` already has a type of its own (ADR-0019) and every dereference is already checked; an optional type makes the check a *type* question instead of a run-time one |
@@ -223,7 +256,7 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 542 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 546 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the error-path corpus of `selfhost/badparse/` and
 `selfhost/badsema/`, the verification run, the bootstrap and the product check —
 and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded

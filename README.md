@@ -112,13 +112,16 @@ command line.
 `lib/` holds the beginning of one (ADR-0114). It is ordinary Extended Pascal —
 §6.11 modules, translated separately as §6.13 program-components — so it needed
 no compiler change and changes nothing about what either conformance mode
-accepts. Three modules so far:
+accepts. Six modules so far:
 
 | Module | What it has |
 | --- | --- |
 | `lib/passtrings.pas` | `Upper`, `Lower`, `StartsWith`, `EndsWith`, `IndexOf`, `PadLeft`, `PadRight`, `Times`, `Reverse`, `Replace` |
 | `lib/passort.pas` | `SortIndexed` and `LowerBound` over positions, `SortInts` over an integer array, and the `IntVector` schema |
 | `lib/pasmath.pas` | `IMin`, `IMax`, `Gcd`, `Lcm`, `ISqrt`, and a seedable Lehmer generator |
+| `lib/pasvector.pas` | `IntVec`, a growable sequence: `VecNew`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecReserve`, `VecFill`, `VecSum`, `VecFree` |
+| `lib/pasmap.pas` | `StrMap`, a `string(32)`-keyed dictionary: `MapPut`, `MapGet`, `MapHas`, `MapDelete`, and `MapSlots`/`MapLiveAt` to walk it |
+| `lib/pastext.pas` | `Split`, `Join`, `TrimStart`, `TrimEnd`, `TrimAll`, `CountChar`, `TryParseInt`, `ParseIntOr`, `IntToStr` |
 
 Use one the way §6.13 asks: translate it, then hand the program its *source*,
 which is where the interface is written.
@@ -152,6 +155,37 @@ its own identifier once, at the end.** §6.8.2.2 makes every *read* of it a
 recursive call, and the other way to accumulate — a result-variable-specification
 — is unavailable to an exported function, §6.11.1 making its heading a `forward`
 whose body cannot see that name.
+
+**A container is a pointer, and growth replaces it** (ADR-0116). A schema is
+chosen once — `var v: IntVec(n)` fixes `n` at the declaration — so anything
+whose size changes lives on the heap, and every routine that may grow takes a
+`var` pointer:
+
+```pascal
+var v: VecPtr;
+begin
+  VecNew(v, 4);
+  VecPush(v, 10);          { may reallocate, so `v` is passed by reference }
+  writeln(VecGet(v, 1):1);
+  VecFree(v)
+end.
+```
+
+**The element type is written out, and copying the file is the answer for
+another one.** `PasVector` holds integers and `PasMap` maps `string(32)` to
+integers. `PasSort` avoids this by phrasing itself over *positions* and never
+seeing an element, but a container holds the elements, so their type is part of
+its layout — and a schema parameterises a type by a value, never by another
+type. That is a real limitation, recorded rather than worked around.
+
+**No container takes an allocator**, though the roadmap expected one to. An
+allocator record is not expressible — a record field may not have a procedure
+type — and while a per-type allocator *parameter* compiles, it can only recycle
+blocks `new` produced, because `new` is the only origin of a typed pointer and
+there is no pointer arithmetic. Worse, the capacity it serves is unchecked: a
+pool asked for 9 may return a block of 4, and `p^.cap` then reads 4. What the
+caller gets instead is control over *when* — `VecNew` sets the initial capacity
+and `VecReserve` grows once so that no later push reallocates.
 
 **There is no install location and no resolution by name.** `--import` takes a
 path, so a program outside this checkout names paths into it, and `maxImports`
@@ -737,7 +771,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 542 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 546 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.

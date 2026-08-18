@@ -39,7 +39,53 @@ appears below in the release where it still existed.
   once at the end, §6.11.1 making its heading a `forward` whose body cannot see
   a result-variable-specification.
 
+- **Three more modules — containers and text** (ADR-0116):
+  - `PasVector` — `IntVec`, a growable sequence of integers: `VecNew`,
+    `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecReserve`, `VecFill`, `VecSum`,
+    `VecClear`, `VecFree`;
+  - `PasMap` — `StrMap`, a `string(32)`-keyed dictionary with open addressing
+    and tombstones: `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, and
+    `MapSlots`/`MapLiveAt`/`MapKeyAt`/`MapValAt` to walk it;
+  - `PasText` — `Split`, `Join`, `TrimStart`, `TrimEnd`, `TrimAll`,
+    `CountChar`, `TryParseInt`, `ParseIntOr`, `IntToStr`.
+
+  **A container is a pointer to a schema and growth replaces the variable**, so
+  every routine that may grow takes `var v: VecPtr`. A schema is chosen once —
+  `var v: IntVec(n)` fixes `n` at the declaration — which makes the heap the
+  only mechanism for an extent that changes.
+
+  **The element type is written out.** `PasSort` avoided "no generics" by
+  phrasing itself over positions and never seeing an element; a container holds
+  the elements, so their type is part of its layout. The documented answer for
+  another element type is to copy the file.
+
+  **No container takes an allocator.** An allocator record is not expressible —
+  a record field may not have a procedure type — and a per-type allocator
+  parameter, which does compile, can only recycle blocks `new` produced and
+  serves a capacity nothing checks. `VecReserve` is what survives of the idea:
+  control over *when* allocation happens.
+
+  `TryParseInt` inspects characters itself rather than using `readstr`, because
+  §6.9.1's read of an integer is an *error* when the text is not a number and
+  stops the program — a library cannot offer "parse this if it is a number" on
+  top of something that halts when it is not.
+
 ### Fixed
+
+- **A schema type containing a string may now be allocated.** `new(p, d)` where
+  the domain is a schema whose component contains a variable-string — the shape
+  a keyed container wants, `array [1..cap] of record key: string(k); … end` —
+  stopped the *compiler* with `case: no label matches the selector`. Not a
+  diagnostic and not a wrong answer: a crash, on a legal program, before
+  anything was emitted. Sema's `StaticThroughout` asks whether a bound anywhere
+  inside a type depends on a discriminant; its case over the sixteen type kinds
+  listed fifteen, and Pascal's case-statement traps on the sixteenth rather than
+  falling through. The correct arm is `true`, because a string whose capacity is
+  a discriminant is answered *before* the case by the dynamic-bounds test — so
+  one that reaches it has a fixed capacity and nothing inside it can vary. The
+  reference front end had it right all along, its counterpart ending
+  `default: return true`; `difftest` could not report the difference because the
+  Pascal crashed rather than printing a different dump.
 
 - **A variable-string may now be a value parameter**, so a string argument may
   be a literal, another function's result, a concatenation, or a string of a
