@@ -1,0 +1,9 @@
+record from a call:  7
+array from a call:   12
+nested call:         506
+between two others:  9
+clobber returned:    999 and q.x is still 7
+clobber of a call:   999
+from a variable:     15
+field of a call:     9
+assigned from call:  8

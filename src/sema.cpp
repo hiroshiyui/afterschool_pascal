@@ -7514,12 +7514,23 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                        "so the argument must have the same length");
     // A structured value parameter is a copy, so it needs something to copy
     // from: a designator, a string literal, a structured-value-constructor
-    // (ADR-0061), or a constant whose value lives in memory (ADR-0068). The
-    // last three are not variables but each has storage — a constructor
-    // because §6.8.7's value is *built* rather than computed, a constant
-    // because it is its defining expression, named.
+    // (ADR-0061), a constant whose value lives in memory (ADR-0068), or a
+    // *call* whose result is structured. None of the last four is a variable
+    // and each has storage — a constructor because §6.8.7's value is *built*
+    // rather than computed, a constant because it is its defining expression
+    // named, and a call because ADR-0055 gives a structured result
+    // caller-supplied storage.
+    //
+    // The call was missing and that was a defect, not a restriction. §6.6.3.2
+    // makes a value parameter's actual an *expression* and §6.7.1 makes a
+    // function-designator one, so `f(g)` is legal wherever `f(v)` is. What
+    // kept it out was isDesignator answering false for a call — the right
+    // answer to a different question, the one a *var* parameter asks, where
+    // there is no variable to bind. Assignment had already settled it the
+    // other way: `q := MakePoint` copies from exactly this address.
     else if (p->type && p->type->isStructured() && !isDesignator(a) &&
-             !is<StrLit>(a) && !is<StructValueExpr>(a) && !isMemoryConstant(a))
+             !is<StrLit>(a) && !is<StructValueExpr>(a) && !is<Call>(a) &&
+             !isMemoryConstant(a))
       diags_.error(a->line, a->col,
                    "argument " + std::to_string(i + 1) + " of '" +
                        callee->name + "' is " + p->type->name() +
