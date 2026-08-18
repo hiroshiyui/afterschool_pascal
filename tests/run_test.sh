@@ -125,7 +125,13 @@ if [[ -f $components_file ]]; then
     [[ -n $rel ]] || continue
     comp="$(dirname "$source_file")/$rel"
     n=$((n + 1))
-    if ! "$pascalc" "--std=$standard" -c "$comp" -o "$work/c$n.o" \
+    # Translated with the components listed *before* it, because §6.13 lets one
+    # component import another and the list is in dependency order. Its own
+    # --import is added after, so a component is never handed its own
+    # interface. Each is still translated on its own, which is the clause's
+    # point: what is linked is several objects.
+    if ! "$pascalc" "--std=$standard" \
+           "${imports[@]+"${imports[@]}"}" -c "$comp" -o "$work/c$n.o" \
            2>"$work/compile.err"; then
       echo "--- $name: component $rel did not translate ---" >&2
       cat "$work/compile.err" >&2

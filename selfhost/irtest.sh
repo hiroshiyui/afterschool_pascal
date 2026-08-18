@@ -122,11 +122,15 @@ build() {
     while IFS= read -r rel; do
       [[ -n $rel ]] || continue
       comp="$(dirname "$src")/$rel"
-      imports+=(--import "$comp")
       n=$((n + 1))
       rm -f "$work/comp.ll"
-      timeout 600 "$cc" "--std=$std" "$comp" -o "$work/comp.ll" \
+      # With the components listed before it, and not with its own --import:
+      # 6.13 lets one component import another and the list is in dependency
+      # order, so the import is added after this translation rather than before.
+      timeout 600 "$cc" "--std=$std" "${imports[@]+"${imports[@]}"}" \
+          "$comp" -o "$work/comp.ll" \
           >/dev/null 2>"$work/gen.err" || return 1
+      imports+=(--import "$comp")
       [[ -s $work/comp.ll ]] || return 1
       clang -Wno-override-module -fPIC -c "$work/comp.ll" -o "$work/c$n.o" \
           2>"$work/link.err" || return 2

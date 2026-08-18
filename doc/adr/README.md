@@ -128,3 +128,4 @@ the alternatives that were rejected and why.
 | [0117](0117-the-dialect-is-a-third-std-and-it-is-extended-pascal-plus.md) | The dialect is a third `--std`, and it is Extended Pascal plus | Accepted |
 | [0118](0118-a-sum-type-is-a-variant-record-whose-tag-cannot-lie.md) | A sum type is a variant record whose tag cannot lie | Accepted |
 | [0119](0119-the-components-of-one-program-agree-on-the-mode.md) | The program-components of one program agree on the mode | Accepted |
+| [0120](0120-a-fallible-routine-answers-one-record-and-the-library-has-two-layers.md) | A fallible routine answers one record, and the library has two layers | Accepted |
