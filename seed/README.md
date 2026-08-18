@@ -53,6 +53,15 @@ present in both — the same caution `doc/sop.md` §7 records for the differenti
 oracle and for `langspec-audit`'s readers, and for the same reason: one author,
 one reading.
 
+**Re-run on 2026-08-18 at commit `95a7268`, after every commit message in the
+repository was rewritten — also PASS**, at 7,074,541 bytes and sha256
+`4a718afb16e63b08e972706f6476eb26b50c5d1460c97bdfb98ff86fb536228d`. The figures
+differ from the first run because `selfhost/compiler.pas` has changed since;
+each line above is a statement about the source at the commit it names, not a
+constant. It is recorded because the rewrite moved tag `v0.1.0`, which
+`ddc.sh` resolves by name, and a check that silently stopped resolving its own
+starting point would have reported nothing.
+
 **The window closes on its own and nothing will announce it.** The check works
 only while the `v0.1.0` compiler still accepts `selfhost/compiler.pas`, and
 every feature the compiler starts *using* risks ending that. `ddc.sh` says so in
