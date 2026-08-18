@@ -25,6 +25,41 @@ not something a reader can check by inspection, which is the trusting-trust
 problem in its ordinary form. Tag `v0.1.0` is the last commit where `src/`
 existed and a C++ compiler could reproduce a compiler from source alone.
 
+## That chain has been checked once, by diverse double-compiling
+
+**2026-08-18, at commit `3eab2cd`, against LLVM 21.1.8 — PASS.**
+
+David A. Wheeler's diverse double-compiling, run by `seed/ddc.sh`:
+
+1. build the `v0.1.0` C++ compiler, whose code generator is LLVM's;
+2. have it translate today's `selfhost/compiler.pas`, and link that — **A**;
+3. `build/bin/pascalc`, which came from `seed/pascalc.ll` the ordinary way — **B**;
+4. have A and B each translate `selfhost/compiler.pas`, and compare *those*.
+
+They were identical: 7,024,210 bytes, sha256
+`399b9cdc2e9422ae16ae5bd89c0eba9f1df4adbb729a66411104dfad7ee7925b`.
+
+A and B are deliberately **not** compared to each other — ADR-0025 settled that
+two backends' assembler text is not comparable, which is exactly why the
+comparison is made one stage further on. What makes it evidence is that the two
+compilers reached the same source through unrelated implementations, so a seed
+carrying behaviour `selfhost/compiler.pas` does not account for would show up
+here.
+
+**What it does not establish.** `v0.1.0` is this project's own earlier compiler,
+so the two implementations are diverse but not independently *authored*. This
+rules out a seed that drifted from its source. It does not rule out a mistake
+present in both — the same caution `doc/sop.md` §7 records for the differential
+oracle and for `langspec-audit`'s readers, and for the same reason: one author,
+one reading.
+
+**The window closes on its own and nothing will announce it.** The check works
+only while the `v0.1.0` compiler still accepts `selfhost/compiler.pas`, and
+every feature the compiler starts *using* risks ending that. `ddc.sh` says so in
+as many words when it happens, and reports it as a skip rather than a failure —
+there would be nothing to fix. The dated line above is what survives; the
+ability to repeat it is not guaranteed.
+
 ## It is x86-64 Linux only
 
 The first two lines are a `target datalayout` and a `target triple`, and they

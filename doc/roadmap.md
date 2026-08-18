@@ -1524,7 +1524,20 @@ Three candidates, cheapest first, and not exclusive:
   does **not** preserve mtime, or the mutated binary stays in the build tree
   and the next control run reads as a broken feature.
 
-### 2. Diverse double-compiling, while it is still possible
+### 2. ~~Diverse double-compiling, while it is still possible~~ Done
+
+**Run on 2026-08-18 at commit `3eab2cd`, and it passed.** The two outputs were
+identical — 7,024,210 bytes, sha256 `399b9cdc…` — so a compiler reached through
+LLVM's code generator and one reached through the seed translate
+`selfhost/compiler.pas` to the same text. `seed/ddc.sh` is the procedure, and
+`seed/README.md` holds the dated statement with what it does and does not
+establish; the short version of the latter is that `v0.1.0` is this project's
+own earlier compiler, so the implementations are diverse but not independently
+authored.
+
+The window was still open, which was not certain — the four steps below are kept
+because they are the argument, and because `ddc.sh` reports the day they stop
+working as a *skip* saying so rather than as a failure.
 
 ADR-0085's sharpest cost is that provenance became "a chain rather than an
 inspection": the first compiler now comes from a committed artefact whose only

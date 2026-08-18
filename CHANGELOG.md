@@ -70,6 +70,19 @@ appears below in the release where it still existed.
   stops the program — a library cannot offer "parse this if it is a number" on
   top of something that halts when it is not.
 
+- **`seed/ddc.sh` — diverse double-compiling, and it passed.** The seed is an
+  opaque committed artefact whose provenance was this repository's history and
+  nothing else. Building a compiler through the `v0.1.0` C++ implementation
+  (LLVM's own code generator) and one through the seed, then having each
+  translate `selfhost/compiler.pas`, produced identical output — 7,024,210
+  bytes, sha256 `399b9cdc…`. `seed/README.md` carries the dated statement and
+  the limits: `v0.1.0` is this project's own earlier compiler, so the two are
+  diverse in implementation but not independently authored, which rules out a
+  seed that drifted from its source rather than a mistake present in both. The
+  script skips rather than fails when it cannot run, and says so explicitly on
+  the day the `v0.1.0` compiler stops accepting today's source — after which the
+  question can no longer be asked.
+
 ### Fixed
 
 - **A schema type containing a string may now be allocated.** `new(p, d)` where
