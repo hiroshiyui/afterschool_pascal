@@ -130,6 +130,37 @@ appears below in the release where it still existed.
   the day the `v0.1.0` compiler stops accepting today's source — after which the
   question can no longer be asked.
 
+### Added
+
+- **`lib/dialect/` — a second library layer, in `--std=afterschool`**
+  (ADR-0120), and the answer to the finding three increments of `lib/` kept
+  producing: every routine that can fail invents its own way of saying so.
+  A fallible routine now answers one record that carries the value **or** the
+  reason:
+
+  ```pascal
+  IntResult = record
+    case ok: boolean of
+      true:  (num: integer);
+      false: (code: ErrorCode)
+    end;
+  ```
+
+  Nothing assigns the tag — the write to the payload is what sets it — so a
+  caller who reads `num` on a failed result **traps** rather than receiving an
+  integer that was never parsed. `lib/dialect/paserror.pas` holds the shared
+  `ErrorCode`; `lib/dialect/pasparse.pas` is the first producer.
+
+  It is a shape and not a type: with no generics a result's payload type is
+  part of its layout, so each producing module declares its own record and what
+  is shared is the error code and the spelling of the tag.
+
+  **The two layers do not mix.** `lib/` stays Extended Pascal and stays
+  importable by any conforming program; `lib/dialect/` is dialect all the way
+  down, and the entry below is what makes that enforced rather than promised.
+  The cost is duplication — `ParseInt` trims its own input because it cannot
+  call `PasText.TrimAll`.
+
 ### Changed
 
 - **The program-components of one program must agree on `--std`**, and a
@@ -152,6 +183,16 @@ appears below in the release where it still existed.
   changing `--std` now refuses instead of misbehaving.
 
 ### Fixed
+
+- **A module imported and not used was called and never declared.** §6.2.3.6
+  activates every module that supplies the main-program-block, whether or not
+  the importing component names anything of it — but the only thing registering
+  an imported module for declaration was the path that names its activation
+  record, which runs when something of the module's is *accessed*. So a program
+  importing a module it never used emitted a call to `@m.<name>.fini` into a
+  file that declared no such symbol, and the assembler refused it: the program
+  did not build at all. Present since modules landed (ADR-0053), and reached by
+  nothing in the corpus, every `--import` in the tree having used what it named.
 
 - **A `forward`-declared function may name its own result.** §6.7.2's
   result-variable-specification — `function f(...): t[r]` — was refused for a

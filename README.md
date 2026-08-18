@@ -188,6 +188,28 @@ accepts. Six modules so far:
 | `lib/pasmap.pas` | `StrMap`, a `string(32)`-keyed dictionary: `MapPut`, `MapGet`, `MapHas`, `MapDelete`, and `MapSlots`/`MapLiveAt` to walk it |
 | `lib/pastext.pas` | `Split`, `Join`, `TrimStart`, `TrimEnd`, `TrimAll`, `CountChar`, `TryParseInt`, `ParseIntOr`, `IntToStr` |
 
+**`lib/dialect/` is a second layer, and it does not mix with the first**
+(ADR-0120). Its modules are `--std=afterschool` all the way down, so only a
+dialect program can link them — `--std` is part of a module's linkage name and
+a mixture is refused (ADR-0119).
+
+| module | what it is |
+| --- | --- |
+| `lib/dialect/paserror.pas` | `ErrorCode` — six categories — with `ErrorText` and `Failed` |
+| `lib/dialect/pasparse.pas` | `ParseInt`, answering an `IntResult` that carries the value **or** the reason |
+
+The trade is stated rather than hidden: the layers duplicate, because
+`ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
+forgets to check does not get a stale value —
+
+```pascal
+r := ParseInt('not a number');    { r.code := errSyntax, and the tag with it }
+writeln(r.num:1)                  { traps: the tag does not select num }
+```
+
+— where `TryParseInt` hands back an integer that was never parsed. Nothing
+assigns `r.ok`: the write to the payload is what sets it.
+
 Use one the way §6.13 asks: translate it, then hand the program its *source*,
 which is where the interface is written.
 

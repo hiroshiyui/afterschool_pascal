@@ -130,6 +130,38 @@ It bought one more fact, and it was found by probing rather than by reasoning:
   conforming program. That is not the decision ADR-0118 parked; it is the
   removal of the option that would have been unsafe.
 
+### The fourth increment: the library grew a second layer
+
+`lib/dialect/` (ADR-0120) — the result shape, and the answer to the finding the
+first three increments kept producing. A fallible routine answers one record
+carrying the value or the reason, the tag is set by writing the payload, and a
+caller who does not check traps instead of reading a stale value.
+
+It settles the question ADR-0118 parked, and it settles it *against* rewriting
+`lib/`: those modules are the only Pascal here a reader can take away to another
+ISO/IEC 10206:1991 processor, which is worth more than the safety, and making
+the dialect's first user its only user would have been the wrong shape for
+something that has to earn its keep against a specification.
+
+Two facts came out of building it, and both are about the wall rather than the
+feature:
+
+- **A result shape cannot be a library type.** With no generics the payload type
+  is part of the layout, so each producing module declares its own record and
+  what is shared is `ErrorCode` and the spelling of the tag. ADR-0116 hit the
+  same wall from the container side; twice from different directions is worth
+  recording before anyone proposes generics as a convenience.
+- **Two layers duplicate, and there is no way around it.** `ParseInt` trims its
+  own input because ADR-0119 will not link `PasText` into a dialect program.
+  That is the containment being enforced rather than promised, and the cost is
+  paid in copies.
+
+It also turned up a defect nothing in the corpus could reach: a module imported
+and *not used* was activated and never declared, so the program did not build.
+Present since ADR-0053. Every `--import` in the tree had used what it named,
+which is the shape of gap this project keeps finding — a claim no program writes
+is a claim nothing checks.
+
 ### The enabler: a foreign-function interface
 
 Everything above needs to call code this compiler did not emit. Today the only

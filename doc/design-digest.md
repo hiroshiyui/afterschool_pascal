@@ -1775,3 +1775,14 @@ names the mode the *program* wanted rather than the one the object has.
 `tests/checks/mixed_mode_link.sh` is the case, and it is a `ctest` case because
 `run_test.sh` compiles every component of a case under one `--std` and cannot
 express a mixture at all.
+
+**A fallible routine answers one record** (ADR-0120), and the shape is the
+dialect's first real user rather than a fourth mechanism. `case ok: boolean of
+true: (payload); false: (code: ErrorCode)` — `boolean` because §6.4.3.3 with
+ADR-0096 wants the labels to be exactly the tag-type's values and a result needs
+exactly two, and **nothing assigns `ok`**, the write to the payload being what
+sets it. It is a convention and not a library type: with no generics the payload
+type is part of the layout, so each producing module declares its own record and
+only `ErrorCode` is shared. `lib/` therefore has two layers that do not mix —
+ADR-0119 makes that enforced rather than promised — and they duplicate, which is
+the price. `tests/dialect/lib_result.pas` and `trap_result_unchecked.pas`.
