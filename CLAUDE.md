@@ -242,14 +242,14 @@ accepts. The rule is written out in `.claude/skills/docs-engineering/SKILL.md`,
 which is loaded only when that skill is invoked; it is repeated here because
 that is exactly how it came to be missed.
 
-It *was* missed, for the eight Extended Pascal features from `d49bc75`
-(protected parameters) through `2ce4c85` (modules): each carried its README
+It *was* missed, for the eight Extended Pascal features from `5df95d7`
+(protected parameters) through `e710d3a` (modules): each carried its README
 edit inside the `feat:` commit. Those features are documented — the grep is
 what is incomplete, not the docs — and the gap is recorded here so the next
 reader does not conclude otherwise from an empty search. Don't try to repair it
 by rewriting published history.
 
-**And a ninth, `4257de8`** (a variable-string may be a value parameter), which
+**And a ninth, `de4f206`** (a variable-string may be a value parameter), which
 is worth its own sentence because it failed differently: it is a `fix:`. The
 rule above says "feature" and the skill's survey step read `feat(...)` commits
 only, so a *conformance fix that changes what the compiler accepts* fell

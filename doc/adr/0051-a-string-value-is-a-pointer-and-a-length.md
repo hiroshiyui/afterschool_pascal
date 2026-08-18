@@ -81,7 +81,7 @@ a<b true", and `tests/extended/string.pas` prints both answers side by side.
 ## Consequences
 
 **ISO 7185's equal-length rule is retired**, and with it the trap ADR-0042's
-follow-up fix (`9b72539`) had added. Under §6.8.3.5 two strings of different
+follow-up fix (`158549b`) had added. Under §6.8.3.5 two strings of different
 lengths compare rather than failing, so `trap_schema_string.pas` no longer
 describes the language and is now `schema_string_compare.pas`, which shows the
 padding instead. What that trap protected has not gone away — the defect was a

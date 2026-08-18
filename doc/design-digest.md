@@ -767,7 +767,7 @@ able to make.
     NOTE 3 says "LT(a,b) could be false and a<b true", and the test prints
     both.
   - It **retires ISO 7185's equal-length comparison rule** and the trap
-    `9b72539` added — see `tests/extended/schema_string_compare.pas`, which
+    `158549b` added — see `tests/extended/schema_string_compare.pas`, which
     now shows the padding.
   - Deferred, all stated in the ADR: substring *variables* (§6.5.6 as an
     lvalue), `readstr`/`writestr`, a string function result, and §6.10.3.6's

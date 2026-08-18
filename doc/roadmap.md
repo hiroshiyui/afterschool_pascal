@@ -795,7 +795,7 @@ they landed — rather than in the standard's.
     shorter operand with spaces, §6.7.6.7's `EQ`/`LT` family compares lengths
     too. The standard's NOTE 3 says so outright, and the test prints both
     answers side by side.
-  - It **retires ISO 7185's equal-length rule** and the trap `9b72539` added
+  - It **retires ISO 7185's equal-length rule** and the trap `158549b` added
     with it. What that trap protected has not gone away — the defect was a
     length computed from placeholder bounds — so the evidence moved from a
     program that stops to one that answers.
@@ -1526,7 +1526,7 @@ Three candidates, cheapest first, and not exclusive:
 
 ### 2. ~~Diverse double-compiling, while it is still possible~~ Done
 
-**Run on 2026-08-18 at commit `3eab2cd`, and it passed.** The two outputs were
+**Run on 2026-08-18 at commit `ef49570`, and it passed.** The two outputs were
 identical — 7,024,210 bytes, sha256 `399b9cdc…` — so a compiler reached through
 LLVM's code generator and one reached through the seed translate
 `selfhost/compiler.pas` to the same text. `seed/ddc.sh` is the procedure, and

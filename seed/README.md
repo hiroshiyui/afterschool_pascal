@@ -27,7 +27,7 @@ existed and a C++ compiler could reproduce a compiler from source alone.
 
 ## That chain has been checked once, by diverse double-compiling
 
-**2026-08-18, at commit `3eab2cd`, against LLVM 21.1.8 — PASS.**
+**2026-08-18, at commit `ef49570`, against LLVM 21.1.8 — PASS.**
 
 David A. Wheeler's diverse double-compiling, run by `seed/ddc.sh`:
 
