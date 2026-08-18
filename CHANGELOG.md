@@ -37,7 +37,9 @@ appears below in the release where it still existed.
   One thing a caller should read first, a consequence of existing behaviour
   rather than of this change: an exported function assigns its own identifier
   once at the end, §6.11.1 making its heading a `forward` whose body cannot see
-  a result-variable-specification.
+  a result-variable-specification. **Fixed under Fixed, below**, in a later
+  change of this same unreleased version; the paragraph is left as written
+  because it is what a caller of the library at that point had to know.
 
 - **Three more modules — containers and text** (ADR-0116):
   - `PasVector` — `IntVec`, a growable sequence of integers: `VecNew`,
@@ -129,6 +131,27 @@ appears below in the release where it still existed.
   question can no longer be asked.
 
 ### Fixed
+
+- **A `forward`-declared function may name its own result.** §6.7.2's
+  result-variable-specification — `function f(...): t[r]` — was refused for a
+  function whose heading had already been given, so §6.11.1 putting every
+  exported function's heading in a module-heading made it unavailable to every
+  module in `lib/`. §6.8.2.2 makes a *read* of the function identifier a
+  recursive call, so an exported function that accumulates had no name to
+  accumulate in and had to use a local.
+
+  The clause gives the result identifier a defining-point in "the block of the
+  function-block, **if any**, associated with the identifier of the
+  function-heading", and one paragraph later says the identical thing of the
+  formal-parameter-list — which has always reached a forward body. The
+  asymmetry was literal in the compiler: parameters were bound from the
+  *symbol*, the result variable from the *declaration node*, and a forward
+  body's node carries no specification. The refusal now reads the symbol too,
+  and both halves of the clause behave alike.
+
+  `tests/extended/forward_resultvar.pas` is the case; `doc/sop.md` §7 carried
+  this as the first question for the next `langspec-audit`, which it turned out
+  not to need.
 
 - **A function's result may be a structured value parameter's actual.**
   §6.6.3.2 makes a value parameter's actual an *expression* and §6.7.1 makes a

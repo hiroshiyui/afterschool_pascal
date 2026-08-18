@@ -331,7 +331,6 @@ from it when one is closed.
 | Clause **citation is presence, not depth** | a clause with one scenario counts as cited, though §6.8.3.9 alone has six requirements this suite checks and more it does not. The same caution statement coverage carries, one level further out | ADR-0106 |
 | The statement-coverage gate is a **ratchet**, not an allowlist | it cannot fail in both directions, so a line that becomes covered says nothing, and 454 uncovered lines carry no argument between them. The per-procedure breakdown is what makes a regression nameable | ADR-0104 |
 | The differential oracle never compares an **import** | `pascalc-s0` does not implement `--import`, so §6.13's separately translated components are compared only as standalone sources — each parses and analyses on its own, and the path where one component supplies another's interfaces is compared by nothing. It accepted the option and ignored it until this was written, which was worse: a harness that started passing `--import` would have compared dumps built without the imports and agreed. It refuses now, so that harness fails instead. **ADR-0114 raised the stakes**: `lib/` is now walked by `difftest.sh`, so a library module is compared as a source — but the library exists *to be imported*, and the three `tests/extended/lib_*.pas` cases are the whole of what covers it linked and running | ADR-0108, ADR-0114 |
-| A `forward`-declared function cannot use a **result-variable-specification** | the identifier §6.7.2 introduces is not visible in the body that follows, and restating it is refused as *the parameters of 'f' were already given in its forward declaration*. §6.11.1 makes every module-heading procedure a `forward`, so this reaches **every exported function** of every library module — and §6.8.2.2 makes reading the function identifier a recursive call, so the workaround is to accumulate into a local and assign the identifier once. Whether the standard intends that name to be in scope is a **reading** this project has not taken, which is why it is a row here and not a fix: ADR-0114 was a library increment and the wrong change to carry a Sema fix. First question for the next `langspec-audit` | ADR-0114 |
 | `coverage.py` sees the sources, not the harnesses that build their own compiler | it enumerates the corpus by glob, so what `irtest.sh`, `producttest.sh`, `verify.py` and the BSI runner drive is invisible; a procedure only those reach reports as uncovered. The **flags** half of this is closed: the corpus now sweeps `--dump-all` as `difftest.sh` does, which had been worth 195 statements reported unreached while an oracle reached them every run — `dumpexpr` alone read 75 of 186 rather than 1 | ADR-0103 |
 | Errors listed in `doc/implementation-defined.md` §3 | deliberately unreported, under §5.1 f) 1) | ADR-0073 |
 | §6.4.3.3's region is not asked of a **constant** occurrence | a type-name inside a record denoter is now asked at every occurrence (ADR-0112), but `array [1..fred]` beside a field `fred` reads the constant. Constant occurrences reach the expression checker rather than type-denoter resolution. What is left of a row that used to say the rule was enforced for a pointer domain and nothing else | ADR-0112 |
@@ -345,6 +344,16 @@ from it when one is closed.
 **Closed since this document was written**, kept here because a register that
 only grows is a register nobody trusts:
 
+- *A `forward`-declared function could not name its own result.* §6.7.2 puts
+  the result identifier's defining-point in "the block of the function-block,
+  **if any**, associated with the identifier of the function-heading" — the same
+  words the next paragraph uses of the formal-parameter-list, which has always
+  reached a forward body. The asymmetry was literal: parameters bound from the
+  *symbol*, the result variable from the *declaration node*, and a forward
+  body's node carries no specification. §6.11.1 makes every exported function a
+  `forward`, so this reached every module in `lib/`;
+  `tests/extended/forward_resultvar.pas` is the case. It was recorded here as
+  the first question for the next `langspec-audit` and did not need one.
 - *The model-drift gate could not survive a force-push.* Its base resolution
   lived in the workflow's shell and asked `git rev-parse --verify`, which exits
   0 for a full 40-hex string without ever looking the object up — so the

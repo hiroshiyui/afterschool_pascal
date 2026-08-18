@@ -201,11 +201,28 @@ own test was rewritten to the form above **without its golden changing** — sam
 answers, and the interface stopped documenting a compiler defect as a house
 style.
 
-One convention is still forced by the language: **an exported function assigns
-its own identifier once, at the end.** §6.8.2.2 makes every *read* of it a
-recursive call, and the other way to accumulate — a result-variable-specification
-— is unavailable to an exported function, §6.11.1 making its heading a `forward`
-whose body cannot see that name.
+**An exported function may name its own result.** §6.8.2.2 makes every *read*
+of the function identifier a recursive call, so accumulating into it is not
+available; the other way is a result-variable-specification, and until
+`ab8d125` it was refused for an exported function, §6.11.1 making every module
+heading a `forward` and the name in the heading not reaching the body. §6.7.2
+puts that name's defining-point in "the block of the function-block, **if
+any**, associated with the identifier of the function-heading" — the same words
+the clause uses one paragraph later of the formal-parameter-list, which has
+always reached a forward body. So this compiles now, and an exported function
+no longer has to accumulate into a local:
+
+```pascal
+function Upper(s: Line) = r: Line; forward;   { r names the result }
+
+function Upper;
+var k: integer;
+begin
+  r := '';
+  for k := 1 to length(s) do
+    r := r + Cap(s[k])          { reading r is not a recursive call }
+end;
+```
 
 **A container is a pointer, and growth replaces it** (ADR-0116). A schema is
 chosen once — `var v: IntVec(n)` fixes `n` at the declaration — so anything

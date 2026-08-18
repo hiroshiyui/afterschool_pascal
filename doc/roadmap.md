@@ -58,10 +58,13 @@ language that no amount of design would have produced:
   **fixed** (ADR-0115), in the change after the one that found it: the library
   is what turned a limitation recorded from the compiler's side into one a
   caller could feel.
-- **A `forward`-declared function loses its result-variable-specification**, and
+- **A `forward`-declared function lost its result-variable-specification**, and
   §6.11.1 makes every exported function a `forward` — so an exported function
-  accumulates into a local. Possibly a defect; `doc/sop.md` §7 carries it as a
-  reading nobody has taken.
+  accumulated into a local. It was a defect, and is **fixed** (`ab8d125`):
+  §6.7.2 puts the result identifier in the block of "the function-block, if
+  any", the same words the next paragraph uses of the formal-parameter-list,
+  which had always reached a forward body. Recorded as a reading nobody had
+  taken and settled by taking it.
 - **No generics is survivable by phrasing algorithms over positions.**
   `SortIndexed` takes `less(i, j)` and `swap(i, j)` and never sees an element,
   so one body sorts an array, several parallel arrays, or anything else the
