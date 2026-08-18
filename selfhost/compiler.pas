@@ -19467,11 +19467,38 @@ end;
 
 { 6.13: a module's two activation functions are named from the module, because
   the component that calls them holds the main-program-declaration and may be
-  another translation. }
+  another translation.
+
+  The **mode is part of that name**, and it is a check rather than decoration
+  (ADR-0119). ADR-0118's two rules are a pair -- a write to a field activates
+  its variant, a read of an inactive one traps -- and the pair holds only
+  within one compilation, because each half is emitted at the access. Split
+  them across components and the surviving half is worse than neither: a
+  dialect component reading a variant maintained by a conformance-mode one runs
+  its guard against a tag nothing ever stored, and *passes* the access. A check
+  that answers `safe` for an unsafe read is the one outcome a safety feature
+  may not have.
+
+  So the components of one program must agree on the mode. Spelling it into the
+  symbol they already have to agree on is what makes that refusal free: the
+  program calls this name for every module it activates, so a mixture cannot
+  reach an executable. It cannot be misdeclared either -- the name is written
+  from the translation that is happening, not from anything a caller says. }
 procedure PutModulePart(p: symPtr; init: boolean);
 begin
   write(ircode, '@m.');
   WritePoolIr(p^.at, p^.len);
+  write(ircode, '.');
+  { Two spellings and not three, because what this has to separate is the
+    dialect from the conformance modes: it is ADR-0118's *pair* of rules that a
+    mixture splits, and only --std=afterschool has them. Mixing the two
+    conformance modes could not split a pair, and cannot arise anyway -- 6.11's
+    module is an Extended Pascal feature, so --std=iso7185 never reaches this.
+    Written as an if rather than a case over stdKind for the reason doc/sop.md
+    §7 gives: a mode left off a case traps, and this is on the path of every
+    program that has a module. }
+  if langStd = stdAfterschool then write(ircode, 'afterschool')
+  else write(ircode, 'extended');
   if init then write(ircode, '.init') else write(ircode, '.fini')
 end;
 

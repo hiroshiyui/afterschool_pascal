@@ -8,6 +8,13 @@ ADR-0117 said would have to argue for one on its own merits.
 It decides the *rule*. The implementation lands separately, and this record is
 what that commit is held against.
 
+**Extended by [ADR-0119](0119-the-components-of-one-program-agree-on-the-mode.md).**
+The two rules below are a pair, and both are emitted at the access — so §6.13
+let them be split across program-components translated under different modes,
+where the surviving half consulted a tag nothing maintained and passed an
+access that was wrong. Nothing in this record is withdrawn; ADR-0119 adds the
+condition under which it holds.
+
 ## Context
 
 Three increments of `lib/` produced one recurring shape: every routine that can

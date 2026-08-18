@@ -164,6 +164,19 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
+# ...and the rule no `tests/` case can express: the program-components of one
+# program must agree on `--std` (ADR-0119). run_test.sh compiles every
+# component of a case with a single standard, so a *mixture* has to be built by
+# hand -- four builds of one pair of files, two that must link and two that must
+# be refused. It fails in both directions: a mixture that starts linking is as
+# loud as a matched pair that stops.
+add_test(NAME mixed-mode-link
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/mixed_mode_link.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${CMAKE_SOURCE_DIR})
+set_tests_properties(mixed-mode-link PROPERTIES
+                     ENVIRONMENT
+                     "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
+
 # ...and the half of the model-drift gate a local run *can* check. The gate
 # itself is CI-only, needing a push range; deciding which range to judge is not,
 # and is the half that broke. A force-push reports a base that is a real 40-hex

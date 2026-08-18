@@ -135,6 +135,33 @@ if [[ $mode == object ]]; then
   exec clang -Wno-override-module "$opt" -fPIC -c "$ir" -o "${out:-$base.o}"
 fi
 
-exec clang -Wno-override-module "$opt" "$ir" \
+# The link is also where a **mode disagreement between program-components**
+# surfaces, and it is the one link failure worth translating. A module's two
+# activation functions carry the mode in their names (ADR-0119), so a component
+# built under a different `--std` leaves the caller's symbol undefined. That is
+# the correct outcome and an unreadable way to say it: `undefined reference to
+# 'm.pastext.extended.init'` names the mode the *program* wanted, not the one
+# the object has, and a reader has no reason to know the convention.
+#
+# Only the diagnosis is added -- the linker's own output is passed through
+# first, and the exit status is still a failure. A driver that turned a link
+# error into something else would be the silent-ignoring this script's header
+# refuses.
+if clang -Wno-override-module "$opt" "$ir" \
      "${objects[@]+"${objects[@]}"}" "$runtime/libpasrt.a" -lm \
-     -o "${out:-$base}"
+     -o "${out:-$base}" 2>"$work/link.txt"; then
+  exit 0
+fi
+cat "$work/link.txt" >&2
+mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\(init\|fini\).*/\1 \2/p" \
+           "$work/link.txt" | head -1)
+if [[ -n $mismatch ]]; then
+  set -- $mismatch
+  echo "pascalcc: error: module '$1' was translated under a different --std" >&2
+  echo "pascalcc: this program is --std=$2, so every component it links must be" >&2
+  echo "pascalcc: too. The modes are not mixable: a variant's write-side and" >&2
+  echo "pascalcc: read-side rules are a pair, and a component holding one half" >&2
+  echo "pascalcc: without the other reports unsafe accesses as safe (ADR-0119)." >&2
+  echo "pascalcc: rebuild '$1' with --std=$2, or this program without it." >&2
+fi
+exit 1
