@@ -129,12 +129,11 @@ valid Afterschool Pascal program meaning the same thing. Nothing forces the
 first two apart except the two specifications disagreeing; nothing forces this
 one apart at all, because the language is ours.
 
-**It admits nothing yet.** Today `--std=afterschool` accepts exactly Extended
-Pascal, which is deliberate: that containment is the property every later
-feature is added to, and `tests/dialect/inherits_extended.pas` is what holds it.
-The two conformance modes are not affected by anything that lands in it — they
-are the only part of this compiler with an external specification, and they stay
-exactly what they are.
+The containment is the property every later feature is added to, and
+`tests/dialect/inherits_extended.pas` is what holds it. The two conformance
+modes are not affected by anything that lands in it — they are the only part of
+this compiler with an external specification, and they stay exactly what they
+are.
 
 It carries **no stability promise**. The dialect is what the compiler in your
 hand defines; a program that needs fixed behaviour should pin a compiler
@@ -172,6 +171,36 @@ label — `aa, bb: (i: integer)` cannot decide between them, so it is checked
 against the tag instead. And a variant part with **no tag field**, which
 §6.4.3.3 permits, has nothing to check against and stays an unchecked union.
 
+**A program can call code this compiler did not emit** (ADR-0121). `external`
+follows a procedure or function heading, in the position §6.1.4 gives to
+`forward`:
+
+```pascal
+function cbrt(x: real): real; external 'cbrt';
+procedure srandom(seed: integer); external 'srandom';
+```
+
+The foreign name is written out and there is no default, because identifiers
+here are case-folded and a linker matches a symbol exactly. `external` is not
+a reserved word in any mode — a directive is an identifier in the one position
+it may occupy — so a program that uses the spelling for something else is
+unaffected.
+
+**Two types cross the boundary: `integer` and `real`**, as value parameters and
+as a function result, and by their exact type — a subrange does not cross, and
+neither does `char`, `boolean`, a string, a pointer, a `var` parameter or
+anything structured. libc and libm are already linked, so a foreign call needs
+no extra build step; there is no way yet to name another library.
+
+**Nothing checks the declaration against the function it names.** The linker
+checks the name and nothing checks the signature, so a wrong type or a wrong
+parameter count is undefined behaviour with no diagnostic. What the feature
+gives you is that the boundary is *visible*: one directive, the foreign name
+beside it, greppable. Everything past it is on you.
+
+A binding is a module that exports Pascal and keeps the directive to itself —
+`lib/dialect/pasmathx.pas` is the first, and is what a caller sees instead.
+
 ## The standard library
 
 `lib/` holds the beginning of one (ADR-0114). It is ordinary Extended Pascal —
@@ -197,6 +226,7 @@ a mixture is refused (ADR-0119).
 | --- | --- |
 | `lib/dialect/paserror.pas` | `ErrorCode` — six categories — with `ErrorText` and `Failed` |
 | `lib/dialect/pasparse.pas` | `ParseInt`, answering an `IntResult` that carries the value **or** the reason |
+| `lib/dialect/pasmathx.pas` | `Cbrt`, `Log10`, `Log2`, `FMod`, `RealOr` — libm through `external`, with a `RealResult` where the answer can fail |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
@@ -294,9 +324,12 @@ and `VecReserve` grows once so that no later push reallocates.
 **There is no install location and no resolution by name.** `--import` takes a
 path, so a program outside this checkout names paths into it, and `maxImports`
 bounds one program at eight components. Sockets, locales, threads and containers
-are all absent: the first three wait on a foreign-function interface, and a
-container waits on something to parameterise a type by a type, which schemata do
-not do. `doc/roadmap.md` has the ordering.
+are still absent, and the reason has changed for three of them: the
+foreign-function interface they waited on **exists** (ADR-0121), and what it
+does not carry yet is a pointer or a string across the boundary, which is what
+every one of those three needs. A container waits on something else entirely —
+parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
+the ordering.
 
 ## What the compiler accepts today, with `--std=iso7185`
 

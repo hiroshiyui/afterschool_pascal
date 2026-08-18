@@ -186,9 +186,9 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Five gates make that mechanical, and each fails in **both** directions — a
+Six gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to five catalogues:
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to six catalogues:
 
 | Gate | Catalogue | Asks |
 | --- | --- | --- |
@@ -196,6 +196,7 @@ claim that stops being true is as loud as one that was never true, which is
 | `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
 | `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
 | `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced. It also checks *how many* files were compared, an empty list being what a clean run and a run that reached nothing both produce |
+| `foreign-reserved` | `ReservedForeignName` in the compiler | is every global the emitter names still refused as a foreign name? (ADR-0121) — LLVM rejects a redeclared global, so a collision is an error about a file nobody wrote; the predicate is a second copy of what the emitter writes, and this compares them |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? |
 
 All but the last are `ctest` cases, so they run before a push rather than
@@ -408,9 +409,10 @@ knowing before adding anything:
   40 sites asking "does this mode have Extended Pascal?" goes through it. Never
   write `langStd = stdExtended`; it silently switches Extended Pascal off for
   the dialect and 545 of 547 cases still pass.
-- **It admits nothing yet**, and `tests/dialect/inherits_extended.pas` pins
-  that: the mode accepts exactly Extended Pascal, which is the property every
-  feature is added *to*.
+- **`tests/dialect/inherits_extended.pas` pins the containment**: everything
+  Extended Pascal accepts, the dialect accepts and means the same thing. That
+  is the property every feature is added *to*, and it is what a dialect feature
+  must not disturb.
 - **A feature needs a reason of its own** — "the standard has it" is
   unavailable, since none does — and should still be spelled the way a standard
   spells it wherever one does. It must not change what the conformance modes
@@ -421,6 +423,16 @@ knowing before adding anything:
   `difftest.sh` *skips* it — counted and reported, because a silent skip is
   what the corpus-size check exists to prevent. `irtest.sh` does not skip, and
   is what recovers part of that. `doc/sop.md` §7 carries the gap.
+  - **But the *refusal* is on the conformance surface, and `src/` must carry
+    it.** A dialect feature with a syntax of its own is one the reference front
+    end can see, and what `--std=extended` says about such a program is a
+    conformance question. ADR-0121's `external` was the first, and left alone
+    `src/` answered "expected 'begin'" where the compiler names the mode — a
+    difftest failure, correctly. Teaching `src/` the refusal is six lines and
+    is unconditional there (its `Std` has two values and it is never given
+    `--std=afterschool`); the alternative was one `difftest_baseline.txt` entry
+    per dialect diagnostic, which spends the emptiness that makes an entry mean
+    something.
 
 ## Where things live
 

@@ -1729,7 +1729,7 @@ decision being overturned on taste.
 
 ## The dialect
 
-Three mechanisms, and the section exists because the first two landed without
+Four mechanisms, and the section exists because the first two landed without
 an entry here. Nothing in it changes what either conformance mode accepts.
 
 **The mode is an ordinal and the order is a containment** (ADR-0117). `stdKind`
@@ -1786,3 +1786,26 @@ type is part of the layout, so each producing module declares its own record and
 only `ErrorCode` is shared. `lib/` therefore has two layers that do not mix —
 ADR-0119 makes that enforced rather than promised — and they duplicate, which is
 the price. `tests/dialect/lib_result.pas` and `trap_result_unchecked.pas`.
+
+**A foreign function is a directive, and two types cross** (ADR-0121).
+`external 'name'` sits where ISO 7185 §6.1.4 and ISO/IEC 10206:1991 §6.1.4 put
+`forward` — an identifier in the one position it may occupy, so nothing is
+reserved and a variable named `external` is untouched — and the foreign name is
+a *string-literal* because this lexer case-folds identifiers and a linker
+matches a symbol exactly. There is no default: deriving one from the other is a
+lossy mapping to a name that has to be right, and writing it out is also what
+makes the boundary greppable, which is the whole safety property claimed. The
+mapping is `integer`↔`i32` and `real`↔`double` and nothing else, decided by a
+probe rather than by reading — `clang` passes a `char` as `i8 signext` and a
+`_Bool` as `i1 zeroext`, and those two rows need an attribute and an answer
+about signedness that this increment does not have. It tests the type and not
+`Base(t)`, reversing ADR-0018 everywhere else here: a subrange's values are its
+host's only because something promised it, and nothing across this boundary
+does. `EmitUserCall` writes no static link for a foreign callee and
+`EmitExterns` no leading `ptr` — the mutation that kills
+`tests/dialect/foreign.pas` is the call site, the `declare` being unchecked
+against a direct call under opaque pointers. `ReservedForeignName` refuses a
+name the compiler emits itself, LLVM rejecting any redeclared global, and
+`tests/checks/foreign_reserved.py` keeps that list honest in both directions.
+`lib/dialect/pasmathx.pas` is the first binding module and holds the shape: it
+exports Pascal and keeps the directive to itself.

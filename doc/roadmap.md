@@ -162,36 +162,73 @@ Present since ADR-0053. Every `--import` in the tree had used what it named,
 which is the shape of gap this project keeps finding — a claim no program writes
 is a claim nothing checks.
 
-### The enabler: a foreign-function interface
+### The fifth increment: the enabler, in its narrowest form
 
-Everything above needs to call code this compiler did not emit. Today the only
-route is a hand-written `pas_*` primitive in `runtime/pasrt.c`, which is right
-for the twenty-odd things the standards require and does not scale to sockets,
-locales, threads and clocks. **So FFI comes first**, not because it is the most
-interesting but because the rest is blocked on it.
+`external` (ADR-0121), under `--std=afterschool` only. Everything above needs
+to call code this compiler did not emit, and until this the only route was a
+hand-written `pas_*` primitive in `runtime/pasrt.c` — right for the twenty-odd
+things the standards require, and no way to reach a socket.
 
-Three things make it cheaper here than it looks, and one makes it dangerous.
+The blocker recorded one increment ago is what made it possible: a syscall
+wrapper is a routine that can fail, and ADR-0120 gave the language a shape to
+say so in. The blocker recorded *below* is not solved — an FFI is a hole in
+every safety property, and the memory-safety model is still open — so the
+boundary is made **lexically visible** instead, which is the answer the table
+below already said was most likely to fit. A directive prejudges nothing.
 
-- **The calling convention already exists.** The compiler emits textual LLVM IR
-  and already calls C functions by name with C types — every `write` is one.
-  What is missing is a *language surface* for declaring one, not a mechanism.
-- **The grammar already has the shape.** §6.1.5 and §6.1.6 make `forward` a
-  **directive** — an identifier in the one position it may occupy — and ADR-0053
-  noted that `interface` and `implementation` are directives too, not reserved
-  words. A declaration ending in a directive is therefore an established form,
-  and an `external` directive costs the lexis nothing.
-- **Modules give it somewhere to live** (ADR-0053, ADR-0079). A binding is a
-  module that exports Pascal procedures and imports C ones; nothing about
-  separate compilation changes.
+Three facts came out of it, and two are about how little is checked:
+
+- **The type mapping is an ABI question and was probed, not reasoned.**
+  `integer` and `real` cross, and they are exactly the two `clang` passes with
+  no parameter attribute — a `char` is `i8 signext` and disagrees with
+  §6.4.2.2's 0..255 about the sign bit, a `bool` is `i1 zeroext` as a `_Bool`.
+  Two rows of a four-row table, and the other two are the next increment.
+- **The `declare` is not the ABI; the call site is.** Giving the foreign
+  declaration a static link it does not have assembles, links and runs
+  correctly — LLVM does not check a *direct* call against the declaration under
+  opaque pointers. So nothing anywhere checks a foreign signature, which is
+  what an FFI is without a header parser.
+- **A foreign name can collide with one the compiler emits**, and LLVM answers
+  with an error about a file nobody wrote. Refused as a diagnostic now, and
+  `hypot` and `atan2` are unavailable to a program because `complex` uses them
+  — the one place the rule bites something a user would want.
+
+What it does **not** do is the whole of what comes next: no pointers, no
+strings, no `var` parameters, no callbacks, no way to name a library. Every one
+of sockets, locales and clocks needs the first two.
+
+### What is still blocked on it
+
+**The rest of the FFI**, and the ordering has not changed — it is the narrowness
+that moved, not the position.
+
+Three things this file expected to make it cheap did, and are spent:
+
+- **The calling convention already existed.** The compiler emits textual LLVM
+  IR and already called C functions by name with C types — every `write` is
+  one — so what was missing was a language surface and not a mechanism.
+- **The grammar already had the shape.** ISO 7185 §6.1.4 and
+  ISO/IEC 10206:1991 §6.1.4 make `forward` a **directive**, an identifier in
+  the one position it may occupy, and ADR-0053 had noted that §6.1.5's
+  `interface` and §6.1.6's `implementation` are directives too. `external` cost
+  the lexis nothing, exactly as predicted.
+- **Modules gave it somewhere to live** (ADR-0053, ADR-0079). A binding is a
+  module that exports Pascal and keeps the directive to itself, and nothing
+  about separate compilation changed. `lib/dialect/pasmathx.pas` is the first.
+
+**The real work is still the type mapping**, and two rows of it are done. What
+a C `char *`, `size_t` or struct pointer is in Pascal — and which Pascal types
+may cross at all — is the whole of what stands between here and a socket, and
+it cannot be settled the way `integer` and `real` were, by observing that the
+ABI needs no attribute. A pointer crossing the boundary is the memory-safety
+question in its smallest form:
+
 - **It is a hole in every safety property the goal asks for.** A foreign call
-  can do anything, so an FFI surface and the memory-safety model must be
-  designed as one thing. Rust and Zig both answer this by making the boundary
-  *lexically visible* rather than by trying to check across it, and that is the
-  answer most likely to fit here.
-
-The real work is the **type mapping** — what a C `int`, `size_t`, `char *` or
-struct pointer is in Pascal, and which Pascal types may cross at all. That is a
-document before it is code.
+  can do anything. ADR-0121 answered that for a *call* by making the boundary
+  lexically visible — Rust's and Zig's answer, and the one this table already
+  said was likeliest to fit — and that answer does not extend to a pointer,
+  which outlives the call. So the next increment and the memory-safety model
+  may genuinely have to be designed together, which the first one did not.
 
 ### Where the ideas come from
 
