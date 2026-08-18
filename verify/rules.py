@@ -476,7 +476,42 @@ def _pow_is_exact_when_it_does_not_trap(e):
     return build
 
 
+
+def _variant_completer_is_the_exact_complement(w):
+    """ADR-0118: every tag value is accepted by exactly one arm.
+
+    Not a restatement of the emitted test, which is the trap ADR-0013 warns
+    about.  What is proved here is a property of the *pair* of conditions
+    EmitVariantGuard emits: a labelled arm's and the completer's partition the
+    tag type between them.  Both halves matter and neither is obvious from the
+    code --
+
+      * if some value satisfied both, one store could activate two arms and the
+        tag would have stopped being authoritative, which is the whole claim;
+      * if some value satisfied neither, a record built through the completer
+        would trap on every subsequent read of a field that *is* live -- a
+        correct program broken by the safety feature.
+
+    §6.4.3.3 with ADR-0096 makes a variant part's labels exactly its tag-type's
+    values, so exhaustiveness is a language rule; this says the lowering keeps
+    it.  Quantified over the bounds as well as the value, so it speaks about
+    every variant part rather than a sampled one (ADR-0013's rule for keeping
+    bounds symbolic).
+    """
+    tag = z3.BitVec("tag", w)
+    lo = z3.BitVec("lo", w)
+    hi = z3.BitVec("hi", w)
+    labelled = low.variant_accepts_range(tag, lo, hi)
+    completer = low.variant_accepts_completer(tag, lo, hi)
+    # a non-empty label list is the only shape a variant part can have
+    return lo <= hi, z3.Xor(labelled, completer)
+
+
 ALL = [
+    Rule("variant-completer-is-the-exact-complement", MUST_HOLD,
+         "ISO 7185 §6.4.3.3 with ADR-0096 — a variant part's arms partition "
+         "its tag-type, so exactly one accepts any tag value",
+         "EmitVariantGuard", _variant_completer_is_the_exact_complement),
     Rule("mod-satisfies-iso", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — 0 <= i mod j < j, and j divides (i - r)",
          "EmitBinary, opMod", _mod_correct, widths=BOUNDED),

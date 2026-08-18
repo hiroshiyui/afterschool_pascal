@@ -63,6 +63,14 @@ const
     in LexIdentOrKeyword. Stated in doc/implementation-defined.md 6, which
     5.1 c) asks for. }
   strMax   = 255;
+  { How a field selection is being used, for ADR-0118's variant guard.
+    vgNone is the machinery that writes whole records -- the initial state, a
+    whole-variable copy, the file walk -- which reaches every arm on purpose;
+    vgWrite is an assignment target, which activates the arm it names; vgRead
+    is every other use and is checked against the tag. }
+  vgNone   = 0;
+  vgRead   = 1;
+  vgWrite  = 2;
   kwWidth  = 9;      { 'procedure', the longest reserved word }
   { The capacity of BindingType.name. ISO/IEC 10206:1991 6.4.3.4 makes the
     field "an implementation-defined variable-string-type" and says nothing
@@ -1470,6 +1478,11 @@ var
   curFile: nameStr;
   langStd: stdKind;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
+  { Which way the designator being addressed is used (ADR-0118). vgWrite only
+    while EmitAssign is taking its target's address; EmitExpr saves and clears
+    it, so a subscript or a call argument *inside* a target is read like any
+    other expression while the spine that reaches the field stays a write. }
+  designatorGuard: integer;
   curBlock: integer;             { the block being filled, for a phi's label }
   { The string arena's level at this function's entry (ADR-0111). A string
     value's life is one statement, and the runtime cannot see when one ends, so
@@ -20127,13 +20140,176 @@ end;
 { Walk down the field's path. At each step the shared storage is the last
   member of the struct we are in, and the arm laid over it starts at the same
   address -- so stepping in is one getelementptr, not two. }
-procedure FieldAddress(var rec: str; t: typePtr; f: fieldPtr; var v: str);
+{ ADR-0118: in the dialect, a variant's tag may not lie about which arm holds
+  the payload. 6.5.3.3 makes reading or writing a field of an inactive variant
+  an *error* -- Annex D.2, which doc/implementation-defined.md lists among the
+  ones deliberately left unreported -- and 3.1 lets a processor leave an error
+  undetected. So detecting it changes the meaning of no conforming program,
+  which is what lets this live in --std=afterschool without weakening
+  ADR-0117's containment.
+
+  Called once per variant part crossed on the way to a field, because activity
+  is a *chain*: an inner tag stays readable when the arm containing it is not
+  active, so `v.p` needs the outer tag to select its arm and the inner tag to
+  select its own.
+
+  `guard` is vgNone for the machinery that writes whole records -- the initial
+  state, a whole-variable copy, the file walk -- which reaches every arm on
+  purpose and must not be checked. vgWrite is a designator being assigned to;
+  vgRead is every other use.
+
+  A write *activates* the arm, but only when the arm has exactly one label to
+  activate it to: `a, b: (i: integer)` cannot decide between a and b, and the
+  variant-part-completer has no label at all. Those are checked like a read
+  instead, which is sound and is the same rule 6.5.3.3 states.
+
+  A tagless variant part and a discriminant-selected one are both skipped:
+  TagFieldAt answers -1 for each, there being no field to compare against.
+  That is a hole in the safety claim rather than an oversight, and it is
+  written down in doc/sop.md 7. }
+procedure EmitVariantGuard(var rec: str; t: typePtr; prefix: numPtr;
+                           armIndex, guard: integer);
+var tagIdx, msg, k: integer;
+    arms, arm, other: variantPtr; tt: typePtr; r: rangePtr;
+    tagAddr, tagVal, acc, c1, c2, c3, cond: str;
+    haveAcc, single: boolean;
+
+  { `acc := acc or (tag in lo..hi)`, with the first term starting it. }
+  procedure Accumulate(lo, hi: integer);
+  begin
+    if lo = hi then begin
+      Def(c1);
+      write(ircode, 'icmp eq ');
+      PutLlType(tt);
+      write(ircode, ' ');
+      PutOp(tagVal);
+      writeln(ircode, ', ', lo:1)
+    end
+    else begin
+      Def(c2);
+      write(ircode, 'icmp sge ');
+      PutLlType(tt);
+      write(ircode, ' ');
+      PutOp(tagVal);
+      writeln(ircode, ', ', lo:1);
+      Def(c3);
+      write(ircode, 'icmp sle ');
+      PutLlType(tt);
+      write(ircode, ' ');
+      PutOp(tagVal);
+      writeln(ircode, ', ', hi:1);
+      Def(c1);
+      write(ircode, 'and i1 ');
+      PutOp(c2);
+      write(ircode, ', ');
+      PutOp(c3);
+      writeln(ircode)
+    end;
+    if haveAcc then begin
+      Def(cond);
+      write(ircode, 'or i1 ');
+      PutOp(acc);
+      write(ircode, ', ');
+      PutOp(c1);
+      writeln(ircode);
+      acc := cond
+    end
+    else begin
+      acc := c1;
+      haveAcc := true
+    end
+  end;
+
+begin
+  tagIdx := TagFieldAt(t, prefix);
+  if (langStd = stdAfterschool) and (guard <> vgNone) and (tagIdx >= 0) then
+  begin
+    arms := ArmsAt(t, prefix);
+    arm := ArmAtIn(arms, armIndex);
+    tt := TagTypeAt(t, prefix);
+    Def(tagAddr);
+    write(ircode, 'getelementptr inbounds ');
+    PutStructAt(t, prefix);
+    write(ircode, ', ptr ');
+    PutOp(rec);
+    writeln(ircode, ', i32 0, i32 ', tagIdx:1);
+
+    single := (not arm^.isOtherwise) and (arm^.labels <> nil) and
+              (arm^.labels^.next = nil) and
+              (arm^.labels^.lo = arm^.labels^.hi);
+
+    if (guard = vgWrite) and single then begin
+      { the write says which arm is live, so the tag cannot disagree with the
+        payload: the only way to write a payload is through this store }
+      write(ircode, '  store ');
+      PutLlType(tt);
+      write(ircode, ' ', arm^.labels^.lo:1, ', ptr ');
+      PutOp(tagAddr);
+      writeln(ircode)
+    end
+    else begin
+      Def(tagVal);
+      write(ircode, 'load ');
+      PutLlType(tt);
+      write(ircode, ', ptr ');
+      PutOp(tagAddr);
+      writeln(ircode);
+      haveAcc := false;
+      if arm^.isOtherwise then begin
+        { 6.4.3.3's completer is selected by whatever the other arms leave, so
+          what it accepts is the complement of their labels and `acc` is
+          already the trap condition (ADR-0034). }
+        other := arms;
+        while other <> nil do begin
+          if other <> arm then begin
+            r := other^.labels;
+            while r <> nil do begin
+              Accumulate(r^.lo, r^.hi);
+              r := r^.next
+            end
+          end;
+          other := other^.next
+        end
+      end
+      else begin
+        r := arm^.labels;
+        while r <> nil do begin
+          Accumulate(r^.lo, r^.hi);
+          r := r^.next
+        end
+      end;
+      if haveAcc then begin
+        if not arm^.isOtherwise then begin
+          { trap when the tag selects some *other* arm }
+          Def(cond);
+          write(ircode, 'xor i1 ');
+          PutOp(acc);
+          writeln(ircode, ', true');
+          acc := cond
+        end;
+        MsgStart;
+        { one segment: MsgText trims each one's trailing blanks, so a message
+          split across two loses the space between them }
+        MsgText('variant: the tag selects another arm    ');
+        msg := MsgEnd;
+        EmitTrapIf(acc, msg)
+      end
+    end
+  end
+end;
+
+procedure FieldAddress(var rec: str; t: typePtr; f: fieldPtr; var v: str;
+                       guard: integer);
 var cur, p: str; prefix, step: numPtr;
 begin
   cur := rec;
   prefix := nil;
   step := f^.variant;
   while step <> nil do begin
+    { ADR-0118, before descending: `cur` is the struct holding this variant
+      part, and `step^.value_` is the arm being entered. The guard is emitted
+      per step because activity is a chain -- see EmitVariantGuard. }
+    EmitVariantGuard(cur, t, prefix, step^.value_, guard);
     Def(p);
     write(ircode, 'getelementptr inbounds ');
     PutStructAt(t, prefix);
@@ -20221,7 +20397,7 @@ begin
     f := t^.fields;
     while f <> nil do begin
       if HoldsFile(f^.ftype) then begin
-        FieldAddress(addr, t, f, elem);
+        FieldAddress(addr, t, f, elem, vgNone);
         WalkFiles(elem, f^.ftype, init, 0, 0, name)
       end;
       f := f^.next
@@ -22868,7 +23044,7 @@ begin
       else
         { The name was a field of an enclosing `with`, and vrSym is that
           statement's binding -- the record's address, taken once on entry. }
-        FieldAddress(base, e^.vrSym^.stype, e^.vrField, v)
+        FieldAddress(base, e^.vrSym^.stype, e^.vrField, v, designatorGuard)
       end
     end;
 
@@ -22886,7 +23062,7 @@ begin
       end
       else begin
         EmitAddress(e^.fdBase, base);
-        FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v)
+        FieldAddress(base, e^.fdBase^.ntype, e^.fdResolved, v, designatorGuard)
       end;
 
     nkIndex: begin
@@ -23079,8 +23255,15 @@ begin
 end;
 
 procedure EmitExpr;
-var addr: str;
+var addr: str; savedGuard: integer;
 begin
+  { ADR-0118: an expression is a *read*, whatever encloses it. This is what
+    keeps `r.a[i].b := 5` honest -- the spine reaching `b` stays a write and
+    activates the arms it passes through, while `i` is evaluated here and is
+    checked like any other read. Saved and restored rather than simply set,
+    because EmitExpr is reached from inside a target's own address. }
+  savedGuard := designatorGuard;
+  designatorGuard := vgRead;
   case e^.kind of
     nkInt: OpInt(e^.intVal, v);
     nkReal: EmitRealText(e^.rlAt, e^.rlLen, false, v);
@@ -23171,7 +23354,8 @@ begin
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpInt(0, v)
-  end
+  end;
+  designatorGuard := savedGuard
 end;
 
 { ============================== statements =============================== }
@@ -23364,14 +23548,14 @@ begin
         if f^.index = el^.veFields^.value_ then first := f;
         f := f^.next
       end;
-      FieldAddress(into, rec, first, src);
+      FieldAddress(into, rec, first, src, vgNone);
       EmitComponentValue(src, first^.ftype, el^.veValue);
       num := el^.veFields^.next;
       while num <> nil do begin
         f := fields;
         while f <> nil do begin
           if f^.index = num^.value_ then begin
-            FieldAddress(into, rec, f, dst);
+            FieldAddress(into, rec, f, dst, vgNone);
             CopyComponent(dst, src, f^.ftype)
           end;
           f := f^.next
@@ -23393,7 +23577,7 @@ begin
         i := i + 1;
         f := f^.next
       end;
-      FieldAddress(into, rec, first, dst);
+      FieldAddress(into, rec, first, dst, vgNone);
       OpInt(e^.svTagOrd, ord_);
       write(ircode, '  store ');
       PutLlType(first^.ftype);
@@ -23501,7 +23685,12 @@ begin
     writeln(ircode, ')')
   end
   else begin
+  { ADR-0118: the target of an assignment is the one designator whose variant
+    a write *activates*. Cleared immediately, so the value on the right and
+    everything after it is read like any other expression. }
+  designatorGuard := vgWrite;
   EmitAddress(s^.asTarget, dst);
+  designatorGuard := vgRead;
   t := s^.asTarget^.ntype;
   { A string is produced from the required schema, so it would otherwise take
     the tuple-comparison path below -- and must not: 6.4.6 f) makes two
@@ -25357,7 +25546,7 @@ begin
     f := t^.fields;
     while f <> nil do begin
       if (f^.initValue <> nil) or IsRecord(f^.ftype) then begin
-        FieldAddress(addr, t, f, sub);
+        FieldAddress(addr, t, f, sub, vgNone);
         InitialStateInto(sub, f^.ftype, f^.initValue)
       end;
       f := f^.next
@@ -25500,6 +25689,7 @@ begin
   irRoot := p;
   while irRoot^.owner <> nil do irRoot := irRoot^.owner;
   nextReg := 0;
+  designatorGuard := vgRead;
   nextBlock := 0;
   StartBlock(NewBlock);
   { The arena level this activation inherits, read before anything can add to

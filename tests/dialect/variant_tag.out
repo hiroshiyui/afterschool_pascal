@@ -1,0 +1,13 @@
+res tag=0 num=42
+res tag=1 msg=nope
+nest t=1 u=0 p=5
+nest t=0 a=9
+multi which=0 i=7
+multi which=1 i=8
+compl sel=0 lone=3
+compl sel=2 rest=1.5
+tagless common=1 ti=42
+ranged n=2 small=11
+ranged n=9 large=2.5
+ranged n=7 exact=z
+done

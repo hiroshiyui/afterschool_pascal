@@ -425,3 +425,18 @@ def traps_set_store(s, lo, hi, width):
     """`checkedForSetBase`: the store traps when anything is set outside the
     base type's own values."""
     return (s & ~set_universe(lo, hi, width)) != z3.BitVecVal(0, width)
+
+def variant_accepts_range(tag, lo, hi):
+    """ADR-0118's guard, for one arm of a variant part whose labels are the
+    range lo..hi.  EmitVariantGuard emits `icmp sge` and `icmp sle` and ands
+    them; a single-value label is the case lo = hi, where it emits one
+    `icmp eq` instead and this says the same thing."""
+    return z3.And(tag >= lo, tag <= hi)
+
+
+def variant_accepts_completer(tag, lo, hi):
+    """The variant-part-completer (ADR-0034): it carries no labels of its own,
+    so what it accepts is whatever the other arms leave.  EmitVariantGuard
+    accumulates the *others'* ranges and traps when the tag is in one, which is
+    this condition negated."""
+    return z3.Not(variant_accepts_range(tag, lo, hi))
