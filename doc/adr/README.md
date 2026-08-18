@@ -126,3 +126,4 @@ the alternatives that were rejected and why.
 | [0115](0115-a-string-value-parameter-is-converted-by-the-callee.md) | A string value parameter is converted by the callee | Accepted |
 | [0116](0116-a-container-is-a-pointer-to-a-schema-and-its-allocator-cannot-be-injected.md) | A container is a pointer to a schema, and its allocator cannot be injected | Accepted |
 | [0117](0117-the-dialect-is-a-third-std-and-it-is-extended-pascal-plus.md) | The dialect is a third `--std`, and it is Extended Pascal plus | Accepted |
+| [0118](0118-a-sum-type-is-a-variant-record-whose-tag-cannot-lie.md) | A sum type is a variant record whose tag cannot lie | Accepted |
