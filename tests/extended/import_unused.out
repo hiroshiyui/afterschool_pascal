@@ -1,0 +1,5 @@
+silent: commenced
+program: starting, tally = 100
+program: after bump, tally = 105
+counter finalizing, tally = 105
+silent: finalized

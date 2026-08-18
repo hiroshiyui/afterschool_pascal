@@ -25969,6 +25969,14 @@ begin
   if p = programSym then begin
     e := activeModules;
     while e <> nil do begin
+      { Declared here and not only where its storage is reached. A module
+        supplies the main-program-block whether or not this component names
+        anything of it, so 6.2.3.6's commencement calls its activation either
+        way -- and until this line the *only* thing registering an imported
+        module was FrameGlobal, which runs when something of the module's is
+        accessed. A module imported and not used was therefore called and never
+        declared, and the emitted IR named a symbol it had not mentioned. }
+      if e^.sym^.compiledElsewhere then NeedExternalModule(e^.sym);
       write(ircode, '  call void ');
       PutModulePart(e^.sym, true);
       writeln(ircode, '()');
