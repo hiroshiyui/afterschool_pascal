@@ -106,6 +106,30 @@ What it still did **not** do: no install location, no resolution by name, no
 error-handling convention, no second element type, and nothing touching the
 operating system.
 
+### The third increment: the dialect opened, and closed a hole it opened
+
+`--std=afterschool` (ADR-0117) and its first feature, a variant tag that cannot
+lie (ADR-0118). Both were built against the argument above — a library may not
+halt, so every routine that can fail invents its own shape — and neither
+changed what the conformance modes accept.
+
+It bought one more fact, and it was found by probing rather than by reasoning:
+
+- **A safety rule emitted at the access belongs to a compilation unit, not to a
+  type.** ADR-0118's two rules are a pair, and §6.13's separate translation let
+  them be split across program-components built under different modes. The
+  surviving half then ran its check against a tag the other half never stored
+  and *passed* the access — a check answering `safe` for an unsafe read, which
+  is worse than the documented gap it replaced. ADR-0119 refuses the mixture at
+  the link.
+
+  It also **decides the next question rather than leaving it open**: a library
+  cannot be a dialect layer under conformance-mode callers. If a dialect
+  library is wanted it is dialect all the way down — separate modules, dialect
+  callers — and `lib/` as it stands is Extended Pascal and stays usable by any
+  conforming program. That is not the decision ADR-0118 parked; it is the
+  removal of the option that would have been unsafe.
+
 ### The enabler: a foreign-function interface
 
 Everything above needs to call code this compiler did not emit. Today the only

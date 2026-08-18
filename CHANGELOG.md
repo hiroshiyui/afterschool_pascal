@@ -130,6 +130,27 @@ appears below in the release where it still existed.
   the day the `v0.1.0` compiler stops accepting today's source — after which the
   question can no longer be asked.
 
+### Changed
+
+- **The program-components of one program must agree on `--std`**, and a
+  mixture no longer links (ADR-0119). A module's two activation functions carry
+  the mode in their names — `@m.counter.extended.init` against
+  `@m.counter.afterschool.init` — so a component built under a different
+  standard leaves the caller's symbol undefined, and `pascalcc` translates that
+  into a sentence naming the module and the mode.
+
+  It is a restriction, and it is there because the alternative was a false
+  assurance. `--std=afterschool`'s variant rules are a *pair* — a write to a
+  field activates its variant, a read of an inactive one traps — and both are
+  emitted at the access, so §6.13's separate translation let them be split. A
+  dialect component reading a variant that a conformance-mode component wrote
+  ran its guard against a tag nothing had stored and **permitted** the access:
+  the check compiled in, switched on, and answering `safe` for an unsafe read.
+
+  Nothing in this repository mixed modes, and an all-`--std=extended` program
+  links exactly as before. What changes is that rebuilding half a program after
+  changing `--std` now refuses instead of misbehaving.
+
 ### Fixed
 
 - **A `forward`-declared function may name its own result.** §6.7.2's

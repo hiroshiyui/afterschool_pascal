@@ -1726,3 +1726,52 @@ unnecessary — nearly all its string building feeds text that is written out.
 Extended Pascal defines a `string` type, so that decision is the one most
 likely to be revisited at stage 2 — its reason expires there rather than the
 decision being overturned on taste.
+
+## The dialect
+
+Three mechanisms, and the section exists because the first two landed without
+an entry here. Nothing in it changes what either conformance mode accepts.
+
+**The mode is an ordinal and the order is a containment** (ADR-0117). `stdKind`
+is `(stdIso7185, stdExtended, stdAfterschool)`, and `HasExtended(s)` is
+`s >= stdExtended`. Every one of the 40 sites that used to ask
+`langStd = stdExtended` asks the predicate instead, which is the whole of what
+keeps the dialect from silently switching Extended Pascal off — the equality
+test still compiles, still reads correctly, and leaves 545 of 547 cases
+passing. That is why the conversion landed as its own commit before the third
+enumerant existed: a no-behaviour-change refactor is reviewable, and the same
+edit mixed into a feature is not. `tests/dialect/inherits_extended.pas` pins the
+containment itself; ADR-0117 for why the first two modes cannot nest and this
+one can.
+
+**A variant's tag is authoritative, in the dialect only** (ADR-0118).
+`EmitVariantGuard` runs inside the path walk `FieldAddress` already does, so it
+asks one comparison per variant part crossed and activity is a chain rather
+than a flag: reading an inner field needs every tag on the way out to select
+the arm containing it. Writing a field emits a *store* of the tag; reading one
+emits the comparison and an `EmitTrapIf`. Which of the two a designator gets is
+`designatorGuard`, a global that `EmitAssign` sets to `vgWrite` around the
+target's address and `EmitExpr` clears and restores — so `r.a[i].b := 5` keeps
+its spine a write while evaluating `i` as a read, without threading a parameter
+through thirty-five callers. §6.5.3.3's violation is an *error* (§3.1), so
+detecting it changes the meaning of no correct program, which is what lets a
+safety feature into a mode that claims to contain Extended Pascal.
+`tests/dialect/variant_tag.pas` and `trap_variant_read.pas`; the trap's
+partition is proved for every tag value by `verify/`'s
+`variant-completer-is-the-exact-complement`.
+
+**The mode is part of a module's linkage name** (ADR-0119), because the two
+rules above are a *pair* and both are emitted at the access. Split them across
+program-components translated under different modes and the surviving half is
+worse than neither: a dialect component's guard consults a tag a
+conformance-mode component never stored, and passes the access. So
+`PutModulePart` writes `@m.<module>.<mode>.init`, from `langStd` — the definer
+spells its own mode, the caller spells its own, and a program calls that symbol
+for every module it activates, so a mixture cannot reach an executable. Two
+spellings and not three: what has to be separated is the dialect from the
+conformance modes, and §6.11's module makes `--std=iso7185` unreachable here
+anyway. `tools/pascalcc` translates the resulting link error, which otherwise
+names the mode the *program* wanted rather than the one the object has.
+`tests/checks/mixed_mode_link.sh` is the case, and it is a `ctest` case because
+`run_test.sh` compiles every component of a case under one `--std` and cannot
+express a mixture at all.

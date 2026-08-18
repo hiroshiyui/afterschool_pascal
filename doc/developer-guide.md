@@ -28,7 +28,7 @@ procedure — how a change is classified, what its class has to satisfy, and, in
 | `tests/dumps/` | what the *compiler* writes under a `--dump` flag, rather than what a program wrote |
 | `tests/spec/` | scenarios written against clauses of the two standards, each tagged with its clause |
 | `tests/bsi/` | the fetched validation suite, and a catalogue of what this compiler does with all 812 |
-| `tests/checks/` | the gates and their catalogues — which diagnostics, procedures and statements the corpus reaches, whether the two front ends still agree, whether a lowering changed without its model, and whether a second backend builds the same compiler |
+| `tests/checks/` | the gates and their catalogues — which diagnostics, procedures and statements the corpus reaches, whether the two front ends still agree, whether a lowering changed without its model, whether a second backend builds the same compiler, and the two rules no `tests/` case can express: that a discarded base still yields a range (`model-drift-base`) and that program-components translated under different `--std` do not link (`mixed-mode-link`, with its own two-component corpus in `tests/checks/mixedmode/`) |
 | `verify/` | SMT proofs that the lowering means what ISO 7185 says |
 | `selfhost/difftest.sh` | the two front ends' `--dump` output, over every Pascal source in the tree |
 | `selfhost/irtest.sh` | runs what the compiler builds, and requires stage 2 = stage 3 |

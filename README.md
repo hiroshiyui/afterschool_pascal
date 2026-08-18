@@ -79,6 +79,20 @@ tools/pascalcc --std=extended -c counter.pas -o counter.o
 tools/pascalcc --std=extended prog.pas --import counter.pas counter.o -o prog
 ```
 
+**Every component of one program must be translated under the same `--std`**
+(ADR-0119). The two `--std=extended` above are not repetition: a mixture does
+not link, and says so —
+
+```
+pascalcc: error: module 'counter' was translated under a different --std
+```
+
+The dialect's variant rules are a pair — a write activates a variant, a read of
+an inactive one traps — and each is emitted at the access, so a component
+holding one half without the other checks a tag the other half never stored and
+reports an unsafe read as safe. Rebuilding half a program after changing
+`--std` used to link and misbehave.
+
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
 `--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
 
