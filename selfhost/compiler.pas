@@ -640,6 +640,19 @@ type
       containment the standard asks about: an assignment inside an `if`
       counts. }
     resultNamed, assignedResult: boolean;
+    { The result-variable-specification's identifier as the *source* spells it.
+      resultVar's own name is that spelling with `$result` appended, which the
+      program deliberately cannot write, so the binding needs this instead.
+
+      It is kept on the symbol rather than read off the declaration node
+      because §6.7.2 puts the defining-point in "the block of the
+      function-block, if any, associated with the identifier of the
+      function-heading" -- and for a `forward` the heading and the block are in
+      *different* declarations. That is the same phrase the clause uses for the
+      formal-parameter-list one paragraph later, and the parameters have always
+      reached a forward body by living on the symbol; the result variable did
+      not, and that asymmetry was the defect. }
+    resAt, resLen: integer;
     { The result type was refused, so `never assigns its result` is
       suppressed: the body cannot assign a type the heading does not have, and
       one mistake deserves one message. }
@@ -6652,6 +6665,8 @@ begin
   s^.nlTail := nil;
   s^.resultVar := nil;
   s^.resultNamed := false;
+  s^.resAt := 0;
+  s^.resLen := 0;
   s^.assignedResult := false;
   s^.resultTypeBad := false;
   s^.defined := false;
@@ -15247,6 +15262,10 @@ begin
         AddressOf dereferences an skVarParam, and assignment, whole-variable
         copying and every designator over the result then need nothing new. }
       sym^.resultNamed := d^.pdResLen > 0;
+      if sym^.resultNamed then begin
+        sym^.resAt := d^.pdResAt;
+        sym^.resLen := d^.pdResLen
+      end;
       if sym^.resultNamed then
         InternResultName(d^.pdResAt, d^.pdResLen, at, len)
       else
@@ -15286,11 +15305,22 @@ begin
         p := p^.next
       end;
       { 6.7.2: the result-variable-specification's identifier is a
-        variable-identifier for the region that is the block. It is the *same*
-        symbol the function name assigns to, so nothing else has to know which
-        of the two spellings a body used. }
-      if (d^.pdResLen > 0) and (sym^.resultVar <> nil) then
-        Bind(d^.pdResAt, d^.pdResLen, sym^.resultVar);
+        variable-identifier for the region that is "the block of the
+        function-block, if any, associated with the identifier of the
+        function-heading". It is the *same* symbol the function name assigns
+        to, so nothing else has to know which of the two spellings a body used.
+
+        Read from the **symbol** rather than from this declaration node, which
+        is what makes it reach a `forward`-declared body: the heading carrying
+        the specification and the block are then different declarations, and
+        this one has no specification to read. The clause spends its next
+        paragraph saying the same thing about the formal-parameter-list -- "the
+        function-block, if any, associated with the identifier of the
+        function-heading" -- and the parameters above have always been bound
+        from the symbol for exactly that reason. §6.11.1 makes every exported
+        function a forward, so this reached every module in lib/. }
+      if sym^.resultNamed and (sym^.resultVar <> nil) then
+        Bind(sym^.resAt, sym^.resLen, sym^.resultVar);
       CheckBlock(d^.pdBody, sym);
       scopeDepth := scopeDepth - 1;
       scopeTop := mark;

@@ -136,6 +136,13 @@ struct Symbol {
   /// identifier. Without one the body must assign to it at least once — the
   /// two rules are exclusive, which is why one flag answers both.
   bool resultNamed = false;
+  /// The result-variable-specification's identifier as the source spells it.
+  /// resultVar's own name has "$result" appended and the program cannot write
+  /// it, so the binding needs this. Kept on the symbol rather than read off
+  /// the declaration because §6.7.2 puts the defining-point in "the block of
+  /// the function-block, if any, associated with the identifier of the
+  /// function-heading" — and for a `forward` those are different declarations.
+  std::string resultSourceName;
   /// The result type was refused, so `never assigns its result` is suppressed:
   /// the body cannot assign a type the heading does not have, and one mistake
   /// deserves one message.

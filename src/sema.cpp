@@ -4190,6 +4190,8 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
     // `addressOf` dereferences a `VarParam`, and assignment, whole-variable
     // copying and every designator over the result then need nothing new.
     sym->resultNamed = !decl.resultName.empty();
+    if (sym->resultNamed)
+      sym->resultSourceName = decl.resultName;
     sym->resultVar = addHiddenVar(
         (sym->resultNamed ? decl.resultName : decl.name) + "$result",
         sym->type->isMemory() ? SymKind::VarParam : SymKind::Var, sym->type,
@@ -4430,8 +4432,15 @@ void Sema::checkProcBody(ProcDecl &decl) {
   // variable-identifier for the region that is the block. It is the *same*
   // symbol the function name assigns to, so nothing else has to know which of
   // the two spellings a body used.
-  if (!decl.resultName.empty() && sym->resultVar)
-    scopes_.back()[decl.resultName] = sym->resultVar;
+  // §6.7.2: read from the *symbol*, not from this declaration, which is what
+  // makes the result variable reach a `forward`-declared body — the heading
+  // carrying the specification and the block are then different declarations.
+  // The clause's next paragraph says the same of the formal-parameter-list,
+  // and the parameters have always been bound from the symbol for that reason.
+  // §6.11.1 makes every exported function a forward, so this reached every
+  // module.
+  if (sym->resultNamed && sym->resultVar)
+    scopes_.back()[sym->resultSourceName] = sym->resultVar;
   checkBlock(*decl.body, sym);
   popScope();
 
