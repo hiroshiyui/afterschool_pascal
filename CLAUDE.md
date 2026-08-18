@@ -394,9 +394,33 @@ feature, because each was arrived at more than once:
 `--std=extended` an extension is a defect unless
 `doc/implementation-defined.md` lists it as one — it lists two, and a third is a
 decision with a record behind it rather than a convenience. Those two modes stay
-exactly as they are. The dialect ADR-0109 is aiming at is a *third* `--std`, and
-a feature for it should still be spelled the way a standard spells it wherever
-one does.
+exactly as they are.
+
+**The third `--std` now exists**: `--std=afterschool` (ADR-0117), and it is
+where a feature neither standard has belongs. Four things about it are worth
+knowing before adding anything:
+
+- **It nests, where the first two do not.** ADR-0033's non-nesting was forced by
+  the two specifications disagreeing about word-symbols; nothing forces it here,
+  so the dialect *contains* Extended Pascal. `stdKind` is
+  `(stdIso7185, stdExtended, stdAfterschool)` and **the order is a
+  containment** — `HasExtended(s)` is `s >= stdExtended`, and every one of the
+  40 sites asking "does this mode have Extended Pascal?" goes through it. Never
+  write `langStd = stdExtended`; it silently switches Extended Pascal off for
+  the dialect and 545 of 547 cases still pass.
+- **It admits nothing yet**, and `tests/dialect/inherits_extended.pas` pins
+  that: the mode accepts exactly Extended Pascal, which is the property every
+  feature is added *to*.
+- **A feature needs a reason of its own** — "the standard has it" is
+  unavailable, since none does — and should still be spelled the way a standard
+  spells it wherever one does. It must not change what the conformance modes
+  accept, and it must be expressible in what `seed/pascalc.ll` accepts or the
+  seed is refreshed first.
+- **difftest does not follow it.** `src/` is frozen at the conformance surface,
+  so a dialect source is compared by no second implementation and
+  `difftest.sh` *skips* it — counted and reported, because a silent skip is
+  what the corpus-size check exists to prevent. `irtest.sh` does not skip, and
+  is what recovers part of that. `doc/sop.md` §7 carries the gap.
 
 ## Where things live
 

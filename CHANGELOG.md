@@ -70,6 +70,28 @@ appears below in the release where it still existed.
   stops the program — a library cannot offer "parse this if it is a number" on
   top of something that halts when it is not.
 
+- **`--std=afterschool` — a third language mode, the dialect** (ADR-0117). It
+  is where the project's stated goal gets built, and unlike the first two it
+  **nests**: it contains ISO/IEC 10206:1991, so every Extended Pascal program is
+  a valid Afterschool Pascal program meaning the same thing. `--std=iso7185` and
+  `--std=extended` are unaffected and stay exactly what they are.
+
+  **It admits no feature yet**, which is the point rather than a caveat: today
+  the mode accepts exactly Extended Pascal, and that containment is the property
+  every later feature is added to. `tests/dialect/inherits_extended.pas` holds
+  it, and the same source under `--std=extended` and `--std=afterschool`
+  produces identical output.
+
+  It carries **no stability promise**. The dialect is what the compiler at hand
+  defines; a program needing fixed behaviour should pin a compiler version.
+
+  `tests/dialect/` is the third corpus directory and the directory decides the
+  flag, as `tests/extended/` does. `selfhost/difftest.sh` **skips** dialect
+  sources — the reference front end is frozen at the conformance surface, so
+  there is no second implementation, and comparing two rejections would pass
+  while proving nothing. Skips are counted and reported, and the corpus check
+  now requires compared + skipped to equal the whole.
+
 - **`seed/ddc.sh` — diverse double-compiling, and it passed.** The seed is an
   opaque committed artefact whose provenance was this repository's history and
   nothing else. Building a compiler through the `v0.1.0` C++ implementation

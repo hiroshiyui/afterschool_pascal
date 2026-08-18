@@ -101,7 +101,7 @@ When landing a change, always follow these steps:
    it from CI:
 
    ```sh
-   ctest --test-dir build --output-on-failure      # 546 cases
+   ctest --test-dir build --output-on-failure      # 547 cases
    python3 verify/verify.py --pascalc tools/pascalcc --crosscheck
    selfhost/irtest.sh build/bin/pascalc            # stage 2 = stage 3
    selfhost/producttest.sh build/bin/pascalc build/lib

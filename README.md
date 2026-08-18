@@ -54,6 +54,7 @@ tools/pascalcc -S hello.pas            # -> hello.ll, no linking
 tools/pascalcc -c hello.pas            # -> hello.o
 tools/pascalcc -O0 hello.pas           # -O0..-O3, handed to clang
 tools/pascalcc --std=extended hello.pas   # ISO/IEC 10206:1991 instead
+tools/pascalcc --std=afterschool hello.pas   # the dialect (ADR-0117)
 ```
 
 The compiler underneath takes the same flags, and reads them the only way a
@@ -106,6 +107,24 @@ is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`
 `selfhost/compiler.pas` used to be the example of that and is now written in
 Extended Pascal itself, because only that standard lets a program read its own
 command line.
+
+There is a third: **`--std=afterschool`, the dialect** (ADR-0117), and it is
+where the goal at the top of this file will be built. Unlike the first two it
+*nests* — it contains ISO/IEC 10206:1991, so every Extended Pascal program is a
+valid Afterschool Pascal program meaning the same thing. Nothing forces the
+first two apart except the two specifications disagreeing; nothing forces this
+one apart at all, because the language is ours.
+
+**It admits nothing yet.** Today `--std=afterschool` accepts exactly Extended
+Pascal, which is deliberate: that containment is the property every later
+feature is added to, and `tests/dialect/inherits_extended.pas` is what holds it.
+The two conformance modes are not affected by anything that lands in it — they
+are the only part of this compiler with an external specification, and they stay
+exactly what they are.
+
+It carries **no stability promise**. The dialect is what the compiler in your
+hand defines; a program that needs fixed behaviour should pin a compiler
+version. That will change by a decision that says so.
 
 ## The standard library
 
@@ -771,7 +790,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 546 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 547 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.
