@@ -256,10 +256,10 @@ language was finished for bootstrap purposes** at that point: what remained was
 writing the Pascal, not growing what it is written in. That writing is done
 too — see "Stage 1", below — and everything since has been conformance.
 
-Alongside the language, 548 ctest cases — the Pascal programs of `tests/` and
+Alongside the language, 550 ctest cases — the Pascal programs of `tests/` and
 `tests/extended/`, the error-path corpus of `selfhost/badparse/` and
 `selfhost/badsema/`, the verification run, the bootstrap and the product check —
-and 43 SMT rules, 27 of them for all 2³² inputs and 16 at bounded
+and 44 SMT rules, 28 of them for all 2³² inputs and 16 at bounded
 width, with no known gaps.
 
 ### Item 5 — text files (done)

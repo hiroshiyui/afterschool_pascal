@@ -126,6 +126,38 @@ It carries **no stability promise**. The dialect is what the compiler in your
 hand defines; a program that needs fixed behaviour should pin a compiler
 version. That will change by a decision that says so.
 
+### What it adds so far
+
+**A variant record's tag cannot lie** (ADR-0118). Writing a variant's field
+makes that variant active, and reading a field whose variant is not active
+traps — so a tagged union is checked rather than merely conventional:
+
+```pascal
+type Outcome = (ok, bad);
+     Res = record
+       case tag: Outcome of
+         ok:  (num: integer);
+         bad: (msg: string(32))
+       end;
+var r: Res;
+begin
+  r.num := 42;        { the write activates ok; no tag assignment needed }
+  writeln(r.num);     { fine }
+  r.msg := 'nope';    { now bad is active }
+  writeln(r.num)      { traps: the tag selects another arm }
+end.
+```
+
+§6.5.3.3 makes reading an inactive variant an **error**, and §3.1 lets a
+processor leave an error undetected — which is what `--std=iso7185` and
+`--std=extended` do, conformingly. A correct program never does it, so the
+dialect detecting it changes nothing that was already right.
+
+Two limits worth knowing. A write activates only when the arm has exactly one
+label — `aa, bb: (i: integer)` cannot decide between them, so it is checked
+against the tag instead. And a variant part with **no tag field**, which
+§6.4.3.3 permits, has nothing to check against and stays an unchecked union.
+
 ## The standard library
 
 `lib/` holds the beginning of one (ADR-0114). It is ordinary Extended Pascal —
@@ -790,7 +822,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 548 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 550 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.

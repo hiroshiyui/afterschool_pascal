@@ -92,6 +92,29 @@ appears below in the release where it still existed.
   while proving nothing. Skips are counted and reported, and the corpus check
   now requires compared + skipped to equal the whole.
 
+- **In `--std=afterschool`, a variant record's tag cannot lie** (ADR-0118) —
+  the dialect's first feature. Writing a variant's field makes that variant
+  active, and reading a field whose variant is not active traps, so a tagged
+  union is checked rather than merely conventional. Construction needs no tag
+  assignment and cannot get it wrong:
+
+  ```pascal
+  r.num := 42;      { activates ok }
+  r.msg := 'nope';  { activates bad }
+  writeln(r.num)    { traps: the tag selects another arm }
+  ```
+
+  §6.5.3.3 makes reading an inactive variant an **error** and §3.1 lets a
+  processor leave an error undetected, which both conformance modes do — so a
+  correct program never does it and the dialect detecting it changes nothing
+  that was already right. Nothing in `--std=iso7185` or `--std=extended`
+  behaves differently.
+
+  Two limits: a write activates only when the arm has exactly one label, since
+  `aa, bb: (i: integer)` cannot decide between them and is checked against the
+  tag instead; and a variant part with **no tag field**, which §6.4.3.3 permits,
+  has nothing to check against and stays an unchecked union.
+
 - **`seed/ddc.sh` — diverse double-compiling, and it passed.** The seed is an
   opaque committed artefact whose provenance was this repository's history and
   nothing else. Building a compiler through the `v0.1.0` C++ implementation
