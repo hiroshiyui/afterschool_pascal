@@ -32,7 +32,7 @@
 #     -c              write an object file and stop
 #     --emit-llvm,-S  write the IR and stop
 #     -O0 .. -O3      optimisation level, handed to clang (default -O2)
-#     --std=<name>    iso7185 (default) or extended
+#     --std=<name>    iso7185 (default), extended, or afterschool
 #     --import <f>    a program-component already translated
 #     --coverage      emit statement counters; the compiled program then
 #                     writes the lines it ran to $PASCOV_LINES
@@ -98,8 +98,12 @@ done
 [[ -x $pascalc ]] || die "$pascalc is not executable -- was it built?"
 
 case $std in
-  iso7185|extended) ;;
-  *) die "unknown standard '$std'; expected iso7185 or extended" ;;
+  # afterschool is the dialect (ADR-0117): Extended Pascal and whatever has
+  # been added to it. Validated here rather than passed straight through, so a
+  # typo is a message from this script and not an "unknown option" from the
+  # compiler.
+  iso7185|extended|afterschool) ;;
+  *) die "unknown standard '$std'; expected iso7185, extended or afterschool" ;;
 esac
 
 base=$(basename "${source_file%.pas}")

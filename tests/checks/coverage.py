@@ -96,6 +96,12 @@ def corpus(root):
         ("extended", sorted((root / "tests" / "extended").glob("*.pas"))),
         ("extended",
          sorted((root / "tests" / "extended" / "components").glob("*.pas"))),
+        # The dialect (ADR-0117). Listed here for the same reason the dump
+        # corpus was added after ADR-0103: a case this does not enumerate
+        # contributes no coverage, so the lines it reaches report as unreached
+        # while an oracle reaches them on every run -- which was worth 195
+        # statements the last time it happened.
+        ("afterschool", sorted((root / "tests" / "dialect").glob("*.pas"))),
         ("iso7185", sorted((root / "selfhost" / "badparse").glob("*.pas"))),
         ("iso7185", sorted((root / "selfhost" / "badsema").glob("*.pas"))),
         ("iso7185", [root / "selfhost" / "torture.pas"]),

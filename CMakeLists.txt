@@ -357,3 +357,15 @@ foreach(t ${APASCAL_EXTENDED_TESTS})
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} extended)
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()
+
+# The dialect (ADR-0117), globbed separately for the same reason tests/extended/
+# is: the directory decides the standard, and these are compiled under a flag
+# neither of the other two corpora may be given.
+file(GLOB APASCAL_DIALECT_TESTS ${CMAKE_SOURCE_DIR}/tests/dialect/*.pas)
+foreach(t ${APASCAL_DIALECT_TESTS})
+  get_filename_component(name ${t} NAME_WE)
+  add_test(NAME ${name}
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} afterschool)
+  set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
+endforeach()

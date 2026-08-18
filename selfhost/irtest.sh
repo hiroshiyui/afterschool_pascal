@@ -96,6 +96,10 @@ standard_of() {
   fi
   case $1 in
     *tests/extended/*)  echo extended ;;
+    # The dialect (ADR-0117). Same construction as the line above, and the
+    # glob is unanchored for the same reason: a relative path named on the
+    # command line must not fall through to iso7185.
+    *tests/dialect/*)   echo afterschool ;;
     *)                  echo iso7185 ;;
   esac
 }

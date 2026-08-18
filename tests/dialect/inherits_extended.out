@@ -1,0 +1,11 @@
+schema n=4 total=30
+string "afterschool pascal" length=18
+substr=after trimmed="  x"
+shout=AFTERSCHOOL
+compare=TRUE
+case otherwise
+2**10=  1024.0 2 pow 10=1024
+complex re=3.0 im=4.0 abs=5.0
+record x=1.5 y=2.5
+const char=a
+the dialect accepts Extended Pascal

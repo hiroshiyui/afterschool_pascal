@@ -66,6 +66,11 @@ HEADER = """\
 """
 
 COMPARED = re.compile(r"^difftest-compared: (\d+)$", re.MULTILINE)
+# Skipped files are part of the denominator. A dialect source has no second
+# implementation to be compared against (ADR-0117), so difftest.sh passes over
+# it -- and a pass-over that nothing counts is precisely the hole this check
+# exists to close, so it is reported and added back in below.
+SKIPPED = re.compile(r"^difftest-skipped: (\d+)$", re.MULTILINE)
 
 
 def read_baseline(path):
@@ -137,10 +142,13 @@ def main():
               file=sys.stderr)
         print(proc.stdout, file=sys.stderr)
         return 1
+    skipped_m = SKIPPED.search(proc.stdout or "")
+    skipped = int(skipped_m.group(1)) if skipped_m else 0
     compared, expected = int(seen.group(1)), corpus_size(root)
-    if compared != expected:
-        print(f"difftest: it compared {compared} files and there are "
-              f"{expected} under tests/, lib/ and selfhost/.", file=sys.stderr)
+    if compared + skipped != expected:
+        print(f"difftest: it compared {compared} files and skipped "
+              f"{skipped}, and there are {expected} under tests/, lib/ "
+              f"and selfhost/.", file=sys.stderr)
         print("An empty disagreement list means nothing if the run did not "
               "reach the files.\nIf the corpus really moved, difftest.sh's "
               "`find` and corpus_size() here have\nto be changed together -- "

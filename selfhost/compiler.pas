@@ -196,11 +196,23 @@ type
       tokens rather than by looking a spelling up. }
     tkAndThen, tkOrElse);
 
-  { Which standard the source is written in. ISO 7185 is the default: the whole
-    test corpus, and this compiler's own source, are written in it -- and this
-    file has a record field named `value`, which ISO 10206 reserves. Selecting
-    the language is a real choice and not a convenience (ADR-0033). }
-  stdKind = (stdIso7185, stdExtended);
+  { Which language the source is written in. ISO 7185 is the default, and
+    selecting the language is a real choice rather than a convenience
+    (ADR-0033): the first two are *not* nested, because Extended Pascal
+    reserves word-symbols a valid ISO 7185 program may use as identifiers.
+
+    stdAfterschool is the dialect (ADR-0117) and is the exception -- it
+    **contains** ISO/IEC 10206:1991, because nothing forces otherwise when the
+    language is ours. So the order here is a containment and is load-bearing:
+    HasExtended is `>= stdExtended`, and every question of the form "does this
+    mode have Extended Pascal?" is asked that way rather than by equality.
+    Adding a fourth mode means deciding where it sits in this order before
+    anything else.
+
+    The dialect admits nothing yet. It is exactly Extended Pascal, which is
+    what tests/dialect/inherits_extended.pas pins -- and that is the property
+    every dialect feature will be added *to*. }
+  stdKind = (stdIso7185, stdExtended, stdAfterschool);
 
   token = record
     kind: tokenKind;
@@ -2114,7 +2126,9 @@ begin
   writeln('usage: pascalc [options] file.pas');
   writeln('  -o <file>       where to write the LLVM IR');
   writeln('                  (the source name with .ll, by default)');
-  writeln('  --std=<name>    iso7185 (default) or extended');
+  writeln('  --std=<name>    iso7185 (default), extended, or afterschool');
+  writeln('                  (the dialect: Extended Pascal and what is');
+  writeln('                  added to it)');
   writeln('  --import <f>    a program-component already translated; its');
   writeln('                  module-headings supply this one''s interfaces');
   writeln('  --dump-tokens   write the token stream and stop');
@@ -2171,6 +2185,10 @@ begin
     else if EQ(a, '--coverage') then covOpt := true
     else if EQ(a, '--std=extended') then langStd := stdExtended
     else if EQ(a, '--std=iso7185') then langStd := stdIso7185
+    { The dialect (ADR-0117). It accepts exactly Extended Pascal today; what
+      makes it a mode rather than an alias is that features may be added to it
+      and to neither of the others. }
+    else if EQ(a, '--std=afterschool') then langStd := stdAfterschool
     else if EQ(a, '-h') or EQ(a, '--help') then begin
       Usage;
       argsOk := false;

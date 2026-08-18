@@ -56,6 +56,10 @@ standard_of() {
   fi
   case $1 in
     *tests/extended/*)  echo extended ;;
+    # The dialect (ADR-0117). Same construction as the line above, and the
+    # glob is unanchored for the same reason: a relative path named on the
+    # command line must not fall through to iso7185.
+    *tests/dialect/*)   echo afterschool ;;
     *)                  echo iso7185 ;;
   esac
 }
@@ -107,8 +111,26 @@ note_differs() {
 
 checked=0
 failed=0
+skipped=0
 for f in "${files[@]}"; do
   standard=$(standard_of "$f")
+  # The dialect has no second implementation and will not get one: ADR-0117
+  # freezes the reference front end at the conformance surface, because a
+  # front-end feature shipping twice is the cost ADR-0085 retired stage 0 to
+  # escape.
+  #
+  # So a dialect source is *skipped* rather than compiled under --std=extended.
+  # Handing it to a front end that does not know the mode would compare two
+  # rejections, which are equal, and pass -- ADR-0034's trap exactly, and the
+  # reason that glob is unanchored.
+  #
+  # Skipped files are counted and reported, not dropped. difftest_check.py
+  # requires compared + skipped to equal the corpus, so a file cannot leave the
+  # comparison without something saying so.
+  if [[ $standard == afterschool ]]; then
+    skipped=$((skipped + 1))
+    continue
+  fi
   "$pascalc" "--std=$standard" "$flag" "$f" >"$work/cpp.txt" 2>"$work/cpp.err"
   # A bug can be a *loop* rather than a wrong answer — a scanner that
   # recognises no character consumes none and never advances. That is a
@@ -171,10 +193,19 @@ done
 # indistinguishable from a clean one. `find` matching one directory less is all
 # that would take.
 echo "difftest-compared: $checked"
+# Reported on its own line and in the same fixed form, because a skip is the
+# one way a file leaves this comparison and "no disagreements" must not be
+# able to mean "nothing was looked at".
+echo "difftest-skipped: $skipped"
 
 if [[ $failed -ne 0 ]]; then
   echo "differential $component test: $failed of $checked files disagree" >&2
   exit 1
 fi
 
-echo "differential $component test: $checked files, both ${component}s agree $what"
+if [[ $skipped -ne 0 ]]; then
+  echo "differential $component test: $checked files, both ${component}s agree" \
+       "$what ($skipped dialect source(s) skipped: no second implementation)"
+else
+  echo "differential $component test: $checked files, both ${component}s agree $what"
+fi
