@@ -11,6 +11,19 @@ It decides the *surface* and the *mapping*, and deliberately admits two types.
 It does not decide the memory-safety model, and §"What this does not do" is
 where the reader should look for how much of the FFI is still unbuilt.
 
+**One consequence below has since been discharged and the record is left as
+written.** Decision 6 reserved five bare names and the consequences noted that
+two of them — `hypot` and `atan2` — were ones a Pascal programmer might
+reasonably want, "because this compiler emits them for `complex`", and that
+routing them through `pas_` wrappers "would free them and is a change of its
+own". That change was made: `atan`, `atan2` and `hypot` are now
+`pas_atan`, `pas_atan2` and `pas_hypot` in `runtime/pasrt.c`, and a program may
+name all three. **The decision is unchanged** — a foreign name may not be one
+this compiler emits — and what moved is which names it emits, which is exactly
+the thing `foreign-reserved` exists to track. Two remain, and neither can move:
+`main` is the entry point, and `_setjmp` must be called in the frame `longjmp`
+returns to. `tests/dialect/foreign_libm.pas` is the case.
+
 ## Context
 
 `doc/roadmap.md` puts the FFI first among everything left, and the reason is

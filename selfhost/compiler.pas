@@ -1860,19 +1860,27 @@ end;
 { Whether a foreign name (ADR-0121) is one this compiler already emits for
   something of its own. LLVM's assembler refuses a second declaration of any
   global, however identical the two are -- so without this a program writing
-  `external 'hypot'` is answered with an error about a file nobody wrote,
-  because the emitted module declares that one for `abs` of a complex.
+  `external 'nnn'` is answered with an error about a file nobody wrote,
+  for one of the two names below.
 
   Every name this compiler composes is caught by one of the tests below. A
   **dot** catches LLVM's intrinsics and every linkage name 6.13 needs --
   `p.<interface>.<constituent>`, `v.<...>`, `pas.input`, `frame.<module>` and
   `m.<module>.<std>.<part>` -- none of which is spellable without one. `pas_`
   catches the runtime. A letter and then digits catch the two counters, one
-  for procedures and one for string constants. What is left is a short list of
-  bare names, and `tests/checks/foreign_reserved.py` is what keeps it a
-  complete one: it reads the `declare` lines out of this file and fails if any
+  for procedures and one for string constants. What is left is two bare names,
+  and `tests/checks/foreign_reserved.py` is what keeps that a complete list: it
+  reads the `declare` and `define` literals out of this file and fails if any
   of them names something this function would let through -- and fails the
-  other way too, so a name that stops being emitted stops being reserved. }
+  other way too, so a name that stops being emitted stops being reserved.
+
+  It was five. `atan`, `atan2` and `hypot` were the only ones a Pascal
+  programmer would plausibly reach for -- `arctan` compiles to the first, and
+  `abs` and `arg` of a complex to the other two -- so they moved into the
+  runtime as `pas_atan`, `pas_atan2` and `pas_hypot`, and a program can have
+  the names. The two left cannot move: `main` is the entry point, and
+  `_setjmp` has to be called in the frame `longjmp` returns to, so a wrapper
+  would return before the jump. }
 function ReservedForeignName(at, len: integer): boolean;
 var k: integer; counter, dotted: boolean;
 begin
@@ -1887,9 +1895,7 @@ begin
 
   ReservedForeignName := dotted or counter or
     PoolStarts(at, len, 'pas_     ') or
-    PoolIs(at, len, 'main     ') or PoolIs(at, len, '_setjmp  ') or
-    PoolIs(at, len, 'atan     ') or PoolIs(at, len, 'atan2    ') or
-    PoolIs(at, len, 'hypot    ')
+    PoolIs(at, len, 'main     ') or PoolIs(at, len, '_setjmp  ')
 end;
 
 { Two pooled spellings, compared. Every name in the compiler is a slice of the
@@ -22962,7 +22968,7 @@ begin
           ReOf(a, re);
           ImOf(a, im);
           Def(v);
-          write(ircode, 'call double @hypot(double ');
+          write(ircode, 'call double @pas_hypot(double ');
           PutOp(re);
           write(ircode, ', double ');
           PutOp(im);
@@ -22972,7 +22978,7 @@ begin
           ReOf(a, re);
           ImOf(a, im);
           Def(v);
-          write(ircode, 'call double @atan2(double ');
+          write(ircode, 'call double @pas_atan2(double ');
           PutOp(im);
           write(ircode, ', double ');
           PutOp(re);
@@ -23278,9 +23284,9 @@ begin
           biCos:  write(ircode, 'call double @llvm.cos.f64(double ');
           biLn:   write(ircode, 'call double @llvm.log.f64(double ');
           biExp:  write(ircode, 'call double @llvm.exp.f64(double ');
-          biArcTan: write(ircode, 'call double @atan(double ');
+          biArcTan: write(ircode, 'call double @pas_atan(double ');
           biNone, biAbs, biSqr, biOdd, biOrd, biChr, biSucc, biPred, biTrunc,
-          biRound, biEof, biEoln: write(ircode, 'call double @atan(double ')
+          biRound, biEof, biEoln: write(ircode, 'call double @pas_atan(double ')
         end;
         PutOp(a);
         writeln(ircode, ')')
@@ -26356,7 +26362,7 @@ begin
   writeln(ircode, 'declare double @llvm.log.f64(double)');
   writeln(ircode, 'declare double @llvm.exp.f64(double)');
   writeln(ircode, 'declare double @llvm.round.f64(double)');
-  writeln(ircode, 'declare double @atan(double)');
+  writeln(ircode, 'declare double @pas_atan(double)');
   { ISO/IEC 10206:1991 6.4.3.3's string operations. A string value is a pointer
     and a length, so every one of these takes the pair rather than an
     aggregate. }
@@ -26412,8 +26418,8 @@ begin
     because a `double complex` returned across this boundary would put the C
     ABI's opinion about a two-double aggregate into an interface whose whole
     point is not to have one. }
-  writeln(ircode, 'declare double @hypot(double, double)');
-  writeln(ircode, 'declare double @atan2(double, double)');
+  writeln(ircode, 'declare double @pas_hypot(double, double)');
+  writeln(ircode, 'declare double @pas_atan2(double, double)');
   writeln(ircode, 'declare double @pas_csqrt_re(double, double)');
   writeln(ircode, 'declare double @pas_csqrt_im(double, double)');
   writeln(ircode, 'declare double @pas_cexp_re(double, double)');

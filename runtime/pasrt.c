@@ -219,6 +219,34 @@ int pas_pow_int(int x, int y) {
   return (int)acc;
 }
 
+/* Three libm functions the emitter needs, under names of this runtime's own.
+ *
+ * They are here for a reason that has nothing to do with arithmetic. ADR-0121
+ * lets a program name a linker symbol -- `external 'hypot'` -- and LLVM's
+ * assembler refuses a second declaration of any global however identical the
+ * two are, so a name the emitted module *already* declares is one a program
+ * cannot have. `arctan` compiles to a call to `atan`, and `abs` and `arg` of a
+ * `complex` (ISO/IEC 10206:1991 §6.7.6.2) to `hypot` and `atan2` -- so those
+ * three were reserved, and they are the only ones of the five a Pascal
+ * programmer would plausibly reach for. `main` and `_setjmp` are the others,
+ * and `_setjmp` cannot move: §6.8.3.11's non-local goto needs it called in the
+ * frame `longjmp` returns to, so a wrapper would return before the jump.
+ *
+ * The cost is one call frame apiece, `libpasrt.a` being a static archive that
+ * nothing links across. These are libm calls already and `complex` is not a
+ * hot path in anything here; a name a user can have is worth more.
+ *
+ * They take and return `double` and do nothing else -- no domain check. Every
+ * one of the three is total over the reals: `atan` on all of them, `hypot` on
+ * every pair, and `atan2` on every pair including (0, 0), where C defines the
+ * result rather than leaving it an error. So there is nothing here for
+ * pas_runtime_error to report, and adding a check would be inventing one the
+ * standard does not have. */
+
+double pas_atan(double x) { return atan(x); }
+double pas_atan2(double y, double x) { return atan2(y, x); }
+double pas_hypot(double x, double y) { return hypot(x, y); }
+
 /* ------------------------------------------------------------------- files */
 
 /* ISO 7185 §6.4.3.5 gives every file variable a buffer variable `f^` and

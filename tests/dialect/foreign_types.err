@@ -6,7 +6,7 @@
 <source>:18:1: error: an 'external' function cannot return char; only 'integer' and 'real' cross the boundary
 <source>:19:1: error: an 'external' function cannot return sub; only 'integer' and 'real' cross the boundary
 <source>:24:1: error: the foreign name of an 'external' declaration cannot be empty
-<source>:25:1: error: the foreign name 'hypot' is one this compiler emits for something of its own; it cannot also name a foreign routine
+<source>:25:1: error: the foreign name '_setjmp' is one this compiler emits for something of its own; it cannot also name a foreign routine
 <source>:26:1: error: the foreign name 'p3' is one this compiler emits for something of its own; it cannot also name a foreign routine
 <source>:27:1: error: the foreign name 'main' is one this compiler emits for something of its own; it cannot also name a foreign routine
 <source>:28:1: error: the foreign name 'pas_new' is one this compiler emits for something of its own; it cannot also name a foreign routine

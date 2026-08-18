@@ -1,0 +1,6 @@
+complex abs = 5.0
+complex arg = 0.9273
+arctan 1    = 0.7854
+hypot 3 4   = 5.0
+atan2 4 3   = 0.9273
+atan 1      = 0.7854

@@ -22,7 +22,7 @@ function rsub(n: integer): sub; external 'f7';
   compiler already emits for something of its own -- LLVM's assembler refuses
   a second declaration of any global however identical the two are. }
 function blank(n: integer): integer; external '';
-function taken(x, y: real): real; external 'hypot';
+function taken(n: integer): integer; external '_setjmp';
 function counter(n: integer): integer; external 'p3';
 function entry(n: integer): integer; external 'main';
 function runtime(n: integer): integer; external 'pas_new';
@@ -31,6 +31,5 @@ begin
   i := 0;
   writeln(pchar('a') + pbool(true) + psub(1) + penum(red) + pvar(i));
   writeln(ord(rchar(1)) + rsub(1));
-  writeln(blank(1) + trunc(taken(3.0, 4.0)) + counter(1) + entry(1) +
-          runtime(1))
+  writeln(blank(1) + taken(1) + counter(1) + entry(1) + runtime(1))
 end.

@@ -54,6 +54,18 @@ appears below in the release where it still existed.
   outward-facing library is dialect-only, permanently, and `lib/`'s existing
   modules stay Extended Pascal that any conforming processor can take.
 
+- **`hypot`, `atan2` and `atan` are names a program may have.** ADR-0121 could
+  not let a program name a linker symbol the emitted module already declares,
+  LLVM refusing any redeclared global, and those three were declared because
+  `arctan` compiles to the first and `abs` and `arg` of a `complex` to the
+  other two. They are now `pas_atan`, `pas_atan2` and `pas_hypot` in the
+  runtime, so `external 'hypot'` works — in the same program that uses
+  `complex`, which `tests/dialect/foreign_libm.pas` is.
+
+  Two names are still refused and neither can move: `main` is the entry point,
+  and `_setjmp` has to be called in the frame `longjmp` returns to, so a
+  wrapper would return before §6.8.3.11's non-local goto ever jumped.
+
 - **`PasMathX` — the first binding module** (`lib/dialect/`, ADR-0121):
   `Cbrt`, `Log10`, `Log2`, `FMod` and `RealOr`, over libm functions neither
   standard has. It holds one claim still — a binding module **exports Pascal
