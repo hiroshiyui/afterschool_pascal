@@ -37,6 +37,8 @@ reads first. Copying it thoughtlessly defeats the check, which is true of every
 process gate; what it buys is that nobody changes a lowering without being
 asked the question.
 
+The base it is handed may not be a commit at all -- see resolve_base.
+
 Usage:
 
     python3 tests/checks/model_drift.py <base> [head]
@@ -86,6 +88,46 @@ def run(*args):
                           check=True).stdout
 
 
+def is_commit(rev):
+    """Whether `rev` names a commit that is actually in this repository.
+
+    The peel to `^{commit}` is the whole point. `git rev-parse --verify` given
+    a full 40-hex string exits 0 without ever looking the object up, so the
+    obvious spelling of this question answers yes for a commit that is not
+    here.
+    """
+    if not rev:
+        return False
+    return subprocess.run(("git", "cat-file", "-e", f"{rev}^{{commit}}"),
+                          capture_output=True).returncode == 0
+
+
+def resolve_base(base, head):
+    """The base to judge from, given the one the caller reported.
+
+    A push does not always report a usable one. A new branch reports nothing
+    and a tag reports all zeros, which are the easy cases; a **force-push**
+    reports a real SHA that the rewrite discarded, which is not, because it
+    looks exactly like a good one. Rewriting every commit message in this
+    repository is what turned that into a CI failure (run 32131932455): the
+    workflow asked `git rev-parse --verify`, was told yes, and died in
+    `git diff` a moment later.
+
+    With no range to judge, fall back to the single commit rather than guessing
+    at one -- a check with no range must not invent one, and must not silently
+    pass a lowering change either. A head with no parent falls back further, to
+    the empty tree, so that the range is everything rather than an exception.
+    """
+    if is_commit(base):
+        return base
+    fallback = f"{head}^"
+    if not is_commit(fallback):
+        fallback = run("git", "hash-object", "-t", "tree", "/dev/null").strip()
+    print(f"model-drift: the reported base {base or '(none)'} is not a commit "
+          f"here, so the range is {fallback}..{head}")
+    return fallback
+
+
 def region_bounds(rev):
     """Each watched region as (name, first line, last line) in the *new*
     revision -- so a hunk's new-file line number can be compared against it."""
@@ -128,6 +170,7 @@ def touched_regions(base, head):
 def main():
     base = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
     head = sys.argv[2] if len(sys.argv) > 2 else "HEAD"
+    base = resolve_base(base, head)
 
     changed = run("git", "diff", "--name-only", f"{base}..{head}").split()
     if COMPILER not in changed:

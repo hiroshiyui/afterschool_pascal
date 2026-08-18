@@ -337,13 +337,10 @@ jobs:
           else
             base='${{ github.event.before }}'
           fi
-          # A new branch, a tag, or a force-push reports an all-zero or missing
-          # base. There is no range to judge then, so fall back to the single
-          # commit rather than guessing at one -- a check with no range must not
-          # invent one and must not silently pass a lowering change either.
-          case "$base" in
-            ''|0000000000000000000000000000000000000000) base="${{ github.sha }}^" ;;
-          esac
-          git rev-parse --verify "$base" >/dev/null 2>&1 || base="${{ github.sha }}^"
-          echo "range: $base..${{ github.sha }}"
+          # The base may be missing (a new branch), all zeros (a tag), or a
+          # real SHA that no longer exists (a force-push). model_drift.py's
+          # resolve_base decides what to do about each; deciding it here as
+          # well would be a second copy of the rule, free to drift from the one
+          # the check applies -- and the shell spelling of it is what let a
+          # force-push kill this job in run 32131932455.
           python3 tests/checks/model_drift.py "$base" "${{ github.sha }}"

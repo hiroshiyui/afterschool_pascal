@@ -340,10 +340,19 @@ from it when one is closed.
 | The diverse-double-compiling window can **close without anything noticing** | `seed/ddc.sh` answered the seed's provenance once (2026-08-18, PASS) and works only while the `v0.1.0` C++ compiler still accepts `selfhost/compiler.pas`. Every feature the compiler starts *using* risks ending that, and nothing runs the check — it is not a `ctest` case, deliberately: it builds an LLVM-linked C++ compiler, and it answers a question that is asked once rather than a regression that can recur. So the day it stops being possible will pass unremarked unless someone runs it. It reports that day as a skip naming it, which is the most a script can do; the dated line in `seed/README.md` is what is meant to survive | ADR-0085 |
 | Nothing checks that a `case` over `typeKind` is **exhaustive** | Pascal's case-statement traps when no label matches (ADR-0018), so a type kind left off a list is a *compiler crash* on the first program that reaches it — not a wrong answer a golden could catch. `StaticThroughout` listed fifteen of the sixteen kinds and omitted `tyString`, and every schema type containing a variable-string stopped the compiler for as long as that took to find. No gate can see it: a missing arm is not a statement, so `line-coverage` does not count it, and `procedure-coverage` asks only whether the procedure was entered. **The porting hazard is named**: `src/`'s counterpart is a `switch` with `default: return true`, and turning a default into an enumerated list is exactly where a kind gets dropped — the C++ has always been right here, and difftest could not report it because the Pascal crashed rather than disagreeing. Three such case-statements exist; the other two were swept by hand and cover all sixteen. A mechanical check is cheap and is not written | ADR-0018 |
 | Nothing checks that every string-arena producer is **counted** | the release CodeGen emits at the end of a statement is driven by a counter the three arms of `EmitString` bump. A new producer added to `runtime/pasrt.c` and emitted from somewhere else would allocate without bumping it, and the statement holding it would write no release — a leak that reports only once the arena is gone. The three that exist are pinned by `tests/extended/str_arena_loop.pas`, one loop each; a fourth would have nothing looking for it | ADR-0111 |
+| The model-drift gate's **judgement** runs on CI only | it needs a push range, so no local run asks whether a CodeGen change carried its model — a `git push` is the first thing that does, and it reports after the fact rather than before. Its *base resolution* is checked locally (`model-drift-base`) because that half is a pure question about one repository and is the half that has broken; the judgement half is not, and `python3 tests/checks/model_drift.py origin/main HEAD` before a push is the manual substitute | ADR-0013 |
 
 **Closed since this document was written**, kept here because a register that
 only grows is a register nobody trusts:
 
+- *The model-drift gate could not survive a force-push.* Its base resolution
+  lived in the workflow's shell and asked `git rev-parse --verify`, which exits
+  0 for a full 40-hex string without ever looking the object up — so the
+  discarded SHA a force-push reports was waved through and the job died in
+  `git diff` a line later (run 32131932455). The rule now lives in
+  `model_drift.resolve_base`, one copy rather than one per caller, and
+  `model-drift-base` is a `ctest` case over a repository built for the purpose.
+  What is left of that gap is the row above.
 - *`-O0` was two cases wide.* The `unoptimised` CI job now runs the whole
   corpus at `-O0`, and `AFTERSCHOOL_PASCAL_OPT=-O0 ctest` does it locally. What
   is left of that gap is the first two rows above.

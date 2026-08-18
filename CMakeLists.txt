@@ -164,6 +164,19 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
+# ...and the half of the model-drift gate a local run *can* check. The gate
+# itself is CI-only, needing a push range; deciding which range to judge is not,
+# and is the half that broke. A force-push reports a base that is a real 40-hex
+# SHA and is gone from the repository, `git rev-parse --verify` says yes to one
+# of those without looking it up, and the job died in `git diff` (run
+# 32131932455). This builds a repository for the purpose and asks resolve_base
+# the four questions a push can pose.
+if(Python3_FOUND)
+  add_test(NAME model-drift-base
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/model_drift_base_test.py)
+endif()
+
 # ...and the oracle ADR-0085 gave up and ADR-0108 brought back: two independent
 # implementations of the front end, compared over every Pascal source in the
 # tree. Nothing else here can disagree with the compiler without being asked a
