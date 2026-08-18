@@ -198,6 +198,13 @@ parameter count is undefined behaviour with no diagnostic. What the feature
 gives you is that the boundary is *visible*: one directive, the foreign name
 beside it, greppable. Everything past it is on you.
 
+**Two foreign names are refused**, and the compiler says so rather than leaving
+it to the linker: `main` and `_setjmp`, both of which the emitted module
+already declares. LLVM refuses a redeclared global whatever the two say, so
+those two spellings are not available to a program. Nothing else in libc or
+libm is reserved — `hypot`, `atan2` and `atan` were until the runtime took
+private names for them.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas` is the first, and is what a caller sees instead.
 
