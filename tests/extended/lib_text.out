@@ -1,0 +1,43 @@
+trimming
+  start "abc  |"
+  end   "   abc|"
+  all   "abc|"
+  empty "|"
+splitting
+  3 pieces: 3 -> "a" "b" "c"
+  with empties: 5 -> "" "a" "" "b" ""
+  empty string gives 1 piece
+  no separator gives 1 piece: "nosep"
+  into Parts(2): 2 -> "a" "b"   would have been 5
+round trips
+  "a,b,c" -> 3 pieces -> "a,b,c"  same
+  ",a,,b," -> 5 pieces -> ",a,,b,"  same
+  "single" -> 1 pieces -> "single"  same
+  "" -> 1 pieces -> ""  same
+  "x y z" -> 3 pieces -> "x y z"  same
+counting
+  commas in "a,b,,c" = 3
+  z in "a,b,,c"      = 0
+parsing what should work
+  "123"        TRUE 123
+  "  42  "     TRUE 42
+  "-7"         TRUE -7
+  "+7"         TRUE 7
+  "0"          TRUE 0
+  maxint       TRUE 2147483647
+  -maxint      TRUE -2147483647
+parsing what must be refused, not trapped
+  ""           FALSE -999
+  "abc"        FALSE -999
+  "12x"        FALSE -999
+  "-"          FALSE -999
+  "1 2"        FALSE -999
+  maxint+1     FALSE -999
+  far over     FALSE -999
+defaulting and formatting
+  ParseIntOr("55", 0)  = 55
+  ParseIntOr("no", -1) = -1
+  IntToStr(0)      = "0"
+  IntToStr(-4096)  = "-4096"
+  IntToStr(maxint) = "2147483647"
+  IntToStr then TryParseInt: TRUE -12345

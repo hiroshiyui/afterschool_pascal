@@ -1,0 +1,17 @@
+empty count=0
+count=3
+alpha=1 beta=2 gamma=3
+absent=-1 has=FALSE
+replaced beta=20 count=3
+deleted=TRUE count=2 has beta=FALSE
+alpha still=1 gamma still=3
+second delete=FALSE count=2
+after reuse count=3 delta=4
+grown count=200 slots>=TRUE
+retrieved=200
+walked=200 total=60300
+expected=60300
+every walked key present=TRUE
+after deleting evens count=100
+odds still present=100
+done

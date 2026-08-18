@@ -1,0 +1,13 @@
+empty len=0 cap=1
+len=10 cap=16
+1 4 9 16 25 36 49 64 81 100 
+sum=385
+pop=100 pop=81 len=8
+a1=100
+reserved cap=50
+after 50 pushes cap=50 len=50
+reserve(4) leaves cap=50
+cleared len=0 cap=50
+filled len=5 sum=35
+pop empty=0 len=0
+freed
