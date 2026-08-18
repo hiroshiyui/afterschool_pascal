@@ -125,3 +125,4 @@ the alternatives that were rejected and why.
 | [0114](0114-the-standard-library-begins-in-what-is-already-conforming.md) | The standard library begins in what is already conforming | Accepted |
 | [0115](0115-a-string-value-parameter-is-converted-by-the-callee.md) | A string value parameter is converted by the callee | Accepted |
 | [0116](0116-a-container-is-a-pointer-to-a-schema-and-its-allocator-cannot-be-injected.md) | A container is a pointer to a schema, and its allocator cannot be injected | Accepted |
+| [0117](0117-the-dialect-is-a-third-std-and-it-is-extended-pascal-plus.md) | The dialect is a third `--std`, and it is Extended Pascal plus | Accepted |

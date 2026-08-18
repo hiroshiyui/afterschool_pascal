@@ -7,6 +7,13 @@ Accepted. Supersedes the goal statement of
 priority expired when the bootstrap closed; the conformance work it led to is
 untouched and stays.
 
+The fourth of the open decisions below — *how far the C++ reference front end
+follows* — is **taken** by
+[ADR-0117](0117-the-dialect-is-a-third-std-and-it-is-extended-pascal-plus.md),
+which freezes `src/` at the conformance surface and opens the dialect mode this
+record named. The other three — the memory-safety model, the text model and the
+memory model — are as open as this record left them.
+
 ## Context
 
 The project has reached the end of its stated goals. Self-hosting closed
