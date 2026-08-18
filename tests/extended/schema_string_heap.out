@@ -1,0 +1,8 @@
+name 1 = alpha
+name 2 = beta
+name 3 = gamma
+tag = boxed room4 = 40
+slot 0 k 0
+slot 1 k 1
+slot 2 found 4
+slot 3 k 9

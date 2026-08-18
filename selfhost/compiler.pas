@@ -9940,7 +9940,7 @@ begin
         StaticThroughout := ok
       end;
       tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-      tyPointer, tyProc, tyComplex: StaticThroughout := true;
+      tyPointer, tyProc, tyComplex, tyString: StaticThroughout := true;
       tyRestricted: StaticThroughout := StaticThroughout(t^.elem)
     end
 end;
