@@ -190,6 +190,20 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/model_drift_base_test.py)
 endif()
 
+# ADR-0121: a program may name a linker symbol, and LLVM's assembler refuses a
+# second declaration of any global however identical -- so a foreign name that
+# is also one this compiler emits produces an error about a file nobody wrote.
+# `ReservedForeignName` turns that into a diagnostic from a list of names, and
+# a list is a second copy of what the emitter writes. This compares the two and
+# fails in both directions: a name the emitter grows and the predicate lets
+# through, and a name the predicate reserves and the emitter has stopped
+# writing.
+if(Python3_FOUND)
+  add_test(NAME foreign-reserved
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/foreign_reserved.py)
+endif()
+
 # ...and the oracle ADR-0085 gave up and ADR-0108 brought back: two independent
 # implementations of the front end, compared over every Pascal source in the
 # tree. Nothing else here can disagree with the compiler without being asked a

@@ -1,0 +1,67 @@
+program foreign
+  params
+    name output @9:17
+  block
+    imports
+    labels
+    consts
+    types
+    vars
+    procs
+      func cbrt @10:1
+        params
+          group
+            names
+              name x @10:15
+            type
+              named real @10:18
+        result
+          named real @10:25
+        external 'cbrt'
+      proc srandom @11:1
+        params
+          group
+            names
+              name seed @11:19
+            type
+              named integer @11:25
+        external 'srandom'
+      func twice @12:1
+        params
+          group
+            names
+              name x @12:16
+            type
+              named real @12:19
+        result
+          named real @12:26
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @13:1
+              assign @14:3
+                var twice @14:3
+                binary add @14:20
+                  call cbrt @14:12
+                    args
+                      var x @14:17
+                  call cbrt @14:22
+                    args
+                      var x @14:27
+    body
+      compound @16:1
+        proccall srandom @17:3
+          args
+            int 1 @17:11
+        writeln @18:3
+          arg w p
+            call twice @18:11
+              args
+                real 27.0 @18:17
+            int 0 @18:23
+            int 1 @18:25

@@ -1,0 +1,9 @@
+cbrt   27    = 3.0
+cbrt  -8     = -2.0
+log10  1000  = 3.0  ok=TRUE
+log2   1024  = 10.0  ok=TRUE
+log10 -1     = outside the representable range  ok=FALSE
+fmod   7 3   = 1.0
+fmod   7 0   = outside the representable range  failed=TRUE
+or 0 of bad  = 0.0
+or 0 of good = 1.0

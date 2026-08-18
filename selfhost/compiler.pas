@@ -138,7 +138,7 @@ const
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
   setBits  = 256;
-  { Which shape a symbol's linkage name takes (6.13). Only these five cross a
+  { Which shape a symbol's linkage name takes (6.13). Only these six cross a
     program-component boundary; everything else in the emitted text is named
     with a counter, which is a fact about the order one translation walked the
     tree in and so cannot be reproduced by another. }
@@ -147,6 +147,12 @@ const
   lnkProc   = 2;  { p.<interface>.<constituent> }
   lnkStdIn  = 3;  { pas.input }
   lnkStdOut = 4;  { pas.output }
+  { ADR-0121's `external` directive: the name is the one the program wrote,
+    letter for letter, and is the only linkage name here that this compiler
+    did not compose. It is stored in linkItemAt/linkItemLen with no interface
+    part, there being no interface -- what is on the other side was not
+    translated by anything that reads this repository's conventions. }
+  lnkForeign = 5; { the foreign name, exactly as written }
 
 type
   strLen = 0..strMax;
@@ -1174,9 +1180,15 @@ type
       { pdResAt/pdResLen: 6.7.2's result-variable-specification, the name
         the block calls its result by. Zero length where none was written,
         which is what decides whether `f := e` is required or forbidden. }
+      { pdExtAt/pdExtLen: the foreign name of ADR-0121's `external`
+        directive, which is a string-literal and not an identifier because
+        this lexer case-folds identifiers and a linker symbol is matched
+        exactly. Zero length where the directive was not written. }
       nkProcDecl:   (pdAt, pdLen, pdResAt, pdResLen: integer;
+                     pdExtAt, pdExtLen: integer;
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward, pdInHeading: boolean;
+                     pdIsExternal: boolean;
                      pdSym: symPtr);
       { 6.2.1 puts an import-part at the head of a block, before the label,
         constant, type, variable and procedure parts -- in every block, and
@@ -1823,6 +1835,61 @@ begin
     end;
     PoolIs := same
   end
+end;
+
+{ As PoolIs, but of a prefix: the pooled text need only begin with the word. }
+function PoolStarts(at, len: integer; word: kwLit): boolean;
+var n, k: integer; same: boolean;
+begin
+  n := kwWidth;
+  while (n > 0) and (word[n] = ' ') do
+    n := n - 1;
+  if len < n then
+    PoolStarts := false
+  else begin
+    same := true;
+    k := 1;
+    while same and (k <= n) do begin
+      same := word[k] = pool[at + k - 1];
+      k := k + 1
+    end;
+    PoolStarts := same
+  end
+end;
+
+{ Whether a foreign name (ADR-0121) is one this compiler already emits for
+  something of its own. LLVM's assembler refuses a second declaration of any
+  global, however identical the two are -- so without this a program writing
+  `external 'hypot'` is answered with an error about a file nobody wrote,
+  because the emitted module declares that one for `abs` of a complex.
+
+  Every name this compiler composes is caught by one of the tests below. A
+  **dot** catches LLVM's intrinsics and every linkage name 6.13 needs --
+  `p.<interface>.<constituent>`, `v.<...>`, `pas.input`, `frame.<module>` and
+  `m.<module>.<std>.<part>` -- none of which is spellable without one. `pas_`
+  catches the runtime. A letter and then digits catch the two counters, one
+  for procedures and one for string constants. What is left is a short list of
+  bare names, and `tests/checks/foreign_reserved.py` is what keeps it a
+  complete one: it reads the `declare` lines out of this file and fails if any
+  of them names something this function would let through -- and fails the
+  other way too, so a name that stops being emitted stops being reserved. }
+function ReservedForeignName(at, len: integer): boolean;
+var k: integer; counter, dotted: boolean;
+begin
+  dotted := false;
+  for k := at to at + len - 1 do
+    if pool[k] = '.' then dotted := true;
+
+  counter := (len >= 2) and ((pool[at] = 'p') or (pool[at] = 's'));
+  if counter then
+    for k := at + 1 to at + len - 1 do
+      if (pool[k] < '0') or (pool[k] > '9') then counter := false;
+
+  ReservedForeignName := dotted or counter or
+    PoolStarts(at, len, 'pas_     ') or
+    PoolIs(at, len, 'main     ') or PoolIs(at, len, '_setjmp  ') or
+    PoolIs(at, len, 'atan     ') or PoolIs(at, len, 'atan2    ') or
+    PoolIs(at, len, 'hypot    ')
 end;
 
 { Two pooled spellings, compared. Every name in the compiler is a slice of the
@@ -5322,6 +5389,9 @@ begin
   d^.pdIsFunction := isFunction;
   d^.pdIsForward := false;
   d^.pdInHeading := false;
+  d^.pdIsExternal := false;
+  d^.pdExtAt := 0;
+  d^.pdExtLen := 0;
   d^.pdParams := nil;
   d^.pdResult := nil;
   d^.pdBody := nil;
@@ -5392,6 +5462,41 @@ begin
      PoolIs(tok[pos].at, tok[pos].len, 'forward  ') then begin
     pos := pos + 1;
     d^.pdIsForward := true
+  end
+  { ADR-0121's `external`, a fourth directive in the position ISO 7185 6.1.4
+    and ISO/IEC 10206:1991 6.1.4 give to `forward`. Nothing is reserved: this
+    is an identifier here, exactly as `forward` and 6.1.5's `interface` are,
+    so a program that names a variable `external` is untouched.
+
+    The foreign name is a string-literal rather than an identifier because
+    this lexer case-folds identifiers (6.1.2 makes case insignificant) and a
+    linker matches a symbol exactly. Deriving the one from the other is a
+    lossy mapping to a name that must be right, so there is no default and
+    the name is always written out -- which is also what makes the boundary
+    greppable, the whole of the safety property this feature claims. }
+  else if (not aborted) and Check(tkIdent) and
+     PoolIs(tok[pos].at, tok[pos].len, 'external ') then begin
+    if langStd <> stdAfterschool then begin
+      ErrorAtCur;
+      write('the ''external'' directive is an Afterschool Pascal feature; ');
+      writeln('compile with --std=afterschool');
+      Bail
+    end
+    else begin
+      pos := pos + 1;
+      if not Check(tkStr) then begin
+        ErrorAtCur;
+        write('expected the foreign name, as a string literal, after ');
+        writeln('''external''');
+        Bail
+      end
+      else begin
+        d^.pdIsExternal := true;
+        d^.pdExtAt := tok[pos].at;
+        d^.pdExtLen := tok[pos].len;
+        pos := pos + 1
+      end
+    end
   end
   else
     d^.pdBody := ParseBlock;
@@ -15190,6 +15295,89 @@ begin
   end
 end;
 
+{ ADR-0121's type mapping, as a predicate. Two types cross the foreign
+  boundary: `integer` and `real`. They are the two whose LLVM spelling this
+  compiler already emits *and* which the C ABI on this target needs no
+  parameter attribute for -- `clang` passes a `char` as `i8 signext`, which
+  also disagrees with 6.4.2.2's 0..255 about what the sign bit means, and a
+  `_Bool` as `i1 zeroext`, which is not the `int` most C interfaces take.
+  Neither question is answerable by inspection, so neither type is admitted
+  yet.
+
+  The test is on the type itself and not on `Base(t)`, which reverses what
+  ADR-0018 does everywhere else here. A subrange answers for its host because
+  its values *are* its host's; nothing on the other side of this boundary
+  promises that. Passing one would be sound and returning one would not --
+  `checkedForSubrange` has nothing to apply to a value that arrived -- and a
+  rule with a side is the kind that gets misremembered. }
+function ForeignType(t: typePtr): boolean;
+begin
+  ForeignType := (t = intType) or (t = realType)
+end;
+
+{ An `external` declaration, once its heading is built. The symbol is complete
+  the moment it is declared: there is no block here and never will be, so it
+  is marked defined -- otherwise the "declared forward but never given a body"
+  sweep at the end of every block would claim it -- and its storage belongs to
+  another translation, which is what `storageElsewhere` already means. }
+procedure CheckForeignHeading(d: nodePtr; sym: symPtr);
+var p: symListPtr; k: integer;
+begin
+  sym^.linkKind := lnkForeign;
+  sym^.linkItemAt := d^.pdExtAt;
+  sym^.linkItemLen := d^.pdExtLen;
+  sym^.defined := true;
+  sym^.storageElsewhere := true;
+
+  { A function result is checked only where CheckedResultType let it through,
+    so a record result is reported once by the rule that is about Pascal and
+    not a second time by the rule that is about C. }
+  { The lexer's own "a string literal cannot be empty" is reported where the
+    value is *used*, and this one is never used as a value -- so `external ''`
+    reached CodeGen and wrote `declare i32 @(i32)`, which is not a name. }
+  if d^.pdExtLen = 0 then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('the foreign name of an ''external'' declaration cannot be empty')
+  end
+  else if ReservedForeignName(d^.pdExtAt, d^.pdExtLen) then begin
+    ErrorAt(d^.line, d^.col);
+    write('the foreign name ''');
+    WritePool(d^.pdExtAt, d^.pdExtLen);
+    write(''' is one this compiler emits for something of its own; ');
+    writeln('it cannot also name a foreign routine')
+  end;
+
+  if (sym^.kind = skFunc) and not sym^.resultTypeBad then
+    if not ForeignType(sym^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('an ''external'' function cannot return ');
+      WriteTypeName(sym^.stype);
+      writeln('; only ''integer'' and ''real'' cross the boundary')
+    end;
+
+  p := sym^.params;
+  k := 1;
+  while p <> nil do begin
+    if p^.sym^.kind <> skParam then begin
+      ErrorAt(d^.line, d^.col);
+      write('parameter ', k:1, ' of ''');
+      WritePool(d^.pdAt, d^.pdLen);
+      writeln(''' must be a value parameter: an ''external'' declaration ',
+              'passes no addresses')
+    end
+    else if not ForeignType(p^.sym^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('parameter ', k:1, ' of ''');
+      WritePool(d^.pdAt, d^.pdLen);
+      write(''' cannot be ');
+      WriteTypeName(p^.sym^.stype);
+      writeln('; only ''integer'' and ''real'' cross the boundary')
+    end;
+    k := k + 1;
+    p := p^.next
+  end
+end;
+
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
 var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
 begin
@@ -15219,6 +15407,19 @@ begin
       WritePool(d^.pdAt, d^.pdLen);
       write(''' was already declared forward, so this declaration needs ');
       writeln('its body rather than ''forward'' again')
+    end;
+    { An `external` declaration says where the body is, and a completion is a
+      declaration whose heading was already read -- so a completion cannot be
+      one. It also could not be made to work: an exported name's linkage name
+      is composed from the interface and the constituent, and a foreign name
+      is whatever the program wrote, and the importing component would look up
+      the one this one did not emit (ADR-0121). Declare it once. }
+    if d^.pdIsExternal then begin
+      ErrorAt(d^.line, d^.col);
+      write('''');
+      WritePool(d^.pdAt, d^.pdLen);
+      write(''' was already declared, and a declaration that completes an ');
+      writeln('earlier heading cannot be ''external''')
     end;
     d^.pdSym := existing
   end
@@ -15275,6 +15476,7 @@ begin
       else
         sym^.resultVar := AddHiddenVar(at, len, skVar, sym^.stype, sym)
     end;
+    if d^.pdIsExternal then CheckForeignHeading(d, sym);
     scopeDepth := scopeDepth - 1;
     scopeTop := mark
   end
@@ -18776,6 +18978,14 @@ begin
     Pad;
     writeln('forward')
   end
+  { ADR-0121: the foreign name is shown, because it is the whole of what this
+    declaration says and it is not derivable from anything else here. }
+  else if d^.pdIsExternal then begin
+    Pad;
+    write('external ''');
+    WritePool(d^.pdExtAt, d^.pdExtLen);
+    writeln('''')
+  end
   else
     DumpBlock(d^.pdBody);
   level := level - 1
@@ -19397,6 +19607,11 @@ procedure AppendLinkName(var s: str; sym: symPtr);
 begin
   if sym^.linkKind = lnkStdIn then AppendLit(s, 'pas.input       ')
   else if sym^.linkKind = lnkStdOut then AppendLit(s, 'pas.output      ')
+  { ADR-0121's foreign name is the one thing here this compiler did not
+    compose: it names something translated by another language's processor,
+    so there is no interface part and no prefix letter to add. }
+  else if sym^.linkKind = lnkForeign then
+    AppendPool(s, sym^.linkItemAt, sym^.linkItemLen)
   else begin
     if sym^.linkKind = lnkVar then StrAppend(s, 'v') else StrAppend(s, 'p');
     StrAppend(s, '.');
@@ -19414,7 +19629,8 @@ end;
 procedure AppendProcName(var s: str; sym: symPtr);
 begin
   StrAppend(s, '@');
-  if sym^.linkKind = lnkProc then AppendLinkName(s, sym)
+  if (sym^.linkKind = lnkProc) or (sym^.linkKind = lnkForeign) then
+    AppendLinkName(s, sym)
   else begin
     StrAppend(s, 'p');
     AppendInt(s, sym^.irId)
@@ -21359,7 +21575,7 @@ procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
                        var v: str);
 var link, a, alen, slot, half, target, resAddr: str; head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
-    byAddr: boolean;
+    byAddr, comma: boolean;
 begin
   StrClear(target);
   if callee^.kind = skProcParam then begin
@@ -21383,6 +21599,16 @@ begin
     write(ircode, 'load ptr, ptr ');
     PutOp(half);
     writeln(ircode)
+  end
+  else if callee^.linkKind = lnkForeign then begin
+    { ADR-0121: a foreign function has no enclosing activation, so the static
+      link that leads every other call here is simply not written. Nothing
+      else about the call changes -- every argument already travels as a
+      separate scalar, because nothing here may depend on how a struct is
+      passed (ADR-0030), which is exactly what a C ABI wants. }
+    StrClear(link);
+    AppendProcName(target, callee);
+    NeedExternalProc(callee)
   end
   else begin
     { A callee declared at level L runs with the frame at level L-1 as its
@@ -21470,15 +21696,25 @@ begin
   else PutLlType(result);
   write(ircode, ' ');
   PutOp(target);
-  write(ircode, '(ptr ');
-  PutOp(link);
+  write(ircode, '(');
+  { With no static link there is nothing before the first argument, so the
+    separator has to be counted rather than assumed. }
+  comma := true;
+  if callee^.linkKind = lnkForeign then comma := false
+  else begin
+    write(ircode, 'ptr ');
+    PutOp(link)
+  end;
   if byAddr then begin
-    write(ircode, ', ptr ');
-    PutOp(resAddr)
+    if comma then write(ircode, ', ');
+    write(ircode, 'ptr ');
+    PutOp(resAddr);
+    comma := true
   end;
   o := head;
   while o <> nil do begin
-    write(ircode, ', ');
+    if comma then write(ircode, ', ');
+    comma := true;
     if o^.asPtr then write(ircode, 'ptr') else PutLlType(o^.otype);
     write(ircode, ' ');
     PutOp(o^.text);
@@ -25433,7 +25669,11 @@ begin
   d := b^.blProcs;
   while d <> nil do begin
     if d^.pdSym <> nil then
-      if d^.pdSym^.irId = 0 then   { a forward declaration already made one }
+      { A foreign routine has no activation record here -- its body is on the
+        other side of the link and was laid out by another processor -- so
+        there is no frame type to name (ADR-0121). }
+      if (d^.pdSym^.irId = 0) and    { a forward declaration already made one }
+         (d^.pdSym^.linkKind <> lnkForeign) then
         EmitFrameType(d^.pdSym);
     d := d^.next
   end;
@@ -26239,7 +26479,7 @@ end;
   its address is ever taken; a module's record likewise, it being only a static
   link to pass. }
 procedure EmitExterns;
-var e: symListPtr; nm: str;
+var e, q: symListPtr; nm: str; first: boolean;
 begin
   e := externVars;
   while e <> nil do begin
@@ -26274,10 +26514,26 @@ begin
     AppendProcName(nm, e^.sym);
     write(ircode, ' ');
     PutOp(nm);
-    write(ircode, '(ptr');
-    if e^.sym^.kind = skFunc then
-      if IsMemory(e^.sym^.stype) then write(ircode, ', ptr');
-    PutParamTypes(e^.sym^.params, false);
+    write(ircode, '(');
+    { ADR-0121: no static link, and the parameter list is written here rather
+      than by PutParamTypes -- that one always leads with a comma because
+      every other declaration has the link in front of it, and the two types
+      that cross this boundary need none of the shapes it knows about. }
+    if e^.sym^.linkKind = lnkForeign then begin
+      q := e^.sym^.params;
+      first := true;
+      while q <> nil do begin
+        if first then first := false else write(ircode, ', ');
+        PutLlType(q^.sym^.stype);
+        q := q^.next
+      end
+    end
+    else begin
+      write(ircode, 'ptr');
+      if e^.sym^.kind = skFunc then
+        if IsMemory(e^.sym^.stype) then write(ircode, ', ptr');
+      PutParamTypes(e^.sym^.params, false)
+    end;
     writeln(ircode, ')');
     e := e^.next
   end

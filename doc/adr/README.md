@@ -129,3 +129,4 @@ the alternatives that were rejected and why.
 | [0118](0118-a-sum-type-is-a-variant-record-whose-tag-cannot-lie.md) | A sum type is a variant record whose tag cannot lie | Accepted |
 | [0119](0119-the-components-of-one-program-agree-on-the-mode.md) | The program-components of one program agree on the mode | Accepted |
 | [0120](0120-a-fallible-routine-answers-one-record-and-the-library-has-two-layers.md) | A fallible routine answers one record, and the library has two layers | Accepted |
+| [0121](0121-a-foreign-function-is-a-directive-and-the-boundary-is-two-types-wide.md) | A foreign function is a directive, and the boundary is two types wide | Accepted |

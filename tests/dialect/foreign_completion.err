@@ -1,0 +1,3 @@
+<source>:13:1: error: 'sync' was already declared, and a declaration that completes an earlier heading cannot be 'external'
+<source>:12:1: error: 'sync' was declared forward but never given a body
+<source>:13:1: error: 'sync' was declared forward but never given a body

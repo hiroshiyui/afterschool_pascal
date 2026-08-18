@@ -15,6 +15,52 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`external` — a foreign function, under `--std=afterschool` only**
+  (ADR-0121). A program can now call code this compiler did not emit, which
+  is what the whole outward-facing half of ADR-0109 was waiting on: sockets,
+  clocks, locales and ADR-0116's allocator convention are all behind it.
+
+  ```pascal
+  function cbrt(x: real): real; external 'cbrt';
+  procedure srandom(seed: integer); external 'srandom';
+  ```
+
+  The word sits where `forward` does, so it is an *identifier* in that one
+  position (ISO 7185 §6.1.4, ISO/IEC 10206:1991 §6.1.4) and nothing is
+  reserved — a program that names a variable `external` is untouched, in every
+  mode. The foreign name is a string-literal and there is no default: this
+  lexer case-folds identifiers and a linker matches a symbol exactly, so
+  deriving one from the other would be a lossy mapping to a name that has to
+  be right.
+
+  **Two types cross the boundary: `integer` and `real`.** They are the two the
+  C ABI on this target needs no parameter attribute for, which was settled by
+  probing `clang` rather than by reading — a `char` is passed `i8 signext` and
+  disagrees with §6.4.2.2's 0..255 about the sign bit, and a `bool` is passed
+  `i1 zeroext` as a `_Bool` few C interfaces take. Value parameters only, and
+  the test is on the **exact** type: `1..9` does not cross, because nothing on
+  the other side promises a value is in range.
+
+  `tools/pascalcc` already links libc and libm, so a first foreign call needs
+  no build change and there is no `-l` surface yet.
+
+  **Nothing checks the declaration against the function it names.** The linker
+  checks the name; nothing checks the signature. The boundary is *visible* —
+  one directive, the foreign name written out — and that is the only property
+  claimed for it.
+
+  Neither conformance mode accepts it, and ADR-0119 then makes an
+  `external`-using module unimportable by a conformance-mode program: so the
+  outward-facing library is dialect-only, permanently, and `lib/`'s existing
+  modules stay Extended Pascal that any conforming processor can take.
+
+- **`PasMathX` — the first binding module** (`lib/dialect/`, ADR-0121):
+  `Cbrt`, `Log10`, `Log2`, `FMod` and `RealOr`, over libm functions neither
+  standard has. It holds one claim still — a binding module **exports Pascal
+  and keeps the directive to itself** — and where a routine can fail it answers
+  ADR-0120's result shape rather than a NaN: `Log10(-1.0)` reports `errRange`,
+  and reading the payload without asking traps.
+
 - **`lib/` — the beginning of a standard library** (ADR-0114), and it widens
   what the sentence above calls the public interface: until now this project
   shipped a compiler, and it now also ships Pascal that other programs import.

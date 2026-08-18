@@ -507,6 +507,21 @@ std::unique_ptr<ProcDecl> Parser::parseProcOrFunc(bool isFunction) {
   if (check(Tok::Ident) && cur().text == "forward") {
     ++pos_;
     decl->isForward = true;
+  } else if (check(Tok::Ident) && cur().text == "external") {
+    // ADR-0121's directive, and the first dialect feature with a syntax of its
+    // own — so the first one this front end can see at all. It follows the
+    // dialect no further than the refusal: `Std` here has two values and this
+    // compiler is never given `--std=afterschool`, difftest skipping a dialect
+    // source outright (ADR-0117), so the answer does not depend on the mode.
+    //
+    // The refusal is on the conformance surface even though the feature is
+    // not: what `--std=extended` does with this program is a conformance
+    // question, and leaving it to the generic "expected 'begin'" would make
+    // the two front ends disagree about every dialect feature that ever needs
+    // a diagnostic. That would be paid one baseline entry at a time.
+    errorAtCur("the 'external' directive is an Afterschool Pascal feature; "
+               "compile with --std=afterschool");
+    bail();
   } else {
     decl->body = parseBlock();
   }
