@@ -1729,7 +1729,7 @@ decision being overturned on taste.
 
 ## The dialect
 
-Five mechanisms, and the section exists because the first two landed without
+Six mechanisms, and the section exists because the first two landed without
 an entry here. Nothing in it changes what either conformance mode accepts.
 
 **The mode is an ordinal and the order is a containment** (ADR-0117). `stdKind`
@@ -1837,3 +1837,39 @@ procedural parameter is refused because the link is the half with no image at
 all. `lib/dialect/pasfs.pas` is what it buys, and what it does not: every
 failure there is `errIO`, because `errno` is `*__errno_location()` and a
 pointer result is the thing this record refuses.
+
+**An optional is a type, and it is how a pointer comes back** (ADR-0123).
+`?T` — a value of T, or nothing. It is here because ADR-0122 refused every
+result that is an address and named what it was waiting for: a returned
+`char *` may be null, and null is not an error, so trapping would stop a
+program on a value the C library returns on purpose and the empty string would
+conflate "not set" with "set to nothing". `?` is a character neither standard
+admits anywhere, so the lexis costs nothing and the reference front end needed
+**no** teaching — `unexpected character '?'` is what it already said, where
+ADR-0121's `external` needed six lines in `src/`. The denoter takes a whole
+sub-denoter where `^T` takes a name: §6.4.4 restricts a pointer's domain so a
+type may close a cycle, and an optional contains its T rather than pointing at
+it, so a type that were its own optional would have no size. `nil` is the
+absent value and `= nil` the test, so no identifier and no operator is added;
+`o^` is the only way to the value and traps when there is none, which is
+ADR-0019's check with the same syntax and for the same reason. The guarantee is
+that read backwards — **a `T` that is not optional can never be absent** — and
+the type discipline is two lines in `Assignable`: an optional takes `nil` and
+anything assignable to its T, and nothing takes an optional. Everything else is
+refusal by construction, eight of the twelve refusals in
+`tests/dialect/optional_types.pas` coming from diagnostics that already
+existed. It is name-equivalent (ADR-0017), no exception made for a wrapper, and
+`IsStructured` answers yes so a copy, a value parameter and a memory result all
+work through the paths that meant "copied whole" already. The representation is
+a flag then the value, and the *value* is stored first: an over-long string is
+§6.4.6's error, so writing it first means no optional is marked present over
+storage a store did not finish. A foreign function may return `?S` for a string
+S with a capacity — null is absence, non-null is copied at the call site so no
+C pointer becomes a Pascal value, and the capacity is a real check in §6.4.6's
+words. `pas_cstr_take` *answers* the flag rather than writing it, so the layout
+stays CodeGen's. What it does not do: no flow-sensitive narrowing, so
+`if o <> nil then o^` still checks (`doc/sop.md` §7); no non-nullable `^T`,
+which ADR-0117's containment forbids; and nothing about the memory-safety
+model. `lib/dialect/pasenv.pas` is the user, and refuses to bind `putenv` —
+which keeps the pointer it is handed — making it the first place the FFI's
+registered blind spot decided an interface.

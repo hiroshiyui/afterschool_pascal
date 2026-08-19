@@ -233,6 +233,52 @@ And one thing it could not: **`errno`**. glibc spells it
 answers `errIO` for every failure and cannot say which. The first thing the
 next increment buys is the ability to say which.
 
+### The seventh increment: the type null needed
+
+ADR-0123, and it is the first of ADR-0109's four open decisions to be settled —
+the **optional** row of the table below, not the memory-safety row. `?T` is a
+value of T or nothing; `nil` is the absent value, `= nil` the test, and `o^` the
+only way to a value, checked exactly as §6.4.4's dereference already is.
+
+It is here because the increment before it stopped at a wall that was not about
+memory at all. A returned `char *` may be null, and null is not a failure —
+`getenv` of a name that is not set answers it on purpose — so trapping would
+stop a program on a normal answer and the empty string would conflate "not set"
+with "set to nothing". The language simply had no way to say "there may be
+nothing here", and every fallible thing built so far had invented its own:
+ADR-0120's record carries a *reason* as well, `MapGet` takes a `whenAbsent`
+argument, `TryParseInt` writes through a `var`. Absence with no reason is the
+commonest case and had the least support.
+
+Four things are worth carrying forward:
+
+- **The lexis cost nothing, again, and by a different route.** `?` is a
+  character neither standard admits anywhere, so nothing that compiled stops
+  compiling and the reference front end needed **no** teaching at all — it
+  already said `unexpected character '?'`, where ADR-0121's `external` needed
+  six lines in `src/`. A syntax made of a character no standard uses is cheaper
+  than one made of an identifier.
+- **The guarantee is the refusal, not the check.** Nothing is assignable *from*
+  an optional — two lines in `Assignable` — so a `T` that is not optional can
+  never be absent, and eight of the twelve refusals in the test file come from
+  diagnostics that already existed. Refusal by construction paid here more than
+  anywhere since ADR-0058.
+- **No C pointer becomes a Pascal value.** The copy is made at the call site, so
+  the program holds a string of its own and the pointer is dead by the end of
+  the statement. The capacity is required and is §6.4.6's check, in §6.4.6's
+  words.
+- **The blind spot decided an interface.** `lib/dialect/pasenv.pas` refuses to
+  bind `putenv`, which keeps the pointer it is handed — the hazard
+  `doc/sop.md` §7 records against ADR-0122 — and binds `setenv`, which copies.
+  That is the first time a registered gap has changed what gets built rather
+  than only being written down beside it.
+
+And writing it found a defect ADR-0122 had shipped: two `string` parameters in
+one group of an `external` heading were held to §6.7.3.3's one-tuple rule,
+which is not about them. `strcmp('b', 'ab')` had been refused since that
+increment, and nothing asked because every call in the corpus passed actuals of
+equal length.
+
 ### What is still blocked on it
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
@@ -288,7 +334,7 @@ Each borrowing below is tied to the open decision it would settle.
 | **Explicit allocator passing** | Zig | part of memory safety | **Tried, and it does not survive contact** (ADR-0116). An allocator *record* is not expressible — a record field may not have a procedure type, neither standard having general procedure types. A per-type allocator *parameter* is, and compiles; but `new` is the only origin of a typed pointer and there is no pointer arithmetic or cast, so it can only recycle blocks `new` produced rather than carve one into several. And the capacity it serves is unchecked: a pool asked for 9 may return a block of 4, whose own discriminant then answers `p^.cap`. Not unsafe — the bounds check reads the served block — but the central contract is unenforced. **This needs the FFI too**, which moves it from "cheapest on the list" to behind the same gate as everything else |
 | **`defer`** | Zig, Swift | resource safety | **Good.** Pascal has no early return, so a block already has one exit and the epilogue is already where files close (ADR-0021, ADR-0032). `defer` generalises a mechanism that exists |
 | **Error unions / `Result`** | Zig, Rust | error handling | **Good, and the biggest practical gap.** Pascal has *no* error handling — no exceptions, no result convention. It needs sum types with payloads, which variant records nearly are. Independent of the memory-safety fork, so it can proceed while that is open |
-| **Optionals, and no bare null** | Swift, Rust | pointer safety | **Good.** `nil` already has a type of its own (ADR-0019) and every dereference is already checked; an optional type makes the check a *type* question instead of a run-time one |
+| **Optionals, and no bare null** | Swift, Rust | pointer safety | **Done, and half of the description was wrong** (ADR-0123). `?T` exists, `nil` is its absent value and `o^` is the only way to a value. What it does *not* do is make the check a type question instead of a run-time one: `o^` still traps, as Swift's `!` does, and flow-sensitive narrowing (`if let`) is a Sema this has not built. What the type gives is that a `T` which is not optional can never be absent, so the check is **localised** to where the source writes `^` rather than eliminated. And "no bare null" is unavailable in the second half of its name: ADR-0117's containment means `^T` has to go on meaning what Extended Pascal says it means |
 | **Unicode-correct `String`** | Swift | the text model | **The model to copy.** Swift's is the best-considered answer to "what is a character" in any mainstream language, and the question is exactly the one ADR-0109 leaves open |
 | **ARC** | Swift | memory safety | **Plausible.** Needs retain/release in CodeGen and a runtime, but no borrow checker, no lifetime inference, and stays self-hostable and cheap to mirror in `src/` |
 | **Ownership and borrowing** | Rust | memory safety | **Strongest guarantee, worst fit.** Lifetime inference is a large Sema, the most expensive thing here to mirror in the C++ front end (ADR-0108), and the furthest from anything recognisably Pascal |

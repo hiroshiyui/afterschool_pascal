@@ -227,9 +227,53 @@ those two spellings are not available to a program. Nothing else in libc or
 libm is reserved — `hypot`, `atan2` and `atan` were until the runtime took
 private names for them.
 
+**A value may be absent, and the type says so** (ADR-0123). `?T` is a value of
+T or nothing:
+
+```pascal
+type OptName = ?string(16);
+var n: OptName;
+begin
+  n := nil;                       { absent }
+  n := 'hello';                   { present, by ordinary assignment }
+  if n <> nil then writeln(n^)
+end
+```
+
+`nil` is the absent value and `= nil` is the test, so no identifier and no
+operator is added; `?` is a character neither standard admits anywhere, so
+nothing that compiled stops compiling and `?` in either conformance mode is
+still `unexpected character '?'`.
+
+**`o^` is the only way to the value, and it traps when there is none** — the
+same check §6.4.4's pointer already has, with the same spelling. Read the other
+way round that is the guarantee: a `T` that is not optional can never be
+absent. Nothing is assignable *from* an optional, and everything else follows —
+`o + 1`, `writeln(o)` and `o < nil` are refused by rules that were already
+there. An optional may hold anything but a file and another optional, may sit
+in a record or an array, and may be a parameter or a result. The check is not
+elided by a guard: `if o <> nil then o^` still makes it.
+
+**And it is how a pointer comes back from C.** ADR-0122 refused every foreign
+result that is an address, because a returned `char *` may be null and null is
+not a failure. An optional is where null lives:
+
+```pascal
+type EnvText = string(4096);
+     OptEnvText = ?EnvText;
+function getenv(name: string): OptEnvText; external 'getenv';
+```
+
+The value is copied at the call site, so **no C pointer ever becomes a Pascal
+value** — the program holds a string of its own. The capacity is required and
+checked; a value that does not fit is an error, in the words §6.4.6 uses for an
+over-long assignment. A bare string result is still refused, and so is
+`?integer`: C has no null integer.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
-`lib/dialect/pasmathx.pas` is the first and `lib/dialect/pasfs.pas` the second,
-and they are what a caller sees instead.
+`lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas` and
+`lib/dialect/pasenv.pas` are the three, and they are what a caller sees
+instead.
 
 ## The standard library
 
@@ -258,6 +302,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasparse.pas` | `ParseInt`, answering an `IntResult` that carries the value **or** the reason |
 | `lib/dialect/pasmathx.pas` | `Cbrt`, `Log10`, `Log2`, `FMod`, `RealOr` — libm through `external`, with a `RealResult` where the answer can fail |
 | `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists` — the file system through `external`, answering an `ErrorCode` |
+| `lib/dialect/pasenv.pas` | `Lookup`, `LookupOr`, `Defined`, `Define`, `Undefine` — the environment, where an unset variable is `nil` and one set to nothing is not |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
@@ -357,11 +402,12 @@ path, so a program outside this checkout names paths into it, and `maxImports`
 bounds one program at eight components. Sockets, locales, threads and containers
 are still absent, and the reason has moved again for three of them: the
 foreign-function interface they waited on **exists** (ADR-0121) and a string
-now crosses it (ADR-0122). What is missing is the *result* direction — nothing
-comes back as an address, so a routine that answers a name, a message or a
-buffer cannot be bound yet, and `errno` itself is behind that same refusal. A
-container waits on something else entirely — parameterising a type by a type,
-which schemata do not do. `doc/roadmap.md` has
+now crosses it (ADR-0122). A string now comes back too
+(ADR-0123), which is what `getenv` and `strerror` needed. What is still missing
+is every *other* returned pointer — a buffer, a struct, and `errno`, which is
+`*__errno_location()` and a macro besides — so a socket is nearer than it was
+and not yet in reach. A container waits on something else entirely —
+parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
 the ordering.
 
 ## What the compiler accepts today, with `--std=iso7185`

@@ -168,7 +168,7 @@ load-bearing and the entry names the test that fails without it.
 | function results and function-accesses | 0055, 0056 |
 | conformance sweeps and what they found | 0067, 0071 – 0078, 0080, 0087 – 0101 |
 | the build, the seed, the oracles | 0011, 0013, 0081 – 0086, 0102 – 0108 |
-| where the language is going | 0109, 0117 – 0122 |
+| where the language is going | 0109, 0117 – 0123 |
 
 `doc/adr/README.md` indexes all of them by number and title.
 
@@ -736,7 +736,9 @@ array's own bounds optimises the check away; where the bounds arrived with the
 actual (ADR-0040) the message is built by the runtime and says the same words. Storing outside a subrange traps,
 and so does a `case` whose selector matches no label (ADR-0018) — unless it has
 an Extended Pascal `otherwise`, which is the only thing that gives that arm
-something to do (ADR-0033) — a dereference of `nil` (ADR-0019), and a set whose
+something to do (ADR-0033) — a dereference of `nil` (ADR-0019), the reading of an
+optional that has no value (ADR-0123, and it is spelled `^` for exactly that
+reason), and a set whose
 members are not values of the target's base type (ADR-0028). That last check
 fires at the **store**, because a constructor does not know what it is being
 assigned to — except for §6.8.7.4's set-value, which names its type and is
