@@ -1,0 +1,185 @@
+=== tokens
+4 1 kw program
+4 9 ident optional_dump
+4 22 op (
+4 23 ident output
+4 29 op )
+4 30 op ;
+5 1 kw type
+5 6 ident optint
+5 13 op =
+5 15 op ?
+5 16 ident integer
+5 23 op ;
+6 6 ident optname
+6 14 op =
+6 16 op ?
+6 17 ident string
+6 23 op (
+6 24 int 8
+6 25 op )
+6 26 op ;
+7 1 kw var
+7 5 ident a
+7 6 op :
+7 8 ident optint
+7 14 op ;
+8 5 ident b
+8 6 op :
+8 8 ident optname
+8 15 op ;
+9 5 ident c
+9 6 op :
+9 8 op ?
+9 9 ident char
+9 13 op ;
+10 1 kw begin
+11 3 ident a
+11 5 op :=
+11 8 kw nil
+11 11 op ;
+12 3 ident b
+12 5 op :=
+12 8 str [x]
+12 11 op ;
+13 3 ident c
+13 5 op :=
+13 8 str [z]
+13 11 op ;
+14 3 ident writeln
+14 10 op (
+14 11 op (
+14 12 ident a
+14 14 op =
+14 16 kw nil
+14 19 op )
+14 20 op ,
+14 22 ident b
+14 23 op ^
+14 24 op ,
+14 26 ident c
+14 27 op ^
+14 28 op )
+15 1 kw end
+15 4 op .
+16 1 eof
+=== ast
+program optional_dump
+  params
+    name output @4:23
+  block
+    imports
+    labels
+    consts
+    types
+      type optint @5:6
+        optional @5:15
+          named integer @5:16
+      type optname @6:6
+        optional @6:16
+          schema string @6:17
+            int 8 @6:24
+    vars
+      var
+        names
+          name a @7:5
+        type
+          named optint @7:8
+      var
+        names
+          name b @8:5
+        type
+          named optname @8:8
+      var
+        names
+          name c @9:5
+        type
+          optional @9:8
+            named char @9:9
+    procs
+    body
+      compound @10:1
+        assign @11:3
+          var a @11:3
+          nil @11:8
+        assign @12:3
+          var b @12:3
+          char 120 @12:8
+        assign @13:3
+          var c @13:3
+          char 122 @13:8
+        writeln @14:3
+          arg - -
+            binary eq @14:14
+              var a @14:12
+              nil @14:16
+          arg - -
+            deref @14:23
+              var b @14:22
+          arg - -
+            deref @14:27
+              var c @14:26
+=== sema
+program optional_dump
+  params
+    name output @4:23
+  frames
+    frame optional_dump level 0
+      var output #0 : text (stdout 0)
+      var a #1 : optint
+      var b #2 : optname
+      var c #3 : ?char
+  block
+    imports
+    labels
+    consts
+    types
+      type optint @5:6
+        optional @5:15 = optint
+          named integer @5:16 = integer
+      type optname @6:6
+        optional @6:16 = optname
+          schema string @6:17 = string(8)
+            int 8 @6:24 : integer
+    vars
+      var
+        names
+          name a @7:5
+        type
+          named optint @7:8 = optint
+      var
+        names
+          name b @8:5
+        type
+          named optname @8:8 = optname
+      var
+        names
+          name c @9:5
+        type
+          optional @9:8 = ?char
+            named char @9:9 = char
+    procs
+    body
+      compound @10:1
+        assign @11:3
+          var a @11:3 -> optional_dump/1 : optint
+          nil @11:8 : nil
+        assign @12:3
+          var b @12:3 -> optional_dump/2 : optname
+          char 120 @12:8 : char
+        assign @13:3
+          var c @13:3 -> optional_dump/3 : ?char
+          char 122 @13:8 : char
+        writeln @14:3
+          file
+            var output @14:3 -> optional_dump/0 : text
+          arg - -
+            binary eq @14:14 : boolean
+              var a @14:12 -> optional_dump/1 : optint
+              nil @14:16 : nil
+          arg - -
+            deref @14:23 : string(8)
+              var b @14:22 -> optional_dump/2 : optname
+          arg - -
+            deref @14:27 : char
+              var c @14:26 -> optional_dump/3 : ?char

@@ -1762,6 +1762,30 @@ void pas_str_store_var(void *dst, int cap, const char *src, int len) {
   memmove((char *)dst + PAS_STR_LENGTH_BYTES, src, (size_t)len);
 }
 
+/* ADR-0123: a C string arriving as an optional, which is the only direction a
+ * foreign pointer travels in.
+ *
+ * `dst` is the *value* half of the optional -- a variable-string of capacity
+ * `cap` -- and the answer is the flag the caller stores in the other half. So
+ * the layout stays entirely the compiler's: this routine knows what a string
+ * is and nothing about what an optional is.
+ *
+ * NULL is absence and not an error. That is the whole reason ADR-0122 refused
+ * a returned pointer and this record admits one: `getenv` of a name that is
+ * not set answers NULL in the ordinary course of things, and a language with
+ * no optional type would have had to trap on it or lie about it.
+ *
+ * A string too long for the capacity *is* an error, and pas_str_store_var
+ * reports it in the words 6.4.6 uses for an over-long assignment -- the same
+ * words, because it is the same rule and the value merely came from further
+ * away. */
+int pas_cstr_take(void *dst, int cap, const char *s) {
+  if (s == NULL)
+    return 0;
+  pas_str_store_var(dst, cap, s, (int)strlen(s));
+  return 1;
+}
+
 /* §6.4.6 again: a char is a string of capacity 1. A null-string padded to that
  * capacity is a space, which is the case worth spelling out. */
 void pas_str_store_char(char *dst, const char *src, int len) {

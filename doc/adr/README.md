@@ -131,3 +131,4 @@ the alternatives that were rejected and why.
 | [0120](0120-a-fallible-routine-answers-one-record-and-the-library-has-two-layers.md) | A fallible routine answers one record, and the library has two layers | Accepted |
 | [0121](0121-a-foreign-function-is-a-directive-and-the-boundary-is-two-types-wide.md) | A foreign function is a directive, and the boundary is two types wide | Accepted |
 | [0122](0122-an-address-crosses-only-as-an-argument-and-its-lifetime-is-the-call.md) | An address crosses only as an argument, and its lifetime is the call | Accepted |
+| [0123](0123-an-optional-is-a-type-and-it-is-how-a-pointer-comes-back.md) | An optional is a type, and it is how a pointer comes back | Accepted |

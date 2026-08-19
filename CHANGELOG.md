@@ -54,6 +54,78 @@ appears below in the release where it still existed.
   outward-facing library is dialect-only, permanently, and `lib/`'s existing
   modules stay Extended Pascal that any conforming processor can take.
 
+- **`?T` — an optional type, under `--std=afterschool` only** (ADR-0123). A
+  value of T, or nothing, and the language's first way of saying "there may be
+  nothing here" without inventing a convention per routine.
+
+  ```pascal
+  type OptName = ?string(16);
+  var n: OptName;
+  begin
+    n := nil;                       { absent }
+    n := 'hello';                   { present, by ordinary assignment }
+    if n <> nil then writeln(n^)
+  end
+  ```
+
+  `nil` is the absent value and `= nil` is the test, so no identifier and no
+  operator is added. `?` is a character neither standard admits anywhere, so
+  the lexis costs nothing and no program that compiled stops compiling — in
+  either conformance mode `?` is still `unexpected character '?'`.
+
+  **`o^` is the only way to the value, and it traps when there is none.** That
+  is the guarantee read the other way round: a `T` that is not optional can
+  never be absent. Nothing is assignable *from* an optional, which is the whole
+  of the type discipline — two lines, and `o + 1`, `writeln(o)` and `o < nil`
+  are then refused by rules that were already there.
+
+  An optional may hold any type that is not a file and not itself an optional,
+  including a record, an array or a string; it may sit in a record or an array,
+  and it may be a parameter or a function result. It is name-equivalent like
+  every other structured type (ADR-0017): two separately declared `?integer`
+  are two types.
+
+  The check is **not** elided by a guard — `if o <> nil then o^` still emits
+  it. What the type localises is *where* the check is, not whether it happens.
+
+- **A foreign function may return an optional string** (ADR-0123), which lifts
+  ADR-0122's refusal of the result direction exactly as far as null now has
+  somewhere to live.
+
+  ```pascal
+  type EnvText = string(4096);
+       OptEnvText = ?EnvText;
+  function getenv(name: string): OptEnvText; external 'getenv';
+  ```
+
+  Null is absence, not a failure and not an empty string. Non-null is copied at
+  the call site, so **no C pointer ever becomes a Pascal value** — the program
+  holds a string of its own and the pointer is dead by the end of the
+  statement. The capacity is required and is checked: a value that does not fit
+  is §6.4.6's error, in §6.4.6's words.
+
+  Still refused: a bare string result (now with a message that names the
+  remedy), `?integer` — C has no null integer — and every other pointer.
+
+- **`PasEnv` — the process environment** (`lib/dialect/`, ADR-0123): `Lookup`,
+  `LookupOr`, `Defined`, `Define` and `Undefine`. `Lookup` of an unset name
+  answers `nil`, of a name set to the empty string answers a present value of
+  length zero, and a caller can tell the two apart — which no shape in this
+  library could do before.
+
+  **`putenv` is deliberately absent**: it keeps the pointer it is handed, and
+  this compiler's string arena reclaims that storage at the end of the
+  statement. `setenv` copies. It is the first time the FFI's registered blind
+  spot has decided an interface rather than being recorded against one.
+
+- **Fixed: two `string` parameters in one group of an `external` heading.**
+  `function setenv(name, val: string; …)` was refused since ADR-0122, because
+  §6.7.3.3's "one formal-parameter-section is one parameter-form, so every
+  actual brings the same tuple" was being applied to a foreign heading. A
+  foreign `string` formal is not a schematic formal and has no tuple. Nothing
+  had asked: the only such declaration in the corpus was `strcmp`, and every
+  call passed two actuals of equal length.
+
 - **A string and a `var` parameter cross the foreign boundary** (ADR-0122),
   still under `--std=afterschool` only.
 

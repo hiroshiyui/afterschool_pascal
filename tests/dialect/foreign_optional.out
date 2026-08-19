@@ -1,0 +1,6 @@
+before    = (unset)
+setenv     = 0
+after     = 'a value'
+empty set  = TRUE length 0
+unset     = (unset)
+strerror   = TRUE

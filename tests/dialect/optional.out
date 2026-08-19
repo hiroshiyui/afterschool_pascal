@@ -1,0 +1,16 @@
+absent    = TRUE
+present   = TRUE 42
+through   = 43
+copy     = hello
+source   = (absent)
+point     = TRUE
+untaken   = TRUE
+taken     = FALSE 0
+table    = odd
+table    = (absent)
+table    = odd
+table    = (absent)
+found    = one
+found    = two
+missing  = (absent)
+slots      = 10 TRUE 300 TRUE

@@ -1,0 +1,11 @@
+before      = (unset)
+defined      = FALSE
+or default   = 'fallback'
+define       = FALSE
+after       = 'set to this'
+or default   = 'set to this'
+empty set    = TRUE
+empty length = 0
+undefine     = FALSE
+defined      = FALSE
+again        = FALSE

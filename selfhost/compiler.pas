@@ -181,6 +181,10 @@ type
     tkEof, tkIdent, tkInt, tkReal, tkStr,
     tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
     tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
+    { ADR-0123's optional-type marker. `?` is a character neither standard
+      admits anywhere at all, so the dialect can take it and the lexis costs
+      nothing -- the same property ADR-0121 got out of a directive. }
+    tkQuery,
     tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe,
     tkAnd, tkArray, tkBegin, tkCase, tkConst, tkDiv, tkDo, tkDownto, tkElse,
     tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
@@ -321,6 +325,12 @@ type
     { type denoters }
     nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkFile,
     nkSetOf,
+    { ADR-0123's optional-type, `?T`. Unlike nkPointer it holds a whole
+      denoter rather than a name: a pointer takes a name so a type may name
+      itself and close a cycle (6.4.4), and an optional has no cycle to close
+      -- `?T` has to *contain* a T, so a type that were its own optional would
+      have no size. }
+    nkOptional,
     { ISO/IEC 10206:1991 6.4.8's discriminated-schema. The only type-denoter
       whose children are expressions rather than denoters. }
     nkSchema,
@@ -390,6 +400,11 @@ type
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
               tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc, tyComplex,
               tyRestricted,
+              { ADR-0123's optional-type. `elem` is the type it may hold, and
+                the value is that type's storage with a flag in front of it.
+                Neither standard has one: it is what lets a pointer come back
+                from a foreign call without a null becoming a Pascal value. }
+              tyOptional,
               { ISO/IEC 10206:1991 6.4.3.3.3's variable-string-type: a type
                 produced from the required schema `string`. Its value is a
                 length and that many characters, and the length may be anything
@@ -1150,6 +1165,7 @@ type
       nkSchema:     (scAt, scLen, scQualAt, scQualLen: integer;
                      scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer);
+      nkOptional:   (opElem: nodePtr);
       nkEnum:       (enConstants: nodePtr);
       nkSubrange:   (sbLo, sbHi: nodePtr);
       nkArray:      (arDims, arElem: nodePtr; arPacked: boolean);
@@ -2898,6 +2914,11 @@ begin
   else if c = '[' then AddSimple(sl, sc, tkLBracket)
   else if c = ']' then AddSimple(sl, sc, tkRBracket)
   else if c = '^' then AddSimple(sl, sc, tkCaret)
+  { Refused outside the dialect by the path every other stray character takes,
+    so `?` in an ISO 7185 or Extended Pascal source still reports "unexpected
+    character" and still says which character it was. }
+  else if (c = '?') and (langStd = stdAfterschool) then
+    AddSimple(sl, sc, tkQuery)
   else if c = ':' then begin
     if Peek(0) = '=' then begin Advance; AddSimple(sl, sc, tkAssign) end
     else AddSimple(sl, sc, tkColon)
@@ -2984,6 +3005,7 @@ begin
     tkLBracket:  write('''[''');
     tkRBracket:  write(''']''');
     tkCaret:     write('''^''');
+    tkQuery:     write('''?''');
     tkEq:        write('''=''');
     tkArrow:     write('''=>''');
     tkNotEq:     write('''<>''');
@@ -3057,6 +3079,7 @@ begin
     tkLParen: write('(');     tkRParen: write(')');
     tkLBracket: write('[');   tkRBracket: write(']');
     tkCaret: write('^');      tkEq: write('=');
+    tkQuery: write('?');
     tkNotEq: write('<>');     tkLt: write('<');
     tkLe: write('<=');        tkGt: write('>');
     tkGe: write('>=');    tkStarStar: write('**');
@@ -3266,6 +3289,7 @@ begin
       n^.ssSetValue := nil;
       n^.ssListed := false
     end;
+    nkOptional: n^.opElem := nil;
     nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat,
@@ -4062,6 +4086,16 @@ begin
       end
       else
         ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen)
+    end
+    { optional-type = '?' type-denoter (ADR-0123). A whole denoter and not a
+      name, unlike the pointer above: `^T` takes a name so that a type may
+      name itself, and an optional has no such use for one -- it contains its
+      T rather than pointing at it, so a type that were its own optional could
+      have no size at all. }
+    else if Check(tkQuery) then begin
+      t := NewNode(nkOptional, CurLine, CurCol);
+      pos := pos + 1;
+      t^.opElem := ParseTypeDenoter
     end
     { type-inquiry = 'type' 'of' type-inquiry-object (6.4.9). Both words are
       already reserved in ISO 7185, so this feature reserves nothing -- the
@@ -6175,6 +6209,11 @@ begin IsComplex := (t <> nil) and (t^.kind = tyComplex) end;
 function IsVarString(t: typePtr): boolean;
 begin IsVarString := (t <> nil) and (t^.kind = tyString) end;
 
+{ ADR-0123. Asked on the type itself and never through Base(): an optional is
+  not its T and the whole point is that it does not answer for one. }
+function IsOptional(t: typePtr): boolean;
+begin IsOptional := (t <> nil) and (t^.kind = tyOptional) end;
+
 function IsNumeric(t: typePtr): boolean;
 begin IsNumeric := IsInteger(t) or IsReal(t) end;
 
@@ -6262,8 +6301,10 @@ end;
   stood. }
 function IsStructured(t: typePtr): boolean;
 begin
-  if IsRestricted(t) then IsStructured := IsArray(t^.elem) or IsRecord(t^.elem)
-  else IsStructured := IsArray(t) or IsRecord(t)
+  if IsRestricted(t) then
+    IsStructured := IsArray(t^.elem) or IsRecord(t^.elem) or
+                    IsOptional(t^.elem)
+  else IsStructured := IsArray(t) or IsRecord(t) or IsOptional(t)
 end;
 
 function IsMemory(t: typePtr): boolean;
@@ -6631,6 +6672,13 @@ begin
         end
         else
           PutLit('nil             ');
+      { ADR-0123. Printed the way it is written, `?` and then the type it
+        may hold -- which recurses, but never forever: the denoter had to
+        contain a T for the storage to have a size. }
+      tyOptional: begin
+        Put('?');
+        WriteTypeName(t^.elem)
+      end;
       { `text` names itself; every other file names its component, because a
         `file of char` is a different type from a text and a diagnostic that
         called them both "text" would be describing the wrong one. }
@@ -7128,6 +7176,15 @@ begin
     Assignable := false
   else if toT = fromT then
     Assignable := true
+  { ADR-0123: `nil` is the absent value of every optional-type, and a value of
+    T is the present one -- so an optional is assignable *from* its own T and
+    from nothing else, and nothing is assignable from an optional. The second
+    half is the whole guarantee: a T that is not optional can never be absent,
+    so `o^` is the only way out and it is checked. }
+  else if IsOptional(toT) then
+    Assignable := IsNil(fromT) or Assignable(toT^.elem, fromT)
+  else if IsOptional(fromT) then
+    Assignable := false
   { 6.4.2.5: "Attribution of a value of a type to a variable possessing the
     underlying-type of the type shall constitute the attribution of the
     associated value of the underlying-type", and the sentence after it says the
@@ -7833,7 +7890,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+      nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         ok := false
@@ -8795,6 +8852,37 @@ begin
   ResolveSet := t
 end;
 
+{ ADR-0123's `?T`. A type of its own, name-equivalent like every other
+  structured type here (ADR-0017), so two variables declared `?integer`
+  separately have two types exactly as two `array [1..3] of integer` do -- the
+  rule is the language's and this is not an exception to it.
+
+  What T may not be is a file (a file cannot be copied, compared or held by
+  value at all, ADR-0021) and another optional (`??T` has no use and two flags
+  to answer for). Both are refused here rather than left to a later diagnostic,
+  because the storage would already have been laid out by then. }
+function ResolveOptional(d: nodePtr): typePtr;
+var t, inner: typePtr;
+begin
+  t := NewType(tyOptional);
+  inner := ResolveType(d^.opElem);
+  if IsFile(inner) then begin
+    ErrorAt(d^.line, d^.col);
+    write('an optional cannot hold ');
+    WriteTypeName(inner);
+    writeln(': a file is never a value, so there is nothing to be absent');
+    inner := intType
+  end
+  else if IsOptional(inner) then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('an optional cannot hold an optional: one flag answers for a ',
+            'value, and two answer for each other');
+    inner := intType
+  end;
+  t^.elem := inner;
+  ResolveOptional := t
+end;
+
 { ISO 7185 6.4.3.5 bars a file from having a file as a component, at any
   depth: `file of file of char` and `file of record f: text end` are both out.
   The reason is that a file has no value to copy -- the same fact that keeps a
@@ -9497,6 +9585,10 @@ begin
         ForgetResolved(d^.flIndex)
       end;
       nkSetOf: ForgetResolved(d^.soElem);
+      { Walked, where nkPointer below is not: a pointer's domain is 6.4.7's
+        stated exception and holds a name, while an optional holds a denoter
+        that a schema's tuple can reach into -- `?array [1..n] of char`. }
+      nkOptional: ForgetResolved(d^.opElem);
       nkRecord: begin
         g := d^.rcFields;
         while g <> nil do begin
@@ -9619,6 +9711,7 @@ begin
         CheckSchemaBodyNames(d^.flIndex, self)
       end;
       nkSetOf: CheckSchemaBodyNames(d^.soElem, self);
+      nkOptional: CheckSchemaBodyNames(d^.opElem, self);
       nkRecord: begin
         g := d^.rcFields;
         while g <> nil do begin
@@ -10585,7 +10678,7 @@ begin
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
@@ -10783,6 +10876,7 @@ begin
       nkArray:    t := ResolveArray(d, d^.arDims);
       nkRecord:   t := ResolveRecord(d);
       nkPointer:  t := ResolvePointer(d);
+      nkOptional: t := ResolveOptional(d);
       nkFile:     t := ResolveFile(d);
       nkSetOf:    t := ResolveSet(d);
       nkInquiry:  t := ResolveInquiry(d);
@@ -11379,7 +11473,13 @@ begin
     a := args;
     p := callee^.params;
     while a <> nil do begin
-      if p^.sym^.descSchema <> nil then
+      { ADR-0122 and ADR-0123: not of a foreign heading. `string` there is not
+        a schematic formal at all -- there is no tuple, so `a, b: string`
+        names two `const char` pointers rather than two strings of one
+        capacity, and holding the two actuals to one type would refuse
+        `strcmp('b', 'ab')` for a rule that is not about it. The clause is
+        about a *parameter form*, and a foreign parameter has none. }
+      if (p^.sym^.descSchema <> nil) and (callee^.linkKind <> lnkForeign) then
         if (a^.ntype <> nil) and not IsGeneric(a^.ntype) then begin
           b := args;
           q := callee^.params;
@@ -11790,7 +11890,30 @@ begin
           the shorter operand is padded with spaces. Under ISO 7185 the lengths
           had to be equal and this compiler said so; that check now applies
           only to the language that has the rule. }
-        if (HasExtended(langStd)) and IsStringOrChar(l) and
+        { ADR-0123: an optional compares with `nil` and with nothing else,
+          not even with another optional of its own type. `= nil` is the
+          presence test, which is the one question answerable without
+          unwrapping; comparing two of them would need T's own equality, and T
+          may be a record or an array, which have none. }
+        if IsOptional(l) or IsOptional(r) then begin
+          if (b^.bnOp <> opEq) and (b^.bnOp <> opNe) then begin
+            ErrorAt(b^.line, b^.col);
+            write('an optional can only be compared with = and <>, not ',
+                  'with ''');
+            WriteOpName(b^.bnOp);
+            writeln('''')
+          end
+          else if not (IsNil(l) or IsNil(r)) then begin
+            ErrorAt(b^.line, b^.col);
+            write('an optional can only be compared with ''nil'': it asks ',
+                  'whether there is a value, and ');
+            WriteTypeName(b^.bnLhs^.ntype);
+            write(' against ');
+            WriteTypeName(b^.bnRhs^.ntype);
+            writeln(' would need the value''s own equality')
+          end
+        end
+        else if (HasExtended(langStd)) and IsStringOrChar(l) and
            IsStringOrChar(r) and not (IsChar(l) and IsChar(r)) then
           { padded comparison: nothing to check }
         else if IsCharArray(l) and IsCharArray(r) then begin
@@ -13121,6 +13244,13 @@ begin
         if IsFile(b) then begin
           if b^.elem <> nil then e^.ntype := b^.elem else e^.ntype := charType
         end
+        { ADR-0123: `o^` on an optional is the value, and it is the only way to
+          one. It is spelled like a dereference because it *is* the same
+          question -- "is there something here?" -- and 6.4.4's pointer already
+          answers it at run time (ADR-0019); reusing the syntax reuses the
+          reader's expectation that this one may stop the program. }
+        else if IsOptional(b) then
+          e^.ntype := b^.elem
         else if not IsPointer(b) or IsNil(b) then begin
           { 6.4.4 gives a pointer-type one nil-value and a set of
             identifying-values, and its NOTE 1 draws the consequence: "Since
@@ -13380,7 +13510,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+      nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         { not an expression }
@@ -15058,7 +15188,7 @@ begin
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
       nkImportItem:
@@ -15388,11 +15518,26 @@ begin
     trap on a value the C library returns in the ordinary course of things.
     That is ADR-0109's decision and it is open. }
   if (sym^.kind = skFunc) and not sym^.resultTypeBad then
-    if IsStringType(sym^.stype) then begin
+    { ADR-0123: an optional of a string with a capacity is the one thing that
+      comes back as an address, and the capacity is what the copy needs
+      somewhere to go. ADR-0122 refused the direction entirely because null is
+      what `getenv` answers for a name that is not set; an optional is where
+      null now lives, so the refusal is lifted exactly that far. }
+    if IsOptional(sym^.stype) then begin
+      if not (IsVarString(sym^.stype^.elem) and
+              (sym^.stype^.elem^.hiDisc = nil) and
+              (sym^.stype^.elem^.hi > 0)) then begin
+        ErrorAt(d^.line, d^.col);
+        write('an ''external'' function can return an optional only of a ');
+        write('string with a capacity: the value arrives as a pointer, and ');
+        writeln('the copy needs somewhere of a known size to go')
+      end
+    end
+    else if IsStringType(sym^.stype) then begin
       ErrorAt(d^.line, d^.col);
-      write('an ''external'' function cannot return a string: what would ');
-      writeln('cross is a pointer, and a pointer that may be null has no ',
-              'shape in this language yet')
+      write('an ''external'' function cannot return a bare string: it would ');
+      write('be a pointer that may be null, which only an optional can hold ');
+      writeln('-- write ''?'' before the type')
     end
     else if not ForeignType(sym^.stype) then begin
       ErrorAt(d^.line, d^.col);
@@ -18779,6 +18924,16 @@ begin
       WritePos(n^.line, n^.col);
       TypeEnd(n)
     end;
+    { ADR-0123. It nests, so the sub-denoter is printed indented under it the
+      way an array's component type is. }
+    nkOptional: begin
+      write('optional');
+      WritePos(n^.line, n^.col);
+      TypeEnd(n);
+      level := level + 1;
+      DumpTypeExpr(n^.opElem);
+      level := level - 1
+    end;
     { A type-inquiry names a *variable*, so it prints like `named` and means
       something else entirely -- which is why it gets its own tag rather than
       being folded into one. }
@@ -19132,6 +19287,7 @@ begin
       end;
       tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
       tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
+      tkQuery,
       tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar, tkGtLt, tkArrow: begin
         write('op ');
         WriteOperator(tok[i].kind);
@@ -19485,6 +19641,12 @@ begin
       tyComplex: LlAlign := 16;
       tyRestricted: LlAlign := LlAlign(b^.elem);
       tyString: LlAlign := 4;
+      { ADR-0123's flag-then-value pair. The flag is an i32 rather than the
+        i8 a boolean field is, so the whole aligns at least as a length word
+        does and the value after it starts where LLVM puts it. }
+      tyOptional:
+        if LlAlign(b^.elem) > 4 then LlAlign := LlAlign(b^.elem)
+        else LlAlign := 4;
       { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
         it takes the largest one that is named, which is i128's. }
       tySet: LlAlign := 16;
@@ -19522,6 +19684,13 @@ begin
         answer here leaves that field outside a whole-record copy. }
       tyString:
         if b^.hi > 0 then LlSize := RoundUp(4 + b^.hi, 4) else LlSize := 4;
+      { The flag, the padding LLVM puts before a value that wants more
+        alignment than 4, the value, and the tail padding every type gets --
+        the same arithmetic RecordLayout does over two fields, written out
+        because an optional has no field list to walk. }
+      tyOptional:
+        LlSize := RoundUp(RoundUp(4, LlAlign(b^.elem)) + LlSize(b^.elem),
+                          LlAlign(b));
       tyFile: LlSize := fileSize;
       tySet: LlSize := setBits div 8;
       tyProc: LlSize := 16;
@@ -19616,6 +19785,14 @@ begin
         write(ircode, '{ i32, [');
         if b^.hi > 0 then write(ircode, b^.hi:1) else write(ircode, '0');
         write(ircode, ' x i8] }')
+      end;
+      { ADR-0123: a flag and the value it answers for. Printed structurally
+        like everything else here, so an optional inside a record or an array
+        needs no name of its own. }
+      tyOptional: begin
+        write(ircode, '{ i32, ');
+        PutLlType(b^.elem);
+        write(ircode, ' }')
       end;
       tyArray: begin
         { The bounds are folded away: an index is lowered to an offset from the
@@ -19991,6 +20168,19 @@ begin
 end;
 
 { -------------------------------------------------------- traps and checks }
+
+{ ADR-0123: the address of an optional's flag (0) or of the value it answers
+  for (1). One routine for both, because the only difference is the index and
+  a second copy would be free to disagree about the layout. }
+procedure OptionalPart(var base: str; t: typePtr; index: integer; var v: str);
+begin
+  Def(v);
+  write(ircode, 'getelementptr inbounds ');
+  PutLlType(t);
+  write(ircode, ', ptr ');
+  PutOp(base);
+  writeln(ircode, ', i32 0, i32 ', index:1)
+end;
 
 procedure EmitTrapIf(var cond: str; msg: integer);
 var t, c: integer;
@@ -21689,7 +21879,7 @@ procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
                        var v: str);
 var link, a, alen, slot, half, target, resAddr: str; head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
-    byAddr, comma: boolean;
+    byAddr, comma, foreignPtr: boolean;
 begin
   StrClear(target);
   if callee^.kind = skProcParam then begin
@@ -21795,6 +21985,11 @@ begin
     started, because the emitter is sequential. }
   byAddr := false;
   if result <> nil then byAddr := IsMemory(result);
+  { ADR-0123: a foreign function answers a `ptr` in a register, so the result
+    slot is not an argument to it -- it is where the answer is *put*, after
+    the call, by the four lines at the end of this procedure. }
+  foreignPtr := byAddr and (callee^.linkKind = lnkForeign);
+  if foreignPtr then byAddr := false;
   if byAddr then AddressOfSym(slotSym, resAddr);
   if (result <> nil) and not byAddr then begin
     Def(v);
@@ -21808,6 +22003,7 @@ begin
     whose signature the module already carries. }
   if callee^.kind = skProcParam then
     PutProcSignature(callee)
+  else if foreignPtr then write(ircode, 'ptr')
   else if (result = nil) or byAddr then write(ircode, 'void')
   else PutLlType(result);
   write(ircode, ' ');
@@ -21837,7 +22033,29 @@ begin
     o := o^.next
   end;
   writeln(ircode, ')');
-  if byAddr then v := resAddr
+  if byAddr then v := resAddr;
+  { The pointer C answered, made into an optional. `pas_cstr_take` copies the
+    characters and reports whether there were any; the flag is stored here,
+    because the layout of an optional is CodeGen's and no runtime routine may
+    hold a second opinion about it. NULL is absence and is not an error --
+    which is the whole of what ADR-0122 was missing. }
+  if foreignPtr then begin
+    AddressOfSym(slotSym, resAddr);
+    OptionalPart(resAddr, result, 1, slot);
+    Def(half);
+    write(ircode, 'call i32 @pas_cstr_take(ptr ');
+    PutOp(slot);
+    write(ircode, ', i32 ', result^.elem^.hi:1, ', ptr ');
+    PutOp(v);
+    writeln(ircode, ')');
+    OptionalPart(resAddr, result, 0, alen);
+    write(ircode, '  store i32 ');
+    PutOp(half);
+    write(ircode, ', ptr ');
+    PutOp(alen);
+    writeln(ircode);
+    v := resAddr
+  end
 end;
 
 { ISO 7185 6.7.2.5 orders equal-length strings by their first differing
@@ -22526,6 +22744,29 @@ begin
   writeln(ircode, ', 0')
 end;
 
+{ ADR-0123: `o = nil` and `o <> nil`, the presence test. Sema has required
+  that one side be nil and the other an optional, so the only question left is
+  which side is which -- and nothing is loaded but the flag, which is what
+  makes this the one thing a program may ask without unwrapping. }
+procedure EmitOptionalTest(e: nodePtr; var v: str);
+var opnd: nodePtr; base, flag, has: str; t: typePtr;
+begin
+  if IsOptional(e^.bnLhs^.ntype) then opnd := e^.bnLhs else opnd := e^.bnRhs;
+  t := Underlying(opnd^.ntype);
+  EmitAddress(opnd, base);
+  OptionalPart(base, t, 0, flag);
+  Def(has);
+  write(ircode, 'load i32, ptr ');
+  PutOp(flag);
+  writeln(ircode);
+  Def(v);
+  { `= nil` is *absent*, so the sense is inverted against the flag. }
+  if e^.bnOp = opEq then write(ircode, 'icmp eq i32 ')
+  else write(ircode, 'icmp ne i32 ');
+  PutOp(has);
+  writeln(ircode, ', 0')
+end;
+
 procedure EmitBinary(e: nodePtr; var v: str);
 var l, r, rem, neg, adj, bad, m1, m2: str;
     lt, rt: typePtr; msg: integer; sign, useFloat: boolean;
@@ -22537,6 +22778,12 @@ begin
     is taken before the two are evaluated alike. }
   else if e^.bnOp = opIn then
     EmitIn(e, v)
+  { ADR-0123's presence test, taken before the operands are evaluated: an
+    optional has no register form, so EmitExpr below would have nothing to
+    hand back. }
+  else if IsOptional(Underlying(e^.bnLhs^.ntype)) or
+          IsOptional(Underlying(e^.bnRhs^.ntype)) then
+    EmitOptionalTest(e, v)
   { 6.8.3.6's concatenation, which is a value and not a comparison. }
   else if (e^.bnOp = opAdd) and IsStringType(e^.ntype) then
     EmitStringValue(e, v)
@@ -23431,7 +23678,7 @@ end;
 
 procedure EmitAddress;
 var base, idx, lo, hi, below, above, bad, off, target, stride, byte: str;
-    hdr: str; arr: typePtr; msg: integer;
+    hdr, half: str; arr: typePtr; msg: integer;
 begin
   case e^.kind of
     nkVar: begin
@@ -23619,6 +23866,26 @@ begin
         PutOp(base);
         writeln(ircode, ')')
       end
+      { ADR-0123: `o^` is the value an optional holds, and the flag is read
+        first. It is the only way to that value, so this is the one check
+        the type exists to make -- a T that is not optional never reaches it. }
+      else if IsOptional(Underlying(e^.drBase^.ntype)) then begin
+        EmitAddress(e^.drBase, base);
+        OptionalPart(base, Underlying(e^.drBase^.ntype), 0, half);
+        Def(off);
+        write(ircode, 'load i32, ptr ');
+        PutOp(half);
+        writeln(ircode);
+        Def(bad);
+        write(ircode, 'icmp eq i32 ');
+        PutOp(off);
+        writeln(ircode, ', 0');
+        MsgStart;
+        MsgText('this optional has no value              ');
+        msg := MsgEnd;
+        EmitTrapIf(bad, msg);
+        OptionalPart(base, Underlying(e^.drBase^.ntype), 1, v)
+      end
       else begin
         { The pointer's *value* is the address of the variable it denotes. }
         EmitExpr(e^.drBase, target);
@@ -23656,7 +23923,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+    nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpWord('null            ', v)   { Sema has already required a designator }
@@ -23759,7 +24026,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+    nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpInt(0, v)
@@ -23795,7 +24062,7 @@ end;
   whole-variable copy -- and `write` to a file that is not a text needs exactly
   it, because 6.6.5.2 defines that write as `f^ := e`. }
 procedure EmitStore(var dst: str; t: typePtr; src: nodePtr);
-var v, hdr: str; from: typePtr;
+var v, hdr, slot, flag: str; from: typePtr;
 begin
   { 6.4.2.5: "Attribution of a value of a type to a variable possessing the
     underlying-type of the type shall constitute the attribution of the
@@ -23824,6 +24091,30 @@ begin
     it was always going to occupy. }
   else if src^.kind = nkStructValue then
     EmitStructValue(src, dst)
+  { ADR-0123. Three sources and three shapes: another optional of this type is
+    a whole-value copy, flag and all; `nil` writes the flag alone; anything
+    else is a value of T, which goes in through this same routine so a string,
+    a record and a scalar each keep their own rule.
+
+    The value is stored *before* the flag, which matters: storing a string
+    longer than its capacity is an error that stops the program (6.4.6), and
+    doing it in this order means no optional is ever marked present over
+    storage the store did not finish writing. }
+  else if IsOptional(t) then
+    if IsOptional(from) then
+      EmitCopy(dst, t, src)
+    else begin
+      if not IsNil(from) then begin
+        OptionalPart(dst, t, 1, slot);
+        EmitStore(slot, t^.elem, src)
+      end;
+      OptionalPart(dst, t, 0, flag);
+      write(ircode, '  store i32 ');
+      if IsNil(from) then write(ircode, '0') else write(ircode, '1');
+      write(ircode, ', ptr ');
+      PutOp(flag);
+      writeln(ircode)
+    end
   { A whole array or record is copied; ISO 7185 6.8.2.2 makes assignment of a
     structured value a copy of every component, not a sharing of storage. }
   else if IsStructured(t) then
@@ -25679,7 +25970,7 @@ begin
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem: ;
@@ -26479,8 +26770,10 @@ begin
   writeln(ircode, 'declare ptr @pas_str_char(i8)');
   writeln(ircode, 'declare ptr @pas_str_concat(ptr, i32, ptr, i32)');
   { ADR-0122: a string on its way to a foreign routine, NUL-terminated into
-    the same arena. }
+    the same arena. ADR-0123 is the other direction, and answers the flag
+    rather than writing it -- the layout of an optional stays here. }
   writeln(ircode, 'declare ptr @pas_str_cstr(ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_cstr_take(ptr, i32, ptr)');
   { How much of the runtime's string arena is in use -- the one thing this
     module names in the runtime that is not a function (ADR-0111). It is data
     rather than a mark/release pair so that the read every prologue makes is a
@@ -26625,7 +26918,13 @@ begin
   e := externProcs;
   while e <> nil do begin
     write(ircode, 'declare ');
-    if (e^.sym^.kind = skFunc) and not IsMemory(e^.sym^.stype) then
+    { ADR-0123: a foreign function whose result is an optional answers a
+      pointer, which the call site unpacks -- so the declaration says what C
+      says and not what the Pascal type is. }
+    if (e^.sym^.linkKind = lnkForeign) and (e^.sym^.kind = skFunc) and
+       IsOptional(e^.sym^.stype) then
+      write(ircode, 'ptr')
+    else if (e^.sym^.kind = skFunc) and not IsMemory(e^.sym^.stype) then
       PutLlType(e^.sym^.stype)
     else
       write(ircode, 'void');
