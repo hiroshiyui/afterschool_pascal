@@ -401,7 +401,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/paserror.pas` | `ErrorCode` — six categories — with `ErrorText` and `Failed` |
 | `lib/dialect/pasparse.pas` | `ParseInt`, answering an `IntResult` that carries the value **or** the reason |
 | `lib/dialect/pasmathx.pas` | `Cbrt`, `Log10`, `Log2`, `FMod`, `RealOr` — libm through `external`, with a `RealResult` where the answer can fail |
-| `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists` — the file system through `external`, answering an `ErrorCode` |
+| `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists`, `WorkingDirectory`, `LinkTarget`, `PathOr` — the file system through `external`, answering an `ErrorCode` or a `PathResult` |
 | `lib/dialect/pasenv.pas` | `Lookup`, `LookupOr`, `Defined`, `Define`, `Undefine` — the environment, where an unset variable is `nil` and one set to nothing is not |
 | `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see |
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
@@ -514,10 +514,16 @@ needed nothing new — a `char *` result is what ADR-0123 already receives. The
 code a binding module answers stays `errIO`, classifying one needing header
 numbers.
 
-What is still missing is a returned pointer that is **not** a string, which is
-where the memory-safety model is still the blocker: `getcwd` and `readlink`
-write into a caller's buffer and could be had, but a `struct sockaddr *` has a
-layout C fixes and this compiler would have to agree with, and that is what
+`getcwd` and `readlink` are bound too, and needed nothing built (ADR-0132):
+they write into a buffer the **caller** owns, so the slice lends the storage
+and the optional copies the answer back. A returned pointer that is the
+caller's own storage coming home has no ownership question in it, which is the
+same distinction ADR-0122 drew for arguments.
+
+What is left is a pointer to storage the **callee** owns whose contents are
+not characters — a `DIR *` you must hand back to `closedir`, a
+`struct sockaddr *` with a layout C fixes and this compiler would have to agree
+with. That is where the memory-safety model actually bites, and it is what
 stands between here and a socket. A container waits on something else entirely —
 parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
 the ordering.

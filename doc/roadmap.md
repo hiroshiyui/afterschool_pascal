@@ -473,12 +473,58 @@ Three things worth carrying forward:
   ADR-0067's `pack` and `page`: three documents asserting something no probe
   had been written for.
 
+### The thirteenth increment: half of "every returned pointer" was never blocked
+
+ADR-0132, and like the increment before it the finding is that a recorded
+blocker was one sentence covering two unlike things.
+
+"Every returned pointer that is not a string" ran together **a pointer to
+storage the callee owns** — `getenv`'s, `strerror`'s, where whose it is and
+how long it lives are real questions ADR-0123 answered by copying at the call
+site — and **a pointer to storage the caller just lent it**. `getcwd` answers
+the buffer it was handed, or null. There is no ownership question in that at
+all: the storage is the caller's, it outlives the call by construction, and
+the pointer is a success flag with an address attached.
+
+So `WorkingDirectory` and `LinkTarget` needed **no compiler change and no new
+mechanism**. Three things already in the tree met: ADR-0129's slice lends the
+buffer and supplies two C arguments from one formal, ADR-0123's optional
+receives `getcwd`'s result, ADR-0128's `int64` receives `readlink`'s
+`ssize_t`.
+
+That is the same distinction ADR-0122 drew for the argument side — "a pointer
+outlives the call, and an argument does not" — applied to a result that is an
+argument coming home. **Three increments in a row have now found that a
+decision described as needing the memory-safety model needed it for only part
+of its surface**, which this file already wrote down once as a lesson and has
+now had to learn a third time.
+
+One thing it adds to the register rather than to the language:
+
+- **Binding a C interface produces guards for cases the platform cannot
+  currently produce.** `LinkTarget` reports `errFull` when `readlink` fills the
+  buffer exactly, because there is no terminator and truncation cannot be told
+  from a target that just fits — and that arm is unreachable, `MaxPath` being
+  Linux's `PATH_MAX` and the kernel refusing to create a longer target. Third
+  in three increments, after `WriteAll`'s retry and `ErrorNumberText`'s null.
+  They are correct to write and impossible to test from here; the honest
+  treatment is to say which branch and why, not to delete the guard so the
+  coverage reads better.
+
 ### What is still blocked on it
 
-**A socket**, which needs `struct sockaddr *`: a pointer to a struct is the
-part of ADR-0121's type mapping that is still entirely absent, and unlike a
-buffer it has a *layout* that C fixes and this compiler would have to agree
-with.
+**A pointer to storage the callee owns whose contents are not characters**, and
+it is now two things rather than a category:
+
+- **An opaque handle** — `DIR *` from `opendir`, `FILE *` from `fopen`. No
+  layout has to be agreed; it is a token to hand back. What it needs is a
+  *lifetime*, and Pascal has a precedent worth using: a file variable is a
+  handle whose lifetime a block manages, and ADR-0021 and ADR-0032 already
+  close files at block exit and on a non-local `goto`. This is the cheapest
+  thing left and the first that genuinely touches ADR-0109's open decision.
+- **A struct with a layout** — `struct sockaddr`, `struct stat`. Unlike a
+  handle this needs the compiler and C to agree about offsets, which nothing
+  here does for a foreign type. It is what stands between here and a socket.
 
 **Creating a file**, which is not a language question at all — `O_WRONLY`,
 `O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS set and PasIO

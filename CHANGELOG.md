@@ -507,6 +507,20 @@ appears below in the release where it still existed.
   answers stays PasError's closed set. And the value is meaningful only in the
   statement after the one that failed, which is C's contract.
 
+- **`PasFS` gains `WorkingDirectory`, `LinkTarget` and `PathOr`**, answering a
+  `PathResult` that carries the path **or** the reason (ADR-0132). No compiler
+  change and no new mechanism: `getcwd` and `readlink` write into a buffer the
+  *caller* owns, so ADR-0129's slice lends the storage, ADR-0123's optional
+  receives `getcwd`'s pointer, and ADR-0128's `int64` receives `readlink`'s
+  `ssize_t`.
+
+  A returned pointer that is the caller's own storage coming home has no
+  ownership question in it, which is what separates these two from `getenv`
+  and a `DIR *`. `LinkTarget` answers `errFull` when the target fills the
+  buffer exactly — `readlink` writes no terminator, so a possibly-truncated
+  path cannot be told from one that just fits, and reporting is the direction
+  that does not silently return a short path.
+
 ### Changed
 
 #### Programs that used to compile and no longer do
