@@ -197,6 +197,42 @@ What it does **not** do is the whole of what comes next: no pointers, no
 strings, no `var` parameters, no callbacks, no way to name a library. Every one
 of sockets, locales and clocks needs the first two.
 
+### The sixth increment: the pointer, on the side that has no lifetime
+
+ADR-0122, and it is the increment this file said might have to be designed
+together with the memory-safety model. It was not, and the reason is a
+distinction the sentence below already contained: *a pointer* outlives the
+call, and **an argument does not**.
+
+A `var` actual and a string actual are storage the caller owns and outlives, so
+the lifetime is settled before any model is chosen. A returned `char *` is the
+callee's or nobody's, and is blocked twice — once on ownership, and nearer than
+that on **null**, which `getenv` answers in the ordinary course of things and
+which needs the *optional type* row of the table below rather than the
+memory-safety row. So an address crosses only as an argument.
+
+`string` in an `external` heading means `const char *` and is not a schematic
+formal; the copy goes in ADR-0111's arena, which already had exactly the
+lifetime wanted for reasons that had nothing to do with C. That is why the
+increment is small. A NUL inside the value traps, which is the one safety
+property it adds rather than makes visible.
+
+Two things it deliberately did not take:
+
+- **A buffer** — `var b: packed array of char`, what `read` and `snprintf`
+  want. Not a lifetime objection: it is a pointer *and* a length, and the
+  length is not in-band the way a C string's is. That is the **slices** row of
+  the table below, and it is a language decision. Admitting it here would
+  invent a fifth spelling of the two-scalar shape at the one place nothing can
+  check it.
+- **A callback.** The static link is the half of a procedural value with no
+  image at all in C, and a Pascal procedure without one is a different feature.
+
+And one thing it could not: **`errno`**. glibc spells it
+`*__errno_location()`, so it is a pointer result, so `lib/dialect/pasfs.pas`
+answers `errIO` for every failure and cannot say which. The first thing the
+next increment buys is the ability to say which.
+
 ### What is still blocked on it
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
@@ -227,8 +263,17 @@ question in its smallest form:
   can do anything. ADR-0121 answered that for a *call* by making the boundary
   lexically visible — Rust's and Zig's answer, and the one this table already
   said was likeliest to fit — and that answer does not extend to a pointer,
-  which outlives the call. So the next increment and the memory-safety model
-  may genuinely have to be designed together, which the first one did not.
+  which outlives the call.
+
+  **The paragraph above expected the next increment and the memory-safety model
+  to be designed together, and they were not.** ADR-0122 found that the
+  argument side of the boundary has no lifetime question on it at all — the
+  caller owns the storage and outlives the call — so half of what was blocked
+  here was never blocked on a model. What remains is the *result* direction,
+  and it is blocked on two things rather than one: ownership, and the optional
+  type that null needs. The estimate was wrong in a useful direction, and the
+  lesson is worth keeping for the rows below: a decision that looks like it
+  needs a model may only need the model for part of its surface.
 
 ### Where the ideas come from
 

@@ -186,11 +186,33 @@ a reserved word in any mode — a directive is an identifier in the one position
 it may occupy — so a program that uses the spelling for something else is
 unaffected.
 
-**Two types cross the boundary: `integer` and `real`**, as value parameters and
-as a function result, and by their exact type — a subrange does not cross, and
-neither does `char`, `boolean`, a string, a pointer, a `var` parameter or
-anything structured. libc and libm are already linked, so a foreign call needs
-no extra build step; there is no way yet to name another library.
+**Four things cross the boundary**, and by their exact type — a subrange does
+not cross, and neither does `char`, `boolean`, a pointer, a set or anything
+structured. `integer` and `real` cross as values and as a function result;
+ADR-0122 added the two address rows:
+
+```pascal
+function atoi(s: string): integer; external 'atoi';
+function modf(x: real; var ip: real): real; external 'modf';
+```
+
+`string` there means `const char *` — a NUL-terminated copy of the value, made
+for the statement — and it is **not** a schematic formal: the actual has only
+to be a string, so a literal, a variable, a concatenation, a substring or a
+char will all do, and the formal states no capacity because a C string carries
+its length in-band. A string containing `chr(0)` traps rather than being
+truncated. A `var` parameter of `integer` or `real` crosses as the actual's own
+address.
+
+**An address crosses only as an argument.** Nothing comes back as one: a
+returned `char *` may be null — `getenv` of a name that is not set answers null
+on purpose — and there is no optional type to say that in yet. A **buffer**
+does not cross either, in either direction: it is a pointer *and* a length, and
+the length is not in-band the way a C string's is, so `read` and `snprintf`
+wait on a language decision about slices rather than on the FFI.
+
+libc and libm are already linked, so a foreign call needs no extra build step;
+there is no way yet to name another library.
 
 **Nothing checks the declaration against the function it names.** The linker
 checks the name and nothing checks the signature, so a wrong type or a wrong
@@ -206,7 +228,8 @@ libm is reserved — `hypot`, `atan2` and `atan` were until the runtime took
 private names for them.
 
 A binding is a module that exports Pascal and keeps the directive to itself —
-`lib/dialect/pasmathx.pas` is the first, and is what a caller sees instead.
+`lib/dialect/pasmathx.pas` is the first and `lib/dialect/pasfs.pas` the second,
+and they are what a caller sees instead.
 
 ## The standard library
 
@@ -234,6 +257,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/paserror.pas` | `ErrorCode` — six categories — with `ErrorText` and `Failed` |
 | `lib/dialect/pasparse.pas` | `ParseInt`, answering an `IntResult` that carries the value **or** the reason |
 | `lib/dialect/pasmathx.pas` | `Cbrt`, `Log10`, `Log2`, `FMod`, `RealOr` — libm through `external`, with a `RealResult` where the answer can fail |
+| `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists` — the file system through `external`, answering an `ErrorCode` |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
@@ -331,11 +355,13 @@ and `VecReserve` grows once so that no later push reallocates.
 **There is no install location and no resolution by name.** `--import` takes a
 path, so a program outside this checkout names paths into it, and `maxImports`
 bounds one program at eight components. Sockets, locales, threads and containers
-are still absent, and the reason has changed for three of them: the
-foreign-function interface they waited on **exists** (ADR-0121), and what it
-does not carry yet is a pointer or a string across the boundary, which is what
-every one of those three needs. A container waits on something else entirely —
-parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
+are still absent, and the reason has moved again for three of them: the
+foreign-function interface they waited on **exists** (ADR-0121) and a string
+now crosses it (ADR-0122). What is missing is the *result* direction — nothing
+comes back as an address, so a routine that answers a name, a message or a
+buffer cannot be bound yet, and `errno` itself is behind that same refusal. A
+container waits on something else entirely — parameterising a type by a type,
+which schemata do not do. `doc/roadmap.md` has
 the ordering.
 
 ## What the compiler accepts today, with `--std=iso7185`

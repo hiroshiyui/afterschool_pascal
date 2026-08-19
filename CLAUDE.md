@@ -168,7 +168,7 @@ load-bearing and the entry names the test that fails without it.
 | function results and function-accesses | 0055, 0056 |
 | conformance sweeps and what they found | 0067, 0071 – 0078, 0080, 0087 – 0101 |
 | the build, the seed, the oracles | 0011, 0013, 0081 – 0086, 0102 – 0108 |
-| where the language is going | 0109 |
+| where the language is going | 0109, 0117 – 0122 |
 
 `doc/adr/README.md` indexes all of them by number and title.
 

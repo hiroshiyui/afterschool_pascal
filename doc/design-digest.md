@@ -1729,7 +1729,7 @@ decision being overturned on taste.
 
 ## The dialect
 
-Four mechanisms, and the section exists because the first two landed without
+Five mechanisms, and the section exists because the first two landed without
 an entry here. Nothing in it changes what either conformance mode accepts.
 
 **The mode is an ordinal and the order is a containment** (ADR-0117). `stdKind`
@@ -1809,3 +1809,31 @@ name the compiler emits itself, LLVM rejecting any redeclared global, and
 `tests/checks/foreign_reserved.py` keeps that list honest in both directions.
 `lib/dialect/pasmathx.pas` is the first binding module and holds the shape: it
 exports Pascal and keeps the directive to itself.
+
+**An address crosses only as an argument, and its lifetime is the call**
+(ADR-0122). The objection to a pointer at this boundary was always that it
+outlives the call — and *a pointer* does, while **an argument does not**. A
+`var` actual and a string actual are both storage the caller owns and outlives,
+so neither needs the memory-safety model; a returned `char *` is the callee's
+or nobody's and needs it, and needs an optional type before that, because null
+is what `getenv` answers in the ordinary course of things. So nothing comes
+back as an address. `string` in an `external` heading means `const char *` and
+is **not** a schematic formal — there is no descriptor, no discriminant and no
+callee prologue, so the actual has only to *be* a string and may be a literal,
+a concatenation, a substring or a char. A capacity (`string(20)`) and a fixed
+size (`packed array [1..3] of char`) are both refused: a C string carries its
+length in-band as the NUL, so the formal states no size and ADR-0115's
+prologue-converts guarantee has no callee here to make it. `pas_str_cstr` makes
+the NUL-terminated copy in ADR-0111's arena, which is already exactly the
+lifetime wanted — longer than the argument list, no longer than the statement —
+and being a third arena producer it has to bump the same counter, which
+`tests/dialect/foreign_string.pas` isolates with a loop that allocates nothing
+else. A NUL *inside* the value traps rather than truncating, and is the one
+safety property the increment adds. A `var` parameter of `integer` or `real`
+crosses as the actual's address (`int *`, `double *`); a **buffer** does not,
+and not for a lifetime reason — it is a pointer and a length whose length is
+not in-band, which is the slice decision and belongs to the language. A
+procedural parameter is refused because the link is the half with no image at
+all. `lib/dialect/pasfs.pas` is what it buys, and what it does not: every
+failure there is `errIO`, because `errno` is `*__errno_location()` and a
+pointer result is the thing this record refuses.
