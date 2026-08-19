@@ -31,7 +31,7 @@ If you are here for
 | [Stage 2](#stage-2--isoiec-102061991) | ISO/IEC 10206:1991 — [how it arrives](#how-the-second-standard-arrives), [every feature](#the-features-in-the-order-they-landed), [what is left](#what-is-left) |
 | [Conformance sweeps](#conformance-sweeps) | what was checked rather than asserted, and what that found |
 | [The two things that were not features](#the-two-things-that-were-not-features) | a required document, and an oracle nobody here wrote |
-| [The goal, restated](#the-goal-restated-adr-0109) | the dialect: its aim, thirteen increments, and [what is still blocked](#what-is-still-blocked-on-it) |
+| [The goal, restated](#the-goal-restated-adr-0109) | the dialect: its aim, [thirteen increments](#the-increments-at-a-glance), [where the ideas come from](#where-the-ideas-come-from), and [what is still blocked](#what-is-still-blocked-on-it) |
 
 **Part II — what is open**
 
@@ -1320,6 +1320,31 @@ compilation** (ADR-0053, ADR-0079) mean a standard library needs no new language
 mechanism to exist, and `runtime/pasrt.c` is where the outside world already
 enters. Those two are most of a library's scaffolding, finished and tested.
 
+### The increments at a glance
+
+Thirteen so far. What each one *is*, for someone who wants to use it, is in
+[README's "What it adds so far"](../README.md#what-it-adds-so-far); the
+sections below are why each was built in that order and what building it
+found. Six of the thirteen — 1, 2, 4, 11, 12 and 13 — are library work rather
+than language work, and several of those found a compiler defect nothing else
+in the tree could reach, which is a theme the sections return to.
+
+| # | What landed | Record |
+| --- | --- | --- |
+| 1 | `lib/` — `PasStrings`, `PasSort`, `PasMath`, in ordinary Extended Pascal | ADR-0114 |
+| 2 | `PasVector`, `PasMap`, `PasText` — a sequence, a map, a text buffer | ADR-0116 |
+| 3 | `--std=afterschool` itself, and a variant tag that cannot lie | ADR-0117 – 0119 |
+| 4 | `lib/dialect/` — the result record, and one shared `ErrorCode` | ADR-0120 |
+| 5 | `external` — a call to code this compiler did not emit | ADR-0121 |
+| 6 | `var` and `string` actuals across that boundary | ADR-0122 |
+| 7 | The optional type — `?T`, `nil` as its absent value, `o^` to read it | ADR-0123 |
+| 8 | Slices — `array of T` as a formal, the bounds travelling with it | ADR-0125 |
+| 9 | `int64` — the width `ssize_t` answers in | ADR-0128 |
+| 10 | A slice crosses to C as the pair `(ptr, i64)` | ADR-0129 |
+| 11 | `PasIO` — descriptor I/O on that buffer | ADR-0130 |
+| 12 | `errno` and `strerror`, through a second runtime surface (`pasx_`) | ADR-0131 |
+| 13 | `WorkingDirectory` and `LinkTarget`, with no compiler change at all | ADR-0132 |
+
 ### The first increment (done)
 
 `lib/` exists (ADR-0114): three modules — `PasStrings`, `PasSort`, `PasMath` —
@@ -1887,19 +1912,76 @@ they do not all fit equally. Pascal's grain is value semantics, explicitness and
 a small orthogonal core; that is close to Zig and Swift and further from Rust.
 Each borrowing below is tied to the open decision it would settle.
 
-| Idea | From | Settles | Fit here |
+| Idea | From | Settles | Where it stands |
 | --- | --- | --- | --- |
-| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Done** (ADR-0125), and the prediction held: `array of T` is that shape a fifth time and needed no new mechanism. What the row did not anticipate is how much of it §6.5.6 had already paid for — `a[i..j]` is the substring designator, and only the base's type tells the two apart, so the parser was untouched. Argument-only, so bounds safety is settled without the memory-safety decision. **ADR-0129 then carried it across the foreign boundary**, where the same two words are what `read`, `write`, `recv` and `send` take — the first time the far side of a design chose the shape rather than this project choosing it |
-| **Explicit allocator passing** | Zig | part of memory safety | **Tried, and it does not survive contact** (ADR-0116). An allocator *record* is not expressible — a record field may not have a procedure type, neither standard having general procedure types. A per-type allocator *parameter* is, and compiles; but `new` is the only origin of a typed pointer and there is no pointer arithmetic or cast, so it can only recycle blocks `new` produced rather than carve one into several. And the capacity it serves is unchecked: a pool asked for 9 may return a block of 4, whose own discriminant then answers `p^.cap`. Not unsafe — the bounds check reads the served block — but the central contract is unenforced. **This needs the FFI too**, which moves it from "cheapest on the list" to behind the same gate as everything else |
-| **`defer`** | Zig, Swift | resource safety | **Good.** Pascal has no early return, so a block already has one exit and the epilogue is already where files close (ADR-0021, ADR-0032). `defer` generalises a mechanism that exists |
-| **Error unions / `Result`** | Zig, Rust | error handling | **Good, and the biggest practical gap.** Pascal has *no* error handling — no exceptions, no result convention. It needs sum types with payloads, which variant records nearly are. Independent of the memory-safety fork, so it can proceed while that is open |
-| **Optionals, and no bare null** | Swift, Rust | pointer safety | **Done, and half of the description was wrong** (ADR-0123). `?T` exists, `nil` is its absent value and `o^` is the only way to a value. What it does *not* do is make the check a type question instead of a run-time one: `o^` still traps, as Swift's `!` does, and flow-sensitive narrowing (`if let`) is a Sema this has not built. What the type gives is that a `T` which is not optional can never be absent, so the check is **localised** to where the source writes `^` rather than eliminated. And "no bare null" is unavailable in the second half of its name: ADR-0117's containment means `^T` has to go on meaning what Extended Pascal says it means |
-| **Unicode-correct `String`** | Swift | the text model | **The model to copy.** Swift's is the best-considered answer to "what is a character" in any mainstream language, and the question is exactly the one ADR-0109 leaves open |
-| **ARC** | Swift | memory safety | **Plausible.** Needs retain/release in CodeGen and a runtime, but no borrow checker, no lifetime inference, and stays self-hostable and cheap to mirror in `src/` |
-| **Ownership and borrowing** | Rust | memory safety | **Strongest guarantee, worst fit.** Lifetime inference is a large Sema, the most expensive thing here to mirror in the C++ front end (ADR-0108), and the furthest from anything recognisably Pascal |
-| **Traits / protocols** | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039); this is the next layer, not the first |
-| **`comptime`** | Zig | metaprogramming | **Later.** ADR-0054 gave the language constant-expressions everywhere; `comptime` is a much larger idea and nothing yet needs it |
-| **Actors / `Send`+`Sync`** | Swift, Rust | concurrency | **Blocked**, and rightly: it cannot be designed before the memory model, and the memory model cannot be designed before the safety model |
+| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Done** (ADR-0125, ADR-0129) |
+| **Optionals, and no bare null** | Swift, Rust | pointer safety | **Done**, and this row's description was half wrong (ADR-0123) |
+| **Explicit allocator passing** | Zig | part of memory safety | **Tried; does not survive contact** (ADR-0116) |
+| **Error unions / `Result`** | Zig, Rust | error handling | **Good**, and the biggest practical gap |
+| **`defer`** | Zig, Swift | resource safety | **Good** |
+| **Unicode-correct `String`** | Swift | the text model | **The model to copy** |
+| **ARC** | Swift | memory safety | **Plausible** |
+| **Ownership and borrowing** | Rust | memory safety | **Strongest guarantee, worst fit** |
+| **Traits / protocols** | Rust, Swift | abstraction | **Later** |
+| **`comptime`** | Zig | metaprogramming | **Later** |
+| **Actors / `Send`+`Sync`** | Swift, Rust | concurrency | **Blocked** on the two above it |
+
+**Slices.** The prediction held: `array of T` is the two-scalar shape a fifth
+time and needed no new mechanism. What the row did not anticipate is how much
+of it §6.5.6 had already paid for — `a[i..j]` is the substring designator, and
+only the base's type tells the two apart, so the parser was untouched.
+Argument-only, so bounds safety is settled without the memory-safety decision.
+ADR-0129 then carried it across the foreign boundary, where the same two words
+are what `read`, `write`, `recv` and `send` take — the first time the far side
+of a design chose the shape rather than this project choosing it.
+
+**Optionals.** `?T` exists, `nil` is its absent value and `o^` is the only way
+to a value — and half of what this row used to claim for it was wrong. What it
+does *not* do is make the check a type question instead of a run-time one:
+`o^` still traps, as Swift's `!` does, and flow-sensitive narrowing (`if let`)
+is a Sema this has not built. What the type gives is that
+a `T` which is not optional can never be absent, so the check is **localised**
+to where the source writes `^` rather than eliminated. And "no bare null" is
+unavailable in the second half of its name: ADR-0117's containment means `^T`
+has to go on meaning what Extended Pascal says it means.
+
+**Explicit allocator passing.** An allocator *record* is not expressible — a
+record field may not have a procedure type, neither standard having general
+procedure types. A per-type allocator *parameter* is, and compiles; but `new`
+is the only origin of a typed pointer and there is no pointer arithmetic or
+cast, so it can only recycle blocks `new` produced rather than carve one into
+several. And the capacity it serves is unchecked: a pool asked for 9 may return
+a block of 4, whose own discriminant then answers `p^.cap`. Not unsafe — the
+bounds check reads the served block — but the central contract is unenforced.
+**This needs the FFI too**, which moves it from "cheapest on the list" to
+behind the same gate as everything else.
+
+**Error unions.** Pascal has *no* error handling — no exceptions, no result
+convention. It needs sum types with payloads, which variant records nearly are.
+Independent of the memory-safety fork, so it can proceed while that is open.
+
+**`defer`.** Pascal has no early return, so a block already has one exit and
+the epilogue is already where files close (ADR-0021, ADR-0032). `defer`
+generalises a mechanism that exists.
+
+**Unicode-correct `String`.** Swift's is the best-considered answer to "what is
+a character" in any mainstream language, and the question is exactly the one
+ADR-0109 leaves open.
+
+**ARC.** Needs retain/release in CodeGen and a runtime, but no borrow checker,
+no lifetime inference, and stays self-hostable and cheap to mirror in `src/`.
+
+**Ownership and borrowing.** Lifetime inference is a large Sema, the most
+expensive thing here to mirror in the C++ front end (ADR-0108), and the
+furthest from anything recognisably Pascal.
+
+**Traits, and `comptime`.** Schemata already give parametric types (ADR-0039),
+so traits are the next layer and not the first; ADR-0054 gave the language
+constant-expressions everywhere, and `comptime` is a much larger idea that
+nothing yet needs.
+
+**Actors.** Blocked, and rightly: concurrency cannot be designed before the
+memory model, and the memory model cannot be designed before the safety model.
 
 Two conclusions worth stating rather than leaving implicit:
 
@@ -2096,9 +2178,9 @@ Writing that sentence down, or finding that it cannot be written, is the work.
 
 ADR-0121 requires `src/` to carry the *refusal* of `external`, and the message
 names the mode — so a program written for the dialect and compiled under
-`--std=extended` is told about the dialect. `.claude/skills/release-engineering/`
-makes diagnostics part of the public interface, alongside the accepted language
-and the command line.
+`--std=extended` is told about the dialect.
+`.claude/skills/release-engineering/` makes diagnostics part of the public
+interface, alongside the accepted language and the command line.
 
 The exact claim is therefore: **the dialect does not change what the
 conformance modes accept; it does change what they say.** That is almost
@@ -2421,8 +2503,8 @@ written it:
 
 One thing the workflow had to be told explicitly: `verify.py` *skips* when z3
 is absent, which is right for a checkout and wrong for CI — the rest of the
-suite would report green with the 43 rules never run. It asserts z3 is importable before it
-configures, so a green bar means the proofs ran.
+suite would report green with the 43 rules never run. It asserts z3 is
+importable before it configures, so a green bar means the proofs ran.
 
 ## Known limitations
 
