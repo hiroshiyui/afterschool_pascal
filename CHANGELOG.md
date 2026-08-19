@@ -13,6 +13,21 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-08-19
+
+**The release the dialect arrived in.** ADR-0109's practical Pascal had a
+goal and no surface; it now has a third `--std`, a foreign-function
+interface, a standard library in two layers, and the types those needed.
+The two conformance modes are untouched by all of it — that separation is
+the whole design, and `tests/dialect/inherits_extended.pas` is what pins it.
+
+**And the last known conformance defect is fixed.** §6.1 of
+`doc/implementation-defined.md` — the programs this compiler accepts that
+ISO 7185 requires it to reject — is **empty** for the first time, and §3's
+unreported-error list is three entries shorter. Read *Changed* before upgrading: five shapes
+that used to compile no longer do, and each of them returned or read
+something wrong.
+
 ### Added
 
 - **`external` — a foreign function, under `--std=afterschool` only**
@@ -357,8 +372,6 @@ appears below in the release where it still existed.
   script skips rather than fails when it cannot run, and says so explicitly on
   the day the `v0.1.0` compiler stops accepting today's source — after which the
   question can no longer be asked.
-
-### Added
 
 - **`lib/dialect/` — a second library layer, in `--std=afterschool`**
   (ADR-0120), and the answer to the finding three increments of `lib/` kept
@@ -1527,6 +1540,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.5.0
 [1.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.4.0
 [1.3.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.1
 [1.3.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.0
