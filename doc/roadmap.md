@@ -625,11 +625,14 @@ finished being a means to an end: since then a feature needs no reason beyond
 the standard having it, ISO 7185 was completed on those grounds, and
 ISO/IEC 10206:1991 is being worked through the same way.
 
-**Where things are.** Everything above "What is next" is now history: both
-standards are complete, the sweeps have been run, and the bootstrap stands on
-its own. The live work is that last section, and most of it is not about the
-language.
+**Where things are.** Everything between here and "What is next" is history
+with **one exception**: both standards are complete, the sweeps have been run,
+and the bootstrap stands on its own, but "The two standards and the dialect" is
+live and is the only chapter here that holds questions rather than answers. The
+other live section is the last one, and most of it is not about the language.
 
+- [The two standards and the dialect](#the-two-standards-and-the-dialect) —
+  seven structural questions the dialect raises and no ADR has settled
 - [The three-stage build](#the-three-stage-build)
 - [The six bootstrap items](#the-six-bootstrap-items-all-done) — with
   [text files](#item-5--text-files-done) and
@@ -650,6 +653,209 @@ language.
 - [The two things that were not features](#the-two-things-that-were-not-features)
 - [What is next](#what-is-next) — the oracle that was given up, and the four
   other things worth doing; measuring what the corpus reaches is done
+
+## The two standards and the dialect
+
+Everything above this point describes the dialect one increment at a time —
+what each feature cost, and what the record said it unblocked. This chapter is
+the other reading: what the *relationship* between `--std=afterschool` and the
+two conformance modes now is, where it is asserted more strongly than it is
+checked, and which decisions are being made by default rather than on purpose.
+
+None of these is a work item. Each is a question with a live answer that no ADR
+has written down, and the reason they are here rather than in
+`doc/implementation-defined.md` §6 or `doc/sop.md` §7 is that those two
+registers hold *what this compiler does not do*. These are about what it does
+and whether we have said so accurately.
+
+### 1. The containment stops at the link, and no document says so
+
+ADR-0117's claim is that the dialect **contains** Extended Pascal:
+`HasExtended(s)` is `s >= stdExtended`, and
+`tests/dialect/inherits_extended.pas` is the witness. At the source level it
+holds. It does not survive separate translation:
+
+```
+$ tools/pascalcc --std=extended -c lib/pasmath.pas -o pm.o     # fine
+$ tools/pascalcc --std=afterschool use.pas --import lib/pasmath.pas pm.o
+ld: undefined reference to `m.pasmath.afterschool.init'
+pascalcc: error: module 'pasmath' was translated under a different --std
+```
+
+Sema accepts that program **completely** — the interface resolves and
+`PasMath.IMax(3, 4)` type-checks — and it dies at the link. So the six
+conforming modules in `lib/` are unreachable from the dialect: the layer
+ADR-0114 built so the *conforming* language would have a library is the layer
+the language that contains it cannot use.
+
+ADR-0119's reason is real and the hole it closes is real — the dialect's
+variant rules are a pair emitted at the access, so a dialect component reading
+a variant a conformance-mode component wrote runs its guard against a tag
+nothing stored and **permits** the read. What is wrong is not the rule but its
+granularity: the mangling names the *mode*, and the mode is a proxy for the ABI
+that is far too coarse. `lib/pasmath.pas` contains no variant record at all,
+and its object code is identical under both modes.
+
+The principled fix is the move this project already makes everywhere else —
+**ask what actually differs, not what the flag says** (ADR-0044, ADR-0053,
+ADR-0066, ADR-0071, ADR-0087 are the same sentence about five other
+constructs): mangle on a fingerprint of the ABI-relevant features a module
+actually uses, or emit both symbols where the object code is mode-independent.
+
+Until that is settled the honest phrasing is that **the dialect contains
+Extended Pascal as a language and not as a linkage**, and no document currently
+carries the second half.
+
+### 2. The dialect has spent no reserved word, and that is a fact rather than a policy
+
+Four features have landed and none of them cost the lexis anything:
+
+| Feature | What it cost |
+| --- | --- |
+| `external` (ADR-0121) | nothing — a directive, in the one position `forward` occupies |
+| `?T` (ADR-0123) | nothing — `?` was unused punctuation |
+| `array of T` (ADR-0125) | nothing — two words already reserved |
+| `int64` (ADR-0128) | a *required identifier*, which §6.1.3 makes shadowable |
+
+That is a real discipline and it was never decided: each feature found a cheap
+spelling on its own, and the pattern is visible only in aggregate. **It is also
+the only thing keeping the containment of §1 true at all.** The moment the
+dialect reserves a word-symbol, a valid Extended Pascal program using that
+identifier stops compiling — which is exactly how ISO 7185 and Extended Pascal
+came to be non-nested (ADR-0033), and the reason `--std` is a property of a
+source rather than a switch.
+
+The collision is coming. `defer`, error unions, traits and actors — every
+remaining borrowing in *Where the ideas come from* wants a word. The dodges
+available are a directive position (only where the grammar admits exactly one),
+a required identifier (names, never statement syntax), punctuation (a small
+supply, and poor for statements), and ADR-0038's trick of joining two words the
+lexer already has, the way `and then` is joined.
+
+**This is the decision most worth making before a feature forces it in a
+hurry**: is "the dialect reserves no new word-symbol" a constraint we design
+within, or a budget we intend to spend — and if the second, what does spending
+it cost and what has to be true before it is spent?
+
+### 3. The dialect has no external authority, and every gate here is anchored in one
+
+| | ISO 7185 | Extended Pascal | the dialect |
+| --- | --- | --- | --- |
+| third-party corpus | BSI, 812 programs | — | — |
+| second implementation (difftest) | yes | yes | **skipped** |
+| clause-cited scenarios | yes | yes | **not expressible** |
+| independent reading | ADR-0101, ADR-0107 | ADR-0101, ADR-0107 | **nothing to read** |
+| goldens, irtest, `verify/` | yes | yes | yes |
+
+The third row is literal rather than rhetorical. `tests/spec/run.py` matches
+
+```python
+TAG = re.compile(r"@(iso7185|extended):(\d+(?:\.\d+)*)")
+```
+
+so a dialect scenario cannot be tagged, and ADR-0105's apparatus — the one
+suite whose unit is a clause rather than a program — is unavailable to the
+fastest-growing part of the compiler.
+
+Every oracle in this repository bottoms out in *the standard says X*.
+`.claude/skills/langspec-audit/` exists because no oracle here can contradict a
+**reading**, and its remedy is independent readers holding the standards text.
+The dialect has no text, so its correctness is currently "what the compiler
+does, plus what its ADR said it should do" — the closed loop ADR-0072's
+set-packing deviation survived inside for four documents and a purpose-written
+test.
+
+One external authority is already in play and is worth naming, because ADR-0129
+noticed it and then dropped it: **POSIX and the C ABI are specifications**, and
+`read`, `write`, `recv` and `send` taking a pointer and a count is the far side
+of the boundary choosing a shape rather than this project choosing it. Every
+FFI-facing decision has an authority available to it. Nothing else in the
+dialect does.
+
+### 4. Containment is a claim about every program, witnessed by one
+
+`tests/dialect/inherits_extended.pas` asserts that everything Extended Pascal
+accepts, the dialect accepts and means the same thing. One program cannot
+witness that, and a much stronger witness is nearly free: **compile the whole
+of `tests/extended/` under `--std=afterschool` as well and require identical
+results.** That is 228 programs, the corpus already exists, and the only new
+machinery is a loop. It would also have caught §1, since
+`tests/extended/module.pas` links modules.
+
+That every case is compiled under exactly one mode is the same shape of gap as
+"no corpus program had ever written `pack`, `page` or a string constant" — a
+claim every oracle agreed with because nothing had tried it.
+
+### 5. The dialect was pulled, not designed, and the pieces have not been checked for coherence
+
+Every feature so far was demanded by the foreign interface or by the library
+built on it: `external` because nothing outside the program was reachable
+without it, `?T` because a `char *` may be null, `array of T` because a buffer
+needs bounds at the boundary, `int64` because `read` answers an `ssize_t`, and
+the variant rules and the result record because the library needed a way to
+report failure. The one *designed* feature — ADR-0116's allocator — did not
+survive contact.
+
+That is a strength: nothing speculative has landed, and the record of the last
+five increments is that each blocked half turned out narrower than written
+down. The risk is its mirror — no one has stepped back and asked whether the
+pieces form a language rather than a set of local optima.
+
+The sharpest instance is that **the dialect now has two ways to say "this may
+have failed"**: an optional (`?T` — absence) and a result record (ADR-0120 —
+absence with a code). `lib/dialect/pasfs.pas` uses both, `OptPathName` inside
+and `PathResult` out. Either there is a rule an author can apply — *absence is
+not a failure* is the candidate — or users meet both idioms and learn neither.
+Writing that sentence down, or finding that it cannot be written, is the work.
+
+### 6. "The conformance modes stay exactly as they are" is slightly stronger than the truth
+
+ADR-0121 requires `src/` to carry the *refusal* of `external`, and the message
+names the mode — so a program written for the dialect and compiled under
+`--std=extended` is told about the dialect. `.claude/skills/release-engineering/`
+makes diagnostics part of the public interface, alongside the accepted language
+and the command line.
+
+The exact claim is therefore: **the dialect does not change what the
+conformance modes accept; it does change what they say.** That is almost
+certainly unavoidable and is not a conformance question — §5.1 is about
+accepting and rejecting — but the phrasing in `CLAUDE.md` and in README is
+stronger than what is true, and noticing that gap is this repository's habit.
+
+### 7. The memory-safety fork: deferral, or discovery?
+
+ADR-0109 wants networking, internationalisation, concurrency and memory safety.
+Three of the four are behind the one decision that has never been made:
+networking needs a struct with an agreed layout; concurrency cannot be designed
+before the memory model and the memory model cannot be designed before the
+safety model; and the safety model itself is the open fork — ARC, ownership, or
+neither.
+
+The record of the last five increments cuts both ways. ADR-0122 found the
+argument side of the boundary has no lifetime question on it, ADR-0123 found
+the nearest blocker was **null** rather than ownership, and ADR-0132 found a
+buffer the caller lends was never blocked at all. **Two readings fit that
+equally well**: either the decision genuinely keeps proving unnecessary, or it
+is being routed around because it is the hardest thing here. The opaque handle
+(`DIR *`, `FILE *`) is the first item that forces it, which is the reason it
+has not simply been started.
+
+Internationalisation is the fourth and is wholly unstarted. It is also the one
+with the best model available to copy, and the one whose absence a "practical
+Pascal" would be judged on first.
+
+### Which of these is which
+
+- **§2 is the decision.** It gets harder the longer it is left, and it silently
+  governs the spelling of every remaining feature.
+- **§3 is the risk.** It is the condition under which this project's own
+  history says a mistake survives every oracle at once.
+- **§1 is the bug.** Concrete, reproduced above, and probably a day's work
+  under the ABI-fingerprint framing.
+- §4 is cheap and would strengthen §1 and §2 both.
+- §5, §6 and §7 are writing rather than building: a rule, a sentence, and a
+  decision that has been deferred long enough to deserve being deferred
+  *explicitly*.
 
 ## The three-stage build
 
