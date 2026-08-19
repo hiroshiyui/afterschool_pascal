@@ -1,5 +1,4 @@
-<source>:27:10: error: the bounds of a subrange must be ordinal constants
-<source>:28:26: error: the bounds of a subrange must be ordinal constants
-<source>:30:9: error: the bounds of a subrange must be ordinal constants
-<source>:31:16: error: the bounds of a subrange must be ordinal
-<source>:32:25: error: the bounds of a subrange must be ordinal constants
+<source>:21:19: error: the bounds of a subrange must be ordinal constants
+<source>:22:19: error: the bounds of a subrange must be ordinal constants
+<source>:23:16: error: the bounds of a subrange must be ordinal constants
+<source>:24:16: error: the bounds of a subrange must be ordinal

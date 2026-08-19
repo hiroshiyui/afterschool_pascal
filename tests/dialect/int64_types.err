@@ -1,6 +1,6 @@
 <source>:25:6: error: the base type of a set must be an ordinal type, found int64
 <source>:26:15: error: an array index must be an ordinal type, found int64
-<source>:27:8: error: the bounds of a subrange must be ordinal constants
+<source>:27:8: error: the bounds of a subrange must be ordinal
 <source>:32:8: error: the selector of a case statement must be an ordinal type, found int64
 <source>:33:7: error: the control variable of a for statement must be an ordinal type
 <source>:34:11: error: 'succ' needs an ordinal argument, found int64

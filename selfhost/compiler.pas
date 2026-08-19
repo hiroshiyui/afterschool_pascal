@@ -1521,16 +1521,6 @@ var
     to a *schema's* actual-discriminant-part: the two are the same clause and
     different denoters, and a bound has no schema to be keyed on. }
   dynBoundsFor: symPtr;
-  { Whether the denoter about to be resolved is an array's *index-type*, which
-    is the one position a subrange whose bounds are discriminants may occupy
-    (ADR-0127). Everywhere else such a subrange is refused, because what a
-    subrange's bounds are *for* outside an index-type is the range check at a
-    store -- and that check reads the type's two numbers, not a descriptor. It
-    was not refused, and `var a: array [1..m] of 1..m` then trapped on a legal
-    store: the component's hi had never been read from anywhere and was zero.
-    One-shot -- ResolveType clears it before it recurses -- so it says something
-    about one denoter and not about a subtree. }
-  dynBoundsIndex: boolean;
   { True while a field of a *variant part* is being resolved, where 6.5.1 makes
     the initial state conditional on the selector. There is no flag for "this
     position admits a specifier at all": the parser settles that, by stopping
@@ -7434,7 +7424,15 @@ begin
           (IsStringType(toT) or IsStringType(fromT)) and
           IsStringOrChar(toT) and IsStringOrChar(fromT) then
     Assignable := true
-  else if IsGeneric(toT) or IsGeneric(fromT) then
+  { A subrange is exempt, and has to be: since ADR-0133 one whose bounds are
+    discriminants carries the anonymous schema ADR-0113 hangs a descriptor on,
+    which is a compiler device and not 6.4.8's schema -- no schema-definition
+    produced it and no tuple selects it. What the type *is* is a subrange, so
+    6.4.6 asks about its host, which is what the ordinal rules at the end of
+    this function do. Left here it would be compatible only with a subrange
+    sharing its descriptor, so `x := 3` into `var x: 1..m` would be refused. }
+  else if (IsGeneric(toT) or IsGeneric(fromT)) and
+          (toT^.kind <> tySubrange) and (fromT^.kind <> tySubrange) then
     Assignable := toT^.schema = fromT^.schema
   { ISO 7185 6.4.6 makes set compatibility *structural*, not by name: two set
     types are compatible when their base types are. This is the standard's own
@@ -9341,12 +9339,7 @@ end;
 function ResolveArray(d, dim: nodePtr): typePtr;
 var t, index: typePtr;
 begin
-  { The one position 6.2.3.8 b)'s bound may size something from: this array.
-    A component's own subrange is refused, and the flag is what tells the two
-    apart -- both are an nkSubrange reached from here (ADR-0127). }
-  dynBoundsIndex := true;
   index := ResolveType(dim);
-  dynBoundsIndex := false;
   if not IsOrdinal(index) then begin
     ErrorAt(dim^.line, dim^.col);
     write('an array index must be an ordinal type, found ');
@@ -9389,7 +9382,6 @@ begin
   t^.loDisc := index^.loDisc;
   t^.hiDisc := index^.hiDisc;
   t^.isPacked := d^.arPacked;
-  dynBoundsIndex := false;
   if dim^.next <> nil then
     t^.elem := ResolveArray(d, dim^.next)
   else
@@ -10527,6 +10519,13 @@ function DynamicExtent(t: typePtr): boolean;
 var f: fieldPtr;
 begin
   if t = nil then DynamicExtent := false
+  { A subrange is asked before its bounds are, because its bounds decide what
+    a store is compared against and not how many bytes it takes: its size is
+    its host's whatever they are. The question reaches one only since ADR-0133
+    let a dynamically bounded subrange stand as a variable's own type and as an
+    array's component; before that the only one anywhere was an array's
+    index-type, which is asked about the array. }
+  else if t^.kind = tySubrange then DynamicExtent := false
   else if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then DynamicExtent := true
   else if t^.kind = tyArray then DynamicExtent := DynamicExtent(t^.elem)
   else if t^.kind = tyRecord then begin
@@ -11072,7 +11071,6 @@ end;
 
 function ResolveType;
 var t: typePtr; s, savedDynamic, savedBounds: symPtr; n: nodePtr;
-    savedIndex: boolean;
 begin
   if d^.ntype <> nil then
     ResolveType := d^.ntype
@@ -11092,14 +11090,18 @@ begin
       a type of its own, whose storage is not this variable's to size, so the
       offer stops there and the bound must be constant exactly as before. }
     savedBounds := dynBoundsFor;
-    if (d^.kind <> nkArray) and
-       ((d^.kind <> nkSubrange) or not dynBoundsIndex) then
+    { A subrange joins it (ADR-0133), and the two together are the whole of
+      what 6.2.3.8 b) reaches: a bound written in a variable-declaration or a
+      type-definition of this block, at any depth of arrays and subranges. A
+      subrange needs no clause of its own about *sizing* -- its storage is its
+      host's whatever its bounds are -- so what admits it here is that the
+      range check at a store can read the descriptor, which is the half
+      ADR-0127 left. Every other kind still withdraws the offer at the
+      container: `set of 1..m` stops at the nkSet, `record f: 1..m end` at the
+      nkRecord, and a file component and a pointer domain likewise, so the
+      bound must be constant there exactly as before. }
+    if (d^.kind <> nkArray) and (d^.kind <> nkSubrange) then
       dynBoundsFor := nil;
-    { One denoter's answer, not a subtree's: an array's index-type may be a
-      subrange with discriminant bounds and its component-type may not, so the
-      flag is spent on the denoter it was set for (ADR-0127). }
-    savedIndex := dynBoundsIndex;
-    dynBoundsIndex := false;
     t := nil;
     case d^.kind of
       nkNamed: begin
@@ -11216,7 +11218,6 @@ begin
     end;
     dynamicVarFor := savedDynamic;
     dynBoundsFor := savedBounds;
-    dynBoundsIndex := savedIndex;
     CheckInitialState(d, t);
     d^.ntype := t;
     ResolveType := t
@@ -20822,6 +20823,29 @@ begin
   StartBlock(c)
 end;
 
+{ And again for a store into a subrange whose bounds are discriminants
+  (ADR-0133). Where they are constants the message names the *type*, which is
+  what a program wrote and the more useful of the two; a bound evaluated at the
+  block's commencement has no spelling to name, so this names its value -- the
+  same trade EmitTrapIndex makes, and made here for the same reason. }
+procedure EmitTrapRange(var cond, lo, hi: str);
+var t, c: integer;
+begin
+  t := NewBlock;
+  c := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', t:1, ', label %L', c:1);
+  StartBlock(t);
+  write(ircode, '  call void @pas_range_error(i32 ');
+  PutOp(lo);
+  write(ircode, ', i32 ');
+  PutOp(hi);
+  writeln(ircode, ')');
+  writeln(ircode, '  unreachable');
+  StartBlock(c)
+end;
+
 { And again for 6.7.2.5's equal-length requirement, where one of the lengths is
   a discriminant and neither is known until the program runs. }
 { No program reaches this, and tests/checks/uncovered_procedures.txt carries
@@ -21762,40 +21786,77 @@ var host: typePtr;
 begin
   NeedsSubrangeCheck := false;
   if target <> nil then
-    if target^.kind = tySubrange then begin
-      host := Base(target);
-      NeedsSubrangeCheck :=
-        (target^.lo > OrdinalLo(host)) or (target^.hi < OrdinalHi(host))
-    end
+    if target^.kind = tySubrange then
+      { A bound that is a discriminant is not a number here, and the two on the
+        type are placeholders -- so the question cannot be asked and the check
+        is always emitted. Reading them anyway would answer about the subrange
+        0..0, which is a subrange nobody wrote. }
+      if (target^.loDisc <> nil) or (target^.hiDisc <> nil) then
+        NeedsSubrangeCheck := true
+      else begin
+        host := Base(target);
+        NeedsSubrangeCheck :=
+          (target^.lo > OrdinalLo(host)) or (target^.hi < OrdinalHi(host))
+      end
 end;
 
 { ISO 7185 6.4.6 makes it an error to store a value outside a subrange's
   bounds, so every place a value enters a subrange variable comes through here. }
+{ Where a bound is a discriminant the two numbers on the type say nothing and
+  BoundValue reads the descriptor instead -- the same call the subscript check
+  makes, which is the whole of what ADR-0127 left for ADR-0133 to do. The
+  comparison moves to i32 with it, because that is the width a discriminant is
+  loaded and widened to; a char or boolean value widens to meet it, and zext is
+  exact there because their ordinals are non-negative. The header is empty, and
+  for a reason rather than by omission: a header is where a *heap* variable
+  keeps its tuple, and `new` builds one only for a type with a dynamic extent,
+  which a subrange never has. So `type t = 1..m; q = ^t` allocates four bytes
+  with no tuple in front of them and `ptr^ := k` is checked against the block's
+  own descriptor, which is where its bounds have been all along. }
 procedure CheckedForSubrange(var v: str; target: typePtr);
-var below, above, bad, lo, hi: str; sign: boolean; msg: integer;
+var below, above, bad, lo, hi, hdr, val: str; sign, dynamic: boolean;
+    msg: integer;
 begin
   if target <> nil then
     if target^.kind = tySubrange then begin
       if NeedsSubrangeCheck(target) then
       begin
+        dynamic := (target^.loDisc <> nil) or (target^.hiDisc <> nil);
         sign := IsInteger(target);
-        OpInt(target^.lo, lo);
-        OpInt(target^.hi, hi);
+        val := v;
+        if dynamic then begin
+          StrClear(hdr);
+          BoundValue(target, false, hdr, lo);
+          BoundValue(target, true, hdr, hi);
+          if IsChar(target) or IsBoolean(target) then begin
+            Def(val);
+            write(ircode, 'zext ');
+            PutLlType(target);
+            write(ircode, ' ');
+            PutOp(v);
+            writeln(ircode, ' to i32')
+          end;
+          sign := true
+        end
+        else begin
+          OpInt(target^.lo, lo);
+          OpInt(target^.hi, hi)
+        end;
         Def(below);
         if sign then write(ircode, 'icmp slt ')
         else write(ircode, 'icmp ult ');
-        PutLlType(target);
+        if dynamic then write(ircode, 'i32') else PutLlType(target);
         write(ircode, ' ');
-        PutOp(v);
+        PutOp(val);
         write(ircode, ', ');
         PutOp(lo);
         writeln(ircode);
         Def(above);
         if sign then write(ircode, 'icmp sgt ')
         else write(ircode, 'icmp ugt ');
-        PutLlType(target);
+        if dynamic then write(ircode, 'i32') else PutLlType(target);
         write(ircode, ' ');
-        PutOp(v);
+        PutOp(val);
         write(ircode, ', ');
         PutOp(hi);
         writeln(ircode);
@@ -21806,12 +21867,16 @@ begin
         PutOp(above);
         writeln(ircode);
 
-        MsgStart;
-        MsgText('value out of range (                    ');
-        WriteTypeName(target);
-        Put(')');
-        msg := MsgEnd;
-        EmitTrapIf(bad, msg)
+        if dynamic then
+          EmitTrapRange(bad, lo, hi)
+        else begin
+          MsgStart;
+          MsgText('value out of range (                    ');
+          WriteTypeName(target);
+          Put(')');
+          msg := MsgEnd;
+          EmitTrapIf(bad, msg)
+        end
       end
     end
 end;
@@ -25344,7 +25409,11 @@ begin
     HeapHeader(s^.asTarget, hdr);
     EmitStringStore(dst, t, s^.asValue, hdr)
   end
-  else if (t^.schema <> nil) and
+  { And a subrange, for the reason Assignable exempts one: the anonymous
+    schema on it describes where its *bounds* are and not an extent, so there
+    is no tuple to compare and nothing to copy by size. Its store is the
+    ordinary one, with the range check reading the descriptor (ADR-0133). }
+  else if (t^.schema <> nil) and (t^.kind <> tySubrange) and
      (IsGeneric(t) or IsGeneric(s^.asValue^.ntype)) then begin
     EmitTupleCheck(s^.asTarget, s^.asValue);
     EmitAddress(s^.asValue, src);
@@ -27159,6 +27228,33 @@ begin
       last := LastField(t^.fields);
       CheckSchemaDomain(last^.ftype, schema, header)
     end
+    { A subrange whose bounds are discriminants, which ADR-0133 made reachable
+      here. 6.4.2.4 requires the first bound not to exceed the second, and
+      where both are constants Sema says so before the program runs; where one
+      is not, nothing else would. An empty one has no values, so every store
+      into it traps -- but a block that declares such a variable and never
+      stores into it would run with a type that is not a type, which is the
+      case this catches. It is not guarded by DynamicExtent, a subrange having
+      none: its size is its host's whatever its bounds are. }
+    else if (t^.kind = tySubrange) and
+            ((t^.loDisc <> nil) or (t^.hiDisc <> nil)) then begin
+      BoundValue(t, false, header, lo);
+      BoundValue(t, true, header, hi);
+      Def(bad);
+      write(ircode, 'icmp slt i32 ');
+      PutOp(hi);
+      write(ircode, ', ');
+      PutOp(lo);
+      writeln(ircode);
+      MsgStart;
+      { A constant, where the array's message above has to choose between the
+        schema's name and a description: an empty subrange has nothing to name
+        but itself. }
+      MsgText('this subrange has no values: its upper  ');
+      MsgText(' bound is below its lower bound         ');
+      msg := MsgEnd;
+      EmitTrapIf(bad, msg)
+    end
     else if (t^.kind = tyArray) and DynamicExtent(t) then begin
       if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
         BoundValue(t, false, header, lo);
@@ -27867,6 +27963,7 @@ begin
   writeln(ircode, 'declare i', setBits:1, ' @llvm.ctpop.i', setBits:1,
           '(i', setBits:1, ')');
   writeln(ircode, 'declare void @pas_index_error(i32, i32)');
+  writeln(ircode, 'declare void @pas_range_error(i32, i32)');
   { 6.4.6 d): an assignment between two types produced from one schema with
     different tuples. The schema and the discriminant are named here; only the
     values come from the running program. }
@@ -28318,7 +28415,6 @@ begin
   sliceFormNode := nil;
   dynamicVarFor := nil;
   dynBoundsFor := nil;
-  dynBoundsIndex := false;
   variantField := false;
   inSchemaBody := false;
   stdInput := nil;

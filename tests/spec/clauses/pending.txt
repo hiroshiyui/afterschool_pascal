@@ -28,7 +28,6 @@ extended:6.4.1
 extended:6.4.2.1
 extended:6.4.2.2
 extended:6.4.2.3
-extended:6.4.2.4
 extended:6.4.2.5
 extended:6.4.3.1
 extended:6.4.3.2

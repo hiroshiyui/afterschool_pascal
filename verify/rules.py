@@ -386,7 +386,13 @@ def _subrange_traps_exactly_outside(w):
     subranges rather than a sample of some."""
     v = low.integer("v", w)
     lo, hi = low.integer("lo", w), low.integer("hi", w)
-    pre = z3.And(lo <= hi,  # Sema rejects an empty subrange at compile time
+    # `lo <= hi` is a restriction the compiler enforces rather than an
+    # assumption made here, which is what keeps this rule from proving
+    # something about a subrange nothing can declare. Sema rejects an empty one
+    # where both bounds fold; where one is evaluated at the block's
+    # commencement (ADR-0133) the declaration traps instead, which is why that
+    # check is load-bearing and not a nicety.
+    pre = z3.And(lo <= hi,
                  iso.in_integer_range(lo, low.maxint(w)),
                  iso.in_integer_range(hi, low.maxint(w)),
                  iso.in_integer_range(v, low.maxint(w)))

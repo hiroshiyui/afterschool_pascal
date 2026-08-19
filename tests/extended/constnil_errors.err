@@ -1,4 +1,4 @@
-<source>:38:9: error: the bounds of a subrange must be ordinal constants
+<source>:38:9: error: the bounds of a subrange must be ordinal
 <source>:45:9: error: nil identifies no variable, so it cannot be dereferenced
 <source>:46:7: error: 'new' needs a pointer variable
 <source>:47:11: error: 'dispose' needs a pointer, found nil

@@ -308,36 +308,32 @@ link one list node twice (ADR-0070).
 **Conformant array parameters are not accepted**, which is what makes this a
 level 0 processor rather than a deviation — see §1.
 
-**A subrange whose bounds are not constants is refused anywhere but an array's
-index-type.** `var x: 1..m`, `type t = 1..m` and `array [1..m] of 1..m` inside a
-procedure, with `m` a value parameter, are legal under §6.4.2.4 —
-`subrange-bound = expression`, with a dynamic-violation branch of its own for
-varying bounds, which would be meaningless if they were illegal — and are
-refused with *the bounds of a subrange must be ordinal constants*.
+**A subrange whose bounds are not constants is refused as a record's field, as
+a set's base type and as a file's component.** All three are legal under
+§6.2.3.8 b) — a bound inside a record-type written in the block is
+closest-contained by the block — and each is refused with *the bounds of a
+subrange must be ordinal constants*.
 
-What an index-type's bounds are for is the subscript check, which reads them
-out of the descriptor §6.2.3.8 b) filled. What every other subrange's bounds are
-for is the range check at a store, and that check compares against the two
-numbers on the type. So a dynamically bounded subrange in any other position
-has a check that cannot see its own bound, and until ADR-0127 it was **accepted
-and wrong**: `a[1] := 2` over `array [1..m] of 1..m` with `m = 3` trapped with
-*value out of range (1..)* — a legal store stopped by a comparison against an
-upper bound that had never been read from anywhere. Refusing it is a deviation;
-accepting it was a defect.
+The entry this replaces refused it everywhere but an array's index-type, and
+ADR-0133 lifted that: `var x: 1..m`, `type t = 1..m` and `array [1..m] of 1..m`
+inside a procedure all work, because the range check at a store now reads the
+descriptor §6.2.3.8 b) filled the way the subscript check always has. What holds
+the three above is the shape of the withdrawal rather than anything about a
+subrange: it is made at the **container**, so admitting one there would admit an
+array with it, and `record f: array [1..m] of integer end` is a genuine problem
+about storage this activation does not size. A set has a reason of its own
+besides — it is one 256-bit word laid out from its base type's ordinal range
+(ADR-0028), so a dynamic base type has no representation to give.
 
-Fixable, and it is a run-time check rather than a decision: the store's
-comparison has to read the descriptor the way the subscript check already does,
-and the message has to be built by the runtime the way an array's already is
-where the bounds arrived with an actual (ADR-0040). `doc/sop.md` §7 carries it.
-
-The two halves of the entry this replaces are **fixed**. `var v: vector(m)` has
-always worked; `var a: array [1..m] of real` works since ADR-0113; and
-`type t = vector(m)` and `type t = array [1..m] of real` work since ADR-0127 —
-all three in `--std=extended` only, ISO 7185 §6.4.2.4 writing `subrange-type =
-constant '..' constant`. The type-definition half was the finding of the second
-independent reading most likely to break a real program (ADR-0107). A record
-field is still refused, for the reason it always was: its storage is sized where
-the record is.
+Everything else is **fixed**, and it took four records to get there.
+`var v: vector(m)` has always worked; `var a: array [1..m] of real` works since
+ADR-0113; `type t = vector(m)` and `type t = array [1..m] of real` since
+ADR-0127; and the bare subrange in every position but the three above since
+ADR-0133 — all of them in `--std=extended` and `--std=afterschool` only,
+ISO 7185 §6.4.2.4 writing `subrange-type = constant '..' constant`. The
+type-definition half was the finding of the second independent reading most
+likely to break a real program (ADR-0107). `doc/sop.md` §7 carries what is
+left.
 
 **`read` does not take an `int64`** (ADR-0128), under `--std=afterschool`.
 `write` does — §6.10.3.1's decimal representation is the same at both widths
@@ -389,8 +385,8 @@ only for the walkers after it. A program's own block is one of the levels, so
 
 ### 6.1 Programs accepted that the standard requires to be rejected
 
-The first two above are deviations this project chose, the third is a defect it
-has not fixed, and the last three are limits it states rather than hides. These are the other kind: rules of ISO 7185 that a program can
+The first three above are deviations this project chose, and the last three are
+limits it states rather than hides. These are the other kind: rules of ISO 7185 that a program can
 break without this compiler saying so.
 They were found the way the unreported errors in §3 were — by the BSI Pascal
 Validation Suite's `DEVIANCE` category, whose programs a conforming processor

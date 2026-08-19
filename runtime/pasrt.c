@@ -116,6 +116,21 @@ void pas_index_error(int lo, int hi) {
   exit(1);
 }
 
+/// And the same for a store into a subrange whose bounds are discriminants
+/// (ISO/IEC 10206:1991 §6.2.3.8 b), ADR-0133). Where the bounds are constants
+/// the compiler writes the *type* -- `value out of range (small)`, or
+/// `(1..3)` where the subrange is anonymous -- and it cannot here: a bound
+/// evaluated at the block's commencement has no spelling in the source, the
+/// program having written an expression rather than a name. So this names the
+/// bounds as values, which is what `pas_index_error` above does for exactly
+/// the same reason, and prints them as ordinal numbers whatever the host type
+/// is -- again as the index message does.
+void pas_range_error(int lo, int hi) {
+  fflush(stdout);
+  fprintf(stderr, "runtime error: value out of range (%d..%d)\n", lo, hi);
+  exit(1);
+}
+
 /// ISO/IEC 10206:1991 §6.4.6 d): two types produced from one schema with
 /// different tuples are different types, and an assignment between them is a
 /// dynamic-violation. The schema and the discriminant are named where the

@@ -759,12 +759,7 @@ Type *Sema::resolveSubrange(TypeExpr &denoter) {
 /// (ISO 7185 §6.4.3.2), so dimension `dim` wraps everything after it.
 Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   TypeExpr &indexDenoter = *denoter.dims[dim];
-  // The one position §6.2.3.8 b)'s bound may size something from: this array.
-  // A component's own subrange is refused, and the flag is what tells the two
-  // apart — both are a Subrange denoter reached from here (ADR-0127).
-  dynBoundsIndex_ = true;
   Type *index = resolveType(indexDenoter);
-  dynBoundsIndex_ = false;
 
   if (!index->isOrdinal()) {
     diags_.error(indexDenoter.line, indexDenoter.col,
@@ -800,7 +795,6 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   t->loDisc = index->loDisc;
   t->hiDisc = index->hiDisc;
   t->packed = denoter.packed;
-  dynBoundsIndex_ = false;
   t->elem = dim + 1 < denoter.dims.size() ? resolveArray(denoter, dim + 1)
                                           : resolveType(*denoter.elem);
   return t;
@@ -1374,14 +1368,17 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   // type of its own, whose storage is not this variable's to size, so the offer
   // stops there and the bound must be constant exactly as before.
   Symbol *savedBounds = dynBoundsFor_;
-  if (denoter.kind != TEK::Array &&
-      (denoter.kind != TEK::Subrange || !dynBoundsIndex_))
+  // A subrange joins it (ADR-0133), and the two together are the whole of what
+  // §6.2.3.8 b) reaches: a bound written in a variable-declaration or a
+  // type-definition of this block, at any depth of arrays and subranges. A
+  // subrange needs no clause of its own about *sizing* — its storage is its
+  // host's whatever its bounds are — so what admits it is that the range check
+  // at a store can read the descriptor, which is the half ADR-0127 left. Every
+  // other kind still withdraws the offer at the container, so `set of 1..m`,
+  // `record f: 1..m end`, a file component and a pointer domain each need a
+  // constant bound exactly as before.
+  if (denoter.kind != TEK::Array && denoter.kind != TEK::Subrange)
     dynBoundsFor_ = nullptr;
-  // One denoter's answer, not a subtree's: an array's index-type may be a
-  // subrange with discriminant bounds and its component-type may not, so the
-  // flag is spent on the denoter it was set for (ADR-0127).
-  bool savedIndex = dynBoundsIndex_;
-  dynBoundsIndex_ = false;
 
   Type *t = nullptr;
   switch (denoter.kind) {
@@ -1491,7 +1488,6 @@ Type *Sema::resolveType(TypeExpr &denoter) {
 
   dynamicVarFor_ = savedDynamic;
   dynBoundsFor_ = savedBounds;
-  dynBoundsIndex_ = savedIndex;
   checkInitialState(denoter, t);
   denoter.resolved = t;
   return t;
@@ -2384,7 +2380,15 @@ bool Sema::assignable(Type *to, Type *from) const {
   if (std_ == Std::Extended && (to->isStringType() || from->isStringType()) &&
       to->isStringOrChar() && from->isStringOrChar())
     return true;
-  if (to->isGeneric() || from->isGeneric())
+  // A subrange is exempt, and has to be: since ADR-0133 one whose bounds are
+  // discriminants carries the anonymous schema ADR-0113 hangs a descriptor on,
+  // which is a compiler device and not §6.4.8's schema — no schema-definition
+  // produced it and no tuple selects it. What the type *is* is a subrange, so
+  // §6.4.6 asks about its host, which is what the ordinal rules below do. Left
+  // here it would be compatible only with a subrange sharing its descriptor,
+  // so `x := 3` into `var x: 1..m` would be refused.
+  if ((to->isGeneric() || from->isGeneric()) &&
+      to->kind != TypeKind::Subrange && from->kind != TypeKind::Subrange)
     return to->schema == from->schema;
   // ISO 7185 §6.4.6 makes set compatibility *structural*, not by name: two set
   // types are compatible when their base types are. This is the standard's own
