@@ -536,15 +536,48 @@ able to make.
   - **A parameter of such a type needs no descriptor**, one thing simpler than
     a schematic formal: the bounds are in an enclosing activation record and
     the static chain reaches them.
-  - **And a bare dynamic subrange is confined to an index-type.** A bound only
-    works where the *subscript* check reads it out of the descriptor; a
-    subrange's own bounds are read by the range check at a store, which
-    compares against the two numbers on the type. `array [1..m] of 1..m`
-    trapped on a legal store with the upper bound reading zero, present since
-    ADR-0113. `dynBoundsIndex` is the one-shot flag that tells an array's
-    index-type from its component, both being a subrange denoter reached from
-    the same place. Refusing it is the deviation in
-    `doc/implementation-defined.md` §6; accepting it was a defect.
+  - **And a bare dynamic subrange was confined to an index-type**, which
+    ADR-0133 below lifted. A bound worked only where the *subscript* check read
+    it out of the descriptor; a subrange's own bounds were read by the range
+    check at a store, which compared against the two numbers on the type, so
+    `array [1..m] of 1..m` trapped on a legal store with the upper bound
+    reading zero — present since ADR-0113, refused since ADR-0127.
+- **The check at a store reads the descriptor** (ADR-0133), which is what was
+  left. `CheckedForSubrange` calls `BoundValue` for each end instead of reading
+  the type's two numbers, so `var x: 1..m`, `type t = 1..m` and
+  `array [1..m] of 1..m` work and `dynBoundsIndex` — the one-shot flag that
+  expressed the confinement — is deleted from both implementations.
+  - **A subrange needed no clause of its own about sizing**, which is why the
+    change is small: §6.2.3.8 b) is otherwise about storage whose extent is not
+    known until entry, and a subrange's storage is its host's whatever its
+    bounds are. Its bounds decide what a store is *compared against* and
+    nothing else.
+  - **The comparison moves to i32** where a bound is dynamic, that being the
+    width a discriminant is loaded and widened to; a char or boolean value
+    widens to meet it, exactly as the subscript check widens an index.
+  - **`DynamicExtent` had to start answering no for a subrange**, which was
+    invisible while the only dynamic one anywhere was an array's index-type —
+    a position asked about the *array*.
+  - **The anonymous schema leaked into two rules about §6.4.8's.** ADR-0113
+    hangs a schema with no body and no name on such a type, and `Assignable`
+    read it as a schema — so `x := 3` into `var x: 1..m` was refused — while
+    the assignment lowering turned a four-byte store into a tuple check and a
+    memcpy. Both are exempt by kind now: the schema on a subrange is a compiler
+    device, not something a schema-definition produced.
+  - **The message is built by the runtime**, and this is the part that looks
+    like it needs no work and does. Where the bounds are constants the trap
+    names the *type*; `WriteTypeName` handles a dynamic bound by writing the
+    discriminant's own name, which is right for a schema and empty for a bound
+    the program wrote as an expression — so the compile-time path produces
+    `value out of range (1..)`, which is the defect's own message. Ordinal
+    numbers instead, as `pas_index_error` prints them and for the same reason.
+  - **§6.4.2.4's other requirement gained a check**: an empty dynamic subrange
+    is reported at the declaration rather than at the first store, because a
+    block that never stores would otherwise run with a type that is not a type.
+  - Refused: a record's field, a set's base type and a file's component, which
+    is the narrowed deviation in `doc/implementation-defined.md` §6 — the
+    withdrawal is made at the container, so admitting a subrange there would
+    admit an array with it.
 - **An assignment between two schematic types compares the tuples**
   (ADR-0042), and that is the *whole* of the feature: §6.4.6 a) is "the same
   type" and §6.4.8 makes one schema with one tuple one type, so `assignable`

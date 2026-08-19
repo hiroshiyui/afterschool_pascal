@@ -525,17 +525,15 @@ appears below in the release where it still existed.
 
 #### Programs that used to compile and no longer do
 
-- **A subrange whose bounds are not constants, anywhere but an array's
-  index-type.** `var x: 1..m` and `array [1..m] of 1..m` inside a procedure
-  compiled and did not work: the first could be read and never assigned to, and
-  the second **trapped on a legal store** — `a[1] := 2` with `m = 3` stopped with
-  *value out of range (1..)*, because the range check at a store compares
-  against the two numbers on the type and those had never been read from
-  anywhere. Only an array's index-type has a check that reads the bound out of
-  the descriptor. Refused now, with *the bounds of a subrange must be ordinal
-  constants*; it is a deviation from §6.4.2.4 and is recorded as one in
-  `doc/implementation-defined.md` §6, where accepting it was a defect.
-  (ADR-0127)
+- **A subrange whose bounds are not constants, as a record's field, as a set's
+  base type or as a file's component.** None of these ever worked, and each is
+  now refused with *the bounds of a subrange must be ordinal constants*. They
+  are legal under §6.2.3.8 b) and the refusal is a deviation, recorded in
+  `doc/implementation-defined.md` §6: the offer of a descriptor is withdrawn at
+  the *container*, so admitting a subrange there would admit an array with it,
+  and `record f: array [1..m] of integer end` is a genuine problem about storage
+  the activation does not size. Every other position works — see *Fixed* below.
+  (ADR-0127, ADR-0133)
 
 - **The program-components of one program must agree on `--std`**, and a
   mixture no longer links (ADR-0119). A module's two activation functions carry
@@ -556,7 +554,46 @@ appears below in the release where it still existed.
   links exactly as before. What changes is that rebuilding half a program after
   changing `--std` now refuses instead of misbehaving.
 
+#### Diagnostics
+
+- **A subrange bound that is not an ordinal is now told so.** With §6.2.3.8 b)'s
+  offer live at a subrange denoter, a bound that fails to fold is reported by
+  the arm that knows why: `type bad = q..q` with `q = nil` and `sub: 1..maxint64`
+  say *the bounds of a subrange must be ordinal* rather than *must be ordinal
+  constants*. Neither fault was ever about constancy — `maxint64` is a constant.
+  This is the same correction ADR-0127 made to the message for a schema's
+  discriminants. (ADR-0133)
+
 ### Fixed
+
+- **A subrange may have a bound that is not a constant**, in every position but
+  the three named above. §6.4.2.4 writes `subrange-bound = expression` and
+  §6.2.3.8 b) evaluates one "closest-contained by … the block" at that block's
+  commencement, so all of these are legal and none of them worked:
+
+  ```pascal
+  procedure p(m: integer);
+  type t = 1..m;
+  var x: t; y: 1..m; a: array [1..m] of 1..m;
+  ```
+
+  `var x: 1..m` compiled and could be read but never assigned to, and
+  `array [1..m] of 1..m` **trapped on a legal store** — `a[1] := 2` with
+  `m = 3` stopped with *value out of range (1..)*, the upper bound reading zero.
+  ADR-0127 refused the shape rather than leave it wrong; this is the fix it
+  named. The range check at a store now reads the bounds out of the descriptor
+  §6.2.3.8 b) filled, which is what the subscript check has always done.
+
+  The trap message names the bounds as **values** — *value out of range
+  (1..3)* — because a bound evaluated at the block's commencement has no
+  spelling in the source, the program having written an expression and not a
+  name. That is what the array-index message already does.
+
+  An **empty** one is reported at the declaration rather than at the first
+  store: *this subrange has no values: its upper bound is below its lower
+  bound*, which is §6.4.2.4's other requirement and would otherwise go unsaid
+  in a block that never assigns. Extended Pascal and the dialect only;
+  ISO 7185 §6.4.2.4 writes `subrange-type = constant '..' constant`. (ADR-0133)
 
 - **A type-definition may have a bound that is not a constant.** §6.2.3.8 b)
   evaluates "each actual-discriminant-part or subrange-bound … closest-contained

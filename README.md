@@ -1087,18 +1087,19 @@ both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 program compiled and run rather than with a reading. `doc/roadmap.md` records
 what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
-**One construct of it is refused**: a subrange whose bounds are not constants,
-anywhere but an array's **index-type** — so `var x: 1..m` and
-`array [1..m] of 1..m` inside a procedure are legal under §6.4.2.4 and are
-refused. A bound only *works* in an index-type, where the subscript check reads
-it out of the descriptor §6.2.3.8 b) filled; every other subrange's bounds are
-read by the range check at a store, which compares against the two numbers on
-the type. Accepting it was worse than refusing it — `a[1] := 2` over
-`array [1..m] of 1..m` with `m = 3` trapped on a legal store — and it is a
-defect rather than a decision; `doc/implementation-defined.md` §6 states it with
-the clause. Conformant array parameters are not accepted either, which is what
-makes this a level 0 processor — that one is the standard's own option rather
-than a shortfall.
+**Three positions of it are refused**: a subrange whose bounds are not
+constants, as a record's **field**, as a **set's base type** and as a **file's
+component**. All three are legal under §6.2.3.8 b), and what holds them is the
+shape of the withdrawal rather than anything about a subrange — it is made at
+the container, so admitting one there admits an *array* with it, and
+`record f: array [1..m] of integer end` is a genuine problem about storage the
+activation does not size. `var x: 1..m`, `type t = 1..m` and
+`array [1..m] of 1..m` all work since ADR-0133, which made the range check at a
+store read the descriptor §6.2.3.8 b) filled the way the subscript check always
+has. `doc/implementation-defined.md` §6 states what is left with the clause.
+Conformant array parameters are not accepted either, which is what makes this a
+level 0 processor — that one is the standard's own option rather than a
+shortfall.
 
 ## What backs the answers
 

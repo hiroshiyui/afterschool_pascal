@@ -944,25 +944,35 @@ started looking like what it was.
     buffer with itself, printed EQUAL and exited 0. ADR-0111 made it a stack
     whose end CodeGen supplies — a release emitted after any statement that
     took storage — and both ways of exhausting it are reported now.
-- **A subrange whose bounds are not constants is refused anywhere but an
-  array's *index-type*.** §6.4.2.4 writes `subrange-bound = expression`, so
-  `var x: 1..m` and `array [1..m] of 1..m` inside a procedure are legal and are
-  refused. A bound only *works* in an index-type: the subscript check reads it
-  out of the descriptor §6.2.3.8 b) filled, where every other subrange's bounds
-  are read by the range check at a store, which compares against the two
-  numbers on the type. Accepting it was worse than refusing it and that is what
-  ADR-0127 changed — `a[1] := 2` over `array [1..m] of 1..m` with `m = 3`
-  trapped on a legal store, the upper bound reading zero. Fixable and not a
-  decision: the store's check has to read the descriptor as the subscript check
-  does, and the message has to be built by the runtime as an array's already
-  is (ADR-0040). The one conformance defect that is known and unfixed.
-  - **The type-definition entry that stood here is fixed** (ADR-0127).
-    `type t = array [1..m] of integer` and `type t = vector(m)` inside a
-    procedure work, and the answer was the sentence ADR-0113 stopped at: a
-    type's descriptor belongs to the **block**, so it is evaluated once and
-    every variable of the type shares the discriminant symbols rather than a
-    copy of their values. Found by ADR-0107's independent reading, which called
-    it the finding most likely to break a real program.
+- **A subrange whose bounds are not constants is refused as a record's field,
+  as a set's base type and as a file's component.** All three are legal under
+  §6.2.3.8 b) — a bound inside a record-type written in the block is
+  closest-contained by the block — and what holds them is the shape of the
+  withdrawal rather than anything about a subrange: it is made at the
+  *container*, so admitting one there admits an **array** with it, and
+  `record f: array [1..m] of integer end` is a genuine problem about storage the
+  activation does not size. Telling the two apart needs a second one-shot flag
+  of exactly the kind ADR-0133 deleted. A set has a reason of its own besides:
+  it is one 256-bit word laid out from its base type's ordinal range (ADR-0028),
+  so a dynamic base type has no representation to give.
+  - **Everything else in the entry that stood here is fixed**, over four
+    records. `type t = array [1..m] of integer` and `type t = vector(m)` work
+    since ADR-0127 — a type's descriptor belongs to the **block**, so it is
+    evaluated once and every variable of the type shares the discriminant
+    symbols rather than a copy of their values; that was ADR-0107's independent
+    reading's finding most likely to break a real program. And the *bare*
+    subrange — `var x: 1..m`, `type t = 1..m`, `array [1..m] of 1..m` — works
+    since ADR-0133, which did the one thing ADR-0127 named: the range check at
+    a store reads the descriptor the way the subscript check always has.
+    **There is no longer a conformance defect that is known and unfixed.**
+  - Worth carrying forward from how that last one went: the fix was three lines
+    of check, and three *other* things that had been true only because the
+    shape was unreachable — `DynamicExtent` answering yes for a subrange, and
+    the anonymous schema ADR-0113 hangs on such a type being read as §6.4.8's
+    by `Assignable` and by the assignment lowering. **A device that borrows a
+    language concept's representation will be read as that concept**, and the
+    misreading is invisible until something outside the device's original shape
+    reaches it.
 - **ExpDigits is not a fixed number** (ADR-0064). §6.10.3.4.1 makes it one
   implementation-defined value; here it is what C's `%E` writes — two digits,
   or three past 1e100 — so a representation stays exactly ActWidth wide while
