@@ -420,7 +420,11 @@ knowing before adding anything:
 - **`tests/dialect/inherits_extended.pas` pins the containment**: everything
   Extended Pascal accepts, the dialect accepts and means the same thing. That
   is the property every feature is added *to*, and it is what a dialect feature
-  must not disturb.
+  must not disturb. A feature that adds a **required identifier** has to write a
+  paragraph there rather than leave the file alone — §6.2.2.10 puts one in a
+  scope enclosing the program, so it takes a spelling away from any program that
+  does not shadow it, and §6.1.3's shadowing is what makes that survivable
+  (ADR-0128's `int64`).
 - **A feature needs a reason of its own** — "the standard has it" is
   unavailable, since none does — and should still be spelled the way a standard
   spells it wherever one does. It must not change what the conformance modes

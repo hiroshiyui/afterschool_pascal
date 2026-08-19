@@ -1933,4 +1933,40 @@ the foreign boundary, and that is a probe's finding rather than a scope limit �
 every length in the POSIX data path is `size_t` and `read`, `write` and `recv`
 all answer `ssize_t`, so the argument could cross as an `i64` the compiler
 generates but the *result* could not be received, this language having no
-64-bit integer.
+64-bit integer. ADR-0128 is the half that answers, so the boundary is a
+decision away rather than a mechanism away.
+
+**An integer wider than the compiler's own** (ADR-0128). `int64` is the type a
+`size_t` and an `ssize_t` cross as, and its whole shape comes from one
+constraint that is not a standard's: `selfhost/compiler.pas` is written in this
+language, so its own integers are 32 bits and there is no value of the wide
+type anywhere in the compiler to fold with, compare, or put in a constant.
+
+- **A value is carried as the text that was written**, all the way into the IR.
+  That is ADR-0025's answer for a real literal reached a second time and for the
+  same sentence — LLVM's assembler reads the digits, so nothing this compiler
+  converts can be converted wrongly. `maxint64` is a required constant whose
+  value is nineteen characters, and `Int64TooLarge` compares *text* against the
+  limit because neither side is a number this compiler could hold. Nothing
+  64-bit folds, which is the price: `const c = maxint64 - 1` is not a
+  constant-expression here.
+- **It is numeric and not ordinal**, which is one line in `IsOrdinal` and
+  thirteen refusals that needed no message of their own. Every construct that
+  refuses it needs the compiler to *hold* the value — a case label, an array
+  index, a subrange bound, a set base, a `for` control variable, `succ`, `pred`,
+  `ord`, `odd`, `chr`, `in` — so the line is forced as well as preferred. It
+  answers where `real` answers instead: `IsNumeric` gains it and the operators,
+  `abs`, `sqr` and the widenings pick it up unchanged.
+- **`trunc` is the narrowing and the only one.** §6.6.6.3's words are "the value
+  of x truncated to an integer" and its own error condition is that no such
+  integer exists, so the meaning was already written; an implicit narrowing
+  would have put an unwritten run-time check under an ordinary assignment.
+- **One emitter, two widths.** `PutIntWidth` and `PutIntMin` take the width and
+  every checked emitter takes it from them, so the checked add, the div guard
+  and the mod adjustment exist once. Two copies of a checked multiply is two
+  places for a check to go missing from.
+- **`verify/` proved it by running the rules it already had.** The model was
+  written generic in the width, so `WIDE = (32, 64)` establishes the emitted
+  code at its real width rather than a second family of rules restating the
+  first — a model written symbolically paying a second time, for a type nobody
+  had in mind. The narrowing is new lowering and has two rules of its own.

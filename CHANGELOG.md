@@ -389,6 +389,45 @@ appears below in the release where it still existed.
   The cost is duplication — `ParseInt` trims its own input because it cannot
   call `PasText.TrimAll`.
 
+- **`int64` — an integer twice as wide, under `--std=afterschool` only**
+  (ADR-0128), and the other half of the data path ADR-0125's closing probe
+  named: on this target every length `read`, `write` and `recv` take is a
+  `size_t` and every one of them *answers* an `ssize_t`.
+
+  ```pascal
+  function llabs(x: int64): int64; external 'llabs';
+  var n: int64;
+  begin
+    n := 5000000000;
+    writeln(n * 2, ' ', maxint64)
+  end.
+  ```
+
+  It is a **numeric** type and not an ordinal one, and the rest follows from
+  that. It answers where `real` answers — `+ - * / div mod`, the relational
+  operators, `abs`, `sqr`, unary sign, and the widening from `integer` — and it
+  is refused wherever an ordinal is wanted: no case label, no array index, no
+  subrange bound, no set base, no `for` control variable, no `succ`, `pred`,
+  `ord`, `odd`, `chr` or `in`. Overflow traps as `integer`'s does and at both
+  ends, `-maxint64..maxint64` being the type. `trunc` is the one way back to
+  `integer` and it is checked; there is no implicit narrowing.
+
+  `maxint64` is a required constant beside `maxint`, and the type crosses the
+  `external` boundary as a value parameter, a `var` parameter and a function
+  result.
+
+  Two things it does not do, and both come from the same place — the compiler is
+  written in this language and its own integers are 32 bits, so it has no value
+  of the wide type to hold. A literal is carried as the **text** that was
+  written, exactly as a real literal always has been, so nothing 64-bit folds:
+  `const c = 5000000000` names the digits and `const c = maxint64 - 1` is not a
+  constant-expression. And `read` does not take one where `write` does, which is
+  in `doc/implementation-defined.md`.
+
+  Nothing about `--std=iso7185` or `--std=extended` moved: `int64` is an
+  ordinary identifier there, and a decimal literal above `maxint` is the error
+  it always was.
+
 ### Changed
 
 #### Programs that used to compile and no longer do

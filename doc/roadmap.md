@@ -323,7 +323,53 @@ that word — but the result cannot be received, this language's `integer` being
 of them**; shipping the buffer argument alone would have put a knowingly wrong
 ABI in the tree for a call that cannot say how many bytes it moved.
 
+### The ninth increment: the half the probe named
+
+ADR-0128, and it is the increment ADR-0125's closing probe wrote the
+specification for. `clang` on this target declares `read`, `write` and `recv`
+as taking an `i64` length and *answering* `ssize_t`; a slice could cross with
+that length, and the result could not be received. `int64` is the half that
+answers.
+
+It is the first dialect feature whose constraint is the **compiler** rather
+than a standard, and the constraint decided the design twice over.
+`selfhost/compiler.pas` is written in this language, so its own integers are 32
+bits: there is no value of the wide type anywhere in the compiler to fold with,
+compare, or put in a constant.
+
+- **So a value is carried as text**, all the way into the IR. That is ADR-0025's
+  answer for a real literal, arrived at again one clause later and for the same
+  sentence: LLVM's assembler is what reads the digits, and nothing this compiler
+  converts can be converted wrongly. `Int64TooLarge` compares *text* against the
+  limit, because neither side of that comparison is a number it could hold.
+- **And it is numeric rather than ordinal**, which is one line — `IsOrdinal`
+  answers no — and thirteen refusals that needed no message of their own. Every
+  construct that refuses it is one that needs the compiler to *hold* the value,
+  so the line is forced as well as preferred.
+- **`verify/` proved the wide lowering by running the rules it already had.**
+  The model was written generic in the width, so `WIDE = (32, 64)` establishes
+  the emitted code at its real width rather than a second family of rules
+  restating the first. Worth recording as a property of how that catalogue was
+  built: a model written symbolically pays a second time, years later, for a
+  type nobody had in mind.
+
+**The lexis cost something, for the first time in four increments.** A
+directive, a character no standard admits, a combination of two reserved words
+— three routes to a free spelling, and there is no fourth for a *type*.
+`int64` is an identifier, available only because §6.2.2.10 makes a required
+identifier shadowable rather than reserved. That is a weaker kind of free, and
+it is why the containment test grew a paragraph rather than being left alone.
+
 ### What is still blocked on it
+
+**The buffer**, and it is the one thing that is now *unblocked* rather than
+blocked. Both halves the probe named exist — ADR-0125's slice and ADR-0128's
+int64 — so what is left is a shape decision with no missing mechanism behind
+it: a slice may cross as its address alone, with the program passing the count,
+or as the pair `(ptr, i64)`, which is exactly what `read`, `write`, `recv`,
+`send` and `memcpy` take in that order. The second is more useful and assumes a
+convention; the first assumes nothing and puts the count in the program's
+hands. That is the next increment and it needs a record, not a mechanism.
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
 that moved, not the position.

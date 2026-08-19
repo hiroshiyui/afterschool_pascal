@@ -303,6 +303,37 @@ answers the count, and `a[4..3]` is the empty slice. It is a `var` or
 result, not a named type — a view of the caller's storage is not a thing that
 can outlive the call.
 
+**An integer twice as wide** (ADR-0128). `int64` is the type a `size_t` and an
+`ssize_t` cross the boundary as, and it is the other half of the data path the
+slice above is one half of:
+
+```pascal
+function llabs(x: int64): int64; external 'llabs';
+var n: int64;
+begin
+  n := 5000000000;              { a literal above maxint is where it begins }
+  writeln(n * 2, ' ', maxint64)
+end.
+```
+
+It is a **numeric** type and not an ordinal one, and everything else follows
+from that. It answers where `real` answers — the arithmetic and relational
+operators, `abs`, `sqr`, and the widening from `integer` — and it is refused
+wherever an ordinal is wanted: no case label, no array index, no subrange
+bound, no set base, no `for` control variable, no `succ`, `pred`, `ord`, `odd`
+or `chr`. `trunc` is the one way back to `integer`, and it traps outside
+`-maxint..maxint`, which is §6.6.6.3's own error condition.
+
+The reason for the shape is the compiler: `selfhost/compiler.pas` is written in
+this language, so its own integers are 32 bits and it has no value of the wide
+type to hold. A literal is carried as the **text** that was written, all the way
+into the IR — which is what a real literal has done since the beginning, for the
+same reason. So `const c = 5000000000` names the digits and nothing computes
+with them at compile time, and `read` does not take one where `write` does.
+
+Overflow traps as `integer`'s does, at both ends: `-maxint64..maxint64` is the
+type, so the machine word's least value is not one of its values.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas` and
 `lib/dialect/pasenv.pas` are the three, and they are what a caller sees
