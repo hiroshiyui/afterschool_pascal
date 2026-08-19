@@ -403,17 +403,59 @@ Three things came out of building it:
   them. That is the sixth thing here travelling as two scalars and the first
   where the far side chose the shape.
 
+### The eleventh increment: the library, and the streak that ended
+
+ADR-0130 and `lib/dialect/pasio.pas` — descriptor I/O on ADR-0129's buffer,
+answered the way every fallible thing in the second layer answers. It closes
+the entry that stood here.
+
+**Its result is that there was no result**, and that is what the record is for.
+Four library increments in a row found a compiler defect nothing else could
+see — ADR-0114 a string argument that had to be a variable, ADR-0116 a schema
+holding a variable-string that stopped the compiler outright and a `forward`
+function that lost its result variable, ADR-0120 a module imported and not
+used that never linked. This one found nothing, and not for want of asking: a
+slice reached `write` from a global, a record field, a schema-bounded array, an
+enclosing procedure's local through the static chain, a `with` binding, a `var`
+parameter sliced by two expressions, a slice of a slice, an empty slice and an
+`array of int64`. Every one behaved.
+
+The narrow reading is the right one. ADR-0129's feature is built out of
+ADR-0125's, which arrived with a corpus, and confining it to an argument kept
+it away from everything that has a lifetime. It says nothing about the rest of
+the FFI: the two mutations ADR-0129 recorded as surviving still survive.
+
+What the library *did* find is about the library, and both were caught by
+mutation rather than by running it:
+
+- **`AtEnd`'s first conjunct is load-bearing and was untested.** `r.ok and
+  (r.count = 0)` is safe because `and` short-circuits, so `r.count` is never
+  read on a result whose tag says there is none. Dropping `r.ok` passed the
+  whole suite until a case asked `AtEnd` of a *failed* result — then it traps
+  with *variant: the tag selects another arm*. ADR-0118's rule and §6.7.2's
+  short-circuit holding each other up, and invisible along the successful path.
+- **`WriteAll`'s retry branch cannot be reached from a test here.** A short
+  write needs a descriptor that takes fewer bytes than it was handed; a regular
+  file never does and a pipe blocks rather than truncating. Its failing exit is
+  covered, the retry is not, and that is written down rather than left.
+
 ### What is still blocked on it
 
-**A library on top of it.** `read`, `write`, `recv` and `send` are bindable and
-nothing binds them: every increment since ADR-0114 has shipped a `lib/` module
-and this one did not, because the feature's test binds `read` directly and a
-`PasIO` is its own piece of work. It is also the one that will meet
-`lib/dialect/pasfs.pas`'s recorded wall head-on — `open` needs `O_WRONLY` and
-`O_CREAT`, which are header numbers an FFI without a header parser cannot see,
-and that module's stated policy is to offer only what it can check. Reading and
-writing *descriptors that POSIX fixes* — 0, 1 and 2 — needs no constant at all,
-which is where it starts.
+**`errno`, and it is now asked for by two modules rather than one.** PasFS
+answers `errIO` for every failure and PasIO does the same, so "the file was not
+there" and "the directory is not writable" are one code twice over. It is
+`*__errno_location()` — a returned pointer, which is ADR-0122's open half — and
+it is the cheapest thing on the other side of that wall.
+
+**A socket**, which needs `struct sockaddr *`: a pointer to a struct is the
+part of ADR-0121's type mapping that is still entirely absent, and unlike a
+buffer it has a *layout* that C fixes and this compiler would have to agree
+with.
+
+**Creating a file**, which is not a language question at all — `O_WRONLY`,
+`O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS set and PasIO
+kept is that a number the module cannot check does not go in. What would lift
+it is something that reads a C header, which is a different project.
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
 that moved, not the position.

@@ -465,6 +465,28 @@ appears below in the release where it still existed.
   yields a string, so a buffer wants `array [1..n] of char`; passing such an
   array whole works either way.
 
+- **`PasIO` — descriptor input and output** (`lib/dialect/`, ADR-0130), and
+  the first user of the buffer above: `OpenRead`, `Close`, `ReadInto`,
+  `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd`, `CountOr`, `ResultText`. A
+  read or a write answers a `CountResult` carrying the count **or** the reason,
+  and a short answer is not a failure — zero from a read is the end of the
+  input, which `AtEnd` names.
+
+  **It reads files and writes to descriptors that were already open.** There is
+  no `OpenWrite`: creating a file needs `O_WRONLY`, `O_CREAT` and `O_TRUNC`,
+  which are header numbers an FFI without a header parser cannot see, and the
+  policy `PasFS` set over `access`'s modes is that a number a module cannot
+  check does not go in. `O_RDONLY` is 0, the one flag value a header is not
+  needed for.
+
+  **It does not share a descriptor with §6.9 and §6.10's own I/O**, which go
+  through buffered streams while everything here is unbuffered — writing to
+  `StdOut` from both interleaves by whichever flushed last.
+
+  Failures are `errIO` and nothing finer, `errno` being `*__errno_location()`
+  and a returned pointer being what ADR-0122 does not admit. That is now the
+  second module saying so.
+
 ### Changed
 
 #### Programs that used to compile and no longer do

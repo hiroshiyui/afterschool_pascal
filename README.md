@@ -365,8 +365,8 @@ Overflow traps as `integer`'s does, at both ends: `-maxint64..maxint64` is the
 type, so the machine word's least value is not one of its values.
 
 A binding is a module that exports Pascal and keeps the directive to itself —
-`lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas` and
-`lib/dialect/pasenv.pas` are the three, and they are what a caller sees
+`lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`
+and `lib/dialect/pasio.pas` are the four, and they are what a caller sees
 instead.
 
 ## The standard library
@@ -397,6 +397,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasmathx.pas` | `Cbrt`, `Log10`, `Log2`, `FMod`, `RealOr` — libm through `external`, with a `RealResult` where the answer can fail |
 | `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists` — the file system through `external`, answering an `ErrorCode` |
 | `lib/dialect/pasenv.pas` | `Lookup`, `LookupOr`, `Defined`, `Define`, `Undefine` — the environment, where an unset variable is `nil` and one set to nothing is not |
+| `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
