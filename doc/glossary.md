@@ -189,12 +189,13 @@ label, a dereference of `nil`. This compiler
 the array, or producing an arbitrary value (ADR-0014, ADR-0015).
 
 **Standard (`--std`).** Which language a source is written in: `iso7185`, the
-default, or `extended` for ISO/IEC 10206:1991. Not a feature switch — the two
-are not nested, because Extended Pascal reserves word-symbols (`otherwise`,
-`value`, `only`, …) that a valid ISO 7185 program may use as ordinary
-identifiers, and `selfhost/compiler.pas` does. The directory a test lives in
-says which language it is in, and the stage-1 compiler is told through a file
-because ISO 7185 gives a program no other channel (ADR-0033).
+default, `extended` for ISO/IEC 10206:1991, or `afterschool` for the dialect.
+The first two are not a feature switch and are **not nested**, because Extended
+Pascal reserves word-symbols (`otherwise`, `value`, `only`, …) that a valid
+ISO 7185 program may use as ordinary identifiers, and `selfhost/compiler.pas`
+does. The third *is* nested — see **Dialect** below. The directory a test lives
+in says which language it is in, and the stage-1 compiler is told through a
+file because ISO 7185 gives a program no other channel (ADR-0033, ADR-0117).
 
 **Schema.** ISO/IEC 10206:1991 §6.4.7's mapping from discriminant tuples to
 types: `type vector(n: integer) = array [1..n] of real`. Not a type — nothing
@@ -300,6 +301,77 @@ no label fall outside it (ADR-0096). The case one has **no node**, so §6.8.1's
 rule about where a `goto` may land — it is one of the three things holding a
 statement-sequence — carries a flag rather than asking a node's kind
 (ADR-0094).
+
+## The dialect
+
+Everything here belongs to `--std=afterschool` and to no conforming mode. The
+distinction is the point: an extension inside `iso7185` or `extended` is a
+defect unless `doc/implementation-defined.md` lists it as one, and those two
+modes stay exactly as they are (ADR-0109, ADR-0117).
+
+**Dialect (`--std=afterschool`).** The third mode, and the one place a feature
+neither standard has may land. Unlike the first two it **contains** Extended
+Pascal: `stdKind` is `(stdIso7185, stdExtended, stdAfterschool)` and the order
+*is* the containment, so every site asking "does this mode have Extended
+Pascal?" asks `HasExtended(s)`, which is `s >= stdExtended`. Writing
+`langStd = stdExtended` instead switches Extended Pascal off for the dialect
+and almost every case still passes, which is why the predicate exists.
+`tests/dialect/inherits_extended.pas` pins the containment (ADR-0117).
+
+**`int64`.** A 64-bit integer, and a **numeric** type rather than an ordinal
+one: it has no `succ`, indexes no array, and is the base type of no set. It is
+carried as its source text all the way into the IR, as a real literal is, for
+the same reason — this compiler's own integers are 32 bits, so it has no value
+of the type to convert to and back from. `-maxint64..maxint64`, symmetric like
+`integer`'s range and for the same reason (ADR-0128).
+
+**Optional (`?T`).** A type whose values are those of T plus an absent one,
+spelled `nil`. `o^` is the only way to a value and it **traps** when there is
+none — a run-time check localised to where the source writes `^`, not a
+flow-sensitive narrowing. What the type gives is that a T which is not
+optional can never be absent. `^` is deliberately the spelling: it is the
+dereference every other trap of this shape already uses (ADR-0123).
+
+**Slice (`array of T`).** A view of part of an array: an **address and a
+count**, travelling as two arguments. It is a formal parameter's type and
+nothing else — never a variable's, never a component's — so the extent always
+arrives with the actual and the bounds a callee checks against are the ones it
+was handed. `a[i..j]` is §6.5.6's substring designator reused, so the parser
+was untouched; only the base's type tells the two apart (ADR-0125).
+
+**Foreign function (`external`).** A procedure or function whose body is code
+this compiler did not emit, declared with a directive in the position `forward`
+occupies — so it reserves no word-symbol in any mode. The foreign name is a
+string literal and there is no default, this lexer case-folding identifiers
+where a linker matches exactly (ADR-0121).
+
+**Foreign boundary.** Which types may cross it, and it is narrow on purpose.
+An argument may be an `integer`, a `real`, an `int64`, a `string` (as C's
+`const char *`), or a **slice** — the pair `read`, `write`, `recv` and `send`
+already take (ADR-0129). A result may be one of the scalars, or an *optional*
+string, which is how a `char *` that may be null comes back: the copy is made
+at the call site, so nothing the program holds is a foreign pointer
+(ADR-0122, ADR-0123).
+
+**`pas_` and `pasx_`.** Two surfaces of one runtime. `pas_` is what the
+compiler emits calls to, and `ReservedForeignName` refuses the whole prefix as
+a foreign name — LLVM rejects a redeclared global, so a collision would be an
+error about a file nobody wrote. `pasx_` is what a Pascal program may bind to
+with `external`, and it exists because C specifies `errno` as a *macro*: it has
+no linker symbol at all, so reading it needs a routine (ADR-0131).
+
+**Result record.** The dialect's error convention, and a variant record whose
+tag cannot lie: `case ok: boolean of true: (payload); false: (code: ErrorCode)`.
+A write to a field **activates** that variant and a read of an inactive one
+traps, so a caller that ignores `ok` and reads the payload is stopped rather
+than handed rubbish (ADR-0118, ADR-0120).
+
+**The library's two layers.** `lib/` holds the modules written in
+`--std=extended` and usable from it — six of them, and the layer that could
+exist before the dialect did. `lib/dialect/` holds those that need the dialect:
+five **bindings**, each a module that exports Pascal and keeps its `external`
+declarations to itself, and two that need only the dialect's own features
+(ADR-0114, ADR-0120).
 
 ## The pipeline
 
