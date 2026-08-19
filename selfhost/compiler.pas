@@ -6359,6 +6359,18 @@ begin IsStringType := IsVarString(t) or IsCharArray(t) end;
 function IsStringOrChar(t: typePtr): boolean;
 begin IsStringOrChar := IsStringType(t) or IsChar(t) end;
 
+{ ADR-0122: the one shape a string is allowed to have in an `external`
+  heading -- a schematic formal, so the size is the actual's and the formal
+  states none. What crosses is a `const char *`, whose length is the NUL, so a
+  capacity here would be a promise nothing on the other side keeps and a fixed
+  size would be one nothing states. One spelling and no second rule, which is
+  ADR-0121 decision 2 applied a second time. }
+function ForeignStringFormal(f: symPtr): boolean;
+begin
+  ForeignStringFormal := (f^.kind = skParam) and (f^.descSchema <> nil) and
+                         IsVarString(f^.stype)
+end;
+
 function EnumCount(t: typePtr): integer;
 var p: namePtr; n: integer;
 begin
@@ -11176,6 +11188,23 @@ begin
         -- whatever tuple it was produced with. It must be a variable either
         way, because a value parameter of a size not known until now is copied
         out of one rather than evaluated into one. }
+      { ADR-0122: `string` in an `external` heading is not a schematic formal.
+        There is no descriptor to bind, no discriminant to read and no
+        capacity to produce a variable for -- it names `const char *`, and
+        what crosses is a NUL-terminated copy of the value. So the rule below
+        does not apply and the actual has only to *be* a string. }
+      else if (callee^.linkKind = lnkForeign) and
+              ForeignStringFormal(p^.sym) then begin
+        if (a^.ntype = nil) or not IsStringOrChar(Underlying(a^.ntype)) then
+        begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' must be a string, found ');
+          WriteTypeName(a^.ntype);
+          writeln
+        end
+      end
       else if p^.sym^.descSchema <> nil then begin
         if not IsDesignator(a) then begin
           ErrorAt(a^.line, a^.col);
@@ -15353,8 +15382,19 @@ begin
     writeln('it cannot also name a foreign routine')
   end;
 
+  { ADR-0122: nothing comes back as an address. A returned `char *` may be
+    null -- `getenv` of a name that is not set is not a failure -- and this
+    language has no optional type to say so in, so the copy would have to
+    trap on a value the C library returns in the ordinary course of things.
+    That is ADR-0109's decision and it is open. }
   if (sym^.kind = skFunc) and not sym^.resultTypeBad then
-    if not ForeignType(sym^.stype) then begin
+    if IsStringType(sym^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('an ''external'' function cannot return a string: what would ');
+      writeln('cross is a pointer, and a pointer that may be null has no ',
+              'shape in this language yet')
+    end
+    else if not ForeignType(sym^.stype) then begin
       ErrorAt(d^.line, d^.col);
       write('an ''external'' function cannot return ');
       WriteTypeName(sym^.stype);
@@ -15364,12 +15404,40 @@ begin
   p := sym^.params;
   k := 1;
   while p <> nil do begin
-    if p^.sym^.kind <> skParam then begin
+    { A procedural parameter is a code-and-link pair here (ADR-0030) and one
+      word there, and the link is the half that has no image at all. }
+    if p^.sym^.kind = skProcParam then begin
       ErrorAt(d^.line, d^.col);
       write('parameter ', k:1, ' of ''');
       WritePool(d^.pdAt, d^.pdLen);
-      writeln(''' must be a value parameter: an ''external'' declaration ',
-              'passes no addresses')
+      writeln(''' cannot be a procedure or a function: what would cross is ',
+              'a code pointer and the link it runs under, and C takes one ',
+              'word')
+    end
+    { A `var` parameter crosses as the actual's own storage, which is an
+      address the caller holds for longer than the call -- so the lifetime is
+      settled and only the type is in question. A buffer is not: it is a
+      pointer *and* a length, and the length is not in-band the way a C
+      string's is. That is the slice decision, and this record does not make
+      it. }
+    else if p^.sym^.kind = skVarParam then begin
+      if not ForeignType(p^.sym^.stype) then begin
+        ErrorAt(d^.line, d^.col);
+        write('parameter ', k:1, ' of ''');
+        WritePool(d^.pdAt, d^.pdLen);
+        writeln(''' is a var parameter, so what crosses is an address; only ',
+                '''integer'' and ''real'' cross that way')
+      end
+    end
+    else if ForeignStringFormal(p^.sym) then
+      { admitted: `const char *`, and the size is the actual's }
+    else if IsStringType(p^.sym^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('parameter ', k:1, ' of ''');
+      WritePool(d^.pdAt, d^.pdLen);
+      writeln(''' is a string of a fixed size; a string crosses as a ',
+              '''const char *'' whose length is the NUL, so the formal is ',
+              'spelled ''string'' and the size is the actual''s')
     end
     else if not ForeignType(p^.sym^.stype) then begin
       ErrorAt(d^.line, d^.col);
@@ -15377,7 +15445,7 @@ begin
       WritePool(d^.pdAt, d^.pdLen);
       write(''' cannot be ');
       WriteTypeName(p^.sym^.stype);
-      writeln('; only ''integer'' and ''real'' cross the boundary')
+      writeln('; only ''integer'', ''real'' and ''string'' cross the boundary')
     end;
     k := k + 1;
     p := p^.next
@@ -21575,6 +21643,46 @@ begin
   end
 end;
 
+{ ADR-0121 said the call site is the whole of the ABI -- LLVM does not check a
+  direct call against the declaration under opaque pointers -- and ADR-0122
+  makes that literal: a foreign call's arguments are their own rule, because
+  none of the four shapes above describes one. There is no descriptor, no
+  pointer-and-length pair and no callee prologue to convert anything. }
+procedure EmitForeignArgument(arg: nodePtr; f: symPtr;
+                              var head, tail: opndPtr);
+var a, alen, cs: str;
+begin
+  if f^.kind = skVarParam then begin
+    { The actual's own storage. Sema has already required a variable, so this
+      is the same address any other var parameter would bind to -- what is
+      missing is only the callee's willingness to give it back. }
+    EmitAddress(arg, a);
+    AppendOpnd(head, tail, a, true, nil)
+  end
+  else if ForeignStringFormal(f) then begin
+    { The pair becomes one pointer: a C string carries its length in-band, so
+      the NUL is what the length turns into. The copy is arena storage, which
+      is exactly the lifetime wanted -- longer than the argument list, no
+      longer than the statement -- and being arena storage it has to bump
+      ADR-0111's counter, this being a third producer. }
+    EmitString(arg, a, alen);
+    strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+    Def(cs);
+    write(ircode, 'call ptr @pas_str_cstr(ptr ');
+    PutOp(a);
+    write(ircode, ', i32 ');
+    PutOp(alen);
+    writeln(ircode, ')');
+    AppendOpnd(head, tail, cs, true, nil)
+  end
+  else begin
+    EmitExpr(arg, a);
+    ConvertFor(a, arg^.ntype, f^.stype);
+    CheckedForStore(a, f^.stype);
+    AppendOpnd(head, tail, a, false, f^.stype)
+  end
+end;
+
 { slotSym is the call site's own storage for a result that lives in memory
   (6.7.2); nil for every other call, and unread for them. }
 procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
@@ -21630,7 +21738,9 @@ begin
   arg := args;
   p := callee^.params;
   while (arg <> nil) and (p <> nil) do begin
-    if p^.sym^.kind = skProcParam then
+    if callee^.linkKind = lnkForeign then
+      EmitForeignArgument(arg, p^.sym, head, tail)
+    else if p^.sym^.kind = skProcParam then
       EmitProcArgument(arg^.vrSym, head, tail)
     { The address, then the tuple the actual was produced with -- constants
       where the actual is an ordinary variable, and the caller's own descriptor
@@ -26368,6 +26478,9 @@ begin
     aggregate. }
   writeln(ircode, 'declare ptr @pas_str_char(i8)');
   writeln(ircode, 'declare ptr @pas_str_concat(ptr, i32, ptr, i32)');
+  { ADR-0122: a string on its way to a foreign routine, NUL-terminated into
+    the same arena. }
+  writeln(ircode, 'declare ptr @pas_str_cstr(ptr, i32)');
   { How much of the runtime's string arena is in use -- the one thing this
     module names in the runtime that is not a function (ADR-0111). It is data
     rather than a mark/release pair so that the read every prologue makes is a
@@ -26530,7 +26643,12 @@ begin
       first := true;
       while q <> nil do begin
         if first then first := false else write(ircode, ', ');
-        PutLlType(q^.sym^.stype);
+        { ADR-0122's two address rows print the same way, an opaque pointer
+          being the whole of what either is on this side. }
+        if (q^.sym^.kind = skVarParam) or ForeignStringFormal(q^.sym) then
+          write(ircode, 'ptr')
+        else
+          PutLlType(q^.sym^.stype);
         q := q^.next
       end
     end

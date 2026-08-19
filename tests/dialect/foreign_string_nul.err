@@ -1,0 +1,1 @@
+runtime error: a string crossing to a foreign routine contains a NUL character

@@ -1,0 +1,14 @@
+exists before = no
+exists after  = yes
+rename        = done
+old gone      = no
+new there     = yes
+remove        = done
+removed       = no
+remove again  = the operation was refused
+mkdir         = done
+dir there     = yes
+mkdir again   = the operation was refused
+rmdir         = done
+dir gone      = no
+branched      = errIO

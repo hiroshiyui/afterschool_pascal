@@ -1,0 +1,11 @@
+atoi lit     = 42
+atoi var     = -17
+atof         = 2.50
+atoi char    = 7
+atoi concat  = 12
+atoi substr  = 99
+strcmp eq    = 0
+strcmp lt    = -
+strcmp gt    = +
+loop ok      = 480000
+copy alone   = 700000

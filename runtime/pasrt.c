@@ -1629,6 +1629,37 @@ char *pas_str_char(char c) {
   return p;
 }
 
+/* ADR-0122: a string crossing to a foreign routine, as `const char *`.
+ *
+ * A Pascal string is a pointer and a length (ADR-0051) and a C string carries
+ * its length in-band, so the boundary needs a copy with a NUL after it. The
+ * copy goes in the arena above, which makes this a third arena producer and
+ * means the emitter has to bump ADR-0111's counter where it writes the call --
+ * a statement that took storage releases it, and this is storage.
+ *
+ * The arena is exactly the right lifetime: the value has to outlive the
+ * argument list and must not outlive the statement, which is the rule the
+ * arena already keeps. A `const char *` the callee stores away outlives both,
+ * and nothing here can see that -- doc/sop.md §7.
+ *
+ * A NUL inside the value is an error rather than a truncation. C cannot
+ * represent such a string at all, so there is no image to hand over; passing
+ * the prefix would quietly rename a path or shorten a command, which is the
+ * class of thing every other check here traps on. */
+char *pas_str_cstr(const char *s, int len) {
+  char *p;
+  int i;
+  if (len < 0) len = 0;
+  for (i = 0; i < len; i++)
+    if (s[i] == '\0')
+      pas_runtime_error("a string crossing to a foreign routine contains a "
+                        "NUL character");
+  p = pas_str_temp(len + 1);
+  memcpy(p, s, (size_t)len);
+  p[len] = '\0';
+  return p;
+}
+
 /* §6.8.3.6: "a + b shall denote a value of the canonical-string-type whose
  * length shall be equal to the sum of the length of a and the length of b."
  * The length is therefore known to the compiler and is not returned here. */

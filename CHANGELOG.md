@@ -54,6 +54,53 @@ appears below in the release where it still existed.
   outward-facing library is dialect-only, permanently, and `lib/`'s existing
   modules stay Extended Pascal that any conforming processor can take.
 
+- **A string and a `var` parameter cross the foreign boundary** (ADR-0122),
+  still under `--std=afterschool` only.
+
+  ```pascal
+  function atoi(s: string): integer; external 'atoi';
+  function modf(x: real; var ip: real): real; external 'modf';
+  ```
+
+  **An address crosses only as an argument.** Nothing comes back as one: a
+  returned `char *` is the callee's storage or nobody's, and it may be null —
+  `getenv` of a name that is not set answers null in the ordinary course of
+  things — which needs an optional type this language does not have yet. An
+  *argument* is different: the caller owns the storage and outlives the call,
+  so the lifetime question does not arise.
+
+  `string` in an `external` heading means `const char *`, and it is **not** a
+  schematic formal: there is no descriptor to bind and no capacity, so the
+  actual has only to be a string and may be a literal, a variable, a
+  concatenation, a substring or a char. What crosses is a NUL-terminated copy
+  in the string arena, alive for the statement. A capacity (`string(20)`) or a
+  fixed size (`packed array [1..3] of char`) on the formal is refused: a C
+  string carries its length in-band as the NUL, so the size is the actual's.
+
+  **A string containing `chr(0)` traps** rather than being truncated. C cannot
+  represent one, and a path silently cut short is the class of thing every
+  other check here traps on.
+
+  A `var` parameter of `integer` or `real` crosses as the actual's own address
+  — `int *` and `double *`. A **buffer** does not: it is a pointer *and* a
+  length, and the length is not in-band the way a C string's is. So `read` and
+  `snprintf` still wait, on a language decision about slices rather than on the
+  FFI. A procedural parameter is refused outright, the static link being a half
+  with no image at all in C.
+
+- **`PasFS` — the file system** (`lib/dialect/`, ADR-0122): `Remove`, `Rename`,
+  `MakeDirectory`, `RemoveDirectory` and `Exists`, over `remove`, `rename`,
+  `mkdir`, `rmdir` and `access`. A routine with nothing to return answers an
+  `ErrorCode` directly, `errNone` being success, because ADR-0120's result
+  record draws its safety from the payload setting the tag and an arm with no
+  payload has nothing to set it with.
+
+  **Every failure is `errIO` and cannot be finer**, because `errno` is
+  `*__errno_location()` on glibc and a pointer *result* is the one thing
+  ADR-0122 refuses. `Readable` and `Writable` are absent for a second reason:
+  `R_OK` and `W_OK` are numbers a C header supplies and an FFI without a header
+  parser cannot see, while `F_OK` is 0 and 0 is 0 everywhere.
+
 - **`hypot`, `atan2` and `atan` are names a program may have.** ADR-0121 could
   not let a program name a linker symbol the emitted module already declares,
   LLVM refusing any redeclared global, and those three were declared because
