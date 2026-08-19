@@ -308,28 +308,36 @@ link one list node twice (ADR-0070).
 **Conformant array parameters are not accepted**, which is what makes this a
 level 0 processor rather than a deviation — see §1.
 
-**A discriminant or subrange bound that is not a constant is refused in a
-*type-definition*.** `type t = vector(m)` and `type t = array [1..m] of real`
-inside a procedure, with `m` a value parameter, are legal and are refused.
-§6.2.3.8 b) puts "each actual-discriminant-part or subrange-bound not contained
-by a schema-definition and closest-contained by … the block" in the block's
-commencement, and orders it *after* the attribution of formal value parameters;
-§6.4.2.4 writes `subrange-bound = expression` and gives varying bounds a
-dynamic-violation branch of their own, which would be meaningless if they were
-illegal.
+**A subrange whose bounds are not constants is refused anywhere but an array's
+index-type.** `var x: 1..m`, `type t = 1..m` and `array [1..m] of 1..m` inside a
+procedure, with `m` a value parameter, are legal under §6.4.2.4 —
+`subrange-bound = expression`, with a dynamic-violation branch of its own for
+varying bounds, which would be meaningless if they were illegal — and are
+refused with *the bounds of a subrange must be ordinal constants*.
 
-The **variable-declaration** half of this entry is fixed: `var v: vector(m)` has
-always worked and `var a: array [1..m] of real` works since ADR-0113, in
-`--std=extended` only, ISO 7185 §6.4.2.4 writing `subrange-type = constant '..'
-constant`. What is left is the type-definition, and it is a different decision
-rather than the rest of the same one: a variable's descriptor belongs to the
-variable, while a type's would belong to the *block* and be shared by every
-variable of it. A record field is refused for a related reason — its storage is
-sized where the record is.
+What an index-type's bounds are for is the subscript check, which reads them
+out of the descriptor §6.2.3.8 b) filled. What every other subrange's bounds are
+for is the range check at a store, and that check compares against the two
+numbers on the type. So a dynamically bounded subrange in any other position
+has a check that cannot see its own bound, and until ADR-0127 it was **accepted
+and wrong**: `a[1] := 2` over `array [1..m] of 1..m` with `m = 3` trapped with
+*value out of range (1..)* — a legal store stopped by a comparison against an
+upper bound that had never been read from anywhere. Refusing it is a deviation;
+accepting it was a defect.
 
-Unfixed rather than chosen. It was the finding of the second independent reading
-most likely to break a real program (ADR-0107), and `doc/sop.md` §7 carries what
-remains of it.
+Fixable, and it is a run-time check rather than a decision: the store's
+comparison has to read the descriptor the way the subscript check already does,
+and the message has to be built by the runtime the way an array's already is
+where the bounds arrived with an actual (ADR-0040). `doc/sop.md` §7 carries it.
+
+The two halves of the entry this replaces are **fixed**. `var v: vector(m)` has
+always worked; `var a: array [1..m] of real` works since ADR-0113; and
+`type t = vector(m)` and `type t = array [1..m] of real` work since ADR-0127 —
+all three in `--std=extended` only, ISO 7185 §6.4.2.4 writing `subrange-type =
+constant '..' constant`. The type-definition half was the finding of the second
+independent reading most likely to break a real program (ADR-0107). A record
+field is still refused, for the reason it always was: its storage is sized where
+the record is.
 
 **An identifier or a character-string longer than 255 characters is
 refused.** §6.1.3 makes every character of an identifier significant and

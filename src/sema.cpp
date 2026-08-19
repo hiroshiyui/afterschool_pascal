@@ -759,7 +759,12 @@ Type *Sema::resolveSubrange(TypeExpr &denoter) {
 /// (ISO 7185 §6.4.3.2), so dimension `dim` wraps everything after it.
 Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   TypeExpr &indexDenoter = *denoter.dims[dim];
+  // The one position §6.2.3.8 b)'s bound may size something from: this array.
+  // A component's own subrange is refused, and the flag is what tells the two
+  // apart — both are a Subrange denoter reached from here (ADR-0127).
+  dynBoundsIndex_ = true;
   Type *index = resolveType(indexDenoter);
+  dynBoundsIndex_ = false;
 
   if (!index->isOrdinal()) {
     diags_.error(indexDenoter.line, indexDenoter.col,
@@ -795,6 +800,7 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   t->loDisc = index->loDisc;
   t->hiDisc = index->hiDisc;
   t->packed = denoter.packed;
+  dynBoundsIndex_ = false;
   t->elem = dim + 1 < denoter.dims.size() ? resolveArray(denoter, dim + 1)
                                           : resolveType(*denoter.elem);
   return t;
@@ -1368,8 +1374,14 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   // type of its own, whose storage is not this variable's to size, so the offer
   // stops there and the bound must be constant exactly as before.
   Symbol *savedBounds = dynBoundsFor_;
-  if (denoter.kind != TEK::Array && denoter.kind != TEK::Subrange)
+  if (denoter.kind != TEK::Array &&
+      (denoter.kind != TEK::Subrange || !dynBoundsIndex_))
     dynBoundsFor_ = nullptr;
+  // One denoter's answer, not a subtree's: an array's index-type may be a
+  // subrange with discriminant bounds and its component-type may not, so the
+  // flag is spent on the denoter it was set for (ADR-0127).
+  bool savedIndex = dynBoundsIndex_;
+  dynBoundsIndex_ = false;
 
   Type *t = nullptr;
   switch (denoter.kind) {
@@ -1479,6 +1491,7 @@ Type *Sema::resolveType(TypeExpr &denoter) {
 
   dynamicVarFor_ = savedDynamic;
   dynBoundsFor_ = savedBounds;
+  dynBoundsIndex_ = savedIndex;
   checkInitialState(denoter, t);
   denoter.resolved = t;
   return t;
@@ -3811,7 +3824,7 @@ void Sema::checkDeclarations(Block &block, Symbol *owner,
     else if (which == 1) {
       inTypes = true;
       inTypePart_ = true;
-      checkTypeDecl(block.types[ti++]);
+      checkTypeDecl(block.types[ti++], owner);
     } else if (which == 2)
       checkVarDecl(block.vars[vi++], owner);
     else if (which == 3) {
@@ -3901,7 +3914,21 @@ void Sema::checkConstDecl(ConstDecl &c, Symbol *owner) {
 
 /// One type-definition or schema-definition. A type name is visible to the
 /// definitions after it, so each is declared as it is resolved.
-void Sema::checkTypeDecl(TypeDecl &t) {
+/// The frame slot a type-definition's bounds descriptor turns out to need
+/// (ADR-0127). It cannot be reserved before the denoter is resolved — most
+/// type-definitions have no bound that fails to fold, and a slot claimed for
+/// every one of them would move the layout of every frame in every Extended
+/// Pascal program — so the symbol is made outside the frame and joins it here,
+/// with every discriminant already built against it corrected to the index it
+/// turned out to get.
+void Sema::claimBoundsSlot(Symbol *hv, Symbol *owner) {
+  hv->frameIndex = static_cast<int>(owner->frameVars.size());
+  owner->frameVars.push_back(hv);
+  for (Symbol *d : hv->discSyms)
+    d->frameIndex = hv->frameIndex;
+}
+
+void Sema::checkTypeDecl(TypeDecl &t, Symbol *owner) {
   // §6.4.7: a schema-definition declares a schema, not a type. Its body is
   // *not* resolved here — it has no discriminant values yet, and resolving
   // it once would produce the one type every use then shared.
@@ -3926,7 +3953,60 @@ void Sema::checkTypeDecl(TypeDecl &t) {
       return;
     }
   }
-  Type *resolved = resolveType(*t.type);
+  // ISO/IEC 10206:1991 §6.2.3.8 b) evaluates "each actual-discriminant-part or
+  // subrange-bound not contained by a schema-definition and closest-contained
+  // by the module-heading of the module, by the module-block of the module, or
+  // by the block" at that activation's commencement. A type-definition is
+  // contained by the block, so `type t = array [1..m] of integer` and
+  // `type t = vec(m)` are as legal there as ADR-0113's variable is — and the
+  // difference is who owns the descriptor. A variable's belongs to the
+  // variable; a type's belongs to the *block*, because the clause evaluates the
+  // bound once however many variables of t the block goes on to declare, and
+  // §6.4.1 makes them one type with one extent (ADR-0127).
+  //
+  // So the offer is made to a hidden frame variable standing for the
+  // type-definition rather than to any variable. If every bound folded it is
+  // withdrawn and nothing was claimed.
+  Type *resolved = nullptr;
+  Symbol *hv = nullptr;
+  if (std_ == Std::Extended) {
+    hv = newSymbol();
+    hv->name = "bnd$" + std::to_string(owner->frameVars.size());
+    hv->kind = SymKind::Var;
+    hv->type = ty::Int();
+    hv->level = owner->level;
+    hv->owner = owner;
+    hv->frameIndex = -1;
+    dynBoundsFor_ = hv;
+    dynamicVarFor_ = hv;
+    resolved = resolveType(*t.type);
+    dynBoundsFor_ = nullptr;
+    dynamicVarFor_ = nullptr;
+    if (hv->discSyms.empty()) {
+      hv = nullptr;
+    } else {
+      hv->type = resolved;
+      // A written schema brought its own; a bare bound has none, so the
+      // anonymous one ADR-0113 hangs the discriminants on is made here for the
+      // same reason and by the same procedure.
+      if (!hv->descSchema)
+        boundSchemaFor(hv);
+      claimBoundsSlot(hv, owner);
+      // The type is what a later variable-declaration will have; this is how
+      // it finds the descriptor its extent is in.
+      resolved->boundsVar = hv;
+      // §6.2.3.6 makes a module's activation last as long as the program, so
+      // there is no stack for storage sized on entry — the same rule that
+      // refuses it to a module's variable (ADR-0041, ADR-0113).
+      if (owner->isModuleSym)
+        diags_.error(t.line, t.col,
+                     "the bounds of a module's type must be constants, "
+                     "because a module's activation lasts as long as the "
+                     "program");
+    }
+  } else {
+    resolved = resolveType(*t.type);
+  }
   Symbol *s = declare(t.name, SymKind::Type, t.line, t.col);
   if (s->type)
     return; // a duplicate: keep the first definition
@@ -4046,6 +4126,23 @@ void Sema::checkVarDecl(VarDecl &group, Symbol *owner) {
       boundSchemaFor(v);
     } else {
       v = addFrameVar(n.name, SymKind::Var, t, owner, n.line, n.col);
+    }
+    // A variable of a type whose bounds §6.2.3.8 b) evaluated at the
+    // type-definition (ADR-0127). It has no discriminants of its own — the
+    // clause evaluated them once, for the type — so what its slot holds is the
+    // address alone, and the discriminants it reads are the type's, reached
+    // through the block's own frame slot by the walk any enclosing variable
+    // makes. Sharing the list rather than copying the values is what makes the
+    // extent the type's: nothing here can disagree with the descriptor the
+    // type filled.
+    if (!dynamic && t && t->isGeneric() && t->boundsVar) {
+      v->descSchema = t->boundsVar->descSchema;
+      v->discSyms = t->boundsVar->discSyms;
+      if (owner->isModuleSym)
+        diags_.error(n.line, n.col,
+                     "the bounds of a module's variable must be constants, "
+                     "because a module's activation lasts as long as the "
+                     "program");
     }
     // §6.2.3.5 creates each local "in its initial state" on entry, so the
     // whole group shares one value as it shares one type.

@@ -14,7 +14,13 @@
   (ADR-0053). The same holds of a subrange-bound that is not a constant, which
   6.2.3.8 b) commences in the same place and for the same reason: the two are
   one rule about where sized-on-entry storage can live, so they are written as
-  two messages only because each names what the program wrote (ADR-0113). }
+  two messages only because each names what the program wrote (ADR-0113).
+
+  A *type-definition* is the fourth of them and the reason there are four
+  (ADR-0127). 6.2.3.8 b) reaches a type-definition's bound as well, so the
+  rule has to reach it too -- and a variable of such a type is refused
+  separately, because the two are declared separately and a reader given only
+  the first would not know which one to change. }
 module m(nosuch);
 export
   mi = (a..b);
@@ -24,5 +30,9 @@ var a, b: integer;
     k: integer;
     v: vec(k);
     w: array [1..k] of integer;
+type dyn = array [1..k] of integer;
+     prod = vec(k);
+var x: dyn;
+    y: prod;
 end;
 end.

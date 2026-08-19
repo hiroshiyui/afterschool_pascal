@@ -448,7 +448,8 @@ private:
   void checkDeclarations(Block &block, Symbol *owner,
                          std::vector<std::unique_ptr<ProcDecl>> *procs = nullptr);
   void checkConstDecl(ConstDecl &c, Symbol *owner);
-  void checkTypeDecl(TypeDecl &t);
+  void checkTypeDecl(TypeDecl &t, Symbol *owner);
+  void claimBoundsSlot(Symbol *hv, Symbol *owner);
   void checkVarDecl(VarDecl &group, Symbol *owner);
   void declareProcHeading(ProcDecl &decl, Symbol *owner);
   void checkProcBody(ProcDecl &decl);
@@ -831,6 +832,14 @@ private:
   /// to a *schema's* actual-discriminant-part: the same clause, different
   /// denoters, and a bare bound has no schema to be keyed on.
   Symbol *dynBoundsFor_ = nullptr;
+
+  /// Whether the denoter about to be resolved is an array's *index-type*,
+  /// which is the one position a subrange whose bounds are discriminants may
+  /// occupy (ADR-0127). Everywhere else such a subrange is refused, because
+  /// what a subrange's bounds are *for* outside an index-type is the range
+  /// check at a store — and that check reads the type's two numbers, not a
+  /// descriptor. One-shot: resolveType clears it before it recurses.
+  bool dynBoundsIndex_ = false;
   /// The schemata whose bodies are being resolved right now. §6.4.7 forbids a
   /// schema-definition from containing an applied occurrence of its own
   /// identifier anywhere but the domain of a pointer, and this is that rule:

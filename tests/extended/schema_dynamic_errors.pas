@@ -1,7 +1,9 @@
-{ What a discriminant that is not a constant still refuses. §6.2.3.2 allows a
-  variable in an actual-discriminant-part, and *only* there: every other
-  position the same denoter can be written in wants a constant, because the
-  type it produces belongs to the program rather than to an activation. }
+{ What a discriminant that is not a constant still refuses. §6.2.3.8 b) puts
+  every actual-discriminant-part "closest-contained by ... the block" in that
+  block's commencement, so a variable's may be one (§6.2.3.2, ADR-0113) and so
+  may a type-definition's (ADR-0127). What is refused is every position the
+  clause does *not* reach -- a schema body, an array's component, a record's
+  field -- because the type produced there is not sized by this activation. }
 program SchemaDynamicErrors(output);
 type
   vector(n: integer) = array [1..n] of integer;
@@ -32,10 +34,13 @@ var
   { and neither is a field }
   rec: record inner: vector(k) end;
 
-{ a type definition names a type of the program, not of an activation, so its
-  discriminants are constants wherever it is written }
+{ a type-definition *is* closest-contained by the block, so `type later =
+  vector(k)` is legal here now (ADR-0127) and tests/extended/dynbounds_type.pas
+  is where it runs. What is left in this file is the rule that outlives it: a
+  discriminant is an *ordinal* expression however it is evaluated, and a real
+  is not one }
 procedure defined;
-type later = vector(k);
+type later = vector(r);
 var v: later;
 begin
   { the body says nothing about v: a variable whose type was refused has a

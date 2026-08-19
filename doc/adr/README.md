@@ -135,3 +135,4 @@ the alternatives that were rejected and why.
 | [0124](0124-every-case-over-a-type-kind-names-every-kind.md) | Every case over a type kind names every kind, and a gate says so | Accepted |
 | [0125](0125-a-slice-is-a-parameter-form-and-the-pair-travels-as-two-words.md) | A slice is a parameter form, and the pair travels as two words | Accepted |
 | [0126](0126-the-token-array-was-the-ceiling.md) | The token array was the ceiling, and the headroom is measured now | Accepted |
+| [0127](0127-a-type-definitions-bounds-belong-to-the-block.md) | A type-definition's bounds belong to the block | Accepted |

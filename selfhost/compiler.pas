@@ -618,7 +618,17 @@ type
       (ADR-0043). descOwner holds its discriminant symbols, because a heap
       variable is reached through `p^` and so has no name to hang them on. }
     heapTuple: boolean;
-    descOwner: symPtr
+    descOwner: symPtr;
+
+    { 6.2.3.8 b) at a type-definition (ADR-0127): the hidden frame variable
+      whose descriptor holds this type's bounds, evaluated once at the
+      commencement of the activation of the block that defines it. Every
+      variable of the type reads that one descriptor, so the extent is the
+      type's and not each variable's -- which is what 6.4.1 requires of a
+      type-name and what distinguishes this from ADR-0113's per-variable
+      bounds, where the type belongs to one name. Nil for every type whose
+      bounds folded, which is every type outside this clause. }
+    boundsVar: symPtr
   end;
 
   symbol = record
@@ -721,6 +731,21 @@ type
       the list. }
     discExpr: nodePtr;
     discIndex, paramSection: integer;
+
+    { The two halves 6.2.3.8 b) needs at a *type-definition* (ADR-0127). The
+      clause evaluates a subrange-bound or an actual-discriminant-part closest-
+      contained by the block once, at the block's commencement -- and a
+      type-definition is contained by the block, so the descriptor belongs to
+      the block rather than to any one variable of the type.
+
+      boundsOwner is that block-level descriptor: a hidden frame variable made
+      for the type-definition, which fills its discriminants on entry and
+      allocates nothing, a type having no storage. boundsFromType is a variable
+      of such a type: its descriptor holds only the address, because the
+      discriminants it reads are the *type's* and its discSyms are that same
+      list, reached through the owner's frame slot exactly as any other
+      discriminant is. }
+    boundsOwner, boundsFromType: boolean;
 
     { A skDisc whose storage is not in any activation record: the tuple of a
       variable created by `new` lives in a header immediately before it, so
@@ -1477,6 +1502,16 @@ var
     to a *schema's* actual-discriminant-part: the two are the same clause and
     different denoters, and a bound has no schema to be keyed on. }
   dynBoundsFor: symPtr;
+  { Whether the denoter about to be resolved is an array's *index-type*, which
+    is the one position a subrange whose bounds are discriminants may occupy
+    (ADR-0127). Everywhere else such a subrange is refused, because what a
+    subrange's bounds are *for* outside an index-type is the range check at a
+    store -- and that check reads the type's two numbers, not a descriptor. It
+    was not refused, and `var a: array [1..m] of 1..m` then trapped on a legal
+    store: the component's hi had never been read from anywhere and was zero.
+    One-shot -- ResolveType clears it before it recurses -- so it says something
+    about one denoter and not about a subtree. }
+  dynBoundsIndex: boolean;
   { True while a field of a *variant part* is being resolved, where 6.5.1 makes
     the initial state conditional on the selector. There is no flag for "this
     position admits a specifier at all": the parser settles that, by stopping
@@ -2078,6 +2113,27 @@ end;
   `for ... in` does not allocate one per iteration of the loop around it; the
   program cannot name it, and the `$` is what keeps it out of reach of a source
   identifier. }
+{ The name of the hidden frame variable a type-definition's bounds descriptor
+  lives in (ADR-0127). Named rather than anonymous for the same reason `for$`
+  and `with$` are: the Sema dump prints a frame's variables and a nameless one
+  would be indistinguishable from the next. Nothing looks it up -- `$` is not
+  an identifier character, so no program can write the name. }
+procedure InternBoundsName(slot: integer; var at, len: integer);
+var digits: array [1..12] of char; n, v, k: integer;
+begin
+  at := poolLen + 1;
+  PoolPut('b'); PoolPut('n'); PoolPut('d'); PoolPut('$');
+  n := 0;
+  v := slot;
+  repeat
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  until v = 0;
+  for k := n downto 1 do PoolPut(digits[k]);
+  len := 4 + n
+end;
+
 procedure InternForName(slot: integer; var at, len: integer);
 var digits: array [1..12] of char; n, v, k: integer;
 begin
@@ -6209,6 +6265,7 @@ begin
   t^.hiDisc := nil;
   t^.heapTuple := false;
   t^.descOwner := nil;
+  t^.boundsVar := nil;
   NewType := t
 end;
 
@@ -6917,6 +6974,8 @@ begin
   s^.discExprs := nil;
   s^.discExpr := nil;
   s^.discIndex := -1;
+  s^.boundsOwner := false;
+  s^.boundsFromType := false;
   s^.heapDisc := false;
   s^.discBinding := false;
   s^.paramSection := 0;
@@ -9183,7 +9242,12 @@ end;
 function ResolveArray(d, dim: nodePtr): typePtr;
 var t, index: typePtr;
 begin
+  { The one position 6.2.3.8 b)'s bound may size something from: this array.
+    A component's own subrange is refused, and the flag is what tells the two
+    apart -- both are an nkSubrange reached from here (ADR-0127). }
+  dynBoundsIndex := true;
   index := ResolveType(dim);
+  dynBoundsIndex := false;
   if not IsOrdinal(index) then begin
     ErrorAt(dim^.line, dim^.col);
     write('an array index must be an ordinal type, found ');
@@ -9226,6 +9290,7 @@ begin
   t^.loDisc := index^.loDisc;
   t^.hiDisc := index^.hiDisc;
   t^.isPacked := d^.arPacked;
+  dynBoundsIndex := false;
   if dim^.next <> nil then
     t^.elem := ResolveArray(d, dim^.next)
   else
@@ -10907,6 +10972,7 @@ end;
 
 function ResolveType;
 var t: typePtr; s, savedDynamic, savedBounds: symPtr; n: nodePtr;
+    savedIndex: boolean;
 begin
   if d^.ntype <> nil then
     ResolveType := d^.ntype
@@ -10926,8 +10992,14 @@ begin
       a type of its own, whose storage is not this variable's to size, so the
       offer stops there and the bound must be constant exactly as before. }
     savedBounds := dynBoundsFor;
-    if (d^.kind <> nkArray) and (d^.kind <> nkSubrange) then
+    if (d^.kind <> nkArray) and
+       ((d^.kind <> nkSubrange) or not dynBoundsIndex) then
       dynBoundsFor := nil;
+    { One denoter's answer, not a subtree's: an array's index-type may be a
+      subrange with discriminant bounds and its component-type may not, so the
+      flag is spent on the denoter it was set for (ADR-0127). }
+    savedIndex := dynBoundsIndex;
+    dynBoundsIndex := false;
     t := nil;
     case d^.kind of
       nkNamed: begin
@@ -11044,6 +11116,7 @@ begin
     end;
     dynamicVarFor := savedDynamic;
     dynBoundsFor := savedBounds;
+    dynBoundsIndex := savedIndex;
     CheckInitialState(d, t);
     d^.ntype := t;
     ResolveType := t
@@ -16637,55 +16710,6 @@ begin
   end
 end;
 
-{ One type-definition or schema-definition. A type name is visible to the
-  definitions after it, so each is declared as it is resolved. }
-procedure CheckTypeDecl(d: nodePtr);
-var s, named: symPtr; t: typePtr;
-begin
-  { 6.4.7: a schema-definition declares a schema, not a type. Its body is
-    *not* resolved here -- it has no discriminant values yet, and resolving
-    it once would produce the one type every use then shared. }
-  if d^.tdDiscs <> nil then
-    DeclareSchema(d)
-  else begin
-    { 6.4.7's *first* alternative, `identifier '=' schema-name`. It is the same
-      tokens as a type-definition naming a type, so the symbol decides and not
-      the syntax -- the fourth time here, after ADR-0044's variant-selector,
-      ADR-0053's qualified name and ADR-0066's set-value.
-
-      The clause says the new identifier denotes "the schema denoted by the
-      schema-name", so the two names share one symbol rather than one being a
-      copy of the other: 6.4.8 keys a produced type on (schema, tuple), and a
-      copy would make `vec2(3)` and `vector(3)` two types where the standard
-      has one. }
-    named := nil;
-    if d^.tdType^.kind = nkNamed then begin
-      named := LookupQuiet(d^.tdType^.nmQualAt, d^.tdType^.nmQualLen,
-                           d^.tdType^.nmAt, d^.tdType^.nmLen);
-      if named <> nil then
-        if named^.kind <> skSchema then named := nil
-    end;
-    if named <> nil then
-      BindName(d^.tdAt, d^.tdLen, named, d^.line, d^.col)
-    else begin
-      t := ResolveType(d^.tdType);
-      s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
-      if s^.stype = nil then begin   { a duplicate: keep the first definition }
-        s^.stype := t;
-        { 6.4.1: a type-name denotes "the type, bindability and initial state"
-          its definition denoted, so the initial state travels with the name
-          and every variable of it is initialised. }
-        s^.initValue := InitialStateOf(d^.tdType);
-        s^.isBindable := BindableOf(d^.tdType);
-        if t^.aliasLen = 0 then begin
-          t^.aliasAt := d^.tdAt;
-          t^.aliasLen := d^.tdLen
-        end
-      end
-    end
-  end
-end;
-
 { The anonymous schema a variable with non-constant bounds is given (ADR-0113).
   Everything downstream of a dynamically sized variable is keyed on a schema --
   IsGeneric is "a schema and no tuple", the descriptor is laid out from
@@ -16717,6 +16741,132 @@ begin
     what IsGeneric asks. }
   v^.stype^.schema := synth;
   v^.stype^.tuple := nil
+end;
+
+{ The frame slot a type-definition's bounds descriptor turns out to need
+  (ADR-0127). It cannot be reserved before the denoter is resolved -- most
+  type-definitions have no bound that fails to fold, and a slot claimed for
+  every one of them would move the layout of every frame in every Extended
+  Pascal program -- so the symbol is made outside the frame and joins it here,
+  with every discriminant already built against it corrected to the index it
+  turned out to get. }
+procedure ClaimBoundsSlot(hv, owner: symPtr);
+var l: symListPtr;
+begin
+  hv^.frameIndex := owner^.frameCount;
+  AppendSym(owner^.frameVars, owner^.frameTail, hv);
+  owner^.frameCount := owner^.frameCount + 1;
+  l := hv^.discSyms;
+  while l <> nil do begin
+    l^.sym^.frameIndex := hv^.frameIndex;
+    l := l^.next
+  end
+end;
+
+{ One type-definition or schema-definition. A type name is visible to the
+  definitions after it, so each is declared as it is resolved. }
+procedure CheckTypeDecl(d: nodePtr; owner: symPtr);
+var s, named, hv: symPtr; t: typePtr; at, len: integer;
+begin
+  { 6.4.7: a schema-definition declares a schema, not a type. Its body is
+    *not* resolved here -- it has no discriminant values yet, and resolving
+    it once would produce the one type every use then shared. }
+  if d^.tdDiscs <> nil then
+    DeclareSchema(d)
+  else begin
+    { 6.4.7's *first* alternative, `identifier '=' schema-name`. It is the same
+      tokens as a type-definition naming a type, so the symbol decides and not
+      the syntax -- the fourth time here, after ADR-0044's variant-selector,
+      ADR-0053's qualified name and ADR-0066's set-value.
+
+      The clause says the new identifier denotes "the schema denoted by the
+      schema-name", so the two names share one symbol rather than one being a
+      copy of the other: 6.4.8 keys a produced type on (schema, tuple), and a
+      copy would make `vec2(3)` and `vector(3)` two types where the standard
+      has one. }
+    named := nil;
+    if d^.tdType^.kind = nkNamed then begin
+      named := LookupQuiet(d^.tdType^.nmQualAt, d^.tdType^.nmQualLen,
+                           d^.tdType^.nmAt, d^.tdType^.nmLen);
+      if named <> nil then
+        if named^.kind <> skSchema then named := nil
+    end;
+    if named <> nil then
+      BindName(d^.tdAt, d^.tdLen, named, d^.line, d^.col)
+    else begin
+      { ISO/IEC 10206:1991 6.2.3.8 b) evaluates "each actual-discriminant-part
+        or subrange-bound not contained by a schema-definition and closest-
+        contained by the module-heading of the module, by the module-block of
+        the module, or by the block" at that activation's commencement. A
+        type-definition is contained by the block, so `type t = array [1..m] of
+        integer` and `type t = vec(m)` are as legal there as ADR-0113's
+        variable is -- and the difference is who owns the descriptor. A
+        variable's belongs to the variable; a type's belongs to the *block*,
+        because the clause evaluates the bound once however many variables of t
+        the block goes on to declare, and 6.4.1 makes them one type with one
+        extent (ADR-0127).
+
+        So the offer is made to a hidden frame variable standing for the
+        type-definition rather than to any variable. If every bound folded it
+        is withdrawn and nothing was claimed. }
+      hv := nil;
+      if HasExtended(langStd) then begin
+        hv := NewSymbol;
+        InternBoundsName(owner^.frameCount, at, len);
+        hv^.at := at;
+        hv^.len := len;
+        hv^.kind := skVar;
+        hv^.stype := intType;
+        hv^.level := owner^.level;
+        hv^.owner := owner;
+        hv^.frameIndex := -1;
+        dynBoundsFor := hv;
+        dynamicVarFor := hv;
+        t := ResolveType(d^.tdType);
+        dynBoundsFor := nil;
+        dynamicVarFor := nil;
+        if hv^.discSyms = nil then
+          hv := nil
+        else begin
+          hv^.stype := t;
+          hv^.boundsOwner := true;
+          { A written schema brought its own; a bare bound has none, so the
+            anonymous one ADR-0113 hangs the discriminants on is made here for
+            the same reason and by the same procedure. }
+          if hv^.descSchema = nil then BoundSchemaFor(hv);
+          ClaimBoundsSlot(hv, owner);
+          { The type is what a later variable-declaration will have; this is
+            how it finds the descriptor its extent is in. }
+          t^.boundsVar := hv;
+          { 6.2.3.6 makes a module's activation last as long as the program, so
+            there is no stack for storage sized on entry -- the same rule that
+            refuses it to a module's variable (ADR-0041, ADR-0113), and the
+            message names what the program wrote. }
+          if owner^.isModuleSym then begin
+            ErrorAt(d^.line, d^.col);
+            writeln('the bounds of a module''s type must be constants, ',
+                    'because a module''s activation lasts as long as the ',
+                    'program')
+          end
+        end
+      end
+      else
+        t := ResolveType(d^.tdType);
+      s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
+      if s^.stype = nil then begin   { a duplicate: keep the first definition }
+        s^.stype := t;
+        { 6.4.1: a type-name denotes "the type, bindability and initial state"
+          its definition denoted, so the initial state travels with the name
+          and every variable of it is initialised. }
+        s^.initValue := InitialStateOf(d^.tdType);
+        s^.isBindable := BindableOf(d^.tdType);
+        if t^.aliasLen = 0 then begin
+          t^.aliasAt := d^.tdAt;
+          t^.aliasLen := d^.tdLen
+        end
+      end
+    end
+  end
 end;
 
 { One variable-declaration: a group of names sharing a type-denoter. }
@@ -16833,6 +16983,27 @@ begin
       end
       else
         s := AddFrameVar(n^.dnAt, n^.dnLen, skVar, t, owner, n^.line, n^.col);
+      { A variable of a type whose bounds 6.2.3.8 b) evaluated at the
+        type-definition (ADR-0127). It has no discriminants of its own -- the
+        clause evaluated them once, for the type -- so what its slot holds is
+        the address alone, and the discriminants it reads are the type's,
+        reached through the block's own frame slot by the walk any enclosing
+        variable makes. Sharing the list rather than copying the values is
+        what makes the extent the type's: nothing here can disagree with the
+        descriptor the type filled. }
+      if not dynamic then
+        if IsGeneric(t) and (t^.boundsVar <> nil) then begin
+          s^.descSchema := t^.boundsVar^.descSchema;
+          s^.discSyms := t^.boundsVar^.discSyms;
+          s^.discSymTail := t^.boundsVar^.discSymTail;
+          s^.boundsFromType := true;
+          if owner^.isModuleSym then begin
+            ErrorAt(n^.line, n^.col);
+            writeln('the bounds of a module''s variable must be constants, ',
+                    'because a module''s activation lasts as long as the ',
+                    'program')
+          end
+        end;
       { 6.2.3.5 creates each local "in its initial state" on entry, so the
         whole group shares one value as it shares one type. }
       s^.initValue := init;
@@ -16942,7 +17113,7 @@ begin
     else if which = 1 then begin
       inTypes := true;
       inTypePart := true;
-      CheckTypeDecl(t);
+      CheckTypeDecl(t, owner);
       t := t^.next
     end
     else if which = 2 then begin
@@ -26713,13 +26884,20 @@ var l, d: symListPtr; a, e: nodePtr; slot, half, value_, size, storage: str;
 begin
   l := p^.frameVars;
   while l <> nil do begin
-    if FillsOwnDescriptor(l^.sym) then begin
+    if FillsOwnDescriptor(l^.sym) or l^.sym^.boundsFromType then begin
       { Through FrameSlot rather than a written %frame: a level-0 owner -- the
         program -- keeps its variables in a global and has no frame register,
         so spelling one here emitted IR naming a value that does not exist.
         Every other reach for a slot outside this procedure already goes
         through it (ADR-0016). }
       FrameSlot(l^.sym, slot);
+      { A variable whose bounds are its *type's* fills nothing: 6.2.3.8 b)
+        evaluated them once at the type-definition, and this slot holds only
+        the address (ADR-0127). Re-evaluating them here would be a second
+        evaluation of one bound and could answer differently -- a bound may
+        call a function -- which is exactly what makes two variables of one
+        type two extents. }
+      if not l^.sym^.boundsFromType then begin
       a := l^.sym^.discExprs;
       d := l^.sym^.discSyms;
       while d <> nil do begin
@@ -26750,7 +26928,15 @@ begin
         d := d^.next
       end;
       StrClear(nohdr);
-      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema, nohdr);
+      CheckSchemaDomain(l^.sym^.stype, l^.sym^.descSchema, nohdr)
+      end;
+      { A type-definition's own descriptor allocates nothing: a type has no
+        storage, and the variables of it each get their own below. Its slot is
+        a descriptor all the same, so the discriminants sit where every reader
+        of them already looks; the address field is the one word it does not
+        use (ADR-0127). }
+      if not l^.sym^.boundsOwner then begin
+      StrClear(nohdr);
       comp := l^.sym^.stype;
       while comp^.kind = tyArray do comp := comp^.elem;
       align := LlAlign(comp);
@@ -26770,6 +26956,7 @@ begin
       write(ircode, ', ptr ');
       PutOp(half);
       writeln(ircode)
+      end
     end;
     l := l^.next
   end
@@ -27734,6 +27921,7 @@ begin
   sliceFormNode := nil;
   dynamicVarFor := nil;
   dynBoundsFor := nil;
+  dynBoundsIndex := false;
   variantField := false;
   inSchemaBody := false;
   stdInput := nil;

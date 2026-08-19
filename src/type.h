@@ -252,6 +252,15 @@ struct Type {
   /// other symbol to hang them on.
   Symbol *descOwner = nullptr;
 
+  /// §6.2.3.8 b) at a type-definition (ADR-0127): the hidden frame variable
+  /// whose descriptor holds this type's bounds, evaluated once at the
+  /// commencement of the activation of the block that defines it. Every
+  /// variable of the type reads that one descriptor, so the extent is the
+  /// type's and not each variable's — which is what §6.4.1 requires of a
+  /// type-name, and what distinguishes this from ADR-0113's per-variable
+  /// bounds, where the type belongs to one name.
+  Symbol *boundsVar = nullptr;
+
   /// The type of a schematic formal parameter: produced from a schema, but
   /// with no tuple — the tuple arrives with the actual, in the descriptor that
   /// travels beside its address. A schema with no discriminants is refused, so

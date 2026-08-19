@@ -1,1 +1,2 @@
-<source>:12:15: error: the bounds of a subrange must be ordinal constants
+<source>:16:17: error: the bounds of a subrange must be ordinal constants
+<source>:17:15: error: the bounds of a subrange must be ordinal constants
