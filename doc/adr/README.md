@@ -137,3 +137,4 @@ the alternatives that were rejected and why.
 | [0126](0126-the-token-array-was-the-ceiling.md) | The token array was the ceiling, and the headroom is measured now | Accepted |
 | [0127](0127-a-type-definitions-bounds-belong-to-the-block.md) | A type-definition's bounds belong to the block | Accepted |
 | [0128](0128-an-integer-wider-than-the-compilers-own.md) | An integer wider than the compiler's own | Accepted |
+| [0129](0129-a-buffer-crosses-as-the-pair-c-already-takes.md) | A buffer crosses as the pair C already takes | Accepted |

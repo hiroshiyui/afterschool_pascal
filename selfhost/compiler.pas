@@ -15912,6 +15912,26 @@ begin
   ForeignType := (t = intType) or (t = int64Type) or (t = realType)
 end;
 
+{ ADR-0129's component rule, and it is deliberately not the list above.
+
+  A slice is storage the callee may *write* -- `read` fills it -- so
+  ADR-0121's reason for testing the type rather than `Base(t)` bites in the
+  direction that record only had to consider for a result: nothing runs
+  `checkedForSubrange` over a value a foreign routine left behind. So a
+  subrange is refused however ordinary its host is, and so is an enumeration,
+  and so is `boolean`, of whose 256 byte patterns 254 are not values.
+
+  `char` is the addition, and it is the case the feature exists for. ADR-0121
+  refused it *by value* because `clang` passes one as `i8 signext` and the
+  sign bit then disagrees with 6.4.2.2's 0..255 -- an objection about the
+  register convention, which an array component does not use. In memory a
+  `char` is one byte, and the type has no bit pattern that is not a value of
+  it, which is the property every other candidate here lacks. }
+function ForeignSliceComponent(t: typePtr): boolean;
+begin
+  ForeignSliceComponent := ForeignType(t) or (t = charType)
+end;
+
 { An `external` declaration, once its heading is built. The symbol is complete
   the moment it is declared: there is no block here and never will be, so it
   is marked defined -- otherwise the "declared forward but never given a body"
@@ -15992,12 +16012,31 @@ begin
               'a code pointer and the link it runs under, and C takes one ',
               'word')
     end
+    { ADR-0129: the buffer ADR-0122 refused and ADR-0125 made expressible. A
+      slice crosses as the pair `(ptr, i64)` -- the address of the first
+      component, then how many there are -- which is what `read`, `write`,
+      `recv` and `send` take in that order. Only the component type is in
+      question here: ADR-0125 has already required a var parameter, so a slice
+      that is a value parameter has been reported by the rule that is about
+      slices and must not be reported a second time by the one that is about
+      the boundary. }
+    else if IsSlice(p^.sym^.stype) then begin
+      if not ForeignSliceComponent(p^.sym^.stype^.elem) then begin
+        ErrorAt(d^.line, d^.col);
+        write('parameter ', k:1, ' of ''');
+        WritePool(d^.pdAt, d^.pdLen);
+        write(''' is a slice of ');
+        WriteTypeName(p^.sym^.stype^.elem);
+        writeln('; the callee writes through it, so only ''char'', ',
+                '''integer'', ''int64'' and ''real'' cross as a component')
+      end
+    end
     { A `var` parameter crosses as the actual's own storage, which is an
       address the caller holds for longer than the call -- so the lifetime is
       settled and only the type is in question. A buffer is not: it is a
       pointer *and* a length, and the length is not in-band the way a C
-      string's is. That is the slice decision, and this record does not make
-      it. }
+      string's is. That was the slice decision, and ADR-0129 is where it was
+      made. }
     else if p^.sym^.kind = skVarParam then begin
       if not ForeignType(p^.sym^.stype) then begin
         ErrorAt(d^.line, d^.col);
@@ -22575,7 +22614,18 @@ procedure EmitForeignArgument(arg: nodePtr; f: symPtr;
                               var head, tail: opndPtr);
 var a, alen, cs: str;
 begin
-  if f^.kind = skVarParam then begin
+  { ADR-0129: the address and the count, in that order and as two arguments
+    from one formal. The count is widened because every length this target's
+    data path takes is a `size_t`; the range it names was checked where the
+    designator was written, which is where the base's own extent was still
+    known, so what C receives is a bound this compiler proved. }
+  if IsSlice(f^.stype) then begin
+    EmitSliceValue(arg, a, alen);
+    ToInt64(alen, intType);
+    AppendOpnd(head, tail, a, true, nil);
+    AppendOpnd(head, tail, alen, false, int64Type)
+  end
+  else if f^.kind = skVarParam then begin
     { The actual's own storage. Sema has already required a variable, so this
       is the same address any other var parameter would bind to -- what is
       missing is only the callee's willingness to give it back. }
@@ -27909,9 +27959,13 @@ begin
       first := true;
       while q <> nil do begin
         if first then first := false else write(ircode, ', ');
+        { ADR-0129: one formal, two arguments -- the only place in this
+          declaration list where the counts differ. }
+        if IsSlice(q^.sym^.stype) then
+          write(ircode, 'ptr, i64')
         { ADR-0122's two address rows print the same way, an opaque pointer
           being the whole of what either is on this side. }
-        if (q^.sym^.kind = skVarParam) or ForeignStringFormal(q^.sym) then
+        else if (q^.sym^.kind = skVarParam) or ForeignStringFormal(q^.sym) then
           write(ircode, 'ptr')
         else
           PutLlType(q^.sym^.stype);
