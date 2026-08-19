@@ -376,8 +376,8 @@ only grows is a register nobody trusts:
   case fails in both directions (§5).
 - *Clause coverage had an untriaged denominator.* All 292 headings are now
   classified testable, structural or not-implemented
-  (`tests/spec/clauses/triage.tsv`), so the figure is 13 of **207 testable**
-  clauses rather than 13 of 292 headings, and `spec-clause-traceability` gates
+  (`tests/spec/clauses/triage.tsv`), so the figure is 14 of **207 testable**
+  clauses rather than 14 of 292 headings, and `spec-clause-traceability` gates
   it in both directions (ADR-0106). What is left of that gap is the row above.
 - *"§5 is an argument, not a number."* There is a number now —
   `procedure-coverage`, 554 of 556 — and the two rows above are what is left of

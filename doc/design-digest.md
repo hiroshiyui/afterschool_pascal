@@ -1854,7 +1854,7 @@ is `(stdIso7185, stdExtended, stdAfterschool)`, and `HasExtended(s)` is
 `s >= stdExtended`. Every one of the 40 sites that used to ask
 `langStd = stdExtended` asks the predicate instead, which is the whole of what
 keeps the dialect from silently switching Extended Pascal off — the equality
-test still compiles, still reads correctly, and leaves 545 of 547 cases
+test still compiles, still reads correctly, and left 545 of 547 cases
 passing. That is why the conversion landed as its own commit before the third
 enumerant existed: a no-behaviour-change refactor is reviewable, and the same
 edit mixed into a feature is not. `tests/dialect/inherits_extended.pas` pins the

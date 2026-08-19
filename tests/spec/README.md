@@ -110,7 +110,7 @@ Two rules that keep a scenario honest:
 - **Not a replacement for `tests/`.** The golden corpus is far larger and
   covers the compiler; this covers *readings*. A feature landing still needs
   its `tests/*.pas` pair.
-- **Not complete, and citation is not depth.** `--coverage` reports 13 of the
+- **Not complete, and citation is not depth.** `--coverage` reports 14 of the
   **207 testable** clauses — the denominator is triaged in
   `clauses/triage.tsv` (ADR-0106, corrected by ADR-0107), so the 75 structural
   headings and the 10 for conformant array parameters are excluded rather than

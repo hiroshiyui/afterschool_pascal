@@ -166,9 +166,9 @@ load-bearing and the entry names the test that fails without it.
 | modules and separate translation | 0053, 0079 |
 | constant-expressions, constant-accesses, structured values | 0054, 0061, 0066, 0069, 0075 |
 | function results and function-accesses | 0055, 0056 |
-| conformance sweeps and what they found | 0067, 0071 – 0078, 0080, 0087 – 0101 |
-| the build, the seed, the oracles | 0011, 0013, 0081 – 0086, 0102 – 0108 |
-| where the language is going | 0109, 0117 – 0123 |
+| conformance sweeps and what they found | 0067, 0071 – 0078, 0080, 0087 – 0101, 0107, 0113, 0127, 0133, 0134 |
+| the build, the seed, the oracles | 0011, 0013, 0081 – 0086, 0095, 0102 – 0108, 0126 |
+| where the language is going | 0109, 0114 – 0125, 0128 – 0132 |
 
 `doc/adr/README.md` indexes all of them by number and title.
 
@@ -186,11 +186,13 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Eight gates make that mechanical, and each fails in **both** directions — a
+Nine gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to eight catalogues. Two are
-one-directional and say so in the table: `line-coverage`, and the eighth, which
-watches a bound rather than a claim:
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to nine catalogues. Three say
+in the table that they are one-directional in part: `line-coverage`, which is a
+ratchet; `buffer-headroom`, which watches a bound rather than a claim; and
+`spec-clause-traceability`, which does fail when a citation disappears and
+deliberately does not when one appears:
 
 | Gate | Catalogue | Asks |
 | --- | --- | --- |
@@ -201,7 +203,8 @@ watches a bound rather than a claim:
 | `foreign-reserved` | `ReservedForeignName` in the compiler | is every global the emitter names still refused as a foreign name? (ADR-0121) — LLVM rejects a redeclared global, so a collision is an error about a file nobody wrote; the predicate is a second copy of what the emitter writes, and this compares them |
 | `kind-exhaustive` | the `typeKind` enumeration in the compiler | does every `case … kind of` name every kind? (ADR-0124) — a case-statement with no matching label *stops the program* (ADR-0018), so a kind left off one of the six is a compiler **crash** and not a wrong answer. No other gate can see that: a missing arm is not a statement, a crash writes nothing for a golden to hold, and `src/`'s counterpart is a `switch` with a `default`, so difftest has one side falling over rather than a disagreement. It has shipped twice — `tyString`, then `tyOptional` |
 | `buffer-headroom` | `tokMax` in the compiler | how much of the token array is this compiler's own source still leaving free? (ADR-0126) — a one-directional watch on a bound, not a claim. Twice a fixed buffer (ADR-0012) has failed as a **build** rather than as a diagnostic, because the array that has to hold this source is the *seed's*: raising the constant here does not raise the one that matters, so the only way out is an out-of-cycle reseed. ADR-0095 cleared the string pool at 74 characters over and closed with "nothing measures the headroom"; ADR-0126 cleared the tokens at 107 left of 140000 and is that measurement. It counts the tokens exactly and the pool not at all — `doc/sop.md` §7 says why |
-| `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? |
+| `spec-clause-traceability` | `tests/spec/clauses/triage.tsv` and `pending.txt` | is every clause a scenario cites still cited, and does every citation name a clause the triage calls testable? (ADR-0106) — the second half is what keeps the *triage* honest, since a scenario citing a `structural` or `not-implemented` clause fails. A clause that **starts** being cited does not fail; it asks for `--write-pending`, a gate that punished progress being one people learn to avoid |
+| `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? — its *base resolution* is checked locally as `model-drift-base`, that half being a pure question about one repository and the half that has broken |
 
 All but `model-drift` are `ctest` cases, so they run before a push rather than
 reporting after one. **What none of them sees** is a branch: `line-coverage`
@@ -416,7 +419,8 @@ knowing before adding anything:
   containment** — `HasExtended(s)` is `s >= stdExtended`, and every one of the
   40 sites asking "does this mode have Extended Pascal?" goes through it. Never
   write `langStd = stdExtended`; it silently switches Extended Pascal off for
-  the dialect and 545 of 547 cases still pass.
+  the dialect and almost every case still passes — it was 545 of 547 when the
+  predicate was written, and the two that noticed are the reason it exists.
 - **`tests/dialect/inherits_extended.pas` pins the containment**: everything
   Extended Pascal accepts, the dialect accepts and means the same thing. That
   is the property every feature is added *to*, and it is what a dialect feature
@@ -582,13 +586,13 @@ scenario that asserts nothing.
   `.git/info/exclude`, so no clone had it.
 - **The denominator is triaged** (ADR-0106): every one of the 292 headings is
   classified `testable`, `structural` or `not-implemented` in
-  `clauses/triage.tsv`, so coverage is 13 of **207 testable** clauses rather
-  than 13 of 292. `spec-clause-traceability` gates it — a clause that stops
+  `clauses/triage.tsv`, so coverage is 14 of **207 testable** clauses rather
+  than 14 of 292. `spec-clause-traceability` gates it — a clause that stops
   being cited fails, and so does a scenario citing a clause the triage says
   cannot carry one, which is what keeps the triage itself honest. A clause that
   *starts* being cited does not fail; it asks for `--write-pending`, because a
   gate that punished progress would train people to avoid it.
-- `clauses/pending.txt` is the **work queue**: the 194 testable clauses no
+- `clauses/pending.txt` is the **work queue**: the 193 testable clauses no
   scenario cites yet.
 
 **The one oracle nobody here wrote is the BSI Pascal Validation Suite**
@@ -757,6 +761,25 @@ assigned to — except for §6.8.7.4's set-value, which names its type and is
 therefore checked where it is written (ADR-0066). `tests/extended/trap_setvalue.pas`
 is the program with no assignment in it.
 
+**A subrange's bounds may be discriminants, and the check reads them.**
+§6.2.3.8 b) evaluates a bound written in a variable-declaration or a
+type-definition of the block at that block's commencement, so `var x: 1..m` is
+legal in a procedure — and `CheckedForSubrange` calls `BoundValue` for each end
+rather than reading the two numbers on the type, which for such a subrange are
+placeholders (ADR-0133). Two things follow that are easy to get wrong. The
+comparison moves to i32 where a bound is dynamic, that being the width a
+discriminant is loaded to; and the trap message names the bounds as **values**,
+not the type, because a bound the block evaluated has no spelling in the
+source — the compile-time path exists, produces `value out of range (1..)`, and
+is the defect's own message. An **empty** such subrange is reported at the
+declaration, §6.4.2.4's other requirement having nowhere else to be said.
+
+**A direct-access file is at most as long as its index-type** (§6.4.3.6,
+ADR-0134). Only a write at the end grows a file, so the check is in `put` and
+nowhere else: `update` overwrites in place, a seek past the end is already
+refused, and seeking to the append position of a full file stays legal right up
+until something is written there.
+
 `date(t)` traps when the day, month and year of a `TimeStamp` are not a
 calendar date (§6.7.6.9) — February the 30th, and a year outside 1..9999, that
 bound being what keeps the result fixed-width (ADR-0065). The six subranges of
@@ -891,8 +914,8 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 44 rules, 28 of them for every
-32-bit input — so any gap that appears is something this change introduced.
+The catalogue currently has **no known gaps** — 46 rules, 30 of them for every
+32-bit input and seven of those at 64 bits too since ADR-0128 — so any gap that appears is something this change introduced.
 
 Don't add a rule that restates the lowering. A check whose ISO condition *is*
 the emitted test (the nil check) proves nothing and dilutes what "no known gaps"
