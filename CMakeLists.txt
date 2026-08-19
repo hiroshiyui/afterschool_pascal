@@ -207,6 +207,23 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
 endif()
 
+# ...and how much of the token array this compiler's own source still leaves
+# free. Twice the loud failure of a fixed buffer (ADR-0012) has been the build
+# itself -- the array that has to hold this source is the *seed's*, so raising
+# the constant here does not raise the one that matters and the only way out is
+# to reseed. ADR-0095 did that for the string pool at 74 characters over;
+# ADR-0126 for the tokens, found with 107 of 140000 left. ADR-0095 closed with
+# "nothing measures the headroom", which is why there was a second time.
+# Measures the tokens exactly and the pool not at all -- doc/sop.md §7 says why.
+# Skips (77) when pascalc has not been built.
+if(Python3_FOUND)
+  add_test(NAME buffer-headroom
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/buffer_headroom.py
+                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(buffer-headroom PROPERTIES SKIP_RETURN_CODE 77)
+endif()
+
 # ...and the oracle ADR-0085 gave up and ADR-0108 brought back: two independent
 # implementations of the front end, compared over every Pascal source in the
 # tree. Nothing else here can disagree with the compiler without being asked a

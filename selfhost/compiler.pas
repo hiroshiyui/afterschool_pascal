@@ -112,9 +112,16 @@ const
   { Sized for this compiler's own source with room to grow: it is the largest
     Pascal in the tree, and the one that has to keep fitting. Both are frame
     storage, so they are the fixed-buffer limits ADR-0012 predicted -- and both
-    fail loudly rather than silently truncating. }
-  poolMax  = 700000; { characters of identifier and literal text }
-  tokMax   = 140000;
+    fail loudly rather than silently truncating.
+
+    Twice now the loud failure has been the *build*, because the array that
+    has to hold this source is the seed's and raising the constant here does
+    not raise the seed's (ADR-0095 for the pool, ADR-0126 for the tokens).
+    Both are sized for roughly twice the present source, and the
+    `buffer-headroom` case is what says how much of each is left, so a third
+    time is a report rather than a wall. }
+  poolMax  = 1000000; { characters of identifier and literal text }
+  tokMax   = 300000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
   { Blocks nest inside that limit and never beyond it, because ParseBlock
     counts one -- which it did not until a security audit wrote 1001 nested

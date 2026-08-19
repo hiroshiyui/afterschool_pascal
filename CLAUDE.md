@@ -186,9 +186,11 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Seven gates make that mechanical, and each fails in **both** directions — a
+Eight gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to seven catalogues:
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to eight catalogues. Two are
+one-directional and say so in the table: `line-coverage`, and the eighth, which
+watches a bound rather than a claim:
 
 | Gate | Catalogue | Asks |
 | --- | --- | --- |
@@ -198,6 +200,7 @@ claim that stops being true is as loud as one that was never true, which is
 | `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced. It also checks *how many* files were compared, an empty list being what a clean run and a run that reached nothing both produce |
 | `foreign-reserved` | `ReservedForeignName` in the compiler | is every global the emitter names still refused as a foreign name? (ADR-0121) — LLVM rejects a redeclared global, so a collision is an error about a file nobody wrote; the predicate is a second copy of what the emitter writes, and this compares them |
 | `kind-exhaustive` | the `typeKind` enumeration in the compiler | does every `case … kind of` name every kind? (ADR-0124) — a case-statement with no matching label *stops the program* (ADR-0018), so a kind left off one of the six is a compiler **crash** and not a wrong answer. No other gate can see that: a missing arm is not a statement, a crash writes nothing for a golden to hold, and `src/`'s counterpart is a `switch` with a `default`, so difftest has one side falling over rather than a disagreement. It has shipped twice — `tyString`, then `tyOptional` |
+| `buffer-headroom` | `tokMax` in the compiler | how much of the token array is this compiler's own source still leaving free? (ADR-0126) — a one-directional watch on a bound, not a claim. Twice a fixed buffer (ADR-0012) has failed as a **build** rather than as a diagnostic, because the array that has to hold this source is the *seed's*: raising the constant here does not raise the one that matters, so the only way out is an out-of-cycle reseed. ADR-0095 cleared the string pool at 74 characters over and closed with "nothing measures the headroom"; ADR-0126 cleared the tokens at 107 left of 140000 and is that measurement. It counts the tokens exactly and the pool not at all — `doc/sop.md` §7 says why |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? |
 
 All but `model-drift` are `ctest` cases, so they run before a push rather than

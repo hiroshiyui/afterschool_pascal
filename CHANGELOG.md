@@ -412,6 +412,21 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **The compiler no longer runs out of tokens compiling itself.** The lexer
+  reads its input into a fixed array of tokens, which grows with the size of the
+  source; the compiler is its own largest input and had reached **107 tokens**
+  under the bound — 0.08% free, and the next change to add more than that
+  stopped the build with *"too many tokens: this compiler accepts 140000"*.
+  Raised from 140,000 to 300,000, `poolMax` from 700,000 to 1,000,000 so the two
+  run out at about the same size of source, and the seed refreshed to match —
+  the seed carries the old bound, so this is again the one shape of change that
+  cannot wait for a release tag. A large program that failed with either message
+  now compiles. (ADR-0126, and ADR-0095 four days earlier for the pool)
+
+  The headroom is now **measured**: `buffer-headroom` runs with every `ctest`
+  and fails above 80% full, so the third occurrence is a report rather than a
+  wall. That measurement is the sentence ADR-0095 closed with and did not act on.
+
 - **A module imported and not used was called and never declared.** §6.2.3.6
   activates every module that supplies the main-program-block, whether or not
   the importing component names anything of it — but the only thing registering
