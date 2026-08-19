@@ -428,6 +428,43 @@ appears below in the release where it still existed.
   ordinary identifier there, and a decimal literal above `maxint` is the error
   it always was.
 
+- **A buffer crosses the `external` boundary, as a slice** (ADR-0129), under
+  `--std=afterschool` only. The pair travels as `(ptr, i64)` — the address of
+  the first component, then how many there are — which is the argument shape
+  `read`, `write`, `recv`, `send` and `snprintf` all take, so the POSIX data
+  path is bindable for the first time:
+
+  ```pascal
+  function PosixRead(fd: integer; var buf: array of char): int64;
+    external 'read';
+  ...
+  n := PosixRead(0, buf[1..5]);      { five bytes, and read is told so }
+  ```
+
+  **The program never writes the count.** `PosixRead` has two parameters and
+  `read(2)` has three: the length C receives is the one the compiler computed
+  from the designator and checked against the array, so a buffer overrun is not
+  something a caller can spell. The rejected alternative — an address alone,
+  with the program passing the count — would have put that hazard back at the
+  one place across this boundary where nothing is checked.
+
+  The component may be `char`, `integer`, `int64` or `real`, and the list is
+  deliberately not the one the other rows use. A slice is storage the callee
+  **writes**, so a subrange would come back with nothing to check it and
+  `boolean` has 254 byte patterns that are not values of it. `char` is admitted
+  here and refused as a value because that refusal was about the register
+  convention: in memory the type has no bit pattern that is not a value of it.
+
+  Two limits worth knowing before binding anything. A count is **components**
+  and C's is bytes, so `read` bound to an `array of integer` asks for a quarter
+  of what it looks like. And a C function whose length does not immediately
+  follow its pointer — `memcpy`, or anything spelled `(size_t n, void *p)` —
+  cannot be bound with a slice, there being no bare-address form.
+
+  `p[2..5]` over a **packed** array of char is still §6.5.6's substring and
+  yields a string, so a buffer wants `array [1..n] of char`; passing such an
+  array whole works either way.
+
 ### Changed
 
 #### Programs that used to compile and no longer do

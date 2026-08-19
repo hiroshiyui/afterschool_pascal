@@ -1933,8 +1933,8 @@ the foreign boundary, and that is a probe's finding rather than a scope limit �
 every length in the POSIX data path is `size_t` and `read`, `write` and `recv`
 all answer `ssize_t`, so the argument could cross as an `i64` the compiler
 generates but the *result* could not be received, this language having no
-64-bit integer. ADR-0128 is the half that answers, so the boundary is a
-decision away rather than a mechanism away.
+64-bit integer. ADR-0128 is the half that answers and ADR-0129 is the decision,
+so the boundary is neither a decision nor a mechanism away any more.
 
 **An integer wider than the compiler's own** (ADR-0128). `int64` is the type a
 `size_t` and an `ssize_t` cross as, and its whole shape comes from one
@@ -1970,3 +1970,30 @@ type anywhere in the compiler to fold with, compare, or put in a constant.
   code at its real width rather than a second family of rules restating the
   first — a model written symbolically paying a second time, for a type nobody
   had in mind. The narrowing is new lowering and has two rules of its own.
+
+**A buffer crosses as the pair C already takes** (ADR-0129). A slice reaches a
+foreign routine as `(ptr, i64)` — the address of the first component, then how
+many there are, two arguments from one formal — which is what `read`, `write`,
+`recv`, `send` and `snprintf` take, so the emitted `declare i64 @read(i32, ptr,
+i64)` is byte for byte what `clang` writes. Three things decide it.
+
+- **The program cannot write the count.** The Pascal heading has one parameter
+  where C has two, so the length is one the compiler computed from the
+  designator and checked against the array. The rejected alternative — an
+  address alone — reads as the neutral choice and is not: a length travelling
+  separately from its pointer is the hazard the slice exists to remove, placed
+  where ADR-0121 established that nothing is checked.
+- **The component list is `ForeignType`'s plus `char`**, and both halves are
+  ADR-0121's rule read again. That rule tests the type rather than `Base(t)`
+  and was argued with a side — passing a subrange is sound, returning one is
+  not — and a slice is storage the callee *writes*, so every component is on
+  the returning side. `char` is the addition because its refusal by value was
+  about `i8 signext`, a register convention an array component does not use,
+  and because in memory the type has no bit pattern that is not a value of it.
+  That property is the test, and `boolean` fails it 254 ways.
+- **The `declare` is documentary and the call site is the ABI.** Writing `ptr`
+  where `ptr, i64` belongs — so the declaration and the call disagree about
+  arity — survives the whole suite, which is ADR-0121's registered gap
+  confirmed for arity rather than for types. So does dropping the `sext`, both
+  target architectures zeroing the upper half of a 32-bit register write. Both
+  are in `doc/sop.md` §7.

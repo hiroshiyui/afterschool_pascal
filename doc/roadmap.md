@@ -360,16 +360,60 @@ directive, a character no standard admits, a combination of two reserved words
 identifier shadowable rather than reserved. That is a weaker kind of free, and
 it is why the containment test grew a paragraph rather than being left alone.
 
+### The tenth increment: the shape decision, and it had no mechanism left
+
+ADR-0129, and it is the first increment here whose whole content was a choice
+between two things that both worked. The entry that stood in this place named
+them: a slice crossing as its address alone, with the program passing the
+count, or as the pair `(ptr, i64)`. It went to the pair, and the reason is not
+the one this file gave.
+
+This file said the pair was "more useful and assumes a convention" and that the
+address alone "assumes nothing and puts the count in the program's hands". That
+second half was the wrong way round. **Putting the count in the program's hands
+is the C hazard**, and it is the one ADR-0122 refused to reintroduce at the one
+place nothing can check anything: a length travelling separately from its
+pointer is a length nothing relates to the storage. `PosixRead` has two
+parameters where `read(2)` has three, and the count C receives is one the
+compiler computed from the designator and checked against the array. A buffer
+overrun is not something a caller can spell.
+
+Three things came out of building it:
+
+- **A rule with a side gets read twice.** ADR-0121 admitted a type by testing
+  it rather than `Base(t)`, and argued it as *passing a subrange is sound,
+  returning one is not*. A slice is storage the callee **writes**, so every
+  component sits on the returning side of that argument — which decided the
+  component list without a new principle. `char` then came in for the mirror
+  reason: it is refused *by value* over `i8 signext`, an objection about the
+  register convention, and in memory the type has no bit pattern that is not a
+  value of it. That property — and not "a byte is a byte" — is what makes a
+  component safe for a routine this compiler did not emit to write into.
+- **Two mutations survived, and both are ADR-0121's registered gap seen
+  again.** Writing `ptr` where `ptr, i64` belongs, so the declaration and the
+  call disagree about *arity*, assembles and runs; so does dropping the `sext`
+  and passing the count as an `i32`. The first is the gap recorded for
+  parameter types, now confirmed for arity — the `declare` is documentary. The
+  second is right for a reason no program here can exhibit, both target
+  architectures zeroing the upper half of a 32-bit register write. Both are in
+  `doc/sop.md` §7 rather than claimed as covered.
+- **The prediction this file made about slices held a second time.** The
+  "already the house style" row was written about a language feature; the same
+  two words are now what an operating system takes, with no adapter between
+  them. That is the sixth thing here travelling as two scalars and the first
+  where the far side chose the shape.
+
 ### What is still blocked on it
 
-**The buffer**, and it is the one thing that is now *unblocked* rather than
-blocked. Both halves the probe named exist — ADR-0125's slice and ADR-0128's
-int64 — so what is left is a shape decision with no missing mechanism behind
-it: a slice may cross as its address alone, with the program passing the count,
-or as the pair `(ptr, i64)`, which is exactly what `read`, `write`, `recv`,
-`send` and `memcpy` take in that order. The second is more useful and assumes a
-convention; the first assumes nothing and puts the count in the program's
-hands. That is the next increment and it needs a record, not a mechanism.
+**A library on top of it.** `read`, `write`, `recv` and `send` are bindable and
+nothing binds them: every increment since ADR-0114 has shipped a `lib/` module
+and this one did not, because the feature's test binds `read` directly and a
+`PasIO` is its own piece of work. It is also the one that will meet
+`lib/dialect/pasfs.pas`'s recorded wall head-on — `open` needs `O_WRONLY` and
+`O_CREAT`, which are header numbers an FFI without a header parser cannot see,
+and that module's stated policy is to offer only what it can check. Reading and
+writing *descriptors that POSIX fixes* — 0, 1 and 2 — needs no constant at all,
+which is where it starts.
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
 that moved, not the position.
@@ -426,7 +470,7 @@ Each borrowing below is tied to the open decision it would settle.
 
 | Idea | From | Settles | Fit here |
 | --- | --- | --- | --- |
-| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Done** (ADR-0125), and the prediction held: `array of T` is that shape a fifth time and needed no new mechanism. What the row did not anticipate is how much of it §6.5.6 had already paid for — `a[i..j]` is the substring designator, and only the base's type tells the two apart, so the parser was untouched. Argument-only, so bounds safety is settled without the memory-safety decision |
+| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Done** (ADR-0125), and the prediction held: `array of T` is that shape a fifth time and needed no new mechanism. What the row did not anticipate is how much of it §6.5.6 had already paid for — `a[i..j]` is the substring designator, and only the base's type tells the two apart, so the parser was untouched. Argument-only, so bounds safety is settled without the memory-safety decision. **ADR-0129 then carried it across the foreign boundary**, where the same two words are what `read`, `write`, `recv` and `send` take — the first time the far side of a design chose the shape rather than this project choosing it |
 | **Explicit allocator passing** | Zig | part of memory safety | **Tried, and it does not survive contact** (ADR-0116). An allocator *record* is not expressible — a record field may not have a procedure type, neither standard having general procedure types. A per-type allocator *parameter* is, and compiles; but `new` is the only origin of a typed pointer and there is no pointer arithmetic or cast, so it can only recycle blocks `new` produced rather than carve one into several. And the capacity it serves is unchecked: a pool asked for 9 may return a block of 4, whose own discriminant then answers `p^.cap`. Not unsafe — the bounds check reads the served block — but the central contract is unenforced. **This needs the FFI too**, which moves it from "cheapest on the list" to behind the same gate as everything else |
 | **`defer`** | Zig, Swift | resource safety | **Good.** Pascal has no early return, so a block already has one exit and the epilogue is already where files close (ADR-0021, ADR-0032). `defer` generalises a mechanism that exists |
 | **Error unions / `Result`** | Zig, Rust | error handling | **Good, and the biggest practical gap.** Pascal has *no* error handling — no exceptions, no result convention. It needs sum types with payloads, which variant records nearly are. Independent of the memory-safety fork, so it can proceed while that is open |

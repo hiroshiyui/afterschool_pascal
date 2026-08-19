@@ -186,10 +186,10 @@ a reserved word in any mode — a directive is an identifier in the one position
 it may occupy — so a program that uses the spelling for something else is
 unaffected.
 
-**Four things cross the boundary**, and by their exact type — a subrange does
-not cross, and neither does `char`, `boolean`, a pointer, a set or anything
-structured. `integer` and `real` cross as values and as a function result;
-ADR-0122 added the two address rows:
+**Things cross the boundary by their exact type** — a subrange does not cross,
+and neither does `boolean`, a pointer, a set or anything structured. `integer`,
+`real` and `int64` cross as values and as a function result; ADR-0122 added the
+two address rows:
 
 ```pascal
 function atoi(s: string): integer; external 'atoi';
@@ -204,12 +204,11 @@ its length in-band. A string containing `chr(0)` traps rather than being
 truncated. A `var` parameter of `integer` or `real` crosses as the actual's own
 address.
 
-**An address crosses only as an argument.** Nothing comes back as one: a
-returned `char *` may be null — `getenv` of a name that is not set answers null
-on purpose — and there is no optional type to say that in yet. A **buffer**
-does not cross either, in either direction: it is a pointer *and* a length, and
-the length is not in-band the way a C string's is, so `read` and `snprintf`
-wait on a language decision about slices rather than on the FFI.
+**An address crosses only as an argument**, with one exception that is itself
+an argument's worth of storage: a returned `char *` may be null, and an
+optional is where null now lives (below). A **buffer** crosses as a slice, and
+that is ADR-0129 — the entry that used to stand here said it waited on a
+language decision, and the decision was ADR-0125's.
 
 libc and libm are already linked, so a foreign call needs no extra build step;
 there is no way yet to name another library.
@@ -302,6 +301,37 @@ answers the count, and `a[4..3]` is the empty slice. It is a `var` or
 `protected var` parameter and nothing else: not a variable, not a field, not a
 result, not a named type — a view of the caller's storage is not a thing that
 can outlive the call.
+
+**And a slice is how a buffer reaches C** (ADR-0129). The pair crosses as
+`(ptr, i64)` — the address of the first component, then how many there are —
+which is the argument shape `read`, `write`, `recv`, `send` and `snprintf` all
+take:
+
+```pascal
+function PosixRead(fd: integer; var buf: array of char): int64;
+  external 'read';
+...
+n := PosixRead(0, buf[1..5]);      { five bytes, and read is told so }
+```
+
+**The program never writes the count.** `PosixRead` has two parameters and
+`read(2)` has three: the length C receives is the one the compiler computed
+from the designator and checked against the array, so a buffer overrun is not
+something a caller can spell. That is the opposite of what an FFI usually does
+to a bounds property.
+
+The component may be `char`, `integer`, `int64` or `real`, and the list is not
+the one above because a slice is storage the callee **writes**: a subrange
+would come back unchecked, and 254 of a byte's patterns are not values of
+`boolean`. `char` is admitted here and refused as a value for a reason that is
+about the register convention and not about the byte — in memory the type has
+no bit pattern that is not a value of it. Note that a count is components and
+C's is bytes, so binding `read` to an `array of integer` asks for a quarter of
+what it looks like.
+
+A C function whose length does not immediately follow its pointer — `memcpy`,
+or anything spelled `(size_t n, void *p)` — cannot be bound with a slice, and
+there is no bare-address escape hatch.
 
 **An integer twice as wide** (ADR-0128). `int64` is the type a `size_t` and an
 `ssize_t` cross the boundary as, and it is the other half of the data path the
@@ -467,11 +497,13 @@ bounds one program at eight components. Sockets, locales, threads and containers
 are still absent, and the reason has moved again for three of them: the
 foreign-function interface they waited on **exists** (ADR-0121) and a string
 now crosses it (ADR-0122). A string now comes back too
-(ADR-0123), and ADR-0125 gives the language the buffer shape a socket needs.
-What is still missing is a **64-bit integer**: every length in the POSIX data
-path is `size_t` and `read`, `write` and `recv` all answer `ssize_t`, so a
-slice could cross as a pointer and an `i64` but the result could not be
-received. That, and every returned pointer that is not a string. A container waits on something else entirely —
+(ADR-0123), ADR-0125 gives the language the buffer shape a socket needs,
+ADR-0128 the 64-bit integer an `ssize_t` comes back as, and ADR-0129 puts the
+two together: `read`, `write`, `recv` and `send` are bindable, every word of
+them. What is still missing is every returned pointer that is not a string —
+`getcwd`, `readlink`, `strerror`, and `errno`, which is `*__errno_location()`
+and is why a failure in `lib/dialect/pasfs.pas` is still `errIO` and nothing
+finer. A container waits on something else entirely —
 parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
 the ordering.
 
