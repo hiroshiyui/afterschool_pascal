@@ -574,10 +574,63 @@ able to make.
   - **§6.4.2.4's other requirement gained a check**: an empty dynamic subrange
     is reported at the declaration rather than at the first store, because a
     block that never stores would otherwise run with a type that is not a type.
-  - Refused: a record's field, a set's base type and a file's component, which
-    is the narrowed deviation in `doc/implementation-defined.md` §6 — the
-    withdrawal is made at the container, so admitting a subrange there would
-    admit an array with it.
+  - Refused: a record's field, a set's base type and a file's component — the
+    first and the third only until ADR-0134 below, which is the record that
+    read that reason back and found it naming the check rather than the
+    obstacle.
+- **The register, read end to end** (ADR-0134). Seven entries of
+  `doc/implementation-defined.md` and `doc/sop.md` §7, taken to their end in one
+  pass — five closed, two narrowed, and none closed by deciding it did not
+  matter. The pattern worth keeping is *why* they were open: each reason had
+  either expired, been about the wrong thing, or been the cost of a mechanism
+  since built for something else.
+  - **§6.7.2's result variable.** A function with a result-variable-
+    specification that never wrote to it compiled and returned whatever the
+    slot held. §6.7.2 asks for "at least one statement threatening" it and
+    §6.9.4's *threatens* is weaker than *assigns*, which is what the assignment
+    flag could not answer — and the weaker word already had a walker, called at
+    every one of the clause's six sites and nowhere else. The flag is set
+    *there* rather than at the six call sites, and unconditionally: what is
+    recorded is that the variable was threatened, not whether the threat was
+    allowed.
+  - **§6.4.3.3's region at a constant occurrence**, which was the whole of
+    `doc/implementation-defined.md` §6.1 — the one program this compiler was
+    known to accept that ISO 7185 requires it to reject. ADR-0112 asked at every
+    *type-name* occurrence; a constant one goes through the expression checker
+    instead. `inSchemaBody` keeps it exact: a production written inside a record
+    re-resolves the schema's body, which is lexically outside it. `EvalOrdinal`
+    now clears `constReported` *before* checking the expression, so the vaguer
+    "must be ordinal constants" does not follow the specific message.
+  - **§6.4.3.6's file length.** An eleventh component written to a
+    `file [1..10]`. Only one thing grows a file's length, so the check is in
+    `put` and nowhere else — `update` overwrites in place and a seek is already
+    refused past the end. The capacity is a `pas_file_init` argument, zero
+    meaning no bound worth carrying; the struct grew a field and stayed 112
+    bytes.
+  - **§6.4.9's type-inquiry-object**, and this one needed the clause rather
+    than the paraphrase. A parameter-identifier's defining-point must be in the
+    formal-parameter-list closest-containing the object — and §6.7.3.1 is what
+    makes that a rule about *where the inquiry is written*, giving such an
+    identifier **two** defining-points, as a parameter-identifier for the list
+    and as the associated variable-identifier for the block. Inside the block it
+    is the second, which is why the clause's own example is legal. One saved
+    symbol across `BuildFormals`' recursion is the whole implementation.
+  - **§6.2.3.8 b) through a record and a file.** A record is no kind of block,
+    so a bound written inside one is still closest-contained by the block the
+    declaration is in. What is refused is the consequence rather than the
+    position — a field or component whose *size* the bound decides — and the
+    test is `DynamicExtent`, asked in `AddField` and `ResolveFile`. Passing the
+    offer through **without** that check was measured first: it compiles
+    `record a: array [1..m] of integer; g: integer end` and silently
+    miscompiles it, which is ADR-0045's offset problem happening.
+  - **§6.9.1's read of an int64**, ADR-0128's one asymmetry. The clause is the
+    same sentence at both widths, so `wide` selects the limit rather than a
+    second copy of the loop selecting everything — and the overflow moved from
+    after the accumulation to during it, which is not tidying: `value * 10`
+    would already have wrapped.
+  - Still open: §6.11.3's constituent-identifier region, which no program
+    distinguishes; the definedness errors of Annex D, which need a mechanism
+    this compiler does not have; and a set of a dynamically bounded subrange.
 - **An assignment between two schematic types compares the tuples**
   (ADR-0042), and that is the *whole* of the feature: §6.4.6 a) is "the same
   type" and §6.4.8 makes one schema with one tuple one type, so `assignable`

@@ -525,15 +525,45 @@ appears below in the release where it still existed.
 
 #### Programs that used to compile and no longer do
 
-- **A subrange whose bounds are not constants, as a record's field, as a set's
-  base type or as a file's component.** None of these ever worked, and each is
-  now refused with *the bounds of a subrange must be ordinal constants*. They
-  are legal under §6.2.3.8 b) and the refusal is a deviation, recorded in
-  `doc/implementation-defined.md` §6: the offer of a descriptor is withdrawn at
-  the *container*, so admitting a subrange there would admit an array with it,
-  and `record f: array [1..m] of integer end` is a genuine problem about storage
-  the activation does not size. Every other position works — see *Fixed* below.
-  (ADR-0127, ADR-0133)
+- **A subrange whose bounds are not constants, as a set's base type.** It never
+  worked, and it is now refused with *the bounds of a subrange must be ordinal
+  constants*. It is legal under §6.2.3.8 b) and the refusal is a deviation,
+  recorded in `doc/implementation-defined.md` §6: every set here is one 256-bit
+  word whose base type must have its values in 0..255, and a bound the block
+  evaluates cannot be checked against that before the program runs. Every other
+  position works — see *Fixed* below. (ADR-0127, ADR-0133, ADR-0134)
+
+- **A field or a file component whose *size* a non-constant bound decides**, as
+  in `record f: array [1..m] of integer end`. §6.2.3.8 b) reaches the bound and
+  a record is no kind of block, so the *bound* is legal; what has no answer is
+  where the storage goes, a field after a dynamically sized one sitting at an
+  offset nothing can compute (ADR-0045). It compiled, and it was **wrong**:
+  `v.a[1]` read 99140726979296144 where 1 had been stored. Refused now, with
+  *the bounds of the field 'f' must be constants, because a field's storage is
+  sized where the record is*. (ADR-0134)
+
+- **A function with a result-variable-specification that never writes to it.**
+  `function f = r: integer; begin end` compiled and returned whatever the slot
+  held. §6.7.2 requires the block to contain "at least one statement
+  threatening" the result variable — §6.9.4's *threatens*, so a `read` into it
+  or passing it to a `var` parameter counts and an assignment is not required.
+  *function 'f' never writes to its result variable 'r'*. (ADR-0134)
+
+- **A record whose constant occurrence names one of its own fields.**
+  `const fred = 3; type r = record a: array [1..fred] of integer; fred: integer
+  end` compiled with the bound reading 3. §6.4.3.3 gives a field-identifier its
+  defining-point in the record and §6.2.2.4 makes the scope the whole region, so
+  `fred` there is the field and names no constant. This was the last program
+  this compiler was known to accept that ISO 7185 requires it to reject, and
+  `doc/implementation-defined.md` §6.1 is now empty. (ADR-0134)
+
+- **A type-inquiry naming a parameter of another formal-parameter-list**, as in
+  `procedure outer(k: integer; procedure q(x: type of k))`. §6.4.9 requires a
+  parameter-identifier object's defining-point to be in the formal-parameter-list
+  closest-containing the object. Written in the *block* the same spelling is a
+  variable-identifier (§6.7.3.1 gives a parameter both defining-points), so
+  `procedure p(var a: v); var b: type of a;` — the clause's own example — is
+  unaffected. (ADR-0134)
 
 - **The program-components of one program must agree on `--std`**, and a
   mixture no longer links (ADR-0119). A module's two activation functions carry
@@ -554,6 +584,16 @@ appears below in the release where it still existed.
   links exactly as before. What changes is that rebuilding half a program after
   changing `--std` now refuses instead of misbehaving.
 
+#### At run time
+
+- **Writing past a direct-access file's index-type is now an error.** §6.4.3.6
+  requires `length(f)` never to exceed `ord(b) - ord(a) + 1`, and an eleventh
+  component written to a `file [1..10] of T` was accepted — one of the errors
+  `doc/implementation-defined.md` §3 listed as unreported. *this file holds at
+  most 2 components*. Only a write at the end can grow a file, so `update` is
+  unaffected and seeking to the append position of a full file is still legal.
+  (ADR-0134)
+
 #### Diagnostics
 
 - **A subrange bound that is not an ordinal is now told so.** With §6.2.3.8 b)'s
@@ -566,8 +606,23 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **`read` takes an `int64`**, under `--std=afterschool` (ADR-0128, ADR-0134).
+  `write` always did — §6.10.3.1's decimal representation is the same at both
+  widths — so this was the one asymmetry the type had, and *a value of type
+  int64 cannot be read* is a message no program gets now.
+
+  ```pascal
+  var n: int64;
+  begin read(n); writeln(n) end.
+  ```
+
+  §6.9.1 c) and d)'s longest-prefix rule is the same sentence at both widths, so
+  the runtime selects the bound rather than carrying a second copy of the loop.
+  A value outside `-maxint64..maxint64` is reported, and the check is made
+  *during* the accumulation because `value * 10` would already have wrapped.
+
 - **A subrange may have a bound that is not a constant**, in every position but
-  the three named above. §6.4.2.4 writes `subrange-bound = expression` and
+  a set's base type. §6.4.2.4 writes `subrange-bound = expression` and
   §6.2.3.8 b) evaluates one "closest-contained by … the block" at that block's
   commencement, so all of these are legal and none of them worked:
 
@@ -575,6 +630,8 @@ appears below in the release where it still existed.
   procedure p(m: integer);
   type t = 1..m;
   var x: t; y: 1..m; a: array [1..m] of 1..m;
+      r: record f: 1..m end;
+      g: file of 1..m;
   ```
 
   `var x: 1..m` compiled and could be read but never assigned to, and
@@ -589,11 +646,18 @@ appears below in the release where it still existed.
   spelling in the source, the program having written an expression and not a
   name. That is what the array-index message already does.
 
+  The last two arrived a record later (ADR-0134): a record is no kind of
+  block, so a bound written inside one is still closest-contained by the block
+  the declaration is in. What a record and a file refuse is the *consequence*
+  rather than the position — a field or component whose size the bound decides,
+  listed above.
+
   An **empty** one is reported at the declaration rather than at the first
   store: *this subrange has no values: its upper bound is below its lower
   bound*, which is §6.4.2.4's other requirement and would otherwise go unsaid
   in a block that never assigns. Extended Pascal and the dialect only;
-  ISO 7185 §6.4.2.4 writes `subrange-type = constant '..' constant`. (ADR-0133)
+  ISO 7185 §6.4.2.4 writes `subrange-type = constant '..' constant`.
+  (ADR-0133, ADR-0134)
 
 - **A type-definition may have a bound that is not a constant.** §6.2.3.8 b)
   evaluates "each actual-discriminant-part or subrange-bound … closest-contained
