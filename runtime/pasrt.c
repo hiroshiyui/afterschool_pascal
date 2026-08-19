@@ -907,8 +907,7 @@ void pas_put(void *v) {
     at = ftell(f->fp) / f->compsize;
     if (at >= f->capacity) {
       fflush(stdout);
-      fprintf(stderr,
-              "runtime error: this file holds at most %d components\n",
+      fprintf(stderr, "runtime error: this file holds at most %d components\n",
               f->capacity);
       exit(1);
     }
@@ -1713,7 +1712,8 @@ char *pas_str_char(char c) {
 char *pas_str_cstr(const char *s, int len) {
   char *p;
   int i;
-  if (len < 0) len = 0;
+  if (len < 0)
+    len = 0;
   for (i = 0; i < len; i++)
     if (s[i] == '\0')
       pas_runtime_error("a string crossing to a foreign routine contains a "
