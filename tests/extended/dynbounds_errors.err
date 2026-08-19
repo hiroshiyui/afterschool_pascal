@@ -1,4 +1,4 @@
-<source>:21:19: error: the bounds of a subrange must be ordinal constants
-<source>:22:19: error: the bounds of a subrange must be ordinal constants
-<source>:23:16: error: the bounds of a subrange must be ordinal constants
-<source>:24:16: error: the bounds of a subrange must be ordinal
+<source>:29:11: error: the bounds of a file's component type must be constants, because every component of a file is the same size
+<source>:30:16: error: the bounds of the field 'f' must be constants, because a field's storage is sized where the record is
+<source>:32:16: error: the bounds of a subrange must be ordinal constants
+<source>:33:16: error: the bounds of a subrange must be ordinal

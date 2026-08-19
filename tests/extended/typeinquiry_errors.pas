@@ -40,6 +40,24 @@ begin
   j := j + 1
 end;
 
+{ §6.4.9: "A parameter-identifier in a type-inquiry-object shall have its
+  defining-point in a value-parameter-specification or
+  variable-parameter-specification in the formal-parameter-list
+  closest-containing the type-inquiry-object." The list closest-containing `k`
+  here is `q`'s, and k's defining-point as a *parameter-identifier* is in
+  outer2's -- so this is refused where the same spelling one list out is not.
+
+  §6.7.3.1 is what makes that a rule about where the inquiry is written: an
+  identifier in a value- or variable-parameter-specification gets two
+  defining-points, one as a parameter-identifier for the formal-parameter-list
+  and one as the associated variable-identifier for the block. Inside the
+  block it is the second, which is §6.4.9's other alternative and legal --
+  `typeinquiry.pas` writes that form (ADR-0134). }
+procedure outer2(k: integer; procedure q(x: type of k));
+begin
+  j := j + 1
+end;
+
 { §6.4.2.1: "A type-inquiry in an ordinal-type shall denote an ordinal-type."
   A record is not one, so it cannot index an array. }
 var bad: array [type of a] of integer;

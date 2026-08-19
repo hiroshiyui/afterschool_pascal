@@ -1,8 +1,9 @@
-<source>:20:1: error: a function cannot return text: a result may not be, or contain, a file
-<source>:23:1: error: a function cannot return holder: a result may not be, or contain, a file
-<source>:28:1: error: a function cannot return text: a result may not be, or contain, a file
-<source>:31:1: error: a function cannot return a bindable bpoint: only a variable can be bound to something outside the program
-<source>:37:17: error: 'named' names a result variable, so assign to that instead of to the function
-<source>:40:1: error: function 'silent' never assigns its result
-<source>:53:7: error: 'silent' is not this block's function, so its result cannot be assigned here
-<source>:52:1: error: function 'other' never assigns its result
+<source>:22:1: error: a function cannot return text: a result may not be, or contain, a file
+<source>:25:1: error: a function cannot return holder: a result may not be, or contain, a file
+<source>:30:1: error: a function cannot return text: a result may not be, or contain, a file
+<source>:33:1: error: a function cannot return a bindable bpoint: only a variable can be bound to something outside the program
+<source>:39:17: error: 'named' names a result variable, so assign to that instead of to the function
+<source>:42:1: error: function 'silent' never assigns its result
+<source>:51:1: error: function 'mute' never writes to its result variable 'q'
+<source>:70:7: error: 'silent' is not this block's function, so its result cannot be assigned here
+<source>:69:1: error: function 'other' never assigns its result

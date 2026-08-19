@@ -699,6 +699,14 @@ type
       containment the standard asks about: an assignment inside an `if`
       counts. }
     resultNamed, assignedResult: boolean;
+    { 6.9.4's *threatens*, recorded on the symbol as it is seen. It is what
+      6.7.2 asks of a **result variable**, where assignedResult is what it asks
+      of a function identifier -- and the two words are not the same one: a
+      `read` into the result, or passing it to a var parameter, threatens it
+      and assigns nothing. Set by `Threatened`, which is called at every one of
+      the clause's six sites and nowhere else, so this is that list rather than
+      a second reading of it (ADR-0134). }
+    wasThreatened: boolean;
     { The result-variable-specification's identifier as the *source* spells it.
       resultVar's own name is that spelling with `$result` appended, which the
       program deliberately cannot write, so the binding needs this instead.
@@ -1530,6 +1538,12 @@ var
     type-denoter, so the word parses there, and a schema definition is spelled
     as a type definition -- so refusing it needs a reason of its own. }
   inSchemaBody: boolean;
+  { The symbol whose formal-parameter-list is being built, and nil outside one.
+    It is "the formal-parameter-list closest-containing" in 6.4.9's words --
+    closest because BuildFormals recurses for a procedural parameter's own
+    list and saves this across the call, so inside `procedure q(x: type of k)`
+    it names q and not the procedure q is a parameter of (ADR-0134). }
+  formalsFor: symPtr;
   { Not nil while a schema body is being resolved *generically*, for the
     schematic formal parameter it belongs to. It is what tells the subrange
     resolver that a bound naming a discriminant is a bound and not a mistake. }
@@ -7039,6 +7053,7 @@ begin
   s^.resAt := 0;
   s^.resLen := 0;
   s^.assignedResult := false;
+  s^.wasThreatened := false;
   s^.resultTypeBad := false;
   s^.defined := false;
   s^.schemaBody := nil;
@@ -7752,6 +7767,11 @@ begin
     A threat from the containing block's own statements is deliberately not
     recorded, that block being neither the for-statement nor its declaration
     part. }
+  { 6.9.4's list is exactly this procedure's call sites, so the flag is set
+    here rather than at each of them -- and unconditionally, because what is
+    recorded is that the variable was threatened and not whether the threat was
+    allowed. §6.7.2 is the one rule that asks (ADR-0134). }
+  if sym <> nil then sym^.wasThreatened := true;
   if sym <> nil then
     if (sym^.kind = skVar) and (sym^.threatLine = 0) and
        (currentProc <> nil) and (currentProc <> sym^.owner) and
@@ -8520,9 +8540,14 @@ end;
 function EvalOrdinal(e: nodePtr; var t: typePtr; var value_: integer): boolean;
 var res: symbol;
 begin
+  { Cleared *before* the expression is checked and not after it, so a reason
+    given by the checker counts as one the caller need not repeat. The only
+    one that does so is 6.4.3.3's region (ADR-0134): `array [1..fred]` beside a
+    field `fred` names no constant, and "the bounds of a subrange must be
+    ordinal constants" after that is the same mistake said again and vaguely. }
+  constReported := false;
   CheckExpr(e);
   res.stype := nil;
-  constReported := false;
   if not EvalConst(e, res) then
     EvalOrdinal := false
   else if not IsOrdinal(res.stype) then
@@ -8923,15 +8948,23 @@ begin
   FieldOfOpenRecord := found
 end;
 
-{ One message for every occurrence the region rule refuses, so the three that
-  ask cannot drift into saying it three ways (ADR-0112). }
-procedure ErrorFieldNotAType(line, col, at, len: integer);
+{ One message for every occurrence the region rule refuses, so the four that
+  ask cannot drift into saying it four ways (ADR-0112, ADR-0134). The noun is
+  the only difference between them: three are asking for a type-name and the
+  fourth for a constant, and a field is neither. }
+procedure ErrorFieldNotA(line, col, at, len: integer; wantType: boolean);
 begin
   ErrorAt(line, col);
   write('''');
   WritePool(at, len);
   write(''' is a field of this record type, ');
-  writeln('so it does not name a type here')
+  if wantType then writeln('so it does not name a type here')
+  else writeln('so it does not name a constant here')
+end;
+
+procedure ErrorFieldNotAType(line, col, at, len: integer);
+begin
+  ErrorFieldNotA(line, col, at, len, true)
 end;
 
 function ResolvePointer(d: nodePtr): typePtr;
@@ -9154,6 +9187,11 @@ end;
   contain, a file. A `text` is *not* what this produces even when T is char:
   6.4.3.5 makes `text` a required type of its own with a line structure, and
   `file of char` a plain sequence of characters with none. }
+{ Asked while a record's or a file's insides are resolved, which is before it
+  is defined -- the storage questions it answers are the ones 6.2.3.8 b)'s
+  offer must not reach through a container (ADR-0134). }
+function DynamicExtent(t: typePtr): boolean; forward;
+
 function ResolveFile(d: nodePtr): typePtr;
 var t, component: typePtr;
 begin
@@ -9166,6 +9204,18 @@ begin
           'found ');
     WriteTypeName(component);
     writeln;
+    component := charType
+  end
+  { 6.2.3.8 b)'s offer reaches inside a file's denoter since ADR-0134, and a
+    subrange component is what it is for -- its storage is its host's whatever
+    its bounds are. A component whose *size* the bound decides is a different
+    thing: the runtime is told one component size when the file is prepared,
+    and that number is written where the file is. }
+  else if (dynBoundsFor <> nil) and (genericFor = nil) and (not inSchemaBody)
+          and DynamicExtent(component) then begin
+    ErrorAt(d^.line, d^.col);
+    write('the bounds of a file''s component type must be constants, ');
+    writeln('because every component of a file is the same size');
     component := charType
   end;
   t^.elem := component;
@@ -9394,6 +9444,24 @@ procedure AddField(rec: typePtr; var into, tail: fieldPtr; n: nodePtr;
                    init: nodePtr);
 var f: fieldPtr;
 begin
+  { 6.2.3.8 b) reaches a bound written inside a record's denoter -- a record is
+    not a block, so such a bound is still closest-contained by the one the
+    declaration is in -- and ADR-0134 admits it. What it must not admit is a
+    field whose *size* the bound decides: a field's storage is laid out where
+    the record is, and a field after a dynamically sized one sits at an offset
+    nothing can compute (ADR-0045). A subrange is the case that works, for the
+    reason ADR-0133 gives: its storage is its host's whatever its bounds are.
+
+    The field is still added afterwards, so a later `u.f` is a field selection
+    and not a second complaint about a name that went missing. }
+  if (dynBoundsFor <> nil) and (genericFor = nil) and (not inSchemaBody) and
+     DynamicExtent(t) then begin
+    ErrorAt(n^.line, n^.col);
+    write('the bounds of the field ''');
+    WritePool(n^.dnAt, n^.dnLen);
+    write(''' must be constants, because a field''s storage is sized ');
+    writeln('where the record is')
+  end;
   if FindField(rec, n^.dnAt, n^.dnLen) <> nil then begin
     ErrorAt(n^.line, n^.col);
     write('''');
@@ -10515,7 +10583,7 @@ end;
   nothing could compute -- which is why this reads the last field and not "any
   field". A record with a dynamic field anywhere else is not a type with a
   dynamic extent; it is a type that is refused (ADR-0045). }
-function DynamicExtent(t: typePtr): boolean;
+function DynamicExtent;
 var f: fieldPtr;
 begin
   if t = nil then DynamicExtent := false
@@ -10802,6 +10870,23 @@ begin
   end
 end;
 
+{ Whether this symbol is one of that procedure's formal parameters, rather
+  than something else its frame owns. A function's result variable is an
+  skVarParam of the function when the result lives in memory (6.7.2), and it is
+  not a parameter-identifier -- so the parameter list is walked rather than the
+  kind being trusted. }
+function ParameterOf(owner, s: symPtr): boolean;
+var p: symListPtr; found: boolean;
+begin
+  found := false;
+  p := owner^.params;
+  while (p <> nil) and not found do begin
+    if p^.sym = s then found := true;
+    p := p^.next
+  end;
+  ParameterOf := found
+end;
+
 function ResolveInquiry(d: nodePtr): typePtr;
 var s: symPtr; t: typePtr;
 begin
@@ -10813,7 +10898,38 @@ begin
   { 6.4.9's type-inquiry-object is a `variable-name` or a
     `parameter-identifier`, and a variable-name carries the qualifier too. }
   s := LookupQuiet(d^.tqQualAt, d^.tqQualLen, d^.tqAt, d^.tqLen);
-  if s = nil then begin
+  { 6.4.9: "A parameter-identifier in a type-inquiry-object shall have its
+    defining-point in a value-parameter-specification or
+    variable-parameter-specification in the formal-parameter-list
+    closest-containing the type-inquiry-object."
+
+    What makes that a rule about *where the inquiry is written* rather than a
+    ban on naming an outer parameter is 6.7.3.1: an identifier in a value- or
+    variable-parameter-specification gets **two** defining-points, one as a
+    parameter-identifier for the formal-parameter-list and one as the
+    associated variable-identifier for the block. So inside a
+    formal-parameter-list the name is a parameter-identifier and this applies;
+    inside the block it is a variable-identifier and 6.4.9's other alternative,
+    `variable-name`, is what it matches -- which is why the clause's own
+    example, `procedure p(var a: VVector); var b: type of a;`, is legal.
+
+    `procedure outer(k: integer; procedure q(x: type of k))` is not: the list
+    closest-containing the object is q's, and k's defining-point as a
+    parameter-identifier is in outer's. A schema body is lexically outside any
+    formal-parameter-list, so it is exempt for the reason a record's region
+    exempts it (ADR-0134). }
+  if (s <> nil) and (formalsFor <> nil) and (not inSchemaBody) and
+     ((s^.kind = skParam) or (s^.kind = skVarParam)) and
+     (s^.owner <> nil) and (s^.owner <> formalsFor) and
+     ParameterOf(s^.owner, s) then begin
+    ErrorAt(d^.line, d^.col);
+    write('''');
+    WritePool(d^.tqAt, d^.tqLen);
+    write(''' is a parameter of another formal-parameter-list, so ');
+    writeln('''type of'' cannot name it here');
+    ResolveInquiry := intType
+  end
+  else if s = nil then begin
     ErrorAt(d^.line, d^.col);
     write('unknown variable ''');
     WritePool(d^.tqAt, d^.tqLen);
@@ -11100,7 +11216,8 @@ begin
       container: `set of 1..m` stops at the nkSet, `record f: 1..m end` at the
       nkRecord, and a file component and a pointer domain likewise, so the
       bound must be constant there exactly as before. }
-    if (d^.kind <> nkArray) and (d^.kind <> nkSubrange) then
+    if (d^.kind <> nkArray) and (d^.kind <> nkSubrange) and
+       (d^.kind <> nkRecord) and (d^.kind <> nkFile) then
       dynBoundsFor := nil;
     t := nil;
     case d^.kind of
@@ -13814,6 +13931,32 @@ begin
       end;
 
       nkVar: begin
+        { 6.4.3.3's region at a *constant* occurrence, which is the one kind
+          ADR-0112 left and the last program this compiler accepted that
+          ISO 7185 requires it to reject. Inside a record's denoter a spelling
+          that is one of its fields is an applied occurrence of the field
+          (6.2.2.4), and a field is not a value here -- so `array [1..fred]`
+          beside a field `fred` names no constant, however the program declared
+          `fred` outside.
+
+          Asked *before* the lookup, for the reason the three type occurrences
+          ask before theirs: a field's defining-point is nearer than anything
+          outside the record, including the required identifiers.
+
+          `inSchemaBody` is what keeps it exact rather than approximately
+          right. A production written inside a record -- `a: vec(2)` -- makes
+          the schema's *body* be resolved again, and that body is lexically
+          outside the record, so a constant name in it is in no region of this
+          one. The actual-discriminant-part is not in the body and is still
+          asked, which is the half that matters (ADR-0134). }
+        if (not inSchemaBody) and FieldOfOpenRecord(0, e^.vrAt, e^.vrLen) then
+        begin
+          ErrorFieldNotA(e^.line, e^.col, e^.vrAt, e^.vrLen, false);
+          { The reason is given, so the caller's vaguer one is not. }
+          constReported := true;
+          e^.ntype := intType
+        end
+        else begin
         { A `with` scope is inside every enclosing one, so its fields win. }
         binding := LookupWithField(e^.vrAt, e^.vrLen, e^.vrField);
         if binding <> nil then begin
@@ -13882,6 +14025,7 @@ begin
           end
           else
             e^.ntype := e^.vrSym^.stype
+        end
         end
       end;
 
@@ -14288,7 +14432,11 @@ begin
       t := a^.ntype;
       okRead := false;
       if t <> nil then begin
-        okRead := IsInteger(t) or IsReal(t) or IsChar(t);
+        { ADR-0128 gave the dialect an int64 that `write` took and `read` did
+          not, which was the one asymmetry the type had -- and 6.9.1's rule is
+          the same at both widths, so what it needed was the bound and not a
+          second reader (ADR-0134). }
+        okRead := IsInteger(t) or IsReal(t) or IsChar(t) or IsInt64(t);
         if (not okRead) and (HasExtended(langStd)) then
           okRead := IsStringType(t)
       end
@@ -15621,8 +15769,10 @@ function CheckedResultType(t: typePtr; bindable_: boolean;
 
 procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
 var g, n: nodePtr; t: typePtr; ps, schema, named: symPtr; section: integer;
-    bindable_: boolean;
+    bindable_: boolean; savedFormals: symPtr;
 begin
+  savedFormals := formalsFor;
+  formalsFor := into;
   g := groups;
   section := 0;
   while g <> nil do begin
@@ -15836,7 +15986,8 @@ begin
       end
     end;
     g := g^.next
-  end
+  end;
+  formalsFor := savedFormals
 end;
 
 { What a function may return. The two standards draw the line in opposite
@@ -16223,18 +16374,34 @@ begin
       { ISO 7185 6.6.2 and ISO/IEC 10206:1991 6.7.2 both require a function's
         block to contain at least one assignment to the function-identifier;
         with a result-variable-specification the requirement moves to the
-        result variable, and "threatens" is a weaker word than "assigns" -- a
-        `read` or a `var` argument counts -- so that half is not checked here
-        and the ADR says so. What is checked is the form that has no other
-        reading: a function whose body never mentions its own result at all
-        returns whatever the storage happened to hold. }
-      if (sym^.kind = skFunc) and not sym^.resultNamed and
-         not sym^.assignedResult and not sym^.resultTypeBad then begin
-        ErrorAt(d^.line, d^.col);
-        write('function ''');
-        WritePool(d^.pdAt, d^.pdLen);
-        writeln(''' never assigns its result')
-      end;
+        result variable and the word changes with it -- 6.7.2 asks for "at
+        least one statement threatening" it, and 6.9.4's *threatens* is weaker
+        than *assigns*, a `read` into the result or a var argument counting
+        where no assignment does.
+
+        So the two halves ask two questions of two flags, which is what
+        ADR-0134 added: assignedResult is the syntactic containment of an
+        assignment to the function identifier, wasThreatened is 6.9.4's own
+        list recorded where that list is already walked. A function returns
+        whatever the storage happened to hold if either goes unanswered. }
+      if (sym^.kind = skFunc) and not sym^.resultTypeBad then
+        if not sym^.resultNamed then begin
+          if not sym^.assignedResult then begin
+            ErrorAt(d^.line, d^.col);
+            write('function ''');
+            WritePool(d^.pdAt, d^.pdLen);
+            writeln(''' never assigns its result')
+          end
+        end
+        else if sym^.resultVar <> nil then
+          if not sym^.resultVar^.wasThreatened then begin
+            ErrorAt(d^.line, d^.col);
+            write('function ''');
+            WritePool(d^.pdAt, d^.pdLen);
+            write(''' never writes to its result variable ''');
+            WritePool(sym^.resAt, sym^.resLen);
+            writeln('''')
+          end;
 
       currentProc := outer
     end
@@ -21529,7 +21696,7 @@ end;
   reached through a subscript or a field is always an internal one. }
 procedure WalkFiles(addr: str; t: typePtr; init: boolean;
                     binding, arg, name: integer);
-var comp, istext, direct, headB, bodyB, doneB: integer;
+var comp, istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
     f: fieldPtr;
     nohdr, count, iv, i, more, elem, next, zero, one: str;
 begin
@@ -21547,17 +21714,32 @@ begin
       if t^.elem <> nil then comp := LlSize(t^.elem);
       istext := 0;
       if t^.isText then istext := 1;
-      { 6.4.3.6: an index-type makes the file direct-access, and the one thing
-        the runtime does differently is open the stream for reading *and*
+      { 6.4.3.6: an index-type makes the file direct-access, and the runtime
+        does two things differently. It opens the stream for reading *and*
         writing -- SeekUpdate must be able to turn one into the other without
-        reopening, since it has to preserve the contents. }
+        reopening, since it has to preserve the contents -- and it holds the
+        clause's own bound on the length.
+
+        The capacity is `ord(b) - ord(a) + 1`, and zero says there is none
+        worth carrying: an index-type spanning maxint values or more has a
+        capacity this compiler has no integer for, and a program has no way to
+        reach it. The guard is the one ResolveArray uses on an array's index
+        for the same arithmetic, written the same way round so neither
+        subtraction can leave the type (ADR-0134). }
       direct := 0;
-      if t^.indexType <> nil then direct := 1;
+      cap := 0;
+      if t^.indexType <> nil then begin
+        direct := 1;
+        ixLo := OrdinalLo(t^.indexType);
+        ixHi := OrdinalHi(t^.indexType);
+        if (ixLo <= 0) and (ixHi >= maxint + ixLo) then cap := 0
+        else cap := ixHi - ixLo + 1
+      end;
       write(ircode, '  call void @pas_file_init(ptr ');
       PutOp(addr);
       writeln(ircode, ', i32 ', binding:1, ', i32 ', arg:1,
               ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1,
-              ', i32 ', direct:1, ')')
+              ', i32 ', direct:1, ', i32 ', cap:1, ')')
     end
   end
   else if IsRecord(t) then begin
@@ -25727,6 +25909,16 @@ begin
         PutOp(fh);
         writeln(ircode, ')')
       end
+      { An int64 is what the runtime already accumulates in, so this is the
+        one arm with nothing to narrow -- and no subrange to check, ADR-0128
+        making int64 numeric rather than ordinal. }
+      else if IsInt64(t) then begin
+        needStore := true;
+        Def(v);
+        write(ircode, 'call i64 @pas_read_int64(ptr ');
+        PutOp(fh);
+        writeln(ircode, ')')
+      end
       else begin
         needStore := true;
         { The runtime returns i64 and has already rejected anything outside
@@ -27832,7 +28024,8 @@ begin
   writeln(ircode, 'declare void @pas_runtime_error(ptr)');
   writeln(ircode, 'declare void @pas_args(i32, ptr)');
   writeln(ircode,
-          'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32, i32)');
+          'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32, ',
+          'i32, i32)');
   writeln(ircode, 'declare void @pas_file_done(ptr)');
   writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
   writeln(ircode, 'declare void @pas_jump_done(ptr)');
@@ -27856,6 +28049,7 @@ begin
   writeln(ircode, 'declare i8 @pas_read_char(ptr)');
   writeln(ircode, 'declare double @pas_read_real(ptr)');
   writeln(ircode, 'declare i64 @pas_read_int(ptr)');
+  writeln(ircode, 'declare i64 @pas_read_int64(ptr)');
   writeln(ircode, 'declare void @pas_readln(ptr)');
   writeln(ircode, 'declare i32 @pas_eof(ptr)');
   writeln(ircode, 'declare i32 @pas_eoln(ptr)');
@@ -28417,6 +28611,7 @@ begin
   dynBoundsFor := nil;
   variantField := false;
   inSchemaBody := false;
+  formalsFor := nil;
   stdInput := nil;
   stdOutput := nil;
   for stringIndex := 1 to strMax do

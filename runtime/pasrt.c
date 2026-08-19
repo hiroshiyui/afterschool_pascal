@@ -298,6 +298,16 @@ struct pas_file {
    * reading and writing, because `SeekUpdate` may turn a file being read into
    * one being written without reopening it. */
   int direct;
+  /* ISO/IEC 10206:1991 §6.4.3.6: how many components the index-type admits,
+   * `ord(b) - ord(a) + 1`, and the clause's own requirement is that
+   * `length(f)` never exceed it — so an eleventh component written to a
+   * `file [1..10] of T` is an error. Zero means there is no bound worth
+   * checking: a sequential file has no index-type, and one whose index-type
+   * spans maxint values or more has a capacity this compiler cannot carry in
+   * an integer and a program cannot reach. The number is a constant, an
+   * index-type's bounds being outside every position §6.2.3.8 b) reaches
+   * (ADR-0134). */
+  int capacity;
   /* ISO/IEC 10206:1991 §6.7.5.6: the external entity this variable is bound
    * to, if any. A *bound* file names its own external file, where a program
    * parameter names an argument and a scratch file names nothing — so this is
@@ -538,7 +548,7 @@ static const char *pas_external(struct pas_file *f) {
 }
 
 void pas_file_init(void *v, int binding, int arg, const char *name,
-                   int compsize, int istext, int direct) {
+                   int compsize, int istext, int direct, int capacity) {
   struct pas_file *f = v;
   f->fp = NULL;
   f->mode = PAS_CLOSED;
@@ -548,6 +558,7 @@ void pas_file_init(void *v, int binding, int arg, const char *name,
   f->have = 0;
   f->istext = istext;
   f->direct = direct;
+  f->capacity = capacity;
   f->compsize = compsize > 0 ? compsize : 1;
   f->ateof = 0;
   f->ch = ' ';
@@ -883,6 +894,25 @@ void pas_put(void *v) {
       pas_runtime_error("cannot position the file to write to it");
     f->have = 0;
   }
+  /* §6.4.3.6: "length(f) shall be less than or equal to
+   * ord(b) - ord(a) + 1". The requirement is about the file's length, and the
+   * only thing that grows it is a write at the end — so this is that check,
+   * made where the growth happens and nowhere else. `update` overwrites in
+   * place and cannot reach it; a seek is refused past the end already, and
+   * seeking to the append position of a full file is legal right up until
+   * something is written there. */
+  if (f->capacity > 0) {
+    long at;
+    fflush(f->fp);
+    at = ftell(f->fp) / f->compsize;
+    if (at >= f->capacity) {
+      fflush(stdout);
+      fprintf(stderr,
+              "runtime error: this file holds at most %d components\n",
+              f->capacity);
+      exit(1);
+    }
+  }
   if (f->istext)
     putc(f->ch, f->fp);
   else if (fwrite(f->buf, 1, (size_t)f->compsize, f->fp) !=
@@ -949,11 +979,23 @@ static void pas_unread(struct pas_file *f, char c) {
   f->ch = c;
 }
 
-long long pas_read_int(void *v) {
-  struct pas_file *f = v;
+/* §6.9.1's read of an integer, at either width. The two differ in one number
+ * and in nothing else -- the longest-prefix rule, the sign, the give-back and
+ * the "expected an integer" are the same sentence of the standard for both --
+ * so `wide` selects the bound rather than a second copy of the loop selecting
+ * everything (ADR-0134).
+ *
+ * The overflow is caught *during* the accumulation and not after it, which is
+ * what keeps the check meaningful at the wider width: `value * 10` would
+ * already have wrapped. `limit / 10` is the largest value that can still be
+ * multiplied, and the digit is compared separately at the boundary. */
+static long long pas_read_int_at(struct pas_file *f, int wide) {
   int negative = 0;
   long long value = 0;
   int digits = 0;
+  const long long limit = wide ? 9223372036854775807LL : 2147483647LL;
+  const char *what = wide ? "int64 read is outside -maxint64..maxint64"
+                          : "integer read is outside -maxint..maxint";
 
   pas_skip_blanks(f);
   if (f->lookahead == '+' || f->lookahead == '-') {
@@ -962,11 +1004,13 @@ long long pas_read_int(void *v) {
     pas_fill(f);
   }
   while (f->lookahead >= '0' && f->lookahead <= '9') {
-    value = value * 10 + (f->lookahead - '0');
-    /* The integer type is -maxint..maxint (ADR-0014), so a number too big for
-     * it is an error rather than a wrapped value. */
-    if (value > 2147483647LL)
-      pas_runtime_error("integer read is outside -maxint..maxint");
+    int digit = f->lookahead - '0';
+    /* The integer type is -maxint..maxint (ADR-0014) and int64 is
+     * -maxint64..maxint64 (ADR-0128), so a number too big for the one being
+     * read is an error rather than a wrapped value. */
+    if (value > limit / 10 || (value == limit / 10 && digit > limit % 10))
+      pas_runtime_error(what);
+    value = value * 10 + digit;
     ++digits;
     f->have = 0;
     pas_fill(f);
@@ -975,6 +1019,10 @@ long long pas_read_int(void *v) {
     pas_runtime_error("expected an integer in the input");
   return negative ? -value : value;
 }
+
+long long pas_read_int(void *v) { return pas_read_int_at(v, 0); }
+
+long long pas_read_int64(void *v) { return pas_read_int_at(v, 1); }
 
 /* The characters of the number being read.
  *

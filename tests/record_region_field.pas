@@ -19,6 +19,9 @@
   says exactly the same second thing today, because both fall back to `integer`
   to keep the tree checkable. }
 program RecordRegionField(output);
+const
+  lim  = 2;
+  size = 3;
 type
   cell = integer;
   arm  = 1..2;
@@ -64,8 +67,28 @@ type
          f       : integer;
          integer : real
        end;
+
+  { A *constant* occurrence, which none of the four above is. An array's bound
+    and a subrange's bound are expressions, so they reach the name through the
+    expression checker rather than through type-denoter resolution -- the same
+    region and the same clause, and for a long time the one occurrence that
+    went unasked. `size` is declared as a constant above and is still the field
+    here; `lim` is not a field of this record and still names its constant,
+    which is what says the rule is about fields and not about writing constant
+    names inside a record (ADR-0134).
+
+    Neither line carries a second message. A bound that did not fold usually
+    draws "the bounds of a subrange must be ordinal constants" after it, and
+    here the first message has already said why -- the same suppression an
+    overflow in a bound gets. }
+  r5 = record
+         g    : array [1..size] of integer;
+         h    : 1..size;
+         size : integer;
+         ok5  : array [1..lim] of integer
+       end;
 var
-  x1: r1; x2: r2; x3: r3; x4: r4;
+  x1: r1; x2: r2; x3: r3; x4: r4; x5: r5;
 begin
-  writeln('unreached ', x1.fred, x2.idx, x3.item, x4.f)
+  writeln('unreached ', x1.fred, x2.idx, x3.item, x4.f, x5.size)
 end.

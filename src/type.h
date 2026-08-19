@@ -277,6 +277,11 @@ struct Type {
   /// "any field". A record with a dynamic field anywhere else is not a type
   /// with a dynamic extent; it is a type that is refused (ADR-0045).
   bool dynamicExtent() const {
+    // A subrange is asked before its bounds are, because its bounds decide
+    // what a store is compared against and not how many bytes it takes: its
+    // size is its host's whatever they are (ADR-0133).
+    if (kind == TypeKind::Subrange)
+      return false;
     if (dynamicBounds())
       return true;
     if (isArray())

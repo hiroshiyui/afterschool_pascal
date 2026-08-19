@@ -151,6 +151,14 @@ struct Symbol {
   /// Syntactic containment, as the standard states it: an assignment inside an
   /// `if` counts, because §6.6.2 asks what the block *contains*.
   bool assignedResult = false;
+  /// §6.9.4's *threatens*, recorded on the symbol as it is seen. It is what
+  /// §6.7.2 asks of a **result variable**, where assignedResult is what it
+  /// asks of a function identifier — and the two words are not the same one: a
+  /// `read` into the result, or passing it to a var parameter, threatens it
+  /// and assigns nothing. Set by checkNotThreatened, which is called at every
+  /// one of the clause's six sites and nowhere else, so this is that list
+  /// rather than a second reading of it (ADR-0134).
+  bool wasThreatened = false;
   bool defined = false;            // a body has been seen (vs. only `forward`)
   ProcDecl *decl = nullptr;
 
@@ -534,6 +542,8 @@ private:
                          const std::string &name) const;
   /// The one message the region rule refuses with, so the three occurrences
   /// that ask cannot drift into saying it three ways.
+  void errorFieldNotA(int line, int col, const std::string &name,
+                      bool wantType);
   void errorFieldNotAType(int line, int col, const std::string &name);
   /// §6.4.4's domain-type written as a schema-name. One type per schema, so a
   /// schema that names itself in a pointer domain terminates.
@@ -692,6 +702,9 @@ private:
   /// type-denoter, so the word parses there, and it is spelled as a type
   /// definition — so refusing it needs a reason of its own.
   bool schemaBody_ = false;
+  /// The symbol whose formal-parameter-list is being built, and null outside
+  /// one. §6.4.9's "formal-parameter-list closest-containing" (ADR-0134).
+  Symbol *formalsFor_ = nullptr;
   /// ISO/IEC 10206:1991 §6.4.3.3.3's required schema `string`. Kept because a
   /// type produced from it has to be interned by (schema, tuple) — §6.4.8 —
   /// and `BindingType`'s `name` field is such a production made where there is

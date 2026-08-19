@@ -33,6 +33,16 @@ var x: t;                                { and a variable of it }
       front of it, `new` building one only where the extent is dynamic. The
       bounds stay the block's, which is what the store is checked against. }
     h: ^t;
+    { A record is no kind of block, so a bound written inside one is still
+      closest-contained by this block and 6.2.3.8 b) reaches it (ADR-0134).
+      What makes a *subrange* field work where an array field does not is that
+      it sizes nothing: `rec` is eight bytes whatever m is, so `g` sits at an
+      offset this compiler can compute. }
+    rec: record f: 1..m; g: integer end;
+    { And a file's component, for the same reason: the runtime is told one
+      component size when the file is prepared, and a subrange's is its
+      host's. }
+    fl: file of 1..m;
   { The bounds belong to the activation of p that is running, so a nested
     procedure reaches them the way it reaches any other variable of it. }
   procedure inner;
@@ -56,6 +66,11 @@ begin
   h^ := m;
   writeln('heap ', h^:1);
   dispose(h);
+  rec.f := m; rec.g := 8;
+  writeln('field ', rec.f:1, rec.g:1);
+  rewrite(fl); fl^ := 2; put(fl);
+  reset(fl);
+  writeln('component ', fl^:1);
   inner
 end;
 begin p(3, 'c', blue) end.

@@ -5,4 +5,5 @@
 <source>:20:24: error: unknown variable 'x' in 'type of'
 <source>:29:46: error: unknown variable 'y' in 'type of'
 <source>:38:41: error: 'type of v' would need the discriminants that arrive with 'v', which is not supported
-<source>:45:17: error: an array index must be an ordinal type, found point
+<source>:56:45: error: 'k' is a parameter of another formal-parameter-list, so 'type of' cannot name it here
+<source>:63:17: error: an array index must be an ordinal type, found point

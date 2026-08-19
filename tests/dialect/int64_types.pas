@@ -10,11 +10,10 @@
   of the messages below is the one that position has always given -- not one
   of them was written for this type.
 
-  `read` is the exception in kind rather than in reason: 6.9.1's read of an
-  integer takes the longest prefix that is a number and gives it back through
-  a two-character lookahead, and extending that to a second width is runtime
-  work this increment did not do. The refusal is `write`'s list read backwards
-  and it is recorded in doc/implementation-defined.md.
+  `read` used to be the one exception in the other direction -- a required
+  procedure that took the type where `write` did -- and ADR-0134 closed it:
+  6.9.1's rule is the same sentence at both widths, so what it needed was the
+  bound and not a second reader. `int64_read.pas` is that half.
 
   The literal's own bound is in int64_toobig.pas rather than here, because it
   is the *lexer* that reports it and every stage after a failed one is skipped
@@ -37,6 +36,5 @@ begin
   writeln(chr(a));
   writeln(a in s);
   { nothing narrows without being asked to: `trunc` is the one way }
-  n := a;
-  read(a)
+  n := a
 end.

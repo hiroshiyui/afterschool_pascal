@@ -227,9 +227,14 @@ long long Sema::ordinalOf(const Symbol &v) {
 }
 
 bool Sema::evalOrdinal(Expr *e, Type *&type, long long &value) {
+  // Cleared *before* the expression is checked and not after it, so a reason
+  // given by the checker counts as one the caller need not repeat. The only
+  // one that does so is §6.4.3.3's region (ADR-0134): `array [1..fred]` beside
+  // a field `fred` names no constant, and "the bounds of a subrange must be
+  // ordinal constants" after that is the same mistake said again and vaguely.
+  constReported_ = false;
   checkExpr(e);
   Symbol out;
-  constReported_ = false;
   if (!evalConst(e, out) || !out.type || !out.type->isOrdinal())
     return false;
   type = out.type;
@@ -318,11 +323,16 @@ bool Sema::fieldOfOpenRecord(const std::string &qualifier,
   return false;
 }
 
-void Sema::errorFieldNotAType(int line, int col, const std::string &name) {
+void Sema::errorFieldNotA(int line, int col, const std::string &name,
+                          bool wantType) {
   diags_.error(line, col,
-               "'" + name +
-                   "' is a field of this record type, "
-                   "so it does not name a type here");
+               "'" + name + "' is a field of this record type, " +
+                   (wantType ? "so it does not name a type here"
+                             : "so it does not name a constant here"));
+}
+
+void Sema::errorFieldNotAType(int line, int col, const std::string &name) {
+  errorFieldNotA(line, col, name, true);
 }
 
 /// A pointer's domain is a type identifier, and it may be one defined later in
@@ -505,6 +515,18 @@ Type *Sema::resolveFile(TypeExpr &denoter) {
     diags_.error(denoter.line, denoter.col,
                  "the component type of a file must not be, or contain, a "
                  "file, found " + component->name());
+    component = ty::Char();
+  }
+  // §6.2.3.8 b)'s offer reaches inside a file's denoter since ADR-0134, and a
+  // subrange component is what it is for — its storage is its host's whatever
+  // its bounds are. A component whose *size* the bound decides is a different
+  // thing: the runtime is told one component size when the file is prepared,
+  // and that number is written where the file is.
+  else if (dynBoundsFor_ && !genericFor_ && !schemaBody_ &&
+           component->dynamicExtent()) {
+    diags_.error(denoter.line, denoter.col,
+                 "the bounds of a file's component type must be constants, "
+                 "because every component of a file is the same size");
     component = ty::Char();
   }
   t->elem = component;
@@ -863,6 +885,22 @@ bool Sema::overlaps(const std::vector<LabelRange> &seen, LabelRange r,
 void Sema::addField(Type *record, std::vector<Field> &into,
                     const DeclName &name, Type *type,
                     const std::vector<int> &variant, Expr *init) {
+  // §6.2.3.8 b) reaches a bound written inside a record's denoter — a record
+  // is not a block, so such a bound is still closest-contained by the one the
+  // declaration is in — and ADR-0134 admits it. What it must not admit is a
+  // field whose *size* the bound decides: a field's storage is laid out where
+  // the record is, and a field after a dynamically sized one sits at an offset
+  // nothing can compute (ADR-0045). A subrange is the case that works, for the
+  // reason ADR-0133 gives: its storage is its host's whatever its bounds are.
+  //
+  // The field is still added afterwards, so a later `u.f` is a field selection
+  // and not a second complaint about a name that went missing.
+  if (dynBoundsFor_ && !genericFor_ && !schemaBody_ && type &&
+      type->dynamicExtent())
+    diags_.error(name.line, name.col,
+                 "the bounds of the field '" + name.name +
+                     "' must be constants, because a field's storage is sized "
+                     "where the record is");
   if (record->findField(name.name)) {
     diags_.error(name.line, name.col,
                  "'" + name.name + "' is already a field of this record");
@@ -1171,6 +1209,18 @@ Type *Sema::resolveRestricted(TypeExpr &denoter) {
   return t;
 }
 
+/// Whether this symbol is one of that procedure's formal parameters, rather
+/// than something else its frame owns. A function's result variable is a
+/// VarParam of the function when the result lives in memory (§6.7.2), and it
+/// is not a parameter-identifier — so the parameter list is walked rather than
+/// the kind being trusted.
+static bool parameterOf(Symbol *owner, Symbol *s) {
+  for (Symbol *p : owner->params)
+    if (p == s)
+      return true;
+  return false;
+}
+
 Type *Sema::resolveInquiry(TypeExpr &denoter) {
   // §6.4.9 also allows the object to be a parameter of the closest-containing
   // formal-parameter-list, and that needs nothing added: `declareProcHeading`
@@ -1180,6 +1230,30 @@ Type *Sema::resolveInquiry(TypeExpr &denoter) {
   // §6.4.9's type-inquiry-object is a `variable-name` or a
   // `parameter-identifier`, and a variable-name carries the qualifier too.
   Symbol *sym = lookupQuiet(denoter.qualifier, denoter.name);
+  // §6.4.9: "A parameter-identifier in a type-inquiry-object shall have its
+  // defining-point in a value-parameter-specification or
+  // variable-parameter-specification in the formal-parameter-list
+  // closest-containing the type-inquiry-object."
+  //
+  // What makes that a rule about *where the inquiry is written* rather than a
+  // ban on naming an outer parameter is §6.7.3.1: an identifier in a value- or
+  // variable-parameter-specification gets **two** defining-points, one as a
+  // parameter-identifier for the formal-parameter-list and one as the
+  // associated variable-identifier for the block. So inside a
+  // formal-parameter-list the name is a parameter-identifier and this applies;
+  // inside the block it is a variable-identifier and §6.4.9's other
+  // alternative, `variable-name`, is what it matches — which is why the
+  // clause's own example, `procedure p(var a: VVector); var b: type of a;`, is
+  // legal (ADR-0134).
+  if (sym && formalsFor_ && !schemaBody_ &&
+      (sym->kind == SymKind::Param || sym->kind == SymKind::VarParam) &&
+      sym->owner && sym->owner != formalsFor_ && parameterOf(sym->owner, sym)) {
+    diags_.error(denoter.line, denoter.col,
+                 "'" + denoter.name +
+                     "' is a parameter of another formal-parameter-list, so "
+                     "'type of' cannot name it here");
+    return ty::Int();
+  }
   if (!sym) {
     diags_.error(denoter.line, denoter.col,
                  "unknown variable '" + denoter.name + "' in 'type of'");
@@ -1377,7 +1451,15 @@ Type *Sema::resolveType(TypeExpr &denoter) {
   // other kind still withdraws the offer at the container, so `set of 1..m`,
   // `record f: 1..m end`, a file component and a pointer domain each need a
   // constant bound exactly as before.
-  if (denoter.kind != TEK::Array && denoter.kind != TEK::Subrange)
+  //
+  // A record and a file join them (ADR-0134), because a record is not a block
+  // and a bound written inside one is still closest-contained by the block the
+  // declaration is in. What the offer must not reach through them is a field
+  // or a component whose *size* the bound decides, and `addField` and
+  // `resolveFile` are where that is refused — by asking dynamicExtent(), which
+  // a subrange answers no to and an array yes.
+  if (denoter.kind != TEK::Array && denoter.kind != TEK::Subrange &&
+      denoter.kind != TEK::Record && denoter.kind != TEK::File)
     dynBoundsFor_ = nullptr;
 
   Type *t = nullptr;
@@ -2706,6 +2788,13 @@ static bool nestedIn(Symbol *inner, Symbol *outer) {
 
 void Sema::checkNotThreatened(Expr *e, const std::string &what) {
   Symbol *s = baseSymbol(e);
+
+  // §6.9.4's list is exactly this function's call sites, so the flag is set
+  // here rather than at each of them — and unconditionally, because what is
+  // recorded is that the variable was threatened and not whether the threat
+  // was allowed. §6.7.2 is the one rule that asks (ADR-0134).
+  if (s)
+    s->wasThreatened = true;
 
   // §6.8.3.9 forbids the declaration part of the block containing a
   // for-statement to threaten its control-variable, and those bodies are
@@ -4316,6 +4405,17 @@ static Symbol *formalSymbol(Symbol *s, const DeclName &n, SymKind kind,
 
 void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
                         Symbol *frame) {
+  // "The formal-parameter-list closest-containing" in §6.4.9's words — closest
+  // because this recurses for a procedural parameter's own list and restores
+  // the saved value afterwards, so inside `procedure q(x: type of k)` it names
+  // q and not the procedure q is a parameter of (ADR-0134).
+  Symbol *savedFormals = formalsFor_;
+  formalsFor_ = into;
+  struct Restore {
+    Symbol *&slot;
+    Symbol *old;
+    ~Restore() { slot = old; }
+  } restore{formalsFor_, savedFormals};
   int section = 0;
   for (auto &group : groups) {
     if (group.isProc) {
@@ -4548,16 +4648,27 @@ void Sema::checkProcBody(ProcDecl &decl) {
   // ISO 7185 §6.6.2 and ISO/IEC 10206:1991 §6.7.2 both require a function's
   // block to contain at least one assignment to the function-identifier; with
   // a result-variable-specification the requirement moves to the result
-  // variable, and "threatens" is a weaker word than "assigns" — a `read` or a
-  // `var` argument counts — so that half is not checked here and the ADR says
-  // so. What is checked is the form that has no other reading: a function
-  // whose body never mentions its own result at all returns whatever the
-  // storage happened to hold.
-  if (sym->kind == SymKind::Func && !sym->resultNamed &&
-      !sym->assignedResult && !sym->resultTypeBad)
-    diags_.error(decl.line, decl.col,
-                 "function '" + decl.name +
-                     "' never assigns its result");
+  // variable and the word changes with it — §6.7.2 asks for "at least one
+  // statement threatening" it, and §6.9.4's *threatens* is weaker than
+  // *assigns*, a `read` into the result or a var argument counting where no
+  // assignment does.
+  //
+  // So the two halves ask two questions of two flags, which is what ADR-0134
+  // added: assignedResult is the syntactic containment of an assignment to the
+  // function identifier, wasThreatened is §6.9.4's own list recorded where that
+  // list is already walked. A function returns whatever the storage happened to
+  // hold if either goes unanswered.
+  if (sym->kind == SymKind::Func && !sym->resultTypeBad) {
+    if (!sym->resultNamed) {
+      if (!sym->assignedResult)
+        diags_.error(decl.line, decl.col,
+                     "function '" + decl.name + "' never assigns its result");
+    } else if (sym->resultVar && !sym->resultVar->wasThreatened)
+      diags_.error(decl.line, decl.col,
+                   "function '" + decl.name +
+                       "' never writes to its result variable '" +
+                       sym->resultSourceName + "'");
+  }
 
   current_ = outerProc;
 }
@@ -6032,6 +6143,30 @@ void Sema::checkExpr(Expr *e) {
   }
 
   if (auto *v = as<VarRef>(e)) {
+    // §6.4.3.3's region at a *constant* occurrence, which is the one kind
+    // ADR-0112 left and the last program this compiler accepted that ISO 7185
+    // requires it to reject. Inside a record's denoter a spelling that is one
+    // of its fields is an applied occurrence of the field (§6.2.2.4), and a
+    // field is not a value here — so `array [1..fred]` beside a field `fred`
+    // names no constant, however the program declared `fred` outside.
+    //
+    // Asked *before* the lookup, for the reason the three type occurrences ask
+    // before theirs: a field's defining-point is nearer than anything outside
+    // the record, including the required identifiers.
+    //
+    // `schemaBody_` is what keeps it exact rather than approximately right. A
+    // production written inside a record — `a: vec(2)` — makes the schema's
+    // *body* be resolved again, and that body is lexically outside the record,
+    // so a constant name in it is in no region of this one. The
+    // actual-discriminant-part is not in the body and is still asked, which is
+    // the half that matters (ADR-0134).
+    if (!schemaBody_ && fieldOfOpenRecord("", v->name)) {
+      errorFieldNotA(v->line, v->col, v->name, false);
+      // The reason is given, so the caller's vaguer one is not.
+      constReported_ = true;
+      v->type = ty::Int();
+      return;
+    }
     // A `with` scope is inside every enclosing one, so its fields win.
     if (Symbol *binding = lookupWithField(v->name, v->withField)) {
       v->sym = binding;

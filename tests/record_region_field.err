@@ -1,8 +1,10 @@
-<source>:31:17: error: 'fred' is a field of this record type, so it does not name a type here
-<source>:39:24: error: 'idx' is a field of this record type, so it does not name a type here
-<source>:39:24: error: this array has too many elements: an index type may span at most maxint values
-<source>:40:32: error: 'comp' is a field of this record type, so it does not name a type here
-<source>:50:24: error: 'base' is a field of this record type, so it does not name a type here
-<source>:50:17: error: a set base type must lie within 0..255, but integer spans -2147483647..2147483647
-<source>:51:25: error: 'item' is a field of this record type, so it does not name a type here
-<source>:64:20: error: 'integer' is a field of this record type, so it does not name a type here
+<source>:34:17: error: 'fred' is a field of this record type, so it does not name a type here
+<source>:42:24: error: 'idx' is a field of this record type, so it does not name a type here
+<source>:42:24: error: this array has too many elements: an index type may span at most maxint values
+<source>:43:32: error: 'comp' is a field of this record type, so it does not name a type here
+<source>:53:24: error: 'base' is a field of this record type, so it does not name a type here
+<source>:53:17: error: a set base type must lie within 0..255, but integer spans -2147483647..2147483647
+<source>:54:25: error: 'item' is a field of this record type, so it does not name a type here
+<source>:67:20: error: 'integer' is a field of this record type, so it does not name a type here
+<source>:85:27: error: 'size' is a field of this record type, so it does not name a constant here
+<source>:86:20: error: 'size' is a field of this record type, so it does not name a constant here

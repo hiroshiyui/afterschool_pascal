@@ -215,10 +215,7 @@ it is checked (ADR-0078).
 | §6.5.3.3 (D.2) | Reading or writing a field of a variant that is not active. A constant's tag is a constant, so §6.8.8.3's version of this *is* reported (ADR-0069); the rule for a variable has never been checked. ADR-0018, ADR-0056. |
 | §6.5.6 | Altering the length of a string-variable while a reference to a substring of it exists. ADR-0057. |
 | §6.7.5.5 | A write-parameter of `writestr` accessing the string-variable being written to. ADR-0060. |
-| §6.4.3.6 | `length(f) > ord(b) - ord(a) + 1` for a direct-access `file [a..b] of T` — an eleventh component written to a `file [1..10]`. Enforcing it is a check per component written. ADR-0050. |
-| §6.7.2 | A function with a result-variable-specification that never *threatens* the result. Only assignment is required here, and §6.9.4's *threatens* is weaker — a `read` into it counts. ADR-0055. |
-| §6.4.9 | That a type-inquiry's parameter-identifier object is in the closest-containing formal-parameter-list. Ordinary lookup also sees the enclosing list. ADR-0047. |
-| §6.11.3 | Where a `qualified` import's names may be written, outside the import-specification itself. ADR-0053. |
+| §6.11.3 | A constituent-identifier's defining-point is not enforced as a *region*. §6.11.3 a) gives it "each region that is a constituent-identifier contained by the import-specification" — a region as narrow as the occurrence itself — where this compiler makes the interface's names reachable across the import-specification while it is being checked. **No program distinguishes the two**, and every observable rule around it was probed: `only` imports exactly what it names, a renaming introduces the new spelling and not the old, the interface's own name of a renamed spelling is not imported, and NOTE 2's long-form-only rule holds. ADR-0053, ADR-0134. |
 | §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
 | §6.6.5.2 (D.12) | That the buffer-variable is defined immediately before `put`. Two `put`s in a row is the error: the first leaves `f^` undefined, and nothing here records that. ADR-0021. |
 | §6.6.5.2 (D.13) | That the file is defined immediately before `reset`. This processor prepares every file variable when its block is entered (ADR-0070), so the state the clause calls undefined does not arise: a `reset` of a file never given a name reads an empty scratch file rather than reporting anything. |
@@ -308,42 +305,34 @@ link one list node twice (ADR-0070).
 **Conformant array parameters are not accepted**, which is what makes this a
 level 0 processor rather than a deviation — see §1.
 
-**A subrange whose bounds are not constants is refused as a record's field, as
-a set's base type and as a file's component.** All three are legal under
-§6.2.3.8 b) — a bound inside a record-type written in the block is
-closest-contained by the block — and each is refused with *the bounds of a
-subrange must be ordinal constants*.
+**A subrange whose bounds are not constants is refused as a set's base type.**
+`set of 1..m` inside a procedure is legal under §6.2.3.8 b) and is refused with
+*the bounds of a subrange must be ordinal constants*. Every set here is one
+256-bit word whose base type must have its values in 0..255 (ADR-0028), and a
+bound the block evaluates cannot be checked against that before the program
+runs — so it is the limit `set of integer` already states, reached by a
+different route.
 
-The entry this replaces refused it everywhere but an array's index-type, and
-ADR-0133 lifted that: `var x: 1..m`, `type t = 1..m` and `array [1..m] of 1..m`
-inside a procedure all work, because the range check at a store now reads the
-descriptor §6.2.3.8 b) filled the way the subscript check always has. What holds
-the three above is the shape of the withdrawal rather than anything about a
-subrange: it is made at the **container**, so admitting one there would admit an
-array with it, and `record f: array [1..m] of integer end` is a genuine problem
-about storage this activation does not size. A set has a reason of its own
-besides — it is one 256-bit word laid out from its base type's ordinal range
-(ADR-0028), so a dynamic base type has no representation to give.
-
-Everything else is **fixed**, and it took four records to get there.
+Everything else is **fixed**, and it took five records to get there.
 `var v: vector(m)` has always worked; `var a: array [1..m] of real` works since
 ADR-0113; `type t = vector(m)` and `type t = array [1..m] of real` since
-ADR-0127; and the bare subrange in every position but the three above since
-ADR-0133 — all of them in `--std=extended` and `--std=afterschool` only,
-ISO 7185 §6.4.2.4 writing `subrange-type = constant '..' constant`. The
-type-definition half was the finding of the second independent reading most
-likely to break a real program (ADR-0107). `doc/sop.md` §7 carries what is
-left.
+ADR-0127; the bare subrange as a variable's type, a type-definition and an
+array's component since ADR-0133; and as a **record's field** and a **file's
+component** since ADR-0134 — a record being no kind of block, so a bound
+written inside one is still closest-contained by the block the declaration is
+in. All of them in `--std=extended` and `--std=afterschool` only, ISO 7185
+§6.4.2.4 writing `subrange-type = constant '..' constant`. The type-definition
+half was the finding of the second independent reading most likely to break a
+real program (ADR-0107).
 
-**`read` does not take an `int64`** (ADR-0128), under `--std=afterschool`.
-`write` does — §6.10.3.1's decimal representation is the same at both widths
-and the runtime's call has taken an `i64` since it was written — so the two
-required procedures disagree about a type of the dialect, which is the one
-asymmetry the type has. §6.9.1's read of an integer takes the longest prefix
-that *is* a number and gives back two characters (ADR-0076); extending that to
-a second width is runtime work the increment did not do, and *a value of type
-int64 cannot be read* is what a program is told. This is a hole in the dialect
-rather than a deviation from either standard: neither has the type.
+What a record and a file refuse is the *consequence* rather than the position:
+a field or a component whose **size** the bound decides, because a field's
+storage is laid out where the record is and a file is told one component size
+when it is prepared. `record f: array [1..m] of integer end` is that, and it is
+a refusal rather than a deviation — the standard's own §6.2.3.8 b) evaluates
+the bound, and ADR-0045's rule about where a dynamically sized part may sit is
+what has no answer for it. Admitting it unchecked was measured: `v.a[1]` read
+99140726979296144 where 1 had been stored.
 
 **An identifier or a character-string longer than 255 characters is
 refused.** §6.1.3 makes every character of an identifier significant and
@@ -395,24 +384,32 @@ exercised one**, so every oracle in the repository agreed the compiler was
 right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
-**There is currently one, and it is narrow.** §6.4.3.3's record region is
-enforced at every occurrence of a *type-name* inside the record — a field's own
-denoter, an array's index-type and component-type, a set's base-type, a file's
-component-type, a pointer's domain-type and a schema-name (ADR-0112). It is
-**not** enforced at a *constant* occurrence: in
+**There are currently none**, and the emptiness is a claim about what is
+*known* rather than a proof. The BSI suite's `DEVIANCE` category has no program
+left that this compiler accepts — every one of them is refused, and the single
+exception stops at run time, which §5.1 permits — and that is the strongest
+statement available here, the catalogue being a fixed corpus of 812 programs
+from 1982 rather than something that grew with the language.
+
+The last entry was **§6.4.3.3's record region at a *constant* occurrence**, and
+it was found by reading rather than by the suite (ADR-0101). §6.4.3.3 gives a
+field-identifier its defining-point in the record-type closest-containing the
+field-list and §6.2.2.4 makes the scope the whole of that region, so in
 
 ```pascal
 const fred = 3;
 type r = record a: array [1..fred] of integer; fred: integer end;
 ```
 
-the bound `fred` is the field by §6.2.2.4, and this processor reads it as the
-constant. Those occurrences go through the expression checker rather than
-type-denoter resolution, and reach it for a different purpose.
+the bound `fred` is the field and names no constant. ADR-0112 had enforced that
+at every occurrence of a *type-name* — a field's own denoter, an array's
+index-type and component-type, a set's base-type, a file's component-type, a
+pointer's domain-type and a schema-name — and a constant occurrence goes
+through the expression checker instead, which is why it was the one left.
+ADR-0134 asks there too.
 
-The larger half of this entry was the whole of it until ADR-0112: only `^fred`
-was refused, while `record a: fred; fred: integer end`, an array whose
-index-type names a field, and a field named `integer` taking that spelling from
-the required identifiers were all accepted. Same clause, same region; only the
-occurrence differed (ADR-0101).
+Before ADR-0112 the entry was larger still: only `^fred` was refused, while
+`record a: fred; fred: integer end`, an array whose index-type names a field,
+and a field named `integer` taking that spelling from the required identifiers
+were all accepted. Same clause, same region; only the occurrence differed.
 
