@@ -26707,9 +26707,12 @@ begin
   l := p^.frameVars;
   while l <> nil do begin
     if FillsOwnDescriptor(l^.sym) then begin
-      Def(slot);
-      writeln(ircode, 'getelementptr inbounds %frame', p^.irId:1,
-              ', ptr %frame, i32 0, i32 ', 1 + l^.sym^.frameIndex:1);
+      { Through FrameSlot rather than a written %frame: a level-0 owner -- the
+        program -- keeps its variables in a global and has no frame register,
+        so spelling one here emitted IR naming a value that does not exist.
+        Every other reach for a slot outside this procedure already goes
+        through it (ADR-0016). }
+      FrameSlot(l^.sym, slot);
       a := l^.sym^.discExprs;
       d := l^.sym^.discSyms;
       while d <> nil do begin
