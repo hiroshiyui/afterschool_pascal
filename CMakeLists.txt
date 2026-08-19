@@ -202,6 +202,9 @@ if(Python3_FOUND)
   add_test(NAME foreign-reserved
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/foreign_reserved.py)
+  add_test(NAME kind-exhaustive
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
 endif()
 
 # ...and the oracle ADR-0085 gave up and ADR-0108 brought back: two independent
