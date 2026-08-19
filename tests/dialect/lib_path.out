@@ -1,0 +1,7 @@
+cwd ok        = yes
+cwd absolute  = yes
+symlink made  = yes
+link target   = [/no/such/place]
+not a link    = the operation was refused
+PathOr        = nothing there
+link removed  = yes

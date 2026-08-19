@@ -140,3 +140,4 @@ the alternatives that were rejected and why.
 | [0129](0129-a-buffer-crosses-as-the-pair-c-already-takes.md) | A buffer crosses as the pair C already takes | Accepted |
 | [0130](0130-a-library-that-moves-bytes.md) | A library that moves bytes, and the first increment that found nothing | Accepted |
 | [0131](0131-errno-is-a-macro-so-it-belongs-to-the-runtime.md) | `errno` is a macro, so it belongs to the runtime | Accepted |
+| [0132](0132-a-returned-pointer-into-the-callers-own-buffer.md) | A returned pointer into the caller's own buffer | Accepted |
