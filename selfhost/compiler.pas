@@ -186,6 +186,11 @@ type
 
   tokenKind = (
     tkEof, tkIdent, tkInt, tkReal, tkStr,
+    { ADR-0128: a decimal literal above maxint, under --std=afterschool. It is
+      a token of its own rather than a flag on tkInt because what it carries is
+      *text* -- this compiler has no value of the type to put in intVal -- and
+      that is the same reason tkReal is a token of its own. }
+    tkInt64,
     tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
     tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
     { ADR-0123's optional-type marker. `?` is a character neither standard
@@ -316,7 +321,7 @@ type
     code than five parallel ones. }
   nodeKind = (
     { expressions }
-    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+    nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
     nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
     { ISO/IEC 10206:1991 6.8.7's structured-value-constructor, and one
       array-value-element or field-value of it. The two forms of the
@@ -428,7 +433,18 @@ type
                 The *canonical*-string-type of 6.4.3.3.1 -- the type of `+`,
                 `substr` and `trim` -- is this kind with `hi` negative: a value
                 with no storage and so no capacity to exceed. }
-              tyString);
+              tyString,
+              { ADR-0128's `int64`, and the reason it answers like `real` rather
+                than like `integer`: it is a *numeric* type and not an ordinal
+                one. Nothing this compiler can hold is a value of it -- its own
+                integers are 32 bits -- so a value is carried as the text that
+                was written, all the way into the IR, which is what ADR-0025
+                already does with a real and for the same reason. Everything an
+                ordinal is asked for follows from that and is refused: no case
+                label, no array index, no subrange host, no set base, no `for`
+                control variable, because each of those needs a value the
+                compiler must hold. }
+              tyInt64);
 
   { The required functions of ISO 7185, and the standard procedures that are
     not statements of their own. }
@@ -1020,6 +1036,9 @@ type
         conversion would be worse than an absent one; it arrives with Sema,
         which is the first stage that needs the value. }
       nkReal:       (rlAt, rlLen: integer);
+      { ADR-0128, and the same field pair for the same reason: the digits, in
+        the pool, carried to the code generator without ever being a value. }
+      nkInt64:      (i64At, i64Len: integer);
       nkChar:       (chVal: char);
       nkStr:        (stAt, stLen: integer);
       nkNil:        ();
@@ -1611,6 +1630,10 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
+  { ADR-0128. Only ever reached by name under --std=afterschool, but built
+    unconditionally: a type object costs one record, and a conditional one
+    would make every predicate that names it test the mode as well. }
+  int64Type: typePtr;
   complexType, canonStringType, bindingTy, timeStampType: typePtr;
   emptySetType: typePtr;
   { 6.4.3.3.3's required schema `string`. Kept because a type produced from it
@@ -2663,6 +2686,41 @@ end;
   literal is never converted here (ADR-0025), and the C++ lexer uses this same
   rule rather than its `strtod`'s ERANGE so that the two accept the same
   programs. }
+{ Whether a decimal digit-sequence names a value above maxint64 (ADR-0128).
+
+  Compared as *text*, for the reason ADR-0022 gave about the lexer's own
+  overflow check and one step further: this compiler's integers are 32 bits, so
+  there is no arithmetic here that could hold either side. Leading zeros are
+  dropped first, because `0009223372036854775807` is a digit-sequence a program
+  may write and denotes a value in range; after that a longer sequence is a
+  larger value and an equal-length one compares character by character.
+
+  Pascal has no negative literal -- a sign is an operator (6.7.1) -- so this
+  need only bound the magnitude, and -maxint64..maxint64 is symmetric for the
+  same reason -maxint..maxint is. }
+function Int64TooLarge(var text: str): boolean;
+var i, n: integer; over: boolean;
+const limit = '9223372036854775807';
+begin
+  i := 1;
+  while (i < text.len) and (text.ch[i] = '0') do i := i + 1;
+  n := text.len - i + 1;
+  if n > 19 then
+    Int64TooLarge := true
+  else if n < 19 then
+    Int64TooLarge := false
+  else begin
+    over := false;
+    n := 1;
+    while (n <= 19) and (text.ch[i] = limit[n]) do begin
+      i := i + 1;
+      n := n + 1
+    end;
+    if n <= 19 then over := text.ch[i] > limit[n];
+    Int64TooLarge := over
+  end
+end;
+
 function RealTooLarge(var text: str): boolean;
 var i, digits, exponent: integer;
     anySignificant, fractionSignificant, negative: boolean;
@@ -2855,14 +2913,27 @@ begin
     AddText(sl, sc, tkReal, PoolAdd(text), text.len)
   end
   else begin
-    if overflow then begin
-      ErrorAt(sl, sc);
-      write('integer literal out of range (maxint is ', maxint:1, '): ');
-      for digit := 1 to text.len do
-        write(text.ch[digit]);
-      writeln
-    end;
-    AddInt(sl, sc, value_, overflow)
+    { ADR-0128: above maxint is where int64 begins, in the dialect. The token
+      carries the digits rather than a value, this compiler having none of the
+      type to put there -- the same shape tkReal has had since ADR-0025, and
+      arrived at the same way. Above maxint64 it is out of range again, and the
+      message names the bound that was actually exceeded. }
+    if overflow and (langStd = stdAfterschool) and not Int64TooLarge(text) then
+      AddText(sl, sc, tkInt64, PoolAdd(text), text.len)
+    else begin
+      if overflow then begin
+        ErrorAt(sl, sc);
+        if langStd = stdAfterschool then
+          write('integer literal out of range (maxint64 is ',
+                '9223372036854775807): ')
+        else
+          write('integer literal out of range (maxint is ', maxint:1, '): ');
+        for digit := 1 to text.len do
+          write(text.ch[digit]);
+        writeln
+      end;
+      AddInt(sl, sc, value_, overflow)
+    end
   end;
 
   { ISO 7185 6.1.8, and ISO/IEC 10206:1991 6.1.10 in the same words: "There
@@ -3064,6 +3135,7 @@ begin
     tkIdent:     write('identifier');
     tkInt:       write('integer literal');
     tkReal:      write('real literal');
+    tkInt64:     write('int64 literal');
     tkStr:       write('string literal');
     tkPlus:      write('''+''');
     tkMinus:     write('''-''');
@@ -3160,7 +3232,8 @@ begin
     tkGe: write('>=');    tkStarStar: write('**');
     tkGtLt: write('><');
     tkArrow: write('=>');
-    tkEof, tkIdent, tkInt, tkReal, tkStr, tkAnd, tkArray, tkBegin, tkCase,
+    tkEof, tkIdent, tkInt, tkReal, tkInt64, tkStr, tkAnd, tkArray, tkBegin,
+    tkCase,
     tkConst, tkDiv, tkDo, tkDownto, tkElse, tkEnd, tkFile, tkFor, tkFunction,
     tkGoto, tkIf, tkIn, tkLabel, tkMod, tkNil, tkNot, tkOf, tkOr, tkPacked,
     tkProcedure, tkProgram, tkRecord, tkRepeat, tkSet, tkThen, tkTo, tkType,
@@ -3365,7 +3438,7 @@ begin
       n^.ssListed := false
     end;
     nkOptional: n^.opElem := nil;
-    nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
+    nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat,
     nkWriteArg, nkDeclName, nkNamed, nkEnum,
@@ -4430,6 +4503,12 @@ begin
     if Check(tkInt) then begin
       e := NewNode(nkInt, CurLine, CurCol);
       e^.intVal := tok[pos].intVal;
+      pos := pos + 1
+    end
+    else if Check(tkInt64) then begin
+      e := NewNode(nkInt64, CurLine, CurCol);
+      e^.i64At := tok[pos].at;
+      e^.i64Len := tok[pos].len;
       pos := pos + 1
     end
     else if Check(tkReal) then begin
@@ -6298,6 +6377,12 @@ end;
 function IsReal(t: typePtr): boolean;
 begin IsReal := (t <> nil) and (t^.kind = tyReal) end;
 
+{ ADR-0128. Asked on the type itself and never through Base(), for the reason
+  IsReal is: an int64 is not an ordinal, so it is never the host of a subrange
+  and there is nothing for Base() to look through. }
+function IsInt64(t: typePtr): boolean;
+begin IsInt64 := (t <> nil) and (t^.kind = tyInt64) end;
+
 function IsComplex(t: typePtr): boolean;
 begin IsComplex := (t <> nil) and (t^.kind = tyComplex) end;
 
@@ -6332,7 +6417,7 @@ begin
 end;
 
 function IsNumeric(t: typePtr): boolean;
-begin IsNumeric := IsInteger(t) or IsReal(t) end;
+begin IsNumeric := IsInteger(t) or IsInt64(t) or IsReal(t) end;
 
 { Everything the arithmetic operators accept (6.8.3.2, table 3). Kept apart
   from IsNumeric because the *ordering* operators take a numeric type and
@@ -6743,6 +6828,7 @@ begin
   else
     case t^.kind of
       tyInteger: PutLit('integer         ');
+      tyInt64:   PutLit('int64           ');
       tyReal:    PutLit('real            ');
       tyComplex: PutLit('complex         ');
       { 6.4.2.5's own spelling. A restricted-type is nearly always named -- the
@@ -7399,8 +7485,21 @@ begin
       widening is exact and the narrowing does not exist. }
     else if IsComplex(toT) then
       Assignable := IsNumeric(fromT)
+    { ADR-0128's widenings, and they are the same sentence 6.4.6 c) writes for
+      complex: the widening is exact and the narrowing does not exist. An
+      integer is a value of int64 and of real; an int64 is a value of real,
+      which loses precision above 2^53 and is the loss `real` already has for
+      every integer above it in a language whose integers are 32 bits -- the
+      standard's own real-from-integer widening is not exact either.
+
+      There is deliberately no int64-to-integer line. Narrowing is `trunc`,
+      which is 6.6.6.2's name for exactly this -- a value of a wider numeric
+      type as a value of integer, checked -- and making it implicit would put
+      an unwritten run-time check under an ordinary assignment. }
+    else if IsInt64(toT) then
+      Assignable := IsInteger(fromT)
     else
-      Assignable := IsReal(toT) and IsInteger(fromT)
+      Assignable := IsReal(toT) and (IsInteger(fromT) or IsInt64(fromT))
   end
 end;
 
@@ -9758,7 +9857,7 @@ begin
         ForgetArms(d^.rcVariants)
       end;
       nkSchema: ForgetList(d^.scArgs);
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
+      nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
       nkStructValue, nkValueElem,
       nkIndex, nkSubstr, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
@@ -10389,7 +10488,8 @@ begin
         if not StaticVariants(t^.variants) then ok := false;
         StaticThroughout := ok
       end;
-      tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
+      tyVoid, tyInteger, tyInt64, tyReal, tyBoolean, tyChar, tyEnum,
+      tySubrange,
       { A slice joins these rather than recursing into its component, and the
         reason is the rule ADR-0125 makes rather than an approximation: a slice
         denoter may be written only as a formal parameter's own type, never in
@@ -10777,7 +10877,7 @@ begin
     Nonvarying := false
   else
     case e^.kind of
-      nkInt, nkReal, nkChar, nkStr, nkNil: Nonvarying := true;
+      nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil: Nonvarying := true;
       nkVar: Nonvarying := (e^.vrSym <> nil) and (e^.vrSym^.kind = skConst);
       nkUnary: Nonvarying := Nonvarying(e^.unArg);
       nkBinary: Nonvarying := Nonvarying(e^.bnLhs) and Nonvarying(e^.bnRhs);
@@ -11104,7 +11204,7 @@ begin
           t := ProduceFromSchema(s, nil, d)
         end
       end;
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember,
+      nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
       nkStructValue, nkValueElem,
       nkVar, nkIndex, nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkEmpty, nkAssign, nkWrite, nkRead,
@@ -12036,6 +12136,10 @@ begin
         end
         else if IsComplex(l) or IsComplex(r) then b^.ntype := complexType
         else if IsReal(l) or IsReal(r) then b^.ntype := realType
+        { ADR-0128, and in the position table 3 would put it: the wider of the
+          two integer types answers for both, exactly as real answers over
+          integer. An integer operand is widened; nothing narrows. }
+        else if IsInt64(l) or IsInt64(r) then b^.ntype := int64Type
         else b^.ntype := intType;
 
       opRealDiv: begin
@@ -12046,9 +12150,13 @@ begin
       end;
 
       opIntDiv, opMod: begin
-        if not IsInteger(l) or not IsInteger(r) then
+        if not (IsInteger(l) or IsInt64(l)) or not (IsInteger(r) or IsInt64(r))
+        then
           BadOperands(b, l, r, 'integer     ', false);
-        b^.ntype := intType
+        { ADR-0128: the wider operand decides, as it does for + - *. Both
+          6.7.2.2 error conditions are the same conditions one width up. }
+        if IsInt64(l) or IsInt64(r) then b^.ntype := int64Type
+        else b^.ntype := intType
       end;
 
       { 6.8.3.3 gives all four the same operands and the same result; they
@@ -12104,6 +12212,7 @@ begin
           end;
           if IsComplex(l) then b^.ntype := complexType
           else if IsReal(l) then b^.ntype := realType
+          else if IsInt64(l) then b^.ntype := int64Type
           else b^.ntype := intType
         end;
 
@@ -12765,12 +12874,17 @@ begin
           biAbs: begin
             RequireArg(c, IsArith(t), 'a numeric   ', t);
             if IsComplex(t) or IsReal(t) then c^.ntype := realType
+            { 6.6.6.2 gives abs and sqr "the same type as that of the
+              expression", so ADR-0128's int64 answers int64 -- it is the
+              clause, not an extension of it. }
+            else if IsInt64(t) then c^.ntype := int64Type
             else c^.ntype := intType
           end;
           biSqr: begin
             RequireArg(c, IsArith(t), 'a numeric   ', t);
             if IsComplex(t) then c^.ntype := complexType
             else if IsReal(t) then c^.ntype := realType
+            else if IsInt64(t) then c^.ntype := int64Type
             else c^.ntype := intType
           end;
           { 6.7.6.2: re, im and arg take a complex and yield a real. }
@@ -12809,7 +12923,22 @@ begin
             did not extend the offer. Accepting one was a permissive deviation
             with nothing in the corpus to notice it; the suite's DEV158 is what
             did. ISO/IEC 10206:1991 6.7.6.3 uses the same words. }
-          biTrunc, biRound: begin
+          { ADR-0128 gives `trunc` a second operand type and no second
+            meaning: 6.6.6.3's words are "the value of x truncated to an
+            integer", and an int64 above maxint has no integer to be truncated
+            to -- which is 6.6.6.3's own error condition (D.32), checked here
+            the way every narrowing here is checked. It is the *only* way from
+            int64 to integer, deliberately: an implicit narrowing would put an
+            unwritten run-time check under an ordinary assignment. `round` is
+            not extended, there being nothing to round. }
+          biTrunc: begin
+            if langStd = stdAfterschool then
+              RequireArg(c, IsReal(t) or IsInt64(t), 'a real      ', t)
+            else
+              RequireArg(c, IsReal(t), 'a real      ', t);
+            c^.ntype := intType
+          end;
+          biRound: begin
             RequireArg(c, IsReal(t), 'a real      ', t);
             c^.ntype := intType
           end;
@@ -13319,6 +13448,7 @@ begin
     case e^.kind of
       nkInt:  e^.ntype := intType;
       nkReal: e^.ntype := realType;
+      nkInt64: e^.ntype := int64Type;
       nkChar: e^.ntype := charType;
       nkNil:  e^.ntype := nilType;
       nkSet:  CheckSetExpr(e);
@@ -13773,7 +13903,9 @@ begin
             WriteTypeName(t);
             writeln
           end;
-          if IsReal(t) then e^.ntype := realType else e^.ntype := intType
+          if IsReal(t) then e^.ntype := realType
+          else if IsInt64(t) then e^.ntype := int64Type
+          else e^.ntype := intType
         end
       end;
 
@@ -13850,8 +13982,14 @@ begin
       list -- the standard gives no spelling for its constants at run time --
       and neither is any other structured type. ISO/IEC 10206:1991 6.10.3.1
       has the same list with "a string-type" in place of the packed char
-      array, so a variable-string and a canonical value join it. }
-    if (t <> nil) and not (IsInteger(t) or IsReal(t) or IsBoolean(t) or
+      array, so a variable-string and a canonical value join it.
+
+      ADR-0128's int64 joins the list under --std=afterschool, and the clause
+      it joins is the integer one: 6.10.3.1's decimal representation is the
+      same for both widths, so the runtime writes it through the call it has
+      taken an i64 through since it was written. }
+    if (t <> nil) and not (IsInteger(t) or IsInt64(t) or IsReal(t) or
+                           IsBoolean(t) or
                            IsChar(t) or IsStringType(t)) then begin
       ErrorAt(a^.waValue^.line, a^.waValue^.col);
       write('a value of type ');
@@ -15458,7 +15596,7 @@ begin
         stmtPath := saved
       end;
 
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+      nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
@@ -15765,7 +15903,13 @@ end;
   rule with a side is the kind that gets misremembered. }
 function ForeignType(t: typePtr): boolean;
 begin
-  ForeignType := (t = intType) or (t = realType)
+  { ADR-0128's int64 is the third, and it is the one the boundary was waiting
+    for: on this target every length a read or a write takes is a `size_t` and
+    every one of them *answers* `ssize_t`, so a data path with no 64-bit
+    integer could hand over the buffer and not be told how many bytes moved
+    (ADR-0125's closing probe). `clang` passes an `i64` with no parameter
+    attribute, which is the test the other two were admitted by. }
+  ForeignType := (t = intType) or (t = int64Type) or (t = realType)
 end;
 
 { An `external` declaration, once its heading is built. The symbol is complete
@@ -15831,7 +15975,8 @@ begin
       ErrorAt(d^.line, d^.col);
       write('an ''external'' function cannot return ');
       WriteTypeName(sym^.stype);
-      writeln('; only ''integer'' and ''real'' cross the boundary')
+      writeln('; only ''integer'', ''int64'' and ''real'' cross the ',
+              'boundary')
     end;
 
   p := sym^.params;
@@ -15859,7 +16004,7 @@ begin
         write('parameter ', k:1, ' of ''');
         WritePool(d^.pdAt, d^.pdLen);
         writeln(''' is a var parameter, so what crosses is an address; only ',
-                '''integer'' and ''real'' cross that way')
+                '''integer'', ''int64'' and ''real'' cross that way')
       end
     end
     else if ForeignStringFormal(p^.sym) then
@@ -15878,7 +16023,8 @@ begin
       WritePool(d^.pdAt, d^.pdLen);
       write(''' cannot be ');
       WriteTypeName(p^.sym^.stype);
-      writeln('; only ''integer'', ''real'' and ''string'' cross the boundary')
+      writeln('; only ''integer'', ''int64'', ''real'' and ''string'' ',
+              'cross the boundary')
     end;
     k := k + 1;
     p := p^.next
@@ -17562,6 +17708,9 @@ begin
   RequiredType('char     ', charType);
   RequiredType('text     ', textType);
   if HasExtended(langStd) then RequiredType('complex  ', complexType);
+  { ADR-0128. The dialect's alone: neither standard has a second integer type,
+    and a valid Extended Pascal program may define a type of this name. }
+  if langStd = stdAfterschool then RequiredType('int64    ', int64Type);
 
   { 6.6.6's required functions. The 10206-only ones are declared only under
     that standard, so an ISO 7185 program may still declare a function called
@@ -17623,6 +17772,20 @@ begin
   s := Declare(at, len, skConst, 0, 0);
   s^.stype := intType;
   s^.intVal := maxint;
+
+  { 6.4.2.2 a) makes maxint "the largest value of integer-type"; ADR-0128's
+    int64 needs the same constant and cannot have it the same way. This
+    compiler's own integers are 32 bits, so the value is not one it can hold --
+    it is spelled as text and emitted as text, which is exactly what maxreal
+    below does and for exactly the reason ADR-0025 gave. The type is
+    -maxint64..maxint64 as integer is -maxint..maxint, so the i64 whose bit
+    pattern is the minimum is not a value of it. }
+  if langStd = stdAfterschool then begin
+    InternWord('maxint64 ', at, len);
+    s := Declare(at, len, skConst, 0, 0);
+    s^.stype := int64Type;
+    InternWide2('9223372036854775', '807             ', s^.realAt, s^.realLen)
+  end;
 
   { 6.4.2.2 d): "The value of maxchar shall be the largest value of
     char-type." A char here is a byte (ADR-0021), so it is 255 -- and it is a
@@ -18111,6 +18274,7 @@ procedure RunSema;
 var p, m: nodePtr; k: integer; info: modRecPtr;
 begin
   intType := NewType(tyInteger);
+  int64Type := NewType(tyInt64);
   realType := NewType(tyReal);
   complexType := NewType(tyComplex);
   { ISO/IEC 10206:1991 6.4.3.3.1's canonical-string-type: the type of every
@@ -18615,6 +18779,12 @@ begin
     nkReal: begin
       write('real ');
       WritePool(n^.rlAt, n^.rlLen);
+      WritePos(n^.line, n^.col);
+      ExprEnd(n)
+    end;
+    nkInt64: begin
+      write('int64 ');
+      WritePool(n^.i64At, n^.i64Len);
       WritePos(n^.line, n^.col);
       ExprEnd(n)
     end;
@@ -19666,6 +19836,11 @@ begin
         WritePool(tok[i].at, tok[i].len);
         writeln
       end;
+      tkInt64: begin
+        write('int64 ');
+        WritePool(tok[i].at, tok[i].len);
+        writeln
+      end;
       tkStr: begin
         write('str [');
         WritePool(tok[i].at, tok[i].len);
@@ -20021,7 +20196,7 @@ begin
     case b^.kind of
       tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
       tyInteger, tyEnum: LlAlign := 4;
-      tyReal, tyPointer, tyFile: LlAlign := 8;
+      tyInt64, tyReal, tyPointer, tyFile: LlAlign := 8;
       { <2 x double>: two doubles, and the target aligns a vector to its whole
         size. }
       tyComplex: LlAlign := 16;
@@ -20059,7 +20234,7 @@ begin
       tyVoid, tySubrange: LlSize := 0;
       tyBoolean, tyChar: LlSize := 1;
       tyInteger, tyEnum: LlSize := 4;
-      tyReal, tyPointer: LlSize := 8;
+      tyInt64, tyReal, tyPointer: LlSize := 8;
       tyComplex: LlSize := 16;
       { 6.4.2.5 makes the states one-to-one, so the representation *is* the
         underlying type's -- which is the whole of what CodeGen knows about
@@ -20138,6 +20313,9 @@ begin
       { An enumeration is its ordinal number; a subrange is represented exactly
         as its host, which is what Base already looked through to. }
       tyInteger, tyEnum: write(ircode, 'i32');
+      { ADR-0128, and the whole of what CodeGen knows about the type: it is
+        twice an integer and nothing else about it is new. }
+      tyInt64: write(ircode, 'i64');
       tyReal: write(ircode, 'double');
       tyBoolean: write(ircode, 'i1');
       tyChar: write(ircode, 'i8');
@@ -21399,9 +21577,15 @@ end;
 procedure ToReal(var v: str; from: typePtr);
 var r: str;
 begin
-  if IsInteger(from) then begin
+  { ADR-0128's int64 widens to real by the same instruction one width up. It
+    is the one widening here that is not exact -- above 2^53 the nearest double
+    is not the value -- and it is the widening 6.4.6 c) already permits for
+    integer, whose exactness is an accident of this processor's 32 bits rather
+    than something the standard promises. }
+  if IsInteger(from) or IsInt64(from) then begin
     Def(r);
-    write(ircode, 'sitofp i32 ');
+    write(ircode, 'sitofp ');
+    if IsInt64(from) then write(ircode, 'i64 ') else write(ircode, 'i32 ');
     PutOp(v);
     writeln(ircode, ' to double');
     v := r
@@ -21458,9 +21642,28 @@ begin
   end
 end;
 
+{ ADR-0128's widening, and it is one instruction: the integer type is
+  -maxint..maxint, so every value of it is a value of int64 and the sign
+  extension cannot lose one. Nothing widens *to* an integer -- that is `trunc`,
+  and it is checked. }
+procedure ToInt64(var v: str; from: typePtr);
+var w: str;
+begin
+  if not IsInt64(from) then begin
+    Def(w);
+    write(ircode, 'sext ');
+    PutLlType(from);
+    write(ircode, ' ');
+    PutOp(v);
+    writeln(ircode, ' to i64');
+    v := w
+  end
+end;
+
 procedure ConvertFor(var v: str; from, toT: typePtr);
 begin
   if IsReal(toT) then ToReal(v, from)
+  else if IsInt64(toT) then ToInt64(v, from)
   { 6.4.6 c): "an implicit integer-to-complex conversion or real-to-complex
     conversion, respectively, shall be performed". }
   else if IsComplex(toT) then ToComplex(v, from)
@@ -21472,6 +21675,20 @@ end;
   the same correctly-rounded conversion the C++ compiler gets from its own.
   The only adjustment is that LLVM's float syntax needs a decimal point, and
   Pascal's `1e6` has none. }
+{ The digits of an int64 constant, and no adjustment at all: LLVM writes an
+  integer the way Pascal does, where a real needed a decimal point Pascal's
+  `1e6` has none of. The text is carried for the same reason a real's is --
+  this compiler's own integers are 32 bits, so it has no value of the type to
+  convert to and back from (ADR-0025, ADR-0128). }
+procedure EmitInt64Text(at, len: integer; negative: boolean; var v: str);
+var k: integer;
+begin
+  StrClear(v);
+  if negative then StrAppend(v, '-');
+  for k := 1 to len do
+    StrAppend(v, pool[at + k - 1])
+end;
+
 procedure EmitRealText(at, len: integer; negative: boolean; var v: str);
 var k, ePos: integer; hasDot: boolean;
 begin
@@ -21685,6 +21902,10 @@ begin
   else
     case b^.kind of
       tyInteger, tyEnum: OpInt(s^.intVal, v);
+      { The text that was written, exactly as a real's is and for exactly the
+        same reason: this compiler has no value of either type to hold, so
+        LLVM's assembler is what reads the digits (ADR-0025, ADR-0128). }
+      tyInt64: EmitInt64Text(s^.realAt, s^.realLen, s^.realNeg, v);
       tyReal: EmitRealText(s^.realAt, s^.realLen, s^.realNeg, v);
       tyBoolean:
         if s^.boolVal then OpWord('true            ', v)
@@ -22628,33 +22849,66 @@ begin
 end;
 
 { The overflow-reporting form of +, - and *. }
-procedure EmitCheckedArith(which: char; var l, r, v: str; msg: integer);
+{ `i32` or `i64`, and the least value of the machine word behind each. ADR-0128
+  makes int64 the same arithmetic one width wider, so every emitter below takes
+  the width rather than being written twice -- two copies of a checked multiply
+  is two places for the check to go missing from. }
+procedure PutIntWidth(wide: boolean);
+begin
+  if wide then write(ircode, 'i64') else write(ircode, 'i32')
+end;
+
+procedure PutIntMin(wide: boolean);
+begin
+  if wide then write(ircode, '-9223372036854775808')
+  else write(ircode, '-2147483648')
+end;
+
+procedure EmitCheckedArith(which: char; var l, r, v: str; msg: integer;
+                           wide: boolean);
 var pair, ovf, isMin, bad: str;
 begin
   Def(pair);
-  write(ircode, 'call { i32, i1 } @llvm.');
+  write(ircode, 'call { ');
+  PutIntWidth(wide);
+  write(ircode, ', i1 } @llvm.');
   if which = '+' then write(ircode, 'sadd')
   else if which = '-' then write(ircode, 'ssub')
   else write(ircode, 'smul');
-  write(ircode, '.with.overflow.i32(i32 ');
+  write(ircode, '.with.overflow.');
+  PutIntWidth(wide);
+  write(ircode, '(');
+  PutIntWidth(wide);
+  write(ircode, ' ');
   PutOp(l);
-  write(ircode, ', i32 ');
+  write(ircode, ', ');
+  PutIntWidth(wide);
+  write(ircode, ' ');
   PutOp(r);
   writeln(ircode, ')');
   Def(v);
-  write(ircode, 'extractvalue { i32, i1 } ');
+  write(ircode, 'extractvalue { ');
+  PutIntWidth(wide);
+  write(ircode, ', i1 } ');
   PutOp(pair);
   writeln(ircode, ', 0');
   Def(ovf);
-  write(ircode, 'extractvalue { i32, i1 } ');
+  write(ircode, 'extractvalue { ');
+  PutIntWidth(wide);
+  write(ircode, ', i1 } ');
   PutOp(pair);
   writeln(ircode, ', 1');
   { -maxint..maxint is the integer type (6.4.2.2), so a result of INT_MIN is
-    out of range even though it fits the machine word. }
+    out of range even though it fits the machine word. ADR-0128 gives int64 the
+    same shape -- -maxint64..maxint64 -- so the same test answers for both. }
   Def(isMin);
-  write(ircode, 'icmp eq i32 ');
+  write(ircode, 'icmp eq ');
+  PutIntWidth(wide);
+  write(ircode, ' ');
   PutOp(v);
-  writeln(ircode, ', -2147483648');
+  write(ircode, ', ');
+  PutIntMin(wide);
+  writeln(ircode);
   Def(bad);
   write(ircode, 'or i1 ');
   PutOp(ovf);
@@ -22664,11 +22918,13 @@ begin
   EmitTrapIf(bad, msg)
 end;
 
-procedure GuardNonZero(var r: str; msg: integer);
+procedure GuardNonZero(var r: str; msg: integer; wide: boolean);
 var zero: str;
 begin
   Def(zero);
-  write(ircode, 'icmp eq i32 ');
+  write(ircode, 'icmp eq ');
+  PutIntWidth(wide);
+  write(ircode, ' ');
   PutOp(r);
   writeln(ircode, ', 0');
   EmitTrapIf(zero, msg)
@@ -22679,11 +22935,13 @@ end;
   constant divisor -- which is what makes the two answers the same answer.
   Before this, `const c = 5 mod -3` was a diagnostic and the same expression
   over a variable quietly computed 1. }
-procedure GuardPositive(var r: str; msg: integer);
+procedure GuardPositive(var r: str; msg: integer; wide: boolean);
 var nonpos: str;
 begin
   Def(nonpos);
-  write(ircode, 'icmp sle i32 ');
+  write(ircode, 'icmp sle ');
+  PutIntWidth(wide);
+  write(ircode, ' ');
   PutOp(r);
   writeln(ircode, ', 0');
   EmitTrapIf(nonpos, msg)
@@ -23289,7 +23547,7 @@ end;
 
 procedure EmitBinary(e: nodePtr; var v: str);
 var l, r, rem, neg, adj, bad, m1, m2: str;
-    lt, rt: typePtr; msg: integer; sign, useFloat: boolean;
+    lt, rt: typePtr; msg: integer; sign, useFloat, wide: boolean;
 begin
   if (e^.bnOp = opAnd) or (e^.bnOp = opOr) or (e^.bnOp = opAndThen)
      or (e^.bnOp = opOrElse) then
@@ -23348,7 +23606,17 @@ begin
       ToComplex(r, rt);
       EmitComplexBinary(e, l, r, v)
     end
-    else
+    else begin
+    { ADR-0128: an int64 anywhere makes the whole operation one width wider,
+      and the narrower operand is sign-extended before anything else looks at
+      it -- the same shape ToReal has always had, and it has to be done for a
+      *comparison* too, where the result type is boolean and says nothing about
+      the operands. }
+    wide := IsInt64(lt) or IsInt64(rt);
+    if wide and not IsReal(e^.ntype) and not IsComplex(e^.ntype) then begin
+      ToInt64(l, lt);
+      ToInt64(r, rt)
+    end;
 
     case e^.bnOp of
       opAdd, opSub, opMul:
@@ -23372,9 +23640,9 @@ begin
           else if e^.bnOp = opSub then Put('-')
           else Put('*');
           msg := MsgEnd;
-          if e^.bnOp = opAdd then EmitCheckedArith('+', l, r, v, msg)
-          else if e^.bnOp = opSub then EmitCheckedArith('-', l, r, v, msg)
-          else EmitCheckedArith('*', l, r, v, msg)
+          if e^.bnOp = opAdd then EmitCheckedArith('+', l, r, v, msg, wide)
+          else if e^.bnOp = opSub then EmitCheckedArith('-', l, r, v, msg, wide)
+          else EmitCheckedArith('*', l, r, v, msg, wide)
         end;
 
       opRealDiv: begin
@@ -23431,15 +23699,22 @@ begin
         MsgStart;
         MsgText('division by zero                        ');
         msg := MsgEnd;
-        GuardNonZero(r, msg);
+        GuardNonZero(r, msg, wide);
         { maxint div -1 is representable, but INT_MIN div -1 is not; LLVM calls
-          it undefined rather than wrapping, so it is excluded explicitly. }
+          it undefined rather than wrapping, so it is excluded explicitly. The
+          same sentence one width up for ADR-0128's int64. }
         Def(m1);
-        write(ircode, 'icmp eq i32 ');
+        write(ircode, 'icmp eq ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(l);
-        writeln(ircode, ', -2147483648');
+        write(ircode, ', ');
+        PutIntMin(wide);
+        writeln(ircode);
         Def(m2);
-        write(ircode, 'icmp eq i32 ');
+        write(ircode, 'icmp eq ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(r);
         writeln(ircode, ', -1');
         Def(bad);
@@ -23453,7 +23728,9 @@ begin
         msg := MsgEnd;
         EmitTrapIf(bad, msg);
         Def(v);
-        write(ircode, 'sdiv i32 ');
+        write(ircode, 'sdiv ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(l);
         write(ircode, ', ');
         PutOp(r);
@@ -23466,21 +23743,27 @@ begin
         Put(' ');
         MsgText('positive                                ');
         msg := MsgEnd;
-        GuardPositive(r, msg);
+        GuardPositive(r, msg, wide);
         { ISO 7185 defines i mod j (for j > 0) as a non-negative result, unlike
           the truncating remainder LLVM gives. }
         Def(rem);
-        write(ircode, 'srem i32 ');
+        write(ircode, 'srem ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(l);
         write(ircode, ', ');
         PutOp(r);
         writeln(ircode);
         Def(neg);
-        write(ircode, 'icmp slt i32 ');
+        write(ircode, 'icmp slt ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(rem);
         writeln(ircode, ', 0');
         Def(adj);
-        write(ircode, 'add i32 ');
+        write(ircode, 'add ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(rem);
         write(ircode, ', ');
         PutOp(r);
@@ -23488,9 +23771,13 @@ begin
         Def(v);
         write(ircode, 'select i1 ');
         PutOp(neg);
-        write(ircode, ', i32 ');
+        write(ircode, ', ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(adj);
-        write(ircode, ', i32 ');
+        write(ircode, ', ');
+        PutIntWidth(wide);
+        write(ircode, ' ');
         PutOp(rem);
         writeln(ircode)
       end;
@@ -23517,7 +23804,7 @@ begin
           { char, boolean and enumerations compare as unsigned ordinals;
             integer, the only one with negative values, as signed. Pointers
             compare only for equality, which needs no predicate choice. }
-          sign := IsInteger(lt);
+          sign := IsInteger(lt) or IsInt64(lt) or IsInt64(rt);
           Def(v);
           case e^.bnOp of
             opEq: write(ircode, 'icmp eq ');
@@ -23535,6 +23822,10 @@ begin
               write(ircode, 'icmp eq ')
           end;
           if IsPointer(lt) and IsPointer(rt) then write(ircode, 'ptr')
+          { Both operands were widened above, so the wider type is what they
+            are now -- asking the right one would answer i32 for `n < 1`
+            (ADR-0128). }
+          else if wide then write(ircode, 'i64')
           else if IsPointer(lt) then PutLlType(lt)
           else PutLlType(rt);
           write(ircode, ' ')
@@ -23544,6 +23835,7 @@ begin
         PutOp(r);
         writeln(ircode)
       end
+    end
     end
   end
 end;
@@ -23568,8 +23860,11 @@ begin
         writeln(ircode)
       end
       else begin
+        ConvertFor(a, e^.unArg^.ntype, e^.ntype);
         Def(v);
-        write(ircode, 'sub nsw i32 0, ');
+        write(ircode, 'sub nsw ');
+        PutIntWidth(IsInt64(e^.ntype));
+        write(ircode, ' 0, ');
         PutOp(a);
         writeln(ircode)
       end;
@@ -23614,7 +23909,7 @@ end;
 
 procedure EmitCall(e: nodePtr; var v: str);
 var a, w, lim, tmp, b_, re, im, x, y, c_, d_, k_, sum: str;
-    sqinf, mag, sqfin, sqbad: str;
+    sqinf, mag, sqfin, sqbad, narrow: str;
     at, idx: typePtr; msg, up: integer; isSucc: boolean;
 begin
   if e^.clSym <> nil then
@@ -23920,8 +24215,17 @@ begin
           writeln(ircode, ')')
         end
         else begin
+          { -maxint..maxint is symmetric, so `poison` for the least value can
+            never be reached -- and the same holds of -maxint64..maxint64
+            (ADR-0014, ADR-0128). }
           Def(v);
-          write(ircode, 'call i32 @llvm.abs.i32(i32 ');
+          write(ircode, 'call ');
+          PutIntWidth(IsInt64(e^.ntype));
+          write(ircode, ' @llvm.abs.');
+          PutIntWidth(IsInt64(e^.ntype));
+          write(ircode, '(');
+          PutIntWidth(IsInt64(e^.ntype));
+          write(ircode, ' ');
           PutOp(a);
           writeln(ircode, ', i1 false)')
         end;
@@ -23969,7 +24273,7 @@ begin
           MsgStart;
           MsgText('integer overflow in sqr                 ');
           msg := MsgEnd;
-          EmitCheckedArith('*', a, a, v, msg)
+          EmitCheckedArith('*', a, a, v, msg, IsInt64(e^.ntype))
         end;
       biOdd: begin
         Def(w);
@@ -24170,13 +24474,43 @@ begin
         PutOp(a);
         writeln(ircode, ')')
       end;
-      biTrunc: begin
-        ToReal(a, at);
-        MsgStart;
-        MsgText('trunc: value out of integer range       ');
-        msg := MsgEnd;
-        CheckedFpToInt(a, v, msg)
-      end;
+      biTrunc:
+        { ADR-0128's narrowing, and the only one: an int64 outside
+          -maxint..maxint has no integer to be truncated to, which is
+          6.6.6.3's own error condition. The comparison is made in the wider
+          type and the truncation follows it, so nothing is tested after the
+          bits it would have tested are gone. }
+        if IsInt64(at) then begin
+          Def(w);
+          write(ircode, 'icmp sgt i64 ');
+          PutOp(a);
+          writeln(ircode, ', 2147483647');
+          Def(lim);
+          write(ircode, 'icmp slt i64 ');
+          PutOp(a);
+          writeln(ircode, ', -2147483647');
+          Def(narrow);
+          write(ircode, 'or i1 ');
+          PutOp(w);
+          write(ircode, ', ');
+          PutOp(lim);
+          writeln(ircode);
+          MsgStart;
+          MsgText('trunc: value out of integer range       ');
+          msg := MsgEnd;
+          EmitTrapIf(narrow, msg);
+          Def(v);
+          write(ircode, 'trunc i64 ');
+          PutOp(a);
+          writeln(ircode, ' to i32')
+        end
+        else begin
+          ToReal(a, at);
+          MsgStart;
+          MsgText('trunc: value out of integer range       ');
+          msg := MsgEnd;
+          CheckedFpToInt(a, v, msg)
+        end;
       biRound: begin
         { llvm.round rounds halfway cases away from zero, which is what ISO
           7185 6.6.6.3 asks for; the range check then applies to the rounded
@@ -24478,7 +24812,7 @@ begin
     end;
 
     nkValueElem,
-    nkInt, nkReal, nkChar, nkNil, nkSet, nkSetMember, nkBinary, nkUnary,
+    nkInt, nkReal, nkInt64, nkChar, nkNil, nkSet, nkSetMember, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -24502,6 +24836,7 @@ begin
   case e^.kind of
     nkInt: OpInt(e^.intVal, v);
     nkReal: EmitRealText(e^.rlAt, e^.rlLen, false, v);
+    nkInt64: EmitInt64Text(e^.i64At, e^.i64Len, false, v);
     nkChar: OpInt(ord(e^.chVal), v);
     nkStr: EmitAddress(e, v);
     nkNil: OpWord('null            ', v);
@@ -25077,11 +25412,19 @@ begin
       else begin
         EmitExpr(a^.waValue, v);
         b := Base(a^.waValue^.ntype);
-        if b^.kind = tyInteger then begin
-          Def(addr);
-          write(ircode, 'sext i32 ');
-          PutOp(v);
-          writeln(ircode, ' to i64');
+        if (b^.kind = tyInteger) or (b^.kind = tyInt64) then begin
+          { The runtime has taken an i64 since it was written -- an integer is
+            widened into it, and 6.10.3.1's decimal representation is the same
+            one whatever the width, so ADR-0128's type needs nothing of the
+            runtime but the sext left out. }
+          if b^.kind = tyInteger then begin
+            Def(addr);
+            write(ircode, 'sext i32 ');
+            PutOp(v);
+            writeln(ircode, ' to i64')
+          end
+          else
+            addr := v;
           write(ircode, '  call void @pas_write_int(ptr ');
           PutOp(fh);
           write(ircode, ', i64 ');
@@ -26525,7 +26868,7 @@ begin
         if s^.pcStd <> spNone then EmitStdProc(s)
         else if s^.pcSym <> nil then
           EmitUserCall(s^.pcSym, s^.pcArgs, nil, v);
-      nkInt, nkReal, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
+      nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar, nkIndex,
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,

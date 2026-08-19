@@ -56,6 +56,17 @@ begin
   Shout := r
 end;
 
+{ ADR-0128 adds a required type-identifier, and 6.1.3 makes every one of them
+  shadowable -- so a program of the standard this mode contains may still spell
+  a type of its own `int64`. Declared here rather than at the top so that the
+  declaration and the use that proves it sit together. }
+type int64 = 1..100;
+
+function Shadowed(n: int64): int64;
+begin
+  Shadowed := n * n
+end;
+
 begin
   { schemata: the discriminant is readable and bounds the loop }
   total := 0;
@@ -97,6 +108,15 @@ begin
   p.y := 2.5;
   writeln('record x=', p.x:3:1, ' y=', p.y:3:1);
   writeln('const char=', Origin[1]);
+
+  { 6.1.3 makes every required identifier shadowable, so a required one the
+    *dialect* adds takes no name away from a program written for the standard
+    it contains. `int64` is ADR-0128's, and `Shadowed` below is a function
+    whose formal is a type of that name declared in this program -- which is
+    the whole of what containment means for a new required identifier.
+    tests/extended/int64_is_free.pas is the same declaration under
+    --std=extended, where the name was never required at all. }
+  writeln('shadowed=', Shadowed(3));
 
   writeln('the dialect accepts Extended Pascal')
 end.

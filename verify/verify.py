@@ -138,8 +138,11 @@ def run_proofs(timeout_ms):
     bounded = sum(1 for r in catalogue.ALL
                   if r.status == catalogue.MUST_HOLD and r.bounded)
     gaps = sum(1 for r in catalogue.ALL if r.status == catalogue.KNOWN_GAP)
+    wide = sum(1 for r in catalogue.ALL
+               if r.status == catalogue.MUST_HOLD and 64 in r.widths)
     print(f"\n  {proved} rules claimed correct "
-          f"({proved - bounded} at the full 32-bit width, {bounded} bounded), "
+          f"({proved - bounded} at full width, {wide} of them at 64 bits too "
+          f"for ADR-0128's int64, {bounded} bounded), "
           f"{gaps} known gaps documented")
     if bounded:
         print(f"  {DIM}* bounded: the claim is checked at reduced widths, "

@@ -339,6 +339,16 @@ independent reading most likely to break a real program (ADR-0107). A record
 field is still refused, for the reason it always was: its storage is sized where
 the record is.
 
+**`read` does not take an `int64`** (ADR-0128), under `--std=afterschool`.
+`write` does — §6.10.3.1's decimal representation is the same at both widths
+and the runtime's call has taken an `i64` since it was written — so the two
+required procedures disagree about a type of the dialect, which is the one
+asymmetry the type has. §6.9.1's read of an integer takes the longest prefix
+that *is* a number and gives back two characters (ADR-0076); extending that to
+a second width is runtime work the increment did not do, and *a value of type
+int64 cannot be read* is what a program is told. This is a hole in the dialect
+rather than a deviation from either standard: neither has the type.
+
 **An identifier or a character-string longer than 255 characters is
 refused.** §6.1.3 makes every character of an identifier significant and
 §6.1.7 puts no bound on a character-string, so both limits are this

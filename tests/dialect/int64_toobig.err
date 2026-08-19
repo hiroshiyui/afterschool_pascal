@@ -1,0 +1,4 @@
+<source>:17:8: error: integer literal out of range (maxint64 is 9223372036854775807): 9223372036854775808
+<source>:18:8: error: integer literal out of range (maxint64 is 9223372036854775807): 99999999999999999999999999
+<source>:19:8: error: integer literal out of range (maxint64 is 9223372036854775807): 0000000009223372036854775808
+<source>:23:8: error: integer literal out of range (maxint64 is 9223372036854775807): 1000000000000000000000

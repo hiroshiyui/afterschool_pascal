@@ -208,6 +208,30 @@ def traps_div(i, j):
     return z3.Or(j == 0, z3.And(_is_int_min(i), j == -1))
 
 
+def traps_int64_to_integer(a, narrow_bits):
+    """`EmitCall, biTrunc` over an int64 operand (ADR-0128). It is the only
+    narrowing in the language, and the comparison is made in the *wide* type
+    before the truncation:
+
+        %w = icmp sgt i64 %a, 2147483647
+        %l = icmp slt i64 %a, -2147483647
+        trap if %w or %l
+        %v = trunc i64 %a to i32
+
+    The bounds are maxint and -maxint, not INT_MIN, because the integer type is
+    -maxint..maxint (ISO 7185 6.4.2.2 as ADR-0014 reads it) -- so a wide value
+    of INT_MIN is refused although it fits the narrow machine word. Testing
+    before the truncation is what makes it a check at all: the bits it would
+    have tested are gone afterwards."""
+    hi = z3.BitVecVal(maxint(narrow_bits), a.size())
+    return z3.Or(a > hi, a < -hi)
+
+
+def int64_to_integer(a, narrow_bits):
+    """`trunc i64 %a to i32`, once the check above has passed."""
+    return z3.Extract(narrow_bits - 1, 0, a)
+
+
 def traps_chr(i):
     """`Builtin::Chr`: i < 0 or i > 255, checked before the truncation."""
     return z3.Or(i < 0, i > 255)

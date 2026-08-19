@@ -49,6 +49,15 @@ KNOWN_GAP = "known-gap"
 
 FULL = (32,)
 BOUNDED = (4, 6, 8, 10)
+# ADR-0128's int64 is the same lowering one width up -- the emitter takes the
+# width and writes i32 or i64 through one path, so two copies of a checked
+# multiply cannot drift apart. The rules below are already generic in the
+# width, so what says the wide lowering is right is *running* them at 64 as
+# well as at 32 rather than a second family of rules. Only the rules whose
+# emitted code int64 actually shares carry this: a `trunc` from a double is
+# still to an i32, and a `for` statement's control variable is still an
+# ordinal, so widening those would prove a claim about code nothing emits.
+WIDE = (32, 64)
 # The set rules are checked at reduced *set* widths rather than reduced integer
 # widths: a set is 256 bits wide in the compiler and a symbolic shift that wide
 # bit-blasts into a circuit no solver will finish. The lowering is generic in
@@ -73,7 +82,10 @@ class Rule:
 
     @property
     def bounded(self):
-        return self.widths != FULL
+        # "Bounded" means *reduced* widths, not "more than one width": ADR-0128
+        # made WIDE a second real width rather than a sampled one, and a rule
+        # proved at 32 and 64 is proved at both types' full width.
+        return min(self.widths) < 32
 
 
 # --------------------------------------------------------------------- rules
@@ -245,6 +257,29 @@ def _trunc_traps_exactly_out_of_range(w):
     x = low.real("x")
     error = z3.Not(iso.truncation_is_an_integer_value(x, low.maxint()))
     return z3.BoolVal(True), low.traps_fp_to_int(x) == error
+
+
+def _int64_narrowing_traps_exactly_out_of_range(w):
+    """ADR-0128: `trunc` of an int64 is an error exactly when the value is not
+    a value of the integer type. Checked at 64 (the width the compiler emits)
+    and at 32, whose narrow half is 16 -- so the claim is about the
+    construction rather than about one pair of widths."""
+    narrow = w // 2
+    a = low.integer("a", w)
+    error = z3.Not(iso.in_integer_range(a, z3.BitVecVal(low.maxint(narrow),
+                                                        w)))
+    return z3.BoolVal(True), low.traps_int64_to_integer(a, narrow) == error
+
+
+def _int64_narrowing_exact_when_accepted(w):
+    """An accepted narrowing yields the same value, which is what the check is
+    for: the truncation discards bits, and this says the discarded ones carried
+    nothing."""
+    narrow = w // 2
+    a = low.integer("a", w)
+    pre = z3.Not(low.traps_int64_to_integer(a, narrow))
+    claim = z3.SignExt(w - narrow, low.int64_to_integer(a, narrow)) == a
+    return pre, claim
 
 
 def _trunc_traps_on_nan_and_infinity(w):
@@ -557,7 +592,7 @@ ALL = [
          "EmitCall, biChr", _chr_correct_when_it_does_not_trap),
     Rule("div-traps-exactly-on-error", MUST_HOLD,
          "a zero divisor, and the one quotient with no representable value",
-         "EmitBinary, opIntDiv", _div_traps_exactly_on_error),
+         "EmitBinary, opIntDiv", _div_traps_exactly_on_error, widths=WIDE),
     Rule("succ-traps-exactly-at-maxint", MUST_HOLD,
          "ISO 7185 §6.6.6.4 — succ(x) is an error when x has no successor",
          "EmitCall, biSucc", _succ_traps_exactly_at_maxint),
@@ -567,11 +602,11 @@ ALL = [
     Rule("add-traps-exactly-on-overflow", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — arithmetic overflow is an error",
          "EmitCheckedArith(sadd_with_overflow)",
-         _add_traps_exactly_on_overflow),
+         _add_traps_exactly_on_overflow, widths=WIDE),
     Rule("sub-traps-exactly-on-overflow", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — arithmetic overflow is an error",
          "EmitCheckedArith(ssub_with_overflow)",
-         _sub_traps_exactly_on_overflow),
+         _sub_traps_exactly_on_overflow, widths=WIDE),
     Rule("mul-traps-exactly-on-overflow", MUST_HOLD,
          "ISO 7185 §6.7.2.2 — arithmetic overflow is an error (also sqr)",
          "EmitCheckedArith(smul_with_overflow)",
@@ -579,15 +614,24 @@ ALL = [
     Rule("add-exact-when-accepted", MUST_HOLD,
          "an accepted sum equals the mathematical sum",
          "EmitCheckedArith(sadd_with_overflow)",
-         _add_exact_when_it_does_not_trap),
+         _add_exact_when_it_does_not_trap, widths=WIDE),
     Rule("mul-exact-when-accepted", MUST_HOLD,
          "an accepted product equals the mathematical product",
          "EmitCheckedArith(smul_with_overflow)",
          _mul_exact_when_it_does_not_trap, widths=BOUNDED),
     Rule("negation-cannot-overflow", MUST_HOLD,
          "why UnOp::Neg needs no check: INT_MIN is not a value of the type",
-         "EmitUnary", _negation_cannot_overflow),
+         "EmitUnary", _negation_cannot_overflow, widths=WIDE),
 
+    Rule("int64-narrowing-traps-exactly-out-of-range", MUST_HOLD,
+         "ADR-0128 with ISO 7185 6.6.6.2 - trunc of an int64 outside "
+         "-maxint..maxint is an error",
+         "EmitCall, biTrunc (IsInt64 arm)",
+         _int64_narrowing_traps_exactly_out_of_range, widths=WIDE),
+    Rule("int64-narrowing-exact-when-accepted", MUST_HOLD,
+         "an accepted narrowing loses nothing",
+         "EmitCall, biTrunc (IsInt64 arm)",
+         _int64_narrowing_exact_when_accepted, widths=WIDE),
     Rule("trunc-traps-exactly-out-of-range", MUST_HOLD,
          "ISO 7185 §6.6.6.2 — trunc(x) is an error outside the integer type",
          "CheckedFPToInt", _trunc_traps_exactly_out_of_range),
