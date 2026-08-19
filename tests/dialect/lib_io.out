@@ -1,0 +1,18 @@
+one: two
+ABCDE
+empty write   = 0 bytes
+open          = done
+short read    = 5 bytes
+bytes         = hello
+rest          = 7 bytes
+bytes         = , world
+at the end    = 0 bytes
+AtEnd         = yes
+write to ro   = the operation was refused
+close         = done
+close again   = the operation was refused
+open missing  = the operation was refused
+read closed   = the operation was refused
+text          = the operation was refused
+failed at end = no
+CountOr       = -7

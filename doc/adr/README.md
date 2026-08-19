@@ -138,3 +138,4 @@ the alternatives that were rejected and why.
 | [0127](0127-a-type-definitions-bounds-belong-to-the-block.md) | A type-definition's bounds belong to the block | Accepted |
 | [0128](0128-an-integer-wider-than-the-compilers-own.md) | An integer wider than the compiler's own | Accepted |
 | [0129](0129-a-buffer-crosses-as-the-pair-c-already-takes.md) | A buffer crosses as the pair C already takes | Accepted |
+| [0130](0130-a-library-that-moves-bytes.md) | A library that moves bytes, and the first increment that found nothing | Accepted |
