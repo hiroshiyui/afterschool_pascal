@@ -118,6 +118,19 @@ appears below in the release where it still existed.
   statement. `setenv` copies. It is the first time the FFI's registered blind
   spot has decided an interface rather than being recorded against one.
 
+- **Fixed: a schema whose body holds an optional crashed the compiler.**
+  `?T` was the seventeenth type kind and `StaticThroughout` still enumerated
+  sixteen; a Pascal case-statement with no matching label stops the program, so
+  a schematic formal parameter over such a schema —
+
+  ```pascal
+  type Box(n: integer) = record slot: ?integer; pad: array [1..n] of integer end;
+  procedure show(var b: Box);
+  ```
+
+  — stopped `pascalc` rather than compiling. Present only in the unreleased
+  ADR-0123 work, and never in a released version.
+
 - **Fixed: two `string` parameters in one group of an `external` heading.**
   `function setenv(name, val: string; …)` was refused since ADR-0122, because
   §6.7.3.3's "one formal-parameter-section is one parameter-form, so every

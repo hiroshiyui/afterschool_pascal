@@ -1,0 +1,1 @@
+<source>:22:24: error: schema 'bad' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute

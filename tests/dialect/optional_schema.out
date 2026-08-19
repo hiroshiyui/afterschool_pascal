@@ -1,0 +1,4 @@
+small  n=2 slot=10 pad=11 12 
+large  n=4 slot=20 pad=21 22 23 24 
+small  n=2 slot=(none) pad=11 12 
+large  n=4 slot=20 pad=0 0 0 0 

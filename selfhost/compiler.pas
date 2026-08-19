@@ -10215,6 +10215,11 @@ begin
         StaticThroughout := StaticThroughout(t^.indexType)
                         and StaticThroughout(t^.elem);
       tySet, tyFile: StaticThroughout := StaticThroughout(t^.elem);
+      { ADR-0123's optional holds its T rather than pointing at it, so a bound
+        inside that T is a bound inside this type -- `?array [1..n] of real` in
+        a schema body has a dynamic extent and this has to say so. The same
+        answer a set and a file give, and for the same reason. }
+      tyOptional: StaticThroughout := StaticThroughout(t^.elem);
       tyRecord: begin
         ok := true;
         f := t^.fields;
@@ -21301,8 +21306,14 @@ begin
         if s^.boolVal then OpWord('true            ', v)
         else OpWord('false           ', v);
       tyChar: OpInt(ord(s^.charVal), v);
+      { No constant of the remaining kinds has a scalar operand, and an
+        optional is among them: 6.3 gives no way to write one, there being no
+        constructor syntax for it. The label is here anyway -- a kind left off
+        is a crash rather than a wrong answer (ADR-0018), and "no program can
+        reach it" is the argument that was wrong the last two times. It costs
+        no coverage: a label is not a statement and the arm was already run. }
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex, tyRestricted, tyString:
+      tyComplex, tyRestricted, tyString, tyOptional:
         OpInt(0, v)
     end
 end;
