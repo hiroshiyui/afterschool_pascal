@@ -383,7 +383,11 @@ feature, because each was arrived at more than once:
   variable-string **value parameter** is the fifth, and the first where the
   shape was forced rather than chosen: an actual of a different capacity has a
   different layout, so no address would have served and the callee's prologue
-  converts the pair into its own slot (ADR-0115).
+  converts the pair into its own slot (ADR-0115). ADR-0125's **slice** is the
+  sixth, and the one that makes the shape a language feature rather than a
+  lowering: `array of T` is a formal parameter's type and what travels is an
+  address and a count, so the bounds a callee checks against are the ones it
+  was handed.
 - **A permission granted in a shared predicate leaks to every caller.**
   `assignable` is asked by the relational operators too, which is why
   ADR-0058 had to write the comparison refusal out separately.

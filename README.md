@@ -270,6 +270,39 @@ checked; a value that does not fit is an error, in the words §6.4.6 uses for an
 over-long assignment. A bare string result is still refused, and so is
 `?integer`: C has no null integer.
 
+**Part of an array can be passed** (ADR-0125). `array of T` is a formal
+parameter's type, and a slice carries its own length:
+
+```pascal
+function Total(protected var s: array of integer): integer;
+var k, t: integer;
+begin
+  t := 0;
+  for k := 1 to length(s) do t := t + s[k];
+  Total := t
+end;
+...
+Total(a);          { the whole of it }
+Total(a[3..5]);    { three components }
+```
+
+Extended Pascal gives a string a substring (§6.7.6.7) and gives an array
+nothing, so a routine that wanted part of one had to be handed the whole thing
+and two indices — which puts the bounds outside anything that checks them.
+**The bounds travel with the pointer**, so `s[k]` is checked against the part
+the callee was given.
+
+`array of T` is a syntax error in both standards — §6.4.3.2 requires a
+bracketed index-type — so nothing that compiled stops compiling. `a[i..j]` is
+the designator §6.5.6 already gives a substring; only the base's type tells the
+two apart, and in a conformance mode it still means a substring.
+
+A slice is indexed **1..length** however far into the base it starts, `length`
+answers the count, and `a[4..3]` is the empty slice. It is a `var` or
+`protected var` parameter and nothing else: not a variable, not a field, not a
+result, not a named type — a view of the caller's storage is not a thing that
+can outlive the call.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas` and
 `lib/dialect/pasenv.pas` are the three, and they are what a caller sees
@@ -403,10 +436,11 @@ bounds one program at eight components. Sockets, locales, threads and containers
 are still absent, and the reason has moved again for three of them: the
 foreign-function interface they waited on **exists** (ADR-0121) and a string
 now crosses it (ADR-0122). A string now comes back too
-(ADR-0123), which is what `getenv` and `strerror` needed. What is still missing
-is every *other* returned pointer — a buffer, a struct, and `errno`, which is
-`*__errno_location()` and a macro besides — so a socket is nearer than it was
-and not yet in reach. A container waits on something else entirely —
+(ADR-0123), and ADR-0125 gives the language the buffer shape a socket needs.
+What is still missing is a **64-bit integer**: every length in the POSIX data
+path is `size_t` and `read`, `write` and `recv` all answer `ssize_t`, so a
+slice could cross as a pointer and an `i64` but the result could not be
+received. That, and every returned pointer that is not a string. A container waits on something else entirely —
 parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
 the ordering.
 

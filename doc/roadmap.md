@@ -279,6 +279,50 @@ which is not about them. `strcmp('b', 'ab')` had been refused since that
 increment, and nothing asked because every call in the corpus passed actuals of
 equal length.
 
+### The eighth increment: the bounds travel with the pointer
+
+ADR-0125, and it is the **slices** row of the table below — "a pointer and a
+length; excellent, and already the house style" — which this file predicted
+correctly and for the right reason.
+
+It was deferred to by name: ADR-0122 refused a buffer at the foreign boundary
+because "it is a pointer *and* a length, and the length is not in-band … that
+is the slices row, and it is a language decision, not an FFI one." So it was
+built as a language decision, and it has a reason that does not mention C at
+all: Extended Pascal gives a string a substring and gives an array nothing.
+
+Three things it confirms about how this dialect grows:
+
+- **The lexis has now cost nothing three times, by three different routes.** A
+  directive (ADR-0121), a character no standard admits (ADR-0123), and a
+  *combination* of two reserved words that no standard's grammar allows —
+  §6.4.3.2 requires a bracketed index-type, so `array of T` is a syntax error
+  in both. Looking for the spelling a standard has already left free is the
+  cheapest design move available here.
+- **"Ask the symbol, not the syntax" paid for most of the increment.**
+  `a[i..j]` is §6.5.6's substring designator and was already parsed; only the
+  base's *type* decides which construct it is. The parser was not touched for
+  it.
+- **Confining a feature to an argument worked a third time.** ADR-0122 found
+  that an argument has no lifetime question; a slice that cannot be stored in a
+  variable, a field or a result cannot outlive the array it views. Three
+  increments have now taken that shape, and it is worth stating as a pattern:
+  where a feature's danger is *lifetime*, confining it to an argument removes
+  the danger without deciding anything about ownership.
+
+And a probe reshaped what comes next. `clang` on this target:
+
+    declare i64 @read(i32, ptr, i64)
+    declare i64 @write(i32, ptr, i64)
+    declare i64 @recv(i32, ptr, i64, i32)
+
+Every length is `size_t` and every one of them *answers* `ssize_t`. A slice
+could cross with an `i64` length without difficulty, the compiler generating
+that word — but the result cannot be received, this language's `integer` being
+`i32` with nothing wider. **So the data path needs two things and this is one
+of them**; shipping the buffer argument alone would have put a knowingly wrong
+ABI in the tree for a call that cannot say how many bytes it moved.
+
 ### What is still blocked on it
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
@@ -336,7 +380,7 @@ Each borrowing below is tied to the open decision it would settle.
 
 | Idea | From | Settles | Fit here |
 | --- | --- | --- | --- |
-| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Excellent, and already the house style.** ADR-0051 made a string exactly this, and ADR-0030, ADR-0040 and ADR-0049 each reached for a two-scalar value for the same reason: nothing may depend on how a struct is passed. A general slice is that shape a fourth time |
+| **Slices — a pointer and a length** | Zig, Rust | bounds safety | **Done** (ADR-0125), and the prediction held: `array of T` is that shape a fifth time and needed no new mechanism. What the row did not anticipate is how much of it §6.5.6 had already paid for — `a[i..j]` is the substring designator, and only the base's type tells the two apart, so the parser was untouched. Argument-only, so bounds safety is settled without the memory-safety decision |
 | **Explicit allocator passing** | Zig | part of memory safety | **Tried, and it does not survive contact** (ADR-0116). An allocator *record* is not expressible — a record field may not have a procedure type, neither standard having general procedure types. A per-type allocator *parameter* is, and compiles; but `new` is the only origin of a typed pointer and there is no pointer arithmetic or cast, so it can only recycle blocks `new` produced rather than carve one into several. And the capacity it serves is unchecked: a pool asked for 9 may return a block of 4, whose own discriminant then answers `p^.cap`. Not unsafe — the bounds check reads the served block — but the central contract is unenforced. **This needs the FFI too**, which moves it from "cheapest on the list" to behind the same gate as everything else |
 | **`defer`** | Zig, Swift | resource safety | **Good.** Pascal has no early return, so a block already has one exit and the epilogue is already where files close (ADR-0021, ADR-0032). `defer` generalises a mechanism that exists |
 | **Error unions / `Result`** | Zig, Rust | error handling | **Good, and the biggest practical gap.** Pascal has *no* error handling — no exceptions, no result convention. It needs sum types with payloads, which variant records nearly are. Independent of the memory-safety fork, so it can proceed while that is open |

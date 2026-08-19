@@ -1729,7 +1729,7 @@ decision being overturned on taste.
 
 ## The dialect
 
-Six mechanisms, and the section exists because the first two landed without
+Seven mechanisms, and the section exists because the first two landed without
 an entry here. Nothing in it changes what either conformance mode accepts.
 
 **The mode is an ordinal and the order is a containment** (ADR-0117). `stdKind`
@@ -1873,3 +1873,33 @@ which ADR-0117's containment forbids; and nothing about the memory-safety
 model. `lib/dialect/pasenv.pas` is the user, and refuses to bind `putenv` —
 which keeps the pointer it is handed — making it the first place the FFI's
 registered blind spot decided an interface.
+
+**A slice is a parameter form, and the pair travels as two words** (ADR-0125).
+`array of T` is a formal parameter's type and nothing else — a view of part of
+an array, indexed 1..`length` however far into the base it starts. It exists
+because Extended Pascal gives a string a substring (§6.7.6.7) and gives an
+array nothing, so a routine wanting part of one had to take the whole array and
+two indices, which puts the bounds outside everything that checks them. **The
+bounds travel with the pointer**: `s[k]` is checked against the length the
+callee was handed, which is a different check from the one that made the slice
+and is the property a C buffer-and-count pair cannot promise. The lexis cost
+nothing a third time — §6.4.3.2 requires a bracketed index-type, so `array of
+T` is a syntax error in both standards — and `a[i..j]` cost nothing at all,
+being §6.5.6's substring designator with the base's type deciding which it is
+(the "ask the symbol, not the syntax" pattern a seventh time). That decision is
+gated on the mode, and **difftest is what found that it had to be**: §6.5.6
+gives the designator to a string alone, so `--std=extended` must go on refusing
+it over an array, and `src/` was right where the Pascal had become wrong. `var`
+and `protected var` only, ADR-0046's protected parameter being the read-only
+borrow: a slice is a view of the caller's storage and a value parameter is a
+copy. The denoter is confined to a parameter's own type — stronger than "not a
+variable", and one test instead of a list of positions, since a name that
+cannot exist has no place a variable of it could be made. Two slices agree when
+their *components* are the same type, which reverses ADR-0017 only in
+appearance: that rule is about types a program can write, and this is one it
+cannot. The pair is ADR-0030's shape a fifth time. What it does not do is cross
+the foreign boundary, and that is a probe's finding rather than a scope limit —
+every length in the POSIX data path is `size_t` and `read`, `write` and `recv`
+all answer `ssize_t`, so the argument could cross as an `i64` the compiler
+generates but the *result* could not be received, this language having no
+64-bit integer.
