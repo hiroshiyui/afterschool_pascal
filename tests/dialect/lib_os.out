@@ -1,0 +1,10 @@
+open failed   = yes
+code          = the operation was refused
+why           = No such file or directory
+number set    = yes
+rmdir failed  = yes
+code          = the operation was refused
+why           = Not a directory
+unknown has a = yes
+same twice    = Not a directory
+branched      = errIO

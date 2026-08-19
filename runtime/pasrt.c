@@ -31,6 +31,7 @@
  *   width < 0  means "no width given"
  *   prec  < 0  means "no precision given"
  */
+#include <errno.h>
 #include <math.h>
 #include <setjmp.h>
 #include <stdio.h>
@@ -2121,3 +2122,33 @@ char *pas_time(int h, int m, int s) {
   p[7] = (char)('0' + s % 10);
   return p;
 }
+
+/* ---------------------------------------------------------------------- */
+/* The runtime's second surface: what a Pascal *program* may bind by name.
+ *
+ * Everything above is called by code the compiler emits, and `pas_` is
+ * reserved for exactly that reason -- ReservedForeignName refuses the whole
+ * prefix, because LLVM will not take a second declaration of a global the
+ * emitted module already declares. A routine the emitter never names is not
+ * that hazard, so it gets `pasx_` and a program may write
+ * `external 'pasx_...'`.
+ *
+ * The split is what keeps ReservedForeignName a mirror of the **emitter**
+ * rather than of the archive. Do not add a `pasx_` routine that the compiler
+ * also emits calls to, and do not rename a `pas_` one into this space to make
+ * it bindable: the reason `pas_atan` and `pas_hypot` exist is that a program
+ * should be able to have the *libc* spellings, which is the opposite move.
+ */
+
+/* ADR-0130 recorded, and ADR-0122 before it, that a failure in a binding
+ * module is `errIO` and nothing finer, because `errno` is unreachable: C
+ * specifies it as a **macro**, and glibc spells it `*__errno_location()`, so
+ * it is a returned pointer even before it is a macro. No foreign-function
+ * interface can bind a macro -- not this one and not a better one -- which is
+ * what puts it here rather than behind a language decision.
+ *
+ * The value is only meaningful immediately after a call that reported a
+ * failure; nothing clears it on success, and any intervening library call may
+ * set it. That is C's contract and this does not improve on it.
+ */
+int pasx_errno(void) { return errno; }

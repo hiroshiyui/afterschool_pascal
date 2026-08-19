@@ -22,10 +22,12 @@
     and X_OK. O_RDONLY is 0, which is the one flag value a header is not
     needed for, so this module reads files and writes only to descriptors that
     were already open.
-  - **It cannot say why.** A failure is `errIO` and nothing finer, because
-    `errno` is `*__errno_location()` and a returned pointer is what ADR-0122
-    does not admit. Same wall PasFS records, and it is still the first thing
-    the next increment would buy.
+  - **It cannot say why, and PasOS can.** A failure is `errIO` and nothing
+    finer, which is the closed set a `case` can cover; the sentence is
+    `PasOS.LastErrorText`, read in the statement after the one that failed
+    (ADR-0131). The wall this recorded was `errno` being a returned pointer,
+    and the real reason was that C makes it a **macro** with no symbol to
+    bind at all -- which is what put it in `runtime/pasrt.c`.
   - **It does not share a descriptor with the standard's own I/O.** 6.9 and
     6.10's `read` and `write` go through the runtime's buffered streams;
     everything here is a descriptor and unbuffered. Writing to `StdOut` from

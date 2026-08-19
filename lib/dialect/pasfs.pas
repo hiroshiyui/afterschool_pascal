@@ -14,13 +14,19 @@
   containment), and ADR-0119 makes a dialect module unimportable by a
   conformance-mode program (ADR-0121 decision 5).
 
-  **What it cannot tell you is why.** A failure here is `errIO` and nothing
-  finer, because `errno` is not reachable: glibc spells it
-  `*__errno_location()`, a function returning `int *`, and a pointer result is
-  the thing ADR-0122 does not admit. So "the file was not there" and "the
-  directory is not writable" arrive as one code. That is a real cost of the
-  narrowness and it is written here rather than discovered; the first thing the
-  increment after ADR-0122 buys is the ability to say which.
+  **What it cannot tell you is why, and PasOS can.** A failure here is `errIO`
+  and nothing finer, so "the file was not there" and "the directory is not
+  writable" arrive as one code. That is deliberate rather than a limit now:
+  the code is the closed set a `case` can cover, and the *sentence* is
+  `PasOS.LastErrorText`, read in the statement after the one that failed
+  (ADR-0131). What this module still cannot do is map one to the other, ENOENT
+  and EACCES being numbers in a header it cannot read.
+
+  The paragraph that stood here said `errno` was unreachable because glibc
+  spells it `*__errno_location()` and a pointer result is what ADR-0122 does
+  not admit. That was true and was not the reason: C specifies `errno` as a
+  **macro**, so it has no linker symbol for any foreign-function interface to
+  bind, and the answer was always `runtime/pasrt.c`.
 
   **And it cannot read a header.** `access` takes R_OK, W_OK and X_OK, which
   are numbers a C header would have supplied and an FFI without a header parser
