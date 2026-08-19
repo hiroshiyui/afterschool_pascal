@@ -186,9 +186,9 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Six gates make that mechanical, and each fails in **both** directions — a
+Seven gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to six catalogues:
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to seven catalogues:
 
 | Gate | Catalogue | Asks |
 | --- | --- | --- |
@@ -197,9 +197,10 @@ claim that stops being true is as loud as one that was never true, which is
 | `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
 | `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced. It also checks *how many* files were compared, an empty list being what a clean run and a run that reached nothing both produce |
 | `foreign-reserved` | `ReservedForeignName` in the compiler | is every global the emitter names still refused as a foreign name? (ADR-0121) — LLVM rejects a redeclared global, so a collision is an error about a file nobody wrote; the predicate is a second copy of what the emitter writes, and this compares them |
+| `kind-exhaustive` | the `typeKind` enumeration in the compiler | does every `case … kind of` name every kind? (ADR-0124) — a case-statement with no matching label *stops the program* (ADR-0018), so a kind left off one of the six is a compiler **crash** and not a wrong answer. No other gate can see that: a missing arm is not a statement, a crash writes nothing for a golden to hold, and `src/`'s counterpart is a `switch` with a `default`, so difftest has one side falling over rather than a disagreement. It has shipped twice — `tyString`, then `tyOptional` |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? |
 
-All but the last are `ctest` cases, so they run before a push rather than
+All but `model-drift` are `ctest` cases, so they run before a push rather than
 reporting after one. **What none of them sees** is a branch: `line-coverage`
 counts a statement, so `if c then a else b` on one line is covered when either
 arm runs. That, and the corpus being enumerated by glob so the harnesses that

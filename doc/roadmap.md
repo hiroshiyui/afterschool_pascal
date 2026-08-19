@@ -315,11 +315,17 @@ question in its smallest form:
   to be designed together, and they were not.** ADR-0122 found that the
   argument side of the boundary has no lifetime question on it at all — the
   caller owns the storage and outlives the call — so half of what was blocked
-  here was never blocked on a model. What remains is the *result* direction,
-  and it is blocked on two things rather than one: ownership, and the optional
-  type that null needs. The estimate was wrong in a useful direction, and the
-  lesson is worth keeping for the rows below: a decision that looks like it
-  needs a model may only need the model for part of its surface.
+  here was never blocked on a model. ADR-0123 then took the other half's
+  nearest blocker, which was **null** rather than ownership, and a *string*
+  now comes back: the copy is made at the call site, so nothing the program
+  holds is a foreign pointer.
+
+  What is left is every returned pointer that is not a string — a buffer, a
+  struct, and `errno`, which is `*__errno_location()` and a macro besides. Two
+  estimates in a row were wrong in the same useful direction, and the lesson is
+  worth keeping for the rows below: **a decision that looks like it needs a
+  model may need the model for only part of its surface**, and the part that
+  does not is usually worth taking first.
 
 ### Where the ideas come from
 
