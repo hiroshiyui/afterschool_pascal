@@ -391,6 +391,20 @@ appears below in the release where it still existed.
 
 ### Changed
 
+#### Programs that used to compile and no longer do
+
+- **A subrange whose bounds are not constants, anywhere but an array's
+  index-type.** `var x: 1..m` and `array [1..m] of 1..m` inside a procedure
+  compiled and did not work: the first could be read and never assigned to, and
+  the second **trapped on a legal store** — `a[1] := 2` with `m = 3` stopped with
+  *value out of range (1..)*, because the range check at a store compares
+  against the two numbers on the type and those had never been read from
+  anywhere. Only an array's index-type has a check that reads the bound out of
+  the descriptor. Refused now, with *the bounds of a subrange must be ordinal
+  constants*; it is a deviation from §6.4.2.4 and is recorded as one in
+  `doc/implementation-defined.md` §6, where accepting it was a defect.
+  (ADR-0127)
+
 - **The program-components of one program must agree on `--std`**, and a
   mixture no longer links (ADR-0119). A module's two activation functions carry
   the mode in their names — `@m.counter.extended.init` against
@@ -411,6 +425,27 @@ appears below in the release where it still existed.
   changing `--std` now refuses instead of misbehaving.
 
 ### Fixed
+
+- **A type-definition may have a bound that is not a constant.** §6.2.3.8 b)
+  evaluates "each actual-discriminant-part or subrange-bound … closest-contained
+  by … the block" at that block's commencement, and a type-definition is
+  contained by the block — so `type t = array [1..m] of integer` and
+  `type t = vec(m)` inside a procedure are legal, and were refused. The variable
+  half landed in the previous release (ADR-0113); this is the rest of the
+  clause, and it was the finding of ADR-0107's independent reading most likely
+  to break a real program.
+
+  ```pascal
+  procedure p(m: integer);
+  type t = array [1..m] of integer;
+  var a, b: t;
+  ```
+
+  The bound is evaluated **once for the type**, however many variables of it the
+  block declares — so `a` and `b` are one type with one extent and `a := b` is
+  an assignment, which is what §6.4.1 requires of a type-name. Extended Pascal
+  and the dialect only; ISO 7185 §6.4.2.4 writes `subrange-type = constant '..'
+  constant`. (ADR-0127)
 
 - **The compiler no longer runs out of tokens compiling itself.** The lexer
   reads its input into a fixed array of tokens, which grows with the size of the

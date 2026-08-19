@@ -510,10 +510,41 @@ able to make.
     second and later names re-resolve the same denoter, so a list built by
     chaining nodes the parser did not chain would be built twice over the same
     nodes.
-  - Refused, and each in `doc/implementation-defined.md` §6: the same bound in
-    a type-definition, in a record field, and in a module's variable
+  - Refused: the same bound in a record field, and in a module's variable
     (`tests/extended/dynbounds_errors.pas`,
     `tests/extended/module_sema_errors.pas`).
+- **A type-definition's bounds belong to the block** (ADR-0127), which is the
+  half of §6.2.3.8 b) the entry above left. A type-definition is
+  closest-contained by the block, so `type t = array [1..m] of integer` and
+  `type t = vec(m)` inside a procedure are legal — and the answer was the
+  sentence ADR-0113 stopped at: a variable's descriptor belongs to the
+  variable, a type's belongs to the **block**.
+  - **A hidden frame variable of the block holds it**, named `bnd$N` for the
+    reason `for$` and `with$` are: the Sema dump prints a frame's variables and
+    a nameless one is indistinguishable from the next.
+  - **The slot is claimed after the denoter is resolved.** Reserving one for
+    every type-definition would move the layout of every frame in every
+    Extended Pascal program, so the symbol is built outside the frame and
+    joins it afterwards, with the `frameIndex` of every discriminant already
+    built against it corrected.
+  - **A variable of the type shares the discriminant *symbols***, not a copy of
+    their values, and holds only the address in its own slot. That is what
+    makes the extent the type's: nothing anywhere can hold a different answer,
+    and §6.4.1's "one type-name, one type" survives — `a := b` between two of
+    them is an assignment. Evaluated once per activation however many variables
+    there are, which `tests/extended/dynbounds_type.pas` counts.
+  - **A parameter of such a type needs no descriptor**, one thing simpler than
+    a schematic formal: the bounds are in an enclosing activation record and
+    the static chain reaches them.
+  - **And a bare dynamic subrange is confined to an index-type.** A bound only
+    works where the *subscript* check reads it out of the descriptor; a
+    subrange's own bounds are read by the range check at a store, which
+    compares against the two numbers on the type. `array [1..m] of 1..m`
+    trapped on a legal store with the upper bound reading zero, present since
+    ADR-0113. `dynBoundsIndex` is the one-shot flag that tells an array's
+    index-type from its component, both being a subrange denoter reached from
+    the same place. Refusing it is the deviation in
+    `doc/implementation-defined.md` §6; accepting it was a defect.
 - **An assignment between two schematic types compares the tuples**
   (ADR-0042), and that is the *whole* of the feature: §6.4.6 a) is "the same
   type" and §6.4.8 makes one schema with one tuple one type, so `assignable`

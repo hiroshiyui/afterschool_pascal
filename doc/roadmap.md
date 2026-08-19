@@ -738,14 +738,25 @@ started looking like what it was.
     buffer with itself, printed EQUAL and exited 0. ADR-0111 made it a stack
     whose end CodeGen supplies — a release emitted after any statement that
     took storage — and both ways of exhausting it are reported now.
-- **A subrange bound that is not a constant is refused in a
-  *type-definition*.** §6.2.3.8 b) evaluates one at the block's commencement,
-  so `type t = array [1..m] of integer` and `type t = vector(m)` inside a
-  procedure are legal. The **variable** half landed as ADR-0113 and is the half
-  most likely to be met; what is left is a different decision rather than the
-  rest of the same one, since a variable's descriptor belongs to the variable
-  and a type's would belong to the block. Found by ADR-0107's independent
-  reading; the one conformance defect that is known and unfixed.
+- **A subrange whose bounds are not constants is refused anywhere but an
+  array's *index-type*.** §6.4.2.4 writes `subrange-bound = expression`, so
+  `var x: 1..m` and `array [1..m] of 1..m` inside a procedure are legal and are
+  refused. A bound only *works* in an index-type: the subscript check reads it
+  out of the descriptor §6.2.3.8 b) filled, where every other subrange's bounds
+  are read by the range check at a store, which compares against the two
+  numbers on the type. Accepting it was worse than refusing it and that is what
+  ADR-0127 changed — `a[1] := 2` over `array [1..m] of 1..m` with `m = 3`
+  trapped on a legal store, the upper bound reading zero. Fixable and not a
+  decision: the store's check has to read the descriptor as the subscript check
+  does, and the message has to be built by the runtime as an array's already
+  is (ADR-0040). The one conformance defect that is known and unfixed.
+  - **The type-definition entry that stood here is fixed** (ADR-0127).
+    `type t = array [1..m] of integer` and `type t = vector(m)` inside a
+    procedure work, and the answer was the sentence ADR-0113 stopped at: a
+    type's descriptor belongs to the **block**, so it is evaluated once and
+    every variable of the type shares the discriminant symbols rather than a
+    copy of their values. Found by ADR-0107's independent reading, which called
+    it the finding most likely to break a real program.
 - **ExpDigits is not a fixed number** (ADR-0064). §6.10.3.4.1 makes it one
   implementation-defined value; here it is what C's `%E` writes — two digits,
   or three past 1e100 — so a representation stays exactly ActWidth wide while

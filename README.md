@@ -713,6 +713,11 @@ types      vector(n: integer) = array [1..n] of real — a schema, and
            inside a procedure, sized on entry and bounds-checked against what
            the entry computed. Either end, both ends, an expression rather
            than a name, and at more than one level (§6.4.2.4, §6.2.3.8 b).
+           A **type-definition** of a procedure may have one too —
+           `type t = array [1..m] of integer` and `type t = vector(m)` — and
+           the bound is evaluated **once** for the type however many variables
+           of it the block declares, so two of them are one type with one
+           extent and `a := b` between them is an assignment.
            `vec2 = vector` gives a
            schema a second name (§6.4.7), and the two denote *one* schema
            rather than alike ones — so `vec2(3)` and `vector(3)` are the
@@ -998,16 +1003,18 @@ both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 program compiled and run rather than with a reading. `doc/roadmap.md` records
 what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
-**One construct of it is refused**: a discriminant or subrange bound that is not
-a constant, in a **type-definition** — `type t = array [1..m] of integer` or
-`type t = vector(m)` inside a procedure, with `m` a value parameter. §6.2.3.8 b)
-evaluates those at block commencement, *after* the value parameters are
-attributed, so they are legal. The same bound in a *variable* declaration is
-accepted, which was the half most likely to be met. This is a defect rather than
-a decision; `doc/implementation-defined.md` §6 states it with the clause.
-Conformant array parameters are not accepted either, which is what makes this a
-level 0 processor — that one is the standard's own option rather than a
-shortfall.
+**One construct of it is refused**: a subrange whose bounds are not constants,
+anywhere but an array's **index-type** — so `var x: 1..m` and
+`array [1..m] of 1..m` inside a procedure are legal under §6.4.2.4 and are
+refused. A bound only *works* in an index-type, where the subscript check reads
+it out of the descriptor §6.2.3.8 b) filled; every other subrange's bounds are
+read by the range check at a store, which compares against the two numbers on
+the type. Accepting it was worse than refusing it — `a[1] := 2` over
+`array [1..m] of 1..m` with `m = 3` trapped on a legal store — and it is a
+defect rather than a decision; `doc/implementation-defined.md` §6 states it with
+the clause. Conformant array parameters are not accepted either, which is what
+makes this a level 0 processor — that one is the standard's own option rather
+than a shortfall.
 
 ## What backs the answers
 
