@@ -1,0 +1,13 @@
+<source>:13:11: error: 'array of' is a parameter form and not a type: it may be written as a formal parameter's own type and nowhere else
+<source>:14:25: error: 'array of' is a parameter form and not a type: it may be written as a formal parameter's own type and nowhere else
+<source>:17:10: error: 'array of' is a parameter form and not a type: it may be written as a formal parameter's own type and nowhere else
+<source>:25:19: error: a slice must be a var parameter: it views the caller's storage, and a value parameter is a copy. Write 'protected var' for one that may not be written through
+<source>:30:34: error: 'array of' is a parameter form and not a type: it may be written as a formal parameter's own type and nowhere else
+<source>:36:24: error: a slice cannot have text as its component type, because it contains a file
+<source>:49:5: error: a slice is indexed by an integer, but the subscript is char
+<source>:54:17: error: slice parameter 's' has components of type real, but the argument's are integer
+<source>:56:17: error: slice parameter 's' needs an array or a slice of one, but the argument is real
+<source>:59:17: error: a slice can be taken only of an array indexed by integers, and array [red..green] of real is not
+<source>:60:19: error: a slice can be taken only of an array indexed by integers, and array [red..green] of real is not
+<source>:62:19: error: a slice is bounded by integers, but this one is char
+<source>:62:23: error: a slice is bounded by integers, but this one is char

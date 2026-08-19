@@ -1,0 +1,8 @@
+whole    = 36
+part     = 12
+one      = 4
+empty    = 0
+tail     = 35
+written  = 101 102 103
+offset   = 100 60
+schema   = 21 9

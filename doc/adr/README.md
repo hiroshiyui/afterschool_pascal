@@ -133,3 +133,4 @@ the alternatives that were rejected and why.
 | [0122](0122-an-address-crosses-only-as-an-argument-and-its-lifetime-is-the-call.md) | An address crosses only as an argument, and its lifetime is the call | Accepted |
 | [0123](0123-an-optional-is-a-type-and-it-is-how-a-pointer-comes-back.md) | An optional is a type, and it is how a pointer comes back | Accepted |
 | [0124](0124-every-case-over-a-type-kind-names-every-kind.md) | Every case over a type kind names every kind, and a gate says so | Accepted |
+| [0125](0125-a-slice-is-a-parameter-form-and-the-pair-travels-as-two-words.md) | A slice is a parameter form, and the pair travels as two words | Accepted |

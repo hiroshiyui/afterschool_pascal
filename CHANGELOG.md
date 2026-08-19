@@ -118,6 +118,44 @@ appears below in the release where it still existed.
   statement. `setenv` copies. It is the first time the FFI's registered blind
   spot has decided an interface rather than being recorded against one.
 
+- **`array of T` — a slice, under `--std=afterschool` only** (ADR-0125). A
+  formal parameter's type, and a view of part of an array:
+
+  ```pascal
+  function Total(protected var s: array of integer): integer;
+  var k, t: integer;
+  begin
+    t := 0;
+    for k := 1 to length(s) do t := t + s[k];
+    Total := t
+  end;
+  ...
+  Total(a);          { the whole of it }
+  Total(a[3..5]);    { three components }
+  ```
+
+  Extended Pascal gives a string a substring (§6.7.6.7) and gives an array
+  nothing, so a routine that wanted part of one had to be handed the whole
+  thing and two indices — which puts the bounds outside anything that checks
+  them. **A slice carries its own length**, so the callee's `s[k]` is checked
+  against the part it was given and not against the array it came from.
+
+  §6.4.3.2 requires a bracketed index-type after `array`, so `array of T` is a
+  syntax error in both standards and nothing that compiled stops compiling.
+  The designator `a[i..j]` is the one §6.5.6 already gives a substring; only
+  the base's type tells the two apart, and in a conformance mode it still
+  means a substring and still refuses an array.
+
+  A slice is indexed **1..length** however far into the base it starts — the
+  rule §6.7.6.7 gives a substring, and a divergence from Delphi's 0-based open
+  array that fails at the first access rather than quietly. `length(s)` answers
+  the count. An empty slice (`a[4..3]`) is admissible.
+
+  `var` and `protected var` only: a slice is a view of the caller's storage,
+  and a value parameter is a copy. It may not be a variable, a field, a result,
+  or a named type — the denoter is legal as a formal parameter's own type and
+  nowhere else.
+
 - **Fixed: a schema whose body holds an optional crashed the compiler.**
   `?T` was the seventeenth type kind and `StaticThroughout` still enumerated
   sixteen; a Pascal case-statement with no matching label stops the program, so

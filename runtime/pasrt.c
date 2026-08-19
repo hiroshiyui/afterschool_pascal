@@ -1819,6 +1819,24 @@ void pas_str_substr_check(int lo, int hi, int len) {
   }
 }
 
+/* ADR-0125: `a[i..j]`, after the indices have been normalised to the base's
+ * own 1..n. Its own routine rather than pas_str_substr_check above, for two
+ * reasons that are both about what it says: a slice is not a string, and an
+ * *empty* slice is admissible where an empty substring range is not --
+ * §6.7.6.7 already lets `substr(s, i, 0)` yield the null-string, and a loop
+ * that consumes a slice down to nothing should not have to special-case its
+ * last step. So `hi = lo - 1` is the empty slice and `hi < lo - 1` is an
+ * error. */
+void pas_slice_check(int lo, int hi, int len) {
+  if (lo < 1 || hi > len || hi < lo - 1) {
+    char msg[160];
+    snprintf(msg, sizeof msg,
+             "slice: [%d..%d] is not within a sequence of %d components", lo,
+             hi, len);
+    pas_runtime_error(msg);
+  }
+}
+
 void pas_str_slice_check(int at, int count, int len) {
   if (at <= 0 || count < 0 || at + count - 1 > len) {
     char msg[160];

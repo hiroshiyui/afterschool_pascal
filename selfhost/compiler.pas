@@ -400,6 +400,11 @@ type
   typeKind = (tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
               tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc, tyComplex,
               tyRestricted,
+              { ADR-0125's slice: a view of part of an array, and the type
+                of a formal parameter and of nothing else -- the second such
+                kind after tyProc. `elem` is the component type; there is no
+                extent, that being the half that arrives with the actual. }
+              tySlice,
               { ADR-0123's optional-type. `elem` is the type it may hold, and
                 the value is that type's storage with a flag in front of it.
                 Neither standard has one: it is what lets a pointer come back
@@ -1478,6 +1483,13 @@ var
     schematic formal parameter it belongs to. It is what tells the subrange
     resolver that a bound naming a discriminant is a bound and not a mistake. }
   genericFor: symPtr;
+  { ADR-0125: the one denoter a slice is allowed to be. It is set to a formal
+    parameter's own type-denoter while that denoter is resolved and to nothing
+    otherwise, so `array of T` is legal exactly where the record says it is --
+    directly in a formal-parameter-section -- and a slice nested inside a
+    record, an array or another slice is refused by the same test without a
+    second rule. }
+  sliceFormNode: nodePtr;
   programSym, currentProc: symPtr;
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
@@ -4049,6 +4061,20 @@ begin
         t^.flElem := ParseTypeDenoter
       end
     end
+    { ADR-0125's `array of T`, which §6.4.3.2 requires a bracketed index-type
+      after `array` -- so this spelling is a syntax error in both standards and
+      the dialect may have it for nothing. It builds an nkArray with no
+      dimensions rather than a node kind of its own: that is what the syntax
+      says it is, and every walker that already descends into arElem then needs
+      no teaching. }
+    else if Check(tkArray) and (PeekKind(1) = tkOf) then begin
+      t := NewNode(nkArray, CurLine, CurCol);
+      t^.arDims := nil;
+      t^.arElem := nil;
+      t^.arPacked := packed_;
+      pos := pos + 2;
+      t^.arElem := ParseTypeDenoter
+    end
     else if Check(tkArray) then
       t := ParseArrayType(packed_)
     else if Check(tkRecord) then
@@ -5405,8 +5431,15 @@ begin
         a parameter's type is still not a type-denoter -- it is a name, or one
         of those two other forms. `type` is the only word-symbol that may begin
         one. }
+      { ADR-0125 adds a fourth form in the dialect, and it has to be added
+        here rather than left to Sema: 6.7.3.1's list is what the parser
+        enforces, so `array of T` would be a parse error before any symbol
+        could be asked about it. `array` is admitted only when `of` follows,
+        which is the spelling 6.4.3.2 leaves free. }
       if not aborted then
-        if not (Check(tkIdent) or Check(tkType)) then begin
+        if not (Check(tkIdent) or Check(tkType) or
+                ((langStd = stdAfterschool) and Check(tkArray) and
+                 (PeekKind(1) = tkOf))) then begin
           ErrorAtCur;
           writeln('a parameter''s type must be a type name');
           Bail
@@ -6214,6 +6247,26 @@ begin IsVarString := (t <> nil) and (t^.kind = tyString) end;
 function IsOptional(t: typePtr): boolean;
 begin IsOptional := (t <> nil) and (t^.kind = tyOptional) end;
 
+{ ADR-0125's slice. Like tyProc, this is the type of a formal parameter and of
+  nothing else -- so most of the compiler meets one only through the parameter
+  paths, and everything that asks "is this a value?" is right to answer no. }
+function IsSlice(t: typePtr): boolean;
+begin IsSlice := (t <> nil) and (t^.kind = tySlice) end;
+
+{ The type a slice-designator has. A fresh one each time, because two slices
+  are compatible when their *component* types are the same type and never
+  because they are the same object -- there being nothing to name-equate,
+  ADR-0017's rule being about types a program can write and this being a type
+  no program can. }
+function SliceOf(comp: typePtr): typePtr;
+var t: typePtr;
+begin
+  t := NewType(tySlice);
+  t^.elem := comp;
+  t^.lo := 1;
+  SliceOf := t
+end;
+
 function IsNumeric(t: typePtr): boolean;
 begin IsNumeric := IsInteger(t) or IsReal(t) end;
 
@@ -6672,6 +6725,13 @@ begin
         end
         else
           PutLit('nil             ');
+      { ADR-0125. Printed the way it is written, and with no extent because
+        it has none of its own -- the extent is the actual's. }
+      tySlice: begin
+        PutLit('array of        ');
+        Put(' ');
+        WriteTypeName(t^.elem)
+      end;
       { ADR-0123. Printed the way it is written, `?` and then the type it
         may hold -- which recurses, but never forever: the denoter had to
         contain a T for the storage to have a size. }
@@ -9086,6 +9146,33 @@ end;
 
 { `array [a, b] of T` abbreviates `array [a] of array [b] of T`
   (ISO 7185 6.4.3.2), so dimension `dim` wraps everything after it. }
+{ ADR-0125's `array of T`: a view of part of an array, and the type of a formal
+  parameter and of nothing else -- the second such kind after tyProc, and the
+  reason there is no extent here is that the extent arrives with the actual.
+
+  §6.4.3.2 requires a bracketed index-type after `array`, so this spelling is a
+  syntax error in both standards and the dialect has it for nothing. }
+function ResolveSlice(d: nodePtr): typePtr;
+var t, comp: typePtr;
+begin
+  t := NewType(tySlice);
+  comp := ResolveType(d^.arElem);
+  if d <> sliceFormNode then begin
+    ErrorAt(d^.line, d^.col);
+    write('''array of'' is a parameter form and not a type: it may be ');
+    writeln('written as a formal parameter''s own type and nowhere else')
+  end
+  else if IsFile(comp) or ContainsFile(comp) then begin
+    ErrorAt(d^.line, d^.col);
+    write('a slice cannot have ');
+    WriteTypeName(comp);
+    writeln(' as its component type, because it contains a file')
+  end;
+  t^.elem := comp;
+  t^.lo := 1;
+  ResolveSlice := t
+end;
+
 function ResolveArray(d, dim: nodePtr): typePtr;
 var t, index: typePtr;
 begin
@@ -10231,7 +10318,12 @@ begin
         StaticThroughout := ok
       end;
       tyVoid, tyInteger, tyReal, tyBoolean, tyChar, tyEnum, tySubrange,
-      tyPointer, tyProc, tyComplex, tyString: StaticThroughout := true;
+      { A slice joins these rather than recursing into its component, and the
+        reason is the rule ADR-0125 makes rather than an approximation: a slice
+        denoter may be written only as a formal parameter's own type, never in
+        a schema body, so nothing inside it can name a discriminant. }
+      tyPointer, tyProc, tyComplex, tyString, tySlice:
+        StaticThroughout := true;
       tyRestricted: StaticThroughout := StaticThroughout(t^.elem)
     end
 end;
@@ -10878,7 +10970,11 @@ begin
       end;
       nkEnum:     t := ResolveEnum(d);
       nkSubrange: t := ResolveSubrange(d);
-      nkArray:    t := ResolveArray(d, d^.arDims);
+      { No dimensions is ADR-0125's `array of T`, which the parser builds
+        as an array denoter with none because that is what the syntax says. }
+      nkArray:
+        if d^.arDims = nil then t := ResolveSlice(d)
+        else t := ResolveArray(d, d^.arDims);
       nkRecord:   t := ResolveRecord(d);
       nkPointer:  t := ResolvePointer(d);
       nkOptional: t := ResolveOptional(d);
@@ -11354,7 +11450,12 @@ begin
           would say so on its own -- the canonical-string-type is not any named
           type either -- but the words it would use name a representation
           rather than the reason. }
-        else if a^.kind = nkSubstr then begin
+        { ADR-0125: not when the formal is a slice. NOTE 3's reason is that
+          a substring's type is a new one different from every named type, and
+          a slice formal has no named type for it to differ from -- the
+          agreement is about components, and `a[i..j]` is the designator the
+          feature is for. }
+        else if (a^.kind = nkSubstr) and not IsSlice(p^.sym^.stype) then begin
           ErrorAt(a^.line, a^.col);
           write('argument ', i:1, ' of ''');
           WritePool(callee^.at, callee^.len);
@@ -11389,6 +11490,45 @@ begin
         if (a^.ntype <> nil) and (p^.sym^.stype <> nil) then
           if IsRestricted(a^.ntype) then
             okVar := Underlying(a^.ntype) = p^.sym^.stype;
+        { ADR-0125: a slice formal binds to a whole array, to a slice of one,
+          or to another slice -- and what has to agree is the *component* type,
+          not the type of the actual, there being no type here for the actual
+          to be the same object as. The extent is exactly what does not have to
+          match; that is the feature. }
+        if (not okVar) and IsSlice(p^.sym^.stype) and (a^.ntype <> nil) then
+        begin
+          if IsSlice(a^.ntype) or IsArray(a^.ntype) then begin
+            okVar := a^.ntype^.elem = p^.sym^.stype^.elem;
+            if not okVar then begin
+              ErrorAt(a^.line, a^.col);
+              write('slice parameter ''');
+              WritePool(p^.sym^.at, p^.sym^.len);
+              write(''' has components of type ');
+              WriteTypeName(p^.sym^.stype^.elem);
+              write(', but the argument''s are ');
+              WriteTypeName(a^.ntype^.elem);
+              writeln;
+              okVar := true   { reported here; not again below }
+            end
+            else if IsArray(a^.ntype) and not IsInteger(a^.ntype^.indexType)
+            then begin
+              ErrorAt(a^.line, a^.col);
+              write('a slice can be taken only of an array indexed by ');
+              write('integers, and ');
+              WriteTypeName(a^.ntype);
+              writeln(' is not')
+            end
+          end
+          else begin
+            ErrorAt(a^.line, a^.col);
+            write('slice parameter ''');
+            WritePool(p^.sym^.at, p^.sym^.len);
+            write(''' needs an array or a slice of one, but the argument is ');
+            WriteTypeName(a^.ntype);
+            writeln;
+            okVar := true   { reported here; not again below }
+          end
+        end;
         { No implicit conversion is possible through a reference, so the types
           must be the same rather than merely assignment-compatible. }
         if (not okVar) and (a^.ntype <> nil) and (p^.sym^.stype <> nil) and
@@ -12364,6 +12504,11 @@ begin
             ErrorAt(c^.line, c^.col);
             writeln('''length'' takes one string')
           end
+          { ADR-0125: a slice answers `length` too. It and a string are the
+            same shape -- an address and a count -- and giving one question two
+            spellings would be the invention, not this. }
+          else if IsSlice(c^.clArgs^.ntype) then
+            { the count, and nothing to check }
           else
             CheckStringArgs(c, c^.clArgs)
         end
@@ -13088,7 +13233,7 @@ end;
 
 procedure CheckExpr;
 var t, b, sv: typePtr; f: fieldPtr; binding: symPtr; qual: nodePtr;
-    p, ds: symListPtr; tv: numPtr; found: boolean;
+    p, ds: symListPtr; tv: numPtr; found, sliced: boolean;
 begin
   if e <> nil then
     case e^.kind of
@@ -13145,9 +13290,36 @@ begin
         CheckExpr(e^.ssHi);
         b := e^.ssBase^.ntype;
         e^.ntype := canonStringType;
+        { ADR-0125: the same designator over an array is a *slice*, and only
+          the base's type tells the two apart -- which Sema knows and the
+          parser does not. That is why the feature needed no syntax: 6.5.6
+          already spells `a[i..j]` for a string. }
+        { ADR-0125 is a dialect feature, and `a[i..j]` over an array is the
+          half of it that a conformance mode can *see*: §6.5.6 gives that
+          designator to a string only, so both other modes must go on saying
+          so. difftest is what noticed -- src/ is frozen at the conformance
+          surface and kept the old answer for tests/extended/substring_errors,
+          correctly. }
+        sliced := (langStd = stdAfterschool) and
+                  (IsSlice(b) or (IsArray(b) and not IsCharArray(b)));
+        if sliced then begin
+          if IsArray(b) and not IsInteger(b^.indexType) then begin
+            ErrorAt(e^.line, e^.col);
+            write('a slice can be taken only of an array indexed by ');
+            write('integers, and ');
+            WriteTypeName(b);
+            writeln(' is not');
+            { The bounds are then values of that index type, so the two checks
+              below would report the same mistake twice more. }
+            sliced := false;
+            e^.ssLo^.ntype := intType;
+            e^.ssHi^.ntype := intType
+          end;
+          e^.ntype := SliceOf(b^.elem)
+        end
         { 6.5.6 takes a string-*variable* and 6.8.6.5 a string-function; a char
           is a string of length 1 (6.4.3.3.1) but is not either of those. }
-        if b <> nil then
+        else if b <> nil then
           if not IsStringType(b) then begin
             ErrorAt(e^.line, e^.col);
             write('only a string can have a substring taken of it, not ');
@@ -13157,14 +13329,18 @@ begin
         if e^.ssLo^.ntype <> nil then
           if not IsInteger(e^.ssLo^.ntype) then begin
             ErrorAt(e^.ssLo^.line, e^.ssLo^.col);
-            write('a substring is bounded by integers, but this one is ');
+            if sliced then write('a slice is bounded by integers, but this ',
+                                 'one is ')
+            else write('a substring is bounded by integers, but this one is ');
             WriteTypeName(e^.ssLo^.ntype);
             writeln
           end;
         if e^.ssHi^.ntype <> nil then
           if not IsInteger(e^.ssHi^.ntype) then begin
             ErrorAt(e^.ssHi^.line, e^.ssHi^.col);
-            write('a substring is bounded by integers, but this one is ');
+            if sliced then write('a slice is bounded by integers, but this ',
+                                 'one is ')
+            else write('a substring is bounded by integers, but this one is ');
             WriteTypeName(e^.ssHi^.ntype);
             writeln
           end
@@ -13186,7 +13362,20 @@ begin
           component is a char. 6.5.3.2 makes the subscript an *integer* -- not
           a value of an index type, because a string's index-domain is
           1..length and no type names it. }
-        if IsVarString(b) then begin
+        { ADR-0125: a slice is indexed 1..length like a string, and for the
+          same reason -- no type names its index-domain, the extent having
+          arrived with the actual. }
+        if IsSlice(b) then begin
+          if e^.ixIndex^.ntype <> nil then
+            if not IsInteger(e^.ixIndex^.ntype) then begin
+              ErrorAt(e^.ixIndex^.line, e^.ixIndex^.col);
+              write('a slice is indexed by an integer, but the subscript is ');
+              WriteTypeName(e^.ixIndex^.ntype);
+              writeln
+            end;
+          e^.ntype := b^.elem
+        end
+        else if IsVarString(b) then begin
           if e^.ixIndex^.ntype <> nil then
             if not IsInteger(e^.ixIndex^.ntype) then begin
               ErrorAt(e^.ixIndex^.line, e^.ixIndex^.col);
@@ -15329,7 +15518,21 @@ begin
             n := n^.next
           end
         end;
+      { ADR-0125: this denoter, and only this one, may be `array of T`. }
+      sliceFormNode := g^.grType;
       t := ResolveType(g^.grType);
+      sliceFormNode := nil;
+      { A slice is a *view* of storage the caller owns, which is what makes it
+        a slice rather than an array -- and a value parameter is by definition
+        not a view. `protected var` is the read-only form, §6.6.3.7's own
+        spelling (ADR-0046), and copying part of an array is what a schematic
+        array by value already does. }
+      if IsSlice(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+        ErrorAt(g^.grNames^.line, g^.grNames^.col);
+        write('a slice must be a var parameter: it views the caller''s ');
+        writeln('storage, and a value parameter is a copy. Write ',
+                '''protected var'' for one that may not be written through')
+      end;
       { ISO 7185 6.6.3.2 and ISO/IEC 10206:1991 6.7.3.2: "The type possessed
         by the formal-parameter shall be one that is permitted as the
         component-type of a file-type." ContainsFile is precisely that
@@ -19656,8 +19859,9 @@ begin
         it takes the largest one that is named, which is i128's. }
       tySet: LlAlign := 16;
       { A procedural parameter is a pair of pointers: the code, and the static
-        link to call it with. }
-      tyProc: LlAlign := 8;
+        link to call it with. ADR-0125's slice is the same two-word shape with
+        a length in the second word instead of a link. }
+      tyProc, tySlice: LlAlign := 8;
       tyArray: LlAlign := LlAlign(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -19698,7 +19902,7 @@ begin
                           LlAlign(b));
       tyFile: LlSize := fileSize;
       tySet: LlSize := setBits div 8;
-      tyProc: LlSize := 16;
+      tyProc, tySlice: LlSize := 16;
       tyArray: LlSize := TypeLength(b) * LlSize(b^.elem);
       tyRecord: begin
         RecordLayout(b, s, a);
@@ -19773,6 +19977,8 @@ begin
         an argument carries the scope it was *declared* in, not the one it is
         called from -- which is the whole difficulty of the feature. }
       tyProc: write(ircode, '{ ptr, ptr }');
+      { ADR-0125: the address of the first component, and how many there are. }
+      tySlice: write(ircode, '{ ptr, i32 }');
       { ISO/IEC 10206:1991 6.4.2.2 e) makes `complex` a *simple* type, so it
         must be a value and not a thing reached through its address. A
         two-element vector is the one shape that is both: LLVM lowers it in
@@ -21313,7 +21519,7 @@ begin
         reach it" is the argument that was wrong the last two times. It costs
         no coverage: a label is not a statement and the arm was already run. }
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex, tyRestricted, tyString, tyOptional:
+      tyComplex, tyRestricted, tyString, tyOptional, tySlice:
         OpInt(0, v)
     end
 end;
@@ -21844,6 +22050,123 @@ begin
   end
 end;
 
+{ ADR-0125: the pair a slice is, from whatever designator produced it. The
+  single path to one, the way EmitString is the single path to a string's
+  pointer-and-length -- and the same three shapes: a slice formal, which holds
+  its pair in a slot; a whole array, whose address is its first component's and
+  whose count is its extent; and `a[i..j]`, which is the first two with
+  arithmetic on top.
+
+  The range is checked here and not by the callee, because this is where the
+  base's own extent is still known. }
+procedure EmitSliceValue(e: nodePtr; var base, len: str);
+var t, bt: typePtr; slot, half, hdr, lo, hi, off, adj, stride, bytes: str;
+begin
+  t := e^.ntype;
+  if (e^.kind = nkVar) and (e^.vrField = nil) and IsSlice(e^.vrSym^.stype) then
+  begin
+    { A slice formal, handed on. Both halves come out of the slot; nothing is
+      re-checked, the pair having been checked where it was made. }
+    FrameSlot(e^.vrSym, slot);
+    Def(half);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(t);
+    write(ircode, ', ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 0');
+    Def(base);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(half);
+    writeln(ircode);
+    Def(half);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(t);
+    write(ircode, ', ptr ');
+    PutOp(slot);
+    writeln(ircode, ', i32 0, i32 1');
+    Def(len);
+    write(ircode, 'load i32, ptr ');
+    PutOp(half);
+    writeln(ircode)
+  end
+  else if e^.kind = nkSubstr then begin
+    EmitSliceValue(e^.ssBase, base, len);
+    bt := e^.ssBase^.ntype;
+    EmitExpr(e^.ssLo, lo);
+    EmitExpr(e^.ssHi, hi);
+    { An array carries its own lower bound and a slice is always 1-based, so
+      the indices are normalised before anything is checked -- which is what
+      lets one runtime routine answer for both. }
+    if IsArray(bt) and not IsSlice(bt) then begin
+      StrClear(hdr);
+      if DynamicExtent(bt) then HeapHeader(e^.ssBase, hdr);
+      BoundValue(bt, false, hdr, off);
+      Def(adj);
+      write(ircode, 'sub i32 ');
+      PutOp(lo);
+      write(ircode, ', ');
+      PutOp(off);
+      writeln(ircode);
+      Def(lo);
+      write(ircode, 'add i32 ');
+      PutOp(adj);
+      writeln(ircode, ', 1');
+      Def(adj);
+      write(ircode, 'sub i32 ');
+      PutOp(hi);
+      write(ircode, ', ');
+      PutOp(off);
+      writeln(ircode);
+      Def(hi);
+      write(ircode, 'add i32 ');
+      PutOp(adj);
+      writeln(ircode, ', 1')
+    end;
+    write(ircode, '  call void @pas_slice_check(i32 ');
+    PutOp(lo);
+    write(ircode, ', i32 ');
+    PutOp(hi);
+    write(ircode, ', i32 ');
+    PutOp(len);
+    writeln(ircode, ')');
+    { The new count, and then the new base: (hi - lo) + 1 components, starting
+      (lo - 1) of them along. }
+    Def(adj);
+    write(ircode, 'sub i32 ');
+    PutOp(hi);
+    write(ircode, ', ');
+    PutOp(lo);
+    writeln(ircode);
+    Def(len);
+    write(ircode, 'add i32 ');
+    PutOp(adj);
+    writeln(ircode, ', 1');
+    Def(off);
+    write(ircode, 'sub i32 ');
+    PutOp(lo);
+    writeln(ircode, ', 1');
+    Def(bytes);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(t^.elem);
+    write(ircode, ', ptr ');
+    PutOp(base);
+    write(ircode, ', i32 ');
+    PutOp(off);
+    writeln(ircode);
+    base := bytes
+  end
+  else begin
+    { A whole array. Its address is its first component's -- ADR-0017 lays an
+      array out as its components and nothing else -- and its extent is what
+      DynLength answers, which is a constant unless a discriminant decided it. }
+    EmitAddress(e, base);
+    StrClear(hdr);
+    if DynamicExtent(e^.ntype) then HeapHeader(e, hdr);
+    DynLength(e^.ntype, hdr, len)
+  end;
+  StrClear(stride)
+end;
+
 { ADR-0121 said the call site is the whole of the ABI -- LLVM does not check a
   direct call against the declaration under opaque pointers -- and ADR-0122
   makes that literal: a foreign call's arguments are their own rule, because
@@ -21966,6 +22289,14 @@ begin
         will store (ADR-0115). The conversion is the callee's, because only
         its slot has the capacity to pad to. }
       EmitString(arg, a, alen);
+      AppendOpnd(head, tail, a, true, nil);
+      AppendOpnd(head, tail, alen, false, intType)
+    end
+    { ADR-0125: the address of the first component and how many there are.
+      The range was checked where the designator was written, which is the
+      only place the base's own extent is still known. }
+    else if IsSlice(p^.sym^.stype) then begin
+      EmitSliceValue(arg, a, alen);
       AppendOpnd(head, tail, a, true, nil);
       AppendOpnd(head, tail, alen, false, intType)
     end
@@ -23166,7 +23497,9 @@ begin
     emitted by EmitString; the rest answer about one, so they take the pair
     apart here. }
   else if e^.clBuiltin = biLength then begin
-    EmitString(e^.clArgs, x, v)
+    { ADR-0125: a slice answers the same question through the same pair. }
+    if IsSlice(e^.clArgs^.ntype) then EmitSliceValue(e^.clArgs, x, v)
+    else EmitString(e^.clArgs, x, v)
   end
   else if e^.clBuiltin = biIndex then begin
     EmitString(e^.clArgs, x, y);
@@ -23739,7 +24072,44 @@ begin
         not the capacity (6.5.3.2), because the index-domain is the value's and
         the capacity is the type's -- so this cannot go through the array path,
         whose bounds come from the type. }
-      if IsVarString(arr) then begin
+      { ADR-0125: a slice is indexed against the length it carries, which is
+        the only bound in scope -- the callee cannot see where its slice came
+        from, and that is exactly the property the pair exists for. }
+      if IsSlice(arr) then begin
+        EmitSliceValue(e^.ixBase, base, hi);
+        EmitExpr(e^.ixIndex, idx);
+        Def(below);
+        write(ircode, 'icmp slt i32 ');
+        PutOp(idx);
+        writeln(ircode, ', 1');
+        Def(above);
+        write(ircode, 'icmp sgt i32 ');
+        PutOp(idx);
+        write(ircode, ', ');
+        PutOp(hi);
+        writeln(ircode);
+        Def(bad);
+        write(ircode, 'or i1 ');
+        PutOp(below);
+        write(ircode, ', ');
+        PutOp(above);
+        writeln(ircode);
+        OpInt(1, lo);
+        EmitTrapIndex(bad, lo, hi);
+        Def(off);
+        write(ircode, 'sub i32 ');
+        PutOp(idx);
+        writeln(ircode, ', 1');
+        Def(v);
+        write(ircode, 'getelementptr inbounds ');
+        PutLlType(arr^.elem);
+        write(ircode, ', ptr ');
+        PutOp(base);
+        write(ircode, ', i32 ');
+        PutOp(off);
+        writeln(ircode)
+      end
+      else if IsVarString(arr) then begin
         EmitString(e^.ixBase, base, hi);
         EmitExpr(e^.ixIndex, idx);
         Def(below);
@@ -26011,6 +26381,10 @@ begin
     its value. Everything else -- including a structured value parameter, which
     the prologue copies in -- holds the value itself. }
   if s^.descSchema <> nil then PutDescType(s)
+  { ADR-0125: a slice's slot holds the pair even though it is a var parameter,
+    because the *length* is not in the caller's variable -- it is what the
+    designator computed, and there is nowhere else for it to live. }
+  else if IsSlice(s^.stype) then PutLlType(s^.stype)
   else if s^.kind = skVarParam then write(ircode, 'ptr')
   else PutLlType(s^.stype)
 end;
@@ -26043,6 +26417,15 @@ begin
         padding has somewhere to happen (ADR-0115). }
       else if (p^.sym^.kind <> skVarParam) and IsVarString(p^.sym^.stype) then
       begin
+        write(ircode, 'ptr');
+        if named then write(ircode, ' %a', k:1);
+        k := k + 1;
+        write(ircode, ', i32')
+      end
+      { ADR-0125's slice is the third, and for ADR-0030's reason a third time:
+        an address and a count, and no single object whose address would carry
+        both. }
+      else if IsSlice(p^.sym^.stype) then begin
         write(ircode, 'ptr');
         if named then write(ircode, ' %a', k:1);
         k := k + 1;
@@ -26536,6 +26919,37 @@ begin
           writeln(ircode)
         end
       end
+      { ADR-0125: two arguments into one slot, exactly as a procedural
+        parameter's pair is assembled -- the address first, then the count. }
+      else if IsSlice(l^.sym^.stype) then begin
+        Def(half);
+        write(ircode, 'getelementptr inbounds ');
+        PutLlType(l^.sym^.stype);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 0');
+        write(ircode, '  store ptr ');
+        PutOp(arg);
+        write(ircode, ', ptr ');
+        PutOp(half);
+        writeln(ircode);
+        k := k + 1;
+        StrClear(arg);
+        StrAppend(arg, '%');
+        StrAppend(arg, 'a');
+        AppendInt(arg, k);
+        Def(half);
+        write(ircode, 'getelementptr inbounds ');
+        PutLlType(l^.sym^.stype);
+        write(ircode, ', ptr ');
+        PutOp(slot);
+        writeln(ircode, ', i32 0, i32 1');
+        write(ircode, '  store i32 ');
+        PutOp(arg);
+        write(ircode, ', ptr ');
+        PutOp(half);
+        writeln(ircode)
+      end
       else if l^.sym^.kind = skProcParam then begin
         { Two arguments, one slot: the pair is assembled here and never exists
           as a value. }
@@ -26785,6 +27199,8 @@ begin
     rather than writing it -- the layout of an optional stays here. }
   writeln(ircode, 'declare ptr @pas_str_cstr(ptr, i32)');
   writeln(ircode, 'declare i32 @pas_cstr_take(ptr, i32, ptr)');
+  { ADR-0125's slice range, normalised to the base's own 1..n. }
+  writeln(ircode, 'declare void @pas_slice_check(i32, i32, i32)');
   { How much of the runtime's string arena is in use -- the one thing this
     module names in the runtime that is not a function (ADR-0111). It is data
     rather than a mark/release pair so that the read every prologue makes is a
@@ -27305,6 +27721,7 @@ begin
   heapTypes := nil;
   newTuple := nil;
   genericFor := nil;
+  sliceFormNode := nil;
   dynamicVarFor := nil;
   dynBoundsFor := nil;
   variantField := false;
