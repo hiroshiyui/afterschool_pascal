@@ -439,13 +439,41 @@ mutation rather than by running it:
   file never does and a pipe blocks rather than truncating. Its failing exit is
   covered, the retry is not, and that is written down rather than left.
 
-### What is still blocked on it
+### The twelfth increment: the wall was a misdiagnosis
 
-**`errno`, and it is now asked for by two modules rather than one.** PasFS
-answers `errIO` for every failure and PasIO does the same, so "the file was not
-there" and "the directory is not writable" are one code twice over. It is
-`*__errno_location()` — a returned pointer, which is ADR-0122's open half — and
-it is the cheapest thing on the other side of that wall.
+ADR-0131, and it closes the entry that stood here — the one three records in a
+row had closed by naming. **The reason every one of them gave was wrong.**
+
+They said `errno` is unreachable because glibc spells it
+`*__errno_location()`, a function returning `int *`, and a returned pointer is
+what ADR-0122 does not admit. True, and a detail of one C library. The reason
+that matters is in the language: **C specifies `errno` as a macro.** It has no
+linker symbol, so no foreign-function interface can bind it — not this one,
+not a better one, not one with a header parser, which would read the macro and
+still have nothing to call. So it was never blocked on ADR-0109's
+memory-safety model at all, and the thing it was waiting for is the oldest
+mechanism here: `runtime/pasrt.c`, which is where anything not expressible in
+the emitted IR has always gone.
+
+Three things worth carrying forward:
+
+- **The runtime now has two surfaces, and the prefix is the decision.**
+  `ReservedForeignName` refuses the whole `pas_` prefix and is right to — those
+  are names the emitted module declares, and LLVM will not take a second
+  declaration. A routine the emitter *never* names is not that hazard, so it
+  gets `pasx_` and a program binds it. That keeps the predicate a mirror of the
+  emitter rather than a list of exceptions, which is the property
+  `foreign-reserved` fails in both directions to hold.
+- **`strerror` needed nothing.** It answers a `char *` and ADR-0123's optional
+  string already receives one, with the copy made at the call site. The half of
+  this increment that looked hardest was already paid for.
+- **A wall recorded three times is worth re-deriving once.** Each record
+  restated its predecessor's reason rather than the clause behind it, and the
+  restatement was cheaper to believe than to check. The same shape as
+  ADR-0067's `pack` and `page`: three documents asserting something no probe
+  had been written for.
+
+### What is still blocked on it
 
 **A socket**, which needs `struct sockaddr *`: a pointer to a struct is the
 part of ADR-0121's type mapping that is still entirely absent, and unlike a

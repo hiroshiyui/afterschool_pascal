@@ -365,9 +365,15 @@ Overflow traps as `integer`'s does, at both ends: `-maxint64..maxint64` is the
 type, so the machine word's least value is not one of its values.
 
 A binding is a module that exports Pascal and keeps the directive to itself —
-`lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`
-and `lib/dialect/pasio.pas` are the four, and they are what a caller sees
-instead.
+`lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
+`lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are
+what a caller sees instead.
+
+**The runtime has a second surface**, and it is one routine wide (ADR-0131).
+`pas_` names are what the compiler emits calls to and are refused as foreign
+names; `pasx_` names are what a *program* may bind, and `pasx_errno` is the
+only one. It exists because C specifies `errno` as a **macro**, so it has no
+linker symbol any foreign-function interface could name.
 
 ## The standard library
 
@@ -398,6 +404,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists` — the file system through `external`, answering an `ErrorCode` |
 | `lib/dialect/pasenv.pas` | `Lookup`, `LookupOr`, `Defined`, `Define`, `Undefine` — the environment, where an unset variable is `nil` and one set to nothing is not |
 | `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see |
+| `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
@@ -501,10 +508,17 @@ now crosses it (ADR-0122). A string now comes back too
 (ADR-0123), ADR-0125 gives the language the buffer shape a socket needs,
 ADR-0128 the 64-bit integer an `ssize_t` comes back as, and ADR-0129 puts the
 two together: `read`, `write`, `recv` and `send` are bindable, every word of
-them. What is still missing is every returned pointer that is not a string —
-`getcwd`, `readlink`, `strerror`, and `errno`, which is `*__errno_location()`
-and is why a failure in `lib/dialect/pasfs.pas` is still `errIO` and nothing
-finer. A container waits on something else entirely —
+them. And a failure's *reason* is readable: ADR-0131 puts `errno` in the
+runtime, because C makes it a **macro** with no symbol to bind, and `strerror`
+needed nothing new — a `char *` result is what ADR-0123 already receives. The
+code a binding module answers stays `errIO`, classifying one needing header
+numbers.
+
+What is still missing is a returned pointer that is **not** a string, which is
+where the memory-safety model is still the blocker: `getcwd` and `readlink`
+write into a caller's buffer and could be had, but a `struct sockaddr *` has a
+layout C fixes and this compiler would have to agree with, and that is what
+stands between here and a socket. A container waits on something else entirely —
 parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
 the ordering.
 

@@ -483,9 +483,29 @@ appears below in the release where it still existed.
   through buffered streams while everything here is unbuffered — writing to
   `StdOut` from both interleaves by whichever flushed last.
 
-  Failures are `errIO` and nothing finer, `errno` being `*__errno_location()`
-  and a returned pointer being what ADR-0122 does not admit. That is now the
-  second module saying so.
+  Failures are `errIO` and nothing finer. The *reason* is readable through
+  `PasOS` below.
+
+- **`PasOS` — why the last call failed** (`lib/dialect/`, ADR-0131):
+  `LastErrorNumber`, `ErrorNumberText`, `LastErrorText`. Two failures that
+  answer one `errIO` now say *No such file or directory* and *Not a
+  directory*.
+
+  **`errno` is a macro**, so it has no linker symbol and no foreign-function
+  interface can bind it — which is why it is `runtime/pasrt.c` and not a
+  language decision. Three records had said it was unreachable because glibc
+  spells it `*__errno_location()`, a returned pointer; that was true and was
+  not the reason.
+
+  The runtime therefore has a **second surface**: `pas_` names are what the
+  compiler emits calls to and are refused as foreign names, `pasx_` names are
+  what a program may bind, and `pasx_errno` is the only one. `strerror` needed
+  nothing new — a `char *` result is what ADR-0123 already receives.
+
+  It gives the sentence and **not** a classification: ENOENT and EACCES are
+  numbers in a header this compiler cannot read, so the code a binding module
+  answers stays PasError's closed set. And the value is meaningful only in the
+  statement after the one that failed, which is C's contract.
 
 ### Changed
 
