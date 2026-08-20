@@ -209,13 +209,16 @@ python3 verify/verify.py
 
 For each construct, `verify/` states what ISO 7185 requires of the result as a
 *property*, models what the compiler emits, and asks Z3 whether any input makes
-the two disagree. Forty-three rules are currently established — the
+the two disagree. The rules established are the
 non-negative `mod`, truncating `div`, `odd` on negative values, ordinal `char`
 comparison, the exact integer-to-real widening, the `for` loop's inability to
 overflow, an array subscript's inability to leave its bounds, a subrange's
 inability to hold a value outside it, a set constructor containing exactly the
 members it names, and the digit accumulator in `read` being unable to wrap
-before its check sees it — twenty-seven of them for all 2³² inputs.
+before its check sees it — most of them for all 2³² inputs. **The count lives
+in `README.md` and nowhere else**, deliberately: it has moved four times, and
+this paragraph carried a stale one for three releases because it kept a second
+copy.
 
 Several rules keep their bounds *symbolic*, so they are theorems about every
 array, every subrange, every enumeration and every set base type rather than

@@ -1114,8 +1114,9 @@ processor — that one is the standard's own option rather than a shortfall.
 A compiler is the one program whose bugs are inherited by everything it builds,
 and a miscompilation is silent — the source is right, the test is right, the
 answer is wrong. So the arithmetic this compiler emits is **proved** correct
-rather than sampled: forty-three rules under Z3, twenty-seven of them for all
-2³² inputs, each stating what ISO 7185 requires of a result as a *property* and
+rather than sampled: forty-six rules under Z3, thirty of them for all 2³²
+inputs and seven of those at 64 bits too, each stating what ISO 7185 requires
+of a result as a *property* and
 asking whether any input makes the emitted code disagree. Every run-time check
 is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are

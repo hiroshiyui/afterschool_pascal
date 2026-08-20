@@ -2523,7 +2523,7 @@ written it:
 
 One thing the workflow had to be told explicitly: `verify.py` *skips* when z3
 is absent, which is right for a checkout and wrong for CI — the rest of the
-suite would report green with the 43 rules never run. It asserts z3 is
+suite would report green with every rule never run. It asserts z3 is
 importable before it configures, so a green bar means the proofs ran.
 
 ## Known limitations
