@@ -1,0 +1,2 @@
+<source>:36:8: error: 'type of a' is a slice, and a slice type may be written only as a formal parameter's own type
+<source>:39:6: error: 'type of a' is a slice, and a slice type may be written only as a formal parameter's own type

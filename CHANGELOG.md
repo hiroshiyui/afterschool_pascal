@@ -15,6 +15,29 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **Assigning a slice is refused instead of writing outside an array**
+  (ADR-0143, `--std=afterschool`). `p := r` between two slice formals reached
+  `Assignable`'s last resort, which compares type *kinds* and so accepted any
+  two slices whatever their component types; CodeGen then copied
+  descriptor-sized bytes between the two arrays' **contents**, writing past the
+  end of the shorter one and exiting 0, at `-O0` and `-O2` alike.
+
+- **A slice type can no longer escape through `type of`** (ADR-0143,
+  `--std=afterschool`). ISO/IEC 10206:1991 §6.4.9's type-inquiry named a slice
+  type, so a slice could be made a variable, a type-definition, a record field,
+  an array component, a pointer domain or a file component — every position the
+  specification forbids — each holding a descriptor nothing had filled in.
+
+- **A module is mode-locked when a tagged variant is reachable through a
+  procedural parameter's own parameters** (ADR-0142). Such a module was called
+  portable, linked into a dialect program, and the program's variant check then
+  passed an unsafe read.
+
+- **An empty case-list-element may abut `otherwise`** (`--std=extended` and
+  `--std=afterschool`). `case i of 1: otherwise s end` is legal —
+  ISO/IEC 10206:1991 §6.9.3.5 makes the separator before the completer optional
+  — and was refused with *expected a statement, found 'otherwise'*.
+
 - **Comparing two slices is refused instead of emitting invalid IR**
   (ADR-0139, `--std=afterschool`). AP §6.4.5 makes two slices compatible so
   that one `array of T` parameter accepts either, and the relational operators

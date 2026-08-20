@@ -7413,6 +7413,26 @@ begin
     here. }
   else if IsProcType(toT) or IsProcType(fromT) then
     Assignable := false
+  { ADR-0143, and the same sentence a third time. A slice is not a value
+    either: 6.8.2.2 gives an array-type no assignment, and a slice is an
+    array's components with the extent taken out. The only place one may travel
+    is another slice parameter, which CheckActualParams handles in its own arm
+    -- it compares component types and then the types themselves, and never
+    asks here.
+
+    Without this, `p := r` between two slice formals fell through to the kind
+    comparison at the end, which answers on `tb^.kind = fb^.kind` and so said
+    yes for any two slices *whatever their component types*. CodeGen then
+    reached a slice through AddressOfSym, which has no slice arm and yields the
+    DATA address for a var parameter, and copied sixteen bytes of one array's
+    contents over another's -- a silent out-of-bounds write, at both -O0 and
+    -O2, exit 0.
+
+    ADR-0139 wrote this refusal for the relational operators and stopped there.
+    Assignment is the second caller of the same permission, and it was the one
+    that could corrupt memory rather than emit invalid IR. }
+  else if IsSlice(toT) or IsSlice(fromT) then
+    Assignable := false
   else if toT = fromT then
     Assignable := true
   { ADR-0123: `nil` is the absent value of every optional-type, and a value of
@@ -10981,6 +11001,28 @@ begin
       write(''' would need the discriminants that arrive with ''');
       WritePool(d^.tqAt, d^.tqLen);
       writeln(''', which is not supported');
+      ResolveInquiry := intType
+    end
+    { ADR-0143. AP 6.7.3.9.2 confines a slice type to a formal parameter's own
+      denoter, and its NOTE argued that one test suffices because "a type that
+      cannot be named cannot be created anywhere the list might have missed".
+      6.4.9 names it. `type of a` denotes the type a *possesses*, and the
+      clause's own worked example is a var parameter and a local variable
+      declared from it -- so every position 6.7.3.9.2 lists was reachable
+      through this one denoter: a variable, a type-definition, a record field,
+      an array component, a pointer domain and a file component were all
+      accepted, each holding a descriptor nothing had filled in.
+
+      Refused here, which is the one place that closes all of them, because
+      this is the only denoter that can produce a slice type without writing
+      `array of`. The NOTE's reasoning was right about needing one test and
+      wrong about where it already was. }
+    else if IsSlice(t) then begin
+      ErrorAt(d^.line, d^.col);
+      write('''type of ');
+      WritePool(d^.tqAt, d^.tqLen);
+      write(''' is a slice, and a slice type may be written only as a ');
+      writeln('formal parameter''s own type');
       ResolveInquiry := intType
     end
     else
@@ -15542,12 +15584,33 @@ begin
           else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then
           begin
             ErrorAt(s^.line, s^.col);
-            write('cannot assign ');
-            WriteTypeName(s^.asValue^.ntype);
-            write(' to a variable of type ');
-            WriteTypeName(s^.asTarget^.ntype);
-            WriteDistinctTypeNote(s^.asTarget^.ntype, s^.asValue^.ntype);
-            writeln
+            { The refusal is Assignable's (ADR-0143); this only chooses the
+              words. The general message ends with WriteDistinctTypeNote's
+              advice to declare one named type and give it to both, which is
+              impossible for a slice: AP 6.7.3.9.2 confines a slice type to a
+              parameter's own denoter, so it has no name to declare and the
+              reader would be sent after something that cannot exist.
+
+              Asked *inside* the failure rather than before it, so that the
+              predicate stays the thing being tested. Written the other way --
+              a slice arm ahead of the Assignable call -- it masked the
+              predicate at the only site that reaches it, and removing
+              Assignable's own slice refusal then changed nothing anywhere: a
+              mutation that should have restored an out-of-bounds write left
+              all 623 cases green. }
+            if IsSlice(s^.asTarget^.ntype) or IsSlice(s^.asValue^.ntype) then
+              writeln('a slice cannot be assigned: it is a view of the ',
+                      'caller''s array, not a value, and its length is not ',
+                      'in its type -- assign the components, or pass it on ',
+                      'as a slice')
+            else begin
+              write('cannot assign ');
+              WriteTypeName(s^.asValue^.ntype);
+              write(' to a variable of type ');
+              WriteTypeName(s^.asTarget^.ntype);
+              WriteDistinctTypeNote(s^.asTarget^.ntype, s^.asValue^.ntype);
+              writeln
+            end
           end
         end
       end;

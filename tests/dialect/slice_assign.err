@@ -1,0 +1,4 @@
+<source>:49:3: error: a slice cannot be assigned: it is a view of the caller's array, not a value, and its length is not in its type -- assign the components, or pass it on as a slice
+<source>:55:3: error: a slice cannot be assigned: it is a view of the caller's array, not a value, and its length is not in its type -- assign the components, or pass it on as a slice
+<source>:62:3: error: a slice cannot be assigned: it is a view of the caller's array, not a value, and its length is not in its type -- assign the components, or pass it on as a slice
+<source>:67:3: error: a slice cannot be assigned: it is a view of the caller's array, not a value, and its length is not in its type -- assign the components, or pass it on as a slice

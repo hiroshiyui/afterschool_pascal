@@ -519,7 +519,25 @@ the extent is exactly what a slice exists not to fix.
 
 #### 6.4.6 Assignment-compatibility [extended]
 
-Extended by 6.4.2.6.3 (`int64`) and 6.4.11.6 (optional-types). No other change.
+Extended by 6.4.2.6.3 (`int64`) and 6.4.11.6 (optional-types).
+
+No value shall be assignment-compatible with a slice (6.7.3.9), and a slice
+shall not be assignment-compatible with any type.
+
+NOTE 1 — Like 6.8.3.5, this is a restriction that exists because 6.4.5 is an
+extension. ISO/IEC 10206:1991 §6.4.6's six alternatives reach a slice through
+none of them — it is not ordinal, not a set, not a string-type or the char-type,
+and two slices are never the same type — so this states what that clause already
+implies, in the one place a reader will look for it.
+
+It is stated rather than left implied because the processor did not enforce it:
+`p := r` between two slice formals was accepted and copied descriptor-sized
+bytes between the two arrays' *contents*, writing outside the shorter one and
+exiting 0 (ADR-0143).
+
+NOTE 2 — A slice reaches its callee by 6.7.3.9.3, which is a rule about
+parameters and not about assignment. Nothing else in this document gives a
+slice a way to travel.
 
 ### 6.5 Declarations and denotations of variables
 
@@ -582,9 +600,20 @@ type-denoter of a type-definition, of a variable-declaration, of a record's
 field, of an array's component, of a function's result, or of another
 slice-parameter-type.
 
-NOTE — This is stronger than "a slice may not be a variable" and needs one test
-rather than a list of positions: a type that cannot be named cannot be created
-anywhere the list might have missed.
+A slice-parameter-type shall not be the type denoted by a type-inquiry
+(ISO/IEC 10206:1991 §6.4.9).
+
+NOTE 1 — This is stronger than "a slice may not be a variable", and the list of
+positions is discharged by one test — but not the test the first draft of this
+clause named. It argued that *a type that cannot be named cannot be created
+anywhere the list might have missed*, and §6.4.9 names it: `type of a` denotes
+the type its object possesses, and that clause's own worked example is a `var`
+parameter with a local variable declared from it. Every position listed above
+was reachable through that one denoter. The paragraph before this NOTE is the
+test the argument wanted (ADR-0143).
+
+NOTE 2 — A type-inquiry is the only denoter that can produce a slice type
+without writing `array of`, which is why one sentence closes the family.
 
 **6.7.3.9.3 Parameter kind, and the actual.** A slice parameter shall be a
 variable parameter (§6.7.3.3) or a protected variable parameter — `protected`
@@ -1031,6 +1060,22 @@ was not a divergence between a record and the processor — no record said
 anything about it either way, which is the failure mode a specification exists
 to close: a rule nobody wrote down is a rule nobody can check.
 
+**E.8 A slice was assignable, and 6.4.9 could name its type.** Two defects with
+one root: 6.4.5's compatibility is asked by more callers than the clause was
+written for. `p := r` between two slice formals copied descriptor-sized bytes
+between the arrays' contents and wrote outside the shorter one, exit 0; and
+6.7.3.9.2's NOTE argued that a slice type has no name while
+ISO/IEC 10206:1991 §6.4.9's `type of` supplies one, which made every position
+that clause forbids reachable. **Found by two independent readers of a
+specification audit, fixed by ADR-0143**, and 6.4.6 and 6.7.3.9.2 now state
+both.
+
+Unlike E.5 and E.7 this is a divergence between the document's *reasoning* and
+the processor rather than between its requirements and the processor: the
+requirement in 6.7.3.9.2 was right and unenforced, and its NOTE explained why
+enforcement was unnecessary. A NOTE is informative and cannot be wrong about
+what is required; it can be wrong about why, and this one was.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -1050,3 +1095,5 @@ to close: a rule nobody wrote down is a rule nobody can check.
 | 4, 5.5, Annex E | ADR-0135 |
 | 6.5.6 NOTE 3, Annex E.6 | ADR-0138 |
 | 6.8.3.5, Annex E.7 | ADR-0139 |
+| 6.13.1 (the walk) | ADR-0142 |
+| 6.4.6, 6.7.3.9.2, Annex E.8 | ADR-0143 |

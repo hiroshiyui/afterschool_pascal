@@ -136,8 +136,8 @@ Feature: The dialect contains Extended Pascal
       """
 
   # ...and the mirror, which is what makes the first mean something: the same
-  # designator over an array that is *not* a string-type yields a slice, which
-  # no string variable will accept.
+  # designator over an array that is *not* a string-type yields a slice, and a
+  # slice is not a value any variable can be assigned.
   @afterschool:6.5.6
   Scenario: the same designator over a non-string array yields a slice
     Given the Afterschool Pascal program
@@ -150,7 +150,7 @@ Feature: The dialect contains Extended Pascal
     Then it is rejected
      And the diagnostic includes
       """
-      cannot assign array of char to a variable of type string(10)
+      a slice cannot be assigned
       """
 
   @afterschool:6.5.6
