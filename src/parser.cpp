@@ -1286,15 +1286,19 @@ StmtPtr Parser::parseStatement() {
   case Tok::KwWith:   return parseWith();
   case Tok::KwCase:   return parseCase();
   case Tok::Ident:    return parseIdentStatement();
-  // ISO 7185 §6.8.1 makes an empty statement a statement, so every token that
+  // ISO 7185 §6.8.2.1 makes an empty statement a statement, so every token that
   // can *follow* one also starts one: `;` and `end` between statements, `else`
-  // after a then-branch, `until` after a repeat body. Leaving `else` out made
+  // after a then-branch, `until` after a repeat body, and — under
+  // ISO/IEC 10206:1991, whose §6.9.2.1 is the same sentence — `otherwise`
+  // after a case-list-element. Leaving `else` out made
   // `if c then ; else s` — legal Pascal — a syntax error, which was found by
-  // having to write around it while porting Sema (ADR-0024).
+  // having to write around it while porting Sema (ADR-0024); `otherwise` was
+  // missing for the same reason and found by a specification audit.
   case Tok::KwEnd:
   case Tok::Semi:
   case Tok::KwElse:
   case Tok::KwUntil:
+  case Tok::KwOtherwise:
     return makeNode<EmptyStmt>(cur());
   case Tok::KwGoto: {
     auto s = makeNode<GotoStmt>(cur());

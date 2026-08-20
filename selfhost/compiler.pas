@@ -5329,10 +5329,20 @@ begin
     else if Check(tkWith) then s := ParseWith
     else if Check(tkCase) then s := ParseCase
     else if Check(tkIdent) then s := ParseIdentStatement
-    { ISO 7185 6.8.1 makes an empty statement a statement, so every token that
+    { ISO 7185 6.8.2.1 makes an empty statement a statement, so every token that
       can *follow* one also starts one: ';' and 'end' between statements,
-      'else' after a then-branch, 'until' after a repeat body. }
+      'else' after a then-branch, 'until' after a repeat body, and -- under
+      ISO/IEC 10206:1991, whose 6.9.2.1 is the same sentence -- 'otherwise'
+      after a case-list-element.
+
+      That fifth one was missing, and `case i of 1: otherwise s end` is legal:
+      6.9.3.5 writes the separator before the completer as `[ ';' ]`, so an
+      empty arm body may abut `otherwise` with nothing between them. Under
+      ISO 7185 the token never arrives -- `otherwise` is index 36 of the
+      keyword table and that standard reserves 35 -- so the test costs it
+      nothing and needs no guard. }
     else if Check(tkEnd) or Check(tkSemi) or Check(tkElse) or Check(tkUntil)
+            or Check(tkOtherwise)
     then
       s := NewNode(nkEmpty, CurLine, CurCol)
     else if Check(tkGoto) then begin
