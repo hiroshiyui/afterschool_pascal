@@ -85,8 +85,51 @@ Feature: The dialect contains Extended Pascal
       5
       """
 
+  # The requirement 6.5.6 states is the *exclusion*: a string-type is sliced as
+  # a substring and not as a slice. It is not a special case but the containment
+  # itself -- a packed array of char is a string-type AND an array with an
+  # integer index-type, so the slice reading would take s[1..3] away from every
+  # conforming program that writes one. The first draft of the clause omitted
+  # this and said the opposite of what the processor does (Annex E.6).
   @afterschool:6.5.6
-  Scenario: a[i..j] over an array is a slice here and a substring error there
+  Scenario: a substring of a string-type is still a substring under the dialect
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var s: packed array [1..6] of char; t: string(10);
+      begin
+        s := 'abcdef';
+        t := s[2..4];
+        writeln(t)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      bcd
+      """
+
+  # ...and the mirror, which is what makes the first mean something: the same
+  # designator over an array that is *not* a string-type yields a slice, which
+  # no string variable will accept.
+  @afterschool:6.5.6
+  Scenario: the same designator over a non-string array yields a slice
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var c: array [1..6] of char; t: string(10);
+      begin t := c[2..4] end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      cannot assign array of char to a variable of type string(10)
+      """
+
+  @afterschool:6.5.6
+  Scenario: the slice denoter is refused by the conformance mode
     Given the Extended Pascal program
       """
       program p(output);

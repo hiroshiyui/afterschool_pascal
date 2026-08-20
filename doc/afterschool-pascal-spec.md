@@ -500,9 +500,13 @@ type, and its value shall be in the closed range 1 to the slice's length
 
 #### 6.5.6 Substring-variables [extended]
 
-Where the variable preceding `[` denotes an array whose index-type is an integer
-type, `a[i..j]` shall denote a slice of that array (6.7.3.9.3) rather than the
-substring ISO/IEC 10206:1991 §6.5.6 gives a string.
+Where the variable preceding `[` denotes an array that is **not** of a
+string-type and whose index-type is an integer type, `a[i..j]` shall denote a
+slice of that array (6.7.3.9.3) rather than the substring ISO/IEC 10206:1991
+§6.5.6 gives a string.
+
+Where it denotes a variable of a string-type, §6.5.6 is unchanged and `a[i..j]`
+shall denote a substring.
 
 Which construct is denoted shall be determined by the type of the variable
 preceding `[`, and by nothing else.
@@ -514,6 +518,15 @@ seven times.
 NOTE 2 — In a conformance mode `a[i..j]` remains available only for a string,
 and the diagnostic is unchanged. The dialect's reading of the designator is
 gated on the mode for that reason (ADR-0125).
+
+NOTE 3 — The string-type exclusion is not a special case; it is what containment
+requires. A `packed array [1..n] of char` is a string-type (§6.4.3.3.2) *and* an
+array with an integer index-type, so without the first paragraph's exclusion
+both readings would apply to it — and the slice reading would take `s[1..3]`
+away from every ISO/IEC 10206:1991 program that writes one, which is exactly
+what a dialect containing that standard may not do. The first draft of this
+clause omitted the exclusion and said the opposite of what the processor does;
+the processor was right. Recorded in Annex E.
 
 ### 6.7 Procedure and function declarations
 
@@ -962,6 +975,29 @@ ADR-0136 settled the language question the defect exposed — whether such a
 constant is refused or admitted — in favour of refusing it, and 6.4.2.6.5 now
 states it. `tests/dialect/int64_const.pas` is the case.
 
+**E.6 A string-type is sliced as a substring, and the first draft of 6.5.6
+said otherwise.** ADR-0125's rule is "an array whose index-type is an integer
+type", and a `packed array [1..n] of char` is one — so as first written this
+document made `s[1..3]` a slice for exactly the variables ISO/IEC 10206:1991
+gives a substring. The processor does not do that: it asks whether the variable
+has a string-type first, and only then whether it is a sliceable array. The
+processor is right and the document was wrong, because the slice reading would
+take a substring away from every conforming program that writes one, which is
+what 6.0.1's containment forbids. 6.5.6 now states the exclusion and NOTE 3
+gives the reason.
+
+Found by ADR-0138's containment sweep — not directly, since a conforming
+program cannot spell a slice, but by following the one case in 228 that the
+sweep reports as divergent.
+
+**E.7 Two slices are compatible and were comparable.** 6.4.5's compatibility is
+for parameter passing; the relational operators ask compatibility, so
+`a[1..2] = a[3..4]` was accepted and lowered to invalid IR. **Found here,
+fixed by ADR-0139**, and 6.8.3.5 now states the restriction. Unlike E.5 this
+was not a divergence between a record and the processor — no record said
+anything about it either way, which is the failure mode a specification exists
+to close: a rule nobody wrote down is a rule nobody can check.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -979,3 +1015,5 @@ states it. `tests/dialect/int64_const.pas` is the case.
 | 6.7.7.10 NOTE 3 | ADR-0131 |
 | 6.7.7.8, 6.7.7.9 c) | ADR-0132 |
 | 4, 5.5, Annex E | ADR-0135 |
+| 6.5.6 NOTE 3, Annex E.6 | ADR-0138 |
+| 6.8.3.5, Annex E.7 | ADR-0139 |
