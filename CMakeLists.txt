@@ -247,6 +247,22 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
 endif()
 
+# ADR-0146: what a shared predicate permits, it permits everywhere. `Assignable`
+# is asked by eighteen routines -- assignment, the relational operators, an
+# actual parameter, a set member, a `for` statement's bounds -- and ADR-0058's
+# sentence has now cost twice over the same permission: ADR-0139 found the
+# relational operators emitting invalid IR for two slices, and ADR-0143 found
+# assignment copying one array's contents over another's, silently, at both -O0
+# and -O2. This sweeps every position the *source* contains against every type
+# `Assignable` refuses outright, and requires the program to be refused. A
+# mutation moving the slice arm one line down leaves all 625 cases green.
+if(Python3_FOUND)
+  add_test(NAME predicate-callers
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/predicate_callers.py
+                   --pascalc ${CMAKE_BINARY_DIR}/bin/pascalc)
+endif()
+
 # ...and how much of the token array this compiler's own source still leaves
 # free. Twice the loud failure of a fixed buffer (ADR-0012) has been the build
 # itself -- the array that has to hold this source is the *seed's*, so raising

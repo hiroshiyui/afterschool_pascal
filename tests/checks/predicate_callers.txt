@@ -1,0 +1,15 @@
+# Positions where a type `Assignable` refuses outright is nevertheless
+# **accepted** by a caller of `Assignable` (ADR-0146).
+#
+#     <position> <type>
+#
+# The list is empty, and that is the claim: all 63 pairs are refused. An entry
+# is an argued exception, and the bar is the one `unreachable_diagnostics.txt`
+# sets -- not "the compiler happens to allow it" but "this caller is asking a
+# different question, and here is the question".
+#
+# It fails in both directions. An acceptance with no entry is the leak this
+# gate exists for -- ADR-0139's relational operators, then ADR-0143's
+# assignment, over one permission. An entry that starts being refused is an
+# entry describing a compiler that no longer exists, which is verify/'s
+# KNOWN_GAP rule; strike it in the change that made it false.
