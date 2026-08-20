@@ -2037,7 +2037,14 @@ variable", and one test instead of a list of positions, since a name that
 cannot exist has no place a variable of it could be made. Two slices agree when
 their *components* are the same type, which reverses ADR-0017 only in
 appearance: that rule is about types a program can write, and this is one it
-cannot. The pair is ADR-0030's shape a fifth time. What it does not do is cross
+cannot. **That agreement is compatibility and not comparability** (ADR-0139):
+the relational operators ask compatibility too, so `a[1..2] = a[3..4]` rode in
+on a rule written for parameter passing and reached CodeGen, which had no
+comparison for a two-word descriptor and emitted invalid IR — an error against
+a file nobody wrote. AP §6.8.3.5 is the refusal and
+`tests/dialect/slice_compare.pas` is what fails without it. It is ADR-0058's
+sentence a second time, that a permission granted in a shared predicate leaks
+to every caller, and the sentence was already written down. The pair is ADR-0030's shape a fifth time. What it does not do is cross
 the foreign boundary, and that is a probe's finding rather than a scope limit —
 every length in the POSIX data path is `size_t` and `read`, `write` and `recv`
 all answer `ssize_t`, so the argument could cross as an `i64` the compiler

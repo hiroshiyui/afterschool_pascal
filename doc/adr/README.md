@@ -147,3 +147,4 @@ the alternatives that were rejected and why.
 | [0136](0136-a-constant-cannot-have-the-wide-type.md) | A constant cannot have the wide type, and saying so is a diagnostic rather than a crash | Accepted |
 | [0137](0137-a-module-is-mode-locked-by-what-it-exports.md) | A module is mode-locked by what it exports, not by the flag it was translated with | Accepted |
 | [0138](0138-containment-is-witnessed-by-the-corpus.md) | Containment is witnessed by the corpus, not by one program | Accepted |
+| [0139](0139-two-slices-are-compatible-and-that-is-not-comparable.md) | Two slices are compatible, and that is not permission to compare them | Accepted |

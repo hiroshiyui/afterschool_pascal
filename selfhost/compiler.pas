@@ -12377,6 +12377,30 @@ begin
             writeln(' would need the value''s own equality')
           end
         end
+        { ADR-0139: AP 6.4.5 makes two slices compatible when their component
+          types are the same, so that one `array of T` parameter accepts a
+          slice of any extent. That is a rule about *parameter passing*, and
+          the relational operators ask compatibility too -- so `a[1..2] =
+          a[3..4]` rode in on it and reached codegen, which has no comparison
+          for a two-word descriptor and emitted an `icmp eq` whose operand type
+          was the descriptor and whose operands were the literal 0: invalid IR,
+          and an error about a file nobody wrote.
+
+          This is ADR-0058's shape exactly -- a permission granted in a shared
+          predicate leaks to every caller -- and it needs writing out here for
+          ADR-0058's reason. 6.8.3.5 gives an array no relational operators at
+          all -- that is ISO/IEC 10206:1991's numbering for what ISO 7185 calls
+          6.7.2.5, and the dialect amends the former -- and a slice is an
+          array's components without even the extent, so there is nothing for
+          the dialect to have extended. }
+        else if IsSlice(l) or IsSlice(r) then begin
+          ErrorAt(b^.line, b^.col);
+          write('a slice cannot be compared: 6.4.5 makes two slices ',
+                'compatible so that one ''array of'' parameter accepts ',
+                'either, and that is not an order or an equality -- ',
+                '6.8.3.5 gives an array no relational operators');
+          writeln
+        end
         else if (HasExtended(langStd)) and IsStringOrChar(l) and
            IsStringOrChar(r) and not (IsChar(l) and IsChar(r)) then
           { padded comparison: nothing to check }

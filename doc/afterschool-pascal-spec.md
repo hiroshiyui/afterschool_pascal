@@ -196,7 +196,7 @@ Three rules, and the first is the one that matters:
   when they were written; this states what the language is now. Annex E lists
   every such divergence found.
 - **d) Its clauses are cited by scenarios that run.** `tests/spec/` takes
-  `@afterschool:<clause>`, and 44 of this document's 45 testable clauses are
+  `@afterschool:<clause>`, and 45 of this document's 46 testable clauses are
   cited by at least one scenario; the clause table those citations are checked
   against is **generated from these headings**, so a renamed clause fails the
   traceability gate rather than drifting. 6.13.1 is the one not cited — it needs
@@ -738,6 +738,34 @@ document found, and it is in Annex E.
 NOTE 3 — The routines a program may bind in this processor's own runtime are
 spelled `pasx_`, are never emitted, and are therefore never reserved. `pas_` is
 what the processor emits; `pasx_` is what a program may name (ADR-0131).
+
+### 6.8 Expressions [extended]
+
+#### 6.8.3 Operators [extended]
+
+##### 6.8.3.5 Relational operators [extended]
+
+Neither operand of a relational-operator shall be a slice (6.7.3.9).
+
+NOTE 1 — This is a restriction and not an extension, and it exists because
+6.4.5 above is one. The relational operators of ISO/IEC 10206:1991 §6.8.3.5
+require compatible operands, so making two slices compatible — which 6.4.5 does
+for the sake of parameter passing — would otherwise admit `a[1..2] = a[3..4]`
+by a rule written for something else entirely. §6.8.3.5 gives an array no
+relational operators at all, and a slice is an array's components with the
+extent taken out, so there is nothing for this amendment to have extended.
+
+NOTE 2 — The restriction is on either operand rather than on both, there being
+no type on the other side that would make the comparison mean something.
+
+NOTE 3 — A slice whose component-type is `char` is not a string-type: it is
+unpacked, and its length is not in its type. So the padded comparison
+§6.8.3.5 gives two string-types does not reach it either.
+
+NOTE 4 — Should a comparison of slices ever be wanted, it needs a rule for
+operands of unequal length, which this feature deliberately does not have —
+6.7.3.9.5's NOTE says the callee cannot see where its slice came from. That
+rule belongs here before it belongs in a processor (ADR-0139).
 
 ### 6.10 Input and output [extended]
 

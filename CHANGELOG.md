@@ -13,6 +13,17 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Comparing two slices is refused instead of emitting invalid IR**
+  (ADR-0139, `--std=afterschool`). AP §6.4.5 makes two slices compatible so
+  that one `array of T` parameter accepts either, and the relational operators
+  ask compatibility — so `a[1..2] = a[3..4]` was accepted by Sema and lowered
+  to an `icmp` over a two-word descriptor, which `clang` rejects as invalid IR
+  against a file nobody wrote. All six operators and every component type were
+  affected; `<` on two slices of `real` emitted an unsigned integer compare.
+  The new diagnostic is *a slice cannot be compared*.
+
 ### Added
 
 - **A dialect program can use the conforming library** (ADR-0137). A module

@@ -150,3 +150,41 @@ Feature: Slice parameters
       """
       15 20 5
       """
+
+  # AP 6.8.3.5 is a restriction that exists because AP 6.4.5 above is an
+  # extension. The scenario immediately above makes two slices of different
+  # lengths compatible so that one parameter accepts either; the relational
+  # operators ask compatibility too, so without this clause the permission
+  # granted there arrives here (ADR-0139). The two are neighbours on purpose.
+  @afterschool:6.8.3.5
+  Scenario: compatible is not comparable, and a slice has no relational operators
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var v: array [1..8] of integer;
+      begin writeln(v[1..2] = v[3..4]) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a slice cannot be compared
+      """
+
+  # The component type is not what decides it: a slice of char is unpacked and
+  # its length is not in its type, so it is not a string-type and the padded
+  # comparison two string-types get does not reach it.
+  @afterschool:6.8.3.5
+  Scenario: a slice of char is not a string, and does not compare as one
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var c: array [1..8] of char;
+      begin writeln(c[1..2] < c[3..4]) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      6.8.3.5 gives an array no relational operators
+      """

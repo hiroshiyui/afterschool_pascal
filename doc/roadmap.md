@@ -328,7 +328,7 @@ found five divergences on its first pass, one of them a compiler crash no gate
 here could see.
 
 **The third row followed it.** `tests/spec/run.py` takes `@afterschool:` beside
-the two standards' tags, and 44 of the specification's 45 testable clauses are
+the two standards' tags, and 45 of the specification's 46 testable clauses are
 cited by a scenario — the one that is not is 6.13.1, which needs two
 program-components and a link, and the harness compiles one program
 (`doc/sop.md` §7). The clause table is generated from the document rather than
