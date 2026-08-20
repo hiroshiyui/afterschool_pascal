@@ -1,0 +1,139 @@
+# Case-statements that name a subset of their enumeration on purpose, and
+# enumeration constants no case-statement names at all (ADR-0145).
+#
+# Two entry forms:
+#
+#   routine:enumeration:n names N of M   the n-th case-statement over that
+#                                        enumeration in that routine
+#   enumeration:CONSTANT unused          a constant dispatched some other way
+#
+# The counts are the point. A constant added to an enumeration turns every
+# `names N of M` over it into `names N of M+1` and fails the gate, which is
+# exactly the moment `tyString` and then `tyOptional` needed a reader and did
+# not get one. Fix the case or move the number, and say which in the commit.
+#
+# The bar for an entry is the one `unreachable_diagnostics.txt` sets: not "I
+# could not make it crash" but "no program can reach this arm", with the reason
+# it cannot. Where the reason is a guard, name the guard.
+
+# --- a narrowed parameter -------------------------------------------------
+#
+# Five callers pass five contexts -- ctxEnumConstants, ctxFieldList,
+# ctxFormalDisc, ctxVarDecl, ctxParamList -- and `what` is read nowhere else,
+# so the five spellings are the whole domain. A sixth caller passing a sixth
+# context is what this entry is here to make fail.
+ParseNameList:ctxKind:1 names 5 of 78
+
+# --- an expression walker cannot meet a statement -------------------------
+#
+# nkGoto, nkLabeled and nkLabelDecl are statement nodes. The parser builds them
+# only from ParseStatement, so a tree rooted at an expression contains none of
+# them, and each of these four walks an expression.
+EvalConst:nodeKind:1 names 56 of 59
+CheckExpr:nodeKind:1 names 56 of 59
+EmitExpr:nodeKind:1 names 56 of 59
+ResolveType:nodeKind:1 names 56 of 59
+
+# EmitAddress is the same walk with one more exclusion: a substring designates
+# characters rather than storage, so ADR-0052 emits an assignment to one
+# through the runtime and never asks for its address.
+EmitAddress:nodeKind:1 names 55 of 59
+
+# And the statement walker's own exclusion. nkLabelDecl is the label-declaration
+# part of a block, which CheckBlock reads directly; it never appears in a
+# statement-sequence.
+CheckStmt:nodeKind:1 names 58 of 59
+
+# --- the three dump walkers each own a third of the node kinds ------------
+#
+# DumpExpr, DumpStmt and DumpTypeExpr are entered from the walker that already
+# knows which of the three a node is -- an expression, a statement, a
+# type-denoter -- so each names its own third. This is the one group where the
+# subsets are large, and it is also the group ADR-0103 gave a corpus to:
+# tests/dumps/ enters all thirty-one walker procedures.
+DumpExpr:nodeKind:1 names 17 of 59
+DumpStmt:nodeKind:1 names 14 of 59
+DumpTypeExpr:nodeKind:1 names 12 of 59
+
+# --- an operator the arm above already took -------------------------------
+#
+# The folder refuses a real constant expression before this case is reached and
+# opRealDiv and opExp are refused there; opSymDiff is a set operator, and
+# 6.8.8's constant-expression has no set-valued fold.
+EvalConstBinary:binaryOp:1 names 19 of 20
+
+# EmitBinary takes four operators before it evaluates anything. The four
+# short-circuiting ones go to EmitShortCircuit -- 6.8.3.3 makes `and then` and
+# `or else`, and in this compiler `and` and `or` too, control flow rather than
+# an instruction -- and `in` goes to EmitIn, its two operands being of
+# different kinds. opSymDiff reaches EmitSetBinary once the operands are
+# evaluated. What is left for this case is the arithmetic and the comparisons.
+EmitBinary:binaryOp:1 names 14 of 20
+
+# The two below it are nested inside its `opEq, opNe, opLt, opLe, opGt, opGe`
+# arm, one for the float predicates and one for the integer ones, so their
+# selector is those six and `opIn` is the one comparison-shaped operator that
+# is not among them -- 6.8.3.5 makes `in` a set membership, and EmitSetBinary
+# has it.
+EmitBinary:binaryOp:2 names 19 of 20
+EmitBinary:binaryOp:3 names 19 of 20
+
+# EmitStringCompare is entered only from EmitBinary's string arm, which tests
+# IsStringOrChar on both operands; `in` takes a set on its right and never
+# reaches it.
+EmitStringCompare:binaryOp:1 names 19 of 20
+
+# --- a builtin routed by shape before it is routed by name ----------------
+#
+# CheckCall splits the string builtins off first -- they take a string rather
+# than a number and each has its own arity -- so this case sees only the ones
+# whose argument is arithmetic.
+CheckCall:builtinKind:1 names 27 of 40
+
+# EmitCall's first three are catch-all lists that mean to name every builtin,
+# and each omits the same three: biBinding, biDate and biTime are the builtins
+# whose result is a *record* rather than a value in a register, so none of them
+# reaches an instruction-shaped arm. biBinding is taken by an `else if` at the
+# top of EmitCall, and biDate and biTime never reach EmitCall at all -- EmitExpr
+# has an IsTimeBuiltin arm above the call it would come through.
+EmitCall:builtinKind:1 names 37 of 40
+EmitCall:builtinKind:2 names 37 of 40
+EmitCall:builtinKind:3 names 37 of 40
+
+# The fourth is the real-valued intrinsics, guarded by the arm above it that
+# established the argument is real.
+EmitCall:builtinKind:4 names 18 of 40
+
+# --- a required procedure the arm above already took ----------------------
+#
+# EmitStdProc's outer case handles seventeen; pack and unpack are taken by an
+# `if` before it, because 6.6.5.4 gives them a shape no other required
+# procedure has -- two whole arrays and an index -- and the emitter needs the
+# two operand addresses before the dispatch rather than after it.
+EmitStdProc:stdProcKind:1 names 17 of 19
+
+# The two below it are nested inside that case's own arms -- one in the
+# `spReset, spRewrite, spGet, spPut, spUpdate, spExtend` arm and one in the
+# three-seek arm -- and each names the whole enumeration except the four that
+# no arm of the outer case can have narrowed to.
+EmitStdProc:stdProcKind:2 names 15 of 19
+EmitStdProc:stdProcKind:3 names 15 of 19
+
+# --- constants nothing dispatches on --------------------------------------
+#
+# stdKind is **ordered**, not dispatched. ADR-0117 makes the dialect contain
+# Extended Pascal, and the containment is the order of these three constants:
+# every one of the forty sites asking "does this mode have Extended Pascal?"
+# goes through `HasExtended(s)`, which is `s >= stdExtended`. A case-statement
+# over the standard is what that predicate exists to prevent -- it would have
+# to be edited at each site when a fourth mode arrives, which is precisely how
+# `langStd = stdExtended` gets written.
+stdKind:stdIso7185 unused
+stdKind:stdExtended unused
+stdKind:stdAfterschool unused
+
+# pack and unpack are compared with `=` in the four places that need them --
+# CheckStdProc twice, EmitStdProc twice -- because each place wants one of the
+# pair and the difference between them is a direction, not a dispatch.
+stdProcKind:spPack unused
+stdProcKind:spUnpack unused

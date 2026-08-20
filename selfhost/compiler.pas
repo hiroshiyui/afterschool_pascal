@@ -3280,7 +3280,7 @@ begin
     tkUntil, tkVar, tkWhile, tkWith, tkOtherwise, tkPow, tkProtected,
     tkValue, tkBindable,
     tkModule, tkExport, tkImport, tkOnly, tkQualified,
-    tkAndThen, tkOrElse: write('?')
+    tkRestricted, tkAndThen, tkOrElse: write('?')
   end
 end;
 

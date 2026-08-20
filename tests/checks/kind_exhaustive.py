@@ -15,10 +15,10 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Every case-statement over a type's kind names every kind.
+"""Every case-statement over an enumeration names every constant, or argues.
 
 A Pascal case-statement stops the program when no label matches (ADR-0018), so
-a type kind left off one of these lists is a **compiler crash** on the first
+a constant left off one of these lists is a **compiler crash** on the first
 program that reaches it -- not a wrong answer some golden could hold. That is
 why no other gate here can see it: a missing arm is not a statement, so
 line-coverage does not count it, and procedure-coverage asks only whether the
@@ -26,26 +26,65 @@ procedure was entered. difftest cannot report it either, because src/'s
 counterparts are C++ `switch`es with a `default`, so the Pascal crashes where
 the C++ answers and there is no disagreement to compare.
 
-It has now happened twice. `StaticThroughout` listed fifteen of sixteen kinds
-and omitted `tyString`, and every schema type containing a variable-string
-stopped the compiler until that was found. ADR-0123 then added `tyOptional`
-and the same routine crashed again, with all 578 cases, difftest, irtest,
-verify, llc and the BSI suite green -- doc/sop.md §7 having named both the
-hazard and the routine in advance, and having ended "a mechanical check is
-cheap and is not written". This is that check.
+It has happened twice, both in `StaticThroughout`. It listed fifteen of sixteen
+type kinds and omitted `tyString`, and every schema type containing a
+variable-string stopped the compiler until that was found. ADR-0123 then added
+`tyOptional` and the same routine crashed again, with all 578 cases, difftest,
+irtest, verify, llc and the BSI suite green.
 
-It fails in **both** directions, which is verify/'s KNOWN_GAP rule (ADR-0013)
-applied to a seventh catalogue:
+ADR-0124 wrote this check for **one** enumeration, `typeKind`, and `doc/sop.md`
+§7 has carried the rest as a known gap ever since: "the parser and both walkers
+enumerate the node kinds in long label lists, and this compiler rejects a
+duplicate label at build time, which is what caught two of them during
+ADR-0123. That is an accident of how those lists are written and not a check."
+This is the check, over all twelve.
 
-  * a kind a case-statement does not name -- the crash is there, waiting;
-  * a kind named by no case-statement at all, and by nothing else either --
-    a kind nothing switches on is a kind that was removed from the type and
-    left in the enumeration, or one added and never used.
+## What it reads
 
-What it does *not* do is judge whether an arm is **right**. `tyOptional:
-StaticThroughout := true` would satisfy this check and be wrong. The claim is
-only that every kind was considered somewhere, which is what turns a crash into
-a review.
+Both halves come from the source.
+
+  * **The enumerations.** Any `name = (c1, c2, ...)` whose every constant is a
+    lowercase tag followed by a capital -- `tkEof`, `nkInt`, `spNone`. That is
+    this compiler's own convention and it is what makes a label identify its
+    enumeration without a symbol table.
+  * **The case-statements.** `case <expr> of`, with the labels collected at
+    the statement's *own* nesting depth, so a nested case is not credited to
+    the one containing it. A **variant part** (`case kind: nodeKind of`) is not
+    a case-statement and is excluded -- §6.4.3.3 requires its labels to be
+    exactly the tag-type's values and this compiler already enforces that
+    (ADR-0096), which is a stronger check than this one.
+
+A case-statement with an `otherwise` is total by construction (§6.9.3.5) and is
+required to name nothing.
+
+## The catalogue
+
+24 of the 56 case-statements here name a subset on purpose -- `EmitSetBinary`
+is entered only for operands Sema has already established are sets, and
+`ParseNameList` has five callers passing five contexts. Each is one line of
+`partial_cases.txt` keyed by `routine:enumeration:n` -- the n-th such case in
+that routine -- recording **how many** constants it names of how many.
+
+The count is the part that pays. When a constant is added to an enumeration,
+every partial case over it changes from `17 of 19` to `17 of 20` and fails,
+which is exactly the moment `tyString` and `tyOptional` needed a reader and did
+not get one. An exhaustive case needs no entry and is simply required to stay
+exhaustive.
+
+It fails in five directions:
+
+  * an exhaustive case that stops being exhaustive;
+  * a partial case with no entry;
+  * an entry whose case is now exhaustive, or has gone -- the entry describes a
+    compiler that no longer exists, which is verify/'s KNOWN_GAP rule;
+  * an entry whose numerator or denominator moved;
+  * a constant named by no case-statement at all -- it was removed from the
+    type and left in the enumeration, or added and never used.
+
+What it does **not** do is judge whether an arm is right, or whether a subset
+is the right subset. `tyOptional: StaticThroughout := true` would satisfy this
+and be wrong. The claim is only that every constant was considered somewhere,
+which is what turns a crash into a review.
 """
 
 import pathlib
@@ -53,18 +92,26 @@ import re
 import sys
 
 SOURCE = "selfhost/compiler.pas"
+CATALOGUE = "partial_cases.txt"
 
-# `case <anything> kind of`, on one line, which is how every one of them is
-# written. A case over something else -- a token kind, a node kind -- does not
-# match, and would be a different catalogue with a different enumeration.
-CASE = re.compile(r"(?<![A-Za-z0-9_])case(?![A-Za-z0-9_]).*\bkind of\s*$",
-                  re.IGNORECASE)
-DECL = re.compile(r"^\s*typeKind\s*=\s*\(", re.IGNORECASE)
+# A constant of one of these enumerations: two or three lowercase letters and
+# then a capital or a digit. Every enumeration in compiler.pas is written this
+# way, and it is what lets a label name its own enumeration.
+CONST = re.compile(r"^[a-z]{2,3}[A-Z0-9]")
+ENUM = re.compile(r"^\s*([A-Za-z0-9_]+)\s*=\s*\(")
+
+# `case <expr> of` at the end of a line, which is how every one of them is
+# written -- and `case <name>: <type> of`, which is a variant part rather than
+# a statement and is excluded.
+CASE = re.compile(r"(?<![A-Za-z0-9_])case(?![A-Za-z0-9_]).*"
+                  r"(?<![A-Za-z0-9_])of\s*$", re.IGNORECASE)
+VARIANT = re.compile(r"(?<![A-Za-z0-9_])case\s+[A-Za-z0-9_]+\s*:\s*"
+                     r"[A-Za-z0-9_]+\s+of\s*$", re.IGNORECASE)
+HEADER = re.compile(r"^\s*(?:function|procedure)\s+([A-Za-z0-9_]+)",
+                    re.IGNORECASE)
 
 # A case-statement's arms nest with begin/case/record, and `end` closes any of
-# them. Counting words is enough once comments and string literals are gone,
-# which is what strip() below is for: this source is full of prose containing
-# the word "end", and a literal ')' or '}' inside quotes would close nothing.
+# them. Counting words is enough once comments and string literals are gone.
 OPENERS = ("begin", "case", "record")
 
 
@@ -73,7 +120,15 @@ def word(w):
                       re.IGNORECASE)
 
 
-WORDS = {w: word(w) for w in OPENERS + ("end",)}
+WORDS = {w: word(w) for w in OPENERS + ("end", "otherwise")}
+
+# A label list, and a line that is only the front of one. A list may run over
+# several lines with a comment between them, so a fragment ending in a comma is
+# held until the line that closes it -- StaticThroughout writes fourteen
+# constants over three lines that way, and a reader that lost them would call
+# an exhaustive case partial.
+LABEL = re.compile(r"^\s*([A-Za-z0-9_ ,.]+?)\s*:(?!=)")
+FRAGMENT = re.compile(r"^\s*[A-Za-z0-9_]+(\s*(,|\.\.)\s*[A-Za-z0-9_]+)*\s*,\s*$")
 
 
 def strip(text):
@@ -102,87 +157,221 @@ def strip(text):
     return "".join(out)
 
 
-def kinds(lines):
-    """The typeKind enumeration, in the order it is declared."""
+def enumerations(lines):
+    """name -> [constants], for every enumeration written the house way."""
+    found = {}
     for i, line in enumerate(lines):
-        if not DECL.match(line):
+        m = ENUM.match(line)
+        if not m:
             continue
-        text = ""
-        j = i
+        text, j = "", i
         while j < len(lines):
-            text += lines[j]
+            text += lines[j] + " "
             if ")" in lines[j]:
                 break
             j += 1
+        if ")" not in text:
+            continue
         inner = text[text.index("(") + 1:text.rindex(")")]
-        return [n.strip() for n in inner.split(",") if n.strip()]
-    return []
+        names = [n.strip() for n in inner.split(",") if n.strip()]
+        if names and all(CONST.match(n) for n in names):
+            found[m.group(1)] = names
+    return found
 
 
-def arms(lines, start, names):
-    """The kinds named between `case … kind of` and the `end` that closes it."""
-    depth, j, seen = 1, start + 1, set()
-    while j < len(lines) and depth > 0:
-        for w in OPENERS:
-            depth += len(WORDS[w].findall(lines[j]))
-        depth -= len(WORDS["end"].findall(lines[j]))
-        for name in names:
-            if word(name).search(lines[j]):
-                seen.add(name)
-        j += 1
-    return seen, j - start
+def labels(text, members):
+    """The enumeration constants a label list names, or None if it is not one.
+
+    None and the empty set are different answers: `biAbs:` is a label list,
+    `PutOp(d_):` is not one, and a case-statement's arm bodies are full of the
+    second.
+    """
+    m = LABEL.match(text)
+    if not m:
+        return None
+    got = set()
+    for item in [x.strip() for x in m.group(1).split(",") if x.strip()]:
+        for part in item.split(".."):
+            part = part.strip()
+            if part in members:
+                got.add(part)
+            elif part:
+                return None
+    return got
+
+
+def cases(lines, enums):
+    """Every case-statement over an enumeration: line, routine, enum, labels."""
+    members = {c: e for e, cs in enums.items() for c in cs}
+    owner, cur = [], "?"
+    for line in lines:
+        m = HEADER.match(line)
+        if m:
+            cur = m.group(1)
+        owner.append(cur)
+
+    out = []
+    for i, line in enumerate(lines):
+        if not CASE.search(line) or VARIANT.search(line):
+            continue
+        depth, j, seen, other, pend = 1, i + 1, set(), False, ""
+        while j < len(lines) and depth > 0:
+            here = depth
+            for w in OPENERS:
+                depth += len(WORDS[w].findall(lines[j]))
+            depth -= len(WORDS["end"].findall(lines[j]))
+            if depth <= 0:
+                break
+            # Only this statement's own arms: a nested case answers for itself.
+            if here != 1 or not lines[j].strip():
+                j += 1
+                continue
+            if WORDS["otherwise"].search(lines[j]):
+                other = True
+            # Arms are separated by `;`, and two short ones share a line in
+            # WriteOperator -- `tkPlus: write(...);  tkMinus: write(...)`. A
+            # reader that took only the first label per line called that case
+            # partial and named eleven constants it does in fact handle.
+            pieces = lines[j].split(";")
+            if FRAGMENT.match(pieces[0]):
+                pend += pieces[0].strip()
+            else:
+                got = labels(pend + pieces[0], members)
+                if got:
+                    seen |= got
+                pend = ""
+            for piece in pieces[1:]:
+                got = labels(piece, members)
+                if got:
+                    seen |= got
+            j += 1
+        if not seen:
+            continue
+        which = {members[c] for c in seen}
+        if len(which) != 1:
+            out.append((i + 1, owner[i], None, seen, other, which))
+        else:
+            out.append((i + 1, owner[i], which.pop(), seen, other, None))
+    return out
+
+
+def catalogue(path):
+    """Two entry forms, `#` a comment:
+
+        routine:enum:n names N of M   -- a case-statement naming a subset
+        enum:CONSTANT unused          -- a constant no case-statement names
+    """
+    listed, unused = {}, {}
+    partial = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+):(\d+)\s+names\s+"
+                         r"(\d+)\s+of\s+(\d+)\b")
+    never = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+)\s+unused\b")
+    for n, raw in enumerate(path.read_text().splitlines(), 1):
+        line = raw.split("#", 1)[0].strip()
+        if not line:
+            continue
+        m = partial.match(line)
+        if m:
+            listed[(m.group(1), m.group(2), int(m.group(3)))] = (
+                n, int(m.group(4)), int(m.group(5)))
+            continue
+        m = never.match(line)
+        if m:
+            unused[(m.group(1), m.group(2))] = n
+            continue
+        print(f"kind-exhaustive: {path.name}:{n}: expected "
+              f"`routine:enum:n names N of M` or `enum:CONSTANT unused`, "
+              f"found {line!r}", file=sys.stderr)
+        sys.exit(1)
+    return listed, unused
 
 
 def main():
     root = pathlib.Path(__file__).resolve().parents[2]
-    raw = (root / SOURCE).read_text()
-    lines = strip(raw).splitlines()
+    lines = strip((root / SOURCE).read_text()).splitlines()
+    listed, unused = catalogue(pathlib.Path(__file__).with_name(CATALOGUE))
 
-    names = kinds(lines)
-    if not names:
-        print(f"kind-exhaustive: no typeKind declaration in {SOURCE}",
+    enums = enumerations(lines)
+    if not enums:
+        print(f"kind-exhaustive: no enumeration in {SOURCE}; the pattern this "
+              f"reads for must have changed", file=sys.stderr)
+        return 1
+
+    found = cases(lines, enums)
+    if not found:
+        print("kind-exhaustive: no case-statement over an enumeration was "
+              "found; the pattern this reads for must have changed",
               file=sys.stderr)
         return 1
 
     bad = []
     covered = set()
-    found = 0
-    for i, line in enumerate(lines):
-        if not CASE.search(line):
+    ordinal = {}
+    partial = total = 0
+    for line, routine, enum, seen, other, mixed in found:
+        if enum is None:
+            bad.append(f"{SOURCE}:{line} ({routine}) has labels from "
+                       f"{', '.join(sorted(mixed))} in one case-statement")
             continue
-        seen, span = arms(lines, i, names)
-        # A case over a *kind* that names only one or two of them is switching
-        # on something else -- a node kind, a link kind. Four is the smallest
-        # any real one has, and every real one has all seventeen or is a bug.
-        if len(seen) < 4:
-            continue
-        found += 1
         covered |= seen
-        missing = [n for n in names if n not in seen]
-        if missing:
-            bad.append((i + 1, span, missing))
+        if other:
+            continue
+        total += 1
+        missing = [c for c in enums[enum] if c not in seen]
+        n = ordinal[(routine, enum)] = ordinal.get((routine, enum), 0) + 1
+        key = (routine, enum, n)
+        entry = listed.pop(key, None)
+        if not missing:
+            if entry:
+                bad.append(f"{CATALOGUE}:{entry[0]} argues that "
+                           f"{routine}'s case over {enum} names a subset, and "
+                           f"it names every one -- strike the entry")
+            continue
+        partial += 1
+        if entry is None:
+            bad.append(f"{SOURCE}:{line} ({routine}) names "
+                       f"{len(seen)} of {len(enums[enum])} {enum} constants "
+                       f"and argues for none of it -- missing "
+                       f"{', '.join(missing[:6])}"
+                       f"{' ...' if len(missing) > 6 else ''}")
+            bad.append(f"  a constant left off is a crash, not a wrong answer "
+                       f"(ADR-0018). Add `{routine}:{enum}:{n} names "
+                       f"{len(seen)} of {len(enums[enum])}` to {CATALOGUE} "
+                       f"with the reason no other constant reaches it")
+        elif (entry[1], entry[2]) != (len(seen), len(enums[enum])):
+            bad.append(f"{CATALOGUE}:{entry[0]} says {routine}'s case over "
+                       f"{enum} names {entry[1]} of {entry[2]}; it names "
+                       f"{len(seen)} of {len(enums[enum])} -- "
+                       f"{'the enumeration grew and this case did not' if entry[2] != len(enums[enum]) else 'an arm was added or removed'}")
 
-    if not found:
-        print("kind-exhaustive: no case-statement over a type kind was found; "
-              "the pattern this reads for must have changed", file=sys.stderr)
+    for key, (n, _, _) in sorted(listed.items(), key=lambda kv: kv[1][0]):
+        bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}:{key[2]}, and "
+                   f"there is no such case-statement")
+
+    for enum, names in sorted(enums.items()):
+        for c in names:
+            key = (enum, c)
+            if c not in covered:
+                if unused.pop(key, None) is None:
+                    bad.append(f"{c} is named by no case-statement at all -- "
+                               f"it is unused, or {enum} outlived it. Add "
+                               f"`{enum}:{c} unused` to {CATALOGUE} with what "
+                               f"dispatches on it instead")
+            elif key in unused:
+                bad.append(f"{CATALOGUE}:{unused.pop(key)} argues that {c} is "
+                           f"named by no case-statement, and one names it -- "
+                           f"strike the entry")
+    for key, n in sorted(unused.items(), key=lambda kv: kv[1]):
+        bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}, and there is no "
+                   f"such enumeration constant")
+
+    if bad:
+        for b in bad:
+            print(f"kind-exhaustive: {b}", file=sys.stderr)
         return 1
 
-    unused = [n for n in names if n not in covered]
-
-    if bad or unused:
-        for line, span, missing in bad:
-            print(f"kind-exhaustive: {SOURCE}:{line} (a {span}-line case) "
-                  f"does not name {', '.join(missing)}", file=sys.stderr)
-            print("  a kind left off is a crash, not a wrong answer "
-                  "(ADR-0018)", file=sys.stderr)
-        for name in unused:
-            print(f"kind-exhaustive: {name} is named by no case-statement at "
-                  f"all -- it is unused, or the enumeration outlived it",
-                  file=sys.stderr)
-        return 1
-
-    print(f"kind-exhaustive: {found} case-statements over {len(names)} type "
-          f"kinds -- every one names every kind")
+    print(f"kind-exhaustive: {total} case-statements over "
+          f"{len(enums)} enumerations; {total - partial} name every constant "
+          f"and {partial} argue for a subset")
     return 0
 
 
