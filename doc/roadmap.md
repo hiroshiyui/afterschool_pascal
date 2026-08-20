@@ -413,19 +413,31 @@ is that **the linkage follows the language except where the dialect would emit
 a check the other mode does not**, and AP §6.13.1 now carries that sentence —
 the first clause of that document to change because the language did.
 
-### 4. Containment is a claim about every program, witnessed by one
+### 4. ~~Containment is a claim about every program, witnessed by one~~ Answered
 
-`tests/dialect/inherits_extended.pas` asserts that everything Extended Pascal
-accepts, the dialect accepts and means the same thing. One program cannot
-witness that, and a much stronger witness is nearly free: **compile the whole
-of `tests/extended/` under `--std=afterschool` as well and require identical
-results.** That is 228 programs, the corpus already exists, and the only new
-machinery is a loop. It would also have caught §3, since
-`tests/extended/module.pas` links modules.
+`dialect-containment` is that sweep (ADR-0138). The whole of `tests/extended/`
+is compiled a second way under `--std=afterschool` and required to behave
+identically — 228 cases, 13 seconds, four divergences with an argument apiece
+in `tests/checks/containment_exceptions.txt`.
 
-That every case is compiled under exactly one mode is the same shape of gap as
-"no corpus program had ever written `pack`, `page` or a string constant" — a
-claim every oracle agreed with because nothing had tried it.
+The proposal above said "require identical results" and the word doing the work
+turned out to be *results* rather than output: diffing the emitted IR does not
+work, because 19 of 219 sources differ textually and sixteen of those differ
+because the dialect is working — ADR-0119 spells `--std` into a module's
+activation names, ADR-0118 adds a tag check to every variant access. So the
+gate runs the case, which is what `run_test.sh` already decides.
+
+**What it was worth is measurable.** Switching Extended Pascal off for the
+dialect at the `readstr`/`writestr` site — the literal mistake `CLAUDE.md`
+warns against — leaves **all 617 existing cases green**, `inherits_extended`
+included, and `dialect-containment` names sixteen. At the string-comparison
+site the single witness does fail, with one opaque error where the gate reports
+ten cases and their diagnostics.
+
+It also found the only case in 228 that diverges for a reason of its own,
+`substring_errors`, and following that thread found a defect the corpus could
+not reach: two slices are compatible, the relational operators ask
+compatibility, and `a[1..2] = a[3..4]` compiled to invalid IR (ADR-0139).
 
 ### 5. The dialect was pulled, not designed, and the pieces have not been checked for coherence
 
@@ -498,9 +510,10 @@ The order above is the ranking, so what is left to say is the kind:
 - **§3 is a bug.** Concrete, reproduced above, and probably a day's work under
   the ABI-fingerprint framing.
 
-- **§4 is cheap**, and strengthens §1 and §3 both — a word reserved by accident
-  and a module that will not link are both things 228 Extended Pascal programs
-  compiled a second way would find.
+- **§4 was cheap** and is done. It strengthens §1, which is now the one open
+  question with an instrument pointed at it: a word-symbol the dialect reserves
+  breaks containment for every program using that identifier, and the sweep
+  reports it wherever a corpus program does.
 
 - **§5, §6 and §7 are writing rather than building**: a rule, a sentence, and a
   decision that has been deferred long enough to deserve being deferred

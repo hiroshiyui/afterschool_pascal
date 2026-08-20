@@ -1,0 +1,60 @@
+# Cases under tests/extended/ that do NOT behave identically under
+# --std=afterschool, and the argument for each.
+#
+# ADR-0117 makes the dialect *contain* Extended Pascal: everything Extended
+# Pascal accepts, the dialect accepts and means the same thing. That claim is
+# about every program, and until this gate it was witnessed by one --
+# tests/dialect/inherits_extended.pas. tests/checks/containment.sh compiles the
+# whole conformance corpus a second way and requires the same result, which is
+# the same shape of oracle difftest.sh is: the corpus already exists and the
+# only new machinery is a loop.
+#
+# It fails in BOTH directions. A case here that starts behaving identically is
+# as loud as a case that stops -- an entry that has stopped being true is
+# describing a compiler that no longer exists (ADR-0013's rule, applied again).
+#
+# An entry is a decision to argue for in the commit message, and the bar is the
+# one containment sets: not "the two runs differ" but "they differ and the
+# difference is not something Extended Pascal accepts". A case that accepts
+# something under the dialect which Extended Pascal also accepts, and means
+# something else by it, is a containment defect and may never be listed here.
+#
+# Format: the case's base name, then a blank-line-separated argument above it.
+
+# The three *_refused cases are the dialect's own features, and their whole
+# subject is what --std=extended says about one. Under the dialect the
+# construct is accepted, which is the feature rather than a divergence: each
+# golden is a conformance-mode diagnostic, and asking for it under the mode
+# that has the feature would be asking the dialect not to have it.
+#
+# These are the inverse of a containment failure and could not be anything
+# else: a case whose expectation *is* a refusal of the dialect cannot expect
+# the same refusal from the dialect.
+foreign_refused
+optional_refused
+slice_refused
+
+# ADR-0125's slice shares §6.5.6's syntax: `a[i..j]` is a substring where `a`
+# has a string-type and a slice where it is any other array with an integer
+# index-type. This case writes `a[1..2]` on an `array [1..4] of integer` -- a
+# substring of a non-string, which Extended Pascal refuses with
+#
+#   only a string can have a substring taken of it, not array [1..4] of integer
+#
+# and the dialect, which has a construct there, refuses one statement later:
+#
+#   a value of type array of integer cannot be written
+#
+# Both reject the program and neither accepts anything the other does not, so
+# containment is intact: no valid Extended Pascal program writes `a[i..j]` on a
+# non-string, that being an error in every case. What differs is what the two
+# modes *say* about a program both refuse, which is open question §6 in
+# doc/roadmap.md observed rather than reasoned about -- and the weakest form of
+# it, since the conformance mode's own answer is unchanged.
+#
+# This entry is the reason the gate was worth building. It is the only case in
+# 228 that diverges for a reason other than being about the dialect, and
+# following it found a defect no corpus program could reach: two slices are
+# compatible (AP §6.4.5), the relational operators ask compatibility, and
+# `a[1..2] = a[3..4]` was accepted by Sema and emitted as invalid IR.
+substring_errors

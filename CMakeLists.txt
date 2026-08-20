@@ -177,6 +177,22 @@ set_tests_properties(mixed-mode-link PROPERTIES
                      ENVIRONMENT
                      "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
 
+# ADR-0117's containment, witnessed by the corpus rather than by one program.
+# Everything Extended Pascal accepts, --std=afterschool accepts and means the
+# same thing -- a claim about every program, asserted until now by a single
+# 122-line source. This compiles the whole of tests/extended/ a second way and
+# requires the same behaviour, against a catalogue of four argued divergences,
+# and fails in both directions. A mutation switching Extended Pascal off for
+# the dialect at one site (readstr and writestr, which the single witness never
+# writes) leaves all 617 other cases green and is named here in sixteen.
+add_test(NAME dialect-containment
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/containment.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${CMAKE_SOURCE_DIR})
+set_tests_properties(dialect-containment PROPERTIES
+                     TIMEOUT 600
+                     ENVIRONMENT
+                     "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
+
 # ...and the half of the model-drift gate a local run *can* check. The gate
 # itself is CI-only, needing a push range; deciding which range to judge is not,
 # and is the half that broke. A force-push reports a base that is a real 40-hex

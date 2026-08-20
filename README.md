@@ -129,8 +129,9 @@ valid Afterschool Pascal program meaning the same thing. Nothing forces the
 first two apart except the two specifications disagreeing; nothing forces this
 one apart at all, because the language is ours.
 
-The containment is the property every later feature is added to, and
-`tests/dialect/inherits_extended.pas` is what holds it. The two conformance
+The containment is the property every later feature is added to, and it is
+checked by compiling the whole ISO/IEC 10206:1991 test corpus a second time
+under `--std=afterschool` and requiring the same answers. The two conformance
 modes are not affected by anything that lands in it — they are the only part of
 this compiler with an external specification, and they stay exactly what they
 are.

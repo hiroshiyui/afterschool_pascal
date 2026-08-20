@@ -187,9 +187,9 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Nine gates make that mechanical, and each fails in **both** directions — a
+Ten gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to nine catalogues. Three say
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to ten catalogues. Three say
 in the table that they are one-directional in part: `line-coverage`, which is a
 ratchet; `buffer-headroom`, which watches a bound rather than a claim; and
 `spec-clause-traceability`, which does fail when a citation disappears and
@@ -203,6 +203,7 @@ deliberately does not when one appears:
 | `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced. It also checks *how many* files were compared, an empty list being what a clean run and a run that reached nothing both produce |
 | `foreign-reserved` | `ReservedForeignName` in the compiler | is every global the emitter names still refused as a foreign name? (ADR-0121) — LLVM rejects a redeclared global, so a collision is an error about a file nobody wrote; the predicate is a second copy of what the emitter writes, and this compares them |
 | `kind-exhaustive` | the `typeKind` enumeration in the compiler | does every `case … kind of` name every kind? (ADR-0124) — a case-statement with no matching label *stops the program* (ADR-0018), so a kind left off one of the six is a compiler **crash** and not a wrong answer. No other gate can see that: a missing arm is not a statement, a crash writes nothing for a golden to hold, and `src/`'s counterpart is a `switch` with a `default`, so difftest has one side falling over rather than a disagreement. It has shipped twice — `tyString`, then `tyOptional` |
+| `dialect-containment` | `tests/checks/containment_exceptions.txt` | does every case under `tests/extended/` behave the same under `--std=afterschool`? (ADR-0138) — ADR-0117's containment was a claim about every program witnessed by **one**, `inherits_extended.pas`, and the corpus that witnesses it properly already existed compiled under a single mode. It runs the case rather than diffing the IR, because sixteen of 219 sources differ textually for reasons that are the dialect working. Four divergences are argued for, and the mutation it exists to catch — `langStd = stdExtended` where `HasExtended` belongs — leaves all 617 other cases green |
 | `buffer-headroom` | `tokMax` in the compiler | how much of the token array is this compiler's own source still leaving free? (ADR-0126) — a one-directional watch on a bound, not a claim. Twice a fixed buffer (ADR-0012) has failed as a **build** rather than as a diagnostic, because the array that has to hold this source is the *seed's*: raising the constant here does not raise the one that matters, so the only way out is an out-of-cycle reseed. ADR-0095 cleared the string pool at 74 characters over and closed with "nothing measures the headroom"; ADR-0126 cleared the tokens at 107 left of 140000 and is that measurement. It counts the tokens exactly and the pool not at all — `doc/sop.md` §7 says why |
 | `spec-clause-traceability` | `tests/spec/clauses/triage.tsv` and `pending.txt` | is every clause a scenario cites still cited, and does every citation name a clause the triage calls testable? (ADR-0106) — the second half is what keeps the *triage* honest, since a scenario citing a `structural` or `not-implemented` clause fails. A clause that **starts** being cited does not fail; it asks for `--write-pending`, a gate that punished progress being one people learn to avoid |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? — its *base resolution* is checked locally as `model-drift-base`, that half being a pure question about one repository and the half that has broken |
@@ -434,10 +435,15 @@ Five things about the dialect are worth knowing before adding anything:
   write `langStd = stdExtended`; it silently switches Extended Pascal off for
   the dialect and almost every case still passes — it was 545 of 547 when the
   predicate was written, and the two that noticed are the reason it exists.
-- **`tests/dialect/inherits_extended.pas` pins the containment**: everything
-  Extended Pascal accepts, the dialect accepts and means the same thing. That
-  is the property every feature is added *to*, and it is what a dialect feature
-  must not disturb. A feature that adds a **required identifier** has to write a
+- **The containment is witnessed twice**: everything Extended Pascal accepts,
+  the dialect accepts and means the same thing. `tests/dialect/inherits_extended.pas`
+  is the readable statement of it, and `dialect-containment` (ADR-0138) is the
+  sweep — the whole of `tests/extended/` compiled a second way under
+  `--std=afterschool` and required to behave identically. The witness alone was
+  122 lines against a claim about every program, and a mutation switching
+  Extended Pascal off for the dialect at the `readstr` site left all 617 cases
+  green. That is the property every feature is added *to*, and it is what a
+  dialect feature must not disturb. A feature that adds a **required identifier** has to write a
   paragraph there rather than leave the file alone — §6.2.2.10 puts one in a
   scope enclosing the program, so it takes a spelling away from any program that
   does not shadow it, and §6.1.3's shadowing is what makes that survivable
