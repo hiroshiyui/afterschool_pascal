@@ -153,3 +153,6 @@ the alternatives that were rejected and why.
 | [0142](0142-reachability-follows-a-procedural-parameters-own-parameters.md) | Reachability follows a procedural parameter's own parameters | Accepted |
 | [0143](0143-a-slice-is-not-a-value-and-cannot-be-named.md) | A slice is not a value, and 6.4.9 could name one | Accepted |
 | [0144](0144-the-first-audit-of-the-dialects-specification.md) | The first audit of the dialect's specification | Accepted |
+| [0145](0145-every-enumeration-not-only-the-type-kinds.md) | Every enumeration, not only the type kinds | Accepted |
+| [0146](0146-what-a-shared-predicate-permits-it-permits-everywhere.md) | What a shared predicate permits, it permits everywhere | Accepted |
+| [0147](0147-one-linker-symbol-one-external-declaration.md) | One linker symbol, one `external` declaration | Accepted |

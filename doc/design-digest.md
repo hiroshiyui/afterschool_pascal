@@ -1950,6 +1950,25 @@ name the compiler emits itself, LLVM rejecting any redeclared global, and
 `lib/dialect/pasmathx.pas` is the first binding module and holds the shape: it
 exports Pascal and keeps the directive to itself.
 
+**And one linker symbol is one `external` declaration** (ADR-0147, AP
+§6.7.7.11). Two headings on one symbol emitted two `declare`s of one global,
+which LLVM refuses — *invalid redefinition of function 'abs'*, an error about a
+file nobody wrote, which is `ReservedForeignName`'s own failure mode from the
+other direction. The emitter's duplicate check existed and never fired:
+`SameLink` compares the two names' **positions in the string pool** and
+`PoolAdd` interns nothing, so two sources of the word `abs` are two positions.
+The rule is Sema's rather than a fix to that comparison, because deduplicating
+in the emitter is worse than the bug — it keeps the first declaration and lets
+`declare i32 @abs(i32)` sit beside `call double @abs(double …)`, which LLVM does
+not check under opaque pointers, so an accidental refusal would have become
+silent undefined behaviour. Refusing outright also avoids needing a congruity
+comparison, which would have meant a third caller of `Congruous` and ADR-0058's
+sentence a third time. `tests/dialect/foreign_duplicate.pas` is the case; the
+mutation is `prior := nil` in place of the lookup, and it carries `clang`'s own
+message into the diff. `SameLink` is left as it is and is now sound by
+construction: the only pair of distinct symbols that could share a link name
+cannot be declared.
+
 **An address crosses only as an argument, and its lifetime is the call**
 (ADR-0122). The objection to a pointer at this boundary was always that it
 outlives the call — and *a pointer* does, while **an argument does not**. A

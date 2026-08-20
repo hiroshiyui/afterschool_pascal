@@ -13,6 +13,17 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **`--std=afterschool`: one linker symbol is one `external` declaration.** Two
+  headings naming the same foreign symbol in one program-component are now
+  refused with a diagnostic. They were accepted and then failed at assembly
+  time — `invalid redefinition of function 'abs'`, reported against a temporary
+  file the program's author never wrote. The names are compared exactly, so
+  `'ABS'` and `'abs'` are different symbols, and two modules of one program may
+  each declare the same name. `--std=iso7185` and `--std=extended` are
+  untouched: they refuse the `external` directive itself.
+
 ## [1.6.0] — 2026-08-20
 
 The first release after an independent audit of `doc/afterschool-pascal-spec.md`

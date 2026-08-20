@@ -192,7 +192,11 @@ The foreign name is written out and there is no default, because identifiers
 here are case-folded and a linker matches a symbol exactly. `external` is not
 a reserved word in any mode — a directive is an identifier in the one position
 it may occupy — so a program that uses the spelling for something else is
-unaffected.
+unaffected. **One linker symbol is one `external` declaration** within a
+program-component: a second heading on a name already declared is refused, and
+the two names are compared exactly, so `'ABS'` and `'abs'` are different
+symbols. Two modules of one program may each declare the same name; they are
+translated separately.
 
 **Things cross the boundary by their exact type** — a subrange does not cross,
 and neither does `boolean`, a pointer, a set or anything structured. `integer`,
