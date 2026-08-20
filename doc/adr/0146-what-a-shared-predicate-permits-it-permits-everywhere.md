@@ -19,7 +19,7 @@ already in `CLAUDE.md`.
 
 AP §6.4.5 makes two slices compatible when their component types are the same,
 so that one `array of T` parameter accepts either. `Assignable` is where
-compatibility is decided, and eighteen routines ask it.
+compatibility is decided, and sixteen routines ask it at 33 call sites.
 
 - **ADR-0139.** The relational operators ask it, so `a[1..2] = a[3..4]` was
   accepted, reached CodeGen and emitted invalid IR. Fixed for the relational

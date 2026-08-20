@@ -18,10 +18,10 @@
 """A type `Assignable` refuses is refused by every caller of `Assignable`.
 
 `Assignable` is not a rule about assignment. It is *the* compatibility
-predicate, and eighteen routines ask it -- assignment, the relational
-operators, an actual parameter, a set member, a case selector, a `for`
-statement's bounds, an array index, a structured value's component. ADR-0058
-wrote the sentence this gate exists for:
+predicate, and sixteen routines ask it at 33 call sites -- assignment, the
+relational operators, an actual parameter, a set member, a case selector, a
+`for` statement's bounds, an array index, a structured value's component.
+ADR-0058 wrote the sentence this gate exists for:
 
     A permission granted in a shared predicate leaks to every caller.
 
@@ -64,7 +64,7 @@ It does not judge whether the refusal happens *at* the call site. A guard
 placed ahead of the predicate refuses the same program and passes this gate --
 which is ADR-0143's second defect, and `doc/sop.md` §7 carries it. What this
 answers is the question that was never asked: **has every caller been
-considered at all?** If ADR-0139 had had to answer for eighteen positions, the
+considered at all?** If ADR-0139 had had to answer for all 21 positions, the
 assignment hole would have been on the list that day.
 
 It fails in four directions:
