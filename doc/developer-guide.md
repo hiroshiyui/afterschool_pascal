@@ -341,6 +341,14 @@ modules, and every feature of both standards as it landed — each citing the
 record behind it. It is where to look when you know the area but not the
 number.
 
+[`doc/afterschool-pascal-spec.md`](afterschool-pascal-spec.md) specifies the
+dialect, as an amendment to ISO/IEC 10206:1991 in that standard's clause
+numbering. It is the one document here written in the register of a
+requirement rather than of an explanation, and ADR-0135's rule for keeping it
+true is that it is derived from the decision records and verified by probe —
+**never from `selfhost/compiler.pas`**, which would make it agree with the
+compiler by construction and contradict nothing.
+
 [`doc/implementation-defined.md`](implementation-defined.md) answers what the
 two standards leave to a processor, and names every error this one does not
 report — the document clause 5.1 requires. [doc/glossary.md](glossary.md)

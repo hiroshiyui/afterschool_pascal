@@ -143,3 +143,4 @@ the alternatives that were rejected and why.
 | [0132](0132-a-returned-pointer-into-the-callers-own-buffer.md) | A returned pointer into the caller's own buffer | Accepted |
 | [0133](0133-the-check-at-a-store-reads-the-descriptor.md) | The check at a store reads the descriptor | Accepted |
 | [0134](0134-the-register-read-end-to-end.md) | The register, read end to end | Accepted |
+| [0135](0135-the-dialect-gets-a-specification.md) | The dialect gets a specification, and it is written against the standard it amends | Accepted |

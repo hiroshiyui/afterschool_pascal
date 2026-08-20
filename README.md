@@ -139,6 +139,13 @@ It carries **no stability promise**. The dialect is what the compiler in your
 hand defines; a program that needs fixed behaviour should pin a compiler
 version. That will change by a decision that says so.
 
+**What it is, clause by clause, is
+[`doc/afterschool-pascal-spec.md`](doc/afterschool-pascal-spec.md)** — an
+amendment to ISO/IEC 10206:1991, in that standard's own clause numbering, so
+each addition sits at the address of the clause it changes. The listing below
+is the tour; the specification is the statement, and it is where a requirement
+is written precisely enough to be argued with (ADR-0135).
+
 ### What it adds so far
 
 **A variant record's tag cannot lie** (ADR-0118). Writing a variant's field

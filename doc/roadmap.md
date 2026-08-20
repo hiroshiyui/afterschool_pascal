@@ -1502,8 +1502,11 @@ Three facts came out of it, and two are about how little is checked:
 
 - **A foreign name can collide with one the compiler emits**, and LLVM answers
   with an error about a file nobody wrote. Refused as a diagnostic now, and
-  `hypot` and `atan2` are unavailable to a program because `complex` uses them
-  — the one place the rule bites something a user would want.
+  `hypot` and `atan2` were unavailable to a program because `complex` used
+  them — the one place the rule bit something a user would want. ~~Unavailable~~
+  **no longer**: the runtime has since taken `pas_`-prefixed names for those
+  uses and the bare spellings are free. Only `main` and `_setjmp` are reserved
+  today, which ADR-0135's probe of the record established.
 
 What it does **not** do is the whole of what comes next: no pointers, no
 strings, no `var` parameters, no callbacks, no way to name a library. Every one
@@ -2072,7 +2075,7 @@ it cost and what has to be true before it is spent?
 | third-party corpus | BSI, 812 programs | — | — |
 | second implementation (difftest) | yes | yes | **skipped** |
 | clause-cited scenarios | yes | yes | **not expressible** |
-| independent reading | ADR-0101, ADR-0107 | ADR-0101, ADR-0107 | **nothing to read** |
+| independent reading | ADR-0101, ADR-0107 | ADR-0101, ADR-0107 | [the spec](afterschool-pascal-spec.md), since ADR-0135 |
 | goldens, irtest, `verify/` | yes | yes | yes |
 
 The third row is literal rather than rhetorical. `tests/spec/run.py` matches
@@ -2088,17 +2091,34 @@ fastest-growing part of the compiler.
 Every oracle in this repository bottoms out in *the standard says X*.
 `.claude/skills/langspec-audit/` exists because no oracle here can contradict a
 **reading**, and its remedy is independent readers holding the standards text.
-The dialect has no text, so its correctness is currently "what the compiler
-does, plus what its ADR said it should do" — the closed loop ADR-0072's
-set-packing deviation survived inside for four documents and a purpose-written
-test.
+
+**Half of this is now answered.** ADR-0135 wrote
+[`doc/afterschool-pascal-spec.md`](afterschool-pascal-spec.md), an amendment to
+ISO/IEC 10206:1991 in that standard's own clause numbering, derived from the
+thirteen records and verified by probe rather than from the compiler's source —
+so there is a text to hold, and the fourth row above is no longer empty. It
+found five divergences on its first pass, one of them a compiler crash no gate
+here could see.
+
+What is **not** answered is the third row: a dialect scenario is still not
+expressible, because the tag pattern above has two alternatives and needs
+three. That is a small change and it is the next one. Until it lands, the spec
+is a document nothing enforces — which is the closed loop reopened one step
+further out, and worth saying plainly rather than counting the row as done.
 
 One external authority is already in play and is worth naming, because ADR-0129
 noticed it and then dropped it: **POSIX and the C ABI are specifications**, and
 `read`, `write`, `recv` and `send` taking a pointer and a count is the far side
 of the boundary choosing a shape rather than this project choosing it. Every
-FFI-facing decision has an authority available to it. Nothing else in the
-dialect does.
+FFI-facing decision has an authority available to it.
+
+**And one more turned up when the spec was aligned with the standard's clause
+numbering**: ISO/IEC 10206:1991 §6.1.4's NOTE anticipates a remote-directive
+spelled `external` for a heading whose block lies outside the program-block —
+so ADR-0121 chose the spelling the standard names, without knowing it. The same
+NOTE recommends enforcing type compatibility across the boundary, which this
+compiler cannot; the departure is now written down rather than merely true.
+Nothing else in the dialect has an authority.
 
 ### 3. The containment stops at the link, and no document says so
 

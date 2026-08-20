@@ -409,8 +409,17 @@ decision with a record behind it rather than a convenience. Those two modes stay
 exactly as they are.
 
 **The third `--std` now exists**: `--std=afterschool` (ADR-0117), and it is
-where a feature neither standard has belongs. Four things about it are worth
-knowing before adding anything:
+where a feature neither standard has belongs. **`doc/afterschool-pascal-spec.md`
+is what it accepts, clause by clause** (ADR-0135) — an amendment to
+ISO/IEC 10206:1991 in that standard's own numbering, so AP §6.4.11 is the
+optional type because clause 6.4 ends at 6.4.10. Two rules govern it: it is
+derived from the decision records and verified by probe and **never from
+`selfhost/compiler.pas`**, because a specification describing an implementation
+agrees with it by construction and can contradict nothing; and where it and an
+ADR disagree, it wins and the divergence goes in its Annex E. A dialect feature
+now lands with a clause as well as a record.
+
+Five things about the dialect are worth knowing before adding anything:
 
 - **It nests, where the first two do not.** ADR-0033's non-nesting was forced by
   the two specifications disagreeing about word-symbols; nothing forces it here,
@@ -434,6 +443,10 @@ knowing before adding anything:
   spells it wherever one does. It must not change what the conformance modes
   accept, and it must be expressible in what `seed/pascalc.ll` accepts or the
   seed is refreshed first.
+- **It is specified, and the specification is not yet enforced.** The spec
+  exists; `tests/spec/run.py`'s tag pattern still has two alternatives and
+  needs three, so no scenario can cite an AP clause yet. Until that lands the
+  document is a reading nothing checks — `doc/sop.md` §7 carries it.
 - **difftest does not follow it.** `src/` is frozen at the conformance surface,
   so a dialect source is compared by no second implementation and
   `difftest.sh` *skips* it — counted and reported, because a silent skip is
