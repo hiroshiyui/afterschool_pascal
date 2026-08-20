@@ -2036,6 +2036,16 @@ type anywhere in the compiler to fold with, compare, or put in a constant.
   limit because neither side is a number this compiler could hold. Nothing
   64-bit folds, which is the price: `const c = maxint64 - 1` is not a
   constant-expression here.
+- **And no constant has the type at all** (ADR-0136). A symbol has nowhere to
+  keep text, so `const c = 5000000000` is refused — with a message naming the
+  type and the remedy, because the generic *is not a compile-time constant*
+  would be untrue of a literal. Until that record a wide literal in any
+  constant position **stopped the compiler**: `EvalConst`'s closing arm
+  enumerates the node kinds that cannot fold and `nkInt64` was missing from it,
+  with no `else`, so the folder reached no label. Nothing saw it because
+  `int64_types.pas` writes the type name and `maxint64` in every such position
+  and both of those fold; only a literal reached the arm.
+  `tests/dialect/int64_const.pas` is what fails without the fix.
 - **It is numeric and not ordinal**, which is one line in `IsOrdinal` and
   thirteen refusals that needed no message of their own. Every construct that
   refuses it needs the compiler to *hold* the value — a case label, an array

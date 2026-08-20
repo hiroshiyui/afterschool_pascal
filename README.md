@@ -365,8 +365,12 @@ The reason for the shape is the compiler: `selfhost/compiler.pas` is written in
 this language, so its own integers are 32 bits and it has no value of the wide
 type to hold. A literal is carried as the **text** that was written, all the way
 into the IR — which is what a real literal has done since the beginning, for the
-same reason. So `const c = 5000000000` names the digits and nothing computes
-with them at compile time, and `read` does not take one where `write` does.
+same reason.
+
+**So a constant cannot have this type** (ADR-0136): a symbol has nowhere to keep
+text, and `const c = 5000000000` is refused, naming the type and the remedy.
+Assign the literal to a variable, as above. Every position that wants an ordinal
+refuses it for the older reason and says so in the words it always used.
 
 Overflow traps as `integer`'s does, at both ends: `-maxint64..maxint64` is the
 type, so the machine word's least value is not one of its values.
