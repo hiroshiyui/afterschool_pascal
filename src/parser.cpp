@@ -1298,8 +1298,7 @@ StmtPtr Parser::parseStatement() {
   case Tok::Semi:
   case Tok::KwElse:
   case Tok::KwUntil:
-  case Tok::KwOtherwise:
-    return makeNode<EmptyStmt>(cur());
+  case Tok::KwOtherwise: return makeNode<EmptyStmt>(cur());
   case Tok::KwGoto: {
     auto s = makeNode<GotoStmt>(cur());
     ++pos_;
