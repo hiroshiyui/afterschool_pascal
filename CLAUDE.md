@@ -57,7 +57,8 @@ different standards.
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and
 a non-zero exit is then required), `foo.in` (standard input), `foo.epoch` (a
 fixed `SOURCE_DATE_EPOCH`), `foo.components` (§6.13's other program-components,
-one path per line) and
+one per line, each `path` or `path std` — the second field naming a standard
+other than the case's own, which only ADR-0137's mixed-mode case needs) and
 `foo.opt` (an optimisation level). **`foo.std` is not one of them** — for a case
 under `tests/` the directory decides and `run_test.sh` never looks, taking the
 standard as an argument CMake passes by glob. The sidecar is real but belongs to
@@ -348,8 +349,11 @@ property of the source.
   components**, and the subdirectory is load-bearing: the CMake glob is not
   recursive, so a source declaring no program is never registered as a case
   that fails to run. A case that needs one lists it in `name.components`, one
-  path per line relative to the case's own directory, and `run_test.sh` and
-  `irtest.sh` each translate it separately and link the objects.
+  per line relative to the case's own directory — `path` or `path std`, the
+  second field being how ADR-0137's case translates one component under
+  `--std=extended` while the program is the dialect — and `run_test.sh` and
+  `irtest.sh` each translate it separately and link the objects. The two
+  harnesses must read that file the same way, or a case means two things.
   - `irtest.sh` skips a source with **no `.out` and no `.err`**, which is what
     keeps a component from being run as a program. Selecting by "the C++
     compiler rejected it" stopped working the moment a component became

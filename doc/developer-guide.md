@@ -277,9 +277,15 @@ file (ADR-0034).
   file name a date. Without the file the variable is *unset*, so every other
   case runs against the real clock whatever the environment holds.
 * `name.components` — the other program-components this one is translated
-  against, one path per line, relative to the case's own directory. Extended
+  against, one line each, relative to the case's own directory. Extended
   Pascal §6.13 separates translation from linking, and each component is
-  compiled on its own and the objects linked together.
+  compiled on its own and the objects linked together. A line may be `path` or
+  `path std`: the second field translates that component under a different
+  standard from the case's own, which exists because ADR-0137 made a module's
+  mode a property of its *interface*, so a case whose whole point is that the
+  modes differ cannot have one standard for every component. Omitted, the
+  case's own standard is used, which is what every other `.components` file
+  means.
 * `name.opt` — one word, the optimisation flag to compile this case with. Reach
   for it least: the corpus compiles at `-O2` and should go on doing so, but a
   defect in *storage* is invisible there, since LLVM may hoist an `alloca` whose

@@ -119,15 +119,20 @@ build() {
   local objects=() imports=()
   n=0
   if [[ -f ${src%.pas}.components ]]; then
-    while IFS= read -r rel; do
-      [[ -n $rel ]] || continue
+    while IFS= read -r line; do
+      [[ -n $line ]] || continue
+      # `path` or `path std` -- see tests/run_test.sh for why the second field
+      # exists. The two harnesses must read the file the same way or a case
+      # means two things.
+      read -r rel comp_std <<<"$line"
+      [[ -n $comp_std ]] || comp_std="$std"
       comp="$(dirname "$src")/$rel"
       n=$((n + 1))
       rm -f "$work/comp.ll"
       # With the components listed before it, and not with its own --import:
       # 6.13 lets one component import another and the list is in dependency
       # order, so the import is added after this translation rather than before.
-      timeout 600 "$cc" "--std=$std" "${imports[@]+"${imports[@]}"}" \
+      timeout 600 "$cc" "--std=$comp_std" "${imports[@]+"${imports[@]}"}" \
           "$comp" -o "$work/comp.ll" \
           >/dev/null 2>"$work/gen.err" || return 1
       imports+=(--import "$comp")

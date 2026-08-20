@@ -121,8 +121,15 @@ imports=()
 objects=()
 if [[ -f $components_file ]]; then
   n=0
-  while IFS= read -r rel; do
-    [[ -n $rel ]] || continue
+  while IFS= read -r line; do
+    [[ -n $line ]] || continue
+    # `path` or `path std`. The second field exists because ADR-0137 made a
+    # module's mode a property of its *interface* rather than of the flag it
+    # was translated with, so a case whose whole point is that the modes differ
+    # cannot have one standard for every component. Absent, the case's own
+    # standard is used, which is what every existing .components file means.
+    read -r rel comp_std <<<"$line"
+    [[ -n $comp_std ]] || comp_std="$standard"
     comp="$(dirname "$source_file")/$rel"
     n=$((n + 1))
     # Translated with the components listed *before* it, because §6.13 lets one
@@ -130,7 +137,7 @@ if [[ -f $components_file ]]; then
     # --import is added after, so a component is never handed its own
     # interface. Each is still translated on its own, which is the clause's
     # point: what is linked is several objects.
-    if ! "$pascalc" "--std=$standard" \
+    if ! "$pascalc" "--std=$comp_std" \
            "${imports[@]+"${imports[@]}"}" -c "$comp" -o "$work/c$n.o" \
            2>"$work/compile.err"; then
       echo "--- $name: component $rel did not translate ---" >&2

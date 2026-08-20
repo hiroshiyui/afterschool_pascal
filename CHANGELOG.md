@@ -13,6 +13,26 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A dialect program can use the conforming library** (ADR-0137). A module
+  whose interface exposes no record with a tagged variant-part now emits its
+  activation names under `--std=afterschool` as well as its own, so
+  `lib/`'s six ISO/IEC 10206:1991 modules — `PasStrings`, `PasSort`,
+  `PasMath`, `PasVector`, `PasMap`, `PasText` — link into an Afterschool
+  Pascal program. None of them needed a change.
+
+  Before this, Sema accepted such a program completely and it died at the
+  link on `m.pasmath.afterschool.init`: ADR-0119 spelled the mode into a
+  module's activation names, and the mode is a proxy for the ABI far too
+  coarse to be right. The safety rule it protects is unchanged — a module
+  exporting a tagged variant is still mode-locked, because that is the one
+  construct whose meaning differs between the modes.
+
+  A dialect module still cannot be linked into a conforming program, and that
+  asymmetry is deliberate: a dialect module may declare `external` routines
+  and is not a conforming program-component.
+
 ### Fixed
 
 - **A wide literal where a constant is required no longer stops the compiler**

@@ -750,29 +750,53 @@ it is linked with; see 6.13.1.
 
 ### 6.13 Programs
 
-#### 6.13.1 Program-components shall agree on the language [added]
+#### 6.13.1 Program-components shall agree where the language differs [added]
 
-Every program-component of one program shall have been translated under the same
-`--std`. A program whose components disagree shall not be produced.
+A program-component translated under `--std=afterschool` shall be linked only
+with components that were translated under `--std=afterschool`, **or** whose
+interfaces expose nothing this document requires a check against.
+
+A module's interface **exposes nothing checked** when no type reachable from it
+— through a field, an array component, a file component, a pointer domain or a
+parameter — is a record-type having a variant-part with a tag-field (6.4.3.4).
+Such a module may be translated under `--std=extended` and linked into an
+Afterschool Pascal program.
+
+The converse shall not hold: a module translated under `--std=afterschool`
+shall not be linked into a program translated under a conformance mode, whatever
+its interface exposes.
 
 NOTE 1 — The requirement is enforced at the link, by the language forming part
 of the name of a module's activation procedures — a name §6.13 already requires
-the components to agree on. A mixture therefore leaves an undefined name and
-cannot yield a program. Nothing in a source can misstate it: the name comes from
-the translation that is happening, not from an option, a sidecar or a claim
-(ADR-0119).
+the components to agree on. A module that exposes nothing checked emits those
+names under both spellings. Nothing in a source can misstate any of it: the
+names come from the translation that is happening, not from an option, a
+sidecar or a claim (ADR-0119, ADR-0137).
+
+NOTE 4 — The asymmetry in the third paragraph is deliberate. A module in this
+dialect may declare `external` routines (6.7.7) and is therefore not a
+conforming program-component; admitting one into a program that claims a
+conformance mode would put a component outside both standards inside it. The
+direction that was worth opening is the other one, where `lib/`'s modules are
+ordinary Extended Pascal and the language that contains Extended Pascal could
+not use them.
 
 NOTE 2 — This is not tidiness. 6.4.3.4's two requirements are a pair, and
 §6.13's separate translation would otherwise let them be split across
 components: the surviving half would check a tag the other half never set, and
 would answer *safe* for an unsafe access — worse than the documented hole it
-replaced, which is how the requirement came to be written.
+replaced, which is how the requirement came to be written. It is also the whole
+of what the first paragraph's exception is measured against: where no check can
+be emitted, no pair can be split.
 
-NOTE 3 — It follows that **a module written in the dialect cannot be imported by
-a program written in a conformance mode, and the converse**. A library is
-therefore dialect all the way down or conformance-mode all the way down. That
-is why `lib/` and `lib/dialect/` are two directories and why they duplicate
-(Annex D).
+NOTE 3 — `lib/`'s six modules expose nothing checked and are usable from either
+language. `lib/dialect/`'s are not usable from a conforming program, and the
+third paragraph is what says so — for most of them the first paragraph would
+say it too, their result records (Annex D) being variant-parts with a
+tag-field, but `PasError` exports only an error code and a text type and would
+otherwise be portable. The two directories remain two for the reason Annex D
+gives; what has changed is that the duplication runs in one direction rather
+than both.
 
 ---
 

@@ -834,6 +834,17 @@ type
       what decides which modules are activated at all. }
     importedFrom, importedTail: symListPtr;
 
+    { ADR-0137, and only ever asked of a module symbol: nothing this module
+      exports carries a variant-part with a tag-field, so its object code is
+      the same under `--std=extended` and `--std=afterschool` and a program in
+      either may link it. Sema decides it; CodeGen only emits the second name
+      (ADR-0119 spells the mode into a module's activation names, and this is
+      what says the two spellings mean one thing here).
+
+      False until computed, which is the safe direction: a module nothing has
+      looked at stays mode-locked. }
+    modePortable: boolean;
+
     { 6.13. This module's own program-component was translated separately, so
       this translation has its heading and not its block: no body of its is
       emitted, its activation record is declared rather than defined, and
@@ -7084,6 +7095,7 @@ begin
   s^.importedFrom := nil;
   s^.importedTail := nil;
   s^.compiledElsewhere := false;
+  s^.modePortable := false;
   s^.linkKind := lnkNone;
   s^.linkIfaceAt := 0;
   s^.linkIfaceLen := 0;
@@ -18436,6 +18448,123 @@ begin
   end
 end;
 
+{ ADR-0137. Is anything this module exports something the dialect would emit a
+  variant check against?
+
+  ADR-0119 spells `--std` into a module's activation names so that the
+  components of one program cannot disagree about the language, and the hazard
+  it closes is real: ADR-0118's two rules are a *pair*, and 6.13's separate
+  translation would otherwise let a dialect component check a tag that a
+  conformance-mode component never stored -- a check answering `safe` for an
+  unsafe read, which is worse than the documented gap it replaced.
+
+  What is too coarse is the *granularity*. The mode is a proxy for the ABI and
+  `lib/pasmath.pas` has no variant record in it at all, so its object code is
+  identical under both modes and a dialect program still could not link it.
+
+  So ask what actually differs, which is this repository's move everywhere else
+  (ADR-0044, ADR-0053, ADR-0066, ADR-0071, ADR-0087). The emitter's own
+  condition for the check is `TagFieldAt(t, path) >= 0` under the dialect, and
+  the walk below asks that question of every type a caller can reach instead of
+  at one access. Nothing else the dialect adds is a change to a construct
+  ISO/IEC 10206:1991 also has: `external`, `?T`, `array of` and `int64` are new
+  syntax, and a conformance-mode component cannot contain any of them.
+
+  A component, a domain, a field and a parameter are all followed, because a
+  value of the type crosses at any of them. The walk answers **true when it
+  cannot tell**: an exhausted depth means a cycle through a pointer domain, and
+  a cycle must never be what makes a module look portable. }
+function TypeCarriesTag(t: typePtr; depth: integer): boolean; forward;
+
+function ArmsCarryTag(v: variantPtr; depth: integer): boolean;
+var f: fieldPtr; found: boolean;
+begin
+  found := false;
+  while (v <> nil) and not found do begin
+    { the emitter's own test, arm by arm }
+    if v^.tagField >= 0 then found := true;
+    f := v^.fields;
+    while (f <> nil) and not found do begin
+      if TypeCarriesTag(f^.ftype, depth - 1) then found := true;
+      f := f^.next
+    end;
+    if not found then
+      if ArmsCarryTag(v^.variants, depth - 1) then found := true;
+    v := v^.next
+  end;
+  ArmsCarryTag := found
+end;
+
+function TypeCarriesTag;
+var f: fieldPtr; found: boolean;
+begin
+  found := false;
+  if t <> nil then
+    if depth <= 0 then found := true
+    else begin
+      if t^.kind = tyRecord then begin
+        if t^.tagField >= 0 then found := true;
+        if not found then
+          if ArmsCarryTag(t^.variants, depth - 1) then found := true;
+        f := t^.fields;
+        while (f <> nil) and not found do begin
+          if TypeCarriesTag(f^.ftype, depth - 1) then found := true;
+          f := f^.next
+        end
+      end;
+      { An array component, a file component, a pointer domain and a set base
+        all reach a type a caller can hold a value of. Asked by field rather
+        than by kind: `elem` is the one field all four use, and a kind that has
+        no elem holds nil there. }
+      if not found then
+        if TypeCarriesTag(t^.elem, depth - 1) then found := true
+    end;
+  TypeCarriesTag := found
+end;
+
+{ Every module's answer, computed once the interfaces are complete. A
+  constituent that is a procedure or a function is asked of its parameters and
+  of its result as well as of itself, because a variant record crosses at an
+  argument exactly as it does at a variable. }
+procedure ComputeModePortable;
+var i: ifacePtr; c: constitPtr; e: symListPtr; locked: boolean; s: symPtr;
+
+  function SymCarriesTag(sym: symPtr): boolean;
+  var p: symListPtr; got: boolean;
+  begin
+    got := false;
+    if sym <> nil then begin
+      if TypeCarriesTag(sym^.stype, 64) then got := true;
+      p := sym^.params;
+      while (p <> nil) and not got do begin
+        if TypeCarriesTag(p^.sym^.stype, 64) then got := true;
+        p := p^.next
+      end
+    end;
+    SymCarriesTag := got
+  end;
+
+begin
+  e := moduleOrder;
+  while e <> nil do begin
+    s := e^.sym;
+    locked := false;
+    i := interfaces;
+    while i <> nil do begin
+      if i^.owner = s then begin
+        c := i^.items;
+        while c <> nil do begin
+          if SymCarriesTag(c^.sym) then locked := true;
+          c := c^.next
+        end
+      end;
+      i := i^.next
+    end;
+    s^.modePortable := not locked;
+    e := e^.next
+  end
+end;
+
 { 6.11.1: "For any two distinct modules A and B such that A supplies B and B
   supplies A, neither the module-block of A nor the module-block of B shall
   contain an initialization-part; neither module-block shall contain a
@@ -18571,6 +18700,7 @@ begin
     end;
     CheckPendingImplementations;
     ComputeActiveModules;
+    ComputeModePortable;
     CheckMutualSupply
   end
   else begin
@@ -18604,6 +18734,7 @@ begin
 
   CheckPendingImplementations;
   ComputeActiveModules;
+  ComputeModePortable;
   CheckMutualSupply
   end
 end;
@@ -28315,6 +28446,33 @@ end;
   the two `to` parts are its commencement and its finalization -- so it comes
   out as a pair of functions over one global frame, called by main around the
   program's own body. }
+{ ADR-0137. A module whose interface carries no variant-part with a tag-field
+  emits its activation names under the dialect's spelling as well as its own,
+  so a `--std=afterschool` program may link a module translated under
+  `--std=extended`. An alias and not a second definition: one body, two names,
+  and nothing for the two to disagree about.
+
+  **One direction only.** A conformance-mode module gains the dialect's
+  spelling; a dialect module does not gain a conformance mode's. That is
+  ADR-0120's decision and not an oversight -- a dialect module may call
+  `external` routines and is not a conforming program-component, so letting a
+  conforming program link one would put a component outside both standards into
+  a program that claims one. The direction that matters is the other: `lib/` is
+  ordinary Extended Pascal and the language that *contains* Extended Pascal
+  could not use it. }
+procedure PutModuleAlias(p: symPtr; init: boolean);
+begin
+  if (langStd <> stdAfterschool) and p^.modePortable then begin
+    write(ircode, '@m.');
+    WritePoolIr(p^.at, p^.len);
+    write(ircode, '.afterschool');
+    if init then write(ircode, '.init') else write(ircode, '.fini');
+    write(ircode, ' = alias void (), ptr ');
+    PutModulePart(p, init);
+    writeln(ircode)
+  end
+end;
+
 procedure EmitModule(m: nodePtr);
 var p: symPtr;
 begin
@@ -28341,6 +28499,11 @@ begin
   CloseFiles(p);
   writeln(ircode, '  ret void');
   writeln(ircode, '}');
+
+  { After both definitions, because an alias names a global that must already
+    have been written. }
+  PutModuleAlias(p, true);
+  PutModuleAlias(p, false);
 
   if m^.mdBlock <> nil then EmitProcs(m^.mdBlock)
 end;

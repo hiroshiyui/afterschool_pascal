@@ -355,7 +355,7 @@ NOTE recommends enforcing type compatibility across the boundary, which this
 compiler cannot; the departure is now written down rather than merely true.
 Nothing else in the dialect has an authority.
 
-### 3. The containment stops at the link, and no document says so
+### 3. ~~The containment stops at the link, and no document says so~~ Answered
 
 ADR-0117's claim is that the dialect **contains** Extended Pascal:
 `HasExtended(s)` is `s >= stdExtended`, and
@@ -389,9 +389,29 @@ ADR-0066, ADR-0071, ADR-0087 are the same sentence about five other
 constructs): mangle on a fingerprint of the ABI-relevant features a module
 actually uses, or emit both symbols where the object code is mode-independent.
 
-Until that is settled the honest phrasing is that **the dialect contains
-Extended Pascal as a language and not as a linkage**, and no document currently
-carries the second half.
+**ADR-0137 took the second of those two moves**, and the entry above describes
+the compiler as it was. What ships now: Sema asks whether any type reachable
+from a module's interfaces is a record with a variant-part having a tag-field —
+the emitter's own condition for the check, asked over the interface instead of
+at one access — and a module for which the answer is no emits its activation
+names under the dialect's spelling as well as its own. `lib/`'s six modules are
+reachable from the dialect and not one of them needed changing; none has a
+variant-part anywhere.
+
+The alias was taken over the fingerprint because **only the definer computes
+it**. A fingerprint both sides compute is the more general answer and puts one
+predicate in two places, and the day they disagree is a link error nobody can
+read. The caller is unchanged: it asks for its own mode's name, as it always
+did.
+
+**One direction stays closed**, and that is ADR-0120's decision rather than
+work left undone: a dialect module may call `external` routines and is not a
+conforming program-component, so a conforming program still cannot link one.
+
+So the honest phrasing is no longer that the containment stops at the link. It
+is that **the linkage follows the language except where the dialect would emit
+a check the other mode does not**, and AP §6.13.1 now carries that sentence —
+the first clause of that document to change because the language did.
 
 ### 4. Containment is a claim about every program, witnessed by one
 

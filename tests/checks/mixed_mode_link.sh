@@ -38,6 +38,23 @@
 #
 # It fails in both directions. A mixture that starts linking is as loud as a
 # matched pair that stops.
+#
+# **ADR-0137 narrowed the third and fourth rows, and the narrowing is checked
+# here too.** The mode was a proxy for the ABI and far too coarse a one:
+# `lib/pasmath.pas` has no variant record in it at all, so its object code is
+# identical under both modes, and a dialect program still could not link it --
+# the layer built so the *conforming* language would have a library was the
+# layer the language containing it could not use. A module whose interface
+# carries no variant-part with a tag-field now emits its activation names under
+# the dialect's spelling as well as its own. Two more rows, over `plain.pas`:
+#
+#   plain module conformance, program dialect   links
+#   plain module dialect, program conformance   refused
+#
+# The second is not symmetry left undone. A dialect module may call `external`
+# routines and is not a conforming program-component, so letting a conforming
+# program link one would put a component outside both standards into a program
+# that claims one -- which is ADR-0120's decision, not an oversight.
 set -u
 
 pascalcc=${1:?usage: mixed_mode_link.sh <pascalcc> <srcdir>}
@@ -69,6 +86,46 @@ matched() {
   fi
 }
 
+# As `matched`, over a module whose interface carries no tagged variant-part
+# (ADR-0137), so the two modes may be mixed in the one direction that is safe.
+#   $1 module std, $2 program std, $3 what the run should print
+portable() {
+  if ! "$pascalcc" "--std=$1" -c "$here/plain.pas" -o "$work/plain.o" \
+       >"$work/log" 2>&1; then
+    fail "$1 plain module did not translate"; cat "$work/log"; return
+  fi
+  if ! "$pascalcc" "--std=$2" "$here/plainuser.pas" --import "$here/plain.pas" \
+       "$work/plain.o" -o "$work/plainuser" >"$work/log" 2>&1; then
+    fail "plain $1 + $2 should link and did not"; cat "$work/log"; return
+  fi
+  got=$("$work/plainuser" 2>&1)
+  if [[ $got == "$3" ]]; then
+    note "ok   plain $1 module + $2 program links and says: $got"
+  else
+    fail "plain $1 + $2 printed '$got', wanted '$3'"
+  fi
+}
+
+# The direction ADR-0137 leaves closed, over the same portable module.
+#   $1 module std, $2 program std
+portable_refused() {
+  if ! "$pascalcc" "--std=$1" -c "$here/plain.pas" -o "$work/plain.o" \
+       >"$work/log" 2>&1; then
+    fail "$1 plain module did not translate"; cat "$work/log"; return
+  fi
+  if "$pascalcc" "--std=$2" "$here/plainuser.pas" --import "$here/plain.pas" \
+     "$work/plain.o" -o "$work/plainuser" >"$work/log" 2>&1; then
+    fail "plain $1 module + $2 program linked; a dialect module is not a conforming component"
+    return
+  fi
+  if grep -q "was translated under a different --std" "$work/log"; then
+    note "ok   plain $1 module + $2 program is refused, and says why"
+  else
+    fail "plain $1 module + $2 program was refused without naming the reason:"
+    sed 's/^/       /' "$work/log"
+  fi
+}
+
 # $1 module std, $2 program std
 mixed() {
   if ! "$pascalcc" "--std=$1" -c "$here/parts.pas" -o "$work/parts.o" \
@@ -97,8 +154,13 @@ matched afterschool afterschool "runtime error: variant: the tag selects another
 mixed   afterschool extended
 mixed   extended    afterschool
 
+echo "ADR-0137: and a module whose interface cannot differ may be mixed"
+portable         extended    afterschool "plain -3 4"
+portable         extended    extended    "plain -3 4"
+portable_refused afterschool extended
+
 if [[ $failures -gt 0 ]]; then
-  echo "$failures of 4 wrong"
+  echo "$failures of 7 wrong"
   exit 1
 fi
-echo "all four combinations as intended"
+echo "all seven combinations as intended"

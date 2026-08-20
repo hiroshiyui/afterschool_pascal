@@ -1893,6 +1893,29 @@ names the mode the *program* wanted rather than the one the object has.
 `run_test.sh` compiles every component of a case under one `--std` and cannot
 express a mixture at all.
 
+**And a module is locked by what it exports, not by the flag** (ADR-0137). The
+mode is a proxy for the ABI and far too coarse a one: `lib/pasmath.pas` has no
+variant record in it at all, so its object code is identical under both modes,
+and a dialect program still could not link it — Sema accepted the program
+completely and it died on `m.pasmath.afterschool.init`. So `ComputeModePortable`
+asks the *emitter's own* condition — is any type reachable from the module's
+interfaces a record with a variant-part whose `tagField >= 0`? — over the
+interface instead of at one access, following a field, an array component, a
+file component, a pointer domain and a parameter, and answering **true when the
+depth runs out**, a cycle never being what makes a module look portable. A
+module that answers no emits `@m.x.afterschool.init` as an *alias* of its own
+spelling, so only the definer computes the predicate and the caller is
+untouched. One direction only: a conformance-mode module gains the dialect's
+name and not the reverse, because a dialect module may declare `external` and
+is not a conforming program-component (ADR-0120). A tagless variant-part is
+portable and falls out rather than being decided — `tagField` is `-1`, so no
+check is emitted against it under any mode. `tests/dialect/lib_conforming.pas`
+fails without the alias; `mixed_mode_link.sh` grew from four combinations to
+seven, and the three new ones are what fail if every module is called portable.
+The `.components` sidecar gained an optional second field naming a component's
+standard, in both harnesses, because without it no case in `tests/` could
+express the mixture.
+
 **A fallible routine answers one record** (ADR-0120), and the shape is the
 dialect's first real user rather than a fourth mechanism. `case ok: boolean of
 true: (payload); false: (code: ErrorCode)` — `boolean` because §6.4.3.3 with
