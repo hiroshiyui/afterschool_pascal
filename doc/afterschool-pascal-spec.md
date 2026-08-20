@@ -239,11 +239,44 @@ in-source form that selects it.
 
 The special-symbol `?` is added, and shall occur only as specified in 6.4.11.
 
-NOTE — `?` is a character that neither standard admits in any position — not in
-an identifier, not as an operator, and not among ISO/IEC 10206:1991 §6.1.11's
-lexical alternatives. Taking it therefore costs the lexis nothing: no
+**No word-symbol is added.** The word-symbols of Afterschool Pascal shall be
+exactly those of ISO/IEC 10206:1991 §6.1.2, and this document shall add none.
+
+NOTE 1 — `?` is a character that neither standard admits in any position — not
+in an identifier, not as an operator, and not among ISO/IEC 10206:1991
+§6.1.11's lexical alternatives. Taking it therefore costs the lexis nothing: no
 program that compiled before compiles differently, and both conformance modes
 report it as an unrecognised character exactly as they did (ADR-0123).
+
+NOTE 2 — The second paragraph is a requirement on this document rather than on
+a program, and it is what makes 6.0.1's containment possible. A word-symbol is
+the one addition that cannot be made compatibly: reserving a spelling takes it
+away from every conforming program that uses it as an identifier, which is how
+ISO 7185 and ISO/IEC 10206:1991 came to be non-nested and is the reason a
+source is written in one of them rather than compiled in a mode (ADR-0033).
+
+NOTE 3 — What this document does instead is spell each addition in a position
+where a conforming program could not have written it. `external` is an
+identifier in the directive position (6.1.4), `array of` is two word-symbols in
+a juxtaposition that was a syntax error (6.7.3.9.1), `?` is a character no
+program could spell, and `int64` is a defining-point in a scope §6.1.3 lets any
+program shadow (6.4.2.6). The test a new spelling shall satisfy is whether a
+conforming program could have written that spelling **in that position**;
+where it could, the spelling is a word-symbol however it is implemented.
+
+NOTE 4 — For a statement, that test is answerable with one token of lookahead.
+A statement-initial identifier in ISO/IEC 10206:1991 is followed by exactly one
+of `(`, `:=`, `[`, `.`, `^`, or a token that ends a statement — `;`, `end`,
+`else` or `until`, the last three because §6.8.1 admits an empty statement. A
+statement form whose second token is none of those cannot collide with a
+conforming program. A program that takes the name for its own keeps the name
+and loses the statement form within that scope, which is the direction this
+document requires: the addition yields to the standard it contains (ADR-0140).
+
+NOTE 5 — `tests/checks/reserved_words.py` enforces the second paragraph
+directly, asking of every spelling the processor's lexer knows whether a
+program may use it as a variable name, and requiring `--std=extended` and
+`--std=afterschool` to give the same answer.
 
 #### 6.1.4 Remote-directives [extended]
 

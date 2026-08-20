@@ -263,7 +263,7 @@ and whether we have said so accurately.
 rather than a label; the section at the end says what *kind* of work each one
 is, which is the part the ordering cannot carry.
 
-### 1. The dialect has spent no reserved word, and that is a fact rather than a policy
+### 1. ~~The dialect has spent no reserved word, and that is a fact rather than a policy~~ Answered
 
 Four features have landed and none of them cost the lexis anything:
 
@@ -289,10 +289,31 @@ a required identifier (names, never statement syntax), punctuation (a small
 supply, and poor for statements), and ADR-0038's trick of joining two words the
 lexer already has, the way `and then` is joined.
 
-**This is the decision most worth making before a feature forces it in a
-hurry**: is "the dialect reserves no new word-symbol" a constraint we design
-within, or a budget we intend to spend — and if the second, what does spending
-it cost and what has to be true before it is spent?
+**Decided (ADR-0140): a constraint, and permanently.** The dialect reserves no
+word-symbol, and the question of "spending a budget" turns out to be the wrong
+frame — what is scarce is not spellings but **positions**, and a position is
+not used up by being occupied. `external` taking the directive slot does not
+stop something else taking the statement-initial slot.
+
+So the rule the four features were following, written down: **a dialect feature
+is spelled in a position where a conforming program could not have written
+it.** The test is one sentence — could a conforming program have written this
+spelling *in this position*? — and it is answerable before a spelling is
+chosen rather than after.
+
+**Statements were the case this question was really about**, and they pass the
+test. A statement-initial identifier in either conforming language is followed
+by exactly one of `(`, `:=`, `[`, `.`, `^`, or a statement terminator (`;`,
+`end`, `else`, `until` — the last three because §6.8.1 admits an empty
+statement; probed, not derived). So `defer <statement>` is decidable with one
+token of lookahead and cannot collide. A program that declares `var defer`
+keeps its variable and loses the statement form in that scope, which is the
+right direction: the dialect yields to the standard it contains.
+
+`reserved-words` is the gate, and it is not redundant with the sweep §4 built:
+reserving `defer` in the dialect leaves **all 619 cases green**,
+`dialect-containment` included, because no corpus program uses that identifier.
+AP §6.1.2 states the requirement.
 
 ### 2. The dialect has no external authority, and every gate here is anchored in one
 
@@ -501,8 +522,9 @@ Pascal" would be judged on first.
 
 The order above is the ranking, so what is left to say is the kind:
 
-- **§1 is a decision.** It gets harder the longer it is left, and it silently
-  governs the spelling of every remaining feature.
+- **§1 was a decision** and is made (ADR-0140). It governs the spelling of
+  every remaining feature, and what it turned into was a *test* a spelling has
+  to pass rather than a quantity to ration.
 
 - **§2 is a risk.** It is the condition under which this project's own history
   says a mistake survives every oracle at once.
@@ -510,10 +532,10 @@ The order above is the ranking, so what is left to say is the kind:
 - **§3 is a bug.** Concrete, reproduced above, and probably a day's work under
   the ABI-fingerprint framing.
 
-- **§4 was cheap** and is done. It strengthens §1, which is now the one open
-  question with an instrument pointed at it: a word-symbol the dialect reserves
-  breaks containment for every program using that identifier, and the sweep
-  reports it wherever a corpus program does.
+- **§4 was cheap** and is done. It also demonstrated its own limit, which is
+  what motivated §1's gate: a word-symbol the dialect reserves breaks
+  containment for every program using that identifier, and the sweep reports it
+  only where a corpus program does — which for `defer` is nowhere.
 
 - **§5, §6 and §7 are writing rather than building**: a rule, a sentence, and a
   decision that has been deferred long enough to deserve being deferred

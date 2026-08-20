@@ -70,6 +70,31 @@ Feature: The dialect contains Extended Pascal
       unexpected character '?'
       """
 
+  # 6.1.2's second paragraph is the requirement the whole containment rests on,
+  # and this is it stated as a program: every word the dialect introduced is
+  # still a name a program may take. `?` has no identifier form and is covered
+  # by the scenario above. tests/checks/reserved_words.py asks the same question
+  # of all 46 word-symbols at once, which a scenario cannot.
+  @afterschool:6.1.2
+  Scenario: the dialect adds no word-symbol, so its own spellings stay available
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var external, int64, maxint64: integer;
+      function optional(slice: integer): integer;
+      begin optional := slice + external + int64 + maxint64 end;
+      begin
+        external := 1; int64 := 10; maxint64 := 100;
+        writeln(optional(2))
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      113
+      """
+
   @afterschool:6.1.4
   Scenario: external is not a word-symbol, so a program may still use the name
     Given the Afterschool Pascal program

@@ -177,6 +177,26 @@ set_tests_properties(mixed-mode-link PROPERTIES
                      ENVIRONMENT
                      "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
 
+# ADR-0140: the dialect reserves no word-symbol, which is the whole of what
+# keeps ADR-0117's containment true -- a reserved word breaks it by
+# construction, for every conforming program using that identifier. The corpus
+# sweep below sees such a word only where a corpus program happens to use it as
+# a name, and reserving `defer` in the dialect leaves all 619 cases green,
+# dialect-containment included. This asks the question directly, of every
+# spelling the lexer knows, and fails in both directions: a word the dialect
+# starts reserving, and a word it starts allowing that Extended Pascal
+# reserves, which is the containment broken from the other side.
+if(Python3_FOUND)
+  add_test(NAME reserved-words
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/reserved_words.py
+                   --pascalcc ${CMAKE_SOURCE_DIR}/tools/pascalcc
+                   --source ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas)
+  set_tests_properties(reserved-words PROPERTIES
+                       ENVIRONMENT
+                       "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
+endif()
+
 # ADR-0117's containment, witnessed by the corpus rather than by one program.
 # Everything Extended Pascal accepts, --std=afterschool accepts and means the
 # same thing -- a claim about every program, asserted until now by a single
