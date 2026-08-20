@@ -15,6 +15,18 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **`new(p, c1, ..., cn)` sets each selector** (ADR-0144, `--std=extended` and
+  `--std=afterschool`). ISO/IEC 10206:1991 §6.7.5.3 requires the tag-field of
+  each selected variant to be attributed the case-constant's value; the tags
+  were read only to size the allocation, so `new(p, green)` left the tag
+  reading `red` and `case p^.k of` took the wrong arm. ISO 7185 §6.6.5.3 has no
+  such requirement and `--std=iso7185` is unchanged.
+
+- **`read` into a field of a variant activates that variant**
+  (ADR-0144, `--std=afterschool`). §6.10.2 writes `read(f, v)` out as
+  `v := f^; get(f)`, so its target is assigned to; the dialect treated it as a
+  read and stopped the program on a valid Extended Pascal program.
+
 - **Assigning a slice is refused instead of writing outside an array**
   (ADR-0143, `--std=afterschool`). `p := r` between two slice formals reached
   `Assignable`'s last resort, which compares type *kinds* and so accepted any

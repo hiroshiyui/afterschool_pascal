@@ -1196,9 +1196,17 @@ type
                      frCounter: symPtr);
       { pcSelect: `new(p, c1, ..., cn)` -- the arms the tag values select,
         outermost first, as indices into the variant part at each level
-        (ISO 7185 6.6.5.3). nil for the one-argument form. }
+        (ISO 7185 6.6.5.3). nil for the one-argument form.
+
+        pcTagVals is the same list of *values*, and the two are parallel
+        because an arm index is not a tag value: `1, 2: (…)` is one arm, and
+        which of the two constants was written decides what 10206's 6.7.5.3
+        stores in the tag-field. The path needs the index and the store needs
+        the value, so both are kept rather than one derived from the other
+        (ADR-0144). }
       nkProcCall:   (pcAt, pcLen, pcQualAt, pcQualLen: integer; pcArgs: nodePtr;
-                     pcSym: symPtr; pcStd: stdProcKind; pcSelect: numPtr);
+                     pcSym: symPtr; pcStd: stdProcKind;
+                     pcSelect, pcTagVals: numPtr);
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
@@ -3393,7 +3401,7 @@ begin
     nkProcCall: begin
       n^.pcSym := nil;
       n^.pcStd := spNone;
-      n^.pcSelect := nil
+      begin n^.pcSelect := nil; n^.pcTagVals := nil end
     end;
     { `for v in s` gained a frame slot for its counter, so nkFor left the
       "nothing of Sema's to clear" group below -- the move ADR-0066 made for
@@ -15157,6 +15165,8 @@ begin
               end
               else begin
                 p^.pcSelect := PathAppend(p^.pcSelect, chosen);
+                { and the value itself, for 6.7.5.3's store }
+                p^.pcTagVals := PathAppend(p^.pcTagVals, v);
                 w := ArmAtIn(arms, chosen);
                 tag := w^.tagType;
                 discSel := w^.discSelector;
@@ -26126,6 +26136,21 @@ begin
         the two string branches do not. Without it a `read` of a string stored
         whatever register the *previous* argument left behind. }
       needStore := false;
+      { ADR-0144: ISO/IEC 10206:1991 6.10.2 writes `read(f, v)` out as
+        `begin v := f^; get(f) end`, so the target of a read is *assigned to*
+        and ADR-0118's activation applies to it exactly as it does to the left
+        side of an assignment-statement. Its own NOTE 2 says so in as many
+        words -- "the variable-access is not a variable parameter.
+        Consequently, it may be a variant-selector or a component of a packed
+        structure".
+
+        Without this the dialect trapped on `read(r.gr)` where the tag named
+        another arm, which is a valid ISO/IEC 10206:1991 program refused --
+        a containment break, and one no corpus program could reach because no
+        corpus program reads into a variant. Cleared per argument rather than
+        per statement: `read(a, b)` assigns to both, and each is its own
+        designator. }
+      designatorGuard := vgWrite;
       if a^.kind = nkSubstr then begin
         EmitString(a, slot, rcap);
         write(ircode, '  call void @pas_read_str(ptr ');
@@ -26205,6 +26230,7 @@ begin
         PutOp(slot);
         writeln(ircode)
       end;
+      designatorGuard := vgRead;
       a := a^.next
     end;
 end;
@@ -26294,6 +26320,66 @@ end;
 procedure CheckSchemaDomain(t: typePtr; schema: symPtr;
                             var header: str);
   forward;
+
+{ ISO/IEC 10206:1991 6.7.5.3, for `new(p, c1, ..., cn)`: "the initial state of
+  the selector of the variant corresponding with the case-constant ci shall be
+  the state bearing the value associated with the variant corresponding to the
+  value denoted by ci", and its NOTE 1 spells out the consequence -- "any
+  corresponding tag-field is also attributed the value of the case-constant".
+
+  **ISO 7185 does not require this.** Its 6.6.5.3 says the created variable
+  "shall be totally-undefined" and "shall have nested variants that correspond
+  to the case-constants", which is a statement about which variants exist and
+  not about the tag. So this is gated on HasExtended, and --std=iso7185 goes on
+  leaving the tag alone, conformingly.
+
+  It was not implemented at all: pcSelect was read for SelectedSize and for
+  nothing else, so `new(p, green)` allocated the right amount of storage and
+  left the tag reading `red`. Under --std=extended that is a conforming program
+  given a wrong answer -- `case p^.k of` took the wrong arm -- and under the
+  dialect ADR-0118's guard then trapped on a read of the variant the program
+  had just asked for.
+
+  The walk is FieldAddress's, without the guard: descend one variant part per
+  selector, storing the tag at each level that has one. A variant part with no
+  tag-field answers -1 and is skipped, there being nothing to attribute the
+  value to (6.4.3.4 requires a tag-type here, but a *tagless* part can sit
+  above one in the same record). }
+procedure EmitNewSelectors(rec: typePtr; block: str; sel, vals: numPtr);
+var path: numPtr; tagIdx: integer; tt: typePtr; cur, p, tagAddr: str;
+begin
+  if HasExtended(langStd) then begin
+    cur := block;
+    path := nil;
+    while (sel <> nil) and (vals <> nil) do begin
+      tagIdx := TagFieldAt(rec, path);
+      if tagIdx >= 0 then begin
+        tt := TagTypeAt(rec, path);
+        Def(tagAddr);
+        write(ircode, 'getelementptr inbounds ');
+        PutStructAt(rec, path);
+        write(ircode, ', ptr ');
+        PutOp(cur);
+        writeln(ircode, ', i32 0, i32 ', tagIdx:1);
+        write(ircode, '  store ');
+        PutLlType(tt);
+        write(ircode, ' ', vals^.value_:1, ', ptr ');
+        PutOp(tagAddr);
+        writeln(ircode)
+      end;
+      Def(p);
+      write(ircode, 'getelementptr inbounds ');
+      PutStructAt(rec, path);
+      write(ircode, ', ptr ');
+      PutOp(cur);
+      writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(rec, path)):1);
+      cur := p;
+      path := PathAppend(path, sel^.value_);
+      sel := sel^.next;
+      vals := vals^.next
+    end
+  end
+end;
 
 procedure EmitNewTuple(s: nodePtr; domain: typePtr; var slot: str);
 var d: symListPtr; value_: nodePtr; v, size, raw, block, vr, nohdr: str;
@@ -26627,6 +26713,9 @@ begin
       write(ircode, ', ptr ');
       PutOp(slot);
       writeln(ircode);
+      { 6.7.5.3's selectors, which ISO 7185 does not have. }
+      if s^.pcSelect <> nil then
+        EmitNewSelectors(domain, block, s^.pcSelect, s^.pcTagVals);
       { A created variable holding a file needs the same preparation a declared
         one gets: pas_file_init per file, because 6.4.4 does not stop a
         domain-type from containing one. dispose closes them below, which is
