@@ -1998,7 +1998,7 @@ end;
   `_setjmp` has to be called in the frame `longjmp` returns to, so a wrapper
   would return before the jump. }
 function ReservedForeignName(at, len: integer): boolean;
-var k: integer; counter, dotted: boolean;
+var k: integer; counter, dotted, frames: boolean;
 begin
   dotted := false;
   for k := at to at + len - 1 do
@@ -2009,7 +2009,24 @@ begin
     for k := at + 1 to at + len - 1 do
       if (pool[k] < '0') or (pool[k] > '9') then counter := false;
 
-  ReservedForeignName := dotted or counter or
+  { ADR-0144: `frame` and digits. An activation record gets a name apiece and
+    a level-0 one is a *global* -- `@frame1` is the program's, emitted as an
+    `internal global` before the first function that indexes it. A module's is
+    `@frame.<name>` and is caught by `dotted`; the program's is not, and
+    `function frame1(x: integer): integer; external 'frame1'` was refused with
+    `redefinition of function '@frame1'`, an error naming a file nobody wrote,
+    which is the exact failure this predicate exists to prevent.
+
+    Not seen by tests/checks/foreign_reserved.py either, and for a reason
+    worth writing down: that gate harvests the `declare` and `define` literals
+    the emitter writes, so a global emitted as neither was outside what it
+    could compare. It reads `internal global` now as well. }
+  frames := (len >= 6) and PoolStarts(at, len, 'frame    ');
+  if frames then
+    for k := at + 5 to at + len - 1 do
+      if (pool[k] < '0') or (pool[k] > '9') then frames := false;
+
+  ReservedForeignName := dotted or counter or frames or
     PoolStarts(at, len, 'pas_     ') or
     PoolIs(at, len, 'main     ') or PoolIs(at, len, '_setjmp  ')
 end;

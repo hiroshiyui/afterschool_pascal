@@ -237,7 +237,11 @@ endif()
 if(Python3_FOUND)
   add_test(NAME foreign-reserved
            COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tests/checks/foreign_reserved.py)
+                   ${CMAKE_SOURCE_DIR}/tests/checks/foreign_reserved.py
+                   --pascalcc ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+  set_tests_properties(foreign-reserved PROPERTIES
+                       ENVIRONMENT
+                       "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
   add_test(NAME kind-exhaustive
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
