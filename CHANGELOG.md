@@ -13,6 +13,47 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A wide literal where a constant is required no longer stops the compiler**
+  (ADR-0136), under `--std=afterschool`. Writing an unsigned-integer greater
+  than `maxint` in a constant-definition, a subrange bound, an array's
+  index-type, a set's base-type, a case-constant, or an operand of a
+  constant-expression terminated `pascalc` with `case: no label matches the
+  selector` — a case-statement in its own source with no arm for the wide
+  literal. It reported nothing, so no golden could hold it.
+
+  Reachable since 1.5.0 and invisible to every gate: the corpus wrote the type
+  name and `maxint64` in all six positions, and both of those fold. Only a
+  literal reached the missing arm. Found by probing a requirement while writing
+  `doc/afterschool-pascal-spec.md` (ADR-0135).
+
+### Changed
+
+- **A constant may not have type `int64`**, and the compiler now says so
+  (ADR-0136). This settles a sentence ADR-0128 left open. Five of the six
+  positions report the message they always reported for a type that is not
+  ordinal; a constant-definition, which requires no ordinal, gets one of its
+  own rather than the generic *is not a compile-time constant*, which of a
+  literal would not have been true:
+
+  ```
+  the value of constant 'c' has type int64, and a constant cannot:
+  assign it to a variable of that type instead
+  ```
+
+  No program is affected: every program this refuses is one that did not
+  compile before. Admitting such a constant later would widen what is accepted
+  and break nothing.
+
+### Added
+
+- **`doc/afterschool-pascal-spec.md`** (ADR-0135) — a specification of the
+  dialect, written as an amendment to ISO/IEC 10206:1991 in that standard's own
+  clause numbering. It is derived from the decision records and verified by
+  probe, never from the compiler's source, and it found five divergences on its
+  first pass, one of them the crash above.
+
 ## [1.5.0] — 2026-08-19
 
 **The release the dialect arrived in.** ADR-0109's practical Pascal had a

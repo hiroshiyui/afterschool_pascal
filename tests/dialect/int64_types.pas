@@ -17,7 +17,16 @@
 
   The literal's own bound is in int64_toobig.pas rather than here, because it
   is the *lexer* that reports it and every stage after a failed one is skipped
-  (the Compile pipeline's rule) -- so one file cannot carry both. }
+  (the Compile pipeline's rule) -- so one file cannot carry both.
+
+  And what this file writes in every position below is the **type name**, or
+  `maxint64`. Both of those fold -- `maxint64` is a constant-identifier whose
+  folded type is int64 -- so each position gets as far as its own ordinal
+  message. A *literal* above maxint is a different node and reached, until
+  ADR-0136, a case-statement in the folder with no arm for it: a stopped
+  compiler rather than a wrong answer, which is why no golden here could hold
+  it for four increments. int64_const.pas is that half, and the two files are
+  neighbours on purpose. }
 program Int64Types(input, output);
 var
   a: int64;

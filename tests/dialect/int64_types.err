@@ -1,12 +1,12 @@
-<source>:24:6: error: the base type of a set must be an ordinal type, found int64
-<source>:25:15: error: an array index must be an ordinal type, found int64
-<source>:26:8: error: the bounds of a subrange must be ordinal
-<source>:31:8: error: the selector of a case statement must be an ordinal type, found int64
-<source>:32:7: error: the control variable of a for statement must be an ordinal type
-<source>:33:11: error: 'succ' needs an ordinal argument, found int64
-<source>:33:20: error: 'pred' needs an ordinal argument, found int64
-<source>:34:11: error: 'ord' needs an ordinal argument, found int64
-<source>:35:11: error: 'odd' needs an integer argument, found int64
-<source>:36:11: error: 'chr' needs an integer argument, found int64
-<source>:37:13: error: the left operand of 'in' must have an ordinal type, found int64
-<source>:39:3: error: cannot assign int64 to a variable of type integer
+<source>:33:6: error: the base type of a set must be an ordinal type, found int64
+<source>:34:15: error: an array index must be an ordinal type, found int64
+<source>:35:8: error: the bounds of a subrange must be ordinal
+<source>:40:8: error: the selector of a case statement must be an ordinal type, found int64
+<source>:41:7: error: the control variable of a for statement must be an ordinal type
+<source>:42:11: error: 'succ' needs an ordinal argument, found int64
+<source>:42:20: error: 'pred' needs an ordinal argument, found int64
+<source>:43:11: error: 'ord' needs an ordinal argument, found int64
+<source>:44:11: error: 'odd' needs an integer argument, found int64
+<source>:45:11: error: 'chr' needs an integer argument, found int64
+<source>:46:13: error: the left operand of 'in' must have an ordinal type, found int64
+<source>:48:3: error: cannot assign int64 to a variable of type integer

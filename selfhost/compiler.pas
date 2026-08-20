@@ -8129,7 +8129,7 @@ begin
           ok := true
         end;
       nkValueElem,
-      nkSetMember, nkDeref,
+      nkSetMember, nkDeref, nkInt64,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
@@ -17029,12 +17029,24 @@ begin
   if not EvalConst(d^.kdValue, value_) then begin
     { The folder says why when it can -- an overflow, a `chr` out of range --
       and this generic message is for when it cannot: the expression was
-      never constant in the first place. }
+      never constant in the first place.
+
+      An int64 is the one value that reaches here having been written out in
+      full, so the generic message would be a plain untruth about a literal:
+      `const c = 5000000000` is a compile-time constant everywhere except
+      here. What it cannot be is a constant of *this* compiler, which holds no
+      int64 to fold with -- ADR-0128 carries such a value as the text that was
+      written, and a symbol has nowhere to keep text. The ordinal contexts need
+      no arm of their own: an int64 is not ordinal (AP 6.4.2.6.2) and their own
+      messages already say so. }
     if not constReported then begin
       ErrorAt(d^.line, d^.col);
       write('the value of constant ''');
       WritePool(d^.kdAt, d^.kdLen);
-      writeln(''' is not a compile-time constant')
+      if IsInt64(d^.kdValue^.ntype) then
+        writeln(''' has type int64, and a constant cannot: assign it to a variable of that type instead')
+      else
+        writeln(''' is not a compile-time constant')
     end
   end
   else begin

@@ -1,0 +1,7 @@
+<source>:27:3: error: the value of constant 'c1' has type int64, and a constant cannot: assign it to a variable of that type instead
+<source>:28:3: error: the value of constant 'c2' has type int64, and a constant cannot: assign it to a variable of that type instead
+<source>:29:3: error: the value of constant 'c3' has type int64, and a constant cannot: assign it to a variable of that type instead
+<source>:31:8: error: the bounds of a subrange must be ordinal
+<source>:33:13: error: the bounds of a subrange must be ordinal
+<source>:34:13: error: the bounds of a subrange must be ordinal constants
+<source>:39:5: error: a case label must be an ordinal constant

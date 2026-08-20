@@ -304,10 +304,11 @@ preference (ADR-0058) and here it is also forced: every one of those
 constructs requires the processor to hold the value, and this processor cannot
 (6.4.2.6.5).
 
-NOTE 2 — **The refusal is currently a crash and not a diagnostic**, for the
-subset of these contexts a program reaches by writing an unsigned-integer
-greater than `maxint` where a constant is required. See Annex E.5; this
-document states the requirement, and the processor does not yet meet it.
+NOTE 2 — Each of those contexts reports the message it has always reported for
+a type that is not ordinal; not one was written for `int64` (ADR-0136). Until
+that record the refusal was a **crash** rather than a diagnostic wherever the
+program reached the context with a literal rather than with the type name, and
+Annex E.5 keeps the account.
 
 **6.4.2.6.3 Widening.** `integer` shall be assignment-compatible with `int64`,
 and `int64` with `real`, in the manner ISO/IEC 10206:1991 §6.4.6 c) already
@@ -322,10 +323,18 @@ NOTE — An implicit narrowing would put an unwritten run-time check under an
 ordinary assignment; a new required identifier would spend a name for a meaning
 a standard one already has (ADR-0128).
 
-**6.4.2.6.5 Denotation.** A value of `int64` shall be denoted by an
-unsigned-integer whose value exceeds `maxint`, and a program shall not require
-this processor to compute one at translation time: no expression of type
-`int64` is a constant-expression in the sense of §6.8.2.
+**6.4.2.6.5 Denotation, and it is not a constant.** A value of `int64` shall be
+denoted by an unsigned-integer whose value exceeds `maxint`.
+
+**No expression of type `int64` is a constant** in the sense of §6.3, and none
+is a constant-expression in the sense of §6.8.2. A constant-definition whose
+value has that type shall be refused, and the diagnostic shall name the type
+and the remedy rather than describing the expression as not constant — which of
+a literal would not be true (ADR-0136).
+
+It follows that a value of `int64` shall not be written where §6.3's constant
+or §6.8.2's constant-expression is required, whether or not that position also
+requires an ordinal.
 
 NOTE — This is a restriction of *this processor* stated as a requirement on a
 program, and it is the one place in this document where that is done. The
@@ -863,34 +872,33 @@ plus `char` (6.7.7.7), for the reason ADR-0129 gives. Stated here because a
 reader assembling the rule from ADR-0121 alone would get it wrong in both
 directions.
 
-**E.5 A wide literal where a constant is required stops the processor.**
-Writing an unsigned-integer greater than `maxint` in a constant-definition, a
-subrange bound, an array's index-type, a set's base-type, a case-constant, or
-an operand of a constant-expression terminates the processor with
+**E.5 A wide literal where a constant is required stopped the processor.**
+**Found here, fixed by ADR-0136.** Writing an unsigned-integer greater than
+`maxint` in a constant-definition, a subrange bound, an array's index-type, a
+set's base-type, a case-constant, or an operand of a constant-expression
+terminated the processor with
 
     runtime error: case: no label matches the selector
 
-which is a case-statement in the processor's own source having no arm for the
-wide literal (§6.9.3.5's error, which ADR-0018 makes stop the program). It is
-**dialect-only** — both conformance modes reject such a literal in the lexis,
-with a diagnostic naming `maxint` — and it does not arise in an expression
-context, where `writeln(5000000000)` and an assignment to a variable of `int64`
-are correct.
+which was a case-statement in the processor's own source having no arm for the
+wide literal (§6.9.3.5's error, which ADR-0018 makes stop the program).
 
-6.4.2.6.2 already requires every one of those constructs to be refused, so the
-requirement in this document is not in question; what is missing is the
-diagnostic. ADR-0128 anticipated the constant-definition case and described it
-as naming the digits and nothing more, which reads as an acceptance, so **what
-the program should be told is a language decision and not merely a repair** —
-either the construct is refused by a diagnostic, or a constant of `int64` is
-admitted and 6.4.2.6.5 is weakened. This document takes the first reading,
-because it is the one 6.4.2.6.2 already implies, and flags that the second is
-available.
+It was dialect-only — both conformance modes reject such a literal in the
+lexis — and it did not arise in an expression context, where
+`writeln(5000000000)` and an assignment to a variable of `int64` were always
+correct.
 
-This is the first defect found by the exercise 5.5 a) describes, and it was
-found by probing a requirement rather than by any oracle in this repository:
-no case in `tests/dialect/` writes a wide literal in a constant position, so
-every gate was green.
+**Why no oracle here could see it** is worth keeping: `tests/dialect/int64_types.pas`
+writes the *type name* and `maxint64` in every one of those positions, and both
+of those fold — `maxint64` is a constant-identifier whose folded type is
+`int64`, so each position reported its own ordinal message. A **literal** above
+`maxint` is a different node, and no case in the corpus had ever written one
+where a constant was required. Every gate was green, and the defect was found
+by probing a requirement of this document (5.5 a) rather than by any of them.
+
+ADR-0136 settled the language question the defect exposed — whether such a
+constant is refused or admitted — in favour of refusing it, and 6.4.2.6.5 now
+states it. `tests/dialect/int64_const.pas` is the case.
 
 ## Annex F (informative) — Where each requirement was decided
 
