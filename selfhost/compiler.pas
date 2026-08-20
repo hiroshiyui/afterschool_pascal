@@ -18563,18 +18563,40 @@ end;
 procedure ComputeModePortable;
 var i: ifacePtr; c: constitPtr; e: symListPtr; locked: boolean; s: symPtr;
 
-  function SymCarriesTag(sym: symPtr): boolean;
+  { Recursive, and that is the whole of the fix ADR-0142 made. Asking each
+    parameter about its own `stype` alone stops one level too soon: the
+    parameters of a *procedural* parameter are in that parameter's own `params`
+    list, and `TypeCarriesTag` has no arm for tyProc because a procedure type
+    is not a type a value is held in. So
+
+        procedure Apply(procedure Q(var t: Tagged))
+
+    exports `Tagged` -- through a parameter, twice -- and the walk reported the
+    module portable. The link then succeeded and the dialect's variant check
+    ran in the program against a tag the module never stored, and *passed* an
+    unsafe read: the one outcome ADR-0118's claim cannot survive.
+
+    Depth-bounded and answering **true when it cannot tell**, as
+    TypeCarriesTag does, so an exhausted depth locks the module rather than
+    freeing it. A parameter list cannot be cyclic the way a pointer domain can,
+    the source having to write each nesting out, but the rule costs nothing and
+    a walk that can only be wrong in the safe direction is worth more than one
+    that is provably terminating. }
+  function SymCarriesTag(sym: symPtr; depth: integer): boolean;
   var p: symListPtr; got: boolean;
   begin
     got := false;
-    if sym <> nil then begin
-      if TypeCarriesTag(sym^.stype, 64) then got := true;
-      p := sym^.params;
-      while (p <> nil) and not got do begin
-        if TypeCarriesTag(p^.sym^.stype, 64) then got := true;
-        p := p^.next
-      end
-    end;
+    if sym <> nil then
+      if depth <= 0 then got := true
+      else begin
+        { A function's `stype` is its result type; a procedure's is nil. }
+        if TypeCarriesTag(sym^.stype, 64) then got := true;
+        p := sym^.params;
+        while (p <> nil) and not got do begin
+          if SymCarriesTag(p^.sym, depth - 1) then got := true;
+          p := p^.next
+        end
+      end;
     SymCarriesTag := got
   end;
 
@@ -18588,7 +18610,7 @@ begin
       if i^.owner = s then begin
         c := i^.items;
         while c <> nil do begin
-          if SymCarriesTag(c^.sym) then locked := true;
+          if SymCarriesTag(c^.sym, 64) then locked := true;
           c := c^.next
         end
       end;

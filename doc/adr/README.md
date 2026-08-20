@@ -150,3 +150,4 @@ the alternatives that were rejected and why.
 | [0139](0139-two-slices-are-compatible-and-that-is-not-comparable.md) | Two slices are compatible, and that is not permission to compare them | Accepted |
 | [0140](0140-the-dialect-reserves-no-word-symbol.md) | The dialect reserves no word-symbol, and what it does instead has a name | Accepted |
 | [0141](0141-one-rule-for-saying-a-routine-may-have-failed.md) | One rule for saying a routine may have failed | Accepted |
+| [0142](0142-reachability-follows-a-procedural-parameters-own-parameters.md) | Reachability follows a procedural parameter's own parameters | Accepted |

@@ -126,6 +126,41 @@ portable_refused() {
   fi
 }
 
+# A module reaching a tagged variant only through the parameter list of a
+# *procedural* parameter (ADR-0142). Same requirement as `mixed`, over a corpus
+# whose reachability the walk got wrong: it asked each parameter about its own
+# type and never entered a procedural parameter's own parameters.
+#   $1 module std, $2 program std
+callback_refused() {
+  # Three components. The record lives in TagBase so that Callback can *reach*
+  # it without *exporting* it -- a module exporting the type is locked by that
+  # constituent alone, whichever way the parameter walk goes, and a first
+  # version of this test did exactly that and passed without the fix.
+  if ! "$pascalcc" "--std=$2" -c "$here/tagbase.pas" -o "$work/tagbase.o" \
+       >"$work/log" 2>&1; then
+    fail "tagbase module did not translate"; cat "$work/log"; return
+  fi
+  if ! "$pascalcc" "--std=$1" -c "$here/callback.pas" \
+       --import "$here/tagbase.pas" -o "$work/callback.o" \
+       >"$work/log" 2>&1; then
+    fail "$1 callback module did not translate"; cat "$work/log"; return
+  fi
+  if "$pascalcc" "--std=$2" "$here/callbackuser.pas" \
+     --import "$here/tagbase.pas" --import "$here/callback.pas" \
+     "$work/tagbase.o" "$work/callback.o" -o "$work/cbuser" \
+     >"$work/log" 2>&1; then
+    fail "callback $1 module + $2 program linked; the tagged variant is reachable through a procedural parameter"
+    "$work/cbuser" 2>&1 | sed 's/^/       and it ran: /'
+    return
+  fi
+  if grep -q "was translated under a different --std" "$work/log"; then
+    note "ok   callback $1 module + $2 program is refused, and says why"
+  else
+    fail "callback $1 module + $2 program was refused without naming the reason:"
+    sed 's/^/       /' "$work/log"
+  fi
+}
+
 # $1 module std, $2 program std
 mixed() {
   if ! "$pascalcc" "--std=$1" -c "$here/parts.pas" -o "$work/parts.o" \
@@ -159,8 +194,11 @@ portable         extended    afterschool "plain -3 4"
 portable         extended    extended    "plain -3 4"
 portable_refused afterschool extended
 
+echo "ADR-0142: and reachability follows a procedural parameter's own parameters"
+callback_refused extended    afterschool
+
 if [[ $failures -gt 0 ]]; then
-  echo "$failures of 7 wrong"
+  echo "$failures of 8 wrong"
   exit 1
 fi
-echo "all seven combinations as intended"
+echo "all eight combinations as intended"
