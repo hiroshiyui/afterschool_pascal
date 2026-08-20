@@ -322,4 +322,89 @@ extended	6.11.6	structural	the standard's own illustration, not a requirement
 extended	6.11.7	structural	the standard's own illustration, not a requirement
 extended	6.12	testable	Main-program-declarations
 extended	6.13	testable	Programs
-
+afterschool	1	structural	states what the document specifies; carries no requirement on a program
+afterschool	2	structural	lists the documents incorporated; carries no requirement on a program
+afterschool	3	structural	introduces the definitions
+afterschool	3.1	structural	defines a term the rest of the document uses
+afterschool	3.2	structural	defines a term the rest of the document uses
+afterschool	3.3	structural	defines a term the rest of the document uses
+afterschool	3.4	structural	defines a term the rest of the document uses
+afterschool	3.5	structural	defines a term the rest of the document uses
+afterschool	3.6	structural	defines a term the rest of the document uses
+afterschool	3.7	structural	defines a term the rest of the document uses
+afterschool	4	structural	introduces the conventions
+afterschool	4.1	structural	a rule about this document's numbering, not about a program
+afterschool	4.2	structural	a rule about how this document is cited
+afterschool	4.3	structural	a rule about how a clause of this document is labelled
+afterschool	4.4	structural	a licence rule about this repository, not about a program
+afterschool	4.5	structural	defines shall, should and may
+afterschool	5	structural	introduces the compliance clauses
+afterschool	5.1	structural	a statement about processors; no program can exercise it
+afterschool	5.2	structural	defines what a complying program is, in terms of the other clauses
+afterschool	5.3	testable
+afterschool	5.4	structural	a policy about versioning, not a property of a translation
+afterschool	5.5	structural	a rule about how this document is maintained
+afterschool	6	structural	introduces the requirements
+afterschool	6.0	structural	introduces the relationship clauses
+afterschool	6.0.1	testable
+afterschool	6.0.2	testable
+afterschool	6.1	structural	introduces the lexical additions
+afterschool	6.1.2	testable
+afterschool	6.1.4	testable
+afterschool	6.2	structural	introduces the scope additions
+afterschool	6.2.2	testable
+afterschool	6.4	structural	introduces the type additions
+afterschool	6.4.2	structural	introduces the simple-type additions
+afterschool	6.4.2.6	structural	introduces int64; the requirements are in its subclauses
+afterschool	6.4.2.6.1	testable
+afterschool	6.4.2.6.2	testable
+afterschool	6.4.2.6.3	testable
+afterschool	6.4.2.6.4	testable
+afterschool	6.4.2.6.5	testable
+afterschool	6.4.2.6.6	testable
+afterschool	6.4.3	structural	introduces the structured-type additions
+afterschool	6.4.3.4	structural	introduces the variant rules; the requirements are in its subclauses
+afterschool	6.4.3.4.1	testable
+afterschool	6.4.3.4.2	testable
+afterschool	6.4.3.4.3	testable
+afterschool	6.4.3.4.4	testable
+afterschool	6.4.3.4.5	testable
+afterschool	6.4.3.4.6	testable
+afterschool	6.4.5	testable
+afterschool	6.4.6	structural	a cross-reference to 6.4.2.6.3 and 6.4.11.6, which carry the requirements
+afterschool	6.4.11	structural	introduces the optional-type; the requirements are in its subclauses
+afterschool	6.4.11.1	testable
+afterschool	6.4.11.2	testable
+afterschool	6.4.11.3	testable
+afterschool	6.4.11.4	testable
+afterschool	6.4.11.5	testable
+afterschool	6.4.11.6	testable
+afterschool	6.4.11.7	testable
+afterschool	6.5	structural	introduces the variable-denotation additions
+afterschool	6.5.3	structural	introduces the component-variable additions
+afterschool	6.5.3.2	testable
+afterschool	6.5.6	testable
+afterschool	6.7	structural	introduces the procedure and function additions
+afterschool	6.7.3	structural	introduces the parameter additions
+afterschool	6.7.3.9	structural	introduces slice parameters; the requirements are in its subclauses
+afterschool	6.7.3.9.1	testable
+afterschool	6.7.3.9.2	testable
+afterschool	6.7.3.9.3	testable
+afterschool	6.7.3.9.4	testable
+afterschool	6.7.3.9.5	testable
+afterschool	6.7.6	testable
+afterschool	6.7.7	structural	introduces external-declarations; the requirements are in its subclauses
+afterschool	6.7.7.1	testable
+afterschool	6.7.7.2	testable
+afterschool	6.7.7.3	testable
+afterschool	6.7.7.4	testable
+afterschool	6.7.7.5	testable
+afterschool	6.7.7.6	testable
+afterschool	6.7.7.7	testable
+afterschool	6.7.7.8	testable
+afterschool	6.7.7.9	testable
+afterschool	6.7.7.10	testable
+afterschool	6.10	structural	a cross-reference to 6.4.2.6.6, which carries the requirement
+afterschool	6.11	structural	restates 6.13.1, which carries the requirement
+afterschool	6.13	structural	introduces 6.13.1
+afterschool	6.13.1	testable

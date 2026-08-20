@@ -300,7 +300,7 @@ it cost and what has to be true before it is spent?
 | --- | --- | --- | --- |
 | third-party corpus | BSI, 812 programs | — | — |
 | second implementation (difftest) | yes | yes | **skipped** |
-| clause-cited scenarios | yes | yes | **not expressible** |
+| clause-cited scenarios | yes | yes | yes, since ADR-0135's wiring |
 | independent reading | ADR-0101, ADR-0107 | ADR-0101, ADR-0107 | [the spec](afterschool-pascal-spec.md), since ADR-0135 |
 | goldens, irtest, `verify/` | yes | yes | yes |
 
@@ -310,9 +310,10 @@ The third row is literal rather than rhetorical. `tests/spec/run.py` matches
 TAG = re.compile(r"@(iso7185|extended):(\d+(?:\.\d+)*)")
 ```
 
-so a dialect scenario cannot be tagged, and ADR-0105's apparatus — the one
-suite whose unit is a clause rather than a program — is unavailable to the
-fastest-growing part of the compiler.
+was the pattern until ADR-0135's wiring, so a dialect scenario could not be
+tagged at all and ADR-0105's apparatus — the one suite whose unit is a clause
+rather than a program — was unavailable to the fastest-growing part of the
+compiler. It now reads `@(iso7185|extended|afterschool)`.
 
 Every oracle in this repository bottoms out in *the standard says X*.
 `.claude/skills/langspec-audit/` exists because no oracle here can contradict a
@@ -326,11 +327,19 @@ so there is a text to hold, and the fourth row above is no longer empty. It
 found five divergences on its first pass, one of them a compiler crash no gate
 here could see.
 
-What is **not** answered is the third row: a dialect scenario is still not
-expressible, because the tag pattern above has two alternatives and needs
-three. That is a small change and it is the next one. Until it lands, the spec
-is a document nothing enforces — which is the closed loop reopened one step
-further out, and worth saying plainly rather than counting the row as done.
+**The third row followed it.** `tests/spec/run.py` takes `@afterschool:` beside
+the two standards' tags, and 44 of the specification's 45 testable clauses are
+cited by a scenario — the one that is not is 6.13.1, which needs two
+program-components and a link, and the harness compiles one program
+(`doc/sop.md` §7). The clause table is generated from the document rather than
+transcribed, so the two cannot drift.
+
+What is **still** empty is the first two rows, and neither is something a
+document or a harness can supply: there is no third-party corpus for a language
+this project invented, and no second implementation, `src/` being frozen at the
+conformance surface on purpose. A high citation fraction here means the
+specification is young and was written against a compiler someone could probe,
+not that the dialect is as well checked as the conformance modes.
 
 One external authority is already in play and is worth naming, because ADR-0129
 noticed it and then dropped it: **POSIX and the C ABI are specifications**, and

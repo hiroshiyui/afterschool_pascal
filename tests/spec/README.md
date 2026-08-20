@@ -1,7 +1,7 @@
 # The specification suite
 
-Scenarios written against **clauses of the two standards**, in a subset of
-Gherkin, run by `run.py`.
+Scenarios written against **clauses of the two standards and of the dialect's
+own specification**, in a subset of Gherkin, run by `run.py`.
 
 ```sh
 ctest --test-dir build -R '^spec-'            # as part of an ordinary run
@@ -12,7 +12,27 @@ python3 tests/spec/run.py --write-pending     # after adding a citation
 ```
 
 `clauses/pending.txt` is the work queue: the testable clauses no scenario cites
-yet. Adding one is the ordinary way to grow this suite — write the scenario,
+yet.
+
+## The three clause tables
+
+`clauses/iso7185.tsv` and `clauses/iso10206.tsv` are extracted from PDFs that
+are **not** in this repository and may not be — `clauses/extract.sh` needs
+`pdftotext` and the documents, and does nothing without them.
+
+`clauses/afterschool.tsv` has the opposite problem and the opposite solution.
+The dialect's specification *is* here, so its table is **generated from the
+document** by `clauses/extract_afterschool.py` rather than transcribed, and the
+two cannot drift. Regenerate it whenever
+`doc/afterschool-pascal-spec.md` gains or renames a clause:
+
+```sh
+python3 tests/spec/clauses/extract_afterschool.py
+```
+
+A dialect clause is a numbered heading (`### 5.1 Processors`) or a numbered
+bold lead-in (`**6.4.2.6.1 Values.**`), which is the form the specification uses
+where a requirement is finer than a heading. Adding one is the ordinary way to grow this suite — write the scenario,
 tag it, then regenerate the pending list and say in the commit message which
 clause gained one.
 
@@ -68,7 +88,11 @@ what it requires.
 ## Writing a scenario
 
 A file is `features/<area>.feature`. Tags carry the clause and may sit on the
-feature (applying to every scenario in it) or on one scenario:
+feature (applying to every scenario in it) or on one scenario. There are three
+tag prefixes — `@iso7185:`, `@extended:` and `@afterschool:` — and the last
+cites `doc/afterschool-pascal-spec.md`, never a standard. A bare `§6.4.11`
+anywhere in this repository means one of the two standards; the dialect's own
+clauses are `AP §6.4.11` in prose and `@afterschool:6.4.11` here:
 
 ```gherkin
 @iso7185:6.8.3.9 @iso7185:6.7.1
@@ -110,10 +134,17 @@ Two rules that keep a scenario honest:
 - **Not a replacement for `tests/`.** The golden corpus is far larger and
   covers the compiler; this covers *readings*. A feature landing still needs
   its `tests/*.pas` pair.
-- **Not complete, and citation is not depth.** `--coverage` reports 14 of the
-  **207 testable** clauses — the denominator is triaged in
-  `clauses/triage.tsv` (ADR-0106, corrected by ADR-0107), so the 75 structural
-  headings and the 10 for conformant array parameters are excluded rather than
-  counted as gaps. But a
-  clause with one scenario counts as cited, and §6.8.3.9 alone has more
-  requirements than the six here. `doc/sop.md` §7 carries that caveat.
+- **Not complete, and citation is not depth.** `--coverage` reports the cited
+  fraction of the **testable** clauses — the denominator is triaged in
+  `clauses/triage.tsv` (ADR-0106, corrected by ADR-0107), so a structural
+  heading and the ones for conformant array parameters are excluded rather than
+  counted as gaps. But a clause with one scenario counts as cited, and
+  §6.8.3.9 alone has more requirements than the six here. `doc/sop.md` §7
+  carries that caveat.
+
+  **The dialect's fraction is much the higher of the three, and that is not a
+  claim about quality.** Its clauses were written by someone who could probe
+  the compiler for each one (ADR-0135), so the citations arrived with the
+  document; the two standards' clauses were written in 1990 by people with no
+  such thing in mind. A high number there means the specification is young,
+  not that it is well tested.

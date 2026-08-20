@@ -48,6 +48,7 @@ asserts nothing, which is the failure this whole suite exists to avoid:
 
     Given the ISO 7185 program            <docstring>
     Given the Extended Pascal program     <docstring>
+    Given the Afterschool Pascal program  <docstring>
     Given the standard input              <docstring>
     When it is compiled and run
     When it is compiled
@@ -75,12 +76,23 @@ import sys
 import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
-TAG = re.compile(r"@(iso7185|extended):(\d+(?:\.\d+)*)")
+TAG = re.compile(r"@(iso7185|extended|afterschool):(\d+(?:\.\d+)*)")
 
 STANDARD_OF = {
     "the ISO 7185 program": "iso7185",
     "the Extended Pascal program": "extended",
+    "the Afterschool Pascal program": "afterschool",
 }
+
+# The clause table each standard's citations are checked against, and the label
+# a report prints. The dialect's table is generated from the specification
+# itself (clauses/extract_afterschool.py) rather than from a PDF that may not
+# be present, which is the one way the three differ.
+STANDARDS = (
+    ("iso7185", "iso7185", "ISO 7185:1990"),
+    ("extended", "iso10206", "ISO/IEC 10206:1991"),
+    ("afterschool", "afterschool", "Afterschool Pascal (doc/afterschool-pascal-spec.md)"),
+)
 
 
 class SpecError(Exception):
@@ -136,7 +148,8 @@ def parse(path):
             unknown = [t for t in stripped.split() if not TAG.fullmatch(t)]
             if unknown:
                 raise SpecError(f"{path.name}:{i}: unrecognised tag {unknown[0]} "
-                                "(expected @iso7185:<clause> or @extended:<clause>)")
+                                "(expected @iso7185:, @extended: or "
+                                "@afterschool:, each with a clause)")
             continue
         if stripped.startswith("Feature:"):
             feature_tags, pending_tags = pending_tags, []
@@ -383,7 +396,7 @@ def check_clauses(scenarios):
 
 def inventory():
     out = {}
-    for name, std in (("iso7185", "iso7185"), ("iso10206", "extended")):
+    for std, name, _ in STANDARDS:
         path = HERE / "clauses" / f"{name}.tsv"
         if not path.exists():
             continue
@@ -408,8 +421,7 @@ def coverage(scenarios):
 def report(scenarios):
     inv, cited, tri = inventory(), coverage(scenarios), triage()
     print(f"specification suite: {len(scenarios)} scenarios\n")
-    for std, label in (("iso7185", "ISO 7185:1990"),
-                       ("extended", "ISO/IEC 10206:1991")):
+    for std, _, label in STANDARDS:
         clauses = inv.get(std, {})
         have = cited.get(std, {})
         known = [c for c in have if c in clauses]

@@ -195,6 +195,16 @@ Three rules, and the first is the one that matters:
   this document.** ADRs are immutable (ADR-0001) and state what was decided
   when they were written; this states what the language is now. Annex E lists
   every such divergence found.
+- **d) Its clauses are cited by scenarios that run.** `tests/spec/` takes
+  `@afterschool:<clause>`, and 44 of this document's 45 testable clauses are
+  cited by at least one scenario; the clause table those citations are checked
+  against is **generated from these headings**, so a renamed clause fails the
+  traceability gate rather than drifting. 6.13.1 is the one not cited — it needs
+  two program-components and a link, and that harness compiles a single program.
+
+  This rule was added after a) to c) and is numbered after them for that
+  reason: ADR-0135 cites 5.5 a) by letter, and renumbering would have made an
+  immutable record wrong.
 
 ---
 

@@ -443,10 +443,12 @@ Five things about the dialect are worth knowing before adding anything:
   spells it wherever one does. It must not change what the conformance modes
   accept, and it must be expressible in what `seed/pascalc.ll` accepts or the
   seed is refreshed first.
-- **It is specified, and the specification is not yet enforced.** The spec
-  exists; `tests/spec/run.py`'s tag pattern still has two alternatives and
-  needs three, so no scenario can cite an AP clause yet. Until that lands the
-  document is a reading nothing checks — `doc/sop.md` §7 carries it.
+- **It is specified, and the specification is enforced.** `tests/spec/` takes
+  `@afterschool:<clause>` beside the two standards' tags, and 44 of the spec's
+  45 testable clauses are cited by a scenario. The clause table is **generated
+  from the document** (`tests/spec/clauses/extract_afterschool.py`), not
+  transcribed, so a renamed clause fails the traceability gate rather than
+  drifting. Regenerate it when the spec gains or renames one.
 - **difftest does not follow it.** `src/` is frozen at the conformance surface,
   so a dialect source is compared by no second implementation and
   `difftest.sh` *skips* it — counted and reported, because a silent skip is
