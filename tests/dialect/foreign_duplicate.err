@@ -1,0 +1,2 @@
+<source>:29:1: error: the foreign name 'abs' already names 'abs1'; one linker symbol may be named by one 'external' declaration, so call that one
+<source>:32:1: error: the foreign name 'abs' already names 'abs1'; one linker symbol may be named by one 'external' declaration, so call that one

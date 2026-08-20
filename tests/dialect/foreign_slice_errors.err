@@ -1,4 +1,4 @@
-<source>:18:1: error: parameter 2 of 'r1' is a slice of small; the callee writes through it, so only 'char', 'integer', 'int64' and 'real' cross as a component
-<source>:22:1: error: parameter 2 of 'r2' is a slice of boolean; the callee writes through it, so only 'char', 'integer', 'int64' and 'real' cross as a component
-<source>:26:1: error: parameter 2 of 'r3' is a slice of point; the callee writes through it, so only 'char', 'integer', 'int64' and 'real' cross as a component
-<source>:31:26: error: a slice must be a var parameter: it views the caller's storage, and a value parameter is a copy. Write 'protected var' for one that may not be written through
+<source>:22:1: error: parameter 2 of 'r1' is a slice of small; the callee writes through it, so only 'char', 'integer', 'int64' and 'real' cross as a component
+<source>:26:1: error: parameter 2 of 'r2' is a slice of boolean; the callee writes through it, so only 'char', 'integer', 'int64' and 'real' cross as a component
+<source>:30:1: error: parameter 2 of 'r3' is a slice of point; the callee writes through it, so only 'char', 'integer', 'int64' and 'real' cross as a component
+<source>:35:26: error: a slice must be a var parameter: it views the caller's storage, and a value parameter is a copy. Write 'protected var' for one that may not be written through

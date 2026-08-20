@@ -1668,6 +1668,11 @@ var
   labelScope: labelScopePtr;
   stmtPath: stmtPathPtr;
   nextLabelId: integer;
+  { ADR-0147: every `external` declaration this program-component has made, so
+    that a second one naming a linker symbol already named is refused. Sema's
+    rather than CodeGen's, because what it decides is what the language accepts
+    -- CodeGen reports no user-facing errors. }
+  foreignDecls, foreignDeclTail: symListPtr;
   labelBlocks: labelBlockPtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
 
@@ -16225,8 +16230,25 @@ end;
   is marked defined -- otherwise the "declared forward but never given a body"
   sweep at the end of every block would claim it -- and its storage belongs to
   another translation, which is what `storageElsewhere` already means. }
+{ The `external` declaration this component has already made of this linker
+  symbol, or nil. By the pool *text*, because the pool interns nothing: two
+  sources of the word `abs` are two positions, which is exactly what SameLink
+  compares and exactly why the emitter's own duplicate check never fired. }
+function ForeignNamed(at, len: integer): symPtr;
+var e: symListPtr; found: symPtr;
+begin
+  found := nil;
+  e := foreignDecls;
+  while e <> nil do begin
+    if PoolSame(e^.sym^.linkItemAt, e^.sym^.linkItemLen, at, len) then
+      found := e^.sym;
+    e := e^.next
+  end;
+  ForeignNamed := found
+end;
+
 procedure CheckForeignHeading(d: nodePtr; sym: symPtr);
-var p: symListPtr; k: integer;
+var p: symListPtr; k: integer; prior: symPtr;
 begin
   sym^.linkKind := lnkForeign;
   sym^.linkItemAt := d^.pdExtAt;
@@ -16250,6 +16272,27 @@ begin
     WritePool(d^.pdExtAt, d^.pdExtLen);
     write(''' is one this compiler emits for something of its own; ');
     writeln('it cannot also name a foreign routine')
+  end
+  { ADR-0147: one linker symbol, one `external` declaration. A second heading
+    on one symbol emits a second `declare` of one global, which LLVM refuses --
+    an error about a file nobody wrote, which is the shape ADR-0121's own gate
+    exists to prevent from the other direction. Nothing checks a foreign
+    heading against the routine it names (doc/sop.md §7), so a second heading
+    is a second unchecked claim about one symbol and buys nothing that calling
+    the first one does not. }
+  else begin
+    prior := ForeignNamed(d^.pdExtAt, d^.pdExtLen);
+    if prior <> nil then begin
+      ErrorAt(d^.line, d^.col);
+      write('the foreign name ''');
+      WritePool(d^.pdExtAt, d^.pdExtLen);
+      write(''' already names ''');
+      WritePool(prior^.at, prior^.len);
+      write('''; one linker symbol may be named by one ''external'' ');
+      writeln('declaration, so call that one')
+    end
+    else
+      AppendSym(foreignDecls, foreignDeclTail, sym)
   end;
 
   { ADR-0122: nothing comes back as an address. A returned `char *` may be
@@ -18792,6 +18835,8 @@ begin
   labelScope := nil;
   stmtPath := nil;
   nextLabelId := 0;
+  foreignDecls := nil;
+  foreignDeclTail := nil;
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like
     the other predefined types, so every variable declared `text` has the same
     type -- a `file of char` written out longhand is a different one, exactly

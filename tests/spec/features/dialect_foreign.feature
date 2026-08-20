@@ -114,6 +114,37 @@ Feature: Foreign functions
       is one this compiler emits for something of its own
       """
 
+  @afterschool:6.7.7.11
+  Scenario: one linker symbol is named by one external declaration
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function a1(x: integer): integer; external 'abs';
+      function a2(x: integer): integer; external 'abs';
+      begin writeln(a1(-1), a2(-2)) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      one linker symbol may be named by one 'external' declaration
+      """
+
+  @afterschool:6.7.7.11
+  Scenario: a foreign name is a character-string and is not case-folded
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      function lower(x: integer): integer; external 'abs';
+      function upper(x: integer): integer; external 'ABS';
+      begin writeln(lower(-7):1) end.
+      """
+    When it is compiled and run
+    Then it prints
+      """
+      7
+      """
+
   @afterschool:5.3
   Scenario: the directive is refused under a conformance mode, naming the mode that has it
     Given the Extended Pascal program

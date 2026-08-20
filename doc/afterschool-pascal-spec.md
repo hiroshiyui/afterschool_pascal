@@ -867,6 +867,32 @@ NOTE 3 — The routines a program may bind in this processor's own runtime are
 spelled `pasx_`, are never emitted, and are therefore never reserved. `pas_` is
 what the processor emits; `pasx_` is what a program may name (ADR-0131).
 
+**6.7.7.11 One declaration per linker symbol.** Within one program-component,
+no two external-declarations shall have the same character-string.
+
+The character-strings are compared exactly. Identifiers in this language are
+case-folded (§6.1.3) and a character-string is not one, so `'ABS'` and `'abs'`
+are different names and neither is a second declaration of the other.
+
+NOTE 1 — This is 6.7.7.10 from the other side. There the collision is between a
+foreign name and one the processor emits; here it is between two foreign names,
+and the consequence is the same — two declarations of one global, which a
+linker's assembler refuses with a diagnostic naming a file the program's author
+never wrote.
+
+NOTE 2 — The requirement is a refusal rather than a rule that the two
+declarations agree, and that is deliberate. Nothing in this dialect checks an
+external-declaration against the routine it names (6.7.7.8, C.1), so a second
+declaration is a second unchecked claim about one symbol and gives a program
+nothing that calling the first one does not. Were the processor instead to
+emit one declaration for the two, a program declaring `'abs'` once as
+`integer -> integer` and once as `real -> real` would translate, link and be
+undefined, which is worse than being refused.
+
+NOTE 3 — The restriction is per program-component. Two modules of one program
+may each declare the same foreign name; §6.13 translates them separately, each
+emits its own declaration, and the linker resolves both to one symbol.
+
 ### 6.8 Expressions [extended]
 
 #### 6.8.3 Operators [extended]
