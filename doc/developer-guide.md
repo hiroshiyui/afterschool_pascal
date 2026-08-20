@@ -85,32 +85,11 @@ and why retiring stage 0 was possible at all
 ([ADR-0085](adr/0085-stage-0-is-retired.md)). What it *did* cost is the
 differential test, and that record says so plainly rather than in passing.
 
-Reaching stage 1 means the accepted language has to cover what a compiler is
-written in. In dependency order:
-
-1. ~~**Procedures and functions**~~ — done: nested to any depth, value and
-   `var` parameters, `forward`, implemented with static links (ADR-0016).
-2. ~~**Arrays and records**~~ — done: static arrays of any ordinal index,
-   `packed`, nested records, `with`, bounds-checked subscripts (ADR-0017).
-   Variant parts wait for `case`.
-3. ~~**Enumerations, subranges, `case`**~~ — done, together with the variant
-   records they unlock (ADR-0018). An AST node is now expressible: the tag is
-   an enumeration and the node is a variant record.
-4. ~~**Pointers and `new`/`dispose`**~~ — done, with the forward-referenced
-   pointer domain that makes a recursive type possible (ADR-0019). The AST can
-   now be a heap-allocated tree rather than an array of nodes.
-5. ~~**Text files**~~ — done: `reset`, `rewrite`, `read`, `readln`, `eof`,
-   `eoln`, and the buffer variable with `get`/`put` that a lexer wants
-   (ADR-0021). The compiler can now read source and write `.ll`.
-6. ~~**Character strings**~~ — decided: a length-plus-buffer record in strict
-   ISO Pascal, no extension (ADR-0012). Measuring the existing compiler settled
-   it: a compiler reads text in and writes text out rather than manipulating
-   it, so nearly every concatenation becomes a `write` and the only strings
-   that must be *stored* are identifiers and about sixty padded table entries.
-   `tests/bootstrap_strings.pas` is the working evidence.
-
-**Every prerequisite for stage 1 is now in place**, and the Pascal source that
-needed them is written.
+Reaching stage 1 meant the accepted language had to cover what a compiler is
+written in, and six features in dependency order are what that came to. All six
+are done, and **[the roadmap's table](roadmap.md#the-six-bootstrap-items-all-done)
+is where they are listed** with the record behind each — it is history now, and
+the history belongs there rather than in two places that can disagree.
 
 ## Stage 1
 
@@ -141,31 +120,23 @@ file per message, because it stops at its first) and `selfhost/badsema/` for
 Sema (which accumulates). Those were compared between two compilers until
 ADR-0085 left one; each is now pinned against a `.err` golden.
 
-**It is also checked differentially**, against a second implementation of the
-front end, stage for stage on every Pascal source in the tree — the strongest
-oracle this project has. It was written against the C++ compiler stage 1 was
-ported from; retiring stage 0 gave it up (ADR-0085) and ADR-0108 brought it
-back, `src/` now being a lexer, parser and Sema with no code generator. What it
-catches is worth knowing, because nothing else here catches it: a diagnostic
-that named two types identically and explained nothing, a comment-delimiter
-rule implemented wrongly in *both* compilers, a builtin's enumerator one apart.
+**It is also checked differentially**, against `src/` — a second implementation
+of the lexer, parser and Sema, with no code generator — stage for stage on every
+Pascal source in the tree. That is the strongest oracle here, and
+[the roadmap](roadmap.md#what-is-next) records the defects it caught that every
+other oracle here agreed about, with the record behind each.
 
-Two things it still cannot do. It says nothing about the **code generator**,
-which it never compared — two backends' assembler text is not comparable — and
-it cannot contradict a **reading**, because one author writes both sides. The
-`.err` goldens above are what covers the first; `langspec-audit` is what
-covers the second. See
+Two things it cannot do, and both decide what else you must run. It says nothing
+about the **code generator**, which it never compared — two backends' assembler
+text is not comparable — so the `.err` goldens above are what covers that. And
+it cannot contradict a **reading**, because one author writes both sides;
+`.claude/skills/langspec-audit/` is what covers that. See
 [ADR-0022](adr/0022-the-lexer-port-is-checked-differentially.md),
-[ADR-0023](adr/0023-the-ast-is-a-variant-record-and-a-sibling-list.md),
-[ADR-0024](adr/0024-the-stage-1-compiler-becomes-one-source-file.md) and
-[ADR-0085](adr/0085-stage-0-is-retired.md).
+[ADR-0024](adr/0024-the-stage-1-compiler-becomes-one-source-file.md),
+[ADR-0085](adr/0085-stage-0-is-retired.md) and
+[ADR-0108](adr/0108-the-reference-front-end-comes-back.md).
 
-The AST is where the bootstrap constraints paid off: the node tag of
-[ADR-0005](adr/0005-tag-dispatched-ast-without-cpp-rtti.md) became a
-variant record's tag and the downcast helper became the `case` that reads it,
-with no `dynamic_cast` to replace and nothing to redesign.
-
-Done by hand, that is:
+Building the thing by hand, rather than through `cmake`, is three commands:
 
 ```sh
 clang -Wno-override-module seed/pascalc.ll build/lib/libpasrt.a -lm -o stage1
