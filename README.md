@@ -537,7 +537,7 @@ not characters — a `DIR *` you must hand back to `closedir`, a
 with. That is where the memory-safety model actually bites, and it is what
 stands between here and a socket. A container waits on something else entirely —
 parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
-the ordering.
+the ordering, and `doc/history.md` has each increment that got this far.
 
 ## What the compiler accepts today, with `--std=iso7185`
 
@@ -1095,7 +1095,7 @@ program-components were the last clause, and the claim is not an
 impression: Annex A's 274 productions were probed in both directions,
 both Annex Ds' errors, Annexes E and F's 80 implementation-defined and
 -dependent features, and Annex C's 94 required identifiers — each with a
-program compiled and run rather than with a reading. `doc/roadmap.md` records
+program compiled and run rather than with a reading. `doc/history.md` records
 what each sweep found; the tag `iso-10206-1991-done` is where it was settled.
 
 **One position of it is refused**: a subrange whose bounds are not constants,

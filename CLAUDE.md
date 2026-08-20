@@ -285,8 +285,8 @@ arbitrary.
 
 Feature priority follows what a compiler is written in (procedures, records,
 pointers, text files, a usable string type), not ISO chapter order. README.md
-holds the three-stage plan and the dependency ordering; `doc/roadmap.md`
-tracks it.
+holds the three-stage plan and the dependency ordering; `doc/history.md`
+records how it went, and `doc/roadmap.md` is what is still open.
 
 **All six bootstrap items are now settled**, and both standards are complete
 besides — so the bar for a new feature has *moved* twice rather than risen.

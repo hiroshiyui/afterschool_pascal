@@ -4,7 +4,7 @@ How a change gets into this compiler, and what has to be true before it does.
 
 This document exists because of a specific, repeated failure here: **the suite
 was green and the compiler was wrong.** Not once — every conformance sweep in
-`doc/roadmap.md` was opened by it, and the most recent round found a `verify/`
+`doc/history.md` was opened by it, and the most recent round found a `verify/`
 model describing a compiler that had been replaced, a stack leak the default
 `-O2` optimised out of sight, and 32 diagnostics no test had ever named. In
 every case the bar had been met, and the bar was the problem.

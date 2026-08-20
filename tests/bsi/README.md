@@ -21,7 +21,7 @@ ADR-0085 retired the C++ compiler and with it `selfhost/difftest.sh`, which
 compared two independent implementations over 436 sources. What was left —
 goldens, the stage-2/stage-3 fixed point, the SMT rules — all share one
 implementation, and a golden cannot disagree with the program that wrote it.
-Every conformance sweep in `doc/roadmap.md` ends with the same sentence: *no
+Every conformance sweep in `doc/history.md` ends with the same sentence: *no
 program in the corpus had written the construct, so all five oracles agreed
 with a compiler that was wrong.* This is a corpus that was not chosen here.
 

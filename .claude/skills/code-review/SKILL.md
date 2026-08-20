@@ -87,7 +87,7 @@ When performing a project-wide code review, always follow these steps:
      `cmake`.
    - **Remember what the goldens cannot do.** A golden agrees with whatever
      wrote it, so "the tests pass" says nothing about a construct no test
-     *names*. That is the gap every conformance sweep in `doc/roadmap.md` was
+     *names*. That is the gap every conformance sweep in `doc/history.md` was
      opened by. `difftest` closes part of it — a second implementation disagrees
      without being asked a question someone here composed — but only for the
      **front end**, and only for *slips*: both sides are written by one author

@@ -1658,8 +1658,8 @@ able to make.
     pointer can be dereferenced, found nil"; §6.4.4's NOTE 1 is the rule that
     applies — the nil-value "does not identify a variable". ADR-0074's lesson
     in a third form, and equally invisible to every oracle here.
-  - It was found by ADR-0071's sweep and **written into `doc/roadmap.md`
-    instead of fixed**, which is the only reason it outlived two more
+  - It was found by ADR-0071's sweep and **written into the roadmap instead of
+    fixed**, which is the only reason it outlived two more
     conformance rounds.
 - **A required procedure may be declared away** (ADR-0087). ISO 7185 §6.2.2.10
   puts the required identifiers' defining-points in "a region enclosing the

@@ -624,7 +624,7 @@ Stage 0 *was* the C++ compiler in this repository and is retired (ADR-0085);
 what starts the chain now is `seed/pascalc.ll`, a working compiler in IR,
 committed. Stage 1 is what the seed produces from `selfhost/compiler.pas` and
 is `build/bin/pascalc`; stages 2 and 3 are that source compiled by its own
-output, and must be identical. They are. See [roadmap.md](roadmap.md).
+output, and must be identical. They are. See [history.md](history.md#the-three-stage-build).
 
 **Seed.** The committed artefact stage 0 became — 6.6 MB of IR that nobody
 reads and that builds the compiler, which is a supply-chain surface by

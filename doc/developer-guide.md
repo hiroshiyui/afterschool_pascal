@@ -87,7 +87,7 @@ differential test, and that record says so plainly rather than in passing.
 
 Reaching stage 1 meant the accepted language had to cover what a compiler is
 written in, and six features in dependency order are what that came to. All six
-are done, and **[the roadmap's table](roadmap.md#the-six-bootstrap-items-all-done)
+are done, and **[the history's table](history.md#the-six-bootstrap-items-all-done)
 is where they are listed** with the record behind each — it is history now, and
 the history belongs there rather than in two places that can disagree.
 
@@ -162,9 +162,10 @@ until it was rewritten in the other standard, and why the last line above is
 still `clang`: neither standard has process control, so `pascalc` stops at the
 IR permanently.
 
-[doc/roadmap.md](roadmap.md) expands this: what items 5 and 6 actually
-involve, the order the stage-1 source gets ported in, and the known limitations
-— including the ones that are deliberate.
+[doc/history.md](history.md) expands this: what items 5 and 6 actually
+involved and the order the stage-1 source was ported in.
+[doc/roadmap.md](roadmap.md#known-limitations) has the known limitations,
+including the ones that are deliberate.
 
 ## Verified, not just tested
 
