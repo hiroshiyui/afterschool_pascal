@@ -139,3 +139,42 @@ Feature: A variant tag that cannot lie
       """
       A
       """
+
+  # AP 6.4.3.4's own opening carries a claim about the CONFORMANCE modes -- that
+  # both leave §6.5.3.3's error undetected, conformingly -- and no subclause
+  # repeats it. That sentence is what makes the dialect's detection an addition
+  # rather than a correction, and it is exercisable by a program, which is why
+  # the clause was re-triaged from `structural` to `testable` (ADR-0144).
+  @afterschool:6.4.3.4
+  Scenario: the conformance modes leave an inactive-variant read undetected
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type Sel = (si, sr);
+           Rec = record case k: Sel of si: (i: integer); sr: (r: real) end;
+      var v: Rec;
+      begin v.k := si; v.i := 7; writeln('no trap') end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      no trap
+      """
+
+  @afterschool:6.4.3.4
+  Scenario: and the dialect detects it
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Sel = (si, sr);
+           Rec = record case k: Sel of si: (i: integer); sr: (r: real) end;
+      var v: Rec;
+      begin v.k := si; v.i := 7; writeln(v.r) end.
+      """
+    When it is compiled and run
+    Then it stops at run time
+     And the run-time error includes
+      """
+      variant: the tag selects another arm
+      """

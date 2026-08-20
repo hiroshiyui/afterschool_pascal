@@ -315,7 +315,7 @@ reserving `defer` in the dialect leaves **all 619 cases green**,
 `dialect-containment` included, because no corpus program uses that identifier.
 AP §6.1.2 states the requirement.
 
-### 2. The dialect has no external authority, and every gate here is anchored in one
+### 2. The dialect has no external authority, and every gate here is anchored in one — *audited once*
 
 | | ISO 7185 | Extended Pascal | the dialect |
 | --- | --- | --- | --- |
@@ -375,6 +375,20 @@ so ADR-0121 chose the spelling the standard names, without knowing it. The same
 NOTE recommends enforcing type compatibility across the boundary, which this
 compiler cannot; the departure is now written down rather than merely true.
 Nothing else in the dialect has an authority.
+
+**Audited once (ADR-0144).** Five independent readers were given
+`doc/afterschool-pascal-spec.md` and the two standards and told to prove it
+wrong. That is the substitute for an authority and it is a partial one: it works
+for every claim the document makes *about* ISO 7185 and ISO/IEC 10206:1991 —
+**nine of those were wrong**, including `external` called a remote-directive
+and §6.1.3 credited with a rule that is §6.2.2.5's — and it cannot work for a
+requirement the dialect invents, where a reader can only ask whether the
+processor agrees with the document.
+
+It also found four defects in the compiler, two of them memory-unsafe, and one
+clause of the specification that contradicted another while being classified
+`structural`, which makes a requirement unfalsifiable by construction. So the
+substitute is worth running; it is not an authority.
 
 ### 3. ~~The containment stops at the link, and no document says so~~ Answered
 

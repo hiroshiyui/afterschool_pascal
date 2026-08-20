@@ -763,9 +763,13 @@ same message, so what it varies is the *backend configuration* and nothing else.
 short-circuit; `/` is always real division; `for` evaluates its limit once and
 tests `= limit` before stepping so the last iteration cannot overflow; a
 one-character string literal is a `char`; and a statement may be **empty**
-(§6.8.1), which means every token that can *follow* a statement also starts
-one — `;` and `end`, but also `else` and `until`, so `if c then ; else s` is
-legal. `tests/empty_statements.pas` pins it.
+(ISO 7185 §6.8.2.1, ISO/IEC 10206:1991 §6.9.2.1 — *not* §6.8.1, which is the
+goto-target rule in the first and `Expressions — General` in the second), which
+means every token that can *follow* a statement also starts one — `;` and
+`end`, but also `else` and `until`, so `if c then ; else s` is legal, and under
+Extended Pascal **`otherwise`** as well, §6.9.3.5 making the separator before a
+case-statement-completer optional. `tests/empty_statements.pas` and
+`tests/extended/case_empty_otherwise.pas` pin the two halves.
 
 **A number read takes the longest prefix that *is* a number** (§6.9.1 c) and
 d), ADR-0076), which is one character more than a file's lookahead can decide:

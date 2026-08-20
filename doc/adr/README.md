@@ -152,3 +152,4 @@ the alternatives that were rejected and why.
 | [0141](0141-one-rule-for-saying-a-routine-may-have-failed.md) | One rule for saying a routine may have failed | Accepted |
 | [0142](0142-reachability-follows-a-procedural-parameters-own-parameters.md) | Reachability follows a procedural parameter's own parameters | Accepted |
 | [0143](0143-a-slice-is-not-a-value-and-cannot-be-named.md) | A slice is not a value, and 6.4.9 could name one | Accepted |
+| [0144](0144-the-first-audit-of-the-dialects-specification.md) | The first audit of the dialect's specification | Accepted |

@@ -8,6 +8,7 @@
 #
 # and say in the commit message which clause gained a scenario.
 
+afterschool:6.11
 afterschool:6.13.1
 extended:6.1.1
 extended:6.1.2

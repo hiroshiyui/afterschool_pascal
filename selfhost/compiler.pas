@@ -27503,7 +27503,7 @@ begin
       what makes a coverage report usable on a program that stops.
 
       Two kinds are skipped and both would be noise rather than information: an
-      empty statement (6.8.1 makes one legal wherever a statement may stand, and
+      empty statement (6.8.2.1 makes one legal wherever a statement may stand, and
       it emits nothing) and a compound, whose line is the `begin` and whose
       constituents are each counted already. A node with no recorded position is
       skipped too, since a line of 0 names nothing in the source. }

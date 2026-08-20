@@ -242,9 +242,10 @@ The special-symbol `?` is added, and shall occur only as specified in 6.4.11.
 **No word-symbol is added.** The word-symbols of Afterschool Pascal shall be
 exactly those of ISO/IEC 10206:1991 §6.1.2, and this document shall add none.
 
-NOTE 1 — `?` is a character that neither standard admits in any position — not
-in an identifier, not as an operator, and not among ISO/IEC 10206:1991
-§6.1.11's lexical alternatives. Taking it therefore costs the lexis nothing: no
+NOTE 1 — `?` is a character neither standard admits in any position outside a
+character-string (§6.1.9) or a commentary (§6.1.10) — not in an identifier, not
+as an operator, and not among ISO/IEC 10206:1991 §6.1.11's lexical
+alternatives. Taking it therefore costs the lexis nothing: no
 program that compiled before compiles differently, and both conformance modes
 report it as an unrecognised character exactly as they did (ADR-0123).
 
@@ -259,17 +260,29 @@ NOTE 3 — What this document does instead is spell each addition in a position
 where a conforming program could not have written it. `external` is an
 identifier in the directive position (6.1.4), `array of` is two word-symbols in
 a juxtaposition that was a syntax error (6.7.3.9.1), `?` is a character no
-program could spell, and `int64` is a defining-point in a scope §6.1.3 lets any
-program shadow (6.4.2.6). The test a new spelling shall satisfy is whether a
+program could spell, and `int64` is a defining-point in a scope §6.2.2.5 lets any
+program shadow (6.4.2.6) — §6.2.2.5 being the clause that excludes an enclosing
+region's defining-point where an enclosed one repeats the spelling. §6.1.3 says
+only that an identifier may not spell a word-symbol and that a required
+identifier has special significance; it is the right citation for *not
+reserved* and the wrong one for *shadowable*. The test a new spelling shall satisfy is whether a
 conforming program could have written that spelling **in that position**;
 where it could, the spelling is a word-symbol however it is implemented.
 
 NOTE 4 — For a statement, that test is answerable with one token of lookahead.
 A statement-initial identifier in ISO/IEC 10206:1991 is followed by exactly one
 of `(`, `:=`, `[`, `.`, `^`, or a token that ends a statement — `;`, `end`,
-`else` or `until`, the last three because §6.8.1 admits an empty statement. A
-statement form whose second token is none of those cannot collide with a
-conforming program. A program that takes the name for its own keeps the name
+`else`, `until` or **`otherwise`**, the last five because §6.9.2.1 admits an
+empty statement and §6.9.3.5 makes the separator before a
+case-statement-completer optional. A statement form whose second token is none
+of those cannot collide with a conforming program.
+
+The list is five tokens and the first draft of this NOTE gave four, omitting
+`otherwise`; the processor's own empty-statement follow-set had the same four,
+so `case i of 1: otherwise s end` — a legal program — was refused. Both are
+corrected. The test the token is compared against is a **token** and not a
+spelling: §6.1.11 makes `(.` the token `[`, so a reading of this NOTE over
+characters would miss it. A program that takes the name for its own keeps the name
 and loses the statement form within that scope, which is the direction this
 document requires: the addition yields to the standard it contains (ADR-0140).
 
@@ -280,13 +293,21 @@ program may use it as a variable name, and requiring `--std=extended` and
 
 #### 6.1.4 Remote-directives [extended]
 
-The remote-directive `external` is added, and shall occur only as specified in
+The directive `external` is added, and shall occur only as specified in
 6.7.7.
 
-`external` is a directive in the sense of ISO/IEC 10206:1991 §6.1.4's
-production for one, which admits any identifier-shaped word; it is **not** a
-word-symbol, and a program may still use `external` as an identifier
-everywhere else.
+`external` is spelled as §6.1.4's own NOTE spells it, and it is **not** a
+word-symbol: a program may still use `external` as an identifier everywhere
+else.
+
+It is **not** a remote-directive, and 6.7.7.1 is where it is defined. §6.1.4's
+production is `remote-directive = directive .` and a directive is one
+identifier-shaped token, while an external-directive is two — the word and a
+mandatory character-string (6.7.7.2). So 6.7.7.1 adds an alternative to
+`procedure-declaration` and `function-declaration` rather than a second
+remote-directive, which is what its own grammar line says. The first draft of
+this clause called it a remote-directive and attributed to §6.1.4's production
+an authorisation it does not give (ADR-0144).
 
 NOTE 1 — §6.1.4 carries a NOTE anticipating this extension by name: it
 observes that many processors provide a remote-directive spelled `external`
@@ -315,12 +336,24 @@ region ISO/IEC 10206:1991 §6.2.2.10 places the required identifiers in: one
 enclosing the program.
 
 They are therefore **shadowable and not reserved**. A program declaring its own
-`int64` takes that spelling for its own use, exactly as it may for `integer`,
-and §6.1.3 is what makes this survivable.
+`int64` takes that spelling for its own use, exactly as it may for `integer`.
+§6.1.3 is what makes them *not reserved* — "no identifier shall have the same
+spelling as any word-symbol", and these are identifiers — and §6.2.2.5 is what
+makes them *shadowable*, by excluding an enclosing region's defining-point
+wherever an enclosed region repeats the spelling.
 
-NOTE — This is the one addition in this document that takes a spelling away
+NOTE 1 — This is the one addition in this document that takes a spelling away
 from a program that does not shadow it, and it is why 6.0.1's test carries a
 paragraph for it rather than being left alone (ADR-0128).
+
+NOTE 2 — ISO/IEC 10206:1991 §3.3 defines an **extension** as a modification to
+clause 6 "that does not invalidate any program complying with this
+International Standard … except by prohibiting the use of one or more
+particular spellings of identifiers". A required identifier is therefore an
+extension in that standard's own terms, and the exception in §3.3's sentence is
+exactly this one. It is the citation NOTE 1's caution wants: what a conforming
+program loses is a spelling it must in any case have declared, since it could
+not have used `int64` undeclared.
 
 ### 6.4 Types and schemata
 
@@ -329,8 +362,10 @@ paragraph for it rather than being left alone (ADR-0128).
 ##### 6.4.2.6 The type int64 [added]
 
 **6.4.2.6.1 Values.** `int64` shall denote a signed integer type whose values
-are those representable in 64 bits, two's complement. `maxint64` shall denote
-its greatest value, `9223372036854775807`.
+are `-maxint64 .. maxint64`, which is one short of the range representable in
+64 bits two's complement: as with `integer` and `maxint`, the most negative
+representable value is not a value of the type, so negation cannot overflow.
+`maxint64` shall denote its greatest value, `9223372036854775807`.
 
 **6.4.2.6.2 It is numeric and it is not ordinal.** `int64` shall be a numeric
 type wherever ISO/IEC 10206:1991 admits one — the arithmetic operators, the
@@ -502,9 +537,18 @@ optional-type shall not be an operand of an arithmetic or relational operator
 other than as 6.4.11.4 permits, shall not be a write-parameter, and shall not be
 assigned to a variable of its component type.
 
-**6.4.11.7 Type identity.** An optional-type shall be identified as every other
-structured type is (ADR-0017): two separately written `?integer` denote two
-types, and §6.4.1 is what says so. No exception is made for an optional-type on
+**6.4.11.7 Type identity.** An optional-type shall be a **new-type** in the
+sense of ISO/IEC 10206:1991 §6.4.1, and specifically a new-structured-type, so
+that clause's rule reaches it: two separately written `?integer` denote two
+types.
+
+NOTE — §6.4.1's distinctness sentence is stated of a *new-type*, not of "a
+type-denoter that is not a type-name", and the difference is not pedantic: a
+discriminated-schema is a type-denoter that is not a type-name and two
+occurrences of `string(10)` denote the **same** type, §6.4.7 being carved out
+of the rule. The first draft of this clause cited §6.4.1 without saying that an
+optional-type is a new-type, which left the grammar with no production
+admitting `?T` anywhere and the rule with nothing to attach to (ADR-0144). No exception is made for an optional-type on
 account of its resembling a wrapper.
 
 #### 6.4.5 Compatible types [extended]
@@ -763,7 +807,16 @@ property.
 
 **6.7.7.8 Function results.** The result type of an external-declaration shall
 be `integer`, `int64`, `real`, or an optional-type (6.4.11) whose component is a
-string-type having a capacity.
+**variable-string-type** (ISO/IEC 10206:1991 §6.4.3.3.3).
+
+NOTE — The first draft of this clause said "a string-type having a capacity",
+which excludes nothing: §6.4.3.3.2 gives a fixed-string-type a capacity too —
+"the capacity of a fixed-string-type shall be the largest value of its
+index-type" — so the phrase used a defined term against its definition. What is
+meant, and what the processor does, is the variable-string-type: `?string(10)`
+is admitted and `?packed array [1..8] of char` is refused, because the length a
+foreign routine's answer turns out to have is not known when the call is
+written (ADR-0144).
 
 Where the result type is an optional-type, a null address shall yield the absent
 value, and any other address shall yield a copy, made where the call occurs, of
@@ -848,8 +901,19 @@ Extended by 6.4.2.6.6. No other change.
 
 ### 6.11 Modules [extended]
 
-A module shall be translated under the same language as every program-component
-it is linked with; see 6.13.1.
+A module shall be translated under a language 6.13.1 permits it to be linked
+with, which is not in general the same language as every other
+program-component: 6.13.1 grants an exception this clause must not withdraw.
+
+NOTE — The first draft of this clause said "the same language as every
+program-component it is linked with", which is strictly stronger than 6.13.1
+and forbids exactly the case ADR-0137 exists for and `lib/` depends on — a
+conforming module whose interface exposes nothing checked, linked into an
+Afterschool Pascal program. The processor obeys 6.13.1 and so violated the
+letter of this clause. It was found by an audit, and by a route worth recording:
+the clause was classified `structural` in `tests/spec/clauses/triage.tsv`, and a
+`structural` clause may carry no scenario — so its requirement was unfalsifiable
+by construction while contradicting a `testable` one (ADR-0144).
 
 ### 6.13 Programs
 
@@ -1076,6 +1140,32 @@ requirement in 6.7.3.9.2 was right and unenforced, and its NOTE explained why
 enforcement was unnecessary. A NOTE is informative and cannot be wrong about
 what is required; it can be wrong about why, and this one was.
 
+**E.9 Nine citation and wording defects, found by an audit of this document
+against the standards it amends.** None changed what the processor does; each
+would have misled a reader holding the standard, which is the one thing this
+document exists to prevent. All are corrected in place and listed here because
+5.5 c) makes this document the current statement and the record the historical
+one.
+
+| Clause | Was | Is |
+| --- | --- | --- |
+| 6.1.2 NOTE 1 | `?` admitted "in no position" | in none **outside a character-string (§6.1.9) or a commentary (§6.1.10)** |
+| 6.1.2 NOTE 3, 6.2.2 | §6.1.3 makes a required identifier shadowable | §6.1.3 makes it **not reserved**; §6.2.2.5 makes it **shadowable** |
+| 6.1.2 NOTE 4 | the empty statement is §6.8.1; four following tokens | §6.9.2.1; **five**, `otherwise` being the fifth |
+| 6.1.4 | `external` is a remote-directive | a **directive**; an external-directive is two tokens and §6.1.4's production admits one, so 6.7.7.1 adds an alternative to procedure-declaration |
+| 6.2.2 NOTE 2 | *(absent)* | §3.3's definition of **extension**, whose one exception is a spelling of an identifier — the citation the caution wanted |
+| 6.4.2.6.1 | `int64` holds every value representable in 64 bits | `-maxint64 .. maxint64`, one short, as `integer` is of `maxint` |
+| 6.4.11.7 | §6.4.1 makes two `?integer` distinct | §6.4.1's rule is stated of a **new-type**, so the clause now says an optional-type is one |
+| 6.7.7.8 | an optional of "a string-type having a capacity" | a **variable-string-type**; §6.4.3.3.2 gives a fixed-string-type a capacity too, so the phrase excluded nothing |
+| 6.11 | a module is translated under the same language as every component | under a language **6.13.1 permits**, 6.13.1 granting an exception 6.11 must not withdraw |
+
+The last is the one with a consequence beyond a reader. 6.11 as written forbade
+exactly the case ADR-0137 exists for and `lib/` depends on, so the processor
+violated its letter while obeying 6.13.1 — and the clause was classified
+`structural`, which makes a requirement unfalsifiable by construction, since no
+scenario may cite one. It and 6.4.3.4 are re-triaged `testable`; 6.4.3.4 now has
+the two scenarios its opening sentence always deserved.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -1097,3 +1187,4 @@ what is required; it can be wrong about why, and this one was.
 | 6.8.3.5, Annex E.7 | ADR-0139 |
 | 6.13.1 (the walk) | ADR-0142 |
 | 6.4.6, 6.7.3.9.2, Annex E.8 | ADR-0143 |
+| 6.7.5.3, 6.10.2, Annex E.9 | ADR-0144 |

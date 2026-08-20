@@ -1,12 +1,16 @@
 program EmptyStatements(output);
-{ ISO 7185 6.8.1 makes an empty statement a statement, so it is legal wherever
-  a statement is. Most of these already worked; `if c then <empty> else s` did
+{ ISO 7185 6.8.2.1 makes an empty statement a statement, so it is legal wherever
+  a statement is. (6.8.2.1, not 6.8.1: that one is the rule about where a goto
+  may land, and the mis-citation stood in five places until an audit read the
+  clause -- ISO/IEC 10206:1991 numbers the same sentence 6.9.2.1.) Most of these already worked; `if c then <empty> else s` did
   not, and the omission was found the hard way -- by having to write around it
   while porting Sema, where the C++ has a `continue` (ADR-0024).
 
   The rule is that every token which can *follow* a statement also starts one:
   `;` and `end` between statements, `else` after a then-branch, `until` after a
-  repeat body. }
+  repeat body. This file is ISO 7185, where those four are the whole list;
+  Extended Pascal adds `otherwise` and tests/extended/case_empty_otherwise.pas
+  is that half. }
 
 type
   point = record x, y: integer end;

@@ -363,7 +363,7 @@ afterschool	6.4.2.6.4	testable
 afterschool	6.4.2.6.5	testable
 afterschool	6.4.2.6.6	testable
 afterschool	6.4.3	structural	introduces the structured-type additions
-afterschool	6.4.3.4	structural	introduces the variant rules; the requirements are in its subclauses
+afterschool	6.4.3.4	testable
 afterschool	6.4.3.4.1	testable
 afterschool	6.4.3.4.2	testable
 afterschool	6.4.3.4.3	testable
@@ -408,6 +408,6 @@ afterschool	6.8	structural	introduces the expression additions
 afterschool	6.8.3	structural	introduces the operator additions
 afterschool	6.8.3.5	testable
 afterschool	6.10	structural	a cross-reference to 6.4.2.6.6, which carries the requirement
-afterschool	6.11	structural	restates 6.13.1, which carries the requirement
+afterschool	6.11	testable
 afterschool	6.13	structural	introduces 6.13.1
 afterschool	6.13.1	testable
