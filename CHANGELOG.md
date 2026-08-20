@@ -13,88 +13,41 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
-### Fixed
+## [1.6.0] — 2026-08-20
+
+The first release after an independent audit of `doc/afterschool-pascal-spec.md`
+against the standards it amends (ADR-0144). Five readers were given the document
+and told to prove it wrong; six compiler defects and nine citation errors came
+back, and most of what follows is theirs.
+
+**Read the first entry under `Changed` before upgrading.** It alters what an
+already-valid ISO/IEC 10206:1991 program prints.
+
+`--std=iso7185` is untouched by every entry below.
+
+### Changed
 
 - **`new(p, c1, ..., cn)` sets each selector** (ADR-0144, `--std=extended` and
   `--std=afterschool`). ISO/IEC 10206:1991 §6.7.5.3 requires the tag-field of
   each selected variant to be attributed the case-constant's value; the tags
-  were read only to size the allocation, so `new(p, green)` left the tag
-  reading `red` and `case p^.k of` took the wrong arm. ISO 7185 §6.6.5.3 has no
-  such requirement and `--std=iso7185` is unchanged.
+  were read only to size the allocation, so the tag kept whatever the storage
+  held.
+
+  ```pascal
+  new(p, green);
+  case p^.k of red: writeln('red'); green: writeln('green') end
+  ```
+
+  printed `red` in 1.5.0 and prints `green` in 1.6.0. Any program using `new`
+  with variant selectors may therefore behave differently — correctly, and
+  differently. ISO 7185 §6.6.5.3 has no such requirement, saying instead that
+  the created variable "shall be totally-undefined", so `--std=iso7185` is
+  unchanged.
 
 - **`read` into a field of a variant activates that variant**
   (ADR-0144, `--std=afterschool`). §6.10.2 writes `read(f, v)` out as
   `v := f^; get(f)`, so its target is assigned to; the dialect treated it as a
   read and stopped the program on a valid Extended Pascal program.
-
-- **Assigning a slice is refused instead of writing outside an array**
-  (ADR-0143, `--std=afterschool`). `p := r` between two slice formals reached
-  `Assignable`'s last resort, which compares type *kinds* and so accepted any
-  two slices whatever their component types; CodeGen then copied
-  descriptor-sized bytes between the two arrays' **contents**, writing past the
-  end of the shorter one and exiting 0, at `-O0` and `-O2` alike.
-
-- **A slice type can no longer escape through `type of`** (ADR-0143,
-  `--std=afterschool`). ISO/IEC 10206:1991 §6.4.9's type-inquiry named a slice
-  type, so a slice could be made a variable, a type-definition, a record field,
-  an array component, a pointer domain or a file component — every position the
-  specification forbids — each holding a descriptor nothing had filled in.
-
-- **A module is mode-locked when a tagged variant is reachable through a
-  procedural parameter's own parameters** (ADR-0142). Such a module was called
-  portable, linked into a dialect program, and the program's variant check then
-  passed an unsafe read.
-
-- **An empty case-list-element may abut `otherwise`** (`--std=extended` and
-  `--std=afterschool`). `case i of 1: otherwise s end` is legal —
-  ISO/IEC 10206:1991 §6.9.3.5 makes the separator before the completer optional
-  — and was refused with *expected a statement, found 'otherwise'*.
-
-- **Comparing two slices is refused instead of emitting invalid IR**
-  (ADR-0139, `--std=afterschool`). AP §6.4.5 makes two slices compatible so
-  that one `array of T` parameter accepts either, and the relational operators
-  ask compatibility — so `a[1..2] = a[3..4]` was accepted by Sema and lowered
-  to an `icmp` over a two-word descriptor, which `clang` rejects as invalid IR
-  against a file nobody wrote. All six operators and every component type were
-  affected; `<` on two slices of `real` emitted an unsigned integer compare.
-  The new diagnostic is *a slice cannot be compared*.
-
-### Added
-
-- **A dialect program can use the conforming library** (ADR-0137). A module
-  whose interface exposes no record with a tagged variant-part now emits its
-  activation names under `--std=afterschool` as well as its own, so
-  `lib/`'s six ISO/IEC 10206:1991 modules — `PasStrings`, `PasSort`,
-  `PasMath`, `PasVector`, `PasMap`, `PasText` — link into an Afterschool
-  Pascal program. None of them needed a change.
-
-  Before this, Sema accepted such a program completely and it died at the
-  link on `m.pasmath.afterschool.init`: ADR-0119 spelled the mode into a
-  module's activation names, and the mode is a proxy for the ABI far too
-  coarse to be right. The safety rule it protects is unchanged — a module
-  exporting a tagged variant is still mode-locked, because that is the one
-  construct whose meaning differs between the modes.
-
-  A dialect module still cannot be linked into a conforming program, and that
-  asymmetry is deliberate: a dialect module may declare `external` routines
-  and is not a conforming program-component.
-
-### Fixed
-
-- **A wide literal where a constant is required no longer stops the compiler**
-  (ADR-0136), under `--std=afterschool`. Writing an unsigned-integer greater
-  than `maxint` in a constant-definition, a subrange bound, an array's
-  index-type, a set's base-type, a case-constant, or an operand of a
-  constant-expression terminated `pascalc` with `case: no label matches the
-  selector` — a case-statement in its own source with no arm for the wide
-  literal. It reported nothing, so no golden could hold it.
-
-  Reachable since 1.5.0 and invisible to every gate: the corpus wrote the type
-  name and `maxint64` in all six positions, and both of those fold. Only a
-  literal reached the missing arm. Found by probing a requirement while writing
-  `doc/afterschool-pascal-spec.md` (ADR-0135).
-
-### Changed
 
 - **A constant may not have type `int64`**, and the compiler now says so
   (ADR-0136). This settles a sentence ADR-0128 left open. Five of the six
@@ -114,11 +67,91 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **An empty case-list-element may abut `otherwise`** (`--std=extended` and
+  `--std=afterschool`). `case i of 1: otherwise s end` is legal —
+  ISO/IEC 10206:1991 §6.9.3.5 makes the separator before the completer optional
+  — and was refused with *expected a statement, found 'otherwise'*.
+
+- **A dialect program can use the conforming library** (ADR-0137). A module
+  whose interface exposes no record with a tagged variant-part now emits its
+  activation names under `--std=afterschool` as well as its own, so
+  `lib/`'s six ISO/IEC 10206:1991 modules — `PasStrings`, `PasSort`,
+  `PasMath`, `PasVector`, `PasMap`, `PasText` — link into an Afterschool
+  Pascal program. None of them needed a change.
+
+  Before this, Sema accepted such a program completely and it died at the
+  link on `m.pasmath.afterschool.init`: ADR-0119 spelled the mode into a
+  module's activation names, and the mode is a proxy for the ABI far too
+  coarse to be right. The safety rule it protects is unchanged — a module
+  exporting a tagged variant is still mode-locked, because that is the one
+  construct whose meaning differs between the modes.
+
+  A dialect module still cannot be linked into a conforming program, and that
+  asymmetry is deliberate: a dialect module may declare `external` routines
+  and is not a conforming program-component.
+
 - **`doc/afterschool-pascal-spec.md`** (ADR-0135) — a specification of the
   dialect, written as an amendment to ISO/IEC 10206:1991 in that standard's own
   clause numbering. It is derived from the decision records and verified by
   probe, never from the compiler's source, and it found five divergences on its
   first pass, one of them the crash above.
+
+- **The dialect reserves no word-symbol, and now says so** (ADR-0140,
+  AP §6.1.2). A feature is spelled in a position where a conforming program
+  could not have written it — `external` in the directive slot, `array of` in a
+  juxtaposition that was a syntax error, `?` in a character no program can
+  spell, `int64` in a scope §6.2.2.5 lets any program shadow. Nothing about
+  what the compiler accepts changes; what changes is that the rule every future
+  spelling is held to is written down and enforced.
+
+### Fixed
+
+- **Assigning a slice is refused instead of writing outside an array**
+  (ADR-0143, `--std=afterschool`). `p := r` between two slice formals reached
+  `Assignable`'s last resort, which compares type *kinds* and so accepted any
+  two slices whatever their component types; CodeGen then copied
+  descriptor-sized bytes between the two arrays' **contents**, writing past the
+  end of the shorter one and exiting 0, at `-O0` and `-O2` alike.
+
+- **A slice type can no longer escape through `type of`** (ADR-0143,
+  `--std=afterschool`). ISO/IEC 10206:1991 §6.4.9's type-inquiry named a slice
+  type, so a slice could be made a variable, a type-definition, a record field,
+  an array component, a pointer domain or a file component — every position the
+  specification forbids — each holding a descriptor nothing had filled in.
+
+- **Comparing two slices is refused instead of emitting invalid IR**
+  (ADR-0139, `--std=afterschool`). AP §6.4.5 makes two slices compatible so
+  that one `array of T` parameter accepts either, and the relational operators
+  ask compatibility — so `a[1..2] = a[3..4]` was accepted by Sema and lowered
+  to an `icmp` over a two-word descriptor, which `clang` rejects as invalid IR
+  against a file nobody wrote. All six operators and every component type were
+  affected; `<` on two slices of `real` emitted an unsigned integer compare.
+  The new diagnostic is *a slice cannot be compared*.
+
+- **A module is mode-locked when a tagged variant is reachable through a
+  procedural parameter's own parameters** (ADR-0142). Such a module was called
+  portable, linked into a dialect program, and the program's variant check then
+  passed an unsafe read.
+
+- **A level-0 activation record's name is refused as a foreign name**
+  (ADR-0144, `--std=afterschool`). `external 'frame1'` collided with the
+  program's own frame global and was reported by LLVM as *redefinition of
+  function '@frame1'* — an error naming a file nobody wrote. It is now a
+  diagnostic from the compiler.
+
+- **A wide literal where a constant is required no longer stops the compiler**
+  (ADR-0136), under `--std=afterschool`. Writing an unsigned-integer greater
+  than `maxint` in a constant-definition, a subrange bound, an array's
+  index-type, a set's base-type, a case-constant, or an operand of a
+  constant-expression terminated `pascalc` with `case: no label matches the
+  selector` — a case-statement in its own source with no arm for the wide
+  literal. It reported nothing, so no golden could hold it.
+
+  Reachable since 1.5.0 and invisible to every gate: the corpus wrote the type
+  name and `maxint64` in all six positions, and both of those fold. Only a
+  literal reached the missing arm. Found by probing a requirement while writing
+  `doc/afterschool-pascal-spec.md` (ADR-0135).
+
 
 ## [1.5.0] — 2026-08-19
 
@@ -1647,6 +1680,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.6.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.6.0
 [1.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.5.0
 [1.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.4.0
 [1.3.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.3.1
