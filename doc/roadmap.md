@@ -460,7 +460,7 @@ It also found the only case in 228 that diverges for a reason of its own,
 not reach: two slices are compatible, the relational operators ask
 compatibility, and `a[1..2] = a[3..4]` compiled to invalid IR (ADR-0139).
 
-### 5. The dialect was pulled, not designed, and the pieces have not been checked for coherence
+### 5. The dialect was pulled, not designed, and the pieces have not been checked for coherence — *the sharpest instance answered*
 
 Every feature so far was demanded by the foreign interface or by the library
 built on it: `external` because nothing outside the program was reachable
@@ -475,12 +475,42 @@ five increments is that each blocked half turned out narrower than written
 down. The risk is its mirror — no one has stepped back and asked whether the
 pieces form a language rather than a set of local optima.
 
-The sharpest instance is that **the dialect now has two ways to say "this may
-have failed"**: an optional (`?T` — absence) and a result record (ADR-0120 —
-absence with a code). `lib/dialect/pasfs.pas` uses both, `OptPathName` inside
-and `PathResult` out. Either there is a rule an author can apply — *absence is
-not a failure* is the candidate — or users meet both idioms and learn neither.
-Writing that sentence down, or finding that it cannot be written, is the work.
+The sharpest instance was that **the dialect had two ways to say "this may have
+failed"**: an optional (`?T` — absence) and a result record (ADR-0120 — absence
+with a code). **Answered (ADR-0141)**, and the survey found the premise
+understated: there are **four** shapes, not two, and the fourth is not about
+failure at all.
+
+| Shape | Routines | What it says |
+| --- | --- | --- |
+| `ErrorCode` | 9 | the routine acted; it worked or here is why not |
+| `?T` | 1 | there is a value, or there is not, and nothing to add |
+| a result record | 9 | there is a value, or here is why there is not |
+| `boolean` | 4 | a question about the world, with no failure of its own |
+
+The rule is two questions in order: **is there a value to return?** — no, and it
+is an `ErrorCode`; then **can it be missing for a reason the caller could act
+on?** — no, an optional; yes, a result record. All 35 exported routines
+classify. `absence is not a failure` was the right slogan for the second
+question's *no* arm and was never a rule for the whole surface, which is why it
+alone would not have told an author what to do about `Remove`, which returns
+nothing, or `Exists`, which cannot fail.
+
+`lib/dialect/README.md` is that written for the author of the next module, and
+it is where the two spelling rules live too — a result record's tag is `ok`
+everywhere, and an extractor is `XOr(result, default)`.
+
+**One routine breaks the rule and cannot be fixed**, which is the part worth
+carrying forward: `PasEnv.Lookup` stops the caller's program on an environment
+value longer than 4096 characters, a third outcome its optional cannot express.
+`getcwd` is lent a buffer and reports `ERANGE`; `getenv` returns a pointer to a
+string of a length nobody stated, and the dialect has no result form that can
+receive an unmeasured one. So the rule ends with a clause about honesty rather
+than shape — where a boundary cannot report a failure, say so at the routine.
+
+What §5 asks *as a whole* is still open: optionals against pointers, slices
+against strings and `int64` against `integer` are three more near-overlaps that
+have not been examined this way.
 
 ### 6. "The conformance modes stay exactly as they are" is slightly stronger than the truth
 
@@ -537,9 +567,9 @@ The order above is the ranking, so what is left to say is the kind:
   containment for every program using that identifier, and the sweep reports it
   only where a corpus program does — which for `defer` is nowhere.
 
-- **§5, §6 and §7 are writing rather than building**: a rule, a sentence, and a
-  decision that has been deferred long enough to deserve being deferred
-  *explicitly*.
+- **§5's sharpest instance is written** (ADR-0141) and the rest of §5 remains
+  writing. **§6 and §7 are writing too**: a sentence, and a decision deferred
+  long enough to deserve being deferred *explicitly*.
 
 
 ## What is next
