@@ -196,7 +196,7 @@ Three rules, and the first is the one that matters:
   when they were written; this states what the language is now. Annex E lists
   every such divergence found.
 - **d) Its clauses are cited by scenarios that run.** `tests/spec/` takes
-  `@afterschool:<clause>`, and 45 of this document's 46 testable clauses are
+  `@afterschool:<clause>`, and 46 of this document's 48 testable clauses are
   cited by at least one scenario; the clause table those citations are checked
   against is **generated from these headings**, so a renamed clause fails the
   traceability gate rather than drifting. 6.13.1 is the one not cited — it needs
