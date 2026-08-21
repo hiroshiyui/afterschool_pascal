@@ -1,0 +1,1 @@
+<source>:12:13: error: only a string can have a substring taken of it, not array [1..9] of integer

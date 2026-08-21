@@ -168,3 +168,4 @@ the alternatives that were rejected and why.
 | [0157](0157-the-offsets-are-compared-on-every-run.md) | The offsets are compared on every run | Accepted |
 | [0158](0158-one-more-program-parameter-than-the-limit.md) | One more program-parameter than the limit | Accepted |
 | [0159](0159-the-port-is-run-not-argued.md) | The port is run, not argued | Accepted |
+| [0160](0160-the-dialects-refusal-surface-is-checked-by-a-second-implementation.md) | The dialect's refusal surface is where a second implementation reaches it | Accepted |

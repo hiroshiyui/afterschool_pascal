@@ -21,18 +21,25 @@
 #
 # Format: the case's base name, then a blank-line-separated argument above it.
 
-# The three *_refused cases are the dialect's own features, and their whole
-# subject is what --std=extended says about one. Under the dialect the
-# construct is accepted, which is the feature rather than a divergence: each
-# golden is a conformance-mode diagnostic, and asking for it under the mode
-# that has the feature would be asking the dialect not to have it.
+# The *_refused cases are the dialect's own features, and their whole subject
+# is what --std=extended says about one. Under the dialect the construct is
+# accepted, which is the feature rather than a divergence: each golden is a
+# conformance-mode diagnostic, and asking for it under the mode that has the
+# feature would be asking the dialect not to have it.
 #
 # These are the inverse of a containment failure and could not be anything
 # else: a case whose expectation *is* a refusal of the dialect cannot expect
 # the same refusal from the dialect.
+#
+# There are five, one per row of Annex B of doc/afterschool-pascal-spec.md, and
+# the `annex-b` gate is what keeps that list and this one the same length: a
+# sixth dialect construct with a syntax of its own needs a row there, a case
+# here and an entry in this catalogue, and two of the three are now mechanical.
 foreign_refused
 optional_refused
 slice_refused
+substring_refused
+int64_refused
 
 # ADR-0125's slice shares §6.5.6's syntax: `a[i..j]` is a substring where `a`
 # has a string-type and a slice where it is any other array with an integer

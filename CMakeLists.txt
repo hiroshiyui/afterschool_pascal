@@ -416,6 +416,22 @@ set_tests_properties(target-sizes PROPERTIES
 # only correct while that agreement holds. It needs no cross toolchain -- clang
 # folds the offsets for any target it has a backend for -- so unlike
 # target-sizes it does not skip.
+# Annex B of the dialect specification, made mechanical. It records what each
+# conformance mode *says* about each construct the dialect adds -- a
+# conformance claim, since ADR-0117's containment is about what the two modes
+# accept and ADR-0154's rule is that a dialect feature may still change what
+# they say. The annex was a table nothing read until this, and it was wrong:
+# it claimed the two modes agree, and ISO 7185's parser stops at the `..` in
+# `a[i..j]` where Extended Pascal parses it and Sema refuses it.
+#
+# Fails in both directions -- a row with no cases, and a `*_refused` case no
+# row names, which is the one a sixth dialect feature would trip.
+if(Python3_FOUND)
+  add_test(NAME annex-b
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/annex_b.py)
+endif()
+
 if(Python3_FOUND)
   add_test(NAME target-layout
            COMMAND ${Python3_EXECUTABLE}

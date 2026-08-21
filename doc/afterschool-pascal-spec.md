@@ -1064,17 +1064,42 @@ Each construct this document adds is refused under `--std=iso7185` and
 `--std=extended`, and this annex records how, because it is a conformance
 question even though the feature is not (5.3).
 
-| Construct | What a conformance mode says |
-| --- | --- |
-| `external` | names the directive and the mode that has it |
-| `?` | an unrecognised character, as it always was |
-| `array of T` | a parameter's type must be a type name |
-| `a[i..j]` over an array | only a string can have a substring taken of it |
-| `int64` | an ordinary identifier, undeclared unless the program declares it |
+**The two modes do not always say the same thing**, which this annex claimed
+they did until the rows were probed rather than read: ISO 7185 has no substring
+notation at all, so its parser stops at the `..` where Extended Pascal parses
+the construct and Sema refuses it. One column became two.
+
+| Case | Construct | `--std=iso7185` says | `--std=extended` says |
+| --- | --- | --- | --- |
+| `foreign` | `external` | `the 'external' directive is an Afterschool Pascal feature` | `the 'external' directive is an Afterschool Pascal feature` |
+| `optional` | `?` | `unexpected character '?'` | `unexpected character '?'` |
+| `slice` | `array of T` | `a parameter's type must be a type name` | `a parameter's type must be a type name` |
+| `substring` | `a[i..j]` over an array | `expected ']' after a subscript, found '..'` | `only a string can have a substring taken of it` |
+| `int64` | `int64` | `unknown type 'int64'` | `unknown type 'int64'` |
+
+Only the first names the dialect. That is not an oversight: ADR-0140's rule is
+that a dialect construct is spelled in a *position* where a conforming program
+could not have written it, so four of the five are refused by machinery that
+predates the dialect and has nothing to say about it. `external` is the
+exception because §6.1.4 makes a directive an ordinary identifier in the one
+position it may occupy, so nothing but a rule about the mode can refuse it
+(ADR-0154).
+
+**This table is checked.** The `Case` column names a pair of test cases,
+`tests/<case>_refused_iso.pas` and
+`tests/extended/<case>_refused.pas`, and the
+`annex-b` gate requires each to exist, to be refused, and for its golden to
+contain the message this table states. It fails in both directions: a row with
+no cases, and a `*_refused` case naming no row. So a sixth dialect construct
+cannot be added with a row here and no case, or with cases and no row.
 
 The reference front end in `src/` carries these refusals although it implements
 no dialect feature, because what a conformance mode says about a program is
-part of the surface that must not regress (ADR-0117, ADR-0121).
+part of the surface that must not regress (ADR-0117, ADR-0121). Since the cases
+are ordinary `.pas` files under `tests/`, `selfhost/difftest.sh` compares the
+two front ends on every one of them — which is the only place the dialect
+reaches a second implementation at all, `difftest` skipping a dialect source by
+directory.
 
 ## Annex C (informative) — What this processor does not check
 
