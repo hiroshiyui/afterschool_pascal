@@ -410,6 +410,22 @@ set_tests_properties(target-sizes PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600)
 
+# How far runtime/pasrt.c is from ISO C, which is the whole of what a port to
+# another C library has to satisfy. The cross-platform chapter used to answer
+# that by assertion; measured, the runtime's entire departure from the standard
+# is four names, and this is what keeps it four. It also asks the other half --
+# what the *emitted* module declares -- which is `pas_*`, LLVM intrinsics, and
+# `_setjmp`.
+#
+# Skips (77) on a C library that declares POSIX even under __STRICT_ANSI__,
+# because there the question cannot be asked at all.
+add_test(NAME runtime-isoc
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/runtime_isoc.sh)
+set_tests_properties(runtime-isoc PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 600
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # And the other half of the same question: do the targets this compiler admits
 # agree about where every field of every frame *sits*? LlSize and LlAlign are
 # hand-written and answer with one number for every target (ADR-0028), which is
