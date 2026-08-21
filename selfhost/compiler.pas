@@ -21563,7 +21563,16 @@ begin
         if LlAlign(b^.elem) > 4 then LlAlign := LlAlign(b^.elem)
         else LlAlign := 4;
       { LLVM aligns an i256 to 16: the datalayout names no alignment for it, so
-        it takes the largest one that is named, which is i128's. }
+        it takes the largest one that is named, which is i128's -- and both
+        targets this compiler emits for say `i128:128`.
+
+        That is a fact about most targets rather than all, which the sweep
+        behind doc/roadmap.md's item 4 found: s390x names no i128 at all, so
+        the largest named is `i64:64` and an i256 aligns to 8 there. Its
+        `v128:64` moves a complex the same way. Nothing is wrong here today --
+        `target-layout` compares every admitted target's offsets on every run,
+        and s390x is not one -- but admitting a target whose datalayout names
+        no i128 means this line stops being a constant. }
       tySet: LlAlign := 16;
       { A procedural parameter is a pair of pointers: the code, and the static
         link to call it with. ADR-0125's slice is the same two-word shape with
