@@ -1,0 +1,16 @@
+totals 6 35
+onward 1..3 = 6
+onward 5..9 = 35
+rows 1..2 cols 3..5
+  row 1 total 42
+  row 2 total 72
+  after a[1] := a[2]: 72
+paint 1 2 3
+spell 1..5 hello then !ello
+spell 1..5 bye   then !ye  
+p is still hello
+onward 1..3 = 6
+swapped 60 60
+flags 10 20
+packed a b c d e
+unpacked a b c d e

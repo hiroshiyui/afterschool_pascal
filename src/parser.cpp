@@ -613,11 +613,20 @@ void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
     // §6.7.3.1: `parameter-form = type-name | schema-name | type-inquiry`, so
     // a parameter's type is still not a type-denoter — it is a name, or one of
     // those two other forms. `type` is the only word-symbol that may begin one.
-    if (!check(Tok::Ident) && !check(Tok::KwType)) {
-      errorAtCur("a parameter's type must be a type name");
-      bail();
+    // ISO 7185 §6.6.3.7's conformant array parameter, which is level 1 and is
+    // the one place a formal's type is a *schema* rather than a name. Told
+    // from an ordinary parameter by one token of lookahead: neither standard
+    // admits `array` in this position at level 0.
+    if ((check(Tok::KwArray) && check(Tok::LBracket, 1)) ||
+        (check(Tok::KwPacked) && check(Tok::KwArray, 1))) {
+      group.type = parseConfArraySchema(check(Tok::KwPacked));
+    } else {
+      if (!check(Tok::Ident) && !check(Tok::KwType)) {
+        errorAtCur("a parameter's type must be a type name");
+        bail();
+      }
+      group.type = parseTypeDenoter();
     }
-    group.type = parseTypeDenoter();
     into.push_back(std::move(group));
   } while (accept(Tok::Semi));
   expect(Tok::RParen, "after the parameter list");
@@ -1016,6 +1025,102 @@ TypeExprPtr Parser::parseArrayType(bool packed) {
   expect(Tok::KwOf, "after the index type of an array");
   t->elem = parseTypeDenoter();
   return t;
+}
+
+/// One bound-identifier of an index-type-specification. §6.6.3.7.1 makes the
+/// occurrence a *defining-point*, so it is a declared name and not a
+/// variable-access that happens to be spelled the same.
+bool Parser::parseBoundIdent(TypeExpr &spec, bool upper) {
+  if (!check(Tok::Ident)) {
+    errorAtCur(upper
+                   ? "expected the name of the conformant array's upper bound"
+                   : "expected the name of the conformant array's lower bound");
+    bail();
+  }
+  spec.constants.push_back({cur().text, cur().line, cur().col});
+  ++pos_;
+  return true;
+}
+
+/// conformant-array-schema (ISO 7185 §6.6.3.7, ISO/IEC 10206:1991 §6.7.3.7)
+///
+///   packed-conformant-array-schema =
+///     'packed' 'array' '[' index-type-specification ']' 'of' type-identifier
+///   unpacked-conformant-array-schema =
+///     'array' '[' index-type-specification (';' index-type-specification)* ']'
+///     'of' (type-identifier | conformant-array-schema)
+///   index-type-specification =
+///     identifier '..' identifier ':' ordinal-type-identifier
+///
+/// Written as the full form always: §6.6.3.7 makes the abbreviated form — a
+/// single semicolon replacing `] of array [` — equivalent, so this normalises
+/// to one index-type-specification per node and nothing after the parser has
+/// two shapes to know about. It is the same move parseArrayType makes for
+/// §6.4.3.2's several indices, one clause later and for a construct that nests
+/// rather than repeats.
+///
+/// The packed form is not the unpacked one with a flag: its grammar gives it
+/// exactly one specification and a type-identifier component, so a packed
+/// conformant array of a conformant array has no spelling.
+TypeExprPtr Parser::parseConfArraySchema(bool packed) {
+  Depth guard(*this);
+  std::vector<TypeExprPtr> specs;
+  if (packed)
+    ++pos_; // 'packed'
+  expect(Tok::KwArray, "");
+  expect(Tok::LBracket, "after 'array'");
+
+  do {
+    auto spec = std::make_unique<TypeExpr>();
+    spec->kind = TEK::ConfArray;
+    spec->packed = packed;
+    spec->line = cur().line;
+    spec->col = cur().col;
+    parseBoundIdent(*spec, false);
+    expect(Tok::DotDot, "between the bounds of a conformant array");
+    parseBoundIdent(*spec, true);
+    if (!accept(Tok::Colon)) {
+      errorAtCur("a conformant array's bounds are followed by ':' and the "
+                 "name of their index type");
+      bail();
+    }
+    if (!check(Tok::Ident)) {
+      errorAtCur("the index type of a conformant array must be a type name");
+      bail();
+    }
+    spec->index = parseTypeDenoter();
+    specs.push_back(std::move(spec));
+  } while (accept(Tok::Semi));
+
+  expect(Tok::RBracket, "after the index type of an array");
+  expect(Tok::KwOf, "after the index type of an array");
+
+  TypeExprPtr elem;
+  if (check(Tok::KwArray) || (check(Tok::KwPacked) && check(Tok::KwArray, 1)))
+    elem = parseConfArraySchema(check(Tok::KwPacked));
+  else if (check(Tok::Ident))
+    elem = parseTypeDenoter();
+  else {
+    errorAtCur("the component type of a conformant array must be a type "
+               "name or another conformant array schema");
+    bail();
+  }
+
+  // Reported at the first index-type-specification, which is where the Pascal
+  // compiler reports it; the two front ends are compared position and all.
+  if (packed && (specs.size() > 1 || elem->kind == TEK::ConfArray))
+    diags_.error(specs[0]->line, specs[0]->col,
+                 "a packed conformant array schema has one index and a named "
+                 "component type; only the unpacked form nests");
+
+  // Fold right: the last specification takes the component, and each earlier
+  // one takes the schema built from those after it.
+  TypeExprPtr built = std::move(elem);
+  for (size_t k = specs.size(); k-- > 0;) {
+    specs[k]->elem = std::move(built);
+    built = std::move(specs[k]);
+  }
+  return built;
 }
 
 /// record-type = 'record' field-list 'end'

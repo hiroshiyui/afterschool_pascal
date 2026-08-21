@@ -108,6 +108,8 @@ private:
   TypeExprPtr parseTypeExpr();
   TypeExprPtr parseTypeDenoter();
   TypeExprPtr parseArrayType(bool packed);
+  TypeExprPtr parseConfArraySchema(bool packed);
+  bool parseBoundIdent(TypeExpr &spec, bool upper);
   /// ISO/IEC 10206:1991 §6.4.7's formal-discriminant-part. Separated by ';'
   /// like a parameter list, unlike the ',' of the actual-discriminant-part.
   void parseFormalDiscriminants(std::vector<DiscriminantGroup> &out);

@@ -1,0 +1,7 @@
+<source>:15:42: error: the index type of a conformant array must be ordinal, not real
+<source>:20:20: error: a value conformant array cannot have component type rec: it contains a file, and a file has no copy
+<source>:33:15: error: argument 1 of 'byvalue' is a value conformant array, so its actual may not be a conformant array parameter: the copy would have no size known where it is made
+<source>:45:15: error: argument 2 of 'twonames' is other, and the actuals of one conformant array section must all possess the same type -- this one was vec
+<source>:47:12: error: argument 1 of 'needsvar' is a conformant array parameter and needs a variable
+<source>:48:13: error: argument 1 of 'needsvar' is a conformant array parameter and needs a variable; the brackets make this an expression
+<source>:49:13: error: argument 1 of 'wantschar' is not conformable with the schema: vec against array [u..v] of char

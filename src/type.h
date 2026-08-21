@@ -240,6 +240,13 @@ struct Type {
   /// written as a constant, which is every bound outside a schematic formal.
   Symbol *loDisc = nullptr, *hiDisc = nullptr;
 
+  /// ISO 7185 §6.6.3.7: this array-type came from a conformant-array-schema.
+  /// Not derivable from loDisc/hiDisc being set — a schematic formal's
+  /// `array [1..n]` sets one of them and could set both — and §6.6.3.8's
+  /// conformability has to know, because it recurses into a component that is
+  /// another schema and stops at one that is a type-identifier.
+  bool isConfSchema = false;
+
   /// This type's tuple is in a header immediately before the variable rather
   /// than in an activation record: it is the domain of a pointer, written as a
   /// bare schema-name (§6.4.4), and `new` supplied the tuple (ADR-0043). The

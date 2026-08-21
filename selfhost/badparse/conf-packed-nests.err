@@ -1,0 +1,1 @@
+<source>:4:30: error: a packed conformant array schema has one index and a named component type; only the unpacked form nests

@@ -352,6 +352,18 @@ type
       -- `?T` has to *contain* a T, so a type that were its own optional would
       have no size. }
     nkOptional,
+    { ISO 7185 6.6.3.7's conformant-array-schema, and ISO/IEC 10206:1991
+      6.7.3.7's, which is the same construct. It is a type-denoter that may
+      appear in one position only -- a formal parameter's -- and it is the only
+      one whose bounds are *identifiers being declared* rather than expressions
+      being read: `array [u..v: integer] of real` gives u and v defining-points
+      for the parameter list and for the block (6.6.3.7.1).
+
+      One node per index-type-specification, always. 6.6.3.7 makes the
+      abbreviated form `array [u..v: T1; j..k: T2] of T3` equivalent to the
+      full `array [u..v: T1] of array [j..k: T2] of T3`, so the parser writes
+      the full one and nothing after it has two shapes to know about. }
+    nkConfArray,
     { ISO/IEC 10206:1991 6.4.8's discriminated-schema. The only type-denoter
       whose children are expressions rather than denoters. }
     nkSchema,
@@ -636,6 +648,12 @@ type
       Nil for every bound written as a constant, which is every bound outside
       a schematic formal parameter. }
     loDisc, hiDisc: symPtr;
+    { ISO 7185 6.6.3.7: this array-type came from a conformant-array-schema.
+      Not derivable from loDisc and hiDisc being set -- a schematic formal's
+      `array [1..n]` sets one of them and could set both -- and 6.6.3.8's
+      conformability has to know, because it recurses into a component that is
+      another schema and stops at one that is a type-identifier. }
+    isConfSchema: boolean;
 
     { 10206 6.4.4: this type's tuple is in a header immediately before the
       variable rather than in an activation record -- it is the domain of a
@@ -750,6 +768,21 @@ type
       formal-parameter-section declared a parameter, because 6.7.3.3 requires
       every actual in one section to bring the same tuple. }
     descSchema: symPtr;
+    { ISO 7185 6.6.3.7: this parameter's type came from a conformant array
+      schema rather than from a schema-name. The descriptor is the same object
+      either way -- ADR-0113's BoundSchemaFor builds it for both -- and what
+      differs is the *call site*: a schematic formal wants an actual produced
+      from its own schema, and a conformant array parameter wants one
+      conformable with the schema (6.6.3.8), which is a rule about bounds and
+      not about identity. }
+    isConformant: boolean;
+    { ...and this one of them is the parameter that *declares* the section's
+      bound-identifiers. 6.6.3.7.1 gives them one defining-point per
+      index-type-specification, not one per name, so a section naming two
+      parameters binds them once -- and the block's scope has to be told which
+      of the two carries them, the parameter list's scope having been popped
+      before the body is entered. }
+    confBinds: boolean;
     discSyms, discSymTail: symListPtr;
     { The actual-discriminant-part of a variable whose discriminants are not
       constants, in order -- the expressions the prologue evaluates on entry
@@ -1258,6 +1291,10 @@ type
                      scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer);
       nkOptional:   (opElem: nodePtr);
+      { caLo and caHi are nkDeclName nodes -- these are defining-points, and a
+        declared name is what that node kind is for. caIndex is the
+        ordinal-type-identifier the two bounds are values of. }
+      nkConfArray:  (caLo, caHi, caIndex, caElem: nodePtr; caPacked: boolean);
       nkEnum:       (enConstants: nodePtr);
       nkSubrange:   (sbLo, sbHi: nodePtr);
       nkArray:      (arDims, arElem: nodePtr; arPacked: boolean);
@@ -3443,6 +3480,13 @@ begin
               n^.clSym := nil;
               n^.clSlot := nil
             end;
+    nkConfArray: begin
+      n^.caLo := nil;
+      n^.caHi := nil;
+      n^.caIndex := nil;
+      n^.caElem := nil;
+      n^.caPacked := false
+    end;
     nkWrite: begin n^.wrFile := nil; n^.wrStr := nil; n^.wrCall := nil end;
     nkRead: begin n^.rdFile := nil; n^.rdStr := nil; n^.rdCall := nil end;
     nkProcCall: begin
@@ -3813,6 +3857,132 @@ begin
   Expect(tkOf, ctxArrayIndex);
   t^.arElem := ParseTypeDenoter;
   ParseArrayType := t
+end;
+
+{ One bound-identifier of an index-type-specification. 6.6.3.7.1 makes the
+  occurrence a *defining-point*, for the formal-parameter-list and for the
+  block, so it is an nkDeclName like every other declared name here and not a
+  variable-access that happens to be spelled the same. }
+function ParseBoundIdent(upper: boolean): nodePtr;
+var n: nodePtr;
+begin
+  ParseBoundIdent := nil;
+  if not Check(tkIdent) then begin
+    ErrorAtCur;
+    if upper then
+      writeln('expected the name of the conformant array''s upper bound')
+    else
+      writeln('expected the name of the conformant array''s lower bound');
+    Bail
+  end
+  else begin
+    n := NewNode(nkDeclName, CurLine, CurCol);
+    n^.dnAt := tok[pos].at;
+    n^.dnLen := tok[pos].len;
+    pos := pos + 1;
+    ParseBoundIdent := n
+  end
+end;
+
+{ conformant-array-schema (ISO 7185 6.6.3.7, ISO/IEC 10206:1991 6.7.3.7)
+
+    packed-conformant-array-schema =
+      'packed' 'array' '[' index-type-specification ']' 'of' type-identifier
+    unpacked-conformant-array-schema =
+      'array' '[' index-type-specification (';' index-type-specification)* ']'
+      'of' (type-identifier | conformant-array-schema)
+    index-type-specification =
+      identifier '..' identifier ':' ordinal-type-identifier
+
+  **Written as the full form always.** 6.6.3.7 says the abbreviated form -- a
+  single semicolon replacing the sequence `] of array [` -- and the full form
+  "shall be equivalent", so this normalises to one index-type-specification per
+  node and nothing after the parser has two shapes to know about. It is the
+  same move ParseArrayType makes for 6.4.3.2's several indices, one clause
+  later and for a construct that nests rather than repeats.
+
+  The packed form is not the unpacked one with a flag: 6.6.3.7's grammar gives
+  it exactly one index-type-specification and a type-identifier component, and
+  a packed conformant array of a conformant array has no spelling. Refused
+  here, because the grammar is what refuses it. }
+function ParseConfArraySchema(packed_: boolean): nodePtr;
+var head, tail, spec, elem, cur: nodePtr; more: boolean; count: integer;
+begin
+  head := nil;
+  tail := nil;
+  count := 0;
+  if packed_ then pos := pos + 1;   { 'packed' }
+  Expect(tkArray, ctxNone);
+  Expect(tkLBracket, ctxAfterArray);
+
+  more := true;
+  while more and not aborted do begin
+    spec := NewNode(nkConfArray, CurLine, CurCol);
+    spec^.caPacked := packed_;
+    spec^.caLo := nil;
+    spec^.caHi := nil;
+    spec^.caIndex := nil;
+    spec^.caElem := nil;
+    spec^.caLo := ParseBoundIdent(false);
+    if not aborted then Expect(tkDotDot, ctxSubrangeBounds);
+    if not aborted then spec^.caHi := ParseBoundIdent(true);
+    if not aborted then
+      if not Accept(tkColon) then begin
+        ErrorAtCur;
+        writeln('a conformant array''s bounds are followed by '':'' and the ',
+                'name of their index type');
+        Bail
+      end;
+    if not aborted then
+      if not Check(tkIdent) then begin
+        ErrorAtCur;
+        writeln('the index type of a conformant array must be a type name');
+        Bail
+      end;
+    if not aborted then spec^.caIndex := ParseTypeDenoter;
+    Append(head, tail, spec);
+    count := count + 1;
+    more := (not aborted) and Accept(tkSemi)
+  end;
+
+  Expect(tkRBracket, ctxArrayIndex);
+  Expect(tkOf, ctxArrayIndex);
+
+  { The component: a type-identifier, or another schema -- which is the *full*
+    form of what a second index-type-specification abbreviates. }
+  elem := nil;
+  if not aborted then
+    if Check(tkArray) or (Check(tkPacked) and (PeekKind(1) = tkArray)) then
+      elem := ParseConfArraySchema(Check(tkPacked))
+    else if Check(tkIdent) then
+      elem := ParseTypeDenoter
+    else begin
+      ErrorAtCur;
+      writeln('the component type of a conformant array must be a type name ',
+              'or another conformant array schema');
+      Bail
+    end;
+
+  if (not aborted) and packed_ and ((count > 1) or (elem^.kind = nkConfArray))
+  then begin
+    ErrorAt(head^.line, head^.col);
+    writeln('a packed conformant array schema has one index and a named ',
+            'component type; only the unpacked form nests')
+  end;
+
+  { Fold right: the last specification takes the component, and each earlier
+    one takes the schema built from those after it. }
+  if not aborted then begin
+    tail^.caElem := elem;
+    while head <> tail do begin
+      cur := head;
+      while cur^.next <> tail do cur := cur^.next;
+      cur^.caElem := tail;
+      cur^.next := nil;
+      tail := cur
+    end
+  end;
+  ParseConfArraySchema := head
 end;
 
 { field-list = group (';' group)*, shared by a record's fixed part and by the
@@ -5658,15 +5828,28 @@ begin
         enforces, so `array of T` would be a parse error before any symbol
         could be asked about it. `array` is admitted only when `of` follows,
         which is the spelling 6.4.3.2 leaves free. }
-      if not aborted then
-        if not (Check(tkIdent) or Check(tkType) or
-                ((langStd = stdAfterschool) and Check(tkArray) and
-                 (PeekKind(1) = tkOf))) then begin
-          ErrorAtCur;
-          writeln('a parameter''s type must be a type name');
-          Bail
-        end;
-      g^.grType := ParseTypeDenoter
+      { ISO 7185 6.6.3.7's conformant array parameter, which is level 1 and is
+        the one place a formal's type is a *schema* rather than a name. It is
+        told from ADR-0125's slice by one token of lookahead and from an
+        ordinary parameter by two: `array [` opens a conformant array schema,
+        `array of` opens a slice, and `packed array` can only be the first.
+        Neither standard admits `array` in this position at level 0, so the
+        spelling costs the grammar nothing. }
+      if (not aborted) and
+         ((Check(tkArray) and (PeekKind(1) = tkLBracket)) or
+          (Check(tkPacked) and (PeekKind(1) = tkArray))) then
+        g^.grType := ParseConfArraySchema(Check(tkPacked))
+      else begin
+        if not aborted then
+          if not (Check(tkIdent) or Check(tkType) or
+                  ((langStd = stdAfterschool) and Check(tkArray) and
+                   (PeekKind(1) = tkOf))) then begin
+            ErrorAtCur;
+            writeln('a parameter''s type must be a type name');
+            Bail
+          end;
+        g^.grType := ParseTypeDenoter
+      end
     end;
     Append(head, tail, g);
     more := Accept(tkSemi)
@@ -6421,6 +6604,7 @@ begin
   t^.tuple := nil;
   t^.tupleTail := nil;
   t^.loDisc := nil;
+  t^.isConfSchema := false;
   t^.hiDisc := nil;
   t^.heapTuple := false;
   t^.descOwner := nil;
@@ -7136,6 +7320,8 @@ begin
   s^.discs := nil;
   s^.discTail := nil;
   s^.descSchema := nil;
+  s^.isConformant := false;
+  s^.confBinds := false;
   s^.discSyms := nil;
   s^.discSymTail := nil;
   s^.discExprs := nil;
@@ -7379,6 +7565,43 @@ end;
   and has the same type -- recursively, for a procedural parameter of a
   procedural parameter. Note "the same type", not "assignment compatible":
   nothing is converted on the way through a procedural parameter. }
+
+{ ISO 7185 6.6.3.6 e): when two conformant-array-schemas are **equivalent**,
+  which is that clause's four statements.
+
+  Statement 1) -- "There is a single index-type-specification in each
+  conformant-array-schema" -- is satisfied by construction and has nothing to
+  test: ParseConfArraySchema writes 6.6.3.7's full form always, one
+  specification per node, so the abbreviated `[u..v: T1; j..k: T2]` and the
+  nested `[u..v: T1] of array [j..k: T2]` arrive here as the same tree. That is
+  what the clause's own NOTE 1 says they are.
+
+  The other three are below in the clause's order but reversed for cost:
+  packing is a boolean, the index type is one comparison, and only the
+  component may recurse. }
+function EquivalentConf(a, b: typePtr): boolean;
+var ok: boolean;
+begin
+  ok := (a <> nil) and (b <> nil) and a^.isConfSchema and b^.isConfSchema;
+  { 4) both packed, or both unpacked }
+  if ok then ok := a^.isPacked = b^.isPacked;
+  { 2) the ordinal-type-identifiers denote the same type -- read from the bound
+    identifiers, which possess exactly that type (6.6.3.7.1). Not from the
+    index-type's host, which ConfArrayType flattens to the base so that a
+    subrange never hosts a subrange: `one = 1..10` and `two = 1..10` are two
+    types by 6.4.1 and both flatten to integer, so that field cannot tell them
+    apart. BSI's LEV1F03 is the program that does. }
+  if ok then
+    ok := a^.indexType^.loDisc^.stype = b^.indexType^.loDisc^.stype;
+  { 3) the component schemas are equivalent, or the type-identifiers denote the
+    same type -- and a schema against a named type is neither }
+  if ok then
+    if a^.elem^.isConfSchema or b^.elem^.isConfSchema then
+      ok := EquivalentConf(a^.elem, b^.elem)
+    else
+      ok := a^.elem = b^.elem;
+  EquivalentConf := ok
+end;
 function Congruous(formal, actual: symPtr): boolean;
 var f, a: symListPtr; want, got: typePtr; ok: boolean;
 begin
@@ -7422,6 +7645,17 @@ begin
         ok := false
       else if f^.sym^.kind = skProcParam then
         ok := Congruous(f^.sym, a^.sym)
+      { 6.6.3.6 e): two conformant array parameters match when their schemas
+        are equivalent. It has to come before the schematic-formal test below,
+        because a conformant array parameter carries a descriptor too and its
+        synthesised schema is a fresh object per parameter -- so that test
+        would refuse every pair, including a body handed the very procedure it
+        was written for. Value against variable is already excluded by the
+        `kind` comparison at the top of this loop, which is the first half of
+        e)'s own sentence. }
+      else if f^.sym^.isConformant or a^.sym^.isConformant then
+        ok := f^.sym^.isConformant and a^.sym^.isConformant and
+              EquivalentConf(f^.sym^.stype, a^.sym^.stype)
       { A schematic formal's type belongs to that one parameter and is never
         equal to another's, so congruity asks the question 6.7.3.3 asks: the
         same schema, with the tuple left to the actual as it always is. }
@@ -10024,6 +10258,13 @@ begin
         stated exception and holds a name, while an optional holds a denoter
         that a schema's tuple can reach into -- `?array [1..n] of char`. }
       nkOptional: ForgetResolved(d^.opElem);
+      { 6.6.3.7's schema is a denoter like any other and nests like an array's.
+        Its bound-identifiers are not denoters and are not walked: they are
+        defining-points, and forgetting a resolution cannot unbind a name. }
+      nkConfArray: begin
+        ForgetResolved(d^.caIndex);
+        ForgetResolved(d^.caElem)
+      end;
       nkRecord: begin
         g := d^.rcFields;
         while g <> nil do begin
@@ -11113,6 +11354,196 @@ begin
   SchematicFormal := t
 end;
 
+{ ADR-0113's anonymous schema, which a conformant array parameter needs for the
+  same reason a variable with non-constant bounds does. Defined with the rest
+  of the declaration machinery, further down. }
+procedure BoundSchemaFor(v: symPtr); forward;
+
+{ One bound-identifier of an index-type-specification (6.6.3.7.1).
+
+  It is an skDisc reading `param`'s descriptor, which is ADR-0040's object
+  exactly: the field lives in the parameter's own frame slot, so `owner`,
+  `level` and `frameIndex` are the parameter's and a nested procedure inside a
+  recursive one sees the bounds of the invocation it is running in.
+
+  NOTE 2 of 6.6.3.7 says the object a bound-identifier denotes "is neither a
+  constant nor a variable", and skDisc is already that: it has a value, it has
+  no storage of its own, and it is not assignable. The clause needed no kind of
+  its own because ADR-0040 had already had to invent one. }
+function ConfBound(param: symPtr; n: nodePtr; host: typePtr;
+                   var k: integer; bind: boolean): symPtr;
+var s: symPtr;
+begin
+  s := NewSymbol;
+  s^.at := n^.dnAt;
+  s^.len := n^.dnLen;
+  s^.kind := skDisc;
+  s^.stype := host;
+  s^.discBinding := true;
+  s^.owner := param^.owner;
+  s^.level := param^.level;
+  s^.frameIndex := param^.frameIndex;
+  s^.discIndex := k;
+  AppendSym(param^.discSyms, param^.discSymTail, s);
+  k := k + 1;
+  { Bound once per *specification* and not once per name: 6.6.3.7 requires
+    every actual of one conformant-array-parameter-specification to possess the
+    same type, so one pair of bounds describes all of them, and binding them
+    again for the second name would be 6.2.2.7's duplicate. }
+  if bind then BindName(s^.at, s^.len, s, n^.line, n^.col);
+  ConfBound := s
+end;
+
+{ The type a conformant-array-schema denotes (6.6.3.7.1): "an array-type which
+  shall be distinct from any other type", whose component is the
+  fixed-component-type and whose index-type is the one the actual possesses.
+
+  The index-type is built as a *subrange* of the ordinal-type-identifier whose
+  two ends are the bound symbols, which is the shape ResolveSubrange already
+  produces for `array [1..n]` inside a schema body (ADR-0040). Everything after
+  this point -- indexing, the bounds check, whole-variable copying, the size
+  walk -- is the code that was already there, and that is the whole reason this
+  feature is small: 6.6.3.7 asks for bounds that travel with the actual, and
+  ADR-0040 built bounds that travel with the actual for a different clause.
+
+  `k` numbers the discriminants across the whole nest, so
+  `array [u..v: T1] of array [j..k: T2] of T3` puts four in one descriptor. }
+function ConfArrayType(param: symPtr; d: nodePtr; bind: boolean;
+                       var k: integer): typePtr;
+var t, idx, host, comp: typePtr; lo, hi: symPtr;
+begin
+  host := ResolveType(d^.caIndex);
+  if not IsOrdinal(host) then begin
+    ErrorAt(d^.caIndex^.line, d^.caIndex^.col);
+    write('the index type of a conformant array must be ordinal, not ');
+    WriteTypeName(host);
+    writeln;
+    host := intType
+  end;
+  lo := ConfBound(param, d^.caLo, host, k, bind);
+  hi := ConfBound(param, d^.caHi, host, k, bind);
+  idx := NewType(tySubrange);
+  { **Base(host), not host.** A subrange's host is never itself a subrange
+    anywhere else in this compiler, and Base is one level on that invariant --
+    so `array [l..u: index]` with `index = 1..2` built a subrange of a subrange
+    and every ordinal rule downstream then saw `index` where it wanted
+    `integer`. BSI's LEV1F10 is the program that says so.
+
+    T2 itself is not lost: it is the *type of the bound identifiers*, which
+    6.6.3.7.1 makes exactly that -- "applied occurrences of the first
+    identifier ... shall denote the smallest value specified by the
+    corresponding index-type" -- so Conformable reads it from there. }
+  idx^.host := Base(host);
+  idx^.lo := 0;
+  idx^.hi := 0;
+  idx^.loDisc := lo;
+  idx^.hiDisc := hi;
+  if d^.caElem^.kind = nkConfArray then
+    comp := ConfArrayType(param, d^.caElem, bind, k)
+  else
+    comp := ResolveType(d^.caElem);
+  t := NewType(tyArray);
+  t^.indexType := idx;
+  { "An array is bounded by its index type, dynamically or not, so a dynamic
+    bound travels one step outwards here and codegen never looks at the index
+    type again" -- ResolveArray's sentence, and this is the same step for the
+    same reason. }
+  t^.loDisc := lo;
+  t^.hiDisc := hi;
+  t^.elem := comp;
+  t^.isPacked := d^.caPacked;
+  t^.isConfSchema := true;
+  { Placeholders, as they are for every dynamic bound: BoundValue reads the
+    discriminant and nothing reads these (ADR-0040). }
+  t^.lo := 0;
+  t^.hi := 0;
+  ConfArrayType := t
+end;
+
+{ ISO 7185 6.6.3.8's conformability, written as that clause's four statements
+  and in its order. T1 is the type the actual possesses; `f` is the type the
+  formal possesses, which ConfArrayType built -- so the schema is read back off
+  the *type* rather than off the denoter, and the recursion in c) is a
+  component that is itself a schema.
+
+  6.6.3.8 closes with an error rather than a violation -- "it shall be an error
+  if the smallest or largest value specified by the index-type of T1 lies
+  outside the closed interval specified by T2" -- and b) is checked here
+  because both ends are known at the call site: T1 is the actual's own type and
+  T2 is written in the schema, so nothing about this one waits for run time.
+  The clause says *error* because it is stated for the general rule, which
+  6.6.3.8 also reaches through a conformant array passed on to another. }
+function Conformable(t1, f: typePtr): boolean;
+var ok: boolean; t2: typePtr;
+begin
+  ok := (t1 <> nil) and (f <> nil) and IsArray(t1) and IsArray(f);
+  { d) packed with packed, unpacked with unpacked }
+  if ok then ok := t1^.isPacked = f^.isPacked;
+  { a) the index-type of T1 is compatible with T2. T2 is the type the bound
+    identifiers possess (6.6.3.7.1), the schema's index-type having been
+    flattened to its base so that a subrange never hosts a subrange. }
+  t2 := f^.indexType^.loDisc^.stype;
+  if ok then ok := Base(t1^.indexType) = Base(t2);
+  { b) T1's bounds lie within the closed interval T2 specifies -- **where T1
+    has bounds**. Where T1 is itself a conformant array schema they arrive with
+    its own actual, so there is nothing here to compare and 6.6.3.8's closing
+    sentence is what applies: "it shall be an error if the smallest or largest
+    value specified by the index-type of T1 lies outside the closed interval
+    specified by T2". An error, and an undetected one here -- BSI's LEV1F44,
+    LEV1F48 and LEV1F49 are the three programs that ask, and
+    doc/implementation-defined.md lists it with the rest of Annex D. Checking
+    it at compile time, as this did until those three said otherwise, refuses a
+    conforming program: `q` passing its own conformant array on to `p` cannot
+    know its bounds. }
+  if ok and not t1^.isConfSchema then
+    ok := (t1^.lo >= OrdinalLo(t2)) and (t1^.hi <= OrdinalHi(t2));
+  { c) the component is the fixed-component-type, or conformable in turn }
+  if ok then
+    if f^.elem^.isConfSchema then ok := Conformable(t1^.elem, f^.elem)
+    else ok := t1^.elem = f^.elem;
+  Conformable := ok
+end;
+
+{ 6.6.3.7.1's fixed-component-type: "The type denoted by the type-identifier
+  contained by the conformant-array-schema", which is the component at the
+  bottom of the nest and not the component of the outermost. }
+function FixedComponent(t: typePtr): typePtr;
+begin
+  while t^.elem^.isConfSchema do t := t^.elem;
+  FixedComponent := t^.elem
+end;
+
+{ The whole of a conformant array parameter's type, descriptor and all.
+
+  **One type for the whole section.** 6.6.3.7.1 says "the formal-parameters
+  shall possess an array-type" -- one array-type for the formal-parameters of
+  one conformant-array-parameter-specification, not one apiece -- and the
+  clause before it is what makes that sound: every actual of one specification
+  possesses the same type, so one pair of bounds describes all of them. It is
+  also what a program can see: `x := y` between two names of one section is
+  conforming, and ADR-0017's name equivalence would refuse it if each name had
+  a type of its own. BSI's LEV1F10 is the program that assigns.
+
+  `share` is that type, nil for the first name of the section. Each name still
+  builds its own discriminants -- they are fields of its own descriptor, and
+  the caller fills one per parameter -- so the walk happens either way and only
+  the type it produces is thrown away. }
+function ConformantFormal(param: symPtr; d: nodePtr;
+                          share: typePtr): typePtr;
+var t: typePtr; k: integer;
+begin
+  param^.discSyms := nil;
+  param^.discSymTail := nil;
+  k := 0;
+  t := ConfArrayType(param, d, share = nil, k);
+  if share <> nil then t := share;
+  param^.stype := t;
+  param^.isConformant := true;
+  param^.confBinds := share = nil;
+  BoundSchemaFor(param);
+  ConformantFormal := t
+end;
+
 { ISO/IEC 10206:1991 6.8.2: an expression is *nonvarying* when its value cannot
   change -- literals, constants, and operations on those. That is not the same
   as "the compiler can fold it": 6.6's own examples include `ord(red)` and
@@ -11202,6 +11633,7 @@ begin
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
+      nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
@@ -11767,7 +12199,12 @@ end;
 
 procedure CheckArguments(callee: symPtr; args: nodePtr; line, col: integer);
 var a, b: nodePtr; p, q: symListPtr; n, given, i: integer; okVar: boolean;
+    { 6.6.3.7.1's "all possess the same type", which is a rule about a
+      *section* and so needs the first actual of the one being walked. }
+    sectionType: typePtr; sectionOf: integer;
 begin
+  sectionType := nil;
+  sectionOf := 0;
   { Checked against the parameter rather than on its own, because an actual
     procedural parameter is an identifier and not an expression: `f` there
     denotes the function, where CheckExpr would read it as a call of it. The
@@ -11835,6 +12272,100 @@ begin
           write(''' must be a string, found ');
           WriteTypeName(a^.ntype);
           writeln
+        end
+      end
+      { ISO 7185 6.6.3.7's conformant array parameter. The formal carries a
+        descriptor exactly as a schematic formal does, so it arrives in the
+        same branch -- and what it wants of the actual is a different question.
+        A schematic formal wants a type *produced from its own schema*, which
+        is identity; this wants one **conformable** with the schema (6.6.3.8),
+        which is a rule about bounds and packing and lets one body serve every
+        extent an ordinary array-type can have. }
+      else if p^.sym^.isConformant then begin
+        { 6.6.3.7.3 for the variable form: "The actual-parameter shall be a
+          variable-access." 6.6.3.7.2 for the value form says the opposite in
+          as many words -- "Each actual-parameter corresponding to a value
+          formal-parameter shall be an expression" -- so `p('abc', st, str)`
+          against a value conformant array of char is conforming, and a literal
+          and a constant are two of its three actuals. Everything a var
+          parameter is additionally under, 6.6.3.3's packed-component rule
+          included, belongs to that half and to this `if`. }
+        if (p^.sym^.kind = skVarParam) and not IsDesignator(a) then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          writeln(''' is a conformant array parameter and needs a variable')
+        end
+        { And 6.5.1's four variable-accesses do not include a parenthesised
+          expression, which the var-parameter branch below says at more length.
+          The node remembers the brackets because the parser drops them. }
+        else if (p^.sym^.kind = skVarParam) and a^.nParen then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' is a conformant array parameter and needs a variable; ');
+          writeln('the brackets make this an expression')
+        end
+        { 6.6.3.7.1: "The actual-parameters corresponding to formal-parameters
+          that occur in a single conformant-array-parameter-specification shall
+          all possess the same type." Not merely conformable with the schema
+          and not merely alike: 6.4.1 makes two identical declarations two
+          types, and this clause asks for one. It is what lets the section
+          share a single array-type, and so what makes `a := b` between two
+          names of one section legal. }
+        else if (sectionType <> nil) and (a^.ntype <> nil) and
+                (p^.sym^.paramSection = sectionOf) and
+                (a^.ntype <> sectionType) then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' is ');
+          WriteTypeName(a^.ntype);
+          write(', and the actuals of one conformant array section must all ');
+          write('possess the same type -- this one was ');
+          WriteTypeName(sectionType);
+          writeln
+        end
+        { 6.6.3.7.2's last requirement, and its NOTE says what it is for: an
+          actual containing an occurrence of a conformant-array-parameter is
+          admitted only inside a function-designator, or inside an
+          indexed-variable whose type is the fixed-component-type -- "This
+          ensures that the type possessed by the expression and the auxiliary
+          variable will always be known and that, as a consequence, the
+          activation record of a procedure can be of a fixed size."
+
+          Both admitted shapes yield a type that is *not* a schema: a function
+          result cannot be one (6.6.3.7.2 permits no conformant result), and an
+          indexed-variable of the fixed-component-type is by definition the
+          bottom of the nest. So the whole requirement is one test on the
+          actual's type, and what it refuses is a conformant array handed on by
+          value -- directly, or one dimension of a nested one. The variable
+          form has no such rule, nothing being copied. }
+        else if (p^.sym^.kind = skParam) and (a^.ntype <> nil) and
+                a^.ntype^.isConfSchema then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' is a value conformant array, so its actual may not be a ');
+          writeln('conformant array parameter: the copy would have no size ',
+                  'known where it is made')
+        end
+        else if not Conformable(a^.ntype, p^.sym^.stype) then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' is not conformable with the schema: ');
+          WriteTypeName(a^.ntype);
+          write(' against ');
+          WriteTypeName(p^.sym^.stype);
+          writeln
+        end
+        else if (p^.sym^.kind = skVarParam) and BadVarActual(a, callee, i) then
+          { the message is BadVarActual's }
+        ;
+        if p^.sym^.paramSection <> sectionOf then begin
+          sectionOf := p^.sym^.paramSection;
+          sectionType := a^.ntype
         end
       end
       else if p^.sym^.descSchema <> nil then begin
@@ -15953,6 +16484,7 @@ begin
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
+      nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
       nkImportItem:
@@ -15971,8 +16503,8 @@ function CheckedResultType(t: typePtr; bindable_: boolean;
                           line, col: integer): typePtr; forward;
 
 procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
-var g, n: nodePtr; t: typePtr; ps, schema, named: symPtr; section: integer;
-    bindable_: boolean; savedFormals: symPtr;
+var g, n: nodePtr; t: typePtr; ps, schema, named, first: symPtr;
+    section: integer; bindable_: boolean; savedFormals: symPtr;
 begin
   savedFormals := formalsFor;
   formalsFor := into;
@@ -16029,7 +16561,59 @@ begin
           if named <> nil then
             if named^.kind = skSchema then schema := named
         end;
-      if schema <> nil then begin
+      { ISO 7185 6.6.3.7's conformant array parameter takes the same route for
+        the same reason: the symbol has to exist before its type can be built,
+        because the bound-identifiers are fields of the descriptor that
+        symbol's frame slot holds. Only the *first* name of the section
+        declares them (6.6.3.7 makes every actual of one specification possess
+        the same type), and each name still gets a descriptor of its own,
+        because each carries its own address. }
+      if (g^.grType <> nil) and (g^.grType^.kind = nkConfArray) then begin
+        n := g^.grNames;
+        first := nil;
+        while n <> nil do begin
+          if frame <> nil then
+            if g^.grByRef then
+              ps := AddFrameVar(n^.dnAt, n^.dnLen, skVarParam, intType, frame,
+                                n^.line, n^.col)
+            else
+              ps := AddFrameVar(n^.dnAt, n^.dnLen, skParam, intType, frame,
+                                n^.line, n^.col)
+          else begin
+            ps := NewSymbol;
+            ps^.at := n^.dnAt;
+            ps^.len := n^.dnLen;
+            if g^.grByRef then ps^.kind := skVarParam
+            else ps^.kind := skParam;
+            ps^.stype := intType
+          end;
+          ps^.paramSection := section;
+          ps^.isProtected := g^.grIsProtected;
+          if first = nil then
+            ps^.stype := ConformantFormal(ps, g^.grType, nil)
+          else
+            ps^.stype := ConformantFormal(ps, g^.grType, first^.stype);
+          { 6.6.3.7.2: "The fixed-component-type of a value conformant array
+            shall be one that is permitted as the component-type of a
+            file-type." ContainsFile is that predicate, and this is the same
+            sentence 6.6.3.2 makes about an ordinary value parameter -- said
+            again here because the type is built on this path and never
+            reaches the check below. The *variable* form is unrestricted:
+            nothing is copied, so there is nothing a file cannot do. }
+          if (not g^.grByRef) and ContainsFile(FixedComponent(ps^.stype)) then
+          begin
+            ErrorAt(n^.line, n^.col);
+            write('a value conformant array cannot have component type ');
+            WriteTypeName(FixedComponent(ps^.stype));
+            writeln(': it contains a file, and a file has no copy')
+          end;
+          if first = nil then first := ps;
+          g^.grType^.ntype := ps^.stype;
+          AppendSym(into^.params, into^.paramTail, ps);
+          n := n^.next
+        end
+      end
+      else if schema <> nil then begin
         n := g^.grNames;
         while n <> nil do begin
           if frame <> nil then
@@ -16568,7 +17152,7 @@ begin
 end;
 
 procedure CheckProcBody(d: nodePtr);
-var sym, outer: symPtr; p: symListPtr; mark: entryPtr;
+var sym, outer: symPtr; p, q: symListPtr; mark: entryPtr;
 begin
   sym := d^.pdSym;
   if sym <> nil then
@@ -16589,6 +17173,19 @@ begin
       p := sym^.params;
       while p <> nil do begin
         Bind(p^.sym^.at, p^.sym^.len, p^.sym);
+        { 6.6.3.7.1 makes a bound-identifier a defining-point for the
+          formal-parameter-list *and* for the block, and those are two scopes
+          here: the first is popped when BuildFormals returns. So the block's
+          is made from the symbol, exactly as the parameters above it are and
+          for the same reason -- a `forward` heading and its body are two
+          declarations, and only the symbol is common to both. }
+        if p^.sym^.confBinds then begin
+          q := p^.sym^.discSyms;
+          while q <> nil do begin
+            Bind(q^.sym^.at, q^.sym^.len, q^.sym);
+            q := q^.next
+          end
+        end;
         p := p^.next
       end;
       { 6.7.2: the result-variable-specification's identifier is a
@@ -17329,7 +17926,7 @@ end;
   here is the list of discriminants -- and CheckSchemaDomain reads the empty
   spelling to know it must describe the array the program wrote rather than
   name a schema that does not exist. }
-procedure BoundSchemaFor(v: symPtr);
+procedure BoundSchemaFor;
 var synth: symPtr; l: symListPtr;
 begin
   synth := NewSymbol;
@@ -20091,6 +20688,22 @@ begin
       TypeEnd(n);
       level := level + 1;
       DumpTypeExpr(n^.opElem);
+      level := level - 1
+    end;
+    { 6.6.3.7's conformant array schema. Its two bound-identifiers are printed
+      on the tag line, because they are what distinguishes it from an array and
+      because each is one token: an nkDeclName of its own under here would put
+      three lines where the interesting thing is one. }
+    nkConfArray: begin
+      if n^.caPacked then write('packed confarray ') else write('confarray ');
+      if n^.caLo <> nil then WritePool(n^.caLo^.dnAt, n^.caLo^.dnLen);
+      write('..');
+      if n^.caHi <> nil then WritePool(n^.caHi^.dnAt, n^.caHi^.dnLen);
+      WritePos(n^.line, n^.col);
+      TypeEnd(n);
+      level := level + 1;
+      DumpTypeExpr(n^.caIndex);
+      DumpTypeExpr(n^.caElem);
       level := level - 1
     end;
     { A type-inquiry names a *variable*, so it prints like `named` and means
@@ -23131,6 +23744,65 @@ begin
   end
 end;
 
+{ ISO 7185 6.6.3.7's descriptor, filled from the actual: one pair of bounds per
+  index-type-specification, in the order ConfBound numbered them, flattened
+  across the whole nest.
+
+  Two shapes of actual, and the second is what makes a conformant array
+  parameter passable on. Where the actual is an ordinary array its bounds are
+  constants and OpInt writes them; where it is itself a conformant array
+  parameter its bounds are its own caller's descriptor, and DiscValue reads
+  them the way it reads a schematic formal's -- which it can, because
+  BoundSchemaFor made the formal's type generic and a generic nkVar is the case
+  DiscValue already had. So `q(a)` inside `q` hands the same bounds down
+  without the compiler needing a case for it. }
+{ A descriptor field has the discriminant's own type, and BoundValue works in
+  i32 -- so a bound of a type narrower than that is truncated on the way in,
+  which is what DiscValue does for a schema's discriminants and for the same
+  reason. char and boolean are the two: an enumeration is already i32.
+  `array [l..u: boolean] of real` is BSI's LEV1F28, and without this the module
+  it emitted was refused by LLVM rather than by the compiler. }
+procedure NarrowBound(var v: str; want: typePtr);
+var narrow: str;
+begin
+  if IsChar(want) or IsBoolean(want) then begin
+    Def(narrow);
+    write(ircode, 'trunc i32 ');
+    PutOp(v);
+    write(ircode, ' to ');
+    PutLlType(want);
+    writeln(ircode);
+    v := narrow
+  end
+end;
+
+procedure EmitConfBounds(arg: nodePtr; t1, f: typePtr;
+                         var head, tail: opndPtr);
+var a, hdr: str; want: typePtr;
+begin
+  want := f^.indexType^.host;
+  { **BoundValue, and nothing else.** It answers a constant where the actual's
+    bound is one and reads the descriptor where it is not, so all three shapes
+    of actual go through one call: an ordinary array, a schematic formal's
+    `array [1..n]`, and a conformant array parameter being handed on.
+
+    The first draft asked DiscValue instead, which reads the k-th discriminant
+    of a *bare name* -- and so answered 0 for `y[i]`, a row of a
+    two-dimensional conformant array passed to a one-dimensional one. The
+    bounds of that row are fields of y's descriptor, and loDisc and hiDisc on
+    the row's own type name them; walking the designator was never necessary.
+    BSI's LEV1F45 is the program that sorts the rows of a matrix. }
+  HeapHeader(arg, hdr);
+  BoundValue(t1, false, hdr, a);
+  NarrowBound(a, want);
+  AppendOpnd(head, tail, a, false, want);
+  BoundValue(t1, true, hdr, a);
+  NarrowBound(a, want);
+  AppendOpnd(head, tail, a, false, want);
+  if f^.elem^.isConfSchema then
+    EmitConfBounds(arg, t1^.elem, f^.elem, head, tail)
+end;
+
 { ADR-0125: the pair a slice is, from whatever designator produced it. The
   single path to one, the way EmitString is the single path to a string's
   pointer-and-length -- and the same three shapes: a slice formal, which holds
@@ -23362,6 +24034,15 @@ begin
       where the actual is an ordinary variable, and the caller's own descriptor
       where it is itself a schematic formal, which is how a schematic array is
       handed on through any number of blocks. }
+    { 6.6.3.7's conformant array parameter: the address, then the actual's own
+      bounds. Same slot and same shape as the schematic formal below it; what
+      differs is where the numbers come from, the actual not having been
+      produced from a schema. }
+    else if p^.sym^.isConformant then begin
+      EmitAddress(arg, a);
+      AppendOpnd(head, tail, a, true, nil);
+      EmitConfBounds(arg, arg^.ntype, p^.sym^.stype, head, tail)
+    end
     else if p^.sym^.descSchema <> nil then begin
       EmitAddress(arg, a);
       AppendOpnd(head, tail, a, true, nil);
@@ -25991,9 +26672,22 @@ begin
     schema on it describes where its *bounds* are and not an extent, so there
     is no tuple to compare and nothing to copy by size. Its store is the
     ordinary one, with the range check reading the descriptor (ADR-0133). }
-  else if (t^.schema <> nil) and (t^.kind <> tySubrange) and
-     (IsGeneric(t) or IsGeneric(s^.asValue^.ntype)) then begin
-    EmitTupleCheck(s^.asTarget, s^.asValue);
+  { ...or the extent is not a constant for any other reason. Since ISO 7185
+    6.6.3.7 there is one: a *row* of a two-dimensional conformant array
+    parameter has bounds in the descriptor and no schema of its own, because
+    BoundSchemaFor gives one to the parameter and not to each level of its
+    nest. Without this disjunct `a[p] := a[q]` between two rows took the static
+    path and LlSize answered for the placeholder bounds -- one component copied
+    of however many there are. BSI's LEV1F45 is the program that assigns a row.
+
+    There is no tuple to check on that path: 6.6.3.7 makes every actual of one
+    conformant-array-parameter-specification possess the same type, so two rows
+    of one parameter have the same extent by construction and an assignment
+    between rows of *different* parameters is refused by name equivalence. }
+  else if ((t^.schema <> nil) and (t^.kind <> tySubrange) and
+           (IsGeneric(t) or IsGeneric(s^.asValue^.ntype)))
+          or DynamicExtent(t) then begin
+    if t^.schema <> nil then EmitTupleCheck(s^.asTarget, s^.asValue);
     EmitAddress(s^.asValue, src);
     { The alignment is the component's, for the same reason a schematic value
       parameter's copy takes it from there: the array type has no extent to
@@ -26609,6 +27303,7 @@ end;
 procedure EmitTransfer(s: nodePtr);
 var unpackedArg, packedArg, indexArg: nodePtr;
     ua, pa, idx, wide, lo, hi, last, off, from, below, above, bad: str;
+    uhdr, phdr, plo, phi, spn, stride, byte, plen, wlen: str;
     ut, pt: typePtr;
     span, align, msg: integer;
 begin
@@ -26630,13 +27325,42 @@ begin
     idx := wide
   end;
 
-  span := pt^.hi - pt^.lo;
-  OpInt(ut^.lo, lo);
-  OpInt(ut^.hi, hi);
-  Def(last);
-  write(ircode, 'add i32 ');
-  PutOp(idx);
-  writeln(ircode, ', ', span:1);
+  { Both arrays' bounds may arrive with an actual: a schematic formal's
+    `array [1..n]`, and since ISO 7185 6.6.3.7 a conformant array parameter's.
+    BoundValue answers a constant where there is one and reads the descriptor
+    where there is not, so asking it unconditionally is the whole difference --
+    and until BSI's LEV1F06, LEV1F07 and LEV1F51 said otherwise this read
+    ut^.lo and ut^.hi, which for either shape are the placeholders 0 and 0.
+    That was ADR-0040's gap and not this feature's: `pack` of a schematic
+    formal was already wrong, and no program in the corpus packed one. }
+  HeapHeader(unpackedArg, uhdr);
+  HeapHeader(packedArg, phdr);
+  BoundValue(ut, false, uhdr, lo);
+  BoundValue(ut, true, uhdr, hi);
+  if DynamicExtent(pt) then begin
+    { j - i, the packed array's span, when it is not a constant either. }
+    BoundValue(pt, false, phdr, plo);
+    BoundValue(pt, true, phdr, phi);
+    Def(spn);
+    write(ircode, 'sub i32 ');
+    PutOp(phi);
+    write(ircode, ', ');
+    PutOp(plo);
+    writeln(ircode);
+    Def(last);
+    write(ircode, 'add i32 ');
+    PutOp(idx);
+    write(ircode, ', ');
+    PutOp(spn);
+    writeln(ircode)
+  end
+  else begin
+    span := pt^.hi - pt^.lo;
+    Def(last);
+    write(ircode, 'add i32 ');
+    PutOp(idx);
+    writeln(ircode, ', ', span:1)
+  end;
   Def(below);
   write(ircode, 'icmp slt i32 ');
   PutOp(idx);
@@ -26655,14 +27379,21 @@ begin
   write(ircode, ', ');
   PutOp(above);
   writeln(ircode);
-  MsgStart;
-  MsgText('array index out of bounds (             ');
-  AppendInt(msgBuf, ut^.lo);
-  MsgText('..                                      ');
-  AppendInt(msgBuf, ut^.hi);
-  Put(')');
-  msg := MsgEnd;
-  EmitTrapIf(bad, msg);
+  { The message names the bounds, so where they are not constants it has to be
+    built where they are known -- which is the subscript check's own answer,
+    and the same helper. }
+  if DynamicExtent(ut) then
+    EmitTrapIndex(bad, lo, hi)
+  else begin
+    MsgStart;
+    MsgText('array index out of bounds (             ');
+    AppendInt(msgBuf, ut^.lo);
+    MsgText('..                                      ');
+    AppendInt(msgBuf, ut^.hi);
+    Put(')');
+    msg := MsgEnd;
+    EmitTrapIf(bad, msg)
+  end;
 
   { k - m, the offset of the first unpacked component. The check above has
     already made the subtraction sound. }
@@ -26672,21 +27403,60 @@ begin
   write(ircode, ', ');
   PutOp(lo);
   writeln(ircode);
-  Def(from);
-  write(ircode, 'getelementptr inbounds ');
-  PutLlType(ut);
-  write(ircode, ', ptr ');
-  PutOp(ua);
-  write(ircode, ', i32 0, i32 ');
-  PutOp(off);
-  writeln(ircode);
+  { An array whose extent is not known until the block is entered has no LLVM
+    array type to index, so the address is computed in bytes -- the same
+    `(i - lo) * stride` the two-index getelementptr stands for, and the same
+    two helpers the subscript path uses. }
+  if DynamicExtent(ut) then begin
+    DynSize(ut^.elem, uhdr, stride);
+    Def(byte);
+    write(ircode, 'mul i32 ');
+    PutOp(off);
+    write(ircode, ', ');
+    PutOp(stride);
+    writeln(ircode);
+    Def(from);
+    write(ircode, 'getelementptr inbounds i8, ptr ');
+    PutOp(ua);
+    write(ircode, ', i32 ');
+    PutOp(byte);
+    writeln(ircode)
+  end
+  else begin
+    Def(from);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(ut);
+    write(ircode, ', ptr ');
+    PutOp(ua);
+    write(ircode, ', i32 0, i32 ');
+    PutOp(off);
+    writeln(ircode)
+  end;
+
+  { How much moves is the packed array's size, which is itself a run-time
+    question when its bounds arrived with an actual. Computed *before* the call
+    is written: the emitter is sequential and has no instruction list, so an
+    instruction cannot be produced half way through another one's line. }
+  if DynamicExtent(pt) then begin
+    DynSize(pt, phdr, plen);
+    Def(wlen);
+    write(ircode, 'zext i32 ');
+    PutOp(plen);
+    writeln(ircode, ' to i64')
+  end;
 
   align := LlAlign(ut^.elem);
   write(ircode, '  call void @llvm.memcpy.p0.p0.i64(ptr align ', align:1, ' ');
   if s^.pcStd = spPack then PutOp(pa) else PutOp(from);
   write(ircode, ', ptr align ', align:1, ' ');
   if s^.pcStd = spPack then PutOp(from) else PutOp(pa);
-  writeln(ircode, ', i64 ', LlSize(pt):1, ', i1 false)')
+  if DynamicExtent(pt) then begin
+    write(ircode, ', i64 ');
+    PutOp(wlen);
+    writeln(ircode, ', i1 false)')
+  end
+  else
+    writeln(ircode, ', i64 ', LlSize(pt):1, ', i1 false)')
 end;
 
 procedure EmitStdProc(s: nodePtr);
@@ -27659,6 +28429,7 @@ begin
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
+      nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem: ;

@@ -892,6 +892,20 @@ struct Dumper {
       typeExpr(t->elem.get());
       --level;
       break;
+    // ISO 7185 §6.6.3.7's conformant array schema. Its two bound-identifiers
+    // are printed on the tag line, because they are what distinguishes it from
+    // an array and because each is one token.
+    case TEK::ConfArray:
+      headType(std::string(t->packed ? "packed confarray " : "confarray ") +
+                   (t->constants.size() > 0 ? t->constants[0].name : "") +
+                   ".." +
+                   (t->constants.size() > 1 ? t->constants[1].name : ""),
+               t);
+      ++level;
+      typeExpr(t->index.get());
+      typeExpr(t->elem.get());
+      --level;
+      break;
     case TEK::Set:
       headType(std::string("set") + pk, t);
       ++level;

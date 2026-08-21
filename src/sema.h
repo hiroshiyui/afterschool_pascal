@@ -194,6 +194,15 @@ struct Symbol {
   /// variable holds the same descriptor a parameter does and differs only in
   /// where the tuple comes from.
   Symbol *descSchema = nullptr;
+  /// ISO 7185 §6.6.3.7: this parameter's type came from a conformant array
+  /// schema rather than from a schema-name. The descriptor is the same object
+  /// either way; what differs is the call site, which wants an actual
+  /// *conformable* with the schema (§6.6.3.8) rather than one produced from
+  /// it. `confBinds` marks the one parameter of the section that declares the
+  /// bound-identifiers — §6.6.3.7.1 gives them one defining-point per
+  /// index-type-specification, not one per name.
+  bool isConformant = false;
+  bool confBinds = false;
   /// The `Disc` symbols of this parameter, in the schema's own order. Their
   /// storage is inside this parameter's frame slot, after the address.
   std::vector<Symbol *> discSyms;
@@ -525,6 +534,13 @@ private:
   /// The anonymous schema a variable with non-constant bounds is given, so
   /// that everything keyed on a schema keeps working (ADR-0113).
   void boundSchemaFor(Symbol *v);
+  Symbol *confBound(Symbol *param, const DeclName &n, Type *host, int &k,
+                    bool bind);
+  Type *confArrayType(Symbol *param, TypeExpr &denoter, bool bind, int &k);
+  Type *conformantFormal(Symbol *param, TypeExpr &denoter, Type *share);
+  static Type *fixedComponent(Type *t);
+  static bool conformable(Type *t1, Type *f);
+  static bool equivalentConf(Type *a, Type *b);
   /// True when nothing inside this type depends on a discriminant. Arrays are
   /// where a dynamic bound is allowed; this asks about everywhere else.
   bool staticThroughout(Type *t) const;

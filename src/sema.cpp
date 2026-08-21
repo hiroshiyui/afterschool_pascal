@@ -4283,6 +4283,145 @@ void Sema::boundSchemaFor(Symbol *v) {
   v->type->tuple.clear();
 }
 
+/// One bound-identifier of an index-type-specification (§6.6.3.7.1).
+///
+/// It is a `Disc` reading `param`'s descriptor, which is ADR-0040's object
+/// exactly. NOTE 2 of §6.6.3.7 says the object a bound-identifier denotes "is
+/// neither a constant nor a variable", and `Disc` is already that: it has a
+/// value, no storage of its own, and is not assignable.
+Symbol *Sema::confBound(Symbol *param, const DeclName &n, Type *host, int &k,
+                        bool bind) {
+  Symbol *d = newSymbol();
+  d->name = n.name;
+  d->kind = SymKind::Disc;
+  d->type = host;
+  d->discBinding = true;
+  d->owner = param->owner;
+  d->level = param->level;
+  d->frameIndex = param->frameIndex;
+  d->discIndex = k++;
+  param->discSyms.push_back(d);
+  // Bound once per *specification*: §6.6.3.7 requires every actual of one
+  // conformant-array-parameter-specification to possess the same type, so one
+  // pair of bounds describes all of them.
+  if (bind)
+    scopes_.back()[d->name] = d;
+  return d;
+}
+
+/// The type a conformant-array-schema denotes (§6.6.3.7.1): "an array-type
+/// which shall be distinct from any other type", whose component is the
+/// fixed-component-type and whose index-type is the one the actual possesses.
+///
+/// The index-type is a *subrange* of the ordinal-type-identifier whose ends are
+/// the bound symbols, which is the shape a schema body's `array [1..n]` already
+/// produces. Its host is `base()`, not the identifier's own type: a subrange
+/// never hosts a subrange anywhere else here, and `base()` is one level. T2 is
+/// not lost — it is the type the bound identifiers possess.
+Type *Sema::confArrayType(Symbol *param, TypeExpr &denoter, bool bind, int &k) {
+  Type *host = resolveType(*denoter.index);
+  if (host && !host->isOrdinal()) {
+    diags_.error(denoter.index->line, denoter.index->col,
+                 "the index type of a conformant array must be ordinal, not " +
+                     host->name());
+    host = ty::Int();
+  }
+  Symbol *lo = confBound(param, denoter.constants[0], host, k, bind);
+  Symbol *hi = confBound(param, denoter.constants[1], host, k, bind);
+  Type *idx = newType(TypeKind::Subrange);
+  idx->host = host->base();
+  idx->lo = 0;
+  idx->hi = 0;
+  idx->loDisc = lo;
+  idx->hiDisc = hi;
+  Type *comp = denoter.elem->kind == TEK::ConfArray
+                   ? confArrayType(param, *denoter.elem, bind, k)
+                   : resolveType(*denoter.elem);
+  Type *t = newType(TypeKind::Array);
+  t->indexType = idx;
+  // An array is bounded by its index type, dynamically or not, so a dynamic
+  // bound travels one step outwards here.
+  t->loDisc = lo;
+  t->hiDisc = hi;
+  t->elem = comp;
+  t->packed = denoter.packed;
+  t->isConfSchema = true;
+  t->lo = 0;
+  t->hi = 0;
+  return t;
+}
+
+/// §6.6.3.7.1's fixed-component-type: the component at the bottom of the nest.
+Type *Sema::fixedComponent(Type *t) {
+  while (t->elem && t->elem->isConfSchema)
+    t = t->elem;
+  return t->elem;
+}
+
+/// §6.6.3.8's conformability, as that clause's four statements.
+bool Sema::conformable(Type *t1, Type *f) {
+  if (!t1 || !f || !t1->isArray() || !f->isArray())
+    return false;
+  // d) packed with packed, unpacked with unpacked
+  if (t1->packed != f->packed)
+    return false;
+  // a) the index-type of T1 is compatible with T2, which is the type the bound
+  // identifiers possess (§6.6.3.7.1)
+  Type *t2 = f->indexType->loDisc->type;
+  if (t1->indexType->base() != t2->base())
+    return false;
+  // b) T1's bounds lie within the closed interval T2 specifies — where T1 has
+  // bounds. Where T1 is itself a schema they arrive with its own actual, and
+  // §6.6.3.8's closing sentence makes that an *error* rather than a violation.
+  if (!t1->isConfSchema && (t1->lo < t2->ordinalLo() || t1->hi > t2->ordinalHi()))
+    return false;
+  // c) the component is the fixed-component-type, or conformable in turn
+  if (f->elem->isConfSchema)
+    return conformable(t1->elem, f->elem);
+  return t1->elem == f->elem;
+}
+
+/// §6.6.3.6 e): when two conformant-array-schemas are **equivalent**.
+///
+/// Statement 1) — a single index-type-specification in each — is satisfied by
+/// construction: the parser writes §6.6.3.7's full form always, so the
+/// abbreviated and nested spellings arrive as one tree.
+bool Sema::equivalentConf(Type *a, Type *b) {
+  if (!a || !b || !a->isConfSchema || !b->isConfSchema)
+    return false;
+  // 4) both packed, or both unpacked
+  if (a->packed != b->packed)
+    return false;
+  // 2) the ordinal-type-identifiers denote the same type — read from the bound
+  // identifiers, the index-type's host having been flattened to its base
+  if (a->indexType->loDisc->type != b->indexType->loDisc->type)
+    return false;
+  // 3) the component schemas are equivalent, or the type-identifiers denote
+  // the same type
+  if (a->elem->isConfSchema || b->elem->isConfSchema)
+    return equivalentConf(a->elem, b->elem);
+  return a->elem == b->elem;
+}
+
+/// The whole of a conformant array parameter's type, descriptor and all.
+///
+/// **One type for the whole section.** §6.6.3.7.1 says "the formal-parameters
+/// shall possess an array-type" — one for the parameters of one specification,
+/// not one apiece — and the clause before it makes that sound. It is also what
+/// a program can see: `x := y` between two names of one section is conforming.
+Type *Sema::conformantFormal(Symbol *param, TypeExpr &denoter, Type *share) {
+  param->discSyms.clear();
+  int k = 0;
+  Type *t = confArrayType(param, denoter, share == nullptr, k);
+  if (share)
+    t = share;
+  param->type = t;
+  param->isConformant = true;
+  param->confBinds = share == nullptr;
+  boundSchemaFor(param);
+  return t;
+}
+
 /// What a function may return. The two standards draw the line in opposite
 /// directions, so this states each in its own words rather than deriving one
 /// from the other.
@@ -4468,6 +4607,36 @@ void Sema::buildFormals(std::vector<ParamGroup> &groups, Symbol *into,
       if (named && named->kind == SymKind::Schema)
         schema = named;
     }
+    // ISO 7185 §6.6.3.7's conformant array parameter takes the same route for
+    // the same reason: the symbol has to exist before its type can be built,
+    // because the bound-identifiers are fields of the descriptor that symbol's
+    // frame slot holds. Only the *first* name of the section declares them.
+    if (group.type && group.type->kind == TEK::ConfArray) {
+      Symbol *first = nullptr;
+      for (auto &n : group.names) {
+        Symbol *ps = frame ? addFrameVar(n.name, kind, ty::Int(), frame, n.line,
+                                         n.col)
+                           : formalSymbol(newSymbol(), n, kind, ty::Int());
+        ps->paramSection = section;
+        ps->isProtected = group.isProtected;
+        ps->type = conformantFormal(ps, *group.type,
+                                    first ? first->type : nullptr);
+        // §6.6.3.7.2: "The fixed-component-type of a value conformant array
+        // shall be one that is permitted as the component-type of a
+        // file-type." The variable form is unrestricted: nothing is copied.
+        if (!group.byRef && containsFile(fixedComponent(ps->type)))
+          diags_.error(n.line, n.col,
+                       "a value conformant array cannot have component type " +
+                           fixedComponent(ps->type)->name() +
+                           ": it contains a file, and a file has no copy");
+        if (!first)
+          first = ps;
+        group.type->resolved = ps->type;
+        into->params.push_back(ps);
+      }
+      continue;
+    }
+
     if (schema) {
       for (auto &n : group.names) {
         Symbol *ps = frame ? addFrameVar(n.name, kind, ty::Int(), frame, n.line,
@@ -4608,6 +4777,17 @@ bool Sema::congruous(Symbol *formal, Symbol *actual) const {
     if (f->kind == SymKind::ProcParam) {
       if (!congruous(f, a))
         return false;
+    } else if (f->isConformant || a->isConformant) {
+      // §6.6.3.6 e): two conformant array parameters match when their schemas
+      // are equivalent. Before the schematic-formal test below, because a
+      // conformant array parameter carries a descriptor too and its
+      // synthesised schema is a fresh object per parameter — so that test
+      // would refuse every pair. Value against variable is already excluded by
+      // the `kind` comparison at the top of this loop, which is the first half
+      // of e)'s own sentence.
+      if (!f->isConformant || !a->isConformant ||
+          !equivalentConf(f->type, a->type))
+        return false;
     } else if (f->descSchema || a->descSchema) {
       // A schematic formal's type belongs to that one parameter and is never
       // equal to another's, so congruity asks the question §6.7.3.3 asks: the
@@ -4636,8 +4816,18 @@ void Sema::checkProcBody(ProcDecl &decl) {
   current_ = sym;
 
   pushScope();
-  for (Symbol *p : sym->params)
+  for (Symbol *p : sym->params) {
     scopes_.back()[p->name] = p;
+    // §6.6.3.7.1 makes a bound-identifier a defining-point for the
+    // formal-parameter-list *and* for the block, and those are two scopes
+    // here: the first is popped when buildFormals returns. So the block's is
+    // made from the symbol, exactly as the parameters are and for the same
+    // reason — a `forward` heading and its body are two declarations, and only
+    // the symbol is common to both.
+    if (p->confBinds)
+      for (Symbol *d : p->discSyms)
+        scopes_.back()[d->name] = d;
+  }
   // §6.7.2: the result-variable-specification's identifier is a
   // variable-identifier for the region that is the block. It is the *same*
   // symbol the function name assigns to, so nothing else has to know which of
@@ -7652,6 +7842,10 @@ void Sema::giveResultSlot(Call *c) { c->resultSlot = newResultSlot(c->type); }
 
 void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                           int col) {
+  // §6.6.3.7.1's "all possess the same type", which is a rule about a
+  // *section* and so needs the first actual of the one being walked.
+  Type *sectionType = nullptr;
+  int sectionOf = 0;
   // Checked against the parameter rather than on its own, because an actual
   // procedural parameter is an identifier and not an expression: `f` there
   // denotes the function, where checkExpr would read it as a call of it. The
@@ -7686,6 +7880,67 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
     // whatever tuple it was produced with. It must be a variable either way,
     // because a value parameter of a size not known until now is copied out of
     // one rather than evaluated into one.
+    // ISO 7185 §6.6.3.7's conformant array parameter. The formal carries a
+    // descriptor exactly as a schematic formal does, so it arrives in the same
+    // place — and what it wants of the actual is a different question: one
+    // *conformable* with the schema (§6.6.3.8) rather than produced from it.
+    if (p->isConformant) {
+      // §6.6.3.7.3 for the variable form: "The actual-parameter shall be a
+      // variable-access." §6.6.3.7.2 for the value form says the opposite in
+      // as many words — "shall be an expression" — so a literal and a constant
+      // are conforming actuals there, and everything a var parameter is
+      // additionally under belongs to that half.
+      if (p->kind == SymKind::VarParam && !isDesignator(a))
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name +
+                         "' is a conformant array parameter and needs a "
+                         "variable");
+      else if (p->kind == SymKind::VarParam && a->paren)
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name +
+                         "' is a conformant array parameter and needs a "
+                         "variable; the brackets make this an expression");
+      // §6.6.3.7.1: "The actual-parameters corresponding to formal-parameters
+      // that occur in a single conformant-array-parameter-specification shall
+      // all possess the same type." Not merely conformable and not merely
+      // alike: §6.4.1 makes two identical declarations two types.
+      else if (sectionType && a->type && p->paramSection == sectionOf &&
+               a->type != sectionType)
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name + "' is " + a->type->name() +
+                         ", and the actuals of one conformant array section "
+                         "must all possess the same type -- this one was " +
+                         sectionType->name());
+      // §6.6.3.7.2's last requirement, and its NOTE says what it is for: the
+      // auxiliary variable's type has to be known where the copy is made. Both
+      // shapes it admits yield a type that is not a schema, so the whole rule
+      // is one test on the actual's type.
+      else if (p->kind == SymKind::Param && a->type && a->type->isConfSchema)
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name +
+                         "' is a value conformant array, so its actual may not "
+                         "be a conformant array parameter: the copy would have "
+                         "no size known where it is made");
+      else if (!conformable(a->type, p->type))
+        diags_.error(a->line, a->col,
+                     "argument " + std::to_string(i + 1) + " of '" +
+                         callee->name +
+                         "' is not conformable with the schema: " +
+                         (a->type ? a->type->name() : std::string("untyped")) +
+                         " against " + p->type->name());
+      else if (p->kind == SymKind::VarParam)
+        badVarActual(a, callee, i + 1);
+      if (p->paramSection != sectionOf) {
+        sectionOf = p->paramSection;
+        sectionType = a->type;
+      }
+      continue;
+    }
+
     if (p->descSchema) {
       if (!isDesignator(a))
         diags_.error(a->line, a->col,

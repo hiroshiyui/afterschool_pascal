@@ -727,7 +727,21 @@ enum class TEK { Named, Enum, Subrange, Array, Record, Pointer, File, Set,
                  /// `restricted type-name`. `name` is the underlying-type's,
                  /// and the syntax admits a *name* and nothing else — so there
                  /// is no nested denoter here and no recursion to bound.
-                 Restricted };
+                 Restricted,
+                 /// ISO 7185 §6.6.3.7's conformant-array-schema, which is
+                 /// level 1 and the only type-denoter that may be written in
+                 /// one position — a formal parameter's — and nowhere else.
+                 /// It is also the only one whose bounds are *identifiers
+                 /// being declared*: §6.6.3.7.1 gives them defining-points for
+                 /// the parameter list and for the block.
+                 ///
+                 /// `constants` holds the two bound-identifiers, `index` the
+                 /// ordinal-type-identifier they are values of, `elem` the
+                 /// component, `packed` the form. One node per
+                 /// index-type-specification always — §6.6.3.7 makes the
+                 /// abbreviated `[u..v: T1; j..k: T2]` and the nested full
+                 /// form equivalent, so the parser writes the full one.
+                 ConfArray };
 
 /// A type-denoter: what follows ':' in a declaration or '=' in the type part.
 /// Deliberately not an Expr — a type is not a value, and keeping them apart is
