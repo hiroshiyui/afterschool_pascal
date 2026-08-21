@@ -342,16 +342,54 @@ def check_clauses(scenarios):
     a wrong triage, and both are worth hearing about. A clause that *starts*
     being cited is not a failure to be fixed but a list to regenerate -- said
     in those words, so nobody reads it as a defect."""
-    tri, cited = triage(), coverage(scenarios)
+    tri, cited, inv = triage(), coverage(scenarios), inventory()
     problems = []
+
+    # The triage and the inventory must name the same clauses, in both
+    # directions, and nothing asked until ADR-0152 found them 37 apart.
+    #
+    #   * a triage row for a clause the inventory does not have is the
+    #     *extractor* having lost one -- the regression guard for the defect
+    #     that record is about, since the tables are generated and the triage
+    #     is written by hand;
+    #   * a clause in the inventory with no triage row is a denominator nobody
+    #     has classified, which is how those 37 sat outside the count while
+    #     being cited 214 times elsewhere in the tree.
+    #
+    # Neither is about a scenario, so both are checked before the citations.
+    for std, rows in sorted(tri.items()):
+        known = inv.get(std, {})
+        if not known:
+            continue
+        for clause in sorted(rows):
+            if clause not in known:
+                problems.append(
+                    f"{std} §{clause} is triaged in clauses/triage.tsv and is "
+                    "not in the clause inventory -- regenerate it "
+                    "(clauses/extract.sh, or extract_afterschool.py), and if "
+                    "it does not come back the extractor has lost a clause")
+        for clause in sorted(known):
+            if clause not in rows:
+                problems.append(
+                    f"{std} §{clause} is a clause of that standard with no row "
+                    "in clauses/triage.tsv -- classify it testable, structural "
+                    "or not-implemented, or the denominator is short by one")
 
     for std, clauses in cited.items():
         known = tri.get(std, {})
         for clause in sorted(clauses):
             if clause not in known:
+                # Two different faults, and saying "not a clause of that
+                # standard" about both sent a reader to the wrong file: the
+                # inventory is generated from the standard and the triage is
+                # written by hand, so a clause can be real and untriaged
+                # (ADR-0152, where 37 of them were).
+                where = ("is not a clause of that standard"
+                         if clause not in inv.get(std, {})
+                         else "is a clause of that standard with no row in "
+                              "clauses/triage.tsv -- triage it")
                 problems.append(f"{std} §{clause} is cited by "
-                                f"{clauses[clause][0].name!r} but is not a clause "
-                                "of that standard")
+                                f"{clauses[clause][0].name!r} but {where}")
                 continue
             klass, reason = known[clause]
             if klass != "testable":
@@ -373,8 +411,18 @@ def check_clauses(scenarios):
     lost = sorted(now_pending - recorded)
     gained = sorted(recorded - now_pending)
 
+    # `lost` is "testable, cited by nothing, and not on the recorded list",
+    # which has two causes and the message used to assert the first of them.
+    # The other is the denominator *growing*: ADR-0152 added 37 clauses to the
+    # inventory and 23 testable rows to the triage, and every one of them
+    # arrived here reported as a scenario somebody had deleted. The gate still
+    # fails either way -- a real loss must -- and only the diagnosis changes.
     for c in lost:
-        problems.append(f"{c} was cited by a scenario and is not any more")
+        problems.append(f"{c} is testable and no scenario cites it, and "
+                        "clauses/pending.txt does not have it either -- a "
+                        "scenario stopped citing it, or the triage gained the "
+                        "clause. If the second, regenerate: python3 "
+                        "tests/spec/run.py --write-pending")
 
     for p in problems:
         print(f"spec: {p}")

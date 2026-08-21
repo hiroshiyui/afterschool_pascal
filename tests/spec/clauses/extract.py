@@ -38,6 +38,15 @@ import sys
 # the length bound and the character class are what separate the two.
 HEADING = re.compile(r"^\s*(\d+(?:\s*\.\s*\d+)+)\s+([A-Z][A-Za-z0-9 ,'()/-]{2,60})\s*$")
 
+# ...and a clause may have **no** title at all. Every sub-clause of 6.2.2
+# (Scopes) and 6.2.3 (Activations) in both standards is a bare number on a line
+# of its own with the requirement under it, which is 37 clauses -- including the
+# most-cited clause in this repository, 6.2.2.9, and 6.2.3.8, which two ADRs are
+# about. Reading only HEADING dropped every one of them, so no scenario could
+# cite them and `spec-clause-traceability` answered "not a clause of that
+# standard" about clauses this project cites 214 times (ADR-0152).
+UNTITLED = re.compile(r"^\s*(\d+(?:\s*\.\s*\d+)+)\s*$")
+
 # The two PDFs lose the fi/fl ligatures, in different ways: ISO 7185 emits the
 # pair as a token of its own ("Implementation-de fi ned") and ISO/IEC 10206
 # drops it ("Schema-de nitions"). Neither is how the standard spells the word,
@@ -73,18 +82,56 @@ def repair(title):
 
 
 def clauses(text):
-    found = {}
+    found, bare = {}, set()
     for line in text.splitlines():
         m = HEADING.match(line)
-        if not m:
+        if m:
+            number = re.sub(r"\s+", "", m.group(1))
+            title = repair(re.sub(r"\s+", " ", m.group(2)).strip())
+            # The first occurrence wins: a heading repeated in a running header
+            # is the same clause, and the contents list it before the body.
+            if number.count(".") >= 1 and len(title) > 2:
+                found.setdefault(number, title)
             continue
-        number = re.sub(r"\s+", "", m.group(1))
-        title = repair(re.sub(r"\s+", " ", m.group(2)).strip())
-        # The first occurrence wins: a heading repeated in a running header is
-        # the same clause, and the table of contents lists it before the body.
-        if number.count(".") >= 1 and len(title) > 2:
-            found.setdefault(number, title)
-    return found
+        m = UNTITLED.match(line)
+        if m:
+            number = re.sub(r"\s+", "", m.group(1))
+            if number.count(".") >= 1:
+                bare.add(number)
+    return dict(found, **untitled(found, bare))
+
+
+def untitled(found, bare):
+    """The numbered-but-untitled clauses among `bare`, headed by their parent.
+
+    A bare number on a line is not evidence of a clause: a cross-reference, a
+    contents entry and a fragment of a broken table all look the same after
+    pdftotext. What distinguishes a clause is that clause numbering is
+    **consecutive** -- 6.2.2.5 is a clause only if 6.2.2.1 through 6.2.2.4 are
+    there too -- so a candidate is accepted only when every sibling before it
+    is present, counting titled siblings as present so that a part-titled
+    parent still works. A stray citation has no run behind it.
+
+    The heading is the parent's with `(untitled)` after it. It is not a title
+    and must not be mistaken for one; what a reader needs from this column is
+    where the clause sits, and the parent's own heading is already in this file
+    (tests/spec/README.md: numbers and headings, never text).
+    """
+    out = {}
+    siblings = {}
+    for number in list(found) + list(bare):
+        parent, _, last = number.rpartition(".")
+        if parent and last.isdigit():
+            siblings.setdefault(parent, set()).add(int(last))
+    for number in sorted(bare, key=key):
+        parent, _, last = number.rpartition(".")
+        if parent not in found or number in found:
+            continue
+        here = siblings.get(parent, set())
+        if not all(n in here for n in range(1, int(last) + 1)):
+            continue
+        out[number] = f"{found[parent]} (untitled)"
+    return out
 
 
 def key(number):

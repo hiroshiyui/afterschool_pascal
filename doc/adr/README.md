@@ -160,3 +160,4 @@ the alternatives that were rejected and why.
 | [0149](0149-three-near-overlaps-and-what-divides-them.md) | Three near-overlaps, and the ownership question that divides them | Accepted |
 | [0150](0150-a-file-inside-a-record-is-still-a-file.md) | A file inside a record is still a file | Accepted |
 | [0151](0151-block-scoped-ownership-and-the-fork-is-forced-by-sharing.md) | Block-scoped ownership is the model, and the fork is forced by sharing | Accepted |
+| [0152](0152-the-clauses-with-no-titles.md) | The clauses with no titles | Accepted |

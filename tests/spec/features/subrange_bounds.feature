@@ -13,6 +13,7 @@
 @extended:6.4.2.4
 Feature: Subrange bounds are expressions
 
+  @extended:6.2.3.8
   Scenario: a bound may be a value parameter of the enclosing block
     Given the Extended Pascal program
       """
