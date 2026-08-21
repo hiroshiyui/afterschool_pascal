@@ -170,3 +170,4 @@ the alternatives that were rejected and why.
 | [0159](0159-the-port-is-run-not-argued.md) | The port is run, not argued | Accepted |
 | [0160](0160-the-dialects-refusal-surface-is-checked-by-a-second-implementation.md) | The dialect's refusal surface is where a second implementation reaches it | Accepted |
 | [0161](0161-the-runtimes-distance-from-iso-c-is-four-names.md) | The runtime's distance from ISO C is four names | Accepted |
+| [0162](0162-what-an-adversarial-reading-of-the-standards-found.md) | What an adversarial reading of the standards found | Accepted |
