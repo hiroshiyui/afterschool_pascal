@@ -622,7 +622,8 @@ void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
       group.type = parseConfArraySchema(check(Tok::KwPacked));
     } else {
       if (!check(Tok::Ident) && !check(Tok::KwType)) {
-        errorAtCur("a parameter's type must be a type name");
+        errorAtCur("a parameter's type must be a type name or a conformant "
+                   "array schema");
         bail();
       }
       group.type = parseTypeDenoter();

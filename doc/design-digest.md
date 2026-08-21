@@ -1611,8 +1611,10 @@ able to make.
   - Two deviations remain and are deliberate: an underscore in an identifier,
     and set compatibility not requiring §6.4.5 c)'s packing agreement.
 - **Writing the document clause 5.1 requires found two bugs** (ADR-0073).
-  `doc/implementation-defined.md` states the compliance level (**level 0** —
-  conformant array parameters are not accepted), answers all 52 entries of
+  `doc/implementation-defined.md` states the compliance level (**level 1** since
+  ADR-0153 — conformant array parameters are accepted; it said level 0 for as
+  long as they were not, and a specification audit found the sentence still
+  saying so afterwards), answers all 52 entries of
   ISO/IEC 10206:1991's Annexes E and F and all 28 of ISO 7185's, names the
   errors that go unreported, and lists the extensions and restrictions.
   Answering an entry meant compiling a probe, which is what found the two.

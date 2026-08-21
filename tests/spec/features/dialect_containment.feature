@@ -165,5 +165,5 @@ Feature: The dialect contains Extended Pascal
     Then it is rejected
      And the diagnostic includes
       """
-      a parameter's type must be a type name
+      a parameter's type must be a type name or a conformant array schema
       """

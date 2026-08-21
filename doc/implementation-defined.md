@@ -16,6 +16,34 @@ entry says otherwise.
 
 ## 1. Compliance level
 
+Clause 5.1 of ISO 7185 requires a processor that purports to comply to do so
+**"only in the following terms"**, and prescribes the sentence. ISO/IEC
+10206:1991 prescribes its own. Both are given here rather than paraphrased,
+because the clause is about the wording:
+
+> Afterschool Pascal complies with the requirements of level 1 of
+> ISO/IEC 7185, with the following exceptions: those listed in §6 of this
+> document.
+
+> Afterschool Pascal complies with the requirements of level 1 of
+> ISO/IEC 10206, with the following exceptions: those listed in §6 of this
+> document.
+
+The second form is the honest one. Clause 5.1 reserves the unqualified
+statement for a processor that "complies in all respects", and §6 below records
+restrictions — including §6.1, programs this processor accepts that the
+standard requires to be rejected. NOTE 3 permits "a brief reference to
+accompanying documentation" in place of a complete list, which is what the
+reference to §6 is. The errors of §3 are *not* exceptions in this sense: clause
+5.1 f) 1) admits an unreported error given exactly the statement and the
+separate section that §3 is.
+
+This section said only "This processor complies at level 1" until a
+specification audit read clause 5.1 against it. That sentence is true and is
+not a compliance statement: it keeps the standard's own placeholder text
+"(This processor)" where the clause requires "an unambiguous name identifying
+the processor", and omits the prescribed form entirely.
+
 **This processor complies at level 1.** ISO 7185 clause 5.1 a) defines level 0
 as accepting every feature of clause 6 except §6.6.3.6 e), §6.6.3.7 and
 §6.6.3.8 — the conformant array parameters — and level 1 as accepting them.

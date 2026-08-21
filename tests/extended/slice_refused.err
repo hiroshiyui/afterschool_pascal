@@ -1,1 +1,1 @@
-<source>:15:34: error: a parameter's type must be a type name
+<source>:15:34: error: a parameter's type must be a type name or a conformant array schema

@@ -5983,7 +5983,8 @@ begin
                   ((langStd = stdAfterschool) and Check(tkArray) and
                    (PeekKind(1) = tkOf))) then begin
             ErrorAtCur;
-            writeln('a parameter''s type must be a type name');
+            writeln('a parameter''s type must be a type name or a ',
+                    'conformant array schema');
             Bail
           end;
         g^.grType := ParseTypeDenoter

@@ -1073,7 +1073,7 @@ the construct and Sema refuses it. One column became two.
 | --- | --- | --- | --- |
 | `foreign` | `external` | `the 'external' directive is an Afterschool Pascal feature` | `the 'external' directive is an Afterschool Pascal feature` |
 | `optional` | `?` | `unexpected character '?'` | `unexpected character '?'` |
-| `slice` | `array of T` | `a parameter's type must be a type name` | `a parameter's type must be a type name` |
+| `slice` | `array of T` | `a parameter's type must be a type name or a conformant array schema` | `a parameter's type must be a type name or a conformant array schema` |
 | `substring` | `a[i..j]` over an array | `expected ']' after a subscript, found '..'` | `only a string can have a substring taken of it` |
 | `int64` | `int64` | `unknown type 'int64'` | `unknown type 'int64'` |
 
