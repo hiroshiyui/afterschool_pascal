@@ -38,6 +38,23 @@
 # installed is skipped, and a run that reached only the host says so in those
 # words: an empty list is what a clean run and a run that asked nothing both
 # produce, and this repository has been caught by that before.
+#
+# **A compiler being on PATH is not the same as being usable**, and telling the
+# two apart is most of this script. Debian and Ubuntu package the cross
+# compiler and its C library separately, so `gcc-aarch64-linux-gnu` without
+# `libc6-dev-arm64-cross` gives a driver that runs and then cannot find
+# <setjmp.h> -- and the first version of this reported that as the size being
+# too small, which is an accusation against the wrong file. Every target is
+# therefore probed with a trivial translation unit first: one that fails there
+# is *incomplete*, not failing, and the message says which package is missing.
+#
+# **`TARGET_SIZES_REQUIRE` is how CI refuses to pass by skipping.** Set it to a
+# space-separated list of triples and every one of them must be reached: absent
+# or header-less becomes a failure rather than a note. Without it the script
+# reports and moves on, which is right on a developer's machine and wrong on a
+# job whose whole purpose was to install those compilers -- the same shape the
+# `second-backend` job has, where installing llc and then skipping would be a
+# green run that asked nothing.
 set -u
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -53,16 +70,37 @@ targets="x86_64-linux-gnu aarch64-linux-gnu arm-linux-gnueabihf
          arm-linux-gnueabi i686-linux-gnu riscv64-linux-gnu
          powerpc64le-linux-gnu s390x-linux-gnu mips64el-linux-gnuabi64"
 
+# What this machine is, so that "not the host" is a fact about the target rather
+# than about how the compiler happened to be named. `x86_64-linux-gnu-gcc` and
+# `gcc` are the same compiler here, and only one of the two spellings exists in
+# a minimal container.
+host=$(cc -dumpmachine 2>/dev/null || echo unknown)
+
 checked=0
 crossed=0
 failed=0
 absent=""
+incomplete=""
+
+# Can this compiler see a C library at all? The header the runtime's sizes turn
+# on is the one to ask for.
+printf '#include <setjmp.h>\n#include <stdio.h>\njmp_buf b;\n' > "$work/probe.c"
 
 for t in $targets; do
   cc="$t-gcc"
-  command -v "$cc" >/dev/null 2>&1 || { absent="$absent $t"; continue; }
+  if ! command -v "$cc" >/dev/null 2>&1; then
+    # The host's compiler is usually just `gcc`, without the triple prefix.
+    if [[ $t == "$(cc -dumpmachine 2>/dev/null)" ]] && command -v cc >/dev/null
+    then cc=cc
+    else absent="$absent $t"; continue
+    fi
+  fi
+  if ! "$cc" -c "$work/probe.c" -o "$work/probe.o" 2>"$work/probe.err"; then
+    incomplete="$incomplete $t"
+    continue
+  fi
   checked=$((checked + 1))
-  [[ $t == x86_64-linux-gnu ]] || crossed=$((crossed + 1))
+  [[ $t == "$host" ]] || crossed=$((crossed + 1))
   if "$cc" -c "$root/runtime/pasrt.c" -I"$root/runtime" -o "$work/$t.o" \
        2>"$work/$t.err"; then
     echo "target-sizes: $t ok"
@@ -77,6 +115,29 @@ done
 
 if [[ -n $absent ]]; then
   echo "target-sizes: no compiler installed for:$absent"
+fi
+
+if [[ -n $incomplete ]]; then
+  # Not a failure and not silence: the toolchain is here and cannot be used, so
+  # the question was not asked for it and saying which package is missing is
+  # the useful half.
+  echo "target-sizes: a compiler is installed but has no C library headers" \
+       "for:$incomplete -- on Debian and Ubuntu that is the matching" \
+       "libc6-dev-<arch>-cross package, which --no-install-recommends omits"
+fi
+
+# Anything CI said it would ask about and did not.
+missing=""
+for want in ${TARGET_SIZES_REQUIRE:-}; do
+  case " $absent $incomplete " in
+    *" $want "*) missing="$missing $want" ;;
+  esac
+done
+if [[ -n $missing ]]; then
+  echo "target-sizes: TARGET_SIZES_REQUIRE names$missing, and the run did not" \
+       "reach them. This job installed those compilers on purpose, so a skip" \
+       "here is a question that was not asked rather than one that passed." >&2
+  exit 1
 fi
 
 if (( failed > 0 )); then

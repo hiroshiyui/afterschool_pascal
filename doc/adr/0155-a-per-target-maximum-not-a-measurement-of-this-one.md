@@ -67,6 +67,22 @@ host is available — a run that asked nothing must not look like a run that
 passed. CI installs `gcc-aarch64-linux-gnu` and `gcc-arm-linux-gnueabihf` for
 it, which are the two that would have caught this.
 
+**Two things about that were learned from CI rather than designed**, and both
+are the same mistake in different places. Debian and Ubuntu ship a cross
+compiler and its C library as separate packages, so `--no-install-recommends`
+installed a driver that runs and then cannot find `<setjmp.h>` — and the first
+version of this script read that as the size being too small, which is an
+accusation against the wrong file. A compiler on PATH is not a usable compiler,
+so every target is probed with a trivial translation unit first and one that
+fails there is reported *incomplete*, naming the package.
+
+And reporting it is not enough on a job whose purpose was to install those
+compilers: a skip there is a green run that asked nothing.
+`TARGET_SIZES_REQUIRE` names the targets that must be reached, CI sets it to
+those two, and an absent or header-less one is then a failure. It is the
+arrangement `second-backend` already has — install `llc` and refuse to pass by
+skipping.
+
 ## Consequences
 
 `runtime/pasrt.c` now compiles for aarch64, 32-bit arm (both ABIs), i686 and

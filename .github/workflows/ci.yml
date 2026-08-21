@@ -68,11 +68,17 @@ jobs:
           # artefact this repository ships: what they answer is whether
           # PAS_FILE_SIZE and PAS_JUMP_SIZE are large enough somewhere other
           # than here, which is a question one machine cannot ask (ADR-0155).
-          # Without them that case skips, and a skip is what this repository
-          # treats as "not asked" rather than "passed".
+          #
+          # **The libc6-dev-*-cross packages are not optional.** Debian and
+          # Ubuntu ship the driver and its C library separately, and with
+          # --no-install-recommends the driver arrives alone: it then runs,
+          # fails to find <setjmp.h>, and the first version of this job read
+          # that as the size being too small. The compiler is on PATH and
+          # cannot compile anything, which is the state target_sizes.sh now
+          # tells apart from both "absent" and "wrong".
           apt-get install -y --no-install-recommends \
-            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf || \
-            echo "cross compilers unavailable; target-sizes will skip"
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
+            gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
           # z3 for verify/, from pip, which is what verify/README.md documents.
           # --break-system-packages because Debian and Ubuntu both mark their
           # Python installations externally managed (PEP 668).
@@ -114,6 +120,13 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+        env:
+          # This job installed those two cross compilers, so `target-sizes`
+          # must reach them: without this it reports a missing toolchain and
+          # passes, which would be a green run that asked nothing. Same
+          # arrangement as `second-backend`, which installs llc and refuses to
+          # pass by skipping.
+          TARGET_SIZES_REQUIRE: aarch64-linux-gnu arm-linux-gnueabihf
         # 435 cases: the two corpora, the 157 error-path sources, the SMT
         # rules, the stage-2/stage-3 fixed point, and the product check.
 
