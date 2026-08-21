@@ -1161,14 +1161,46 @@ program-parameter being the only end-of-list there is; one *extra* parameter is
 what makes going over detectable, and there are twenty-four now.
 
 **4. Anything that is not LP64 little-endian Linux.** A different and much
-larger question, and none of the measurements above transfer:
+larger question — and **the layout half of it is much smaller than this entry
+used to claim.** Measured on 2026-08-22 by running `target-layout`'s own
+comparison against 25 targets instead of the two the compiler admits, all 4538
+offsets each:
 
-- **ILP32 or a 32-bit target** breaks `LlSize`/`LlAlign` for a pointer, which
-  are 8 by construction, and ADR-0129's `i64` count at the foreign boundary;
-- **big-endian** has not been looked at at all;
-- **macOS** changes the object format and the `m:` field of the datalayout, and
-  `bind` and the file model are POSIX assumptions in the runtime;
-- **Windows** changes the ABI, the C library and the file model together.
+| target | offsets differing | |
+| --- | --- | --- |
+| aarch64, riscv64, powerpc64le, loongarch64, mips64el | 0 | LP64 little-endian |
+| **powerpc64, mips64, aarch64_be, sparcv9** | **0** | LP64 **big-endian** |
+| **x86_64-apple-darwin, arm64-apple-darwin** | **0** | Mach-O |
+| **x86_64 and aarch64 windows-msvc, windows-gnu** | **0** | COFF |
+| **s390x** | **13** of 4538 | LP64 big-endian, and the one exception |
+| i686, arm, armeb, riscv32, mipsel, mips, powerpc, x32 | 3858–3904 | every 32-bit target |
+
+So three of this entry's four bullets were wrong about *layout*, and only about
+layout — the differences they name are real and are somewhere else:
+
+- **big-endian is not a layout problem.** Four big-endian 64-bit targets are
+  identical, which is what one would expect on reflection: endianness decides
+  what a byte *means*, not where a field sits.
+- **s390x is the exception, and it is ADR-0028's shape exactly.** It aligns
+  `i256`, `i128` and `<2 x double>` to **8** where every other target here says
+  16, so `LlAlign`'s `tySet := 16` — a comment that reads "LLVM aligns an i256
+  to 16" — is a fact about most targets rather than all. Thirteen offsets, every
+  one of them in a frame holding a `set` or a `complex`.
+- **macOS and Windows agree about layout.** What they change is the object
+  format, the C library and the file model — `bind` and `pas_file` are POSIX
+  assumptions in `runtime/pasrt.c`, and that is the work, not the datalayout's
+  `m:` field.
+- **32-bit is the real layout blocker, and it is every 32-bit target.** 85–86%
+  of offsets move, because `LlSize` says a pointer is 8 by construction, and
+  ADR-0129's `i64` count at the foreign boundary is a second, independent one.
+
+**One caveat about the gate, found by the same sweep.** Mach-O puts a
+zero-valued global in `.zerofill` rather than emitting a directive with a 0 in
+it, and 32-bit ARM and PowerPC split an `i64` constant into two `.long`s. So
+`target-layout` as committed cannot read a Darwin or a 32-bit assembly listing —
+it fails loudly, with "N constants were not folded to a number", rather than
+comparing something wrong. Admitting such a target means teaching it those two
+spellings first.
 
 ### What is not claimed
 
