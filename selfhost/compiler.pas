@@ -16,7 +16,10 @@
 
 program Compile(output,
                 arg1, arg2, arg3, arg4, arg5, arg6,
-                arg7, arg8, arg9, arg10, arg11, arg12);
+                arg7, arg8, arg9, arg10, arg11, arg12,
+                arg13, arg14, arg15, arg16, arg17, arg18,
+                arg19, arg20, arg21, arg22, arg23, arg24,
+                argOver);
 
 { The self-hosted compiler: stage 1, components 1 to 3 -- the lexer, the parser
   and the AST, and Sema.
@@ -94,6 +97,13 @@ const
     an array is, and generous because 6.13 puts no limit on how many
     program-components a program-block has. }
   maxImports = 8;
+  { How many command-line arguments the compiler can be handed, and one more
+    program-parameter than that exists so that going over is reported rather
+    than truncated -- see the declarations of arg1..argOver. Twenty-four is
+    twice what a `--import`-heavy command line needs: eight imports are
+    sixteen words, and --std=, --target=, a --dump flag, --coverage, the
+    source, `-o` and its file name are seven more. }
+  argMax = 24;
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }
@@ -1487,11 +1497,29 @@ var
     them is ever opened. An unbound one is how the list ends, there being no
     other way to count them (ADR-0081, ADR-0082).
 
-    Twelve is the limit on how many arguments this compiler can be given, and
+    `argMax` is the limit on how many arguments this compiler can be given, and
     it is a real limit rather than a notional one: a program-parameter list is
-    written out, so the count is fixed when the compiler is compiled. }
+    written out, so the count is fixed when the compiler is compiled.
+
+    It was twelve, and twelve was not headroom: `tests/dialect/lib_os.pas` has
+    four program-components, so `--std=afterschool`, eight `--import` words, a
+    source, `-o` and a file name are exactly twelve. One more flag -- and
+    ADR-0156's `--target=` is one -- pushed a *correct* command line past the
+    end, where it was silently truncated and then reported as "-o needs a file
+    name", an accusation against the last argument that arrived rather than the
+    first that did not.
+
+    `argOver` is how that stops being silent. Nothing can count the arguments
+    -- an unbound parameter is the only end-of-list there is -- so a compiler
+    with argMax parameters cannot tell argMax from argMax + 9. One *extra*
+    program-parameter can: it is bound exactly when there was an argument with
+    nowhere to go, and ParseArgs reports rather than truncating. It is never
+    read for its name. }
   arg1, arg2, arg3, arg4, arg5, arg6: text;
   arg7, arg8, arg9, arg10, arg11, arg12: text;
+  arg13, arg14, arg15, arg16, arg17, arg18: text;
+  arg19, arg20, arg21, arg22, arg23, arg24: text;
+  argOver: text;
 
   { The source being translated, bound to the name the command line gave rather
     than to an argument position (6.7.5.6). `bindable` is needed here and not
@@ -2441,7 +2469,9 @@ end;
   a *variable* number of arguments readable from a *fixed* parameter list.
 
   The case statement is the whole cost of the approach: a program-parameter is a
-  name, not a subscript, so there is no way to say "the k'th". Twelve arms. }
+  name, not a subscript, so there is no way to say "the k'th". One arm each, and
+  argMax + 1 of them: the last is the sentinel that makes an over-long command
+  line detectable rather than silently short. }
 function Arg(k: integer; var s: nameStr): boolean;
 var b: BindingType;
 begin
@@ -2459,6 +2489,20 @@ begin
     10: b := binding(arg10);
     11: b := binding(arg11);
     12: b := binding(arg12);
+    13: b := binding(arg13);
+    14: b := binding(arg14);
+    15: b := binding(arg15);
+    16: b := binding(arg16);
+    17: b := binding(arg17);
+    18: b := binding(arg18);
+    19: b := binding(arg19);
+    20: b := binding(arg20);
+    21: b := binding(arg21);
+    22: b := binding(arg22);
+    23: b := binding(arg23);
+    24: b := binding(arg24);
+    { argMax + 1: bound only when an argument had nowhere to go. }
+    25: b := binding(argOver);
     otherwise
   end;
   if b.bound then s := b.name else s := '';
@@ -2554,6 +2598,15 @@ begin
   dumpLimitsOpt := false;
   targetIx := tgtX86;
   covOpt := false;
+  { Before anything is parsed: an argument past the last program-parameter is
+    invisible to the loop below, which ends at the first unbound one. Reporting
+    it here is the difference between "this command line is too long" and a
+    complaint about whichever flag happened to land in the last slot. }
+  if Arg(argMax + 1, a) then begin
+    writeln('pascalc: more than ', argMax:1, ' arguments');
+    argsOk := false;
+    argsBad := true
+  end;
   k := 1;
   while Arg(k, a) and argsOk do begin
     if EQ(a, '--dump-tokens') then dumpTokensOpt := true

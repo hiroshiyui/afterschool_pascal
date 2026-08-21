@@ -165,3 +165,6 @@ the alternatives that were rejected and why.
 | [0154](0154-the-dialect-changes-what-a-mode-says.md) | The dialect changes what a conformance mode says, not what it accepts | Accepted |
 | [0155](0155-a-per-target-maximum-not-a-measurement-of-this-one.md) | A per-target maximum, not a measurement of this one | Accepted |
 | [0156](0156-the-emitted-target-is-selectable-and-the-list-is-short.md) | The emitted target is selectable, and the list is deliberately short | Accepted |
+| [0157](0157-the-offsets-are-compared-on-every-run.md) | The offsets are compared on every run | Accepted |
+| [0158](0158-one-more-program-parameter-than-the-limit.md) | One more program-parameter than the limit | Accepted |
+| [0159](0159-the-port-is-run-not-argued.md) | The port is run, not argued | Accepted |

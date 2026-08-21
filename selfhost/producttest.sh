@@ -371,6 +371,30 @@ cli_check "unknown option"            --no-such-flag "$root/tests/hello.pas"
 cli_check "-o needs a file name"      "$root/tests/hello.pas" -o
 cli_check "--import needs a file name" "$root/tests/hello.pas" --import
 cli_check "more than one input file"  "$root/tests/hello.pas" "$root/tests/arith.pas"
+# A command line one word longer than the program-parameter list. Nothing can
+# count the arguments -- an unbound program-parameter is the only end-of-list
+# there is -- so this is reported by one *extra* parameter being bound, and
+# without it the surplus was silently dropped: twelve was exactly what
+# tests/dialect/lib_os.pas needs, so ADR-0156's --target= made a correct
+# command line report "-o needs a file name" about the argument that fell off
+# the end. The complaint has to name the length, not the last flag standing.
+long_args=()
+for _ in $(seq 22); do long_args+=(--std=iso7185); done
+cli_check "more than 24 arguments" "${long_args[@]}" "$root/tests/hello.pas" \
+          -o "$work/ir.ll"
+
+# ...and the length below that is accepted, which is the half a bound-raising
+# change gets wrong: a check that only pins the refusal passes just as well
+# with the bound left where it was.
+checked=$((checked + 1))
+ok_args=()
+for _ in $(seq 21); do ok_args+=(--std=iso7185); done
+if ! "$pascalc" "${ok_args[@]}" "$root/tests/hello.pas" -o "$work/long.ll" \
+     >"$work/long.txt" 2>&1 || [[ ! -s $work/long.ll ]]; then
+  echo "--- cli: 24 arguments were refused or wrote no IR ---" >&2
+  cat "$work/long.txt" >&2
+  failed=$((failed + 1))
+fi
 # With no source at all pascalc writes the usage rather than a message, which
 # is the one case here that is not a complaint -- and worth pinning, because
 # "prints help" and "silently succeeds" are indistinguishable without the exit

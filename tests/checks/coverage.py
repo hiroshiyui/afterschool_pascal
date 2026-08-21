@@ -193,6 +193,17 @@ def corpus(root):
     # diagnostic_coverage.py filters `pascalc: ` messages out as driver output,
     # so the gate that counts messages is blind to these by construction, and
     # line_coverage.py is what found the branches unrun (ADR-0104).
+    # A command line as long as the compiler admits, and one word longer.
+    # `Arg` is argMax + 1 arms of `binding(argN)`, and nothing in the corpus is
+    # invoked with more than a handful of arguments -- so twelve of those arms
+    # were reported unreached the moment the bound was raised, which is the
+    # ratchet doing exactly its job. The filler is a repeated `--std=iso7185`
+    # because it is the one flag that is a no-op when written twice: what is
+    # being exercised is the *position*, not the option.
+    filler = ["--std=iso7185"] * 21          # + source + -o + name = argMax
+    jobs.append((hello, list(filler)))
+    jobs.append((hello, filler + ["--std=iso7185"]))   # ...and one over it
+
     jobs.append((None, ["--no-such-flag", hello]))
     jobs.append((None, [hello, "-o"]))       # -o with nothing after it
     jobs.append((None, [hello, "--import"]))  # --import with nothing after it
