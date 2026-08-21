@@ -15,6 +15,23 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **Conformant array parameters, and this is now a level 1 processor.**
+  ISO 7185 clause 5.1 a) makes §6.6.3.6 e), §6.6.3.7 and §6.6.3.8 the whole of
+  the difference between the two levels, and all three are accepted:
+
+  ```pascal
+  function total(var a: array [u..v: integer] of integer): integer;
+  ```
+
+  One compiled body serves every extent an array-type can have; `u` and `v`
+  denote the smallest and largest values of the index-type the *actual*
+  possesses; and §6.6.3.8's conformability decides which actuals fit. The
+  packed form, the nested form and §6.6.3.7's abbreviated
+  `array [u..v: T1; j..k: T2] of T3` are all accepted, as is a conformant array
+  parameter passed on to another. `doc/implementation-defined.md` §1 now states
+  level 1. All 51 programs of the BSI Validation Suite's LEVEL1 directory
+  behave as their class headers require.
+
 - **`pascalc --dump-limits`** compiles as usual and then writes how full it
   left its own fixed arrays — the character pool and the token table — each
   against its capacity, one per line (`pool 491964 of 1000000`). Neither
@@ -25,6 +42,15 @@ appears below in the release where it still existed.
   Sema and by CodeGen as well as by the lexer, so it runs everything.
 
 ### Fixed
+
+- **`pack` and `unpack` work on an array whose bounds arrive with the actual.**
+  Both read the arrays' bounds and the packed one's size from the type's
+  compile-time `lo` and `hi`, which for a schematic formal parameter
+  (`var s: sch`) are placeholders — so `pack(s, 1, z)` moved the wrong bytes
+  and trapped against bounds of `1..0`. It has been wrong since schematic
+  formals landed and no program in the corpus packed one; conformant array
+  parameters reached it a second way, and BSI's LEV1F06, LEV1F07 and LEV1F51
+  are the programs that report it.
 
 - **A structured type containing a file is no longer assignable**, under all
   three `--std` modes. §6.4.6 a) of both standards makes a value

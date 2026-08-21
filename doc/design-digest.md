@@ -458,6 +458,26 @@ able to make.
     is recorded on the `Type` as the symbol. `array [1..n] of real` is then an
     ordinary array type whose upper bound is read at run time, so the array,
     index and assignment code needed no case for schemata.
+  - **And it is what ISO 7185 §6.6.3.7 needed** (ADR-0153). A conformant array
+    parameter is the same object under another standard's clause: the
+    bound-identifiers are `Disc` symbols reading the parameter's descriptor,
+    the index-type is a subrange whose ends are those two symbols, and
+    ADR-0113's `BoundSchemaFor` supplies the anonymous schema. §6.6.3.7's
+    NOTE 2 says a bound-identifier denotes an object that "is neither a
+    constant nor a variable", which `Disc` already was — so the clause needed
+    no kind of its own, and *not assignable* and *not a var actual* came for
+    free. Accepting it, with §6.6.3.6 e) and §6.6.3.8, is what makes this a
+    **level 1** processor.
+  - One type serves a whole conformant-array-parameter-*section*, because
+    §6.6.3.7.1 says "the formal-parameters shall possess an array-type" —
+    singular for a plural — and because ADR-0017's name equivalence would
+    otherwise refuse `x := y` between two names of one section, which is
+    conforming. `tests/conformant.pas` assigns.
+  - **`pack` and `unpack` had never worked on either.** Both read the bounds
+    and the packed array's size from the type's compile-time `lo` and `hi`,
+    which for any array whose extent arrives with an actual are placeholders.
+    It had been wrong since ADR-0040 and no corpus program packed a schematic
+    formal; BSI's LEV1F06, LEV1F07 and LEV1F51 are what found it.
   - **A dynamic bound is a discriminant and nothing else** — not `n - 1`.
     ISO 7185 has no constant-expression, so this is the restriction every other
     bound is already under, not one invented here.

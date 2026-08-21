@@ -710,16 +710,20 @@ The order above is the ranking, so what is left to say is the kind:
 ## What is next
 
 Both standards are complete and every sweep in
-[`doc/history.md`](history.md#conformance-sweeps) has been run, so only the
-third item below is a language feature. Two of the others are about **oracles**
-— what could still be wrong with nothing here to say so — and they come first
-because v1.0.0 gave up the strongest oracle this project had and nothing has
-replaced it. The fifth is the platform lock.
+[`doc/history.md`](history.md#conformance-sweeps) has been run. The third item
+was the last language feature on this page, and it is done: ISO 7185 is now
+accepted at **level 1**. Two of the others are about **oracles** — what could
+still be wrong with nothing here to say so — and they come first because v1.0.0
+gave up the strongest oracle this project had and nothing has replaced it. The
+fifth is the platform lock, and is the only entry here that is still open work.
 
-**The fourth is done**, and is left in place rather than deleted because what it
-found is the argument for the two above it: every one of those measurements
-turned something up on its first run, which is what an unasked question looks
-like from the outside.
+**The third and the fourth are done**, and both are left in place rather than
+deleted because what they found is the argument for the two above them: every
+one of those measurements turned something up on its first run, which is what
+an unasked question looks like from the outside. The third turned up nine
+defects in its own first implementation and one that had been there since
+ADR-0040, out of a corpus that had been sitting in the tree recorded as
+*rejected*.
 
 Nothing here is scheduled. This section exists so that the reasons are written
 down while they are still live, which is ADR-0001's rule applied to work that
@@ -876,24 +880,30 @@ the result in `seed/README.md` even if it never runs again — a dated statement
 that the seed carried nothing the C++ compiler did not is worth more than the
 ability to repeat it.
 
-### 3. Conformant array parameters, and level 1
+### 3. ~~Conformant array parameters, and level 1~~ Done
 
-The one language feature here, and the only work that would change the
-compliance level `doc/implementation-defined.md` states.
+**Done (ADR-0153)**, and `doc/implementation-defined.md` §1 states level 1.
 
-That document's §1 declares **level 0**, which is a complying level rather than
-a gap: ISO 7185 clause 5.1 a) defines it as clause 6 without §6.6.3.6 e),
-§6.6.3.7 and §6.6.3.8. Accepting those three makes a level 1 processor.
+The estimate held in both directions and is worth keeping for the next one.
+*Most of the mechanism is already here* was right: ADR-0040's schematic formal
+parameter is a descriptor beside the address, which is exactly what a
+conformant array parameter needs, and the bound-identifiers are `skDisc`
+symbols — §6.6.3.7's NOTE 2 saying one denotes an object that "is neither a
+constant nor a variable", which that kind already was. Indexing, the bounds
+check and the size walk needed nothing.
 
-Most of the mechanism is already here. ADR-0040's schematic formal parameter is
-a descriptor beside the address — bounds that travel with the actual — which is
-what a conformant array parameter needs and is why one compiled body can serve
-every extent. What is genuinely new is §6.6.3.7's congruity rules for
-conformant array schemas, which are not ADR-0030's rules for procedural
-parameters however alike the two read.
+*What is genuinely new is §6.6.3.7's congruity rules* was right too, and it was
+the smaller half. What the estimate missed is that the **third-party corpus
+already existed**: `tests/bsi/suite/LEVEL1/` is 51 programs, `expected.tsv`
+recorded all 51 as rejected, and they found nine defects in the first
+implementation and one older one — `pack` of a schematic formal had never
+worked, and no program in this repository packs one.
 
-Worth knowing before starting: a schematic formal already covers this ground in
-Extended Pascal, so the feature buys **conformance and not expressiveness**.
+*The feature buys conformance and not expressiveness* also held: a schematic
+formal covers the same ground in Extended Pascal. What it bought that the entry
+did not anticipate is [§2](#2-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one--audited-once-and-the-anchors-machinery-repaired)'s
+authority — §6.6.3.7 is the standard's own answer to the question AP §6.7.3.9's
+slice asks, and ADR-0152 found the two entries were about one clause.
 
 ### 4. ~~Nothing can currently measure what the corpus reaches~~ Done
 

@@ -16,20 +16,26 @@ entry says otherwise.
 
 ## 1. Compliance level
 
-**This processor complies at level 0.** ISO 7185 clause 5.1 a) defines level 0
+**This processor complies at level 1.** ISO 7185 clause 5.1 a) defines level 0
 as accepting every feature of clause 6 except §6.6.3.6 e), §6.6.3.7 and
-§6.6.3.8 — the conformant array parameters. Those are not accepted:
+§6.6.3.8 — the conformant array parameters — and level 1 as accepting them.
+They are accepted (ADR-0153):
 
 ```pascal
-procedure sum(a: array [lo..hi: integer] of integer);
+function total(var a: array [u..v: integer] of integer): integer;
 ```
 
-is refused with *a parameter's type must be a type name*, §6.7.3.1's
-`parameter-form` being a type-name, a schema-name or a type-inquiry here. A
-schematic formal parameter (ADR-0040) covers the same ground in Extended
-Pascal — `procedure p(var v: vector)` takes a vector of any length, and one
-compiled body serves every tuple — but it is a different feature of a different
-standard and does not make this a level 1 processor.
+One compiled body serves every extent, `u` and `v` denote the smallest and
+largest values of the index-type the *actual* possesses, and §6.6.3.8's
+conformability decides which actuals fit. The abbreviated form
+`array [u..v: T1; j..k: T2] of T3` and the nested full form are equivalent, as
+§6.6.3.7 says they are, and both are accepted.
+
+It was level 0 until then, which is a complying level rather than a gap. A
+schematic formal parameter (ADR-0040) covered the same ground in Extended
+Pascal and did not make this a level 1 processor, being a different feature of
+a different standard; what it did do is supply the descriptor this one needed,
+which is why the two now share one.
 
 ## 2. Implementation-defined features
 
@@ -214,6 +220,7 @@ it is checked (ADR-0078).
 | §6.5.5 (D.6) | Altering a file-variable `f` while a reference to `f^` exists — a `put(f)` from inside `with f^ do`, or while `f^` is somebody's `var` parameter. Exactly D.5's shape, one type along. ADR-0021. |
 | §6.5.3.3 (D.2) | Reading or writing a field of a variant that is not active. A constant's tag is a constant, so §6.8.8.3's version of this *is* reported (ADR-0069); the rule for a variable has never been checked. ADR-0018, ADR-0056. |
 | §6.5.6 | Altering the length of a string-variable while a reference to a substring of it exists. ADR-0057. |
+| §6.6.3.8 | That the smallest and largest values of the index-type of T1 lie within the closed interval of T2, where T1 is itself a conformant-array-schema. Both bounds are then a run-time fact, arriving with that parameter's own actual; where T1 is an ordinary array-type the check is made at compile time and the program refused. BSI's LEV1F44 and LEV1F49 are the two programs that report *ERROR NOT DETECTED*. ADR-0153. |
 | §6.7.5.5 | A write-parameter of `writestr` accessing the string-variable being written to. ADR-0060. |
 | §6.11.3 | A constituent-identifier's defining-point is not enforced as a *region*. §6.11.3 a) gives it "each region that is a constituent-identifier contained by the import-specification" — a region as narrow as the occurrence itself — where this compiler makes the interface's names reachable across the import-specification while it is being checked. **No program distinguishes the two**, and every observable rule around it was probed: `only` imports exactly what it names, a renaming introduces the new spelling and not the old, the interface's own name of a renamed spelling is not imported, and NOTE 2's long-form-only rule holds. ADR-0053, ADR-0134. |
 | §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
@@ -301,9 +308,6 @@ none is silent.
 file's storage carries a heap buffer and a place on the runtime's open-file
 list, so two arms holding files at one address would leak the first buffer and
 link one list node twice (ADR-0070).
-
-**Conformant array parameters are not accepted**, which is what makes this a
-level 0 processor rather than a deviation — see §1.
 
 **A subrange whose bounds are not constants is refused as a set's base type.**
 `set of 1..m` inside a procedure is legal under §6.2.3.8 b) and is refused with

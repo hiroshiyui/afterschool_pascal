@@ -569,7 +569,9 @@ types      integer  real  boolean  char
            file of T — files of any type that is not, and holds, no file
 routines   procedures and functions, nested to any depth, recursive,
            value and var parameters, forward declarations,
-           procedural and functional parameters, congruity-checked
+           procedural and functional parameters, congruity-checked,
+           array [u..v: T] of C — conformant array parameters (level 1),
+           packed and unpacked, nested, and the abbreviated form
 statements := , if/then/else, while, repeat/until, for/to/downto,
            begin/end, case, with, procedure call,
            label declarations, labelled statements,
@@ -604,11 +606,15 @@ constants  named constants — a number, a char, a 'string' of any length, or
            true, false, maxint
 ```
 
-**This is the whole of ISO 7185.** The last four to arrive were §6.6.5.4's
-`pack` and `unpack`, §6.9.5's `page` and §6.3's string constant — each missed
-rather than declined, and each found by compiling a probe rather than by a
-test, because no program in the corpus had ever written one. What is left of
-the language is the next standard, not more of this one.
+**This is the whole of ISO 7185, at level 1.** Conformant array parameters —
+§6.6.3.6 e), §6.6.3.7 and §6.6.3.8 — were the last of it, and are the whole of
+the difference clause 5.1 a) draws between the two levels; before them this was
+a level 0 processor, which is a complying level rather than a shortfall. The
+four before that were §6.6.5.4's `pack` and `unpack`, §6.9.5's `page` and
+§6.3's string constant — each missed rather than declined, and each found by
+compiling a probe rather than by a test, because no program in the corpus had
+ever written one. What is left of the language is the next standard, not more
+of this one.
 
 One thing this compiler is **more permissive** about than ISO 7185, deliberate
 and stated here because nothing else would notice it.
@@ -1119,9 +1125,7 @@ checked against that before the program runs — the limit `set of integer`
 already states, reached another way. Everywhere else the bound works:
 `var x: 1..m`, `type t = 1..m` and `array [1..m] of 1..m` since ADR-0133, and a
 record's field and a file's component since ADR-0134.
-`doc/implementation-defined.md` §6 states it with the clause. Conformant array
-parameters are not accepted either, which is what makes this a level 0
-processor — that one is the standard's own option rather than a shortfall.
+`doc/implementation-defined.md` §6 states it with the clause.
 
 ## What backs the answers
 
@@ -1136,7 +1140,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 609 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 637 cases under `ctest`, the compiler compiled with itself to a
 fixed point, scenarios written against clauses of the two standards, and the
 1982 BSI Pascal Validation Suite. What none of it sees is written down rather
 than left to be discovered — `doc/sop.md` §7 keeps that list.
@@ -1149,7 +1153,7 @@ how to run the proofs.
 [`doc/implementation-defined.md`](doc/implementation-defined.md) is the document
 clause 5.1 requires a processor to be accompanied by, and it is the one to read
 next if you are *using* this compiler. It states the compliance level —
-**level 0**, conformant array parameters not being accepted — answers every
+**level 1**, conformant array parameters being accepted — answers every
 entry of both standards' annexes of implementation-defined and
 implementation-dependent features, names each error this compiler does not
 report, and lists the extensions and restrictions. If you want to know what
