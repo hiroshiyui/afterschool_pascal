@@ -13,6 +13,17 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **`pascalc --dump-limits`** compiles as usual and then writes how full it
+  left its own fixed arrays — the character pool and the token table — each
+  against its capacity, one per line (`pool 491964 of 1000000`). Neither
+  standard bounds the size of a program, so both limits are this processor's
+  and `doc/implementation-defined.md` now states them; the flag is how a large
+  program's headroom is read off a real compilation rather than guessed at.
+  Unlike the four `--dump-*` flags it stops no stage: the pool is filled by
+  Sema and by CodeGen as well as by the lexer, so it runs everything.
+
 ### Changed
 
 - **`--std=afterschool`: one linker symbol is one `external` declaration.** Two

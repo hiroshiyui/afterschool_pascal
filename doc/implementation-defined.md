@@ -364,6 +364,25 @@ found applied in silence — the wrap wrote one value over another, so
 character as equal, and exited 0.
 `tests/extended/str_arena_overflow.pas` is that program.
 
+**A program needing more than 1 000 000 characters of identifier and literal
+text, or more than 300 000 tokens, is refused.** Neither standard bounds the
+size of a program, so both numbers are this processor's; each is *reported*, as
+`out of string space: this compiler keeps 1000000 characters of text` and `too
+many tokens: this compiler accepts 300000`. `pascalc --dump-limits` writes how
+much of each a compilation used, so the limits can be read off a real program
+rather than guessed at (ADR-0148):
+
+```
+pool 491964 of 1000000
+tokens 144756 of 300000
+```
+
+Those figures are this compiler's own source, which is the largest Pascal in
+this repository. One way into the pool does *not* report: `PoolPut`, which
+builds the two names Sema needs rather than reads, drops a character instead of
+diagnosing when the pool is full. It is reachable only once the pool is within
+a name's length of full and is registered in `doc/sop.md` §7.
+
 **Nesting deeper than 1000 levels is refused** (ADR-0020) —
 parentheses, statements, type denoters, blocks, or the depth of the tree an
 operator chain builds. The bound is on the *tree* rather than on the parser's

@@ -95,6 +95,15 @@ reports an unsafe read as safe. Rebuilding half a program after changing
 
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
 `--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
+`--dump-limits` is the odd one out: it compiles as usual and then writes how
+full the compiler left its own fixed arrays, which is what says how much room a
+larger program still has.
+
+```
+$ pascalc --std=extended --dump-limits big.pas -o /dev/null
+pool 491964 of 1000000
+tokens 144756 of 300000
+```
 
 `--coverage` compiles a program that records which of its own statements ran.
 Set `PASCOV_LINES` when running it and the line numbers are appended there, one

@@ -303,6 +303,15 @@ not what a compiled program wrote:
   under `--dump-tokens`, `--dump-ast`, `--dump-sema` and `--dump-all`. Sidecars
   are `name.dump` (the golden), `name.flags` (which flag, `--dump-all` by
   default) and `name.std` (the standard, `iso7185` when absent).
+
+  `--dump-limits` is the one dump flag with no case here, deliberately
+  (ADR-0148). It reports how full the compiler left its own fixed arrays, and
+  the pool figure moves whenever Sema or CodeGen interns something new — so its
+  golden would be regenerated for reasons that have nothing to do with what it
+  asserts. `tests/checks/buffer_headroom.py` is its asserter instead, and what
+  it asserts is stronger than a golden: the capacities the compiler reports
+  must equal the constants `selfhost/compiler.pas` declares, and each count
+  must sit under 80% of its capacity.
 * **`tests/spec/`** is written against *clauses* rather than against the
   compiler: scenarios in a subset of Gherkin, each tagged with the clause of
   ISO 7185 or ISO/IEC 10206:1991 whose requirement it states. Its README says
