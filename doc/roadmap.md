@@ -1131,10 +1131,34 @@ the datalayout being **absent** rather than wrong. What they are for is every
 consumer that trusts the module instead — `llc` with no `-mtriple`, which is a
 `ctest` case here, `opt`, and a reader.
 
-**3. A real aarch64 port, with CI.** GitHub has arm64 runners. Without one this
-would be a claim nothing checks, which is the failure mode `doc/sop.md` §7
-exists for — and the evidence above stops at *links*, not *runs*, because there
-is no emulator on the machine where it was measured.
+**3. ~~A real aarch64 port, with CI.~~ Done (ADR-0157, ADR-0159).** Two halves,
+because the question has two shapes.
+
+*Compared, without leaving x86-64.* `target-layout` is a `ctest` case that reads
+the frame type definitions out of what the built compiler emits — for
+`selfhost/compiler.pas`, and for a probe carrying the types the compiler has no
+frame slot of, an `i256` in a record first among them — and assembles them as
+`ptrtoint getelementptr` constants once per admitted target. **4512 offsets, on
+every run.** The list of targets is parsed from the compiler's own `--target=`
+refusal, so a third one is compared without the gate being edited. It fails when
+a field moves and when the comparison reached nothing; admitting
+`i686-linux-gnu` reports 3878 of 4512 differing.
+
+*Run.* A CI job on GitHub's `ubuntu-24.04-arm` runner builds and runs the whole
+suite natively — **639 of 639 on the first attempt**, from a seed whose two
+header lines still say x86-64. `AFTERSCHOOL_PASCAL_TARGET=aarch64-linux-gnu` is what makes it
+mean something — without it the compiler emits an x86-64 header for clang to
+override *silently*, and the job would be green over an emission path never
+taken. Two steps refuse a green run that asked nothing: `uname -m` must say
+aarch64, and `TARGET_SIZES_REQUIRE` is mirrored so the target the host cannot
+ask about itself is x86-64.
+
+**It found a defect before it ran once.** Setting the variable over the existing
+suite failed `lib_os`, whose command line was already exactly at the
+twelve-argument program-parameter limit — see ADR-0158. Twelve was a bound that
+truncated in silence and could not have done otherwise, an unbound
+program-parameter being the only end-of-list there is; one *extra* parameter is
+what makes going over detectable, and there are twenty-four now.
 
 **4. Anything that is not LP64 little-endian Linux.** A different and much
 larger question, and none of the measurements above transfer:
@@ -1148,18 +1172,27 @@ larger question, and none of the measurements above transfer:
 
 ### What is not claimed
 
-The evidence stops at **links**, not **runs**. No aarch64 binary produced by any
-of this has been executed, because the machine it was measured on has no
-emulator.
+The paragraph that stood here said the evidence stopped at **links** rather than
+**runs**, no aarch64 binary having been executed. That is no longer true, and
+what replaces it is narrower rather than absent.
 
-Item 1 is done, so part of this has changed: `target-sizes` fails when either
-opaque size stops being large enough for a target a compiler is installed for,
-and CI installs two cross compilers so that it is asked rather than skipped.
-What still has no gate is the **offset comparison** — the 4501 numbers above
-were measured once, by hand, and nothing re-runs them. A datalayout that
-diverged between two targets would go unnoticed until someone tried. Wiring that
-in would mean generating the probe from a build's own IR, which is item 3's
-work rather than item 1's.
+**aarch64 works; it is not supported.** No release ships an aarch64 binary,
+`seed/pascalc.ll` is still generated for x86-64, and `seed/README.md`'s target
+lock stands. What CI establishes is that the port *works* — that the seed
+retargets textually, that the hand-written layout rules are right for a second
+machine, and that the runtime's constants clear it — not that an artefact is
+maintained for it.
+
+**Not every oracle follows.** `llc-second-backend` skips on the arm64 job, no
+`llc` being installed there, and the SMT proofs are left out deliberately: they
+are about the lowering *model*, which is the same file on either machine. So a
+miscompilation only an aarch64 backend produces has nothing looking for it.
+`doc/sop.md` §7 carries that row.
+
+**The layout gate sees frames and nothing else.** A global's alignment, a string
+constant's, and the ABI arguments travel by are outside it. The last is LLVM's
+business rather than this compiler's, which is what ADR-0030 and ADR-0051 were
+for, but it is still not compared here.
 
 ## Known limitations
 

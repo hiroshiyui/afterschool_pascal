@@ -24,6 +24,20 @@ appears below in the release where it still existed.
   compiler's own layout rules have been compared against LLVM's for it, which
   does not hold for a 32-bit machine.
 
+- **`AFTERSCHOOL_PASCAL_TARGET`.** Points a whole run of `pascalcc` at one
+  target, the way `AFTERSCHOOL_PASCAL_OPT` points one at an optimisation level.
+  An explicit `--target=` still wins. It is what lets a test harness — or CI —
+  compile a corpus for a machine without a flag on every invocation.
+
+### Changed
+
+- **The compiler accepts twenty-four command-line arguments, up from twelve,
+  and says so when given more.** Twelve was exactly what a program with four
+  separately translated components needs, so adding one flag pushed the `-o`
+  file name off the end — where it was silently dropped and reported as
+  `-o needs a file name`, blaming the wrong argument. Going over the limit now
+  produces `pascalc: more than 24 arguments` and a non-zero exit.
+
 ### Fixed
 
 - **`PAS_JUMP_SIZE` is a per-target maximum rather than a measurement of

@@ -197,11 +197,11 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Twelve gates make that mechanical, and each fails in **both** directions — a
+Fourteen gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to eleven catalogues. Three say
-in the table that they are one-directional in part: `line-coverage`, which is a
-ratchet; `buffer-headroom`, which watches a bound rather than a claim; and
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to thirteen catalogues. Three
+say in the table that they are one-directional in part: `line-coverage`, which
+is a ratchet; `buffer-headroom`, which watches a bound rather than a claim; and
 `spec-clause-traceability`, which does fail when a citation disappears and
 deliberately does not when one appears:
 
@@ -217,6 +217,8 @@ deliberately does not when one appears:
 | `reserved-words` | the keyword table in the compiler | does the dialect reserve exactly what Extended Pascal reserves? (ADR-0140) — the dialect reserves **no** word-symbol, and that is the whole of what keeps ADR-0117's containment true, since reserving a spelling takes it from every conforming program using it as an identifier. `dialect-containment` sees such a word only where a corpus program happens to use it: reserving `defer` in the dialect leaves all 619 cases green, that sweep included. This asks every spelling the lexer knows, from the lexer's own table, and fails in both directions — a word the dialect starts reserving, and one it starts allowing that Extended Pascal reserves |
 | `dialect-containment` | `tests/checks/containment_exceptions.txt` | does every case under `tests/extended/` behave the same under `--std=afterschool`? (ADR-0138) — ADR-0117's containment was a claim about every program witnessed by **one**, `inherits_extended.pas`, and the corpus that witnesses it properly already existed compiled under a single mode. It runs the case rather than diffing the IR, because sixteen of 219 sources differ textually for reasons that are the dialect working. Four divergences are argued for, and the mutation it exists to catch — `langStd = stdExtended` where `HasExtended` belongs — leaves all 617 other cases green |
 | `buffer-headroom` | `poolMax` and `tokMax` in the compiler, and what `--dump-limits` reports | how much of each array sized for this compiler's own source is still free? (ADR-0126, ADR-0148) — a one-directional watch on a bound, not a claim. Twice a fixed buffer (ADR-0012) has failed as a **build** rather than as a diagnostic, because the array that has to hold this source is the *seed's*: raising the constant here does not raise the one that matters, so the only way out is an out-of-cycle reseed. ADR-0095 cleared the string pool at 74 characters over and closed with "nothing measures the headroom"; ADR-0126 cleared the tokens at 107 left of 140000 and is that measurement — of the tokens only, the pool having no count a token stream can carry. ADR-0148's `--dump-limits` is the other half: the compiler compiles as usual and then reports both counters against both capacities, and the gate reads the capacities **twice**, from the source and from the compiler, so a stale `build/bin/pascalc` is named rather than measured |
+| `target-sizes` | `PAS_FILE_SIZE`/`PAS_JUMP_SIZE` and `fileSize`/`jumpSize` | are the two opaque struct sizes large enough on a machine that is not this one? (ADR-0155) — it compiles `runtime/pasrt.c` itself for every target a compiler is installed for, because the two `_Static_assert`s live in that file and a copy of the struct would be a copy free to drift. Both numbers were x86-64 measurements written as constants, and `struct pas_jump` embeds a `jmp_buf` — 200 bytes on x86-64, 312 on aarch64, 392 on 32-bit arm — so `PAS_JUMP_SIZE = 256` stopped an aarch64 build at the runtime's own assert. Skips with 77 where only the host is available; `TARGET_SIZES_REQUIRE` is how CI refuses to pass by skipping |
+| `target-layout` | the frame types the compiler emits, and the targets `--target=` admits | do the admitted targets lay a frame out the same way? (ADR-0157) — `LlSize` and `LlAlign` are hand-written and answer with **one number for every target** (ADR-0028), which is correct only while they agree. It reads the `%frameN` definitions out of what the built compiler emits for `selfhost/compiler.pas` *and* for a probe carrying the types the compiler has no frame slot of — an `i256` in a record first, that being ADR-0028's segfault exactly — then folds them to offsets once per target. 4512 of them. The target list comes from the compiler's own `--target=` refusal, so a third target is compared without the gate being edited; admitting `i686-linux-gnu` reports 3878 differing |
 | `spec-clause-traceability` | `tests/spec/clauses/triage.tsv` and `pending.txt` | is every clause a scenario cites still cited, and does every citation name a clause the triage calls testable? (ADR-0106) — the second half is what keeps the *triage* honest, since a scenario citing a `structural` or `not-implemented` clause fails. A clause that **starts** being cited does not fail; it asks for `--write-pending`, a gate that punished progress being one people learn to avoid |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? — its *base resolution* is checked locally as `model-drift-base`, that half being a pure question about one repository and the half that has broken |
 
@@ -584,8 +586,16 @@ simply no longer written in it (ADR-0082). Until then the standard arrived in a
 file holding one word and §6.13's components arrived *concatenated* into a
 fifth, because a program that cannot name a file cannot open several — the
 shape ADR-0079 had to defend against the language rather than on its merits.
-Twelve arguments and eight `--import`s are array bounds, and both report rather
-than truncate.
+**Twenty-four arguments and eight `--import`s are array bounds, and one of them
+needed an extra parameter to be a bound at all.** `maxImports` reports because a
+counter can be compared; the argument list could not, and for a long time did
+not — an unbound program-parameter being the only end-of-list there is, a
+compiler with *n* of them cannot tell *n* arguments from *n* + 9. It was twelve,
+which was exactly what `tests/dialect/lib_os.pas` needs, so one more flag
+silently pushed the `-o` file name off the end and the complaint named the wrong
+argument. `argOver` is declared beyond the last usable one and never read for
+its name: bound exactly when an argument had nowhere to go, which is what turns
+"the list ended" into "the list ended because it ran out" (ADR-0158).
 
 **The first three components are checked twice: against `src/`, and against
 golden files.** `pascalc --dump-all` writes three sections (`=== tokens`,

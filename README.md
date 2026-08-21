@@ -115,7 +115,18 @@ tools/pascalcc --target=aarch64-linux-gnu -c hello.pas -o hello.o
 
 Any other target is refused. The list is short because each entry is a claim
 that this compiler's own size and alignment rules have been compared against
-LLVM's for that machine, which has been done for those two and no others.
+LLVM's for that machine, which has been done for those two and no others — and
+the comparison is re-run on every build, over 4512 frame sizes and offsets.
+
+Set `AFTERSCHOOL_PASCAL_TARGET` instead to point a whole run of `pascalcc` at
+one machine without writing the flag each time; an explicit `--target=` wins.
+
+The repository is developed on x86-64 Linux, and the compiler is **built and
+tested on arm64 as well**: the same suite runs there natively on every push.
+No release ships an aarch64 binary, and `seed/pascalc.ll` is still generated
+for x86-64 — but it needs no editing to be used elsewhere: `clang` overrides
+the two header lines with the host's, and the compiler that comes out passes
+the whole suite.
 
 `--coverage` compiles a program that records which of its own statements ran.
 Set `PASCOV_LINES` when running it and the line numbers are appended there, one
