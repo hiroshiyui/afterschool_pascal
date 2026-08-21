@@ -348,7 +348,11 @@ jobs:
         run: |
           tools/pascalcc tests/hello.pas -o /tmp/hello
           /tmp/hello
-          file /tmp/hello
+        # No `file` here: it is not in the minimal container, and asking for it
+        # would install a package the documented build does not name, which is
+        # the line the first paragraph of this workflow draws. What the binary
+        # is was already settled by the step that requires `uname -m`.
+        #
         # With nothing set, which is what a reader of README.md on an arm64
         # machine gets: the compiler still states x86-64 in the module it
         # writes and clang overrides it. That path has to work too, and it is
