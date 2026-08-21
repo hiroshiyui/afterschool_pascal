@@ -651,10 +651,28 @@ the processor was right. Recorded in Annex E.
 
     slice-parameter-type = 'array' 'of' type-denoter .
 
-NOTE — Both words are already word-symbols in both standards; it is the
+NOTE 1 — Both words are already word-symbols in both standards; it is the
 *combination* that is free, §6.4.3.2 requiring a bracketed index-type. So
 `array of T` is a syntax error in ISO 7185 and in ISO/IEC 10206:1991 alike, and
 the lexis costs nothing (ADR-0125).
+
+NOTE 2 — **A standard answers this question and answers it differently.**
+ISO 7185 §6.6.3.7's conformant array parameter is a formal parameter whose
+bounds travel with the actual, which is what 6.7.3.9 is for, and
+ISO/IEC 10206:1991's schematic formal (§6.7.3.1, and ADR-0040 here) is a third
+member of the same family. Three deliberate differences, and each is argued
+where it is stated rather than here: a conformant array parameter **preserves**
+the actual's own bounds where a slice renumbers from 1 (6.7.3.9.4); it takes a
+whole array where a slice may denote any contiguous run of one (6.7.3.9.3); and
+it exists in a value form as well as a variable form, where a slice is a borrow
+only (6.7.3.9.3). Congruity is the fourth: §6.6.3.7 gives conformant array
+schemas congruity rules of their own, and the dialect uses compatibility
+(6.4.5), which is what ADR-0139 and ADR-0143 were each about.
+
+This NOTE exists because `doc/roadmap.md` §2 said the dialect has no external
+authority for anything but the foreign boundary, and that was not true of its
+largest feature (ADR-0152). A processor accepting §6.6.3.7 would be a level 1
+processor; this one declares level 0, which is a complying level.
 
 **6.7.3.9.2 Where it may be written.** A slice-parameter-type shall be written
 as the type of a formal parameter and nowhere else. It shall not be the

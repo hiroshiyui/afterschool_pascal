@@ -337,7 +337,7 @@ reserving `defer` in the dialect leaves **all 619 cases green**,
 `dialect-containment` included, because no corpus program uses that identifier.
 AP §6.1.2 states the requirement.
 
-### 2. The dialect has no external authority, and every gate here is anchored in one — *audited once*
+### 2. The dialect has no external authority, and every gate here is anchored in one — *audited once, and the anchor's machinery repaired*
 
 | | ISO 7185 | Extended Pascal | the dialect |
 | --- | --- | --- | --- |
@@ -371,11 +371,11 @@ found five divergences on its first pass, one of them a compiler crash no gate
 here could see.
 
 **The third row followed it.** `tests/spec/run.py` takes `@afterschool:` beside
-the two standards' tags, and 46 of the specification's 48 testable clauses are
-cited by a scenario — the one that is not is 6.13.1, which needs two
-program-components and a link, and the harness compiles one program
-(`doc/sop.md` §7). The clause table is generated from the document rather than
-transcribed, so the two cannot drift.
+the two standards' tags, and 47 of the specification's 49 testable clauses are
+cited by a scenario — the two that are not are 6.11 and 6.13.1, both rules
+about which program-components may be *linked* together, and the harness
+compiles one program (`doc/sop.md` §7). The clause table is generated from the
+document rather than transcribed, so the two cannot drift.
 
 What is **still** empty is the first two rows, and neither is something a
 document or a harness can supply: there is no third-party corpus for a language
@@ -390,6 +390,21 @@ noticed it and then dropped it: **POSIX and the C ABI are specifications**, and
 of the boundary choosing a shape rather than this project choosing it. Every
 FFI-facing decision has an authority available to it.
 
+**And so does the largest feature that is not FFI-facing**, which this entry
+denied and ADR-0152 found. ISO 7185 §6.6.3.7's **conformant array parameter**
+is a formal parameter whose bounds travel with the actual — the question
+AP §6.7.3.9's slice exists to answer — and ISO/IEC 10206:1991's schematic
+formal is a third member of the same family. The standard answers it
+differently in three ways the dialect chose against on purpose: bounds
+preserved rather than renumbered from 1, a whole array rather than any
+contiguous run of one, and a value form as well as a borrow. None of that was
+written down; the slice clause's own NOTE reached for "the open array of other
+Pascal dialects" while a standard on the shelf had the question. It is a NOTE
+at AP §6.7.3.9.1 now. Note the coincidence this file kept without noticing:
+[*What is next* §3](#3-conformant-array-parameters-and-level-1) is
+*Conformant array parameters, and level 1*, and the two entries are about one
+clause.
+
 **And one more turned up when the spec was aligned with the standard's clause
 numbering**: ISO/IEC 10206:1991 §6.1.4's NOTE anticipates a remote-directive
 spelled `external` for a heading whose block lies outside the program-block —
@@ -397,6 +412,27 @@ so ADR-0121 chose the spelling the standard names, without knowing it. The same
 NOTE recommends enforcing type compatibility across the boundary, which this
 compiler cannot; the departure is now written down rather than merely true.
 Nothing else in the dialect has an authority.
+
+**And the path from an authority to a gate had a hole in it (ADR-0152).** The
+risk this entry names is that a mistake survives every oracle at once because
+every oracle bottoms out in the same reading. What it did not anticipate is a
+mistake in the *machinery* between the standard and the gate. `tests/spec/`'s
+clause inventory is generated from the standards by a script, and every
+sub-clause of §6.2.2 (Scopes) and §6.2.3 (Activations) in both standards is a
+bare number on a line of its own with the requirement under it — no title. The
+extractor read only lines carrying a title, so **37 real clauses** were in no
+inventory, no triage and no work queue, and `spec-clause-traceability` answered
+*"§6.2.3.8 is not a clause of that standard"* about a clause two ADRs are about.
+§6.2.2.9 is the most-cited clause in this repository at 56 citations; 214
+citations across the tree named a clause the apparatus did not have. No reader
+would find this, because a reader cites the clause from the standard and never
+opens the `.tsv`.
+
+Fixed, and guarded from both sides: the triage and the inventory must now name
+the same clauses, so a clause the extractor loses fails as an orphaned triage
+row and a clause it gains fails as an unclassified denominator. Reverting the
+extractor fails the gate 37 times. `tests/spec/features/scopes.feature` is six
+scenarios for clauses that could not be cited at all the day before.
 
 **Audited once (ADR-0144).** Five independent readers were given
 `doc/afterschool-pascal-spec.md` and the two standards and told to prove it
@@ -881,9 +917,11 @@ before it could not see.
   lines were executable. 12,949 of 13,403 statements are run by the corpus.
 
 - **`tests/spec/`** (ADR-0105, ADR-0106) is the same question asked of the
-  *standards* rather than of the compiler: 13 of 207 testable clauses cited,
-  with 85 of the 292 headings triaged out as structural or unimplemented so the
-  denominator means something.
+  *standards* rather than of the compiler: 68 of 279 testable clauses cited,
+  with 140 of the 419 headings triaged out as structural or unimplemented so
+  the denominator means something. The inventory those numbers are counted
+  against was 37 clauses short until ADR-0152, and the triage and the inventory
+  are now required to name the same clauses in both directions.
 
 **Two things it did not buy, both in `doc/sop.md` §7.** A statement is not a
 branch — `if c then a else b` on one line is covered when either arm runs — and

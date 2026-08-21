@@ -20,6 +20,18 @@ yet.
 are **not** in this repository and may not be — `clauses/extract.sh` needs
 `pdftotext` and the documents, and does nothing without them.
 
+Two things about that extraction are worth knowing before trusting it. **A
+clause need not have a heading**: every sub-clause of §6.2.2 and §6.2.3 in both
+standards is a bare number on its own line with the requirement under it, and
+reading only titled lines lost 37 of them — including §6.2.2.9, the most-cited
+clause in this repository (ADR-0152). They are recognised now by their numbering
+being consecutive, and their heading column reads `Scopes (untitled)`: the
+parent's heading, and not a title. And **the inventory has no oracle of its
+own** — it is checked against `clauses/triage.tsv` in both directions, so a
+clause lost from one shows up as an orphan in the other, but a clause missing
+from *both* would leave them agreeing. Only a reader holding the standard can
+see that; it is in `doc/sop.md` §7.
+
 `clauses/afterschool.tsv` has the opposite problem and the opposite solution.
 The dialect's specification *is* here, so its table is **generated from the
 document** by `clauses/extract_afterschool.py` rather than transcribed, and the
