@@ -148,8 +148,17 @@ const
   fileSize = 120;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
-    variable's is, and checked against that header by selfhost/irtest.sh. }
-  jumpSize = 256;
+    variable's is, and checked against that header by selfhost/irtest.sh.
+
+    **A per-target maximum, not a measurement of this one** (ADR-0155). It was
+    256, which is what the runtime's record needs on x86-64 and nowhere else:
+    `jmp_buf` is 200 bytes here, 312 on aarch64 and 392 on 32-bit arm, so the
+    runtime's own _Static_assert stopped an aarch64 build before anything else
+    could. The header carries the four measurements and why 1024. The cost is
+    paid only by a block that is the target of a non-local goto -- the only
+    kind that carries a record at all -- and this compiler contains no `goto`,
+    so no frame in seed/pascalc.ll has one. }
+  jumpSize = 1024;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;

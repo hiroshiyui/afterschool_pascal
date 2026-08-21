@@ -13,6 +13,18 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`PAS_JUMP_SIZE` is a per-target maximum rather than a measurement of
+  x86-64.** The storage a block needs to be the target of a non-local `goto`
+  embeds a `jmp_buf`, which is 200 bytes on x86-64, 312 on aarch64 and 392 on
+  32-bit arm; the constant was 256, so the runtime's own `_Static_assert`
+  stopped a build for any of them. It is 1024 now, and the cost is paid only by
+  a block that is a non-local `goto` target. `runtime/pasrt.c` compiles for
+  aarch64, both arm ABIs, i686 and x86-64, and a complete aarch64 `pascalc`
+  links from a textually retargeted seed. Nothing about the compiler's own
+  behaviour on x86-64 changes.
+
 ## [1.7.0] — 2026-08-21
 
 ### Added

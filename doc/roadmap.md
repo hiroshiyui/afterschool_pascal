@@ -1089,12 +1089,25 @@ file predicted.
 
 ### The items, in the order they are worth doing
 
-**1. Make `PAS_JUMP_SIZE` a per-target maximum.** A latent portability defect
-rather than a feature: 256 is what `jmp_buf` happens to need here. Raising it
-costs frame bytes only in a block that is a non-local `goto` target, which is
-the only kind that carries a jump record at all — and `selfhost/irtest.sh`
-already checks `fileSize` against `PAS_FILE_SIZE`, so the second pair wants the
-same check. Cheap, and it is the one thing that stops an aarch64 build today.
+**1. ~~Make `PAS_JUMP_SIZE` a per-target maximum.~~ Done (ADR-0155).** It is
+1024, which clears every target in the table above and glibc's powerpc64
+besides, and both sites carry the measurements rather than a fresh guess. The
+cost is paid only by a block that is a non-local `goto` target, and
+`selfhost/compiler.pas` contains no `goto`, so the seed did not have to be
+regenerated.
+
+`tests/checks/target_sizes.sh` is the gate, and it asks the question one machine
+cannot: for every target a compiler is installed for it compiles
+`runtime/pasrt.c`, which is where the two `_Static_assert`s live — the real
+file rather than a copy of the struct, which is ADR-0144's lesson. It reports
+which targets it reached and skips with 77 when only the host is available. CI
+installs the aarch64 and armhf cross compilers for it.
+
+**And a complete aarch64 `pascalc` links.** Retarget `seed/pascalc.ll`'s two
+header lines, assemble with `clang --target=aarch64-linux-gnu`, link against a
+runtime built by `aarch64-linux-gnu-gcc`. It is the first compiler binary this
+repository has produced for another architecture — and it has not been *run*,
+because there is still no emulator here.
 
 **2. `--target=`.** The triple and the datalayout are already written as text,
 so the emitter's half is small. It makes *cross*-compilation possible from
@@ -1120,9 +1133,16 @@ larger question, and none of the measurements above transfer:
 
 The evidence stops at **links**, not **runs**. No aarch64 binary produced by any
 of this has been executed, because the machine it was measured on has no
-emulator. Nothing here is a test: no gate re-runs the offset comparison, and
-none of these numbers would fail a build if they drifted. Item 1 is where that
-starts to change.
+emulator.
+
+Item 1 is done, so part of this has changed: `target-sizes` fails when either
+opaque size stops being large enough for a target a compiler is installed for,
+and CI installs two cross compilers so that it is asked rather than skipped.
+What still has no gate is the **offset comparison** — the 4501 numbers above
+were measured once, by hand, and nothing re-runs them. A datalayout that
+diverged between two targets would go unnoticed until someone tried. Wiring that
+in would mean generating the probe from a build's own IR, which is item 3's
+work rather than item 1's.
 
 ## Known limitations
 

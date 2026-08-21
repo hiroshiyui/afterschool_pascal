@@ -42,8 +42,28 @@
  * to jump back to, and the mark that says which files the jump abandons. It is
  * opaque for the same reason a file variable is, and sized here for the same
  * reason — `jmp_buf` is the platform's business and the compiler must not have
- * an opinion about it. See ADR-0032. */
-#define PAS_JUMP_SIZE 256
+ * an opinion about it. See ADR-0032.
+ *
+ * **A per-target maximum, not a measurement of this one** (ADR-0155). It was
+ * 256, which is what `struct pas_jump` needs on x86-64 and nowhere else, so the
+ * _Static_assert below stopped an aarch64 build before anything else could.
+ * Measured with the cross toolchains this repository's CI has:
+ *
+ *     x86-64   jmp_buf 200   struct pas_jump 216
+ *     aarch64  jmp_buf 312   struct pas_jump 328
+ *     armhf    jmp_buf 392   struct pas_jump 400   <- 32-bit, and the largest
+ *     i686     jmp_buf 156   struct pas_jump 164
+ *
+ * glibc's powerpc64 is the largest one not measurable here: __jmp_buf is 64
+ * longs, so the struct is about 648. 1024 clears every one of them with room,
+ * and the cost is paid only by a block that is the target of a non-local goto,
+ * which is the only kind that carries a record at all.
+ *
+ * It must equal `jumpSize` in selfhost/compiler.pas, which is what actually
+ * allocates the bytes; selfhost/irtest.sh checks the two, and
+ * tests/checks/target_sizes.sh checks that the number is enough for every
+ * target a cross compiler is installed for. */
+#define PAS_JUMP_SIZE 1024
 
 /* How reset/rewrite find the external file a file variable stands for.
  * ISO 7185 §6.10 makes the binding implementation-defined; this compiler binds

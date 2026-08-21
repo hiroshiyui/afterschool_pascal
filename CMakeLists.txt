@@ -392,6 +392,16 @@ set_tests_properties(bsi-validation-suite PROPERTIES
 #
 # Skips without llc, as verify-lowering does without z3: llc is LLVM's, and
 # ADR-0085's claim is that the build needs nothing of LLVM's.
+# The two opaque struct sizes, against every target a compiler is installed for
+# (ADR-0155). Skips with 77 where only the host is available, as the BSI runner
+# does without its corpus and verify-lowering does without z3 -- the question it
+# exists for cannot be asked with one target.
+add_test(NAME target-sizes
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/target_sizes.sh)
+set_tests_properties(target-sizes PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 600)
+
 add_test(NAME llc-second-backend
          COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/llc_check.sh
                  ${CMAKE_BINARY_DIR})

@@ -163,3 +163,4 @@ the alternatives that were rejected and why.
 | [0152](0152-the-clauses-with-no-titles.md) | The clauses with no titles | Accepted |
 | [0153](0153-conformant-array-parameters-and-level-1.md) | Conformant array parameters, and level 1 | Accepted |
 | [0154](0154-the-dialect-changes-what-a-mode-says.md) | The dialect changes what a conformance mode says, not what it accepts | Accepted |
+| [0155](0155-a-per-target-maximum-not-a-measurement-of-this-one.md) | A per-target maximum, not a measurement of this one | Accepted |

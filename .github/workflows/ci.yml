@@ -64,6 +64,15 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             ca-certificates cmake make clang git python3
+          # Cross compilers, for `target-sizes` and nothing else. They build no
+          # artefact this repository ships: what they answer is whether
+          # PAS_FILE_SIZE and PAS_JUMP_SIZE are large enough somewhere other
+          # than here, which is a question one machine cannot ask (ADR-0155).
+          # Without them that case skips, and a skip is what this repository
+          # treats as "not asked" rather than "passed".
+          apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf || \
+            echo "cross compilers unavailable; target-sizes will skip"
           # z3 for verify/, from pip, which is what verify/README.md documents.
           # --break-system-packages because Debian and Ubuntu both mark their
           # Python installations externally managed (PEP 668).
