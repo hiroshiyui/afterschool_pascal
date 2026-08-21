@@ -175,8 +175,21 @@ def build_module(sources):
     return types, consts, names
 
 
-VALUE = re.compile(r"^\s*\.(?:quad|xword|8byte)\s+(?:0\s*\+\s*)?(-?\d+)")
-LABEL = re.compile(r"^([A-Za-z_.$][\w.$]*):")
+# One 64-bit datum, however this target's assembler spells it.
+WIDE = re.compile(r"^\s*\.(?:quad|xword|8byte|dword)\s+(?:0\s*\+\s*)?(-?\d+)")
+# ...and the half of one, for the targets that have no 64-bit directive: a
+# 32-bit machine writes an i64 constant as two of these, and which half comes
+# first is the datalayout's `e`/`E`.
+HALF = re.compile(r"^\s*\.(?:long|word|4byte)\s+(?:0\s*\+\s*)?(-?\d+)")
+# Mach-O gives a global a leading underscore. Stripping one is safe here and
+# only here: every name this gate generates begins with `z`, so there is no ELF
+# symbol `_x` for it to collide with a symbol `x`.
+LABEL = re.compile(r"^_?([A-Za-z.$][\w.$]*):")
+# ...and Mach-O does not emit a directive at all for a global whose value is
+# zero, which is every frame's field 0. Without this the gate reads 617 fewer
+# offsets than it asked for and says so, which is the right failure and not a
+# useful one.
+ZEROFILL = re.compile(r"^\s*\.zerofill\s+[^,]+,[^,]+,_?([\w.$]+),")
 
 
 def offsets_for(target, dl, types, consts):
@@ -194,16 +207,33 @@ def offsets_for(target, dl, types, consts):
         r = run([CLANG, "--target=" + target, "-S", "-o", "-", path])
         if r.returncode != 0:
             die("assembling the probe for %s failed:\n%s" % (target, r.stderr))
-        vals, pending = {}, None
+        little = not dl.split('"')[1].startswith("E")
+        vals, pending, half = {}, None, None
         for line in r.stdout.splitlines():
+            m = ZEROFILL.match(line)
+            if m:
+                vals.setdefault(m.group(1), 0)
+                continue
             m = LABEL.match(line)
             if m:
-                pending = m.group(1)
+                pending, half = m.group(1), None
                 continue
-            m = VALUE.match(line)
-            if m and pending is not None:
+            if pending is None:
+                continue
+            m = WIDE.match(line)
+            if m:
                 vals.setdefault(pending, int(m.group(1)))
                 pending = None
+                continue
+            m = HALF.match(line)
+            if m:
+                if half is None:
+                    half = int(m.group(1))
+                else:
+                    lo, hi = (half, int(m.group(1))) if little \
+                        else (int(m.group(1)), half)
+                    vals.setdefault(pending, (hi << 32) | lo)
+                    pending, half = None, None
         return vals
     finally:
         os.unlink(path)
