@@ -13,6 +13,17 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **`pascalc --target=` and `pascalcc --target=`.** Which machine the emitted
+  module states it is for: `x86_64-pc-linux-gnu` (the default) or
+  `aarch64-linux-gnu`. `pascalcc` hands it to both halves, so
+  `pascalcc --target=aarch64-linux-gnu -c hello.pas` produces an aarch64 object
+  on an x86-64 machine given a cross toolchain. Any other target is **refused**,
+  naming what is admitted: a target belongs on that list only once this
+  compiler's own layout rules have been compared against LLVM's for it, which
+  does not hold for a 32-bit machine.
+
 ### Fixed
 
 - **`PAS_JUMP_SIZE` is a per-target maximum rather than a measurement of

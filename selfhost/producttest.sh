@@ -175,12 +175,22 @@ else
     [[ -n $flag ]] || continue
     probe=$flag
     [[ $flag == --std=* ]] && probe="--std="
+    [[ $flag == --target=* ]] && probe="--target="
     case $help_text in
       *"$probe"*) ;;
       *) undocumented="$undocumented $flag" ;;
     esac
-  done < <(grep -o "EQ(a, '-[^']*')" "$root/selfhost/compiler.pas" |
-           sed "s/EQ(a, '//; s/')//" | sort -u)
+    # Two spellings, because a flag that takes a *joined* value cannot be
+    # compared with EQ against the whole argument: `--target=aarch64-linux-gnu`
+    # is matched by its prefix, `EQ(substr(a, 1, 9), '--target=')`. Deriving
+    # only the first form left --target= undiscoverable here, so the check that
+    # exists to notice an undocumented flag could not have noticed that one
+    # (ADR-0156).
+  done < <({ grep -o "EQ(a, '-[^']*')" "$root/selfhost/compiler.pas" |
+               sed "s/EQ(a, '//; s/')//"
+             grep -o "EQ(substr(a, 1, [0-9]*), '-[^']*')" \
+                  "$root/selfhost/compiler.pas" |
+               sed "s/.*, '//; s/')//"; } | sort -u)
   if [[ -n $undocumented ]]; then
     echo "--- help: pascalc accepts flags -h does not mention:$undocumented ---" >&2
     failed=$((failed + 1))
@@ -240,6 +250,54 @@ else
     echo "--- help: pascalcc accepts options --help does not mention:$undocumented ---" >&2
     failed=$((failed + 1))
   fi
+fi
+
+# --- and that --target= picks the machine the module says it is for ---------
+#
+# ADR-0156. `clang` overrides both header lines with its own target's, so what
+# these check is the module as a *document*: what `llc` with no -mtriple reads,
+# and what a person reads. Two directions, because the flag is as much about
+# what it refuses -- a target whose layout has not been compared against LlSize
+# and LlAlign is answered wrongly rather than refused if this arm goes.
+cat >"$work/target.pas" <<'PAS'
+program Target(output);
+begin
+  writeln('x')
+end.
+PAS
+
+checked=$((checked + 1))
+if "$pascalc" --target=aarch64-linux-gnu "$work/target.pas" \
+     -o "$work/target.ll" >/dev/null 2>&1 &&
+   grep -q 'target triple = "aarch64-unknown-linux-gnu"' "$work/target.ll" &&
+   grep -q 'i8:8:32-i16:16:32' "$work/target.ll"; then
+  :
+else
+  echo "--- target: --target=aarch64-linux-gnu did not emit that target ---" >&2
+  failed=$((failed + 1))
+fi
+
+# The default has to stay the default: this repository is built and tested on
+# x86-64 and the seed was generated for it.
+checked=$((checked + 1))
+if "$pascalc" "$work/target.pas" -o "$work/host.ll" >/dev/null 2>&1 &&
+   grep -q 'target triple = "x86_64-pc-linux-gnu"' "$work/host.ll"; then
+  :
+else
+  echo "--- target: the default is no longer x86_64-pc-linux-gnu ---" >&2
+  failed=$((failed + 1))
+fi
+
+checked=$((checked + 1))
+if "$pascalc" --target=riscv64-linux-gnu "$work/target.pas" -o /dev/null \
+     >"$work/target.txt" 2>&1; then
+  echo "--- target: an unverified target was accepted ---" >&2
+  failed=$((failed + 1))
+elif ! grep -q 'unknown target' "$work/target.txt" ||
+     ! grep -q 'x86_64-pc-linux-gnu' "$work/target.txt"; then
+  echo "--- target: the refusal does not name what is admitted ---" >&2
+  cat "$work/target.txt" >&2
+  failed=$((failed + 1))
 fi
 
 # --- and that it says so when it does not translate something ---------------

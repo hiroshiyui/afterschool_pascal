@@ -105,6 +105,18 @@ pool 491964 of 1000000
 tokens 144756 of 300000
 ```
 
+`--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
+by default, or `aarch64-linux-gnu`. `pascalcc` hands it to `clang` as well, so
+with a cross toolchain installed it cross-compiles:
+
+```sh
+tools/pascalcc --target=aarch64-linux-gnu -c hello.pas -o hello.o
+```
+
+Any other target is refused. The list is short because each entry is a claim
+that this compiler's own size and alignment rules have been compared against
+LLVM's for that machine, which has been done for those two and no others.
+
 `--coverage` compiles a program that records which of its own statements ran.
 Set `PASCOV_LINES` when running it and the line numbers are appended there, one
 per line, for every statement the run reached:

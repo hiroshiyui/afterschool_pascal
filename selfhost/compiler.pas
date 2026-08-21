@@ -146,6 +146,27 @@ const
     cannot disagree; ISO 7185 has no include mechanism, so this side repeats
     the number and selfhost/irtest.sh checks that the two still match. }
   fileSize = 120;
+  { ISO 7185 says nothing about a machine; this compiler has to. `--target=`
+    selects which triple and datalayout the emitted module states, and the list
+    is **two entries long on purpose** (ADR-0156).
+
+    A target belongs here when this compiler's own layout rules -- LlSize and
+    LlAlign, which are hand-written because there is no DataLayout to ask --
+    have been shown to agree with LLVM's for it. That was measured for aarch64
+    against x86-64 over 4501 frame sizes and field offsets, the `i256` in a
+    record that is ADR-0028's segfault included, and it holds because both are
+    LP64 and little-endian. It does not hold for a 32-bit target, where LlSize
+    says a pointer is 8 -- so `--target=i686-linux-gnu` is refused rather than
+    answered wrongly. Refusal by construction, as everywhere else here.
+
+    A case statement rather than an array: the datalayout strings are long and
+    fixed, TargetIndex reads a spelling and RunCodeGen writes the pair, and
+    adding a target is two arms and a count -- after the offsets have been
+    compared for it, which doc/roadmap.md's cross-platform chapter says how to
+    do. }
+  tgtCount = 2;
+  tgtX86 = 1;
+  tgtAarch64 = 2;
   { The storage a block needs to be the target of a non-local `goto`, which is
     PAS_JUMP_SIZE in runtime/pasrt.h -- opaque here for the same reason a file
     variable's is, and checked against that header by selfhost/irtest.sh.
@@ -1670,6 +1691,10 @@ var
     everything. `dumping` therefore excludes it, a diagnostic during a limits
     run being for a person to read and keeping the file:line:col form. }
   dumpLimitsOpt: boolean;
+  { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
+    what the seed was generated for and what this repository is built and
+    tested on. }
+  targetIx: integer;
   { --coverage: emit a call to pas_cov_hit before every statement, carrying the
     line it begins on (ADR-0104). What is *executable* is decided here and
     nowhere else -- the runtime counts what it is told and the denominator is
@@ -2440,6 +2465,32 @@ begin
   Arg := b.bound
 end;
 
+{ ADR-0156's table of targets, read one way and written the other. Zero for a
+  spelling that is not one of them -- `--target=` then reports and names what is
+  admitted, because a target whose layout has not been compared against LlSize
+  and LlAlign would be answered wrongly rather than refused. }
+function TargetIndex(var name: nameStr): integer;
+begin
+  if EQ(name, 'x86_64-pc-linux-gnu') then TargetIndex := tgtX86
+  { Both spellings, because they name one machine and a reader will type
+    whichever the toolchain does: `aarch64-linux-gnu` is the Debian package and
+    the cross compiler's prefix, and `aarch64-unknown-linux-gnu` is what clang
+    normalises it to. The *emitted* one is clang's, so that assembling the
+    module raises no -Woverride-module; x86_64-pc-linux-gnu needs no such pair,
+    being canonical already. }
+  else if EQ(name, 'aarch64-linux-gnu') or
+          EQ(name, 'aarch64-unknown-linux-gnu') then TargetIndex := tgtAarch64
+  else TargetIndex := 0
+end;
+
+procedure TargetName(ix: integer; var name: nameStr);
+begin
+  case ix of
+    tgtX86: name := 'x86_64-pc-linux-gnu';
+    tgtAarch64: name := 'aarch64-linux-gnu'
+  end
+end;
+
 procedure Version;
 begin
   writeln('pascalc (Afterschool Pascal) ', apVersion)
@@ -2459,6 +2510,9 @@ begin
   writeln('  --dump-tokens   write the token stream and stop');
   writeln('  --dump-ast      write the parse tree and stop');
   writeln('  --dump-sema     write the tree Sema annotated and stop');
+  writeln('  --target=<t>    which machine the emitted module states it is');
+  writeln('                  for: x86_64-pc-linux-gnu (default) or');
+  writeln('                  aarch64-linux-gnu');
   writeln('  --dump-all      write all three, with section headers');
   writeln('  --dump-limits   compile as usual, then write how full the');
   writeln('                  compiler''s own fixed arrays were left');
@@ -2485,7 +2539,7 @@ end;
   operand with spaces and 6.7.6.7's EQ compares the lengths too: `-o` and
   `-o ` are not the same flag. }
 procedure ParseArgs;
-var k: integer; a: nameStr; dot: integer;
+var k: integer; a: nameStr; dot: integer; k2: integer; tname: nameStr;
 begin
   langStd := stdIso7185;
   srcName := '';
@@ -2498,6 +2552,7 @@ begin
   dumpSemaOpt := false;
   dumpAllOpt := false;
   dumpLimitsOpt := false;
+  targetIx := tgtX86;
   covOpt := false;
   k := 1;
   while Arg(k, a) and argsOk do begin
@@ -2518,6 +2573,27 @@ begin
       makes it a mode rather than an alias is that features may be added to it
       and to neither of the others. }
     else if EQ(a, '--std=afterschool') then langStd := stdAfterschool
+    { ADR-0156. Joined to its flag, like --std= and unlike -o and --import,
+      which take file names a shell completes. }
+    else if (length(a) > 9) and EQ(substr(a, 1, 9), '--target=') then begin
+      tname := substr(a, 10, length(a) - 9);
+      k2 := TargetIndex(tname);
+      if k2 = 0 then begin
+        writeln('pascalc: unknown target ', tname);
+        write('pascalc: this compiler emits for ');
+        for k2 := 1 to tgtCount do begin
+          if k2 > 1 then write(' and ');
+          TargetName(k2, tname);
+          write(tname)
+        end;
+        writeln;
+        writeln('pascalc: another target needs its layout compared against ',
+                'LlSize and LlAlign first -- see doc/roadmap.md');
+        argsOk := false;
+        argsBad := true
+      end
+      else targetIx := k2
+    end
     else if EQ(a, '-h') or EQ(a, '--help') then begin
       Usage;
       argsOk := false;
@@ -29630,10 +29706,26 @@ begin
     the moment a type is wider than a machine word: an i256 is 16-aligned here
     and 8-aligned there, so a set in a record got 16-byte moves against an
     8-aligned frame. The hand-written rules were never wrong -- they were
-    unstated, which is the same thing once someone else is doing the layout. }
-  writeln(ircode, 'target datalayout = "e-m:e-p270:32:32-p271:32:32-',
-                  'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
-  writeln(ircode, 'target triple = "x86_64-pc-linux-gnu"');
+    unstated, which is the same thing once someone else is doing the layout.
+
+    Which target's, since ADR-0156. `clang` overrides both lines with its own
+    target's and warns about the triple only -- so on the ordinary path these
+    are advisory, and what they are for is every consumer that trusts the
+    module instead: `llc` with no -mtriple, `opt`, and a reader. Being *absent*
+    is what was a segfault; being another machine's is what --target= is for. }
+  case targetIx of
+    tgtX86: begin
+      writeln(ircode, 'target datalayout = "e-m:e-p270:32:32-p271:32:32-',
+                      'p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"');
+      writeln(ircode, 'target triple = "x86_64-pc-linux-gnu"')
+    end;
+    tgtAarch64: begin
+      writeln(ircode, 'target datalayout = "e-m:e-p270:32:32-p271:32:32-',
+                      'p272:64:64-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-',
+                      'S128-Fn32"');
+      writeln(ircode, 'target triple = "aarch64-unknown-linux-gnu"')
+    end
+  end;
   writeln(ircode);
   nextProcId := 1;
   nextStr := 0;

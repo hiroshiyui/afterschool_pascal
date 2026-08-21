@@ -1079,10 +1079,11 @@ constant.
 
 For an LP64 little-endian Linux target, and not for any other:
 
-1. two lines of emitted text;
+1. two lines of emitted text — **done**, ADR-0156;
 2. one size constant that has to be a per-target maximum rather than a
-   measurement of this one;
-3. a seed for the new host, which the retarget above supplies.
+   measurement of this one — **done**, ADR-0155;
+3. a seed for the new host, which the retarget above supplies, and which
+   nothing here automates.
 
 It is not a rewrite of the layout rules, which is the opposite of what this
 file predicted.
@@ -1109,10 +1110,26 @@ runtime built by `aarch64-linux-gnu-gcc`. It is the first compiler binary this
 repository has produced for another architecture — and it has not been *run*,
 because there is still no emulator here.
 
-**2. `--target=`.** The triple and the datalayout are already written as text,
-so the emitter's half is small. It makes *cross*-compilation possible from
-x86-64; it does not by itself make the compiler run anywhere else. Worth doing
-when something wants it rather than first.
+**2. ~~`--target=`.~~ Done (ADR-0156).** `pascalc --target=` selects which
+triple and datalayout the module states, `tools/pascalcc --target=` hands it to
+both halves, and `pascalcc --target=aarch64-linux-gnu -c hello.pas` produces an
+aarch64 object on an x86-64 machine.
+
+**It admits two targets and refuses the rest, and that is the decision.** A
+target belongs on the list when this compiler's hand-written layout rules have
+been shown to agree with LLVM's for it — the 4501 offsets above, for aarch64.
+It does not hold for a 32-bit target, where `LlSize` says a pointer is 8, so
+`--target=i686-linux-gnu` is refused rather than answered with a module whose
+header and contents disagree.
+
+**And the emitter's half was worth less than this entry assumed.** `clang`
+overrides both lines with its own target's and warns about the triple only —
+measured: a module carrying a 32-bit datalayout, compiled with
+`--target=x86_64`, lays its structs out the 64-bit way silently. So on the
+`pascalcc` path those lines are *advisory*, and ADR-0028's segfault was about
+the datalayout being **absent** rather than wrong. What they are for is every
+consumer that trusts the module instead — `llc` with no `-mtriple`, which is a
+`ctest` case here, `opt`, and a reader.
 
 **3. A real aarch64 port, with CI.** GitHub has arm64 runners. Without one this
 would be a claim nothing checks, which is the failure mode `doc/sop.md` §7

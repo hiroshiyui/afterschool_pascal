@@ -164,3 +164,4 @@ the alternatives that were rejected and why.
 | [0153](0153-conformant-array-parameters-and-level-1.md) | Conformant array parameters, and level 1 | Accepted |
 | [0154](0154-the-dialect-changes-what-a-mode-says.md) | The dialect changes what a conformance mode says, not what it accepts | Accepted |
 | [0155](0155-a-per-target-maximum-not-a-measurement-of-this-one.md) | A per-target maximum, not a measurement of this one | Accepted |
+| [0156](0156-the-emitted-target-is-selectable-and-the-list-is-short.md) | The emitted target is selectable, and the list is deliberately short | Accepted |

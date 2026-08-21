@@ -163,6 +163,7 @@ def corpus(root):
     # CMakeLists.txt) and `-h` is too (producttest.sh checks it documents every
     # flag ParseArgs accepts). Running them here claims only what is true: some
     # case enters these procedures.
+    hello = str(root / "tests" / "hello.pas")
     jobs.append((None, ["--version"]))
     jobs.append((None, ["-h"]))
 
@@ -178,13 +179,20 @@ def corpus(root):
     jobs.append((root / "selfhost" / "compiler.pas",
                  ["--std=extended", "--dump-limits"]))
 
+    # ADR-0156's --target=, both ways. The accepting arm is driven over an
+    # ordinary program because what it changes is two lines of the module the
+    # code generator writes; the refusing arm is a driver message, which
+    # diagnostic_coverage.py filters out as not being about a program, so
+    # nothing but this reaches it. selfhost/producttest.sh is what asserts both.
+    jobs.append((hello, ["--std=iso7185", "--target=aarch64-linux-gnu"]))
+    jobs.append((None, ["--target=riscv64-linux-gnu", hello]))
+
     # The command-line error paths, for the same reason and with the same
     # caveat: producttest.sh is what asserts each message and its non-zero
     # exit. They are here because nothing else drives them --
     # diagnostic_coverage.py filters `pascalc: ` messages out as driver output,
     # so the gate that counts messages is blind to these by construction, and
     # line_coverage.py is what found the branches unrun (ADR-0104).
-    hello = str(root / "tests" / "hello.pas")
     jobs.append((None, ["--no-such-flag", hello]))
     jobs.append((None, [hello, "-o"]))       # -o with nothing after it
     jobs.append((None, [hello, "--import"]))  # --import with nothing after it
