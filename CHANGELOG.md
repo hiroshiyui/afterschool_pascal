@@ -29,6 +29,15 @@ appears below in the release where it still existed.
   An explicit `--target=` still wins. It is what lets a test harness — or CI —
   compile a corpus for a machine without a flag on every invocation.
 
+- **Ten cases pinning what each conformance mode says about each dialect
+  construct**, one per construct per mode, and a check that the dialect
+  specification's Annex B states the same messages. Under `--std=iso7185` and
+  `--std=extended` a program using `external`, `?`, `array of T`, `a[i..j]` over
+  an array, or `int64` is refused, and now with a golden behind each refusal.
+  One correction fell out of writing them: the two modes do **not** say the same
+  thing about `a[i..j]` over an array — ISO 7185 complains about the `..` token,
+  Extended Pascal about the type.
+
 ### Changed
 
 - **The compiler accepts twenty-four command-line arguments, up from twelve,

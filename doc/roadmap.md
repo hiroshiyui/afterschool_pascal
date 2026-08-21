@@ -347,7 +347,7 @@ AP §6.1.2 states the requirement.
 | | ISO 7185 | Extended Pascal | the dialect |
 | --- | --- | --- | --- |
 | third-party corpus | BSI, 812 programs | — | — |
-| second implementation (difftest) | yes | yes | **skipped** |
+| second implementation (difftest) | yes | yes | **the refusal surface only**, since ADR-0160 |
 | clause-cited scenarios | yes | yes | yes, since ADR-0135's wiring |
 | independent reading | ADR-0101, ADR-0107 | ADR-0101, ADR-0107 | [the spec](afterschool-pascal-spec.md), since ADR-0135 |
 | goldens, irtest, `verify/` | yes | yes | yes |
@@ -382,12 +382,40 @@ about which program-components may be *linked* together, and the harness
 compiles one program (`doc/sop.md` §7). The clause table is generated from the
 document rather than transcribed, so the two cannot drift.
 
-What is **still** empty is the first two rows, and neither is something a
-document or a harness can supply: there is no third-party corpus for a language
-this project invented, and no second implementation, `src/` being frozen at the
-conformance surface on purpose. A high citation fraction here means the
-specification is young and was written against a compiler someone could probe,
-not that the dialect is as well checked as the conformance modes.
+**And the second row moved, though not to "yes" (ADR-0160).** `src/` is frozen
+at the conformance surface — but *what a conformance mode says about a dialect
+construct is conformance behaviour*, which is ADR-0121's rule and ADR-0154's
+generalisation of it. So the refusal surface was never on the dialect's side of
+the freeze; it simply had no programs. The specification's Annex B is the table
+of that surface, and of its five constructs exactly one had a case, under one
+mode.
+
+There are ten now, one per construct per conformance mode, and `annex-b` reads
+the annex and requires each golden to contain the message the document states —
+so the annex is enforced rather than accompanied, and difftest compares the two
+front ends on all ten. **Probing them found the annex wrong**: it claimed the
+two modes say the same thing, and ISO 7185's parser stops at the `..` in
+`a[i..j]` where Extended Pascal parses it and Sema refuses it by type. One
+column became two.
+
+Worth carrying into the next dialect feature: **four of the five refusals need
+no code in `src/` at all.** ADR-0140's rule — a dialect construct is spelled
+where a conforming program could not have written it — means the refusal usually
+falls out of a grammar both front ends already share. `external` is the
+exception, §6.1.4 making a directive an ordinary identifier in the one position
+it may occupy. A construct that needs teaching in `src/` is a signal that its
+spelling is not in such a position.
+
+What is **still** empty is the first row, and it is not something a document or
+a harness can supply: there is no third-party corpus for a language this project
+invented, and the BSI suite is unavailable for a second reason besides novelty —
+the dialect does not contain ISO 7185, Extended Pascal's reserved word-symbols
+being in the way (ADR-0033). The second row is *partial* rather than full:
+everything the dialect **accepts** is still compared by no second
+implementation, `difftest.sh` skipping a dialect source by directory. A high
+citation fraction here means the specification is young and was written against
+a compiler someone could probe, not that the dialect is as well checked as the
+conformance modes.
 
 One external authority is already in play and is worth naming, because ADR-0129
 noticed it and then dropped it: **POSIX and the C ABI are specifications**, and
