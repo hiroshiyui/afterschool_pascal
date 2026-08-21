@@ -1214,21 +1214,53 @@ layout — the differences they name are real and are somewhere else:
   16, so `LlAlign`'s `tySet := 16` — a comment that reads "LLVM aligns an i256
   to 16" — is a fact about most targets rather than all. Thirteen offsets, every
   one of them in a frame holding a `set` or a `complex`.
-- **macOS and Windows agree about layout.** What they change is the object
-  format, the C library and the file model — `bind` and `pas_file` are POSIX
-  assumptions in `runtime/pasrt.c`, and that is the work, not the datalayout's
-  `m:` field.
+- **macOS and Windows agree about layout**, and the C library was measured too
+  (ADR-0161). `bind` is *not* a POSIX assumption: §6.7.5.6's binding is `fopen`,
+  and the file model is `fopen`, `fseek`, `ftell`, `fread`, `fwrite` and
+  `tmpfile`, every one of them ISO C — as are the time procedures and `getenv`.
+  **The runtime's whole departure from the standard is four names**, and they
+  split the two platforms apart:
+
+  | name | for | macOS | Windows CRT |
+  | --- | --- | --- | --- |
+  | `_setjmp`, `_longjmp` | §6.8.3.11's non-local goto | yes | yes |
+  | `fmemopen` | ADR-0057's `readstr` | 10.13+ | **no** |
+  | `open_memstream` | ADR-0057's `writestr` | 10.13+ | **no** |
+
+  So **macOS needs no runtime change at all** on this axis, and a **Windows**
+  port is two hand-written `FILE*`-over-memory functions plus `_Complex`, which
+  MSVC lacks and §6.7.6.2's complex functions are written in. `runtime-isoc`
+  keeps the list at four in both directions.
 - **32-bit is the real layout blocker, and it is every 32-bit target.** 85–86%
   of offsets move, because `LlSize` says a pointer is 8 by construction, and
   ADR-0129's `i64` count at the foreign boundary is a second, independent one.
 
-**One caveat about the gate, found by the same sweep.** Mach-O puts a
-zero-valued global in `.zerofill` rather than emitting a directive with a 0 in
-it, and 32-bit ARM and PowerPC split an `i64` constant into two `.long`s. So
-`target-layout` as committed cannot read a Darwin or a 32-bit assembly listing —
-it fails loudly, with "N constants were not folded to a number", rather than
-comparing something wrong. Admitting such a target means teaching it those two
-spellings first.
+**A caveat about the gate turned up in the same sweep and is now fixed.** Mach-O
+puts a zero-valued global in `.zerofill` rather than emitting a directive with a
+0 in it, and a 32-bit machine has no 64-bit directive, so an `i64` constant
+arrives as two `.long`s. `target-layout` could read neither — loudly, with "N
+constants were not folded to a number", rather than comparing something wrong,
+but it meant no such target could have been admitted without teaching it first.
+Both taught, and the split constant is reassembled from the datalayout's own
+`e`/`E` rather than a guess: big-endian `powerpc-linux-gnu` yields exactly the
+number little-endian `arm` and `mipsel` do, where a reversed word order gives
+4.0 × 10¹⁶. All nine of the targets that defeated it parse 4538 of 4538 now.
+
+### What item 4 still is
+
+Two things, and they are of very different sizes.
+
+**32-bit, which is the real work.** `LlSize` says a pointer is 8 by
+construction; `tyProc` and `tySlice` are two pointers; `tyFile`'s alignment is
+8. All of those become target-dependent, which means `LlAlign` and `LlSize`
+stop being constants and start asking `targetIx` — and ADR-0129's `i64` count
+at the foreign boundary is a second, independent question with a decision in it
+rather than a lowering. Nothing here is blocked on measurement any more.
+
+**The rest is small and specific**: s390x's `tySet` alignment (13 offsets, and
+`target-layout` fails loudly if it is ever admitted), two `FILE*`-over-memory
+functions for Windows, and `_Complex` for MSVC. macOS needs none of it and has
+never been tried, which is now the cheapest unknown left in the chapter.
 
 ### What is not claimed
 

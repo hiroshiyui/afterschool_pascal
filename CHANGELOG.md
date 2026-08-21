@@ -38,6 +38,13 @@ appears below in the release where it still existed.
   thing about `a[i..j]` over an array — ISO 7185 complains about the `..` token,
   Extended Pascal about the type.
 
+- **A check that the runtime stays close to ISO C.** `runtime/pasrt.c` uses the
+  standard library and four names beyond it — `_setjmp` and `_longjmp` for the
+  non-local `goto`, `fmemopen` and `open_memstream` for `readstr` and
+  `writestr` — and a fifth cannot be added without an entry and an argument.
+  Nothing about the compiled program changes; this bounds what a port to
+  another C library has to supply.
+
 ### Changed
 
 - **The compiler accepts twenty-four command-line arguments, up from twelve,
