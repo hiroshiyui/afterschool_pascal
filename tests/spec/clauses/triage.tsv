@@ -104,11 +104,11 @@ iso7185	6.6.3.3	testable	Variable parameters
 iso7185	6.6.3.4	testable	Procedural parameters
 iso7185	6.6.3.5	testable	Functional parameters
 iso7185	6.6.3.6	testable	Parameter list congruity
-iso7185	6.6.3.7	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-iso7185	6.6.3.7.1	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-iso7185	6.6.3.7.2	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-iso7185	6.6.3.7.3	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-iso7185	6.6.3.8	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
+iso7185	6.6.3.7	testable	conformant array parameters, accepted since this became a level 1 processor
+iso7185	6.6.3.7.1	testable	conformant array parameters, accepted since this became a level 1 processor
+iso7185	6.6.3.7.2	testable	conformant array parameters, accepted since this became a level 1 processor
+iso7185	6.6.3.7.3	testable	conformant array parameters, accepted since this became a level 1 processor
+iso7185	6.6.3.8	testable	conformant array parameters, accepted since this became a level 1 processor
 iso7185	6.6.4	testable	Required procedures and functions
 iso7185	6.6.5	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.6.5.1	structural	introduces the subclauses below it; states no requirement of its own
@@ -322,11 +322,11 @@ extended	6.7.3.3	testable	Variable parameters
 extended	6.7.3.4	testable	Procedural parameters
 extended	6.7.3.5	testable	Functional parameters
 extended	6.7.3.6	testable	Parameter list congruity
-extended	6.7.3.7	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-extended	6.7.3.7.1	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-extended	6.7.3.7.2	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-extended	6.7.3.7.3	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
-extended	6.7.3.8	not-implemented	conformant array parameters; this processor is level 0 (doc/implementation-defined.md)
+extended	6.7.3.7	testable	conformant array parameters, accepted since this became a level 1 processor
+extended	6.7.3.7.1	testable	conformant array parameters, accepted since this became a level 1 processor
+extended	6.7.3.7.2	testable	conformant array parameters, accepted since this became a level 1 processor
+extended	6.7.3.7.3	testable	conformant array parameters, accepted since this became a level 1 processor
+extended	6.7.3.8	testable	conformant array parameters, accepted since this became a level 1 processor
 afterschool	6.7.3.9	structural	introduces slice parameters; the requirements are in its subclauses
 afterschool	6.7.3.9.1	testable	
 afterschool	6.7.3.9.2	testable	

@@ -973,7 +973,7 @@ before it could not see.
   lines were executable. 12,949 of 13,403 statements are run by the corpus.
 
 - **`tests/spec/`** (ADR-0105, ADR-0106) is the same question asked of the
-  *standards* rather than of the compiler: 68 of 279 testable clauses cited,
+  *standards* rather than of the compiler: a minority of the testable clauses cited,
   with 140 of the 419 headings triaged out as structural or unimplemented so
   the denominator means something. The inventory those numbers are counted
   against was 37 clauses short until ADR-0152, and the triage and the inventory

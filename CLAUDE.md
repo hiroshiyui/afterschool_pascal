@@ -646,8 +646,9 @@ scenario that asserts nothing.
   `.git/info/exclude`, so no clone had it.
 - **The denominator is triaged** (ADR-0106): every one of the 419 headings is
   classified `testable`, `structural` or `not-implemented` in
-  `clauses/triage.tsv`, so coverage is 68 of **279 testable** clauses rather
-  than 68 of 419. `spec-clause-traceability` gates it — a clause that stops
+  `clauses/triage.tsv`, so coverage is counted against the **testable** clauses
+  rather than against every heading — `run.py --coverage` prints both, and no
+  document pins the pair, because both move. `spec-clause-traceability` gates it — a clause that stops
   being cited fails, and so does a scenario citing a clause the triage says
   cannot carry one, which is what keeps the triage itself honest. A clause that
   *starts* being cited does not fail; it asks for `--write-pending`, because a
