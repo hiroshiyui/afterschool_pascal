@@ -29,6 +29,14 @@ ParseNameList:ctxKind:1 names 5 of 78
 # nkGoto, nkLabeled and nkLabelDecl are statement nodes. The parser builds them
 # only from ParseStatement, so a tree rooted at an expression contains none of
 # them, and each of these four walks an expression.
+#
+# The fourth constant each of them leaves off is nkConfArray, and its argument
+# is its own: ISO 7185 6.6.3.7's schema is a type-denoter the parser produces in
+# one position only, a formal parameter's, and BuildFormals takes that case
+# before ResolveType is reached (ADR-0153). Its own children -- the index type
+# and a component that is not another schema -- are resolved by ConfArrayType
+# with the kind tested first. So no path reaches these four with one, which is
+# the same shape ADR-0040 gave a bare schema-name one clause earlier.
 EvalConst:nodeKind:1 names 56 of 60
 CheckExpr:nodeKind:1 names 56 of 60
 EmitExpr:nodeKind:1 names 56 of 60

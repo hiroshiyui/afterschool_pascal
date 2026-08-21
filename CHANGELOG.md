@@ -13,6 +13,8 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-08-21
+
 ### Added
 
 - **Conformant array parameters, and this is now a level 1 processor.**

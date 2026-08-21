@@ -1464,6 +1464,17 @@ Type *Sema::resolveType(TypeExpr &denoter) {
 
   Type *t = nullptr;
   switch (denoter.kind) {
+  case TEK::ConfArray:
+    // ISO 7185 §6.6.3.7's schema is a type-denoter the parser produces in one
+    // position only — a formal parameter's — and `buildFormals` takes that case
+    // before `resolveType` is called, exactly as it does for a bare
+    // schema-name one clause earlier (ADR-0153). Its own children are resolved
+    // by `confArrayType`, which tests the kind first. So nothing reaches here
+    // with one, and the case exists to say so rather than to do anything: the
+    // Pascal compiler's counterpart is an arm its `kind-exhaustive` catalogue
+    // argues away, and a `switch` cannot argue.
+    t = ty::Int();
+    break;
   case TEK::Named:
     // A required type-identifier is a symbol in the outermost scope, so this
     // is one lookup and not two (ADR-0097) — and a qualified name reaches only
