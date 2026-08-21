@@ -1849,9 +1849,25 @@ able to make.
     were outside this — `pas_str_temp`'s ring wrapped in silence and the record
     called probing it the obvious next thing, which ADR-0111 then did.
   - Not done: a sweep of the remaining fixed arrays. Two were checked
-    (`maxImports` and the twelve command-line arguments) and both already
-    report; the rest are bounded by construction or by a limit checked
+    (`maxImports` and the command-line arguments) and were recorded as already
+    reporting; the rest are bounded by construction or by a limit checked
     elsewhere, and the record says so rather than implying an audit happened.
+    **Half of that was wrong and ADR-0158 is the correction** — `maxImports`
+    reports because a counter can be compared, and the argument list could not,
+    for a reason no reading of this compiler would have found.
+- **One more program-parameter than the limit** (ADR-0158). An unbound
+  program-parameter is the only end-of-list a Pascal program has (ADR-0081), so
+  a compiler declaring *n* of them cannot distinguish *n* arguments from *n*
+  plus any number: the twelfth binds, the thirteenth is not asked about, and
+  everything past it is discarded in silence. `tests/dialect/lib_os.pas` needed
+  exactly twelve, so one added flag pushed the `-o` file name off the end and
+  the complaint named the wrong argument — `-o needs a file name`, about an
+  argument that had been written. The limit is `argMax = 24` and there are
+  **twenty-five** parameters: `argOver` is declared past the last usable one and
+  never read for its name, only for whether it bound at all, which is what turns
+  "the list ended" into "the list ended because it ran out". `--dump-limits`
+  reports the pool and the tokens and cannot report this one for the same
+  reason — a count is what a bound needs and an argument list has none.
 - **A non-decimal literal is lexical and nothing else** (ADR-0036). `16#ff` reaches the
   parser as an integer literal, so no later rule knows it was written that way.
   Two things the code says and a reader might undo: the extended-digit sequence
