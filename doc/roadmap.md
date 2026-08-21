@@ -13,7 +13,7 @@ two.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal (ADR-0109)](#the-goal-adr-0109) | what this is all for, [what still blocks it](#what-is-still-blocked-on-it), and [where the ideas come from](#where-the-ideas-come-from) |
-| [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions, ranked — five now answered by a record, two open |
+| [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions, ranked — six now answered by a record, one open |
 | [What is next](#what-is-next) | the oracle that was given up, and four other things worth doing |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 
@@ -37,8 +37,11 @@ ISO/IEC 10206:1991 is complete to its last clause.
 [`doc/history.md`](history.md) keeps that account, because it explains why the
 compiler has the shape it has, and because the conformance modes it produced
 are not going away:
-`--std=iso7185` and `--std=extended` stay exactly as they are, and the dialect
-is a third mode beside them (ADR-0033's construction, used a third time).
+the dialect is a third mode beside `--std=iso7185` and `--std=extended`
+(ADR-0033's construction, used a third time), and it changes neither of them:
+what they *accept* moves only for a reason inside their own standard, and what
+they *say* may mention the dialect where a program was compiled under the wrong
+mode (ADR-0154).
 
 Four decisions this forces, none of them yet made, each to get its own record:
 
@@ -274,8 +277,9 @@ two conformance modes now is, where it is asserted more strongly than it is
 checked, and which decisions are being made by default rather than on purpose.
 
 None of these is a work item. Each was a question with a live answer that no
-ADR had written down — four now have one and keep their entry, struck through,
-because what a survey *found* is the part worth carrying forward. The reason
+ADR had written down — **six of the seven now have one** and keep their entry,
+struck through, because what a survey *found* is the part worth carrying
+forward. §2 is the one still open, and it is a risk rather than a task. The reason
 they are here rather than in
 `doc/implementation-defined.md` §6 or `doc/sop.md` §7 is that those two
 registers hold *what this compiler does not do*. These are about what it does
@@ -609,7 +613,7 @@ So §5 is answered for the shapes that exist. It says nothing about the shapes
 not yet added, and every rule in it turns on the word *owns*, which §7 is what
 has not defined.
 
-### 6. "The conformance modes stay exactly as they are" is slightly stronger than the truth
+### 6. ~~"The conformance modes stay exactly as they are" is slightly stronger than the truth~~ Answered
 
 ADR-0121 requires `src/` to carry the *refusal* of `external`, and the message
 names the mode — so a program written for the dialect and compiled under
@@ -617,11 +621,21 @@ names the mode — so a program written for the dialect and compiled under
 `.claude/skills/release-engineering/` makes diagnostics part of the public
 interface, alongside the accepted language and the command line.
 
-The exact claim is therefore: **the dialect does not change what the
-conformance modes accept; it does change what they say.** That is almost
-certainly unavoidable and is not a conformance question — §5.1 is about
-accepting and rejecting — but the phrasing in `CLAUDE.md` and in README is
-stronger than what is true, and noticing that gap is this repository's habit.
+**Answered (ADR-0154).** The exact claim is: *the dialect does not change what
+the conformance modes accept; it does change what they say* — and four
+documents now say that instead of the stronger thing: `CLAUDE.md` in two
+places, `doc/glossary.md`, `doc/afterschool-pascal-spec.md` §5.3 and this file.
+It is unavoidable and is not a conformance question, §5.1 being about accepting
+and rejecting; refusing to name the dialect would keep the old sentence true and
+make the diagnostic worse.
+
+**And the sentence had a second reader problem the entry had not seen.** In
+`CLAUDE.md` it sat one paragraph from ADR-0109's goal, where it reads as a
+promise about the whole compiler — and ADR-0153 made that false in a much larger
+way, `--std=iso7185` now accepting conformant array parameters. That change has
+nothing to do with the dialect. So the corrected sentence names its subject: a
+conformance mode's accepted language moves only for a reason inside its own
+standard, and level 1 is such a reason where the dialect never is.
 
 ### 7. ~~The memory-safety fork: deferral, or discovery?~~ Answered
 
@@ -698,7 +712,9 @@ The order above is the ranking, so what is left to say is the kind:
   near-overlaps in ADR-0149 — and what was left of it was §7, both records
   dividing their shapes on ownership while neither could say what owning is.
   **§7 now says** (ADR-0151): released when the variable holding it dies, and
-  not copyable out of that variable. **§6 is still writing**: one sentence.
+  not copyable out of that variable. **§6 is written too** (ADR-0154), and it
+  was one sentence: what a conformance mode accepts does not move for the
+  dialect, and what it says may.
 
 - **§7 turned out to be two questions wearing one name.** The half about
   lifetime was answered before this project began and only needed naming; the

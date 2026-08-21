@@ -16,8 +16,13 @@ compare. Read a mention of C++ below as naming that, or as history.
 
 **The long-term goal is a practical Pascal** (ADR-0109): a dialect and a
 standard core library for networking, internationalisation, concurrency and
-memory safety, as a third `--std` beside the two conformance modes, which stay
-exactly as they are. Bootstrapping was the previous goal and is done; it is now
+memory safety, as a third `--std` beside the two conformance modes. **The
+dialect does not change what those two accept; it does change what they say** —
+ADR-0121 requires `src/` to carry the refusal of `external` and the message
+names the mode, so a program written for the dialect and compiled under
+`--std=extended` is told the dialect exists (ADR-0154). Their accepted language
+moves only for a reason inside their own standard, as it did when ISO 7185 went
+to level 1 (ADR-0153). Bootstrapping was the previous goal and is done; it is now
 a constraint on the *order* features land in — a dialect feature must be
 expressible in what `seed/pascalc.ll` accepts, or the seed is refreshed first.
 
@@ -417,8 +422,10 @@ feature, because each was arrived at more than once:
 **Anything the standards do not have still waits.** Inside `--std=iso7185` and
 `--std=extended` an extension is a defect unless
 `doc/implementation-defined.md` lists it as one — it lists two, and a third is a
-decision with a record behind it rather than a convenience. Those two modes stay
-exactly as they are.
+decision with a record behind it rather than a convenience. **What the dialect
+may not do is change what those two accept**; it may and does change what they
+*say*, a diagnostic naming the mode being the only way to tell a program it was
+compiled under the wrong one (ADR-0154).
 
 **The third `--std` now exists**: `--std=afterschool` (ADR-0117), and it is
 where a feature neither standard has belongs. **`doc/afterschool-pascal-spec.md`

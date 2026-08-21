@@ -162,3 +162,4 @@ the alternatives that were rejected and why.
 | [0151](0151-block-scoped-ownership-and-the-fork-is-forced-by-sharing.md) | Block-scoped ownership is the model, and the fork is forced by sharing | Accepted |
 | [0152](0152-the-clauses-with-no-titles.md) | The clauses with no titles | Accepted |
 | [0153](0153-conformant-array-parameters-and-level-1.md) | Conformant array parameters, and level 1 | Accepted |
+| [0154](0154-the-dialect-changes-what-a-mode-says.md) | The dialect changes what a conformance mode says, not what it accepts | Accepted |

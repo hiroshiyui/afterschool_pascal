@@ -32,7 +32,9 @@ way.
 
 ISO 7185 and ISO/IEC 10206:1991 are complete in this processor and are not
 affected by anything in this document. They are the two modes with an external
-specification, and they stay exactly as they are (see 5.3).
+specification (see 5.3). Nothing here changes what either **accepts**; 6.7.7.1
+does change what `--std=extended` **says**, its refusal of the `external`
+directive naming this dialect, which is a diagnostic and not an acceptance.
 
 The dialect is the third mode. It **contains** Extended Pascal: every program
 that conforms to ISO/IEC 10206:1991 is an Afterschool Pascal program with the

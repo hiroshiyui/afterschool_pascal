@@ -306,8 +306,10 @@ statement-sequence — carries a flag rather than asking a node's kind
 
 Everything here belongs to `--std=afterschool` and to no conforming mode. The
 distinction is the point: an extension inside `iso7185` or `extended` is a
-defect unless `doc/implementation-defined.md` lists it as one, and those two
-modes stay exactly as they are (ADR-0109, ADR-0117).
+defect unless `doc/implementation-defined.md` lists it as one. The dialect
+does not change what those two *accept*; it does change what one of them
+**says**, `external` being refused there by a message that names the dialect
+(ADR-0109, ADR-0117, ADR-0154).
 
 **Dialect (`--std=afterschool`).** The third mode, and the one place a feature
 neither standard has may land. Unlike the first two it **contains** Extended
