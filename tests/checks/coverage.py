@@ -166,6 +166,18 @@ def corpus(root):
     jobs.append((None, ["--version"]))
     jobs.append((None, ["-h"]))
 
+    # --dump-limits is the third of that kind and the one whose asserter is a
+    # ctest case rather than a shell harness: tests/checks/buffer_headroom.py
+    # drives it over selfhost/compiler.pas on every run and reads both counters
+    # out of it (ADR-0148). It gets no case in tests/dumps/ on purpose -- the
+    # pool figure moves whenever Sema or CodeGen interns something new, so its
+    # golden would be regenerated for reasons that have nothing to do with it,
+    # and CLAUDE.md's rule is that regenerating a golden is a decision. What
+    # buffer_headroom.py asserts instead is stronger than a golden anyway: the
+    # capacities it reports must equal the constants this tree declares.
+    jobs.append((root / "selfhost" / "compiler.pas",
+                 ["--std=extended", "--dump-limits"]))
+
     # The command-line error paths, for the same reason and with the same
     # caveat: producttest.sh is what asserts each message and its non-zero
     # exit. They are here because nothing else drives them --

@@ -156,3 +156,4 @@ the alternatives that were rejected and why.
 | [0145](0145-every-enumeration-not-only-the-type-kinds.md) | Every enumeration, not only the type kinds | Accepted |
 | [0146](0146-what-a-shared-predicate-permits-it-permits-everywhere.md) | What a shared predicate permits, it permits everywhere | Accepted |
 | [0147](0147-one-linker-symbol-one-external-declaration.md) | One linker symbol, one `external` declaration | Accepted |
+| [0148](0148-the-pools-headroom-needs-a-flag.md) | The pool's headroom needs a flag; the tokens' did not | Accepted |

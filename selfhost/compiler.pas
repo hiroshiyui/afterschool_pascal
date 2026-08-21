@@ -111,15 +111,24 @@ const
   creturn  = 13;
   { Sized for this compiler's own source with room to grow: it is the largest
     Pascal in the tree, and the one that has to keep fitting. Both are frame
-    storage, so they are the fixed-buffer limits ADR-0012 predicted -- and both
-    fail loudly rather than silently truncating.
+    storage, so they are the fixed-buffer limits ADR-0012 predicted.
 
     Twice now the loud failure has been the *build*, because the array that
     has to hold this source is the seed's and raising the constant here does
     not raise the seed's (ADR-0095 for the pool, ADR-0126 for the tokens).
-    Both are sized for roughly twice the present source, and the
-    `buffer-headroom` case is what says how much of each is left, so a third
-    time is a report rather than a wall. }
+    Both are sized for roughly twice the present source, and `--dump-limits`
+    says how much of each is left -- the `buffer-headroom` case reads it, so a
+    third time is a report rather than a wall. The tokens could be counted
+    without the flag and the pool never could: `--dump-tokens` writes one line
+    per token and a string-literal cannot contain a newline, while PoolAdd is
+    called from Sema and from CodeGen as well as from the lexer, so no count
+    taken over the token stream is the pool's size (ADR-0148).
+
+    One entry to the pool is not loud: PoolPut drops a character when the pool
+    is full rather than reporting, so the two names it builds -- a function's
+    result slot and a `with` binding -- would come out short. It is reachable
+    only once the pool is within a name's length of full, which is the state
+    the headroom gate exists to report long before; doc/sop.md §7 carries it. }
   poolMax  = 1000000; { characters of identifier and literal text }
   tokMax   = 300000;
   maxDepth = 1000;   { ADR-0020, and the same number the C++ parser uses }
@@ -1603,6 +1612,18 @@ var
     compilers agreed on; outside one it is `file:line:col: error: message`,
     which is what a person reads and what tests/*.err holds. }
   dumpTokensOpt, dumpAstOpt, dumpSemaOpt, dumpAllOpt, dumping: boolean;
+  { --dump-limits: how full the two arrays sized for this compiler's own source
+    are (ADR-0148). Not a fifth member of the set above and deliberately not a
+    section of --dump-all -- those three sections are what selfhost/difftest.sh
+    diffs against the reference front end, which has no such arrays, so a
+    fourth would be a disagreement on every file in the corpus.
+
+    It is also the one dump that is not of a stage. The pool is filled by Sema
+    and by CodeGen as well as by the lexer, so the question it answers has an
+    answer only after the whole pipeline has run: it stops nothing, and it runs
+    everything. `dumping` therefore excludes it, a diagnostic during a limits
+    run being for a person to read and keeping the file:line:col form. }
+  dumpLimitsOpt: boolean;
   { --coverage: emit a call to pas_cov_hit before every statement, carrying the
     line it begins on (ADR-0104). What is *executable* is decided here and
     nowhere else -- the runtime counts what it is told and the denominator is
@@ -2393,6 +2414,8 @@ begin
   writeln('  --dump-ast      write the parse tree and stop');
   writeln('  --dump-sema     write the tree Sema annotated and stop');
   writeln('  --dump-all      write all three, with section headers');
+  writeln('  --dump-limits   compile as usual, then write how full the');
+  writeln('                  compiler''s own fixed arrays were left');
   writeln('  --coverage      emit statement counters; the program then');
   writeln('                  writes the lines it ran to PASCOV_LINES');
   writeln('  --version       write the version and stop');
@@ -2428,6 +2451,7 @@ begin
   dumpAstOpt := false;
   dumpSemaOpt := false;
   dumpAllOpt := false;
+  dumpLimitsOpt := false;
   covOpt := false;
   k := 1;
   while Arg(k, a) and argsOk do begin
@@ -2440,6 +2464,7 @@ begin
       dumpAstOpt := true;
       dumpSemaOpt := true
     end
+    else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     else if EQ(a, '--std=extended') then langStd := stdExtended
     else if EQ(a, '--std=iso7185') then langStd := stdIso7185
@@ -28948,6 +28973,29 @@ begin
   end
 end;
 
+{ How much of each array sized for this compiler's own source is left
+  (ADR-0148). Written after the whole pipeline has run, and after a failed one
+  too: an exhausted array *is* the error, so the numbers are what a reader
+  wants either way, and the gate that reads them has already failed on the
+  exit status.
+
+  Bare, with no `=== ` header. A header separates the three sections of
+  --dump-all; a flag that writes one report writes it unadorned, which is the
+  rule --dump-tokens follows and a test comment once asserted the reverse of.
+
+  Two arrays, and not every fixed one -- an argued list rather than an
+  omission. These two grow with the size of the source and creep toward their
+  ceiling with nothing announcing it. maxImports is bounded by the command
+  line, maxDepth and maxBlockDepth by nesting the parser refuses beyond, and
+  strMax by one identifier: each of those reports what happened in the words of
+  the thing that happened, at the moment it happens, so a headroom figure for
+  them would measure something nobody is approaching unawares. }
+procedure DumpLimits;
+begin
+  writeln('pool ', poolLen:1, ' of ', poolMax:1);
+  writeln('tokens ', tokCount:1, ' of ', tokMax:1)
+end;
+
 { The pipeline. What it *writes* depends on which dumps were asked for; what
   it *runs* is decided the same way, because a dump flag stops at the stage it
   names -- `--dump-tokens` does not parse, which is how the C++ driver behaves
@@ -28958,8 +29006,12 @@ end;
   generator: that is the form selfhost/difftest.sh compares, and generating the
   IR on every file in the corpus is free coverage of the backend. }
 procedure Compile;
-var earlier, earlierTail: nodePtr; earlierCount: integer; go: boolean;
+var earlier, earlierTail: nodePtr; earlierCount: integer; go, whole: boolean;
 begin
+  { --dump-limits asks about a whole run, so it runs the whole pipeline exactly
+    as --dump-all does. Without this `--dump-tokens --dump-limits` would report
+    the pool as the lexer alone had left it and call that the answer. }
+  whole := dumpAllOpt or dumpLimitsOpt;
   ReadTranslatedComponents(earlier, earlierTail, earlierCount);
 
   { --- lex ---------------------------------------------------------------- }
@@ -28970,8 +29022,10 @@ begin
     behaves -- and the only way a stage can be dumped for a program the next
     stage would reject. Pascal has no early return, so "stop" is a flag every
     later stage is guarded by. `--dump-all` is not a stop: it is the whole
-    pipeline with every section shown. }
-  go := not (dumpTokensOpt and not dumpAllOpt);
+    pipeline with every section shown, and `--dump-limits` is not a stop for
+    the same reason by a different route -- it shows no section at all and
+    needs every stage to have run before its question has an answer. }
+  go := not (dumpTokensOpt and not whole);
 
   { --- parse -------------------------------------------------------------- }
   if go then begin
@@ -28995,7 +29049,7 @@ begin
         DumpProgram
       end
     end;
-    go := not (dumpAstOpt and not dumpAllOpt)
+    go := not (dumpAstOpt and not whole)
   end;
 
   { --- check -------------------------------------------------------------- }
@@ -29008,7 +29062,7 @@ begin
         DumpProgram
       end
     end;
-    go := not (dumpSemaOpt and not dumpAllOpt)
+    go := not (dumpSemaOpt and not whole)
   end;
 
   { --- emit --------------------------------------------------------------- }
@@ -29016,7 +29070,10 @@ begin
     own rather than to a fourth section: it has to be assembled and linked, and
     two backends' assembler text cannot be diffed the way three stages of a
     tree can (ADR-0025). }
-  if go and not errorSeen then RunCodeGen
+  if go and not errorSeen then RunCodeGen;
+
+  { --- and how full it left the arrays ------------------------------------ }
+  if dumpLimitsOpt then DumpLimits
 end;
 
 begin

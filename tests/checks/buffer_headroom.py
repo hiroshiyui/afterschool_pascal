@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""How much of the token array this compiler's own source still leaves free.
+"""How much of each fixed array this compiler's own source still leaves free.
 
 `selfhost/compiler.pas` is the largest Pascal in the tree and the one that has
 to keep fitting, and it reads its input into fixed arrays (ADR-0012). Twice the
@@ -28,14 +28,21 @@ found with **107 tokens** of headroom left out of 140000 -- 0.08%.
 ADR-0095 closed with "nothing measures the headroom", and that sentence is why
 it happened a second time. This is the measurement.
 
-**Only the token array is measured.** `--dump-tokens` writes one line per token
-and a Pascal string-literal cannot contain a newline (6.1.7), so the line count
-*is* the token count -- exact, and it needs nothing of the compiler that is not
-already a documented flag. The string pool has no such answer: PoolAdd is called
-from Sema and from CodeGen as well as from the lexer -- a type's alias name, a
-trap message -- so no count taken over the token stream is its size, only a
-lower bound. doc/sop.md §7 carries that gap. A `--dump-limits` reporting poolLen
-and tokCount would close it exactly, and is the move if the pool bites again.
+**Both arrays are measured, and the pool needed a flag to be.** ADR-0126 could
+count the tokens from `--dump-tokens`, which writes one line per token and
+cannot write a second because a Pascal string-literal contains no newline
+(6.1.7) -- so the line count *is* the token count, exactly, from a flag that
+already existed. The pool has no such answer: PoolAdd is called from Sema and
+from CodeGen as well as from the lexer -- a type's alias name, a trap message
+-- so no count taken over the token stream is its size, only a lower bound.
+ADR-0126 wrote down what would close it, and ADR-0148 is that: `--dump-limits`
+compiles as usual and then reports both counters against both capacities.
+
+**The capacities are checked as well as the counts.** They are read twice --
+from the source, and from what the built compiler reports -- and a
+disagreement is a stale `build/bin/pascalc` measuring headroom against a bound
+this tree no longer declares, which is the one way this gate could quietly
+answer about the wrong compiler.
 
 The threshold is 80%: high enough that ordinary growth does not trip it, low
 enough that the reseed it asks for is a scheduled decision rather than a wall
@@ -49,6 +56,13 @@ from pathlib import Path
 
 THRESHOLD = 0.80
 
+# What --dump-limits reports, and the constant in the source that declares each
+# capacity. Adding an array to the flag without adding it here measures one
+# fewer than the compiler offers; adding it here without the flag fails loudly.
+ARRAYS = [("pool", "poolMax"), ("tokens", "tokMax")]
+
+REPORT = re.compile(r"^([a-z]+) (\d+) of (\d+)$")
+
 
 def main() -> int:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
@@ -61,36 +75,56 @@ def main() -> int:
         return 77
 
     text = source.read_text(encoding="utf-8", errors="replace")
-    m = re.search(r"^\s*tokMax\s*=\s*(\d+)", text, re.M)
-    if m is None:
-        print("buffer-headroom: tokMax is not declared as a constant any more")
-        return 1
-    tok_max = int(m.group(1))
+    declared = {}
+    for array, const in ARRAYS:
+        m = re.search(r"^\s*%s\s*=\s*(\d+)" % const, text, re.M)
+        if m is None:
+            print(f"buffer-headroom: {const} is not declared as a constant any more")
+            return 1
+        declared[array] = int(m.group(1))
 
     std = (root / "selfhost" / "compiler.std").read_text().strip()
     run = subprocess.run(
-        [str(pascalc), f"--std={std}", "--dump-tokens", str(source), "-o", "/dev/null"],
+        [str(pascalc), f"--std={std}", "--dump-limits", str(source), "-o", "/dev/null"],
         capture_output=True, text=True,
     )
     if run.returncode != 0:
         print("buffer-headroom: the compiler could not read its own source")
         print(run.stdout[-2000:])
         return 1
-    used = sum(1 for line in run.stdout.splitlines() if line)
 
-    frac = used / tok_max
-    print(f"buffer-headroom: {used} of {tok_max} tokens, {100 * (1 - frac):.1f}% free")
-    if frac > THRESHOLD:
-        print(
-            f"buffer-headroom: the token array is {100 * frac:.1f}% full, over the "
-            f"{100 * THRESHOLD:.0f}% mark.\n"
-            "  Raising tokMax alone does not help: seed/pascalc.ll carries the old\n"
-            "  bound and it is the seed that translates this source. Raise tokMax on a\n"
-            "  tree that still builds, then seed/refresh.sh, as ADR-0095 and ADR-0126\n"
-            "  each did -- and say so in the commit, because it rewrites 6 MB."
-        )
-        return 1
-    return 0
+    reported = {}
+    for line in run.stdout.splitlines():
+        m = REPORT.match(line)
+        if m:
+            reported[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+
+    failed = False
+    for array, const in ARRAYS:
+        if array not in reported:
+            print(f"buffer-headroom: --dump-limits reported nothing about {array}")
+            return 1
+        used, cap = reported[array]
+        if cap != declared[array]:
+            print(f"buffer-headroom: {pascalc} reports {const} as {cap}, and this "
+                  f"tree declares {declared[array]} -- the compiler being measured "
+                  f"was built from another source, so rebuild before believing "
+                  f"any of this")
+            return 1
+        frac = used / cap
+        print(f"buffer-headroom: {array} {used} of {cap}, {100 * (1 - frac):.1f}% free")
+        if frac > THRESHOLD:
+            failed = True
+            print(
+                f"buffer-headroom: {array} is {100 * frac:.1f}% full, over the "
+                f"{100 * THRESHOLD:.0f}% mark.\n"
+                f"  Raising {const} alone does not help: seed/pascalc.ll carries the\n"
+                "  old bound and it is the seed that translates this source. Raise it\n"
+                "  on a tree that still builds, then seed/refresh.sh, as ADR-0095 and\n"
+                "  ADR-0126 each did -- and say so in the commit, because it rewrites\n"
+                "  6 MB."
+            )
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
