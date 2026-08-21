@@ -174,6 +174,18 @@ def main():
 
     changed = run("git", "diff", "--name-only", f"{base}..{head}").split()
     if COMPILER not in changed:
+        # `git diff base..head` compares two *commits*, so work that is only in
+        # the working tree is invisible to it -- and the honest answer for a
+        # dirty tree is not "the compiler did not change", which is what this
+        # said. Running it before committing therefore always passed, which is
+        # how ADR-0153 reached CI without the trailer it owed: the local run
+        # answered about a range that did not contain the change yet.
+        if COMPILER in run("git", "diff", "--name-only", "HEAD").split():
+            print(f"model-drift: {COMPILER} is modified in the working tree "
+                  f"and not in {base}..{head}, so this answers about a range "
+                  "that does not contain your change yet. Commit first, then "
+                  "run this again.")
+            return 1
         print("model-drift: the compiler did not change")
         return 0
 
