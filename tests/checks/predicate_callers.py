@@ -25,7 +25,7 @@ ADR-0058 wrote the sentence this gate exists for:
 
     A permission granted in a shared predicate leaks to every caller.
 
-That sentence has now cost twice. AP §6.4.5 made two slices compatible so one
+That sentence has now cost three times. AP §6.4.5 made two slices compatible so one
 `array of` parameter accepts either; the relational operators ask compatibility
 too, so `a[1..2] = a[3..4]` reached CodeGen and emitted invalid IR (ADR-0139).
 Assignment was the *second* caller of the same permission, found four commits
@@ -34,20 +34,34 @@ later, and it was worse: `p := r` between two slice formals compared
 types, and copied one array's contents over another's -- a silent
 out-of-bounds write at both -O0 and -O2, exit 0 (ADR-0143).
 
-Both times the fix was a probe over the positions someone thought of. This is
-the sweep over the positions the *source* contains.
+The third was not a permission granted but one never withdrawn: §6.4.6 a)'s
+second condition was unread, so a record holding a `text` was assignable to
+another and the memcpy copied the file's own storage -- one `struct pas_file`
+named by two variables, closed twice at block exit, *free(): double free
+detected in tcache 2* (ADR-0150).
+
+The first two fixes were each a probe over the positions someone thought of.
+This is the sweep over the positions the *source* contains.
 
 ## What it checks
 
 `Assignable` opens with a run of arms that answer `false` for a type whatever
 it is being compared with:
 
-    else if IsFile(toT) or IsFile(fromT) then Assignable := false
+    else if ContainsFile(toT) or ContainsFile(fromT) then Assignable := false
 
-Each names a type that is **not a value** -- ISO 7185 §6.8.2.2 gives a file no
-assignment and §6.7.2.5 no relational operators; a procedural parameter is not
-a value either; and AP §6.4.9 says the same of a slice. Those arms are read
-from the source, so the type list is derived rather than remembered.
+Each names a type that is **not a value** -- ISO 7185 §6.4.6 a) gives a file,
+and anything holding one, no assignment and §6.7.2.5 no relational operators;
+a procedural parameter is not a value either; and AP §6.4.9 says the same of a
+slice. Those arms are read from the source, so the type list is derived rather
+than remembered.
+
+One arm may cover more than one *spelling*, which is why WRAPPERS maps a
+predicate to a list: `ContainsFile` refuses a bare file and a record holding
+one, and those are two different programs at each of the 21 positions. The
+second was added by ADR-0150, whose defect this gate would have caught the day
+`Assignable` was first swept had the rule been read then -- 6.4.6 a) is two
+conditions and the arm asked one.
 
 The claim is then one property, asked of the built compiler for every
 (caller, type) pair:
@@ -97,31 +111,53 @@ PREDICATE = "Assignable"
 #       Assignable := false
 #
 # Read from the source so that a fourth one cannot be added without this gate
-# demanding a wrapper for it.
+# demanding a wrapper for it. The predicate is matched by whatever it is called
+# and not by an `Is` prefix -- ADR-0150 replaced `IsFile` here with
+# `ContainsFile`, which is what 6.4.6 a) actually asks, and a pattern keyed on
+# the spelling would have read that as the arm going away.
 REFUSES = re.compile(
-    r"else\s+if\s+Is([A-Za-z0-9_]+)\(toT\)\s+or\s+Is\1\(fromT\)\s+then\s*"
+    r"else\s+if\s+([A-Za-z0-9_]+)\(toT\)\s+or\s+\1\(fromT\)\s+then\s*"
     r"Assignable\s*:=\s*false", re.IGNORECASE)
 
 # How `u` and `v` are given the type under test, and how the program's own
 # block supplies actuals for them. Every wrapper puts them in the same place --
-# two names in scope of one procedure `q` -- so that one snippet serves all
-# three. The key is the name in `IsXxx`, lowercased.
+# two names in scope of one procedure `q` -- so that one snippet serves all of
+# them. The key is the predicate's own name, lowercased, and the value is a
+# **list**, because one predicate may cover more than one spelling of the thing
+# it refuses: `ContainsFile` is true of a bare file and of a record holding one,
+# and those are two different programs at every position. Each wrapper's `name`
+# is what the catalogue and the report call it.
 WRAPPERS = {
-    "file": {
-        "formals": "var u, v: text",
-        "extra": "var f1, f2: text;\n",
-        "call": "q(f1, f2)",
-    },
-    "proctype": {
-        "formals": "procedure u(x: integer); procedure v(x: integer)",
-        "extra": "procedure dummy(x: integer); begin x := x end;\n",
-        "call": "q(dummy, dummy)",
-    },
-    "slice": {
-        "formals": "var u, v: array of integer",
-        "extra": "",
-        "call": "q(arr, arr)",
-    },
+    "containsfile": [
+        {
+            "name": "file",
+            "formals": "var u, v: text",
+            "extra": "var f1, f2: text;\n",
+            "call": "q(f1, f2)",
+        },
+        {
+            "name": "filerec",
+            "formals": "var u, v: frec",
+            "extra": "var r1, r2: frec;\n",
+            "call": "q(r1, r2)",
+        },
+    ],
+    "isproctype": [
+        {
+            "name": "proctype",
+            "formals": "procedure u(x: integer); procedure v(x: integer)",
+            "extra": "procedure dummy(x: integer); begin x := x end;\n",
+            "call": "q(dummy, dummy)",
+        },
+    ],
+    "isslice": [
+        {
+            "name": "slice",
+            "formals": "var u, v: array of integer",
+            "extra": "",
+            "call": "q(arr, arr)",
+        },
+    ],
 }
 
 # Everything a snippet may name, declared once so that a snippet is the one
@@ -136,6 +172,7 @@ type
   sett = set of 0..9;
   sch(d: integer) = record m: array [1..d] of integer end;
   schp = ^sch;
+  frec = record n: integer; g: text end;
 var
   i: integer;
   r: rec;
@@ -217,7 +254,8 @@ def program(wrapper, kind, snippet):
 
 
 def refused_types(text):
-    """The types `Assignable` answers false for outright, from its own source."""
+    """The predicates `Assignable` answers false for outright, from its own
+    source, in the order the arms are written."""
     return [m.group(1).lower() for m in REFUSES.finditer(re.sub(r"\s+", " ",
                                                                 text))]
 
@@ -312,13 +350,13 @@ def main():
         return 1
     for t in types:
         if t not in WRAPPERS:
-            bad.append(f"{PREDICATE} refuses `{t}` outright and this gate has "
-                       f"no wrapper for it -- a new type-rule with no sweep "
-                       f"behind it. Add one to WRAPPERS and answer every "
-                       f"position")
+            bad.append(f"{PREDICATE} refuses whatever `{t}` answers for, "
+                       f"outright, and this gate has no wrapper for it -- a "
+                       f"new type-rule with no sweep behind it. Add one to "
+                       f"WRAPPERS and answer every position")
     for t in WRAPPERS:
         if t not in types:
-            bad.append(f"this gate carries a wrapper for `{t}` and "
+            bad.append(f"this gate carries wrappers for `{t}` and "
                        f"{PREDICATE} no longer refuses it outright -- either "
                        f"the arm went, or it moved behind a condition")
 
@@ -346,14 +384,16 @@ def main():
         return 1
 
     # --- the property, asked of the built compiler ---
+    spellings = [w for t in types for w in WRAPPERS[t]]
     pairs, swept = 0, set()
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp)
         for pos, _, _, kind, snippet in POSITIONS:
-            for t in types:
+            for wrapper in spellings:
+                t = wrapper["name"]
                 pairs += 1
                 ok, msg = accepts(args.pascalc,
-                                  program(WRAPPERS[t], kind, snippet), work)
+                                  program(wrapper, kind, snippet), work)
                 key = (pos, t)
                 swept.add(key)
                 if args.show:
@@ -384,9 +424,9 @@ def main():
             print(f"predicate-callers: {b}", file=sys.stderr)
         return 1
 
-    print(f"predicate-callers: {len(POSITIONS)} positions x {len(types)} "
-          f"types = {pairs} pairs; every caller of {PREDICATE} refuses what "
-          f"{PREDICATE} refuses")
+    print(f"predicate-callers: {len(POSITIONS)} positions x "
+          f"{len(spellings)} types = {pairs} pairs; every caller of "
+          f"{PREDICATE} refuses what {PREDICATE} refuses")
     return 0
 
 

@@ -3,7 +3,7 @@
 #
 #     <position> <type>
 #
-# The list is empty, and that is the claim: all 63 pairs are refused. An entry
+# The list is empty, and that is the claim: all 84 pairs are refused. An entry
 # is an argued exception, and the bar is the one `unreachable_diagnostics.txt`
 # sets -- not "the compiler happens to allow it" but "this caller is asking a
 # different question, and here is the question".

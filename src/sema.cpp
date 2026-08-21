@@ -2407,12 +2407,21 @@ void Sema::installPredefined() {
 bool Sema::assignable(Type *to, Type *from) const {
   if (!to || !from)
     return true; // an earlier error already reported
-  // A file is never assignable, not even to itself: ISO 7185 §6.8.2.2 excludes
-  // a file type from assignment, and §6.7.2.5 gives it no relational operators
-  // either. Both questions arrive here, so both are answered by this line —
-  // which is also why `isStructured()` deliberately excludes files, since that
-  // predicate is what grants a whole-variable copy.
-  if (to->isFile() || from->isFile())
+  // A file is never assignable, not even to itself, and neither is anything
+  // holding one. §6.4.6 a) is two conditions and not one: "T1 and T2 are the
+  // same type, **and that type is permissible as the component-type of a
+  // file-type**" — which §6.4.3.5 (ISO/IEC 10206:1991 §6.4.3.6) defines as
+  // neither a file nor a structured type with a component that is not one, and
+  // which `containsFile` is exactly. §6.7.2.5 gives none of them a relational
+  // operator either, and both questions arrive here.
+  //
+  // The second condition went unread and this asked `isFile()`, so `z := y`
+  // between two records holding a text file was accepted by both front ends —
+  // and the Pascal one lowered it to a memcpy of the file's own storage, so
+  // closing the block closed one `struct pas_file` twice (ADR-0150). This is
+  // also why `isStructured()` deliberately excludes files, that predicate
+  // being what grants a whole-variable copy.
+  if (containsFile(to) || containsFile(from))
     return false;
   // A procedural parameter is not a value either: ISO 7185 gives it no
   // assignment and no operators, and the only place one may travel is another
@@ -5302,11 +5311,31 @@ void Sema::checkStmt(Stmt *s) {
       diags_.error(a->line, a->col,
                    "a file variable cannot be assigned to; use reset, rewrite "
                    "and the buffer variable");
-    else if (!assignable(a->target->type, a->value->type))
-      diags_.error(a->line, a->col,
-                   "cannot assign " + a->value->type->name() +
-                       " to a variable of type " + a->target->type->name() +
-                       distinctTypeNote(a->target->type, a->value->type));
+    else if (!assignable(a->target->type, a->value->type)) {
+      // The refusal is `assignable`'s; this only chooses the words, and it is
+      // asked *inside* the failure rather than ahead of it so that the
+      // predicate stays the thing being tested — a guard placed before the
+      // call masks it at the only site that reaches it, which is how
+      // ADR-0143's slice arm came to be removable with every case green.
+      //
+      // §6.4.6 a)'s second condition rendered through the general message
+      // reads "cannot assign r to a variable of type r": accurate, and saying
+      // nothing about the file inside r. The words are the ones a value
+      // parameter of such a type is already refused with, because it is one
+      // fact. Named on whichever side holds the file.
+      if (containsFile(a->target->type) || containsFile(a->value->type))
+        diags_.error(a->line, a->col,
+                     "cannot assign " +
+                         (containsFile(a->value->type) ? a->value->type
+                                                       : a->target->type)
+                             ->name() +
+                         ": it contains a file, and a file has no copy");
+      else
+        diags_.error(a->line, a->col,
+                     "cannot assign " + a->value->type->name() +
+                         " to a variable of type " + a->target->type->name() +
+                         distinctTypeNote(a->target->type, a->value->type));
+    }
     return;
   }
 

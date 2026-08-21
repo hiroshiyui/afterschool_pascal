@@ -22,6 +22,7 @@
 <source>:70:8: error: a structured value needs an array, a record or a set type, not integer
 <source>:71:3: error: cannot assign vec to a variable of type integer
 <source>:73:8: error: a structured value cannot be of type ft, because it contains a file
+<source>:73:3: error: cannot assign ft: it contains a file, and a file has no copy
 <source>:75:8: error: 'i' is not a type, so it cannot name a structured value
 <source>:75:3: error: cannot assign integer to a variable of type pt
 <source>:76:8: error: undeclared identifier 'nosuch'

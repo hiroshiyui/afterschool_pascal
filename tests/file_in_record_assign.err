@@ -1,0 +1,4 @@
+<source>:29:3: error: cannot assign holder: it contains a file, and a file has no copy
+<source>:31:3: error: cannot assign outer: it contains a file, and a file has no copy
+<source>:35:3: error: cannot assign files: it contains a file, and a file has no copy
+<source>:38:3: error: a file variable cannot be assigned to; use reset, rewrite and the buffer variable

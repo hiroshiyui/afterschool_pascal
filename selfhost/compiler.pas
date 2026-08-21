@@ -7444,8 +7444,11 @@ end;
 { ------------------------------------------------- assignment compatibility }
 
 { Assignable asks this of a type produced from a schema, and IsGeneric is
-  defined with the rest of the schema machinery further down. }
+  defined with the rest of the schema machinery further down. So is
+  ContainsFile, which is 6.4.3.5's "permissible as the component-type of a
+  file-type" and which 6.4.6 a) asks of every structured assignment. }
 function IsGeneric(t: typePtr): boolean; forward;
+function ContainsFile(t: typePtr): boolean; forward;
 
 { ISO 7185 6.4.5 makes two structured types the same only when one type
   identifier denotes both, so they compare by identity here. String types are
@@ -7458,9 +7461,24 @@ var tb, fb: typePtr;
 begin
   if (toT = nil) or (fromT = nil) then
     Assignable := true   { an earlier error already reported }
-  { A file is never assignable, not even to itself: 6.8.2.2 excludes a file
-    type from assignment and 6.7.2.5 gives it no relational operators either. }
-  else if IsFile(toT) or IsFile(fromT) then
+  { A file is never assignable, not even to itself, and neither is anything
+    holding one. 6.4.6 a) is two conditions and not one: "T1 and T2 are the
+    same type, **and that type is permissible as the component-type of a
+    file-type**" -- which 6.4.3.5 (ISO/IEC 10206:1991 6.4.3.6) defines as
+    neither a file nor a structured type with a component that is not one, and
+    which ContainsFile is exactly. 6.7.2.5 gives none of them a relational
+    operator either.
+
+    The second condition went unread for a long time and the arm asked IsFile,
+    so `z := y` between two records holding a text file was accepted and
+    lowered to a memcpy of the file's own storage. Both variables then named
+    one `struct pas_file`, and closing the block closed it twice: *free():
+    double free detected in tcache 2*, SIGABRT, from a program a conforming
+    processor must reject at compile time (ADR-0150).
+
+    ContainsFile answers true for a bare file as well, so this one predicate is
+    the whole rule and IsFile is no longer asked here. }
+  else if ContainsFile(toT) or ContainsFile(fromT) then
     Assignable := false
   { A procedural parameter is not a value either: ISO 7185 gives it no
     assignment and no operators, and the only place one may travel is another
@@ -9241,7 +9259,9 @@ end;
   The reason is that a file has no value to copy -- the same fact that keeps a
   file out of IsStructured -- so a file inside one could not be read, written,
   or positioned. Nothing else about a component is restricted. }
-function ContainsFile(t: typePtr): boolean; forward;
+{ ContainsFile is declared forward with the compatibility predicates further
+  up, because 6.4.6 a) asks it of every assignment and Assignable is defined
+  before this point. }
 
 { A variant's fields are components of the record just as the fixed part's
   are: only one arm exists at a time, but any of them may be the one. }
@@ -15660,6 +15680,23 @@ begin
                       'caller''s array, not a value, and its length is not ',
                       'in its type -- assign the components, or pass it on ',
                       'as a slice')
+            { And the same again for 6.4.6 a)'s second condition, which the
+              general message would render as "cannot assign r to a variable of
+              type r" -- accurate, and saying nothing about the file inside r.
+              The words are the ones a value parameter of such a type is
+              already refused with, because it is one fact. Named on whichever
+              side holds the file: an optional of a file-bearing record is
+              refused through its component, and the target's own spelling
+              would then be the wrapper rather than the reason. }
+            else if ContainsFile(s^.asTarget^.ntype) or
+                    ContainsFile(s^.asValue^.ntype) then begin
+              write('cannot assign ');
+              if ContainsFile(s^.asValue^.ntype) then
+                WriteTypeName(s^.asValue^.ntype)
+              else
+                WriteTypeName(s^.asTarget^.ntype);
+              writeln(': it contains a file, and a file has no copy')
+            end
             else begin
               write('cannot assign ');
               WriteTypeName(s^.asValue^.ntype);
