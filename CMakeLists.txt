@@ -392,6 +392,14 @@ set_tests_properties(bsi-validation-suite PROPERTIES
 #
 # Skips without llc, as verify-lowering does without z3: llc is LLVM's, and
 # ADR-0085's claim is that the build needs nothing of LLVM's.
+add_test(NAME llc-second-backend
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/llc_check.sh
+                 ${CMAKE_BINARY_DIR})
+set_tests_properties(llc-second-backend PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 900
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # The two opaque struct sizes, against every target a compiler is installed for
 # (ADR-0155). Skips with 77 where only the host is available, as the BSI runner
 # does without its corpus and verify-lowering does without z3 -- the question it
@@ -402,13 +410,20 @@ set_tests_properties(target-sizes PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600)
 
-add_test(NAME llc-second-backend
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/llc_check.sh
-                 ${CMAKE_BINARY_DIR})
-set_tests_properties(llc-second-backend PROPERTIES
-                     SKIP_RETURN_CODE 77
-                     TIMEOUT 900
-                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+# And the other half of the same question: do the targets this compiler admits
+# agree about where every field of every frame *sits*? LlSize and LlAlign are
+# hand-written and answer with one number for every target (ADR-0028), which is
+# only correct while that agreement holds. It needs no cross toolchain -- clang
+# folds the offsets for any target it has a backend for -- so unlike
+# target-sizes it does not skip.
+if(Python3_FOUND)
+  add_test(NAME target-layout
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/target_layout.py)
+  set_tests_properties(target-layout PROPERTIES
+                       TIMEOUT 600
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+endif()
 
 # The code generator cannot be diffed against the C++ one — LLVM's own printer
 # is not a specification — so it is checked by *running* what it produces
