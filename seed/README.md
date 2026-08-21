@@ -81,6 +81,17 @@ LLVM and a C++ compiler supported. Porting means generating a seed on the new
 target, which needs a working compiler there first — from `v0.1.0`'s C++, or by
 cross-compiling this IR. That cost is stated here rather than discovered.
 
+**The second of those two is cheaper than this paragraph implies, and it has
+been measured.** Replacing the first two lines with another target's and running
+`clang --target=... -c seed/pascalc.ll` produces a valid object for
+aarch64-linux-gnu from the whole file — the frame layouts LLVM computes from
+this module are identical under both targets' datalayouts, over 4501 sizes and
+offsets, so nothing inside it is x86-64's but those two lines. What stops the
+build is `PAS_JUMP_SIZE` in the *runtime*, `jmp_buf` being 200 bytes here and
+312 there. `doc/roadmap.md`'s
+[Cross-platform support](../doc/roadmap.md#cross-platform-support) has the
+numbers and what they come to. None of it has been run, only linked.
+
 ## Its licence
 
 The seed is `selfhost/compiler.pas` in another form, so it is under the same

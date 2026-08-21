@@ -15,6 +15,7 @@ two.
 | [The goal (ADR-0109)](#the-goal-adr-0109) | what this is all for, [what still blocks it](#what-is-still-blocked-on-it), and [where the ideas come from](#where-the-ideas-come-from) |
 | [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions, ranked — six now answered by a record, one open |
 | [What is next](#what-is-next) | the oracle that was given up, and four other things worth doing |
+| [Cross-platform support](#cross-platform-support) | what the x86-64 lock actually is, measured, and the four items it comes to |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 
 Nothing here is a work queue with owners and dates. Each entry is something
@@ -731,7 +732,8 @@ was the last language feature on this page, and it is done: ISO 7185 is now
 accepted at **level 1**. Two of the others are about **oracles** — what could
 still be wrong with nothing here to say so — and they come first because v1.0.0
 gave up the strongest oracle this project had and nothing has replaced it. The
-fifth is the platform lock, and is the only entry here that is still open work.
+fifth is the platform lock, which has since been measured and moved to a
+chapter of its own.
 
 **The third and the fourth are done**, and both are left in place rather than
 deleted because what they found is the argument for the two above them: every
@@ -956,19 +958,18 @@ a loss and cannot argue that what is uncovered ought to be. The corpus is also
 enumerated by glob, so the shell harnesses are invisible to it; that is how
 `Usage` and `Version` first read as unreached.
 
-### 5. The platform lock has a scoped way out
+### 5. The platform lock has a scoped way out — *measured, and it has its own chapter*
 
-`seed/README.md` states the cost — the repository is x86-64 Linux only, and
-porting needs a working compiler on the new target first. A `--target=` option
-would turn that into "porting needs a cross-assembler": the triple and the
-datalayout are already written out as text (ADR-0028), so the emitter's half is
-small.
+This entry said the emitter's half was small and that everything else "has an
+honest chance of *more is baked in than it looks*", and asked for an
+investigation rather than a feature. The investigation was done on 2026-08-22
+and both halves of the guess came out wrong in the same direction: the frame
+layouts it worried about are **target-independent** for an LP64 little-endian
+target, `fileSize` against `PAS_FILE_SIZE` — the pair it named — is fine, and
+the thing that actually stops an aarch64 build is a constant it did not name.
 
-What needs investigating rather than promising is everything *else* that
-assumes the target — `fileSize` against `PAS_FILE_SIZE`, the pointer width the
-frame layouts are computed with, and `LlSize`/`LlAlign`. This has an honest
-chance of "more is baked in than it looks", and should be scoped as an
-investigation rather than as a feature.
+**[Cross-platform support](#cross-platform-support)** is the chapter, with the
+measurements and the four items they come to. Nothing is implemented.
 
 ### What continuous integration does and does not check
 
@@ -1009,6 +1010,119 @@ One thing the workflow had to be told explicitly: `verify.py` *skips* when z3
 is absent, which is right for a checkout and wrong for CI — the rest of the
 suite would report green with every rule never run. It asserts z3 is
 importable before it configures, so a green bar means the proofs ran.
+
+## Cross-platform support
+
+The repository is x86-64 Linux only, and `seed/README.md` states the cost:
+porting "means generating a seed on the new target, which needs a working
+compiler there first". **That was measured on 2026-08-22 rather than estimated,
+and it is smaller than the sentence suggests** — but the constant that actually
+blocks it is not the one this file had been naming.
+
+Nothing below is implemented. It is written down so the next attempt starts
+from the measurements rather than from the guess.
+
+### What was measured
+
+The comparison target is **aarch64-linux-gnu**: little-endian, LP64, IEEE
+double — the closest thing to x86-64 that is a different machine. Everything
+here was run with the `aarch64-linux-gnu` cross toolchain and `llc`, on the
+v1.7.0 tree.
+
+**The emitter's half is two lines.** `target triple = "x86_64-pc-linux-gnu"` is
+the only literal architecture mention in `selfhost/compiler.pas`, and the
+`target datalayout` beside it is the other half (ADR-0028). Nothing else in the
+compiler names a machine.
+
+**Frame layout is target-independent, and that is the surprise.** This file used
+to list `LlSize`/`LlAlign` as the thing most likely to be baked in. Every frame
+size and field offset LLVM computes was compared under the two datalayouts
+clang reports for the two triples:
+
+| Source of the frames | Sizes and offsets | Result |
+| --- | --- | --- |
+| `seed/pascalc.ll`, all 613 frame types | 4480 | identical |
+| a probe carrying `i256`, `complex`, a file, a variable-string, an optional, `int64` and a conformant array | 21 | identical |
+
+The second row exists because the first has no `i256` in a frame, and an i256 in
+a record is the exact shape of the segfault ADR-0028 records — 16-aligned by the
+stated datalayout and 8-aligned by LLVM's default. So the hand-written layout
+rules need no change for an LP64 little-endian target. To re-run it: emit
+`@g = global i64 ptrtoint(ptr getelementptr(%frameN, ptr null, i32 0, i32 K) to
+i64)` for every frame and field, assemble under each triple, and diff the
+values.
+
+**The seed retargets textually.** Replacing those two lines and running
+`clang --target=aarch64-linux-gnu -c seed/pascalc.ll` produces a valid aarch64
+object from all 181,302 lines, with one `-Woverride-module` warning and nothing
+else. The only symbol the emitted code names outside `runtime/pasrt.c` and
+LLVM's intrinsics is `_setjmp`. **That breaks the chicken-and-egg**: a compiler
+for the new host can be built without a compiler on the new host.
+
+**And then the runtime refuses to compile.** Two C structs have their size
+mirrored as a Pascal constant, because the two files cannot include one another
+and the numbers are checked rather than shared:
+
+| struct | x86-64 | aarch64 | declared |
+| --- | --- | --- | --- |
+| `pas_file` | 112 | 112 | `PAS_FILE_SIZE` = 120, `fileSize` = 120 |
+| `pas_jump` | 216 | **328** | `PAS_JUMP_SIZE` = 256, `jumpSize` = 256 |
+
+`pas_file` is four pointers and some ints, so it is the same on any LP64 — the
+entry this file *did* name is the one that is fine. `pas_jump` embeds a
+`jmp_buf`, which is **200 bytes on x86-64 and 312 on aarch64**, so its
+`_Static_assert` fires and the build stops. That is the right failure and it is
+the actual blocker; `jumpSize = 256` is an x86-64 measurement written as a
+constant.
+
+### So the lock is three things
+
+For an LP64 little-endian Linux target, and not for any other:
+
+1. two lines of emitted text;
+2. one size constant that has to be a per-target maximum rather than a
+   measurement of this one;
+3. a seed for the new host, which the retarget above supplies.
+
+It is not a rewrite of the layout rules, which is the opposite of what this
+file predicted.
+
+### The items, in the order they are worth doing
+
+**1. Make `PAS_JUMP_SIZE` a per-target maximum.** A latent portability defect
+rather than a feature: 256 is what `jmp_buf` happens to need here. Raising it
+costs frame bytes only in a block that is a non-local `goto` target, which is
+the only kind that carries a jump record at all — and `selfhost/irtest.sh`
+already checks `fileSize` against `PAS_FILE_SIZE`, so the second pair wants the
+same check. Cheap, and it is the one thing that stops an aarch64 build today.
+
+**2. `--target=`.** The triple and the datalayout are already written as text,
+so the emitter's half is small. It makes *cross*-compilation possible from
+x86-64; it does not by itself make the compiler run anywhere else. Worth doing
+when something wants it rather than first.
+
+**3. A real aarch64 port, with CI.** GitHub has arm64 runners. Without one this
+would be a claim nothing checks, which is the failure mode `doc/sop.md` §7
+exists for — and the evidence above stops at *links*, not *runs*, because there
+is no emulator on the machine where it was measured.
+
+**4. Anything that is not LP64 little-endian Linux.** A different and much
+larger question, and none of the measurements above transfer:
+
+- **ILP32 or a 32-bit target** breaks `LlSize`/`LlAlign` for a pointer, which
+  are 8 by construction, and ADR-0129's `i64` count at the foreign boundary;
+- **big-endian** has not been looked at at all;
+- **macOS** changes the object format and the `m:` field of the datalayout, and
+  `bind` and the file model are POSIX assumptions in the runtime;
+- **Windows** changes the ABI, the C library and the file model together.
+
+### What is not claimed
+
+The evidence stops at **links**, not **runs**. No aarch64 binary produced by any
+of this has been executed, because the machine it was measured on has no
+emulator. Nothing here is a test: no gate re-runs the offset comparison, and
+none of these numbers would fail a build if they drifted. Item 1 is where that
+starts to change.
 
 ## Known limitations
 
