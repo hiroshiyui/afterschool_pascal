@@ -123,6 +123,113 @@ Feature: Scopes and activations
     When it is compiled
     Then it is rejected
 
+  @iso7185:6.2.2.1
+  Scenario: every identifier the program-block contains has a defining-point
+    Given the ISO 7185 program
+      """
+      program p(output);
+      begin
+        writeln(undeclared : 1)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      undeclared identifier 'undeclared'
+      """
+
+  @iso7185:6.2.2.4
+  Scenario: a scope is its region and every region that region encloses
+    Given the ISO 7185 program
+      """
+      program p(output);
+      var outer: integer;
+
+      procedure middle;
+
+        procedure inner;
+        begin
+          outer := outer + 1
+        end;
+
+      begin
+        inner;
+        inner
+      end;
+
+      begin
+        outer := 1;
+        middle;
+        writeln(outer : 1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      3
+      """
+
+  @iso7185:6.2.2.6
+  Scenario: a field-specifier is excluded from the enclosing scopes
+    Given the ISO 7185 program
+      """
+      program p(output);
+      type holder = record thing: char end;
+      var thing: integer;
+          r: holder;
+      begin
+        thing := 7;
+        r.thing := 'z';
+        writeln(thing : 1, ' ', r.thing)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      7 z
+      """
+
+  @iso7185:6.2.2.7
+  Scenario: one spelling has one defining-point for one region
+    Given the ISO 7185 program
+      """
+      program p(output);
+      var twice: integer;
+          twice: char;
+      begin
+        twice := 1
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  @iso7185:6.2.2.8
+  Scenario: no occurrence outside a scope is an applied occurrence of it
+    Given the ISO 7185 program
+      """
+      program p(output);
+
+      procedure keeps;
+      var hidden: integer;
+      begin
+        hidden := 1
+      end;
+
+      begin
+        keeps;
+        writeln(hidden : 1)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      undeclared identifier 'hidden'
+      """
+
   @iso7185:6.2.3.5
   Scenario: each activation contains its own variables
     Given the ISO 7185 program
