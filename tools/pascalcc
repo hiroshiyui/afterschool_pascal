@@ -71,9 +71,19 @@ std=iso7185
 out=
 mode=link          # link | object | ir
 opt=-O2
-# Empty unless --target= was given: an unset one leaves both halves on their
-# default, which is the machine this is running on.
-target=
+# Empty unless --target= was given, or AFTERSCHOOL_PASCAL_TARGET names one:
+# unset leaves `pascalc` on its own default, which is x86-64, and leaves clang
+# on the machine this is running on.
+#
+# The environment variable is how a *whole run* is pointed at one target, the
+# way AFTERSCHOOL_PASCAL_OPT points one at an optimisation level, and it exists
+# for the same reason: the harnesses drive this script one program at a time and
+# have nowhere to put a flag. What it buys is the arm64 CI job -- without it
+# that job would run 638 programs through a compiler emitting an x86-64 header
+# for clang to override, which passes and says nothing about the aarch64 arm
+# ADR-0156 added. An explicit --target= wins, since a case that names a target
+# means it.
+target=${AFTERSCHOOL_PASCAL_TARGET:+--target=$AFTERSCHOOL_PASCAL_TARGET}
 source_file=
 covflag=()
 imports=()

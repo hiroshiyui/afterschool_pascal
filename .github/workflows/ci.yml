@@ -262,6 +262,98 @@ jobs:
         env:
           AFTERSCHOOL_PASCAL_OPT: -O0
 
+  aarch64:
+    # The first job that *runs* this compiler on a machine that is not x86-64.
+    #
+    # Everything doc/roadmap.md's cross-platform chapter measured stopped at
+    # **links**: seed/pascalc.ll assembles for aarch64, runtime/pasrt.c
+    # compiles, a complete pascalc binary links -- and none of it had ever been
+    # executed, because the machine those were measured on has no emulator. A
+    # port claimed and not run is the failure mode doc/sop.md §7 exists for,
+    # and GitHub's arm64 runners are what supply the missing half.
+    #
+    # Three things it settles that no x86-64 job can:
+    #
+    #  1. **The seed retargets textually.** seed/pascalc.ll states an x86-64
+    #     triple and datalayout; clang here overrides both and builds a working
+    #     seed from all 181,302 lines of it. That is what breaks the
+    #     chicken-and-egg seed/README.md describes -- a compiler for a new host
+    #     without a compiler on the new host -- and it is now run rather than
+    #     argued.
+    #  2. **LlSize and LlAlign are right for a second machine.** They are
+    #     hand-written and answer with one number for every target (ADR-0028).
+    #     `target-layout` compares the two targets' offsets without leaving
+    #     x86-64; this compiles and *runs* the corpus whose frames those rules
+    #     laid out.
+    #  3. **PAS_JUMP_SIZE is large enough where it was too small.** `jmp_buf`
+    #     is 312 bytes here against x86-64's 200, and the constant was 256
+    #     until ADR-0155. `target-sizes` predicted this from x86-64; this is
+    #     the machine it was predicting about.
+    #
+    # AFTERSCHOOL_PASCAL_TARGET is set so the compiler emits the aarch64 header
+    # rather than leaving clang to override an x86-64 one silently (ADR-0156).
+    # Without it the job would pass while saying nothing about the arm that ADR
+    # added -- which is the same "green run that asked nothing" the
+    # TARGET_SIZES_REQUIRE below exists to refuse.
+    #
+    # No z3, and that skip is deliberate: verify/ proves properties of the
+    # *lowering model*, which is the same Python file on either machine, and
+    # the two x86-64 jobs already require the proofs to run. Nothing about them
+    # is a question about this host.
+    name: the compiler on aarch64
+    runs-on: ubuntu-24.04-arm
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3
+          # Cross compilers for `target-sizes`, mirrored: the host is aarch64
+          # here, so the target it cannot ask about itself is x86-64. Same
+          # packaging trap as the other direction -- the driver and its C
+          # library are separate packages and --no-install-recommends gives
+          # only the driver, which then cannot find <setjmp.h>.
+          apt-get install -y --no-install-recommends \
+            gcc-x86-64-linux-gnu libc6-dev-amd64-cross \
+            gcc-arm-linux-gnueabihf libc6-dev-armhf-cross
+
+      - uses: actions/checkout@v4
+
+      - name: Refuse to pass on the wrong machine
+        run: |
+          uname -m
+          test "$(uname -m)" = aarch64
+        # `runs-on` is a request, not a guarantee, and a job named for an
+        # architecture that quietly ran on another one would be the loudest
+        # possible version of a check that asks nothing.
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+        # This step is the first of the three claims above on its own: it
+        # assembles seed/pascalc.ll for aarch64 and then compiles
+        # selfhost/compiler.pas with the result.
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure -j"$(nproc)"
+        env:
+          AFTERSCHOOL_PASCAL_TARGET: aarch64-linux-gnu
+          TARGET_SIZES_REQUIRE: x86_64-linux-gnu arm-linux-gnueabihf
+
+      - name: Compile and run a program by hand
+        run: |
+          tools/pascalcc tests/hello.pas -o /tmp/hello
+          /tmp/hello
+          file /tmp/hello
+        # With nothing set, which is what a reader of README.md on an arm64
+        # machine gets: the compiler still states x86-64 in the module it
+        # writes and clang overrides it. That path has to work too, and it is
+        # the one an unaware user takes.
+
   second-backend:
     # Is the compiler *binary* miscompiled? Nothing else here can ask.
     # `selfhost/irtest.sh` compiles the compiler with itself twice and requires
