@@ -11,7 +11,25 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
-## [Unreleased]
+## [1.8.0] — 2026-08-22
+
+**The release where the platform lock got a scoped way out.** `pascalc` takes a
+`--target=`, and CI builds and runs the whole corpus on aarch64 — so what was an
+argument that the port would work is now a machine that ran it. The two things
+that made the rest of a port guesswork are measured rather than estimated: the
+frame layouts are compared against LLVM's for every admitted target on every
+run, and the runtime's distance from ISO C is four named functions with a check
+that keeps it four.
+
+**Nothing about compiling for x86-64 changes.** A target belongs on the admitted
+list only once the hand-written layout rules have been compared against LLVM's
+for it, and that does not yet hold for a 32-bit machine — so the list is two
+entries long on purpose.
+
+The rest is oracles. An adversarial reading of both standards by readers who had
+not seen the reasoning found no misreading and five defects in the machinery
+around the readings; one of them was a diagnostic that had been false since the
+last release.
 
 ### Added
 
@@ -55,6 +73,19 @@ appears below in the release where it still existed.
   produces `pascalc: more than 24 arguments` and a non-zero exit.
 
 ### Fixed
+
+- **A parameter whose type is not a type name is no longer told the wrong
+  rule.** The diagnostic said `a parameter's type must be a type name`, which
+  stopped being true when conformant array parameters landed in 1.7.0 — a
+  parameter may equally be written as a schema, and the message denied it. It
+  is now `a parameter's type must be a type name or a conformant array schema`.
+  Both front ends carry the wording, so `difftest` compares them.
+
+- **`doc/implementation-defined.md` states compliance in the terms clause 5.1
+  prescribes.** That clause gives the sentence a processor's accompanying
+  documentation shall contain, with a placeholder for the processor's name; the
+  document kept the placeholder, so the required statement named nothing. Both
+  standards' forms are now written out, and the ISO 7185 one says level 1.
 
 - **`PAS_JUMP_SIZE` is a per-target maximum rather than a measurement of
   x86-64.** The storage a block needs to be the target of a non-local `goto`
@@ -1797,6 +1828,8 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[1.8.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.8.0
+[1.7.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.7.0
 [1.6.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.6.0
 [1.5.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.5.0
 [1.4.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.4.0
