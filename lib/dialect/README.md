@@ -81,7 +81,46 @@ would have to handle for nothing.
   for `errNone` too, so a routine that formats unconditionally needs no special
   case.
 
-## What the rule does not cover, and you should know before relying on it
+## The second rule: a boundary shape may be a parameter, not a result
+
+The rule above decides the *shape of an answer*. This one decides which shapes
+may not be one at all, and it comes from ADR-0149's survey of the three pairs
+the dialect has that nearly overlap:
+
+| Pair | The owned shape | The other shape | What the other shape says |
+| --- | --- | --- | --- |
+| absence | `^T` | `?T` | there may be no value |
+| sequences | `string(n)`, `packed array [1..n] of char` | `array of T` | the sequence belongs to the caller |
+| numbers | `integer` | `int64` | the number came from outside |
+
+The right-hand shape in each row exists because something **outside the block**
+had to be described: a foreign function may answer null, a buffer belongs to
+whoever lent it, the kernel says `ssize_t`. A parameter is where that is exactly
+right — passing a slice *is* the caller's ownership written down. A result has
+no owner, so a boundary shape there is the boundary leaking into your interface.
+
+**Convert at the first opportunity**, which is what these seven modules already
+do:
+
+- `o^` after a `= nil` test, and the value copied out — `PasEnv.LookupOr`,
+  `PasFS.WorkingDirectory`, `PasOS.ErrorNumberText`. There is not one pointer
+  type in this directory; every `^` here is an optional access.
+- a whole-array assignment from a `packed array [1..n] of char` into a
+  `string(n)` — `PasFS.PathBuffer` is packed for exactly this, and it is the one
+  type that is both a string-type and a slice actual. A `string(n)` is
+  **refused** as a slice actual, which keeps `length` meaning one thing on both
+  sides of a call.
+- `trunc`, with an argument for why it cannot reject — `PasIO.Counted` narrows
+  `read`'s `ssize_t` and says why the value is already in range. No exported
+  routine in this directory mentions `int64`.
+
+The language enforces two-thirds of this for you: a slice result is a syntax
+error (AP §6.7.3.9.2) and no `int64` expression is a constant (AP §6.4.2.6.5).
+Only the optional can be written as a result, and that is not an oversight —
+it is the *absence is not a failure* arm of the first rule, and what `Lookup`
+returns is a `?string`, a value, and not a foreign pointer wearing a flag.
+
+## What the rules do not cover, and you should know before relying on them
 
 **A failure the boundary cannot report.** `PasEnv.Lookup` binds C's `getenv`,
 which returns a pointer to a string of a length nobody stated. The conversion
@@ -104,6 +143,7 @@ alternative is a truncation nothing reports, which is worse, and that choice is
 `PasEnv`'s own and deliberate. `PasOS.ErrorNumberText` has the same shape
 against `strerror` and is unreachable in practice rather than guarded.
 
-**Nothing checks any of this.** The rule is a convention, not a gate: a new
+**Nothing checks any of this.** Both rules are conventions, not gates: a new
 module returning a result record with a tag spelled `success` would compile,
-link and pass every test in this repository.
+link and pass every test in this repository, and so would one answering an
+`int64`.

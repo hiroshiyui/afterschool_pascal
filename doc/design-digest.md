@@ -282,6 +282,19 @@ checks they agree, which is the same arrangement the version number has. A
   copying, which a file must never have. `isMemory()` is the one that means
   "travels by address". Assignment, comparison, value parameters and function
   results are all refused for files.
+- **And for anything holding one, at any depth** (ADR-0150). §6.4.6 a) is two
+  conditions — "T1 and T2 are the same type, *and that type is permissible as
+  the component-type of a file-type*" — and `Assignable` read only the first,
+  so two records holding a `text` were assignable to each other. The copy is a
+  memcpy of the file's own storage, so both variables named one
+  `struct pas_file` and the block closed it twice: a double free, from a program
+  §5.1 e) requires a processor to reject. `ContainsFile` is §6.4.3.5's
+  "permissible as the component-type of a file-type" exactly and was already
+  asked by the value-parameter, function-result, file-component and
+  structured-value checks; assignment was the one caller of the four that had
+  the weaker predicate. `tests/file_in_record_assign.pas` pins it, and BSI's
+  **DEV102** is the same program — the one DEVIANCE test of 266 this compiler
+  had not rejected.
 - Program parameters that are **files** bind to command-line arguments in order;
   `input`/`output` are the standard streams, declared *only* when the header
   lists them, so using `write` without `output` is the error §6.10 says it is.

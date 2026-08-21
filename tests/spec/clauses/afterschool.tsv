@@ -53,7 +53,7 @@
 6.4.6	Assignment-compatibility
 6.4.11	Optional-types
 6.4.11.1	The denoter
-6.4.11.2	The component shall not itself be an optional-type
+6.4.11.2	The component shall be neither an optional-type nor a file-type
 6.4.11.3	nil
 6.4.11.4	The test
 6.4.11.5	Access to the value

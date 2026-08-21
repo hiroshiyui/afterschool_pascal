@@ -491,10 +491,28 @@ close a cycle. An optional-type has no cycle to close: it *contains* its
 component rather than identifying a variable of it, and a type that were its
 own optional could have no size.
 
-**6.4.11.2 The component shall not itself be an optional-type.** `?(?T)` shall
-be refused.
+**6.4.11.2 The component shall be neither an optional-type nor a file-type.**
+`?(?T)` and `?text` shall be refused.
 
-NOTE — One flag answers for a value; two would answer for each other.
+NOTE 1 — One flag answers for a value; two would answer for each other. And a
+file is never a value (ISO 7185 §6.4.6 a), ISO/IEC 10206:1991 §6.4.6 a)), so
+there is nothing for the flag to be absent from.
+
+NOTE 2 — Neither restriction reaches a **pointer-type**, and `?^T` is
+therefore admitted although it has two absent values that are not the same
+value: where `q` is `nil` and `op := q`, `op = nil` is false and `op^ = nil` is
+true. The redundancy is the program's rather than the language's — a pointer is
+`nil` only because something assigned `nil`, and *no pointer was given* and *a
+pointer was given and it points nowhere* are two facts. The two checks compose
+in the order written, the optional's trapping before the dereference is
+reached. It is admitted rather than refused, and named here rather than left to
+be discovered, because `nil` then means two things in one expression and a
+mistaken count of `^` changes which check applies (ADR-0149).
+
+NOTE 3 — Neither restriction reaches a structured type **containing** a file
+either, and it does not need to: such a type is not assignment-compatible with
+itself (ISO 7185 §6.4.6 a) with §6.4.3.5), so an optional of one can hold
+nothing but `nil` (ADR-0150).
 
 **6.4.11.3 nil.** The value `nil` shall denote the absent value of any
 optional-type. `nil` is unchanged in every other respect, including as the

@@ -13,7 +13,7 @@ two.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal (ADR-0109)](#the-goal-adr-0109) | what this is all for, [what still blocks it](#what-is-still-blocked-on-it), and [where the ideas come from](#where-the-ideas-come-from) |
-| [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions no ADR has settled, ranked |
+| [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions, ranked — four now answered by a record, three open |
 | [What is next](#what-is-next) | the oracle that was given up, and four other things worth doing |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 
@@ -253,8 +253,10 @@ said it unblocked. This chapter is the other reading: what the *relationship* be
 two conformance modes now is, where it is asserted more strongly than it is
 checked, and which decisions are being made by default rather than on purpose.
 
-None of these is a work item. Each is a question with a live answer that no ADR
-has written down, and the reason they are here rather than in
+None of these is a work item. Each was a question with a live answer that no
+ADR had written down — four now have one and keep their entry, struck through,
+because what a survey *found* is the part worth carrying forward. The reason
+they are here rather than in
 `doc/implementation-defined.md` §6 or `doc/sop.md` §7 is that those two
 registers hold *what this compiler does not do*. These are about what it does
 and whether we have said so accurately.
@@ -474,7 +476,7 @@ It also found the only case in 228 that diverges for a reason of its own,
 not reach: two slices are compatible, the relational operators ask
 compatibility, and `a[1..2] = a[3..4]` compiled to invalid IR (ADR-0139).
 
-### 5. The dialect was pulled, not designed, and the pieces have not been checked for coherence — *the sharpest instance answered*
+### 5. ~~The dialect was pulled, not designed, and the pieces have not been checked for coherence~~ Answered
 
 Every feature so far was demanded by the foreign interface or by the library
 built on it: `external` because nothing outside the program was reachable
@@ -522,9 +524,34 @@ string of a length nobody stated, and the dialect has no result form that can
 receive an unmeasured one. So the rule ends with a clause about honesty rather
 than shape — where a boundary cannot report a failure, say so at the routine.
 
-What §5 asks *as a whole* is still open: optionals against pointers, slices
-against strings and `int64` against `integer` are three more near-overlaps that
-have not been examined this way.
+**The other three near-overlaps are examined too (ADR-0149)**, and they divide
+the same way three times — on **ownership**, the second member of each pair
+being the shape that describes something outside the block:
+
+| Pair | The owned shape | The other shape | What the other shape says |
+| --- | --- | --- | --- |
+| absence | `^T` | `?T` | there may be no value |
+| sequences | `string(n)`, `packed array [1..n] of char` | `array of T` | the sequence belongs to the caller |
+| numbers | `integer` | `int64` | the number came from outside |
+
+From which one rule for a module's author: **a boundary shape may be a
+parameter and may not be a result.** The language already enforces two-thirds
+of it — AP §6.7.3.9.2 makes a slice result a syntax error and AP §6.4.2.6.5
+makes no `int64` expression a constant — and the library was written to it
+three times over before anyone stated it: of 35 exported routines, none returns
+an `int64` or mentions one, three take a slice and all three are byte I/O, and
+the only exported optional is a `?string`. There is **not one pointer type in
+seven modules**; all three `^` in `lib/dialect/` are optional accesses.
+
+What the survey found and did not fix is `?^T`, an optional of a pointer, which
+has two absent values that are not the same value — `op = nil` is false while
+`op^ = nil` is true. It is argued for rather than refused: the redundancy is the
+program's and not the language's, the two checks compose in the right order, and
+nothing here writes it. It is in AP §6.4.11.2's NOTE and in `doc/sop.md` §7.
+
+So §5 is answered for the shapes that exist. It says nothing about the shapes
+not yet added, and every rule in it turns on the word *owns*, which §7 is what
+has not defined.
 
 ### 6. "The conformance modes stay exactly as they are" is slightly stronger than the truth
 
@@ -581,9 +608,11 @@ The order above is the ranking, so what is left to say is the kind:
   containment for every program using that identifier, and the sweep reports it
   only where a corpus program does — which for `defer` is nowhere.
 
-- **§5's sharpest instance is written** (ADR-0141) and the rest of §5 remains
-  writing. **§6 and §7 are writing too**: a sentence, and a decision deferred
-  long enough to deserve being deferred *explicitly*.
+- **§5 is written** — its sharpest instance in ADR-0141, the remaining three
+  near-overlaps in ADR-0149 — and what is left of it is not writing but §7:
+  both records divide their shapes on ownership and neither can say what
+  owning is. **§6 and §7 are writing too**: a sentence, and a decision
+  deferred long enough to deserve being deferred *explicitly*.
 
 
 ## What is next

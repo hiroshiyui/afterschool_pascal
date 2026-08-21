@@ -24,6 +24,20 @@ appears below in the release where it still existed.
   Unlike the four `--dump-*` flags it stops no stage: the pool is filled by
   Sema and by CodeGen as well as by the lexer, so it runs everything.
 
+### Fixed
+
+- **A structured type containing a file is no longer assignable**, under all
+  three `--std` modes. §6.4.6 a) of both standards makes a value
+  assignment-compatible only when its type "is permissible as the
+  component-type of a file-type" — a file at any depth — and this compiler read
+  only the first half of that sentence, so `b := a` between two records holding
+  a `text` was accepted. The copy is a memcpy of the file's own storage, so both
+  variables then named one open file and the block closed it twice: a double
+  free and SIGABRT, from a program a conforming processor must reject at compile
+  time. It is now `cannot assign r: it contains a file, and a file has no copy`.
+  BSI's DEV102 is this program, and it was the one DEVIANCE test of 266 this
+  compiler did not reject.
+
 ### Changed
 
 - **`--std=afterschool`: one linker symbol is one `external` declaration.** Two

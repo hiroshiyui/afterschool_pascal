@@ -111,6 +111,21 @@ Feature: Optional types
       an optional cannot hold an optional
       """
 
+  @afterschool:6.4.11.2
+  Scenario: the component of an optional is not a file
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var v: ?text;
+      begin v := nil end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a file is never a value, so there is nothing to be absent
+      """
+
   @afterschool:6.4.11.7
   Scenario: two separately written optional denoters are two types
     Given the Afterschool Pascal program
