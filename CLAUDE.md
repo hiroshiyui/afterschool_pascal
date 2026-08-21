@@ -173,8 +173,8 @@ load-bearing and the entry names the test that fails without it.
 | constant-expressions, constant-accesses, structured values | 0054, 0061, 0066, 0069, 0075 |
 | function results and function-accesses | 0055, 0056 |
 | conformance sweeps and what they found | 0067, 0071 – 0078, 0080, 0087 – 0101, 0107, 0113, 0127, 0133, 0134 |
-| the build, the seed, the oracles | 0011, 0013, 0081 – 0086, 0095, 0102 – 0108, 0126 |
-| where the language is going | 0109, 0114 – 0125, 0128 – 0132 |
+| the build, the seed, the oracles | 0011, 0013, 0081 – 0086, 0095, 0102 – 0108, 0126, 0138, 0142, 0144 – 0148, 0150 |
+| where the language is going | 0109, 0114 – 0125, 0128 – 0141, 0143, 0149, 0151 |
 
 `doc/adr/README.md` indexes all of them by number and title.
 

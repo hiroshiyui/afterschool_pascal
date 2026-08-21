@@ -1,0 +1,4 @@
+a DIR* crossed the boundary as int64
+it copied, and arithmetic on it was legal
+closedir through the copy returned 0
+and nothing in the language prevented any of it

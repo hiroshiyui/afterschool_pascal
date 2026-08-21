@@ -864,6 +864,15 @@ A `?integer` result is refused because C has no null integer for it to mean.
   memory-safety model begins — precisely, a pointer to storage the callee owns
   whose contents are not characters.
 
+NOTE — **c) is a requirement on the program and this processor does not enforce
+it, nor can it.** 6.7.7.8 admits an `int64` result, an address fits in one on
+every target this processor has, and no processor can tell a count from an
+address. So `function ExtOpendir(path: string): int64; external 'opendir'` is
+accepted, and what it yields is a `DIR *` that copies freely and that 6.4.2.6.2
+makes the operand of every arithmetic operator, deliberately. Annex C.7, and
+ADR-0151 for why the memory-safety model this clause defers to does not in fact
+begin here.
+
 **6.7.7.10 Reserved foreign names.** The character-string of an
 external-directive shall not be a name this processor itself emits.
 
@@ -1076,6 +1085,15 @@ the skip. The oracles that do reach it are the goldens in `tests/dialect/`,
 `selfhost/irtest.sh`, and `verify/` for any lowering with a rule (ADR-0117).
 
 **C.6 No third-party corpus reaches it.** The BSI suite is ISO 7185 and fixed.
+
+**C.7 A result that is an address is forbidden and not refused** (6.7.7.9 c)).
+The clause states the requirement; 6.7.7.8's `int64` is a door through it that
+cannot be shut without withdrawing the type `read` and `write` were given it
+for. Every property an owned handle would have is therefore absent rather than
+pending: it copies, arithmetic on it is legal, and releasing it twice is
+whatever the far side does about that — for `closedir`, an abort.
+`tests/dialect/foreign_int64_handle.pas` is the program, kept as a gap that
+fails in both directions (ADR-0151).
 
 ## Annex D (informative) — The library
 

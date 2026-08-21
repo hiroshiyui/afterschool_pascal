@@ -282,6 +282,15 @@ checks they agree, which is the same arrangement the version number has. A
   copying, which a file must never have. `isMemory()` is the one that means
   "travels by address". Assignment, comparison, value parameters and function
   results are all refused for files.
+- **Taken together, this is the language's memory-safety model** (ADR-0151), and
+  it had no name until that record. A file cannot be copied and is released
+  when the variable holding it dies — the block epilogue, a non-local `goto`
+  (ADR-0032), `halt`, or `dispose`, which emits `pas_file_done` before the free
+  — and lifetimes nest, which the runtime states as the invariant making
+  "registered later" and "abandoned" the same set. That is affine ownership with
+  scope-based release, reached from ISO 7185 §6.4.6 a) and §6.6.3.1 rather than
+  from Rust. What it does **not** cover is aliasing: a second name for one owned
+  value, which is ADR-0019's hole and the half of the fork still open.
 - **And for anything holding one, at any depth** (ADR-0150). §6.4.6 a) is two
   conditions — "T1 and T2 are the same type, *and that type is permissible as
   the component-type of a file-type*" — and `Assignable` read only the first,

@@ -13,7 +13,7 @@ two.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal (ADR-0109)](#the-goal-adr-0109) | what this is all for, [what still blocks it](#what-is-still-blocked-on-it), and [where the ideas come from](#where-the-ideas-come-from) |
-| [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions, ranked — four now answered by a record, three open |
+| [The two standards and the dialect](#the-two-standards-and-the-dialect) | seven structural questions, ranked — five now answered by a record, two open |
 | [What is next](#what-is-next) | the oracle that was given up, and four other things worth doing |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 
@@ -151,11 +151,12 @@ Each borrowing below is tied to the open decision it would settle.
 | **Error unions / `Result`** | Zig, Rust | error handling | **Good**, and the biggest practical gap |
 | **`defer`** | Zig, Swift | resource safety | **Good** |
 | **Unicode-correct `String`** | Swift | the text model | **The model to copy** |
-| **ARC** | Swift | memory safety | **Plausible** |
-| **Ownership and borrowing** | Rust | memory safety | **Strongest guarantee, worst fit** |
+| **ARC** | Swift | aliasing | **Undecidable on the evidence in hand** (ADR-0151) |
+| **Ownership and borrowing** | Rust | aliasing | **The same, and the worst fit besides** |
+| **Scope-based release** | ISO 7185, and Rust's `Drop` | lifetime | **Done, and it was already here** (ADR-0151) |
 | **Traits / protocols** | Rust, Swift | abstraction | **Later** |
 | **`comptime`** | Zig | metaprogramming | **Later** |
-| **Actors / `Send`+`Sync`** | Swift, Rust | concurrency | **Blocked** on the two above it |
+| **Actors / `Send`+`Sync`** | Swift, Rust | concurrency | **Blocked**, and it is what *unblocks* the two aliasing rows |
 
 **Slices.** The prediction held: `array of T` is the two-scalar shape a fifth
 time and needed no new mechanism. What the row did not anticipate is how much
@@ -206,13 +207,30 @@ no lifetime inference, and stays self-hostable and cheap to mirror in `src/`.
 expensive thing here to mirror in the C++ front end (ADR-0108), and the
 furthest from anything recognisably Pascal.
 
+**Neither is choosable yet, and ADR-0151 says why.** Both answer *lifetime* the
+way this language already answers it — a file variable is released when the
+variable holding it dies and cannot be copied out of it — and what they differ
+about is *aliasing*, which nothing has asked. The five FFI increments were five
+lifetime questions, so they discriminate between these two rows not at all. The
+row that decides them is `Actors`, three rows down.
+
+**Scope-based release.** The one already here, and the entry exists because the
+absence of an entry was read as the absence of a model for a year. A file
+cannot be copied and is released at the block epilogue, on a non-local `goto`,
+on `halt` and on `dispose`; lifetimes nest. What it does not cover is every
+case where a second name reaches the same value, which is the aliasing half.
+
 **Traits, and `comptime`.** Schemata already give parametric types (ADR-0039),
 so traits are the next layer and not the first; ADR-0054 gave the language
 constant-expressions everywhere, and `comptime` is a much larger idea that
 nothing yet needs.
 
-**Actors.** Blocked, and rightly: concurrency cannot be designed before the
-memory model, and the memory model cannot be designed before the safety model.
+**Actors.** Blocked, and the direction of the blocking is the reverse of what
+this line used to say. Concurrency cannot be designed before the memory model
+and the memory model not before the safety model — but the safety model's open
+half is *aliasing*, and concurrency is the thing that certainly demands two live
+names for one value. So it is not merely last in a chain: it is the demand that
+would make the choice above it decidable, which is what ADR-0151 leaves it as.
 
 Two conclusions worth stating rather than leaving implicit:
 
@@ -224,7 +242,9 @@ Two conclusions worth stating rather than leaving implicit:
   only implementation effort. Borrowing would make ADR-0108's C++ mirror
   prohibitively expensive and would likely force the decision to freeze it —
   so the safety choice and the oracle question are the same question asked
-  twice.
+  twice. That is still the strongest argument available about the two, and
+  ADR-0151 declines to decide on it: cost is a reason to prefer one, not
+  evidence about which the language needs.
 
 One option **closes** as the language diverges: a third-party differential (FPC
 under `-Miso`, or p5) can only ever check the ISO 7185 core, because nobody else
@@ -567,27 +587,57 @@ certainly unavoidable and is not a conformance question — §5.1 is about
 accepting and rejecting — but the phrasing in `CLAUDE.md` and in README is
 stronger than what is true, and noticing that gap is this repository's habit.
 
-### 7. The memory-safety fork: deferral, or discovery?
+### 7. ~~The memory-safety fork: deferral, or discovery?~~ Answered
 
-ADR-0109 wants networking, internationalisation, concurrency and memory safety.
-Three of the four are behind the one decision that has never been made:
-networking needs a struct with an agreed layout; concurrency cannot be designed
-before the memory model and the memory model cannot be designed before the
-safety model; and the safety model itself is the open fork — ARC, ownership, or
-neither.
+ADR-0109 wants networking, internationalisation, concurrency and memory safety,
+and this entry put three of the four behind one decision never made — the safety
+model, "ARC, ownership, or neither". It offered two readings of the increments
+before it, that the decision genuinely kept proving unnecessary or that it was
+being routed around, and said the opaque handle (`DIR *`, `FILE *`) "is the
+first item that forces it, which is the reason it has not simply been started."
 
-The record of the last five increments cuts both ways. ADR-0122 found the
-argument side of the boundary has no lifetime question on it, ADR-0123 found
-the nearest blocker was **null** rather than ownership, and ADR-0132 found a
-buffer the caller lends was never blocked at all. **Two readings fit that
-equally well**: either the decision genuinely keeps proving unnecessary, or it
-is being routed around because it is the hardest thing here. The opaque handle
-(`DIR *`, `FILE *`) is the first item that forces it, which is the reason it
-has not simply been started.
+**Answered (ADR-0151)**, and neither reading was right. Three findings, and the
+second is the one that cost something.
 
-Internationalisation is the fourth and is wholly unstarted. It is also the one
-with the best model available to copy, and the one whose absence a "practical
-Pascal" would be judged on first.
+**There was already a model here and nobody had named it.** A file variable
+cannot be copied — no assignment, no relational operator, no value parameter,
+no function result, and since ADR-0150 none of those for anything *containing*
+one — and it is released on every exit the language has: the block epilogue, a
+non-local `goto` (ADR-0032), `halt`, and `dispose`, which emits `pas_file_done`
+before the free. The runtime states the invariant that makes it work, that file
+lifetimes nest. That is affine ownership with scope-based release — move
+semantics and `Drop` — reached from ISO 7185 §6.4.6 a) and §6.6.3.1 in 1982,
+and implemented across 30 `IsFile` sites, 14 `ContainsFile` and 9 `HoldsFile`.
+It is now the dialect's stated model: **an owned value is released when the
+variable holding it dies, and cannot be copied out of that variable.**
+
+**The handle was never blocked, and the sentence above was protecting nothing.**
+AP §6.7.7.9 c) forbids an external result that is an address of storage the
+callee owns; AP §6.7.7.8 admits `int64`, which ADR-0128 added for `ssize_t`; a
+pointer fits in 64 bits and no processor can tell a count from an address. So
+`function ExtOpendir(path: string): int64; external 'opendir'` compiles, links
+and opens the directory — and because AP §6.4.2.6.2 makes `int64` numeric on
+purpose, the handle copies, `d := d + 8` is a legal statement about an open
+directory stream, and closing it twice is `double free or corruption (!prev)`,
+exit 134. It was in no register: not here, not ADR-0128, not Annex C.
+`tests/dialect/foreign_int64_handle.pas` is the program, and Annex C.7 and
+`doc/sop.md` §7 are where it now lives.
+
+**The remaining fork is forced by aliasing, not by lifetime.** ADR-0122's
+argument side, ADR-0123's null, ADR-0132's lent buffer and now the handle were
+four questions about *when storage dies*, which is the half answered in 1982 —
+which is why five increments produced nothing that discriminates between ARC
+and borrowing. Those two differ about what may hold a **second name** for one
+owned value. The deferral therefore has a criterion instead of a mood: it
+becomes decidable at the first construct admitting two live names for one owned
+value — a handle as a result, a handle stored in something outliving its block,
+a second pointer to a disposed variable, or concurrency. Concurrency is the one
+that certainly forces it, and it is unstarted.
+
+Internationalisation is the fourth of ADR-0109's four and is wholly unstarted.
+It is also the one with the best model available to copy, and the one whose
+absence a "practical Pascal" would be judged on first. It is now the largest
+thing on this page that no record has touched.
 
 ### What kind of work each of these is
 
@@ -609,10 +659,16 @@ The order above is the ranking, so what is left to say is the kind:
   only where a corpus program does — which for `defer` is nowhere.
 
 - **§5 is written** — its sharpest instance in ADR-0141, the remaining three
-  near-overlaps in ADR-0149 — and what is left of it is not writing but §7:
-  both records divide their shapes on ownership and neither can say what
-  owning is. **§6 and §7 are writing too**: a sentence, and a decision
-  deferred long enough to deserve being deferred *explicitly*.
+  near-overlaps in ADR-0149 — and what was left of it was §7, both records
+  dividing their shapes on ownership while neither could say what owning is.
+  **§7 now says** (ADR-0151): released when the variable holding it dies, and
+  not copyable out of that variable. **§6 is still writing**: one sentence.
+
+- **§7 turned out to be two questions wearing one name.** The half about
+  lifetime was answered before this project began and only needed naming; the
+  half about aliasing is open, undecidable from the evidence five increments
+  produced, and waits on the first construct that gives one owned value two
+  live names. What it cost to leave them merged is in Annex C.7.
 
 
 ## What is next
