@@ -103,7 +103,7 @@ def main():
             src = os.path.join(d, case + suffix + ".pas")
             err = os.path.join(d, case + suffix + ".err")
             rel = os.path.relpath(src, ROOT)
-            named.add(os.path.relpath(src, ROOT))
+            named.add(rel)
             if not os.path.exists(src):
                 problems.append("%s (%s) has no case at %s" % (construct, mode, rel))
                 continue

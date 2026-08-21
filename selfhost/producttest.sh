@@ -341,6 +341,35 @@ if [[ $status -ne 0 ]]; then
   failed=$((failed + 1))
 fi
 
+# --- AFTERSCHOOL_PASCAL_TARGET, and that an explicit flag beats it -----------
+#
+# ADR-0159 added the variable so a whole run -- the arm64 CI job, above all --
+# can be pointed at one target without a flag on every invocation. Nothing here
+# exercised it: the only thing that set it was that job, so a typo in
+# tools/pascalcc would have passed every local gate and failed remotely, on
+# another architecture, in a job about something else. The precedence rule was
+# asserted by nothing at all.
+#
+# Both halves, because a check that only pins the variable passes just as well
+# with the explicit flag ignored.
+target_check() { # <expected triple> <env value> <extra args...>
+  local want=$1 env=$2; shift 2
+  checked=$((checked + 1))
+  if ! AFTERSCHOOL_PASCAL_TARGET=$env PASCALC=$pascalc \
+       AFTERSCHOOL_PASCAL_RUNTIME=$runtime \
+       "$driver" -S "$@" "$work/target.pas" -o "$work/t.ll" >/dev/null 2>&1
+  then
+    echo "--- target: pascalcc failed with AFTERSCHOOL_PASCAL_TARGET=$env ---" >&2
+    failed=$((failed + 1))
+  elif ! grep -q "target triple = \"$want\"" "$work/t.ll"; then
+    echo "--- target: AFTERSCHOOL_PASCAL_TARGET=$env $* did not emit $want ---" >&2
+    grep -m1 'target triple' "$work/t.ll" >&2
+    failed=$((failed + 1))
+  fi
+}
+target_check aarch64-unknown-linux-gnu aarch64-linux-gnu
+target_check x86_64-pc-linux-gnu       aarch64-linux-gnu --target=x86_64-pc-linux-gnu
+
 # --- a misused command line is reported, and reported as a failure ----------
 #
 # The command line is part of the interface (CHANGELOG says so in as many

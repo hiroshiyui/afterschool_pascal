@@ -160,8 +160,10 @@ def build_module(sources):
     types, consts, names = [], [], []
     for i, (path, std) in enumerate(sources):
         for name, body in frames_of(path, std):
-            # Renamed per source: two sources both start at %frame1.
-            tag = "%%s%d%s" % (i, name[1:])
+            # Renamed per source, because two sources both start at %frame1.
+            # `name` arrives with its sigil, so it is dropped and one is put
+            # back: source 0's %frame1 becomes %s0frame1.
+            tag = "%s%d%s" % ("%s", i, name[1:])
             types.append("%s = type %s" % (tag, body))
             sym = "z%d_%s" % (i, name[1:])
             consts.append("@%s_size = global i64 ptrtoint (ptr getelementptr "

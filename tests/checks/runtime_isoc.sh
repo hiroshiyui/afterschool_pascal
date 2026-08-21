@@ -66,13 +66,30 @@ std=(-std=c11 -pedantic-errors -I"$root/runtime")
 
 # --- pass 1: what does strict ISO C not declare? ---------------------------
 "$cc" "${std[@]}" -c "$src" -o "$work/a.o" >"$work/p1.txt" 2>&1
+p1=$?
 found=$(grep -oE "call to undeclared function '[A-Za-z_][A-Za-z0-9_]*'" \
           "$work/p1.txt" | sed "s/.*'\(.*\)'/\1/" | sort -u)
 
+# Nothing undeclared has two very different causes, and telling them apart is
+# the whole of this branch. A *clean* compile means the C library declared
+# everything -- macOS exposes POSIX regardless of __STRICT_ANSI__ -- and the
+# question cannot be asked here. A compile that *failed* and still named
+# nothing means it stopped before reaching the calls, which a bad #include does,
+# and reporting that as "this C library declares POSIX" is a lie that exits 77.
+#
+# The first version of this script had exactly that bug: replacing <errno.h>
+# with a header that does not exist made it print the skip message and pass.
 if [[ -z $found ]]; then
-  echo "runtime-isoc: this C library declares POSIX even under __STRICT_ANSI__," \
-       "so the question cannot be asked here -- glibc is what it was measured on"
-  exit 77
+  if [[ $p1 -eq 0 ]]; then
+    echo "runtime-isoc: this C library declares POSIX even under" \
+         "__STRICT_ANSI__, so the question cannot be asked here --" \
+         "glibc is what it was measured on"
+    exit 77
+  fi
+  echo "runtime-isoc: runtime/pasrt.c does not compile as strict ISO C, and" \
+       "the failure is not a POSIX call:" >&2
+  head -20 "$work/p1.txt" >&2
+  exit 1
 fi
 
 # --- pass 3: and what does the *generated* code name? ----------------------
@@ -103,8 +120,16 @@ if [[ -x $pascalc ]]; then
     done | sort -u | grep -vE '^(pas_|llvm\.)' )
   found=$(printf '%s\n%s\n' "$found" "$emitted" | grep -v '^$' | sort -u)
 else
-  echo "runtime-isoc: no compiler at $pascalc, so only runtime/pasrt.c was" \
-       "asked -- the emitted module's own symbols were not" >&2
+  # No degraded mode. Half the harvest against a whole catalogue accuses it of
+  # naming `_setjmp`, which the runtime indeed does not use -- the *generated
+  # code* does -- so running on without the emitted half turns a missing build
+  # into a false finding against the file that is right. Skips as
+  # buffer-headroom does for the same reason.
+  echo "runtime-isoc: no compiler at $pascalc -- half of this check reads what" \
+       "the emitted module declares, and half a harvest against a whole" \
+       "catalogue is a false accusation rather than a partial answer. Build" \
+       "first, or set PASCALC."
+  exit 77
 fi
 
 listed=$(grep -vE '^\s*(#|$)' "$list" | tr -d ' \t' | sort -u)

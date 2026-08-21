@@ -1166,11 +1166,12 @@ because the question has two shapes.
 the frame type definitions out of what the built compiler emits — for
 `selfhost/compiler.pas`, and for a probe carrying the types the compiler has no
 frame slot of, an `i256` in a record first among them — and assembles them as
-`ptrtoint getelementptr` constants once per admitted target. **4512 offsets, on
-every run.** The list of targets is parsed from the compiler's own `--target=`
+`ptrtoint getelementptr` constants once per admitted target. **Every offset it
+emits, on every run** — the gate prints the count, and no document pins it,
+because it moves with every declaration added to the compiler. The list of targets is parsed from the compiler's own `--target=`
 refusal, so a third one is compared without the gate being edited. It fails when
 a field moves and when the comparison reached nothing; admitting
-`i686-linux-gnu` reports 3878 of 4512 differing.
+`i686-linux-gnu` moves 86% of them.
 
 *Run.* A CI job on GitHub's `ubuntu-24.04-arm` runner builds and runs the whole
 suite natively — **639 of 639 on the first attempt**, from a seed whose two
