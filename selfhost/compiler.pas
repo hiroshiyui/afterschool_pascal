@@ -27137,9 +27137,24 @@ begin
   { ISO/IEC 10206:1991 6.4.6: a string destination is not a memcpy. A short
     value is padded with spaces into a fixed string, kept at its own length in
     a variable one, and a value longer than the capacity is an *error* -- so
-    this is a runtime operation and is taken before the copy below. }
-  if IsStringType(t) and IsStringOrChar(from) and
-     (IsVarString(t) or IsVarString(from) or IsChar(from) or
+    this is a runtime operation and is taken before the copy below.
+
+    The destination is asked with IsStringOrChar and not IsStringType, because
+    6.4.6 f) names both: "T1 and T2 are compatible, T1 is a string-type *or the
+    char-type*, and the length of the value of T2 is less than or equal to the
+    capacity of T1", and 6.4.5 d) makes a string-type and the char-type
+    compatible in either order. Asking IsStringType let `c := s` fall past this
+    arm into the scalar store below, which stored the string's *pointer* into
+    an i8 -- IR that clang refuses, naming a file the program's author never
+    wrote. EmitStringStoreValue has had the char arm all along; nothing but
+    this predicate kept an assignment from reaching it.
+
+    Two chars are excluded because they are an ordinary scalar store, and
+    IsChar(t) joins the disjunction because a char has no TypeLength to compare
+    -- `or` short-circuits, so that comparison is never reached for one. }
+  if IsStringOrChar(t) and IsStringOrChar(from) and
+     not (IsChar(t) and IsChar(from)) and
+     (IsVarString(t) or IsVarString(from) or IsChar(from) or IsChar(t) or
       (TypeLength(t) <> TypeLength(from))) then begin
     StrClear(hdr);
     EmitStringStore(dst, t, src, hdr)

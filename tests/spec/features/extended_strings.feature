@@ -212,3 +212,66 @@ Feature: Fixed-string-types and the string functions
       """
       must be a string or a char
       """
+
+# ISO/IEC 10206:1991 §6.4.5 and §6.4.6 -- the char-type is a legal *destination*
+# for a string value, which is easy to miss because the two clauses have to be
+# read together. §6.4.5 d) makes a string-type and the char-type compatible in
+# either order, and §6.4.6 f) then names both as T1: "T1 and T2 are compatible,
+# T1 is a string-type or the char-type, and the length of the value of T2 is
+# less than or equal to the capacity of T1".
+#
+# Reading only §6.4.6 f)'s "string-type" and forgetting "or the char-type" does
+# not refuse the program -- Sema accepts it on §6.4.5 alone -- it miscompiles it.
+
+@extended:6.4.5 @extended:6.4.6
+Feature: A string value may be assigned to a char variable
+
+  Scenario: a substring of length one is assigned to a char
+    Given the Extended Pascal program
+      """
+      program p(output);
+      var c: char; s: string(10);
+      begin
+        s := 'hello';
+        c := s[2..2];
+        writeln(c)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      e
+      """
+
+  Scenario: the null-string is padded with spaces to the capacity of the char
+    Given the Extended Pascal program
+      """
+      program p(output);
+      var c: char; s: string(4);
+      begin
+        s := '';
+        c := s;
+        writeln('[', c, ']')
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      [ ]
+      """
+
+  Scenario: a value longer than the capacity of one is an error
+    Given the Extended Pascal program
+      """
+      program p(output);
+      var c: char; s: string(10);
+      begin
+        s := 'hi';
+        c := s;
+        writeln(c)
+      end.
+      """
+    When it is compiled and run
+    Then it stops at run time
