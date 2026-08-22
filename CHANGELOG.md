@@ -39,7 +39,7 @@ appears below in the release where it still existed.
   `§6.8.2.4` and stops its structured statements at `§6.8.3.10`, while Extended
   Pascal uses `§6.8.3.x` for *Operators* and numbers the goto `§6.9.2.4`. Every
   site that can be corrected now names both. A new check,
-  `clause-citations`, asks of all 7377 clause citations in the tree whether
+  `clause-citations`, asks of all 7382 clause citations in the tree whether
   each names a clause at all; it catches a number that names nothing, and
   cannot catch one that names the wrong clause of the right shape.
 

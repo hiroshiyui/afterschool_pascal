@@ -127,7 +127,7 @@ A change is often two classes. ADR-0102's was A and D: it changed a lowering
     §6.8.1, which is the goto-target rule in the first and Expressions —
     General in the second*". Nothing enforces this (§7).
   - **The number is checked to exist** by `clause-citations` (ADR-0164), which
-    is the half that *can* be mechanical: over 7369 citations it asks whether
+    is the half that *can* be mechanical: over 7382 citations it asks whether
     each names a clause of some standard. It cannot ask whether it names the
     right one — that is what B1 above is for, and what `langspec-audit` exists
     to attack. A clause number written anywhere in this tree counts as a

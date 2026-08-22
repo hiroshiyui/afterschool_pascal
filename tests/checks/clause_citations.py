@@ -39,7 +39,6 @@ list of things that used to be true.
 import csv
 import pathlib
 import re
-import subprocess
 import sys
 
 # A clause of clause 6 -- the language -- which is the only clause anything
@@ -53,6 +52,41 @@ SCAN = (".md", ".pas", ".c", ".cpp", ".h", ".py", ".feature", ".tsv", ".sh",
         ".err", ".txt")
 
 CATALOGUE = "tests/checks/nonexistent_clauses.txt"
+
+# Walked rather than asked of `git ls-files`, which exits 128 in a container
+# whose checkout git calls dubiously owned -- it did, in three CI jobs, and a
+# gate that cannot run is worse than one that is merely narrow. Walking also
+# reaches a file that has not been added yet, which is the moment a citation
+# can still be fixed without a catalogue entry.
+#
+# Each skip is a directory whose text is not this repository's to be judged on:
+SKIP = {
+    ".git",             # not text
+    "__pycache__",
+    "doc/vendor",       # the standards themselves. No text of either is in
+                        # this repository and none may be; they are read
+                        # locally and never redistributed. Scanning them would
+                        # also drown the report in their own cross-references.
+    "tests/bsi/suite",  # BSI's 812 programs, fetched and never committed. Their
+                        # headers cite clauses in BSI's numbering ("TEST
+                        # 6.4.3.5-4"), which is not ours to correct.
+}
+
+
+def sources(root):
+    """Every file whose citations this repository is answerable for."""
+    out = []
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or not path.name.endswith(SCAN):
+            continue
+        rel = path.relative_to(root).as_posix()
+        parts = rel.split("/")
+        if any(p in SKIP or p.startswith("build") for p in parts):
+            continue
+        if any(rel.startswith(s + "/") for s in SKIP):
+            continue
+        out.append(rel)
+    return out
 
 
 def inventory(root):
@@ -96,14 +130,7 @@ def main():
     known = inventory(root)
     allow = catalogued(root)
 
-    # Tracked *and* new-but-not-ignored, so a document is checked before it is
-    # committed rather than after -- which is the only moment its citation can
-    # still be fixed without a catalogue entry. `--exclude-standard` is what
-    # keeps doc/vendor/ out: no text of either standard is in this repository
-    # and none may be, and it is gitignored for that reason.
-    files = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
-        cwd=root, capture_output=True, text=True, check=True).stdout.split()
+    files = sources(root)
     total = 0
     found = {}          # number -> {file, ...}
     for name in files:
@@ -157,7 +184,7 @@ def main():
     # Reported rather than assumed: an empty problem list is what a clean run
     # and a run that scanned nothing both produce.
     print(f"clause-citations: {total} citations of clause 6 across "
-          f"{len(files)} tracked files; {len(known)} clauses known")
+          f"{len(files)} files; {len(known)} clauses known")
     if problems:
         for line in problems:
             print(line)

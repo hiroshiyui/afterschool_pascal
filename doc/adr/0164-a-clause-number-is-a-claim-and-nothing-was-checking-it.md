@@ -69,7 +69,19 @@ and was the standard's own.
 
 **A gate asks whether a cited number names a clause at all**, against the
 generated inventories, and nothing more. `tests/checks/clause_citations.py`,
-7336 citations, a `ctest` case so it runs before a push.
+7382 citations over 1346 files, a `ctest` case so it runs before a push.
+
+**It walks the tree rather than asking git.** The first version asked
+`git ls-files --cached --others --exclude-standard`, which is the more precise
+question and which **exits 128 in a container** whose checkout git calls
+dubiously owned — three CI jobs, and a gate that cannot run is worse than one
+that is merely narrow. What the walk gives up is `.gitignore`, so the four
+directories that must not be read are named in the source with the reason
+apiece: `doc/vendor/`, which is the standards' own text and may never be
+scanned or committed; `tests/bsi/suite/`, whose headers cite clauses in BSI's
+numbering and are not ours to correct; `build*/`; and `__pycache__`. What it
+keeps is reaching a file that has not been added yet, which is the moment a
+citation can still be fixed without a catalogue entry.
 
 **It answers the cheap half and the file says so.** It cannot ask whether a
 number names the *right* clause, so it would not have caught ADR-0163 — 6.4.3.4
