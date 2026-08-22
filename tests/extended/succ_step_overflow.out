@@ -1,0 +1,7 @@
+succ(green,2) = 3
+pred(green,1) = 0
+succ(green,0) = 1
+pred(green,-2) = 3
+big steps still count: 1001
+succ(maxint-1,1) = 2147483647
+this must not print: 

@@ -26108,22 +26108,44 @@ begin
           end
           else
             w := a;
-          Def(sum);
-          if isSucc then write(ircode, 'add i32 ') else write(ircode, 'sub i32 ');
+          { In i64, and that is the whole of D.65. The paragraph above says the
+            arithmetic must not wrap before it is looked at, and an i32 add
+            wraps: for the integer type OrdinalHi is maxint, so succ(maxint, 2)
+            wrapped to -maxint and the range check then found it comfortably
+            inside the type. succ(maxint) reported, because a step of 1 takes
+            the one-ended path below and compares *before* stepping -- so the
+            two spellings of one clause disagreed, and the k form silently
+            answered with a value of the wrong sign.
+
+            i64 is enough by construction and not by luck: both operands are
+            i32, so their sum needs at most 33 bits and the comparison sees the
+            mathematical value. The truncation afterwards is unconditional now
+            -- the sum is i64 whatever the ordinal's width -- which is also how
+            the two size arms below became one. }
+          Def(tmp);
+          write(ircode, 'sext i32 ');
           PutOp(w);
-          write(ircode, ', ');
+          writeln(ircode, ' to i64');
+          Def(lim);
+          write(ircode, 'sext i32 ');
           PutOp(k_);
+          writeln(ircode, ' to i64');
+          Def(sum);
+          if isSucc then write(ircode, 'add i64 ') else write(ircode, 'sub i64 ');
+          PutOp(tmp);
+          write(ircode, ', ');
+          PutOp(lim);
           writeln(ircode);
           OpInt(OrdinalLo(at), lim);
           Def(w);
-          write(ircode, 'icmp slt i32 ');
+          write(ircode, 'icmp slt i64 ');
           PutOp(sum);
           write(ircode, ', ');
           PutOp(lim);
           writeln(ircode);
           OpInt(OrdinalHi(at), lim);
           Def(tmp);
-          write(ircode, 'icmp sgt i32 ');
+          write(ircode, 'icmp sgt i64 ');
           PutOp(sum);
           write(ircode, ', ');
           PutOp(lim);
@@ -26144,15 +26166,12 @@ begin
           WriteTypeName(at);
           msg := MsgEnd;
           EmitTrapIf(lim, msg);
-          if LlSize(at) = 4 then v := sum
-          else begin
-            Def(v);
-            write(ircode, 'trunc i32 ');
-            PutOp(sum);
-            write(ircode, ' to ');
-            PutLlType(at);
-            writeln(ircode)
-          end
+          Def(v);
+          write(ircode, 'trunc i64 ');
+          PutOp(sum);
+          write(ircode, ' to ');
+          PutLlType(at);
+          writeln(ircode)
         end
         else begin
         if isSucc then up := OrdinalHi(at) else up := OrdinalLo(at);

@@ -333,6 +333,25 @@ def fp_to_int(x):
     return z3.fpRoundToIntegral(z3.RTZ(), x)
 
 
+def succ_step_sum(i, k):
+    """`Builtin::Succ`/`Pred` with a step: both operands are sign-extended one
+    width up and the sum computed there, so it cannot wrap before the range
+    check reads it. The emitted code sign-extends i32 to i64; modelled as one
+    extra bit, which is what makes "33 bits suffice for the sum of two 32-bit
+    values" the thing being checked rather than a constant being trusted.
+
+    `pred(x,k)` emits `sub` on the same two extended operands, which is the
+    same statement with k negated and needs no separate model — the negation
+    happens after the extension, so it cannot overflow either.
+    """
+    return z3.SignExt(1, i) + z3.SignExt(1, k)
+
+
+def succ_step_traps_outside(total, lo, hi):
+    """The two `icmp`s that follow, in the wide width the sum was computed in."""
+    return z3.Or(total < z3.SignExt(1, lo), total > z3.SignExt(1, hi))
+
+
 def traps_succ_int(i, width=INT_BITS):
     """`Builtin::Succ` on integer: equality with maxint."""
     return i == maxint(width)

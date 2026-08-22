@@ -422,6 +422,34 @@ def _subrange_traps_exactly_outside(w):
     return pre, claim
 
 
+def _succ_with_a_step_traps_exactly_outside_its_type(w):
+    """The k form of §6.7.6.4, with symbolic bounds and a symbolic step.
+
+    The one-ended rule above cannot see this: a step of one compares *before*
+    stepping, so it never forms a sum that could wrap. The k form has to form
+    the sum first, and the whole question is whether it is still the
+    mathematical one when the range check reads it. It was not — the sum was
+    i32, so succ(maxint, 2) landed on -maxint and the check found it inside
+    every type. One clause, two spellings, and only this rule compares them.
+    """
+    i, k = low.integer("i", w), low.integer("k", w)
+    lo, hi = low.integer("lo", w), low.integer("hi", w)
+    pre = z3.And(lo <= hi,
+                 iso.in_integer_range(lo, low.maxint(w)),
+                 iso.in_integer_range(hi, low.maxint(w)),
+                 iso.in_integer_range(k, low.maxint(w)),
+                 iso.is_a_value_of_the_subrange(i, lo, hi))
+    total = low.succ_step_sum(i, k)
+    traps = low.succ_step_traps_outside(total, lo, hi)
+    claim = z3.And(
+        traps == z3.Not(iso.has_a_value_at_offset(i, k, lo, hi)),
+        # and where it does not trap, the truncated result is the right value
+        z3.Implies(z3.Not(traps),
+                   iso.wide(z3.Extract(w - 1, 0, total)) ==
+                   iso.wide(i) + iso.wide(k)))
+    return pre, claim
+
+
 def _succ_traps_exactly_at_the_end_of_its_type(w):
     """succ over an arbitrary ordinal type, not just integer: it traps exactly
     at the type's last value, and elsewhere gives the next one.
@@ -695,6 +723,11 @@ ALL = [
     Rule("subrange-traps-exactly-outside-its-bounds", MUST_HOLD,
          "ISO 7185 §6.4.6 — storing a value outside a subrange is an error",
          "CheckedForSubrange", _subrange_traps_exactly_outside),
+    Rule("succ-with-a-step-traps-exactly-outside-its-type", MUST_HOLD,
+         "ISO/IEC 10206:1991 §6.7.6.4 — succ(x,k) is an error when no value "
+         "has ordinal number ord(x) + k",
+         "EmitCall, biSucc and biPred with a second argument",
+         _succ_with_a_step_traps_exactly_outside_its_type),
     Rule("succ-traps-exactly-at-the-end-of-its-type", MUST_HOLD,
          "ISO 7185 §6.6.6.4 — succ over any ordinal type, not just integer",
          "EmitCall, biSucc",

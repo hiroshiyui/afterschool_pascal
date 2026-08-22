@@ -171,6 +171,20 @@ def is_a_value_of_the_subrange(v, lo, hi):
     return z3.And(wide(v) >= wide(lo), wide(v) <= wide(hi))
 
 
+def has_a_value_at_offset(i, k, lo, hi):
+    """ISO/IEC 10206:1991 §6.7.6.4 — succ(x,k) "shall yield a value whose
+    ordinal number is ord(x) + k, if such a value exists", and Annex D.65 makes
+    it an error when none does.
+
+    Stated over the wide domain, so the claim is about the *mathematical* sum.
+    That is the whole distinction the i32 lowering lost: it computed ord(x) + k
+    at the program width, where maxint + 2 is a comfortable negative number
+    inside every ordinal type's bounds.
+    """
+    total = wide(i) + wide(k)
+    return z3.And(total >= wide(lo), total <= wide(hi))
+
+
 def has_a_successor_in(i, lo, hi):
     """ISO 7185 §6.6.6.4 — succ(x) exists when x is not the last value of its
     own ordinal type. Stated over the type's own bounds rather than the machine
