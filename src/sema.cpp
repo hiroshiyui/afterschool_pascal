@@ -8352,21 +8352,26 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
       continue;
     }
 
-    // ISO/IEC 10206:1991 §6.4.5 d) made every string type compatible with
-    // every other, and §6.4.6 pads the shorter — but a value parameter is
-    // copied *bytewise*, so a shorter actual would be read past its end. The
-    // padding needs somewhere to build the conversion, which is the same thing
-    // a variable-string value parameter needs and does not have (ADR-0052), so
-    // the lengths must agree until it does.
-    if (p->type && p->type->isCharArray() && a->type &&
+    // ISO/IEC 10206:1991 §6.4.5 d) makes every string type compatible with
+    // every other and §6.4.6 pads the shorter, and §6.7.3.2 holds a value
+    // parameter's actual to assignment-compatibility — so a shorter actual is
+    // padded exactly as `f := s` pads. This used to be a refusal whose reason
+    // was a lowering: a value parameter is copied bytewise and the padding had
+    // nowhere to be built. It has somewhere now, and the arm stands as the one
+    // that says the pair is not an ordinary copy, which is what keeps it away
+    // from the two below — they ask for a variable and for name equivalence,
+    // and this pair satisfies neither and is legal anyway. §6.4.6 c)'s
+    // over-long value is an *error*, reported where the store happens.
+    // §6.4.5 d) and §6.4.6 f) are Extended Pascal's, so this is too. ISO 7185
+    // has neither: there two char arrays of different length are compatible
+    // with nothing but themselves, and the refusal `assignable` already writes
+    // is the correct one.
+    if (std_ == Std::Extended && p->type && p->type->isCharArray() && a->type &&
         a->type->isStringOrChar() && !p->type->dynamicBounds() &&
         (!a->type->isCharArray() || a->type->dynamicBounds() ||
-         a->type->length() != p->type->length()))
-      diags_.error(a->line, a->col,
-                   "argument " + std::to_string(i + 1) + " of '" +
-                       callee->name + "' is " + p->type->name() +
-                       ", and a value parameter is copied rather than padded; "
-                       "so the argument must have the same length");
+         a->type->length() != p->type->length())) {
+      // nothing: padded at the call site
+    }
     // A structured value parameter is a copy, so it needs something to copy
     // from: a designator, a string literal, a structured-value-constructor
     // (ADR-0061), a constant whose value lives in memory (ADR-0068), or a

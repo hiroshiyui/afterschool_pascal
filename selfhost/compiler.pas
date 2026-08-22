@@ -7221,6 +7221,39 @@ end;
 function TypeLength(t: typePtr): integer;
 begin TypeLength := t^.hi - t^.lo + 1 end;
 
+{ 6.7.3.2: "If the parameter-form of the value-parameter-specification
+  contains a type-name or a type-inquiry ... [the value] shall be
+  assignment-compatible with the type possessed by the formal-parameters."
+  6.4.6 f) then makes a string value assignment-compatible with a string-type
+  of at least its length, and 6.4.6's last paragraph says what it means: "the
+  canonical-string-type value shall be treated as a value of the
+  fixed-string-type whose components ... followed by zero or more spaces." So
+  a shorter actual is *padded*, exactly as `f := s` already pads -- and 6.8's
+  primary rule, "any primary whose type is a string-type shall be treated as
+  if it were of the canonical-string-type", is what makes the actual a
+  canonical value however it was spelled.
+
+  What made this a refusal rather than a lowering is that a structured value
+  parameter travels as an address (ADR-0017) and an actual of a different
+  length has none of the formal's shape. This answers the one question both
+  ends have to agree on: does this pair need the padded temporary built at the
+  call site? An actual that is already a char array of the formal's own length
+  is the ordinary copy and answers false, so nothing that compiled before is
+  lowered differently. }
+function PadsToFixedString(formal, actual: typePtr): boolean;
+begin
+  { 6.4.5 d) and 6.4.6 f) are Extended Pascal's, so this is too. ISO 7185 has
+    neither: there `packed array [1..3] of char` and `packed array [1..5] of
+    char` are two array types, compatible with nothing but themselves, and the
+    refusal Assignable already writes is the correct one. }
+  PadsToFixedString := HasExtended(langStd) and
+    (formal <> nil) and (actual <> nil) and
+    IsCharArray(formal) and (formal^.loDisc = nil) and
+    (formal^.hiDisc = nil) and IsStringOrChar(actual) and
+    (not IsCharArray(actual) or (actual^.loDisc <> nil) or
+     (actual^.hiDisc <> nil) or (TypeLength(actual) <> TypeLength(formal)))
+end;
+
 { ISO 7185 6.4.3.3 requires every field name in a record to be distinct,
   variants included, so one flat search over all of them is unambiguous. }
 { The k-th arm of one variant part. }
@@ -13233,27 +13266,19 @@ begin
         end
         end
       end
-      { ISO/IEC 10206:1991 6.4.5 d) made every string type compatible with
-        every other, and 6.4.6 pads the shorter -- but a value parameter is
-        copied *bytewise*, so a shorter actual would be read past its end. The
-        padding needs somewhere to build the conversion, which is the same
-        thing a variable-string value parameter needs and does not have
-        (ADR-0052), so the lengths must agree until it does. }
-      else if IsCharArray(p^.sym^.stype) and (a^.ntype <> nil) and
-              IsStringOrChar(a^.ntype) and
-              (p^.sym^.stype^.loDisc = nil) and
-              (p^.sym^.stype^.hiDisc = nil) and
-              (not IsCharArray(a^.ntype) or (a^.ntype^.loDisc <> nil) or
-               (a^.ntype^.hiDisc <> nil) or
-               (TypeLength(a^.ntype) <> TypeLength(p^.sym^.stype))) then begin
-        ErrorAt(a^.line, a^.col);
-        write('argument ', i:1, ' of ''');
-        WritePool(callee^.at, callee^.len);
-        write(''' is ');
-        WriteTypeName(p^.sym^.stype);
-        writeln(', and a value parameter is copied rather than padded; ',
-                'so the argument must have the same length')
-      end
+      { ISO/IEC 10206:1991 6.4.5 d) makes every string type compatible with
+        every other and 6.4.6 pads the shorter, and 6.7.3.2 holds a value
+        parameter's actual to assignment-compatibility -- so a shorter actual
+        is padded here exactly as `f := s` pads. This used to be a refusal
+        whose reason was a lowering: a value parameter is copied bytewise and
+        the padding had nowhere to be built. It has somewhere now, and the
+        arm stands as the one that says the pair is *not* an ordinary copy --
+        CodeGen asks the same predicate and builds the padded temporary, and
+        the arm's other job is keeping the pair away from the two arms below,
+        which ask for a variable and for name equivalence. }
+      else if PadsToFixedString(p^.sym^.stype, a^.ntype) then
+        { 6.4.6 c)'s over-long value is an *error*, reported where the store
+          happens: the actual's length is not always known here. }
       { A structured value parameter is a copy, so it needs something to copy
         from: a designator, a string literal, a structured-value-constructor
         (ADR-0061), a constant whose value lives in memory (ADR-0068), or a
@@ -24855,7 +24880,8 @@ end;
   (6.7.2); nil for every other call, and unread for them. }
 procedure EmitUserCall(callee: symPtr; args: nodePtr; slotSym: symPtr;
                        var v: str);
-var link, a, alen, slot, half, target, resAddr: str; head, tail, o: opndPtr;
+var link, a, alen, slot, half, target, resAddr, padded: str;
+    head, tail, o: opndPtr;
     p, dp: symListPtr; arg: nodePtr; result: typePtr; k: integer;
     byAddr, comma, foreignPtr: boolean;
 begin
@@ -24956,6 +24982,29 @@ begin
       EmitString(arg, a, alen);
       AppendOpnd(head, tail, a, true, nil);
       AppendOpnd(head, tail, alen, false, intType)
+    end
+    { 6.4.6's padding, built where the actual's length is known. A structured
+      value parameter travels as an address (ADR-0017) and a shorter actual has
+      none of the formal's shape, so the conversion happens at the call and
+      what travels is the address of the converted value -- the mirror of
+      ADR-0115's variable-string parameter, where the capacity is the callee's
+      and the conversion is therefore its own. The storage is the string arena,
+      which is exactly the lifetime wanted: longer than the argument list, no
+      longer than the statement (ADR-0111). An alloca could not have served --
+      a call inside a loop would claim one on every iteration (ADR-0102) -- and
+      being an arena producer this bumps that counter, which nothing checks. }
+    else if (p^.sym^.kind <> skVarParam) and
+            PadsToFixedString(p^.sym^.stype, arg^.ntype) then begin
+      EmitString(arg, a, alen);
+      strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+      Def(padded);
+      write(ircode, 'call ptr @pas_str_pad(i32 ',
+            TypeLength(p^.sym^.stype):1, ', ptr ');
+      PutOp(a);
+      write(ircode, ', i32 ');
+      PutOp(alen);
+      writeln(ircode, ')');
+      AppendOpnd(head, tail, padded, true, nil)
     end
     { ADR-0125: the address of the first component and how many there are.
       The range was checked where the designator was written, which is the
@@ -30341,6 +30390,7 @@ begin
   writeln(ircode, 'declare void @pas_str_slice_check(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_str_substr_check(i32, i32, i32)');
   writeln(ircode, 'declare void @pas_str_store_fixed(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare ptr @pas_str_pad(i32, ptr, i32)');
   { 6.7.5.5's auxiliary text variable, which the runtime owns }
   writeln(ircode, 'declare ptr @pas_str_read_begin(ptr, i32)');
   writeln(ircode, 'declare void @pas_str_read_end(ptr)');

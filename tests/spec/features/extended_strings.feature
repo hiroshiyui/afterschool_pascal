@@ -275,3 +275,88 @@ Feature: A string value may be assigned to a char variable
       """
     When it is compiled and run
     Then it stops at run time
+
+# §6.7.3.2 with §6.4.6 -- what a value parameter of a string-type accepts.
+#
+# This compiler refused a shorter actual and said why: "a value parameter is
+# copied rather than padded". That is a sentence about a lowering and not about
+# the language, and the clause says the opposite.
+
+@extended:6.7.3.2 @extended:6.4.6
+Feature: A string value parameter takes any assignment-compatible actual
+
+  # §6.7.3.2: "If the parameter-form of the value-parameter-specification
+  # contains a type-name or a type-inquiry ... The value in the underlying-type
+  # of the type of each corresponding actual-parameter ... shall be
+  # assignment-compatible with the type possessed by the formal-parameters."
+  #
+  # Assignment-compatible, not equal — and §6.4.6's last paragraph then says
+  # what a canonical-string value assigned to a fixed-string-type is: "the
+  # components of the canonical-string-type value in order of increasing index
+  # followed by zero or more spaces". §6.4.3.3.1's NOTE draws the conclusion in
+  # so many words: "String-type values may be used as the actual-parameter
+  # corresponding to a value parameter possessing a string-type (see 6.7.3.2)."
+
+  Scenario: a shorter string is padded to a fixed-string value parameter
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type five = packed array [1..5] of char;
+      procedure show(s: five);
+      begin writeln('[', s, ']') end;
+      begin
+        show('abc')
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      [abc  ]
+      """
+
+  Scenario: a variable-string is a legal actual for a fixed-string value parameter
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type five = packed array [1..5] of char;
+      var v: string(10);
+      procedure show(s: five);
+      begin writeln('[', s, ']') end;
+      begin
+        v := 'xy';
+        show(v)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      [xy   ]
+      """
+
+  # §6.4.6's error list, c): "it shall be an error if T1 and T2 are compatible,
+  # T1 is a string-type or the char-type, and the length of the value of T2 is
+  # greater than the capacity of T1." The same rule at a call as at an
+  # assignment, and reported at run time because the actual's length is one.
+
+  Scenario: an actual longer than the formal's capacity stops the program
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type five = packed array [1..5] of char;
+      var v: string(10);
+      procedure show(s: five);
+      begin writeln('unreachable') end;
+      begin
+        v := 'abcdefg';
+        writeln('before');
+        show(v)
+      end.
+      """
+    When it is compiled and run
+    Then it stops at run time
+     And it prints
+      """
+      before
+      """

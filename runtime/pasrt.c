@@ -1951,6 +1951,20 @@ void pas_str_store_fixed(char *dst, int cap, const char *src, int len) {
   memset(dst + len, ' ', (size_t)(cap - len));
 }
 
+/* §6.7.3.2 makes a value parameter's actual assignment-compatible with the
+ * formal's type, so §6.4.6's padding reaches a *fixed*-string formal too --
+ * and a structured value parameter travels as an address (ADR-0017), which an
+ * actual of a different length does not have. This builds one. The arena is
+ * the storage a string temporary already has (ADR-0111): it lives longer than
+ * the argument list and no longer than the statement, which is exactly the
+ * lifetime wanted, and an alloca could not be used because a call inside a
+ * loop would claim one on every iteration (ADR-0102). */
+char *pas_str_pad(int cap, const char *src, int len) {
+  char *p = pas_str_temp(cap);
+  pas_str_store_fixed(p, cap, src, len);
+  return p;
+}
+
 /* ...and to a variable-string-type it is the components and nothing else: the
  * length becomes the value's, which is the whole difference between the two
  * string kinds. */

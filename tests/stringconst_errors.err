@@ -1,10 +1,10 @@
 <source>:25:16: error: the bounds of a subrange must be ordinal constants
 <source>:42:3: error: the left side of an assignment must be a variable
 <source>:46:9: error: argument 1 of 'byref' is a var parameter and needs a variable
-<source>:50:9: error: argument 1 of 'byval' is pair, and a value parameter is copied rather than padded; so the argument must have the same length
-<source>:53:8: error: read needs a variable, not a value
-<source>:56:9: error: strings of different lengths cannot be compared: packed array [1..2] of char and packed array [1..3] of char
-<source>:61:5: error: a case label must be an ordinal constant
-<source>:72:6: error: selecting from a constant is an Extended Pascal feature; compile with --std=extended
-<source>:72:6: error: the left side of an assignment must be a variable
-<source>:75:3: error: cannot assign packed array [1..2] of char to a variable of type char
+<source>:53:9: error: argument 1 of 'byval' is pair, but the value is packed array [1..3] of char
+<source>:56:8: error: read needs a variable, not a value
+<source>:59:9: error: strings of different lengths cannot be compared: packed array [1..2] of char and packed array [1..3] of char
+<source>:64:5: error: a case label must be an ordinal constant
+<source>:75:6: error: selecting from a constant is an Extended Pascal feature; compile with --std=extended
+<source>:75:6: error: the left side of an assignment must be a variable
+<source>:78:3: error: cannot assign packed array [1..2] of char to a variable of type char

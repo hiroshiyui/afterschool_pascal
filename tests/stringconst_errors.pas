@@ -45,8 +45,11 @@ begin
     form on the line after it is legal, and is pinned in stringconst.pas. }
   byref(ab);
 
-  { §6.4.6 makes a value parameter a copy rather than a padded one, so the
-    lengths must agree — the same rule a literal of the wrong length meets. }
+  { §6.4.5 makes two char arrays of different length incompatible, and §6.4.6
+    has no clause that reaches across the difference — there is no padding in
+    this standard. ISO/IEC 10206:1991 §6.4.5 d) and §6.4.6 f) add both, and
+    there the same call is legal and padded (ADR-0171); the message here is
+    the one for two types that are simply not assignment-compatible. }
   byval(abc);
 
   { §6.9.1: a read-parameter is a variable-access too. }

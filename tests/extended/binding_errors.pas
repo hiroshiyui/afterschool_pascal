@@ -2,7 +2,6 @@
 program BindingErrors(output);
 type btext = bindable text;
      plainarr = array [1..2] of text;
-     eight = packed array [1..8] of char;
 var f: text;
     g: btext;
     n: integer;
@@ -31,17 +30,12 @@ var f: text;
     pf: ^plainarr;
 
 { legal since ADR-0115: the callee's prologue converts, so this contributes no
-  diagnostic -- unlike `padded` below, which is copied and cannot be padded }
+  diagnostic. `padded` stood beside it until ADR-0171, refusing a shorter
+  actual for a *fixed*-string formal — a lowering written down as a rule, and
+  §6.7.3.2 says the opposite. tests/extended/fixedstring_param.pas is where
+  that pair now lives, and it belongs there rather than here: nothing about it
+  was ever a question about binding. }
 procedure takes(v: string(5));
-begin
-  writeln(v)
-end;
-
-{ §6.4.5 d) makes every string type compatible with every other and §6.4.6 pads
-  the shorter — but a value parameter is *copied*, so a shorter actual would be
-  read past its end. The padding needs somewhere to be built, which is the same
-  thing the variable-string value parameter above needs (ADR-0052). }
-procedure padded(v: eight);
 begin
   writeln(v)
 end;
@@ -73,7 +67,6 @@ begin
   bind(pf^[1], b);
   { §6.4.3.4 gives BindingType exactly two required fields }
   n := b.size;
-  padded('abc');
   { And the three that are legal and were refused. A `with` binding is a field
     of the record the with opened, so it answers as the written selection does. }
   b.name := '/tmp/binding_errors_log';
