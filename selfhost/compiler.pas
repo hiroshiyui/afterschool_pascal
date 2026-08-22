@@ -8513,15 +8513,33 @@ begin
   NestedIn := found
 end;
 
-function Threatened(e: nodePtr): boolean;
-var r: nodePtr; sym: symPtr; res: boolean;
+{ The symbol a threatened variable-access belongs to. 6.9.4 h) makes a threat
+  to a component a threat to the variable containing it, which is what walking
+  to the root is. }
+function ThreatSym(e: nodePtr; var r: nodePtr): symPtr;
 begin
   r := RootDesignator(e);
-  sym := nil;
+  ThreatSym := nil;
   if r <> nil then
-    if r^.kind = nkVar then sym := r^.vrSym
-    else if r^.kind = nkField then sym := r^.fdQualified;
-  res := false;
+    if r^.kind = nkVar then ThreatSym := r^.vrSym
+    else if r^.kind = nkField then ThreatSym := r^.fdQualified
+end;
+
+{ 6.9.4's list has ten entries and two consumers, and they do not need the
+  same thing. 6.7.2 asks only *whether* a variable was threatened; 6.7.3.1 and
+  6.8.3.9 ask whether this particular threat is allowed. For e)'s `new` the
+  second question answers itself -- the argument is a pointer, so it is never
+  protectable under 6.4.1 and never a control-variable -- so that entry wants
+  the recording without the refusal, and calling Threatened there would add a
+  diagnostic no program can reach. Every other entry calls Threatened, which
+  calls this first. }
+procedure RecordThreat(e: nodePtr);
+var r: nodePtr; sym: symPtr;
+begin
+  sym := ThreatSym(e, r);
+  { Unconditional: what is recorded is that the variable was threatened, not
+    whether the threat was allowed. }
+  if sym <> nil then sym^.wasThreatened := true;
   { 6.8.3.9 forbids the declaration part of the block containing a
     for-statement to threaten its control-variable, and those bodies are
     walked first -- so a threat made from a nested block is remembered here
@@ -8530,18 +8548,21 @@ begin
     A threat from the containing block's own statements is deliberately not
     recorded, that block being neither the for-statement nor its declaration
     part. }
-  { 6.9.4's list is exactly this procedure's call sites, so the flag is set
-    here rather than at each of them -- and unconditionally, because what is
-    recorded is that the variable was threatened and not whether the threat was
-    allowed. §6.7.2 is the one rule that asks (ADR-0134). }
-  if sym <> nil then sym^.wasThreatened := true;
   if sym <> nil then
     if (sym^.kind = skVar) and (sym^.threatLine = 0) and
        (currentProc <> nil) and (currentProc <> sym^.owner) and
        NestedIn(currentProc, sym^.owner) then begin
       sym^.threatLine := e^.line;
       sym^.threatCol := e^.col
-    end;
+    end
+end;
+
+function Threatened(e: nodePtr): boolean;
+var r: nodePtr; sym: symPtr; res: boolean;
+begin
+  RecordThreat(e);
+  sym := ThreatSym(e, r);
+  res := false;
   if (sym <> nil) and not sym^.isProtected and ActiveControl(sym) then begin
     res := true;
     ErrorAt(e^.line, e^.col);
@@ -16080,9 +16101,12 @@ begin
         writeln(''' needs a variable, not a value');
         stop := true
       end;
-      { 6.9.4 e): the *destination* is threatened, and only that one -- the
-        source is read. Which side that is, is the whole difference between
-        the two procedures. }
+      { 6.9.4's NOTE: pack and unpack are defined in 6.7.5.4 as "a series of
+        assignments of the components", and the note makes those equivalent
+        assignments subject to a) and i). So the *destination* is threatened,
+        and only that one -- the source is read. Which side that is, is the
+        whole difference between the two procedures. It is the note and not
+        e), which is `new`. }
       if not stop then
         if p^.pcStd = spPack then begin
           if Threatened(packedArg) then
@@ -16204,6 +16228,19 @@ begin
       end
       else begin
         if not DesignatorBindable(a) then NotBindable(a);
+        { 6.9.4 j): "S is a procedure-statement that specifies the activation
+          of the required procedure bind or unbind, and V is the
+          variable-access f". Both write the binding of f, so both threaten
+          it. There is deliberately no RecordThreat call here, and the
+          absence is the entry: 6.9.4's flag has exactly one reader, 6.7.2's
+          "at least one statement threatening" the result variable, and a
+          result variable can never be f -- 6.4.6 a) keeps a file out of a
+          function result, at any depth. Both refusals the flag feeds are
+          equally out of reach, a file being nonprotectable under 6.4.1 and a
+          control-variable being an ordinal. So recording it could change no
+          answer, and a line no test can make matter is worse than a comment
+          saying why it is not there. e)'s `new` is the entry that *is*
+          observable, and it has the call. }
         if p^.pcStd = spBind then
           if a^.next^.ntype <> nil then
             if a^.next^.ntype <> bindingTy then begin
@@ -16307,6 +16344,27 @@ begin
       the suite's CONF129 -- and there is nothing for the nil-back-store of
       ADR-0019 to write into there, which is why CodeGen asks the same
       question rather than assuming an answer. }
+    { 6.9.4 e): "S is a procedure-statement that specifies activation of the
+      required procedure new, and V is the variable-access p". So `new(p)`
+      threatens p, which is 6.7.5.3 saying the same thing another way -- it
+      "shall attribute to p" the identifying-value, and an attribution is a
+      write. `dispose(q)` is deliberately not on 6.9.4's list: it reads the
+      pointer and stores nothing through it.
+
+      RecordThreat and not Threatened, because the *refusal* half of 6.9.4 is
+      unreachable here and says so by construction: 6.7.3.1's `protected`
+      requires a Protectable type, which a pointer is not and neither is
+      anything holding one, so no argument of `new` can ever be protected;
+      and a control-variable is an ordinal, so it can never be one either.
+      A message no program can produce is what
+      tests/checks/unreachable_diagnostics.txt exists to keep out.
+
+      This is also the half 6.7.2 reads: a function-block must contain "at
+      least one statement threatening" its result variable, and a function
+      whose result is allocated rather than assigned -- `new(res)` and then
+      `res^ := v` -- was refused for never writing to it (ADR-0134 built the
+      flag; this is the entry that was missing from the list feeding it). }
+    if (p^.pcStd = spNew) and IsDesignator(a) then RecordThreat(a);
     if (p^.pcStd = spNew) and not IsDesignator(a) then begin
       ErrorAt(a^.line, a^.col);
       write('''');
@@ -17056,7 +17114,8 @@ begin
         if (s^.frVar^.vrField = nil) and (s^.frVar^.vrSym <> nil) and
            (s^.frVar^.vrSym^.kind = skVar) and
            (s^.frVar^.vrSym^.owner = currentProc) then begin
-          { Threat d): the equivalent program fragment the clause gives a
+          { 6.9.4 g): "S is a for-statement and V denotes the control-variable
+            of S". The equivalent program fragment the clause gives a
             for-statement assigns to the control-variable, so a nested
             for-statement over the same variable threatens the one containing
             it. The outer loop is pushed by the time this is reached and this

@@ -2941,13 +2941,20 @@ static bool nestedIn(Symbol *inner, Symbol *outer) {
   return false;
 }
 
-void Sema::checkNotThreatened(Expr *e, const std::string &what) {
+// §6.9.4's list has ten entries and two consumers, and they do not need the
+// same thing. §6.7.2 asks only *whether* a variable was threatened; §6.7.3.1
+// and §6.8.3.9 ask whether this particular threat is allowed. For e)'s `new`
+// the second question answers itself — the argument is a pointer, so it is
+// never protectable under §6.4.1 and never a control-variable — so that entry
+// wants the recording without the refusal, and calling checkNotThreatened
+// there would add a diagnostic no program can reach. Every other entry calls
+// checkNotThreatened, which calls this first.
+void Sema::recordThreat(Expr *e) {
   Symbol *s = baseSymbol(e);
 
-  // §6.9.4's list is exactly this function's call sites, so the flag is set
-  // here rather than at each of them — and unconditionally, because what is
-  // recorded is that the variable was threatened and not whether the threat
-  // was allowed. §6.7.2 is the one rule that asks (ADR-0134).
+  // Unconditional: what is recorded is that the variable was threatened, not
+  // whether the threat was allowed. §6.7.2 is the one rule that asks
+  // (ADR-0134).
   if (s)
     s->wasThreatened = true;
 
@@ -2964,6 +2971,11 @@ void Sema::checkNotThreatened(Expr *e, const std::string &what) {
     s->threatLine = e->line;
     s->threatCol = e->col;
   }
+}
+
+void Sema::checkNotThreatened(Expr *e, const std::string &what) {
+  recordThreat(e);
+  Symbol *s = baseSymbol(e);
 
   // §6.8.3.9: "Neither a for-statement nor any procedure-and-function-
   // declaration-part ... shall contain a statement threatening the variable",
@@ -7525,7 +7537,10 @@ void Sema::checkStdProc(ProcCallStmt *p) {
                      "'" + p->name + "' needs a variable, not a value");
         return;
       }
-    // §6.9.4 e): the *destination* is threatened, and only that one — the
+    // §6.9.4's NOTE: pack and unpack are defined in §6.7.5.4 as "a series of
+    // assignments of the components", and the note makes those equivalent
+    // assignments subject to a) and i). It is the note and not e), which is
+    // `new`. So the *destination* is threatened, and only that one — the
     // source is read. Which side that is, is the whole difference between the
     // two procedures (ADR-0046's list, a second call site after ADR-0065's).
     checkNotThreatened(packing ? packed : unpacked,
@@ -7720,11 +7735,18 @@ void Sema::checkStdProc(ProcCallStmt *p) {
                  "'" + p->name + "' needs a pointer variable");
     return;
   }
-  // §6.9.4 e) makes `new(p)` a threat to p, and this is where the check for it
-  // would go — but there is nothing to check. §6.4.1 makes a pointer type
-  // unprotectable, and a record or array holding one unprotectable with it, so
-  // no designator that reaches here can have a protected variable under it.
-  // Enforced by construction, the way ADR-0044's dynamic-violation is.
+  // §6.9.4 e) makes `new(p)` a threat to p, and there is nothing to *refuse*:
+  // §6.4.1 makes a pointer type unprotectable, and a record or array holding
+  // one unprotectable with it, so no designator that reaches here can have a
+  // protected variable under it, and a control-variable is an ordinal. That
+  // much this comment said before, and it stopped there — but a threat has a
+  // second consumer. §6.7.2 requires a function-block to contain "at least one
+  // statement threatening" its result variable, and reads §6.9.4's list to
+  // decide, so a constructor whose result is *allocated* rather than assigned
+  // was refused for never writing to it. The recording is the half that was
+  // missing; the refusal is still enforced by construction.
+  if (p->standard == StdProc::New && isDesignator(a))
+    recordThreat(a);
   if (a->type && (!a->type->isPointer() || a->type->isNil())) {
     // A variable for `new`, which stores into it; any expression of a
     // pointer-type for `dispose`, which only reads one (§6.6.5.3).

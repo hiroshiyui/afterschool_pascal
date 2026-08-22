@@ -749,6 +749,7 @@ private:
   /// (ADR-0017), so the *only* value `GetTimeStamp` will accept is one of the
   /// type built here.
   Type *timeStampType_ = nullptr;
+  void recordThreat(Expr *e);
   void checkNotThreatened(Expr *e, const std::string &what);
 
   /// True if a value of `from` may be assigned to / compared with `to`.
