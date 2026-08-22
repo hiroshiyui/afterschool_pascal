@@ -24,3 +24,10 @@ tests/bsi/suite/
 # This rule was in .git/info/exclude, which is not committed -- so the whole
 # protection lived on one machine and no clone had it.
 doc/vendor/
+
+# What a bound file leaves behind. tests/extended/bind_qualified.pas binds
+# `bind_qualified.tmp` by a *relative* name, so running that case by hand from
+# the top of the tree writes it here rather than into the build directory --
+# and it was committed once, in 7e827ad, because `git add` was given a
+# directory and the artifact was sitting in it.
+*.tmp
