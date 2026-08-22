@@ -466,7 +466,23 @@ exercised one**, so every oracle in the repository agreed the compiler was
 right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
 and is where the list is maintained; this is the summary by cause.
 
-**There are currently none**, and the emptiness is a claim about what is
+**One is currently known.** ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 require
+the variable-access given to `bind`, `unbind` and `binding` to possess the
+bindability that is bindable, and this compiler does not ask that of a
+**dereference**: `bind(p^, b)` compiles whatever the domain-type denotes. It is
+right for `p: ^bindable text`, which §6.4.4 permits and which is why the
+dereference answers `bindable` rather than the reverse, and it is wrong for
+`p: ^text` — a program the clause requires to be rejected. Found by reading
+(ADR-0167's third reader) rather than by the suite, which is ISO 7185 only and
+has no binding at all.
+
+Not fixed with the field and the component, which were the same defect and are:
+a pointer's domain reaches Sema through `ResolvePointer`'s deferred and pending
+paths, where the denoter that knows the bindability is no longer in hand, so
+carrying it there is a change of its own. `doc/roadmap.md` has it.
+`tests/extended/binding_errors.pas` compiles the program.
+
+**The rest is empty**, and the emptiness is a claim about what is
 *known* rather than a proof. The BSI suite's `DEVIANCE` category has no program
 left that this compiler accepts — every one of them is refused, and the single
 exception stops at run time, which §5.1 permits — and that is the strongest

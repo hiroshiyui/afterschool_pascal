@@ -321,3 +321,54 @@ Feature: Scopes and activations
       """
       20
       """
+
+  # §6.7.5.6 and §6.7.6.8 ask whether "the variable-access f" possesses the
+  # bindability that is bindable, and §6.4.3.4 gives a field "the type,
+  # bindability, and initial state denoted by the type-denoter of the
+  # record-section" — the same sentence §6.4.3.5 uses for an array's component.
+  # So bindability belongs to the variable-access and not to the entire-variable
+  # it selects from, and asking the entire-variable was wrong in both
+  # directions: it refused a bindable field and a bindable element, and named
+  # the container while doing it.
+  @extended:6.7.5.6
+  Scenario: a bindable field and a bindable component may be bound
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type bt = bindable text;
+      var r: record log: bt end;
+          pool: array [1..2] of bt;
+          b: BindingType;
+      begin
+        b.name := 'spec_bind_field.tmp';
+        bind(r.log, b);
+        bind(pool[2], b);
+        writeln(binding(r.log).bound, ' ', binding(pool[2]).bound);
+        unbind(r.log);
+        unbind(pool[2])
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      TRUE TRUE
+      """
+
+  # And the same rule answering the other way, which is what says the question
+  # is being asked of the component rather than assumed.
+  @extended:6.7.5.6
+  Scenario: a field whose type-denoter does not say bindable may not
+    Given the Extended Pascal program
+      """
+      program p(output);
+      var r: record plain: text end;
+          b: BindingType;
+      begin bind(r.plain, b) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      'plain' is not bindable
+      """

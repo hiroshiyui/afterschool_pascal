@@ -613,6 +613,18 @@ type
     { 6.6: a field's own type-denoter may carry an initial-state-specifier, and
       then the record's initial state has that field bearing that value. }
     initValue: nodePtr;
+    { 6.4.3.4: "That component shall have the type, bindability, and initial
+      state denoted by the type-denoter of the record-section." Bindability is
+      the third of the three and the last to be carried -- it sits beside
+      initValue because the clause names them in one breath and for one reason.
+
+      It has to live here rather than on the type: `type bt = bindable text`
+      hands the bindability on without making a *type* distinct from `text`
+      (ADR-0017 gives structured types name equivalence, and this one is not
+      structured at all), so a flag on typePtr would say the same thing about
+      both spellings. The denoter is what knows, and this is where the denoter's
+      answer is kept. }
+    isBindable: boolean;
     { Where the field lives, as a path: nil is the record's fixed part, (0) is
       arm 0 of its variant part, (0, 1) is arm 1 of the variant part inside arm
       0. ISO 7185 6.4.3.3 puts no limit on the nesting, so a single index could
@@ -650,6 +662,13 @@ type
       itself. File: the component type. Sharing the field is what a variant
       record would do, which is where the C++ one was going. }
     elem, indexType, host, tagType: typePtr;
+    { Whether `elem` was written with a bindability of bindable -- 6.4.3.5's
+      "each component shall have the type, bindability, and initial state
+      denoted by the type-denoter" for an array, said about the component
+      rather than about the component's type, for fieldRec::isBindable's
+      reason. A pointer's domain uses the same slot and does not set it yet;
+      doc/implementation-defined.md 6.1 has why. }
+    elemBindable: boolean;
     isPacked: boolean;
     { ISO 7185 6.7.1: a set-constructor with members "shall denote either a
       value of the unpacked-canonical-set-of-T-type or, if the context so
@@ -6842,6 +6861,7 @@ begin
   new(t);
   t^.kind := k;
   t^.elem := nil;
+  t^.elemBindable := false;
   t^.indexType := nil;
   t^.host := nil;
   t^.tagType := nil;
@@ -8253,6 +8273,60 @@ begin
   else IsDesignator := false
 end;
 
+{ Whether the variable a designator denotes possesses the bindability that is
+  bindable -- ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8 both ask this of `bind`,
+  `unbind` and `binding`, and it is a property of the *variable-access* and not
+  of the entire-variable it selects from.
+
+  It used to be asked of the entire-variable, through RootDesignator, and that
+  was wrong in both directions at once. 6.4.3.4 gives a field "the type,
+  bindability, and initial state denoted by the type-denoter of the
+  record-section" and 6.4.3.5 says the same of an array's component, so
+  `bind(r.log, b)` and `bind(pool[i], b)` are legal for a bindable field and a
+  bindable element -- and both were refused with a message naming the
+  *container*, `'r' is not bindable`, which is the defect announcing itself.
+  Meanwhile a dereference has no nkVar under it at all, so the old walk found
+  nothing to ask and let every `p^` through.
+
+  A dereference still answers true, which is the under-strict half and is
+  deliberately unfinished: a pointer's domain reaches this through the deferred
+  and pending-domain machinery of ResolvePointer, so carrying the denoter's
+  bindability to it is its own change. doc/implementation-defined.md 6.1 has it
+  as a program accepted that the standard requires to be rejected.
+
+  A substring is nonbindable by 6.5.3.1 -- "the components of a variable
+  possessing a string-type shall have the bindability that is nonbindable" --
+  and so is a buffer-variable by 6.5.5. Both fall to the closing `false`. }
+function DesignatorBindable(e: nodePtr): boolean;
+begin
+  DesignatorBindable := false;
+  if e <> nil then
+    if e^.kind = nkVar then begin
+      { A name bound by a `with` is a field of the record the with opened, and
+        vrField is that field -- so it answers for itself, exactly as a written
+        field selection does. }
+      if e^.vrField <> nil then
+        DesignatorBindable := e^.vrField^.isBindable
+      else if e^.vrSym <> nil then
+        DesignatorBindable := e^.vrSym^.isBindable
+    end
+    else if e^.kind = nkField then begin
+      { 6.11.3's qualified name denotes one symbol and has no base to select
+        from, so it answers as an entire-variable does. }
+      if e^.fdQualified <> nil then
+        DesignatorBindable := e^.fdQualified^.isBindable
+      else if e^.fdResolved <> nil then
+        DesignatorBindable := e^.fdResolved^.isBindable
+    end
+    else if e^.kind = nkIndex then begin
+      if e^.ixBase <> nil then
+        if e^.ixBase^.ntype <> nil then
+          DesignatorBindable := e^.ixBase^.ntype^.elemBindable
+    end
+    else if e^.kind = nkDeref then
+      DesignatorBindable := true
+end;
+
 { The entire-variable a designator selects from. A subscript and a field
   selection stay inside the same variable and a dereference leaves it, which is
   exactly ISO/IEC 10206:1991 6.5.1's "closest-containing". }
@@ -8265,6 +8339,57 @@ begin
     if e^.fdQualified <> nil then RootDesignator := e
     else RootDesignator := RootDesignator(e^.fdBase)
   else RootDesignator := e
+end;
+
+{ 6.7.5.6's and 6.7.6.8's refusal, in one place because the three procedures
+  and the one function all ask the same question and had been asking it in two
+  copies. The name written is the *thing that is not bindable*: a field where
+  the designator ends in one, the entire-variable otherwise -- which for
+  `pool[i]` is `pool`, and is the right name now that the question is asked of
+  the component rather than of the container. Before this, `'pool' is not
+  bindable` was printed about an array whose components were. }
+procedure NotBindable(a: nodePtr);
+var root: nodePtr; named: boolean;
+begin
+  ErrorAt(a^.line, a^.col);
+  named := false;
+  if a^.kind = nkField then begin
+    if a^.fdQualified <> nil then begin
+      write('''');
+      WritePool(a^.fdQualified^.at, a^.fdQualified^.len);
+      named := true
+    end
+    else if a^.fdResolved <> nil then begin
+      write('''');
+      WritePool(a^.fdResolved^.at, a^.fdResolved^.len);
+      named := true
+    end
+  end
+  else if a^.kind = nkVar then begin
+    if a^.vrField <> nil then begin
+      write('''');
+      WritePool(a^.vrField^.at, a^.vrField^.len);
+      named := true
+    end
+    else if a^.vrSym <> nil then begin
+      write('''');
+      WritePool(a^.vrSym^.at, a^.vrSym^.len);
+      named := true
+    end
+  end
+  else begin
+    root := RootDesignator(a);
+    if root <> nil then
+      if root^.kind = nkVar then
+        if root^.vrSym <> nil then begin
+          write('''');
+          WritePool(root^.vrSym^.at, root^.vrSym^.len);
+          named := true
+        end
+  end;
+  if named then write(''' ') else write('this variable ');
+  writeln('is not bindable; only a variable whose type-denoter says ',
+          '''bindable'' can be bound to something outside the program')
 end;
 
 { ISO 7185 6.6.3.3 and ISO/IEC 10206:1991 6.7.3.3 carry these two sentences
@@ -10227,15 +10352,21 @@ begin
   t^.hiDisc := index^.hiDisc;
   t^.isPacked := d^.arPacked;
   if dim^.next <> nil then
+    { An inner dimension is an array, and 6.4.3.5 makes an array's own
+      bindability the one its type-denoter denotes -- which for a dimension the
+      grammar folded out of `array [a, b] of T` is no denoter at all. Only the
+      component carries one. }
     t^.elem := ResolveArray(d, dim^.next)
-  else
+  else begin
     t^.elem := ResolveType(d^.arElem);
+    t^.elemBindable := BindableOf(d^.arElem)
+  end;
   ResolveArray := t
 end;
 
 procedure AddField(rec: typePtr; var into, tail: fieldPtr; n: nodePtr;
                    t: typePtr; variant: numPtr; index: integer;
-                   init: nodePtr);
+                   init: nodePtr; isBnd: boolean);
 var f: fieldPtr;
 begin
   { 6.2.3.8 b) reaches a bound written inside a record's denoter -- a record is
@@ -10272,6 +10403,7 @@ begin
     f^.line := n^.line;
     f^.col := n^.col;
     f^.initValue := init;
+    f^.isBindable := isBnd;
     f^.next := nil;
     if into = nil then into := f else tail^.next := f;
     tail := f
@@ -10396,7 +10528,10 @@ begin
       tagName := NewNode(nkDeclName, tagLine, tagCol);
       tagName^.dnAt := tagAt;
       tagName^.dnLen := tagLen;
-      AddField(rec, fields, fieldTail, tagName, tag, path, tagField, nil)
+      { 6.4.3.4: "the variant-selector of the variant-part shall denote the
+        bindability that is nonbindable", so a tag field never is. }
+      AddField(rec, fields, fieldTail, tagName, tag, path, tagField, nil,
+               false)
     end;
 
     index := 0;
@@ -10557,8 +10692,10 @@ begin
         end;
         n := g^.grNames;
         while n <> nil do begin
+          { A bindable arm is refused above, so this is false by the check
+            rather than by assumption. }
           AddField(rec, v^.fields, v^.fieldTail, n, fieldType, armPath,
-                   FieldCount(v^.fields), nil);
+                   FieldCount(v^.fields), nil, false);
           n := n^.next
         end;
         g := g^.next
@@ -10648,7 +10785,7 @@ begin
     n := g^.grNames;
     while n <> nil do begin
       AddField(t, t^.fields, t^.fieldTail, n, fieldType, nil,
-               FieldCount(t^.fields), init);
+               FieldCount(t^.fields), init, BindableOf(g^.grType));
       n := n^.next
     end;
     g := g^.next
@@ -13981,20 +14118,11 @@ begin
             writeln
           end
           else begin
-            root := RootDesignator(a);
             bad := false;
-            if root <> nil then
-              if root^.kind = nkVar then
-                if root^.vrSym <> nil then
-                  if not root^.vrSym^.isBindable then begin
-                    bad := true;
-                    ErrorAt(a^.line, a^.col);
-                    write('''');
-                    WritePool(root^.vrSym^.at, root^.vrSym^.len);
-                    writeln(''' is not bindable; only a variable of a ',
-                            'bindable type can be bound to something outside ',
-                            'the program')
-                  end;
+            if not DesignatorBindable(a) then begin
+              bad := true;
+              NotBindable(a)
+            end;
             if not bad then begin
               InternBindingName(currentProc^.frameCount, at2, len2);
               c^.clSlot := AddHiddenVar(at2, len2, skVar, bindingTy,
@@ -16075,17 +16203,7 @@ begin
         writeln
       end
       else begin
-        root := RootDesignator(a);
-        if root <> nil then
-          if root^.kind = nkVar then
-            if root^.vrSym <> nil then
-              if not root^.vrSym^.isBindable then begin
-                ErrorAt(a^.line, a^.col);
-                write('''');
-                WritePool(root^.vrSym^.at, root^.vrSym^.len);
-                writeln(''' is not bindable; only a variable of a bindable ',
-                        'type can be bound to something outside the program')
-              end;
+        if not DesignatorBindable(a) then NotBindable(a);
         if p^.pcStd = spBind then
           if a^.next^.ntype <> nil then
             if a^.next^.ntype <> bindingTy then begin
@@ -19312,6 +19430,9 @@ var s, cap: symPtr; at, len, stampIndex: integer;
     f^.line := 0;
     f^.col := 0;
     f^.initValue := nil;
+    { 6.4.3.4: "The bindability of each field of a required record-type
+      shall be nonbindable." }
+    f^.isBindable := false;
     f^.next := nil;
     if timeStampType^.fields = nil then timeStampType^.fields := f
     else timeStampType^.fieldTail^.next := f;
@@ -19537,6 +19658,7 @@ begin
     fld^.line := 0;
     fld^.col := 0;
     fld^.initValue := nil;
+    fld^.isBindable := false;   { 6.4.3.4, as above }
     fld^.next := nil;
     bindingTy^.fields := fld;
     bindingTy^.fieldTail := fld;
@@ -19548,6 +19670,7 @@ begin
     fld^.line := 0;
     fld^.col := 0;
     fld^.initValue := nil;
+    fld^.isBindable := false;   { 6.4.3.4, as above }
     fld^.next := nil;
     bindingTy^.fieldTail^.next := fld;
     bindingTy^.fieldTail := fld;

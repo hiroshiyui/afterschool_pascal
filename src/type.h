@@ -145,6 +145,15 @@ struct Field {
   /// field bearing that value. Borrowed from the AST — Sema owns the tree —
   /// and read only by the block prologue.
   Expr *initValue = nullptr;
+  /// ISO/IEC 10206:1991 §6.4.3.4: "That component shall have the type,
+  /// bindability, and initial state denoted by the type-denoter of the
+  /// record-section." Bindability is the third of the three, and it sits
+  /// beside `initValue` because the clause names them in one breath.
+  ///
+  /// It cannot live on `type`: `type bt = bindable text` hands the bindability
+  /// on without making a Type distinct from `text`, so a flag there would say
+  /// the same thing about both spellings.
+  bool isBindable = false;
 };
 
 /// One arm of a variant part: the tag values that select it, and the fields
@@ -183,6 +192,12 @@ struct Type {
   /// null for a procedural parameter as against a functional one. Sharing the
   /// field is how a variant record would do it, which is where this is going.
   Type *elem = nullptr;
+  /// Whether `elem` was written with a bindability of bindable — §6.4.3.5's
+  /// "each component shall have the type, bindability, and initial state
+  /// denoted by the type-denoter", said about the component rather than about
+  /// the component's type, for `Field::isBindable`'s reason. A pointer's domain
+  /// shares the slot and does not set it.
+  bool elemBindable = false;
   /// The ordinal type of a subscript — and, for a direct-access file
   /// (ISO/IEC 10206:1991 §6.4.3.6), of a position. The two never collide: a
   /// file is not an array.

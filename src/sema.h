@@ -587,7 +587,7 @@ private:
   /// Add a field to `into`, reporting a name already used anywhere in `record`.
   void addField(Type *record, std::vector<Field> &into, const DeclName &name,
                 Type *type, const std::vector<int> &variant,
-                Expr *init = nullptr);
+                Expr *init = nullptr, bool bindable = false);
   /// The `packed array [1..n] of char` that ISO 7185 §6.4.3.2 gives a string
   /// literal. Cached by length so two literals of a length share one type.
   Type *stringType(long long length);
@@ -702,6 +702,10 @@ private:
   bool isMemoryConstant(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
+  /// ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 ask this of the *variable-access*
+  /// and not of the entire-variable it selects from; see the definition.
+  bool designatorBindable(const Expr *e) const;
+  void notBindable(Expr *a);
   Type *resolveInquiry(TypeExpr &denoter);
   Type *resolveRestricted(TypeExpr &denoter);
   /// ISO/IEC 10206:1991 §6.6's initial-state-specifier, checked and folded.

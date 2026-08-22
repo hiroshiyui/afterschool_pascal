@@ -80,7 +80,6 @@ extended:6.7.5.2
 extended:6.7.5.3
 extended:6.7.5.4
 extended:6.7.5.5
-extended:6.7.5.6
 extended:6.7.5.7
 extended:6.7.5.8
 extended:6.7.6.2

@@ -857,8 +857,16 @@ Type *Sema::resolveArray(TypeExpr &denoter, size_t dim) {
   t->loDisc = index->loDisc;
   t->hiDisc = index->hiDisc;
   t->packed = denoter.packed;
-  t->elem = dim + 1 < denoter.dims.size() ? resolveArray(denoter, dim + 1)
-                                          : resolveType(*denoter.elem);
+  // An inner dimension is an array, and §6.4.3.5 makes an array's own
+  // bindability the one its type-denoter denotes — which for a dimension the
+  // grammar folded out of `array [a, b] of T` is no denoter at all. Only the
+  // component carries one.
+  if (dim + 1 < denoter.dims.size()) {
+    t->elem = resolveArray(denoter, dim + 1);
+  } else {
+    t->elem = resolveType(*denoter.elem);
+    t->elemBindable = bindableOf(*denoter.elem);
+  }
   return t;
 }
 
@@ -924,7 +932,8 @@ bool Sema::overlaps(const std::vector<LabelRange> &seen, LabelRange r,
 /// lookup answer where a name lives.
 void Sema::addField(Type *record, std::vector<Field> &into,
                     const DeclName &name, Type *type,
-                    const std::vector<int> &variant, Expr *init) {
+                    const std::vector<int> &variant, Expr *init,
+                    bool bindable) {
   // §6.2.3.8 b) reaches a bound written inside a record's denoter — a record
   // is not a block, so such a bound is still closest-contained by the one the
   // declaration is in — and ADR-0134 admits it. What it must not admit is a
@@ -954,6 +963,7 @@ void Sema::addField(Type *record, std::vector<Field> &into,
   f.line = name.line;
   f.col = name.col;
   f.initValue = init;
+  f.isBindable = bindable;
   into.push_back(std::move(f));
 }
 
@@ -983,7 +993,8 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
     Type *fieldType = resolveType(*group.type);
     Expr *init = initialStateOf(*group.type);
     for (DeclName &n : group.names)
-      addField(t, t->fields, n, fieldType, {}, init);
+      addField(t, t->fields, n, fieldType, {}, init,
+               bindableOf(*group.type));
   }
   if (denoter.tagType) {
     std::vector<int> path;
@@ -2802,6 +2813,72 @@ bool Sema::isDesignator(Expr *e) const {
   // selection rather than a case of its own.
   if (auto *c = as<Call>(e))
     return c->builtin == Builtin::Binding;
+  return false;
+}
+
+/// Whether the variable a designator denotes possesses the bindability that is
+/// bindable — ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 both ask this of `bind`,
+/// `unbind` and `binding`, and it is a property of the *variable-access* and
+/// not of the entire-variable it selects from.
+///
+/// It used to be asked of the entire-variable, through `baseSymbol`, and that
+/// was wrong in both directions at once. §6.4.3.4 gives a field "the type,
+/// bindability, and initial state denoted by the type-denoter of the
+/// record-section" and §6.4.3.5 says the same of an array's component, so
+/// `bind(r.log, b)` and `bind(pool[i], b)` are legal for a bindable field and a
+/// bindable element — and both were refused with a message naming the
+/// *container*. Meanwhile a dereference has no VarRef under it, so the old walk
+/// found nothing to ask and let every `p^` through.
+///
+/// A dereference still answers true, which is the under-strict half and is
+/// deliberately unfinished; `doc/implementation-defined.md` §6.1 carries it.
+/// A substring is nonbindable by §6.5.3.1 and a buffer-variable by §6.5.5, and
+/// both fall to the closing `false`.
+/// §6.7.5.6's and §6.7.6.8's refusal, in one place because the three
+/// procedures and the one function all ask the same question. The name written
+/// is the *thing that is not bindable*: a field where the designator ends in
+/// one, the entire-variable otherwise — which for `pool[i]` is `pool`, and is
+/// the right name now that the question is asked of the component rather than
+/// of the container.
+void Sema::notBindable(Expr *a) {
+  std::string who;
+  if (auto *f = as<FieldExpr>(a))
+    who = f->qualified ? f->qualified->name
+                       : (f->resolved ? f->resolved->name : std::string());
+  else if (auto *v = as<VarRef>(a))
+    who = v->withField ? v->withField->name
+                       : (v->sym ? v->sym->name : std::string());
+  else if (Symbol *root = baseSymbol(a))
+    who = root->name;
+  diags_.error(a->line, a->col,
+               (who.empty() ? std::string("this variable ")
+                            : "'" + who + "' ") +
+                   "is not bindable; only a variable whose type-denoter says "
+                   "'bindable' can be bound to something outside the program");
+}
+
+bool Sema::designatorBindable(const Expr *ce) const {
+  Expr *e = const_cast<Expr *>(ce);
+  if (!e)
+    return false;
+  if (auto *v = as<VarRef>(e)) {
+    // A name bound by a `with` is a field of the record the with opened, so it
+    // answers for itself exactly as a written field selection does.
+    if (v->withField)
+      return v->withField->isBindable;
+    return v->sym && v->sym->isBindable;
+  }
+  if (auto *f = as<FieldExpr>(e)) {
+    // §6.11.3's qualified name denotes one symbol and has no base to select
+    // from, so it answers as an entire-variable does.
+    if (f->qualified)
+      return f->qualified->isBindable;
+    return f->resolved && f->resolved->isBindable;
+  }
+  if (auto *i = as<IndexExpr>(e))
+    return i->base->type && i->base->type->elemBindable;
+  if (as<DerefExpr>(e))
+    return true;
   return false;
 }
 
@@ -7527,12 +7604,8 @@ void Sema::checkStdProc(ProcCallStmt *p) {
                        (a->type ? ", found " + a->type->name() : ""));
       return;
     }
-    Symbol *root = baseSymbol(a);
-    if (root && !root->isBindable)
-      diags_.error(a->line, a->col,
-                   "'" + root->name + "' is not bindable; only a variable of "
-                   "a bindable type can be bound to something outside the "
-                   "program");
+    if (!designatorBindable(a))
+      notBindable(a);
     if (p->name == "bind" && p->args[1]->type &&
         p->args[1]->type != bindingType_)
       diags_.error(p->args[1]->line, p->args[1]->col,
@@ -8617,8 +8690,11 @@ void Sema::checkCall(Call *c) {
   // is what makes `binding(f).bound` and `b := binding(f)` need no cases.
   if (c->builtin == Builtin::Binding) {
     c->type = bindingType_ ? bindingType_ : ty::Int();
-    for (auto &a : c->args)
-      checkExpr(a.get());
+    // The arguments were checked by the loop above, once. A second loop here
+    // reported every diagnostic in the argument twice — `binding(nosuch)`
+    // said "undeclared identifier 'nosuch'" and then said it again — and no
+    // corpus source had ever called `binding` on a name that failed to
+    // resolve, so difftest had nothing to disagree about until one did.
     if (c->args.size() != 1) {
       diags_.error(c->line, c->col, "'binding' takes one bindable variable");
       return;
@@ -8630,12 +8706,8 @@ void Sema::checkCall(Call *c) {
                        (a->type ? ", found " + a->type->name() : ""));
       return;
     }
-    Symbol *root = baseSymbol(a);
-    if (root && !root->isBindable)
-      diags_.error(a->line, a->col,
-                   "'" + root->name + "' is not bindable; only a variable of "
-                   "a bindable type can be bound to something outside the "
-                   "program");
+    if (!designatorBindable(a))
+      notBindable(a);
     else if (current_ && bindingType_)
       c->resultSlot = addHiddenVar(
           "binding$" + std::to_string(current_->frameVars.size()),

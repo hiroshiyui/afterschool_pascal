@@ -1358,14 +1358,17 @@ surprises.
 makes it a property of the type-denoter.** ADR-0167's third reader found five
 programs refused by it, and they are three pieces of work rather than one bug:
 
-- A **field or an array element** of a bindable type cannot be bound.
-  §6.4.3.4 says a field "shall have the type, bindability, and initial state
-  denoted by the type-denoter of the record-section" and the array clause says
-  the same of a component, so `var r: record log: bindable text end` has a
-  bindable field and `bind(r.log, b)` is legal. It is refused, and the message
-  names the *container* — `'r' is not bindable` — which is the defect saying
-  what it is. The fix is to carry bindability on the type rather than on the
-  variable symbol.
+- ~~A **field or an array element** of a bindable type cannot be bound.~~
+  **Done.** Bindability is carried on the field and on the array's component,
+  and `DesignatorBindable` asks the variable-access rather than the
+  entire-variable it selects from. What that left behind is the third shape:
+  a **dereference** is still answered `bindable` without asking, so
+  `bind(p^, b)` compiles for `p: ^text` as well as for `p: ^bindable text`.
+  A pointer's domain reaches Sema through `ResolvePointer`'s deferred and
+  pending paths, where the denoter is no longer in hand, so carrying the
+  bindability there is its own change; `doc/implementation-defined.md` §6.1
+  carries it meanwhile as a program accepted that the standard requires to be
+  rejected.
 - **A `var` parameter of file-type takes its bindability from the actual, at
   run time.** §6.7.3.3: "The formal-parameter and its associated
   variable-identifier shall possess the bindability that is possessed by the
