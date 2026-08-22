@@ -167,6 +167,46 @@ Feature: Subrange bounds are expressions
       hello
       """
 
+  # §6.7.6.7's index, the third required function this folder had no arm for --
+  # and the one the standard itself writes in a constant-definition-part.
+  # §6.3.2's example ends
+  #
+  #   hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')];
+  #
+  # so the page did not compile. Neither reason that keeps a required function
+  # out of a constant-expression here reaches it: the result is an integer, so
+  # no real is converted, and the operands are literals already carried as
+  # their own text, so no computed string has to be named.
+  @extended:6.8.2 @extended:6.7.6.7
+  Scenario: index of two string constants is nonvarying
+    Given the Extended Pascal program
+      """
+      program p(output);
+      const hex_string = '0123456789ABCDEF';
+            hex_alpha  = hex_string[index(hex_string,'A')..
+                                    index(hex_string,'F')];
+            at_a = index(hex_string, 'A');
+            absent = index(hex_string, 'zz');
+            null_second = index(hex_string, '');
+            null_first = index('', 'a');
+      var buf: packed array [1..index(hex_string, 'A')] of char;
+      begin
+        writeln(at_a : 1, ' ', absent : 1, ' ', null_second : 1,
+                ' ', null_first : 1);
+        writeln('[', hex_alpha, ']');
+        buf := 'anything!!!';
+        writeln('[', buf, ']')
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      11 0 1 0
+      [ABCDEF]
+      [anything!!!]
+      """
+
   # The other half, and it is a restriction of this processor rather than of
   # the clause: a real constant is carried as the text that was written and is
   # never converted to a number, so `trunc` in a constant-expression would need

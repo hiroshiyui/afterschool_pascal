@@ -9065,8 +9065,28 @@ end;
   What is left is exact: the ordinal-valued functions, `length`, and 6.7.6.4's
   two-argument succ and pred, which were missing only because this walked one
   argument. }
+{ 6.4.3.3.1 gives the char-type "length 1 and capacity 1", so a char constant
+  is a string of length one whose only component is itself. These two functions
+  are the whole of that difference: a string constant is its literal, *named*
+  (ADR-0068), so its characters are in the pool and a char's is in the symbol.
+  A length of -1 means the constant is neither, which is the folder's way of
+  saying it has nothing to work on. }
+function ConstStrLen(s: symbol): integer;
+begin
+  if IsChar(s.stype) then ConstStrLen := 1
+  else if s.constValue = nil then ConstStrLen := -1
+  else if s.constValue^.kind <> nkStr then ConstStrLen := -1
+  else ConstStrLen := s.constValue^.stLen
+end;
+
+function ConstStrAt(s: symbol; i: integer): char;
+begin
+  if IsChar(s.stype) then ConstStrAt := s.charVal
+  else ConstStrAt := pool[s.constValue^.stAt + i - 1]
+end;
+
 function EvalConstCall;
-var a, b: symbol; ok: boolean; v, k, lo, hi: integer; bad: boolean;
+var a, b: symbol; ok: boolean; v, k, lo, hi, j: integer; bad: boolean;
 begin
   ok := false;
   a.stype := nil;
@@ -9182,6 +9202,52 @@ begin
         end
     end
     else if e^.clArgs^.next^.next = nil then
+      { 6.7.6.7's index, which nothing folded -- and 6.3.2, the standard's own
+        example of a constant-definition-part, writes it twice:
+
+          hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')];
+
+        6.8.2 leaves it nonvarying like every other required function that
+        names no variable, so the only reason it was refused is that the
+        two-argument arm of this folder was written for succ and pred and
+        asked their question of everything. Neither cause that keeps a
+        required function out reaches index: its result is an integer, so no
+        real is converted, and its operands are literals already in the pool,
+        so no computed string has to be named. }
+      if e^.clBuiltin = biIndex then begin
+        if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
+          if EvalConst(e^.clArgs^.next, b) and (b.stype <> nil) then begin
+            lo := ConstStrLen(a);
+            hi := ConstStrLen(b);
+            if (lo >= 0) and (hi >= 0) then begin
+              { "If the value of s2 is the null-string, then the function
+                shall yield 1; if the value of s1 is the null-string and the
+                value of s2 is not the null-string, then the function shall
+                yield 0; otherwise ... the least i such that
+                s1v[i..i+length(s2)-1] = s2, if such an i exists; otherwise
+                ... 0." The order of the first two matters: two null-strings
+                answer 1, not 0. }
+              if hi = 0 then v := 1
+              else if lo = 0 then v := 0
+              else begin
+                v := 0;
+                k := 1;
+                while (v = 0) and (k + hi - 1 <= lo) do begin
+                  bad := false;
+                  for j := 1 to hi do
+                    if ConstStrAt(a, k + j - 1) <> ConstStrAt(b, j) then
+                      bad := true;
+                  if not bad then v := k;
+                  k := k + 1
+                end
+              end;
+              res.stype := intType;
+              res.intVal := v;
+              ok := true
+            end
+          end
+      end
+      else
         { 6.7.6.4's succ(x,k) and pred(x,k), which the clause defines as
           succ(x,-(k)). Nonvarying by 6.8.2 exactly as the one-argument forms
           are, and refused only because this walked a single argument.

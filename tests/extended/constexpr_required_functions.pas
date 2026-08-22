@@ -22,6 +22,10 @@
   which is what this case is about: `succ(x,k)` and `pred(x,k)` were refused
   because the folder walked one argument, and `length` because it had no arm.
 
+  `index` was a third, and silently: nothing folded it and nothing said so, so
+  6.3.2 -- the standard's own example of a constant-definition-part -- did not
+  compile.
+
   Eight are still refused and that is a *restriction* rather than this rule --
   doc/implementation-defined.md 6 has it. A real constant is carried as the
   text that was written and is never converted to a number here, so trunc,
@@ -70,6 +74,30 @@ const
   five      = length(greeting);
   one       = length('x');
 
+  { 6.7.6.7's index, whose two arguments made it the other casualty of a
+    two-argument arm written for succ and pred. Every branch of the clause:
+    a null second operand answers 1 *before* a null first operand answers 0,
+    so two null-strings answer 1; a match answers the least i; no match
+    answers 0; and either operand may be a char, which 6.4.3.3.1 makes a
+    string of length one. }
+  hex_string = '0123456789ABCDEF';
+  at_a      = index(hex_string, 'A');
+  at_f      = index(hex_string, 'F');
+  run       = index(hex_string, '89A');
+  least     = index('abcabc', 'bc');
+  absent    = index(hex_string, 'zz');
+  empty2    = index(hex_string, '');
+  both      = index('', '');
+  none      = index('', 'a');
+  chars     = index('a', 'a');
+
+  { 6.3.2's own example of a constant-definition-part, written as the standard
+    writes it. It is the reason this arm exists: a substring-constant whose
+    bounds are index expressions is what the clause puts on the page, and this
+    compiler refused the page. }
+  hex_digits = hex_string[1..10];
+  hex_alpha  = hex_string[index(hex_string,'A')..index(hex_string,'F')];
+
 var
   { The point of all of it: a constant-expression is what a bound is. }
   buf: packed array [1..length(greeting)] of char;
@@ -82,6 +110,9 @@ begin
   writeln(top:1, ' ', nearlytop:1);
   writeln(upfromneg:1, ' ', downfromneg:1, ' ', floor:1);
   writeln(five:1, ' ', one:1);
+  writeln(at_a:1, ' ', at_f:1, ' ', run:1, ' ', least:1, ' ', absent:1);
+  writeln(empty2:1, ' ', both:1, ' ', none:1, ' ', chars:1);
+  writeln('[', hex_digits, '] [', hex_alpha, ']');
 
   for i := 1 to length(greeting) do buf[i] := greeting[i];
   writeln('buf = ', buf);

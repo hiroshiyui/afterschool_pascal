@@ -5535,6 +5535,53 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
   // succ(x,-(k)). Nonvarying exactly as the one-argument forms are, and
   // refused only because this walked a single argument.
   if (c->args.size() == 2) {
+    // §6.7.6.7's index, which nothing folded — and §6.3.2, the standard's own
+    // example of a constant-definition-part, writes it twice:
+    //
+    //   hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')];
+    //
+    // Neither cause that keeps a required function out reaches it: the result
+    // is an integer, so no real is converted, and the operands are literals
+    // already carried as their text, so no computed string has to be named.
+    if (c->builtin == Builtin::Index) {
+      Symbol b;
+      if (!evalConst(c->args[1].get(), b) || !b.type)
+        return false;
+      // §6.4.3.3.1 gives the char-type "length 1 and capacity 1", so a char
+      // constant is a string of length one whose only component is itself.
+      auto text = [](const Symbol &s, std::string &to) -> bool {
+        if (s.type->isChar()) {
+          to = std::string(1, s.charVal);
+          return true;
+        }
+        auto *lit = s.constValue ? as<StrLit>(s.constValue) : nullptr;
+        if (!lit)
+          return false;
+        to = lit->value;
+        return true;
+      };
+      std::string s1, s2;
+      if (!text(a, s1) || !text(b, s2))
+        return false;
+      // "If the value of s2 is the null-string, then the function shall yield
+      // 1; if the value of s1 is the null-string and the value of s2 is not
+      // the null-string, then the function shall yield 0; otherwise ... the
+      // least i such that s1v[i..i+length(s2)-1] = s2, if such an i exists;
+      // otherwise ... 0." The order of the first two matters: two
+      // null-strings answer 1, not 0.
+      long long r;
+      if (s2.empty())
+        r = 1;
+      else if (s1.empty())
+        r = 0;
+      else {
+        auto at = s1.find(s2);
+        r = at == std::string::npos ? 0 : static_cast<long long>(at) + 1;
+      }
+      out.type = ty::Int();
+      out.intVal = r;
+      return true;
+    }
     if (c->builtin != Builtin::Succ && c->builtin != Builtin::Pred)
       return false;
     Symbol b;
