@@ -14706,6 +14706,23 @@ begin
         WritePool(e^.svTagAt, e^.svTagLen);
         writeln('''')
       end;
+    { ...and the converse. 6.8.7.3's closing sentence about the selector is a
+      requirement on the *value*, not a permission: "The field-identifier, if
+      any, associated with the selector of a variant-part shall have an applied
+      occurrence in the tag-field-identifier of each variant-part-value
+      corresponding to the variant-part." So where the variant part names its
+      selector, every record-value selecting a variant of it names it too. The
+      syntax leaves the tag-field-identifier optional because a *tagless*
+      variant part has none to write -- which is the arm above, and reading the
+      option as a licence to omit a tag field that exists is what left this
+      unchecked. }
+    if (e^.svTagLen = 0) and (tf <> nil) then begin
+      ErrorAt(e^.line, e^.col);
+      write('this variant part''s tag field is ''');
+      WritePool(tf^.at, tf^.len);
+      writeln(''', and a record value must name it, as ''case '' then that ',
+              'name')
+    end;
 
     tt := TagTypeAt(t, path);
     ltype := tt;

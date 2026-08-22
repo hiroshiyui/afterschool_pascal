@@ -58,8 +58,8 @@ begin
   s := shape[n: 1; case bad: box of [w: 1; h: 2]];
   { the tag field is given by the 'case', never as a field value; and a
     variant's fields belong to the variant's own value }
-  s := shape[n: 1; kind: circle; case circle of [r: 1.0]];
-  s := shape[n: 1; w: 2; case box of [w: 1; h: 2]];
+  s := shape[n: 1; kind: circle; case kind: circle of [r: 1.0]];
+  s := shape[n: 1; w: 2; case kind: box of [w: 1; h: 2]];
   { a record with no variant part cannot select one }
   q := plain[a: 1; case box of [a: 2]];
   { §6.8.7.4's set-value is a *set-constructor*, so a set type takes members
@@ -76,5 +76,9 @@ begin
   p := nosuch[x: 1];
   fields2;
   dyn(3);
+  { §6.8.7.3: the selector of shape's variant part *has* a field-identifier,
+    so every variant-part-value for it names that identifier. Appended here
+    rather than written beside the two above so that no golden line moves. }
+  s := shape[n: 1; case circle of [r: 1.0]];
   writeln(v[1], p.x, s.n, q.a, m.x, i)
 end.

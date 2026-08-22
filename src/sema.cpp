@@ -6325,6 +6325,16 @@ void Sema::checkVariantPartValue(StructValueExpr *e, Type *t,
       diags_.error(e->line, e->col,
                    "the tag field of this variant part is '" +
                        fields[tagField].name + "', not '" + e->tagField + "'");
+  } else if (tagField >= 0) {
+    // ...and the converse. §6.8.7.3's closing sentence about the selector is a
+    // requirement on the *value*, not a permission: "The field-identifier, if
+    // any, associated with the selector of a variant-part shall have an
+    // applied occurrence in the tag-field-identifier of each
+    // variant-part-value corresponding to the variant-part."
+    diags_.error(e->line, e->col,
+                 "this variant part's tag field is '" + fields[tagField].name +
+                     "', and a record value must name it, as 'case ' then "
+                     "that name");
   }
 
   CaseLabel tag;

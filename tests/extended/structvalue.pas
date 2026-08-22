@@ -25,12 +25,21 @@ type
                        red:   (heat: integer);
                        green: (cool: integer))
           end;
+  { A variant part need not name its selector. §6.8.7.3 makes the
+    tag-field-identifier of a variant-part-value optional for exactly this
+    case and no other: there is no field-identifier to write. }
+  bare  = record
+            n: integer;
+            case kinds of
+              circle: (r: real);
+              box: (w, h: integer)
+          end;
   { §6.6 NOTE 3: an initial-state-specifier may be a component-value, and a
     type-name hands the initial state on to every variable of that type. }
   stars = packed array [1..8] of char value [1..8: '*'];
 
 var
-  v: vec; m: mat; p: pt; a: pts; s: shape; t: tree;
+  v: vec; m: mat; p: pt; a: pts; s: shape; t: tree; u: bare;
   banner: stars;
   origin: pt value [x: 0; y: 0];
   i, j, calls: integer;
@@ -64,13 +73,23 @@ begin
   a := pts[1: pt[x: 3; y: 4]; 2: pt[x, y: 9]];
   write('a '); show(a[1]); show(a[2]); writeln;
 
-  { A variant-part-value with a tag-field-identifier stores the tag; without
-    one the variant part is tagless and nothing is stored. }
+  { §6.8.7.3: "The field-identifier, if any, associated with the selector of a
+    variant-part shall have an applied occurrence in the tag-field-identifier
+    of each variant-part-value corresponding to the variant-part." shape names
+    its selector `kind`, so every record-value for it names `kind` too — the
+    option in the syntax is for a variant part that has no such identifier,
+    which is `bare` below and not this. }
   s := shape[n: 1; case kind: box of [w: 6; h: 7]];
   writeln('s ', s.n:1, ' ', ord(s.kind):1, ' ', s.w:1, ' ', s.h:1);
 
-  s := shape[n: 2; case circle of [r: 1.5]];
+  s := shape[n: 2; case kind: circle of [r: 1.5]];
   writeln('s ', s.n:1, ' ', ord(s.kind):1, ' ', s.r:1:1);
+
+  { ...and the tagless form, where the option is the whole of what there is:
+    the selector has no field-identifier, so the value has nothing to name and
+    the constant-tag-value alone says which variant is active. }
+  u := bare[n: 3; case box of [w: 4; h: 5]];
+  writeln('u ', u.n:1, ' ', u.w:1, ' ', u.h:1);
 
   t := tree[id: 7; case tag: node of
               [case hue: green of [cool: 42]]];

@@ -212,3 +212,88 @@ Feature: Variant-parts under Extended Pascal
       """
       7
       """
+
+# ISO/IEC 10206:1991 §6.8.7.3 -- a record-value's variant-part-value against
+# the variant part it selects.
+#
+# The syntax makes the tag-field-identifier optional:
+#
+#   variant-part-value = 'case' [ tag-field-identifier ':' ]
+#                          constant-tag-value 'of' '[' field-list-value ']' .
+#
+# and the option is for a variant part whose selector has no field-identifier,
+# not a licence to leave out one that has. Two sentences say so. "The
+# field-identifier, if any, associated with the selector of a variant-part
+# shall have an applied occurrence in the tag-field-identifier of each
+# variant-part-value corresponding to the variant-part"; and, of the whole
+# field-list-value, "each field-identifier associated with a component of the
+# field-list shall have exactly one applied occurrence" -- the selector being
+# such a component.
+
+@extended:6.8.7.3
+Feature: Record-values and the tag field
+
+  Scenario: a variant-part-value names the selector its variant part declares
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type kinds = (circle, box);
+           shape = record
+                     n: integer;
+                     case kind: kinds of
+                       circle: (r: real);
+                       box: (w, h: integer)
+                   end;
+      const c = shape[n: 1; case kind: box of [w: 6; h: 7]];
+      begin
+        writeln(c.n:1, ' ', ord(c.kind):1, ' ', c.w:1, ' ', c.h:1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      1 1 6 7
+      """
+
+  Scenario: omitting a selector that the variant part declares is refused
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type kinds = (circle, box);
+           shape = record
+                     n: integer;
+                     case kind: kinds of
+                       circle: (r: real);
+                       box: (w, h: integer)
+                   end;
+      const c = shape[n: 1; case box of [w: 6; h: 7]];
+      begin
+        writeln(c.n:1)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  Scenario: a variant part with no selector has nothing for the value to name
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type kinds = (circle, box);
+           bare = record
+                    n: integer;
+                    case kinds of
+                      circle: (r: real);
+                      box: (w, h: integer)
+                  end;
+      const c = bare[n: 3; case box of [w: 4; h: 5]];
+      begin
+        writeln(c.n:1, ' ', c.w:1, ' ', c.h:1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      3 4 5
+      """
