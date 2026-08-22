@@ -32,7 +32,7 @@
 #     -c              write an object file and stop
 #     --emit-llvm,-S  write the IR and stop
 #     -O0 .. -O3      optimisation level, handed to clang (default -O2)
-#     --std=<name>    iso7185 (default), extended, or afterschool
+#     --std=<name>    extended (default), iso7185, or afterschool
 #     --target=<t>    the machine to compile for; handed to both halves, so
 #                     clang needs a cross toolchain and a --sysroot for it
 #     --import <f>    a program-component already translated
@@ -67,7 +67,11 @@ runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-$root/build/lib}
 
 die() { echo "pascalcc: $*" >&2; exit 1; }
 
-std=iso7185
+# ISO/IEC 10206:1991, matching `pascalc`'s own default (ADR-0165). This script
+# always passes --std= explicitly, so the two cannot drift apart silently; the
+# value is here so that `pascalcc f.pas` and `pascalc f.pas` mean the same
+# thing, which is the only reason a driver should have a default at all.
+std=extended
 out=
 mode=link          # link | object | ir
 opt=-O2

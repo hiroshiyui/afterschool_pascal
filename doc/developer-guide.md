@@ -302,7 +302,9 @@ not what a compiled program wrote:
 * **`tests/dumps/`** compares what the *compiler* writes to standard output
   under `--dump-tokens`, `--dump-ast`, `--dump-sema` and `--dump-all`. Sidecars
   are `name.dump` (the golden), `name.flags` (which flag, `--dump-all` by
-  default) and `name.std` (the standard, `iso7185` when absent).
+  default) and `name.std` (the standard, `iso7185` when absent — pinned by the
+  harness rather than taken from the compiler's default, which moved in
+  ADR-0165 and would otherwise have rewritten five goldens).
 
   `--dump-limits` is the one dump flag with no case here, deliberately
   (ADR-0148). It reports how full the compiler left its own fixed arrays, and

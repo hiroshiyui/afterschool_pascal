@@ -48,6 +48,10 @@ std_file="$base.std"
 
 flags="--dump-all"
 [[ -f $flags_file ]] && flags=$(tr -d '[:space:]' <"$flags_file")
+# Pinned, not inherited. The compiler's own default moved to Extended Pascal
+# in ADR-0165; a harness that followed it would have silently recompiled five
+# cases under another standard and rewritten their goldens, which is the one
+# thing a golden must never do by itself.
 standard="iso7185"
 [[ -f $std_file ]] && standard=$(tr -d '[:space:]' <"$std_file")
 

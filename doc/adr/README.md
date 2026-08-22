@@ -173,3 +173,4 @@ the alternatives that were rejected and why.
 | [0162](0162-what-an-adversarial-reading-of-the-standards-found.md) | What an adversarial reading of the standards found | Accepted |
 | [0163](0163-a-variant-denoter-restricts-more-than-this-compiler-knew.md) | A variant-denoter restricts more than this compiler knew | Accepted |
 | [0164](0164-a-clause-number-is-a-claim-and-nothing-was-checking-it.md) | A clause number is a claim, and nothing was checking it | Accepted |
+| [0165](0165-extended-pascal-is-the-default.md) | Extended Pascal is the default, and ISO 7185 stays reachable | Accepted |

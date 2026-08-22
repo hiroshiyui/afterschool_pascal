@@ -338,8 +338,9 @@ design would have reported a false all-clear, because it asked whether a name
 *resolves* rather than whether it works, which is the same mistake that let
 `pack` and `page` sit in `isRequiredName` with no implementation behind them.
 
-**Stage 2 has begun** (ADR-0033). `--std=iso7185` is the default and
-`--std=extended` is ISO/IEC 10206:1991. The two are *not* nested: Extended
+**Stage 2 has begun** (ADR-0033). **`--std=extended` — ISO/IEC 10206:1991 —
+is the default since ADR-0165**, and `--std=iso7185` is the older standard,
+kept reachable rather than retired. The two are *not* nested: Extended
 Pascal reserves word-symbols a valid ISO 7185 program may use as identifiers —
 so a source is written in one language or the other, and the standard is a
 property of the source.

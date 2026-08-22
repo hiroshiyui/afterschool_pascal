@@ -2546,7 +2546,7 @@ begin
   writeln('usage: pascalc [options] file.pas');
   writeln('  -o <file>       where to write the LLVM IR');
   writeln('                  (the source name with .ll, by default)');
-  writeln('  --std=<name>    iso7185 (default), extended, or afterschool');
+  writeln('  --std=<name>    extended (default), iso7185, or afterschool');
   writeln('                  (the dialect: Extended Pascal and what is');
   writeln('                  added to it)');
   writeln('  --import <f>    a program-component already translated; its');
@@ -2585,7 +2585,16 @@ end;
 procedure ParseArgs;
 var k: integer; a: nameStr; dot: integer; k2: integer; tname: nameStr;
 begin
-  langStd := stdIso7185;
+  { ISO/IEC 10206:1991 is the default (ADR-0165). The two conformance modes are
+    not nested -- 6.1.2 reserves thirteen word-symbols a conforming ISO 7185
+    program may use as identifiers -- so the default is a choice about which
+    language an unflagged source is written in, and the dialect this project
+    is aiming at contains Extended Pascal rather than ISO 7185. --std=iso7185
+    keeps the older standard reachable and is what CONF005 needs: BSI wrote
+    that program in 1982 to check that a conforming processor still accepts
+    `module` and `restricted` as identifiers, and it is the one program of 812
+    that only the older mode compiles. }
+  langStd := stdExtended;
   srcName := '';
   outName := '';
   importCount := 0;

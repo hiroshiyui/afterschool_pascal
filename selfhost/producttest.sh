@@ -277,6 +277,48 @@ else
   failed=$((failed + 1))
 fi
 
+# --std has a default too, and until ADR-0165 nothing pinned it. Two harnesses
+# were riding on it silently -- verify/verify.py's crosscheck generator, whose
+# program uses `value` as an identifier, and tests/bsi/run.sh, whose 812
+# programs are ISO 7185 -- and both broke the moment it moved. Both directions
+# are checked, because a default that is merely *a* standard is not the claim:
+# an unflagged source is Extended Pascal, and `string(n)` is the cheapest
+# construct that only Extended Pascal has.
+checked=$((checked + 1))
+cat >"$work/dflt.pas" <<'PAS'
+program dflt(output);
+var s: string(5);
+begin s := 'hi'; writeln(s) end.
+PAS
+if "$pascalc" "$work/dflt.pas" -o "$work/dflt.ll" >/dev/null 2>&1; then
+  :
+else
+  echo "--- std: the default no longer accepts Extended Pascal ---" >&2
+  failed=$((failed + 1))
+fi
+
+checked=$((checked + 1))
+if "$pascalc" --std=iso7185 "$work/dflt.pas" -o /dev/null >/dev/null 2>&1; then
+  echo "--- std: --std=iso7185 accepted a string(n), so the modes are one ---" >&2
+  failed=$((failed + 1))
+fi
+
+# ISO 7185 has to stay reachable, which is the whole of what ADR-0165 kept it
+# for. `value` is an ordinary identifier there and a word-symbol in Extended
+# Pascal, which is the collision BSI's CONF005 was written about in 1982.
+checked=$((checked + 1))
+cat >"$work/iso.pas" <<'PAS'
+program iso(output);
+var value: integer;
+begin value := 1; writeln(value:1) end.
+PAS
+if "$pascalc" --std=iso7185 "$work/iso.pas" -o "$work/iso.ll" >/dev/null 2>&1; then
+  :
+else
+  echo "--- std: --std=iso7185 no longer accepts an ISO 7185 program ---" >&2
+  failed=$((failed + 1))
+fi
+
 # The default has to stay the default: this repository is built and tested on
 # x86-64 and the seed was generated for it.
 checked=$((checked + 1))

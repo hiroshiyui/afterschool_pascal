@@ -65,7 +65,11 @@ struct Options {
   /// the proofs and the stage-1 compiler are all written in it, and because
   /// ISO/IEC 10206:1991 reserves words a valid ISO 7185 program may use as
   /// identifiers (ADR-0033).
-  ap::Std lang = ap::Std::Iso7185;
+  // ISO/IEC 10206:1991 is the default, as it is in the Pascal compiler
+  // (ADR-0165). difftest passes --std= explicitly on every file, so this
+  // default is never what it compares — but the two front ends disagreeing
+  // about their own default would be a difference nothing checks.
+  ap::Std lang = ap::Std::Extended;
 };
 
 /// Diagnostics into the same stream as the dump, and before it. The Pascal
@@ -137,7 +141,7 @@ void usage() {
                "  --dump-ast    write the parse tree and stop\n"
                "  --dump-sema   write the tree Sema annotated and stop\n"
                "  --dump-all    write all three dumps and stop\n"
-               "  --std=<name>  iso7185 (default) or extended\n"
+               "  --std=<name>  extended (default) or iso7185\n"
                "  --version     write the version and stop\n"
                "  -h, --help    write this list and stop\n");
 }

@@ -147,10 +147,12 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`;
 set `AFTERSCHOOL_PASCAL_RUNTIME` to point `pascalcc` at a copy outside the build
 tree.
 
-The language is selected per source. `--std=iso7185` is the default and is
-what everything below describes; `--std=extended` is ISO/IEC 10206:1991, which
-is **not** a superset — it reserves word-symbols (`otherwise`, `value`, `only`,
-…) that a valid ISO 7185 program may use as ordinary identifiers.
+The language is selected per source. **`--std=extended` — ISO/IEC 10206:1991 —
+is the default** (ADR-0165); `--std=iso7185` selects the older standard and is
+kept for compatibility, because the two are **not** nested: Extended Pascal
+reserves word-symbols (`otherwise`, `value`, `only`, …) that a valid ISO 7185
+program may use as ordinary identifiers, so an ISO 7185 program with a field
+called `value` needs the flag.
 `selfhost/compiler.pas` used to be the example of that and is now written in
 Extended Pascal itself, because only that standard lets a program read its own
 command line.

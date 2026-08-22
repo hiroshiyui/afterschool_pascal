@@ -305,7 +305,14 @@ def run_crosscheck(pascalc):
         outputs = {}
         for opt in ("-O0", "-O2"):
             exe = os.path.join(work, f"crosscheck{opt}")
-            built = subprocess.run([pascalc, opt, src, "-o", exe],
+            # --std=iso7185 explicitly. The generated program is ISO 7185 and
+            # uses `value` as an identifier, which Extended Pascal reserves;
+            # riding on the compiler's default broke this the moment the
+            # default moved (ADR-0165). The lowering rules are about the
+            # arithmetic both standards share, so the mode is a property of
+            # the generated source rather than of what is being proved.
+            built = subprocess.run([pascalc, "--std=iso7185", opt, src,
+                                    "-o", exe],
                                    capture_output=True, text=True)
             if built.returncode != 0:
                 print(f"  {RED}FAILED{RESET}   compilation at {opt}")

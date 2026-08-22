@@ -15,6 +15,29 @@ appears below in the release where it still existed.
 
 ### Changed
 
+- **`--std=extended` is now the default.** A source compiled with no `--std=`
+  flag is ISO/IEC 10206:1991 rather than ISO 7185. `--std=iso7185` still
+  selects the older standard and is not deprecated — it keeps its corpus, its
+  clause 5.1 a) compliance statement and its own oracle.
+
+  **Read this before upgrading.** The two standards are not nested: Extended
+  Pascal reserves thirteen word-symbols (`value`, `module`, `otherwise`,
+  `restricted`, …) that a conforming ISO 7185 program may use as ordinary
+  identifiers. An ISO 7185 program with a field called `value` now needs
+  `--std=iso7185`. Almost every affected program says so loudly — a reserved
+  word where an identifier belongs is a syntax error — with **one** exception
+  measured across the whole corpus: a field width of zero. ISO 7185 §6.9.3.1
+  requires a width "greater than or equal to one" and ISO/IEC 10206:1991
+  §6.10.3.1 requires "greater than or equal to zero", so `write('y':0)` changes
+  from trapping to printing nothing, silently. That is the entire silent
+  surface of this change; everything else is a diagnostic.
+
+  All 812 programs of the BSI Validation Suite were compiled both ways to
+  measure this: 811 compile identically, and the one that does not is
+  `CONF005` — the program BSI wrote in 1982 to check that a conforming
+  processor still accepts `module` and `restricted` as identifiers, and the
+  reason `--std=iso7185` was kept rather than retired.
+
 - **A restricted or bindable type is no longer accepted as a field of a variant
   part**, under `--std=extended` and `--std=afterschool`. ISO/IEC 10206:1991
   §6.4.3.4 says "a variant-denoter shall not contain a type-denoter denoting

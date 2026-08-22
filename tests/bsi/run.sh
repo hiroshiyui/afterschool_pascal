@@ -64,7 +64,14 @@ ulimit -f 200000
 #   RAN           it ran to completion with nothing above to say
 classify() {
   local src=$1
-  if ! timeout 25 "$pascalcc" "$src" -o "$work/prog" >"$work/msg" 2>&1; then
+  # --std=iso7185 explicitly: every program here is an ISO 7185 program from
+  # 1982 and the suite's classifications are about that standard. This used to
+  # ride on the compiler's default and broke the moment the default moved
+  # (ADR-0165) -- 17 DEVIANCE programs stopped being rejected, because Extended
+  # Pascal legalises what they deviate from, and CONF005 stopped compiling at
+  # all, it being the program BSI wrote to check that a conforming processor
+  # still accepts `module` and `restricted` as identifiers.
+  if ! timeout 25 "$pascalcc" --std=iso7185 "$src" -o "$work/prog" >"$work/msg" 2>&1; then
     echo REJECTED; return
   fi
   # §6.10 binds a program-parameter that possesses a file-type to a
