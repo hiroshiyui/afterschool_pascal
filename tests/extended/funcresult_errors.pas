@@ -89,6 +89,25 @@ begin n := 1 end;
 function clashbound(a: array [lo..hi: integer] of integer) = hi: integer;
 begin hi := 1 end;
 
+{ 6.9.4 b) says *variable* parameter, and a value conformant array is not one:
+  6.7.3.7.2 attributes the expression's *value* to a variable of the
+  activation, so nothing of the actual is written. So `copied` is `mute` again
+  in a spelling that looks exactly like `spoken`, and the two differ only in
+  the reserved word on the formal. The variable half of the same distinction is
+  what conformant_threatens_result.pas relies on staying true.
+
+  The type-definition-part after a function-declaration is 6.2.1's
+  interleaving, not an accident: the declarations of a block may occur in any
+  order (ADR-0069), and putting it here leaves every line number above it
+  where the goldens already have them. }
+type triple = array [1..3] of integer;
+
+procedure total(a: array [lo..hi: integer] of integer);
+begin p.x := a[lo] end;
+
+function copied = q: triple;
+begin total(q) end;
+
 begin
   writeln(other:1)
 end.

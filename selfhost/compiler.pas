@@ -13049,7 +13049,24 @@ begin
         end
         else if (p^.sym^.kind = skVarParam) and BadVarActual(a, callee, i) then
           { the message is BadVarActual's }
-        ;
+        { ISO/IEC 10206:1991 numbering here, the rule being one ISO 7185 does
+          not have: 6.9.4 b) reaches a conformant array's actual for the same
+          reason it reaches an ordinary one -- 6.7.3.7.3 calls it "an actual-parameter
+          corresponding to a formal variable parameter" in those words, and
+          6.5.1's own cross-reference names 6.7.3.7.1 as one of the three
+          places a protected variable-identifier comes from. The value form is
+          asked about deliberately and answers no -- 6.7.3.7.2 attributes the
+          *expression's* value to a variable of the activation, so nothing of
+          the actual is written -- and b)'s "that is not protected" is what
+          lets a protected conformant array be handed on to another. }
+        else if (p^.sym^.kind = skVarParam) and not p^.sym^.isProtected then
+          if Threatened(a) then begin
+            write('it cannot be passed to the var parameter ''');
+            WritePool(p^.sym^.at, p^.sym^.len);
+            write(''' of ''');
+            WritePool(callee^.at, callee^.len);
+            writeln('''')
+          end;
         if p^.sym^.paramSection <> sectionOf then begin
           sectionOf := p^.sym^.paramSection;
           sectionType := a^.ntype

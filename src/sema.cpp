@@ -8209,8 +8209,22 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
                          "' is not conformable with the schema: " +
                          (a->type ? a->type->name() : std::string("untyped")) +
                          " against " + p->type->name());
-      else if (p->kind == SymKind::VarParam)
-        badVarActual(a, callee, i + 1);
+      else if (p->kind == SymKind::VarParam) {
+        // ISO/IEC 10206:1991 numbering here, the rule being one ISO 7185 does
+        // not have: §6.9.4 b) reaches a conformant array's actual for the same
+        // reason it reaches an ordinary one — §6.7.3.7.3 calls it "an
+        // actual-parameter corresponding to a formal variable parameter" in
+        // those words, and §6.5.1's own cross-reference names §6.7.3.7.1 as
+        // one of the three places a protected variable-identifier comes from.
+        // The value form is asked about deliberately and answers no:
+        // §6.7.3.7.2 attributes the *expression's* value to a variable of the
+        // activation, so nothing of the actual is written. And b)'s "that is
+        // not protected" is what lets a protected conformant array be handed
+        // on to another.
+        if (!badVarActual(a, callee, i + 1) && !p->isProtected)
+          checkNotThreatened(a, "it cannot be passed to the var parameter '" +
+                                    p->name + "' of '" + callee->name + "'");
+      }
       if (p->paramSection != sectionOf) {
         sectionOf = p->paramSection;
         sectionType = a->type;

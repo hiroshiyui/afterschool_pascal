@@ -50,7 +50,6 @@ extended:6.4.3.5
 extended:6.4.3.6
 extended:6.4.4
 extended:6.4.9
-extended:6.5.1
 extended:6.5.2
 extended:6.5.3.1
 extended:6.5.3.2
@@ -66,9 +65,6 @@ extended:6.7.3.4
 extended:6.7.3.5
 extended:6.7.3.6
 extended:6.7.3.7
-extended:6.7.3.7.1
-extended:6.7.3.7.2
-extended:6.7.3.7.3
 extended:6.7.3.8
 extended:6.7.4
 extended:6.7.5.2
