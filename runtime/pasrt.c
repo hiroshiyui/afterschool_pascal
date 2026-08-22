@@ -1194,6 +1194,70 @@ static void pas_write_padded(FILE *o, const char *s, int len, int width) {
   fwrite(s, 1, (size_t)width, o); /* width == 0 writes nothing */
 }
 
+/* ISO/IEC 10206:1991 §6.10.3.4.1 and §6.10.3.4.2 — and ISO 7185 §6.9.3.4.1
+ * and §6.9.3.4.2 in the same words — do not say a real is "rounded" to
+ * FracDigits places and leave the direction open. They prescribe:
+ *
+ *     eWritten := abs(e);
+ *     eWritten := eWritten + 0.5 * 10.0 pow(-FracDigits);
+ *     eWritten := Truncate(eWritten, FracDigits)
+ *
+ * which is round-half-*away-from-zero*, while C's printf rounds half to even.
+ * The two agree everywhere except at an exact halfway value, and there they
+ * differ every time: `0.125:6:2` is 0.13 by the clause and 0.12 by printf,
+ * `2.5:4:0` is 3 against 2, `0.5:4:0` is 1 against 0.
+ *
+ * **The arithmetic is exact here, and that is a reading.** Taken literally the
+ * algorithm is real-type arithmetic, and executing it that way is defensible
+ * from the declared signatures — `Truncate(y: real; DecPlaces: integer):
+ * real`. It was tried, and §6.10.3.4.1's `eWritten := eWritten / 10.0 pow
+ * ExpValue` settles it: for a denormal, `10.0 pow ExpValue` underflows and the
+ * division returns garbage, so 1e-320 printed as 0.0E+00 — a nonzero value
+ * written as zero, which BSI's IMDEFB45 catches by reading its own output
+ * back. §6.10.3.4's opening sentence is the one that governs: "a decimal
+ * representation of the value of e, *rounded* to the specified number of
+ * significant figures or decimal places, shall be written". The sub-clauses
+ * say which rounding; they do not license losing the value. So the scaling and
+ * the halving are done on the exact decimal expansion.
+ *
+ * That expansion is finite: a double is a dyadic rational, 2^-n has exactly n
+ * fraction digits, and the smallest denormal is 2^-1074. Asking printf for
+ * that many digits therefore rounds nothing.
+ *
+ * And on an exact expansion the whole algorithm collapses to one test. Adding
+ * 0.5 * 10^-p and truncating at p rounds up exactly when the discarded tail
+ * reaches a half, and the tail is 0.d(p+1)d(p+2)... — so the answer is
+ * "d(p+1) >= 5" and nothing after it can matter. */
+#define PAS_EXACT_FRAC 1074
+/* 309 integer digits for a value approaching DBL_MAX, a leading slot for a
+ * carry out of the top, the point, the fraction, the terminator, and slack. */
+#define PAS_REALBUF 1450
+/* The most significant decimal digits any double needs to be written exactly;
+ * the smallest denormal is the worst case. */
+#define PAS_EXACT_SIG 767
+
+/* Round the digit string `d` (length `n`, most significant first, no point)
+ * half-up at position `keep`, in place. Returns 1 if the rounding carried out
+ * of the top, in which case the caller shifts: the string is left holding the
+ * digits *after* the carried 1. */
+static int pas_round_half_up(char *d, int n, int keep) {
+  int i;
+  if (keep >= n) return 0;          /* nothing to discard */
+  if (d[keep] < '5') { d[keep] = '\0'; return 0; }
+  for (i = keep - 1; i >= 0; i--) {
+    if (d[i] != '9') { d[i]++; d[keep] = '\0'; return 0; }
+    d[i] = '0';
+  }
+  d[keep] = '\0';
+  return 1;                          /* 999.. became 000.. with a carry out */
+}
+
+static int pas_digits_all_zero(const char *d) {
+  for (; *d; d++)
+    if (*d != '0') return 0;
+  return 1;
+}
+
 void pas_write_real(void *v, double val, int width, int prec) {
   FILE *o = pas_out(v);
   /* ISO 7185 §6.9.5's `page` needs to know whether the current line has
@@ -1211,50 +1275,119 @@ void pas_write_real(void *v, double val, int width, int prec) {
      * character '.', the next FracDigits digit-characters", and the '.' is
      * unconditional — so a FracDigits of zero, which Extended Pascal made
      * legal, still writes it, where C's "%.0f" does not. MinNumChars counts
-     * that character, which is why the padding is computed around it. */
-    if (prec == 0) {
-      int pad = width - (snprintf(NULL, 0, "%.0f", val) + 1);
-      while (pad-- > 0) putc(' ', o);
-      fprintf(o, "%.0f.", val);
-    } else if (width < 0) {
-      fprintf(o, "%.*f", prec, val);
-    } else {
-      fprintf(o, "%*.*f", width, prec, val);
+     * that character. */
+    char buf[PAS_REALBUF];
+    char *ip;
+    int want, ilen, flen, minChars, negative, pad;
+    /* A non-finite value has no decimal representation for the clause to
+     * describe, and nothing here can improve on what printf says about it. */
+    if (!isfinite(val)) {
+      if (width < 0) fprintf(o, "%f", val);
+      else fprintf(o, "%*f", width, val);
+      return;
     }
+    /* One spare leading slot, for a carry out of the top: 9.99:0:1 is 10.0. */
+    buf[0] = '0';
+    want = prec + 1 > PAS_EXACT_FRAC ? prec + 1 : PAS_EXACT_FRAC;
+    snprintf(buf + 1, sizeof buf - 1, "%.*f", want, fabs(val));
+    {
+      char *dot = strchr(buf + 1, '.');
+      ilen = (int)(dot - buf);               /* includes the spare slot */
+      flen = (int)strlen(dot + 1);
+      /* Close the point up so the digits are one string, then round it. */
+      memmove(dot, dot + 1, (size_t)flen + 1);
+    }
+    /* The spare slot is inside the rounded range on purpose: a carry out of
+     * the top lands in it — 9.99:6:1 is 10.0 — so the rounding never reports
+     * one, and the strip below simply finds a leading 1 where it would
+     * otherwise have found the 0. */
+    pas_round_half_up(buf, ilen + flen, ilen + prec);
+    ip = buf;
+    /* "the first IntDigits digit-characters", IntDigits being 1 for a value
+     * below one and RealSize(eWritten) otherwise — the integer part with
+     * leading zeros dropped, and never fewer than one digit. */
+    while (ilen > 1 && *ip == '0') { ip++; ilen--; }
+    negative = val < 0.0 && !pas_digits_all_zero(ip);
+    minChars = ilen + prec + 1 + (negative ? 1 : 0);
+    /* "if TotalWidth >= MinNumChars, (TotalWidth - MinNumChars) spaces". The
+     * NOTE is explicit that no initial spaces are written otherwise, so a
+     * TotalWidth of zero is not a suppression. */
+    for (pad = width - minChars; pad > 0; pad--) putc(' ', o);
+    if (negative) putc('-', o);
+    fwrite(ip, 1, (size_t)ilen, o);
+    putc('.', o);
+    fwrite(ip + ilen, 1, (size_t)prec, o);
     return;
   }
   /* Floating-point form, §6.10.3.4.1. ExpDigits is implementation-defined and
-   * here it is what the exponent needs — two digits, or three past 1e100,
-   * which is what C's %E writes. DecPlaces is then ActWidth - ExpDigits - 5,
-   * so the representation is exactly ActWidth characters wide and the width
-   * needs no padding of its own. The space flag supplies §6.10.3.4.1's sign
-   * character, which is a space rather than nothing for a positive value.
+   * here it is what the exponent needs — two digits, or three past 1e100
+   * (E.27, ADR-0064). DecPlaces is then ActWidth - ExpDigits - 5, so the
+   * representation is exactly ActWidth characters wide.
    *
    * With no width given the default TotalWidth is implementation-defined
-   * (E.24); it is ExpDigits + 17 here, which is what makes DecPlaces 12
-   * whatever the exponent costs. */
-  int expDigits = 2;
-  if (val != 0.0 && !isnan(val) && !isinf(val)) {
-    /* The exponent written is floor(log10(|val|)) -- the one `%E` prints --
-     * and *not* the magnitude of log10, which is what this asked for until
-     * `tests/extended/writereal_width.pas` was written. The two differ for a
-     * value in [1e-100, 1e-99): log10(9.99e-100) is -99.0004, so the magnitude
-     * is under 100 while the printed exponent is E-100. Budgeting two digits
-     * for a three-digit exponent made the representation one character wider
-     * than TotalWidth, which is the one thing §6.10.3.4.1 fixes.
-     *
-     * Rounding in log10 can only move this by one, and it is safe in that
-     * direction: an ExpDigits that is one too *large* makes DecPlaces one too
-     * small, and the field width then pads the difference, so the
-     * representation is still exactly ActWidth characters. One too small is
-     * what overflows the field, and floor is what cannot produce it. */
-    int e10 = (int)floor(log10(fabs(val)));
-    if (e10 >= 100 || e10 <= -100)
-      expDigits = 3;
+   * (E.25); it is ExpDigits + 17 here, which is what makes DecPlaces 12
+   * whatever the exponent costs.
+   *
+   * The clause scales by dividing — "eWritten := eWritten / 10.0 pow
+   * ExpValue" — and that is done here by *reading the exponent off the
+   * expansion* instead. Same value, and it survives a denormal, where the
+   * division does not: 10.0 pow (-320) is not a number this format holds. */
+  {
+    int expDigits = 2;
+    int expValue = 0, actWidth, decPlaces, negative, carried;
+    char buf[PAS_EXACT_SIG + 16];
+    char *dig;
+    if (!isfinite(val)) {
+      actWidth = width < 0 ? expDigits + 17 : width;
+      if (actWidth < expDigits + 6) actWidth = expDigits + 6;
+      fprintf(o, "% *.*E", actWidth, actWidth - expDigits - 5, val);
+      return;
+    }
+    /* The exact significant digits and the decimal exponent in one call: %e
+     * normalises to a single leading digit, so its exponent *is* the clause's
+     * RealSize(eWritten) - 1, and its mantissa digits are eWritten's. */
+    buf[0] = '0';                        /* the spare slot for a carry */
+    snprintf(buf + 1, sizeof buf - 1, "%.*e", PAS_EXACT_SIG, fabs(val));
+    {
+      char *ep = strchr(buf + 1, 'e');
+      expValue = (int)strtol(ep + 1, NULL, 10);
+      *ep = '\0';
+      /* Close up the point: "d.ddd" becomes "dddd". */
+      memmove(buf + 2, buf + 3, strlen(buf + 3) + 1);
+    }
+    if (val == 0.0) expValue = 0;        /* the clause says so explicitly */
+    if (expValue >= 100 || expValue <= -100) expDigits = 3;
+    actWidth = width < 0 ? expDigits + 17 : width;
+    if (actWidth < expDigits + 6) actWidth = expDigits + 6;
+    decPlaces = actWidth - expDigits - 5;
+    /* One leading digit plus DecPlaces after the point. The spare slot is
+     * deliberately *outside* the range here, unlike the fixed-point form: a
+     * carry has to be reported, because it moves the exponent. Letting the
+     * slot absorb it silently is a bug this had, and it printed 1e-305 —
+     * whose double is 9.99..e-306 — as 0.000000000000E-306. */
+    carried = pas_round_half_up(buf + 1, (int)strlen(buf + 1), 1 + decPlaces);
+    dig = buf + 1;
+    if (carried) {
+      /* "if eWritten >= 10.0 then begin eWritten := eWritten / 10.0;
+       *  ExpValue := ExpValue + 1 end" — 9.99.. carried to 10.00.., which is
+       * written as 1.00.. one decade up. */
+      dig = buf;
+      buf[0] = '1';
+      expValue = expValue + 1;
+      /* The carry can cross the decade that costs a third exponent digit. */
+      if (expValue >= 100 || expValue <= -100) expDigits = 3;
+    }
+    negative = val < 0.0 && !pas_digits_all_zero(dig);
+    /* "the sign character ('-' if (e < 0.0) and (eWritten > 0.0), otherwise a
+     * space)" — a space, not nothing. */
+    putc(negative ? '-' : ' ', o);
+    putc(dig[0], o);
+    putc('.', o);
+    fwrite(dig + 1, 1, (size_t)decPlaces, o);
+    putc('E', o);
+    putc(expValue < 0 ? '-' : '+', o);
+    fprintf(o, "%0*d", expDigits, expValue < 0 ? -expValue : expValue);
   }
-  int actWidth = width < 0 ? expDigits + 17 : width;
-  if (actWidth < expDigits + 6) actWidth = expDigits + 6;
-  fprintf(o, "% *.*E", actWidth, actWidth - expDigits - 5, val);
 }
 
 void pas_write_bool(void *v, int val, int width) {

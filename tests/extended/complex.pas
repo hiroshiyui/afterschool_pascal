@@ -83,6 +83,12 @@ begin
   show('e ', exp(cmplx(0.0, 0.0)));
   show('l ', ln(cmplx(1.0, 0.0)));
   show('s ', sin(cmplx(0.0, 0.0)));
+  { cos(0+0i) has an imaginary part of *negative* zero, and `P` below a real
+    part of one. Neither is written with a minus: 6.10.3.4.2 writes the sign
+    "if (e < 0.0) and (eWritten > 0.0)", and -0.0 < 0.0 is false -- as is the
+    second condition, so a tiny negative that rounds away is unsigned for the
+    same reason. C's printf writes the sign bit instead, which is where the
+    `-0.000` these two lines used to show came from (ADR-0169). }
   show('c ', cos(cmplx(0.0, 0.0)));
   show('a ', arctan(cmplx(0.0, 0.0)));
 

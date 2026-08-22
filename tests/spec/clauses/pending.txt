@@ -125,8 +125,6 @@ extended:6.10.3.1
 extended:6.10.3.2
 extended:6.10.3.3
 extended:6.10.3.4
-extended:6.10.3.4.1
-extended:6.10.3.4.2
 extended:6.10.3.5
 extended:6.10.3.6
 extended:6.10.4
