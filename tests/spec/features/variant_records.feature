@@ -122,3 +122,93 @@ Feature: Variant-parts under Extended Pascal
       """
       5
       """
+
+  # "A variant-denoter shall not contain a type-denoter denoting either a
+  # restricted-type or the bindability that is bindable or denoting a
+  # structured-type having any component whose type-denoter is not permissible
+  # as a type-denoter contained by a variant-denoter."
+  #
+  # Not an error and not a dynamic-violation: Annex D's D.3 for this clause is
+  # the discriminant-selector rule and names nothing here, so clause 5.1 e)
+  # obliges the processor to report it and refuse the activation.
+  #
+  # ISO 7185's counterpart clause is 6.4.3.3 and carries no such sentence, so
+  # there is nothing to cite on that side -- and neither word-symbol exists
+  # there in any case.
+
+  Scenario: a restricted-type may not be a field of a variant part
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type r = restricted integer;
+           v = record
+                 case boolean of
+                   true:  (a: r);
+                   false: (b: integer)
+               end;
+      var x: v;
+      begin
+        x.b := 1;
+        writeln(x.b : 1)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  Scenario: the restriction reaches through a structured component
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type r = restricted integer;
+           h = record f: r end;
+           v = record
+                 case boolean of
+                   true:  (a: h);
+                   false: (b: integer)
+               end;
+      var x: v;
+      begin
+        x.b := 1;
+        writeln(x.b : 1)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  Scenario: a bindable type-denoter may not be a field of a variant part
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type v = record
+                 case boolean of
+                   true:  (a: bindable integer);
+                   false: (b: integer)
+               end;
+      var x: v;
+      begin
+        x.b := 1;
+        writeln(x.b : 1)
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+
+  Scenario: the restriction is on the variant-denoter and not on a fixed part
+    Given the Extended Pascal program
+      """
+      program p(output);
+      type r = restricted integer;
+           v = record a: r; b: bindable integer end;
+      var x: v; u: integer;
+      begin
+        x.a := 7;
+        u := x.a;
+        writeln(u : 1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      7
+      """

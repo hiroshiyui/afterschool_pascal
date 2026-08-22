@@ -504,6 +504,46 @@ static bool containsFile(Type *t) {
   return false;
 }
 
+/// ISO/IEC 10206:1991 §6.4.3.4: "A variant-denoter shall not contain a
+/// type-denoter denoting either a restricted-type or the bindability that is
+/// bindable or denoting a structured-type having any component whose
+/// type-denoter is not permissible as a type-denoter contained by a
+/// variant-denoter." This answers the first limb and the third; the second is
+/// asked of the denoter by `bindableOf` at the same call site, because
+/// bindability belongs to the *type-denoter* and a resolved field keeps no
+/// record of it.
+///
+/// Not an error and not a dynamic-violation — Annex D's D.3 for this clause is
+/// the discriminant-selector rule — so clause 5.1 e) requires the report and
+/// refuses the activation. ISO 7185 needs no mode test: `restricted` and
+/// `bindable` are word-symbols of Extended Pascal alone, so neither spelling
+/// reaches a variant-denoter under the other standard.
+static bool containsRestricted(Type *t) {
+  if (!t)
+    return false;
+  if (t->isRestricted())
+    return true;
+  if (t->isArray())
+    return containsRestricted(t->elem);
+  if (t->isRecord()) {
+    for (const Field &f : t->fields)
+      if (containsRestricted(f.type))
+        return true;
+    std::vector<const std::vector<Variant> *> pending{&t->variants};
+    while (!pending.empty()) {
+      const std::vector<Variant> *arms = pending.back();
+      pending.pop_back();
+      for (const Variant &v : *arms) {
+        for (const Field &f : v.fields)
+          if (containsRestricted(f.type))
+            return true;
+        pending.push_back(&v.variants);
+      }
+    }
+  }
+  return false;
+}
+
 /// `file of T`. The component may be any type that is not, and does not
 /// contain, a file. A `text` is *not* what this produces even when T is char:
 /// §6.4.3.5 makes `text` a required type of its own with a line structure, and
@@ -1085,13 +1125,32 @@ void Sema::resolveVariantPart(const std::string &tagName, TypeExpr *tagDenoter,
       // variable contains before the program can name one. Two arms holding
       // files would need two buffers at one address — the second init leaks
       // the first, and the file that is read is not the file that was set up.
-      // §6.4.3.4 does not forbid this; this compiler does, because there is no
-      // answer to "which arm's file is this storage" at block entry.
+      // ISO 7185 §6.4.3.3 and ISO/IEC 10206:1991 §6.4.3.4 — one clause under
+      // two numbers — do not forbid this; this compiler does, because there is
+      // no answer to "which arm's file is this storage" at block entry
+      // (ADR-0070).
+      // Where a complaint about this group is attributed: its first name, or
+      // the arm itself where the parser recovered without one. Three rules
+      // below ask the same question.
+      int fieldLine = group.names.empty() ? arm.line : group.names[0].line;
+      int fieldCol = group.names.empty() ? arm.col : group.names[0].col;
       if (fieldType->isFile() || containsFile(fieldType))
-        diags_.error(group.names.empty() ? arm.line : group.names[0].line,
-                     group.names.empty() ? arm.col : group.names[0].col,
+        diags_.error(fieldLine, fieldCol,
                      "a file cannot be a field of a variant part, because the "
                      "arms share storage and a file's storage is its own");
+      // §6.4.3.4's own sentence about a variant-denoter, which is a
+      // conformance rule and not this compiler's deviation above. Two
+      // spellings and two questions: `containsRestricted` reaches through a
+      // container as the clause's third limb requires, while bindability has
+      // to be asked of the *denoter* — §6.4.1 makes a type-name hand on the
+      // bindability of its definition, so `bindable` need not appear in the
+      // arm for the arm to denote it.
+      if (containsRestricted(fieldType))
+        diags_.error(fieldLine, fieldCol,
+                     "a restricted type cannot be a field of a variant part");
+      if (bindableOf(*group.type))
+        diags_.error(fieldLine, fieldCol,
+                     "a bindable type cannot be a field of a variant part");
       for (DeclName &n : group.names)
         addField(record, variants[index].fields, n, fieldType, path);
     }

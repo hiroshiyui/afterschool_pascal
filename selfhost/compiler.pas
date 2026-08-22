@@ -9673,6 +9673,71 @@ begin
   ContainsFile := found
 end;
 
+{ ISO/IEC 10206:1991 6.4.3.4: "A variant-denoter shall not contain a
+  type-denoter denoting either a restricted-type or the bindability that is
+  bindable or denoting a structured-type having any component whose
+  type-denoter is not permissible as a type-denoter contained by a
+  variant-denoter." This answers the first limb and the third; the second is
+  asked of the denoter by BindableOf at the same call site, because
+  bindability is a property of the *type-denoter* and a resolved field keeps
+  no record of it.
+
+  Not an error and not a dynamic-violation -- Annex D's D.3 for this clause is
+  the discriminant-selector rule -- so clause 5.1 e) requires the report and
+  refuses the activation. ISO 7185 needs no mode test here: `restricted` and
+  `bindable` are word-symbols of Extended Pascal alone, so neither spelling
+  can reach a variant-denoter under the other standard.
+
+  Exactly ContainsFile's shape, for exactly the reason 6.4.3.6 gives it: a
+  rule that reaches through a container is a recursion over the type. }
+function ContainsRestricted(t: typePtr): boolean; forward;
+
+{ Declared forward because 6.4.3.4's variant-denoter rule asks it while a
+  record's insides are resolved, which is well before the declaration parts
+  that were its only callers. }
+function BindableOf(d: nodePtr): boolean; forward;
+
+{ Only one arm exists at a time, but any of them may be the one -- so every
+  arm's fields are asked, as ArmsContainFile asks them. }
+function ArmsContainRestricted(v: variantPtr): boolean;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  while (v <> nil) and not found do begin
+    f := v^.fields;
+    while (f <> nil) and not found do begin
+      if ContainsRestricted(f^.ftype) then found := true;
+      f := f^.next
+    end;
+    if not found then
+      if ArmsContainRestricted(v^.variants) then found := true;
+    v := v^.next
+  end;
+  ArmsContainRestricted := found
+end;
+
+function ContainsRestricted;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  if t <> nil then
+    if IsRestricted(t) then found := true
+    else if IsArray(t) then found := ContainsRestricted(t^.elem)
+    { ADR-0123's optional carries its payload in elem, and the dialect
+      contains Extended Pascal (ADR-0117), so `?rint` in an arm is this rule's
+      question too. }
+    else if IsOptional(t) then found := ContainsRestricted(t^.elem)
+    else if IsRecord(t) then begin
+      f := t^.fields;
+      while (f <> nil) and not found do begin
+        if ContainsRestricted(f^.ftype) then found := true;
+        f := f^.next
+      end;
+      if not found then found := ArmsContainRestricted(t^.variants)
+    end;
+  ContainsRestricted := found
+end;
+
 { `file of T`. The component may be any type that is not, and does not
   contain, a file. A `text` is *not* what this produces even when T is char:
   6.4.3.5 makes `text` a required type of its own with a line structure, and
@@ -10043,6 +10108,9 @@ var
   armPath: numPtr;
   found: rangePtr;
   index, lo, hi, at, need: integer;
+  { Where a diagnostic about an arm's field group is attributed; computed
+    once because three rules ask it. }
+  fieldLine, fieldCol: integer;
   claimed, labelsOk, complete, hasOther: boolean;
 begin
   { 6.4.3.4's third form of variant-selector: a bare name that is one of the
@@ -10208,13 +10276,45 @@ begin
           the first, and the file that is read is not the file that was set up.
           6.4.3.4 does not forbid this; this compiler does, because there is no
           answer to "which arm's file is this storage" at block entry. }
+        { Where a complaint about this group is attributed: its first name,
+          or the arm itself where the parser recovered without one. Three
+          rules below ask the same question, and a copy apiece would be three
+          copies free to drift -- and would count the nameless arm three times
+          against the coverage ratchet for one unreachable recovery path. }
+        if g^.grNames <> nil then begin
+          fieldLine := g^.grNames^.line; fieldCol := g^.grNames^.col
+        end else begin
+          fieldLine := arm^.line; fieldCol := arm^.col
+        end;
+        { The arms share one block of storage, and a file's storage is not just
+          bytes: pas_file_init gives it a heap buffer sized by the component
+          type, and the block's prologue has to do that for every file the
+          variable contains before the program can name one. Two arms holding
+          files would need two buffers at one address -- the second init leaks
+          the first, and the file that is read is not the file that was set up.
+          6.4.3.3 of ISO 7185 and 6.4.3.4 of ISO/IEC 10206:1991 -- one clause
+          under two numbers -- do not forbid this; this compiler does, because
+          there is no answer to "which arm's file is this storage" at block
+          entry (ADR-0070). }
         if IsFile(fieldType) or ContainsFile(fieldType) then begin
-          if g^.grNames <> nil then
-            ErrorAt(g^.grNames^.line, g^.grNames^.col)
-          else
-            ErrorAt(arm^.line, arm^.col);
+          ErrorAt(fieldLine, fieldCol);
           writeln('a file cannot be a field of a variant part, because the ',
                   'arms share storage and a file''s storage is its own')
+        end;
+        { ISO/IEC 10206:1991 6.4.3.4's own sentence about a variant-denoter,
+          which is a conformance rule and not this compiler's deviation above.
+          Two spellings and two questions: ContainsRestricted reaches through
+          a container as the clause's third limb requires, while bindability
+          has to be asked of the *denoter* -- 6.4.1 makes a type-name hand on
+          the bindability of its definition, so `bindable` need not appear in
+          the arm for the arm to denote it. }
+        if ContainsRestricted(fieldType) then begin
+          ErrorAt(fieldLine, fieldCol);
+          writeln('a restricted type cannot be a field of a variant part')
+        end;
+        if BindableOf(g^.grType) then begin
+          ErrorAt(fieldLine, fieldCol);
+          writeln('a bindable type cannot be a field of a variant part')
         end;
         n := g^.grNames;
         while n <> nil do begin
@@ -11857,7 +11957,7 @@ end;
   its definition -- so `type btext = bindable text` hands it on, and a parameter
   whose form is that name is bindable. Exactly InitialStateOf's shape, for
   exactly the clause's reason. }
-function BindableOf(d: nodePtr): boolean;
+function BindableOf;
 var s: symPtr;
 begin
   BindableOf := false;

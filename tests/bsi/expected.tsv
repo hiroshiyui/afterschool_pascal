@@ -85,7 +85,7 @@ CONF064	SAYS-PASS	CONFORM
 CONF065	SAYS-PASS	CONFORM
 CONF066	SAYS-PASS	CONFORM
 CONF067	SAYS-PASS	CONFORM  6.6.5.2 reset appends an end-of-line to a text not ending in one (fixed: eoln_appended.pas)
-CONF068	REJECTED	CONFORM  6.4.3.4 a file as a field of a variant part; refused deliberately (ADR-0070)
+CONF068	REJECTED	CONFORM  6.4.3.3 a file as a field of a variant part; refused deliberately (ADR-0070). BSI files it under 6.4.3.5-4
 CONF069	SAYS-PASS	CONFORM
 CONF070	SAYS-PASS	CONFORM
 CONF071	SAYS-PASS	CONFORM

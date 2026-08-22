@@ -1,0 +1,7 @@
+<source>:35:22: error: a restricted type cannot be a field of a variant part
+<source>:45:22: error: a bindable type cannot be a field of a variant part
+<source>:52:22: error: a restricted type cannot be a field of a variant part
+<source>:64:23: error: a restricted type cannot be a field of a variant part
+<source>:70:22: error: a restricted type cannot be a field of a variant part
+<source>:83:32: error: a restricted type cannot be a field of a variant part
+<source>:90:22: error: a restricted type cannot be a field of a variant part
