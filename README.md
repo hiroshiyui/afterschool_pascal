@@ -731,8 +731,9 @@ array [1..4] of FileOfInteger` and §6.5.5's is `pooltape[2]^`, so a file may be
 a component of an array or a record, at any depth, and a created variable's
 domain may hold one. Each is set up when the block declaring it is entered and
 closed when the block exits, exactly as a file variable of its own is. The one
-place a file may **not** go is a **variant part**, which §6.4.3.4 permits and
-this compiler refuses: the arms share one block of storage, and a file's
+place a file may **not** go is a **variant part**, which ISO 7185 §6.4.3.3 and
+ISO/IEC 10206:1991 §6.4.3.4 — the same clause under two numbers — both permit
+and this compiler refuses: the arms share one block of storage, and a file's
 storage is not just bytes — the runtime gives it a buffer and a place on the
 list of open files — so two arms holding files cannot both be set up at one
 address.
@@ -1028,7 +1029,9 @@ restricted a restricted type has another type's values and representation
            formal of that type, and returned from a function, and §6.4.2.5
            says "no other operations ... are possible". Its initial state is
            the underlying type's. Two restrictions of one type are still two
-           types, and a restricted type is nonbindable
+           types, and a restricted type is nonbindable. §6.4.3.4 keeps it out
+           of a **variant part**, at any depth, and keeps a bindable
+           type-denoter out of one too
 readstr    readstr(e, v1, ..., vn) reads values out of a string as though it
 writestr   were a line of a text file, and writestr(s, p1, ..., pn) writes a
            line into one. §6.7.5.5 defines both as `rewrite(f); writeln(f,

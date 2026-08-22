@@ -1209,6 +1209,20 @@ able to make.
     dump beside `and then`/`or else`, which are in no table either.
   - **A diagnostic cannot contain `§`** — `char` is a byte, so the Pascal source
     would carry two of them. `difftest` caught it as a one-character diff.
+  - **And it may not be a field of a variant part** (ADR-0163) — §6.4.3.4's own
+    sentence, unread until `CONF068` sent someone to the clause: a
+    variant-denoter shall contain no type-denoter denoting a restricted-type,
+    the bindability that is bindable, or a structured-type having such a
+    component. Not an error (Annex D's D.3 for that clause is the
+    discriminant-selector rule), so clause 5.1 e) makes reporting it
+    compulsory. Two limbs asked two ways, and the asymmetry is the clause's:
+    restrictedness is on the *type*, so `ContainsRestricted` recurses over it
+    exactly as `ContainsFile` does, while §6.4.1 puts bindability on the
+    *type-denoter*, so `BindableOf` is asked of the denoter at the call site —
+    `type bint = bindable integer` hands it on, and the arm must be refused for
+    a word it does not contain. `tests/extended/variant_denoter.pas` carries
+    the legal control in the same file, the restriction being on the
+    variant-denoter and nowhere else.
 - **Five required things, and what each cost** (ADR-0059). `maxchar`, `halt`,
   `card`, the two-argument `succ`/`pred` and `><` — a batch, because each is
   too small to be a feature and too separate to be part of one.

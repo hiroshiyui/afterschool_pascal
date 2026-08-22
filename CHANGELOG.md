@@ -11,6 +11,36 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## [Unreleased]
+
+### Changed
+
+- **A restricted or bindable type is no longer accepted as a field of a variant
+  part**, under `--std=extended` and `--std=afterschool`. ISO/IEC 10206:1991
+  §6.4.3.4 says "a variant-denoter shall not contain a type-denoter denoting
+  either a restricted-type or the bindability that is bindable or denoting a
+  structured-type having any component whose type-denoter is not permissible as
+  a type-denoter contained by a variant-denoter", and this compiler read none of
+  that sentence. It is a violation and not an error — Annex D's D.3 for the
+  clause is the discriminant-selector rule — so clause 5.1 e) obliges a
+  processor to report it and refuse to run the program. **A program that
+  compiled before will now be rejected**, and the fix is to move the field out
+  of the variant part: the restriction is on the variant-denoter and on nothing
+  else, so the same type in a record's fixed part is as legal as it ever was.
+  The two messages are `a restricted type cannot be a field of a variant part`
+  and `a bindable type cannot be a field of a variant part`. `--std=iso7185` is
+  untouched: neither word-symbol exists there.
+
+### Fixed
+
+- **A wrong clause number, in four places.** ISO 7185 numbers Record-types
+  §6.4.3.3 and ISO/IEC 10206:1991 numbers it §6.4.3.4, Extended Pascal having
+  inserted String-types above it — so the bare "§6.4.3.4" that `README.md`,
+  `doc/implementation-defined.md`, `tests/bsi/expected.tsv` and both front ends'
+  comments gave as the clause permitting a file in a variant part pointed at
+  **Set-types** whenever an ISO 7185 program was the subject. Each now names
+  both numbers. Nothing about the compiler's behaviour changes.
+
 ## [1.8.0] — 2026-08-22
 
 **The release where the platform lock got a scoped way out.** `pascalc` takes a

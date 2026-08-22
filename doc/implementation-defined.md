@@ -332,7 +332,8 @@ These are the other direction: programs the standard admits and this processor
 refuses. Clause 5.1 c) does not permit them, so each is a known deviation and
 none is silent.
 
-**A file may not be a field of a variant part**, which §6.4.3.4 permits. A
+**A file may not be a field of a variant part**, which ISO 7185 §6.4.3.3 and
+ISO/IEC 10206:1991 §6.4.3.4 — one clause under two numbers — both permit. A
 file's storage carries a heap buffer and a place on the runtime's open-file
 list, so two arms holding files at one address would leak the first buffer and
 link one list node twice (ADR-0070).
