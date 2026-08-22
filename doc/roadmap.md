@@ -1354,6 +1354,41 @@ surprises.
 
 ### Under ISO/IEC 10206:1991
 
+**Bindability is read off the root symbol of a designator, and the standard
+makes it a property of the type-denoter.** ADR-0167's third reader found five
+programs refused by it, and they are three pieces of work rather than one bug:
+
+- A **field or an array element** of a bindable type cannot be bound.
+  §6.4.3.4 says a field "shall have the type, bindability, and initial state
+  denoted by the type-denoter of the record-section" and the array clause says
+  the same of a component, so `var r: record log: bindable text end` has a
+  bindable field and `bind(r.log, b)` is legal. It is refused, and the message
+  names the *container* — `'r' is not bindable` — which is the defect saying
+  what it is. The fix is to carry bindability on the type rather than on the
+  variable symbol.
+- **A `var` parameter of file-type takes its bindability from the actual, at
+  run time.** §6.7.3.3: "The formal-parameter and its associated
+  variable-identifier shall possess the bindability that is possessed by the
+  actual-parameter", with NOTE 1 — "the bindability of the formal-parameter is
+  determined **dynamically** by the actual-parameter" — and §6.7.5.6 and
+  §6.7.6.8 each making the file case a *dynamic-violation* rather than
+  something a processor may refuse to compile. **§6.7.6.8's own worked example
+  is the program this refuses**, `procedure bindfile(var f: text)`, quoted
+  verbatim in the clause. A conforming implementation carries a bindability
+  word with every `var` file parameter — the seventh thing here that travels as
+  two words — and checks it where the clause says, which is at `bind`,
+  `unbind` and `binding`.
+- **`bind` of a non-file bindable variable** is refused with *'bind' needs a
+  file variable*. §6.7.5.6 says "for the variable-access f" and its "otherwise,
+  the variable shall possess the bindability that is bindable" branch
+  presupposes a non-file, so `var clock: bindable integer; bind(clock, b)` is a
+  legal program. This one is a **feature and not a fix**: what it means to bind
+  an integer to an external entity is implementation-defined, and nothing here
+  has designed it.
+
+The first is a fix, the second is architectural, the third is a design. None is
+started, and a record is owed before any of it is.
+
 Five more, each stated in the record that made it. A sixth was listed here for
 exactly one commit and is **fixed**: a variable-string may now be a value
 parameter (ADR-0115), so a string argument may be a literal, another function's
