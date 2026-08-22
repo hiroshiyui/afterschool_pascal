@@ -12434,41 +12434,87 @@ begin
     (LookupBuiltin(at, len) <> biNone)
 end;
 
+{ The symbol a procedural or functional actual names, whichever of the two
+  spellings 6.7.1 and 6.7.2 admit was written. Sema puts it in vrSym for a bare
+  identifier and in fdQualified for 6.11.3's `i.f`, because those are the fields
+  each node kind already has for "the symbol this denotes"; codegen asks here
+  rather than knowing which. }
+function ProcActualSym(a: nodePtr): symPtr;
+begin
+  if a^.kind = nkField then ProcActualSym := a^.fdQualified
+  else ProcActualSym := a^.vrSym
+end;
+
 { Bind the actual parameter of a procedural or functional parameter. It is a
   procedure *identifier* rather than an expression, so it is resolved here
   instead of through CheckExpr -- which would read `f` as a call of it. }
 procedure CheckProcArgument(formal: symPtr; a: nodePtr; callee: symPtr;
                             at: integer);
-var sym: symPtr;
+var sym: symPtr; nameAt, nameLen: integer; viaIface: boolean;
 begin
   { Whatever happens below, the argument leaves here with the formal's type:
-    codegen reads vrSym, and a nil type would break the contract that every
-    expression has one. }
+    codegen reads ProcActualSym, and a nil type would break the contract that
+    every expression has one. }
   a^.ntype := formal^.stype;
-  if a^.kind <> nkVar then begin
+  { 6.7.3.4 and 6.7.3.5 ask for a *procedure-name* and a *function-name*, and
+    6.7.1 and 6.7.2 spell both as an optional interface qualifier and an
+    identifier -- so `call(mi.show)` is one of the two things the clause admits
+    and was refused here as though it were an expression. Under
+    `import mi qualified` there is no workaround either: the unqualified
+    spelling is not in scope, so the module's procedures simply could not be
+    passed to anything.
+
+    The parser cannot tell `mi.show` from a field selection and Sema can, which
+    is ADR-0053's rule and the reason this is asked here rather than there: the
+    base is looked up, and only an interface-identifier makes this a name. }
+  viaIface := false;
+  if a^.kind = nkField then
+    if a^.fdBase^.kind = nkVar then
+      viaIface := IsInterfaceName(a^.fdBase^.vrAt, a^.fdBase^.vrLen);
+  if (a^.kind <> nkVar) and not viaIface then begin
     ErrorAt(a^.line, a^.col);
     write('argument ', at:1, ' of ''');
     WritePool(callee^.at, callee^.len);
     writeln(''' must be the name of a procedure or function')
   end
   else begin
-    sym := LookupUser(a^.vrAt, a^.vrLen);
+    if viaIface then begin
+      nameAt := a^.fdAt;
+      nameLen := a^.fdLen;
+      { LookupName reports an interface that does not exist and a constituent
+        it does not export, so a nil from here has already been complained
+        about -- which is why the not-found arm below asks about the
+        unqualified case only. }
+      sym := LookupName(a^.fdBase^.vrAt, a^.fdBase^.vrLen, nameAt, nameLen,
+                        a^.line, a^.col)
+    end
+    else begin
+      nameAt := a^.vrAt;
+      nameLen := a^.vrLen;
+      sym := LookupUser(nameAt, nameLen)
+    end;
     if sym = nil then begin
-      ErrorAt(a^.line, a^.col);
-      { ISO 7185 6.6.3.7: the actual parameter shall not denote a required
-        procedure or function. There is nothing to pass -- `write` takes a
-        variable number of arguments of types no parameter list can spell,
-        and `abs` is an instruction rather than a body with an address. }
-      if IsRequiredName(a^.vrAt, a^.vrLen) then begin
-        write('''');
-        WritePool(a^.vrAt, a^.vrLen);
-        write(''' is a required procedure or function and ');
-        writeln('cannot be passed as a parameter')
-      end
-      else begin
-        write('undeclared identifier ''');
-        WritePool(a^.vrAt, a^.vrLen);
-        writeln('''')
+      { A qualified name that resolved to nothing has already been reported by
+        LookupName -- an interface nobody exported, or a constituent this one
+        does not. Only the unqualified spelling reaches a lookup that says
+        nothing on its own. }
+      if not viaIface then begin
+        ErrorAt(a^.line, a^.col);
+        { ISO 7185 6.6.3.7: the actual parameter shall not denote a required
+          procedure or function. There is nothing to pass -- `write` takes a
+          variable number of arguments of types no parameter list can spell,
+          and `abs` is an instruction rather than a body with an address. }
+        if IsRequiredName(nameAt, nameLen) then begin
+          write('''');
+          WritePool(nameAt, nameLen);
+          write(''' is a required procedure or function and ');
+          writeln('cannot be passed as a parameter')
+        end
+        else begin
+          write('undeclared identifier ''');
+          WritePool(nameAt, nameLen);
+          writeln('''')
+        end
       end
     end
     else if not IsInvocable(sym) then begin
@@ -12476,18 +12522,23 @@ begin
       write('argument ', at:1, ' of ''');
       WritePool(callee^.at, callee^.len);
       write(''' must be the name of a procedure or function, but ''');
-      WritePool(a^.vrAt, a^.vrLen);
+      WritePool(nameAt, nameLen);
       writeln(''' is not one')
     end
     else begin
-      a^.vrSym := sym;
+      { The husk rule (ADR-0044): the node the parser built is left as it is
+        and the resolved symbol is written into the field that later passes
+        read. For a qualified name that field is fdQualified, which is what
+        nkField already carries for "the whole selection denotes one symbol";
+        ProcActualSym is the one place the two are asked as one question. }
+      if viaIface then a^.fdQualified := sym else a^.vrSym := sym;
       { ISO 7185 6.6.3.6. The lists are compared rather than the types,
         because a procedural parameter has no type to write down: the heading
         *is* the type. }
       if not Congruous(formal, sym) then begin
         ErrorAt(a^.line, a^.col);
         write('''');
-        WritePool(a^.vrAt, a^.vrLen);
+        WritePool(nameAt, nameLen);
         write(''' does not match the parameter list of ');
         if ResultTypeOf(formal) <> nil then write('functional')
         else write('procedural');
@@ -24450,7 +24501,7 @@ begin
     if callee^.linkKind = lnkForeign then
       EmitForeignArgument(arg, p^.sym, head, tail)
     else if p^.sym^.kind = skProcParam then
-      EmitProcArgument(arg^.vrSym, head, tail)
+      EmitProcArgument(ProcActualSym(arg), head, tail)
     { The address, then the tuple the actual was produced with -- constants
       where the actual is an ordinary variable, and the caller's own descriptor
       where it is itself a schematic formal, which is how a schematic array is

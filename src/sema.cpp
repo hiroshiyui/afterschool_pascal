@@ -8223,43 +8223,74 @@ void Sema::checkProcArgument(Symbol *formal, Expr *a, Symbol *callee,
   // expression has one.
   a->type = formal->type;
 
+  // §6.7.3.4 and §6.7.3.5 ask for a *procedure-name* and a *function-name*,
+  // and §6.7.1 and §6.7.2 spell both as an optional interface qualifier and an
+  // identifier — so `i.p` is one of the two forms the clause admits. The
+  // parser builds it as a field selection and only the symbol the base
+  // resolves to tells them apart (ADR-0053), which is why it is asked here.
+  //
+  // Note that difftest cannot see this rule: it never passes `--import`, so
+  // every case with a `.components` sidecar is compared as two identical
+  // rejections about an interface neither front end has heard of. This is
+  // carried here on its merits (doc/sop.md §7).
+  auto *fld = as<FieldExpr>(a);
+  const bool viaIface = fld && as<VarRef>(fld->base.get()) &&
+                        isInterfaceName(as<VarRef>(fld->base.get())->name);
   auto *v = as<VarRef>(a);
-  if (!v) {
+  if (!v && !viaIface) {
     diags_.error(a->line, a->col,
                  where + " must be the name of a procedure or function");
     return;
   }
 
+  const std::string name = viaIface ? fld->field : v->name;
+  const int line = viaIface ? fld->line : v->line;
+  const int col = viaIface ? fld->col : v->col;
+
   // `lookupUser`: §6.6.3.7's answer is the same whether the name is a required
   // procedure (not a symbol at all) or a required function (a marker symbol),
   // so both must arrive here as null for `isRequiredName` to speak for them.
-  Symbol *sym = lookupUser(v->name);
+  // A qualified name goes through `lookupName`, which reports an interface
+  // nobody exported and a constituent one does not export, so a null from
+  // there has already been complained about.
+  Symbol *sym =
+      viaIface ? lookupName(as<VarRef>(fld->base.get())->name, name, line, col)
+               : lookupUser(name);
   if (!sym) {
+    if (viaIface)
+      return;
     // ISO 7185 §6.6.3.7: the actual parameter shall not denote a required
     // procedure or function. There is nothing to pass — `write` takes a
     // variable number of arguments of types no parameter list can spell, and
     // `abs` is an instruction rather than a body with an address.
-    if (isRequiredName(v->name))
-      diags_.error(v->line, v->col,
-                   "'" + v->name + "' is a required procedure or function and "
-                   "cannot be passed as a parameter");
+    if (isRequiredName(name))
+      diags_.error(line, col,
+                   "'" + name +
+                       "' is a required procedure or function and "
+                       "cannot be passed as a parameter");
     else
-      diags_.error(v->line, v->col, "undeclared identifier '" + v->name + "'");
+      diags_.error(line, col, "undeclared identifier '" + name + "'");
     return;
   }
   if (!sym->isInvocable()) {
-    diags_.error(v->line, v->col,
+    diags_.error(line, col,
                  where + " must be the name of a procedure or function, but '" +
-                     v->name + "' is not one");
+                     name + "' is not one");
     return;
   }
-  v->sym = sym;
+  // The husk rule (ADR-0044): the node the parser built is left as it is, and
+  // the resolved symbol goes in the field that node kind already has for "the
+  // symbol this denotes".
+  if (viaIface)
+    fld->qualified = sym;
+  else
+    v->sym = sym;
 
   // ISO 7185 §6.6.3.6. The lists are compared rather than the types, because a
   // procedural parameter has no type to write down: the heading *is* the type.
   if (!congruous(formal, sym))
-    diags_.error(v->line, v->col,
-                 "'" + v->name + "' does not match the parameter list of " +
+    diags_.error(line, col,
+                 "'" + name + "' does not match the parameter list of " +
                      (formal->resultType() ? "functional" : "procedural") +
                      " parameter '" + formal->name + "'");
 }
