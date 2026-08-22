@@ -947,6 +947,42 @@ able to make.
     (§6.4.1), which is why `type btext = bindable text` is how a bindable
     *parameter* is written: `text` is a required identifier and never is.
     `bindableOf` is `initialStateOf`'s shape.
+  - **A real is rounded away from zero, on its exact decimal expansion**
+    (ISO 7185 6.9.3.4.1-2, ISO/IEC 10206:1991 6.10.3.4.1-2, ADR-0169). The
+    clauses prescribe `abs(e) + 0.5 * 10.0 pow(-FracDigits)` and then Truncate,
+    which is half-away-from-zero where printf is half-to-even -- a silent
+    one-unit difference at every exact halfway value. Two things make the
+    implementation short. The arithmetic is **exact**: executing the clause in
+    real arithmetic is defensible from `Truncate(y: real; ...): real` and is
+    refuted by the denormal, where `10.0 pow ExpValue` underflows and 1e-320
+    prints as zero -- 6.10.3.4's own "a decimal representation of the value of
+    e, *rounded*" is what governs. And on an exact expansion the algorithm is
+    one test: adding half and truncating at p rounds up exactly when the
+    discarded tail reaches a half, so the answer is `d(p+1) >= 5` and no later
+    digit matters. The expansion is finite -- a double is dyadic, and 2^-1074
+    is the smallest -- so printf at 1074 fraction digits rounds nothing and the
+    digits can be worked on directly; the floating-point form reads its
+    exponent off `%e` rather than dividing, which is where the denormal went.
+    The sign is separate and conditioned on the **rounded** magnitude, so
+    `-0.000001:0:2` is `0.00` and a negative zero is unsigned.
+    `tests/write_real_round.pas` and
+    `tests/extended/write_real_round_zero.pas` are the cases, and their goldens
+    come from a separate implementation of the clause rather than from this
+    one -- 5022 swept cases agree.
+  - **6.9.4's ten threats have two consumers, and only one wants a refusal**
+    (ADR-0169's sibling in ADR-0168's audit). 6.7.2 asks whether a result
+    variable was threatened at all; 6.7.3.1 and 6.8.3.9 ask whether a
+    particular threat is allowed. Entry e), `new(p)`, was on neither list and
+    is observable on the first: a constructor allocating its own result was
+    refused for never writing to it, with no workaround, a pointer result
+    having nothing to assign it but `new`. `RecordThreat` is the recording half
+    and `Threatened` calls it before the refusal, because for `new` the refusal
+    is unreachable -- 6.4.1 makes a pointer nonprotectable and a
+    control-variable is an ordinal -- and a message no program can produce is
+    what `unreachable_diagnostics.txt` exists to keep out. Entry j),
+    `bind`/`unbind`, is deliberately *not* recorded: a result variable can
+    never be a file (6.4.6 a)), so it could change no answer and no test could
+    catch its absence. `tests/extended/new_threatens_result.pas`.
   - **A char is a legal assignment destination for a string value**
     (6.4.5 d), 6.4.6 f)), and the guard that chooses the string path asks
     `IsStringOrChar` of the *destination* for that reason. Asking

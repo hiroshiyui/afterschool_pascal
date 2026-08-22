@@ -177,3 +177,4 @@ the alternatives that were rejected and why.
 | [0166](0166-a-source-may-name-its-own-standard.md) | A source may name its own standard | Accepted |
 | [0167](0167-the-third-audit-found-six-defects-in-the-parameter-and-constant-clauses.md) | The third audit found six defects in the parameter and constant clauses | Accepted |
 | [0168](0168-the-fourth-audit-and-two-defects-fixed-before-the-2-0-0-tag.md) | The fourth audit, and the two defects fixed before the 2.0.0 tag | Accepted |
+| [0169](0169-a-real-is-rounded-away-from-zero-and-the-arithmetic-is-exact.md) | A real is rounded away from zero, and the arithmetic is exact | Accepted |

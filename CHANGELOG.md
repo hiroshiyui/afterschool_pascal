@@ -11,6 +11,55 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## [Unreleased]
+
+### Changed
+
+- **A real written at an exact halfway value rounds away from zero, not to
+  even.** ISO 7185 §6.9.3.4.2 and ISO/IEC 10206:1991 §6.10.3.4.2 do not say
+  "rounded" and leave the direction open — they prescribe `eWritten := abs(e) +
+  0.5 * 10.0 pow(-FracDigits)` and then truncate. This runtime handed the job to
+  C's `printf`, which rounds half to even, so every exact halfway value came out
+  one unit low half the time and said nothing: `write(0.125:6:2)` wrote `0.12`
+  where the clause requires `0.13`, `write(2.5:4:0)` wrote `2.` against `3.`,
+  and `write(1.25:8)` wrote ` 1.2E+00` against ` 1.3E+00`. **A program that
+  writes reals can print different characters than it did in 2.0.0.** Only at
+  exact halfway values — a value that is not one is unaffected, and so is every
+  value your program computed rather than wrote as a literal, unless it landed
+  on a half exactly.
+
+- **A negative value that rounds away to nothing is written without a minus.**
+  The same clause writes the sign "if `(e < 0.0)` and `(eWritten > 0.0)`", and
+  `eWritten` is the value *after* rounding — so `write(-0.000001:0:2)` is
+  `0.00`, not `-0.00`, and the field is four characters rather than five,
+  MinNumChars not counting a sign that is not there. Negative zero is written
+  without one for the other half of the same condition, `-0.0 < 0.0` being
+  false, where `printf` writes the sign bit.
+
+### Fixed
+
+- **`new(p)` counts as writing to a result variable.** ISO/IEC 10206:1991
+  §6.9.4 e) makes `new(p)` a threat to `p` — §6.7.5.3 says the same thing the
+  other way, since it "shall attribute to p" the identifying-value — and §6.7.2
+  requires a function-block to contain "at least one statement threatening" its
+  result variable. That entry was missing from the list, so a constructor was
+  refused with *never writes to its result variable*:
+
+  ```pascal
+  function cons(v: integer; rest: link) = res: link;
+  begin new(res); res^.value := v; res^.next := rest end;
+  ```
+
+  There was no workaround — the result is a pointer, so there is nothing to
+  assign it but `new`.
+
+- **A real near the bottom of the range is written accurately.** Not a
+  regression from any release; found while fixing the rounding above, and worth
+  naming because implementing the clause's scaling step literally reintroduces
+  it. `1e-320` is a denormal, and dividing by `10.0 pow (-320)` — which is not a
+  number this format holds — writes it as `0.000000000000E+00`. The digits now
+  come from the value's exact decimal expansion, so no division happens.
+
 ## [2.0.0] — 2026-08-22
 
 **The release where the default standard changes.** A source compiled with no
