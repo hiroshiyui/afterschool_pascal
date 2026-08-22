@@ -38,6 +38,29 @@ appears below in the release where it still existed.
   processor still accepts `module` and `restricted` as identifiers, and the
   reason `--std=iso7185` was kept rather than retired.
 
+- **`round(x)` computes a different value for a few arguments**, under every
+  `--std`. ISO 7185 §6.6.6.3 and ISO/IEC 10206:1991 §6.7.6.3 define round by
+  *equivalence* — "if x is positive or zero, round(x) shall be equivalent to
+  trunc(x+0.5); otherwise, round(x) shall be equivalent to trunc(x-0.5)" — and
+  this compiler emitted a round-half-away-from-zero instruction. The two agree
+  at every halfway point, including all four of the clause's own examples, and
+  disagree wherever x ± 0.5 is inexact, because the addition itself rounds:
+  `round(0.49999999999999994)` was 0 and the clause requires 1. If your program
+  depended on the old answer it depended on a defect, and `trunc(x + 0.5)`
+  spells the old behaviour where you want it back.
+
+- **`succ(x, k)` and `pred(x, k)` now stop the program when the result is not a
+  value of the type.** The sum was computed at the width of the ordinal and the
+  range check read it afterwards, so `succ(maxint, 2)` wrapped to -2147483647
+  and ran on; `succ(maxint)` had always reported. Annex D.65 makes it an error
+  either way, so a program relying on the wrap was relying on an unreported one.
+
+- **A result-variable-specification may no longer be spelled like a
+  parameter.** `function f(n: integer) = n: integer` has two defining-points of
+  `n` for one region, which §6.2.2.7 forbids, and it was accepted and silently
+  meant something else — the result variable won inside the block, so the body
+  wrote the result and the argument was unreadable. Rename one of the two.
+
 - **A restricted or bindable type is no longer accepted as a field of a variant
   part**, under `--std=extended` and `--std=afterschool`. ISO/IEC 10206:1991
   §6.4.3.4 says "a variant-denoter shall not contain a type-denoter denoting
@@ -55,6 +78,33 @@ appears below in the release where it still existed.
   untouched: neither word-symbol exists there.
 
 ### Added
+
+- **A `string` value parameter now takes any string expression.** `procedure
+  p(s: string)` accepted only a variable produced from the schema, so a literal,
+  a char, a constant, a concatenation and a function result were all refused —
+  including ISO/IEC 10206:1991 §6.11.6's own worked example, `record
+  event('event-module initialization')`. The clause is §6.7.3.2, which asks for
+  "a type having an underlying-type that is a string-type or the char-type".
+  The formal's capacity is now the **length of the value** rather than the
+  capacity of the variable it came out of, which is the same clause's next
+  sentence; a program that assigned into such a formal beyond the value's length
+  was relying on the old reading and will now stop.
+
+- **A qualified name may be an actual procedural or functional parameter.**
+  `call(i.p)` was refused with "must be the name of a procedure or function".
+  §6.7.3.4 asks for a *procedure-name*, and §6.7.1 spells one as an optional
+  interface qualifier and an identifier. Under `import i qualified` there had
+  been no workaround at all.
+
+- **`succ(x, k)`, `pred(x, k)` and `length` may appear in a
+  constant-expression**, so they may appear in an array bound and a subrange
+  bound: `packed array [1..length(greeting)] of char` compiles. §6.8.2 makes
+  every required function nonvarying except `eof`, `eoln`, `empty`, `position`
+  and `LastPosition`. Eight are still refused — `trunc`, `round`, `sqrt`,
+  `sin`, `cos`, `ln`, `exp`, `arctan` — because a real constant is carried here
+  as the text that was written and never converted to a number; they now say so
+  rather than reporting the expression as not constant, and
+  `doc/implementation-defined.md` §6 records it as a restriction.
 
 - **A source can name its own standard.** A comment before the program heading
   containing `@std:iso7185`, `@std:extended` or `@std:afterschool` selects the

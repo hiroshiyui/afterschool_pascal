@@ -961,7 +961,12 @@ strings    string(n) — the required schema of §6.4.3.3.3: a length and up
            it does not skip leading blanks, never crosses an end-of-line,
            and takes at most the capacity — a substring target included.
            A single statement may not concatenate more than the runtime's
-           string arena holds, and stops the program if it does
+           string arena holds, and stops the program if it does.
+           `procedure p(s: string)` takes any string *expression* --
+           a literal, a char, a constant, a concatenation, a function
+           result -- and the formal's capacity is the length of the
+           value it was handed (§6.7.3.2), not the capacity of the
+           variable it came out of
 binding    var f: bindable text — a variable that may be bound to
            something outside the program. bind(f, b) attaches it to the
            file named by b.name, unbind(f) detaches it, and binding(f)
