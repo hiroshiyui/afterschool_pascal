@@ -251,7 +251,7 @@ it is checked (ADR-0078).
 | §6.6.3.8 | That the smallest and largest values of the index-type of T1 lie within the closed interval of T2, where T1 is itself a conformant-array-schema. Both bounds are then a run-time fact, arriving with that parameter's own actual; where T1 is an ordinary array-type the check is made at compile time and the program refused. BSI's LEV1F44 and LEV1F49 are the two programs that report *ERROR NOT DETECTED*. ADR-0153. |
 | §6.7.5.5 | A write-parameter of `writestr` accessing the string-variable being written to. ADR-0060. |
 | §6.11.3 | A constituent-identifier's defining-point is not enforced as a *region*. §6.11.3 a) gives it "each region that is a constituent-identifier contained by the import-specification" — a region as narrow as the occurrence itself — where this compiler makes the interface's names reachable across the import-specification while it is being checked. **No program distinguishes the two**, and every observable rule around it was probed: `only` imports exactly what it names, a renaming introduces the new spelling and not the old, the interface's own name of a renamed spelling is not imported, and NOTE 2's long-form-only rule holds. ADR-0053, ADR-0134. |
-| §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The same expressions are accepted; a few are rejected for a different reason and with a different message. ADR-0054. |
+| §6.8.2 | Nonvarying is decided by what an expression can be *evaluated* to, not by what it may not *contain*. The two coincide for every expression an operator can build; where they did **not** coincide was a call, and the row used to claim "the same expressions are accepted", which was false — `succ(x,k)`, `pred(x,k)` and `length` were nonvarying by the clause and refused by this processor. Those three fold now. Eight required functions are still refused and are a **restriction** rather than an unreported error, so they are in §6 below and no longer counted here. ADR-0054. |
 | §6.6.5.2 (D.12) | That the buffer-variable is defined immediately before `put`. Two `put`s in a row is the error: the first leaves `f^` undefined, and nothing here records that. ADR-0021. |
 | §6.6.5.2 (D.13) | That the file is defined immediately before `reset`. This processor prepares every file variable when its block is entered (ADR-0070), so the state the clause calls undefined does not arise: a `reset` of a file never given a name reads an empty scratch file rather than reporting anything. |
 | §6.6.5.4 (D.27, D.30) | That no component `pack` or `unpack` accesses is undefined. `packed` means nothing to the layout here, so the transfer is a `memcpy` and there is no per-component read to attach a check to (ADR-0067) — and the definedness it would need is not carried in any case. |
@@ -337,6 +337,35 @@ ISO/IEC 10206:1991 §6.4.3.4 — one clause under two numbers — both permit. A
 file's storage carries a heap buffer and a place on the runtime's open-file
 list, so two arms holding files at one address would leak the first buffer and
 link one list node twice (ADR-0070).
+
+**Eight required functions are refused in a constant-expression.** ISO/IEC
+10206:1991 §6.8.2 makes an expression nonvarying unless it contains a
+variable-identifier, a non-static type-name, a function declared by the
+program, or `eof`/`eoln`; NOTE 1 adds `empty`, `position` and `LastPosition`
+and gives the reason — they need a variable as a parameter. Every other
+required function therefore belongs in a constant-expression, and `trunc`,
+`round`, `sqrt`, `sin`, `cos`, `ln`, `exp` and `arctan` are refused here with
+*a real constant expression is not folded*.
+
+One cause between them. **A real constant is carried as the text that was
+written and is never converted to a number by this compiler** — LLVM's
+assembler is the `strtod`, and three records deferred a conversion that turned
+out never to be needed elsewhere (ADR-0025). So `trunc(3.7)` would need that
+conversion even though its result is an integer, and the six real-valued ones
+would need a formatter to write a result back as text besides. NOTE 2 of the
+same clause anticipates exactly this direction — "an implementation is required
+to specify the accuracy of constant-expressions" — which is a sentence about
+real-valued ones, and this is that specification: there are none.
+
+`substr` is refused for the neighbouring reason: its result is a string, which
+has no scalar form to fold to. §6.3 makes a character-string a constant and
+this compiler carries such a constant as its *literal, named* (ADR-0068), so
+there is nothing for a computed string to be.
+
+The refusal says which of the two things is wrong, rather than reporting the
+expression as not constant — the clause permits it and this processor cannot
+evaluate it, and only one of those is a complaint about the program.
+`tests/extended/constexpr_errors.pas` pins it.
 
 **A subrange whose bounds are not constants is refused as a set's base type.**
 `set of 1..m` inside a procedure is legal under §6.2.3.8 b) and is refused with

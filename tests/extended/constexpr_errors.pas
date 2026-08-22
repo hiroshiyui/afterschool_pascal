@@ -29,6 +29,22 @@ const
     converted, so there is nothing to fold with. }
   real1  = 1.5 * 2.0;
   real2  = 7 / 2;
+  { The same restriction reached through a call rather than an operator.
+    6.8.2 leaves every required function except eof, eoln, empty, position and
+    LastPosition nonvarying, so these are legal constant-expressions that this
+    processor cannot evaluate -- trunc and round because the argument would
+    have to be converted, sqrt because the result would have to be written
+    back as text as well. They say which, rather than reporting the expression
+    as not constant, because those are different complaints and only one of
+    them is about the program. }
+  cut    = trunc(3.7);
+  near   = round(3.5);
+  root   = sqrt(4.0);
+  { 6.7.6.4's two-argument forms run out at the same ends, and each direction
+    has to be reported without the folder overflowing on the way to deciding
+    (ADR-0014 makes the compiler's own arithmetic trap). }
+  overstep  = succ(maxint, 2);
+  understep = pred(-maxint, 2);
 
 type
   { the same refusals reached through a subrange bound rather than a

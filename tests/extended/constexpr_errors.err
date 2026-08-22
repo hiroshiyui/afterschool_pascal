@@ -10,7 +10,12 @@
 <source>:27:17: error: integer overflow in a constant expression
 <source>:30:16: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
 <source>:31:14: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
-<source>:36:21: error: integer overflow in a constant expression
-<source>:46:19: error: the discriminants of a schema must be ordinal; 'cap' is not
-<source>:54:7: error: the value of constant 'varying' is not a compile-time constant
-<source>:60:12: error: integer overflow in a constant expression
+<source>:40:12: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
+<source>:41:12: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
+<source>:42:12: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
+<source>:46:15: error: succ runs past the end of integer in a constant expression
+<source>:47:15: error: pred runs past the end of integer in a constant expression
+<source>:52:21: error: integer overflow in a constant expression
+<source>:62:19: error: the discriminants of a schema must be ordinal; 'cap' is not
+<source>:70:7: error: the value of constant 'varying' is not a compile-time constant
+<source>:76:12: error: integer overflow in a constant expression

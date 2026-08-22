@@ -8839,19 +8839,32 @@ begin
 end;
 
 { 6.8.2 c) excludes a function declared by the program and the required
-  functions eof and eoln; NOTE 1 excludes the ones that take a variable. What
-  is left that this compiler can evaluate *exactly* is ISO 7185's
-  ordinal-valued required functions, and those are the seven here. The
-  transcendentals are not among them for the reason a real operator is not:
-  their results would have to be converted, and a real constant is carried as
-  the text that was written. }
+  functions eof and eoln; NOTE 1 excludes the ones that take a variable --
+  empty, position and LastPosition -- and says why: they need a variable as a
+  parameter. Everything else the standard leaves *nonvarying*, so a required
+  function belongs in a constant-expression unless this compiler cannot
+  evaluate it exactly.
+
+  Two cannot, and for one reason between them. **A real constant is carried as
+  the text that was written** and is never converted to a number here -- LLVM's
+  assembler is the strtod (ADR-0025). So `sqrt`, `sin`, `cos`, `ln`, `exp` and
+  `arctan` would need both a conversion and a formatter to write a result back
+  as text, and `trunc` and `round` would need the conversion even though their
+  results are integers. Those eight are a **restriction**, recorded in
+  doc/implementation-defined.md 6, not an oversight -- and neither is `substr`,
+  whose result is a string with no scalar form to fold to.
+
+  What is left is exact: the ordinal-valued functions, `length`, and 6.7.6.4's
+  two-argument succ and pred, which were missing only because this walked one
+  argument. }
 function EvalConstCall;
-var a: symbol; ok: boolean; v: integer;
+var a, b: symbol; ok: boolean; v, k, lo, hi: integer; bad: boolean;
 begin
   ok := false;
   a.stype := nil;
+  b.stype := nil;
   if e^.clArgs <> nil then
-    if e^.clArgs^.next = nil then
+    if e^.clArgs^.next = nil then begin
       if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
         case e^.clBuiltin of
           biAbs, biSqr:
@@ -8922,12 +8935,88 @@ begin
                 ok := true
               end
             end;
-          biNone, biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc,
-          biRound, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
-          biPosition, biLastPosition, biEmpty, biCard, biLength, biIndex,
+          { 6.7.6.7's length. A string constant is its literal, named
+            (ADR-0068), so the length is the literal's -- and 6.4.3.3.1 gives
+            the char-type "length 1 and capacity 1", which is why a
+            one-character literal, already an nkChar by then, answers 1 rather
+            than falling through. }
+          biLength:
+            if IsChar(a.stype) then begin
+              res.stype := intType;
+              res.intVal := 1;
+              ok := true
+            end
+            else if a.constValue <> nil then
+              if a.constValue^.kind = nkStr then begin
+                res.stype := intType;
+                res.intVal := a.constValue^.stLen;
+                ok := true
+              end;
+          { 6.8.2 leaves these nonvarying and this compiler cannot evaluate
+            them, which is a different thing from the expression not being
+            constant -- so they say which. The cause is one: a real constant
+            is the text that was written and is never converted here, so
+            trunc and round would need a strtod and the six real-valued ones a
+            formatter as well. EvalConstBinary says the same sentence about a
+            real *operator*, and it is the same restriction reached through a
+            call. }
+          biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound: begin
+            ErrorAt(e^.line, e^.col);
+            writeln('a real constant expression is not folded: a real ',
+                    'constant is carried as the text that was written and ',
+                    'never converted');
+            constReported := true
+          end;
+          biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
+          biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
           biStrGe, biBinding, biDate, biTime: ;
-        end;
+        end
+    end
+    else if e^.clArgs^.next^.next = nil then
+        { 6.7.6.4's succ(x,k) and pred(x,k), which the clause defines as
+          succ(x,-(k)). Nonvarying by 6.8.2 exactly as the one-argument forms
+          are, and refused only because this walked a single argument.
+
+          The bound is tested without forming the sum wherever the sum could
+          overflow *this compiler's own* integer arithmetic, which traps
+          (ADR-0014): with v and k of the same sign the difference against the
+          matching bound is what is compared, and with opposite signs the sum
+          is bounded by the operand of larger magnitude and is safe to form.
+          Only one direction needs asking in each case -- adding a
+          non-negative k cannot fall below lo, and a negative one cannot rise
+          above hi. }
+        if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
+          if EvalConst(e^.clArgs^.next, b) and (b.stype <> nil) then
+            if IsOrdinal(a.stype) and IsInteger(b.stype) then begin
+              v := ConstOrdinal(a);
+              k := b.intVal;
+              if e^.clBuiltin = biPred then k := -k;
+              lo := OrdinalLo(Base(a.stype));
+              hi := OrdinalHi(Base(a.stype));
+              if k >= 0 then
+                if v >= 0 then bad := k > hi - v
+                else bad := v + k > hi
+              else
+                if v <= 0 then bad := k < lo - v
+                else bad := v + k < lo;
+              if bad then begin
+                ErrorAt(e^.line, e^.col);
+                if e^.clBuiltin = biSucc then write('succ') else write('pred');
+                write(' runs past the end of ');
+                WriteTypeName(Base(a.stype));
+                writeln(' in a constant expression');
+                constReported := true
+              end
+              else begin
+                v := v + k;
+                res := a;
+                if IsChar(a.stype) then res.charVal := chr(v)
+                else if IsBoolean(a.stype) then res.boolVal := v <> 0
+                else res.intVal := v;
+                ok := true
+              end
+            end;
   EvalConstCall := ok
 end;
 

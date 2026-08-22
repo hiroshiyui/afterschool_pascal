@@ -111,3 +111,79 @@ Feature: Subrange bounds are expressions
       """
     When it is compiled
     Then it is rejected
+
+  # ISO/IEC 10206:1991 §6.8.2 defines a constant-expression by what it must not
+  # contain, and the exclusion for required functions is narrow: clause c)
+  # reaches only a function "that has a defining-point contained by the
+  # program-block" or "eof or eoln". §6.2.2.10 puts every required identifier
+  # in a region *enclosing* the program, so no required function is caught by
+  # the first half, and NOTE 1 names the only others — empty, position and
+  # LastPosition — and gives the reason: they need a variable as a parameter.
+  #
+  # So the Extended Pascal additions belong in a constant-expression, and this
+  # compiler refused two of them: `succ(x,k)` and `pred(x,k)`, because the
+  # folder walked a single argument, and `length`, which had no arm at all.
+  # A constant-expression is what a bound is, so the refusal reached
+  # declarations and not only constant-definitions.
+  @extended:6.8.2
+  Scenario: a required function with a second argument is nonvarying
+    Given the Extended Pascal program
+      """
+      program p(output);
+      const k = succ(1, 3);
+            j = pred(9, 2);
+      var small: succ(0, 1)..pred(10, 4);
+      begin
+        small := 6;
+        writeln(k : 1, ' ', j : 1, ' ', small : 1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      4 7 6
+      """
+
+  # §6.7.6.7's length of a string constant, used where §6.4.3.2 wants a
+  # constant-expression: an array's index-type.
+  @extended:6.8.2
+  Scenario: length of a string constant is a bound
+    Given the Extended Pascal program
+      """
+      program p(output);
+      const greeting = 'hello';
+      var buf: packed array [1..length(greeting)] of char;
+          i: integer;
+      begin
+        for i := 1 to length(greeting) do buf[i] := greeting[i];
+        writeln(buf)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      hello
+      """
+
+  # The other half, and it is a restriction of this processor rather than of
+  # the clause: a real constant is carried as the text that was written and is
+  # never converted to a number, so `trunc` in a constant-expression would need
+  # a conversion that does not exist here. §6.8.2 permits it; this says so
+  # rather than reporting the expression as not constant, which would be a
+  # complaint about the program. doc/implementation-defined.md §6 records it.
+  @extended:6.8.2
+  Scenario: a real-argument required function is a documented restriction
+    Given the Extended Pascal program
+      """
+      program p(output);
+      const cut = trunc(3.7);
+      begin writeln(cut : 1) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a real constant is carried as the text that was written
+      """

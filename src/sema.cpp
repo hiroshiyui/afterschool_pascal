@@ -5403,26 +5403,66 @@ bool Sema::evalConstBinary(Binary *b, Symbol &out) {
 }
 
 /// §6.8.2 c) excludes a function declared by the program and the two required
-/// functions `eof` and `eoln`; NOTE 1 excludes the ones that take a variable.
-/// What is left that this compiler can evaluate *exactly* is ISO 7185's
-/// ordinal-valued required functions, and those are the seven here. The
-/// transcendentals are not among them for the reason a real operator is not:
-/// their results would have to be converted, and a real constant is carried as
-/// the text that was written.
+/// functions `eof` and `eoln`; NOTE 1 excludes the ones that take a variable —
+/// `empty`, `position`, `LastPosition` — and says why: they need a variable as
+/// a parameter. Every other required function is nonvarying and belongs in a
+/// constant-expression.
+///
+/// Eight are refused anyway, and for one reason between them: a real constant
+/// is carried as the text that was written and is never converted to a number
+/// here, so `trunc` and `round` would need a conversion and `sqrt` and the
+/// five transcendentals a formatter besides. That is a restriction of this
+/// processor rather than of the clause, so it says which rather than reporting
+/// the expression as not constant. `substr` is refused for the neighbouring
+/// reason: its result is a string, which has no scalar form to fold to.
 bool Sema::evalConstCall(Call *c, Symbol &out) {
-  if (c->args.size() != 1)
+  if (c->args.empty() || c->args.size() > 2)
     return false;
   Symbol a;
   if (!evalConst(c->args[0].get(), a) || !a.type)
     return false;
 
-  auto ordinal = [&]() -> long long {
-    if (a.type->isChar())
-      return static_cast<unsigned char>(a.charVal);
-    if (a.type->base()->kind == TypeKind::Boolean)
-      return a.boolVal ? 1 : 0;
-    return a.intVal;
+  auto ordinal = [&](const Symbol &s) -> long long {
+    if (s.type->isChar())
+      return static_cast<unsigned char>(s.charVal);
+    if (s.type->base()->kind == TypeKind::Boolean)
+      return s.boolVal ? 1 : 0;
+    return s.intVal;
   };
+
+  // §6.7.6.4's succ(x,k) and pred(x,k), which the clause defines as
+  // succ(x,-(k)). Nonvarying exactly as the one-argument forms are, and
+  // refused only because this walked a single argument.
+  if (c->args.size() == 2) {
+    if (c->builtin != Builtin::Succ && c->builtin != Builtin::Pred)
+      return false;
+    Symbol b;
+    if (!evalConst(c->args[1].get(), b) || !b.type)
+      return false;
+    if (!a.type->isOrdinal() || !b.type->isInteger())
+      return false;
+    long long v = ordinal(a);
+    long long k = c->builtin == Builtin::Pred ? -b.intVal : b.intVal;
+    long long lo = a.type->base()->ordinalLo();
+    long long hi = a.type->base()->ordinalHi();
+    if (v + k > hi || v + k < lo) {
+      diags_.error(c->line, c->col,
+                   std::string(c->builtin == Builtin::Succ ? "succ" : "pred") +
+                       " runs past the end of " + a.type->name() +
+                       " in a constant expression");
+      constReported_ = true;
+      return false;
+    }
+    v += k;
+    out = a;
+    if (a.type->isChar())
+      out.charVal = static_cast<char>(v);
+    else if (a.type->base()->kind == TypeKind::Boolean)
+      out.boolVal = v != 0;
+    else
+      out.intVal = v;
+    return true;
+  }
 
   switch (c->builtin) {
   case Builtin::Abs:
@@ -5450,7 +5490,7 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
     if (!a.type->isOrdinal())
       return false;
     out.type = ty::Int();
-    out.intVal = ordinal();
+    out.intVal = ordinal(a);
     return true;
   case Builtin::Chr: {
     if (!a.type->isInteger())
@@ -5469,7 +5509,7 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
   case Builtin::Pred: {
     if (!a.type->isOrdinal())
       return false;
-    long long v = ordinal();
+    long long v = ordinal(a);
     // The ends are the *host's* (§6.6.6.4 with §6.7.1), so a subrange does not
     // stop succ — only an enumeration does, having no host. The end is tested
     // *before* the step, because at maxint the step itself would overflow —
@@ -5495,6 +5535,37 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
       out.intVal = v;
     return true;
   }
+  // §6.7.6.7's length. A string constant is its literal, named (ADR-0068), so
+  // the length is the literal's — and §6.4.3.3.1 gives the char-type "length 1
+  // and capacity 1", which is why a one-character literal, already a CharLit,
+  // answers 1 rather than falling through.
+  case Builtin::Length:
+    if (a.type->isChar()) {
+      out.type = ty::Int();
+      out.intVal = 1;
+      return true;
+    }
+    if (auto *lit = a.constValue ? as<StrLit>(a.constValue) : nullptr) {
+      out.type = ty::Int();
+      out.intVal = static_cast<long long>(lit->value.size());
+      return true;
+    }
+    return false;
+  // Nonvarying by §6.8.2 and not evaluable here: these say which, because "the
+  // expression is not constant" would be a complaint about the program.
+  case Builtin::Sqrt:
+  case Builtin::Sin:
+  case Builtin::Cos:
+  case Builtin::Ln:
+  case Builtin::Exp:
+  case Builtin::ArcTan:
+  case Builtin::Trunc:
+  case Builtin::Round:
+    diags_.error(c->line, c->col,
+                 "a real constant expression is not folded: a real constant "
+                 "is carried as the text that was written and never converted");
+    constReported_ = true;
+    return false;
   default:
     return false;
   }
