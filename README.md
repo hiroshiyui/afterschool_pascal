@@ -973,6 +973,14 @@ strings    string(n) — the required schema of §6.4.3.3.3: a length and up
            result -- and the formal's capacity is the length of the
            value it was handed (§6.7.3.2), not the capacity of the
            variable it came out of
+           A `packed array [1..n] of char` value parameter takes any
+           string expression too, and pads it: §6.7.3.2 holds the actual
+           to assignment-compatibility, so `p('abc')` for a formal of
+           capacity 5 hands over 'abc  ' -- the same rule, and the same
+           padding, that `f := 'abc'` has always followed. An actual
+           longer than the capacity stops the program (§6.4.6 c))
+           read(f, s) at end of *file* stops the program (D.97); at end
+           of line it reads nothing and answers with the null-string
 binding    var f: bindable text — a variable that may be bound to
            something outside the program. bind(f, b) attaches it to the
            file named by b.name, unbind(f) detaches it, and binding(f)
@@ -1027,7 +1035,10 @@ const      const n = base * 2 — a constant-expression: wherever ISO 7185
            The operators fold as the emitted code computes them — `mod` is
            non-negative, an overflow is refused rather than wrapped — and
            `abs`, `sqr`, `odd`, `ord`, `chr`, `succ` and `pred` fold with
-           them. A real-, set- or string-valued *operation* is not folded: a
+           them, and so do `succ(x, k)`, `pred(x, k)`, `length` and
+           `index` — the last is what §6.3.2's own example needs, whose
+           closing line is
+           `hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')]`. A real-, set- or string-valued *operation* is not folded: a
            real constant is carried as the text that was written and never
            converted, and building characters or a set in the compiler would
            have to give the same answer in both of them. A string *literal*

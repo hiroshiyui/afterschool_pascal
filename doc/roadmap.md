@@ -1392,6 +1392,30 @@ programs refused by it, and they are three pieces of work rather than one bug:
 The first is a fix, the second is architectural, the third is a design. None is
 started, and a record is owed before any of it is.
 
+**A discriminated-schema is not a parameter-form, and this compiler accepts
+one** (ADR-0171). §6.7.3.1's production has three alternatives —
+
+    parameter-form = type-name | schema-name | type-inquiry .
+
+— so `procedure q(x: string)` names the schema and is right, and
+`procedure q(x: string(5))` is outside the grammar. Seventeen occurrences in
+thirteen sources here write the second spelling, and **three** of them are
+under `tests/extended/` — `binding.pas`, `binding_errors.pas` and
+`schema.pas`; the rest are in `tests/dialect/`, which the change would leave
+alone. Those three would have to be rewritten to a type-name. That makes it an **extension inside a
+conformance mode**, which `doc/implementation-defined.md` §5 lists two of and
+this is not one of them — a defect by that document's own rule, found by
+probing the finding next to it rather than by anything reading the production.
+
+It is not a fix in the way the three above are. What is probably right is to
+refuse it under `--std=iso7185` and `--std=extended` and admit it under
+`--std=afterschool` with a clause in `doc/afterschool-pascal-spec.md`, since
+the dialect is exactly where a convenience neither standard has belongs
+(ADR-0109, ADR-0117) and the spelling is already one a conforming program could
+not have written in that position (ADR-0140). That is a feature with its own
+record, not an adjudication, and it takes something away from every program
+in this tree that uses it — so it is written down here rather than done.
+
 Five more, each stated in the record that made it. A sixth was listed here for
 exactly one commit and is **fixed**: a variable-string may now be a value
 parameter (ADR-0115), so a string argument may be a literal, another function's

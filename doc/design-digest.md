@@ -1024,6 +1024,54 @@ able to make.
     `tests/extended/const_access_component.pas`. The clause was triaged
     `structural` and so was in no work queue, which is the direction ADR-0106
     warns about.
+  - **A value parameter of a fixed-string type is padded, not refused**
+    (6.7.3.2, ADR-0171). 6.7.3.2 holds the actual to *assignment-compatibility*
+    with the formal's type, and 6.4.6's last paragraph then treats a
+    canonical-string value assigned to a fixed-string-type as "the components
+    ... followed by zero or more spaces" -- 6.4.3.3.1's NOTE says so outright.
+    This compiler refused a shorter actual and the diagnostic gave a lowering
+    as the reason: *a value parameter is copied rather than padded*. What was
+    missing was storage -- a structured value parameter travels as an address
+    (ADR-0017) -- and ADR-0115 supplies the mirror of it: there the callee's
+    prologue converts because the capacity is the callee's, here the *call*
+    converts because the formal's capacity is written in the formal. The
+    padded value is built in the string arena, whose lifetime is the statement
+    (ADR-0111) and which an alloca could not have been (ADR-0102), so the new
+    arm bumps that counter. `PadsToFixedString` is asked by both Sema and
+    CodeGen and answers **false** for an actual that is already a char array of
+    the formal's length, so nothing that compiled before is lowered
+    differently -- and false under ISO 7185, which has neither 6.4.5 d) nor
+    6.4.6 f). `tests/extended/fixedstring_param.pas` and
+    `tests/extended/trap_param_capacity.pas`.
+  - **A variant-part-value must name the tag field its variant part declares**
+    (6.8.7.3, ADR-0171). Two sentences require it -- the selector's
+    field-identifier "shall have an applied occurrence in the
+    tag-field-identifier of each variant-part-value", and every component of a
+    field-list "shall have exactly one applied occurrence" in the
+    field-list-value. The grammar's `[ tag-field-identifier ':' ]` is optional
+    for a variant part whose selector has *no* identifier, and was read as a
+    licence to omit one that has. Three of the four shapes were already
+    checked; only the omission was missed, and `structvalue.pas` was writing
+    it with a comment asserting the rule the compiler implemented.
+  - **`index` folds, and `substr` still does not** (6.7.6.7, 6.8.2, ADR-0171).
+    The two-argument arm of the constant folder was written for `succ(x, k)`
+    and `pred(x, k)` and asked their question -- is the first operand ordinal
+    and the second an integer? -- of everything, so `index` was refused with
+    *not a compile-time constant* and 6.3.2, the standard's own example of a
+    constant-definition-part, did not compile. Neither reason that keeps a
+    required function out reaches it: the result is an integer, so no real is
+    converted, and the operands are literals already in the pool, so no
+    computed string has to be named (ADR-0068). ADR-0054 found the same arm's
+    other three misses. `tests/extended/constexpr_required_functions.pas`.
+  - **Reading a string at end of file is D.97's error and is reported**
+    (6.10.1, ADR-0171). D.97 makes `read` at `f0.R=S()` an error whatever is
+    being read, and the char form reached it through 6.10.1 b)'s buffer
+    variable while the two string forms of e) and f) reached nothing and
+    answered with spaces and the null-string -- one procedure, two answers to
+    one clause. End of *line* is untouched: NOTE 6 and NOTE 7 give it the
+    null-string and still do, `readstr` included, because 6.7.5.5's auxiliary
+    text file carries a line terminator. It stops programs that used to run.
+    `tests/extended/trap_read_eof.pas`.
   - **A char is a legal assignment destination for a string value**
     (6.4.5 d), 6.4.6 f)), and the guard that chooses the string path asks
     `IsStringOrChar` of the *destination* for that reason. Asking

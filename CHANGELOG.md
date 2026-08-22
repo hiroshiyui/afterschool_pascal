@@ -13,7 +13,48 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
-Nothing yet.
+**One program that compiled and ran before now stops at run time**, and it is
+what an upgrade can cost you: `read(f, s)` for a string variable at **end of
+file** now reports an error and exits 1, where it used to answer with the
+null-string and carry on. ISO/IEC 10206:1991's Annex D, D.97, makes reading at
+end-of-file an error whatever is being read, and this compiler already reported
+it for a char and for the numeric forms — the two string forms of §6.10.1 e)
+and f) reached neither check, so one procedure gave two answers to one clause.
+End of **line** is unchanged: NOTE 6 and NOTE 7 give it the null-string, and
+still do, `readstr` included.
+
+The other three entries only accept more.
+
+### Added
+
+- A **value parameter of a `packed array [1..n] of char`** takes any string
+  expression and pads it, under `--std=extended` and `--std=afterschool`.
+  `p('abc')` for a formal of capacity 5 hands over `'abc  '`, which is what
+  §6.7.3.2's assignment-compatibility and §6.4.6's padding paragraph require
+  and what `f := 'abc'` had always done. An actual longer than the capacity
+  stops the program (§6.4.6 c)). ISO 7185 is unaffected — it has neither rule
+  — and refuses the call as two incompatible types, which is what its
+  diagnostic now says.
+- **`index` folds in a constant-expression**, so §6.3.2 — the standard's own
+  example of a constant-definition-part — compiles. Its closing line is
+  `hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')]`, and
+  a constant-expression is what an array bound and a subrange bound are.
+
+### Changed
+
+- A **record-value's variant-part-value must name the tag field** its variant
+  part declares: `shape[n: 1; case kind: box of [w: 6; h: 7]]` and no longer
+  `case box of`. §6.8.7.3 requires it twice over, and the optional
+  tag-field-identifier in the grammar is for a variant part whose selector has
+  no identifier at all — which is still written without one.
+
+### Fixed
+
+- `doc/implementation-defined.md`'s E.29 said a Boolean written with an
+  explicit width is "truncated from the left", which names the wrong end.
+  §6.10.3.6 writes "the first through TotalWidth-th characters", so `true:2`
+  is `TR` — which is what the compiler has always written and what
+  `tests/extended/fieldwidth.pas` has always checked.
 
 ## [2.1.0] — 2026-08-23
 
