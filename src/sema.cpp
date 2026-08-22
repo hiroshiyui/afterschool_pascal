@@ -993,8 +993,7 @@ Type *Sema::resolveRecord(TypeExpr &denoter) {
     Type *fieldType = resolveType(*group.type);
     Expr *init = initialStateOf(*group.type);
     for (DeclName &n : group.names)
-      addField(t, t->fields, n, fieldType, {}, init,
-               bindableOf(*group.type));
+      addField(t, t->fields, n, fieldType, {}, init, bindableOf(*group.type));
   }
   if (denoter.tagType) {
     std::vector<int> path;
@@ -2850,11 +2849,11 @@ void Sema::notBindable(Expr *a) {
                        : (v->sym ? v->sym->name : std::string());
   else if (Symbol *root = baseSymbol(a))
     who = root->name;
-  diags_.error(a->line, a->col,
-               (who.empty() ? std::string("this variable ")
-                            : "'" + who + "' ") +
-                   "is not bindable; only a variable whose type-denoter says "
-                   "'bindable' can be bound to something outside the program");
+  diags_.error(
+      a->line, a->col,
+      (who.empty() ? std::string("this variable ") : "'" + who + "' ") +
+          "is not bindable; only a variable whose type-denoter says "
+          "'bindable' can be bound to something outside the program");
 }
 
 bool Sema::designatorBindable(const Expr *ce) const {
@@ -4289,6 +4288,16 @@ void Sema::checkVarDecl(VarDecl &group, Symbol *owner) {
     dynamicVarFor_ = first;
     first->type = resolveType(*group.type);
     dynamicVarFor_ = nullptr;
+    // §6.4.1 writes the initial-state-specifier after *any* of the four bases
+    // — "type-denoter = [ 'bindable' ] ( type-name | new-type | type-inquiry |
+    // discriminated-schema ) [ initial-state-specifier ]" — and a
+    // discriminated-schema is one of them, so `var t: string(4) value 'jk'` is
+    // as much a variable with an initial state as `var t: s4 value 'jk'` is.
+    // This branch resolved the denoter, which checks the value, and then never
+    // asked for the state, so §6.2.3.5's "created in its initial state" did not
+    // happen. The path below has always done it; only this branch forgot.
+    Expr *schemaInit = initialStateOf(*group.type);
+    first->initValue = schemaInit;
     // §6.2.3.2 evaluates the discriminants when the block is entered and the
     // storage they size lives as long as the activation (ADR-0041). A
     // module's activation outlives the function that commences it, so there
@@ -4303,6 +4312,9 @@ void Sema::checkVarDecl(VarDecl &group, Symbol *owner) {
       const DeclName &n = group.names[i];
       Symbol *v =
           addFrameVar(n.name, SymKind::Var, first->type, owner, n.line, n.col);
+      // One denoter, so one initial state for the whole group — the same
+      // sharing the path below makes, for §6.2.3.5's same reason.
+      v->initValue = schemaInit;
       if (!first->type->isGeneric())
         continue;
       // Each name has its own descriptor, so each needs its own type — but

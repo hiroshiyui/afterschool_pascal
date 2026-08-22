@@ -18820,6 +18820,20 @@ begin
     dynamicVarFor := first;
     first^.stype := ResolveType(g^.grType);
     dynamicVarFor := nil;
+    { 6.4.1 writes the initial-state-specifier after *any* of the four bases --
+      "type-denoter = [ 'bindable' ] ( type-name | new-type | type-inquiry |
+      discriminated-schema ) [ initial-state-specifier ]" -- and a
+      discriminated-schema is one of them, so `var t: string(4) value 'jk'` is
+      as much a variable with an initial state as `var t: s4 value 'jk'` is.
+      This branch resolved the denoter, which is what runs CheckInitialState and
+      so checks the value and reports a bad one, and then never asked for the
+      state: the group's names got no initValue and 6.2.3.5's "created in its
+      initial state" did not happen. A *global* was merely zeroed; a **local**
+      was left reading whatever the frame slot held, so `writeln(t)` wrote the
+      stack. The else branch below has always done this; only the schema branch
+      forgot, which is why the two spellings of one declaration disagreed. }
+    init := InitialStateOf(g^.grType);
+    first^.initValue := init;
     { 6.2.3.2 evaluates the discriminants when the block is entered and the
       storage they size lives as long as the activation (ADR-0041). A
       module's activation outlives the function that commences it, so there
@@ -18843,6 +18857,9 @@ begin
         s^.descSchema := first^.descSchema;
         s^.discExprs := first^.discExprs
       end;
+      { One denoter, so one initial state for the whole group -- the same
+        sharing the else branch makes, and for 6.2.3.5's same reason. }
+      s^.initValue := init;
       n := n^.next
     end
   end
