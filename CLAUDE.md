@@ -993,7 +993,7 @@ Three things to know before touching it:
   that no longer exists. Flip it to `MUST_HOLD` in the same change.
 
 New arithmetic, conversion, or comparison lowering should arrive with a rule.
-The catalogue currently has **no known gaps** — 46 rules, 30 of them for every
+The catalogue currently has **no known gaps** — 48 rules, 32 of them for every
 32-bit input and seven of those at 64 bits too since ADR-0128 — so any gap that appears is something this change introduced.
 
 Don't add a rule that restates the lowering. A check whose ISO condition *is*

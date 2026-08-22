@@ -947,6 +947,43 @@ able to make.
     (§6.4.1), which is why `type btext = bindable text` is how a bindable
     *parameter* is written: `text` is a required identifier and never is.
     `bindableOf` is `initialStateOf`'s shape.
+  - **A char is a legal assignment destination for a string value**
+    (6.4.5 d), 6.4.6 f)), and the guard that chooses the string path asks
+    `IsStringOrChar` of the *destination* for that reason. Asking
+    `IsStringType` -- true of every string-type and false of `char` -- let
+    `c := s` fall into the scalar store and put the string's pointer in an i8
+    slot, which clang refuses; `c := s[i..j]` reached a different arm and
+    stored chr(0) in silence. `EmitStringStoreValue` had the char arm
+    throughout, and `pas_str_store_char` is 6.4.6 c)'s error and 6.4.6's
+    space-padding in two lines, so the whole defect was the caller's predicate.
+    `tests/extended/char_from_string.pas` sweeps nine spellings (ADR-0168).
+  - **An initial-state-specifier follows any of a type-denoter's four bases**
+    (6.4.1), the discriminated-schema included, so `var t: string(4) value 'jk'`
+    initialises exactly as `var t: s4 value 'jk'` does. `CheckVarDecl` splits
+    into a schema path and an ordinary one because 6.2.3.2 lets a schema's
+    discriminants be variables, and only the ordinary one called
+    `InitialStateOf`: the schema path resolved the denoter -- so a *wrong* value
+    was still reported -- and then dropped the state. A global was zeroed; a
+    local read its own frame slot and printed the stack.
+    `tests/extended/initial_state_schema.pas` covers both storage classes and
+    the group-sharing (ADR-0168).
+  - **The question is asked of the variable-access, not of its root**, because
+    §6.7.5.6 and §6.7.6.8 both say "the variable-access f". Asking the
+    entire-variable was wrong in both directions: `bind(r.log, b)` over a
+    bindable field was refused *naming the record*, and a `p^` was let through
+    whatever the domain denotes, there being no `nkVar` under a dereference to
+    ask. Bindability therefore travels on the field and on the array's
+    component beside the initial state (§6.4.1 names the three in one breath),
+    and not on the type — `type bt = bindable text` hands it on without making
+    a type distinct from `text`, so a flag there would answer the same for
+    both spellings. `DesignatorBindable` is the walk and `NotBindable` the one
+    message all four routines share. The dereference is **left** as it is: for
+    `^bindable text` it is right, for `^text` it is not, and a pointer's domain
+    reaches Sema through the deferred and pending paths where the denoter that
+    knows is out of hand — `doc/implementation-defined.md` §6.1 carries it as
+    the one program accepted that the standard requires rejected. `tests/extended/bind_qualified.pas`
+    is the case; dropping the field arm fails `binding_errors`, `difftest` and
+    `dialect-containment` at once.
   - **`binding(f)` is built in a hidden frame slot** — the `with` mechanism —
     because it is the only required function returning a record and this
     compiler returns none. The call is then a designator, so `b := binding(f)`

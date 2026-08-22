@@ -77,7 +77,45 @@ appears below in the release where it still existed.
   and `a bindable type cannot be a field of a variant part`. `--std=iso7185` is
   untouched: neither word-symbol exists there.
 
+- **The message for binding something nonbindable names a different rule.** It
+  was `only a variable of a bindable type may be bound`; it is now
+  `only a variable whose type-denoter says bindable may be bound`, because
+  bindability is not a property of the type — `type bt = bindable text` hands
+  it on without making a type distinct from `text`. The four procedures and
+  functions of §6.7.5.6 and §6.7.6.8 share the one message.
+
 ### Added
+
+- **A string value may be assigned to a `char` variable.** `c := s[2..2]`,
+  `c := v` over a one-character `string`, `c := substr(s, 4, 1)`, a
+  concatenation, a `trim` and a function result were all accepted by the type
+  rules and then miscompiled: ten spellings emitted invalid IR, so the author
+  saw an LLVM error naming a temporary file they never wrote, and the substring
+  form silently stored `chr(0)`. ISO/IEC 10206:1991 §6.4.5 d) makes a
+  string-type and the char-type compatible and §6.4.6 f) names "a string-type
+  **or the char-type**" as the destination, so all of them are legal. The
+  null-string stores a space, which is §6.4.6's padding rule at a capacity of
+  one, and a value longer than one character stops the program. `--std=iso7185`
+  is untouched — it has no such rule and refuses the assignment outright.
+
+- **An initial-state-specifier is honoured after a discriminated-schema.**
+  `var t: string(4) value 'jk'` parsed, checked its value, and then discarded
+  it; only the type-name spelling, `var t: s4 value 'jk'`, worked. §6.4.1 offers
+  the specifier after any of the four bases a type-denoter may have, a
+  discriminated-schema included. A **global** was left zeroed; a **local** was
+  left reading its uninitialised frame slot, so `writeln(t)` printed several
+  kilobytes of stack. If you wrote this declaration and worked around it with an
+  assignment at the top of the block, that assignment is now redundant rather
+  than load-bearing.
+
+- **A bindable *field* or *array component* may now be bound.** `bind(r.log, b)`
+  over `record log: bindable text end`, and `bind(pool[i], b)` over
+  `array [1..4] of bindable text`, were both refused — with a message naming
+  the container rather than the thing asked about, `'r' is not bindable`.
+  ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 ask whether "the variable-access f"
+  possesses the bindability that is bindable, and §6.4.3.4 and §6.4.3.5 give a
+  field and an array's component the bindability of their own type-denoter.
+  Under `import i qualified` there had been no workaround.
 
 - **A `string` value parameter now takes any string expression.** `procedure
   p(s: string)` accepted only a variable produced from the schema, so a literal,

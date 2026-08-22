@@ -925,7 +925,8 @@ types      integer value 1 — an initial-state specifier: the value a
            again on every later activation of that block. It belongs to
            the type-denoter, so `type count = integer value 7` gives it to
            every variable of count, and a record's fields may each carry
-           one. The value must read nothing that can change — a literal,
+           one, as may a discriminated schema: `var t: string(4) value
+           'jk'`. The value must read nothing that can change — a literal,
            a constant, an operator over those, or a required function
 types      complex — a *simple* type, so it is assigned, passed and
            returned as a value like a real. cmplx(x, y) and polar(r, t)
@@ -962,6 +963,8 @@ strings    string(n) — the required schema of §6.4.3.3.3: a length and up
            and takes at most the capacity — a substring target included.
            A single statement may not concatenate more than the runtime's
            string arena holds, and stops the program if it does.
+           A string value may be assigned to a char: c := s[2..2],
+           and the null-string gives a space (6.4.5 d), 6.4.6 f))
            `procedure p(s: string)` takes any string *expression* --
            a literal, a char, a constant, a concatenation, a function
            result -- and the formal's capacity is the length of the
@@ -975,6 +978,9 @@ binding    var f: bindable text — a variable that may be bound to
            the only way a program names a file while it is *running* —
            ISO 7185 binds the program parameters before it starts and
            gives it no other way out
+           Bindability belongs to the variable-access, so a bindable
+           *field* and a bindable array *component* may each be bound:
+           bind(r.log, b) and bind(pool[i], b) (§6.4.3.4, §6.4.3.5)
            A program-parameter is bindable without saying so (§6.5.1),
            and binding(p).name is the command-line argument it was given
            (§6.7.6.8) — so a program can read its own command line, and
