@@ -360,3 +360,66 @@ Feature: A string value parameter takes any assignment-compatible actual
       """
       before
       """
+
+# ISO/IEC 10206:1991 §6.10.1 with Annex D, D.97 -- reading a string, at the two
+# positions that look alike and are not.
+#
+# D.97: "When read is applied to text file f, it is an error if the buffer
+# variable f^ is undefined, if f0.M is not Inspection or Update, if either f0.L
+# or f0.R is undefined, or if f0.R=S()." The last of those is end-of-file.
+#
+# End-of-line is a different position, and §6.10.1's NOTE 7 gives it its own
+# answer: "If eoln(f) is initially true, then no characters are read, and the
+# value of v is the null-string." A processor that treats the two alike gets
+# one of them wrong, and this one had the string forms answering NOTE 7 at both.
+
+@extended:6.10.1
+Feature: Reading a string-type from a text file
+
+  Scenario: reading at end-of-line yields the null-string
+    Given the standard input
+      """
+      ab
+      """
+    Given the Extended Pascal program
+      """
+      program p(input, output);
+      var s: string(10);
+      begin
+        read(s);
+        writeln('1=[', s, ']');
+        read(s);
+        writeln('2=[', s, ']')
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      1=[ab]
+      2=[]
+      """
+
+  Scenario: reading at end-of-file stops the program
+    Given the standard input
+      """
+      ab
+      """
+    Given the Extended Pascal program
+      """
+      program p(input, output);
+      var s: string(10);
+      begin
+        read(s);
+        readln;
+        writeln('eof=', eof);
+        read(s);
+        writeln('unreachable')
+      end.
+      """
+    When it is compiled and run
+    Then it stops at run time
+     And it prints
+      """
+      eof=TRUE
+      """

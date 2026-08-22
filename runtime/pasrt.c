@@ -2066,6 +2066,19 @@ void pas_read_str(void *v, void *dst, int cap, int isvar) {
   struct pas_file *f = v;
   char *out = isvar ? (char *)dst + PAS_STR_LENGTH_BYTES : (char *)dst;
   int n = 0;
+  /* D.97: "When read is applied to text file f, it is an error if the buffer
+   * variable f^ is undefined, ... or if f0.R = S()" — there is nothing left to
+   * read. The char-type form reaches that through pas_buffer and reports it;
+   * the two string forms reached nothing and answered with the null-string, so
+   * one read procedure gave two answers to one clause.
+   *
+   * §6.10.1's NOTE 6 and NOTE 7 — "if eoln(f) is initially true, then no
+   * characters are read" — are a *different* position and still answer with
+   * spaces or the null-string: at end-of-line there is a line terminator left
+   * to read, and at end-of-file there is not. */
+  pas_fill(f);
+  if (f->ateof)
+    pas_runtime_error("the buffer variable is undefined at end of file");
   while (n < cap) {
     pas_fill(f);
     if (f->ateof || f->lookahead == '\n')

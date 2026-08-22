@@ -111,7 +111,6 @@ extended:6.9.3.9.1
 extended:6.9.3.9.2
 extended:6.9.3.9.3
 extended:6.9.3.10
-extended:6.10.1
 extended:6.10.2
 extended:6.10.3
 extended:6.10.3.1
