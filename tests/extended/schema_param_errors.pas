@@ -92,6 +92,17 @@ begin
   a[1] := 0.0
 end;
 
+{ 6.7.3.2 excuses the required schema `string` from the rule above -- the
+  actual is an expression whose underlying-type is a string-type or the
+  char-type -- but it does not excuse it from having one of those types. An
+  integer is neither, and the complaint has to name the rule that applies
+  rather than "needs a variable produced from schema 'string'", which is the
+  rule that does not. }
+procedure labelled(s: string);
+begin
+  writeln(s)
+end;
+
 begin
   { the actual has to be produced from the schema the formal names }
   good(r);
@@ -104,6 +115,9 @@ begin
   { congruity is decided on the schema }
   applies(takesother);
   applies(good);
+  { 6.7.3.2: a string value parameter takes an expression, and this is not one
+    of a type it admits }
+  labelled(42);
   { a schema is still not a type outside a parameter form }
   i := 0
 end.

@@ -726,6 +726,15 @@ private:
   /// and `BindingType`'s `name` field is such a production made where there is
   /// no denoter to resolve. See `stringOfCapacity`.
   Symbol *stringSchema_ = nullptr;
+  /// ISO/IEC 10206:1991 §6.7.3.2's rule for the required schema `string` as a
+  /// **value** parameter, which is a rule of its own: the actual is an
+  /// expression of any string-or-char type, and the formal's capacity is the
+  /// value's length. §6.7.3.3 has no such paragraph — a var parameter binds to
+  /// storage, so there is no value to take a length from.
+  bool isStringValueFormal(const Symbol *f) const {
+    return f->kind == SymKind::Param && f->descSchema &&
+           f->descSchema == stringSchema_;
+  }
   /// ISO/IEC 10206:1991 §6.4.3.4's required `BindingType`, built once when the
   /// standard has it. Null under ISO 7185, which is what makes every rule
   /// about binding answer "no such type" there rather than needing a flag.

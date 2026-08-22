@@ -8112,6 +8112,25 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
     }
 
     if (p->descSchema) {
+      // §6.7.3.2 gives the required schema `string` a paragraph of its own
+      // when it names a *value* parameter: the actual is an expression "having
+      // an underlying-type that is a string-type or the char-type", and the
+      // formal possesses the type produced from the schema "with the tuple
+      // having that length as its component" — the length of the value, not
+      // the capacity of the variable it came out of. Every other schema-name
+      // asks for a variable produced from it, which is the arm below.
+      // §6.11.6's own Example 10, `record event('event-module
+      // initialization')`, is a program the other arm refuses.
+      if (isStringValueFormal(p)) {
+        if (a->type && !a->type->isStringOrChar())
+          diags_.error(a->line, a->col,
+                       "argument " + std::to_string(i + 1) + " of '" +
+                           callee->name +
+                           "' is a string value parameter, so the argument "
+                           "must be a string or a char, and this one is " +
+                           a->type->name());
+        continue;
+      }
       if (!isDesignator(a))
         diags_.error(a->line, a->col,
                      "argument " + std::to_string(i + 1) + " of '" +
@@ -8249,7 +8268,13 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
   // already known here, so it is reported before the program runs.
   for (size_t i = 0; i < args.size(); ++i) {
     Symbol *p = callee->params[i];
-    if (!p->descSchema || !args[i]->type || args[i]->type->isGeneric())
+    // §6.7.3.2 puts a different rule on `string` as a value parameter, and it
+    // is not this one: "it shall be an error if the values ... do not all have
+    // the same length". Lengths, not types, and an error rather than a
+    // violation — so `pair(v3, 'xyz')` is legal with two actuals of one length
+    // whose types differ, and holding them to one type would refuse it.
+    if (!p->descSchema || isStringValueFormal(p) || !args[i]->type ||
+        args[i]->type->isGeneric())
       continue;
     for (size_t j = 0; j < i; ++j) {
       Symbol *q = callee->params[j];

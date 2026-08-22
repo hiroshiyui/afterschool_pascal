@@ -134,3 +134,81 @@ Feature: Fixed-string-types and the string functions
       """
     When it is compiled and run
     Then it stops at run time
+
+  # ISO/IEC 10206:1991 §6.7.3.2 gives the required schema `string` its own
+  # paragraph when it names a **value** parameter, and it is not the rule every
+  # other schema-name follows: the actual is an expression "having an
+  # underlying-type that is a string-type or the char-type", not a variable
+  # produced from the schema. §6.11.6's own Example 10 writes
+  # `record event('event-module initialization')`, which this compiler refused.
+  @extended:6.7.3.2
+  Scenario: a string value parameter takes any string expression
+    Given the Extended Pascal program
+      """
+      program p(output);
+      const greeting = 'hello';
+      var v: string(40);
+      procedure show(s: string);
+      begin writeln(s, ' ', length(s) : 1) end;
+      begin
+        show('a literal');
+        show('x');
+        show(greeting);
+        show('two' + ' halves');
+        v := 'a variable';
+        show(v)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      a literal 9
+      x 1
+      hello 5
+      two halves 10
+      a variable 10
+      """
+
+  # The clause's other half: the formal possesses the type produced "with the
+  # tuple having that length as its component" — the length of the *value*, so
+  # a `string(40)` holding three characters produces a formal of capacity 3.
+  # Observable only by overflowing it, since length() answers the same under
+  # either reading.
+  @extended:6.7.3.2
+  Scenario: its capacity is the value's length, not the actual's capacity
+    Given the Extended Pascal program
+      """
+      program p(output);
+      var v: string(40);
+      procedure show(s: string);
+      begin
+        writeln(length(s) : 1);
+        s := 'abcdefghij'
+      end;
+      begin v := 'abc'; show(v) end.
+      """
+    When it is compiled and run
+    Then it stops at run time
+     And the run-time error includes
+      """
+      does not fit a capacity of 3
+      """
+
+  # And what it does not excuse: the actual still has to have one of the two
+  # types the clause names.
+  @extended:6.7.3.2
+  Scenario: but the argument must still be a string or a char
+    Given the Extended Pascal program
+      """
+      program p(output);
+      procedure show(s: string);
+      begin writeln(s) end;
+      begin show(42) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      must be a string or a char
+      """

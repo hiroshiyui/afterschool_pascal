@@ -7126,6 +7126,35 @@ begin IsStringType := IsVarString(t) or IsCharArray(t) end;
 function IsStringOrChar(t: typePtr): boolean;
 begin IsStringOrChar := IsStringType(t) or IsChar(t) end;
 
+{ ISO/IEC 10206:1991 6.7.3.2's rule for the required schema `string` as a
+  **value** parameter, which is a rule of its own and not the schematic-formal
+  rule one construct along:
+
+    "If the parameter-form of the value-parameter-specification contains a
+     schema-name that denotes the schema denoted by the required
+     schema-identifier string, then each corresponding actual-parameter
+     contained by the activation-point of an activation shall possess a type
+     having an underlying-type that is a string-type or the char-type ...
+     Within the activation, each corresponding formal-parameter shall possess
+     the type produced from the schema string with the tuple having that
+     length as its component."
+
+  So the actual is an *expression* of any string-or-char type -- not a variable
+  produced from the schema, which is what every other schema-name asks for --
+  and the formal's capacity is the **length of the value**, not the capacity of
+  whatever variable it came out of. Both halves were wrong here: 6.11.6's own
+  Example 10 writes `record event('event-module initialization')` and this
+  compiler answered "needs a variable produced from schema 'string'".
+
+  Only a value parameter. 6.7.3.3's variable-parameter clause has no such
+  paragraph -- a var parameter binds to storage, so there is no value to take a
+  length from -- and it goes on asking for a variable of the schema's type. }
+function StringValueFormal(f: symPtr): boolean;
+begin
+  StringValueFormal := (f^.kind = skParam) and (f^.descSchema <> nil) and
+                       (f^.descSchema = stringSchema)
+end;
+
 { ADR-0122: the one shape a string is allowed to have in an `external`
   heading -- a schematic formal, so the size is the actual's and the formal
   states none. What crosses is a `const char *`, whose length is the NUL, so a
@@ -12869,7 +12898,23 @@ begin
         end
       end
       else if p^.sym^.descSchema <> nil then begin
-        if not IsDesignator(a) then begin
+        { 6.7.3.2's own paragraph for `string` as a value parameter: any
+          expression whose underlying-type is a string-type or the char-type,
+          and the formal takes the *value's* length as its capacity. Every
+          other schema-name asks for a variable produced from it, which is the
+          arm below. }
+        if StringValueFormal(p^.sym) then begin
+          if (a^.ntype <> nil) and not IsStringOrChar(a^.ntype) then begin
+            ErrorAt(a^.line, a^.col);
+            write('argument ', i:1, ' of ''');
+            WritePool(callee^.at, callee^.len);
+            write(''' is a string value parameter, so the argument must be ');
+            write('a string or a char, and this one is ');
+            WriteTypeName(a^.ntype);
+            writeln
+          end
+        end
+        else if not IsDesignator(a) then begin
           ErrorAt(a^.line, a^.col);
           write('argument ', i:1, ' of ''');
           WritePool(callee^.at, callee^.len);
@@ -13092,7 +13137,16 @@ begin
         capacity, and holding the two actuals to one type would refuse
         `strcmp('b', 'ab')` for a rule that is not about it. The clause is
         about a *parameter form*, and a foreign parameter has none. }
-      if (p^.sym^.descSchema <> nil) and (callee^.linkKind <> lnkForeign) then
+      { 6.7.3.2 puts a *different* rule on the required schema `string` as a
+        value parameter, and it is not this one: "it shall be an error if the
+        values of these underlying-types ... do not all have the same length".
+        Lengths, not types, and an **error** rather than a violation -- so
+        `pair(v3, 'xyz')` is a legal program with two actuals of one length
+        whose types are `string(3)` and a fixed string, and holding them to one
+        type would refuse it. The error itself goes unreported; the lengths are
+        run-time values and doc/implementation-defined.md 3 carries it. }
+      if (p^.sym^.descSchema <> nil) and (callee^.linkKind <> lnkForeign) and
+         not StringValueFormal(p^.sym) then
         if (a^.ntype <> nil) and not IsGeneric(a^.ntype) then begin
           b := args;
           q := callee^.params;
@@ -24604,6 +24658,18 @@ begin
       AppendOpnd(head, tail, a, true, nil);
       EmitConfBounds(arg, arg^.ntype, p^.sym^.stype, head, tail)
     end
+    { 6.7.3.2's `string` value parameter travels as the pair EmitString
+      already builds -- the value's address and the value's *length* -- which
+      is the same two arguments a one-discriminant descriptor is, so the
+      callee's prologue is unchanged and copies the length it was handed. That
+      the shapes coincide is what makes the clause's rule free: the capacity
+      the formal possesses is the length of the value, which is exactly what
+      arrives. }
+    else if StringValueFormal(p^.sym) then begin
+      EmitString(arg, a, alen);
+      AppendOpnd(head, tail, a, true, nil);
+      AppendOpnd(head, tail, alen, false, intType)
+    end
     else if p^.sym^.descSchema <> nil then begin
       EmitAddress(arg, a);
       AppendOpnd(head, tail, a, true, nil);
@@ -29530,6 +29596,7 @@ end;
 
 procedure EnterFrame(p: symPtr);
 var l, d, e: symListPtr; link, slot, arg, half, actual, size, copy: str;
+    actual2, chars: str;
     nohdr, arglen, shdr: str; k, align: integer; comp: typePtr;
 begin
   BeginFunction(p);
@@ -29592,6 +29659,9 @@ begin
           StrAppend(arg, '%');
           StrAppend(arg, 'a');
           AppendInt(arg, k);
+          { The last discriminant stored, kept for 6.7.3.2's string arm below:
+            for that schema there is exactly one and it is the length. }
+          actual2 := arg;
           Def(half);
           write(ircode, 'getelementptr inbounds ');
           PutDescType(l^.sym);
@@ -29618,7 +29688,55 @@ begin
         write(ircode, ', ptr ');
         PutOp(half);
         writeln(ircode);
-        if l^.sym^.kind <> skVarParam then begin
+        if StringValueFormal(l^.sym) then begin
+          { 6.7.3.2's `string` value parameter. What arrived is not a string
+            object but the pair EmitString builds -- the value's characters and
+            the value's length -- because the actual is an *expression* here
+            and a literal, a concatenation or a char has no object whose
+            address could travel. So the object is built rather than copied:
+            the length is already stored as the discriminant by the loop above,
+            which is what makes the formal possess "the type produced from the
+            schema string with the tuple having that length as its component",
+            and the storage is 4 + that many bytes.
+
+            No padding and no 6.4.6 refusal, unlike the fixed-capacity arm
+            (ADR-0115): the capacity *is* the length, so the value fits exactly
+            by construction and there is nothing to pad to.
+
+            The alloca is in the prologue, which is the one place ADR-0102
+            allows one: it is reached once per activation, and the storage dies
+            with the frame. }
+          Def(size);
+          write(ircode, 'add i32 ');
+          PutOp(actual2);
+          writeln(ircode, ', 4');
+          Def(copy);
+          write(ircode, 'alloca i8, i32 ');
+          PutOp(size);
+          writeln(ircode, ', align 4');
+          write(ircode, '  store i32 ');
+          PutOp(actual2);
+          write(ircode, ', ptr ');
+          PutOp(copy);
+          writeln(ircode);
+          Def(chars);
+          write(ircode, 'getelementptr inbounds i8, ptr ');
+          PutOp(copy);
+          writeln(ircode, ', i32 4');
+          write(ircode, '  call void @llvm.memcpy.p0.p0.i32(ptr align 1 ');
+          PutOp(chars);
+          write(ircode, ', ptr align 1 ');
+          PutOp(actual);
+          write(ircode, ', i32 ');
+          PutOp(actual2);
+          writeln(ircode, ', i1 false)');
+          write(ircode, '  store ptr ');
+          PutOp(copy);
+          write(ircode, ', ptr ');
+          PutOp(half);
+          writeln(ircode)
+        end
+        else if l^.sym^.kind <> skVarParam then begin
           { A value parameter is a copy, and this one's size is not known until
             the tuple is in place -- so the storage is claimed here rather than
             in the frame, and dies with the activation as the frame does. }

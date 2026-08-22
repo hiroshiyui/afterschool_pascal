@@ -6,8 +6,9 @@
 <source>:70:29: error: schema 'tagged' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
 <source>:73:32: error: schema 'untagged' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
 <source>:76:29: error: schema 'sized' cannot be a parameter form: a discriminant has to bound an array, and a record holding one has to hold it last, because a field after it would sit at an offset nothing can compute
-<source>:97:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is real
-<source>:98:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is other(3)
-<source>:100:8: error: argument 1 of 'good' needs a variable produced from schema 'vector'
-<source>:102:11: error: 'a' and 'b' are one parameter form, so their arguments are one type: found vector(3) and vector(4)
-<source>:105:11: error: 'takesother' does not match the parameter list of procedural parameter 'p'
+<source>:108:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is real
+<source>:109:8: error: argument 1 of 'good' must be produced from schema 'vector', but the argument is other(3)
+<source>:111:8: error: argument 1 of 'good' needs a variable produced from schema 'vector'
+<source>:113:11: error: 'a' and 'b' are one parameter form, so their arguments are one type: found vector(3) and vector(4)
+<source>:116:11: error: 'takesother' does not match the parameter list of procedural parameter 'p'
+<source>:120:12: error: argument 1 of 'labelled' is a string value parameter, so the argument must be a string or a char, and this one is integer
