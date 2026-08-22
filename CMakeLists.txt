@@ -247,6 +247,20 @@ if(Python3_FOUND)
                    ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
 endif()
 
+# ADR-0164: a clause number is the one claim here no other oracle can
+# contradict. A wrong one compiles, runs, passes every golden, agrees with the
+# other front end and is proved correct by verify/ -- ADR-0072 is the record of
+# one surviving in four documents and a purpose-written test, and ADR-0163
+# found §6.4.3.4 cited about an ISO 7185 program, where that number is
+# Set-types. This asks the cheap half: does the number name a clause at all?
+# It found one that names nothing in either standard and had stood in seven
+# places; ADR-0164 says which. Spelling it here would be a citation of it --
+# the gate cannot tell a mention from a claim, and that is the rule rather
+# than a limitation. Needs no compiler, so it is outside the guard above.
+add_test(NAME clause-citations
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tests/checks/clause_citations.py)
+
 # ADR-0146: what a shared predicate permits, it permits everywhere. `Assignable`
 # is asked by eighteen routines -- assignment, the relational operators, an
 # actual parameter, a set member, a `for` statement's bounds -- and ADR-0058's

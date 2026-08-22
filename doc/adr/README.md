@@ -172,3 +172,4 @@ the alternatives that were rejected and why.
 | [0161](0161-the-runtimes-distance-from-iso-c-is-four-names.md) | The runtime's distance from ISO C is four names | Accepted |
 | [0162](0162-what-an-adversarial-reading-of-the-standards-found.md) | What an adversarial reading of the standards found | Accepted |
 | [0163](0163-a-variant-denoter-restricts-more-than-this-compiler-knew.md) | A variant-denoter restricts more than this compiler knew | Accepted |
+| [0164](0164-a-clause-number-is-a-claim-and-nothing-was-checking-it.md) | A clause number is a claim, and nothing was checking it | Accepted |

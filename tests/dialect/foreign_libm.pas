@@ -14,9 +14,9 @@
 
   The two still reserved are in tests/dialect/foreign_types.pas, and neither
   can move. `main` is the entry point. `_setjmp` has to be called in the frame
-  `longjmp` returns to (6.8.3.11's non-local goto), so a wrapper would return
-  before the jump ever happened -- which is a fact about setjmp and not about
-  this compiler. }
+  `longjmp` returns to (6.8.2.4's non-local goto, 6.9.2.4 under Extended
+  Pascal), so a wrapper would return before the jump ever happened -- which is
+  a fact about setjmp and not about this compiler. }
 program foreign_libm(output);
 
 function hypot(x, y: real): real; external 'hypot';

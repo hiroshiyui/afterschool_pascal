@@ -1224,7 +1224,7 @@ layout — the differences they name are real and are somewhere else:
 
   | name | for | macOS | Windows CRT |
   | --- | --- | --- | --- |
-  | `_setjmp`, `_longjmp` | §6.8.3.11's non-local goto | yes | yes |
+  | `_setjmp`, `_longjmp` | §6.8.2.4 / §6.9.2.4's non-local goto | yes | yes |
   | `fmemopen` | ADR-0057's `readstr` | 10.13+ | **no** |
   | `open_memstream` | ADR-0057's `writestr` | 10.13+ | **no** |
 

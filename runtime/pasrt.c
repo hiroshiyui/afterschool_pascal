@@ -245,8 +245,9 @@ int pas_pow_int(int x, int y) {
  * `complex` (ISO/IEC 10206:1991 §6.7.6.2) to `hypot` and `atan2` -- so those
  * three were reserved, and they are the only ones of the five a Pascal
  * programmer would plausibly reach for. `main` and `_setjmp` are the others,
- * and `_setjmp` cannot move: §6.8.3.11's non-local goto needs it called in the
- * frame `longjmp` returns to, so a wrapper would return before the jump.
+ * and `_setjmp` cannot move: the non-local goto of ISO 7185 §6.8.2.4 (§6.9.2.4
+ * under ISO/IEC 10206:1991) needs it called in the frame `longjmp` returns to,
+ * so a wrapper would return before the jump.
  *
  * The cost is one call frame apiece, `libpasrt.a` being a static archive that
  * nothing links across. These are libm calls already and `complex` is not a

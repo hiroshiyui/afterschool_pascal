@@ -33,6 +33,16 @@ appears below in the release where it still existed.
 
 ### Fixed
 
+- **A clause number that names nothing, in seven places.** `§6.8.3.11` was
+  glossed as "the non-local goto" in `CLAUDE.md`, `runtime/pasrt.c`, the
+  roadmap, a test and two records — but ISO 7185 numbers the goto-statement
+  `§6.8.2.4` and stops its structured statements at `§6.8.3.10`, while Extended
+  Pascal uses `§6.8.3.x` for *Operators* and numbers the goto `§6.9.2.4`. Every
+  site that can be corrected now names both. A new check,
+  `clause-citations`, asks of all 7377 clause citations in the tree whether
+  each names a clause at all; it catches a number that names nothing, and
+  cannot catch one that names the wrong clause of the right shape.
+
 - **A wrong clause number, in four places.** ISO 7185 numbers Record-types
   §6.4.3.3 and ISO/IEC 10206:1991 numbers it §6.4.3.4, Extended Pascal having
   inserted String-types above it — so the bare "§6.4.3.4" that `README.md`,

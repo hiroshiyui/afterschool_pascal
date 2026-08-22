@@ -11,7 +11,7 @@
 #
 # Format: the identifier, then a blank-line-separated argument above it.
 
-# §6.8.3.11's non-local goto. ISO C's setjmp is a macro whose expansion must
+# ISO 7185 §6.8.2.4 / ISO/IEC 10206:1991 §6.9.2.4's non-local goto. ISO C's setjmp is a macro whose expansion must
 # appear in a very restricted set of contexts, and the generated code calls it
 # directly -- pas_jump_env hands back the address to call it on, because a
 # wrapper would return before the jump could arrive (the frame setjmp saves has

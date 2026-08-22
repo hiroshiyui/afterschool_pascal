@@ -1,0 +1,41 @@
+# Clause numbers cited here that no standard carries a heading for, each with
+# the argument for why the citation stands. Read by tests/checks/clause_citations.py.
+#
+# Format:  <number>  <anywhere | path>  <argument>
+#
+# `anywhere` is for a number that is legitimately cited wherever it comes up;
+# a path allows it in that file alone. Both directions fail: a number that
+# starts being a clause fails, and so does a path that no longer cites it.
+#
+# Before adding an entry, check the standard itself. The inventories are
+# generated (tests/spec/clauses/extract.sh) and have been wrong -- ADR-0152
+# found 37 real clauses in none of them, because the extractor read only lines
+# carrying a title. An entry here is a claim that the *standard* lacks the
+# clause, which is a much stronger thing than the inventory lacking it.
+
+6.6.4.1  anywhere  ISO 7185 has no such heading: 6.6.4 "Required procedures and
+  functions" is four lines and a NOTE, and is followed directly by 6.6.5. The
+  number is the *standard's own* dangling cross-reference. 6.2.2.10 reads
+  "Required identifiers that denote required values, types, procedures, and
+  functions shall be used as if their defining-points have a region enclosing
+  the program (see 6.1.3, 6.3, 6.4.1, and 6.6.4.1)", and the index lists
+  6.6.4.1 twice. So the rule this repository means by it -- that a program may
+  redefine a required procedure as its own -- is real and is 6.2.2.10's; the
+  number is what 6.2.2.10 points at. Citing anything else would misquote the
+  cross-reference being followed. ADR-0086, ADR-0087, ADR-0164.
+
+6.8.3.11  CHANGELOG.md  Wrong, and corrected everywhere it could be: the
+  non-local goto is ISO 7185 6.8.2.4 and ISO/IEC 10206:1991 6.9.2.4. This
+  occurrence is in a released entry, which CHANGELOG.md's own header keeps as
+  it was written. ADR-0164.
+
+6.8.3.11  doc/adr/0161-the-runtimes-distance-from-iso-c-is-four-names.md  The
+  same wrong number in an accepted record, which ADR-0001 makes immutable --
+  a record is superseded, never revised, and a citation error is not grounds
+  to make an exception of it. ADR-0164 is the correction and says so.
+
+6.8.3.11  doc/adr/0164-a-clause-number-is-a-claim-and-nothing-was-checking-it.md
+  The record of the correction, which has to spell the number to say what was
+  wrong with it. This gate cannot tell a mention from a claim -- that is its
+  rule rather than its limitation -- so the document that states the rule takes
+  an entry under it, which is the honest form of the constraint.
