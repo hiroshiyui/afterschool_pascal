@@ -104,6 +104,38 @@ def truncation_is_an_integer_value(x, maxint):
                   z3.fpGEQ(truncated, z3.fpNeg(limit)))
 
 
+def is_iso_round(x, result):
+    """ISO 7185 §6.6.6.3 / ISO/IEC 10206:1991 §6.7.6.3 — round(x) is defined by
+    *equivalence*, not by a rounding mode: "If x is positive or zero, round(x)
+    shall be equivalent to trunc(x+0.5); otherwise, round(x) shall be
+    equivalent to trunc(x-0.5)."
+
+    Characterised the way `is_iso_div` characterises truncation rather than by
+    recomputing one: `result` must be an integral value no further from the
+    shifted value than 1, on the side the shifted value lies. The shift itself
+    is stated, because the clause states it — it is the whole content of the
+    definition — but nothing here performs the compiler's `select`, and the
+    truncation is characterised instead of applied.
+
+    Note what this deliberately is *not*: "round half away from zero". That
+    reading is what the compiler shipped, it agrees with the clause at every
+    halfway point, and it disagrees wherever x ± 0.5 is inexact. Nothing in
+    verify/ stated the value of round at all until this — only its range — so
+    the drift was invisible to a catalogue with no known gaps.
+    """
+    zero = z3.FPVal(0.0, z3.Float64())
+    half = z3.FPVal(0.5, z3.Float64())
+    shifted = z3.If(z3.fpGEQ(x, zero),
+                    z3.fpAdd(z3.RNE(), x, half),
+                    z3.fpSub(z3.RNE(), x, half))
+    one = z3.FPVal(1.0, z3.Float64())
+    integral = result == z3.fpRoundToIntegral(z3.RTZ(), result)
+    nearer_zero = z3.And(z3.fpLEQ(z3.fpAbs(result), z3.fpAbs(shifted)),
+                         z3.fpLT(z3.fpSub(z3.RNE(), z3.fpAbs(shifted),
+                                          z3.fpAbs(result)), one))
+    return z3.And(integral, nearer_zero)
+
+
 def index_is_in_bounds(i, lo, hi):
     """ISO 7185 §6.5.3.2 — a subscript must be a value of the index type, which
     for `array [lo..hi]` means lo <= i <= hi. Stated over the wide domain so

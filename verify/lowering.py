@@ -307,9 +307,30 @@ def traps_fp_to_int(x):
     return z3.Not(z3.And(z3.fpGT(x, lo), z3.fpLT(x, hi)))
 
 
-def round_to_nearest_away(x):
-    """`Builtin::Round`: llvm.round, which takes halfway cases away from zero."""
-    return z3.fpRoundToIntegral(z3.RNA(), x)
+def round_shifted(x):
+    """`Builtin::Round`, first half: the value handed to the range check and the
+    truncation.
+
+    `fcmp oge` against zero selects the addend, and `fadd` applies it — so the
+    model is an FP addition, rounding included, and not a rounding mode. This
+    replaced `fpRoundToIntegral(RNA(), x)`, which modelled `llvm.round`
+    faithfully and modelled the wrong function: see `round-is-the-clause-value`
+    in rules.py.
+
+    A NaN fails `oge` and takes the -0.5 arm, where it stays a NaN for
+    `traps_fp_to_int` to catch.
+    """
+    zero = z3.FPVal(0.0, z3.Float64())
+    half = z3.FPVal(0.5, z3.Float64())
+    addend = z3.If(z3.fpGEQ(x, zero), half, z3.fpNeg(half))
+    return z3.fpAdd(z3.RNE(), x, addend)
+
+
+def fp_to_int(x):
+    """`checkedFPToInt`'s second half: `fptosi`, which truncates toward zero.
+    Stated separately from the trap test because round now shifts before both.
+    """
+    return z3.fpRoundToIntegral(z3.RTZ(), x)
 
 
 def traps_succ_int(i, width=INT_BITS):

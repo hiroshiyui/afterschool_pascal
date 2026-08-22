@@ -1,0 +1,9 @@
+a: round=  4  trunc(v+-0.5)=  4
+b: round= -4  trunc(v+-0.5)= -4
+c: round=  3  trunc(v+-0.5)=  3
+d: round= -3  trunc(v+-0.5)= -3
+e: round=  3  trunc(v+-0.5)=  3
+f: round=  1  trunc(v+-0.5)=  1
+g: round= -1  trunc(v+-0.5)= -1
+h: round=2147483647  trunc(v+-0.5)=2147483647
+done

@@ -26255,18 +26255,41 @@ begin
           CheckedFpToInt(a, v, msg)
         end;
       biRound: begin
-        { llvm.round rounds halfway cases away from zero, which is what ISO
-          7185 6.6.6.3 asks for; the range check then applies to the rounded
-          value. }
+        { 6.6.6.3 and 6.7.6.3 define round by *equivalence* and not by a
+          rounding mode: round(x) shall be equivalent to trunc(x+0.5) where x
+          is positive or zero, and to trunc(x-0.5) otherwise. `llvm.round` was
+          emitted here for a long time on the strength of the two agreeing at
+          every halfway point, which they do -- and they part company wherever
+          x +- 0.5 is inexact, because the addition rounds. For
+          x = 0.49999999999999994 the sum is exactly 1.0, so the clause
+          requires 1 where llvm.round yields 0.
+
+          So the *addend* is selected and the result is left to the truncation
+          CheckedFpToInt already performs. Three details are load-bearing:
+          `oge` puts a NaN on the -0.5 arm, where it stays a NaN and the range
+          check traps it; -0.0 lands on the +0.5 arm, which is where "positive
+          or zero" wants it, though both arms truncate to 0 there anyway; and
+          the range check now applies to the shifted value rather than to the
+          rounded one, which is what the clause's own trunc(x+0.5) asks. }
         ToReal(a, at);
         Def(w);
-        write(ircode, 'call double @llvm.round.f64(double ');
+        write(ircode, 'fcmp oge double ');
         PutOp(a);
-        writeln(ircode, ')');
+        writeln(ircode, ', 0.0');
+        Def(tmp);
+        write(ircode, 'select i1 ');
+        PutOp(w);
+        writeln(ircode, ', double 5.000000e-01, double -5.000000e-01');
+        Def(sum);
+        write(ircode, 'fadd double ');
+        PutOp(a);
+        write(ircode, ', ');
+        PutOp(tmp);
+        writeln(ircode);
         MsgStart;
         MsgText('round: value out of integer range       ');
         msg := MsgEnd;
-        CheckedFpToInt(w, v, msg)
+        CheckedFpToInt(sum, v, msg)
       end;
       biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
       biPosition, biLastPosition, biEmpty, biLength, biIndex, biSubstr,
@@ -29682,7 +29705,6 @@ begin
   writeln(ircode, 'declare double @llvm.cos.f64(double)');
   writeln(ircode, 'declare double @llvm.log.f64(double)');
   writeln(ircode, 'declare double @llvm.exp.f64(double)');
-  writeln(ircode, 'declare double @llvm.round.f64(double)');
   writeln(ircode, 'declare double @pas_atan(double)');
   { ISO/IEC 10206:1991 6.4.3.3's string operations. A string value is a pointer
     and a length, so every one of these takes the pair rather than an

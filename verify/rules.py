@@ -290,12 +290,33 @@ def _trunc_traps_on_nan_and_infinity(w):
 
 
 def _round_traps_exactly_out_of_range(w):
-    """round(x) applies the same range test to the rounded value, so a real just
-    below maxint + 0.5 is accepted and one just above is an error."""
+    """round(x) applies the range test to the *shifted* value, which is what
+    the clause's own trunc(x+0.5) asks for — so a real just below maxint + 0.5
+    is accepted and one just above is an error.
+
+    The theorem moved when the lowering did: it used to test the value
+    llvm.round produced. Both readings have to make the trap coincide exactly
+    with "the clause's result is a value of the integer type", and it is not
+    obvious in advance that shifting first leaves that true.
+    """
     x = low.real("x")
-    rounded = low.round_to_nearest_away(x)
-    error = z3.Not(iso.truncation_is_an_integer_value(rounded, low.maxint()))
-    return z3.BoolVal(True), low.traps_fp_to_int(rounded) == error
+    shifted = low.round_shifted(x)
+    error = z3.Not(iso.truncation_is_an_integer_value(shifted, low.maxint()))
+    return z3.BoolVal(True), low.traps_fp_to_int(shifted) == error
+
+
+def _round_is_the_clause_value(w):
+    """What round(x) *is*, which nothing here stated before.
+
+    verify/ had a rule for round's range and none for its value, so
+    `lowering.py` could model llvm.round faithfully while llvm.round was the
+    wrong function — a catalogue with no known gaps, proving the compiler
+    matched a model of a mistake. This is the statement that fails against the
+    lowering shipped up to v1.8.0.
+    """
+    x = low.real("x")
+    pre = z3.Not(low.traps_fp_to_int(low.round_shifted(x)))
+    return pre, iso.is_iso_round(x, low.fp_to_int(low.round_shifted(x)))
 
 
 def _index_traps_exactly_out_of_bounds(w):
@@ -648,6 +669,10 @@ ALL = [
     Rule("round-traps-exactly-out-of-range", MUST_HOLD,
          "ISO 7185 §6.6.6.3 — round(x) is an error outside the integer type",
          "EmitCall, biRound", _round_traps_exactly_out_of_range),
+    Rule("round-is-the-clause-value", MUST_HOLD,
+         "ISO 7185 §6.6.6.3 / ISO/IEC 10206:1991 §6.7.6.3 — round(x) is "
+         "equivalent to trunc(x+0.5), or trunc(x-0.5) when x is negative",
+         "EmitCall, biRound", _round_is_the_clause_value),
 
     Rule("index-traps-exactly-out-of-bounds", MUST_HOLD,
          "ISO 7185 §6.5.3.2 — a subscript outside the index type is an error",
