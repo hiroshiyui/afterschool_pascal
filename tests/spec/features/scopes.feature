@@ -258,3 +258,66 @@ Feature: Scopes and activations
       2
       3
       """
+
+  # §6.2.2.7 is the rule that a spelling has one defining-point per region, and
+  # the formal-parameter-list is a region two separate clauses put a
+  # defining-point into: §6.7.3.1 makes a parameter a parameter-identifier for
+  # it, and §6.7.2 makes a result-variable-specification's identifier a
+  # function-result-identifier for it. Nothing here had ever asked what happens
+  # when they collide, and the answer was that the program was accepted and
+  # quietly meant something else -- the result variable won inside the block, so
+  # the body's assignment wrote the result and the parameter became unreadable.
+  #
+  # Not an Annex D error, so §5.1 e) is what requires the refusal.
+  @extended:6.2.2.7
+  Scenario: a result variable may not be spelled like a parameter
+    Given the Extended Pascal program
+      """
+      program p(output);
+      function f(n: integer) = n: integer;
+      begin n := -1 end;
+      begin writeln(f(10) : 1) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      already a parameter of it
+      """
+
+  # §6.7.3.7.1 puts a bound-identifier's defining-point in the same region, so
+  # the rule reaches a conformant array's bounds and not only its parameters.
+  @extended:6.2.2.7
+  Scenario: nor like a bound-identifier of a conformant array
+    Given the Extended Pascal program
+      """
+      program p(output);
+      function f(a: array [lo..hi: integer] of integer) = hi: integer;
+      begin hi := 1 end;
+      var w: array [1..3] of integer;
+      begin writeln(f(w) : 1) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      already a parameter of it
+      """
+
+  # And the shape that must keep working: a result variable whose spelling is
+  # its own is the ordinary case, and the parameter is readable throughout.
+  @extended:6.2.2.7
+  Scenario: a result variable with a spelling of its own is unaffected
+    Given the Extended Pascal program
+      """
+      program p(output);
+      function f(n: integer) = total: integer;
+      begin total := n * 2 end;
+      begin writeln(f(10) : 1) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      20
+      """

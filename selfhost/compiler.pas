@@ -17407,8 +17407,26 @@ begin
   end
 end;
 
+{ 6.2.2.7's refusal, split out because the formal-parameter-list holds two
+  kinds of defining-point and both have to be asked. The message names the
+  region rather than saying "already declared", because the two spellings are
+  in different *parts* of the heading and a reader looking for a duplicate
+  declaration would not find one -- the parameter is inside the parentheses and
+  the result variable is after them. }
+procedure ResultNameClash(d: nodePtr; at, len: integer);
+begin
+  ErrorAt(d^.line, d^.col);
+  write('the result variable of ''');
+  WritePool(d^.pdAt, d^.pdLen);
+  write(''' is named ''');
+  WritePool(at, len);
+  write(''', which is already a parameter of it: both name the ');
+  writeln('formal-parameter-list')
+end;
+
 procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
 var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
+    p, q: symListPtr;
 begin
   existing := LookupInScope(d^.pdAt, d^.pdLen);
   if existing <> nil then
@@ -17493,6 +17511,40 @@ begin
         copying and every designator over the result then need nothing new. }
       sym^.resultNamed := d^.pdResLen > 0;
       if sym^.resultNamed then begin
+        { 6.2.2.7: "When an identifier or label has a defining-point for a
+          region, another identifier or label with the same spelling shall not
+          have a defining-point for that region." The region here is the
+          formal-parameter-list, and 6.7.2 and 6.7.3.1 each put a defining-point
+          in it: the result-variable-specification's identifier is a
+          function-result-identifier "for the region that is the
+          formal-parameter-list, if any, of the function-heading", and a
+          parameter is a parameter-identifier "for the region that is the
+          formal-parameter-list closest-containing it". Same spelling, same
+          region.
+
+          6.7.3.7.1's bound-identifiers have their defining-point in that
+          region too, so a schematic formal's discriminant is asked as well.
+
+          Not an Annex D error -- so 5.1 e) requires this to be reported and
+          the program not executed, rather than left to the run time. What it
+          did instead was accept `function f(n: integer) = n: integer` and let
+          the result variable win in the block, which is a different program
+          from the one that was written: the body's `n := ...` wrote the result
+          and the argument was unreachable. Wrong answer, exit 0. }
+        p := sym^.params;
+        while p <> nil do begin
+          if PoolSame(p^.sym^.at, p^.sym^.len, d^.pdResAt, d^.pdResLen) then
+            ResultNameClash(d, p^.sym^.at, p^.sym^.len);
+          if p^.sym^.confBinds then begin
+            q := p^.sym^.discSyms;
+            while q <> nil do begin
+              if PoolSame(q^.sym^.at, q^.sym^.len, d^.pdResAt, d^.pdResLen) then
+                ResultNameClash(d, q^.sym^.at, q^.sym^.len);
+              q := q^.next
+            end
+          end;
+          p := p^.next
+        end;
         sym^.resAt := d^.pdResAt;
         sym^.resLen := d^.pdResLen
       end;

@@ -7,3 +7,5 @@
 <source>:51:1: error: function 'mute' never writes to its result variable 'q'
 <source>:70:7: error: 'silent' is not this block's function, so its result cannot be assigned here
 <source>:69:1: error: function 'other' never assigns its result
+<source>:86:1: error: the result variable of 'clashparam' is named 'n', which is already a parameter of it: both name the formal-parameter-list
+<source>:89:1: error: the result variable of 'clashbound' is named 'hi', which is already a parameter of it: both name the formal-parameter-list

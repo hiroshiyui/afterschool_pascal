@@ -4598,8 +4598,37 @@ void Sema::declareProcHeading(ProcDecl &decl, Symbol *owner) {
     // `addressOf` dereferences a `VarParam`, and assignment, whole-variable
     // copying and every designator over the result then need nothing new.
     sym->resultNamed = !decl.resultName.empty();
-    if (sym->resultNamed)
+    if (sym->resultNamed) {
+      // §6.2.2.7: "When an identifier or label has a defining-point for a
+      // region, another identifier or label with the same spelling shall not
+      // have a defining-point for that region." The region is the
+      // formal-parameter-list, and §6.7.2 and §6.7.3.1 each put one in it —
+      // the result-variable-specification's identifier is a
+      // function-result-identifier for it, and a parameter is a
+      // parameter-identifier for it. §6.7.3.7.1's bound-identifiers are in
+      // that region too, so a conformant array's bounds are asked as well.
+      //
+      // Unconditional here, as ADR-0121's `external` refusal is: this front
+      // end is never given `--std=afterschool`, and the rule is Extended
+      // Pascal's own — a result-variable-specification does not parse under
+      // ISO 7185, so the branch cannot be reached in that mode.
+      auto clash = [&](const Symbol *other) {
+        diags_.error(decl.line, decl.col,
+                     "the result variable of '" + decl.name + "' is named '" +
+                         other->name +
+                         "', which is already a parameter of it: both name the "
+                         "formal-parameter-list");
+      };
+      for (const Symbol *p : sym->params) {
+        if (p->name == decl.resultName)
+          clash(p);
+        if (p->confBinds)
+          for (const Symbol *d : p->discSyms)
+            if (d->name == decl.resultName)
+              clash(d);
+      }
       sym->resultSourceName = decl.resultName;
+    }
     sym->resultVar = addHiddenVar(
         (sym->resultNamed ? decl.resultName : decl.name) + "$result",
         sym->type->isMemory() ? SymKind::VarParam : SymKind::Var, sym->type,

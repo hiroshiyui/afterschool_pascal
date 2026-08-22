@@ -28,7 +28,6 @@ extended:6.2.2.2
 extended:6.2.2.4
 extended:6.2.2.5
 extended:6.2.2.6
-extended:6.2.2.7
 extended:6.2.2.8
 extended:6.2.2.9
 extended:6.2.2.10

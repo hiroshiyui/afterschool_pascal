@@ -69,6 +69,26 @@ begin fill(q) end;
 function other: integer;
 begin silent := p end;
 
+{ 6.2.2.7 lets an identifier have only one defining-point for a region, and
+  6.7.2 and 6.7.3.1 each put one in the *formal-parameter-list*: the
+  result-variable-specification's identifier is a function-result-identifier
+  for it, and a parameter is a parameter-identifier for it. Same spelling,
+  same region.
+
+  Not an Annex D error, so 5.1 e) asks for it to be reported and the program
+  not executed. Accepted, it silently changed which program was written: the
+  result variable won inside the block, so the body's assignment wrote the
+  result and the argument could not be read at all -- `clashparam(10)`
+  returned 1, and nothing said why.
+
+  6.7.3.7.1 gives a bound-identifier its defining-point in that same region,
+  so `clashbound` is one rule two constructs along. }
+function clashparam(n: integer) = n: integer;
+begin n := 1 end;
+
+function clashbound(a: array [lo..hi: integer] of integer) = hi: integer;
+begin hi := 1 end;
+
 begin
   writeln(other:1)
 end.
