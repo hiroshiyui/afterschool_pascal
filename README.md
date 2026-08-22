@@ -153,6 +153,21 @@ kept for compatibility, because the two are **not** nested: Extended Pascal
 reserves word-symbols (`otherwise`, `value`, `only`, …) that a valid ISO 7185
 program may use as ordinary identifiers, so an ISO 7185 program with a field
 called `value` needs the flag.
+
+**A source can say which standard it is written in**, in a comment before the
+program heading, so the flag is not needed on every invocation:
+
+```pascal
+{ @std:iso7185 }
+program legacy(output);
+var value: integer;          { an ordinary identifier under ISO 7185 }
+begin value := 7; writeln(value:1) end.
+```
+
+`@std:iso7185`, `@std:extended` and `@std:afterschool` are the three spellings.
+Only the header counts — an annotation after the first token of the program is
+an ordinary comment — and an explicit `--std=` on the command line wins over
+it, so a build system that names a standard still gets what it asked for.
 `selfhost/compiler.pas` used to be the example of that and is now written in
 Extended Pascal itself, because only that standard lets a program read its own
 command line.

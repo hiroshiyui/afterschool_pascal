@@ -67,11 +67,14 @@ runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-$root/build/lib}
 
 die() { echo "pascalcc: $*" >&2; exit 1; }
 
-# ISO/IEC 10206:1991, matching `pascalc`'s own default (ADR-0165). This script
-# always passes --std= explicitly, so the two cannot drift apart silently; the
-# value is here so that `pascalcc f.pas` and `pascalc f.pas` mean the same
-# thing, which is the only reason a driver should have a default at all.
-std=extended
+# Empty unless --std= is given. It held a default and passed it on every
+# invocation, which looks like the more explicit thing to do and which made
+# ADR-0166's `@std:` annotation unreachable through this script: `pascalc`
+# reads the annotation only when no flag was written, and a driver that always
+# writes one has answered the question before the file is opened. So the
+# default lives in exactly one place -- `pascalc` itself -- and this passes
+# through what it was given, which is what it does with every other flag.
+std=
 out=
 mode=link          # link | object | ir
 opt=-O2
@@ -122,6 +125,10 @@ done
 [[ -x $pascalc ]] || die "$pascalc is not executable -- was it built?"
 
 case $std in
+  # Empty is the ordinary case now: no --std= was given, so the compiler
+  # decides -- from a `@std:` annotation in the source if it has one, and from
+  # its own default otherwise (ADR-0166).
+  "") ;;
   # afterschool is the dialect (ADR-0117): Extended Pascal and whatever has
   # been added to it. Validated here rather than passed straight through, so a
   # typo is a message from this script and not an "unknown option" from the
@@ -139,7 +146,7 @@ trap 'rm -rf "$work"' EXIT
 # this script's stderr, which is where a caller expects a compiler's complaints
 # and where the golden .err files are compared from.
 ir=$work/$base.ll
-if ! "$pascalc" "--std=$std" ${target:+"$target"} \
+if ! "$pascalc" ${std:+"--std=$std"} ${target:+"$target"} \
      "${covflag[@]+"${covflag[@]}"}" "$source_file" \
      "${imports[@]+"${imports[@]}"}" \
      -o "$ir" >"$work/diag.txt" 2>&1; then

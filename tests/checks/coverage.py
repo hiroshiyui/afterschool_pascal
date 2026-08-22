@@ -204,6 +204,19 @@ def corpus(root):
     jobs.append((hello, list(filler)))
     jobs.append((hello, filler + ["--std=iso7185"]))   # ...and one over it
 
+    # ADR-0166's `@std:` annotation, which nothing under tests/ can reach: every
+    # harness there passes --std= from the directory, and the annotation is read
+    # only when no flag was given. So these are driven with no flag at all --
+    # which is also the only way ReadStdAnnotation runs its scan rather than
+    # returning at once. `late` is the header rule and is expected to fail:
+    # an annotation after the first token is prose.
+    annot = root / "tests" / "checks" / "stdannot"
+    for name in ("iso", "ext", "bad", "late"):
+        jobs.append((annot / f"{name}.pas", []))
+    # And the other side of the same branch: a source with no annotation at
+    # all, compiled with no flag, so the scan runs to the first token and stops.
+    jobs.append((hello, []))
+
     jobs.append((None, ["--no-such-flag", hello]))
     jobs.append((None, [hello, "-o"]))       # -o with nothing after it
     jobs.append((None, [hello, "--import"]))  # --import with nothing after it

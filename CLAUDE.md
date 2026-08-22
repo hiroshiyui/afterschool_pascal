@@ -340,7 +340,10 @@ design would have reported a false all-clear, because it asked whether a name
 
 **Stage 2 has begun** (ADR-0033). **`--std=extended` — ISO/IEC 10206:1991 —
 is the default since ADR-0165**, and `--std=iso7185` is the older standard,
-kept reachable rather than retired. The two are *not* nested: Extended
+kept reachable rather than retired. **A source may name its own standard** in
+a header comment — `{ @std:iso7185 }` — which is read before the lexer runs,
+because the standard decides which words are reserved; an explicit `--std=`
+wins over it (ADR-0166). The two are *not* nested: Extended
 Pascal reserves word-symbols a valid ISO 7185 program may use as identifiers —
 so a source is written in one language or the other, and the standard is a
 property of the source.

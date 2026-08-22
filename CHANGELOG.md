@@ -54,6 +54,30 @@ appears below in the release where it still existed.
   and `a bindable type cannot be a field of a variant part`. `--std=iso7185` is
   untouched: neither word-symbol exists there.
 
+### Added
+
+- **A source can name its own standard.** A comment before the program heading
+  containing `@std:iso7185`, `@std:extended` or `@std:afterschool` selects the
+  language that source is written in, so a file that needs a particular
+  standard no longer depends on every caller passing the right flag:
+
+  ```pascal
+  { @std:iso7185 }
+  program legacy(output);
+  var value: integer;
+  begin value := 7; writeln(value:1) end.
+  ```
+
+  It is read before the lexer runs, because the standard decides which words
+  are reserved. Only the header counts — after the first token of the program
+  it is an ordinary comment — and an explicit `--std=` still wins, so a build
+  system that names a standard gets what it asked for. A misspelt name is
+  reported rather than ignored.
+
+  `pascalcc` no longer has a `--std` default of its own; it passes through what
+  it was given, so the compiler's default and the annotation both work through
+  it.
+
 ### Fixed
 
 - **A clause number that names nothing, in seven places.** `§6.8.3.11` was

@@ -319,6 +319,52 @@ else
   failed=$((failed + 1))
 fi
 
+# ADR-0166's `@std:` annotation. Nothing under tests/ can assert this: every
+# harness there passes --std= from the directory, and the annotation is read
+# only when no flag was given, so the corpus can never reach it. The probes are
+# in tests/checks/stdannot/ and each one is here.
+annot="$root/tests/checks/stdannot"
+
+# Honoured: `value` is an identifier in ISO 7185 and a word-symbol in Extended
+# Pascal, so this compiles only if the annotation was read.
+checked=$((checked + 1))
+if ! "$pascalc" "$annot/iso.pas" -o "$work/annot.ll" >/dev/null 2>&1; then
+  echo "--- std: @std:iso7185 was not honoured ---" >&2
+  failed=$((failed + 1))
+fi
+
+# The other delimiter, and the other direction.
+checked=$((checked + 1))
+if ! "$pascalc" "$annot/ext.pas" -o "$work/annot.ll" >/dev/null 2>&1; then
+  echo "--- std: @std:extended in a (* *) comment was not honoured ---" >&2
+  failed=$((failed + 1))
+fi
+
+# An explicit flag wins. A harness naming a standard means it.
+checked=$((checked + 1))
+if "$pascalc" --std=extended "$annot/iso.pas" -o /dev/null >/dev/null 2>&1; then
+  echo "--- std: --std= did not override a @std: annotation ---" >&2
+  failed=$((failed + 1))
+fi
+
+# A misspelt name is reported, not ignored.
+checked=$((checked + 1))
+if "$pascalc" "$annot/bad.pas" -o /dev/null >"$work/annot.txt" 2>&1; then
+  echo "--- std: a misspelt @std: annotation was accepted ---" >&2
+  failed=$((failed + 1))
+elif ! grep -q "unknown standard 'pascal'" "$work/annot.txt"; then
+  echo "--- std: a misspelt @std: annotation was not named ---" >&2
+  failed=$((failed + 1))
+fi
+
+# Only the header counts. An annotation after the first token is prose, so
+# this file stays Extended Pascal and its `value` is a word-symbol.
+checked=$((checked + 1))
+if "$pascalc" "$annot/late.pas" -o /dev/null >/dev/null 2>&1; then
+  echo "--- std: a @std: annotation past the first token took effect ---" >&2
+  failed=$((failed + 1))
+fi
+
 # The default has to stay the default: this repository is built and tested on
 # x86-64 and the seed was generated for it.
 checked=$((checked + 1))

@@ -1734,6 +1734,11 @@ var
     names it -- inside a dump the file is the one the harness passed. }
   curFile: nameStr;
   langStd: stdKind;
+  { Whether --std= was written on the command line. A source may declare its
+    own standard in a header comment (ADR-0166) and the flag wins, so the
+    annotation is read only when this is false. Without it the two cannot be
+    told apart: `--std=extended` and the default leave langStd the same. }
+  stdFromFlag: boolean;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   { Which way the designator being addressed is used (ADR-0118). vgWrite only
     while EmitAssign is taking its target's address; EmitExpr saves and clears
@@ -1986,6 +1991,116 @@ begin
   Refill(2)
 end;
 
+procedure ErrorAt(l, c: integer);
+begin
+  errorSeen := true;
+  { Counted as well as flagged: producing a type from a schema needs to know
+    whether *its* resolution reported anything, so that the tuple that chose
+    it can be named too (6.4.7's domain). }
+  errorCount := errorCount + 1;
+  if dumping then write(l:1, ' ', c:1, ' error ')
+  else write(curFile, ':', l:1, ':', c:1, ': error: ')
+end;
+
+{ ADR-0166: a source may name its own standard in a header comment, by
+  writing one of
+
+      @std:iso7185      @std:extended      @std:afterschool
+
+  inside a comment before the program heading. (The delimiters are left off
+  here on purpose: a comment does not nest, and 6.1.8 lets either delimiter
+  close either opener, so an example carrying its own braces would end this
+  one.)
+
+  Read *before* Tokenize and not by it, because the standard decides which
+  words are reserved -- 6.1.2 makes `value` a word-symbol in Extended Pascal
+  and an ordinary identifier in ISO 7185, so by the time there are tokens the
+  question has been answered already. That is also why this scans characters
+  rather than reusing SkipTriviaAndComments, which belongs to a lexer that has
+  been told which language it is reading.
+
+  Only the *header* counts: the scan stops at the first character that is
+  neither a separator nor part of a comment, which is the first token of the
+  program. A comment further down means nothing, so a file cannot change
+  language halfway and a stray `@std:` in prose cannot reach back.
+
+  An explicit --std= wins and a disagreement is not reported. A harness naming
+  a standard means it -- 6.13's components are translated under one the
+  *program* chooses (ADR-0137) and run_test.sh passes one on every file -- so
+  a conflict is the flag being more specific, not a mistake.
+
+  Comments do not nest in either standard, so one level is the whole of it,
+  and 6.1.8 lets either delimiter close either opener. }
+procedure ReadStdAnnotation;
+var inComment, done, seen: boolean; word_: nameStr; c: char;
+
+  { Letters and digits from the current position, folded, bounded so a file of
+    one enormous token cannot overrun nameStr. }
+  procedure TakeWord;
+  begin
+    word_ := '';
+    while (not AtEof) and (length(word_) < 20) and
+          (IsAlpha(Peek(0)) or IsDigit(Peek(0))) do begin
+      word_ := word_ + Lower(Peek(0));
+      Advance
+    end
+  end;
+
+begin
+  if not stdFromFlag then begin
+    StartFile;
+    inComment := false;
+    done := false;
+    seen := false;
+    while not done do
+      if AtEof then done := true
+      else begin
+        c := Peek(0);
+        if not inComment then begin
+          if c = '{' then begin inComment := true; Advance end
+          else if (c = '(') and (Peek(1) = '*') then begin
+            inComment := true; Advance; Advance
+          end
+          else if IsSpace(c) then Advance
+          { The first token of the program. Everything after it is the
+            program's business and not this scan's. }
+          else done := true
+        end
+        else if c = '}' then begin inComment := false; Advance end
+        else if (c = '*') and (Peek(1) = ')') then begin
+          inComment := false; Advance; Advance
+        end
+        else if c = '@' then begin
+          Advance;
+          TakeWord;
+          if (word_ = 'std') and (not AtEof) and (Peek(0) = ':') then begin
+            Advance;
+            TakeWord;
+            { A second annotation is not an error and the first one wins:
+              a file states its language once, and a later line inside the
+              same header comment is prose about it. }
+            if not seen then begin
+              seen := true;
+              if word_ = 'iso7185' then langStd := stdIso7185
+              else if word_ = 'extended' then langStd := stdExtended
+              else if word_ = 'afterschool' then langStd := stdAfterschool
+              else begin
+                { Reported rather than ignored. A misspelt annotation that
+                  silently did nothing would compile the file under a standard
+                  its author had tried to say it was not. }
+                ErrorAt(line, col);
+                write('unknown standard ''', word_);
+                writeln(''' in a @std: annotation; expected iso7185, ',
+                        'extended or afterschool')
+              end
+            end
+          end
+        end
+        else Advance
+      end
+  end
+end;
+
 { ------------------------------------------------------------- diagnostics }
 
 { Begin a diagnostic. Every one in this compiler starts here, which is what
@@ -1997,16 +2112,6 @@ end;
   tests/*.err goldens hold. Both go to `output` -- neither standard gives a
   program a second stream, and adding one would be a second invented extension
   for the sake of tidiness (ADR-0084 is the first and it earned its place). }
-procedure ErrorAt(l, c: integer);
-begin
-  errorSeen := true;
-  { Counted as well as flagged: producing a type from a schema needs to know
-    whether *its* resolution reported anything, so that the tuple that chose
-    it can be named too (6.4.7's domain). }
-  errorCount := errorCount + 1;
-  if dumping then write(l:1, ' ', c:1, ' error ')
-  else write(curFile, ':', l:1, ':', c:1, ': error: ')
-end;
 
 { -------------------------------------------------------------- the pool -- }
 
@@ -2595,6 +2700,7 @@ begin
     `module` and `restricted` as identifiers, and it is the one program of 812
     that only the older mode compiles. }
   langStd := stdExtended;
+  stdFromFlag := false;
   srcName := '';
   outName := '';
   importCount := 0;
@@ -2629,12 +2735,18 @@ begin
     end
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
     else if EQ(a, '--coverage') then covOpt := true
-    else if EQ(a, '--std=extended') then langStd := stdExtended
-    else if EQ(a, '--std=iso7185') then langStd := stdIso7185
+    else if EQ(a, '--std=extended') then begin
+      langStd := stdExtended; stdFromFlag := true
+    end
+    else if EQ(a, '--std=iso7185') then begin
+      langStd := stdIso7185; stdFromFlag := true
+    end
     { The dialect (ADR-0117). It accepts exactly Extended Pascal today; what
       makes it a mode rather than an alias is that features may be added to it
       and to neither of the others. }
-    else if EQ(a, '--std=afterschool') then langStd := stdAfterschool
+    else if EQ(a, '--std=afterschool') then begin
+      langStd := stdAfterschool; stdFromFlag := true
+    end
     { ADR-0156. Joined to its flag, like --std= and unlike -o and --import,
       which take file names a shell completes. }
     else if (length(a) > 9) and EQ(substr(a, 1, 9), '--target=') then begin
@@ -30093,6 +30205,9 @@ begin
     as --dump-all does. Without this `--dump-tokens --dump-limits` would report
     the pool as the lexer alone had left it and call that the answer. }
   whole := dumpAllOpt or dumpLimitsOpt;
+  { Before anything reads a token, and before the components are read: the
+    standard decides the lexis, so it has to be settled first (ADR-0166). }
+  ReadStdAnnotation;
   ReadTranslatedComponents(earlier, earlierTail, earlierCount);
 
   { --- lex ---------------------------------------------------------------- }
