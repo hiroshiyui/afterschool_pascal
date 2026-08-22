@@ -105,7 +105,7 @@ the compiler, not the runtime.
 
 ## Refreshing it
 
-**At release tags, not per commit.** The file is 6.6 MB and 160,000 lines;
+**At release tags, not per commit.** The file is 7.7 MB and 185,000 lines;
 regenerating it whenever the compiler changes would rewrite all of it on every
 commit that touches `selfhost/compiler.pas`, which is most of them.
 

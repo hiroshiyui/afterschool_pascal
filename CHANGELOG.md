@@ -11,7 +11,25 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
-## [Unreleased]
+## [2.0.0] — 2026-08-22
+
+**The release where the default standard changes.** A source compiled with no
+`--std=` flag is ISO/IEC 10206:1991 rather than ISO 7185. The two languages are
+not nested — Extended Pascal reserves thirteen word-symbols that a conforming
+ISO 7185 program may use as ordinary identifiers — so this is the change the
+major version is for: an ISO 7185 program with a field called `value` now needs
+`--std=iso7185`, which is kept, and not deprecated. Almost every affected
+program says so loudly, and the whole silent surface is one construct, measured
+across all 812 BSI programs and named under **Changed** below.
+
+Four conformance fixes change what an already-valid program *does*, and each is
+spelled out with its old and new behaviour. Two more change what compiles at
+all: a `char` given a string value emitted IR that `clang` refused, and an
+initial-state-specifier written after a discriminated schema was checked and
+then discarded, leaving a local variable reading its own stack.
+
+Both standards remain complete. What moved is which of them you get by
+default — and, with `@std:`, that a source can now say for itself.
 
 ### Changed
 
@@ -86,28 +104,6 @@ appears below in the release where it still existed.
 
 ### Added
 
-- **A string value may be assigned to a `char` variable.** `c := s[2..2]`,
-  `c := v` over a one-character `string`, `c := substr(s, 4, 1)`, a
-  concatenation, a `trim` and a function result were all accepted by the type
-  rules and then miscompiled: ten spellings emitted invalid IR, so the author
-  saw an LLVM error naming a temporary file they never wrote, and the substring
-  form silently stored `chr(0)`. ISO/IEC 10206:1991 §6.4.5 d) makes a
-  string-type and the char-type compatible and §6.4.6 f) names "a string-type
-  **or the char-type**" as the destination, so all of them are legal. The
-  null-string stores a space, which is §6.4.6's padding rule at a capacity of
-  one, and a value longer than one character stops the program. `--std=iso7185`
-  is untouched — it has no such rule and refuses the assignment outright.
-
-- **An initial-state-specifier is honoured after a discriminated-schema.**
-  `var t: string(4) value 'jk'` parsed, checked its value, and then discarded
-  it; only the type-name spelling, `var t: s4 value 'jk'`, worked. §6.4.1 offers
-  the specifier after any of the four bases a type-denoter may have, a
-  discriminated-schema included. A **global** was left zeroed; a **local** was
-  left reading its uninitialised frame slot, so `writeln(t)` printed several
-  kilobytes of stack. If you wrote this declaration and worked around it with an
-  assignment at the top of the block, that assignment is now redundant rather
-  than load-bearing.
-
 - **A bindable *field* or *array component* may now be bound.** `bind(r.log, b)`
   over `record log: bindable text end`, and `bind(pool[i], b)` over
   `array [1..4] of bindable text`, were both refused — with a message naming
@@ -167,6 +163,28 @@ appears below in the release where it still existed.
   it.
 
 ### Fixed
+
+- **A string value may be assigned to a `char` variable.** `c := s[2..2]`,
+  `c := v` over a one-character `string`, `c := substr(s, 4, 1)`, a
+  concatenation, a `trim` and a function result were all accepted by the type
+  rules and then miscompiled: ten spellings emitted invalid IR, so the author
+  saw an LLVM error naming a temporary file they never wrote, and the substring
+  form silently stored `chr(0)`. ISO/IEC 10206:1991 §6.4.5 d) makes a
+  string-type and the char-type compatible and §6.4.6 f) names "a string-type
+  **or the char-type**" as the destination, so all of them are legal. The
+  null-string stores a space, which is §6.4.6's padding rule at a capacity of
+  one, and a value longer than one character stops the program. `--std=iso7185`
+  is untouched — it has no such rule and refuses the assignment outright.
+
+- **An initial-state-specifier is honoured after a discriminated-schema.**
+  `var t: string(4) value 'jk'` parsed, checked its value, and then discarded
+  it; only the type-name spelling, `var t: s4 value 'jk'`, worked. §6.4.1 offers
+  the specifier after any of the four bases a type-denoter may have, a
+  discriminated-schema included. A **global** was left zeroed; a **local** was
+  left reading its uninitialised frame slot, so `writeln(t)` printed several
+  kilobytes of stack. If you wrote this declaration and worked around it with an
+  assignment at the top of the block, that assignment is now redundant rather
+  than load-bearing.
 
 - **A clause number that names nothing, in seven places.** `§6.8.3.11` was
   glossed as "the non-local goto" in `CLAUDE.md`, `runtime/pasrt.c`, the
@@ -2003,6 +2021,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[2.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v2.0.0
 [1.8.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.8.0
 [1.7.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.7.0
 [1.6.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.6.0
