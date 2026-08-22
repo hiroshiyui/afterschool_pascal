@@ -18678,7 +18678,7 @@ end;
 
 { One constant-definition. }
 procedure CheckConstDecl(d: nodePtr; owner: symPtr);
-var s: symPtr; value_: symbol;
+var s: symPtr; value_: symbol; fillsIt: boolean;
 begin
   CheckExpr(d^.kdValue);
   value_.stype := nil;
@@ -18721,17 +18721,43 @@ begin
     s^.realNeg := value_.realNeg;
     s^.constValue := value_.constValue;
     { A 6.8.7 constructor needs its storage filled at run time, and the block
-      that *defined* it is the one whose prologue does that. The test is
-      whether this definition is where the node came from: `const b = a` hands
-      on `a`'s node, so `b` shares `a`'s storage and must not fill it a second
-      time (ADR-0069). }
-    if s^.constValue = d^.kdValue then
-      if d^.kdValue^.kind = nkStructValue then begin
-        AppendSym(owner^.memConsts, owner^.memConstTail, s);
-        { The hidden frame slot ADR-0061 gives a top-level constructor is not
-          used here -- the value is built into the global instead -- and a slot
-          nothing writes to would still appear in the frame layout. }
-        d^.kdValue^.svSlot := nil
+      that *defined* it is the one whose prologue does that. Two spellings
+      define one, and for a long time only the first was counted.
+
+      The first is the constructor written here. The second is 6.8.8's
+      constant-access selecting a *structured* component out of another
+      constant: 6.8.8.1 gives the name "the value and type ... of the
+      indexed-constant, field-designated-constant, or substring-constant", so
+      `row = grid[2]` is a name for that component -- and while the component's
+      node lives inside grid's value, the storage ConstAddress memoises for it
+      is a global of its own, keyed on a different node from grid's, which
+      nothing else will ever fill. The old test was `s^.constValue = d^.kdValue`
+      and a constant-access is not its own folded node, so every such name read
+      as all-zero with no diagnostic: `row[i]` printed 0 where `grid[2][i]`
+      printed the right number, in one program.
+
+      What must *not* fill is a plain constant-name: `const b = a` hands on
+      a's node, so b shares a's storage and filling it again would write it
+      twice -- once per activation of b's block, which need not be a's
+      (ADR-0069). A module-qualified name (6.11.3) is that same alias, which is
+      why fdQualified is asked rather than the node kind alone. }
+    if s^.constValue <> nil then
+      if s^.constValue^.kind = nkStructValue then begin
+        fillsIt := false;
+        if d^.kdValue^.kind = nkStructValue then begin
+          fillsIt := true;
+          { The hidden frame slot ADR-0061 gives a top-level constructor is not
+            used here -- the value is built into the global instead -- and a
+            slot nothing writes to would still appear in the frame layout.
+            Guarded by the node kind because svSlot shares its storage with the
+            other variants' fields. }
+          d^.kdValue^.svSlot := nil
+        end
+        else if d^.kdValue^.kind = nkIndex then fillsIt := true
+        else if d^.kdValue^.kind = nkField then
+          fillsIt := d^.kdValue^.fdQualified = nil;
+        if fillsIt then
+          AppendSym(owner^.memConsts, owner^.memConstTail, s)
       end
   end
 end;

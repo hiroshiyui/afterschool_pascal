@@ -393,7 +393,7 @@ extended	6.8.7.2	testable	Array-values
 extended	6.8.7.3	testable	Record-values
 extended	6.8.7.4	testable	Set-values
 extended	6.8.8	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.8.8.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.8.8.1	testable	General
 extended	6.8.8.2	testable	Indexed-constants
 extended	6.8.8.3	testable	Field-designated-constants
 extended	6.8.8.4	testable	Substring-constants
