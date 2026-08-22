@@ -13,7 +13,64 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [2.1.0] — 2026-08-23
+
+**Two programs that compiled in 2.0.0 do not compile in 2.1.0, and one that
+compiled prints different characters.** Each was a defect — a program the
+standard already forbade, or output the standard already specified otherwise —
+so no deprecation is offered and none is available. They come first because
+they are what an upgrade can cost you:
+
+  1. a `protected` variable passed to a **variable conformant array** parameter
+     is now refused. It was written through, silently, and the program exited
+     0;
+  2. a `for` statement whose control variable is **bindable** is now refused;
+  3. a constant naming a **structured component** of another constant now reads
+     that component. It read all-zero, with no diagnostic.
+
+The rest is the same work's other half: reals written at an exact halfway value
+now round the way the clause prescribes rather than the way C's `printf` does,
+and two functions that could not be written before now can.
+
+Six of the eight entries below come from the fourth
+`.claude/skills/langspec-audit/` run (ADR-0168, ADR-0169, ADR-0170); the other
+two were found while probing the clauses those raised. Both standards remain
+complete and the accepted language is otherwise unchanged — no new syntax, no
+new flag, no change to `--std`.
+
 ### Changed
+
+- **A program that passed a `protected` variable to a variable conformant array
+  parameter no longer compiles.** ISO/IEC 10206:1991 §6.9.4 b) makes an actual
+  passed to an unprotected formal variable parameter a threat, and §6.7.3.7.3
+  says a variable conformant array's actual is one. That arm never asked, so
+  `protected` was defeated silently — the callee wrote the caller's variable
+  and the program exited 0. The same held through a record field (§6.9.4 h))
+  and when a *protected* conformant array was handed on to an unprotected one.
+  The diagnostic is the one an ordinary var parameter already gave.
+
+- **A `for` statement over a `bindable` control variable no longer compiles.**
+  §6.9.3.9.1: "The control-variable shall possess an ordinal-type **and shall
+  be nonbindable**." Only the first half was asked.
+
+- **A constant naming a structured component of another constant now has that
+  component's value.** ISO/IEC 10206:1991 §6.8.8.1 gives a constant-access "the
+  value and type … of the indexed-constant, field-designated-constant, or
+  substring-constant". A component that was a *scalar* was right; one that was
+  an array or a record read as all-zero, with no diagnostic:
+
+  ```pascal
+  const grid = outer[1: inner[1:1; 2:2; 3:3]; 2: inner[1:4; 2:5; 3:6]];
+        row  = grid[2];
+  ```
+
+  `row[i]` printed 0 where `grid[2][i]` printed 4, 5, 6 — in one program.
+  **A program that reads such a constant can print different characters than it
+  did in 2.0.0**, and there is no spelling under which the old zeros were
+  right. A string component, a set component and `const b = a` were all correct
+  before and are unchanged.
 
 - **A real written at an exact halfway value rounds away from zero, not to
   even.** ISO 7185 §6.9.3.4.2 and ISO/IEC 10206:1991 §6.10.3.4.2 do not say
@@ -36,36 +93,6 @@ appears below in the release where it still existed.
   without one for the other half of the same condition, `-0.0 < 0.0` being
   false, where `printf` writes the sign bit.
 
-- **A constant naming a structured component of another constant now has that
-  component's value.** ISO/IEC 10206:1991 §6.8.8.1 gives a constant-access "the
-  value and type … of the indexed-constant, field-designated-constant, or
-  substring-constant". A component that was a *scalar* was right; one that was
-  an array or a record read as all-zero, with no diagnostic:
-
-  ```pascal
-  const grid = outer[1: inner[1:1; 2:2; 3:3]; 2: inner[1:4; 2:5; 3:6]];
-        row  = grid[2];
-  ```
-
-  `row[i]` printed 0 where `grid[2][i]` printed 4, 5, 6 — in one program.
-  **A program that reads such a constant can print different characters than it
-  did in 2.0.0**, and there is no spelling under which the old zeros were
-  right. A string component, a set component and `const b = a` were all correct
-  before and are unchanged.
-
-- **A program that passed a `protected` variable to a variable conformant array
-  parameter no longer compiles.** ISO/IEC 10206:1991 §6.9.4 b) makes an actual
-  passed to an unprotected formal variable parameter a threat, and §6.7.3.7.3
-  says a variable conformant array's actual is one. That arm never asked, so
-  `protected` was defeated silently — the callee wrote the caller's variable
-  and the program exited 0. The same held through a record field (§6.9.4 h))
-  and when a *protected* conformant array was handed on to an unprotected one.
-  The diagnostic is the one an ordinary var parameter already gave.
-
-- **A `for` statement over a `bindable` control variable no longer compiles.**
-  §6.9.3.9.1: "The control-variable shall possess an ordinal-type **and shall
-  be nonbindable**." Only the first half was asked.
-
 ### Fixed
 
 - **`new(p)` counts as writing to a result variable.** ISO/IEC 10206:1991
@@ -84,7 +111,7 @@ appears below in the release where it still existed.
   assign it but `new`.
 
 - **A function may fill its result variable through a conformant array
-  parameter.** The other direction of the same missing rule as `new(p)` below:
+  parameter.** The other direction of the same missing rule as `new(p)` above:
   §6.7.2 asks §6.9.4 whether the result was threatened, and with b) unapplied
   to conformant arrays a function whose only writer was `fill(res)` was refused
   with *never writes to its result variable*.
@@ -2106,6 +2133,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[2.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v2.1.0
 [2.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v2.0.0
 [1.8.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.8.0
 [1.7.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.7.0
