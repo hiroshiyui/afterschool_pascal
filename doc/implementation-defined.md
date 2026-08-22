@@ -339,6 +339,29 @@ file's storage carries a heap buffer and a place on the runtime's open-file
 list, so two arms holding files at one address would leak the first buffer and
 link one list node twice (ADR-0070).
 
+**`bind`, `unbind` and `binding` are refused for a variable that is not a
+file.** ISO/IEC 10206:1991 §6.7.5.6 makes the file case the *conditional* one
+and the other case unconditional: "If the variable-access f possesses a
+file-type, it shall be a dynamic-violation if the variable does not possess the
+bindability that is bindable; **otherwise, the variable shall possess the
+bindability that is bindable**" — the same sentence in `unbind`, and §6.7.6.8
+for `binding`. So `var i: bindable integer` may be bound, and here
+`bind(i, b)` is refused with *'bind' needs a file variable, found integer*.
+
+Nothing is lost silently: the declaration is accepted and §6.9.3.9.1's
+nonbindable rule is enforced against it (ADR-0170), so the bindability of a
+non-file variable is a real property that only the three procedures decline to
+act on. What binding such a variable would *mean* is implementation-defined and
+§6.7.5.6's NOTE 2 provides `binding` "to test the success", so a conforming
+answer could be as small as one that always fails — that is why this is
+recorded as a restriction rather than defended as a design.
+
+Found by ADR-0167's third reader and carried in `doc/roadmap.md` ever since, as
+a design owed rather than a bug. What was missing is this entry: a restriction
+§5.1 c) does not permit belongs in **this** list whether or not it is also on a
+work queue, and reaching it a second time while probing ADR-0170 is what showed
+that §6 could not be searched for it.
+
 **Eight required functions are refused in a constant-expression.** ISO/IEC
 10206:1991 §6.8.2 makes an expression nonvarying unless it contains a
 variable-identifier, a non-static type-name, a function declared by the

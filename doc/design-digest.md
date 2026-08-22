@@ -983,6 +983,47 @@ able to make.
     `bind`/`unbind`, is deliberately *not* recorded: a result variable can
     never be a file (6.4.6 a)), so it could change no answer and no test could
     catch its absence. `tests/extended/new_threatens_result.pas`.
+  - **A conformant array's actual is on 6.9.4 b)'s list too, and reaching it
+    fixed two opposite defects** (ADR-0170). The conformant-array arm of the
+    argument check is separate from the ordinary var-parameter arm and never
+    asked, though 6.7.3.7.3 calls its actual "an actual-parameter corresponding
+    to a formal variable parameter" in those words and 6.5.1's own
+    cross-reference names 6.7.3.7.1 as one of the three sources of a protected
+    variable-identifier. So `protected` was defeated -- a protected variable
+    handed to an unprotected variable conformant array was written through,
+    exit 0, and through a record field as well -- *and* 6.7.2 could not see the
+    threat, so a function filling its result through such a parameter was
+    refused for never writing to it. The parameter kind is asked because the
+    value form threatens nothing: 6.7.3.7.2 attributes the expression's value
+    to a variable of the activation. `tests/extended/protected_conformant.pas`
+    and `tests/extended/conformant_threatens_result.pas` are the two
+    directions, and `funcresult_errors.pas` carries the value form beside the
+    var one.
+  - **A for statement's control variable must be nonbindable** (6.9.3.9.1,
+    ADR-0170), which is the second half of the sentence whose first half is
+    "shall possess an ordinal-type". 6.5.1 makes a bindable variable
+    totally-undefined while it is unbound, so a loop over an unbound one
+    attributes a value to a totally-undefined variable and a loop over a bound
+    one writes an external entity once an iteration -- which 6.9.3.9.2's
+    equivalent program fragment says nothing about. Asked through
+    `DesignatorBindable`, and needing no `--std` guard because `bindable` is
+    not in ISO 7185's lexis. `tests/extended/forvar_bindable.pas`.
+  - **A constant-access naming a *structured* component is a second way to
+    define a constructor's storage** (6.8.8.1, ADR-0170). ADR-0069 fills a
+    6.8.7 constant's zeroed global from the prologue of the block that defined
+    it, and the test for "defined it" was whether the folded node is the
+    written expression -- which a constant-access is not, its fold answering
+    with the component's node. `ConstAddress` memoises that node into a global
+    of its own, keyed on a different node from the container's, so nothing
+    filled it: `row = grid[2]` then `row[i]` printed 0 where `grid[2][i]`
+    printed the right number, in one program and with no diagnostic. What must
+    still *not* fill is a plain constant-name, `const b = a` sharing a's
+    storage, and a module-qualified name (6.11.3) is that same alias. Only an
+    array or a record was affected; a string component, a set component and an
+    alias were right throughout and are the test's controls.
+    `tests/extended/const_access_component.pas`. The clause was triaged
+    `structural` and so was in no work queue, which is the direction ADR-0106
+    warns about.
   - **A char is a legal assignment destination for a string value**
     (6.4.5 d), 6.4.6 f)), and the guard that chooses the string path asks
     `IsStringOrChar` of the *destination* for that reason. Asking

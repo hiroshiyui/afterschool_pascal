@@ -913,7 +913,10 @@ params     procedure p(protected c: integer; protected var d: point) — a
            assigns it, reads into it, or hands it to something that would.
            Passing it on to another *protected* parameter is allowed, and
            that is what makes the word usable; a file or a pointer cannot be
-           protected, because protecting either would protect nothing
+           protected, because protecting either would protect nothing.
+           A conformant array parameter is a variable parameter like any
+           other here, in both directions: it may say `protected` itself,
+           and a protected variable may not be handed to one that does not
 types      type of x — a type-inquiry: the type the variable x already
            possesses, handed back rather than built again. That is what
            makes `b: type of a` assignable from a, where a second
@@ -985,6 +988,10 @@ binding    var f: bindable text — a variable that may be bound to
            and binding(p).name is the command-line argument it was given
            (§6.7.6.8) — so a program can read its own command line, and
            an unbound one is how it counts the arguments there were
+           A bindable variable may not be a `for` statement's control
+           variable (§6.9.3.9.1), and `bind` here needs a *file* variable:
+           §6.7.5.6 admits any bindable one, and that restriction is
+           recorded in `doc/implementation-defined.md` §6
 modules    module m; export i = (a, b => c, lo..hi); ... end; ... end. —
            a module: a heading that says what it exports and a block that
            implements it, either written together or as separate
