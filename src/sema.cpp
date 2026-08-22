@@ -5958,6 +5958,22 @@ void Sema::checkStmt(Stmt *s) {
       diags_.error(f->var->line, f->var->col,
                    "the control variable of a for statement must be an "
                    "ordinal type");
+    // The other half of the same sentence of ISO/IEC 10206:1991 §6.9.3.9.1:
+    // "The control-variable shall possess an ordinal-type and shall be
+    // nonbindable." Not decoration — §6.5.1 makes a bindable variable
+    // totally-undefined while it is unbound, so a loop over an unbound one
+    // attributes a value to a totally-undefined variable, and over a bound one
+    // it writes an external entity once an iteration, which the equivalent
+    // program fragment of §6.9.3.9.2 says nothing about. The clause settles it
+    // statically and this is that.
+    //
+    // No Std guard: `bindable` is not in ISO 7185's lexis, so no ISO 7185
+    // program can reach a true here.
+    if (designatorBindable(f->var.get()))
+      diags_.error(f->var->line, f->var->col,
+                   "'" + (f->var->sym ? f->var->sym->name : std::string()) +
+                       "' is bindable, so it cannot be the control variable of "
+                       "a for statement");
     if (f->set) {
       // ISO/IEC 10206:1991 §6.9.3.9.3: "The set-expression ... shall possess
       // an unpacked-canonical-set-of-T-type or a packed-canonical-set-of-T-

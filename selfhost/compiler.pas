@@ -17162,6 +17162,29 @@ begin
           writeln('the control variable of a for statement must be an ',
                   'ordinal type')
         end;
+        { The other half of the same sentence of ISO/IEC 10206:1991 6.9.3.9.1:
+          "The control-variable shall possess an ordinal-type and shall be
+          nonbindable." Not decoration -- 6.5.1 makes a bindable variable
+          totally-undefined while it is unbound, so a loop over an unbound one
+          attributes a value to a totally-undefined variable, and over a bound
+          one it writes an external entity once an iteration, which the
+          equivalent program fragment of 6.9.3.9.2 says nothing about. The
+          clause settles it statically and this is that.
+
+          No `--std` guard: `bindable` is not in ISO 7185's lexis, so no ISO
+          7185 program can reach a true here. Asked of the designator rather
+          than the symbol because 6.4.3.4 and 6.4.3.5 give a field and a
+          component their own bindability -- the control-variable is an
+          entire-variable and so answers for itself, but the question has one
+          right place to be asked. }
+        if DesignatorBindable(s^.frVar) then begin
+          ErrorAt(s^.frVar^.line, s^.frVar^.col);
+          write('''');
+          if s^.frVar^.vrSym <> nil then
+            WritePool(s^.frVar^.vrSym^.at, s^.frVar^.vrSym^.len);
+          writeln(''' is bindable, so it cannot be the control variable of a ',
+                  'for statement')
+        end;
         if s^.frSet <> nil then begin
           { 6.9.3.9.3: "The set-expression ... shall possess an
             unpacked-canonical-set-of-T-type or a packed-canonical-set-of-T-

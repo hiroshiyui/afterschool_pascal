@@ -1,0 +1,2 @@
+<source>:30:7: error: 'i' is bindable, so it cannot be the control variable of a for statement
+<source>:31:7: error: 'c' is bindable, so it cannot be the control variable of a for statement
