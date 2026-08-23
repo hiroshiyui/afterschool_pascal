@@ -1681,6 +1681,27 @@ static const char *pas_bound_to(struct pas_file *f) {
 
 int pas_binding_bound(void *v) { return pas_bound_to(v) != NULL; }
 
+/* AP 6.7.6.10 (ADR-0173): the command line as a list. `argcount` is what
+ * §6.12 would have bound program-parameters to, counted; `argument(k)` is
+ * argv[k], and "it shall be an error if k is not in 1..argcount". The
+ * characters are argv's own and outlive the program, so a string value may
+ * point at them (ADR-0111's arena is for values that die with a statement).
+ * The length is a second entry point on a position the first has already
+ * admitted, because a string value is a pointer and a length (ADR-0051) and
+ * the generated code asks for each. */
+int pas_argcount(void) { return pas_argc > 0 ? pas_argc - 1 : 0; }
+
+const char *pas_argument(int k) {
+  char msg[96];
+  if (k < 1 || k > pas_argcount()) {
+    snprintf(msg, sizeof msg, "argument %d is not in 1..%d", k, pas_argcount());
+    pas_runtime_error(msg);
+  }
+  return pas_argv[k];
+}
+
+int pas_argument_len(int k) { return (int)strlen(pas_argv[k]); }
+
 const char *pas_binding_name(void *v) {
   const char *name = pas_bound_to(v);
   return name ? name : "";

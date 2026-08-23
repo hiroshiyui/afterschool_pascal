@@ -544,7 +544,14 @@ type
                    and not the standard's. Only date has an error condition:
                    an hour, a minute and a second cannot fail to be a time,
                    their subranges having already said so. }
-                 biDate, biTime);
+                 biDate, biTime,
+                 { AP 6.7.6.10's program-argument functions, the dialect's
+                   alone (ADR-0173). `argcount` is the number of arguments the
+                   program was activated with and `argument(k)` is the k'th as
+                   a value of the canonical-string-type -- the same list 6.12
+                   binds the program-parameters to, reached without declaring
+                   one file variable per argument (ADR-0081). }
+                 biArgCount, biArgument);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
@@ -1172,7 +1179,17 @@ type
         caller supplies -- so this node takes a result slot exactly as nkCall
         does. nil unless vrSym is invocable with such a result. }
       nkVar:        (vrAt, vrLen: integer; vrSym: symPtr; vrField: fieldPtr;
-                     vrSlot: symPtr);
+                     vrSlot: symPtr;
+                     { AP 6.7.6.10's `argcount` written bare: a call with no
+                       parameter list, which the parser cannot tell from a
+                       variable and Sema can, by looking the name up. The
+                       husk rule (ADR-0044): this node stays, the call hangs
+                       here, and every later pass reads this field first.
+                       Decided in Sema and not in the parser because a
+                       program of the contained standard may declare its own
+                       `argcount` -- a variable, even -- and must keep it
+                       (ADR-0173). }
+                     vrCall: nodePtr);
       { ixSetValue is 6.8.7.4's set-value, `digits[1, 3]`. Its tokens are a
         subscript's, so the parser builds this spine and Sema tells the two
         apart by the symbol at the root of it -- the same shape as
@@ -3744,7 +3761,8 @@ begin
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
   case k of
-    nkVar: begin n^.vrSym := nil; n^.vrField := nil; n^.vrSlot := nil end;
+    nkVar: begin n^.vrSym := nil; n^.vrField := nil; n^.vrSlot := nil;
+                 n^.vrCall := nil end;
     nkField: begin
                n^.fdResolved := nil;
                n^.fdIsDisc := false;
@@ -9198,7 +9216,7 @@ begin
           biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
-          biStrGe, biBinding, biDate, biTime: ;
+          biStrGe, biBinding, biDate, biTime, biArgCount, biArgument: ;
         end
     end
     else if e^.clArgs^.next^.next = nil then
@@ -14020,6 +14038,12 @@ begin
     LookupBuiltin := biBinding
   { 6.7.6.9's two. }
   else if PoolIs(at, len, 'date     ') then LookupBuiltin := biDate
+  { The dialect's alone: under a conformance mode the name is nobody's, and
+    saying "unknown function" there is Annex B's row for it, as for int64. }
+  else if (langStd = stdAfterschool) and PoolIs(at, len, 'argcount ') then
+    LookupBuiltin := biArgCount
+  else if (langStd = stdAfterschool) and PoolIs(at, len, 'argument ') then
+    LookupBuiltin := biArgument
   else if PoolIs(at, len, 'time     ') then LookupBuiltin := biTime
   else LookupBuiltin := biNone
 end;
@@ -14398,6 +14422,31 @@ begin
             type. }
           else if (a^.ntype <> nil) and (c^.clBuiltin <> biEmpty) then
             c^.ntype := a^.ntype^.indexType
+        end
+      end
+      { AP 6.7.6.10 (ADR-0173). argcount is an integer and takes nothing;
+        argument(k) is a value of the canonical-string-type, as trim's is,
+        and takes one integer. Whether k is in 1..argcount is the runtime's
+        to say -- an error, Annex A. }
+      else if c^.clBuiltin = biArgCount then begin
+        c^.ntype := intType;
+        if n <> 0 then begin
+          ErrorAt(c^.line, c^.col);
+          writeln('''argcount'' takes no argument')
+        end
+      end
+      else if c^.clBuiltin = biArgument then begin
+        c^.ntype := canonStringType;
+        if n <> 1 then begin
+          ErrorAt(c^.line, c^.col);
+          writeln('''argument'' takes one integer, the position')
+        end
+        else if (c^.clArgs^.ntype <> nil) and
+                not IsInteger(c^.clArgs^.ntype) then begin
+          ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+          write('''argument'' takes an integer position, found ');
+          WriteTypeName(c^.clArgs^.ntype);
+          writeln
         end
       end
       else if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
@@ -15491,7 +15540,24 @@ begin
             the contract that Sema hands CodeGen a type on every node. Nilling
             it here reproduces the "undeclared identifier" this always said. }
           e^.vrSym := LookupUser(e^.vrAt, e^.vrLen);
-          if e^.vrSym = nil then begin
+          { AP 6.7.6.10's argcount, bare. LookupUser answered nil because what
+            it found was the required marker and not a declaration of the
+            program's -- which is exactly the case in which the bare name is
+            the call; a program that declared its own took the branch above
+            this one. The call is built and checked as any call is, and hangs
+            off this node as a husk. }
+          if (e^.vrSym = nil) and (langStd = stdAfterschool) and
+             PoolIs(e^.vrAt, e^.vrLen, 'argcount ') then begin
+            e^.vrCall := NewNode(nkCall, e^.line, e^.col);
+            e^.vrCall^.clAt := e^.vrAt;
+            e^.vrCall^.clLen := e^.vrLen;
+            e^.vrCall^.clQualAt := 0;
+            e^.vrCall^.clQualLen := 0;
+            e^.vrCall^.clArgs := nil;
+            CheckExpr(e^.vrCall);
+            e^.ntype := e^.vrCall^.ntype
+          end
+          else if e^.vrSym = nil then begin
             ErrorAt(e^.line, e^.col);
             write('undeclared identifier ''');
             WritePool(e^.vrAt, e^.vrLen);
@@ -19790,6 +19856,13 @@ begin
     RequiredFunc('binding  ');
     RequiredFunc('date     ');
     RequiredFunc('time     ')
+  end;
+  { AP 6.7.6.10, the dialect's alone (ADR-0173). Required identifiers and so
+    shadowable, §6.1.3 -- tests/dialect/arguments.pas declares its own
+    `argument` and keeps it. }
+  if langStd = stdAfterschool then begin
+    RequiredFunc('argcount ');
+    RequiredFunc('argument ')
   end;
 
   InternWord('true     ', at, len);
@@ -25670,6 +25743,21 @@ begin
     if e^.clBuiltin = biDate then OpInt(dateLen, len)
     else OpInt(timeLen, len)
   end
+  { AP 6.7.6.10's argument(k): the characters are argv's own, which outlive
+    every statement, so unlike date and trim nothing is taken from the arena.
+    The runtime checks k against the count and reports the error; the length
+    is a second call on a position the first has already admitted. }
+  else if (e^.kind = nkCall) and (e^.clBuiltin = biArgument) then begin
+    EmitExpr(e^.clArgs, hdr);
+    Def(data);
+    write(ircode, 'call ptr @pas_argument(i32 ');
+    PutOp(hdr);
+    writeln(ircode, ')');
+    Def(len);
+    write(ircode, 'call i32 @pas_argument_len(i32 ');
+    PutOp(hdr);
+    writeln(ircode, ')')
+  end
   else if (e^.kind = nkCall) and
           ((e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim)) then begin
     EmitString(e^.clArgs, ad, al);
@@ -26384,7 +26472,14 @@ begin
     PutOp(d_);
     writeln(ircode, ')')
   end
-  else if (e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim) then
+  { AP 6.7.6.10 (ADR-0173). argcount is one call; argument's value is a
+    string and comes through EmitString like trim's. }
+  else if e^.clBuiltin = biArgCount then begin
+    Def(v);
+    writeln(ircode, 'call i32 @pas_argcount()')
+  end
+  else if (e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim) or
+          (e^.clBuiltin = biArgument) then
     EmitStringValue(e, v)
   else if (e^.clBuiltin = biStrEq) or (e^.clBuiltin = biStrNe) or
           (e^.clBuiltin = biStrLt) or (e^.clBuiltin = biStrGt) or
@@ -26416,7 +26511,8 @@ begin
       biNone, biAbs, biSqr, biOdd, biOrd, biChr, biSucc, biPred, biSqrt,
       biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound, biEof, biEoln,
       biCmplx, biPolar, biRe, biIm, biArg, biPosition, biLastPosition,
-      biEmpty, biCard, biLength, biIndex, biSubstr, biTrim:
+      biEmpty, biCard, biLength, biIndex, biSubstr, biTrim, biArgCount,
+      biArgument:
         write(ircode, 'eq')
     end;
     write(ircode, ' i32 ');
@@ -26598,7 +26694,7 @@ begin
         biNone, biOdd, biOrd, biChr, biSucc, biPred, biTrunc, biRound,
         biEof, biEoln, biCmplx, biPolar, biPosition, biLastPosition, biEmpty,
         biLength, biIndex, biSubstr, biTrim, biCard, biStrEq, biStrNe,
-        biStrLt, biStrGt, biStrLe, biStrGe:
+        biStrLt, biStrGt, biStrLe, biStrGe, biArgCount, biArgument:
           OpWord('undef           ', v)
       end
     else
@@ -26965,7 +27061,8 @@ begin
       end;
       biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
       biPosition, biLastPosition, biEmpty, biLength, biIndex, biSubstr,
-      biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe: OpInt(0, v)
+      biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe, biStrGe,
+      biArgCount, biArgument: OpInt(0, v)
     end
   end
 end;
@@ -26976,11 +27073,16 @@ var base, idx, lo, hi, below, above, bad, off, target, stride, byte: str;
 begin
   case e^.kind of
     nkVar: begin
+      { The husk first: a bare argcount is a call and has no address, and
+        Sema refused every position that wanted one (IsDesignator answers
+        false for a vrSym of nil), so this is reached for a value only. }
+      if e^.vrCall <> nil then
+        EmitExpr(e^.vrCall, v)
       { A parameterless function written as a bare name is a call (6.8.2.2),
         and a result living in memory *is* the storage the call filled in -- so
         the address of this expression is the address the call returns, not the
         address of anything named vrSym, which is a function and has none. }
-      if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
+      else if (e^.vrField = nil) and IsInvocable(e^.vrSym) then
         EmitExpr(e, v)
       { A constant whose value lives in memory has storage of its own and no
         frame slot, so it must be answered before AddressOfSym -- which would
@@ -27328,7 +27430,10 @@ begin
       else if e^.fdIsDisc then OpInt(e^.fdDiscValue, v)
       else EmitLoad(e, v);
     nkVar:
-      if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
+      { the husk first: AP 6.7.6.10's bare argcount (ADR-0173) }
+      if e^.vrCall <> nil then
+        EmitExpr(e^.vrCall, v)
+      else if (e^.vrField = nil) and (e^.vrSym^.kind = skConst) then
         EmitConst(e^.vrSym, v)
       { A parameterless call written as a bare name -- of a function, or of a
         functional parameter, which is the same call through a loaded
@@ -30488,6 +30593,9 @@ begin
   writeln(ircode, 'declare void @pas_halt(i32)');
   writeln(ircode, 'declare i32 @pas_binding_bound(ptr)');
   writeln(ircode, 'declare ptr @pas_binding_name(ptr)');
+  writeln(ircode, 'declare i32 @pas_argcount()');
+  writeln(ircode, 'declare ptr @pas_argument(i32)');
+  writeln(ircode, 'declare i32 @pas_argument_len(i32)');
   writeln(ircode, 'declare i32 @pas_binding_namelen(ptr)');
   { ISO/IEC 10206:1991 6.7.5.8 and 6.7.6.9's time operations. }
   writeln(ircode, 'declare void @pas_gettimestamp()');

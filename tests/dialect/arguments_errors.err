@@ -1,0 +1,6 @@
+<source>:7:8: error: 'argcount' takes no argument
+<source>:8:8: error: undeclared identifier 'argument'
+<source>:8:3: error: cannot assign integer to a variable of type string(8)
+<source>:9:8: error: 'argument' takes one integer, the position
+<source>:10:17: error: 'argument' takes an integer position, found packed array [1..3] of char
+<source>:11:3: error: the left side of an assignment must be a variable

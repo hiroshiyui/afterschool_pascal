@@ -67,6 +67,19 @@ begin
   Shadowed := n * n
 end;
 
+{ ADR-0173 adds two required function-identifiers, `argcount` and `argument`,
+  and the same sentence covers them: a program of the contained standard may
+  use either spelling for something of its own. Here `argument` is an integer
+  variable and `argcount` a function of this program's -- the latter the
+  sharper case, because the parser turns a bare `argcount` into a call, and a
+  program that declares its own must still get its own. }
+var argument: integer;
+
+function argcount: integer;
+begin
+  argcount := argument * 2
+end;
+
 begin
   { schemata: the discriminant is readable and bounds the loop }
   total := 0;
@@ -117,6 +130,8 @@ begin
     tests/extended/int64_is_free.pas is the same declaration under
     --std=extended, where the name was never required at all. }
   writeln('shadowed=', Shadowed(3));
+  argument := 21;
+  writeln('argcount of this program=', argcount:1);
 
   writeln('the dialect accepts Extended Pascal')
 end.

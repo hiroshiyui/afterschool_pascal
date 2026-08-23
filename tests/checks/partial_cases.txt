@@ -95,8 +95,9 @@ EmitStringCompare:binaryOp:1 names 19 of 20
 #
 # CheckCall splits the string builtins off first -- they take a string rather
 # than a number and each has its own arity -- so this case sees only the ones
-# whose argument is arithmetic.
-CheckCall:builtinKind:1 names 27 of 40
+# whose argument is arithmetic. AP 6.7.6.10's argcount and argument (ADR-0173)
+# are taken by arms of their own above it, as eof and eoln are.
+CheckCall:builtinKind:1 names 27 of 42
 
 # EmitCall's first three are catch-all lists that mean to name every builtin,
 # and each omits the same three: biBinding, biDate and biTime are the builtins
@@ -104,13 +105,14 @@ CheckCall:builtinKind:1 names 27 of 40
 # reaches an instruction-shaped arm. biBinding is taken by an `else if` at the
 # top of EmitCall, and biDate and biTime never reach EmitCall at all -- EmitExpr
 # has an IsTimeBuiltin arm above the call it would come through.
-EmitCall:builtinKind:1 names 37 of 40
-EmitCall:builtinKind:2 names 37 of 40
-EmitCall:builtinKind:3 names 37 of 40
+EmitCall:builtinKind:1 names 39 of 42
+EmitCall:builtinKind:2 names 39 of 42
+EmitCall:builtinKind:3 names 39 of 42
 
 # The fourth is the real-valued intrinsics, guarded by the arm above it that
-# established the argument is real.
-EmitCall:builtinKind:4 names 18 of 40
+# established the argument is real. argcount and argument never reach it: the
+# first is an arm near the top of EmitCall and the second goes to EmitString.
+EmitCall:builtinKind:4 names 18 of 42
 
 # --- a required procedure the arm above already took ----------------------
 #

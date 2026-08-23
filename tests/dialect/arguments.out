@@ -1,0 +1,6 @@
+argcount = 2
+1: length > 0 = TRUE, ends with file1
+2: length > 0 = TRUE, ends with file2
+joined: TRUE
+equal to itself: TRUE
+shadowed: 20

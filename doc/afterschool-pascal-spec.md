@@ -744,6 +744,43 @@ ISO/IEC 10206:1991 §6.7.6.7 gives a string.
 NOTE — A slice and a string are the same shape; two spellings for one question
 would be the invention.
 
+**6.7.6.10 Program-argument functions [added].** The required
+function-identifiers `argcount` and `argument` shall be program-argument
+functions.
+
+`argcount` shall yield a value of integer-type: the number of arguments the
+program was activated with, not counting the name the program was activated
+under. The function-designator shall have no actual-parameter-list.
+
+`argument(k)`, for an expression `k` of integer-type, shall yield a value of
+the canonical-string-type: the `k`-th argument. It shall be an error if the
+value of `k` is not in the closed interval 1 to `argcount` (Annex A.6).
+
+The arguments are the sequence ISO/IEC 10206:1991 §6.12 binds the program's
+file-type program-parameters to, in that order, so that for a program whose
+program-parameters other than `input` and `output` are `p1` … `pn`, each
+bound, `binding(pk).name` and `argument(k)` denote the same character-string.
+
+NOTE 1 — §6.12 gives a program its arguments one program-parameter each and
+`binding(f).bound` as the only way to count them (E.19, ADR-0081). A program
+wanting a list declares as many file variables as it may be given, opens none
+of them, and stops at the first unbound — which is how `pascalc` itself reads
+its command line, and is the shape this clause exists to spare a program.
+Neither mechanism disturbs the other: a program may use both.
+
+NOTE 2 — Both are required identifiers and §6.1.3 makes each shadowable, so a
+program of the contained standard that declares its own `argument`, or its
+own `argcount` — a variable, even — keeps it (ADR-0117). `argcount` is the
+third name, after `eof` and `eoln`, that a program may call with no parameter
+list at all, and the bare spelling is a call exactly when the identifier's
+nearest defining-point is the required one: the question is asked of the
+symbol and not of the syntax, which is what lets a declaration of the
+program's win.
+
+NOTE 3 — The value of `argument(k)` is a value and not a variable: the
+characters belong to the activation and outlive every statement, so no
+storage of the program's is taken for them (ADR-0111). ADR-0173.
+
 #### 6.7.7 External-declarations [added]
 
 **6.7.7.1 The directive.**
@@ -1054,6 +1091,7 @@ standard error stream.
 | A.3 | a slice is taken outside the array's bounds | 6.7.3.9.5 a) | `slice: [i..j] is not within a sequence of n components` |
 | A.4 | a string crossing to a foreign routine contains NUL | 6.7.7.5 | `a string crossing to a foreign routine contains a NUL character` |
 | A.5 | a foreign string result exceeds the capacity | 6.7.7.8 | `a string of length n does not fit a capacity of c` |
+| A.6 | `argument(k)` with `k` outside 1..`argcount` | 6.7.6.10 | `argument k is not in 1..n` |
 
 Indexing a slice out of range (6.7.3.9.5 b) is reported by the array-index error
 ISO 7185 and ISO/IEC 10206:1991 already have, against the slice's own bounds.
@@ -1076,10 +1114,11 @@ the construct and Sema refuses it. One column became two.
 | `slice` | `array of T` | `a parameter's type must be a type name or a conformant array schema` | `a parameter's type must be a type name or a conformant array schema` |
 | `substring` | `a[i..j]` over an array | `expected ']' after a subscript, found '..'` | `only a string can have a substring taken of it` |
 | `int64` | `int64` | `unknown type 'int64'` | `unknown type 'int64'` |
+| `argument` | `argcount`, `argument(k)` | `unknown function 'argument'` | `unknown function 'argument'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
-could not have written it, so four of the five are refused by machinery that
+could not have written it, so five of the six are refused by machinery that
 predates the dialect and has nothing to say about it. `external` is the
 exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
@@ -1295,3 +1334,4 @@ the two scenarios its opening sentence always deserved.
 | 6.13.1 (the walk) | ADR-0142 |
 | 6.4.6, 6.7.3.9.2, Annex E.8 | ADR-0143 |
 | 6.7.5.3, 6.10.2, Annex E.9 | ADR-0144 |
+| 6.7.6.10, Annex A.6 | ADR-0173 |

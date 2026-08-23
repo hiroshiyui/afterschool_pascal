@@ -72,6 +72,7 @@
 6.7.3.9.4	Index domain and length
 6.7.3.9.5	Bounds
 6.7.6	Required functions
+6.7.6.10	Program-argument functions
 6.7.7	External-declarations
 6.7.7.1	The directive
 6.7.7.2	The foreign name is required and is not derived

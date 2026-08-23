@@ -181,3 +181,4 @@ the alternatives that were rejected and why.
 | [0170](0170-three-more-of-the-fourth-audit-and-a-triage-row-that-hid-one.md) | Three more of the fourth audit, and a triage row that hid one | Accepted |
 | [0171](0171-the-fourth-audits-last-seven.md) | The fourth audit's last seven, and a refusal that was a lowering | Accepted |
 | [0172](0172-binding-says-whether-the-file-is-there.md) | `binding(f).bound` says whether the file is there | Accepted |
+| [0173](0173-the-command-line-as-a-list.md) | The command line as a list: `argcount` and `argument(k)` | Accepted |

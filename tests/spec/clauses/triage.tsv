@@ -345,6 +345,7 @@ extended	6.7.5.7	testable	Control procedures
 extended	6.7.5.8	testable	Time procedures
 extended	6.7.6	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.7.6	testable	
+afterschool	6.7.6.10	testable	
 extended	6.7.6.1	structural	introduces the subclauses below it; states no requirement of its own
 extended	6.7.6.2	testable	Arithmetic functions
 extended	6.7.6.3	testable	Transfer functions
