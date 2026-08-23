@@ -86,10 +86,14 @@ it is now two things rather than a category:
   handle this needs the compiler and C to agree about offsets, which nothing
   here does for a foreign type. It is what stands between here and a socket.
 
-**Creating a file**, which is not a language question at all — `O_WRONLY`,
-`O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS set and PasIO
-kept is that a number the module cannot check does not go in. What would lift
-it is something that reads a C header, which is a different project.
+**Creating a file through PasIO**, which is not a language question at all —
+`O_WRONLY`, `O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS
+set and PasIO kept is that a number the module cannot check does not go in.
+What would lift it is something that reads a C header, which is a different
+project. **Creating a file at all is not blocked and never was**: §6.10's
+`bind` and `rewrite` do it in conforming Pascal, and `lib/pasfile.pas` is the
+module over them — what *was* missing was a way to learn that a file is not
+there without stopping, and ADR-0172's `binding(f).bound` is that.
 
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
 that moved, not the position.

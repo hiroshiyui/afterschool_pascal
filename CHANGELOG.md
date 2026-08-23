@@ -27,6 +27,13 @@ The other three entries only accept more.
 
 ### Added
 
+- **`lib/pasfile.pas`**, the conforming layer's seventh module: whole files
+  by name — `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`,
+  `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`,
+  `CopyFile`. Every reader answers false for a file that is not there, which
+  `binding(f).bound` now makes possible without leaving the standard.
+  `tests/extended/lib_file.pas`.
+
 - A **value parameter of a `packed array [1..n] of char`** takes any string
   expression and pads it, under `--std=extended` and `--std=afterschool`.
   `p('abc')` for a formal of capacity 5 hands over `'abc  '`, which is what
