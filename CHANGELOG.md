@@ -27,6 +27,10 @@ The other three entries only accept more.
 
 ### Added
 
+- **`lib/dialect/pasprocess.pas`**: `Run` a command through the shell and get
+  its exit code, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds` — four libc
+  names through `external`. `tests/dialect/lib_process.pas`.
+
 - **`lib/pasfile.pas`**, the conforming layer's seventh module: whole files
   by name — `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`,
   `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`,
