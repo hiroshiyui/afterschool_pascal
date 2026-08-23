@@ -87,6 +87,16 @@ end;
 type handle = 1..3;
 var external: handle;
 
+{ ADR-0175's defer-statement is `defer` followed by a token that begins a
+  statement, which no program of the contained standard can write. `defer`
+  itself is a procedure of this program's, and every position a conforming
+  program may call it in -- bare before a terminator, and with arguments --
+  still calls it. }
+procedure defer;
+begin
+  writeln('defer of this program')
+end;
+
 begin
   { schemata: the discriminant is readable and bounds the loop }
   total := 0;
@@ -141,6 +151,8 @@ begin
   writeln('argcount of this program=', argcount:1);
   external := 3;
   writeln('handle of this program=', external:1);
+  defer;
+  if external = 3 then defer;
 
   writeln('the dialect accepts Extended Pascal')
 end.

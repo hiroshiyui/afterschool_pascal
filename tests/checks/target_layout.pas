@@ -30,4 +30,18 @@ procedure inner(var x: rec; y: cs; var z: array [u..v: integer] of rec);
 var loc: rec; lset: cs; lc: complex; lt: text;
 begin loc := x; lset := y; lc := c; rewrite(lt) end;
 
-begin writeln('x') end.
+{ AP 6.9.3.11's defer record and its flags, which are the two fields that sit
+  *after* a frame's variables -- so this frame is the one that says the tail
+  of the record is laid out the same way on both targets. Three flags, an odd
+  number, because a byte array of one is the case an alignment rule could get
+  wrong without any of the others noticing. }
+procedure defers;
+var loc: rec; k: integer;
+begin
+  defer k := 1;
+  defer loc := r;
+  defer k := 2;
+  k := 0
+end;
+
+begin defers; writeln('x') end.

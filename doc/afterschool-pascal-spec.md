@@ -1103,6 +1103,82 @@ operands of unequal length, which this feature deliberately does not have —
 6.7.3.9.5's NOTE says the callee cannot see where its slice came from. That
 rule belongs here before it belongs in a processor (ADR-0139).
 
+### 6.9 Statements [extended]
+
+#### 6.9.3.11 Defer-statements [added]
+
+A defer-statement **arms** a statement, which is then executed when the block
+leaves the region it was armed in — so that a program may write what undoes an
+action beside the action, rather than at every place control can leave
+(ADR-0175).
+
+    defer-statement = 'defer' statement .
+
+`defer` shall not be a word-symbol. A statement beginning with an identifier
+in a program of ISO/IEC 10206:1991 can continue only as a designator (`:=`,
+`[`, `.` or `^`), as a procedure-statement with an actual-parameter-list
+(`(`), or not at all — a token that terminates a statement, which by §6.9.2.1
+is any of `;`, `end`, `else`, `until` and `otherwise`. A defer-statement is
+the case where the token after the identifier is none of those, which is
+ADR-0140's test asked of that position. A program in which `defer` denotes
+something of its own keeps that meaning in every position such a program could
+have written it in.
+
+**6.9.3.11.1 Arming.** Executing a defer-statement arms its statement.
+Executing a defer-statement whose statement is already armed shall have no
+further effect.
+
+**6.9.3.11.2 Execution.** An armed statement shall be disarmed and executed at
+the first of:
+
+a) the completion of the statement-sequence in which the defer-statement
+   occurs — the statement-sequence of a compound-statement (§6.9.3.2), of a
+   repeat-statement (§6.9.3.7), or of a case-statement-completer (§6.9.3.5);
+
+b) the termination of the activation of the block in which the defer-statement
+   occurs, including termination by a goto-statement leaving that block
+   (§6.9.2.4) and by `halt` (§6.7.5.7).
+
+Where more than one statement of one statement-sequence is armed, they shall be
+executed in the reverse of the order in which their defer-statements are
+written.
+
+Armed statements shall be executed before any file (§6.7.5) or handle (6.4.12)
+the block owns is closed, and before the value of a function is taken from its
+result variable.
+
+**6.9.3.11.3 What a deferred statement may not contain.** A deferred statement
+shall contain no goto-statement, no label, and no defer-statement.
+
+NOTE 1 — A branch of an if-statement, the body of a while- or for-statement,
+the body of a with-statement and a case-list-element are each a *statement* and
+not a statement-sequence (§6.9.3), so a defer-statement written directly in one
+is armed in the enclosing sequence and not in the branch. Where a loop body is
+a compound-statement, which is how one is usually written, the sequence is
+completed once per iteration and what that iteration armed is executed there —
+with the values that iteration had, since 6.9.3.11.2 executes the statement and
+does not evaluate anything at the moment of arming.
+
+NOTE 2 — Leaving a statement-sequence by a goto-statement does not complete it,
+so what it armed waits for b). The statement is executed late rather than not
+at all, and 6.9.3.11.1's "no further effect" is what keeps a backward
+goto-statement over a defer-statement from arming twice.
+
+NOTE 3 — 6.9.3.11.3 is a consequence of the lowering and is stated here so that
+it is a requirement rather than a discovery. A processor may execute a deferred
+statement in more than one place — this one emits it where its sequence is
+completed and again in a routine the run-time system calls for b) — so a label
+in one denotes more than one statement, and a goto-statement in one has no
+target in the activation that would run it.
+
+NOTE 4 — Nothing here gives a deferred statement a value or an outcome. A
+deferred statement that fails fails where it stands; there is no exception in
+this language for it to raise, and 6.9.3.11.2 gives it nothing to report to.
+
+NOTE 5 — An armed statement is not executed when the program is terminated by
+an error being detected (§3.2, Annex A), because such a termination is not the
+termination of an activation.
+
 ### 6.10 Input and output [extended]
 
 Extended by 6.4.2.6.6. No other change.
@@ -1215,10 +1291,11 @@ the construct and Sema refuses it. One column became two.
 | `int64` | `int64` | `unknown type 'int64'` | `unknown type 'int64'` |
 | `argument` | `argcount`, `argument(k)` | `unknown function 'argument'` | `unknown function 'argument'` |
 | `handle` | `handle external '…'` | `expected ';' after a type definition, found identifier` | `expected ';' after a type definition, found identifier` |
+| `defer` | `defer S` | `expected 'end' at the end of a compound statement, found identifier` | `expected 'end' at the end of a compound statement, found identifier` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
-could not have written it, so six of the seven are refused by machinery that
+could not have written it, so seven of the eight are refused by machinery that
 predates the dialect and has nothing to say about it. `external` is the
 exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
@@ -1282,6 +1359,13 @@ which such an address is owned instead** (ADR-0174), and a program that wants
 the properties listed absent here writes a handle-type; this entry is what the
 `int64` door still costs a program that uses it, and the door stays open
 because `read` and `write` answer through it.
+
+**C.8 An armed statement is not executed when an error is detected**
+(6.9.3.11.2 b), Annex A). Terminating the program because an error was detected
+is not the termination of an activation, and this processor runs no deferred
+statement on that path: it writes the message and stops. A program whose
+release matters on the error path has nothing here to write it with, there
+being no exception in this language to catch (ADR-0175).
 
 ## Annex D (informative) — The library
 
@@ -1440,3 +1524,4 @@ the two scenarios its opening sentence always deserved.
 | 6.7.5.3, 6.10.2, Annex E.9 | ADR-0144 |
 | 6.7.6.10, Annex A.6 | ADR-0173 |
 | 6.4.12, 6.7.7.3, 6.7.7.8, Annex A.7, Annex C.7 | ADR-0174 |
+| 6.9.3.11, Annex C.8 | ADR-0175 |

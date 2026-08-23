@@ -1,0 +1,40 @@
+order:
+  first
+  last
+  armed second
+  armed first
+per iteration:
+  iteration 1
+  end of iteration 1
+  iteration 2
+  end of iteration 2
+  iteration 3
+  end of iteration 3
+conditional:
+  conditional(TRUE) body
+  the conditional one ran
+  conditional(FALSE) body
+nested:
+  inner body
+  inner
+  outer body
+  outer
+reads late:
+  n at the end is 99
+function result: 101
+heap:
+  the heap variable holds 42
+files:
+  the text file: [body] [deferred]
+  the handle's file: [lent by a deferred statement]
+goto:
+  inner body
+  inner armed
+  jumper armed
+  after the jump
+local goto:
+  after the local goto
+  loop armed at 1
+main 1
+main 2
+the program's own, last of all

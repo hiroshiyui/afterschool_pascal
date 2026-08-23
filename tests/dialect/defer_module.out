@@ -1,0 +1,6 @@
+module: initialization body, n = 5
+module: initialization deferred, n = 5
+program: n is 5
+program: body
+program: deferred
+module: finalization, n = 5

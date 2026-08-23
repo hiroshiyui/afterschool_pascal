@@ -426,6 +426,11 @@ extended	6.9.3.9.3	testable	Set-member-iteration
 extended	6.9.3.10	testable	With-statements
 extended	6.9.4	testable	Threats
 extended	6.10	structural	introduces the subclauses below it; states no requirement of its own
+afterschool	6.9	structural	introduces the statement additions
+afterschool	6.9.3.11	testable	
+afterschool	6.9.3.11.1	testable	
+afterschool	6.9.3.11.2	testable	
+afterschool	6.9.3.11.3	testable	
 afterschool	6.10	structural	a cross-reference to 6.4.2.6.6, which carries the requirement
 extended	6.10.1	testable	The procedure read
 extended	6.10.2	testable	The procedure readln

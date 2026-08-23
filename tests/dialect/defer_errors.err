@@ -1,0 +1,11 @@
+<source>:10:9: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:11:23: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:12:9: error: a deferred statement may not contain a label: it is run in more than one place, and a label denotes one
+<source>:13:9: error: a deferred statement may not defer another statement
+<source>:14:35: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:15:24: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:16:16: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:17:28: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:18:33: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:19:22: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there
+<source>:19:40: error: a deferred statement may not contain a goto-statement: it is run where the block ends, and the label is not there

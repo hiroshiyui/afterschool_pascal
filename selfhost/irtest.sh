@@ -78,6 +78,7 @@ check_size() {
 check_size PAS_FILE_SIZE fileSize
 check_size PAS_JUMP_SIZE jumpSize
 check_size PAS_HANDLE_SIZE handleSize
+check_size PAS_DEFER_SIZE deferSize
 
 # Which standard a source is written in is decided by where it lives. The glob
 # is deliberately unanchored: a file named on the command line arrives as a

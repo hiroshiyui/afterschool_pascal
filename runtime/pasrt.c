@@ -418,6 +418,62 @@ void pas_handle_done(void *slot) {
   h->next = NULL;
 }
 
+/* AP 6.9.3.11 (ADR-0175): a deferred statement. The compiler emits one
+ * *runner* per block that defers -- a function taking the block's frame, which
+ * executes every armed statement of that block in the reverse of the order
+ * they are written -- and this is the record that lets a `goto` past the block
+ * and a `halt` call it. It is the handle's model exactly: a slot in the frame,
+ * a list of its own, and a mark in `struct pas_jump`, because what the three
+ * walks share is that lifetimes nest.
+ *
+ * The list is a third one rather than an entry on either of the others
+ * because the *order* between them matters: a deferred statement may write to
+ * a file the same block owns, so every abandoned activation's defers run
+ * before any of its files are closed. */
+struct pas_defer {
+  void (*run)(void *);
+  void *frame;
+  struct pas_defer *prev, *next;
+};
+
+_Static_assert(sizeof(struct pas_defer) <= PAS_DEFER_SIZE,
+               "PAS_DEFER_SIZE is smaller than struct pas_defer");
+
+static struct pas_defer *pas_live_defers;
+
+void pas_defer_init(void *slot, void *run, void *frame) {
+  struct pas_defer *d = slot;
+  d->run = (void (*)(void *))run;
+  d->frame = frame;
+  d->prev = NULL;
+  d->next = pas_live_defers;
+  if (pas_live_defers)
+    pas_live_defers->prev = d;
+  pas_live_defers = d;
+}
+
+/* Unlink *before* running, so a `halt` inside a deferred statement walks a
+ * list this record is no longer on and cannot run it a second time. The
+ * runner is what decides which of the block's statements are armed; this
+ * knows only that the block has some. */
+void pas_defer_done(void *slot) {
+  struct pas_defer *d = slot;
+  void (*run)(void *) = d->run;
+  void *frame = d->frame;
+
+  if (d->prev)
+    d->prev->next = d->next;
+  else if (pas_live_defers == d)
+    pas_live_defers = d->next;
+  if (d->next)
+    d->next->prev = d->prev;
+  d->prev = NULL;
+  d->next = NULL;
+  d->run = NULL;
+  if (run)
+    run(frame);
+}
+
 /* AP 6.4.12.2: the one assignment. The variable takes what the external call
  * answered and releases what it held. */
 void pas_handle_set(void *slot, void *value) {
@@ -1525,6 +1581,7 @@ void pas_page(void *v) {
 struct pas_jump {
   struct pas_file *mark; /* the open-file list as it stood when armed */
   struct pas_handle *hmark; /* and the live-handle list (ADR-0174) */
+  struct pas_defer *dmark;  /* and the blocks with armed statements (ADR-0175) */
   int active;            /* the block that owns this record has not exited */
   jmp_buf env;
 };
@@ -1536,6 +1593,7 @@ void *pas_jump_env(void *v) {
   struct pas_jump *j = v;
   j->mark = pas_open_files;
   j->hmark = pas_live_handles;
+  j->dmark = pas_live_defers;
   j->active = 1;
   return &j->env;
 }
@@ -1556,6 +1614,20 @@ void pas_jump_go(void *v, int id) {
    * reasoning is ever wrong, rather than jumping into a dead frame. */
   if (!j->active)
     pas_runtime_error("goto to a block that is no longer active");
+
+  /* AP 6.9.3.11: the armed statements of every activation being abandoned,
+   * innermost first, and *before* any file or handle is released -- a
+   * deferred statement is the last thing that block runs, and it may still
+   * write to what the block owns. The frames are all alive: the walk happens
+   * here, before `_longjmp` cuts the stack back. */
+  {
+    struct pas_defer *d = pas_live_defers;
+    while (d && d != j->dmark) {
+      struct pas_defer *next = d->next;
+      pas_defer_done(d);
+      d = next;
+    }
+  }
 
   /* Close what the jump abandons, from the most recent back to the mark. The
    * epilogue of each of those blocks is about to be skipped, and this is the
@@ -1696,8 +1768,18 @@ void pas_halt(int status) {
    * saving the next pointer first, exactly as pas_jump_go does. Taking the
    * head each time would work for the ordinary files and loop forever if a
    * file were ever left linked. */
-  struct pas_file *f = pas_open_files;
-  struct pas_handle *h = pas_live_handles;
+  struct pas_file *f;
+  struct pas_handle *h;
+
+  /* AP 6.9.3.11 first, for pas_jump_go's reason: a deferred statement may
+   * write to a file this is about to close. The head is taken afresh each
+   * time because pas_defer_done unlinks before it runs, so a deferred
+   * statement that halts again finds a shorter list rather than this one. */
+  while (pas_live_defers)
+    pas_defer_done(pas_live_defers);
+
+  f = pas_open_files;
+  h = pas_live_handles;
   while (f) {
     struct pas_file *next = f->next_open;
     pas_file_done(f);

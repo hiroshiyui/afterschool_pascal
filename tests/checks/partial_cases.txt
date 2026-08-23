@@ -37,20 +37,20 @@ ParseNameList:ctxKind:1 names 5 of 78
 # and a component that is not another schema -- are resolved by ConfArrayType
 # with the kind tested first. So no path reaches these four with one, which is
 # the same shape ADR-0040 gave a bare schema-name one clause earlier.
-EvalConst:nodeKind:1 names 57 of 61
-CheckExpr:nodeKind:1 names 57 of 61
-EmitExpr:nodeKind:1 names 57 of 61
-ResolveType:nodeKind:1 names 57 of 61
+EvalConst:nodeKind:1 names 57 of 62
+CheckExpr:nodeKind:1 names 57 of 62
+EmitExpr:nodeKind:1 names 57 of 62
+ResolveType:nodeKind:1 names 57 of 62
 
 # EmitAddress is the same walk with one more exclusion: a substring designates
 # characters rather than storage, so ADR-0052 emits an assignment to one
 # through the runtime and never asks for its address.
-EmitAddress:nodeKind:1 names 56 of 61
+EmitAddress:nodeKind:1 names 56 of 62
 
 # And the statement walker's own exclusion. nkLabelDecl is the label-declaration
 # part of a block, which CheckBlock reads directly; it never appears in a
 # statement-sequence.
-CheckStmt:nodeKind:1 names 60 of 61
+CheckStmt:nodeKind:1 names 61 of 62
 
 # --- the three dump walkers each own a third of the node kinds ------------
 #
@@ -59,9 +59,9 @@ CheckStmt:nodeKind:1 names 60 of 61
 # type-denoter -- so each names its own third. This is the one group where the
 # subsets are large, and it is also the group ADR-0103 gave a corpus to:
 # tests/dumps/ enters all thirty-one walker procedures.
-DumpExpr:nodeKind:1 names 17 of 61
-DumpStmt:nodeKind:1 names 14 of 61
-DumpTypeExpr:nodeKind:1 names 14 of 61
+DumpExpr:nodeKind:1 names 17 of 62
+DumpStmt:nodeKind:1 names 15 of 62
+DumpTypeExpr:nodeKind:1 names 14 of 62
 
 # --- an operator the arm above already took -------------------------------
 #

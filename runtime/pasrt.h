@@ -41,6 +41,14 @@
  * `handleSize` in selfhost/compiler.pas is the same number; irtest.sh checks. */
 #define PAS_HANDLE_SIZE 32
 
+/* AP 6.9.3.11's defer record (ADR-0175): the runner this block's armed
+ * statements are executed by, the frame to run it against, and two links.
+ * One per activation whose block contains a defer-statement, not one per
+ * statement -- which is why a block that defers in a loop needs no more
+ * storage than one that defers once. `deferSize` in selfhost/compiler.pas is
+ * the same number; irtest.sh checks. */
+#define PAS_DEFER_SIZE 32
+
 /* The storage a block needs to be the target of a non-local `goto`: somewhere
  * to jump back to, and the mark that says which files the jump abandons. It is
  * opaque for the same reason a file variable is, and sized here for the same

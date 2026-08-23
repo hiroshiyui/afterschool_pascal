@@ -195,6 +195,13 @@ const
     PAS_HANDLE_SIZE is the same number in runtime/pasrt.h, checked by
     selfhost/irtest.sh as the two above are (ADR-0174). }
   handleSize = 32;
+  { AP 6.9.3.11's defer record: the runner, the frame to run it against, and
+    the two links of the runtime's list -- four words, and PAS_DEFER_SIZE is
+    the same number in runtime/pasrt.h, checked by selfhost/irtest.sh
+    (ADR-0175). One per *activation* that defers, not one per defer-statement:
+    which statements are armed is a flag apiece in the frame, and the runner
+    is what reads them. }
+  deferSize = 32;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
@@ -386,6 +393,12 @@ type
     { statements }
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkGoto, nkLabeled,
+    { AP 6.9.3.11's defer-statement, `defer S` (ADR-0175): S is *armed* here
+      and executed when the statement-sequence this statement stands in is
+      completed, or when the activation terminates, whichever comes first.
+      Dialect only, and spelled with no reserved word -- ADR-0140's test is
+      asked of the token after the identifier. }
+    nkDefer,
     { the pieces the C++ side keeps in vectors of plain structs }
     nkWriteArg, nkCaseArm, nkVariantArm, nkGroup, nkDeclName,
     { type denoters }
@@ -803,6 +816,14 @@ type
       frame variables, and the prologue arms it and dispatches on it -- so it
       is the one thing about a block that its own statements do not decide. }
     nlLabels, nlTail: numPtr;
+    { AP 6.9.3.11: this block's defer-statements, most recently *written*
+      first, and how many there are. Non-empty means the activation record
+      carries a defer record and a flag per statement after the jump record,
+      and that a runner function is emitted for the block. The list is in
+      reverse source order because that is the order the armed statements are
+      executed in, so nothing has to walk it backwards (ADR-0175). }
+    defers: nodeListPtr;
+    deferCount: integer;
     resultVar: symPtr;
     { 6.7.2: a result-variable-specification was written, so the body names
       the result and must *not* assign to the function identifier. Without one
@@ -1347,6 +1368,12 @@ type
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
+      { dfIndex is this statement's position among the block's defer-statements,
+        which is the flag in the frame that says whether it is armed. Sema
+        numbers them and pushes the node onto the block's list; CodeGen reads
+        the list in that order, which is *reverse* source order and so is the
+        order the armed statements run in. }
+      nkDefer:      (dfStmt: nodePtr; dfIndex: integer);
       { csHasOtherwise, not `csOtherwise <> nil`: `otherwise` followed by
         nothing is an empty statement -- a legal way to say "and otherwise do
         nothing", which is exactly the case that must not trap. }
@@ -3835,6 +3862,7 @@ begin
     end;
     nkProcDecl: n^.pdSym := nil;
     nkWith: n^.wtBinding := nil;
+    nkDefer: n^.dfIndex := 0;
     nkVariantArm: begin
       n^.vaTagType := nil;
       n^.vaVariants := nil;
@@ -5795,7 +5823,30 @@ begin
     none of the five is a statement any parameter list begins, so the family
     yields whenever what follows the name can continue a designator. }
   k := PeekKind(1);
-  if (k = tkAssign) or (k = tkLBracket) or (k = tkPeriod) or (k = tkCaret) or
+  { AP 6.9.3.11's defer-statement (ADR-0175). `defer` is not reserved, so the
+    question is ADR-0140's, asked of the token *after* the identifier: a
+    statement beginning with an identifier can continue only as a designator
+    (`:=`, `[`, `.`, `^`), as a call (`(`), or not at all (a terminator, the
+    empty statement's rule making `;`, `end`, `else`, `until` and `otherwise`
+    the whole of that list). Anything else after the name is a token no
+    conforming program can have written there, and under the dialect it is the
+    statement being deferred.
+
+    So `defer;`, `defer(x)`, `defer := 3` and `if c then defer else s` all
+    stay what a program that declared `defer` meant by them, and the
+    conformance modes reach none of this: they parse the name as a call and
+    stop at the token after it, which is Annex B's row. }
+  if (langStd = stdAfterschool) and PoolIs(at, len, 'defer    ') and
+     (k <> tkAssign) and (k <> tkLBracket) and (k <> tkPeriod) and
+     (k <> tkCaret) and (k <> tkLParen) and
+     (k <> tkSemi) and (k <> tkEnd) and (k <> tkElse) and (k <> tkUntil) and
+     (k <> tkOtherwise) then begin
+    s := NewNode(nkDefer, l, c);
+    s^.dfStmt := nil;
+    pos := pos + 1;
+    s^.dfStmt := ParseStatement
+  end
+  else if (k = tkAssign) or (k = tkLBracket) or (k = tkPeriod) or (k = tkCaret) or
      ((k = tkLParen) and CallTakesCaret(pos + 1)) then
     handled := false
   else if PoolIs(at, len, 'write    ') then s := ParseWrite(false, false)
@@ -7735,6 +7786,8 @@ begin
   s^.frameVars := nil;
   s^.frameTail := nil;
   s^.frameCount := 0;
+  s^.defers := nil;
+  s^.deferCount := 0;
   s^.memConsts := nil;
   s^.memConstTail := nil;
   s^.nlLabels := nil;
@@ -11161,7 +11214,7 @@ begin
       nkStructValue, nkValueElem,
       nkIndex, nkSubstr, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkEmpty,
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
-      nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
+      nkProcCall, nkWith, nkDefer, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
       nkPointer, nkHandle, nkInquiry, nkRestricted,
       nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
@@ -12514,7 +12567,7 @@ begin
       nkSetMember, nkField, nkDeref, nkWriteArg, nkEmpty,
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
-      nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
+      nkWith, nkDefer, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
@@ -17175,6 +17228,117 @@ begin
   end
 end;
 
+{ AP 6.9.3.11: what a deferred statement may not contain, and why each is
+  refused rather than lowered.
+
+  A deferred statement is emitted **twice** -- once where the sequence it
+  stands in is completed, and once inside the block's runner, which is what a
+  `goto` past the block and a `halt` reach it through. So a label inside one
+  would be two labels with one number, and a `goto` inside one would be a
+  branch out of the runner into a function that is not running. Neither is a
+  restriction the feature wants: they are what the two emissions cost, and
+  they are stated in 6.9.3.11 as requirements rather than left to be
+  discovered.
+
+  A defer-statement inside a deferred statement is refused for its own reason:
+  arming during the run of the armed statements is a question about ordering
+  that this increment does not answer, and ADR-0175 says so in the section
+  that lists what it leaves alone.
+
+  The walk stops at a defer-statement's own boundary -- a nested one is
+  reported and not descended into -- and never enters a procedure declaration,
+  there being none inside a statement. }
+procedure CheckDeferBody(s: nodePtr; outer: nodePtr);
+var sub: nodePtr;
+begin
+  if s <> nil then begin
+    case s^.kind of
+      nkGoto: begin
+        ErrorAt(s^.line, s^.col);
+        writeln('a deferred statement may not contain a goto-statement: it ',
+                'is run where the block ends, and the label is not there')
+      end;
+      nkLabeled: begin
+        ErrorAt(s^.line, s^.col);
+        writeln('a deferred statement may not contain a label: it is run ',
+                'in more than one place, and a label denotes one')
+      end;
+      nkDefer: begin
+        ErrorAt(s^.line, s^.col);
+        writeln('a deferred statement may not defer another statement')
+      end;
+      nkCompound: begin
+        sub := s^.cpBody;
+        while sub <> nil do begin
+          CheckDeferBody(sub, outer);
+          sub := sub^.next
+        end
+      end;
+      nkIf: begin
+        CheckDeferBody(s^.ifThen, outer);
+        CheckDeferBody(s^.ifElse, outer)
+      end;
+      nkWhile: CheckDeferBody(s^.whBody, outer);
+      nkRepeat: begin
+        sub := s^.rpBody;
+        while sub <> nil do begin
+          CheckDeferBody(sub, outer);
+          sub := sub^.next
+        end
+      end;
+      nkFor: CheckDeferBody(s^.frBody, outer);
+      nkWith: CheckDeferBody(s^.wtBody, outer);
+      nkCase: begin
+        sub := s^.csArms;
+        while sub <> nil do begin
+          CheckDeferBody(sub^.caBody, outer);
+          sub := sub^.next
+        end;
+        sub := s^.csOtherwise;
+        while sub <> nil do begin
+          CheckDeferBody(sub, outer);
+          sub := sub^.next
+        end
+      end;
+      { Everything else is a statement with no statement inside it, or is not
+        a statement at all. The list is exhaustive rather than a catch-all so
+        that a statement kind added later is named here (ADR-0145). }
+      nkEmpty, nkAssign, nkWrite, nkRead, nkProcCall,
+      nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
+      nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
+      nkStructValue, nkValueElem, nkWriteArg, nkCaseArm, nkVariantArm,
+      nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
+      nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkConfArray, nkSchema,
+      nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
+      nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
+      nkImportSpec, nkImportItem: ;
+    end
+  end
+end;
+
+{ AP 6.9.3.11's defer-statement. The statement is checked where it is written
+  -- so every name in it means what it means *there*, which is what makes a
+  deferred statement readable beside the thing it undoes -- and the node is
+  then recorded on the block, whose activation record grows a flag for it.
+
+  The list is pushed onto rather than appended to, so it ends up in reverse
+  source order: 6.9.3.11 runs the armed statements in the reverse of the order
+  they are written, and walking this list forwards is that order. }
+procedure CheckDefer(s: nodePtr);
+var e: nodeListPtr;
+begin
+  CheckStmt(s^.dfStmt);
+  CheckDeferBody(s^.dfStmt, s);
+  if currentProc <> nil then begin
+    s^.dfIndex := currentProc^.deferCount;
+    currentProc^.deferCount := currentProc^.deferCount + 1;
+    new(e);
+    e^.dn := s;
+    e^.next := currentProc^.defers;
+    currentProc^.defers := e
+  end
+end;
+
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
     forEntry: symListPtr; owning: symPtr; badFunc: boolean;
@@ -17368,6 +17532,7 @@ begin
       end;
 
       nkWith:  CheckWith(s);
+      nkDefer: CheckDefer(s);
       nkCase:  CheckCase(s);
       nkWrite: CheckWrite(s);
       nkRead:  CheckRead(s);
@@ -21589,6 +21754,18 @@ begin
       end;
       writeln
     end;
+    { AP 6.9.3.11. The index is Sema's -- which flag in the frame says this
+      statement is armed -- so it prints only where the annotations do, as
+      every other resolved fact does. }
+    nkDefer: begin
+      write('defer');
+      WritePos(n^.line, n^.col);
+      if annotate then write(' #', n^.dfIndex:1);
+      writeln;
+      level := level + 1;
+      DumpStmt(n^.dfStmt);
+      level := level - 1
+    end;
     nkLabeled: begin
       write('label ', n^.lbLabel:1);
       WritePos(n^.line, n^.col);
@@ -23464,6 +23641,43 @@ begin
   else FrameAt(b^.level, v)
 end;
 
+{ AP 6.9.3.11: where this block's defer record sits. After the variables and
+  after the jump record, for the jump record's own reason -- so that no frame
+  index a name resolves to can move. The flags are the field after it, one i8
+  per defer-statement, and they are the whole of what says which statements
+  are armed. }
+function DeferBase(p: symPtr): integer;
+var k: integer;
+begin
+  k := 1 + p^.frameCount;
+  if p^.nlLabels <> nil then k := k + 1;
+  DeferBase := k
+end;
+
+procedure DeferRecord(p: symPtr; var frame: str; var v: str);
+begin
+  Def(v);
+  write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
+  PutOp(frame);
+  writeln(ircode, ', i32 0, i32 ', DeferBase(p):1)
+end;
+
+procedure DeferFlag(p: symPtr; var frame: str; k: integer; var v: str);
+begin
+  Def(v);
+  write(ircode, 'getelementptr inbounds %frame', p^.irId:1, ', ptr ');
+  PutOp(frame);
+  writeln(ircode, ', i32 0, i32 ', DeferBase(p) + 1:1, ', i32 ', k:1)
+end;
+
+{ The runner emitted for a block that defers. A dot is what keeps the name out
+  of a program's reach: ReservedForeignName refuses any foreign name
+  containing one, so no `external` declaration can collide with it (ADR-0144). }
+procedure PutDeferName(p: symPtr);
+begin
+  write(ircode, '@p', p^.irId:1, '.defer')
+end;
+
 { The jump record is the field after the last variable. Only called for a
   procedure whose nlLabels is non-empty. }
 procedure JumpRecord(p: symPtr; var frame: str; var v: str);
@@ -24471,6 +24685,10 @@ begin
     end
 end;
 procedure EmitStmt(s: nodePtr); forward;
+{ AP 6.9.3.11: forward because a statement-sequence is completed in three
+  places and the earliest of them, a repeat-statement's body, is emitted
+  before this is defined. }
+procedure EndSequence(list: nodePtr); forward;
 
 { The value a designator holds. An array or a record has no register form, so
   what it yields is its address; everything else is loaded from it. }
@@ -29316,6 +29534,9 @@ begin
     EmitStmt(sub);
     sub := sub^.next
   end;
+  { 6.9.3.7's body is a statement-sequence, so it is completed once per
+    iteration and what it armed runs there (AP 6.9.3.11). }
+  EndSequence(s^.rpBody);
   { repeat runs until the condition becomes true }
   mark := strTemps;
   EmitExpr(s^.rpCond, cond);
@@ -29769,6 +29990,93 @@ end;
 { ISO 7185 6.8.3.5 has no `else` arm, so the default is an error rather than a
   way out: a selector matching no label stops the program. That maps onto a
   switch exactly, and the jump table survives optimisation. }
+{ AP 6.9.3.11. The three routines below are the whole of the lowering, and
+  the shape they share is that a defer-statement's *statement* is emitted in
+  two places: where the sequence it stands in is completed, and inside the
+  block's runner. Nothing else in this emitter emits one statement twice,
+  which is why Sema refuses a label and a goto inside a deferred statement --
+  a label would be two labels with one number.
+
+  A `defer` is armed by storing 1 in its flag, and an armed statement clears
+  its own flag before it runs. So the two emissions cannot both fire, the
+  runner cannot run a statement a sequence already ran, and a defer-statement
+  reached twice without its sequence completing -- a backward `goto` over one
+  -- arms what is already armed and runs it once. }
+
+{ The defer-statement a statement *is*, looking through the labels a program
+  may have put in front of it. }
+function DeferStmtOf(s: nodePtr): nodePtr;
+begin
+  while (s <> nil) and (s^.kind = nkLabeled) do s := s^.lbStmt;
+  if s = nil then DeferStmtOf := nil
+  else if s^.kind = nkDefer then DeferStmtOf := s
+  else DeferStmtOf := nil
+end;
+
+{ `if armed then begin disarm; statement end`. }
+procedure EmitDeferRun(d: nodePtr);
+var frame, flag, val, cond: str; runB, contB: integer;
+begin
+  FrameAt(irProc^.level, frame);
+  DeferFlag(irProc, frame, d^.dfIndex, flag);
+  Def(val);
+  write(ircode, 'load i8, ptr ');
+  PutOp(flag);
+  writeln(ircode);
+  Def(cond);
+  write(ircode, 'icmp ne i8 ');
+  PutOp(val);
+  writeln(ircode, ', 0');
+  runB := NewBlock;
+  contB := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(cond);
+  writeln(ircode, ', label %L', runB:1, ', label %L', contB:1);
+  StartBlock(runB);
+  { Disarmed before it runs, not after: the statement may itself leave the
+    block -- by halting -- and what must not happen is running it twice. }
+  FrameAt(irProc^.level, frame);
+  DeferFlag(irProc, frame, d^.dfIndex, flag);
+  write(ircode, '  store i8 0, ptr ');
+  PutOp(flag);
+  writeln(ircode);
+  EmitStmt(d^.dfStmt);
+  writeln(ircode, '  br label %L', contB:1);
+  StartBlock(contB)
+end;
+
+{ Reverse source order, from a list that is linked forwards: recursion is
+  what reverses it, and the caller has already established that there is at
+  least one defer-statement here -- so no sequence pays for this walk, and
+  the depth is the length of a sequence that defers rather than of any
+  sequence at all. }
+procedure RunDefersReversed(sub: nodePtr);
+var d: nodePtr;
+begin
+  if sub <> nil then begin
+    RunDefersReversed(sub^.next);
+    d := DeferStmtOf(sub);
+    if d <> nil then EmitDeferRun(d)
+  end
+end;
+
+{ AP 6.9.3.11: a statement-sequence has been completed, so what it armed runs.
+  Called for each of the three constructs that hold one -- a compound
+  statement, a repeat-statement's body, and 6.9.3.5's case-statement-completer
+  -- and for nothing else, a branch of an `if` and the body of a `while` being
+  single statements. }
+procedure EndSequence;
+var sub: nodePtr; any: boolean;
+begin
+  any := false;
+  sub := list;
+  while sub <> nil do begin
+    if DeferStmtOf(sub) <> nil then any := true;
+    sub := sub^.next
+  end;
+  if any then RunDefersReversed(list)
+end;
+
 procedure EmitCase(s: nodePtr);
 var sel, wide, ge, le, both: str; arm: nodePtr; n: rangePtr;
     first, k, count, armB, defaultB, endB, nextB, msg: integer;
@@ -29876,6 +30184,7 @@ begin
       EmitStmt(arm);
       arm := arm^.next
     end;
+    EndSequence(s^.csOtherwise);
     writeln(ircode, '  br label %L', endB:1)
   end
   else begin
@@ -29890,7 +30199,7 @@ begin
 end;
 
 procedure EmitStmt;
-var sub: nodePtr; v: str; mark: integer;
+var sub: nodePtr; v, flag: str; mark: integer;
 begin
   if s <> nil then begin
     { What the string arena stood at before this statement was emitted
@@ -29917,7 +30226,18 @@ begin
         while sub <> nil do begin
           EmitStmt(sub);
           sub := sub^.next
-        end
+        end;
+        EndSequence(s^.cpBody)
+      end;
+      { AP 6.9.3.11: arming is the whole of what a defer-statement emits. The
+        statement itself was emitted where the sequence ends and in the
+        runner, both of which read this flag. }
+      nkDefer: begin
+        FrameAt(irProc^.level, v);
+        DeferFlag(irProc, v, s^.dfIndex, flag);
+        write(ircode, '  store i8 1, ptr ');
+        PutOp(flag);
+        writeln(ircode)
       end;
       nkAssign: EmitAssign(s);
       { The husk first: 6.6.4.1 lets the program declare its own `write`, and
@@ -30062,6 +30382,14 @@ begin
     walking the static chain (ADR-0032). }
   if p^.nlLabels <> nil then
     write(ircode, ', [', jumpSize div 8:1, ' x i64]');
+  { AP 6.9.3.11: the defer record, and one flag per defer-statement of the
+    block. Last for the jump record's reason, and absent altogether from a
+    block that defers nothing -- which is what makes this feature cost every
+    program that does not use it exactly nothing (ADR-0175). }
+  if p^.deferCount > 0 then begin
+    write(ircode, ', [', deferSize div 8:1, ' x i64]');
+    write(ircode, ', [', p^.deferCount:1, ' x i8]')
+  end;
   writeln(ircode, ' }')
 end;
 
@@ -30112,6 +30440,32 @@ begin
   end
 end;
 
+{ AP 6.9.3.11: the flags start clear -- an `alloca` does not -- and the
+  record goes on the runtime's list, so that a `goto` past this block and a
+  `halt` can run what this block armed. A block that defers nothing emits none
+  of it. }
+procedure InitDefers(p: symPtr);
+var frame, rec, flag: str; k: integer;
+begin
+  if p^.deferCount > 0 then begin
+    FrameAt(p^.level, frame);
+    for k := 0 to p^.deferCount - 1 do begin
+      DeferFlag(p, frame, k, flag);
+      write(ircode, '  store i8 0, ptr ');
+      PutOp(flag);
+      writeln(ircode)
+    end;
+    DeferRecord(p, frame, rec);
+    write(ircode, '  call void @pas_defer_init(ptr ');
+    PutOp(rec);
+    write(ircode, ', ptr ');
+    PutDeferName(p);
+    write(ircode, ', ptr ');
+    PutOp(frame);
+    writeln(ircode, ')')
+  end
+end;
+
 { A block exit closes the files the block declared, which is ISO 7185's rule
   and also the only thing that flushes a file written to inside a procedure.
   Pascal has no early return, so the single exit point each body ends with is
@@ -30119,6 +30473,19 @@ end;
 procedure CloseFiles(p: symPtr);
 var l: symListPtr; addr, frame, rec: str;
 begin
+  { AP 6.9.3.11 before anything is closed: a statement armed in this block may
+    still write to a file the block owns, and this is the last moment it can.
+    Whatever the sequences already ran is disarmed, so what this reaches is
+    what a `goto` inside the block left pending. Calling it twice is a no-op
+    -- pas_defer_done clears the runner as it unlinks -- which is what lets a
+    module's finalization share this epilogue with its initialization. }
+  if p^.deferCount > 0 then begin
+    FrameAt(p^.level, frame);
+    DeferRecord(p, frame, rec);
+    write(ircode, '  call void @pas_defer_done(ptr ');
+    PutOp(rec);
+    writeln(ircode, ')')
+  end;
   l := p^.frameVars;
   while l <> nil do begin
     if HoldsFile(l^.sym^.stype) and (l^.sym^.kind <> skVarParam) then begin
@@ -30726,6 +31093,7 @@ begin
   InitDynamicVars(p);
   InitInitialStates(p);
   InitFiles(p);
+  InitDefers(p);
   { 6.2.3.6 orders the *commencements* of the modules that supply the
     main-program-block before the program's own, and written order is such an
     order -- 6.2.2.9 already puts a module-heading before everything that
@@ -30755,6 +31123,41 @@ begin
     end
   end;
   JumpDispatch(p)
+end;
+
+{ AP 6.9.3.11's runner: the function `pas_defer_done` calls, and so the one a
+  `goto` past this block and a `halt` reach its armed statements through.
+
+  It takes the block's own frame rather than allocating one, which is what
+  makes every name inside a deferred statement mean there what it meant where
+  it was written: `irLevel` is the block's level, so FrameAt of that level is
+  this parameter and FrameAt of any enclosing level walks the static chain
+  from it exactly as the block's own code does. A level-0 block's frame is a
+  global and the parameter goes unread, which costs a word and needs no second
+  shape.
+
+  The list is already in reverse source order (Sema pushes onto it), so
+  walking it forwards is the order 6.9.3.11 requires. }
+procedure EmitDeferRunner(p: symPtr);
+var e: nodeListPtr;
+begin
+  if p^.deferCount > 0 then begin
+    writeln(ircode);
+    write(ircode, '; deferred statements of ');
+    WritePoolIr(p^.at, p^.len);
+    writeln(ircode);
+    write(ircode, 'define internal void ');
+    PutDeferName(p);
+    writeln(ircode, '(ptr %frame) {');
+    BeginFunction(p);
+    e := p^.defers;
+    while e <> nil do begin
+      EmitDeferRun(e^.dn);
+      e := e^.next
+    end;
+    writeln(ircode, '  ret void');
+    writeln(ircode, '}')
+  end
 end;
 
 procedure EmitProcBody(d: nodePtr);
@@ -30820,7 +31223,8 @@ begin
     { A result that lives in memory went straight into the caller's storage,
       so there is nothing left to hand back. }
     writeln(ircode, '  ret void');
-  writeln(ircode, '}')
+  writeln(ircode, '}');
+  EmitDeferRunner(p)
 end;
 
 procedure EmitProcs(b: nodePtr);
@@ -30848,6 +31252,9 @@ begin
           'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32, ',
           'i32, i32)');
   writeln(ircode, 'declare void @pas_file_done(ptr)');
+  { AP 6.9.3.11 (ADR-0175) }
+  writeln(ircode, 'declare void @pas_defer_init(ptr, ptr, ptr)');
+  writeln(ircode, 'declare void @pas_defer_done(ptr)');
   { AP 6.4.12 (ADR-0174) }
   writeln(ircode, 'declare void @pas_handle_init(ptr, ptr)');
   writeln(ircode, 'declare void @pas_handle_done(ptr)');
@@ -31189,6 +31596,10 @@ begin
   if m^.mdInit <> nil then EmitStmt(m^.mdInit);
   writeln(ircode, '  ret void');
   writeln(ircode, '}');
+  { A module's block defers into its *initialization*: 6.11.4's
+    module-initialization is the statement-part of the module-block, and the
+    finalization shares the frame and the same epilogue. }
+  EmitDeferRunner(p);
 
   { The finalization has its own function because 6.2.3.6 runs it after the
     main-program-block has terminated, not after the initialization. }
@@ -31334,6 +31745,7 @@ begin
   EmitFinis(activeModules);
   writeln(ircode, '  ret i32 0');
   writeln(ircode, '}');
+  EmitDeferRunner(programSym);
 
   EmitProcs(progBlock);
 

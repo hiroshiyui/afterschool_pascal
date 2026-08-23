@@ -93,6 +93,11 @@
 6.8	Expressions
 6.8.3	Operators
 6.8.3.5	Relational operators
+6.9	Statements
+6.9.3.11	Defer-statements
+6.9.3.11.1	Arming
+6.9.3.11.2	Execution
+6.9.3.11.3	What a deferred statement may not contain
 6.10	Input and output
 6.11	Modules
 6.13	Programs

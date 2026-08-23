@@ -183,3 +183,4 @@ the alternatives that were rejected and why.
 | [0172](0172-binding-says-whether-the-file-is-there.md) | `binding(f).bound` says whether the file is there | Accepted |
 | [0173](0173-the-command-line-as-a-list.md) | The command line as a list: `argcount` and `argument(k)` | Accepted |
 | [0174](0174-a-handle-is-a-file-variable-for-a-foreign-address.md) | A handle is a file variable for a foreign address | Accepted |
+| [0175](0175-defer.md) | `defer`: a statement armed where it is written | Accepted |

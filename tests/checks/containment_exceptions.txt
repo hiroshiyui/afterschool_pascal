@@ -67,3 +67,4 @@ argument_refused
 # `a[1..2] = a[3..4]` was accepted by Sema and emitted as invalid IR.
 substring_errors
 handle_refused
+defer_refused
