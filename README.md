@@ -447,6 +447,26 @@ Both are required identifiers and so shadowable: a program with its own
 `argument`, or its own `argcount`, keeps it. `argument(k)` outside
 `1..argcount` stops the program.
 
+**A handle is an owned foreign address** (ADR-0174). A `FILE *` or a `DIR *`
+comes back from a foreign routine and the type says what releases it:
+
+```pascal
+type Dir = handle external 'closedir';
+function ExtOpendir(path: string): Dir; external 'opendir';
+var d: Dir;
+begin
+  d := ExtOpendir('.');          { the one assignment a handle has }
+  if d <> nil then writeln('open')
+end.                             { closedir runs here, as a file closes }
+```
+
+It has a file variable's rules, through the same predicate: no copy, no
+comparison but with `nil`, released when the variable dies — at the block's
+end, on a `goto` out of it, on `halt`, on `dispose`. Assigning another value
+releases the old one first. A handle may be lent to a foreign routine as a
+value parameter, and lending an empty one stops the program. What it is not
+is a value: no Pascal function returns one and no record copies one.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are

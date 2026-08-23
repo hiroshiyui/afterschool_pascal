@@ -71,14 +71,10 @@ Every foreign type that crosses today is a scalar, a string copied at the call,
 or a slice the caller owns (AP §6.7.7). What cannot cross is now two things
 rather than a category:
 
-- **An opaque handle** — `DIR *` from `opendir`, `FILE *` from `fopen`. No
-  layout has to be agreed; it is a token to hand back. What it needs is a
-  *lifetime*, and the language has one to offer: a file variable is a handle a
-  block manages, closed at exit and on a non-local `goto` (ADR-0021, ADR-0032).
-  It is **not blocked** — `int64` carries one today, unsafely, and
-  `tests/dialect/foreign_int64_handle.pas` pins exactly how unsafely (ADR-0151,
-  Annex C.7). What is open is giving it a type. This is the cheapest thing left
-  and the first that genuinely touches the aliasing question above.
+- ~~**An opaque handle**~~ — **done** (ADR-0174, AP 6.4.12): `handle external
+  'closedir'` is a file variable for a foreign address, released where a file
+  closes. What it deliberately does not touch is aliasing: a handle cannot be
+  copied at all, so no two names reach one value.
 
 - **A struct with a layout** — `struct sockaddr`, `struct stat`,
   `struct dirent`. This needs the compiler and C to agree about offsets, which
@@ -89,9 +85,9 @@ rather than a category:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| a directory listing | `readdir` answers a `struct dirent *` — the struct item. `popen` and `fgets` would do it through the shell and a `FILE *` — the handle item, plus an `int`-sized length where a slice crosses as `i64` |
+| a directory listing | `readdir` answers a `struct dirent *` — the struct item. Through the shell it is a module away now: `popen` answers a handle (ADR-0174) and `fgets` takes one |
 | a socket | the struct item, with `sockaddr` |
-| creating a file through `PasIO` | `O_WRONLY`, `O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS set is that a number a module cannot check does not go in. Not a language question, and not urgent: §6.10's `rewrite` creates files and `PasFile` wraps it |
+| creating a file through `PasIO` | `O_WRONLY`, `O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS set is that a number a module cannot check does not go in. `fopen` with a mode string needs none, and answers a handle now (ADR-0174); and §6.10's `rewrite` creates files and `PasFile` wraps it |
 
 **The lesson from the five FFI increments**, worth keeping for the rows above:
 a decision that looks like it needs a model may need it for only part of its
@@ -396,3 +392,4 @@ the record.
 | Is the platform lock scoped? | Three things, two done; 32-bit is what remains | ADR-0155 – ADR-0159 |
 | Can a conforming program learn that a file is missing? | `binding(f).bound` says whether it is there | ADR-0172 |
 | Can a program get its arguments as a list? | `argcount` and `argument(k)`, required identifiers of the dialect | ADR-0173 |
+| Can a foreign address be owned? | A handle-type: a file variable for it, released where a file closes | ADR-0174 |

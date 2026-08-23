@@ -2368,6 +2368,25 @@ the husk ADR-0044 describes; `EmitExpr` and `EmitAddress` read it first, and
 `tests/dialect/inherits_extended.pas` declares both names and is what fails if
 the decision moves back to the parser; `tests/dialect/arguments.pas` and
 `trap_argument.pas` pin the values and Annex A.6.
+
+**A handle is a file variable for a foreign address** (ADR-0174, AP 6.4.12).
+`type Dir = handle external 'closedir'` is `tyHandle`: a 32-byte slot — value,
+closer, two list links — that `WalkFiles` sets up empty in the prologue and
+`pas_handle_done` releases in the epilogue, with the live handles on a runtime
+list beside the open files so that `pas_jump_go` and `pas_halt` release what
+they abandon with the walk they already do. `IsOwned` is a file or a handle,
+`ContainsFile` walks it, and every refusal a file has reaches a handle with no
+new arm — `predicate-callers` sweeps a third spelling. Three exceptions are
+written beside the rules: the assignment from an external function-designator
+of the same type (`pas_handle_set`, releasing the old value; a handle-valued
+call may stand nowhere else, enforced by a flag the assignment arm sets),
+`= nil` (`EmitHandleTest`, a null word), and lending as an external's value
+parameter (`pas_handle_lend`, an error if empty). The closer is declared
+`i32 (ptr)` unless an `external` heading already declared the name. The
+spelling reserves nothing: an identifier followed by `external` and a string
+where a type-denoter ends is a syntax error in both standards.
+`tests/dialect/handle.pas` reads every file back, `fputs` being buffered until
+`fclose`, so each release is observed; `handle_errors.pas` is the refusals.
 **A buffer crosses as the pair C already takes** (ADR-0129). A slice reaches a
 foreign routine as `(ptr, i64)` — the address of the first component, then how
 many there are, two arguments from one formal — which is what `read`, `write`,

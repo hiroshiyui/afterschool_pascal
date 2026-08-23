@@ -27,6 +27,14 @@ The other three entries only accept more.
 
 ### Added
 
+- **Handle-types** under `--std=afterschool`: `type Dir = handle external
+  'closedir'` is a foreign address this program owns, with a file variable's
+  rules — no copy, released when the variable dies, on `goto`, `halt` and
+  `dispose` — and three of its own: assignment from an external function of
+  its type, comparison with `nil`, and lending to an external as a value
+  parameter, where an empty handle is a run-time error. AP 6.4.12, ADR-0174.
+  `tests/dialect/handle.pas`.
+
 - **`argcount` and `argument(k)`** under `--std=afterschool`: the program's
   command line as a list, two required identifiers that §6.1.3 makes
   shadowable. `argument(k)` outside `1..argcount` is a run-time error. Under
