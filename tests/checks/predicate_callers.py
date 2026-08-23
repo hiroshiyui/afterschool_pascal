@@ -182,7 +182,10 @@ type
   schp = ^sch;
   frec = record n: integer; g: text end;
   hnd = handle external 'fclose';
+  ecode = (e1, e2);
+  flb = integer ! ecode;
 var
+  fl: flb;
   i: integer;
   r: rec;
   arr: arrt;
@@ -241,6 +244,11 @@ POSITIONS = [
      "case u of 1: i := 1 end"),
     ("assignment", "CheckStmt", 5, "stmt",
      "u := v"),
+    # AP 6.4.13 (ADR-0176): the shorthand that picks an arm. Assignable is
+    # what chooses, so a type it refuses must reach neither arm -- and then
+    # the ordinary assignment refusal is what reports.
+    ("fallible-arm", "AsFallibleArm", 2, "stmt",
+     "fl := u"),
     ("for-in-control", "CheckStmt", 5, "stmt",
      "for u in st do i := 1"),
     ("for-bounds", "CheckStmt", 5, "stmt",

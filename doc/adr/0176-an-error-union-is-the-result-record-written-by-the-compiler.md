@@ -4,10 +4,13 @@ Date: 2026-08-24
 
 ## Status
 
-**Proposed.** Would add a clause of its own to AP 6.4 — the next one after the
-handle-type — and a row each to Annexes B and F. The number is deliberately not
-written down here: `clause-citations` reads any clause number in this tree as a
-citation, and a proposal must not pin one the specification does not yet carry.
+**Accepted.** AP 6.4.13, and a row each to Annexes B and F.
+
+Written as **Proposed** first, before the implementation, which is what
+ADR-0001 asks for — and the implementation then changed two of its decisions.
+Both changes are recorded in place, marked *revised*, rather than smoothed
+over: the point of writing a record before the work is to be able to see what
+the work taught.
 
 This record is written before the decision, which is ADR-0001's rule — a record
 written afterwards justifies rather than explains. Three choices in it are
@@ -107,7 +110,7 @@ word-symbol of ISO/IEC 10206:1991 §6.1.2 and cannot be a field name, which is
 the same fact that forced `selfhost/compiler.pas` to rename a field of its own
 (ADR-0082). `val` is the nearest spelling that is free.
 
-### 3. Assignment makes a value, from either side
+### 3. Assignment makes a value, from either side [revised]
 
 Two arms in `Assignable`, the shape ADR-0123 used for `?T`:
 
@@ -115,10 +118,22 @@ Two arms in `Assignable`, the shape ADR-0123 used for `?T`:
 - an `E` assigned to it makes it failed;
 - the same fallible type assigned to it copies, by identity as records already do.
 
-**`T ! E` is refused where `T` and `E` are assignable to one another**, because
-then a value would not say which arm it meant. `integer ! integer` and
-`integer ! 1..5` are refused; `integer ! ErrorCode` is not. Refusal by
-construction, and no rule about "which side wins".
+**Revised in implementation.** The proposal refused `T ! E` outright where `T`
+and `E` are assignable to one another. What is implemented refuses the
+*assignment* instead: `integer ! 1..5` is a declarable type — it is an
+ordinary errno-shaped result — and what it cannot take is the shorthand, so
+`r := 3` is refused where it is written and `r.val := 3` and `r.cause := 3`
+say which arm they mean.
+
+Two things pushed it there. The narrower refusal forbids nothing that works,
+which is the better shape whenever the *construction* is not the thing that
+fails. And `predicate-callers` (ADR-0146) found the other half: the
+declaration-time test made `ResolveFallible` a caller of `Assignable`, and
+that gate requires every caller to have a position it can sweep — a
+type-denoter is not a position expressible in a probe that puts a type in as a
+*variable*, so the honest way to answer the gate was to move the question to
+where a value actually is. A gate asking "has this caller been considered at
+all?" answered a design question.
 
 ### 4. The tag may not be assigned
 
@@ -229,12 +244,13 @@ rather than a construct that has to invent its own way out of a block. Doing
   library routine can. That is a follow-on and not part of this record; it is
   named because it is the second thing the survey found and the reason two of
   the six records have no conveniences at all.
-- **Cost estimate**: a token and a lexer arm, a parser branch in
-  `ParseTypeDenoter`, a `ResolveFallible` building the record, one flag on
-  `typeRec`, two arms in `Assignable`, one refusal in the assignment checker,
-  a `WriteTypeName` arm, and the exhaustive no-op arms `kind-exhaustive` will
-  name. No layout work, no new trap, no runtime routine, and no `verify/` rule
-  — the same `Model-unchanged:` argument ADR-0123 made.
+- **Cost, as built**: a token and a lexer arm, a parser postfix in
+  `ParseTypeDenoter`, `ResolveFallible` building the record, one flag and two
+  type pointers on `typeRec`, one arm in `Assignable`, `AsFallibleArm` in
+  Sema, a refusal in `Threatened`, a `WriteTypeName` arm, and the exhaustive
+  no-op arms. **No CodeGen change at all** — which was the estimate's whole
+  bet and it held: no layout work, no new trap, no runtime routine, and no
+  `verify/` rule.
 - **Gates it moves**: `kind-exhaustive` (one node kind), `annex-b` (a row and
   two cases), `containment_exceptions.txt` (one entry), the spec's clause table
   and triage, and `dialect-containment` not at all — `tests/extended/` cannot
@@ -244,6 +260,17 @@ rather than a construct that has to invent its own way out of a block. Doing
   document that named the clause in advance would be a citation
   `clause-citations` could only call nonexistent, and it did, on the first
   draft of this file.
+
+## Mutation
+
+Four, three different cases. The arm rewrite dropped from §6.8.2.2's path:
+`fallible` fails to compile at all, the compiler reaching a nil where a record
+field should be. The tag's refusal in `Threatened` disabled: `fallible_errors`
+loses two diagnostics, the assignment *and* the `read`. `!` removed from
+`LooksLikeSubrange`'s terminator set: `fallible_errors` loses the nested-type
+refusal, `integer ! 1..5` having scanned as one subrange. The cause arm never
+chosen in `AsFallibleArm`: `fallible` no longer compiles, an `ErrorCode` being
+offered to the `val` field.
 
 ## Alternatives considered
 
@@ -273,12 +300,41 @@ rather than a construct that has to invent its own way out of a block. Doing
   says so itself: "a new module returning a result record with a tag spelled
   `success` would compile, link and pass every test in this repository."
 
-## Open, for the decision
+## What the implementation found
 
-1. **The field names.** `ok` / `val` / `cause`, given that `value` is reserved.
-2. **Whether the record is the right substrate** — reusing `tyRecord` and
-   ADR-0118, against a type of its own with `^`.
-3. **Whether propagation is in scope now.** This record assumes not, and that
-   assumption is what keeps it small. If it is, the question underneath it is
-   whether the dialect gets `exit` — which is worth having on its own terms and
-   which every popular Pascal already has.
+Four things a reading would not have, each now a case:
+
+- **Assigning to a function's own identifier is a different path.** §6.8.2.2's
+  `f := 1` never reaches the ordinary assignment checker, so the arm rewrite
+  was absent there: Sema accepted it, nothing wrapped it, and CodeGen emitted
+  a store of an integer into a record. A segfault at run time with the whole
+  suite green.
+- **The rewrite must not re-check its base.** Handing the new `f.val` to
+  `CheckExpr` re-read `f`, and §6.8.2.2 makes *reading* a function identifier
+  a recursive call — the program looped until the stack ran out. The field is
+  the language's own and cannot be missing, so it is resolved directly.
+- **`LooksLikeSubrange` had to learn the token.** It scans forward for a `..`
+  to tell `base - 9 .. base + 1` from a type name, and stops at the tokens
+  that end a denoter. `!` was not one, so `integer ! 1..5` scanned as a single
+  subrange whose lower bound was `integer`, and the diagnostic was about a
+  `..` that was never missing.
+- **The tag needed §6.9.4 and not the assignment.** Refusing `r.ok := true`
+  where the assignment is checked would have left `read(r.ok)` setting the tag
+  with no arm written. `Threatened` is the predicate the clause's six threat
+  sites already go through, and a refusal there reaches all of them — the
+  shared-predicate lesson of ADR-0146 used the way round that pays.
+
+## Consequences of the migration
+
+`lib/dialect/` loses six record declarations for six one-line type
+definitions, and the field names become the same in every module. The
+collision this record cited as its sharpest evidence — `RunResult.code` being
+a *success* payload where `r.code` elsewhere is the `ErrorCode` — is gone by
+construction rather than by a convention someone must remember.
+
+## Still open
+
+**Propagation**, and beneath it whether the dialect gets `exit`. ADR-0175's
+record carries the argument: an early exit is what every popular Pascal has
+and neither standard does, and `try X` is sugar over it rather than a
+construct that has to invent its own way out of a block.

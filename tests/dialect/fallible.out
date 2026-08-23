@@ -1,0 +1,20 @@
+parse 42: ok=TRUE val=42
+parse x: ok=FALSE cause=1
+parse 99999: ok=FALSE cause=2
+assigned a value: ok=TRUE val=7
+assigned a cause: ok=FALSE cause=3
+the copy: ok=TRUE val=5
+the original: ok=FALSE cause=1
+r.val := 11: ok=TRUE val=11
+r.cause := range: ok=FALSE cause=2
+p.a: ok=TRUE val=1
+p.b: ok=FALSE cause=1
+row: ok=TRUE val=10
+row: ok=FALSE cause=1
+row: ok=TRUE val=30
+name 1: ok=TRUE val=[one]
+name 2: ok=FALSE cause=3
+other: ok=TRUE val=8
+bag 1: ok=TRUE val=4
+bag 2: ok=FALSE cause=1
+branching on the tag works

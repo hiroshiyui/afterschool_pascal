@@ -64,6 +64,11 @@
 6.4.12.2	Values and variables
 6.4.12.3	Release
 6.4.12.4	Crossing the boundary
+6.4.13	Fallible-types
+6.4.13.1	The denoter
+6.4.13.2	What it denotes
+6.4.13.3	Assignment
+6.4.13.4	The tag
 6.5	Declarations and denotations of variables
 6.5.3	Component-variables
 6.5.3.2	Indexed-variables

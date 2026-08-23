@@ -258,6 +258,10 @@ type
       admits anywhere at all, so the dialect can take it and the lexis costs
       nothing -- the same property ADR-0121 got out of a directive. }
     tkQuery,
+    { AP 6.4.13's fallible-type marker (ADR-0176). `!` is free for the reason
+      `?` was: neither standard admits the character in any position, so the
+      dialect takes it and the lexis costs nothing. }
+    tkBang,
     tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe,
     tkAnd, tkArray, tkBegin, tkCase, tkConst, tkDiv, tkDo, tkDownto, tkElse,
     tkEnd, tkFile, tkFor, tkFunction, tkGoto, tkIf, tkIn, tkLabel, tkMod,
@@ -415,6 +419,11 @@ type
       released by the named routine when the variable dies. A denoter and
       not a name, for the optional's reason. }
     nkHandle,
+    { AP 6.4.13's fallible-type, `T ! E` (ADR-0176): the result record
+      ADR-0120 tells a module to write, with the field names fixed. It is a
+      denoter holding two denoters and resolves to an ordinary record, which
+      is the whole of why it is cheap. }
+    nkFallible,
     { ISO 7185 6.6.3.7's conformant-array-schema, and ISO/IEC 10206:1991
       6.7.3.7's, which is the same construct. It is a type-denoter that may
       appear in one position only -- a formal parameter's -- and it is the only
@@ -723,6 +732,13 @@ type
     enumNames, enumTail: namePtr;
     fields, fieldTail: fieldPtr;
     variants, variantTail: variantPtr;
+    { AP 6.4.13: this record was written by `T ! E` rather than by the program
+      (ADR-0176). The two types are kept so a diagnostic can spell the type the
+      way the source did; everything else about it is an ordinary record, which
+      is what makes the trap, the copy and the layout inherited rather than
+      re-implemented. }
+    isFallible: boolean;
+    falVal, falCause: typePtr;
     tagField: integer;
     { 6.4.3.4 spells a variant-selector `[tag-field ':'] tag-type |
       discriminant-identifier`, and this says it was the third form. The
@@ -1414,6 +1430,7 @@ type
       nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer);
       nkOptional:   (opElem: nodePtr);
       nkHandle:     (hdAt, hdLen: integer);   { the closer's foreign name }
+      nkFallible:   (faVal, faCause: nodePtr);
       { caLo and caHi are nkDeclName nodes -- these are defining-points, and a
         declared name is what that node kind is for. caIndex is the
         ordinal-type-identifier the two bounds are values of. }
@@ -3524,6 +3541,9 @@ begin
     character" and still says which character it was. }
   else if (c = '?') and (langStd = stdAfterschool) then
     AddSimple(sl, sc, tkQuery)
+  { and the same for `!`, refused outside the dialect by the same path }
+  else if (c = '!') and (langStd = stdAfterschool) then
+    AddSimple(sl, sc, tkBang)
   else if c = ':' then begin
     if Peek(0) = '=' then begin Advance; AddSimple(sl, sc, tkAssign) end
     else AddSimple(sl, sc, tkColon)
@@ -3612,6 +3632,7 @@ begin
     tkRBracket:  write(''']''');
     tkCaret:     write('''^''');
     tkQuery:     write('''?''');
+    tkBang:      write('''!''');
     tkEq:        write('''=''');
     tkArrow:     write('''=>''');
     tkNotEq:     write('''<>''');
@@ -3685,7 +3706,7 @@ begin
     tkLParen: write('(');     tkRParen: write(')');
     tkLBracket: write('[');   tkRBracket: write(']');
     tkCaret: write('^');      tkEq: write('=');
-    tkQuery: write('?');
+    tkQuery: write('?');       tkBang: write('!');
     tkNotEq: write('<>');     tkLt: write('<');
     tkLe: write('<=');        tkGt: write('>');
     tkGe: write('>=');    tkStarStar: write('**');
@@ -3907,6 +3928,7 @@ begin
     end;
     nkOptional: n^.opElem := nil;
     nkHandle: begin n^.hdAt := 0; n^.hdLen := 0 end;
+    nkFallible: begin n^.faVal := nil; n^.faCause := nil end;
     nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat,
@@ -4100,8 +4122,14 @@ begin
           if not ((i + 1 <= tokCount) and (tok[i + 1].kind = tkIdent)) then
             done := true
       end
+      { AP 6.4.13's `!` ends the denoter on its left, so a `..` after one
+        belongs to the *cause* and not to a subrange spanning both: without
+        this line `integer ! 1..5` scans as one subrange whose lower bound is
+        `integer`, and the diagnostic is about a `..` that was never missing
+        (ADR-0176). }
       else if (k = tkSemi) or (k = tkComma) or (k = tkColon) or (k = tkEq) or
               (k = tkOf) or (k = tkEnd) or (k = tkBegin) or
+              (k = tkBang) or
               (k = tkEof) then begin
         if depth = 0 then done := true
       end;
@@ -4950,6 +4978,23 @@ begin
         end
       end
     end
+  end;
+  { AP 6.4.13's fallible-type, read after the denoter it qualifies (ADR-0176).
+    A postfix rather than a prefix because the payload is what the type is
+    about and what every module already names it for -- `integer ! ErrorCode`
+    reads as "an integer, or a failure described by an ErrorCode".
+
+    It binds to the denoter just parsed, so `?integer ! e` is `?(integer ! e)`
+    and `a ! b ! c` is `a ! (b ! c)`. Neither is a type: ResolveFallible
+    refuses a fallible on either side and ResolveOptional refuses one inside an
+    optional, so the associativity decides only which diagnostic arrives. }
+  if Check(tkBang) and not aborted then begin
+    n := NewNode(nkFallible, CurLine, CurCol);
+    n^.faVal := t;
+    n^.faCause := nil;
+    pos := pos + 1;
+    n^.faCause := ParseTypeDenoter;
+    t := n
   end;
   LeaveLevels(1);
   ParseTypeDenoter := t
@@ -6994,6 +7039,9 @@ begin
   t^.variants := nil;
   t^.variantTail := nil;
   t^.discSelector := false;
+  t^.isFallible := false;
+  t^.falVal := nil;
+  t^.falCause := nil;
   t^.tagField := -1;
   t^.aliasAt := 0;
   t^.aliasLen := 0;
@@ -7058,6 +7106,13 @@ begin IsVarString := (t <> nil) and (t^.kind = tyString) end;
   not its T and the whole point is that it does not answer for one. }
 function IsOptional(t: typePtr): boolean;
 begin IsOptional := (t <> nil) and (t^.kind = tyOptional) end;
+
+{ AP 6.4.13 (ADR-0176). A fallible-type *is* a record -- everything that asks
+  "is this a record?" must go on answering yes, which is what makes the copy,
+  the layout and ADR-0118's trap free -- so this asks the flag rather than the
+  kind. It is what the two assignment rules and the tag refusal key on. }
+function IsFallible(t: typePtr): boolean;
+begin IsFallible := (t <> nil) and (t^.kind = tyRecord) and t^.isFallible end;
 
 { ADR-0125's slice. Like tyProc, this is the type of a formal parameter and of
   nothing else -- so most of the compiler meets one only through the parameter
@@ -7682,7 +7737,16 @@ begin
           Put(' ');
           WriteTypeName(t^.elem)
         end;
-      tyRecord: begin
+      tyRecord: if t^.isFallible then begin
+        { AP 6.4.13: spelled the way the source wrote it. Naming its three
+          fields instead would be accurate and would tell a reader nothing
+          about which type this is. }
+        WriteTypeName(t^.falVal);
+        PutLit(' !              ');
+        Put(' ');
+        WriteTypeName(t^.falCause)
+      end
+      else begin
         { An anonymous record is named by its fields, which is the only thing
           that distinguishes it from any other anonymous record. }
         PutLit('record          ');
@@ -8235,6 +8299,21 @@ begin
     Assignable := IsNil(fromT) or Assignable(toT^.elem, fromT)
   else if IsOptional(fromT) then
     Assignable := false
+  { AP 6.4.13 (ADR-0176): a fallible-type takes a value of either side, and
+    which side decides the outcome. The line above has already answered the
+    same-type case, which is what copies one result into another; this is the
+    construction, and it is what makes `r := errSyntax` a statement rather
+    than `r.cause := errSyntax`.
+
+    ResolveFallible refuses a type whose two sides are assignable to one
+    another, so at most one of these can answer true and no precedence between
+    them is needed. Nothing is assignable *from* a fallible except itself: the
+    value and the reason are two arms and the tag is what says which, so a
+    plain T out of one would be the unchecked read the type exists to
+    prevent. }
+  else if IsFallible(toT) then
+    Assignable := Assignable(toT^.falVal, fromT) or
+                  Assignable(toT^.falCause, fromT)
   { 6.4.2.5: "Attribution of a value of a type to a variable possessing the
     underlying-type of the type shall constitute the attribution of the
     associated value of the underlying-type", and the sentence after it says the
@@ -8738,7 +8817,29 @@ begin
   RecordThreat(e);
   sym := ThreatSym(e, r);
   res := false;
-  if (sym <> nil) and not sym^.isProtected and ActiveControl(sym) then begin
+  { AP 6.4.13 (ADR-0176): the tag of a fallible-type is read-only. Asked here
+    rather than at the assignment, because §6.9.4 lists six ways to threaten a
+    variable and an assignment is one of them: a `var` parameter bound to
+    `r.ok`, or a `read` into it, would set the tag with no arm written and the
+    next `r.val` would read storage rather than trap. This is the shared
+    predicate ADR-0146 is about, used the way round that pays -- a refusal
+    here reaches every caller, and each already writes its own tail.
+
+    A record the *program* declared is untouched: its tag means whatever the
+    program uses it for, and ADR-0118 honours a write to it. What may not be
+    written is a tag this language put there. }
+  if (e <> nil) and (e^.kind = nkField) then
+    if (e^.fdResolved <> nil) and (e^.fdBase <> nil) then
+      if IsFallible(e^.fdBase^.ntype) and
+         (e^.fdResolved^.index = e^.fdBase^.ntype^.tagField) and
+         (e^.fdResolved^.variant = nil) then begin
+        res := true;
+        ErrorAt(e^.line, e^.col);
+        write('the tag of a fallible type says which outcome was written, ');
+        write('so ')
+      end;
+  if res then
+  else if (sym <> nil) and not sym^.isProtected and ActiveControl(sym) then begin
     res := true;
     ErrorAt(e^.line, e^.col);
     write('''');
@@ -10306,6 +10407,14 @@ begin
     writeln('an optional cannot hold an optional: one flag answers for a ',
             'value, and two answer for each other');
     inner := intType
+  end
+  { The same sentence for the same reason: a fallible-type already says
+    whether there is a value, and says why when there is not (AP 6.4.13). }
+  else if IsFallible(inner) then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('an optional cannot hold a fallible type: one of them already ',
+            'answers whether there is a value, and says why when there is not');
+    inner := intType
   end;
   t^.elem := inner;
   ResolveOptional := t
@@ -11083,6 +11192,112 @@ begin
   end
 end;
 
+{ AP 6.4.13: the record `T ! E` denotes (ADR-0176).
+
+  It is built rather than parsed, so no lookup of `boolean`, `true` or `false`
+  is involved: §6.2.2.10 makes all three shadowable and a program that
+  redefines one must still get the same type here. What is built is exactly
+  what ADR-0120 tells a module to write --
+
+      record case ok: boolean of true: (val: T); false: (cause: E) end
+
+  -- so the copy, the layout, the value parameter, the function result and
+  ADR-0118's trap on reading the arm the tag does not select are all inherited
+  from the record machinery rather than written a second time. `isFallible` is
+  what the two assignment rules and the tag refusal key on. }
+function ResolveFallible(d: nodePtr): typePtr;
+var t: typePtr; vt, ct: typePtr;
+
+  { One arm: its label, and the single field it holds. `index` is the arm's
+    position, which is also the path a field of it carries (ADR-0027). }
+  procedure Arm(ord_: integer; index: integer; w: kwLit; ft: typePtr);
+  var v: variantPtr; rg: rangePtr; nm: nodePtr; at, len: integer;
+  begin
+    new(v);
+    v^.labels := nil;
+    v^.isOtherwise := false;
+    v^.fields := nil;
+    v^.fieldTail := nil;
+    v^.variants := nil;
+    v^.variantTail := nil;
+    v^.tagField := -1;
+    v^.tagType := nil;
+    v^.discSelector := false;
+    v^.line := d^.line;
+    v^.col := d^.col;
+    v^.next := nil;
+    new(rg);
+    rg^.lo := ord_;
+    rg^.hi := ord_;
+    rg^.next := nil;
+    v^.labels := rg;
+    if t^.variants = nil then t^.variants := v else t^.variantTail^.next := v;
+    t^.variantTail := v;
+    nm := NewNode(nkDeclName, d^.line, d^.col);
+    InternWord(w, at, len);
+    nm^.dnAt := at;
+    nm^.dnLen := len;
+    AddField(t, v^.fields, v^.fieldTail, nm, ft, PathAppend(nil, index), 0,
+             nil, false)
+  end;
+
+  { The tag, which is a field of the enclosing field-list like any named
+    variant-selector (ISO 7185 6.4.3.3). }
+  procedure Tag;
+  var nm: nodePtr; at, len: integer;
+  begin
+    nm := NewNode(nkDeclName, d^.line, d^.col);
+    InternWord('ok       ', at, len);
+    nm^.dnAt := at;
+    nm^.dnLen := len;
+    t^.tagField := 0;
+    t^.tagType := boolType;
+    AddField(t, t^.fields, t^.fieldTail, nm, boolType, nil, 0, nil, false)
+  end;
+
+begin
+  vt := ResolveType(d^.faVal);
+  ct := ResolveType(d^.faCause);
+  { A side that is itself fallible would give the record two tags answering
+    for each other, which is ADR-0123's argument against `??T` reached by the
+    other door. Named on whichever side carries it. }
+  if IsFallible(vt) or IsFallible(ct) then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('neither side of ''!'' may itself be fallible: one tag answers ',
+            'for one outcome, and two answer for each other');
+    if IsFallible(vt) then vt := intType;
+    if IsFallible(ct) then ct := intType
+  end;
+  { §6.4.6 a) again: a side holding a file or a handle would make the whole
+    record unassignable, and a result nobody can assign is not a result. }
+  if ContainsFile(vt) or ContainsFile(ct) then begin
+    ErrorAt(d^.line, d^.col);
+    write('neither side of ''!'' may contain a file or a handle: ');
+    writeln('a result is a value, and neither of those is one');
+    if ContainsFile(vt) then vt := intType;
+    if ContainsFile(ct) then ct := intType
+  end;
+  { Two sides that accept the same value are *not* refused here. What such a
+    type cannot do is take the shorthand -- `r := 3` where both sides admit a
+    3 -- and that is refused where it is written, by AsFallibleArm. Declaring
+    the type stays legal, and `r.val := 3` and `r.cause := 3` say which arm
+    they mean without needing a rule about it.
+
+    The first draft refused the type instead, and the reason for moving it is
+    worth keeping: refusing here would have forbidden `integer ! 1..5`, which
+    is an ordinary errno-shaped result and perfectly usable through the field
+    assignments. Refusal by construction is the better shape only where the
+    construction is the thing that cannot work. }
+  t := NewType(tyRecord);
+  t^.isFallible := true;
+  t^.falVal := vt;
+  t^.falCause := ct;
+  Tag;
+  Arm(1, 0, 'val      ', vt);     { true  }
+  Arm(0, 1, 'cause    ', ct);     { false }
+  ResolveFallible := t
+end;
+
 function ResolveRecord(d: nodePtr): typePtr;
 var t, fieldType: typePtr; g, n, init: nodePtr; push: nodeListPtr;
 begin
@@ -11146,6 +11361,9 @@ begin
   t^.variants := src^.variants;
   t^.variantTail := src^.variantTail;
   t^.tagField := src^.tagField;
+  t^.isFallible := src^.isFallible;
+  t^.falVal := src^.falVal;
+  t^.falCause := src^.falCause;
   t^.discSelector := src^.discSelector;
   t^.loDisc := src^.loDisc;
   t^.hiDisc := src^.hiDisc;
@@ -11193,6 +11411,12 @@ begin
         stated exception and holds a name, while an optional holds a denoter
         that a schema's tuple can reach into -- `?array [1..n] of char`. }
       nkOptional: ForgetResolved(d^.opElem);
+      { Both sides, for the optional's reason: a fallible holds denoters that
+        a schema's tuple can reach into. }
+      nkFallible: begin
+        ForgetResolved(d^.faVal);
+        ForgetResolved(d^.faCause)
+      end;
       { 6.6.3.7's schema is a denoter like any other and nests like an array's.
         Its bound-identifiers are not denoters and are not walked: they are
         defining-points, and forgetting a resolution cannot unbind a name. }
@@ -11323,6 +11547,10 @@ begin
       end;
       nkSetOf: CheckSchemaBodyNames(d^.soElem, self);
       nkOptional: CheckSchemaBodyNames(d^.opElem, self);
+      nkFallible: begin
+        CheckSchemaBodyNames(d^.faVal, self);
+        CheckSchemaBodyNames(d^.faCause, self)
+      end;
       nkRecord: begin
         g := d^.rcFields;
         while g <> nil do begin
@@ -12569,6 +12797,7 @@ begin
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkDefer, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
+      nkFallible,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
@@ -12784,6 +13013,7 @@ begin
       nkPointer:  t := ResolvePointer(d);
       nkOptional: t := ResolveOptional(d);
       nkHandle:   t := ResolveHandle(d);
+      nkFallible: t := ResolveFallible(d);
       nkFile:     t := ResolveFile(d);
       nkSetOf:    t := ResolveSet(d);
       nkInquiry:  t := ResolveInquiry(d);
@@ -17308,7 +17538,8 @@ begin
       nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
       nkStructValue, nkValueElem, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkConfArray, nkSchema,
+      nkPointer, nkFile, nkSetOf, nkOptional, nkHandle, nkFallible, nkConfArray,
+      nkSchema,
       nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem: ;
@@ -17336,6 +17567,64 @@ begin
     e^.dn := s;
     e^.next := currentProc^.defers;
     currentProc^.defers := e
+  end
+end;
+
+{ AP 6.4.13's construction, written as the selection it means (ADR-0176).
+
+  The target is replaced by `target.val` or `target.cause` according to which
+  side the value is assignable to, and the new node is checked the ordinary
+  way -- so the field is found, the arm is numbered and the tag is set by the
+  code that already does all three. ResolveFallible refuses a type whose sides
+  are assignable to one another, so at most one arm can match and no
+  precedence is needed.
+
+  A value matching neither side is left alone: the target keeps its own type
+  and Assignable reports it, naming the fallible rather than one of its
+  arms. }
+procedure AsFallibleArm(s: nodePtr);
+var t: typePtr; sel: nodePtr; w: kwLit; at, len: integer;
+    toVal, toCause, wrap: boolean;
+begin
+  t := s^.asTarget^.ntype;
+  toVal := Assignable(t^.falVal, s^.asValue^.ntype);
+  toCause := Assignable(t^.falCause, s^.asValue^.ntype);
+  wrap := false;
+  w := 'val      ';
+  { A value both sides admit -- `r := 3` where the type is `integer ! 1..5`
+    -- names no outcome, and there is no precedence between the arms that
+    would not be arbitrary. Refused here rather than at the declaration, so
+    that such a type is still usable through the two field assignments, which
+    say which arm they mean. }
+  if toVal and toCause then begin
+    ErrorAt(s^.line, s^.col);
+    write('both sides of ');
+    WriteTypeName(t);
+    write(' admit this value, so the assignment does not say which outcome ');
+    writeln('it means; assign to .val or to .cause')
+  end
+  else if toVal then
+    wrap := true
+  else if toCause then begin
+    wrap := true;
+    w := 'cause    '
+  end;
+  if wrap then begin
+    InternWord(w, at, len);
+    sel := NewNode(nkField, s^.asTarget^.line, s^.asTarget^.col);
+    sel^.fdBase := s^.asTarget;
+    sel^.fdAt := at;
+    sel^.fdLen := len;
+    { Resolved here rather than by handing the node back to CheckExpr, which
+      would check the base a second time -- and the base may be a function
+      identifier, where §6.8.2.2 makes a *read* a recursive call. `f := 1` in
+      a function answering a fallible-type then became `f.val := 1` with `f`
+      read as a call of itself, and the program looped until the stack ran
+      out. The field is this language's own and cannot be missing, so there
+      is nothing here to diagnose. }
+    sel^.fdResolved := FindField(t, at, len);
+    sel^.ntype := sel^.fdResolved^.ftype;
+    s^.asTarget := sel
   end
 end;
 
@@ -17404,6 +17693,15 @@ begin
           s^.asTarget^.ntype := named^.stype;
           named^.assignedResult := true;
           CheckExpr(s^.asValue);
+          { AP 6.4.13 again, and it must be asked here as well: assigning to a
+            function *identifier* is 6.8.2.2's own path and never reaches the
+            one below. Without this line `f := 1` in a function answering a
+            fallible-type was accepted by Assignable, wrapped by nothing, and
+            emitted as a store of an integer into a record -- a segfault at
+            run time with the whole suite green (ADR-0176). }
+          if IsFallible(s^.asTarget^.ntype) and
+             (s^.asValue^.ntype <> s^.asTarget^.ntype) then
+            AsFallibleArm(s);
           if named^.resultNamed then begin
             { 6.7.2: with a result-variable-specification the block "shall
               contain no assignment-statement" to the function-identifier. The
@@ -17440,6 +17738,20 @@ begin
                          (s^.asValue^.kind = nkCall);
           CheckExpr(s^.asValue);
           handleBirth := false;
+          { AP 6.4.13 (ADR-0176): `r := x` where r is fallible and x is a value
+            of one of its two sides *is* the field assignment that activates
+            that arm, so Sema writes the selection the program did not and
+            every later pass reads the field first -- the husk of ADR-0044.
+            Nothing new is lowered: `r.val := x` and `r.cause := x` already
+            store the value and set the tag (ADR-0118), which is the whole
+            reason this type is a record.
+
+            A fallible assigned from its own type falls through to the
+            ordinary whole-record copy, and one assigned from anything else
+            falls through to Assignable's refusal with the type named. }
+          if IsFallible(s^.asTarget^.ntype) and
+             (s^.asValue^.ntype <> s^.asTarget^.ntype) then
+            AsFallibleArm(s);
           { 6.9.4 a): an assignment-statement threatens its target. }
           if Threatened(s^.asTarget) then
             writeln('it cannot be assigned to');
@@ -22547,7 +22859,7 @@ begin
       end;
       tkPlus, tkMinus, tkStar, tkSlash, tkAssign, tkComma, tkSemi, tkColon,
       tkPeriod, tkDotDot, tkLParen, tkRParen, tkLBracket, tkRBracket, tkCaret,
-      tkQuery,
+      tkQuery, tkBang,
       tkEq, tkNotEq, tkLt, tkLe, tkGt, tkGe, tkStarStar, tkGtLt, tkArrow: begin
         write('op ');
         WriteOperator(tok[i].kind);
@@ -30272,6 +30584,7 @@ begin
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
+      nkFallible,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,

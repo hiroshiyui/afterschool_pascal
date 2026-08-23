@@ -68,3 +68,4 @@ argument_refused
 substring_errors
 handle_refused
 defer_refused
+fallible_refused

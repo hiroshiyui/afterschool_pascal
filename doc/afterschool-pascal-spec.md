@@ -667,6 +667,76 @@ carries an address through 6.7.7.8, and this clause takes nothing from that
 door. What it adds is a type through which the address is owned, and Annex C.7
 is the register of what the other door still costs.
 
+#### 6.4.13 Fallible-types [added]
+
+A fallible-type denotes a value that is either an outcome of one type or a
+reason it is not, and says which. It is the shape ISO/IEC 10206:1991 gives no
+name to and that a program otherwise writes out per payload type (ADR-0120,
+ADR-0176).
+
+**6.4.13.1 The denoter.**
+
+    fallible-type = type-denoter '!' type-denoter .
+
+The type-denoter before the `!` is the **value-type** and the one after it the
+**cause-type**. Neither shall be a fallible-type, and neither shall be or
+contain a file-type (§6.4.3.5) or a handle-type (6.4.12).
+
+`!` shall not be a word-symbol; it is a character neither ISO 7185 nor
+ISO/IEC 10206:1991 admits in any position outside a string or a comment, so no
+conforming program can contain one and the lexis of the conformance modes is
+unchanged (ADR-0140, and 6.4.11's `?` for the same reason).
+
+A fallible-type shall be a **new-type** in the sense of ISO/IEC 10206:1991
+§6.4.1, as an optional-type and a handle-type are: two separately written
+denoters denote two types.
+
+**6.4.13.2 What it denotes.** A fallible-type shall denote the record-type
+
+    record case ok: boolean of true: (val: T); false: (cause: E) end
+
+where T is the value-type and E the cause-type, and it shall be that type in
+every respect this document does not amend: it is a record-type, it has that
+type's representation, and 6.4.3.4's requirement that a read of a field of an
+inactive variant be detected applies to it unchanged.
+
+NOTE 1 — That is the whole of the type's semantics, and it is deliberate. The
+tag being authoritative is 6.4.3.4's rule, not a new one; the copy, the value
+parameter, the function result and the layout are the record's.
+
+NOTE 2 — The field-identifiers are this language's and not the program's, and
+a program cannot choose others. `value` is a word-symbol of
+ISO/IEC 10206:1991 §6.1.2 and could not have been one of them.
+
+**6.4.13.3 Assignment.** A value of the value-type and a value of the
+cause-type shall each be assignment-compatible with the fallible-type, and the
+assignment shall be equivalent to an assignment to `val` or to `cause`
+respectively — so the outcome is decided by which type the value has, and the
+tag by 6.4.3.4's own rule.
+
+Where a value is assignment-compatible with **both** types, the assignment
+shall be an error detected by the processor: it names no outcome. Assignment
+to `val` or to `cause` is unaffected, and is how such a type is used.
+
+Nothing other than the two types and the fallible-type itself shall be
+assignment-compatible with a fallible-type, and a fallible-type shall be
+assignment-compatible with nothing but its own type.
+
+**6.4.13.4 The tag.** `ok` shall not be threatened (§6.9.4): it shall not be
+assigned to, read into, or passed as a variable parameter. It shall be
+readable.
+
+NOTE 3 — This is the one requirement here that is not the record's. A record a
+*program* declares may have its tag assigned, and 6.4.3.4 honours it — the arm
+changes and a later read of the other arm is detected. For this type that
+would claim an outcome no assignment wrote, and the next read of `val` would
+yield the storage rather than being detected.
+
+NOTE 4 — What this type does not have is propagation: no construct here takes
+the value of a fallible-type and leaves the enclosing block where it is a
+cause. That needs an early exit, which neither standard has, and it is left to
+a later amendment (ADR-0176).
+
 #### 6.4.5 Compatible types [extended]
 
 Two slices (6.7.3.9) shall be compatible when their component types are the same
@@ -1292,10 +1362,11 @@ the construct and Sema refuses it. One column became two.
 | `argument` | `argcount`, `argument(k)` | `unknown function 'argument'` | `unknown function 'argument'` |
 | `handle` | `handle external '…'` | `expected ';' after a type definition, found identifier` | `expected ';' after a type definition, found identifier` |
 | `defer` | `defer S` | `expected 'end' at the end of a compound statement, found identifier` | `expected 'end' at the end of a compound statement, found identifier` |
+| `fallible` | `T ! E` | `unexpected character '!'` | `unexpected character '!'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
-could not have written it, so seven of the eight are refused by machinery that
+could not have written it, so eight of the nine are refused by machinery that
 predates the dialect and has nothing to say about it. `external` is the
 exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
@@ -1525,3 +1596,4 @@ the two scenarios its opening sentence always deserved.
 | 6.7.6.10, Annex A.6 | ADR-0173 |
 | 6.4.12, 6.7.7.3, 6.7.7.8, Annex A.7, Annex C.7 | ADR-0174 |
 | 6.9.3.11, Annex C.8 | ADR-0175 |
+| 6.4.13 | ADR-0176 |
