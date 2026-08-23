@@ -467,6 +467,30 @@ releases the old one first. A handle may be lent to a foreign routine as a
 value parameter, and lending an empty one stops the program. What it is not
 is a value: no Pascal function returns one and no record copies one.
 
+**`defer` runs a statement on the way out** (ADR-0175). Written beside the
+thing it undoes, and correct at every exit the block has:
+
+```pascal
+procedure work;
+var v: StrVecPtr;
+begin
+  SVecNew(v, 16);
+  defer SVecFree(v);        { runs at the end of the block, on a goto out of
+                              it, and on halt }
+  …
+end;
+```
+
+It arms a statement rather than registering a call, so nothing is evaluated
+until it runs. What it is armed in is the **statement-sequence** — a compound,
+a repeat-body, a case-completer — so a `defer` in a loop body runs at the end
+of each iteration, with that iteration's values; several armed in one sequence
+run in the reverse of the order they are written. Armed statements run before
+the block's files and handles are closed, so a deferred statement may still
+write to one. A deferred statement may not contain a label, a `goto` or
+another `defer`, and `defer` is nobody's word: a program that declares one
+keeps it in every position a conforming program could have written it.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are

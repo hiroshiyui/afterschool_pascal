@@ -2387,6 +2387,29 @@ spelling reserves nothing: an identifier followed by `external` and a string
 where a type-denoter ends is a syntax error in both standards.
 `tests/dialect/handle.pas` reads every file back, `fputs` being buffered until
 `fclose`, so each release is observed; `handle_errors.pas` is the refusals.
+
+**`defer` is a flag in the frame and one function per block** (ADR-0175). A
+defer-statement stores 1 in its own `i8` slot; the statement itself is emitted
+twice — where the statement-sequence it stands in is completed (`EndSequence`,
+called from the compound, the repeat-body and the case-completer, in reverse
+source order and each arm clearing its flag first) and inside a runner
+`@pN.defer` that takes the block's frame as its parameter. The runner is what
+`pas_defer_done` calls, so a `goto` past the block and `halt` reach the armed
+statements through the same list-and-mark machinery the files and handles use
+— a third list, walked *first* in both `pas_jump_go` and `pas_halt` because a
+deferred statement may still write to a file the block owns. Taking the frame
+rather than allocating one is what makes every name in a deferred statement
+mean there what it meant where it was written: `irLevel` is the block's, so
+`FrameAt` of that level is the parameter. Storage is one bit per
+defer-statement and not a stack, which is why a `defer` in a loop costs the
+same as one anywhere else — a defer-statement can be pending only once, its
+sequence not being re-enterable, and arming what is armed has no effect. The
+sequence and not the activation is the unit because of the loop: a
+per-activation defer would run `dispose(p)` once with the last `p`. A label
+and a `goto` inside a deferred statement are refused because it is emitted
+twice. `tests/dialect/defer.pas` observes every exit, `defer_halt.pas` the one
+that ends the program, and `defer_errors.pas` the refusals; removing
+`EndSequence` from the compound leaves the loop's two lines missing.
 **A buffer crosses as the pair C already takes** (ADR-0129). A slice reaches a
 foreign routine as `(ptr, i64)` — the address of the first component, then how
 many there are, two arguments from one formal — which is what `read`, `write`,

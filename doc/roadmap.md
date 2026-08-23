@@ -127,7 +127,7 @@ the open decision it would settle.
 | Scope-based release | ISO 7185, Rust's `Drop` | lifetime | **Done, and it was already here** (ADR-0151) |
 | Explicit allocator passing | Zig | part of memory safety | **Tried; does not survive contact** (ADR-0116) |
 | Error unions / `Result` | Zig, Rust | error handling | **Open, and the biggest practical gap.** Variant records nearly are sum types with payloads; the library's result records (ADR-0120, ADR-0141) are the convention that exists. Independent of the safety fork |
-| `defer` | Zig, Swift | resource safety | **Open and cheap.** A block already has one exit and the epilogue already closes files; `defer` generalises a mechanism that exists. Its spelling passes ADR-0140's test with one token of lookahead |
+| ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
 | Unicode-correct `String` | Swift | the text model | **The model to copy**, and unstarted |
 | ARC | Swift | aliasing | **Undecidable on the evidence in hand** (ADR-0151) |
 | Ownership and borrowing | Rust | aliasing | **The same, and the worst fit besides** — and the most expensive thing to mirror in `src/` |
@@ -139,7 +139,12 @@ Two conclusions worth stating:
 
 - **The cheap items are not the small ones.** `defer` and error unions between
   them cover most of what "daily practical development" means, and neither
-  requires settling the memory-safety fork.
+  requires settling the memory-safety fork. `defer` is done (ADR-0175) and was
+  indeed cheap: no new word, no new type, and a frame that grows only where a
+  block defers. **Error unions are now the one left**, and they are the larger
+  of the two — a type constructor over a type, which the dialect has exactly
+  one of (`?T`, ADR-0123) and which the library works around today by writing
+  a result record per payload type, seven of them (Annex D).
 - **ARC and borrowing are not equally costly here**, and the difference is not
   only effort: borrowing would make ADR-0108's C++ mirror prohibitively
   expensive and likely force the decision to freeze it. ADR-0151 declines to

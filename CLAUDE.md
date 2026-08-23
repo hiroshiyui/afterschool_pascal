@@ -454,10 +454,14 @@ Five things about the dialect are worth knowing before adding anything:
   *position* where a conforming program could not have written it — `external`
   in the directive slot, `array of` in a juxtaposition that was a syntax error,
   `?` in a character no program can spell, `int64` in a scope §6.1.3 lets any
-  program shadow. The test for a new spelling is whether a conforming program
+  program shadow, `handle external '…'` in a three-token juxtaposition where a
+  type-denoter ends. The test for a new spelling is whether a conforming program
   could have written it **in that position**; for a statement that is one token
   of lookahead, a statement-initial identifier admitting only `(`, `:=`, `[`,
-  `.`, `^` or a terminator. `reserved-words` enforces it.
+  `.`, `^` or a terminator. **`defer` is the first to use that last sentence**
+  (ADR-0175): `defer S` is the case where the token after the identifier is
+  none of those six, so `defer;`, `defer(x)` and `defer := 3` all still belong
+  to a program that declared one. `reserved-words` enforces it.
 - **It nests, where the first two do not.** ADR-0033's non-nesting was forced by
   the two specifications disagreeing about word-symbols; nothing forces it here,
   so the dialect *contains* Extended Pascal. `stdKind` is

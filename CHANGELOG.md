@@ -27,6 +27,15 @@ The other three entries only accept more.
 
 ### Added
 
+- **`defer S`** under `--std=afterschool`: a statement armed where it is
+  written and executed when the statement-sequence it stands in is completed,
+  or when the activation terminates — a `goto` out of the block and `halt`
+  included. Several armed in one sequence run in the reverse of the order they
+  are written, and before the block's files and handles are closed. A deferred
+  statement may not contain a label, a `goto` or another `defer`. `defer`
+  reserves nothing: a program that declares one keeps it. AP 6.9.3.11,
+  ADR-0175. `tests/dialect/defer.pas`.
+
 - **Handle-types** under `--std=afterschool`: `type Dir = handle external
   'closedir'` is a foreign address this program owns, with a file variable's
   rules — no copy, released when the variable dies, on `goto`, `halt` and
