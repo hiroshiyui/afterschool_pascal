@@ -24639,11 +24639,22 @@ begin
   end
 end;
 
+{ The parameter types the defining side writes, and the one writer of them:
+  declared here so that PutProcSignature can use it, defined beside
+  EmitProcBody where it is read. }
+procedure PutParamTypes(p: symListPtr; named: boolean); forward;
+
 { The signature an indirect call through a procedural parameter uses: the
   static link, then the parameters, exactly as EmitProcBody builds it for a
-  procedure with a body. }
+  procedure with a body -- and written by the same procedure, because this
+  was a copy of it and a copy is free to drift. It drifted twice: ADR-0115's
+  variable-string value parameter and ADR-0125's slice each became two
+  arguments on the defining side, and this went on declaring one, so a call
+  through a procedural parameter with such a formal passed three arguments
+  to a type naming two and clang refused the module
+  (tests/extended/procparam_string.pas). }
 procedure PutProcSignature(callee: symPtr);
-var p: symListPtr; result: typePtr; k: integer;
+var result: typePtr;
 begin
   result := ResultTypeOf(callee);
   { A result that lives in memory (ADR-0017) has no register form, and the
@@ -24659,20 +24670,7 @@ begin
   write(ircode, ' (ptr');
   if result <> nil then
     if IsMemory(result) then write(ircode, ', ptr');
-  p := callee^.params;
-  k := 0;
-  while p <> nil do begin
-    write(ircode, ', ');
-    if p^.sym^.descSchema <> nil then
-      PutDescParamTypes(p^.sym, false, k)
-    else if (p^.sym^.kind = skVarParam) or (p^.sym^.kind = skProcParam) or
-       IsMemory(p^.sym^.stype) then
-      if p^.sym^.kind = skProcParam then write(ircode, 'ptr, ptr')
-      else write(ircode, 'ptr')
-    else
-      PutLlType(p^.sym^.stype);
-    p := p^.next
-  end;
+  PutParamTypes(callee^.params, false);
   write(ircode, ')')
 end;
 
@@ -29552,7 +29550,7 @@ end;
   link. Every parameter is one argument except a procedural one, which is two
   -- the code and the link it needs -- so a caller and a callee agree on the
   shape only by both coming through here. }
-procedure PutParamTypes(p: symListPtr; named: boolean);
+procedure PutParamTypes;
 var k: integer;
 begin
   k := 0;

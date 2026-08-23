@@ -62,6 +62,14 @@ The other three entries only accept more.
 
 ### Fixed
 
+- **A procedural parameter whose own formal is a variable-string value
+  parameter can be called.** `procedure each(procedure visit(l: string(12)))`
+  compiled and then clang refused the module: the indirect call's type was
+  written by a copy of the defining side's writer that had not learned
+  ADR-0115's pair (nor ADR-0125's slice), so three arguments were passed to a
+  type naming two. One writer now serves both sides.
+  `tests/extended/procparam_string.pas`.
+
 - `doc/implementation-defined.md`'s E.29 said a Boolean written with an
   explicit width is "truncated from the left", which names the wrong end.
   §6.10.3.6 writes "the first through TotalWidth-th characters", so `true:2`
