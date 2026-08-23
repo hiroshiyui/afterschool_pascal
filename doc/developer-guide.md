@@ -123,7 +123,7 @@ ADR-0085 left one; each is now pinned against a `.err` golden.
 **It is also checked differentially**, against `src/` — a second implementation
 of the lexer, parser and Sema, with no code generator — stage for stage on every
 Pascal source in the tree. That is the strongest oracle here, and
-[the roadmap](roadmap.md#what-is-next) records the defects it caught that every
+[history](history.md#the-oracle-nobody-here-wrote--what-the-two-restorations-paid) records the defects it caught that every
 other oracle here agreed about, with the record behind each.
 
 Two things it cannot do, and both decide what else you must run. It says nothing
