@@ -184,3 +184,4 @@ the alternatives that were rejected and why.
 | [0173](0173-the-command-line-as-a-list.md) | The command line as a list: `argcount` and `argument(k)` | Accepted |
 | [0174](0174-a-handle-is-a-file-variable-for-a-foreign-address.md) | A handle is a file variable for a foreign address | Accepted |
 | [0175](0175-defer.md) | `defer`: a statement armed where it is written | Accepted |
+| [0176](0176-an-error-union-is-the-result-record-written-by-the-compiler.md) | An error union is the result record, written by the compiler | Proposed |
