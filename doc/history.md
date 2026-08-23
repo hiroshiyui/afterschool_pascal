@@ -1797,6 +1797,167 @@ One thing it adds to the register rather than to the language:
   treatment is to say which branch and why, not to delete the guard so the
   coverage reads better.
 
+### The fourteenth increment: the property had a spelling already
+
+ADR-0174, and the finding is the one this file has now recorded four times in
+a row: a decision described as needing the memory-safety model needed it for
+none of its surface.
+
+AP §6.7.7.9 c) forbade an external result that is "an address of storage the
+callee owns whose contents are not characters", and the roadmap carried that
+prohibition as the single item standing between the library and a directory
+listing, a pipe, a socket. ADR-0151 found two things about it. It was **never
+enforced** — `int64` carries a `DIR *` today, it copies, arithmetic on it is
+legal, and closing it twice aborts the process. And the property such an
+address needs is a **lifetime**, which this language answered in 1983: a file
+variable is released when the variable holding it dies, cannot be copied out
+of it, and is released across every exit the language has — block epilogue,
+non-local `goto`, `halt`, `dispose`.
+
+So the question was never *what is ownership*. It was how to spell a type with
+a file variable's semantics for an address a foreign routine answered, and
+what a second kind of owned variable costs machinery built for the first. The
+answer to the second was: nothing. `IsOwned` is a file **or** a handle,
+`ContainsFile` walks it, and every refusal a file has — assignment, the
+relational operators, a value parameter, a function result, anything
+containing one — reached a handle with no new arm at any of the 21 positions
+`predicate-callers` sweeps.
+
+Three things a handle has that a file does not are written out as exceptions
+beside the rules they except, which is the shape this project prefers to a
+list of what is forbidden: one assignment form and no other, `= nil` as the
+emptiness test, and a value parameter of an *external* — lent, where an empty
+one is an error at the lend, because a C routine given NULL for a stream does
+not report. What it unlocked was `popen`, `fopen` with a mode and `opendir`,
+each a library module away and none of them more language.
+
+### The fifteenth increment: a loop decided the unit
+
+ADR-0175. `defer` had sat in the borrowings table as **open and cheap** since
+ADR-0109 — "a block already has one exit and the epilogue already closes
+files" — and the design question turned out to be neither of the two the table
+implied. It was: *what is a deferred statement armed in?*
+
+Go says the function. Zig says the block. The case that decides it is a loop:
+
+    for ... do begin new(p); defer dispose(p) end
+
+A defer belonging to the **activation** runs `dispose(p)` once, with the last
+`p`, and leaks the rest. So the unit is the statement-sequence — and
+§6.9.3 has exactly three constructs holding one, a compound-statement, a
+repeat-statement's body and a case-statement-completer, which is why a `defer`
+written directly in an `if` branch or a `while` body belongs to the sequence
+outside it.
+
+That choice is what makes the storage a **flag apiece** rather than a stack. A
+defer-statement can be pending at most once, its sequence not being
+re-enterable without being left, so "armed" needs one bit and arming what is
+armed has no further effect. That last sentence is not tidiness: `1: defer S;
+goto 1` is the one way a defer-statement is reached twice without its sequence
+completing, and a stack would grow without bound there.
+
+The three exits a block has were already three walks — the epilogue, the
+runtime's non-local `goto`, and `halt` — so the armed statements became a
+third list beside the files' and the handles', walked *first* in all three
+because a deferred statement may still write to a file the block owns. And one
+restriction is stated in the specification rather than left to be found: a
+deferred statement may contain no label and no `goto`, because it is emitted
+**twice** — where its sequence completes and inside the runner — so a label in
+one would be two labels with one number.
+
+It also added a row to the blind-spot register that nothing can close by
+testing: **nothing derives the list of statement-sequence holders**. A fourth
+such construct added to the language would arm correctly, refuse a label
+correctly, and run its deferred statements late, through the runner, which is
+the backstop working rather than the feature.
+
+### The sixteenth increment: the estimate was wrong in the cheap direction
+
+ADR-0176, and for the third time in this file an estimate that assumed a
+feature needed its own machinery was worth probing before it was believed.
+
+The borrowings table called error unions "the larger of the two — a type
+constructor over a type". `T ! E` turned out to need **no new type at all**:
+it denotes an ordinary record with a flag on it, so the copy, the layout, the
+value parameter, the function result and ADR-0118's trap on reading an
+inactive variant all came free, and **CodeGen was not touched**. The whole
+feature is a type-denoter, one arm in `Assignable`, and a Sema rewrite of
+`r := x` into the field assignment that already had a lowering.
+
+Four things only the implementation found, each now a case.
+
+- **Assigning to a function's own identifier is a separate path.** Sema
+  accepted `f := 1` in a function answering a fallible-type, nothing rewrote
+  it, and CodeGen stored an integer into a record. A segfault, with the whole
+  suite green.
+- **The rewrite must not re-check its base.** Reading a function identifier is
+  §6.8.2.2's recursive call, so `f.val` looped until the stack ran out. The
+  field is resolved directly instead.
+- **`LooksLikeSubrange` had to learn `!`**, or `integer ! 1..5` scanned as one
+  subrange and the diagnostic complained about a `..` that was never missing.
+- **The tag needed `Threatened`, not the assignment.** Refusing `r.ok := true`
+  alone would have left `read(r.ok)` setting the tag with no arm written.
+
+And a **gate changed the design**. `predicate-callers` refused a
+declaration-time check that the two sides do not both admit a value, because
+it made the resolver a caller of `Assignable` with no sweepable position.
+Moving the question to the assignment — where a value actually is — was both
+the answer the gate would accept and the better rule: `integer ! 1..5` became
+a usable errno-shaped type, and only the ambiguous shorthand is refused.
+
+The library migration is what paid for it. Six result records became six
+one-line types, and the failing side is `cause` everywhere; it had had three
+spellings, and one module's `code` was a *success* payload where four others'
+was the error.
+
+**What it cost is worth recording beside what it bought.** `DumpTypeExpr` had
+no arm for the new node kind, so `--dump-ast` and `--dump-sema` stopped the
+compiler on any program declaring a fallible-type — for three days, with 714
+cases green. `kind-exhaustive` fired at the time and the *number was moved
+rather than the case fixed*, which is the one thing that entry format warns
+about. No oracle could see the result: the dumps' own corpus had no such
+program, `difftest` skips a dialect source by directory, and the coverage
+sweep drives `--dump-all` over everything without reading what it exits with.
+It surfaced only because a later feature added a branch in the same walker and
+`line-coverage` asked why it went unreached.
+
+### The seventeenth increment: the first borrowing from another Pascal
+
+ADR-0177. `try X` needs a way out of a block that is not the end of it, and a
+Pascal block has exactly one exit — §6.9.2.4's `goto` needs a label at the
+block's end and §6.7.5.7's `halt` ends the program. So propagation waited on a
+statement, and `exit` is it.
+
+It is the first dialect feature whose authority is **not a standard**. Turbo
+Pascal, Delphi and Free Pascal all have `Exit`, two of them with a value, and
+open question §1 had just been rewritten to say that where one of the other
+Pascals has already answered a question this dialect is asking, that answer is
+a reference point — not because it is authoritative, but because a Pascal
+programmer arriving here already knows it.
+
+It is also the feature where **ADR-0140's rule does not apply**. That rule
+asks whether a conforming program could have written the construct *in that
+position*, and a procedure-statement is a position ISO/IEC 10206:1991 admits.
+What makes the name the dialect's is only that it is nobody's under a
+conformance mode — `int64`'s answer and `argcount`'s, a required identifier
+made shadowable by §6.1.3. Three features now have that shape, so it is the
+second kind of spelling rather than an exception to the first.
+
+The lowering cost nothing again, and for a reason this file has recorded
+before: the emitter writes text. An `exit` branches to a label the emitter has
+not written yet, which textual IR admits and an instruction list would not —
+the sequential emitter cannot return to a block it has left. The branch lands
+on the epilogue every block already had, so the armed statements, the files
+and handles, and the load of the result slot were all discharged by code that
+was already there.
+
+What was not free was a gate. `exit(e)` can stand only in a function-block,
+and `predicate-callers`'s probe program declared its subject as a *procedure*
+— so the position would have been refused for the wrong reason, and the gate
+would have passed while checking nothing. Making the subject a function, with
+its result assigned before the snippet, was six lines. A gate that passes for
+the wrong reason is worth more attention than the feature that revealed it.
+
 ## What the roadmap answered
 
 `doc/roadmap.md` holds what is open. For two years it also held the full
