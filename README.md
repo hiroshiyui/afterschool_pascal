@@ -1038,7 +1038,8 @@ const      const n = base * 2 — a constant-expression: wherever ISO 7185
            them, and so do `succ(x, k)`, `pred(x, k)`, `length` and
            `index` — the last is what §6.3.2's own example needs, whose
            closing line is
-           `hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')]`. A real-, set- or string-valued *operation* is not folded: a
+           `hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')]`.
+           A real-, set- or string-valued *operation* is not folded: a
            real constant is carried as the text that was written and never
            converted, and building characters or a set in the compiler would
            have to give the same answer in both of them. A string *literal*
