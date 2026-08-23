@@ -515,6 +515,28 @@ write to one. A deferred statement may not contain a label, a `goto` or
 another `defer`, and `defer` is nobody's word: a program that declares one
 keeps it in every position a conforming program could have written it.
 
+**`exit` leaves the block early** (ADR-0177), which no standard Pascal has and
+every widely used one does:
+
+```pascal
+function FirstAbove(n: integer): integer;
+var k: integer;
+begin
+  for k := 1 to 100 do
+    if k * k > n then exit(k);      { the guard clause, written as a guard }
+  FirstAbove := 0
+end;
+```
+
+It terminates the activation of the block it stands in — never an enclosing
+one — and `exit(e)` first assigns `e` to that block's function result, which
+counts as the assignment §6.7.2 asks every function for. Where the result is a
+fallible type the value picks the arm, so `exit(errSyntax)` is a failure and
+`exit(n)` is a value. Terminating an activation is not `halt`: the armed
+statements run, the block's files and handles close, and in the main program
+the module finalizations still run. `exit` is nobody's word either — a program
+that declares one keeps it — and a deferred statement may not contain one.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are

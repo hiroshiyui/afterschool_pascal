@@ -32351,7 +32351,9 @@ begin
   if dumpTokensOpt then DumpTokens;
   { A dump flag stops at the stage it names, which is how the C++ driver
     behaves -- and the only way a stage can be dumped for a program the next
-    stage would reject. Pascal has no early return, so "stop" is a flag every
+    stage would reject. This source is Extended Pascal, which has no early
+    return -- AP 6.7.5.9's exit is the dialect's and a conformance mode has
+    nothing like it -- so "stop" is a flag every
     later stage is guarded by. `--dump-all` is not a stop: it is the whole
     pipeline with every section shown, and `--dump-limits` is not a stop for
     the same reason by a different route -- it shows no section at all and
@@ -32452,7 +32454,8 @@ begin
 
   { A command line that did not parse has already said why, or has written the
     option list because -h asked for it. Either way there is nothing to
-    translate, and Pascal has no early return -- so the whole of the work is
+    translate, and this source's standard has no early return (AP 6.7.5.9's
+    exit belongs to the dialect) -- so the whole of the work is
     inside the test. }
   if argsOk then begin
     curFile := srcName;

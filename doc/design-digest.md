@@ -326,12 +326,14 @@ checks they agree, which is the same arrangement the version number has. A
     first buffer and link one list node twice. The one shape where "which
     arm's file is this" has no answer at block entry.
 - A block exit closes the files the block declared, and also frees the buffer
-  variable a `file of T` allocated. Pascal has no early return, so the single
-  exit point each body already has is the epilogue. A *local* `goto` cannot
-  leave the block; a **non-local** one does, and skips that epilogue — so the
-  runtime does the same work for every block the jump abandons (ADR-0032).
-  Two implementations of one obligation, and the second exists because a
-  `longjmp` skips the first.
+  variable a `file of T` allocated. Neither standard has an early return, so
+  the single exit point each body already has is the epilogue — and AP
+  6.7.5.9's `exit` keeps it that way rather than adding a second, branching to
+  the epilogue's own label (ADR-0177). A *local* `goto` cannot leave the block;
+  a **non-local** one does, and skips that epilogue — so the runtime does the
+  same work for every block the jump abandons (ADR-0032). Two implementations
+  of one obligation, and the second exists because a `longjmp` skips the
+  first.
 - `char` is a byte, ordinal 0..255, and nothing consults the locale. UTF-8
   passes through as bytes; a multi-byte character is several `char` values.
 
@@ -2431,6 +2433,29 @@ and a `goto` inside a deferred statement are refused because it is emitted
 twice. `tests/dialect/defer.pas` observes every exit, `defer_halt.pas` the one
 that ends the program, and `defer_errors.pas` the refusals; removing
 `EndSequence` from the compound leaves the loop's two lines missing.
+**`exit` is a forward-referenced label and one assignment** (ADR-0177). AP
+6.7.5.9 terminates the activation of the block the statement stands in, and the
+lowering is the epilogue the block already had: the first `exit` of a body
+claims a block number, each writes `br label %LN` and opens a fresh block for
+what follows (`EmitGoto`'s shape exactly), and `EmitExitTarget` writes one more
+`br` and the label itself between the body and `CloseFiles`. The label is used
+before it is defined, which textual IR admits and an instruction list would not
+— the sequential emitter cannot return to a block it has left (ADR-0025). So
+everything terminating an activation owes gets discharged by code that was
+already there: the armed statements (`pas_defer_done` at the head of
+`CloseFiles`), the files and handles, and the load of the result slot. The four
+call sites are a procedure body, a module's initialization, its finalization
+and `main` — where the exit is the *ordinary* end, so `EmitFinis` still runs
+and that is the whole difference from `halt`. `exit(e)` is an `nkAssign` Sema
+hangs on the node (ADR-0044's husk) with the argument moved out of `pcArgs`,
+and `CheckResultAssign` is the one routine deciding both spellings of a result
+assignment, so §6.7.2's "at least one", AP 6.4.13's arm shorthand and
+assignment-compatibility cannot answer differently for `f := e` and for
+`exit(e)`. `tests/dialect/exit.pas` observes each obligation, `exit_module.pas`
+the three activations that are not a procedure's, and `exit_errors.pas` the
+refusals; moving `EmitExitTarget` after `CloseFiles` leaves the file empty and
+two armed statements unrun.
+
 **A buffer crosses as the pair C already takes** (ADR-0129). A slice reaches a
 foreign routine as `(ptr, i64)` — the address of the first component, then how
 many there are, two arguments from one formal — which is what `read`, `write`,

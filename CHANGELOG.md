@@ -23,9 +23,21 @@ and f) reached neither check, so one procedure gave two answers to one clause.
 End of **line** is unchanged: NOTE 6 and NOTE 7 give it the null-string, and
 still do, `readstr` included.
 
-The other three entries only accept more.
+One entry is a **fix to something this release itself introduced**: the two
+tree dumps stopped the compiler on any program declaring a fallible-type, for
+three days, with every gate green. The rest only accept more.
 
 ### Added
+
+- **`exit`** under `--std=afterschool`: `exit` terminates the activation of the
+  block it stands in, and `exit(e)` first assigns `e` to that block's function
+  result — the guard clause, which neither standard has and every widely used
+  Pascal does. It is not `halt`: the armed statements run, the block's files
+  and handles close, and in the main program the module finalizations still
+  run. `exit` is a required identifier and shadowable, so a program that
+  declares its own keeps it; a deferred statement may not contain one. Under
+  either conformance mode the name is nobody's and the answer is *unknown
+  procedure 'exit'*. AP 6.7.5.9, ADR-0177. `tests/dialect/exit.pas`.
 
 - **Fallible types** under `--std=afterschool`: `T ! E` denotes the result
   record a module used to write per payload type — tag `ok`, value `val`,
@@ -121,6 +133,14 @@ The other three entries only accept more.
   no identifier at all — which is still written without one.
 
 ### Fixed
+
+- **`--dump-ast` and `--dump-sema` stopped the compiler** on any program
+  declaring a fallible-type: `DumpTypeExpr` had no arm for the kind, and a
+  case-statement whose selector matches no label halts. Present since fallible
+  types landed three days earlier, invisible to every oracle — no dump case had
+  one, `difftest` skips a dialect source, and the coverage sweep drives
+  `--dump-all` over the corpus without reading what it exits with.
+  `tests/dumps/fallible.pas`.
 
 - **A procedural parameter whose own formal is a variable-string value
   parameter can be called.** `procedure each(procedure visit(l: string(12)))`

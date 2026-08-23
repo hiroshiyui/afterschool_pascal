@@ -126,7 +126,8 @@ the open decision it would settle.
 | Optionals, and no bare null | Swift, Rust | pointer safety | **Done** (ADR-0123); the check is localised to `^`, not eliminated |
 | Scope-based release | ISO 7185, Rust's `Drop` | lifetime | **Done, and it was already here** (ADR-0151) |
 | Explicit allocator passing | Zig | part of memory safety | **Tried; does not survive contact** (ADR-0116) |
-| ~~Error unions / `Result`~~ | Zig, Rust | error handling | **Done** (ADR-0176, AP 6.4.13): `T ! E` is the result record ADR-0120's convention described, written by the compiler with the field names fixed. What is *not* done is propagation, which needs an early exit — see below |
+| ~~Error unions / `Result`~~ | Zig, Rust | error handling | **Done** (ADR-0176, AP 6.4.13): `T ! E` is the result record ADR-0120's convention described, written by the compiler with the field names fixed. What is *not* done is propagation — see below |
+| ~~An early exit~~ | Turbo Pascal, Delphi, FPC | what propagation stands on | **Done** (ADR-0177, AP 6.7.5.9): `exit` terminates one activation, `exit(e)` assigns the result first. The one borrowing here whose source is another *Pascal* rather than another language |
 | ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
 | Unicode-correct `String` | Swift | the text model | **The model to copy**, and unstarted |
 | ARC | Swift | aliasing | **Undecidable on the evidence in hand** (ADR-0151) |
@@ -148,11 +149,25 @@ Two conclusions worth stating:
   time: an estimate that assumes a feature needs its own machinery is worth
   probing before it is believed.
 
-- **What is left of error handling is propagation**, and it is a question
-  about *statements* rather than types: `try X` needs a way out of a block
-  that is not the end of it. Neither standard has one; every popular Pascal
-  does (`Exit`), which is ADR-0175's note and the reason `exit` should come
-  before `try` rather than after it.
+- **What is left of error handling is propagation**, and the thing it stands
+  on is now there. `try X` needs a way out of a block that is not the end of
+  it; neither standard has one, every popular Pascal does, and `exit` is that
+  statement (ADR-0177). What is still open is `try` itself — the expression
+  that yields a fallible value's value and leaves the enclosing function with
+  its cause where there is none — and two questions it has to answer that
+  `exit` did not: what the enclosing function's result type must be for the
+  cause to be assignable to it, and whether a spelling exists that a
+  conforming program could not have written in that position. Neither is
+  answered here.
+
+- **`exit` cost less than the table above expected, and for the third time the
+  reason was the same.** It is a branch to the epilogue every block already
+  had, so the armed statements, the files and the result all came free — the
+  same shape as ADR-0176's "no new type" and ADR-0123's before it. What was
+  *not* free was a gate: `exit(e)` can only stand in a function-block, and
+  `predicate-callers`'s probe program declared its subject as a procedure, so
+  the position had to be given a function to live in. A gate that would have
+  passed for the wrong reason is worth more attention than the feature was.
 - **ARC and borrowing are not equally costly here**, and the difference is not
   only effort: borrowing would make ADR-0108's C++ mirror prohibitively
   expensive and likely force the decision to freeze it. ADR-0151 declines to
