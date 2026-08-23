@@ -203,6 +203,27 @@ own answer to the slice's question, found only after the slice had landed
 (ADR-0152). A new dialect feature should look for its authority before its
 spelling.
 
+**A third is the other Pascals**, and it is worth naming because this entry
+reads as though there were none. Turbo Pascal, Delphi and Free Pascal are
+*dialects* — none of them implements either standard completely, and each
+answered questions these standards do not: an early `Exit`, `Break` and
+`Continue`, `try..finally`, a string type that grows. Where one of them has
+already answered a question this dialect is asking, that answer is a reference
+point: not because it is authoritative — it is not, and two of them disagree
+with each other — but because a Pascal programmer arriving here already knows
+it, and gratuitous novelty is a cost paid by every future reader.
+
+**And the absence of an oracle is a fact about how a claim is checked, never a
+reason not to make one.** This entry is a risk register, not a brake. Where no
+authority answers, the dialect answers for itself — reasonably, in the
+standards' own idiom, written down in the specification and pinned by a case
+that fails without it. That is what every one of ADR-0117 onward did, and the
+discipline that matters is internal: a named failing test, a mutation that
+kills it, a clause that says what was meant. What this entry warns about is
+narrower than it looks — that a *misreading of the two standards* is invisible
+here — and it has nothing to say about a facility the dialect invents outright,
+where there is no reading to get wrong.
+
 ### 2. A third-party differential
 
 FPC under `-Miso`, or p5, over the ISO 7185 half of `tests/`. Not a second

@@ -165,9 +165,11 @@ followed.
 
 - **No propagation.** This is the half worth being loudest about, because it is
   the half a Zig or Rust reader will expect. `try f(x)` needs an **early
-  return**, and Pascal has none: a function runs to the end of its block and
-  its value is whatever the result variable then holds. The sketch is in the
-  next section; it is a separate decision and a separate record.
+  return**, which neither *standard* has: a function runs to the end of its
+  block and its value is whatever the result variable then holds. That is a
+  weaker obstacle than the first draft of this record claimed — see the next
+  section. It is a separate decision and a separate record, but not a blocked
+  one.
 - **No flow-sensitive narrowing.** `if r.ok then r.val` still checks the tag at
   the read, exactly as `if o <> nil then o^` still checks the flag. `doc/sop.md`
   §7 and Annex C.3 already carry that for the optional and would carry it here.
@@ -195,8 +197,25 @@ fallible-type whose error side accepts this one's.
 That framing is why it is worth doing *after* ADR-0175 rather than before: a
 goto to the end of a block already closes the block's files and handles and runs
 what it deferred, so propagation inherits a correct exit instead of inventing
-one. What it costs is the thing Pascal deliberately lacks — a second way out of
-a block — and that is a decision on its own merits.
+one.
+
+**And the obstacle is smaller than "Pascal has no early return" makes it
+sound.** Neither *standard* has one. Every widely used Pascal does: Turbo
+Pascal has had `Exit` since the 1980s, Delphi and Free Pascal have `Exit` and
+`Exit(value)`, and `Break` and `Continue` beside them. So an early exit is not
+foreign to Pascal — it is foreign to the two documents this project implements,
+which is a different claim and a much weaker one for a *dialect* to be bound
+by (ADR-0109, ADR-0117). What the dialect actually owes is containment: an
+early exit must not change what a conforming program means, and spelled by
+ADR-0140's rule it cannot.
+
+That reopens the design rather than settling it, and it reopens it wider than
+`try`. The honest sequence is probably **`exit` first and `try` second**: an
+early exit is the more conventional feature, every Pascal programmer already
+knows it, it is useful to programs that never touch a fallible-type, and once
+it exists `try X` is sugar over `if not X.ok then begin r := X.cause; exit end`
+rather than a construct that has to invent its own way out of a block. Doing
+`try` first would be building the sugar before the thing it is sugar for.
 
 ## Consequences
 
@@ -260,4 +279,6 @@ a block — and that is a decision on its own merits.
 2. **Whether the record is the right substrate** — reusing `tyRecord` and
    ADR-0118, against a type of its own with `^`.
 3. **Whether propagation is in scope now.** This record assumes not, and that
-   assumption is what keeps it small.
+   assumption is what keeps it small. If it is, the question underneath it is
+   whether the dialect gets `exit` — which is worth having on its own terms and
+   which every popular Pascal already has.
