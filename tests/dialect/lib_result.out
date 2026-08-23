@@ -1,10 +1,10 @@
-plain    : ok=TRUE num=42 [parsed]
-signed   : ok=TRUE num=-7 [parsed]
-spaced   : ok=TRUE num=123 [parsed]
-empty    : ok=FALSE code=not of the expected form [not of the expected form]
-lone sign: ok=FALSE code=not of the expected form [not of the expected form]
-trailing : ok=FALSE code=not of the expected form [not of the expected form]
-overflow : ok=FALSE code=outside the representable range [outside the representable range]
+plain    : ok=TRUE val=42 [parsed]
+signed   : ok=TRUE val=-7 [parsed]
+spaced   : ok=TRUE val=123 [parsed]
+empty    : ok=FALSE cause=not of the expected form [not of the expected form]
+lone sign: ok=FALSE cause=not of the expected form [not of the expected form]
+trailing : ok=FALSE cause=not of the expected form [not of the expected form]
+overflow : ok=FALSE cause=outside the representable range [outside the representable range]
 or 0 of '55'  = 55
 or 0 of '--'  = 0
 failed? TRUE

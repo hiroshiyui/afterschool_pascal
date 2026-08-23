@@ -10,11 +10,12 @@
 
   **The tag is not assigned here, and that is the point.** Under
   --std=afterschool a write to a variant's field activates that variant
-  (ADR-0118), so `r.num := acc` *is* the statement that makes the result
-  successful, and `r.code := errSyntax` is what makes it a failure. There is no
-  line to forget, because the line that sets the tag is the line that sets the
-  payload. A caller who reads `num` on a failed result does not get a stale
-  integer; the read traps.
+  (ADR-0118), so `r := acc` *is* the statement that makes the result
+  successful, and `r := errSyntax` is what makes it a failure -- the value's
+  type says which outcome it is (AP 6.4.13). There is no line to forget,
+  because the line that sets the tag is the line that sets the payload. A
+  caller who reads `val` on a failed result does not get a stale integer; the
+  read traps.
 
   That is also why this module is dialect-only. Compiled under --std=extended
   the same source parses and runs, and the tag would then be whatever the
@@ -37,19 +38,11 @@ const
 type
   ParseLine = string(ParseMax);
 
-  { ADR-0120's shape. The tag is spelled `ok` in every result record; the
-    payload's name is the module's to choose, because with no generics the
-    payload type is part of the layout and no shared type could carry it.
-
-    `boolean` as the tag-type is not laziness: 6.4.3.3 with ADR-0096 requires
-    a variant part's labels to be exactly its tag-type's values, and `boolean`
-    has precisely the two a result needs. A three-state code as the tag would
-    have to name every one of its values as an arm. }
-  IntResult = record
-    case ok: boolean of
-      true:  (num: integer);
-      false: (code: ErrorCode)
-    end;
+  { ADR-0120's shape, written by the language since AP 6.4.13 (ADR-0176):
+    `T ! E` denotes the record this module used to declare -- tag `ok`, value
+    `val`, reason `cause` -- so the shape is one type rather than a convention
+    each module copies, and the field names are the same in every module. }
+  IntResult = integer ! ErrorCode;
 
 { `s` as an integer, or the reason it is not one.
 
@@ -116,21 +109,21 @@ begin
     tag, and an explicit tag assignment would be a second opinion able to
     disagree with the payload -- which is the whole thing ADR-0118 removes. }
   if bad or not any then
-    r.code := code
+    r := code
   else if b[1] = '-' then
-    r.num := -acc
+    r := -acc
   else
-    r.num := acc
+    r := acc
 end;
 
 function IntOr;
 begin
-  if r.ok then IntOr := r.num else IntOr := whenBad
+  if r.ok then IntOr := r.val else IntOr := whenBad
 end;
 
 function ResultText;
 begin
-  if r.ok then t := 'parsed' else t := ErrorText(r.code)
+  if r.ok then t := 'parsed' else t := ErrorText(r.cause)
 end;
 
 end.

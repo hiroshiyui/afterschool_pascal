@@ -2,7 +2,7 @@
   reason and never both.
 
   What this pins is that the tag is right without anyone having set it.
-  PasParse assigns `r.num` or `r.code` and never `r.ok`, so every `ok` printed
+  PasParse assigns `r := n` or `r := code` and never `r.ok`, so every `ok` printed
   below was decided by ADR-0118's rule that a write to a variant's field
   activates that variant. Compiled under --std=extended the same source would
   print whatever the storage held -- which is why ADR-0119 refuses to link
@@ -23,8 +23,8 @@ begin
   got := ParseInt(s);
   write(label_, ': ok=', got.ok);
   { the read is inside the arm the tag selects, which is what makes it legal }
-  if got.ok then write(' num=', got.num:1)
-            else write(' code=', ErrorText(got.code));
+  if got.ok then write(' val=', got.val:1)
+            else write(' cause=', ErrorText(got.cause));
   writeln(' [', ResultText(got), ']')
 end;
 
@@ -44,7 +44,7 @@ begin
 
   { Failed reads the intent rather than the comparison. }
   r := ParseInt('nope');
-  writeln('failed? ', Failed(r.code));
+  writeln('failed? ', Failed(r.cause));
   r := ParseInt('1');
   writeln('ok, so code is unreadable -- ask the tag instead: ', r.ok)
 end.

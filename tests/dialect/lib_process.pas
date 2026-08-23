@@ -20,8 +20,8 @@ var r: RunResult; t0, t1: int64; c0, c1: real; i, acc: integer;
 procedure report(what: string(24); r: RunResult);
 begin
   write(what, ': ');
-  if r.ok then writeln('code ', r.code:1)
-  else writeln('failed, ', ErrorText(r.reason))
+  if r.ok then writeln('code ', r.val:1)
+  else writeln('failed, ', ErrorText(r.cause))
 end;
 
 begin

@@ -57,13 +57,10 @@ type
   PathName = string(MaxPath);
 
   { ADR-0120's shape, for the two routines that answer a path rather than
-    only succeeding or failing. The tag is spelled `ok` in every result record
-    in this library; the payload's name is each record's own. }
-  PathResult = record
-    case ok: boolean of
-      true:  (path: PathName);
-      false: (code: ErrorCode)
-    end;
+    only succeeding or failing -- and since AP 6.4.13 the language writes the
+    record, so `ok`, `val` and `cause` are its field names here and in every
+    other module (ADR-0176). }
+  PathResult = PathName ! ErrorCode;
 
   { The buffer the two of them lend to C, and it is **packed** deliberately.
     ADR-0125 refuses a slice of a packed array of char -- `b[1..n]` there is
@@ -200,9 +197,9 @@ begin
     { ERANGE and anything else arrive alike, so the code is the one that says
       a bound was reached: a path this module cannot hold is the overwhelmingly
       likely reading, and PasOS.LastErrorText is where the difference is. }
-    r.code := errFull
+    r := errFull
   else
-    r.path := got^
+    r := got^
 end;
 
 function LinkTarget;
@@ -210,7 +207,7 @@ var b: PathBuffer; n: int64; t: PathName;
 begin
   n := ExtReadlink(path, b);
   if n < 0 then
-    r.code := errIO
+    r := errIO
   else if n = MaxPath then
     { Filled exactly, and `readlink` writes no terminator -- so this cannot be
       told from a target that happens to be MaxPath characters long. Reported
@@ -223,19 +220,19 @@ begin
       which is a number this module cannot read any more than it can read
       O_WRONLY. Written because being wrong in the other direction returns a
       truncated path as though it were whole. }
-    r.code := errFull
+    r := errFull
   else begin
     { One assignment rather than a loop: PathBuffer is a packed array of char
       and therefore a string-type (6.4.3.2), so this is a whole-string
       assignment and the substring after it takes the part `readlink` wrote. }
     t := b;
-    r.path := t[1..trunc(n)]
+    r := t[1..trunc(n)]
   end
 end;
 
 function PathOr;
 begin
-  if r.ok then PathOr := r.path else PathOr := whenBad
+  if r.ok then PathOr := r.val else PathOr := whenBad
 end;
 
 end.

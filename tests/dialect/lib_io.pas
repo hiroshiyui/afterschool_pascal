@@ -36,7 +36,7 @@ end;
 procedure got(what: string(16); r: CountResult);
 begin
   write(what);
-  if r.ok then writeln(r.count:1, ' bytes') else writeln(ErrorText(r.code))
+  if r.ok then writeln(r.val:1, ' bytes') else writeln(ErrorText(r.cause))
 end;
 
 begin
@@ -79,10 +79,10 @@ begin
 
   o := OpenRead(path);
   if not o.ok then begin
-    said('open          = ', o.openCode);
+    said('open          = ', o.cause);
     halt
   end;
-  fd := o.fd;
+  fd := o.val;
   writeln('open          = done');
 
   { Five bytes, because the slice says five. `read` is not told how big the
@@ -120,7 +120,7 @@ begin
   { The failing direction. The reason is errIO and cannot be finer, errno
     being behind a pointer result ADR-0122 does not admit. }
   o := OpenRead(gone);
-  if not o.ok then said('open missing  = ', o.openCode);
+  if not o.ok then said('open missing  = ', o.cause);
 
   { A read on a descriptor that is not open. }
   r := ReadInto(fd, buf);
@@ -128,7 +128,7 @@ begin
   writeln('text          = ', ResultText(r));
 
   { AtEnd asked of a *failed* result, which is where its first conjunct earns
-    its keep: `and` short-circuits, so `r.count` is never read on a result
+    its keep: `and` short-circuits, so `r.val` is never read on a result
     whose tag says there is no count -- and under ADR-0118 reading it would
     trap rather than answer a stale integer. Two rules holding each other up. }
   if AtEnd(r) then writeln('failed at end = yes')

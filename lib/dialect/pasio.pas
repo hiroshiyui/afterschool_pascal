@@ -64,20 +64,14 @@ const
 type
   IOLine = string(IOMax);
 
-  { ADR-0120's shape twice, because with no generics a payload type is part of
-    the layout and one record cannot carry both. The tag is spelled `ok` in
-    every result record here; the payload's name is each record's own. }
-  FdResult = record
-    case ok: boolean of
-      true:  (fd: integer);
-      false: (openCode: ErrorCode)
-    end;
+  { ADR-0120's shape twice, because a payload type is part of the layout and
+    one type cannot carry both. Since AP 6.4.13 each is one line and the
+    field names are the language's: `ok`, `val`, `cause` (ADR-0176). Before
+    it, this module spelled the failing side of the first one `openCode` and
+    of the second `code` -- two names for one thing, in one file. }
+  FdResult = integer ! ErrorCode;
 
-  CountResult = record
-    case ok: boolean of
-      true:  (count: integer);
-      false: (code: ErrorCode)
-    end;
+  CountResult = integer ! ErrorCode;
 
 { Open an existing file for reading. `errIO` where the operating system
   refused, which covers a path that is not there and one that may not be read.
@@ -148,7 +142,7 @@ function ExtWrite(fd: integer;
   neither can, which is the reason to write it rather than assume. }
 function Counted(n: int64) = r: CountResult;
 begin
-  if n < 0 then r.code := errIO else r.count := trunc(n)
+  if n < 0 then r := errIO else r := trunc(n)
 end;
 
 function OpenRead;
@@ -156,7 +150,7 @@ var fd: integer;
 begin
   { O_RDONLY. See the module's own comment for why it is the only flag here. }
   fd := ExtOpen(path, 0);
-  if fd < 0 then r.openCode := errIO else r.fd := fd
+  if fd < 0 then r := errIO else r := fd
 end;
 
 function Close;
@@ -189,9 +183,9 @@ begin
       { A write that takes nothing is not progress, and looping on it would
         not terminate. The operating system does not do this to a regular
         file or a pipe; refusing to spin is cheaper than proving it cannot. }
-      if r.count > 0 then done := done + r.count else e := errIO
+      if r.val > 0 then done := done + r.val else e := errIO
     else
-      e := r.code
+      e := r.cause
   end;
   WriteAll := e
 end;
@@ -210,18 +204,18 @@ end;
 
 function AtEnd;
 begin
-  AtEnd := r.ok and (r.count = 0)
+  AtEnd := r.ok and (r.val = 0)
 end;
 
 function CountOr;
 begin
-  if r.ok then CountOr := r.count else CountOr := whenBad
+  if r.ok then CountOr := r.val else CountOr := whenBad
 end;
 
 function ResultText;
 begin
   if r.ok then t := 'read or wrote what was asked'
-  else t := ErrorText(r.code)
+  else t := ErrorText(r.cause)
 end;
 
 end.

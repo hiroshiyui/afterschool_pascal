@@ -34,19 +34,14 @@ export PasMathX = (RealResult, RealOr, Cbrt, Log10, Log2, FMod);
 import PasError;
 
 type
-  { ADR-0120's shape, over a real. It is a *convention* and not a type -- with
-    no generics the payload's type is part of the layout, so each producing
-    module declares its own record and what is shared is ErrorCode and the
-    spelling of the tag. ADR-0116 met the same wall from the container side. }
-  RealResult = record
-    case ok: boolean of
-      true:  (num: real);
-      false: (code: ErrorCode)
-    end;
+  { ADR-0120's shape over a real, and since AP 6.4.13 a *type* rather than a
+    convention: `T ! E` is the record every module used to declare, with the
+    field names fixed -- `ok`, `val`, `cause` (ADR-0176). }
+  RealResult = real ! ErrorCode;
 
 { The value, or the caller's own answer where there is none. The alternative
   to checking, for a caller that has a sensible default and does not want to
-  branch -- reading `r.num` without asking traps, which is the whole point. }
+  branch -- reading `r.val` without asking traps, which is the whole point. }
 function RealOr(r: RealResult; whenBad: real): real;
 
 { The real cube root. Total: every real has one, including a negative one,
@@ -81,7 +76,7 @@ function ExtFMod(x, y: real): real; external 'fmod';
 
 function RealOr;
 begin
-  if r.ok then RealOr := r.num else RealOr := whenBad
+  if r.ok then RealOr := r.val else RealOr := whenBad
 end;
 
 function Cbrt;
@@ -91,17 +86,17 @@ end;
 
 function Log10;
 begin
-  if x > 0.0 then r.num := ExtLog10(x) else r.code := errRange
+  if x > 0.0 then r := ExtLog10(x) else r := errRange
 end;
 
 function Log2;
 begin
-  if x > 0.0 then r.num := ExtLog2(x) else r.code := errRange
+  if x > 0.0 then r := ExtLog2(x) else r := errRange
 end;
 
 function FMod;
 begin
-  if y = 0.0 then r.code := errRange else r.num := ExtFMod(x, y)
+  if y = 0.0 then r := errRange else r := ExtFMod(x, y)
 end;
 
 end.

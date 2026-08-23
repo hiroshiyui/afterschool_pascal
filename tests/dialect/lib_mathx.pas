@@ -20,22 +20,22 @@ begin
   writeln('cbrt  -8     = ', Cbrt(-8.0):0:1);
 
   r := Log10(1000.0);
-  writeln('log10  1000  = ', r.num:0:1, '  ok=', r.ok);
+  writeln('log10  1000  = ', r.val:0:1, '  ok=', r.ok);
 
   r := Log2(1024.0);
-  writeln('log2   1024  = ', r.num:0:1, '  ok=', r.ok);
+  writeln('log2   1024  = ', r.val:0:1, '  ok=', r.ok);
 
   { Not positive: errRange, because 6.7.2.2 makes `ln` of one an error and a
     library may not halt (ADR-0116). The tag went false when `code` was
     written -- no line in PasMathX assigns it. }
   r := Log10(-1.0);
-  writeln('log10 -1     = ', ErrorText(r.code), '  ok=', r.ok);
+  writeln('log10 -1     = ', ErrorText(r.cause), '  ok=', r.ok);
 
   r := FMod(7.0, 3.0);
-  writeln('fmod   7 3   = ', r.num:0:1);
+  writeln('fmod   7 3   = ', r.val:0:1);
 
   r := FMod(7.0, 0.0);
-  writeln('fmod   7 0   = ', ErrorText(r.code), '  failed=', Failed(r.code));
+  writeln('fmod   7 0   = ', ErrorText(r.cause), '  failed=', Failed(r.cause));
 
   { The alternative to branching, for a caller with a default in hand. }
   writeln('or 0 of bad  = ', RealOr(FMod(1.0, 0.0), 0.0):0:1);

@@ -78,12 +78,15 @@ type
 
   { ADR-0120's shape: the exit code, or why there is none. `errIO` is what a
     shell that could not be started answers; a command that ran and failed
-    has a code, and the code is the caller's to judge. }
-  RunResult = record
-    case ok: boolean of
-      true:  (code: integer);
-      false: (reason: ErrorCode)
-    end;
+    has a code, and the code is the caller's to judge.
+
+    Written by the language since AP 6.4.13 (ADR-0176), which is worth a
+    sentence here rather than anywhere else: this record used to spell its
+    *payload* `code` and its *reason* `reason`, so `r.code` meant the exit
+    status here and the ErrorCode in four other modules of the same library.
+    One reader had to know which. The field names are `ok`, `val` and `cause`
+    everywhere now, and the collision is gone by construction. }
+  RunResult = integer ! ErrorCode;
 
 { Run `command` through the shell and wait for it. `ok` with the command's
   exit code -- 0 for success by the usual convention, the command's own
@@ -162,9 +165,9 @@ begin
   status := ExtFflush(0);
   status := ExtSystem(command);
   if status = -1 then
-    r.reason := errIO
+    r := errIO
   else
-    r.code := ExitCode(status);
+    r := ExitCode(status);
   Run := r
 end;
 
@@ -188,7 +191,7 @@ begin
   status := ExtFflush(0);
   p := ExtPopen(Wrapped(command), 'r');
   if p = nil then
-    r.reason := errIO
+    r := errIO
   else begin
     seen := false;
     pending := false;
@@ -212,8 +215,8 @@ begin
       else take(chr(c));
       c := ExtFgetc(p)
     end;
-    if seen then r.code := code
-    else r.reason := errIO
+    if seen then r := code
+    else r := errIO
   end
 end;
 

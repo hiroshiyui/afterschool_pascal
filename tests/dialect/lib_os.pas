@@ -38,7 +38,7 @@ begin
   { The failing open, and the two halves of the answer. }
   o := OpenRead(gone);
   yes('open failed   = ', not o.ok);
-  writeln('code          = ', ErrorText(o.openCode));
+  writeln('code          = ', ErrorText(o.cause));
   writeln('why           = ', LastErrorText);
   yes('number set    = ', LastErrorNumber <> 0);
 
@@ -66,5 +66,5 @@ begin
   { The code and the sentence are different vocabularies on purpose. This one
     is the closed set a `case` can cover (6.4.3.3 with ADR-0096); the other is
     a string nothing here classifies. }
-  if o.openCode = errIO then writeln('branched      = errIO')
+  if o.cause = errIO then writeln('branched      = errIO')
 end.

@@ -32,7 +32,7 @@ end;
 procedure showed(what: string(16); r: PathResult);
 begin
   write(what);
-  if r.ok then writeln('[', r.path, ']') else writeln(ErrorText(r.code))
+  if r.ok then writeln('[', r.val, ']') else writeln(ErrorText(r.cause))
 end;
 
 begin
@@ -47,7 +47,7 @@ begin
     that there is one and that it is absolute. }
   r := WorkingDirectory;
   yes('cwd ok        = ', r.ok);
-  yes('cwd absolute  = ', r.ok and (length(r.path) > 0) and (r.path[1] = '/'));
+  yes('cwd absolute  = ', r.ok and (length(r.val) > 0) and (r.val[1] = '/'));
 
   { A link whose target this file chose, so the comparison is exact. The
     target need not exist -- a symbolic link does not check. }

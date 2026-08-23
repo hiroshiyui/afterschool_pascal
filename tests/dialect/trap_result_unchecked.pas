@@ -18,7 +18,7 @@ var r: IntResult;
 begin
   r := ParseInt('not a number');
   { the check a caller is supposed to write, and does not }
-  writeln('code says: ', ErrorText(r.code));
+  writeln('the cause is: ', ErrorText(r.cause));
   writeln('about to read num on a failed result:');
-  writeln('num = ', r.num:1)
+  writeln('val = ', r.val:1)
 end.
