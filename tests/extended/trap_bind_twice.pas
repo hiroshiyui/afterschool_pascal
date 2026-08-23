@@ -9,6 +9,10 @@ var f: btext;
 begin
   b.name := '/tmp/apascal_bindtwice.txt';
   bind(f, b);
+  { E.16 (ADR-0172): the variable is bound to an external entity when the
+    entity exists, so the file is created before the second attempt -- a
+    name nothing is at may be bound again, bind_missing.pas }
+  rewrite(f);
   writeln('first ok');
   { NOTE 7 permits unbind on a variable that is not bound, so binding again
     after one would be fine — this one does not. }

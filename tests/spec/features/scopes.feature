@@ -343,6 +343,8 @@ Feature: Scopes and activations
         b.name := 'spec_bind_field.tmp';
         bind(r.log, b);
         bind(pool[2], b);
+        { E.16 (ADR-0172): bound when the entity exists, so create it first }
+        rewrite(r.log);
         writeln(binding(r.log).bound, ' ', binding(pool[2]).bound);
         unbind(r.log);
         unbind(pool[2])

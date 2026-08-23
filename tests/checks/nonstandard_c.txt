@@ -2,11 +2,11 @@
 #
 # The runtime is the only C in this project, and how close it stays to the
 # standard decides what a port to another C library costs. Measured on
-# 2026-08-22 it is *three names* -- see doc/roadmap.md's cross-platform chapter,
+# 2026-08-22 it was *three names*, and access made a fourth on 2026-08-23 -- see doc/roadmap.md's cross-platform chapter,
 # where this replaced the claim that "the file model is a POSIX assumption".
 #
 # tests/checks/runtime_isoc.sh reads this file and fails in both directions: a
-# fourth dependency appearing, and one of these three going away while the
+# fifth dependency appearing, and one of these four going away while the
 # entry stays. Add a name only with the argument for why ISO C could not do it.
 #
 # Format: the identifier, then a blank-line-separated argument above it.
@@ -28,3 +28,11 @@ fmemopen
 # ...and writestr, the other direction: a text file whose contents become a
 # string value, so the buffer has to grow as it is written.
 open_memstream
+
+# ISO/IEC 10206:1991 §6.7.5.6's bind: "the binding shall be
+# implementation-defined", and this processor's is that the attempt succeeds
+# when the name designates something that exists or something whose directory
+# does (E.16). ISO C has no way to ask whether a path exists without creating
+# it -- fopen for reading says nothing about a file that is unreadable but
+# there, and fopen for appending creates what it asks about.
+access

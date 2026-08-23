@@ -199,6 +199,9 @@ begin
   writeln('binding of an unbound file: ', bnd.bound, ' ', length(bnd.name):1);
   bnd.name := '/tmp/apascal_required.txt';
   bind(bf, bnd);
+  { E.16 (ADR-0172): bound to an external entity when the entity exists, so
+    the file is created before binding is asked }
+  rewrite(bf);
   bnd := binding(bf);
   writeln('bind: ', bnd.bound, ' ', bnd.name);
   unbind(bf);

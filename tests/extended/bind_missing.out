@@ -1,0 +1,7 @@
+nothing there: bound=FALSE
+bound again: bound=FALSE
+after rewrite: bound=TRUE same name=TRUE
+read back: written
+after unbind: bound=FALSE
+output: bound=FALSE
+unbound, and resetting anyway

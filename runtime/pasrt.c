@@ -38,6 +38,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "pasrt.h"
 
@@ -1528,10 +1529,40 @@ void pas_dispose(void *p) { free(p); }
  * could not ask: a program that names a file while it is running rather than
  * being handed one before it starts. */
 
+/* §6.7.5.6: "The binding shall be implementation-defined." This is it, and
+ * doc/implementation-defined.md E.16 states it: **a variable is bound to an
+ * external entity when the entity exists**, asked whenever `binding` is
+ * called. `bind` records the name and makes no attempt of its own; the
+ * clause's NOTE 2 makes `binding(f)` the way "to test the success", and that
+ * test answers about now -- false for a name nothing is at, true for the same
+ * variable once `rewrite` has created the file. Until this was written every
+ * binding reported success and the first a program heard of a missing file
+ * was the stop at `reset`, which nothing can recover from. Existence and not
+ * readability: that is the open's own question, and `access` answers it for
+ * the wrong user when the process runs set-uid. ISO C cannot ask whether a
+ * path exists without creating it, which is why this is `access` and a
+ * catalogued departure (tests/checks/nonstandard_c.txt).
+ *
+ * F_OK, which POSIX fixes at 0: the one access mode whose value needs no
+ * header, and the only one asked for here. Spelled as the number so that the
+ * catalogue's one name is the whole of the dependency. */
+#define PAS_F_OK 0
+
+static int pas_bound_exists(const struct pas_file *f) {
+  return f->bound_name && access(f->bound_name, PAS_F_OK) == 0;
+}
+
 void pas_bind(void *v, const char *name, int len) {
   struct pas_file *f = v;
-  if (f->bound_name)
+  /* "It shall be a dynamic-violation if the variable is already bound to an
+   * external entity" -- bound, by E.16's rule, so a name nothing is at may be
+   * replaced. The name is kept after a failed test so that an unchecked
+   * `reset` still stops at the file that was named rather than reading a
+   * scratch file, and it is released here. */
+  if (pas_bound_exists(f))
     pas_runtime_error("bind: the variable is already bound");
+  free(f->bound_name);
+  f->bound_name = NULL;
   /* §6.4.6's trailing spaces come with a fixed-string name, and a file name
    * ending in them is never what was meant. The length is the value's, so a
    * variable-string that really ends in a space keeps it. */
@@ -1635,7 +1666,7 @@ static const char *pas_bound_to(struct pas_file *f) {
   /* A binding the program made wins, as it does in `pas_external`: §6.7.5.6's
    * `bind` is a program naming a file it was not started with. */
   if (f->bound_name)
-    return f->bound_name;
+    return pas_bound_exists(f) ? f->bound_name : NULL;
   if (f->binding == PAS_BIND_ARG && f->arg < pas_argc)
     return pas_argv[f->arg];
   /* PAS_BIND_INPUT and PAS_BIND_OUTPUT are bound to an external entity too,

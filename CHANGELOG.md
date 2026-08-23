@@ -42,6 +42,18 @@ The other three entries only accept more.
 
 ### Changed
 
+- **`binding(f).bound` now says whether the file is there.** A variable is
+  bound to an external entity when the entity exists, asked whenever `binding`
+  is called — false for a name nothing is at, true for the same variable once
+  `rewrite` has created the file. ISO/IEC 10206:1991 §6.7.5.6 makes the
+  binding implementation-defined and NOTE 2 makes `binding` the test of its
+  success, so a conforming program can ask before `reset` stops it. A program
+  that does not ask behaves exactly as before: the name is kept and the
+  unchecked `reset` stops with *cannot open for reading* (ADR-0172,
+  `doc/implementation-defined.md` E.16). The runtime's departure from ISO C is
+  five names, `access` being the fifth, and `runtime-isoc` now strips non-ISO
+  headers before it looks.
+
 - A **record-value's variant-part-value must name the tag field** its variant
   part declares: `shape[n: 1; case kind: box of [w: 6; h: 7]]` and no longer
   `case box of`. §6.8.7.3 requires it twice over, and the optional

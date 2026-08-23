@@ -1219,7 +1219,7 @@ layout — the differences they name are real and are somewhere else:
   (ADR-0161). `bind` is *not* a POSIX assumption: §6.7.5.6's binding is `fopen`,
   and the file model is `fopen`, `fseek`, `ftell`, `fread`, `fwrite` and
   `tmpfile`, every one of them ISO C — as are the time procedures and `getenv`.
-  **The runtime's whole departure from the standard is four names**, and they
+  **The runtime's whole departure from the standard is five names**, and they
   split the two platforms apart:
 
   | name | for | macOS | Windows CRT |
@@ -1227,11 +1227,15 @@ layout — the differences they name are real and are somewhere else:
   | `_setjmp`, `_longjmp` | §6.8.2.4 / §6.9.2.4's non-local goto | yes | yes |
   | `fmemopen` | ADR-0057's `readstr` | 10.13+ | **no** |
   | `open_memstream` | ADR-0057's `writestr` | 10.13+ | **no** |
+  | `access` | §6.7.5.6's `binding` asking whether the file is there (ADR-0172) | yes | `_access` |
 
   So **macOS needs no runtime change at all** on this axis, and a **Windows**
-  port is two hand-written `FILE*`-over-memory functions plus `_Complex`, which
-  MSVC lacks and §6.7.6.2's complex functions are written in. `runtime-isoc`
-  keeps the list at four in both directions.
+  port is two hand-written `FILE*`-over-memory functions, one renamed call,
+  plus `_Complex`, which MSVC lacks and §6.7.6.2's complex functions are
+  written in. `runtime-isoc` keeps the list at five in both directions — and
+  since ADR-0172 it compiles a copy with every non-ISO `#include` removed,
+  because `__STRICT_ANSI__` hides what POSIX adds to an ISO header and not a
+  header ISO C never had, which is how `<unistd.h>`'s `access` went through it.
 - **32-bit is the real layout blocker, and it is every 32-bit target.** 85–86%
   of offsets move, because `LlSize` says a pointer is 8 by construction, and
   ADR-0129's `i64` count at the foreign boundary is a second, independent one.

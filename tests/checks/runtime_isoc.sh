@@ -64,8 +64,29 @@ list=$here/nonstandard_c.txt
 
 std=(-std=c11 -pedantic-errors -I"$root/runtime")
 
+# --- pass 0: which headers are not ISO C's? --------------------------------
+#
+# __STRICT_ANSI__ hides what a POSIX *extension* adds to an ISO C header, and
+# that is all it hides. A header ISO C does not have at all -- <unistd.h> --
+# is not touched by it: glibc declares `access` there unconditionally, so a
+# strict compile of the file as written says nothing about it. The first
+# version of this script had exactly that hole, and `access` went through it.
+# So the strict compile is of a *copy* with every non-ISO include removed,
+# which is what an ISO C library would present, and each name such a header
+# declared becomes "undeclared" and is harvested with the rest. The list is
+# C11's twenty-nine headers, Annex B.
+iso_headers='assert complex ctype errno fenv float inttypes iso646 limits locale math setjmp signal stdalign stdarg stdatomic stdbool stddef stdint stdio stdlib stdnoreturn string tgmath threads time uchar wchar wctype'
+stripped=$work/pasrt.c
+cp "$src" "$stripped"
+for h in $(grep -oE '^#include <[a-z0-9_/]+\.h>' "$src" | sed 's/.*<\(.*\)\.h>/\1/'); do
+  case " $iso_headers " in
+    *" $h "*) ;;
+    *) sed -i "s|^#include <$h\.h>|/* <$h.h> is not ISO C: removed by runtime_isoc.sh */|" "$stripped" ;;
+  esac
+done
+
 # --- pass 1: what does strict ISO C not declare? ---------------------------
-"$cc" "${std[@]}" -c "$src" -o "$work/a.o" >"$work/p1.txt" 2>&1
+"$cc" "${std[@]}" -c "$stripped" -o "$work/a.o" >"$work/p1.txt" 2>&1
 p1=$?
 found=$(grep -oE "call to undeclared function '[A-Za-z_][A-Za-z0-9_]*'" \
           "$work/p1.txt" | sed "s/.*'\(.*\)'/\1/" | sort -u)
@@ -162,7 +183,7 @@ fi
 # --- pass 2: and nothing else is non-standard ------------------------------
 if ! "$cc" "${std[@]}" -Wall -Wextra \
      -Wno-implicit-function-declaration -Wno-int-conversion \
-     -c "$src" -o "$work/b.o" >"$work/p2.txt" 2>&1; then
+     -c "$stripped" -o "$work/b.o" >"$work/p2.txt" 2>&1; then
   echo "runtime-isoc: with those names excused, runtime/pasrt.c is still not" \
        "strict ISO C:" >&2
   head -20 "$work/p2.txt" >&2
