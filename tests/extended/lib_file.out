@@ -1,0 +1,28 @@
+absent exists: FALSE
+absent count: FALSE -1
+absent line: FALSE untouched
+absent each: FALSE 0
+absent all: FALSE untouch -1
+absent copy: FALSE FALSE
+exists: TRUE
+count: TRUE 3
+line 2: TRUE [two]
+line 4: FALSE [two]
+line 0: FALSE
+  1: [one]
+  2: [two]
+  3: [three]
+each: TRUE
+all: TRUE size=14 length=14 fits=TRUE
+prefix: TRUE size=14 [one
+two
+] fits=FALSE
+after append: 6
+line 6: [six]
+q: TRUE [created by append]
+q count: 1
+copy: TRUE
+copied size: 28 same=TRUE
+copied line 5: [five]
+unterminated: lines=1 size=11 ends in newline=TRUE
+empty: lines=0 size=0
