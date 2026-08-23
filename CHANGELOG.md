@@ -49,6 +49,15 @@ The other three entries only accept more.
   its exit code, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds` — four libc
   names through `external`. `tests/dialect/lib_process.pas`.
 
+- **`lib/dialect/passtream.pas`**: buffered streams over `fopen` as a
+  handle-type — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`,
+  `WriteLine`, `ReadLine`, `Flush`. A dialect program can create a file
+  through the library now, which `PasIO` could not. `tests/dialect/lib_stream.pas`.
+
+- **`PasProcess.Capture` and `CaptureLines`**: a command's standard output
+  into a string or onto a `StrVec`, with its exit code, through `popen` as a
+  handle. A directory listing is `CaptureLines('ls -1 dir', names)`.
+
 - **`lib/pasfile.pas`**, the conforming layer's seventh module: whole files
   by name — `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`,
   `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`,

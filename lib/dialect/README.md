@@ -1,6 +1,6 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These seven modules are written in `--std=afterschool` and are the only part of
+These nine modules are written in `--std=afterschool` and are the only part of
 this repository that reaches outside the program: the environment, the file
 system, file descriptors, `errno`, and the C functions behind them.
 
@@ -23,9 +23,12 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Nine exported routines take this shape:
-`Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`,
-`Close`, `WriteAll`, `WriteText`.
+**`ErrorCode`.** `errNone` is success. Sixteen exported routines take this
+shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
+`RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, and `PasStream`'s
+`OpenRead`, `OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush` —
+the three `Open`s included, because the stream they answer goes into the
+`var` parameter and what is left to return is whether the world refused.
 
 **2. Then: can the value be missing for a reason the caller could act on?**
 
@@ -56,9 +59,9 @@ PathResult = record
 **A result record**, and ADR-0118 makes its tag authoritative: reading `r.path`
 when `r.ok` is false stops the program, so the discipline is not a convention
 the caller may forget. **The tag is spelled `ok` in every result record here**
-and the payload carries each record's own name. Nine exported routines:
+and the payload carries each record's own name. Twelve exported routines:
 `WorkingDirectory`, `LinkTarget`, `OpenRead`, `ReadInto`, `WriteFrom`,
-`ParseInt`, `Log10`, `Log2`, `FMod`.
+`ParseInt`, `Log10`, `Log2`, `FMod`, `Run`, `Capture`, `CaptureLines`.
 
 ## And one shape that is not about failure at all
 
@@ -66,10 +69,12 @@ and the payload carries each record's own name. Nine exported routines:
 function Exists(path: PathName): boolean;
 ```
 
-**A question about the world** answers `boolean`. `Exists`, `Defined`, `Failed`
-and `AtEnd` are questions, not operations: there is no failure distinct from the
-answer, and giving one an `ErrorCode` would invent a third state the caller
-would have to handle for nothing.
+**A question about the world** answers `boolean`. `Exists`, `Defined`, `Failed`,
+`AtEnd` and `ReadLine` are questions, not operations: there is no failure
+distinct from the answer, and giving one an `ErrorCode` would invent a third
+state the caller would have to handle for nothing. `ReadLine` is the one that
+looks like an operation, and its `false` means *nothing more*, which is the
+answer and not a refusal.
 
 ## Two conveniences, and their names are fixed
 
@@ -99,7 +104,7 @@ whoever lent it, the kernel says `ssize_t`. A parameter is where that is exactly
 right — passing a slice *is* the caller's ownership written down. A result has
 no owner, so a boundary shape there is the boundary leaking into your interface.
 
-**Convert at the first opportunity**, which is what these seven modules already
+**Convert at the first opportunity**, which is what these nine modules already
 do:
 
 - `o^` after a `= nil` test, and the value copied out — `PasEnv.LookupOr`,
@@ -119,6 +124,26 @@ error (AP §6.7.3.9.2) and no `int64` expression is a constant (AP §6.4.2.6.5).
 Only the optional can be written as a result, and that is not an oversight —
 it is the *absence is not a failure* arm of the first rule, and what `Lookup`
 returns is a `?string`, a value, and not a foreign pointer wearing a flag.
+
+## The third rule: an owned value is filled, never returned
+
+A handle (AP 6.4.12) cannot be a Pascal function's result and cannot be
+copied, so a routine that produces one takes the variable that will own it as
+a `var` parameter and fills it:
+
+```pascal
+function OpenWrite(var s: Stream; path: PathName): ErrorCode;
+```
+
+The caller declares the `Stream`, the module assigns it from the external
+function — the one assignment the type has — and the block the caller
+declared it in is what closes it. `s <> nil` asks whether it is open and is
+the whole of what a caller can ask. This is not a shape chosen over the
+others; it is the only one the type admits, and it is why `PasStream`'s
+`Open`s answer an `ErrorCode` where `PasIO.OpenRead` answers a result record
+carrying the descriptor. A module that keeps its handle private — `PasProcess`
+with its `Pipe` — shows nothing of this and answers the result record as
+before.
 
 ## What the rules do not cover, and you should know before relying on them
 

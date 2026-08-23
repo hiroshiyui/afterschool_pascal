@@ -58,7 +58,7 @@ mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 ## What blocks the library
 
-The library is sixteen modules — eight conforming, eight dialect. A survey of
+The library is seventeen modules — eight conforming, nine dialect. A survey of
 what a daily program needs against the thirteen that then existed (2026-08-23)
 found three gaps that needed no language change and were closed the same day (`PasFile`,
 `PasProcess`, `PasStrVec`; the first needed ADR-0172 first), and three that
@@ -85,9 +85,26 @@ rather than a category:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| a directory listing | `readdir` answers a `struct dirent *` — the struct item. Through the shell it is a module away now: `popen` answers a handle (ADR-0174) and `fgets` takes one |
+| a directory listing | `readdir` answers a `struct dirent *` — the struct item. Through the shell it is done: `PasProcess.CaptureLines('ls -1 dir', names)`, over `popen` as a handle |
 | a socket | the struct item, with `sockaddr` |
-| creating a file through `PasIO` | `O_WRONLY`, `O_CREAT` and `O_TRUNC` are header numbers, and the policy PasFS set is that a number a module cannot check does not go in. `fopen` with a mode string needs none, and answers a handle now (ADR-0174); and §6.10's `rewrite` creates files and `PasFile` wraps it |
+| ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
+
+**What building on the handle found.** Two modules were written over
+AP 6.4.12 the day it landed, and each met one edge of the clause:
+
+- **There is no `h := nil`.** 6.4.12.2 gives a handle exactly one assignment,
+  from an external function of its type, so a program cannot close a stream
+  before its block ends except by opening another. `PasStream.Close` does it
+  with `fopen` of the empty path — an assignment whose answer is always null,
+  costing a refused system call and a stale `errno`. A second assignment form
+  is one Sema arm and one `pas_handle_set` with a null value; it waits for a
+  second module to want it.
+- **A closer's result is discarded**, 6.4.12.1 says, and `pclose`'s result is
+  the child's wait status. `PasProcess.Capture` gets the exit code through
+  the stream instead — the shell prints `$?` after the output, behind a marker
+  — which misreads a program that writes a control character 1 at the start
+  of a line. The language change would be a handle whose closer's result is
+  kept somewhere a program can read it, and nothing has said where.
 
 **The lesson from the five FFI increments**, worth keeping for the rows above:
 a decision that looks like it needs a model may need it for only part of its

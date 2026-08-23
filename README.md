@@ -470,7 +470,9 @@ is a value: no Pascal function returns one and no record copies one.
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are
-what a caller sees instead.
+what a caller sees instead. `lib/dialect/passtream.pas` is the first binding
+over a handle: a `Stream` the caller declares and the module fills, so what a
+program holds is a variable that closes itself and never the address.
 
 **The runtime has a second surface**, and it is one routine wide (ADR-0131).
 `pas_` names are what the compiler emits calls to and are refused as foreign
@@ -508,9 +510,10 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasmathx.pas` | `Cbrt`, `Log10`, `Log2`, `FMod`, `RealOr` — libm through `external`, with a `RealResult` where the answer can fail |
 | `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists`, `WorkingDirectory`, `LinkTarget`, `PathOr` — the file system through `external`, answering an `ErrorCode` or a `PathResult` |
 | `lib/dialect/pasenv.pas` | `Lookup`, `LookupOr`, `Defined`, `Define`, `Undefine` — the environment, where an unset variable is `nil` and one set to nothing is not |
-| `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see |
+| `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see — `PasStream` is where to create one |
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
-| `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
+| `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
+| `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
