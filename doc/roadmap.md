@@ -95,6 +95,24 @@ project. **Creating a file at all is not blocked and never was**: §6.10's
 module over them — what *was* missing was a way to learn that a file is not
 there without stopping, and ADR-0172's `binding(f).bound` is that.
 
+**What a survey of daily needs found, 2026-08-23**, against the sixteen
+modules then: three things a program wants that no module gave, each landed
+the same day without a language change — a file read or written whole
+(`PasFile`, which needed ADR-0172 first), a command run and a clock read
+(`PasProcess`), and a sequence of strings (`PasStrVec`) — and three it wants
+that stay open, each for a reason already on this page:
+
+- **Command-line arguments as a list.** The program's own parameters carry
+  them (ADR-0081), and nothing else can: a *module* has no program-parameters
+  to ask, and the runtime routine that would answer is a `pas_*` name AP
+  §6.7.7.10 reserves. A feature, not a module.
+- **Listing a directory.** `readdir` answers with a `struct dirent *`, which is
+  the struct-with-a-layout item above. `popen` and `fgets` would do it through
+  the shell and a `FILE *` — the opaque-handle item, and an `int`-sized length
+  argument where a slice crosses as `i64`, which is correct on every admitted
+  target and is the kind of correctness this repository does not build on.
+- **A socket**, the same struct item with `sockaddr`.
+
 **The rest of the FFI**, and the ordering has not changed — it is the narrowness
 that moved, not the position.
 
