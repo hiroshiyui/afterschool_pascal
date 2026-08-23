@@ -35,17 +35,40 @@
   and cannot fix it from its side; this module can, because it knows when
   the other writer starts.
 
-  **What is not here.** Arguments as a list, a pipe to or from the child,
-  its environment, a signal: `popen` returns a `FILE *` and `posix_spawn`
-  takes a `char *const argv[]`, and AP §6.7.7.9 c) is where both stop. A
-  command is a string the shell reads, exactly what `system` is. }
+  **`Capture` and `CaptureLines` read what a command writes.** `popen` is
+  POSIX.1 and answers a `FILE *`, which is a handle (AP 6.4.12, ADR-0174):
+  `Pipe` below is that type with `pclose` as its closer, so the child is
+  waited for when the variable dies and the stream is closed by nothing
+  else. The stream is read with `fgetc`, a call per character, for the
+  reason PasStream gives.
+
+  **Where the exit code comes from.** `pclose` answers the child's wait
+  status -- and `pclose` is the closer, whose result AP 6.4.12.1 discards.
+  Calling it by hand would leave the variable owning an address already
+  released, which 6.4.12.3 forbids. So the status travels through the
+  stream instead: the command is run in a subshell and the shell prints
+  `$?` after it, behind a marker no text contains (a newline, then the
+  character 1), and the reader takes the code from the marker and the
+  output from before it. The marker is what the program wrote only if it
+  wrote a control character 1 at the start of a line, which `Capture`
+  would then misread; that is the cost, and the roadmap carries the
+  language change that would remove it. A command that cannot be started
+  at all is `errIO`; one the shell could not find is code 127, as with
+  `Run`.
+
+  **What is not here.** A pipe *into* a child, its environment, a signal:
+  `posix_spawn` takes a `char *const argv[]`, which is the struct-layout
+  item of the roadmap. A command is a string the shell reads, exactly what
+  `system` and `popen` are. }
 
 module PasProcess;
 
 export PasProcess = (CommandMax, CommandLine, RunResult,
-                     Run, ExitCode, Sleep, Seconds, CpuSeconds);
+                     Run, Capture, CaptureLines,
+                     ExitCode, Sleep, Seconds, CpuSeconds);
 
 import PasError;
+       PasStrVec;
 
 const
   CommandMax = 4096;
@@ -68,6 +91,20 @@ type
   command the shell could not find is *not* that: it is the shell exiting
   127, which is a code. }
 function Run(command: CommandLine): RunResult;
+
+{ Run `command` and collect everything it writes to its standard output into
+  `into`, a string of any capacity: what does not fit is read and dropped, so
+  the command still runs to its end and the code is still its own. The
+  program's own output is flushed first, as `Run` does. Newlines are kept;
+  the command's standard error is not captured and goes where the program's
+  does. }
+function Capture(command: CommandLine; var into: string): RunResult;
+
+{ The same, a line at a time onto `lines`, each without its newline and cut
+  at `ItemMax` characters; a final line without a newline is still a line.
+  The vector is not cleared first. A directory listing is
+  `CaptureLines('ls -1 dir', names)`, the shell's quoting being the caller's. }
+function CaptureLines(command: CommandLine; var lines: StrVecPtr): RunResult;
 
 { The exit code inside a wait status, as `system` returns one: the second
   byte. A status that is not an exit -- a signal -- decodes to the low byte
@@ -97,6 +134,17 @@ function ExtClock: int64; external 'clock';
 function ExtSleep(seconds: integer): integer; external 'sleep';
 function ExtFflush(stream: int64): integer; external 'fflush';
 
+type
+  { the child's standard output; pclose waits for the child }
+  Pipe = handle external 'pclose';
+
+function ExtPopen(command, mode: string): Pipe; external 'popen';
+function ExtFgetc(f: Pipe): integer; external 'fgetc';
+
+const
+  NewLine = 10;
+  Marker = 1;    { the character after the newline that ends the output }
+
 const
   { POSIX.1, XSI: "CLOCKS_PER_SEC is defined to be one million". A number a
     header would give and this module writes out, for the reason in the
@@ -118,6 +166,95 @@ begin
   else
     r.code := ExitCode(status);
   Run := r
+end;
+
+{ The command wrapped so that the shell reports the status after the
+  output. The subshell is what makes `exit 3` a code rather than the end of
+  the shell before the printf. }
+function Wrapped(command: CommandLine): CommandLine;
+begin
+  Wrapped := '( ' + command + ' ); printf ''\n\001%d'' "$?"'
+end;
+
+{ Both readers are this one loop: every character before the marker goes to
+  `take`, and the digits after it are the code. `c` is the character read
+  and `prev` the one before it, because the marker is two characters and
+  the newline before it belongs to the marker, not to the output -- so a
+  newline is handed over only once the character after it is known. }
+procedure Collect(command: CommandLine; var r: RunResult;
+                  procedure take(ch: char));
+var p: Pipe; status, c, code: integer; seen, pending: boolean;
+begin
+  status := ExtFflush(0);
+  p := ExtPopen(Wrapped(command), 'r');
+  if p = nil then
+    r.reason := errIO
+  else begin
+    seen := false;
+    pending := false;
+    code := 0;
+    c := ExtFgetc(p);
+    while c >= 0 do begin
+      if seen then begin
+        if (c >= ord('0')) and (c <= ord('9')) then
+          code := code * 10 + (c - ord('0'))
+      end
+      else if pending then begin
+        pending := false;
+        if c = Marker then seen := true
+        else begin
+          take(chr(NewLine));
+          if c = NewLine then pending := true
+          else take(chr(c))
+        end
+      end
+      else if c = NewLine then pending := true
+      else take(chr(c));
+      c := ExtFgetc(p)
+    end;
+    if seen then r.code := code
+    else r.reason := errIO
+  end
+end;
+
+function Capture;
+var r: RunResult; n: integer;
+
+  procedure keep(ch: char);
+  begin
+    n := n + 1;
+    if n <= into.capacity then into := into + ch
+  end;
+
+begin
+  into := '';
+  n := 0;
+  Collect(command, r, keep);
+  Capture := r
+end;
+
+function CaptureLines;
+var r: RunResult; piece: StrItem; n: integer;
+
+  procedure keep(ch: char);
+  begin
+    if ch = chr(NewLine) then begin
+      SVecPush(lines, piece);
+      piece := '';
+      n := 0
+    end
+    else begin
+      n := n + 1;
+      if n <= ItemMax then piece := piece + ch
+    end
+  end;
+
+begin
+  piece := '';
+  n := 0;
+  Collect(command, r, keep);
+  if n > 0 then SVecPush(lines, piece);
+  CaptureLines := r
 end;
 
 function Sleep;

@@ -7,6 +7,28 @@ exit 200: code 200
 false: code 1
 not found: code 127
 decode 768: 3 decode 0: 0
+capture: code 0
+  [a
+b
+] length 4
+no final newline: code 0
+  length 3 last 98
+empty output: code 0
+  length 0
+output and a code: code 5
+  [partial
+]
+too short: code 0
+  [0123]
+not found: code 127
+lines: code 0
+  1: [x]
+  2: []
+  3: [y]
+listing: code 0
+  a
+  b
+  c
 epoch plausible: TRUE
 cpu advanced: TRUE positive: TRUE
 slept: 0 left

@@ -83,7 +83,8 @@ type
   refused, which covers a path that is not there and one that may not be read.
 
   There is no OpenWrite, and the reason is above: creating a file needs flag
-  values this module has no way to check. }
+  values this module has no way to check. PasStream creates one, through
+  `fopen` and a mode that is a string. }
 function OpenRead(path: PathName) = r: FdResult;
 
 { Close a descriptor. Closing one this module did not open is allowed and is

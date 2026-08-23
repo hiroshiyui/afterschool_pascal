@@ -1,0 +1,24 @@
+after the block:
+  [from writer]
+  [no newline at the end]
+open for writing: no error
+closed, empty: TRUE
+after Close:
+  [one]
+  []
+  [three]
+after append:
+  [one]
+  []
+  [three]
+  [four, and the rest of a long line]
+short 1: [one]
+short 2: []
+short 3: [three]
+short 4: [four,]
+lines: 4
+while still open:
+  [flushed]
+missing: the operation was refused, empty: TRUE
+uncreatable: the operation was refused
+close of empty: TRUE

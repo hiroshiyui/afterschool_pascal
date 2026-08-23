@@ -1,2 +1,3 @@
 ../../lib/dialect/paserror.pas
+../../lib/passtrvec.pas
 ../../lib/dialect/pasprocess.pas
