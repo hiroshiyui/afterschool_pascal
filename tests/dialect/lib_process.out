@@ -1,0 +1,13 @@
+before the command
+from the shell
+echo: code 0
+true: code 0
+exit 3: code 3
+exit 200: code 200
+false: code 1
+not found: code 127
+decode 768: 3 decode 0: 0
+epoch plausible: TRUE
+cpu advanced: TRUE positive: TRUE
+slept: 0 left
+clock advanced: TRUE
