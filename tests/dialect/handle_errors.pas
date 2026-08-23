@@ -1,0 +1,33 @@
+{ AP 6.4.12: what a handle refuses, and each refusal's reason. A handle is
+  owned (ADR-0151): it has the file variable's refusals through the same
+  predicate -- predicate-callers sweeps those 21 positions -- and three of its
+  own, which are the ones written out here. Sema accumulates, so one file. }
+program handle_errors(output);
+type
+  Dir = handle external 'closedir';
+  Other = handle external 'closedir';
+  Bad = handle external '';
+  Own = handle external 'pas_handle_done';
+  NoOpt = ?Dir;
+function ExtOpendir(path: string): Dir; external 'opendir';
+function ExtReaddir(d: Dir): int64; external 'readdir';
+function ExtRewinddir(var d: Dir): integer; external 'rewinddir';
+function Mine(path: string): Dir;
+begin Mine := ExtOpendir(path) end;
+procedure ByValue(d: Dir);
+begin end;
+var d, e: Dir; o: Other; n: int64; k: integer;
+begin
+  d := ExtOpendir('.');
+  e := d;
+  d := e;
+  o := ExtOpendir('.');
+  n := ExtReaddir(ExtOpendir('.'));
+  k := ExtRewinddir(d);
+  if d = e then writeln('same');
+  if d < nil then writeln('less');
+  if d = nil then writeln('empty');
+  ByValue(d);
+  n := ExtReaddir(o);
+  writeln(n)
+end.

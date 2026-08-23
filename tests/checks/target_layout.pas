@@ -18,8 +18,11 @@ type
   rec  = record a: char; s: cs; b: integer; z: complex;
                 p: ^rec; q: string(7); o: ?real; n: int64 end;
   arr  = array [1..3] of rec;
+  { AP 6.4.12's handle slot, four words: in a record beside a set, and bare }
+  hnd  = handle external 'fclose';
+  hrec = record h: hnd; s: cs; k: integer end;
 var r: rec; a: arr; s1: cs; c: complex; f: file of rec; t: text;
-    st: string(100); op: ?cs; i64v: int64;
+    st: string(100); op: ?cs; i64v: int64; h1: hnd; hr: hrec;
 
 { A conformant array schema and a schematic formal, so that the two parameter
   shapes carrying bounds beside an address are frames here too. }

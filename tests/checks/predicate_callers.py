@@ -141,6 +141,14 @@ WRAPPERS = {
             "extra": "var r1, r2: frec;\n",
             "call": "q(r1, r2)",
         },
+        # AP 6.4.12's handle (ADR-0174) is the third spelling the one arm
+        # covers: owned as a file is, through the same walk.
+        {
+            "name": "handle",
+            "formals": "var u, v: hnd",
+            "extra": "var h1, h2: hnd;\n",
+            "call": "q(h1, h2)",
+        },
     ],
     "isproctype": [
         {
@@ -173,6 +181,7 @@ type
   sch(d: integer) = record m: array [1..d] of integer end;
   schp = ^sch;
   frec = record n: integer; g: text end;
+  hnd = handle external 'fclose';
 var
   i: integer;
   r: rec;

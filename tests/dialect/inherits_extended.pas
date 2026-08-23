@@ -80,6 +80,13 @@ begin
   argcount := argument * 2
 end;
 
+{ ADR-0174's handle-type is spelled `handle external '...'`, and neither word
+  is reserved: `handle` is a type of this program's and `external` a variable
+  of it, and a handle-type is only the three-token juxtaposition no program
+  of the contained standard can write. }
+type handle = 1..3;
+var external: handle;
+
 begin
   { schemata: the discriminant is readable and bounds the loop }
   total := 0;
@@ -132,6 +139,8 @@ begin
   writeln('shadowed=', Shadowed(3));
   argument := 21;
   writeln('argcount of this program=', argcount:1);
+  external := 3;
+  writeln('handle of this program=', external:1);
 
   writeln('the dialect accepts Extended Pascal')
 end.

@@ -31,9 +31,9 @@
 # else: a case whose expectation *is* a refusal of the dialect cannot expect
 # the same refusal from the dialect.
 #
-# There are six, one per row of Annex B of doc/afterschool-pascal-spec.md, and
+# There are seven, one per row of Annex B of doc/afterschool-pascal-spec.md, and
 # the `annex-b` gate is what keeps that list and this one the same length: a
-# seventh dialect construct with a syntax of its own needs a row there, a case
+# eighth dialect construct with a syntax of its own needs a row there, a case
 # here and an entry in this catalogue, and two of the three are now mechanical.
 foreign_refused
 optional_refused
@@ -66,3 +66,4 @@ argument_refused
 # compatible (AP §6.4.5), the relational operators ask compatibility, and
 # `a[1..2] = a[3..4]` was accepted by Sema and emitted as invalid IR.
 substring_errors
+handle_refused

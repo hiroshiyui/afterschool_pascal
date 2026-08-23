@@ -10,4 +10,5 @@ record x=1.5 y=2.5
 const char=a
 shadowed=9
 argcount of this program=42
+handle of this program=3
 the dialect accepts Extended Pascal

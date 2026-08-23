@@ -365,6 +365,78 @@ struct pas_file {
 
 static struct pas_file *pas_open_files;
 
+/* AP 6.4.12 (ADR-0174): a handle is a foreign address this program owns and
+ * the routine that releases it -- a FILE * and fclose, a DIR * and closedir.
+ * The variable is the file model's: set up empty in the prologue, released
+ * by its closer when the block exits, and kept on a list of its own so that
+ * a non-local `goto` and `halt` can release what they abandon exactly as they
+ * close files (ADR-0032, ADR-0084). The list is separate from the files'
+ * because the two walks mark different heads in a jump; the invariant is the
+ * same -- lifetimes nest, so "registered later" and "abandoned" are one set. */
+struct pas_handle {
+  void *value;
+  int (*closer)(void *);
+  struct pas_handle *prev, *next;
+};
+
+_Static_assert(sizeof(struct pas_handle) <= PAS_HANDLE_SIZE,
+               "PAS_HANDLE_SIZE is smaller than struct pas_handle");
+
+static struct pas_handle *pas_live_handles;
+
+void pas_handle_init(void *slot, void *closer) {
+  struct pas_handle *h = slot;
+  h->value = NULL;
+  h->closer = (int (*)(void *))closer;
+  h->prev = NULL;
+  h->next = pas_live_handles;
+  if (pas_live_handles)
+    pas_live_handles->prev = h;
+  pas_live_handles = h;
+}
+
+/* Release what the slot holds, if anything. The closer's result is
+ * deliberately not inspected: a handle is released on the way out of a block
+ * and there is no statement left to report to. */
+static void pas_handle_release(struct pas_handle *h) {
+  if (h->value) {
+    h->closer(h->value);
+    h->value = NULL;
+  }
+}
+
+void pas_handle_done(void *slot) {
+  struct pas_handle *h = slot;
+  pas_handle_release(h);
+  if (h->prev)
+    h->prev->next = h->next;
+  else if (pas_live_handles == h)
+    pas_live_handles = h->next;
+  if (h->next)
+    h->next->prev = h->prev;
+  h->prev = NULL;
+  h->next = NULL;
+}
+
+/* AP 6.4.12.2: the one assignment. The variable takes what the external call
+ * answered and releases what it held. */
+void pas_handle_set(void *slot, void *value) {
+  struct pas_handle *h = slot;
+  pas_handle_release(h);
+  h->value = value;
+}
+
+/* AP 6.4.12.4: a handle lent to a foreign routine. Annex A.7 makes an empty
+ * one an error here, because a C routine given NULL for a stream does not
+ * report -- it dereferences it. */
+void *pas_handle_lend(void *slot) {
+  struct pas_handle *h = slot;
+  if (!h->value)
+    pas_runtime_error(
+        "the handle is empty, and a foreign routine may not be lent it");
+  return h->value;
+}
+
 static void pas_link_open(struct pas_file *f) {
   f->prev_open = NULL;
   f->next_open = pas_open_files;
@@ -1452,6 +1524,7 @@ void pas_page(void *v) {
 
 struct pas_jump {
   struct pas_file *mark; /* the open-file list as it stood when armed */
+  struct pas_handle *hmark; /* and the live-handle list (ADR-0174) */
   int active;            /* the block that owns this record has not exited */
   jmp_buf env;
 };
@@ -1462,6 +1535,7 @@ _Static_assert(sizeof(struct pas_jump) <= PAS_JUMP_SIZE,
 void *pas_jump_env(void *v) {
   struct pas_jump *j = v;
   j->mark = pas_open_files;
+  j->hmark = pas_live_handles;
   j->active = 1;
   return &j->env;
 }
@@ -1491,6 +1565,15 @@ void pas_jump_go(void *v, int id) {
     struct pas_file *next = f->next_open;
     pas_file_done(f);
     f = next;
+  }
+  /* And the handles the jump abandons, the same walk over the other list. */
+  {
+    struct pas_handle *h = pas_live_handles;
+    while (h && h != j->hmark) {
+      struct pas_handle *next = h->next;
+      pas_handle_done(h);
+      h = next;
+    }
   }
   _longjmp(j->env, id);
 }
@@ -1614,10 +1697,17 @@ void pas_halt(int status) {
    * head each time would work for the ordinary files and loop forever if a
    * file were ever left linked. */
   struct pas_file *f = pas_open_files;
+  struct pas_handle *h = pas_live_handles;
   while (f) {
     struct pas_file *next = f->next_open;
     pas_file_done(f);
     f = next;
+  }
+  /* Every handle still held, most recent first (ADR-0174). */
+  while (h) {
+    struct pas_handle *next = h->next;
+    pas_handle_done(h);
+    h = next;
   }
   fflush(NULL);
   exit(status);

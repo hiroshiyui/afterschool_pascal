@@ -190,6 +190,11 @@ const
     kind that carries a record at all -- and this compiler contains no `goto`,
     so no frame in seed/pascalc.ll has one. }
   jumpSize = 1024;
+  { AP 6.4.12's handle slot: the value, the routine that releases it, and the
+    two links of the runtime's list of live handles -- four words, and
+    PAS_HANDLE_SIZE is the same number in runtime/pasrt.h, checked by
+    selfhost/irtest.sh as the two above are (ADR-0174). }
+  handleSize = 32;
   { Every set is one 256-bit word, so a set's base type must have its values
     in 0..setLimit (ADR-0028). That admits `char` exactly. }
   setLimit = 255;
@@ -392,6 +397,11 @@ type
       -- `?T` has to *contain* a T, so a type that were its own optional would
       have no size. }
     nkOptional,
+    { AP 6.4.12's handle-type, `handle external 'closer'` (ADR-0174): a
+      foreign routine's answer that is an address of storage the callee owns,
+      released by the named routine when the variable dies. A denoter and
+      not a name, for the optional's reason. }
+    nkHandle,
     { ISO 7185 6.6.3.7's conformant-array-schema, and ISO/IEC 10206:1991
       6.7.3.7's, which is the same construct. It is a type-denoter that may
       appear in one position only -- a formal parameter's -- and it is the only
@@ -483,6 +493,13 @@ type
                 Neither standard has one: it is what lets a pointer come back
                 from a foreign call without a null becoming a Pascal value. }
               tyOptional,
+              { AP 6.4.12's handle-type (ADR-0174): a foreign address this
+                program owns and a routine that releases it. Its value has
+                no register form and the variable is the file model's --
+                uncopyable, released when the variable dies -- so it answers
+                with a file nearly everywhere a kind is asked. `handleAt`
+                and `handleLen` name the closer. }
+              tyHandle,
               { ISO/IEC 10206:1991 6.4.3.3.3's variable-string-type: a type
                 produced from the required schema `string`. Its value is a
                 length and that many characters, and the length may be anything
@@ -702,6 +719,8 @@ type
       selects, so this variant part is not one a tag value may choose. }
     discSelector: boolean;
     aliasAt, aliasLen: integer;
+    { tyHandle: the foreign name of the routine that releases the value. }
+    handleAt, handleLen: integer;
     { 6.4.7 and 6.4.8: the schema this type was produced from and the tuple it
       was produced with, nil and empty for every type written out in full.
       Sema interns by the pair, so "one tuple, one type" needs no rule in
@@ -1367,6 +1386,7 @@ type
                      scArgs, scArgTail: nodePtr);
       nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer);
       nkOptional:   (opElem: nodePtr);
+      nkHandle:     (hdAt, hdLen: integer);   { the closer's foreign name }
       { caLo and caHi are nkDeclName nodes -- these are defining-points, and a
         declared name is what that node kind is for. caIndex is the
         ordinal-type-identifier the two bounds are values of. }
@@ -1834,6 +1854,16 @@ var
     rather than CodeGen's, because what it decides is what the language accepts
     -- CodeGen reports no user-facing errors. }
   foreignDecls, foreignDeclTail: symListPtr;
+  { AP 6.4.12 (ADR-0174): every foreign name some handle-type names as its
+    closer, once each. CodeGen declares each as `i32 (ptr)` unless an
+    `external` heading already declared the name, and Sema holds such a
+    heading to that shape so the two declarations agree. }
+  handleClosers: namePtr;
+  { AP 6.4.12.2: the call CheckCall is about to check is the whole right side
+    of an assignment to a handle variable, the one position a handle-valued
+    call may stand in. Set by the assignment arm for that node and consumed by
+    CheckCall before it looks at the arguments. }
+  handleBirth: boolean;
   labelBlocks: labelBlockPtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
 
@@ -3848,6 +3878,7 @@ begin
       n^.ssListed := false
     end;
     nkOptional: n^.opElem := nil;
+    nkHandle: begin n^.hdAt := 0; n^.hdLen := 0 end;
     nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember,
     nkDeref, nkBinary, nkUnary,
     nkEmpty, nkAssign, nkCompound, nkIf, nkWhile, nkRepeat,
@@ -4794,6 +4825,23 @@ begin
       t := NewNode(nkOptional, CurLine, CurCol);
       pos := pos + 1;
       t^.opElem := ParseTypeDenoter
+    end
+    { handle-type = 'handle' 'external' string-literal (AP 6.4.12, ADR-0174).
+      Neither word is reserved: a conforming program may have a type named
+      `handle`, and `type T = handle;` is still that program's. What no
+      conforming program can write is a type-name followed by an identifier
+      and a string in this position -- ADR-0140's test, asked of the
+      *juxtaposition* -- so the dialect reads the three tokens as one
+      denoter and the conformance modes go on saying "expected ';'", which
+      is Annex B's row. }
+    else if (langStd = stdAfterschool) and Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'handle   ') and
+            (PeekKind(1) = tkIdent) and (PeekKind(2) = tkStr) and
+            PoolIs(tok[pos + 1].at, tok[pos + 1].len, 'external ') then begin
+      t := NewNode(nkHandle, CurLine, CurCol);
+      t^.hdAt := tok[pos + 2].at;
+      t^.hdLen := tok[pos + 2].len;
+      pos := pos + 3
     end
     { type-inquiry = 'type' 'of' type-inquiry-object (6.4.9). Both words are
       already reserved in ISO 7185, so this feature reserves nothing -- the
@@ -6898,6 +6946,8 @@ begin
   t^.tagField := -1;
   t^.aliasAt := 0;
   t^.aliasLen := 0;
+  t^.handleAt := 0;
+  t^.handleLen := 0;
   t^.schema := nil;
   t^.tuple := nil;
   t^.tupleTail := nil;
@@ -7021,6 +7071,20 @@ begin IsPointer := (t <> nil) and (t^.kind = tyPointer) end;
 function IsFile(t: typePtr): boolean;
 begin IsFile := (t <> nil) and (t^.kind = tyFile) end;
 
+{ AP 6.4.12's handle-type (ADR-0174). Asked on its own where the handle's
+  two permissions are decided -- the assignment from an external call and the
+  comparison with nil -- and through IsOwned everywhere a file's refusals
+  apply, which is the rest. }
+function IsHandle(t: typePtr): boolean;
+begin IsHandle := (t <> nil) and (t^.kind = tyHandle) end;
+
+{ A file or a handle: the two kinds of variable ADR-0151 calls *owned*. No
+  copy, no comparison, released when the variable dies. ContainsFile is the
+  walk over this, and the name stays because 6.4.6 a)'s condition is the
+  file's and the handle was fitted to it. }
+function IsOwned(t: typePtr): boolean;
+begin IsOwned := IsFile(t) or IsHandle(t) end;
+
 { `text` as against `file of char`: see typeRec.isText. }
 function IsTextFile(t: typePtr): boolean;
 begin IsTextFile := IsFile(t) and t^.isText end;
@@ -7074,8 +7138,8 @@ end;
 function IsMemory(t: typePtr): boolean;
 begin
   if IsRestricted(t) then
-    IsMemory := IsStructured(t) or IsFile(t^.elem) or IsVarString(t^.elem)
-  else IsMemory := IsStructured(t) or IsFile(t) or IsVarString(t)
+    IsMemory := IsStructured(t) or IsOwned(t^.elem) or IsVarString(t^.elem)
+  else IsMemory := IsStructured(t) or IsOwned(t) or IsVarString(t)
 end;
 
 { ISO/IEC 10206:1991 6.4.1: a type is protectable unless it is a file or a
@@ -7519,6 +7583,13 @@ begin
       { A direct-access file names its index type too (6.4.3.6): it is what
         makes the type direct-access, so a diagnostic that left it out would
         be describing a different type. }
+      tyHandle: begin
+        PutLit('handle external ');
+        Put(' ');
+        Put('''');
+        WritePool(t^.handleAt, t^.handleLen);
+        Put('''')
+      end;
       tyFile:
         if t^.isText then PutLit('text            ')
         else if t^.indexType <> nil then begin
@@ -8968,7 +9039,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+      nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         ok := false
@@ -10107,16 +10178,74 @@ end;
   value at all, ADR-0021) and another optional (`??T` has no use and two flags
   to answer for). Both are refused here rather than left to a later diagnostic,
   because the storage would already have been laid out by then. }
+{ The closers, by pool text -- the pool interns nothing, so two spellings of
+  one name are two positions and PoolSame is the comparison. }
+function IsHandleCloser(at, len: integer): boolean;
+var n: namePtr; found: boolean;
+begin
+  found := false;
+  n := handleClosers;
+  while (n <> nil) and not found do begin
+    if PoolSame(n^.at, n^.len, at, len) then found := true;
+    n := n^.next
+  end;
+  IsHandleCloser := found
+end;
+
+procedure NoteHandleCloser(at, len: integer);
+var n: namePtr;
+begin
+  if not IsHandleCloser(at, len) then begin
+    new(n);
+    n^.at := at;
+    n^.len := len;
+    n^.next := handleClosers;
+    handleClosers := n
+  end
+end;
+
+{ AP 6.4.12 (ADR-0174). A handle-type is its own type each time it is
+  written, as an array is (ADR-0017), and the closer is kept by foreign name.
+  The same two checks an `external` heading's name gets: not empty, and not
+  one this compiler emits. The declaration the emitter makes for the closer
+  is `i32 (ptr)` -- the shape `fclose`, `closedir` and `pclose` have -- and an
+  `external` declaration of the same name is held to the same shape where the
+  heading is checked, so the two cannot declare one global two ways. }
+function ResolveHandle(d: nodePtr): typePtr;
+var t: typePtr;
+begin
+  t := NewType(tyHandle);
+  t^.handleAt := d^.hdAt;
+  t^.handleLen := d^.hdLen;
+  if d^.hdLen = 0 then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('the foreign name that releases a handle cannot be empty')
+  end
+  else if ReservedForeignName(d^.hdAt, d^.hdLen) then begin
+    ErrorAt(d^.line, d^.col);
+    write('the foreign name ''');
+    WritePool(d^.hdAt, d^.hdLen);
+    write(''' is one this compiler emits for something of its own; ');
+    writeln('it cannot release a handle')
+  end
+  else
+    NoteHandleCloser(d^.hdAt, d^.hdLen);
+  ResolveHandle := t
+end;
+
 function ResolveOptional(d: nodePtr): typePtr;
 var t, inner: typePtr;
 begin
   t := NewType(tyOptional);
   inner := ResolveType(d^.opElem);
-  if IsFile(inner) then begin
+  if IsOwned(inner) then begin
     ErrorAt(d^.line, d^.col);
     write('an optional cannot hold ');
     WriteTypeName(inner);
-    writeln(': a file is never a value, so there is nothing to be absent');
+    if IsHandle(inner) then
+      writeln(': a handle is never a value, and an empty one is its own nil')
+    else
+      writeln(': a file is never a value, so there is nothing to be absent');
     inner := intType
   end
   else if IsOptional(inner) then begin
@@ -10162,7 +10291,7 @@ var found: boolean; f: fieldPtr;
 begin
   found := false;
   if t <> nil then
-    if IsFile(t) then found := true
+    if IsOwned(t) then found := true
     else if IsArray(t) then found := ContainsFile(t^.elem)
     else if IsRecord(t) then begin
       f := t^.fields;
@@ -11034,7 +11163,7 @@ begin
       nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor,
       nkProcCall, nkWith, nkCase, nkGoto, nkLabeled, nkWriteArg, nkCaseArm,
       nkVariantArm, nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange,
-      nkPointer, nkInquiry, nkRestricted,
+      nkPointer, nkHandle, nkInquiry, nkRestricted,
       nkConstDecl, nkTypeDecl, nkProcDecl, nkLabelDecl, nkBlock,
       nkModule, nkExportPart, nkExportItem, nkImportSpec, nkImportItem: ;
     end
@@ -11644,6 +11773,7 @@ begin
         StaticThroughout := StaticThroughout(t^.indexType)
                         and StaticThroughout(t^.elem);
       tySet, tyFile: StaticThroughout := StaticThroughout(t^.elem);
+      tyHandle: StaticThroughout := true;
       { ADR-0123's optional holds its T rather than pointing at it, so a bound
         inside that T is a bound inside this type -- `?array [1..n] of real` in
         a schema body has a dynamic extent and this has to say so. The same
@@ -12385,7 +12515,7 @@ begin
       nkAssign,
       nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat, nkFor, nkProcCall,
       nkWith, nkCase, nkGoto, nkLabeled, nkCaseArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
@@ -12600,6 +12730,7 @@ begin
       nkRecord:   t := ResolveRecord(d);
       nkPointer:  t := ResolvePointer(d);
       nkOptional: t := ResolveOptional(d);
+      nkHandle:   t := ResolveHandle(d);
       nkFile:     t := ResolveFile(d);
       nkSetOf:    t := ResolveSet(d);
       nkInquiry:  t := ResolveInquiry(d);
@@ -12959,7 +13090,10 @@ begin
   r := nil;
   if currentProc <> nil then
     if t <> nil then
-      if IsMemory(t) then begin
+      { A handle answer is a word the assignment stores into the variable it
+        was written for (AP 6.4.12.2); a slot here would be a second handle
+        the prologue registered and the epilogue released. }
+      if IsMemory(t) and not IsHandle(t) then begin
         InternCallResultName(currentProc^.frameCount, at, len);
         r := AddHiddenVar(at, len, skVar, t, currentProc)
       end;
@@ -13363,6 +13497,21 @@ begin
       else if PadsToFixedString(p^.sym^.stype, a^.ntype) then
         { 6.4.6 c)'s over-long value is an *error*, reported where the store
           happens: the actual's length is not always known here. }
+      { AP 6.4.12.4: a handle lent to a foreign routine. The actual must be
+        a variable of the formal's own type -- what crosses is the word in
+        its slot, and the slot goes on owning it. Assignable would refuse the
+        pair for 6.4.6 a)'s reason and must go on doing so everywhere else. }
+      else if (callee^.linkKind = lnkForeign) and
+              IsHandle(p^.sym^.stype) then begin
+        if not IsDesignator(a) or (a^.ntype <> p^.sym^.stype) then begin
+          ErrorAt(a^.line, a^.col);
+          write('argument ', i:1, ' of ''');
+          WritePool(callee^.at, callee^.len);
+          write(''' lends a handle, so it must be a variable of type ');
+          WriteTypeName(p^.sym^.stype);
+          writeln
+        end
+      end
       { A structured value parameter is a copy, so it needs something to copy
         from: a designator, a string literal, a structured-value-constructor
         (ADR-0061), a constant whose value lives in memory (ADR-0068), or a
@@ -13855,7 +14004,25 @@ begin
           presence test, which is the one question answerable without
           unwrapping; comparing two of them would need T's own equality, and T
           may be a record or an array, which have none. }
-        if IsOptional(l) or IsOptional(r) then begin
+        { AP 6.4.12.2 (ADR-0174): a handle compares with `nil` and with
+          nothing else, the optional's rule for the optional's reason -- `=
+          nil` asks whether there is anything there, and two handles have no
+          equality that is not the C address's. }
+        if IsHandle(l) or IsHandle(r) then begin
+          if (b^.bnOp <> opEq) and (b^.bnOp <> opNe) then begin
+            ErrorAt(b^.line, b^.col);
+            write('a handle can only be compared with = and <>, not with ''');
+            WriteOpName(b^.bnOp);
+            writeln('''')
+          end
+          else if not (IsNil(l) or IsNil(r)) then begin
+            ErrorAt(b^.line, b^.col);
+            writeln('a handle can only be compared with ''nil'': it asks ',
+                    'whether the handle is empty, and two handles have no ',
+                    'equality of their own')
+          end
+        end
+        else if IsOptional(l) or IsOptional(r) then begin
           if (b^.bnOp <> opEq) and (b^.bnOp <> opNe) then begin
             ErrorAt(b^.line, b^.col);
             write('an optional can only be compared with = and <>, not ',
@@ -14166,6 +14333,19 @@ begin
   if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
     c^.ntype := ResultTypeOf(sym);
+    { AP 6.4.12.2 (ADR-0174): a handle answered by a call has to land in a
+      handle variable, which is the only thing that can own it -- so the
+      call may stand only as the whole right side of such an assignment,
+      where the arm that sets handleBirth has already said so. Anywhere
+      else there is nothing to own it, and the address would leak. }
+    if IsHandle(c^.ntype) and not handleBirth then begin
+      ErrorAt(c^.line, c^.col);
+      write('''');
+      WritePool(c^.clAt, c^.clLen);
+      writeln(''' answers a handle, which may stand only as the whole ',
+              'right side of an assignment to a handle variable')
+    end;
+    handleBirth := false;
     GiveResultSlot(c);
     CheckArguments(sym, c^.clArgs, c^.line, c^.col)
   end
@@ -15649,7 +15829,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+      nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         { not an expression }
@@ -17090,7 +17270,12 @@ begin
         end
         else begin
           CheckExpr(s^.asTarget);
+          { AP 6.4.12.2: this call, if it is one, is in the one position a
+            handle-valued call may stand. Cleared by CheckCall. }
+          handleBirth := IsHandle(s^.asTarget^.ntype) and
+                         (s^.asValue^.kind = nkCall);
           CheckExpr(s^.asValue);
+          handleBirth := false;
           { 6.9.4 a): an assignment-statement threatens its target. }
           if Threatened(s^.asTarget) then
             writeln('it cannot be assigned to');
@@ -17109,6 +17294,27 @@ begin
             ErrorAt(s^.line, s^.col);
             writeln('a file variable cannot be assigned to; use reset, ',
                     'rewrite and the buffer variable')
+          end
+          { AP 6.4.12.2 (ADR-0174): the one assignment a handle has. The
+            value is born in an external function's answer and nowhere else,
+            and the statement is where the variable takes ownership of it --
+            releasing what it held first. Asked *of the value's node*, not of
+            a predicate: a handle-valued call is admitted in exactly this
+            position and refused in every other (CheckCall), so this arm and
+            that refusal are one rule read from two ends. Assignable still
+            refuses a handle from any other handle, which predicate-callers
+            sweeps. }
+          else if IsHandle(s^.asTarget^.ntype) and
+                  (s^.asValue^.kind = nkCall) and
+                  (s^.asValue^.clSym <> nil) and
+                  (s^.asValue^.clSym^.linkKind = lnkForeign) and
+                  (s^.asValue^.ntype = s^.asTarget^.ntype) then
+            { admitted: the variable takes what the call answered }
+          else if IsHandle(s^.asTarget^.ntype) then begin
+            ErrorAt(s^.line, s^.col);
+            write('a handle may be assigned only the result of an ');
+            write('''external'' function of its own type: it is owned, ');
+            writeln('and there is no copy')
           end
           else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then
           begin
@@ -17428,7 +17634,7 @@ begin
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
@@ -17643,10 +17849,19 @@ begin
         none: the position, the buffer and the operating system's handle are
         one object, not a value. The clause is 6.6.3.2 and not 6.6.3.3, which
         is the variable-parameter clause and says nothing about files. }
-      if ContainsFile(t) and not g^.grByRef and (g^.grNames <> nil) then begin
+      { ...and a handle is lent to an `external` routine by value (AP
+        6.4.12.4), which is the one value parameter of an owned type there
+        is: the word crosses and the variable keeps what it owns. }
+      if ContainsFile(t) and not g^.grByRef and (g^.grNames <> nil) and
+         not (IsHandle(t) and (into <> nil) and
+              (into^.linkKind = lnkForeign)) then begin
         ErrorAt(g^.grNames^.line, g^.grNames^.col);
         if IsFile(t) then
           writeln('a file parameter must be a var parameter')
+        else if IsHandle(t) then
+          writeln('a handle parameter of a Pascal routine must be a var ',
+                  'parameter: a handle has no copy, and only an ''external'' ',
+                  'routine is lent one by value')
         else begin
           write('a value parameter cannot be ');
           WriteTypeName(t);
@@ -17748,7 +17963,11 @@ begin
       write('a function cannot return ');
       WriteTypeName(t);
       write(': a result may not be, or ');
-      writeln('contain, a file');
+      if IsHandle(t) then
+        writeln('contain, a handle -- only an ''external'' function ',
+                'answers one, and only to a handle variable')
+      else
+        writeln('contain, a file');
       CheckedResultType := intType
     end
     else if bindable_ then begin
@@ -17907,6 +18126,11 @@ begin
         writeln('the copy needs somewhere of a known size to go')
       end
     end
+    { AP 6.4.12.3 (ADR-0174): a handle is the one address of storage the
+      callee owns that may come back, because the type says what releases it
+      and the variable it lands in is what owns it. NULL is the empty handle. }
+    else if IsHandle(sym^.stype) then
+      { admitted }
     else if IsStringType(sym^.stype) then begin
       ErrorAt(d^.line, d^.col);
       write('an ''external'' function cannot return a bare string: it would ');
@@ -17960,7 +18184,15 @@ begin
       string's is. That was the slice decision, and ADR-0129 is where it was
       made. }
     else if p^.sym^.kind = skVarParam then begin
-      if not ForeignType(p^.sym^.stype) then begin
+      if IsHandle(p^.sym^.stype) then begin
+        ErrorAt(d^.line, d^.col);
+        write('parameter ', k:1, ' of ''');
+        WritePool(d^.pdAt, d^.pdLen);
+        writeln(''' is a var parameter of a handle type; a handle is lent ',
+                'by value, and a routine given the variable could replace ',
+                'what this program owns without releasing it')
+      end
+      else if not ForeignType(p^.sym^.stype) then begin
         ErrorAt(d^.line, d^.col);
         write('parameter ', k:1, ' of ''');
         WritePool(d^.pdAt, d^.pdLen);
@@ -17968,6 +18200,10 @@ begin
                 '''integer'', ''int64'' and ''real'' cross that way')
       end
     end
+    { AP 6.4.12.4: a handle is *lent* -- the word crosses, the variable keeps
+      ownership, and an empty one is an error at the call (Annex A.7). }
+    else if IsHandle(p^.sym^.stype) then
+      { admitted }
     else if ForeignStringFormal(p^.sym) then
       { admitted: `const char *`, and the size is the actual's }
     else if IsStringType(p^.sym^.stype) then begin
@@ -18063,6 +18299,10 @@ begin
     sym^.level := owner^.level + 1;
     sym^.owner := owner;
     d^.pdSym := sym;
+    { Said now rather than in CheckForeignHeading: the result type and the
+      formals are checked below, and a handle is admitted in both positions
+      for an `external` heading and refused for any other (AP 6.4.12). }
+    if d^.pdIsExternal then sym^.linkKind := lnkForeign;
 
     if d^.pdIsFunction then
       if d^.pdResult = nil then begin
@@ -18074,8 +18314,13 @@ begin
       end
       else begin
         want := ResolveType(d^.pdResult);
-        sym^.stype := CheckedResultType(want, BindableOf(d^.pdResult),
-                                        d^.line, d^.col);
+        { AP 6.4.12.3: an external function is where a handle is born, so
+          its result may be one; CheckForeignHeading has the rest to say. }
+        if d^.pdIsExternal and IsHandle(want) then
+          sym^.stype := want
+        else
+          sym^.stype := CheckedResultType(want, BindableOf(d^.pdResult),
+                                          d^.line, d^.col);
         sym^.resultTypeBad := sym^.stype <> want
       end;
 
@@ -20548,6 +20793,8 @@ begin
   nextLabelId := 0;
   foreignDecls := nil;
   foreignDeclTail := nil;
+  handleClosers := nil;
+  handleBirth := false;
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like
     the other predefined types, so every variable declared `text` has the same
     type -- a `file of char` written out longhand is a different one, exactly
@@ -21742,6 +21989,13 @@ begin
       DumpTypeExpr(n^.opElem);
       level := level - 1
     end;
+    nkHandle: begin
+      write('handle ''');
+      WritePool(n^.hdAt, n^.hdLen);
+      write('''');
+      WritePos(n^.line, n^.col);
+      TypeEnd(n)
+    end;
     { 6.6.3.7's conformant array schema. Its two bound-identifiers are printed
       on the tag line, because they are what distinguishes it from an array and
       because each is one token: an nkDeclName of its own under here would put
@@ -22464,7 +22718,7 @@ begin
     case b^.kind of
       tyVoid, tyBoolean, tyChar, tySubrange: LlAlign := 1;
       tyInteger, tyEnum: LlAlign := 4;
-      tyInt64, tyReal, tyPointer, tyFile: LlAlign := 8;
+      tyInt64, tyReal, tyPointer, tyFile, tyHandle: LlAlign := 8;
       { <2 x double>: two doubles, and the target aligns a vector to its whole
         size. }
       tyComplex: LlAlign := 16;
@@ -22531,6 +22785,7 @@ begin
         LlSize := RoundUp(RoundUp(4, LlAlign(b^.elem)) + LlSize(b^.elem),
                           LlAlign(b));
       tyFile: LlSize := fileSize;
+      tyHandle: LlSize := handleSize;
       tySet: LlSize := setBits div 8;
       tyProc, tySlice: LlSize := 16;
       tyArray: LlSize := TypeLength(b) * LlSize(b^.elem);
@@ -22601,6 +22856,7 @@ begin
         compiler needs is its size, and i64 elements give it the alignment a
         struct full of pointers needs. }
       tyFile: write(ircode, '[', fileSize div 8:1, ' x i64]');
+      tyHandle: write(ircode, '[', handleSize div 8:1, ' x i64]');
       { Every set is the same 256-bit integer whatever its base type: one bit
         per possible member, which is what makes the operators single
         instructions and keeps a set a *value* (ADR-0028). }
@@ -22957,6 +23213,22 @@ end;
 procedure NeedExternalProc(s: symPtr);
 begin
   NeedOne(externProcs, externProcTail, s)
+end;
+
+{ Whether a foreign name is declared by an `external` heading this module
+  calls -- asked by the closer declarations, which must not repeat one. }
+function ForeignDeclared(at, len: integer): boolean;
+var e: symListPtr; found: boolean;
+begin
+  found := false;
+  e := externProcs;
+  while e <> nil do begin
+    if (e^.sym^.linkKind = lnkForeign) and
+       PoolSame(e^.sym^.linkItemAt, e^.sym^.linkItemLen, at, len) then
+      found := true;
+    e := e^.next
+  end;
+  ForeignDeclared := found
 end;
 
 procedure NeedExternalModule(m: symPtr);
@@ -23743,7 +24015,7 @@ var found: boolean; f: fieldPtr;
 begin
   found := false;
   if t <> nil then
-    if IsFile(t) then found := true
+    if IsOwned(t) then found := true
     else if IsArray(t) then found := HoldsFile(t^.elem)
     else if IsRecord(t) then begin
       f := t^.fields;
@@ -23770,7 +24042,26 @@ var comp, istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
     f: fieldPtr;
     nohdr, count, iv, i, more, elem, next, zero, one: str;
 begin
-  if IsFile(t) then begin
+  { AP 6.4.12 (ADR-0174): a handle is set up empty with its closer and torn
+    down by the runtime, which releases what it holds -- the file's own two
+    calls, for the file's reason: the storage is going away. }
+  if IsHandle(t) then begin
+    if init then begin
+      StrClear(nohdr);
+      AppendPool(nohdr, t^.handleAt, t^.handleLen);
+      write(ircode, '  call void @pas_handle_init(ptr ');
+      PutOp(addr);
+      write(ircode, ', ptr @');
+      PutOp(nohdr);
+      writeln(ircode, ')')
+    end
+    else begin
+      write(ircode, '  call void @pas_handle_done(ptr ');
+      PutOp(addr);
+      writeln(ircode, ')')
+    end
+  end
+  else if IsFile(t) then begin
     if not init then begin
       write(ircode, '  call void @pas_file_done(ptr ');
       PutOp(addr);
@@ -24274,7 +24565,7 @@ begin
         reach it" is the argument that was wrong the last two times. It costs
         no coverage: a label is not a statement and the arm was already run. }
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex, tyRestricted, tyString, tyOptional, tySlice:
+      tyComplex, tyRestricted, tyString, tyOptional, tySlice, tyHandle:
         OpInt(0, v)
     end
 end;
@@ -25006,6 +25297,18 @@ begin
     EmitAddress(arg, a);
     AppendOpnd(head, tail, a, true, nil)
   end
+  { AP 6.4.12.4: a handle is lent. The word inside the slot crosses and the
+    variable keeps ownership; the runtime is what says an empty one may not
+    be lent (Annex A.7), because a C routine given NULL for a stream does not
+    report. }
+  else if IsHandle(f^.stype) then begin
+    EmitAddress(arg, a);
+    Def(cs);
+    write(ircode, 'call ptr @pas_handle_lend(ptr ');
+    PutOp(a);
+    writeln(ircode, ')');
+    AppendOpnd(head, tail, cs, true, nil)
+  end
   else if ForeignStringFormal(f) then begin
     { The pair becomes one pointer: a C string carries its length in-band, so
       the NUL is what the length turns into. The copy is arena storage, which
@@ -25249,7 +25552,10 @@ begin
     because the layout of an optional is CodeGen's and no runtime routine may
     hold a second opinion about it. NULL is absence and is not an error --
     which is the whole of what ADR-0122 was missing. }
-  if foreignPtr then begin
+  if foreignPtr and IsHandle(result) then
+    { AP 6.4.12.2: the word is the value, and the assignment this call is
+      the right side of stores it into the variable that owns it }
+  else if foreignPtr then begin
     AddressOfSym(slotSym, resAddr);
     OptionalPart(resAddr, result, 1, slot);
     Def(half);
@@ -26029,6 +26335,25 @@ begin
   writeln(ircode, ', 0')
 end;
 
+{ AP 6.4.12.2's `h = nil`: the slot's first word is the value and NULL is
+  empty. Taken before the operands are evaluated, a handle having no register
+  form. }
+procedure EmitHandleTest(e: nodePtr; var v: str);
+var opnd: nodePtr; base, word: str;
+begin
+  if IsHandle(e^.bnLhs^.ntype) then opnd := e^.bnLhs else opnd := e^.bnRhs;
+  EmitAddress(opnd, base);
+  Def(word);
+  write(ircode, 'load ptr, ptr ');
+  PutOp(base);
+  writeln(ircode);
+  Def(v);
+  if e^.bnOp = opEq then write(ircode, 'icmp eq ptr ')
+  else write(ircode, 'icmp ne ptr ');
+  PutOp(word);
+  writeln(ircode, ', null')
+end;
+
 procedure EmitBinary(e: nodePtr; var v: str);
 var l, r, rem, neg, adj, bad, m1, m2: str;
     lt, rt: typePtr; msg: integer; sign, useFloat, wide: boolean;
@@ -26043,6 +26368,8 @@ begin
   { ADR-0123's presence test, taken before the operands are evaluated: an
     optional has no register form, so EmitExpr below would have nothing to
     hand back. }
+  else if IsHandle(e^.bnLhs^.ntype) or IsHandle(e^.bnRhs^.ntype) then
+    EmitHandleTest(e, v)
   else if IsOptional(Underlying(e^.bnLhs^.ntype)) or
           IsOptional(Underlying(e^.bnRhs^.ntype)) then
     EmitOptionalTest(e, v)
@@ -27356,7 +27683,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+    nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpWord('null            ', v)   { Sema has already required a designator }
@@ -27463,7 +27790,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkOptional, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+    nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpInt(0, v)
@@ -27834,6 +28161,18 @@ begin
     PutOp(sd);
     write(ircode, ', i32 ');
     PutOp(sl);
+    writeln(ircode, ')')
+  end
+  { AP 6.4.12.2 (ADR-0174): the variable takes ownership of what the external
+    call answered, and the runtime releases what it held first. The call is
+    evaluated before the address is taken, as any right side is. }
+  else if IsHandle(s^.asTarget^.ntype) then begin
+    EmitExpr(s^.asValue, src);
+    EmitAddress(s^.asTarget, dst);
+    write(ircode, '  call void @pas_handle_set(ptr ');
+    PutOp(dst);
+    write(ircode, ', ptr ');
+    PutOp(src);
     writeln(ircode, ')')
   end
   else begin
@@ -29612,7 +29951,7 @@ begin
       nkStructValue, nkValueElem,
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
-      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional,
+      nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkLabelDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
@@ -30509,6 +30848,11 @@ begin
           'declare void @pas_file_init(ptr, i32, i32, ptr, i32, i32, ',
           'i32, i32)');
   writeln(ircode, 'declare void @pas_file_done(ptr)');
+  { AP 6.4.12 (ADR-0174) }
+  writeln(ircode, 'declare void @pas_handle_init(ptr, ptr)');
+  writeln(ircode, 'declare void @pas_handle_done(ptr)');
+  writeln(ircode, 'declare void @pas_handle_set(ptr, ptr)');
+  writeln(ircode, 'declare ptr @pas_handle_lend(ptr)');
   writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
   writeln(ircode, 'declare void @pas_jump_done(ptr)');
   writeln(ircode, 'declare void @pas_jump_go(ptr, i32)');
@@ -30684,7 +31028,7 @@ end;
   its address is ever taken; a module's record likewise, it being only a static
   link to pass. }
 procedure EmitExterns;
-var e, q: symListPtr; nm: str; first: boolean;
+var e, q: symListPtr; nm: str; first: boolean; cl: namePtr;
 begin
   e := externVars;
   while e <> nil do begin
@@ -30708,6 +31052,23 @@ begin
     writeln(ircode, '()');
     e := e^.next
   end;
+  { AP 6.4.12 (ADR-0174): the routine each handle-type names as its closer,
+    declared with the shape fclose, closedir and pclose have -- unless an
+    `external` heading of the program already declared the name, in which
+    case that declaration stands and this one would be a second definition of
+    one global, which LLVM refuses. The runtime calls it through the pointer
+    either way, and the two shapes agree on every admitted target. }
+  cl := handleClosers;
+  while cl <> nil do begin
+    if not ForeignDeclared(cl^.at, cl^.len) then begin
+      StrClear(nm);
+      AppendPool(nm, cl^.at, cl^.len);
+      write(ircode, 'declare i32 @');
+      PutOp(nm);
+      writeln(ircode, '(ptr)')
+    end;
+    cl := cl^.next
+  end;
   e := externProcs;
   while e <> nil do begin
     write(ircode, 'declare ');
@@ -30715,7 +31076,7 @@ begin
       pointer, which the call site unpacks -- so the declaration says what C
       says and not what the Pascal type is. }
     if (e^.sym^.linkKind = lnkForeign) and (e^.sym^.kind = skFunc) and
-       IsOptional(e^.sym^.stype) then
+       (IsOptional(e^.sym^.stype) or IsHandle(e^.sym^.stype)) then
       write(ircode, 'ptr')
     else if (e^.sym^.kind = skFunc) and not IsMemory(e^.sym^.stype) then
       PutLlType(e^.sym^.stype)
@@ -30741,7 +31102,8 @@ begin
           write(ircode, 'ptr, i64')
         { ADR-0122's two address rows print the same way, an opaque pointer
           being the whole of what either is on this side. }
-        else if (q^.sym^.kind = skVarParam) or ForeignStringFormal(q^.sym) then
+        else if (q^.sym^.kind = skVarParam) or ForeignStringFormal(q^.sym) or
+                IsHandle(q^.sym^.stype) then
           write(ircode, 'ptr')
         else
           PutLlType(q^.sym^.stype);

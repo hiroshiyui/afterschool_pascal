@@ -295,6 +295,11 @@ afterschool	6.4.11.4	testable
 afterschool	6.4.11.5	testable	
 afterschool	6.4.11.6	testable	
 afterschool	6.4.11.7	testable	
+afterschool	6.4.12	structural	introduces the handle-type; the requirements are in its subclauses
+afterschool	6.4.12.1	testable	
+afterschool	6.4.12.2	testable	
+afterschool	6.4.12.3	testable	
+afterschool	6.4.12.4	testable	
 extended	6.5	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.5	structural	introduces the variable-denotation additions
 extended	6.5.1	testable	Variable-declarations

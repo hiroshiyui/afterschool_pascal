@@ -571,6 +571,102 @@ optional-type is a new-type, which left the grammar with no production
 admitting `?T` anywhere and the rule with nothing to attach to (ADR-0144). No exception is made for an optional-type on
 account of its resembling a wrapper.
 
+#### 6.4.12 Handle-types [added]
+
+A handle-type denotes a type whose value is an address of storage that a
+foreign routine (6.7.7) owns and whose contents this language does not
+describe — a `FILE *`, a `DIR *` — together with the foreign routine that
+releases that storage. A variable of a handle-type **owns** what it holds:
+the value is released when the variable ceases to exist and cannot be copied
+out of it (ADR-0151, ADR-0174).
+
+**6.4.12.1 The denoter.**
+
+    handle-type = 'handle' 'external' character-string .
+
+The character-string shall be the foreign name (6.7.7.2) of the routine that
+releases a value of the type, and the rules of 6.7.7.2 and 6.7.7.10 apply to
+it: it shall not be empty and shall not be a name this processor emits. The
+routine shall take one argument, the value, and its result, if any, shall be
+ignored.
+
+Neither `handle` nor `external` is a word-symbol. A program in which `handle`
+denotes something of its own keeps that meaning in every other position
+(ADR-0140); what no conforming program can write is a type-identifier
+followed by an identifier and a character-string where a type-denoter ends,
+and that is the position this denoter occupies.
+
+A handle-type shall be a **new-type** in the sense of ISO/IEC 10206:1991
+§6.4.1, as an optional-type is (6.4.11.7): two separately written denoters
+denote two types.
+
+**6.4.12.2 Values and variables.** A variable of a handle-type shall be
+**empty** when its block is activated, and shall be empty again whenever the
+value it held has been released.
+
+The value `nil` shall denote the empty state of every handle-type. A handle
+shall be comparable with `nil` by `=` and `<>` and with nothing else, the
+comparison asking whether the variable is empty.
+
+There shall be exactly one form of assignment to a variable of a handle-type:
+an assignment-statement whose expression is a function-designator of an
+external-declaration (6.7.7) whose result type is the same type. The variable
+shall first release the value it holds, if any, and then hold the value the
+function answered; a null answer leaves it empty. A function-designator whose
+result type is a handle-type shall appear in no other position.
+
+A handle-type shall not be a value of any other kind of assignment, of any
+other relational operator, of a value parameter of a routine that is not an
+external-declaration, or of a function result that is not an
+external-declaration's; and a structured-type having a component of a
+handle-type shall be subject to the same restrictions, exactly as
+ISO/IEC 10206:1991 §6.4.6 a) and §6.8.3.5 treat a type having a file-type
+component.
+
+NOTE — Those are the file variable's restrictions, reached through the same
+predicate: §6.4.6 a)'s "permissible as the component-type of a file-type"
+excludes a handle as it excludes a file, for the same reason — there is no
+copy, the storage and the value being one object.
+
+**6.4.12.3 Release.** The value a variable of a handle-type holds shall be
+released by calling the routine 6.4.12.1 names with it, at the first of:
+termination of the activation in which the variable exists, including
+termination by a `goto` (§6.9.2.4) or `halt` (§6.7.5.7); `dispose` of a
+variable containing it; and the assignment 6.4.12.2 describes. A variable
+shall release a value at most once.
+
+**6.4.12.4 Crossing the boundary.** A handle-type shall be the result type of
+an external-declaration (6.7.7.8), and the null address shall answer the empty
+state. A handle-type shall be the type of a value parameter of an
+external-declaration (6.7.7.3), the actual-parameter shall be a variable of
+that type, and what crosses shall be the value the variable holds — the
+variable **lends** it and goes on owning it. It shall be an error for a
+variable lent in this way to be empty (Annex A.7). A handle-type shall not be
+the type of a variable parameter of an external-declaration.
+
+NOTE 1 — A handle answered by a foreign routine has exactly one place to go,
+the variable that will own it, which is why 6.4.12.2 confines the
+function-designator to the right side of that assignment: anywhere else there
+is nothing to release it, and the address would be held by no one.
+
+NOTE 2 — The one property a C routine cannot be given is NULL where it expects
+a stream; it does not report, it dereferences. That is why the empty handle is
+an error at the lend rather than a value the far side is left to discover.
+
+NOTE 3 — A handle may be a variable parameter of a routine of this language
+(§6.7.3.3), which binds to the variable and not to the value, and may be a
+component of a record or an array, which then owns it. What a handle may not
+be is a second name for one value: no two variables hold one handle, which is
+the whole of what makes 6.4.12.3's "at most once" keepable, and it is the half
+of the memory-safety model ADR-0151 calls *lifetime*. The other half,
+*aliasing*, is untouched: a handle cannot be stored where two variables could
+reach it, because it cannot be copied at all.
+
+NOTE 4 — `tests/dialect/foreign_int64_handle.pas` stands: an `int64` still
+carries an address through 6.7.7.8, and this clause takes nothing from that
+door. What it adds is a type through which the address is owned, and Annex C.7
+is the register of what the other door still costs.
+
 #### 6.4.5 Compatible types [extended]
 
 Two slices (6.7.3.9) shall be compatible when their component types are the same
@@ -805,7 +901,8 @@ the string also makes the boundary greppable, which is the whole of the safety
 this clause claims.
 
 **6.7.7.3 Value parameters.** The type of a value parameter of an
-external-declaration shall be `integer`, `int64`, `real` or `string`.
+external-declaration shall be `integer`, `int64`, `real`, `string`, or a
+handle-type (6.4.12.4).
 
 **6.7.7.4 The types are exact, not based.** A subrange-type, an
 enumerated-type, `char`, `boolean` and every other type shall be refused, and
@@ -881,8 +978,9 @@ the opposite of what an interface of this kind usually does to a safety
 property.
 
 **6.7.7.8 Function results.** The result type of an external-declaration shall
-be `integer`, `int64`, `real`, or an optional-type (6.4.11) whose component is a
-**variable-string-type** (ISO/IEC 10206:1991 §6.4.3.3.3).
+be `integer`, `int64`, `real`, a handle-type (6.4.12.4), or an optional-type
+(6.4.11) whose component is a **variable-string-type** (ISO/IEC 10206:1991
+§6.4.3.3.3).
 
 NOTE — The first draft of this clause said "a string-type having a capacity",
 which excludes nothing: §6.4.3.3.2 gives a fixed-string-type a capacity too —
@@ -1092,6 +1190,7 @@ standard error stream.
 | A.4 | a string crossing to a foreign routine contains NUL | 6.7.7.5 | `a string crossing to a foreign routine contains a NUL character` |
 | A.5 | a foreign string result exceeds the capacity | 6.7.7.8 | `a string of length n does not fit a capacity of c` |
 | A.6 | `argument(k)` with `k` outside 1..`argcount` | 6.7.6.10 | `argument k is not in 1..n` |
+| A.7 | an empty handle is lent to a foreign routine | 6.4.12.4 | `the handle is empty, and a foreign routine may not be lent it` |
 
 Indexing a slice out of range (6.7.3.9.5 b) is reported by the array-index error
 ISO 7185 and ISO/IEC 10206:1991 already have, against the slice's own bounds.
@@ -1115,10 +1214,11 @@ the construct and Sema refuses it. One column became two.
 | `substring` | `a[i..j]` over an array | `expected ']' after a subscript, found '..'` | `only a string can have a substring taken of it` |
 | `int64` | `int64` | `unknown type 'int64'` | `unknown type 'int64'` |
 | `argument` | `argcount`, `argument(k)` | `unknown function 'argument'` | `unknown function 'argument'` |
+| `handle` | `handle external '…'` | `expected ';' after a type definition, found identifier` | `expected ';' after a type definition, found identifier` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
-could not have written it, so five of the six are refused by machinery that
+could not have written it, so six of the seven are refused by machinery that
 predates the dialect and has nothing to say about it. `external` is the
 exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
@@ -1177,7 +1277,11 @@ for. Every property an owned handle would have is therefore absent rather than
 pending: it copies, arithmetic on it is legal, and releasing it twice is
 whatever the far side does about that — for `closedir`, an abort.
 `tests/dialect/foreign_int64_handle.pas` is the program, kept as a gap that
-fails in both directions (ADR-0151).
+fails in both directions (ADR-0151). **Since 6.4.12 there is a type through
+which such an address is owned instead** (ADR-0174), and a program that wants
+the properties listed absent here writes a handle-type; this entry is what the
+`int64` door still costs a program that uses it, and the door stays open
+because `read` and `write` answer through it.
 
 ## Annex D (informative) — The library
 
@@ -1335,3 +1439,4 @@ the two scenarios its opening sentence always deserved.
 | 6.4.6, 6.7.3.9.2, Annex E.8 | ADR-0143 |
 | 6.7.5.3, 6.10.2, Annex E.9 | ADR-0144 |
 | 6.7.6.10, Annex A.6 | ADR-0173 |
+| 6.4.12, 6.7.7.3, 6.7.7.8, Annex A.7, Annex C.7 | ADR-0174 |

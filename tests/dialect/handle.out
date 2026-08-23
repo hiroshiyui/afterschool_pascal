@@ -1,0 +1,9 @@
+open: TRUE
+before exit: [empty]
+after exit: [written in writer]
+missing opens: FALSE, empty: TRUE
+first, after reassignment: [first]
+second, still open: [empty]
+second, after exit: [second]
+after goto: [before the goto]
+lent, after exit: [lent]
