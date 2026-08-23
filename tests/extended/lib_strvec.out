@@ -1,0 +1,16 @@
+pushed (5/8): [item1] [item2] [item3] [item4] [item5]
+pop: item5 then 4 left
+get 2: changed indexof changed: 2 indexof none: 0
+padded equal: 1
+reserved: 100 len 4
+cleared: 0 pop of empty: []
+split (4/100): [a] [b] [] [d]
+joined: [a,b,,d] 6
+split of empty: 1 []
+truncated join: length 40 of 89 fits=FALSE
+sorted (20/100): [ka #0] [ka #0] [ka #5] [ka #5] [kb #3] [kb #3] [kb #8] [kb #8] [kc #1] [kc #1] [kc #6] [kc #6] [kd #4] [kd #4] [kd #9] [kd #9] [ke #2] [ke #2] [ke #7] [ke #7]
+ascending: TRUE
+tiny (1/4): [only]
+freed: TRUE
+read (3/100): [pear] [apple] [fig]
+sorted lines: apple < fig < pear
