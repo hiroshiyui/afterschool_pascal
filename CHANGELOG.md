@@ -27,6 +27,10 @@ The other three entries only accept more.
 
 ### Added
 
+- **`lib/passtrvec.pas`**: a growable sequence of strings — `PasVector`'s
+  interface under `SVec` names, with `SVecIndexOf`, a stable `SVecSort`,
+  `SVecJoin` and `SVecSplit`. `tests/extended/lib_strvec.pas`.
+
 - **`lib/dialect/pasprocess.pas`**: `Run` a command through the shell and get
   its exit code, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds` — four libc
   names through `external`. `tests/dialect/lib_process.pas`.

@@ -446,7 +446,7 @@ linker symbol any foreign-function interface could name.
 `lib/` holds the beginning of one (ADR-0114). It is ordinary Extended Pascal —
 §6.11 modules, translated separately as §6.13 program-components — so it needed
 no compiler change and changes nothing about what either conformance mode
-accepts. Seven modules so far:
+accepts. Eight modules so far:
 
 | Module | What it has |
 | --- | --- |
@@ -457,6 +457,7 @@ accepts. Seven modules so far:
 | `lib/pasmap.pas` | `StrMap`, a `string(32)`-keyed dictionary: `MapPut`, `MapGet`, `MapHas`, `MapDelete`, and `MapSlots`/`MapLiveAt` to walk it |
 | `lib/pastext.pas` | `Split`, `Join`, `TrimStart`, `TrimEnd`, `TrimAll`, `CountChar`, `TryParseInt`, `ParseIntOr`, `IntToStr` |
 | `lib/pasfile.pas` | whole files by name: `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`, `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`, `CopyFile` — every reader answers **false** for a file that is not there rather than stopping, which is what ADR-0172's `binding(f).bound` made possible in conforming Pascal |
+| `lib/passtrvec.pas` | `StrVec`, a growable sequence of `string(255)`: `PasVector`'s interface under `SVec` names, plus `SVecIndexOf`, `SVecSort`, `SVecJoin` and `SVecSplit`. `PasFile.ForEachLine` with a nested procedure is how a file's lines become one |
 
 **`lib/dialect/` is a second layer, and it does not mix with the first**
 (ADR-0120). Its modules are `--std=afterschool` all the way down, so only a
