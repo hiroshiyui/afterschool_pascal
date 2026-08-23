@@ -467,6 +467,30 @@ releases the old one first. A handle may be lent to a foreign routine as a
 value parameter, and lending an empty one stops the program. What it is not
 is a value: no Pascal function returns one and no record copies one.
 
+**A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
+is the record a module used to write per payload type, with the field names
+fixed by the language:
+
+```pascal
+type IntResult = integer ! ErrorCode;
+
+function ParseInt(s: string) = r: IntResult;
+begin
+  if bad then r := errSyntax      { the value's type says which outcome }
+  else r := n
+end;
+
+r := ParseInt(s);
+if r.ok then writeln(r.val:1) else writeln(ErrorText(r.cause))
+```
+
+`ok` says which outcome was written, `val` is the value and `cause` the
+reason, and **reading the arm the tag does not select stops the program** — so
+a caller who does not check gets a halt rather than a stale value. The tag is
+read-only: it says what was assigned, and nothing else may set it. Neither
+side may be a fallible type, nor hold a file or a handle. Assigning a value
+both sides admit is refused where it is written, since it names no outcome.
+
 **`defer` runs a statement on the way out** (ADR-0175). Written beside the
 thing it undoes, and correct at every exit the block has:
 

@@ -2388,6 +2388,27 @@ where a type-denoter ends is a syntax error in both standards.
 `tests/dialect/handle.pas` reads every file back, `fputs` being buffered until
 `fclose`, so each release is observed; `handle_errors.pas` is the refusals.
 
+**A fallible type is a record Sema writes** (ADR-0176). `T ! E` resolves to
+`record case ok: boolean of true: (val: T); false: (cause: E) end`, built by
+`ResolveFallible` rather than parsed from a synthesised denoter — §6.2.2.10
+makes `boolean`, `true` and `false` shadowable, and a program that redefines
+one must still get this type. It *is* a `tyRecord`, distinguished only by a
+flag, so the copy, the layout, the parameter, the result and ADR-0118's trap
+are inherited and **CodeGen is untouched**. Two rules are new: `Assignable`
+takes a value of either side, and `AsFallibleArm` rewrites `r := x` into
+`r.val := x` or `r.cause := x` — ADR-0044's husk, so the store and the tag are
+the ones that already existed. It must be applied at §6.8.2.2's
+function-identifier path too, which is a *different* branch: without it Sema
+accepted `f := 1` and CodeGen stored an integer into a record. The rewrite
+resolves the field directly rather than re-checking the base, because reading
+a function identifier is a recursive call. The tag is read-only through
+`Threatened`, which is where §6.9.4's six threat sites already pass, so
+`read(r.ok)` is refused along with the assignment. `!` had to be added to
+`LooksLikeSubrange`'s terminator set — it ends the denoter on its left, and
+without that `integer ! 1..5` scanned as one subrange. `tests/dialect/fallible.pas`
+is the type, `fallible_errors.pas` the refusals, `trap_fallible.pas` the read
+that stops the program.
+
 **`defer` is a flag in the frame and one function per block** (ADR-0175). A
 defer-statement stores 1 in its own `i8` slot; the statement itself is emitted
 twice — where the statement-sequence it stands in is completed (`EndSequence`,

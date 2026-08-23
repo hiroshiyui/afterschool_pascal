@@ -27,6 +27,19 @@ The other three entries only accept more.
 
 ### Added
 
+- **Fallible types** under `--std=afterschool`: `T ! E` denotes the result
+  record a module used to write per payload type — tag `ok`, value `val`,
+  reason `cause` — so a module writes `IntResult = integer ! ErrorCode`
+  instead of five lines, and the field names are the same everywhere.
+  Assigning a value of either side chooses the outcome; reading the other arm
+  stops the program; the tag cannot be assigned, read into, or passed as a
+  variable parameter. AP 6.4.13, ADR-0176. `tests/dialect/fallible.pas`.
+
+- **`lib/dialect/`'s six result records are now six one-line types**, and the
+  failing side is spelled `cause` in every module. It had three spellings, and
+  `PasProcess.RunResult.code` was a *success* payload where `r.code` elsewhere
+  was the `ErrorCode`. Callers read `r.val` and `r.cause`.
+
 - **`defer S`** under `--std=afterschool`: a statement armed where it is
   written and executed when the statement-sequence it stands in is completed,
   or when the activation terminates — a `goto` out of the block and `halt`

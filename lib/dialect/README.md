@@ -48,20 +48,26 @@ Yes — the caller may want to branch on why, or report it:
 function WorkingDirectory = r: PathResult;
 ```
 
+**A fallible type**, `T ! E` (AP 6.4.13) — which *is* that result record, with
+the field names fixed by the language, so the shape is no longer a convention
+each module copies:
+
 ```pascal
-PathResult = record
-  case ok: boolean of
-    true:  (path: PathName);
-    false: (code: ErrorCode)
-  end;
+PathResult = PathName ! ErrorCode;
 ```
 
-**A result record**, and ADR-0118 makes its tag authoritative: reading `r.path`
-when `r.ok` is false stops the program, so the discipline is not a convention
-the caller may forget. **The tag is spelled `ok` in every result record here**
-and the payload carries each record's own name. Twelve exported routines:
-`WorkingDirectory`, `LinkTarget`, `OpenRead`, `ReadInto`, `WriteFrom`,
-`ParseInt`, `Log10`, `Log2`, `FMod`, `Run`, `Capture`, `CaptureLines`.
+ADR-0118 makes its tag authoritative: reading `r.val` when `r.ok` is false
+stops the program, so the discipline is not something the caller may forget.
+**The three field names are `ok`, `val` and `cause` in every module.** Twelve
+exported routines: `WorkingDirectory`, `LinkTarget`, `OpenRead`, `ReadInto`,
+`WriteFrom`, `ParseInt`, `Log10`, `Log2`, `FMod`, `Run`, `Capture`,
+`CaptureLines`.
+
+Before AP 6.4.13 each module declared its own record and named the two arms
+itself, and the names drifted: the failing side was `code` in four modules,
+`openCode` in `PasIO` and `reason` in `PasProcess` — where `code` was the
+*success* payload. `r.code` meant two things in one library. That is what a
+language type removes and a convention could not.
 
 ## And one shape that is not about failure at all
 

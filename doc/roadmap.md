@@ -126,7 +126,7 @@ the open decision it would settle.
 | Optionals, and no bare null | Swift, Rust | pointer safety | **Done** (ADR-0123); the check is localised to `^`, not eliminated |
 | Scope-based release | ISO 7185, Rust's `Drop` | lifetime | **Done, and it was already here** (ADR-0151) |
 | Explicit allocator passing | Zig | part of memory safety | **Tried; does not survive contact** (ADR-0116) |
-| Error unions / `Result` | Zig, Rust | error handling | **Open, and the biggest practical gap.** Variant records nearly are sum types with payloads; the library's result records (ADR-0120, ADR-0141) are the convention that exists. Independent of the safety fork |
+| ~~Error unions / `Result`~~ | Zig, Rust | error handling | **Done** (ADR-0176, AP 6.4.13): `T ! E` is the result record ADR-0120's convention described, written by the compiler with the field names fixed. What is *not* done is propagation, which needs an early exit — see below |
 | ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
 | Unicode-correct `String` | Swift | the text model | **The model to copy**, and unstarted |
 | ARC | Swift | aliasing | **Undecidable on the evidence in hand** (ADR-0151) |
@@ -139,12 +139,20 @@ Two conclusions worth stating:
 
 - **The cheap items are not the small ones.** `defer` and error unions between
   them cover most of what "daily practical development" means, and neither
-  requires settling the memory-safety fork. `defer` is done (ADR-0175) and was
-  indeed cheap: no new word, no new type, and a frame that grows only where a
-  block defers. **Error unions are now the one left**, and they are the larger
-  of the two — a type constructor over a type, which the dialect has exactly
-  one of (`?T`, ADR-0123) and which the library works around today by writing
-  a result record per payload type, seven of them (Annex D).
+  required settling the memory-safety fork. Both are done (ADR-0175,
+  ADR-0176), and the second was cheaper than this table predicted: it was
+  expected to be "the larger of the two — a type constructor over a type", and
+  it turned out to need no new type at all. `T ! E` denotes an ordinary record
+  with a flag on it, so the copy, the layout and ADR-0118's trap came free and
+  **CodeGen was not touched**. The lesson is ADR-0122 and ADR-0123's, a third
+  time: an estimate that assumes a feature needs its own machinery is worth
+  probing before it is believed.
+
+- **What is left of error handling is propagation**, and it is a question
+  about *statements* rather than types: `try X` needs a way out of a block
+  that is not the end of it. Neither standard has one; every popular Pascal
+  does (`Exit`), which is ADR-0175's note and the reason `exit` should come
+  before `try` rather than after it.
 - **ARC and borrowing are not equally costly here**, and the difference is not
   only effort: borrowing would make ADR-0108's C++ mirror prohibitively
   expensive and likely force the decision to freeze it. ADR-0151 declines to
