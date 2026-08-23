@@ -2352,6 +2352,22 @@ type anywhere in the compiler to fold with, compare, or put in a constant.
   first — a model written symbolically paying a second time, for a type nobody
   had in mind. The narrowing is new lowering and has two rules of its own.
 
+
+**The command line as a list** (ADR-0173, AP 6.7.6.10). `argcount` and
+`argument(k)` are required function-identifiers of the dialect, `int64`'s shape:
+shadowable by §6.1.3, and *unknown function* under the conformance modes, which
+is Annex B's existing row. The runtime answers both from the `argv` it already
+holds for ADR-0081's program-parameter bindings, so the two mechanisms name one
+list; `argument(k)` points into `argv` rather than the arena, which outlives
+every statement. A bare `argcount` is the one piece with a mechanism: the parser
+cannot tell it from a variable and must not try — `var argcount: integer` is
+valid Extended Pascal and the first version took it away — so Sema decides by
+looking the name up, builds the call, and hangs it off the `nkVar` as `vrCall`,
+the husk ADR-0044 describes; `EmitExpr` and `EmitAddress` read it first, and
+`IsDesignator`'s nil-symbol answer refuses every position wanting a variable.
+`tests/dialect/inherits_extended.pas` declares both names and is what fails if
+the decision moves back to the parser; `tests/dialect/arguments.pas` and
+`trap_argument.pas` pin the values and Annex A.6.
 **A buffer crosses as the pair C already takes** (ADR-0129). A slice reaches a
 foreign routine as `(ptr, i64)` — the address of the first component, then how
 many there are, two arguments from one formal — which is what `read`, `write`,

@@ -27,6 +27,12 @@ The other three entries only accept more.
 
 ### Added
 
+- **`argcount` and `argument(k)`** under `--std=afterschool`: the program's
+  command line as a list, two required identifiers that §6.1.3 makes
+  shadowable. `argument(k)` outside `1..argcount` is a run-time error. Under
+  the conformance modes the names are nobody's, as `int64` is (Annex B).
+  AP 6.7.6.10, ADR-0173. `tests/dialect/arguments.pas`.
+
 - **`lib/passtrvec.pas`**: a growable sequence of strings — `PasVector`'s
   interface under `SVec` names, with `SVecIndexOf`, a stable `SVecSort`,
   `SVecJoin` and `SVecSplit`. `tests/extended/lib_strvec.pas`.

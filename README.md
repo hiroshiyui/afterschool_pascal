@@ -430,6 +430,23 @@ refuses it for the older reason and says so in the words it always used.
 Overflow traps as `integer`'s does, at both ends: `-maxint64..maxint64` is the
 type, so the machine word's least value is not one of its values.
 
+**The command line as a list** (ADR-0173). `argcount` is how many arguments
+the program was given and `argument(k)` is the `k`-th, a string:
+
+```pascal
+program echo(output);
+var k: integer;
+begin
+  for k := 1 to argcount do writeln(k:1, ': ', argument(k))
+end.
+```
+
+Neither standard gives a program its arguments except one file variable at a
+time through `binding(p).name`, which is still there and names the same list.
+Both are required identifiers and so shadowable: a program with its own
+`argument`, or its own `argcount`, keeps it. `argument(k)` outside
+`1..argcount` stops the program.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are
