@@ -9193,7 +9193,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+      nkPointer, nkOptional, nkHandle, nkFallible, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         ok := false
@@ -16112,7 +16112,7 @@ begin
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
       nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
       nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-      nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+      nkPointer, nkOptional, nkHandle, nkFallible, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
       nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
       nkImportSpec, nkImportItem:
         { not an expression }
@@ -18112,6 +18112,7 @@ begin
       nkSubstr, nkField, nkDeref,
       nkBinary, nkUnary, nkCall, nkWriteArg, nkCaseArm, nkVariantArm, nkGroup,
       nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord, nkPointer, nkOptional, nkHandle,
+      nkFallible,
       nkConfArray,
       nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl, nkProcDecl,
       nkBlock, nkModule, nkExportPart, nkExportItem, nkImportSpec,
@@ -22484,6 +22485,18 @@ begin
       write('''');
       WritePos(n^.line, n^.col);
       TypeEnd(n)
+    end;
+    { AP 6.4.13. It nests on both sides, so each is printed indented under it
+      the way an optional's component is -- value first, then cause, which is
+      the order they are written in. }
+    nkFallible: begin
+      write('fallible');
+      WritePos(n^.line, n^.col);
+      TypeEnd(n);
+      level := level + 1;
+      DumpTypeExpr(n^.faVal);
+      DumpTypeExpr(n^.faCause);
+      level := level - 1
     end;
     { 6.6.3.7's conformant array schema. Its two bound-identifiers are printed
       on the tag line, because they are what distinguishes it from an array and
@@ -28213,7 +28226,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+    nkPointer, nkOptional, nkHandle, nkFallible, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpWord('null            ', v)   { Sema has already required a designator }
@@ -28320,7 +28333,7 @@ begin
     nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
     nkFor, nkProcCall, nkWith, nkCase, nkWriteArg, nkCaseArm, nkVariantArm,
     nkGroup, nkDeclName, nkNamed, nkEnum, nkSubrange, nkArray, nkRecord,
-    nkPointer, nkOptional, nkHandle, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
+    nkPointer, nkOptional, nkHandle, nkFallible, nkFile, nkSetOf, nkSchema, nkInquiry, nkRestricted, nkConstDecl, nkTypeDecl,
     nkProcDecl, nkBlock, nkModule, nkExportPart, nkExportItem,
     nkImportSpec, nkImportItem:
       OpInt(0, v)

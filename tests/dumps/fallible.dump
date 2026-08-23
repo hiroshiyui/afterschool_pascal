@@ -1,0 +1,225 @@
+=== tokens
+11 1 kw program
+11 9 ident fallible_dump
+11 22 op (
+11 23 ident output
+11 29 op )
+11 30 op ;
+12 1 kw type
+13 3 ident reason
+13 10 op =
+13 12 op (
+13 13 ident bad
+13 16 op ,
+13 18 ident worse
+13 23 op )
+13 24 op ;
+14 3 ident number
+14 10 op =
+14 12 ident integer
+14 20 op !
+14 22 ident reason
+14 28 op ;
+15 3 ident nested
+15 10 op =
+15 12 ident string
+15 18 op (
+15 19 int 8
+15 20 op )
+15 22 op !
+15 24 ident reason
+15 30 op ;
+16 1 kw var
+17 3 ident a
+17 4 op :
+17 6 ident number
+17 12 op ;
+18 3 ident b
+18 4 op :
+18 6 ident nested
+18 12 op ;
+19 3 ident c
+19 4 op :
+19 6 ident char
+19 11 op !
+19 13 ident boolean
+19 20 op ;
+20 1 kw begin
+21 3 ident a
+21 5 op :=
+21 8 int 7
+21 9 op ;
+22 3 ident b
+22 5 op :=
+22 8 ident worse
+22 13 op ;
+23 3 ident c
+23 5 op :=
+23 8 ident true
+23 12 op ;
+24 3 ident writeln
+24 10 op (
+24 11 ident a
+24 12 op .
+24 13 ident ok
+24 15 op ,
+24 17 str [ ]
+24 20 op ,
+24 22 ident b
+24 23 op .
+24 24 ident ok
+24 26 op ,
+24 28 str [ ]
+24 31 op ,
+24 33 ident c
+24 34 op .
+24 35 ident ok
+24 37 op )
+25 1 kw end
+25 4 op .
+26 1 eof
+=== ast
+program fallible_dump
+  params
+    name output @11:23
+  block
+    imports
+    labels
+    consts
+    types
+      type reason @13:3
+        enum @13:12
+          names
+            name bad @13:13
+            name worse @13:18
+      type number @14:3
+        fallible @14:20
+          named integer @14:12
+          named reason @14:22
+      type nested @15:3
+        fallible @15:22
+          schema string @15:12
+            int 8 @15:19
+          named reason @15:24
+    vars
+      var
+        names
+          name a @17:3
+        type
+          named number @17:6
+      var
+        names
+          name b @18:3
+        type
+          named nested @18:6
+      var
+        names
+          name c @19:3
+        type
+          fallible @19:11
+            named char @19:6
+            named boolean @19:13
+    procs
+    body
+      compound @20:1
+        assign @21:3
+          var a @21:3
+          int 7 @21:8
+        assign @22:3
+          var b @22:3
+          var worse @22:8
+        assign @23:3
+          var c @23:3
+          var true @23:8
+        writeln @24:3
+          arg - -
+            field ok @24:12
+              var a @24:11
+          arg - -
+            char 32 @24:17
+          arg - -
+            field ok @24:23
+              var b @24:22
+          arg - -
+            char 32 @24:28
+          arg - -
+            field ok @24:34
+              var c @24:33
+=== sema
+program fallible_dump
+  params
+    name output @11:23
+  frames
+    frame fallible_dump level 0
+      var output #0 : text (stdout 0)
+      var a #1 : number
+      var b #2 : nested
+      var c #3 : char ! boolean
+  block
+    imports
+    labels
+    consts
+    types
+      type reason @13:3
+        enum @13:12 = reason
+          names
+            name bad @13:13
+            name worse @13:18
+      type number @14:3
+        fallible @14:20 = number
+          named integer @14:12 = integer
+          named reason @14:22 = reason
+      type nested @15:3
+        fallible @15:22 = nested
+          schema string @15:12 = string(8)
+            int 8 @15:19 : integer
+          named reason @15:24 = reason
+    vars
+      var
+        names
+          name a @17:3
+        type
+          named number @17:6 = number
+      var
+        names
+          name b @18:3
+        type
+          named nested @18:6 = nested
+      var
+        names
+          name c @19:3
+        type
+          fallible @19:11 = char ! boolean
+            named char @19:6 = char
+            named boolean @19:13 = boolean
+    procs
+    body
+      compound @20:1
+        assign @21:3
+          field val @21:3 -> #0/0 : integer
+            var a @21:3 -> fallible_dump/1 : number
+          int 7 @21:8 : integer
+        assign @22:3
+          field cause @22:3 -> #0/1 : reason
+            var b @22:3 -> fallible_dump/2 : nested
+          var worse @22:8 -> const 1 : reason
+        assign @23:3
+          field cause @23:3 -> #0/1 : boolean
+            var c @23:3 -> fallible_dump/3 : char ! boolean
+          var true @23:8 -> const true : boolean
+        writeln @24:3
+          file
+            var output @24:3 -> fallible_dump/0 : text
+          arg - -
+            field ok @24:12 -> #0/- : boolean
+              var a @24:11 -> fallible_dump/1 : number
+          arg - -
+            char 32 @24:17 : char
+          arg - -
+            field ok @24:23 -> #0/- : boolean
+              var b @24:22 -> fallible_dump/2 : nested
+          arg - -
+            char 32 @24:28 : char
+          arg - -
+            field ok @24:34 -> #0/- : boolean
+              var c @24:33 -> fallible_dump/3 : char ! boolean
