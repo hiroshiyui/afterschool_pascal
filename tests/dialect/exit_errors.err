@@ -1,0 +1,4 @@
+<source>:13:8: error: only a function can 'exit' with a value, and this block has no result
+<source>:22:3: error: cannot assign rec to a result of type integer
+<source>:29:3: error: 'exit' takes at most one argument, the result of the function it leaves
+<source>:38:9: error: a deferred statement may not contain an exit-statement: it is run where the block ends, and the block is already leaving

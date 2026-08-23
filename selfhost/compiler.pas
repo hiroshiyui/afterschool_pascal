@@ -612,7 +612,13 @@ type
                    Appended, because the AST dump prints a builtin as its
                    ordinal and both compilers must agree on the number
                    (ADR-0067). }
-                 spPack, spUnpack, spPage);
+                 spPack, spUnpack, spPage,
+                 { AP 6.7.5.9's exit, the dialect's own control procedure, and
+                   appended for the same reason as the three above it: the
+                   dump prints a required procedure as its ordinal, so a
+                   constant inserted anywhere else renumbers the ones after
+                   it. }
+                 spExit);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -840,6 +846,13 @@ type
       executed in, so nothing has to walk it backwards (ADR-0175). }
     defers: nodeListPtr;
     deferCount: integer;
+    { AP 6.7.5.9: the block a `br` leaves this activation through, or 0 where
+      no exit-statement was emitted. It is CodeGen's and is claimed by the
+      first `exit` of a function body -- the label is written before the
+      block it names, which textual IR admits and an instruction list would
+      not have. BeginFunction clears it, so a block emitted more than once
+      (a module's initialization and its finalization) numbers each. }
+    exitBlock: integer;
     resultVar: symPtr;
     { 6.7.2: a result-variable-specification was written, so the body names
       the result and must *not* assign to the function identifier. Without one
@@ -1378,9 +1391,14 @@ type
         stores in the tag-field. The path needs the index and the store needs
         the value, so both are kept rather than one derived from the other
         (ADR-0144). }
+      { pcExit is AP 6.7.5.9's husk (ADR-0044): `exit(e)` assigns the result
+        and then leaves, and Sema writes that assignment here -- moving the
+        argument out of pcArgs, so that after Sema the node says what it does
+        rather than what it was written as. Every rule about assigning a
+        result then reaches it through the one routine that decides them. }
       nkProcCall:   (pcAt, pcLen, pcQualAt, pcQualLen: integer; pcArgs: nodePtr;
                      pcSym: symPtr; pcStd: stdProcKind;
-                     pcSelect, pcTagVals: numPtr);
+                     pcSelect, pcTagVals: numPtr; pcExit: nodePtr);
       { The hidden frame slot the record's address is bound to. Sema makes
         it; CodeGen stores through it. }
       nkWith:       (wtRecord, wtBody: nodePtr; wtBinding: symPtr);
@@ -3866,6 +3884,7 @@ begin
     nkProcCall: begin
       n^.pcSym := nil;
       n^.pcStd := spNone;
+      n^.pcExit := nil;
       begin n^.pcSelect := nil; n^.pcTagVals := nil end
     end;
     { `for v in s` gained a frame slot for its counter, so nkFor left the
@@ -7852,6 +7871,7 @@ begin
   s^.frameCount := 0;
   s^.defers := nil;
   s^.deferCount := 0;
+  s^.exitBlock := 0;
   s^.memConsts := nil;
   s^.memConstTail := nil;
   s^.nlLabels := nil;
@@ -13222,6 +13242,10 @@ begin
 end;
 
 function LookupBuiltin(at, len: integer): builtinKind; forward;
+{ Defined beside AsFallibleArm, which it calls, and reached from here because
+  CheckStdProc answers AP 6.7.5.9's `exit(e)` several thousand lines earlier. }
+procedure CheckResultAssign(s: nodePtr; named: symPtr;
+                            byName: boolean); forward;
 
 { The names ISO 7185 6.6.5 and 6.6.6 reserve for the required procedures and
   functions. Asked by name, because the answer a caller wants is nil either way:
@@ -16641,6 +16665,7 @@ begin
   else if PoolIs(p^.pcAt, p^.pcLen, 'pack     ') then p^.pcStd := spPack
   else if PoolIs(p^.pcAt, p^.pcLen, 'unpack   ') then p^.pcStd := spUnpack
   else if PoolIs(p^.pcAt, p^.pcLen, 'page     ') then p^.pcStd := spPage
+  else if PoolIs(p^.pcAt, p^.pcLen, 'exit     ') then p^.pcStd := spExit
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -16682,6 +16707,46 @@ begin
         write('the exit status of ''halt'' must be an integer, found ');
         WriteTypeName(p^.pcArgs^.ntype);
         writeln
+      end
+  end
+  else
+  { AP 6.7.5.9's control procedure. `exit` terminates the activation of the
+    block the statement occurs in -- currentProc, which is the block whose
+    statement-part this is and never an enclosing one, so an exit written in a
+    nested procedure leaves the nested procedure and nothing else.
+
+    `exit(e)` first assigns e to that block's function result, and the
+    assignment is written here as a node rather than checked in a second place
+    (ADR-0044's husk): everything a result assignment has to satisfy -- 6.7.2's
+    "at least one", AP 6.4.13's arm shorthand, assignment-compatibility -- then
+    reaches it through the one routine that decides all three for `f := e`. }
+  if p^.pcStd = spExit then begin
+    if n > 1 then begin
+      ErrorAt(p^.line, p^.col);
+      writeln('''exit'' takes at most one argument, the result of the ',
+              'function it leaves')
+    end
+    else if n = 1 then
+      if (currentProc = nil) or (currentProc^.kind <> skFunc) then begin
+        ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+        writeln('only a function can ''exit'' with a value, and this block ',
+                'has no result')
+      end
+      else begin
+        { The target is spelled with the function's own name so that anything
+          said about it names what the program would have written. It is not
+          *looked up* under that spelling: a `with` whose record has a field
+          of the same name, or a nested declaration, would answer, and the
+          result variable is what this statement means either way. }
+        a := NewNode(nkVar, p^.line, p^.col);
+        a^.vrAt := currentProc^.at;
+        a^.vrLen := currentProc^.len;
+        value_ := NewNode(nkAssign, p^.line, p^.col);
+        value_^.asTarget := a;
+        value_^.asValue := p^.pcArgs;
+        p^.pcArgs := nil;
+        p^.pcExit := value_;
+        CheckResultAssign(value_, currentProc, false)
       end
   end
   else
@@ -17530,10 +17595,21 @@ begin
           sub := sub^.next
         end
       end;
+      { AP 6.7.5.9's exit, for the goto-statement's reason and not a new one:
+        the runner is a function of its own, and the block whose activation
+        an exit would terminate is not the one running. Asked of pcStd, which
+        CheckStmt has already decided -- the walk runs after the deferred
+        statement is checked. }
+      nkProcCall: if s^.pcStd = spExit then begin
+        ErrorAt(s^.line, s^.col);
+        writeln('a deferred statement may not contain an exit-statement: it ',
+                'is run where the block ends, and the block is already ',
+                'leaving')
+      end;
       { Everything else is a statement with no statement inside it, or is not
         a statement at all. The list is exhaustive rather than a catch-all so
         that a statement kind added later is named here (ADR-0145). }
-      nkEmpty, nkAssign, nkWrite, nkRead, nkProcCall,
+      nkEmpty, nkAssign, nkWrite, nkRead,
       nkInt, nkReal, nkInt64, nkChar, nkStr, nkNil, nkSet, nkSetMember, nkVar,
       nkIndex, nkField, nkDeref, nkBinary, nkUnary, nkCall, nkSubstr,
       nkStructValue, nkValueElem, nkWriteArg, nkCaseArm, nkVariantArm,
@@ -17628,6 +17704,69 @@ begin
   end
 end;
 
+{ Assigning a function's result, which two statements reach: 6.8.2.2's
+  `f := e`, where the function-identifier is the target the program wrote, and
+  AP 6.7.5.9's `exit(e)`, where Sema wrote the target the program did not.
+
+  One routine, because everything the two share is a rule about the *result*
+  and not about the spelling -- the arm AP 6.4.13's shorthand picks, 6.7.2's
+  "at least one", and assignment-compatibility itself. `byName` is the whole
+  of what differs: 6.7.2 refuses `f := e` where a result-variable-
+  specification was written, and has nothing to say about a statement naming
+  neither the function nor the variable.
+
+  The caller has already checked the value: for `exit(e)` it is one of the
+  arguments CheckStdProc walked, and checking an expression twice is what
+  ADR-0176's stack overflow was. }
+procedure CheckResultAssign;
+begin
+  s^.asTarget^.vrSym := named^.resultVar;
+  s^.asTarget^.ntype := named^.stype;
+  named^.assignedResult := true;
+  { 6.7.2 asks two different questions of the two spellings of a result, and
+    ADR-0134 keeps two flags for them. `exit(e)` writes the result under
+    either spelling and names neither, so it answers both -- which is AP
+    6.7.5.9 amending 6.9.4's list of threats rather than a second reading of
+    it, and the reason the flag is set here and not by `Threatened`. }
+  if (not byName) and (named^.resultVar <> nil) then
+    named^.resultVar^.wasThreatened := true;
+  { AP 6.4.13, and it must be asked here as well as on the ordinary
+    assignment path: assigning to a function *identifier* is 6.8.2.2's own
+    path and never reaches that one. Without this line `f := 1` in a function
+    answering a fallible-type was accepted by Assignable, wrapped by nothing,
+    and emitted as a store of an integer into a record -- a segfault at run
+    time with the whole suite green (ADR-0176). }
+  if IsFallible(s^.asTarget^.ntype) and
+     (s^.asValue^.ntype <> s^.asTarget^.ntype) then
+    AsFallibleArm(s);
+  if byName and named^.resultNamed then begin
+    { 6.7.2: with a result-variable-specification the block "shall contain no
+      assignment-statement" to the function-identifier. The two spellings
+      would mean the same storage, so this is not about ambiguity -- it is
+      the standard keeping one name for one thing. }
+    ErrorAt(s^.line, s^.col);
+    write('''');
+    WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
+    write(''' names a result variable, so assign ');
+    writeln('to that instead of to the function')
+  end
+  else if named^.resultVar = nil then begin
+    ErrorAt(s^.line, s^.col);
+    write('''');
+    WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
+    writeln(''' is not a function with a result')
+  end
+  else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then begin
+    ErrorAt(s^.line, s^.col);
+    write('cannot assign ');
+    WriteTypeName(s^.asValue^.ntype);
+    write(' to a result of type ');
+    WriteTypeName(s^.asTarget^.ntype);
+    WriteDistinctTypeNote(s^.asTarget^.ntype, s^.asValue^.ntype);
+    writeln
+  end
+end;
+
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
     forEntry: symListPtr; owning: symPtr; badFunc: boolean;
@@ -17689,46 +17828,8 @@ begin
           end
         end;
         if named <> nil then begin
-          s^.asTarget^.vrSym := named^.resultVar;
-          s^.asTarget^.ntype := named^.stype;
-          named^.assignedResult := true;
           CheckExpr(s^.asValue);
-          { AP 6.4.13 again, and it must be asked here as well: assigning to a
-            function *identifier* is 6.8.2.2's own path and never reaches the
-            one below. Without this line `f := 1` in a function answering a
-            fallible-type was accepted by Assignable, wrapped by nothing, and
-            emitted as a store of an integer into a record -- a segfault at
-            run time with the whole suite green (ADR-0176). }
-          if IsFallible(s^.asTarget^.ntype) and
-             (s^.asValue^.ntype <> s^.asTarget^.ntype) then
-            AsFallibleArm(s);
-          if named^.resultNamed then begin
-            { 6.7.2: with a result-variable-specification the block "shall
-              contain no assignment-statement" to the function-identifier. The
-              two spellings would mean the same storage, so this is not about
-              ambiguity -- it is the standard keeping one name for one thing. }
-            ErrorAt(s^.line, s^.col);
-            write('''');
-            WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
-            write(''' names a result variable, so assign ');
-            writeln('to that instead of to the function')
-          end
-          else if named^.resultVar = nil then begin
-            ErrorAt(s^.line, s^.col);
-            write('''');
-            WritePool(s^.asTarget^.vrAt, s^.asTarget^.vrLen);
-            writeln(''' is not a function with a result')
-          end
-          else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then
-          begin
-            ErrorAt(s^.line, s^.col);
-            write('cannot assign ');
-            WriteTypeName(s^.asValue^.ntype);
-            write(' to a result of type ');
-            WriteTypeName(s^.asTarget^.ntype);
-            WriteDistinctTypeNote(s^.asTarget^.ntype, s^.asValue^.ntype);
-            writeln
-          end
+          CheckResultAssign(s, named, true)
         end
         else begin
           CheckExpr(s^.asTarget);
@@ -17884,6 +17985,12 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'pack     ') or
             PoolIs(s^.pcAt, s^.pcLen, 'unpack   ') or
             PoolIs(s^.pcAt, s^.pcLen, 'page     ') or
+            { AP 6.7.5.9's exit is the dialect's own, so the gate is the
+              dialect and not HasExtended -- and it is behind `sym = nil`
+              like every other required procedure, which is the whole of what
+              keeps a program declaring its own `exit` (ADR-0117). }
+            ((langStd = stdAfterschool) and
+             PoolIs(s^.pcAt, s^.pcLen, 'exit     ')) or
             ((HasExtended(langStd)) and
              IsRequiredProc(s^.pcAt, s^.pcLen))) then
           CheckStdProc(s)
@@ -22302,7 +22409,20 @@ begin
       writeln('args');
       level := level + 1;
       DumpExprList(n^.pcArgs);
-      level := level - 2
+      level := level - 1;
+      { AP 6.7.5.9's husk. `exit(e)` is written with one argument and means an
+        assignment to the result and then a transfer, so after Sema the
+        argument list is empty and the assignment is here -- which is why only
+        --dump-sema can reach it, and why the two dumps of one `exit(e)` do
+        not have the same shape. }
+      if annotate and (n^.pcExit <> nil) then begin
+        Pad;
+        writeln('result');
+        level := level + 1;
+        DumpStmt(n^.pcExit);
+        level := level - 1
+      end;
+      level := level - 1
     end
   end
 end;
@@ -29537,7 +29657,23 @@ begin
     the open-file list is the same one ADR-0032's non-local goto walks, for the
     same reason. The optional exit status is the extension ADR-0084 documents;
     omitted, it is the 0 a conforming program always gets. }
-  if s^.pcStd = spHalt then begin
+  { AP 6.7.5.9's exit, answered before any address is taken because there is
+    no argument left by the time CodeGen runs: Sema moved it into the
+    assignment hanging off the node, which is emitted here by the code that
+    already knows how to store a result of any type.
+
+    The branch names a label the emitter has not written yet. That is what
+    textual IR buys and an instruction list would not have: the target is the
+    block the epilogue starts with, claimed here on first use and closed by
+    EmitExitTarget after the body. Whatever follows in the source is emitted
+    into a fresh block, unreachable and valid, exactly as a goto's is. }
+  if s^.pcStd = spExit then begin
+    if s^.pcExit <> nil then EmitAssign(s^.pcExit);
+    if irProc^.exitBlock = 0 then irProc^.exitBlock := NewBlock;
+    writeln(ircode, '  br label %L', irProc^.exitBlock:1);
+    StartBlock(NewBlock)
+  end
+  else if s^.pcStd = spHalt then begin
     { The operand is computed first: the emitter is sequential, so anything
       EmitExpr writes has to come out before the call line is begun. }
     if s^.pcArgs = nil then begin
@@ -29790,7 +29926,9 @@ begin
         writeln(ircode)
       end
     end;
-    spNone, spHalt: { spHalt was answered above; spNone is not a standard one }
+    spNone, spHalt, spExit:
+      { spHalt and spExit were both answered above; spNone is not a standard
+        one }
   end
   end
 end;
@@ -30792,10 +30930,26 @@ begin
   end
 end;
 
+{ AP 6.7.5.9: where an `exit` branched to, written between the body and the
+  epilogue so that both paths reach the epilogue and there is one of it. The
+  fall-through needs the branch as much as the exits do -- the block before it
+  is whatever the body ended in, and a basic block ends in a terminator.
+
+  Nothing is emitted for a block no `exit` claimed, which is every block of
+  every program written before this clause and of every conforming one. }
+procedure EmitExitTarget(p: symPtr);
+begin
+  if p^.exitBlock <> 0 then begin
+    writeln(ircode, '  br label %L', p^.exitBlock:1);
+    StartBlock(p^.exitBlock)
+  end
+end;
+
 { A block exit closes the files the block declared, which is ISO 7185's rule
   and also the only thing that flushes a file written to inside a procedure.
-  Pascal has no early return, so the single exit point each body ends with is
-  the whole of the epilogue. }
+  Since AP 6.7.5.9 a block may be left before its last statement, so this is
+  reached from the one place EmitExitTarget leaves control at rather than from
+  the end of the body -- and it is still emitted exactly once per block. }
 procedure CloseFiles(p: symPtr);
 var l: symListPtr; addr, frame, rec: str;
 begin
@@ -31129,6 +31283,10 @@ begin
   nextReg := 0;
   designatorGuard := vgRead;
   nextBlock := 0;
+  { AP 6.7.5.9: block numbers restart with the function, so the target an
+    `exit` branches to has to as well. A module's block is emitted twice --
+    an initialization and a finalization -- and each numbers its own. }
+  p^.exitBlock := 0;
   StartBlock(NewBlock);
   { The arena level this activation inherits, read before anything can add to
     it (ADR-0111). Emitted in every function and not only in the ones that
@@ -31527,6 +31685,7 @@ begin
 
   EnterFrame(p);
   EmitStmt(d^.pdBody^.blBody);
+  EmitExitTarget(p);
   CloseFiles(p);
 
   if (p^.kind = skFunc) and not IsMemory(p^.stype) then begin
@@ -31920,6 +32079,7 @@ begin
   writeln(ircode, '() {');
   EnterFrame(p);
   if m^.mdInit <> nil then EmitStmt(m^.mdInit);
+  EmitExitTarget(p);
   writeln(ircode, '  ret void');
   writeln(ircode, '}');
   { A module's block defers into its *initialization*: 6.11.4's
@@ -31935,6 +32095,7 @@ begin
   writeln(ircode, '() {');
   BeginFunction(p);
   if m^.mdFini <> nil then EmitStmt(m^.mdFini);
+  EmitExitTarget(p);
   { A module's files are closed when its activation terminates, which is the
     same obligation a block's exit has and the same call that discharges it. }
   CloseFiles(p);
@@ -32064,6 +32225,10 @@ begin
   writeln(ircode, 'define i32 @main(i32 %argc, ptr %argv) {');
   EnterFrame(programSym);
   EmitStmt(progBlock^.blBody);
+  { AP 6.7.5.9 in the main-program-block terminates the *program*, and does it
+    by the ordinary end: 6.2.3.6's finalizations below run, which is what
+    distinguishes it from 6.7.5.7's halt. }
+  EmitExitTarget(programSym);
   CloseFiles(programSym);
   { 6.2.3.6 read the other way round for termination: the activation of A
     terminates before the finalization of B, so the finalizations run in the

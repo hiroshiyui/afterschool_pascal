@@ -18,9 +18,10 @@
 """A type `Assignable` refuses is refused by every caller of `Assignable`.
 
 `Assignable` is not a rule about assignment. It is *the* compatibility
-predicate, and sixteen routines ask it at 33 call sites -- assignment, the
-relational operators, an actual parameter, a set member, a case selector, a
-`for` statement's bounds, an array index, a structured value's component.
+predicate, and seventeen routines ask it at 33 call sites -- assignment, a
+function's result, the relational operators, an actual parameter, a set
+member, a case selector, a `for` statement's bounds, an array index, a
+structured value's component.
 ADR-0058 wrote the sentence this gate exists for:
 
     A permission granted in a shared predicate leaks to every caller.
@@ -58,7 +59,7 @@ than remembered.
 
 One arm may cover more than one *spelling*, which is why WRAPPERS maps a
 predicate to a list: `ContainsFile` refuses a bare file and a record holding
-one, and those are two different programs at each of the 21 positions. The
+one, and those are two different programs at each of the 23 positions. The
 second was added by ADR-0150, whose defect this gate would have caught the day
 `Assignable` was first swept had the rule been read then -- 6.4.6 a) is two
 conditions and the arm asked one.
@@ -78,7 +79,7 @@ It does not judge whether the refusal happens *at* the call site. A guard
 placed ahead of the predicate refuses the same program and passes this gate --
 which is ADR-0143's second defect, and `doc/sop.md` §7 carries it. What this
 answers is the question that was never asked: **has every caller been
-considered at all?** If ADR-0139 had had to answer for all 21 positions, the
+considered at all?** If ADR-0139 had had to answer for all 23 positions, the
 assignment hole would have been on the list that day.
 
 It fails in four directions:
@@ -242,31 +243,49 @@ POSITIONS = [
      "seekread(df, u)"),
     ("case-selector", "CheckCase", 1, "stmt",
      "case u of 1: i := 1 end"),
-    ("assignment", "CheckStmt", 5, "stmt",
+    ("assignment", "CheckStmt", 4, "stmt",
      "u := v"),
+    # 6.8.2.2's `f := e` and AP 6.7.5.9's `exit(e)` are one routine, because
+    # everything they share is a rule about the result. The probe is the exit,
+    # which is the caller that did not exist when the other was swept.
+    ("result-assignment", "CheckResultAssign", 1, "func",
+     "exit(u)"),
     # AP 6.4.13 (ADR-0176): the shorthand that picks an arm. Assignable is
     # what chooses, so a type it refuses must reach neither arm -- and then
     # the ordinary assignment refusal is what reports.
     ("fallible-arm", "AsFallibleArm", 2, "stmt",
      "fl := u"),
-    ("for-in-control", "CheckStmt", 5, "stmt",
+    ("for-in-control", "CheckStmt", 4, "stmt",
      "for u in st do i := 1"),
-    ("for-bounds", "CheckStmt", 5, "stmt",
+    ("for-bounds", "CheckStmt", 4, "stmt",
      "for w := u to v do i := 1"),
 ]
 
 
 def program(wrapper, kind, snippet):
-    """The whole probe: preamble, q with the snippet in it, and a valid block."""
+    """The whole probe: preamble, q with the snippet in it, and a valid block.
+
+    `q` is a procedure for every kind but "func", where it is a function --
+    AP 6.7.5.9's `exit(e)` is the one position that cannot stand anywhere
+    else. Its result is assigned before the snippet: without that, §6.7.2's
+    *never assigns its result* would refuse every probe of that position
+    whatever type it was given, which is a gate passing for the wrong reason.
+    """
     decls = snippet if kind == "decl" else ""
-    body = snippet if kind == "stmt" else "i := 1"
+    if kind == "func":
+        head = f"function q({wrapper['formals']}): integer;\n"
+        body = "q := 1;\n  " + snippet
+        call = f"i := {wrapper['call']}"
+    else:
+        head = f"procedure q({wrapper['formals']});\n"
+        body = snippet if kind == "stmt" else "i := 1"
+        call = wrapper["call"]
     return (PREAMBLE + wrapper["extra"] +
             "procedure takes(z: integer); begin z := z end;\n" +
-            f"procedure q({wrapper['formals']});\n"
-            f"var w: integer;\n{decls}\nbegin\n"
+            head + f"var w: integer;\n{decls}\nbegin\n"
             f"  {body}\nend;\n"
             "begin\n"
-            f"  {wrapper['call']}\n"
+            f"  {call}\n"
             "end.\n")
 
 

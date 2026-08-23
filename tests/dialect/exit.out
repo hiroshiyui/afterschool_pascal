@@ -1,0 +1,23 @@
+classify -2: negative
+classify 5: positive
+firstAbove(10) = 4
+firstAbove(30) = 6
+tally(2) = 3
+tally(9) = 1000
+123: value 123
+12x: cause 1
+123456: cause 0
+armed(1):
+  armed: iteration 1
+  armed: iteration 1 released
+  armed: fell off the end
+armed(4):
+  armed: iteration 1
+  armed: iteration 1 released
+  armed: iteration 2
+  armed: iteration 2 released
+writes:
+  writes: released
+  the file: [written before the exit]
+main: iteration 1
+main: iteration 2

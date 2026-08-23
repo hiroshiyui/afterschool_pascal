@@ -902,6 +902,78 @@ only bound in scope. That the two bounds always describe the same storage is the
 property the parameter form exists for, and it is what a pointer and a
 separately-passed count cannot promise.
 
+#### 6.7.5 Required procedures [extended]
+
+**6.7.5.9 The exit procedure [added].** The required procedure-identifier
+`exit` shall be a control procedure. It shall terminate the activation of the
+block in which the procedure-statement occurs, and shall be written in either
+of two forms:
+
+    exit
+    exit ( expression )
+
+The block is the one whose statement-part contains the procedure-statement, and
+never an enclosing one: an `exit` in a procedure nested in another leaves the
+nested procedure.
+
+The second form shall be written only where that block is a function-block. The
+expression shall be assignment-compatible with the result type, and the
+assignment shall be performed before the activation is terminated. It shall be
+equivalent in every respect to an assignment to the function's result — in
+particular, where the result type is a fallible-type (6.4.13), the arm is
+chosen as 6.4.13.3 chooses it.
+
+The termination is the termination of an activation and not of the program, so:
+
+a) an armed statement (6.9.3.11.2 b) shall be executed;
+
+b) a file (§6.7.5) or handle (6.4.12) the block owns shall be closed;
+
+c) the value of a function shall be taken from its result variable;
+
+d) where the block is the main-program-block, the program shall terminate as
+   it does at the end of that block — so the finalization-part of every module
+   that supplied it shall be activated (§6.2.3.6) and the termination shall be
+   normal.
+
+An exit-statement shall discharge §6.7.2's requirement that a function-block
+contain at least one assignment to the function-identifier, and, where a
+result-variable-specification was written, its requirement that at least one
+statement threaten the result variable. It shall not be a defining-point of
+either spelling and shall not be written for a block that is not a
+function-block.
+
+`exit` shall not be a word-symbol; §6.1.3's shadowing is what keeps it out of
+the way of a program that declares its own (ADR-0140), exactly as for `int64`
+(6.4.2.6) and the program-argument functions (6.7.6.10).
+
+NOTE 1 — Leaving a statement-sequence by an exit-statement does not complete
+it, so what that sequence armed waits for 6.9.3.11.2 b) rather than a); the
+statement is executed late rather than not at all, which is 6.9.3.11's NOTE 2
+about the goto-statement, for the same reason.
+
+NOTE 2 — A module-block's activation does not terminate when its
+module-initialization does. §6.2.3.6 keeps it live until after the
+main-program-block has terminated, so an exit-statement in a
+module-initialization terminates the initialization, and a statement armed
+there is executed at the end of the finalization.
+
+NOTE 3 — 6.9.3.11.3 forbids an exit-statement in a deferred statement, for the
+reason it forbids a goto-statement: a deferred statement is executed in the
+block's runner as well as where its sequence is completed, and the runner is
+not the activation an exit-statement would terminate.
+
+NOTE 4 — This is the fifth construct the two conformance modes see and refuse
+(Annex B), and the second — after `external` — for which the refusal is not
+what a program meant by the name: `exit` is spelled in a position a program
+of ISO/IEC 10206:1991 could have written, and what makes it the dialect's is
+that the identifier is nobody's there. So a conforming program that declares
+`exit` keeps it, and one that does not is told it named an unknown procedure.
+
+NOTE 5 — Neither standard has an early exit; every widely used Pascal dialect
+does, and spells it `Exit` (ADR-0177). Nothing here gives a value to an
+exit-statement or lets one leave more than one activation.
+
 #### 6.7.6 Required functions [extended]
 
 `length` shall accept a slice (6.7.3.9.4), extending the required function
@@ -1363,14 +1435,19 @@ the construct and Sema refuses it. One column became two.
 | `handle` | `handle external '…'` | `expected ';' after a type definition, found identifier` | `expected ';' after a type definition, found identifier` |
 | `defer` | `defer S` | `expected 'end' at the end of a compound statement, found identifier` | `expected 'end' at the end of a compound statement, found identifier` |
 | `fallible` | `T ! E` | `unexpected character '!'` | `unexpected character '!'` |
+| `exit` | `exit`, `exit(e)` | `unknown procedure 'exit'` | `unknown procedure 'exit'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
-could not have written it, so eight of the nine are refused by machinery that
+could not have written it, so most of these are refused by machinery that
 predates the dialect and has nothing to say about it. `external` is the
 exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
 (ADR-0154).
+
+`int64`, `argument` and `exit` are a third shape and not a fourth: each is a
+required *identifier* rather than a position, so a conformance mode refuses it
+by not having it — the name is nobody's there, and the message says so.
 
 **This table is checked.** The `Case` column names a pair of test cases,
 `tests/<case>_refused_iso.pas` and
@@ -1437,6 +1514,16 @@ is not the termination of an activation, and this processor runs no deferred
 statement on that path: it writes the message and stops. A program whose
 release matters on the error path has nothing here to write it with, there
 being no exception in this language to catch (ADR-0175).
+
+**C.9 A function that exits without a result is not detected** (6.7.5.9). An
+exit-statement discharges §6.7.2's requirement that the block *contain* an
+assignment to the result, which is a syntactic requirement and the one the
+standard states; whether the assignment was **executed** on the path the exit
+took is not asked. `function f: integer; begin if c then exit; f := 1 end`
+yields whatever the result storage held when `c` was true. This is the same
+omission as for a block that falls off its end without having assigned, which
+neither conformance mode detects either, and it is ISO 7185 §6.6.2's own
+error rather than a violation (ADR-0177).
 
 ## Annex D (informative) — The library
 
@@ -1597,3 +1684,4 @@ the two scenarios its opening sentence always deserved.
 | 6.4.12, 6.7.7.3, 6.7.7.8, Annex A.7, Annex C.7 | ADR-0174 |
 | 6.9.3.11, Annex C.8 | ADR-0175 |
 | 6.4.13 | ADR-0176 |
+| 6.7.5.9, Annex C.9 | ADR-0177 |

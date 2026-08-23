@@ -116,18 +116,21 @@ EmitCall:builtinKind:4 names 18 of 42
 
 # --- a required procedure the arm above already took ----------------------
 #
-# EmitStdProc's outer case handles seventeen; pack and unpack are taken by an
+# EmitStdProc's outer case handles eighteen; pack and unpack are taken by an
 # `if` before it, because 6.6.5.4 gives them a shape no other required
 # procedure has -- two whole arrays and an index -- and the emitter needs the
-# two operand addresses before the dispatch rather than after it.
-EmitStdProc:stdProcKind:1 names 17 of 19
+# two operand addresses before the dispatch rather than after it. AP 6.7.5.9's
+# exit is taken by an `if` before it too, and is still *named* by the arm that
+# says so, which is what keeps this count one short of the whole rather than
+# two (ADR-0177).
+EmitStdProc:stdProcKind:1 names 18 of 20
 
 # The two below it are nested inside that case's own arms -- one in the
 # `spReset, spRewrite, spGet, spPut, spUpdate, spExtend` arm and one in the
 # three-seek arm -- and each names the whole enumeration except the four that
 # no arm of the outer case can have narrowed to.
-EmitStdProc:stdProcKind:2 names 15 of 19
-EmitStdProc:stdProcKind:3 names 15 of 19
+EmitStdProc:stdProcKind:2 names 15 of 20
+EmitStdProc:stdProcKind:3 names 15 of 20
 
 # --- constants nothing dispatches on --------------------------------------
 #

@@ -185,3 +185,4 @@ the alternatives that were rejected and why.
 | [0174](0174-a-handle-is-a-file-variable-for-a-foreign-address.md) | A handle is a file variable for a foreign address | Accepted |
 | [0175](0175-defer.md) | `defer`: a statement armed where it is written | Accepted |
 | [0176](0176-an-error-union-is-the-result-record-written-by-the-compiler.md) | An error union is the result record, written by the compiler | Accepted |
+| [0177](0177-exit-leaves-one-activation.md) | `exit` leaves one activation | Accepted |

@@ -1,0 +1,6 @@
+module: initialization body
+program: Count = 1
+program: iteration 1
+program: iteration 2
+module: finalization, n = 1
+module: initialization deferred, n = 1

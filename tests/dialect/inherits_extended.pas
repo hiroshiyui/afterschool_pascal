@@ -97,6 +97,17 @@ begin
   writeln('defer of this program')
 end;
 
+{ ADR-0177's exit is a required procedure-identifier, so 6.1.3's shadowing is
+  the whole of what keeps this one: a program that declares `exit` calls its
+  own in every position, with a value and without, and never leaves a block
+  early. A variable of the name would serve as well -- `argcount` above is
+  that shape -- and a procedure is the harder case, since it is what the
+  required identifier also is. }
+function exit(n: integer): integer;
+begin
+  exit := n * 2
+end;
+
 begin
   { schemata: the discriminant is readable and bounds the loop }
   total := 0;
@@ -153,6 +164,7 @@ begin
   writeln('handle of this program=', external:1);
   defer;
   if external = 3 then defer;
+  writeln('exit of this program=', exit(21):1);
 
   writeln('the dialect accepts Extended Pascal')
 end.

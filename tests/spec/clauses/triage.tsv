@@ -354,6 +354,8 @@ extended	6.7.5.6	testable	Binding procedures
 extended	6.7.5.7	testable	Control procedures
 extended	6.7.5.8	testable	Time procedures
 extended	6.7.6	structural	introduces the subclauses below it; states no requirement of its own
+afterschool	6.7.5	structural	introduces 6.7.5.9
+afterschool	6.7.5.9	testable	
 afterschool	6.7.6	testable	
 afterschool	6.7.6.10	testable	
 extended	6.7.6.1	structural	introduces the subclauses below it; states no requirement of its own
