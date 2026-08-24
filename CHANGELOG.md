@@ -29,6 +29,18 @@ three days, with every gate green. The rest only accept more.
 
 ### Added
 
+- **`try`** under `--std=afterschool`: `try(x)` is the value of a fallible `x`
+  where it succeeded, and where it did not it assigns the cause to the
+  enclosing function's result and terminates that activation — so error
+  handling in this dialect is now three constructs that fit together, `T ! E`,
+  `exit` and this. Everything terminating an activation entails happens on the
+  way out: the armed statements run and the block's files and handles close.
+  The enclosing result need not be a fallible type, only something the cause is
+  assignable to; the operand is evaluated once; a `try` may stand only in a
+  function, and not in a deferred statement. `try` is a required identifier and
+  shadowable, so a program that declares its own keeps it, and under either
+  conformance mode the answer is *unknown function 'try'*. AP 6.8.9, ADR-0178.
+  `tests/dialect/try.pas`.
 - **`exit`** under `--std=afterschool`: `exit` terminates the activation of the
   block it stands in, and `exit(e)` first assigns `e` to that block's function
   result — the guard clause, which neither standard has and every widely used

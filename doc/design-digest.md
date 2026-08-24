@@ -2456,6 +2456,31 @@ the three activations that are not a procedure's, and `exit_errors.pas` the
 refusals; moving `EmitExitTarget` after `CloseFiles` leaves the file empty and
 two armed statements unrun.
 
+**`try` is a `with` binding and one branch** (ADR-0178). AP 6.8.9's `try(x)`
+yields `x.val` where `x` succeeded and otherwise leaves the enclosing function
+with the cause — and it is three husk nodes (ADR-0044) and a frame slot, with
+no new mechanism in CodeGen at all. `CheckTry` binds the operand to a hidden
+`skVarParam` slot, which is `EmitWith`'s binding line for line and is there
+because all three husk reads designate through it: `try(f(x))` calls `f` once
+where the expansion a reader writes for it calls it three times, and that is
+the construct's one observable difference from the expansion. `clOk` reads the
+tag, `clFail` is an `nkAssign` handed to `CheckResultAssign` — so `f := e`,
+`exit(e)` and `try` cannot answer differently about a result — and `clVal`
+reads the value; `EmitTry` writes a `br i1` and the branch `EmitLeaveBlock`
+already wrote for `exit`. Everything downstream needed nothing: a value-type
+that is a string, an array or a record is a *field of a record*, so
+`EmitString` and `EmitAddress` answer through the path they had. The two field
+reads carry ADR-0118's tag check and neither can fire, each being emitted on
+the branch its arm is active on; they are left in because suppressing them
+would be a second opinion about the tag beside the branch itself. The spelling
+is a required function-identifier because no *position* would serve — a factor
+may be a variable-access, so `try (x)`, `try [x]`, `try + x`, `try - x`,
+`try.f` and `try^` are all things a program declaring `try` may write, which
+is where ADR-0176's `try X` sketch failed. `tests/dialect/try.pas` observes
+each obligation and `try_errors.pas` the five refusals; removing the binding
+leaves the behaviour cases green and fails one spec scenario, which is why
+that scenario counts the calls.
+
 **A buffer crosses as the pair C already takes** (ADR-0129). A slice reaches a
 foreign routine as `(ptr, i64)` — the address of the first component, then how
 many there are, two arguments from one formal — which is what `read`, `write`,

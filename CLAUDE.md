@@ -467,7 +467,14 @@ Five things about the dialect are worth knowing before adding anything:
   the name the dialect's is only that it is *nobody's* under a conformance
   mode. That is `int64`'s and `argcount`'s answer — a required identifier,
   shadowable by §6.1.3 — and it is now the third of the two shapes rather
-  than an exception to the first.
+  than an exception to the first. **`try` is where that was measured**
+  (ADR-0178): the statement rule does not transfer to a *factor*, because a
+  factor may be a variable-access and `try (x)`, `try [x]`, `try + x`,
+  `try - x`, `try.f` and `try^` all belong to a program that declared one. So
+  ADR-0176's sketched `try X` was unwritable and the parentheses are the
+  construct. Before spelling a new expression by position, write out what may
+  follow a factor — the six-token list above is the *statement* list and says
+  nothing about this one.
 - **It nests, where the first two do not.** ADR-0033's non-nesting was forced by
   the two specifications disagreeing about word-symbols; nothing forces it here,
   so the dialect *contains* Extended Pascal. `stdKind` is

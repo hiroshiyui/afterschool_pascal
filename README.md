@@ -537,6 +537,28 @@ statements run, the block's files and handles close, and in the main program
 the module finalizations still run. `exit` is nobody's word either — a program
 that declares one keeps it — and a deferred statement may not contain one.
 
+**`try` propagates a failure** (ADR-0178), which is what a fallible type was
+missing and what `exit` was landed for:
+
+```pascal
+function ReadConfig(path: PathName): TextResult;
+var body: string(4096);
+begin
+  body := try(PasFS.ReadAll(path));   { or leave, with the cause }
+  ReadConfig := Parse(body)
+end;
+```
+
+`try(x)` is `x.val` where `x` succeeded. Where it did not, the cause is
+assigned to the enclosing function's result and that activation terminates —
+so everything `exit` does on the way out happens here too: the armed
+statements run and the block's files and handles close. The enclosing result
+does not have to be a fallible type; it has to be something the cause can be
+assigned to, so a function answering the error type takes it directly. It may
+stand only in a function, the operand is evaluated once however many times its
+value is read, and `try` is nobody's word — a program that declares one keeps
+it. A deferred statement may not contain one.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are
