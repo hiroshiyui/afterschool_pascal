@@ -75,3 +75,15 @@ header: <sys/stat.h>
 # F_OK, for telling "nothing there" from "you may not look" without ENOENT --
 # one header already in pasrt.c's own dependency for `access`.
 header: <unistd.h>
+
+# ADR-0188: the name of a directory entry, for PasDir. The offset of `d_name`
+# is what differs between systems -- glibc puts an `unsigned short` and an
+# `unsigned char` in front of it, macOS a 64-bit seek offset and two 16-bit
+# fields, and POSIX requires only `d_ino` and `d_name`, in any order. So this
+# is ADR-0185's fifth decision again: a module may not declare that struct, and
+# the C compiler of the target reads the target's own header.
+#
+# `opendir` and `closedir` are *not* here and need not be: neither has a struct
+# in its signature, so lib/dialect/pasdir.pas binds them itself and owns the
+# `DIR *` as a handle (AP 6.4.12). Only the member access needed a header.
+header: <dirent.h>

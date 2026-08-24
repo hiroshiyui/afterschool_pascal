@@ -1,0 +1,24 @@
+made          = no error
+empty list    = no error
+empty count   = 0
+with dots     = 2
+list          = no error
+count         = 4
+  [1] alpha
+  [2] beta
+  [3] gamma
+  [4] sub
+  kind alpha = regular
+  kind beta = regular
+  kind gamma = regular
+  kind sub = directory
+iterated      = 6
+opened        = no error
+ended         = not present
+entries       = 6, of which dots = 2
+closed        = TRUE
+short open    = no error
+too long      = 4 of 6 did not fit 2
+no such dir   = the operation was refused
+a file        = the operation was refused
+removed       = no error

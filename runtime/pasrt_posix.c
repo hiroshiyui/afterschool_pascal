@@ -46,6 +46,9 @@
  *     (ADR-0185); everything a program can declare and check, it should.
  */
 
+#include <dirent.h>
+#include <errno.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -81,4 +84,51 @@ int pasx_file_info(const char *path, long long *size, long long *mtime,
   else if (S_ISDIR(st.st_mode)) *kind = 2;
   else *kind = 3;
   return 0;
+}
+
+/* The next entry of an open directory, for a library module that may not name
+ * `struct dirent` (ADR-0185's fifth decision, ADR-0188).
+ *
+ * The whole content of this routine is `e->d_name`, and that is the point: the
+ * offset of that member is what differs between systems. glibc puts an
+ * `unsigned short` and an `unsigned char` before it, macOS a 64-bit seek offset
+ * and two 16-bit fields, and POSIX itself requires only `d_ino` and `d_name` in
+ * any order at all. `d_type` is not POSIX either — it is invisible under
+ * `_POSIX_C_SOURCE`, which is what this file is compiled with — so what an
+ * entry *is* comes from `pasx_file_info` and not from here.
+ *
+ * The name is returned rather than copied out, because ADR-0123's optional
+ * string is a copy made at the call site: what this hands back is libc's own
+ * storage, valid until the next call, and the caller has a string of its own
+ * before that matters. `cap` is checked here so that an over-long name is a
+ * *code* rather than the trap an over-long copy would be — which is the one
+ * place a library can close doc/sop.md §7's "foreign string of unstated
+ * length", since the length is known on this side.
+ *
+ * `readdir` answers NULL both at the end of a directory and on a failure, and
+ * only errno tells them apart, so errno is cleared first. The four outcomes:
+ * 0 with a name, 1 exhausted, 2 refused, 3 the name did not fit — and 3 has
+ * consumed the entry, there being no way to put one back.
+ */
+const char *pasx_dir_next(void *d, int cap, int *status) {
+  struct dirent *e;
+  size_t n;
+  if (!status) return NULL;
+  if (!d || cap < 0) {
+    *status = 2;
+    return NULL;
+  }
+  errno = 0;
+  e = readdir((DIR *)d);
+  if (!e) {
+    *status = errno == 0 ? 1 : 2;
+    return NULL;
+  }
+  n = strlen(e->d_name);
+  if (n > (size_t)cap) {
+    *status = 3;
+    return NULL;
+  }
+  *status = 0;
+  return e->d_name;
 }
