@@ -1218,10 +1218,70 @@ NOTE 3 — The NUL error is the one safety property this clause *adds*. C cannot
 represent such a string, so there is no image to hand over, and passing the
 prefix would silently rename a path or shorten a command.
 
-**6.7.7.6 Variable parameters.** The type of a variable parameter of an
-external-declaration shall be `integer`, `int64` or `real`, and what crosses
-shall be the address of the actual. The rules of §6.7.3.3 apply to the actual
-unchanged.
+**6.7.7.6 Variable parameters.** What crosses for a variable parameter of an
+external-declaration shall be the address of the actual, and the rules of
+§6.7.3.3 shall apply to the actual unchanged. Its type shall be as 6.7.7.6.1
+and 6.7.7.6.2 admit.
+
+**6.7.7.6.1 Scalar variable parameters.** The type of a variable parameter of
+an external-declaration may be `integer`, `int64` or `real`.
+
+**6.7.7.6.2 Record variable parameters.** The type of a variable parameter of
+an external-declaration may be a record-type having no variant-part, every
+field of which is of a type that is
+
+- a) `char`, `integer`, `int64` or `real`;
+- b) an array-type, of any number of dimensions, whose component-type
+  satisfies a); or
+- c) a record-type satisfying this clause.
+
+NOTE 1 — What makes this sound is that the layout this processor computes for
+such a record is the layout C computes for the corresponding struct. Each
+field is placed at the next offset that is a multiple of its own alignment,
+the record's alignment is the greatest of its fields', and the record's size
+is rounded up to that. Nothing is computed here *for* C; the rule admits
+exactly those fields whose representation is not this processor's own
+invention (ADR-0184).
+
+NOTE 2 — The list in a) is 6.7.7.7's component list and is that list for
+6.7.7.7's reason: the callee writes through the address, and a type having a
+byte pattern that is not a value of it cannot be admitted. `char` has none.
+`boolean`, an enumerated-type and a subrange-type each have many, and §6.4.6's
+check has nothing to apply to a value a routine this processor did not
+translate left behind.
+
+NOTE 3 — A variant-part is refused because the storage an arm is laid over is
+of this processor's choosing and a C union is not laid out from it, and
+because a tag-field has no member for it to correspond to. A program wanting
+`struct sockaddr_storage` shall declare the arm it means, as b) admits.
+
+NOTE 4 — A field's size is always known, §6.4.3.3 refusing a field whose
+extent a discriminant decides, so no requirement about bounds is stated here.
+
+NOTE 5 — A record-type admitted by this clause may be packed, and packing has
+no effect on what crosses. This processor's layout does not depend on it
+(ISO 7185 §6.4.3.1 permitting that, and `doc/implementation-defined.md`
+recording it), so a packed record crosses at the offsets C computes for a
+struct that is *not* packed. **`packed` is therefore not a way to spell C's
+`__attribute__((packed))`**, and a program needing a struct C packs cannot
+declare one here.
+
+NOTE 6 — **That the fields declared are the fields the foreign struct has, in
+that order and with that padding, is a requirement on the program and this
+processor does not enforce it, nor can it.** It is a claim of the same kind as
+the signature of every external-declaration (6.7.7.8, C.1). What this clause
+removes is the arithmetic: a program states fields and never offsets.
+
+**6.7.7.6.3 A record shall not cross by value.** A value parameter of an
+external-declaration shall not be of a record-type, and neither shall the
+result type of one.
+
+NOTE — How a struct is copied into a call and out of one is a property of the
+C implementation's procedure-calling convention. Every argument at this
+boundary corresponds to a separate scalar so that no part of this processor
+need have an opinion about that convention (ADR-0030), and admitting a record
+by value would give it one. The diagnostic names the remedy, that remedy being
+6.7.7.6.2.
 
 **6.7.7.7 Slice parameters.** A variable parameter of an external-declaration
 may be a slice (6.7.3.9), and its component type shall be `char`, `integer`,
@@ -1282,8 +1342,8 @@ A `?integer` result is refused because C has no null integer for it to mean.
 
 **6.7.7.9 What shall not cross.** An external-declaration shall not have:
 
-- a) a parameter or result of any type not named in 6.7.7.3, 6.7.7.6, 6.7.7.7
-  or 6.7.7.8;
+- a) a parameter or result of any type not named in 6.7.7.3, 6.7.7.6.1,
+  6.7.7.6.2, 6.7.7.7 or 6.7.7.8;
 - b) a procedural or functional parameter (§6.7.3.4, §6.7.3.5). What would
   cross is a code address *and* the activation it runs under, and the far side
   takes one word. The second half has no image in C at all, so this is not a
@@ -1949,3 +2009,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.4.12.2 NOTE 1 | ADR-0180 |
 | 6.4.14, Annex B `owned`, Annex C.11 | ADR-0181 |
 | 6.4.14.6, Annex B `take` | ADR-0182 |
+| 6.7.7.6.1 – 6.7.7.6.3 | ADR-0184 |

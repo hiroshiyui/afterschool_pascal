@@ -1,0 +1,12 @@
+size      = 48
+int64     = 1234567890123
+integer   = -4242
+char      = c
+char[]    = def
+real      = 2.5
+int64[]   = 111 222
+nested    = g -8
+again     = 1234567890123 -8
+timespec  = TRUE
+seconds   = TRUE
+nanos     = TRUE

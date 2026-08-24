@@ -2653,3 +2653,55 @@ char *pas_time(int h, int m, int s) {
  * set it. That is C's contract and this does not improve on it.
  */
 int pasx_errno(void) { return errno; }
+
+/* AP 6.7.7.6.2's record, from the other side of the boundary (ADR-0184).
+ *
+ * A record whose fields C also has crosses as an address, and what makes that
+ * sound is that this compiler's RecordLayout is C's struct rule -- each member
+ * rounded up to its own alignment, the widest member's alignment the whole
+ * struct's, the total rounded to it. That is a claim about two compilers
+ * agreeing, and it is the one claim at this boundary that a program can check
+ * for itself: declare the matching record, call this, and compare.
+ *
+ * So it is here rather than in the test corpus. The corpus is one target and
+ * the claim is per-target -- `target-layout` exists because LlSize and LlAlign
+ * answer with one number for every target (ADR-0028) -- and a program built
+ * for aarch64 can ask this question there without rebuilding this tree's
+ * tests.
+ *
+ * Every field is filled with a value that could not be another field's, so a
+ * disagreement shows up as a wrong value and not as a plausible one. The
+ * members are chosen to cover what 6.7.7.6.2 admits: the two integer widths,
+ * a `char` and the hole it leaves, a fixed array of each, a double forcing
+ * 8-alignment, and a nested struct. Returns `sizeof`, which is the one number
+ * a program cannot otherwise obtain.
+ */
+struct pasx_record_probe {
+  long long a;      /* int64                                          */
+  int b;            /* integer -- and the three bytes after c         */
+  char c;           /* char                                           */
+  char d[3];        /* a fixed array of char, filling that hole       */
+  double e;         /* real -- realigns to 8, so d's tail is padding  */
+  long long f[2];   /* a fixed array of int64                         */
+  struct {
+    char c;
+    int n;
+  } g;              /* a nested record -- and one where a `packed` that
+                     * meant anything would move n from 44 to 41       */
+};
+
+long long pasx_record_probe(struct pasx_record_probe *p) {
+  if (!p) return -1;
+  p->a = 1234567890123LL;
+  p->b = -4242;
+  p->c = 'c';
+  p->d[0] = 'd';
+  p->d[1] = 'e';
+  p->d[2] = 'f';
+  p->e = 2.5;
+  p->f[0] = 111;
+  p->f[1] = 222;
+  p->g.c = 'g';
+  p->g.n = -8;
+  return (long long)sizeof(struct pasx_record_probe);
+}

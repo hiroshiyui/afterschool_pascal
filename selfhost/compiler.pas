@@ -19179,6 +19179,62 @@ begin
   ForeignSliceComponent := ForeignType(t) or (t = charType)
 end;
 
+{ AP 6.7.7.6.2's record, and the whole of what makes one crossable is that this
+  compiler already lays it out the way C does. RecordLayout rounds each field
+  up to its own alignment, takes the widest alignment as the record's and
+  rounds the total to it -- which is C's rule written out rather than a rule
+  chosen to match it. A record of `struct stat`'s fields is 144 bytes on this
+  target at C's own offsets, which is a measurement and not a derivation: it
+  is what ADR-0184 probed before any of this was written.
+
+  So nothing here computes a layout *for* C. What it does is decline every
+  field whose layout is this compiler's own invention, and the list of what is
+  left is ADR-0129's component list for ADR-0129's reason -- the callee writes
+  through the address, so a type with a byte pattern that is not a value of it
+  cannot be admitted. `char` has none; `boolean`, a subrange and an
+  enumeration each have many, and nothing runs CheckedForSubrange over what a
+  routine this compiler did not translate left behind.
+
+  A fixed array is admitted because C lays one out the same way, and it is
+  what a sockaddr is mostly made of; a nested record because the rule one
+  level down is then the same rule. A field's size is always static -- AddField
+  refuses a field whose extent a discriminant decides (ADR-0045) -- so there
+  is nothing to ask about bounds here.
+
+  What this answers is the *first* field of `rec`, at any depth, that fails
+  the test -- a field and not a boolean, because the diagnostic has to name
+  it: such a record fails at one field, and "the record" is not what the
+  program has to change. A nested record answers with its own field for the
+  same reason. }
+function BadForeignField(rec: typePtr): fieldPtr;
+var f, bad, inner: fieldPtr; t: typePtr;
+begin
+  bad := nil;
+  f := rec^.fields;
+  while f <> nil do begin
+    if bad = nil then begin
+      { every dimension at once: `array [1..2, 1..3] of char` is two arrays
+        here and one array to C, and both lay out the same way. }
+      t := f^.ftype;
+      while IsArray(t) do t := t^.elem;
+      if IsRecord(t) then begin
+        if t^.variants <> nil then
+          { the field is the thing to change: a record with a variant part is
+            not one of them }
+          bad := f
+        else begin
+          inner := BadForeignField(t);
+          if inner <> nil then bad := inner
+        end
+      end
+      else if not ForeignSliceComponent(t) then
+        bad := f
+    end;
+    f := f^.next
+  end;
+  BadForeignField := bad
+end;
+
 { An `external` declaration, once its heading is built. The symbol is complete
   the moment it is declared: there is no block here and never will be, so it
   is marked defined -- otherwise the "declared forward but never given a body"
@@ -19202,7 +19258,7 @@ begin
 end;
 
 procedure CheckForeignHeading(d: nodePtr; sym: symPtr);
-var p: symListPtr; k: integer; prior: symPtr;
+var p: symListPtr; k: integer; prior: symPtr; bad: fieldPtr;
 begin
   sym^.linkKind := lnkForeign;
   sym^.linkItemAt := d^.pdExtAt;
@@ -19336,12 +19392,46 @@ begin
                 'by value, and a routine given the variable could replace ',
                 'what this program owns without releasing it')
       end
+      { AP 6.7.7.6.2, ADR-0184: the record whose layout C agrees with. Its
+        address is one argument and is emitted by the line above this rule --
+        EmitForeignArgument writes `ptr %a` for every var parameter whatever
+        its type -- so nothing was lowered for this and the only question was
+        which records. That question is answered by the fields, which is why
+        there is no spelling to learn: `var buf: StatBuf` is a position that
+        already existed and was refused. }
+      else if IsRecord(p^.sym^.stype) then begin
+        if p^.sym^.stype^.variants <> nil then begin
+          ErrorAt(d^.line, d^.col);
+          write('parameter ', k:1, ' of ''');
+          WritePool(d^.pdAt, d^.pdLen);
+          writeln(''' is a var parameter of a record with a variant part; ',
+                  'the storage an arm is laid over is this compiler''s own ',
+                  'and a C union is not laid out from it, so a record that ',
+                  'crosses has a fixed field-list')
+        end
+        else begin
+          bad := BadForeignField(p^.sym^.stype);
+          if bad <> nil then begin
+            ErrorAt(d^.line, d^.col);
+            write('parameter ', k:1, ' of ''');
+            WritePool(d^.pdAt, d^.pdLen);
+            write(''' is a var parameter of a record, but its field ''');
+            WritePool(bad^.at, bad^.len);
+            write(''' is ');
+            WriteTypeName(bad^.ftype);
+            writeln('; a field crosses only as ''char'', ''integer'', ',
+                    '''int64'', ''real'', a fixed array of one of those, or ',
+                    'a record of them having no variant part')
+          end
+        end
+      end
       else if not ForeignType(p^.sym^.stype) then begin
         ErrorAt(d^.line, d^.col);
         write('parameter ', k:1, ' of ''');
         WritePool(d^.pdAt, d^.pdLen);
         writeln(''' is a var parameter, so what crosses is an address; only ',
-                '''integer'', ''int64'' and ''real'' cross that way')
+                '''integer'', ''int64'', ''real'' and a record whose fields ',
+                'C lays out the same way cross that way')
       end
     end
     { AP 6.4.12.4: a handle is *lent* -- the word crosses, the variable keeps
@@ -19357,6 +19447,19 @@ begin
       writeln(''' is a string of a fixed size; a string crosses as a ',
               '''const char *'' whose length is the NUL, so the formal is ',
               'spelled ''string'' and the size is the actual''s')
+    end
+    { Said before the general refusal because it is the mistake the feature
+      invites: a record *does* cross, and what decides it is the direction.
+      How C copies a struct into a call is a fact about its ABI, and ADR-0030
+      is the standing rule that nothing here may depend on one. }
+    else if IsRecord(p^.sym^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('parameter ', k:1, ' of ''');
+      WritePool(d^.pdAt, d^.pdLen);
+      writeln(''' is a record passed by value; how a struct is copied into a ',
+              'call is a fact about C''s ABI and nothing here may depend on ',
+              'one, so a record crosses as a ''var'' parameter and its ',
+              'address is what travels')
     end
     else if not ForeignType(p^.sym^.stype) then begin
       ErrorAt(d^.line, d^.col);

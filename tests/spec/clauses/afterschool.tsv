@@ -99,6 +99,9 @@
 6.7.7.4	The types are exact, not based
 6.7.7.5	String arguments
 6.7.7.6	Variable parameters
+6.7.7.6.1	Scalar variable parameters
+6.7.7.6.2	Record variable parameters
+6.7.7.6.3	A record shall not cross by value
 6.7.7.7	Slice parameters
 6.7.7.8	Function results
 6.7.7.9	What shall not cross

@@ -83,6 +83,93 @@ Feature: Foreign functions
       0.50 4
       """
 
+  @afterschool:6.7.7.6.2
+  Scenario: a record of admitted fields crosses as the address of the actual
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type TS = record sec, nsec: int64 end;
+      function tsget(var t: TS; base: integer): integer; external 'timespec_get';
+      var t: TS;
+      begin
+        t.sec := -1; t.nsec := -1;
+        writeln(tsget(t, 1) = 1, ' ', t.sec > 1700000000,
+                ' ', (t.nsec >= 0) and (t.nsec < 1000000000))
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      TRUE TRUE TRUE
+      """
+
+  @afterschool:6.7.7.6.2
+  Scenario: a field whose values a callee could step outside of is refused
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type R = record ok: boolean end;
+      procedure f(var r: R); external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      its field 'ok' is boolean
+      """
+
+  @afterschool:6.7.7.6.2
+  Scenario: the refused field a nested record holds is the one named
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Inner = record n: 1..9 end;
+           Outer = record head: integer; body: Inner end;
+      procedure f(var r: Outer); external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      its field 'n' is
+      """
+
+  @afterschool:6.7.7.6.2
+  Scenario: a variant part is refused
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Sel = 1..2;
+           R = record case tag: Sel of 1: (a: integer); 2: (b: real) end;
+      procedure f(var r: R); external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a record that crosses has a fixed field-list
+      """
+
+  @afterschool:6.7.7.6.3
+  Scenario: a record by value is refused and the diagnostic names the remedy
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type R = record a, b: integer end;
+      procedure f(r: R); external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a record crosses as a 'var' parameter
+      """
+
   @afterschool:6.7.7.8
   Scenario: a bare string result is refused and the diagnostic names the remedy
     Given the Afterschool Pascal program
