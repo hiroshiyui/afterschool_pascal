@@ -1,0 +1,5 @@
+<source>:22:8: error: only a function can 'try': the cause is left in the result, and this block has none
+<source>:30:12: error: 'try' needs a value of a fallible type, found integer
+<source>:38:8: error: 'try' takes one value of a fallible type, the one whose cause it would propagate
+<source>:48:8: error: cannot assign reason to a result of type colour
+<source>:61:14: error: a deferred statement may not contain a 'try': it is run where the block ends, and the block is already leaving

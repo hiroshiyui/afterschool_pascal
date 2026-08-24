@@ -186,3 +186,4 @@ the alternatives that were rejected and why.
 | [0175](0175-defer.md) | `defer`: a statement armed where it is written | Accepted |
 | [0176](0176-an-error-union-is-the-result-record-written-by-the-compiler.md) | An error union is the result record, written by the compiler | Accepted |
 | [0177](0177-exit-leaves-one-activation.md) | `exit` leaves one activation | Accepted |
+| [0178](0178-try-is-propagation-and-a-required-identifier.md) | `try` is propagation, and a required identifier | Accepted |

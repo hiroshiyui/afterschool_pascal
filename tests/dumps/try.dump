@@ -1,0 +1,324 @@
+=== tokens
+13 1 kw program
+13 9 ident try_dump
+13 17 op (
+13 18 ident output
+13 24 op )
+13 25 op ;
+14 1 kw type
+15 3 ident reason
+15 10 op =
+15 12 op (
+15 13 ident bad
+15 16 op ,
+15 18 ident worse
+15 23 op )
+15 24 op ;
+16 3 ident number
+16 10 op =
+16 12 ident integer
+16 20 op !
+16 22 ident reason
+16 28 op ;
+18 1 kw function
+18 10 ident twice
+18 15 op (
+18 16 ident n
+18 17 op :
+18 19 ident integer
+18 26 op )
+18 27 op :
+18 29 ident number
+18 35 op ;
+19 1 kw begin
+20 3 kw if
+20 6 ident n
+20 8 op <
+20 10 int 0
+20 12 kw then
+20 17 ident twice
+20 23 op :=
+20 26 ident bad
+20 30 kw else
+20 35 ident twice
+20 41 op :=
+20 44 ident n
+20 46 op *
+20 48 int 2
+21 1 kw end
+21 4 op ;
+23 1 kw function
+23 10 ident both
+23 14 op (
+23 15 ident a
+23 16 op ,
+23 18 ident b
+23 19 op :
+23 21 ident integer
+23 28 op )
+23 29 op :
+23 31 ident number
+23 37 op ;
+24 1 kw begin
+25 3 ident both
+25 8 op :=
+25 11 ident try
+25 14 op (
+25 15 ident twice
+25 20 op (
+25 21 ident a
+25 22 op )
+25 23 op )
+25 25 op +
+25 27 ident try
+25 30 op (
+25 31 ident twice
+25 36 op (
+25 37 ident b
+25 38 op )
+25 39 op )
+26 1 kw end
+26 4 op ;
+28 1 kw begin
+29 3 ident writeln
+29 10 op (
+29 11 ident both
+29 15 op (
+29 16 int 1
+29 17 op ,
+29 19 int 2
+29 20 op )
+29 21 op .
+29 22 ident ok
+29 24 op )
+30 1 kw end
+30 4 op .
+31 1 eof
+=== ast
+program try_dump
+  params
+    name output @13:18
+  block
+    imports
+    labels
+    consts
+    types
+      type reason @15:3
+        enum @15:12
+          names
+            name bad @15:13
+            name worse @15:18
+      type number @16:3
+        fallible @16:20
+          named integer @16:12
+          named reason @16:22
+    vars
+    procs
+      func twice @18:1
+        params
+          group
+            names
+              name n @18:16
+            type
+              named integer @18:19
+        result
+          named number @18:29
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @19:1
+              if @20:3
+                binary lt @20:8
+                  var n @20:6
+                  int 0 @20:10
+                assign @20:17
+                  var twice @20:17
+                  var bad @20:26
+                else
+                assign @20:35
+                  var twice @20:35
+                  binary mul @20:46
+                    var n @20:44
+                    int 2 @20:48
+      func both @23:1
+        params
+          group
+            names
+              name a @23:15
+              name b @23:18
+            type
+              named integer @23:21
+        result
+          named number @23:31
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @24:1
+              assign @25:3
+                var both @25:3
+                binary add @25:25
+                  call try @25:11
+                    args
+                      call twice @25:15
+                        args
+                          var a @25:21
+                  call try @25:27
+                    args
+                      call twice @25:31
+                        args
+                          var b @25:37
+    body
+      compound @28:1
+        writeln @29:3
+          arg - -
+            field ok @29:21
+              call both @29:11
+                args
+                  int 1 @29:16
+                  int 2 @29:19
+=== sema
+program try_dump
+  params
+    name output @13:18
+  frames
+    frame try_dump level 0
+      var output #0 : text (stdout 0)
+      var result$1 #1 : number
+    frame twice level 1
+      param n #0 : integer
+      varparam twice$result #1 : number
+    frame both level 1
+      param a #0 : integer
+      param b #1 : integer
+      varparam both$result #2 : number
+      var result$3 #3 : number
+      varparam try$4 #4 : number
+      var result$5 #5 : number
+      varparam try$6 #6 : number
+  block
+    imports
+    labels
+    consts
+    types
+      type reason @15:3
+        enum @15:12 = reason
+          names
+            name bad @15:13
+            name worse @15:18
+      type number @16:3
+        fallible @16:20 = number
+          named integer @16:12 = integer
+          named reason @16:22 = reason
+    vars
+    procs
+      func twice @18:1
+        params
+          group
+            names
+              name n @18:16
+            type
+              named integer @18:19 = integer
+        result
+          named number @18:29 = number
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @19:1
+              if @20:3
+                binary lt @20:8 : boolean
+                  var n @20:6 -> twice/0 : integer
+                  int 0 @20:10 : integer
+                assign @20:17
+                  field cause @20:17 -> #0/1 : reason
+                    var twice @20:17 -> twice/1 : number
+                  var bad @20:26 -> const 0 : reason
+                else
+                assign @20:35
+                  field val @20:35 -> #0/0 : integer
+                    var twice @20:35 -> twice/1 : number
+                  binary mul @20:46 : integer
+                    var n @20:44 -> twice/0 : integer
+                    int 2 @20:48 : integer
+      func both @23:1
+        params
+          group
+            names
+              name a @23:15
+              name b @23:18
+            type
+              named integer @23:21 = integer
+        result
+          named number @23:31 = number
+        block
+          imports
+          labels
+          consts
+          types
+          vars
+          procs
+          body
+            compound @24:1
+              assign @25:3
+                field val @25:3 -> #0/0 : integer
+                  var both @25:3 -> both/2 : number
+                binary add @25:25 : integer
+                  call try @25:11 -> builtin 42 : integer
+                    args
+                      call twice @25:15 -> func twice : number
+                        args
+                          var a @25:21 -> both/0 : integer
+                    tag
+                      field ok @25:11 -> #0/- : boolean
+                        var try$4 @25:11 -> both/4 : number
+                    leaving
+                      assign @25:11
+                        field cause @25:11 -> #0/1 : reason
+                          var both @25:11 -> both/2 : number
+                        field cause @25:11 -> #0/1 : reason
+                          var try$4 @25:11 -> both/4 : number
+                    value
+                      field val @25:11 -> #0/0 : integer
+                        var try$4 @25:11 -> both/4 : number
+                  call try @25:27 -> builtin 42 : integer
+                    args
+                      call twice @25:31 -> func twice : number
+                        args
+                          var b @25:37 -> both/1 : integer
+                    tag
+                      field ok @25:27 -> #0/- : boolean
+                        var try$6 @25:27 -> both/6 : number
+                    leaving
+                      assign @25:27
+                        field cause @25:27 -> #0/1 : reason
+                          var both @25:27 -> both/2 : number
+                        field cause @25:27 -> #0/1 : reason
+                          var try$6 @25:27 -> both/6 : number
+                    value
+                      field val @25:27 -> #0/0 : integer
+                        var try$6 @25:27 -> both/6 : number
+    body
+      compound @28:1
+        writeln @29:3
+          file
+            var output @29:3 -> try_dump/0 : text
+          arg - -
+            field ok @29:21 -> #0/- : boolean
+              call both @29:11 -> func both : number
+                args
+                  int 1 @29:16 : integer
+                  int 2 @29:19 : integer

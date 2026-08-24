@@ -590,7 +590,17 @@ type
                    a value of the canonical-string-type -- the same list 6.12
                    binds the program-parameters to, reached without declaring
                    one file variable per argument (ADR-0081). }
-                 biArgCount, biArgument);
+                 biArgCount, biArgument,
+                 { AP 6.8.9's try, the dialect's propagation (ADR-0178).
+                   `try(x)` is the value of a fallible x where it succeeded,
+                   and where it did not it assigns the cause to the enclosing
+                   function's result and terminates that activation -- so it
+                   is the one required function here that is also a transfer
+                   of control. Appended, as spExit was, because --dump-sema
+                   prints a required function as its ordinal (ADR-0067), so a
+                   constant inserted anywhere else renumbers the ones after
+                   it. }
+                 biTry);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
@@ -1338,8 +1348,19 @@ type
       { clQualAt/clQualLen is 6.11.3's qualified name in call position,
         `i.f(x)`. The parser decides this one on its own: a record field is
         never followed by `(`, so `a.b(` has exactly one reading. }
+      { clOk, clFail and clVal are AP 6.8.9's try (ADR-0178), and they are a
+        husk of the same kind (ADR-0044): Sema writes the three things the
+        construct means and CodeGen emits them in order. clOk reads the
+        operand's tag, clFail is the assignment of the cause to the enclosing
+        function's result -- the same node an `exit(e)` hangs on pcExit, and
+        emitted by the same routine -- and clVal reads the value. All three
+        designate through clSlot, which for a try is a
+        binding to the operand rather than storage for a result -- so the
+        operand is evaluated once however many of the three are emitted, which
+        is a `with` statement's shape and not a new one. }
       nkCall:       (clAt, clLen, clQualAt, clQualLen: integer; clArgs: nodePtr;
-                     clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr);
+                     clBuiltin: builtinKind; clSym: symPtr; clSlot: symPtr;
+                     clOk, clFail, clVal: nodePtr);
       nkEmpty:      ();
       nkAssign:     (asTarget, asValue: nodePtr);
       { wrStr is 6.7.5.5's writestr: the string-variable written to. Non-nil
@@ -1797,6 +1818,13 @@ var
     second rule. }
   sliceFormNode: nodePtr;
   programSym, currentProc: symPtr;
+  { How many defer-statements enclose the statement being checked (AP
+    6.9.3.11.3). CheckDeferBody answers that question for the *statements* a
+    deferred statement contains and cannot answer it for AP 6.8.9's try, which
+    is an expression: no walker here descends into one. A count and not a
+    flag, because a nested defer-statement is reported and then checked like
+    any other. }
+  deferDepth: integer;
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
   { --- CodeGen --- }
@@ -2511,6 +2539,26 @@ begin
   until v = 0;
   for k := n downto 1 do PoolPut(digits[k]);
   len := poolLen + 1 - at
+end;
+
+{ ...and the slot AP 6.8.9's try binds its operand in, which is a `with`
+  binding in everything but the name it is given here -- and it is given its
+  own so that a frame layout in --dump-sema says which construct claimed the
+  slot. }
+procedure InternTryName(slot: integer; var at, len: integer);
+var digits: array [1..12] of char; n, v, k: integer;
+begin
+  at := poolLen + 1;
+  PoolPut('t'); PoolPut('r'); PoolPut('y'); PoolPut('$');
+  n := 0;
+  v := slot;
+  repeat
+    n := n + 1;
+    digits[n] := chr(ord('0') + v mod 10);
+    v := v div 10
+  until v = 0;
+  for k := n downto 1 do PoolPut(digits[k]);
+  len := 4 + n
 end;
 
 procedure InternWithName(slot: integer; var at, len: integer);
@@ -3870,7 +3918,10 @@ begin
     nkCall: begin
               n^.clBuiltin := biNone;
               n^.clSym := nil;
-              n^.clSlot := nil
+              n^.clSlot := nil;
+              n^.clOk := nil;
+              n^.clFail := nil;
+              n^.clVal := nil
             end;
     nkConfArray: begin
       n^.caLo := nil;
@@ -9461,7 +9512,8 @@ begin
           biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
-          biStrGe, biBinding, biDate, biTime, biArgCount, biArgument: ;
+          biStrGe, biBinding, biDate, biTime, biArgCount, biArgument,
+          biTry: ;
         end
     end
     else if e^.clArgs^.next^.next = nil then
@@ -14518,6 +14570,12 @@ begin
     LookupBuiltin := biArgCount
   else if (langStd = stdAfterschool) and PoolIs(at, len, 'argument ') then
     LookupBuiltin := biArgument
+  { AP 6.8.9 (ADR-0178). Recognised only when nothing of that name was
+    declared, as every required identifier here is, so a program with a `try`
+    of its own keeps it -- which is the whole of what a required identifier
+    costs a conforming program (6.1.3). }
+  else if (langStd = stdAfterschool) and PoolIs(at, len, 'try      ') then
+    LookupBuiltin := biTry
   else if PoolIs(at, len, 'time     ') then LookupBuiltin := biTime
   else LookupBuiltin := biNone
 end;
@@ -14602,6 +14660,105 @@ begin
     write(' argument, found ');
     WriteTypeName(a);
     writeln
+  end
+end;
+
+{ AP 6.8.9's try, the dialect's propagation (ADR-0178).
+
+  `try(x)` is the value of x where x succeeded; where it did not, the cause is
+  assigned to the enclosing function's result and that activation terminates.
+  So the construct is three things, and all three are written here as a husk
+  (ADR-0044) rather than as anything CodeGen has to reason about: the tag to
+  test, the assignment to make where it is false, and the value to yield where
+  it is true.
+
+  The operand is bound to a frame slot holding its address -- a `with`
+  statement's binding, and made the same way -- because all three read it and
+  a function-designator emitted three times would be three calls. That is the
+  one mechanism this feature needed that a reading would not have predicted.
+
+  Nothing about the *result* is decided here. The assignment goes through
+  CheckResultAssign, so AP 6.4.13's arm shorthand, 6.7.2's "at least one" and
+  assignment-compatibility answer for `try` exactly what they answer for
+  `f := e` and for `exit(e)` -- and the enclosing function's result-type is
+  therefore not required to be fallible. A function answering the cause-type
+  itself takes the cause directly, and a function answering an unrelated type
+  is refused by the message that refuses any other unassignable result. }
+procedure CheckTry(c: nodePtr; n: integer);
+var t: typePtr; assign, target: nodePtr; at2, len2: integer;
+
+  { One of the three field reads, resolved rather than handed back to
+    CheckExpr: the base is the binding just made and the field is this
+    language's own, so there is nothing here that could be missing and nothing
+    to diagnose. It is also ADR-0176's stack overflow avoided a second time --
+    re-checking a base is what made `f := 1` in a function answering a
+    fallible-type read `f` as a call of itself. }
+  function Sel(w: kwLit): nodePtr;
+  var b, f: nodePtr; a3, l3: integer;
+  begin
+    b := NewNode(nkVar, c^.line, c^.col);
+    b^.vrSym := c^.clSlot;
+    b^.vrAt := c^.clSlot^.at;
+    b^.vrLen := c^.clSlot^.len;
+    b^.ntype := c^.clSlot^.stype;
+    InternWord(w, a3, l3);
+    f := NewNode(nkField, c^.line, c^.col);
+    f^.fdBase := b;
+    f^.fdAt := a3;
+    f^.fdLen := l3;
+    f^.fdResolved := FindField(c^.clSlot^.stype, a3, l3);
+    f^.ntype := f^.fdResolved^.ftype;
+    Sel := f
+  end;
+
+begin
+  c^.ntype := intType;
+  if n <> 1 then begin
+    ErrorAt(c^.line, c^.col);
+    writeln('''try'' takes one value of a fallible type, the one whose ',
+            'cause it would propagate')
+  end
+  else begin
+    t := c^.clArgs^.ntype;
+    if (t <> nil) and not IsFallible(t) then begin
+      ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+      write('''try'' needs a value of a fallible type, found ');
+      WriteTypeName(t);
+      writeln
+    end
+    { AP 6.9.3.11.3's fifth item, and the exit-statement's reason rather than
+      a new one: the armed statements are emitted in the block's runner as
+      well, and the runner is not the activation a try would leave. Asked of
+      a count rather than by CheckDeferBody's walk, because that walk sees
+      statements and this is an expression -- so the one clause is enforced
+      in two places, and says so. }
+    else if deferDepth > 0 then begin
+      ErrorAt(c^.line, c^.col);
+      writeln('a deferred statement may not contain a ''try'': it is run ',
+              'where the block ends, and the block is already leaving')
+    end
+    { A cause has to be left somewhere, and only a function has a somewhere.
+      The same sentence exit(e) is refused by, and for the same reason. }
+    else if (currentProc = nil) or (currentProc^.kind <> skFunc) then begin
+      ErrorAt(c^.line, c^.col);
+      writeln('only a function can ''try'': the cause is left in the ',
+              'result, and this block has none')
+    end
+    else if t <> nil then begin
+      InternTryName(currentProc^.frameCount, at2, len2);
+      c^.clSlot := AddHiddenVar(at2, len2, skVarParam, t, currentProc);
+      c^.clOk := Sel('ok       ');
+      c^.clVal := Sel('val      ');
+      c^.ntype := c^.clVal^.ntype;
+      target := NewNode(nkVar, c^.line, c^.col);
+      target^.vrAt := currentProc^.at;
+      target^.vrLen := currentProc^.len;
+      assign := NewNode(nkAssign, c^.line, c^.col);
+      assign^.asTarget := target;
+      assign^.asValue := Sel('cause    ');
+      c^.clFail := assign;
+      CheckResultAssign(assign, currentProc, false)
+    end
   end
 end;
 
@@ -14936,6 +15093,10 @@ begin
           writeln
         end
       end
+      { AP 6.8.9 (ADR-0178). Everything it decides is in CheckTry, which is
+        where the husk it leaves behind is described. }
+      else if c^.clBuiltin = biTry then
+        CheckTry(c, n)
       else if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
         c^.ntype := boolType;
         if n = 0 then begin
@@ -17634,7 +17795,9 @@ end;
 procedure CheckDefer(s: nodePtr);
 var e: nodeListPtr;
 begin
+  deferDepth := deferDepth + 1;
   CheckStmt(s^.dfStmt);
+  deferDepth := deferDepth - 1;
   CheckDeferBody(s^.dfStmt, s);
   if currentProc <> nil then begin
     s^.dfIndex := currentProc^.deferCount;
@@ -21391,6 +21554,7 @@ begin
 
   scopeTop := nil;
   scopeDepth := 0;
+  deferDepth := 0;
   interfaces := nil;
   interfaceTail := nil;
   modules := nil;
@@ -22126,7 +22290,30 @@ begin
       level := level + 1;
       a := n^.clArgs;
       DumpExprList(a);
-      level := level - 2
+      level := level - 1;
+      { AP 6.8.9's husk (ADR-0178). A try is three things Sema wrote and the
+        program did not, so --dump-sema is the only dump that can show them --
+        and showing them is what makes this walker reach them at all, which is
+        the lesson ADR-0178 inherited from the arm a fallible-type's denoter
+        went without. }
+      if annotate and (n^.clOk <> nil) then begin
+        Pad;
+        writeln('tag');
+        level := level + 1;
+        DumpExpr(n^.clOk);
+        level := level - 1;
+        Pad;
+        writeln('leaving');
+        level := level + 1;
+        DumpStmt(n^.clFail);
+        level := level - 1;
+        Pad;
+        writeln('value');
+        level := level + 1;
+        DumpExpr(n^.clVal);
+        level := level - 1
+      end;
+      level := level - 1
     end
   end
 end;
@@ -25130,6 +25317,10 @@ begin
     end
 end;
 procedure EmitStmt(s: nodePtr); forward;
+{ AP 6.8.9's try assigns a result the way exit(e) does, and through the same
+  routine -- which is defined among the statements, because until this
+  construct no *expression* could contain an assignment. }
+procedure EmitAssign(s: nodePtr); forward;
 { AP 6.9.3.11: forward because a statement-sequence is completed in three
   places and the earliest of them, a repeat-statement's body, is emitted
   before this is defined. }
@@ -27381,6 +27572,61 @@ begin
   MakeComplex(pr, pi_, v)
 end;
 
+{ The branch that leaves this activation, which two constructs write and
+  neither of them terminates a block with anything else: AP 6.7.5.9's exit and
+  AP 6.8.9's try. The label is the block the epilogue starts with, claimed on
+  first use and written by EmitExitTarget after the body -- a forward
+  reference, which is what textual IR admits and an instruction list would not
+  (ADR-0025). The caller opens whatever block comes next, because the two want
+  different ones: an exit-statement wants a fresh unreachable one for the
+  statements after it, and a try wants the block its value is read in. }
+procedure EmitLeaveBlock;
+begin
+  if irProc^.exitBlock = 0 then irProc^.exitBlock := NewBlock;
+  writeln(ircode, '  br label %L', irProc^.exitBlock:1)
+end;
+
+{ AP 6.8.9's try (ADR-0178), which is the husk CheckTry left, emitted in the
+  order the clause states it: bind the operand, test its tag, leave with the
+  cause where it is false, and yield the value where it is true.
+
+  The binding is EmitWith's, line for line and for the same reason -- the
+  operand is read three times and evaluating a function-designator three times
+  would be three calls. Everything after it is an ordinary designator over an
+  ordinary record, so a value-type that is a string, an array or a record
+  needs nothing here: EmitAddress answers for this node, and the field read it
+  ends in is the address such a value already travels as.
+
+  The two field reads carry ADR-0118's tag check, and in correct code neither
+  can fire -- each is emitted on the branch its own arm is active on. Left in
+  rather than suppressed, for a reason a mutation then confirmed: making the
+  cause fall through to the continuation instead of leaving stops the program
+  at that check, where the golden would otherwise have had to notice a wrong
+  answer. A redundant check costs an -O2 build nothing, and suppressing it
+  would have put a second opinion about the tag beside the branch itself. }
+procedure EmitTry(e: nodePtr; var v: str);
+var a, slot, tag: str; failB, contB: integer;
+begin
+  EmitAddress(e^.clArgs, a);
+  FrameSlot(e^.clSlot, slot);
+  write(ircode, '  store ptr ');
+  PutOp(a);
+  write(ircode, ', ptr ');
+  PutOp(slot);
+  writeln(ircode);
+  EmitExpr(e^.clOk, tag);
+  failB := NewBlock;
+  contB := NewBlock;
+  write(ircode, '  br i1 ');
+  PutOp(tag);
+  writeln(ircode, ', label %L', contB:1, ', label %L', failB:1);
+  StartBlock(failB);
+  EmitAssign(e^.clFail);
+  EmitLeaveBlock;
+  StartBlock(contB);
+  EmitExpr(e^.clVal, v)
+end;
+
 procedure EmitCall(e: nodePtr; var v: str);
 var a, w, lim, tmp, b_, re, im, x, y, c_, d_, k_, sum: str;
     sqinf, mag, sqfin, sqbad, narrow: str;
@@ -27388,6 +27634,11 @@ var a, w, lim, tmp, b_, re, im, x, y, c_, d_, k_, sum: str;
 begin
   if e^.clSym <> nil then
     EmitUserCall(e^.clSym, e^.clArgs, e^.clSlot, v)
+  { AP 6.8.9's try, taken here so that none of the instruction-shaped arms
+    below can see it -- which is also why biTry is left out of their
+    exhaustive lists (tests/checks/partial_cases.txt). }
+  else if e^.clBuiltin = biTry then
+    EmitTry(e, v)
   { 6.7.6.8's binding(f): the result is a record, so it is built in the hidden
     frame slot Sema gave this call site and the call becomes that slot's
     address. Everything after -- a field selection, a whole-record assignment,
@@ -28804,7 +29055,7 @@ end;
   program can answer. Sema let the assignment through on the schema alone, so
   this is where the tuples meet -- and once they agree the copy is the ordinary
   whole-variable one with a length that is computed rather than written. }
-procedure EmitAssign(s: nodePtr);
+procedure EmitAssign;
 var dst, src, size, hdr, td, tl, sd, sl: str; t, comp: typePtr;
     align: integer;
 begin
@@ -29669,8 +29920,7 @@ begin
     into a fresh block, unreachable and valid, exactly as a goto's is. }
   if s^.pcStd = spExit then begin
     if s^.pcExit <> nil then EmitAssign(s^.pcExit);
-    if irProc^.exitBlock = 0 then irProc^.exitBlock := NewBlock;
-    writeln(ircode, '  br label %L', irProc^.exitBlock:1);
+    EmitLeaveBlock;
     StartBlock(NewBlock)
   end
   else if s^.pcStd = spHalt then begin

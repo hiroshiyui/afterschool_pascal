@@ -732,10 +732,10 @@ changes and a later read of the other arm is detected. For this type that
 would claim an outcome no assignment wrote, and the next read of `val` would
 yield the storage rather than being detected.
 
-NOTE 4 — What this type does not have is propagation: no construct here takes
-the value of a fallible-type and leaves the enclosing block where it is a
-cause. That needs an early exit, which neither standard has, and it is left to
-a later amendment (ADR-0176).
+NOTE 4 — Propagation is 6.8.9's try-expression, which takes the value of a
+fallible-type and leaves the enclosing function where it is a cause. It needed
+an early exit, which neither standard has, and so arrived after 6.7.5.9
+(ADR-0176, ADR-0177, ADR-0178).
 
 #### 6.4.5 Compatible types [extended]
 
@@ -1245,6 +1245,82 @@ operands of unequal length, which this feature deliberately does not have —
 6.7.3.9.5's NOTE says the callee cannot see where its slice came from. That
 rule belongs here before it belongs in a processor (ADR-0139).
 
+#### 6.8.9 Try-expressions [added]
+
+A try-expression yields the outcome of a fallible value (6.4.13) where there is
+one, and where there is not it leaves the enclosing function with the cause.
+
+**6.8.9.1 The spelling.**
+
+    try-expression = 'try' '(' expression ')' .
+
+`try` shall be a required function-identifier, and shall not be a word-symbol;
+§6.1.3's shadowing is what keeps it out of the way of a program that declares
+its own, as for `exit` (6.7.5.9) and `int64` (6.4.2.6).
+
+NOTE 1 — The parentheses are required, and they are not decoration. `try X`,
+with X an expression, is not a spelling this language could have taken: a
+factor may be a variable-access, so a conforming program that declares `try`
+may write `try (x)`, `try [x]`, `try + x`, `try - x`, `try.f` and `try^`, and
+each means something there. Only an operand beginning with an identifier, a
+number, a character-string, `nil` or `not` would have been unambiguous — which
+is not a rule about a construct but a rule about six of its operands. So the
+test 6.9.3.11 applies to a statement (ADR-0140) does not transfer to a factor,
+and this is the second construct to take a required identifier because no
+position would serve.
+
+**6.8.9.2 The operand.** The expression shall be of a fallible-type (6.4.13).
+The try-expression shall possess that type's value-type.
+
+**6.8.9.3 Where it may occur.** A try-expression shall occur only within a
+function-block, and the cause-type of its operand shall be assignment-
+compatible with the result-type of that block.
+
+NOTE 2 — The result-type is not required to be a fallible-type. Where it is,
+6.4.13.3's shorthand makes the assignment set the cause; where it is the
+cause-type itself, the cause is assigned directly; where it is neither, the
+program is refused by the requirement above. All three follow from the
+assignment 6.8.9.4 b) makes, and none of them is a rule of its own.
+
+**6.8.9.4 What it denotes.** The expression shall be evaluated once. Then
+
+a) where the value is an outcome, the try-expression shall yield that outcome;
+
+b) otherwise the cause shall be assigned to the result of the enclosing
+   function, and the activation of that function-block shall be terminated —
+   both as 6.7.5.9's `exit ( expression )` does them.
+
+NOTE 3 — Because b) is that clause, everything terminating an activation
+entails is that clause's: an armed statement (6.9.3.11.2 b) is executed, a
+file or handle the block owns is closed, and the value of the function is
+taken from its result variable. A try-expression written in a function nested
+in another terminates the nested one and nothing else, 6.7.5.9's block being
+the one the construct occurs in.
+
+NOTE 4 — "Evaluated once" is what distinguishes this from the three field
+accesses it is otherwise equivalent to. `try(f(x))` calls f once; the
+expansion a reader writes for it — `if f(x).ok then f(x).val else …` — calls
+it three times, and where f has an effect that is a different program.
+
+**6.8.9.5 What it discharges.** A try-expression shall discharge §6.7.2's
+requirement that a function-block contain at least one assignment to the
+function-identifier, and, where a result-variable-specification was written,
+its requirement that at least one statement threaten the result variable — as
+an exit-statement does (6.7.5.9), and for the same reason: it assigns the
+result.
+
+NOTE 5 — It discharges those requirements on every path, and makes the
+assignment on one. A function whose only assignment to its result is a
+try-expression's therefore has no value where its operand yielded an outcome.
+That is not detected; Annex C records it beside 6.7.5.9's own case.
+
+NOTE 6 — 6.9.3.11.3 forbids a try-expression in a deferred statement, for the
+reason it forbids an exit-statement.
+
+NOTE 7 — Neither standard has propagation and no Pascal does; the construct is
+Zig's `try` and Rust's `?` (ADR-0178), and it is spelled as a required function
+because that is how Pascal spells an operation on a value.
+
 ### 6.9 Statements [extended]
 
 #### 6.9.3.11 Defer-statements [added]
@@ -1290,7 +1366,14 @@ the block owns is closed, and before the value of a function is taken from its
 result variable.
 
 **6.9.3.11.3 What a deferred statement may not contain.** A deferred statement
-shall contain no goto-statement, no label, and no defer-statement.
+shall contain no goto-statement, no label, no defer-statement, no
+exit-statement (6.7.5.9) and no try-expression (6.8.9).
+
+The last two are restrictions later clauses add, and they are written into this
+one so that it is the whole list. 6.7.5.9's first draft left them apart — its
+NOTE 3 said this clause forbids an exit-statement while this clause said
+nothing of the kind, so a processor reading only the numbered requirements
+would have been right to allow one.
 
 NOTE 1 — A branch of an if-statement, the body of a while- or for-statement,
 the body of a with-statement and a case-list-element are each a *statement* and
@@ -1436,6 +1519,7 @@ the construct and Sema refuses it. One column became two.
 | `defer` | `defer S` | `expected 'end' at the end of a compound statement, found identifier` | `expected 'end' at the end of a compound statement, found identifier` |
 | `fallible` | `T ! E` | `unexpected character '!'` | `unexpected character '!'` |
 | `exit` | `exit`, `exit(e)` | `unknown procedure 'exit'` | `unknown procedure 'exit'` |
+| `try` | `try(x)` | `unknown function 'try'` | `unknown function 'try'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
@@ -1445,9 +1529,13 @@ exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
 (ADR-0154).
 
-`int64`, `argument` and `exit` are a third shape and not a fourth: each is a
-required *identifier* rather than a position, so a conformance mode refuses it
-by not having it — the name is nobody's there, and the message says so.
+`int64`, `argument`, `exit` and `try` are a third shape and not a fourth: each
+is a required *identifier* rather than a position, so a conformance mode
+refuses it by not having it — the name is nobody's there, and the message says
+so. The shape is now as common as the position rule it was once the exception
+to, and 6.8.9's NOTE 1 says why the last of them could not have used a
+position: the test that distinguishes a statement does not transfer to a
+factor.
 
 **This table is checked.** The `Case` column names a pair of test cases,
 `tests/<case>_refused_iso.pas` and
@@ -1524,6 +1612,14 @@ yields whatever the result storage held when `c` was true. This is the same
 omission as for a block that falls off its end without having assigned, which
 neither conformance mode detects either, and it is ISO 7185 §6.6.2's own
 error rather than a violation (ADR-0177).
+
+**C.10 A function whose only assignment to its result is a try-expression's is
+not detected** (6.8.9.5). This is C.9 reached by the other door and is worth
+its own entry because the omission is easier to write by accident: 6.8.9.5
+discharges §6.7.2 on every path and 6.8.9.4 b) makes the assignment on one, so
+`function f: R; begin n := try(g) end` has a result only where g failed. A
+processor could ask this and none here does; the analysis is the same dataflow
+C.3 declines for the optional (ADR-0178).
 
 ## Annex D (informative) — The library
 
@@ -1658,6 +1754,25 @@ violated its letter while obeying 6.13.1 — and the clause was classified
 scenario may cite one. It and 6.4.3.4 are re-triaged `testable`; 6.4.3.4 now has
 the two scenarios its opening sentence always deserved.
 
+**E.10 6.9.3.11.3 forbade three things and was cited as forbidding four.**
+6.7.5.9's NOTE 3 said "6.9.3.11.3 forbids an exit-statement in a deferred
+statement"; 6.9.3.11.3 listed a goto-statement, a label and a defer-statement,
+and said nothing about an exit-statement. The processor refused one, so what
+diverged was the document from itself: a reader implementing only the numbered
+requirements would have been right to allow it, and a reader following the
+NOTE would have found no requirement behind the citation.
+
+Found while writing 6.8.9, which had to say the same thing about a
+try-expression and had nowhere to say it. 6.9.3.11.3 now lists all five, and
+the two later clauses cite it rather than the other way about — which is the
+shape a restriction a later clause adds should always have had.
+
+This is the first divergence here between two clauses of *this* document
+rather than between it and a standard, and the mechanism that let it through
+is worth naming: a NOTE may cite, and nothing checks that what it cites says
+what it claims. `clause-citations` asks only whether a number names a clause
+at all, and 6.9.3.11.3 exists.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -1685,3 +1800,4 @@ the two scenarios its opening sentence always deserved.
 | 6.9.3.11, Annex C.8 | ADR-0175 |
 | 6.4.13 | ADR-0176 |
 | 6.7.5.9, Annex C.9 | ADR-0177 |
+| 6.8.9, 6.9.3.11.3, Annex C.10 | ADR-0178 |

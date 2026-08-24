@@ -108,6 +108,16 @@ begin
   exit := n * 2
 end;
 
+{ ADR-0178's try is the same shape, and the same argument -- a required
+  function-identifier, shadowed by a function of the name. This one is the
+  harder case twice over: the required identifier is also a function, and the
+  operand a conforming program passes is an ordinary value where the dialect's
+  own would need a fallible one. }
+function try(n: integer): integer;
+begin
+  try := n + 1
+end;
+
 begin
   { schemata: the discriminant is readable and bounds the loop }
   total := 0;
@@ -165,6 +175,7 @@ begin
   defer;
   if external = 3 then defer;
   writeln('exit of this program=', exit(21):1);
+  writeln('try of this program=', try(41):1);
 
   writeln('the dialect accepts Extended Pascal')
 end.

@@ -391,6 +391,12 @@ extended	6.8.3.3	testable	Boolean operators
 extended	6.8.3.4	testable	Set operators
 extended	6.8.3.5	testable	Relational operators
 afterschool	6.8.3.5	testable	
+afterschool	6.8.9	structural	introduces 6.8.9.1 to 6.8.9.5
+afterschool	6.8.9.1	testable	
+afterschool	6.8.9.2	testable	
+afterschool	6.8.9.3	testable	
+afterschool	6.8.9.4	testable	
+afterschool	6.8.9.5	testable	
 extended	6.8.3.6	testable	String operator
 extended	6.8.4	testable	Schema-discriminants
 extended	6.8.5	testable	Function-designators

@@ -1,0 +1,49 @@
+doubled 21: value 42
+doubled 2x: cause 1
+doubled 123456: cause 0
+  sum: entered
+  sum: reached the end
+sum 1+2: value 3
+  sum: entered
+sum 1+x: cause 1
+  sum: entered
+sum x+1: cause 1
+whyNot 12 = 2
+whyNot 1x = 1
+shout abc = abc!
+shout abcdef cause = 0
+stepDown 8: value 14
+stepDown 9: cause 2
+armed(4):
+  armed: iteration 1
+  armed: iteration 1 released
+  armed: iteration 2
+  armed: iteration 2 released
+  armed: fell off the end
+  armed: block released
+  armed 4: value 3
+armed(5):
+  armed: iteration 1
+  armed: iteration 1 released
+  armed: block released
+  armed 5: cause 2
+writes(4):
+  writes 4: value 2
+  the file: [written before the try] [written after the try]
+writes(5):
+  writes 5: cause 2
+  the file: [written before the try]
+outer(4):
+  outer: inner answered 1002
+  outer 4: value 7
+outer(5):
+  outer: inner failed with 2
+  outer 5: value 7
+viaVariable ok: value 11
+viaVariable no: cause 2
+viaField ok: value 22
+viaField no: cause 2
+viaIndex ok: value 33
+viaIndex no: cause 0
+viaWith ok: value 44
+viaWith no: cause 1

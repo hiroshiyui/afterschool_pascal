@@ -100,6 +100,12 @@
 6.8	Expressions
 6.8.3	Operators
 6.8.3.5	Relational operators
+6.8.9	Try-expressions
+6.8.9.1	The spelling
+6.8.9.2	The operand
+6.8.9.3	Where it may occur
+6.8.9.4	What it denotes
+6.8.9.5	What it discharges
 6.9	Statements
 6.9.3.11	Defer-statements
 6.9.3.11.1	Arming
