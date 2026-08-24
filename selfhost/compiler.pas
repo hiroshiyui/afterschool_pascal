@@ -8561,6 +8561,29 @@ begin
   else IsMemoryConstant := IsMemory(e^.ntype) and IsConstantAccess(e)
 end;
 
+{ Whether this expression is a function-designator, however it is spelled.
+  §6.8.5 makes the actual-parameter-list optional, so a parameterless function
+  written as a bare identifier *is* the call -- and the two spellings arrive as
+  two node kinds, because the parser cannot tell a bare name from a variable
+  and Sema can (ADR-0044's husk, seen from the asking side).
+
+  Asked wherever a rule is about the *construct*. IsDesignator is the other
+  question and answers false for both spellings: a call has no variable to
+  bind, which is what a var parameter needs to hear.
+
+  A bare name whose function has parameters is invocable and answered yes here,
+  though it is not a call: Sema has already reported that it needs arguments,
+  and a second message about the same fault would be ADR-0054's cascade. }
+function IsCallValue(e: nodePtr): boolean;
+begin
+  if e = nil then IsCallValue := false
+  else if e^.kind = nkCall then IsCallValue := true
+  else if e^.kind = nkVar then
+    IsCallValue := (e^.vrCall <> nil) or
+                   ((e^.vrField = nil) and IsInvocable(e^.vrSym))
+  else IsCallValue := false
+end;
+
 function IsDesignator(e: nodePtr): boolean;
 begin
   if e = nil then IsDesignator := false
@@ -13887,10 +13910,18 @@ begin
         answer to a different question, the one a *var* parameter asks, where
         there is no variable to bind. Assignment had already settled it the
         other way: `q := MakePoint` copies from exactly this address, so the
-        compiler was refusing in one place the copy it performed in another. }
+        compiler was refusing in one place the copy it performed in another.
+
+        And half of it stayed missing for the same reason one node kind was
+        named instead of the construct: 6.8.5 makes the actual-parameter-list
+        optional, so a *parameterless* function written bare is the call too,
+        and it arrives as an nkVar. `take(mk)` was refused where `take(mk(0))`
+        and `q := mk` were both accepted. IsCallValue is the construct asked
+        for by name, and it is why this reads `not IsCallValue(a)` rather than
+        a third `a^.kind <> ...` (ADR-0179). }
       else if IsStructured(p^.sym^.stype) and not IsDesignator(a) and
               (a^.kind <> nkStr) and (a^.kind <> nkStructValue) and
-              (a^.kind <> nkCall) and
+              not IsCallValue(a) and
               not IsMemoryConstant(a) then begin
         ErrorAt(a^.line, a^.col);
         write('argument ', i:1, ' of ''');
@@ -15969,11 +16000,11 @@ begin
           (ADR-0056), where a call *written with arguments* never reaches here
           under ISO 7185 because AfterCall does not offer it the selectors. A
           parameterless function is a bare name and the parser cannot tell, so
-          this is where it is told. }
+          this is where it is told -- which is the whole of what IsCallValue
+          answers, and this is the site where that question was got right
+          first and then written out inline (ADR-0179). }
         if not HasExtended(langStd) then
-          if (e^.drBase^.kind = nkCall) or
-             ((e^.drBase^.kind = nkVar) and IsInvocable(e^.drBase^.vrSym)) then
-          begin
+          if IsCallValue(e^.drBase) then begin
             ErrorAt(e^.line, e^.col);
             writeln('dereferencing a function result is an Extended Pascal ',
                     'feature; compile with --std=extended')

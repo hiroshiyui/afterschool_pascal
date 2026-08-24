@@ -2774,6 +2774,16 @@ bool Sema::badVarActual(Expr *a, Symbol *callee, int i) {
   return false;
 }
 
+bool Sema::isCallValue(Expr *e) const {
+  if (!e)
+    return false;
+  if (is<Call>(e))
+    return true;
+  if (auto *v = as<VarRef>(e))
+    return !v->withField && v->sym && v->sym->isInvocable();
+  return false;
+}
+
 bool Sema::isDesignator(Expr *e) const {
   if (auto *v = as<VarRef>(e)) {
     if (!v->sym)
@@ -6573,11 +6583,11 @@ void Sema::checkExpr(Expr *e) {
     // (ADR-0056), where a call *written with arguments* never reaches here
     // under ISO 7185 because `afterCall` does not offer it the selectors. A
     // parameterless function is a bare name and the parser cannot tell, so
-    // this is where it is told.
+    // this is where it is told — which is the whole of what `isCallValue`
+    // answers, and this is the site where that question was got right first
+    // and then written out inline (ADR-0179).
     if (std_ != Std::Extended) {
-      auto *v = as<VarRef>(d->base.get());
-      if (is<Call>(d->base.get()) ||
-          (v && v->sym && v->sym->isInvocable()))
+      if (isCallValue(d->base.get()))
         diags_.error(d->line, d->col,
                      "dereferencing a function result is an Extended Pascal "
                      "feature; compile with --std=extended");
@@ -8445,8 +8455,14 @@ void Sema::checkArguments(Symbol *callee, std::vector<ExprPtr> &args, int line,
     // answer to a different question, the one a *var* parameter asks, where
     // there is no variable to bind. Assignment had already settled it the
     // other way: `q := MakePoint` copies from exactly this address.
+    //
+    // And half of it stayed missing for the same reason one node kind was
+    // named instead of the construct: §6.8.5 makes the actual-parameter-list
+    // optional, so a *parameterless* function written bare is the call too,
+    // and it arrives as a `VarRef`. `take(mk)` was refused where `take(mk(0))`
+    // and `q := mk` were both accepted (ADR-0179).
     else if (p->type && p->type->isStructured() && !isDesignator(a) &&
-             !is<StrLit>(a) && !is<StructValueExpr>(a) && !is<Call>(a) &&
+             !is<StrLit>(a) && !is<StructValueExpr>(a) && !isCallValue(a) &&
              !isMemoryConstant(a))
       diags_.error(a->line, a->col,
                    "argument " + std::to_string(i + 1) + " of '" +

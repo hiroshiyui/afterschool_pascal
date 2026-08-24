@@ -700,6 +700,13 @@ private:
   bool isConstantAccess(Expr *e) const;
   void refuseConstAccess(Expr *base, int line, int col);
   bool isMemoryConstant(Expr *e) const;
+  /// Whether this expression is a function-designator, however it is spelled.
+  /// §6.8.5 makes the actual-parameter-list optional, so a parameterless
+  /// function written as a bare name *is* the call, and the two spellings
+  /// arrive as two node kinds. Asked wherever a rule is about the construct;
+  /// `isDesignator` is the other question and answers false for both
+  /// (ADR-0179).
+  bool isCallValue(Expr *e) const;
   /// The variable a designator ultimately reaches into, or null.
   Symbol *baseSymbol(Expr *e) const;
   /// ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 ask this of the *variable-access*
