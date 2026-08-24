@@ -58,14 +58,23 @@ mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 ## What blocks the library
 
-**One thing is left**, and it is not a module: a foreign struct **the callee
-owns** — the `struct dirent *` `readdir` answers. It is what stands between
-here and a directory listing.
+**Nothing is left on this list.** It has been emptied, and the last row went
+the way the two before it did — a decision that looked like it needed the
+memory-safety model turned out to need it for only part of its surface.
+
+~~A foreign struct the callee owns~~ is **done** (ADR-0187, AP 6.7.7.8): an
+`external` function may answer an optional of a record, a null address is the
+absent value, and any other address yields a **copy** made where the call
+occurs. That is the whole of it, and choosing a copy is what kept the model out
+of it — nothing holds the address, so there is no lifetime to reason about.
+`readdir`, `gmtime` and `localtime` are declarable. What is still not
+declarable is a member that is *itself* a pointer, so a chained list of structs
+— `getaddrinfo` — waits, and it waits on the model rather than on a clause.
 
 ~~The struct with a layout~~ is **done** (ADR-0184, AP 6.7.7.6.2), and the
 sentence that stood here — *crossing one needs the compiler and C to agree
 about offsets, which nothing here does for a foreign type* — was wrong in the
-direction this page has now been wrong in three times. Nothing had to be made
+direction this page has now been wrong in four times. Nothing had to be made
 to agree: `RecordLayout` already *is* C's struct rule, so a record of
 `struct stat`'s fields was 144 bytes at C's own offsets before anything was
 written. The gap was permission, not arithmetic, and a record now crosses as a
@@ -89,18 +98,21 @@ caller owns (AP §6.7.7). ~~The opaque half~~ is **done** — `handle external
 'closedir'` is a file variable for a foreign address, released where a file
 closes (ADR-0174, AP 6.4.12) — and what it deliberately does not touch is
 aliasing: a handle cannot be copied at all, so no two names reach one value.
-~~The half whose contents have a shape~~ is **done too**, on the side where the
-*caller* owns the storage (ADR-0184): a record crosses as a `var` parameter, so
-`stat` fills a buffer this program declared. Both halves took the piece that
-needed no memory model and left the piece that does, which is now one piece —
-storage the callee owns **and** whose shape the program must read. That is
-`readdir` and nothing else on this page.
+~~The half whose contents have a shape~~ is **done too**, in both directions:
+a record crosses as a `var` parameter, so `stat` fills a buffer this program
+declared (ADR-0184), and comes back as an optional whose value is copied at
+the call, so `readdir` answers one this program then owns (ADR-0187). ~~The
+piece that needed the memory model~~ — storage the callee owns **and** whose
+shape the program must read — turned out not to need it either, because the
+copy retires the address at the end of the statement. What genuinely waits on
+the model is narrower than any row here ever said: a struct **member** that is
+a pointer, which is a second name for storage and cannot be copied away.
 
 **What that leaves open, by name:**
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| a directory listing | `readdir` answers a `struct dirent *`, which the **callee** owns — the one remaining item, and the only row here still waiting on a language decision. Through the shell it is done: `PasProcess.CaptureLines('ls -1 dir', names)`, over `popen` as a handle |
+| ~~a directory listing~~ | **unblocked** (ADR-0187): `readdir` answers a `struct dirent *` the callee owns, and an optional of a record copies it at the call. `d_reclen` is an `unsigned short` and this language has no two-byte scalar, so it is spelled `array [1..2] of char` — same offset, same space. What is left is a module. Through the shell it was already done: `PasProcess.CaptureLines('ls -1 dir', names)`, over `popen` as a handle |
 | ~~a socket~~ | **unblocked** (ADR-0184): `sockaddr` is a caller-owned struct and crosses as a `var` parameter. What is left is a module and a decision about what a portable `sockaddr` declaration looks like, `struct stat` having shown that a hand-written field list is one platform's layout — not a language gap |
 | ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
 
@@ -121,10 +133,17 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
   of a line. The language change would be a handle whose closer's result is
   kept somewhere a program can read it, and nothing has said where.
 
-**The lesson from the five FFI increments**, worth keeping for the rows above:
-a decision that looks like it needs a model may need it for only part of its
-surface, and the part that does not is usually worth taking first. Two
-estimates in a row were wrong in that useful direction (ADR-0122, ADR-0123).
+**The lesson from the FFI increments**, worth keeping for whatever replaces the
+rows above: a decision that looks like it needs a model may need it for only
+part of its surface, and the part that does not is usually worth taking first.
+Four estimates in a row were wrong in that useful direction — ADR-0122 and
+ADR-0123, then ADR-0184, whose item this page had described as needing the
+compiler and C to agree about offsets when they already did, then ADR-0187,
+whose item this page had called the place *where the memory-safety model
+actually bites*. It did not bite there. It bites one level further in, at a
+struct member that is a pointer, and the reason is worth stating in general:
+**an ownership question is only a question while something holds the address.**
+Each of the four was answered by arranging for nothing to.
 
 ---
 

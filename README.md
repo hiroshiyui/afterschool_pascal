@@ -286,8 +286,9 @@ record of them. Everything else is refused, and the diagnostic names the field
 rather than the record. `packed` is allowed and changes nothing — packing does
 not affect layout here, so it is not a way to spell C's
 `__attribute__((packed))`. By value it is refused in both directions: how a
-struct is copied into a call is a fact about C's ABI, and nothing here may
-depend on one.
+struct is copied into a call, or handed back from one, is a fact about C's ABI
+and nothing here may depend on one — so a struct that comes back does so as an
+address, and that is an optional (below).
 
 **You still write the fields yourself, and nothing checks them.** That they are
 the members `struct stat` has, in that order and with that padding, is the same
@@ -359,6 +360,24 @@ value** — the program holds a string of its own. The capacity is required and
 checked; a value that does not fit is an error, in the words §6.4.6 uses for an
 over-long assignment. A bare string result is still refused, and so is
 `?integer`: C has no null integer.
+
+**And it is how a struct comes back** (ADR-0187) — a routine that answers the
+address of storage *it* owns, and a null that is an ordinary outcome:
+
+```pascal
+type Tm = record sec, min, hour, mday, mon, year, wday, yday, isdst: integer end;
+     OptTm = ?Tm;
+function GmTime(var t: int64): OptTm; external 'gmtime';
+```
+
+The record has to be one that crosses — the same fields, for the same reason —
+and the value is copied where the call occurs, so `readdir`, `gmtime` and
+`localtime` are declarable and nothing holds the callee's address afterwards. A
+second call moves the callee's storage and does not move what you were given.
+The copy is as long as the record you declared, so a record naming a *prefix*
+of the struct's members reads the prefix, which is how `struct tm` is usable
+without naming the `char *` glibc puts after the nine that matter. A record
+result **by value** names `?` as its remedy.
 
 **Part of an array can be passed** (ADR-0125). `array of T` is a formal
 parameter's type, and a slice carries its own length:
@@ -806,13 +825,16 @@ same distinction ADR-0122 drew for arguments.
 
 A struct the **caller** owns crosses too (ADR-0184), so `stat` and `sockaddr`
 are declarable — and it turned out to need no agreement to be built, this
-compiler's record layout already being C's struct rule. What is left is a
-pointer to storage the **callee** owns whose contents are not characters: the
-`struct dirent *` `readdir` answers, which is neither a handle to hand back nor
-a buffer you lent. That is where the memory-safety model actually bites. A
-container waits on something else entirely — parameterising a type by a type,
-which schemata do not do. `doc/roadmap.md` has the ordering, and
-`doc/history.md` has each increment that got this far.
+compiler's record layout already being C's struct rule. A struct the **callee**
+owns comes back as well (ADR-0187), as an optional whose value is copied at the
+call — the `struct dirent *` `readdir` answers, which is neither a handle to
+hand back nor a buffer you lent. Choosing a copy is what kept the
+memory-safety model out of it: nothing holds the address, so there is no
+lifetime to reason about. What is still not declarable is a member that is
+itself a pointer, so a chained list of structs — `getaddrinfo` — waits on the
+model rather than on a clause. A container waits on something else entirely —
+parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
+the ordering, and `doc/history.md` has each increment that got this far.
 
 ## What the compiler accepts today, with `--std=iso7185`
 

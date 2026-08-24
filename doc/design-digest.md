@@ -2580,9 +2580,9 @@ estimate of this item was wrong.
   runtime because the claim is per *target* (ADR-0028), so the question has to
   be askable on a machine that is not this one.
 - **What it does not close** is that the declared fields are the struct's
-  fields — the same unchecked claim as every `external` signature. A
-  callee-owned struct pointer is still AP 6.7.7.9 c), so `readdir` waits.
-  `doc/sop.md` §7 carries both.
+  fields — the same unchecked claim as every `external` signature.
+  `doc/sop.md` §7 carries it. (The other half it left open — a callee-owned
+  struct pointer — is ADR-0187 below.)
 
 **A struct claim is checkable, and a library may not make one** (ADR-0185). The
 half of the above that *can* be closed is closed by a gate rather than a
@@ -2628,3 +2628,42 @@ silences. All four earlier dependencies happened to be functions.
   the split safe rather than tidy.
   `tests/checks/runtime_isoc.sh` fails on `#include <dirent.h>` there, and on a
   `pas_` name defined in that file.
+
+**A foreign answer of a record is a copy** (ADR-0187, AP 6.7.7.8). The last row
+under the roadmap's "What blocks the library": a routine that *answers* a
+struct. `readdir`, `gmtime` and `localtime` each hand back the address of
+storage they own and reuse, and each hand back a null that is an ordinary
+outcome. ADR-0123 had already lifted ADR-0122's refusal as far as a string with
+a **capacity**, the size being the whole of the condition — and after ADR-0184 a
+record has one. So the result type may be an optional of a record 6.7.7.6.2
+admits, and the value is copied where the call occurs.
+
+- **The copy is the feature, not the plumbing.** A view onto the callee's
+  storage would be a value of this language whose contents change when the
+  program does something unrelated, and would hand ADR-0109's aliasing question
+  to every program that lists a directory. The address is read once and is dead
+  by the end of the statement, which is why widening 6.7.7.8 leaves 6.7.7.9 c)
+  where it was. `foreign_optional_record.pas` calls the probe twice and reads
+  the *first* value back: an aliasing view answers 2000, a copy answers 1000.
+- **The conditions are 6.7.7.6.2's, and `BadForeignField` was not touched** —
+  the same fields for the same reason, since what is copied is storage a C
+  compiler laid out.
+- **The length is the record's**, there being nothing the far side could
+  report. A record declaring a *prefix* reads the prefix, which is how
+  `struct tm` is usable without naming the `char *` glibc puts after the nine
+  that matter; a record larger than the struct is 6.7.7.9 c)'s kind of
+  requirement on the program. `foreign-layout` deliberately cannot check a
+  prefix — it compares against the whole struct — so the case's `Tm` carries no
+  annotation and what checks it is the calendar.
+- **`pas_rec_take` is `pas_cstr_take`'s mirror** and holds the same
+  non-opinion: a guarded `memcpy` that answers whether there was a value, with
+  the flag stored by CodeGen because the layout of an optional is CodeGen's.
+- **A record result by value gains a diagnostic naming `?` as the remedy.** It
+  was reaching "only 'integer', 'int64' and 'real' cross the boundary", which is
+  true and unhelpful — what the program got wrong is the direction. The chain a
+  reader now follows is `: R` → write `?` → `: ?R` → and if a field cannot
+  cross, the field is named.
+- **What it does not reach** is a member that is a `char *`, so `struct passwd`
+  and `struct addrinfo` are still only declarable as prefixes, and for the
+  second that is not the useful part. A chained list of structs holding
+  pointers is what ADR-0109 exists for.

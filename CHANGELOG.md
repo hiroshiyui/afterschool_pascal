@@ -52,10 +52,25 @@ three days, with every gate green. The rest only accept more.
   value a record is refused in both directions. **You write the field list
   yourself and nothing checks it against the header** — the same unchecked
   claim as every `external` signature.
+- **An `external` function may answer an optional of a record** under
+  `--std=afterschool`, which is how a struct the *callee* owns comes back:
+  `function GmTime(var t: int64): OptTm; external 'gmtime'`. A null address is
+  the absent value; any other address yields a **copy**, made where the call
+  occurs, so no C pointer ever becomes a Pascal value and a later call moves
+  the callee's storage without moving what you were given. The record must be
+  one that already crosses — the same field rule, for the same reason — and the
+  copy is as long as the record you declared, so a record naming a *prefix* of
+  the struct's members reads the prefix. `readdir`, `gmtime` and `localtime`
+  are declarable. A record result **by value** is still refused and its
+  diagnostic now names `?` as the remedy, where it used to say only that
+  `integer`, `int64` and `real` cross the boundary.
 - **`pasx_record_probe`** in the runtime: a struct carrying one member of every
   kind a foreign record may hold, filled with values no other member could
   hold. A program declaring the matching record and calling it learns whether
   this compiler and its C compiler agree about offsets on *its* target.
+  **`pasx_record_answer`** is its counterpart in the other direction: it
+  answers the address of one static object that every call overwrites, so a
+  program can see for itself that what it received was a copy.
 - **`owned ^T`** under `--std=afterschool`: a pointer that owns the variable it
   identifies. The variable is disposed when the pointer's own variable ceases
   to exist, and everything owned inside it — a file, a handle, another owned
