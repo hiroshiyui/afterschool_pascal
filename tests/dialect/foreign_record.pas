@@ -43,10 +43,17 @@ type
     g: packed record c: char; n: integer end   { 40, 44 }
   end;                               { 48 }
 
-  { ISO C11 7.27.2.5. Two words, and on this target both are 64 bits. }
+  { ISO C11 7.27.2.5. Two words, and on this target both are 64 bits.
+
+    The annotation is what makes this declaration a *checked* claim rather
+    than a hopeful one (ADR-0185): `foreign-layout` asks the compiler for the
+    offsets it computed and hands them to a C compiler holding <time.h>. No
+    @cplatform, because a `struct timespec` is a `time_t` beside a `long`
+    wherever there is one. }
+  { @cstruct: TimeSpec = struct timespec, <time.h> }
   TimeSpec = record
-    sec: int64;
-    nsec: int64
+    sec: int64;                      { @cfield: tv_sec }
+    nsec: int64                      { @cfield: tv_nsec }
   end;
 
 function RecordProbe(var p: Probe): int64; external 'pasx_record_probe';

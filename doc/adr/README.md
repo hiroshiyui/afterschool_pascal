@@ -193,3 +193,4 @@ the alternatives that were rejected and why.
 | [0182](0182-take-is-the-move-an-owned-pointer-needs.md) | `take` is the move an owned pointer needs | Accepted |
 | [0183](0183-the-heap-balance-is-the-oracle-that-reads-no-output.md) | The heap balance is the oracle that reads no output | Accepted |
 | [0184](0184-a-record-crosses-when-c-lays-it-out-the-same-way.md) | A record crosses when C lays it out the same way | Accepted |
+| [0185](0185-a-struct-claim-is-checkable-and-a-library-may-not-make-one.md) | A struct claim is checkable, and a library may not make one | Accepted |

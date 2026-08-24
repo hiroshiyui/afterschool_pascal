@@ -454,6 +454,27 @@ set_tests_properties(runtime-isoc PROPERTIES
                      TIMEOUT 600
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
 
+# Does a record declared here have the layout the C struct it claims to be has?
+# ADR-0184 made a record crossable because RecordLayout *is* C's struct rule,
+# and registered in doc/sop.md 7 what that leaves open: whether the fields
+# declared are the members the real struct has. `struct stat` is 144 bytes with
+# two holes, and a hole in the wrong place makes every field after it wrong
+# with no diagnostic anywhere. A source states its claim in a comment
+# (@cstruct / @cfield), the compiler reports the offsets it computed
+# (--dump-layout), and a C compiler holding the real header judges the two
+# together (ADR-0185).
+#
+# Skips (77) with no C compiler, as target-sizes does. A subject marked
+# @cplatform is reported as not-checked here rather than failed, which is the
+# only honest answer for a declaration that is one platform's.
+add_test(NAME foreign-layout
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tests/checks/foreign_layout.py)
+set_tests_properties(foreign-layout PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 600
+                     ENVIRONMENT "${APASCAL_TEST_ENV}")
+
 # And the other half of the same question: do the targets this compiler admits
 # agree about where every field of every frame *sits*? LlSize and LlAlign are
 # hand-written and answer with one number for every target (ADR-0028), which is

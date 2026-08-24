@@ -1165,6 +1165,17 @@ type
     next: heapTypePtr
   end;
 
+  { --dump-layout's subjects: every record type-definition Sema resolved, in
+    the order they were written. Built only when the flag is set, which is
+    --coverage's discipline (ADR-0104) -- a compilation that is not asking
+    this question pays one boolean test per type-definition. }
+  layoutPtr = ^layoutRec;
+  layoutRec = record
+    at, len: integer;
+    ty: typePtr;
+    next: layoutPtr
+  end;
+
   pendingPtr = ^pendingRec;
   pendingRec = record
     ptype: typePtr;
@@ -1785,6 +1796,7 @@ var
     CheckDeclarations, which recurses through nested blocks. }
   inTypePart: boolean;
   heapTypes: heapTypePtr;
+  layoutHead, layoutTail: layoutPtr;
   { The tuple `new` is building, for as long as it has nowhere to live: the
     block it will sit in front of is what the tuple is being used to size.
     Nil everywhere else, and that is what makes it safe for BoundValue to
@@ -1903,6 +1915,7 @@ var
     everything. `dumping` therefore excludes it, a diagnostic during a limits
     run being for a person to read and keeping the file:line:col form. }
   dumpLimitsOpt: boolean;
+  dumpLayoutOpt: boolean;
   { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
     what the seed was generated for and what this repository is built and
     tested on. }
@@ -2901,6 +2914,9 @@ begin
   writeln('                  for: x86_64-pc-linux-gnu (default) or');
   writeln('                  aarch64-linux-gnu');
   writeln('  --dump-all      write all three, with section headers');
+  writeln('  --dump-layout   compile as usual, then write the size,');
+  writeln('                  alignment and field offsets of every');
+  writeln('                  record type the source defines');
   writeln('  --dump-limits   compile as usual, then write how full the');
   writeln('                  compiler''s own fixed arrays were left');
   writeln('  --coverage      emit statement counters; the program then');
@@ -2949,6 +2965,7 @@ begin
   dumpSemaOpt := false;
   dumpAllOpt := false;
   dumpLimitsOpt := false;
+  dumpLayoutOpt := false;
   targetIx := tgtX86;
   covOpt := false;
   { Before anything is parsed: an argument past the last program-parameter is
@@ -2972,6 +2989,7 @@ begin
       dumpSemaOpt := true
     end
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
+    else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     else if EQ(a, '--std=extended') then begin
       langStd := stdExtended; stdFromFlag := true
@@ -20484,7 +20502,7 @@ end;
 { One type-definition or schema-definition. A type name is visible to the
   definitions after it, so each is declared as it is resolved. }
 procedure CheckTypeDecl(d: nodePtr; owner: symPtr);
-var s, named, hv: symPtr; t: typePtr; at, len: integer;
+var s, named, hv: symPtr; t: typePtr; at, len: integer; lay: layoutPtr;
 begin
   { 6.4.7: a schema-definition declares a schema, not a type. Its body is
     *not* resolved here -- it has no discriminant values yet, and resolving
@@ -20581,6 +20599,19 @@ begin
         if t^.aliasLen = 0 then begin
           t^.aliasAt := d^.tdAt;
           t^.aliasLen := d^.tdLen
+        end;
+        { ADR-0185. Recorded here rather than found by a second walk of the
+          declarations, because this is the one place that has both halves at
+          once -- the name as written, and the type it resolved to. }
+        if dumpLayoutOpt and IsRecord(t) then begin
+          new(lay);
+          lay^.at := d^.tdAt;
+          lay^.len := d^.tdLen;
+          lay^.ty := t;
+          lay^.next := nil;
+          if layoutTail = nil then layoutHead := lay
+          else layoutTail^.next := lay;
+          layoutTail := lay
         end
       end
     end
@@ -33274,6 +33305,55 @@ begin
   writeln('tokens ', tokCount:1, ' of ', tokMax:1)
 end;
 
+{ --dump-layout (ADR-0185). Every record type-definition the source made, with
+  the size and alignment this compiler gives it and the offset of each of its
+  fields.
+
+  It exists because AP 6.7.7.6.2 lets a record cross to C, and what makes that
+  sound is that RecordLayout *is* C's struct rule -- a claim about two
+  compilers agreeing, which neither of them can check alone. This is one half
+  of the check: the offsets this compiler computed, in a form a C probe can be
+  generated from. `tests/checks/foreign_layout.py` is the other half.
+
+  The arithmetic is ArmLayoutAt's, written a second time rather than shared,
+  and that is the one thing to be careful of: ArmLayoutAt accumulates a size
+  and never names an offset, so there is no offset in it to return. Moving one
+  out would change the routine every whole-record copy's length comes from.
+  The loop below is therefore the same three lines, and `foreign_layout.py`
+  compares its answers against a C compiler on every run -- so the copy cannot
+  drift without the gate saying so, which is what makes a second copy
+  acceptable here.
+
+  A variant part is reported as a line and not walked: an arm's storage is
+  this compiler's own shape and no C union is laid out from it, which is why
+  6.7.7.6.2 refuses such a record at the boundary in the first place. }
+procedure DumpLayout;
+var lay: layoutPtr; f: fieldPtr; off, size, align, a: integer;
+begin
+  lay := layoutHead;
+  while lay <> nil do begin
+    RecordLayout(lay^.ty, size, align);
+    write('record ');
+    WritePool(lay^.at, lay^.len);
+    writeln(' size=', size:1, ' align=', align:1);
+    off := 0;
+    f := lay^.ty^.fields;
+    while f <> nil do begin
+      a := LlAlign(f^.ftype);
+      off := RoundUp(off, a);
+      write('  field ');
+      WritePool(f^.at, f^.len);
+      writeln(' offset=', off:1, ' size=', LlSize(f^.ftype):1,
+              ' align=', a:1);
+      off := off + LlSize(f^.ftype);
+      f := f^.next
+    end;
+    if lay^.ty^.variants <> nil then
+      writeln('  variants');
+    lay := lay^.next
+  end
+end;
+
 { The pipeline. What it *writes* depends on which dumps were asked for; what
   it *runs* is decided the same way, because a dump flag stops at the stage it
   names -- `--dump-tokens` does not parse, which is how the C++ driver behaves
@@ -33289,7 +33369,7 @@ begin
   { --dump-limits asks about a whole run, so it runs the whole pipeline exactly
     as --dump-all does. Without this `--dump-tokens --dump-limits` would report
     the pool as the lexer alone had left it and call that the answer. }
-  whole := dumpAllOpt or dumpLimitsOpt;
+  whole := dumpAllOpt or dumpLimitsOpt or dumpLayoutOpt;
   { Before anything reads a token, and before the components are read: the
     standard decides the lexis, so it has to be settled first (ADR-0166). }
   ReadStdAnnotation;
@@ -33356,7 +33436,9 @@ begin
   if go and not errorSeen then RunCodeGen;
 
   { --- and how full it left the arrays ------------------------------------ }
-  if dumpLimitsOpt then DumpLimits
+  if dumpLimitsOpt then DumpLimits;
+  { --- and what it decided a record looks like ---------------------------- }
+  if dumpLayoutOpt and not errorSeen then DumpLayout
 end;
 
 begin
@@ -33389,6 +33471,8 @@ begin
   stringSchema := nil;
   producingTop := nil;
   heapTypes := nil;
+  layoutHead := nil;
+  layoutTail := nil;
   newTuple := nil;
   genericFor := nil;
   sliceFormNode := nil;
