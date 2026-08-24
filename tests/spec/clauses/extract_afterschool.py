@@ -46,7 +46,12 @@ LEADIN = re.compile(r"^\*\*(\d+(?:\.\d+)+)\s+(.*?)\.?\*\*")
 
 def clean(title):
     """The heading text as a citation needs it: no emphasis, no status tag."""
-    title = re.sub(r"\s*\[(added|extended|unchanged)\]\s*$", "", title)
+    # AP 5.6's marker is a suffix on one of the three, not a fourth kind: the
+    # clause is still added, and what the marker says is that the processor
+    # does not meet it yet.
+    title = re.sub(
+        r"\s*\[(added|extended|unchanged)(; not yet implemented)?\]\s*$",
+        "", title)
     title = re.sub(r"`([^`]*)`", r"\1", title)
     title = re.sub(r"\*\*|\*|~~", "", title)
     return title.strip().rstrip(".")

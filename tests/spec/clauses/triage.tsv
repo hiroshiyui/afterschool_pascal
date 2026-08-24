@@ -17,6 +17,13 @@
 #                     wrong clause, and both are worth hearing about.
 #   not-implemented   this processor does not provide the feature, by a
 #                     documented decision. A citation FAILS for the same reason.
+#                     Two kinds of decision land here and the class does not
+#                     distinguish them, because the gate's answer is the same:
+#                     a feature declined, and a feature specified ahead of the
+#                     processor (AP 5.6, the whole of AP 6.4.15). What the
+#                     class buys in the second case is that the specification
+#                     cannot come to claim, through a passing scenario, that
+#                     the feature is there.
 #
 # So the gate is two-directional, as tests/checks/uncovered_procedures.txt is:
 # a clause that stops being cited fails, and a clause that starts being cited
@@ -193,6 +200,7 @@ afterschool	5.2	structural	defines what a complying program is, in terms of the 
 afterschool	5.3	testable	
 afterschool	5.4	structural	a policy about versioning, not a property of a translation
 afterschool	5.5	structural	a rule about how this document is maintained
+afterschool	5.6	structural	a rule about how this document may run ahead of the processor, not about a program
 afterschool	6	structural	introduces the requirements
 afterschool	6.0	structural	introduces the relationship clauses
 afterschool	6.0.1	testable	
@@ -312,6 +320,19 @@ afterschool	6.4.14.3	testable
 afterschool	6.4.14.4	testable	
 afterschool	6.4.14.5	testable	
 afterschool	6.4.14.6	testable	
+afterschool	6.4.15	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.1	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.2	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.3	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.4	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.5	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.6	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.7	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.8	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.9	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.10	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.11	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15.12	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
 extended	6.5	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.5	structural	introduces the variable-denotation additions
 extended	6.5.1	testable	Variable-declarations

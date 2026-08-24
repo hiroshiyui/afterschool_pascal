@@ -80,8 +80,19 @@ It does **not** specify:
   standards do not nest).
 - **ISO/IEC 9899**, *Programming languages — C*, and **POSIX.1**. Referenced by
   6.7.7, which describes a boundary whose far side those documents specify.
-  They are the only external authority this dialect has for any decision, and
-  6.7.7.4 names the one place it was used.
+  They were the only external authority this dialect had for any decision until
+  6.4.15 was written, and 6.7.7.4 names the one place they were used.
+- **ISO/IEC 10646** and **The Unicode Standard**, with its Annex #15
+  (*Unicode Normalization Forms*) and Annex #29 (*Unicode Text Segmentation*).
+  Referenced by 6.4.15, which specifies a type whose values and whose element
+  boundaries those documents define. The version in force is
+  implementation-defined and is stated by the processor (6.4.15.12).
+
+  These are the **second** external authority this dialect has, and the only
+  one accompanied by machine-readable conformance data: the two properties
+  6.4.15 rests on are each published with a test file, so what a text-type does
+  is settled by a document written elsewhere rather than by a reading taken
+  here (ADR-0189, and ADR-0086 for the argument).
 
 ## 3 Definitions
 
@@ -198,15 +209,45 @@ Three rules, and the first is the one that matters:
   when they were written; this states what the language is now. Annex E lists
   every such divergence found.
 - **d) Its clauses are cited by scenarios that run.** `tests/spec/` takes
-  `@afterschool:<clause>`, and 46 of this document's 48 testable clauses are
+  `@afterschool:<clause>`, and 74 of this document's 77 testable clauses are
   cited by at least one scenario; the clause table those citations are checked
   against is **generated from these headings**, so a renamed clause fails the
-  traceability gate rather than drifting. 6.13.1 is the one not cited — it needs
-  two program-components and a link, and that harness compiles a single program.
+  traceability gate rather than drifting. Three are not cited: 6.13.1 and 6.11
+  each need two program-components and a link, and that harness compiles a
+  single program, and 6.7.7.6.1 is a rule about which record-types cross a
+  boundary that the `foreign-layout` gate checks instead.
+
+  A clause a scenario may **not** cite is one the triage calls `structural` or
+  `not-implemented`, and the gate fails on a citation of either. That is what
+  holds 5.6: the whole of 6.4.15 is `not-implemented`, so no scenario can
+  assert the text model works while it does not.
 
   This rule was added after a) to c) and is numbered after them for that
   reason: ADR-0135 cites 5.5 a) by letter, and renumbering would have made an
   immutable record wrong.
+
+### 5.6 A requirement stated ahead of the processor
+
+A clause of this document may state a requirement the processor does not yet
+meet at all, rather than one it states and does not check (Annex C). Such a
+clause shall be marked **[not yet implemented]** in its heading, and every
+clause it contains shall be classified `not-implemented` in
+`tests/spec/clauses/triage.tsv`, which makes the traceability gate **refuse** a
+scenario citing it — so the document cannot come to claim, through a passing
+test, that the feature is there.
+
+5.1 is read accordingly: a processor complies when it accepts every program
+this document admits **other than by such a clause**. The list is short and is
+found by searching for the marker; at the time of writing it is 6.4.15 alone.
+
+NOTE — This is deliberately not the shape Annex C has. Annex C entries are
+requirements the processor accepts programs under and does not enforce, which
+is a soundness gap; this is a feature that is designed, argued and not built,
+which is a schedule. Conflating them would let the second hide in the first.
+The alternative — leaving a decided design out of this document until it is
+implemented — was rejected because the design is the expensive half and the
+place a reader looks for what a type means is the clause about that type
+(ADR-0189).
 
 ---
 
@@ -869,6 +910,212 @@ NOTE 5 — An ordinary pointer-type (§6.4.4) is unchanged, and `dispose` of one
 goes on being what a program says. This clause adds a type; it withdraws
 nothing, and 6.4.4's use-after-dispose through a second pointer stays what
 ADR-0019 made it.
+
+#### 6.4.15 Text-types [added; not yet implemented]
+
+A text-type denotes a type whose values are bounded sequences of bytes
+constituting well-formed UTF-8 in Unicode Normalization Form C, and whose
+**elements** are the extended grapheme clusters those bytes represent. It is
+what a program holds when it means the characters of a text rather than the
+octets carrying them; ISO/IEC 10206:1991 §6.4.3.3's string-types remain what a
+program holds when it means the octets, and are unchanged (ADR-0189).
+
+This clause is stated ahead of the processor (5.6).
+
+**6.4.15.1 The denoter.** `utf8` shall be a required identifier denoting a
+schema (§6.4.7) of one discriminant, whose identifier shall be `capacity`, as
+the required schema `string` has.
+
+    text-type = 'utf8' '(' discriminant ')' .
+
+The discriminant shall be of an integer-type and shall be greater than zero. It
+shall be the capacity of a value of the type **in bytes**, and not in elements:
+an element is a sequence of scalar values of no fixed length, so a capacity
+counted in elements would not determine the storage a variable occupies.
+
+`utf8` shall not be a word-symbol, and a program declaring an identifier with
+that spelling shall be admitted, §6.1.3 and §6.2.2.10 placing the required
+identifier in a scope enclosing the program (ADR-0140).
+
+**6.4.15.2 The invariant.** The bytes a value of a text-type comprises shall be
+well-formed UTF-8, and shall be in Normalization Form C as
+ISO/IEC 10646 and the Unicode Standard Annex #15 define it. Every operation
+this clause admits shall preserve that, and no operation shall be admitted
+which does not.
+
+NOTE 1 — The invariant is on construction rather than on use, and that is what
+makes 6.4.15.6's equality byte equality. See NOTE 6.
+
+**6.4.15.3 The element sequence.** The elements of a value of a text-type shall
+be the extended grapheme clusters its bytes represent, as Unicode Standard
+Annex #29 defines them, in order.
+
+The **type** of an element shall be a text-type. An extended grapheme cluster
+comprises one or more scalar values and has no upper bound in the general case,
+so it is not a value of a simple type: it has no ordinal, and `ord`, `succ`,
+`pred`, `chr` and a case-statement selector shall not be applied to it.
+
+NOTE 2 — This is the structural consequence of the unit and it reaches
+everywhere. There is no character type in this model; the smallest thing a
+program can hold is a text of one element, and the control variable of
+6.4.15.9's iteration is therefore a text.
+
+**6.4.15.4 Type identity.** A text-type shall be the type a schema produces
+(§6.4.7), and two occurrences of `utf8` with equal discriminants shall denote
+the same type.
+
+NOTE 3 — This is `string`'s rule and not the new-type rule 6.4.11.7, 6.4.12.1,
+6.4.13 and 6.4.14.5 each state for the four preceding added types. Those are
+constructed at their denoter and have no name to equate; a text-type is
+produced by a schema, and the schema is what its identity comes from.
+
+**6.4.15.5 Assignment and conversion.**
+
+A text-type shall be assignment-compatible from a text-type, and it shall be an
+error (Annex A) if the value does not fit the capacity of the target.
+
+A text-type shall be assignment-compatible from a character-string (§6.1.9)
+and from any constant-expression of type `char`. The bytes shall be validated
+and converted to Normalization Form C by the processor before the program is
+executed; it shall be a **violation**, reported where the expression is
+written, if they are not well-formed UTF-8, and an error if the converted value
+does not fit the target.
+
+A string-type shall be assignment-compatible from a text-type, the value being
+the bytes, with §6.4.6's own error where it does not fit.
+
+A text-type shall **not** be assignment-compatible from a string-type, nor from
+an expression of type `char` that is not a constant-expression. In each of
+those the bytes are unconstrained and the conversion may fail, so it shall be
+written as a function whose result is a fallible-type (6.4.13) — the only
+construct in this language able to report a failure that is not a fault in the
+program.
+
+NOTE 4 — What divides the two lists is whether the processor can settle the
+question before the program runs, and not the width of the value. A
+character-string of length one has the type `char` (§6.1.9), so `t := 'a'` must
+be admitted or the model has no literal at all; but `c` declared `char` may
+hold `chr(200)`, which is not well-formed UTF-8 in any position, and `t := c`
+would be a run-time failure the target's type promises cannot happen.
+`t := chr(200)` is admitted to the *rule* and refused by it, the violation
+being reported where it is written.
+
+NOTE 5 — So `t := 'héllo'` is an ordinary assignment and `t := line` is not,
+`line` being a string-type; the second is written `t := try(ToText(line))`, or
+with the failure examined. The opposite direction, `line := t`, needs no
+function: bytes out of a text-type are well-formed by 6.4.15.2 and a string
+imposes nothing on them.
+
+**6.4.15.6 Comparison.** The relational operators of §6.8.3.5 shall be
+applicable to two operands of text-types, and to one operand of a text-type and
+one character-string, and shall compare the byte sequences of the operands
+lexicographically as unsigned values.
+
+A text-type and a string-type shall not be operands of one relational operator.
+
+NOTE 6 — `=` over text-types is therefore **canonical equivalence**, and this
+is the whole benefit of 6.4.15.2's invariant. `'é'` written as one scalar and
+`'é'` written as a base character and a combining acute accent are one value of
+a text-type and compare equal, where the corresponding string-types differ in
+length and in every byte after the first. Nothing is decoded at the comparison.
+
+NOTE 7 — The order the other four operators give is by scalar value and is
+**not a collation**. It is total, stable and independent of any locale, and it
+sorts `Z` before `a`; it says nothing about where `ä` belongs in any language.
+A collation requires locale data this language does not have and does not
+consult (ADR-0189).
+
+NOTE 8 — A text-type and a string-type are kept apart here for the reason they
+are kept apart in 6.4.15.5: one is normalised and the other is not, so a
+comparison between them would answer a question neither operand's type asks.
+
+**6.4.15.7 Concatenation.** The string operator `+` of §6.8.3.6 shall be
+applicable where either operand is of a text-type and the other is of a
+text-type or is a character-string, and shall yield a text-type.
+
+The result shall be the Normalization Form C of the concatenation of the
+operands' scalar sequences, and **not** the concatenation of their bytes.
+
+NOTE 9 — The distinction is normative and is not an optimisation the processor
+may take back. Normalization Form C is not preserved by concatenation: where
+the left operand ends in a base character and the right begins with a combining
+mark, the two compose across the join, and appending the bytes would yield a
+value violating 6.4.15.2 and unequal to the value the same text written whole
+would have. An implementation may examine only the neighbourhood of the join,
+each operand being normalised already.
+
+**6.4.15.8 Enquiries.** `length` (§6.7.6.7) applied to a value of a text-type
+shall yield the number of its elements. The schema-discriminant `capacity`
+(§6.8.4) of a text-type shall yield the number of **bytes** the type's values
+may comprise.
+
+NOTE 10 — `length` counts elements and `capacity` counts bytes, so the two are
+in different units and `length(t) <= t.capacity` is true but not tight. That is
+a property of the model rather than an inconsistency: a text of one element may
+occupy any number of bytes. A program needing the byte count holds the bytes,
+which is what a string-type is for.
+
+NOTE 11 — `length` over a text-type is not required to be, and in this
+processor is not, an operation of constant time.
+
+**6.4.15.9 Access to the elements.** A text-type shall not be an array-type. An
+indexed-variable (§6.5.3.2) and a substring-variable (§6.5.6) shall not be
+formed from a variable of a text-type, and `substr` and `index` (§6.7.6.7)
+shall not be applied to one.
+
+The elements shall be reached by iteration. The set-member-iteration of
+§6.9.3.9.3 shall admit an expression of a text-type where it admits a
+set-expression, and the control-variable shall then be of a text-type and shall
+take the value of each element of the operand in turn. It shall be an error if
+an element does not fit the capacity of the control-variable.
+
+    for g in t do ...
+
+NOTE 12 — The refusal of an integer index is the substance of this clause and
+not an omission. Three sequences are present in one value — bytes, scalar
+values and elements — and an integer names a position in one of them, so an
+index would have to choose, silently, which; and an index over the elements
+cannot be a constant-time operation over this representation. An index that is
+neither what the reader expects nor cheap is the defect the type is introduced
+to remove, and offering it in the syntax every Pascal program already uses for
+a string would guarantee it went unnoticed.
+
+NOTE 13 — Iteration by type rather than by a new syntax follows the rule that
+a construct is distinguished by asking the symbol and not the parser: the
+operand's type is what selects between §6.9.3.9.3's set-member-iteration and
+this, and no word-symbol is reserved (ADR-0140).
+
+**6.4.15.10 Writing.** A value of a text-type shall be a write-parameter of a
+textfile, and the bytes written shall be the value's bytes. Where a field-width
+is present the value shall be padded on the left with spaces to that number of
+**elements**, and shall not be truncated.
+
+NOTE 14 — The width is in elements and is therefore not the number of columns
+a display device gives the value: a character of East Asian wide width occupies
+two and a combining mark occupies none. Display width is a further property of
+the Unicode Character Database this language does not provide (ADR-0189).
+
+**6.4.15.11 Read.** A value of a text-type shall not be a read-parameter.
+
+NOTE 15 — Reading yields bytes, whose validity is not the program's to
+guarantee, so the conversion belongs where a failure can be reported —
+6.4.15.5's fallible function, applied to what was read into a string-type.
+
+**6.4.15.12 The version of the Unicode Standard.** The version of the Unicode
+Standard and of ISO/IEC 10646 whose data determines Normalization Form C
+(6.4.15.2) and the extent of an extended grapheme cluster (6.4.15.3) shall be
+implementation-defined, and the processor shall state it.
+
+NOTE 16 — A processor is not required to track the current version. It is
+required to say which one it is, because the elements of a value and the
+equality of two values both move with it, and a program whose behaviour depends
+on that is entitled to know what it was compiled against.
+
+NOTE 17 — The two properties this clause rests on are each published with a
+conformance file — `GraphemeBreakTest.txt` and `NormalizationTest.txt` — so
+this is the one area of this language whose correctness is settled by an oracle
+written by neither this processor's author nor its specification's. ADR-0086's
+argument for the BSI suite, in the place it is needed most.
 
 #### 6.4.5 Compatible types [extended]
 
@@ -2051,3 +2298,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.4.14.6, Annex B `take` | ADR-0182 |
 | 6.7.7.6.1 – 6.7.7.6.3 | ADR-0184 |
 | 6.7.7.8 (the record component) | ADR-0187 |
+| 5.6, 6.4.15 | ADR-0189 |

@@ -23,6 +23,7 @@
 5.3	Effect on the conformance modes
 5.4	Stability
 5.5	How this document is kept true
+5.6	A requirement stated ahead of the processor
 6	Requirements
 6.0	Relationship to ISO/IEC 10206:1991
 6.0.1	Containment
@@ -76,6 +77,19 @@
 6.4.14.4	Comparison
 6.4.14.5	Type identity
 6.4.14.6	Move
+6.4.15	Text-types
+6.4.15.1	The denoter
+6.4.15.2	The invariant
+6.4.15.3	The element sequence
+6.4.15.4	Type identity
+6.4.15.5	Assignment and conversion
+6.4.15.6	Comparison
+6.4.15.7	Concatenation
+6.4.15.8	Enquiries
+6.4.15.9	Access to the elements
+6.4.15.10	Writing
+6.4.15.11	Read
+6.4.15.12	The version of the Unicode Standard
 6.5	Declarations and denotations of variables
 6.5.3	Component-variables
 6.5.3.2	Indexed-variables

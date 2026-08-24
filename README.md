@@ -1047,6 +1047,15 @@ passes through unchanged, but a multi-byte character is several `char` values:
 `é` is two, `日` is three. Encoding is the program's business, not the
 language's.
 
+That is a decision about `char` and it is not going to change — widening it
+would stop `set of char` compiling and break the dialect's containment of
+Extended Pascal. The answer is a separate type beside the string, and it is
+**designed and specified but not built**: ADR-0189 and clause 6.4.15 of
+[the dialect specification](doc/afterschool-pascal-spec.md) describe `utf8(n)`,
+a value with a capacity in bytes holding normalised UTF-8 whose elements are
+grapheme clusters. Nothing in this compiler implements it yet, and clause 5.6
+of that document is what keeps it from claiming otherwise.
+
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form with twelve fraction
 digits (` 5.000000000000E-01`); a width narrows the significand (`write(x:8)`

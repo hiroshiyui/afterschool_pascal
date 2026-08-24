@@ -46,7 +46,7 @@ the wrong mode (ADR-0154).
 | Decision | Where it stands |
 | --- | --- |
 | **The memory-safety model** | Half answered, and the answered half took two records rather than one. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — is undecidable on the evidence in hand, and becomes decidable at the first construct that demands two live names. Concurrency is that construct, and an owned pointer is deliberately not: it cannot be copied at all. |
-| **The text model** | Unstarted. `char` is a byte and nothing consults the locale. Real internationalisation needs a wider character type or a text type distinct from §6.4.3.3's strings, and Swift's `String` is the model to copy. **The largest thing on this page that no record has touched**, and the one a "practical Pascal" would be judged on first. |
+| **The text model** | **Decided and specified; nothing is built** (ADR-0189, AP 6.4.15, AP 5.6). The choice this row offered for eleven records — *a wider character type or a text type* — turned out not to exist: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap, which breaks ADR-0117's containment, so it is the second or nothing. The model is `utf8(n)`, a **value with a capacity in bytes** holding well-formed UTF-8 in normal form C, whose elements are **grapheme clusters** and whose element type is itself a text. Normalising where a value is constructed rather than where two are compared is the load-bearing choice: it makes `=` byte equality *and* canonical equivalence at once, so `'é'` typed either way is one value and a text can be a `pasmap` key. There is no integer index, for Swift's reason. Four increments, none landed, and the risk is all in the first — the Unicode tables. |
 | **The memory model** | Unstarted, and it cannot be designed before the safety model: shared mutable state is where the two meet. |
 | **How far the C++ reference front end follows** (ADR-0108) | Frozen at the conformance surface in practice — `difftest` skips a dialect source — and that is the obvious answer, not the decided one. |
 
@@ -176,7 +176,7 @@ the open decision it would settle.
 | ~~An early exit~~ | Turbo Pascal, Delphi, FPC | what propagation stands on | **Done** (ADR-0177, AP 6.7.5.9): `exit` terminates one activation, `exit(e)` assigns the result first. The one borrowing here whose source is another *Pascal* rather than another language |
 | ~~Propagation~~ | Zig's `try`, Rust's `?` | the rest of error handling | **Done** (ADR-0178, AP 6.8.9): `try(x)` yields the value or leaves the enclosing function with the cause. Spelled as a required function because no position would serve — see below |
 | ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
-| Unicode-correct `String` | Swift | the text model | **The model to copy**, and unstarted |
+| Unicode-correct `String` | Swift | the text model | **Decided, unbuilt** (ADR-0189). The grapheme as the unit and the refusal of an integer index are Swift's and are taken whole. Its *storage* is not: Swift's `String` is a reference-counted heap buffer, which is the construct ADR-0151 says forces the aliasing decision, so this is a value with a declared capacity instead — and that in turn is what makes normalise-on-construction affordable, which Swift cannot do and which buys a bytewise `=` |
 | ARC | Swift | aliasing | **Undecidable on the evidence in hand** (ADR-0151) |
 | Ownership and borrowing | Rust | aliasing | **The same, and the worst fit besides** — and the most expensive thing to mirror in `src/` |
 | Traits / protocols | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039) |
@@ -409,7 +409,9 @@ the two kinds are marked.
 
 - **Characters are bytes, and the locale is never consulted.** `char` is
   0..255, UTF-8 passes through, a multi-byte character is several `char`
-  values. *The text model, above.*
+  values. This one is not going to change: ADR-0189 records that `char`
+  *cannot* widen without breaking containment, and puts the answer in a type
+  beside the string rather than underneath it. *The text model, above.*
 
 - **A set's base type must have its values in 0..255**, every set being one
   256-bit word. §6.4.3.4 leaves the size to the implementation, so this is a
@@ -513,3 +515,4 @@ the record.
 | Can a conforming program learn that a file is missing? | `binding(f).bound` says whether it is there | ADR-0172 |
 | Can a program get its arguments as a list? | `argcount` and `argument(k)`, required identifiers of the dialect | ADR-0173 |
 | Can a foreign address be owned? | A handle-type: a file variable for it, released where a file closes | ADR-0174 |
+| What is a character, once a byte is not one? | A grapheme cluster; text is UTF-8 in normal form C, in a value with a byte capacity, and `char` is left alone because it cannot widen | ADR-0189 |

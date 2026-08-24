@@ -197,3 +197,4 @@ the alternatives that were rejected and why.
 | [0186](0186-the-runtime-has-a-posix-half-and-a-catalogue-that-holds-only-functions.md) | The runtime has a POSIX half, and a catalogue that holds only functions | Accepted |
 | [0187](0187-a-foreign-answer-of-a-record-is-a-copy.md) | A foreign answer of a record is a copy | Accepted |
 | [0188](0188-a-library-may-not-declare-the-struct-the-program-may.md) | A library may not declare the struct the program may | Accepted |
+| [0189](0189-text-is-utf-8-in-normal-form-c-and-its-element-is-a-grapheme.md) | Text is UTF-8 in normal form C, and its element is a grapheme | Accepted |
