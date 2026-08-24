@@ -463,9 +463,13 @@ end.                             { closedir runs here, as a file closes }
 It has a file variable's rules, through the same predicate: no copy, no
 comparison but with `nil`, released when the variable dies — at the block's
 end, on a `goto` out of it, on `halt`, on `dispose`. Assigning another value
-releases the old one first. A handle may be lent to a foreign routine as a
-value parameter, and lending an empty one stops the program. What it is not
-is a value: no Pascal function returns one and no record copies one.
+releases the old one first. That assignment is the **only** place such a call
+may stand — anywhere else there would be nothing to own what it answered —
+and a parameterless one written as a bare name is that call, in the one
+position it may stand and in none of the others. A handle may be lent to a
+foreign routine as a value parameter, and lending an empty one stops the
+program. What it is not is a value: no Pascal function returns one and no
+record copies one.
 
 **A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
 is the record a module used to write per payload type, with the field names

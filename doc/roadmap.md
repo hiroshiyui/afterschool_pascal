@@ -432,17 +432,6 @@ Five more, each stated in the record that made it:
   ADR-0027's reason: a property of values at run time that nothing tracks. *A
   decision.*
 
-- **A handle may not be assigned a bare parameterless `external` call**
-  (ADR-0179's leftover, a *dialect* limitation and not a conformance one).
-  `t := make` is refused where `t := make(0)` is accepted, because AP
-  6.4.12.2's arm tests the node kind and §6.8.5 makes the parameter list
-  optional. It is the same defect ADR-0179 fixed for a value parameter, and it
-  is left because the fix is two halves rather than one: the assignment arm has
-  to reach the *symbol* through either spelling to check `linkKind`, and the
-  mirror refusal — a handle-valued call standing anywhere else — lives in
-  `CheckCall`, which the bare spelling never reaches, so admitting it here
-  without that would admit it everywhere. *A fix, with a record owed.*
-
 - **Nothing is known and unfixed about conformance** beyond this list. Both
   standards are complete, four adversarial audits have run (ADR-0162,
   ADR-0167, ADR-0168, ADR-0171), and the last seven findings of the fourth

@@ -146,6 +146,16 @@ three days, with every gate green. The rest only accept more.
 
 ### Fixed
 
+- **A handle-valued `external` function written bare escaped AP 6.4.12.2 in
+  both directions**, under `--std=afterschool`. `t := make` for a
+  parameterless one was refused where `t := make(0)` is accepted; and the
+  clause's other sentence — that such a call may stand nowhere else — was not
+  applied to that spelling at all, so `if make = nil then …` compiled, ran,
+  exited 0 and **leaked the handle**, which is the one thing the type exists
+  to prevent. §6.8.5 makes a function-designator's parameter list optional and
+  the processor implemented both sentences from a node kind. ADR-0180.
+  `tests/dialect/handle_bare_call.pas`, `tests/dialect/handle_errors.pas`.
+
 - **A parameterless function written bare could not be a value parameter** of
   a structured type. `take(mk)` was refused with *argument 1 of 'take' is
   Point and needs a variable* where `take(mk(0))`, `q := mk` and `mk.x` were
