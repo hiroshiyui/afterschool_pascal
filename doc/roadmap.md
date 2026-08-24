@@ -15,7 +15,7 @@ decide about, and the day it is decided it moves there.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
-| [What blocks the library](#what-blocks-the-library) | the foreign-interface items a practical library still waits on, and what a survey of daily needs left open |
+| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the two edges the handle left behind |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the two oracles still worth building |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
@@ -58,30 +58,30 @@ mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 ## What blocks the library
 
-The library is seventeen modules — eight conforming, nine dialect. A survey of
-what a daily program needs against the thirteen that then existed (2026-08-23)
-found three gaps that needed no language change and were closed the same day (`PasFile`,
-`PasProcess`, `PasStrVec`; the first needed ADR-0172 first), and three that
-stayed open. One of those, the command line as a list, was a feature rather
-than a module and is done (ADR-0173); the other two are the same item
-underneath.
+**One thing is left**, and it is not a module: a foreign **struct with a
+layout** — `struct sockaddr`, `struct stat`, `struct dirent`. Crossing one needs
+the compiler and C to agree about offsets, which nothing here does for a foreign
+type. It is what stands between here and a socket, and between here and a
+directory listing.
 
-**A pointer to storage the callee owns whose contents are not characters.**
-Every foreign type that crosses today is a scalar, a string copied at the call,
-or a slice the caller owns (AP §6.7.7). What cannot cross is now two things
-rather than a category:
+Everything else a survey of daily needs found is closed. The library is
+seventeen modules — eight conforming, nine dialect — and that survey
+(2026-08-23, against the thirteen that then existed) named six gaps. Three
+needed no language change and closed the same day: `PasFile` (after ADR-0172),
+`PasProcess`, `PasStrVec`. Of the three that needed one, the command line as a
+list turned out to be a feature rather than a module (ADR-0173), the opaque
+handle is ADR-0174, and the struct above is the remainder.
 
-- ~~**An opaque handle**~~ — **done** (ADR-0174, AP 6.4.12): `handle external
-  'closedir'` is a file variable for a foreign address, released where a file
-  closes. What it deliberately does not touch is aliasing: a handle cannot be
-  copied at all, so no two names reach one value.
+Why those last three were one item underneath: what cannot cross is **a pointer
+to storage the callee owns whose contents are not characters**. Every foreign
+type that crosses today is a scalar, a string copied at the call, or a slice the
+caller owns (AP §6.7.7). ~~The opaque half~~ is **done** — `handle external
+'closedir'` is a file variable for a foreign address, released where a file
+closes (ADR-0174, AP 6.4.12) — and what it deliberately does not touch is
+aliasing: a handle cannot be copied at all, so no two names reach one value.
+What is left is the half whose contents have a shape the program must read.
 
-- **A struct with a layout** — `struct sockaddr`, `struct stat`,
-  `struct dirent`. This needs the compiler and C to agree about offsets, which
-  nothing here does for a foreign type. It is what stands between here and a
-  socket, and between here and a directory listing.
-
-**What those two leave open, by name:**
+**What that leaves open, by name:**
 
 | A daily program wants | Why it waits |
 | --- | --- |
