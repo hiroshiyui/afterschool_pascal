@@ -2011,6 +2011,65 @@ listed three items and said nothing of the kind, so a processor reading only
 the numbered requirements would have been right to allow one. The clause now
 carries all five.
 
+### The nineteenth increment: the sentence that quantified over the wrong thing
+
+ADR-0181, and it is the first increment since ADR-0151 to touch the
+memory-safety model itself rather than to route around it.
+
+ADR-0151's finding was that a model was already here and nobody had named it:
+*an owned value is released when the variable holding it dies, and cannot be
+copied out of that variable*. That sentence was written as the answer to the
+lifetime half, and the roadmap has said the lifetime half was finished ever
+since.
+
+**It quantifies over a variable, and a variable created by `new` is held by
+nothing.** AP 6.4.12.3 releases a handle at the first of "termination of the
+activation in which the variable exists", `dispose` of a variable containing
+it, and reassignment. A heap variable exists in no activation. So a record on
+the heap holding a stream is set up correctly — `new` emits `pas_handle_init`
+for every handle in the domain — and torn down correctly — `dispose` emits
+`pas_handle_done` for every one — and nothing whatever makes `dispose` happen.
+Both halves built, both halves right, and no third thing joining them.
+
+It was in no register: not `doc/sop.md` §7, not the specification's Annex C,
+not the roadmap's own entry on the subject, which said the half was done. What
+found it was a probe written to ask a different question, and what measured it
+was `ulimit -n 64` and a counting loop: `fopen answered empty at iteration 62`.
+
+The fix is visible in the defect. The 1982 model works because every file
+variable is *declared*, so it has exactly one scope that ends; a heap variable
+has no scope, therefore no owner, therefore no release. `owned ^T` gives it
+one.
+
+Three things about the increment are worth keeping.
+
+**It was available because it decides nothing.** ADR-0151 left aliasing open
+with a criterion — it becomes decidable at the first construct admitting two
+live names for one owned value — and an owned pointer admits none, since it
+cannot be copied at all. That is ADR-0174's move a second time, and it is now
+the pattern: the lifetime half can be extended indefinitely without touching
+the fork, and each extension is available precisely because it refuses to
+alias. What it costs is visible in the feature — there is no iterative
+traversal, because a loop would need a second pointer.
+
+**One name was two questions.** `IsOwned` was asked by `ContainsFile`, which
+decides the copy refusals, and by `IsMemory`, which decides that a value
+travels by address. Those had been the same question while the only owned
+things were a file and a handle. An owned pointer is affine and its value is
+still one word, so the name had to split: `IsAffine` for the ownership,
+`IsOwned` for the representation. Everything else came free — the assignment,
+the comparison, the value parameter, the result and the fallible side are all
+refused through the predicate, without a call site being edited.
+
+**The gate that caught the emitter caught it again.** `@ownrelN` is a global
+name the emitter writes, and `foreign-reserved` failed on the first run, for
+`@frame1`'s reason and by ADR-0144's mechanism — the half of that gate which
+harvests what the compiler *emits* rather than what its source spells. A
+release routine is the second generated function per translation, after
+ADR-0175's defer runner, and the first whose number has to be handed out
+before its body exists: a type may own a variable of its own type, so the
+routine calls itself.
+
 ## What the roadmap answered
 
 `doc/roadmap.md` holds what is open. For two years it also held the full

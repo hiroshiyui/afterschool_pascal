@@ -291,6 +291,22 @@ checks they agree, which is the same arrangement the version number has. A
   scope-based release, reached from ISO 7185 §6.4.6 a) and §6.6.3.1 rather than
   from Rust. What it does **not** cover is aliasing: a second name for one owned
   value, which is ADR-0019's hole and the half of the fork still open.
+- **And the sentence quantifies over a variable, which a heap variable is not**
+  (ADR-0181). "Released when the variable holding it dies" reaches nothing
+  created by `new`: such a variable exists in no activation, so the release list
+  of a file and of AP 6.4.12.3's handle both miss it, and a program that forgets
+  `dispose` never releases what the heap record holds. Both halves of the
+  mechanism were built and correct — `new` emits `pas_file_init`/
+  `pas_handle_init` per owned thing in the domain and `dispose` emits the
+  matching teardown — and nothing made `dispose` happen. Under `ulimit -n 64` a
+  loop allocating one such record per iteration exhausted the descriptor table
+  at the 62nd. AP 6.4.14's `owned ^T` is the answer: the pointer owns the
+  variable, so the variable's death is the pointer's, and the release is
+  recursive because a type may own something of its own type. It is a flag on
+  `tyPointer` (`isText`'s shape), the refusals arrive through `ContainsFile` via
+  `IsAffine`, and `IsOwned` keeps `IsMemory` to itself — ownership and
+  representation were one name until that record. `tests/dialect/owned.pas` is
+  the case, and the leak it closes is what `new` being a release point is for.
 - **And for anything holding one, at any depth** (ADR-0150). §6.4.6 a) is two
   conditions — "T1 and T2 are the same type, *and that type is permissible as
   the component-type of a file-type*" — and `Assignable` read only the first,

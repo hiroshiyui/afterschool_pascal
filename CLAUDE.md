@@ -160,7 +160,11 @@ load-bearing and the entry names the test that fails without it.
   `ContainsFile`, which is why `Assignable` asks that and not `IsFile`
   (ADR-0150). Reading only the first made `b := a` between two records holding a
   `text` a memcpy of the file's own storage, and the block then closed one
-  `struct pas_file` twice.
+  `struct pas_file` twice. **Ownership and representation are two questions and
+  were one name until ADR-0181**: `IsAffine` is what `ContainsFile` asks — a
+  file, a handle, and the dialect's `owned ^T` — while `IsOwned` is what
+  `IsMemory` asks, and an owned pointer is not in it, its value being one word.
+  A new affine kind joins the first and not the second.
 - **The emitted module states its own `target datalayout`** (ADR-0028), because
   `LlSize`/`LlAlign` decide what a whole-variable copy moves and there is no
   `DataLayout` to ask. Don't drop the line; a set in a record segfaulted without
@@ -455,7 +459,8 @@ Five things about the dialect are worth knowing before adding anything:
   in the directive slot, `array of` in a juxtaposition that was a syntax error,
   `?` in a character no program can spell, `int64` in a scope §6.1.3 lets any
   program shadow, `handle external '…'` in a three-token juxtaposition where a
-  type-denoter ends. The test for a new spelling is whether a conforming program
+  type-denoter ends, `owned ^T` where a denoter is already complete after the
+  type-name so no caret can follow it (ADR-0181). The test for a new spelling is whether a conforming program
   could have written it **in that position**; for a statement that is one token
   of lookahead, a statement-initial identifier admitting only `(`, `:=`, `[`,
   `.`, `^` or a terminator. **`defer` is the first to use that last sentence**

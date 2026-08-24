@@ -45,7 +45,7 @@ the wrong mode (ADR-0154).
 
 | Decision | Where it stands |
 | --- | --- |
-| **The memory-safety model** | Half answered. The *lifetime* half was already here — an owned value is released when the variable holding it dies and cannot be copied out of it, which is what a file variable has been since 1982 (ADR-0151). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — is undecidable on the evidence in hand, and becomes decidable at the first construct that demands two live names. Concurrency is that construct. |
+| **The memory-safety model** | Half answered, and the answered half took two records rather than one. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — is undecidable on the evidence in hand, and becomes decidable at the first construct that demands two live names. Concurrency is that construct, and an owned pointer is deliberately not: it cannot be copied at all. |
 | **The text model** | Unstarted. `char` is a byte and nothing consults the locale. Real internationalisation needs a wider character type or a text type distinct from §6.4.3.3's strings, and Swift's `String` is the model to copy. **The largest thing on this page that no record has touched**, and the one a "practical Pascal" would be judged on first. |
 | **The memory model** | Unstarted, and it cannot be designed before the safety model: shared mutable state is where the two meet. |
 | **How far the C++ reference front end follows** (ADR-0108) | Frozen at the conformance surface in practice — `difftest` skips a dialect source — and that is the obvious answer, not the decided one. |
@@ -124,7 +124,8 @@ the open decision it would settle.
 | --- | --- | --- | --- |
 | Slices — a pointer and a length | Zig, Rust | bounds safety | **Done** (ADR-0125, ADR-0129) |
 | Optionals, and no bare null | Swift, Rust | pointer safety | **Done** (ADR-0123); the check is localised to `^`, not eliminated |
-| Scope-based release | ISO 7185, Rust's `Drop` | lifetime | **Done, and it was already here** (ADR-0151) |
+| Scope-based release | ISO 7185, Rust's `Drop` | lifetime | **Done, and it was already here** (ADR-0151) — for a *declared* variable. A created one had no owner until ADR-0181 |
+| ~~An owning pointer~~ | Rust's `Box` | lifetime, for the heap | **Done** (ADR-0181, AP 6.4.14): `owned ^T` disposes what it identifies when its own variable dies, and cannot be copied. Reached from the file variable rather than from Rust, and it decides nothing about aliasing because it admits no second name |
 | Explicit allocator passing | Zig | part of memory safety | **Tried; does not survive contact** (ADR-0116) |
 | ~~Error unions / `Result`~~ | Zig, Rust | error handling | **Done** (ADR-0176, AP 6.4.13): `T ! E` is the result record ADR-0120's convention described, written by the compiler with the field names fixed |
 | ~~An early exit~~ | Turbo Pascal, Delphi, FPC | what propagation stands on | **Done** (ADR-0177, AP 6.7.5.9): `exit` terminates one activation, `exit(e)` assigns the result first. The one borrowing here whose source is another *Pascal* rather than another language |
@@ -352,7 +353,10 @@ the two kinds are marked.
 
 - **Use-after-dispose through a second pointer is undetected.** `dispose(p)`
   sets `p` to nil, which turns the common form into the nil trap, and that is
-  all it does (ADR-0019). *The memory-safety model's aliasing half, above.*
+  all it does (ADR-0019). *The memory-safety model's aliasing half, above.* The
+  dialect's `owned ^T` sidesteps rather than closes this: storage declared that
+  way can have no second pointer, so there is nothing to dangle — but §6.4.4's
+  ordinary pointer is untouched, and ADR-0181 withdraws nothing.
 
 - **A text file's last line need not end in a terminator.** §6.4.3.5 says it
   does, so one is supplied when the file is read; reading at end-of-*file*

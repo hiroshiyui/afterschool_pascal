@@ -29,6 +29,20 @@ three days, with every gate green. The rest only accept more.
 
 ### Added
 
+- **`owned ^T`** under `--std=afterschool`: a pointer that owns the variable it
+  identifies. The variable is disposed when the pointer's own variable ceases
+  to exist, and everything owned inside it — a file, a handle, another owned
+  pointer — is released with it, so a list or a tree is freed by leaving the
+  block that owns its root. A second `new` over the same variable releases the
+  first, and `dispose` remains the early release. It cannot be copied: no
+  assignment, no value parameter, no function result, no comparison but with
+  `nil`, so what a routine is lent is a `var` parameter and a traversal is
+  recursive rather than a loop. **This closes a leak, not a convenience**: a
+  variable created by `new` exists in no activation, so nothing released what a
+  heap record held unless the program said `dispose` — under a 64-descriptor
+  limit, a loop allocating one such record per iteration ran out at the 62nd.
+  `owned` is not reserved; a program may still have a type of that name.
+
 - **`try`** under `--std=afterschool`: `try(x)` is the value of a fallible `x`
   where it succeeded, and where it did not it assigns the cause to the
   enclosing function's result and terminates that activation — so error

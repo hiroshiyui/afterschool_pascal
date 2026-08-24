@@ -471,6 +471,32 @@ foreign routine as a value parameter, and lending an empty one stops the
 program. What it is not is a value: no Pascal function returns one and no
 record copies one.
 
+**An owned pointer owns what it identifies** (ADR-0181). A variable created by
+`new` belongs to no block, so nothing releases what it holds unless the program
+says `dispose` — and a heap record holding a stream leaks the descriptor. An
+owned pointer gives that variable an owner:
+
+```pascal
+type NodePtr = owned ^Node;
+     Node = record key: integer; next: NodePtr end;
+var head: NodePtr;
+begin
+  new(head);                     { and the block owns it }
+  head^.key := 1;
+  new(head^.next)                { which the node owns }
+end.                             { dispose runs here, all the way down }
+```
+
+The release is recursive, so a list or a tree is released by leaving the block
+that owns its root, and anything owned *inside* the variable — a file, a handle
+— goes with it. A second `new` over the same variable releases the first, and
+`dispose` is still the early release. What an owned pointer has is the file
+variable's rules again: no copy, no value parameter, no function result, and no
+comparison but with `nil`. So it travels as a `var` parameter, and a list is
+walked by a recursive procedure rather than by a loop assigning a second
+pointer — a second pointer would be a copy. `owned` is not a reserved word; a
+program may still have a type of that name.
+
 **A fallible type is a value or the reason there is none** (ADR-0176). `T ! E`
 is the record a module used to write per payload type, with the field names
 fixed by the language:

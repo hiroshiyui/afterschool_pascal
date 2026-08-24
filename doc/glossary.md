@@ -368,6 +368,18 @@ A write to a field **activates** that variant and a read of an inactive one
 traps, so a caller that ignores `ok` and reads the payload is stopped rather
 than handed rubbish (ADR-0118, ADR-0120).
 
+**Affine, and owned.** A type is *affine* when its values cannot be copied and
+are released when the variable holding one ceases to exist. Three kinds are:
+the file variable, which has been affine since ISO 7185 §6.4.6 a) without the
+word being used (ADR-0151); the dialect's **handle**, a foreign address with
+the routine that releases it written into the type (ADR-0174); and its **owned
+pointer**, `owned ^T`, which owns the variable `new` created and disposes it
+recursively (ADR-0181). `IsAffine` is the predicate `ContainsFile` asks, and it
+is what refuses assignment, comparison, value parameters and function results
+for all three at once. **`IsOwned` is a different question** — whether a value
+travels by address — and an owned pointer is not in it, its value being one
+word. The two were one name until ADR-0181 needed them apart.
+
 **The library's two layers.** `lib/` holds the modules written in
 `--std=extended` and usable from it — six of them, and the layer that could
 exist before the dialect did. `lib/dialect/` holds those that need the dialect:
