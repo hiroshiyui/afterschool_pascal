@@ -58,11 +58,20 @@ mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 ## What blocks the library
 
-**One thing is left**, and it is not a module: a foreign **struct with a
-layout** — `struct sockaddr`, `struct stat`, `struct dirent`. Crossing one needs
-the compiler and C to agree about offsets, which nothing here does for a foreign
-type. It is what stands between here and a socket, and between here and a
-directory listing.
+**One thing is left**, and it is not a module: a foreign struct **the callee
+owns** — the `struct dirent *` `readdir` answers. It is what stands between
+here and a directory listing.
+
+~~The struct with a layout~~ is **done** (ADR-0184, AP 6.7.7.6.2), and the
+sentence that stood here — *crossing one needs the compiler and C to agree
+about offsets, which nothing here does for a foreign type* — was wrong in the
+direction this page has now been wrong in three times. Nothing had to be made
+to agree: `RecordLayout` already *is* C's struct rule, so a record of
+`struct stat`'s fields was 144 bytes at C's own offsets before anything was
+written. The gap was permission, not arithmetic, and a record now crosses as a
+`var` parameter. `struct sockaddr`, `struct stat` and `struct timespec` are
+declarable; what a program still writes for itself is the field list, and
+nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
 eighteen modules — eight conforming, ten dialect — and that survey
@@ -70,7 +79,8 @@ eighteen modules — eight conforming, ten dialect — and that survey
 needed no language change and closed the same day: `PasFile` (after ADR-0172),
 `PasProcess`, `PasStrVec`. Of the three that needed one, the command line as a
 list turned out to be a feature rather than a module (ADR-0173), the opaque
-handle is ADR-0174, and the struct above is the remainder.
+handle is ADR-0174, and the struct is ADR-0184 — so all six are closed, and
+what remains above is the narrower half none of them named.
 
 Why those last three were one item underneath: what cannot cross is **a pointer
 to storage the callee owns whose contents are not characters**. Every foreign
@@ -79,14 +89,19 @@ caller owns (AP §6.7.7). ~~The opaque half~~ is **done** — `handle external
 'closedir'` is a file variable for a foreign address, released where a file
 closes (ADR-0174, AP 6.4.12) — and what it deliberately does not touch is
 aliasing: a handle cannot be copied at all, so no two names reach one value.
-What is left is the half whose contents have a shape the program must read.
+~~The half whose contents have a shape~~ is **done too**, on the side where the
+*caller* owns the storage (ADR-0184): a record crosses as a `var` parameter, so
+`stat` fills a buffer this program declared. Both halves took the piece that
+needed no memory model and left the piece that does, which is now one piece —
+storage the callee owns **and** whose shape the program must read. That is
+`readdir` and nothing else on this page.
 
 **What that leaves open, by name:**
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| a directory listing | `readdir` answers a `struct dirent *` — the struct item. Through the shell it is done: `PasProcess.CaptureLines('ls -1 dir', names)`, over `popen` as a handle |
-| a socket | the struct item, with `sockaddr` |
+| a directory listing | `readdir` answers a `struct dirent *`, which the **callee** owns — the one remaining item, and the only row here still waiting on a language decision. Through the shell it is done: `PasProcess.CaptureLines('ls -1 dir', names)`, over `popen` as a handle |
+| ~~a socket~~ | **unblocked** (ADR-0184): `sockaddr` is a caller-owned struct and crosses as a `var` parameter. What is left is a module and a decision about what a portable `sockaddr` declaration looks like, `struct stat` having shown that a hand-written field list is one platform's layout — not a language gap |
 | ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
 
 **What building on the handle found.** Two modules were written over

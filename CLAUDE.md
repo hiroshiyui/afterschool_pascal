@@ -484,7 +484,17 @@ Five things about the dialect are worth knowing before adding anything:
   ADR-0176's sketched `try X` was unwritable and the parentheses are the
   construct. Before spelling a new expression by position, write out what may
   follow a factor — the six-token list above is the *statement* list and says
-  nothing about this one.
+  nothing about this one. **And the first question is one earlier than either
+  shape**: does the feature need a spelling at all? ADR-0184 admits a record as
+  the type of a `var` parameter at an `external` heading, and spells nothing —
+  it is a *rule* about what is admitted at a position the dialect already
+  holds, not a construct, and a marker for it would have been a second place
+  for the truth to live. It does not escape ADR-0140; it **inherits**
+  `external`'s position, which is why `grep external` still finds it. `exit` is
+  the same premise failing one step earlier — no position works, and a required
+  identifier answers instead. ADR-0184's consequences carry both, because
+  ADR-0140's "a feature with no position has found the real limit" assumes
+  every feature needs a spelling, and twice now none has.
 - **It nests, where the first two do not.** ADR-0033's non-nesting was forced by
   the two specifications disagreeing about word-symbols; nothing forces it here,
   so the dialect *contains* Extended Pascal. `stdKind` is

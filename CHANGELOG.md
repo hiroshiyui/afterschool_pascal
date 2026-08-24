@@ -29,6 +29,23 @@ three days, with every gate green. The rest only accept more.
 
 ### Added
 
+- **A record may be a `var` parameter of an `external` declaration** under
+  `--std=afterschool`, which is how a struct the *caller* owns crosses:
+  `procedure ExtStat(path: string; var buf: StatBuf); external 'stat'`. There
+  is nothing new to spell — that heading was always writable and simply
+  refused — and nothing was lowered for it, because this compiler already lays
+  a record out the way C lays out a struct. A record qualifies when it has no
+  variant part and every field, at any depth, is `char`, `integer`, `int64`,
+  `real`, a fixed array of one of those, or a record of them; the diagnostic
+  names the offending field rather than the record. `packed` is accepted and
+  has no effect, so it is not a way to spell C's `__attribute__((packed))`. By
+  value a record is refused in both directions. **You write the field list
+  yourself and nothing checks it against the header** — the same unchecked
+  claim as every `external` signature.
+- **`pasx_record_probe`** in the runtime: a struct carrying one member of every
+  kind a foreign record may hold, filled with values no other member could
+  hold. A program declaring the matching record and calling it learns whether
+  this compiler and its C compiler agree about offsets on *its* target.
 - **`owned ^T`** under `--std=afterschool`: a pointer that owns the variable it
   identifies. The variable is disposed when the pointer's own variable ceases
   to exist, and everything owned inside it — a file, a handle, another owned

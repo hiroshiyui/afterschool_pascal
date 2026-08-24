@@ -2545,3 +2545,42 @@ i64)` is byte for byte what `clang` writes. Three things decide it.
   confirmed for arity rather than for types. So does dropping the `sext`, both
   target architectures zeroing the upper half of a 32-bit register write. Both
   are in `doc/sop.md` §7.
+
+**A record crosses when C lays it out the same way** (ADR-0184, AP 6.7.7.6.2).
+A `var` parameter of an external-declaration may be a record, and what makes it
+sound is that nothing had to be made to agree: `RecordLayout` rounds each field
+up to its own alignment, takes the widest as the record's and rounds the total
+to it, which *is* C's struct rule. A Pascal record of `struct stat`'s fields
+emits `memcpy(..., i64 144, ...)`, C's own `sizeof`, at C's own offsets — a
+measurement taken before the feature was designed, and the reason the roadmap's
+estimate of this item was wrong.
+
+- **Nothing is spelled and nothing is lowered.** `var buf: StatBuf` at an
+  `external` heading is a position that always existed and was refused, so this
+  is the first dialect feature needing neither of ADR-0140's two shapes; and
+  `EmitForeignArgument` already wrote `EmitAddress` then one `ptr` operand for
+  every var parameter, so `model-drift` reports the edit as outside both
+  modelled regions and asks for no trailer. The whole change is one arm in
+  `CheckForeignHeading` and `BadForeignField` beside it.
+- **The fields decide, and the list is ADR-0129's for ADR-0129's reason.**
+  `char`, `integer`, `int64`, `real`, a fixed array of one of those, a record
+  of them: the callee writes through the address, so a type with a byte pattern
+  that is not a value of it cannot be admitted. A variant part is the one
+  refusal about *this* compiler's representation rather than a value set — an
+  arm is laid over `[k x iN]`, which no C union rule produces.
+- **`packed` is admitted and means nothing**, packing not affecting layout here
+  at all — so it is not a way to spell `__attribute__((packed))`, and the probe's
+  nested struct is `{ char c; int n; }` precisely so the corpus fails if that
+  ever changes.
+- **The oracle is in the runtime, not the corpus.** The claim is that two
+  compilers agree about offsets and no one side can check it, so
+  `pasx_record_probe` is a struct in `runtime/pasrt.c` filled with values no
+  other member could hold — the C compiler builds one side, this compiler the
+  other, and `tests/dialect/foreign_record.pas` is them meeting. It is in the
+  runtime because the claim is per *target* (ADR-0028), so the question has to
+  be askable on a machine that is not this one.
+- **What it does not close** is that the declared fields are the struct's
+  fields — the same unchecked claim as every `external` signature, which is why
+  no POSIX struct is declared in `lib/`: `struct stat` differs between glibc and
+  macOS. And a callee-owned struct pointer is still AP 6.7.7.9 c), so `readdir`
+  waits. `doc/sop.md` §7 carries both.

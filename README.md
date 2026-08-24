@@ -266,6 +266,35 @@ its length in-band. A string containing `chr(0)` traps rather than being
 truncated. A `var` parameter of `integer` or `real` crosses as the actual's own
 address.
 
+**And a `var` parameter may be a record** (ADR-0184), which is how a struct the
+*caller* owns crosses — `stat`, `gettimeofday`, `timespec_get`, `sockaddr`:
+
+```pascal
+type TimeSpec = record sec, nsec: int64 end;
+function timespec_get(var t: TimeSpec; base: integer): integer;
+  external 'timespec_get';
+```
+
+There is nothing new to spell: that heading was always writable and was simply
+refused. What makes it sound is that this compiler already lays a record out
+the way C lays out a struct, so a Pascal record of `struct stat`'s fields is
+144 bytes at C's own offsets with nothing written to make it so.
+
+A record crosses when it has **no variant part** and every field, at any depth,
+is `char`, `integer`, `int64`, `real`, a fixed array of one of those, or a
+record of them. Everything else is refused, and the diagnostic names the field
+rather than the record. `packed` is allowed and changes nothing — packing does
+not affect layout here, so it is not a way to spell C's
+`__attribute__((packed))`. By value it is refused in both directions: how a
+struct is copied into a call is a fact about C's ABI, and nothing here may
+depend on one.
+
+**You still write the fields yourself, and nothing checks them.** That they are
+the members `struct stat` has, in that order and with that padding, is the same
+unchecked claim as the signature — see below. What the record removes is the
+*arithmetic*: you state fields, never offsets. For that reason no POSIX struct
+is declared in `lib/`; `struct stat` differs between glibc and macOS.
+
 **An address crosses only as an argument**, with one exception that is itself
 an argument's worth of storage: a returned `char *` may be null, and an
 optional is where null now lives (below). A **buffer** crosses as a slice, and
@@ -775,13 +804,15 @@ and the optional copies the answer back. A returned pointer that is the
 caller's own storage coming home has no ownership question in it, which is the
 same distinction ADR-0122 drew for arguments.
 
-What is left is a pointer to storage the **callee** owns whose contents are
-not characters — a `DIR *` you must hand back to `closedir`, a
-`struct sockaddr *` with a layout C fixes and this compiler would have to agree
-with. That is where the memory-safety model actually bites, and it is what
-stands between here and a socket. A container waits on something else entirely —
-parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
-the ordering, and `doc/history.md` has each increment that got this far.
+A struct the **caller** owns crosses too (ADR-0184), so `stat` and `sockaddr`
+are declarable — and it turned out to need no agreement to be built, this
+compiler's record layout already being C's struct rule. What is left is a
+pointer to storage the **callee** owns whose contents are not characters: the
+`struct dirent *` `readdir` answers, which is neither a handle to hand back nor
+a buffer you lent. That is where the memory-safety model actually bites. A
+container waits on something else entirely — parameterising a type by a type,
+which schemata do not do. `doc/roadmap.md` has the ordering, and
+`doc/history.md` has each increment that got this far.
 
 ## What the compiler accepts today, with `--std=iso7185`
 
