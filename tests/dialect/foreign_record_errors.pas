@@ -1,5 +1,5 @@
-{ AP 6.7.7.6.2 in the direction that refuses (ADR-0184). Sema accumulates, so
-  one file carries every refusal here.
+{ AP 6.7.7.6.2 and 6.7.7.8 in the direction that refuses (ADR-0184, ADR-0187).
+  Sema accumulates, so one file carries every refusal here.
 
   The rule is not a list of forbidden types but a list of admitted ones, and
   what admits them is a single property: the field's layout must be one C
@@ -52,6 +52,10 @@ type
     sides: a record of two integers crosses as a `var` parameter. }
   plain = record a, b: integer end;
 
+  optVarying = ?varying;
+  optNested  = ?nested;
+  optPlain   = ?plain;
+
 procedure TakesVariant(var r: varying);   external 'ext_variant';
 procedure TakesEnum(var r: withEnum);     external 'ext_enum';
 procedure TakesBool(var r: withBool);     external 'ext_bool';
@@ -72,6 +76,18 @@ procedure ByValue(r: plain);              external 'ext_byvalue';
   other direction, and it is refused by the rule about results. }
 function Returns: plain;                  external 'ext_result';
 
+{ 6.7.7.8's optional record answers the *same* question about fields, because
+  the copy it makes at the call reads bytes a C compiler laid out -- so the two
+  refusals below are the two above, restated in the position where the address
+  comes back. `optNested` names the inner field, as `nested` does: the rule one
+  level down is the same rule wherever it is asked from. }
+function AnswersVariant: optVarying;      external 'ext_opt_variant';
+function AnswersNested: optNested;        external 'ext_opt_nested';
+
+{ And from the admitting side, so the file states this rule from both ends too:
+  an optional of a record C lays out the same way is what comes back. }
+function AnswersPlain: optPlain;          external 'ext_opt_plain';
+
 var v: varying; e: withEnum; b: withBool; s: withSub;
     st: withString; se: withSet; fl: withFile; n: nested;
     ar: withArray; tw: withTwo; pl: plain;
@@ -88,5 +104,6 @@ begin
   TakesArray(ar);
   TakesTwo(tw);
   ByValue(pl);
-  pl := Returns
+  pl := Returns;
+  writeln(AnswersVariant = nil, AnswersNested = nil, AnswersPlain = nil)
 end.

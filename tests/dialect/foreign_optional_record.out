@@ -1,0 +1,17 @@
+present   = TRUE
+int64     = 1000
+integer   = -1
+char      = a
+char[]    = de1
+real      = 0.5
+int64[]   = 11 22
+nested    = g -8
+second    = 2000
+first     = 1000
+copied    = 1000 7 -1
+held[1]   = 1000
+held[2]   = 3000
+absent    = TRUE
+epoch     = 1970-1-1 0:0:0
+weekday   = 4 yearday = 0
+gigasecond= 2001-9-9

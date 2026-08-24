@@ -1,8 +1,8 @@
 <source>:15:11: error: an optional cannot hold an optional: one flag answers for a value, and two answer for each other
 <source>:18:13: error: an optional cannot hold text: a file is never a value, so there is nothing to be absent
 <source>:28:1: error: an 'external' function cannot return a bare string: it would be a pointer that may be null, which only an optional can hold -- write '?' before the type
-<source>:29:1: error: an 'external' function can return an optional only of a string with a capacity: the value arrives as a pointer, and the copy needs somewhere of a known size to go
-<source>:30:1: error: an 'external' function can return an optional only of a string with a capacity: the value arrives as a pointer, and the copy needs somewhere of a known size to go
+<source>:29:1: error: an 'external' function can return an optional only of a string with a capacity or of a record whose fields C lays out the same way: the value arrives as a pointer, and the copy needs somewhere of a known size to go
+<source>:30:1: error: an 'external' function can return an optional only of a string with a capacity or of a record whose fields C lays out the same way: the value arrives as a pointer, and the copy needs somewhere of a known size to go
 <source>:35:3: error: cannot assign optint to a variable of type integer
 <source>:36:3: error: cannot assign char to a variable of type optint
 <source>:39:8: error: an optional can only be compared with 'nil': it asks whether there is a value, and optint against optint would need the value's own equality

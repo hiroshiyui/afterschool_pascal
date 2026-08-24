@@ -186,6 +186,109 @@ Feature: Foreign functions
       write '?' before the type
       """
 
+  @afterschool:6.7.7.8
+  Scenario: a record result crosses as an optional, and the diagnostic says so
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type R = record a, b: integer end;
+      function f: R; external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      write '?' before the record and the value is copied at the call
+      """
+
+  @afterschool:6.7.7.8
+  Scenario: an optional of a record is copied where the call occurs
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Tm = record
+             sec, min, hour, mday, mon, year, wday, yday, isdst: integer
+           end;
+           OptTm = ?Tm;
+      function GmTime(var t: int64): OptTm; external 'gmtime';
+      var when: int64; a, b: OptTm;
+      begin
+        when := 0;
+        a := GmTime(when);
+        when := 1000000000;
+        b := GmTime(when);
+        writeln(a^.year + 1900:1, ' ', b^.year + 1900:1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      1970 2001
+      """
+
+  @afterschool:6.7.7.8
+  Scenario: the copy leaves the callee's storage behind, so a later call does not move it
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type Tm = record
+             sec, min, hour, mday, mon, year, wday, yday, isdst: integer
+           end;
+           OptTm = ?Tm;
+      function GmTime(var t: int64): OptTm; external 'gmtime';
+      var when: int64; held, other: OptTm;
+      begin
+        when := 0;
+        held := GmTime(when);
+        when := 1000000000;
+        other := GmTime(when);
+        writeln(held^.year + 1900:1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      1970
+      """
+
+  @afterschool:6.7.7.8
+  Scenario: a field a C compiler would not lay out is refused in the result position too
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type R = record ok: boolean end;
+           OptR = ?R;
+      function f: OptR; external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      is an optional of a record, but its field 'ok' is boolean
+      """
+
+  @afterschool:6.7.7.8
+  Scenario: and a variant part is refused, an arm's storage being this compiler's own
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type sel = 1..2;
+           R = record head: integer; case tag: sel of 1: (a: integer); 2: (b: real) end;
+           OptR = ?R;
+      function f: OptR; external 'ext_f';
+      begin end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      is an optional of a record with a variant part
+      """
+
   @afterschool:6.7.7.10
   Scenario: a foreign name the compiler emits for itself is refused
     Given the Afterschool Pascal program

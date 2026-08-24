@@ -19276,7 +19276,7 @@ begin
 end;
 
 procedure CheckForeignHeading(d: nodePtr; sym: symPtr);
-var p: symListPtr; k: integer; prior: symPtr; bad: fieldPtr;
+var p: symListPtr; k: integer; prior: symPtr; bad: fieldPtr; el: typePtr;
 begin
   sym^.linkKind := lnkForeign;
   sym^.linkItemAt := d^.pdExtAt;
@@ -19335,13 +19335,47 @@ begin
       what `getenv` answers for a name that is not set; an optional is where
       null now lives, so the refusal is lifted exactly that far. }
     if IsOptional(sym^.stype) then begin
-      if not (IsVarString(sym^.stype^.elem) and
-              (sym^.stype^.elem^.hiDisc = nil) and
-              (sym^.stype^.elem^.hi > 0)) then begin
+      el := sym^.stype^.elem;
+      { AP 6.7.7.8 (ADR-0187): a record is the second thing that comes back as
+        an address, and *which* records is 6.7.7.6.2's question asked in the
+        other direction -- the same fields for the same reason, since the copy
+        made at the call reads bytes a C compiler laid out. What is not asked
+        again is the lifetime: the copy is made where the call occurs and the
+        address is dead by the end of the statement, so no storage the callee
+        owns becomes a value of this language, which is 6.7.7.9 c) holding. }
+      if IsRecord(el) then begin
+        if el^.variants <> nil then begin
+          ErrorAt(d^.line, d^.col);
+          write('the result of ''');
+          WritePool(d^.pdAt, d^.pdLen);
+          writeln(''' is an optional of a record with a variant part; the ',
+                  'storage an arm is laid over is this compiler''s own and a ',
+                  'C union is not laid out from it, so a record that crosses ',
+                  'has a fixed field-list')
+        end
+        else begin
+          bad := BadForeignField(el);
+          if bad <> nil then begin
+            ErrorAt(d^.line, d^.col);
+            write('the result of ''');
+            WritePool(d^.pdAt, d^.pdLen);
+            write(''' is an optional of a record, but its field ''');
+            WritePool(bad^.at, bad^.len);
+            write(''' is ');
+            WriteTypeName(bad^.ftype);
+            writeln('; a field crosses only as ''char'', ''integer'', ',
+                    '''int64'', ''real'', a fixed array of one of those, or ',
+                    'a record of them having no variant part')
+          end
+        end
+      end
+      else if not (IsVarString(el) and (el^.hiDisc = nil) and
+                   (el^.hi > 0)) then begin
         ErrorAt(d^.line, d^.col);
         write('an ''external'' function can return an optional only of a ');
-        write('string with a capacity: the value arrives as a pointer, and ');
-        writeln('the copy needs somewhere of a known size to go')
+        write('string with a capacity or of a record whose fields C lays out ');
+        write('the same way: the value arrives as a pointer, and the copy ');
+        writeln('needs somewhere of a known size to go')
       end
     end
     { AP 6.4.12.3 (ADR-0174): a handle is the one address of storage the
@@ -19354,6 +19388,19 @@ begin
       write('an ''external'' function cannot return a bare string: it would ');
       write('be a pointer that may be null, which only an optional can hold ');
       writeln('-- write ''?'' before the type')
+    end
+    { The string's case, for a record (ADR-0187), and said before the general
+      refusal for the same reason 6.7.7.6.3 is: a record *does* come back, and
+      what the program has got wrong is the direction rather than the type. A
+      struct returned by value is ADR-0030's question -- how a struct is
+      copied into a register pair, or into hidden storage the caller passes --
+      and the remedy is a type this compiler already knows how to receive. }
+    else if IsRecord(sym^.stype) then begin
+      ErrorAt(d^.line, d^.col);
+      write('an ''external'' function cannot return a record by value: how a ');
+      write('struct comes back is a fact about C''s ABI and nothing here may ');
+      write('depend on one, so what crosses is an address -- write ''?'' ');
+      writeln('before the record and the value is copied at the call')
     end
     else if not ForeignType(sym^.stype) then begin
       ErrorAt(d^.line, d^.col);
@@ -27071,11 +27118,27 @@ begin
     AddressOfSym(slotSym, resAddr);
     OptionalPart(resAddr, result, 1, slot);
     Def(half);
-    write(ircode, 'call i32 @pas_cstr_take(ptr ');
-    PutOp(slot);
-    write(ircode, ', i32 ', result^.elem^.hi:1, ', ptr ');
-    PutOp(v);
-    writeln(ircode, ')');
+    { AP 6.7.7.8 (ADR-0187): a record's copy is a guarded memcpy where a
+      string's is a guarded strlen-and-store, and the two are one shape --
+      each routine reports whether there was a value, and the four lines after
+      this `if` store the flag, because the layout of an optional is CodeGen's.
+      The length is the *record's* size and not the struct's: that a C compiler
+      laid the same thing out is a claim the program makes (6.7.7.6.2), and
+      this reads exactly the fields the program declared. }
+    if IsRecord(result^.elem) then begin
+      write(ircode, 'call i32 @pas_rec_take(ptr ');
+      PutOp(slot);
+      write(ircode, ', i64 ', LlSize(result^.elem):1, ', ptr ');
+      PutOp(v);
+      writeln(ircode, ')')
+    end
+    else begin
+      write(ircode, 'call i32 @pas_cstr_take(ptr ');
+      PutOp(slot);
+      write(ircode, ', i32 ', result^.elem^.hi:1, ', ptr ');
+      PutOp(v);
+      writeln(ircode, ')')
+    end;
     OptionalPart(resAddr, result, 0, alen);
     write(ircode, '  store i32 ');
     PutOp(half);
@@ -32766,6 +32829,9 @@ begin
     rather than writing it -- the layout of an optional stays here. }
   writeln(ircode, 'declare ptr @pas_str_cstr(ptr, i32)');
   writeln(ircode, 'declare i32 @pas_cstr_take(ptr, i32, ptr)');
+  { ADR-0187: the same shape for a record, the length being the size
+    the record has here rather than anything the far side reports. }
+  writeln(ircode, 'declare i32 @pas_rec_take(ptr, i64, ptr)');
   { ADR-0125's slice range, normalised to the base's own 1..n. }
   writeln(ircode, 'declare void @pas_slice_check(i32, i32, i32)');
   { How much of the runtime's string arena is in use -- the one thing this

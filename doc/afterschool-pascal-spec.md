@@ -1314,10 +1314,18 @@ property.
 
 **6.7.7.8 Function results.** The result type of an external-declaration shall
 be `integer`, `int64`, `real`, a handle-type (6.4.12.4), or an optional-type
-(6.4.11) whose component is a **variable-string-type** (ISO/IEC 10206:1991
-§6.4.3.3.3).
+(6.4.11) whose component is either a **variable-string-type**
+(ISO/IEC 10206:1991 §6.4.3.3.3) or a record-type admitted by 6.7.7.6.2.
 
-NOTE — The first draft of this clause said "a string-type having a capacity",
+Where the result type is an optional-type, a null address shall yield the absent
+value, and any other address shall yield a copy, made where the call occurs, of
+the value it addresses. Where the component is a variable-string-type, that
+value shall be the NUL-terminated string the address designates, and it shall be
+an error for it to exceed the capacity (Annex A.5, and it is §6.4.6's error
+rather than one added here). Where the component is a record-type, that value
+shall be as many contiguous storage units as the record-type occupies.
+
+NOTE 1 — The first draft of this clause said "a string-type having a capacity",
 which excludes nothing: §6.4.3.3.2 gives a fixed-string-type a capacity too —
 "the capacity of a fixed-string-type shall be the largest value of its
 index-type" — so the phrase used a defined term against its definition. What is
@@ -1326,19 +1334,42 @@ is admitted and `?packed array [1..8] of char` is refused, because the length a
 foreign routine's answer turns out to have is not known when the call is
 written (ADR-0144).
 
-Where the result type is an optional-type, a null address shall yield the absent
-value, and any other address shall yield a copy, made where the call occurs, of
-the NUL-terminated value it addresses. It shall be an error for that value to
-exceed the capacity (Annex A.5, and it is §6.4.6's error rather than one added
-here).
+NOTE 2 — **No address obtained from a foreign routine becomes a value of this
+language.** What the program holds is a value of its own, with its own lifetime,
+and the address is dead by the end of the statement. That is why a size is
+required of both components: the copy needs somewhere of a known size to go, and
+for the string that somewhere is the capacity while for the record it is the
+type itself.
 
-NOTE 1 — **No address obtained from a foreign routine becomes a value of this
-language.** What the program holds is a string of its own, with its own
-lifetime, and the address is dead by the end of the statement. That is why the
-capacity is required: the copy needs somewhere of a known size to go.
+NOTE 3 — The record-type is 6.7.7.6.2's, and the conditions are that clause's
+unchanged, because they are asked for the same reason: what is copied is storage
+a C compiler laid out, and a field whose representation this processor invented
+is not part of any such layout. What 6.7.7.6.2 leaves to the program — that the
+field-list *is* the member list of the struct — this clause leaves to the
+program in the same way, and 6.7.7.6.2's `@cstruct` annotation is how a program
+may have it checked.
 
-NOTE 2 — A bare `string` result is refused, and the diagnostic names the remedy.
-A `?integer` result is refused because C has no null integer for it to mean.
+NOTE 4 — The quantity copied is what the record-type occupies **here**, not
+anything the far side reports, there being nothing it could report. A
+record-type declaring a *prefix* of the struct's members therefore copies that
+prefix, which is how `struct tm` is read without naming the `char *` member
+glibc puts after the nine that matter. A record-type occupying more than the
+struct reads storage the callee does not own; that is a requirement on the
+program, in the same way and for the same reason 6.7.7.9 c) is.
+
+NOTE 5 — A bare `string` result is refused, and the diagnostic names the remedy.
+A record-type result is refused for a different reason and the diagnostic names
+the same remedy: how a struct is returned *by value* is a fact about C's ABI,
+which this processor may not depend on (ADR-0030), so what crosses is an
+address. A `?integer` result is refused because C has no null integer for it to
+mean.
+
+NOTE 6 — This clause is what makes `readdir`, `gmtime` and `localtime`
+declarable. Each answers the address of storage it owns and reuses between
+calls, and each answers a null that is an ordinary outcome and not a failure.
+The copy is what ends the program's involvement with that storage, which is why
+widening this clause leaves 6.7.7.9 c) exactly where it was: nothing here keeps
+the address (ADR-0187).
 
 **6.7.7.9 What shall not cross.** An external-declaration shall not have:
 
@@ -2010,3 +2041,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.4.14, Annex B `owned`, Annex C.11 | ADR-0181 |
 | 6.4.14.6, Annex B `take` | ADR-0182 |
 | 6.7.7.6.1 – 6.7.7.6.3 | ADR-0184 |
+| 6.7.7.8 (the record component) | ADR-0187 |

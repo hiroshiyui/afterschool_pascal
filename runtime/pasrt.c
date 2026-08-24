@@ -2704,3 +2704,55 @@ long long pasx_record_probe(struct pasx_record_probe *p) {
   p->g.n = -8;
   return (long long)sizeof(struct pasx_record_probe);
 }
+
+/* AP 6.7.7.8's optional record result (ADR-0187), from the other side.
+ *
+ * The storage is the callee's and stays the callee's: one static object, reused
+ * by every call. That is the shape `readdir`, `gmtime` and `localtime` have, and
+ * it is what makes the copy at the call site necessary rather than tidy — a
+ * second call overwrites what the first answered, so a program still holding
+ * the first value is holding a copy or it is holding nothing.
+ *
+ * A null answer is a value of the type and not a failure; `readdir` at the end
+ * of a directory is the case the optional exists for, and `n = 0` is how this
+ * routine is asked for one. Every field is derived from `n` so that two calls
+ * differ in every one of them.
+ */
+const struct pasx_record_probe *pasx_record_answer(int n) {
+  static struct pasx_record_probe s;
+  if (n == 0)
+    return NULL;
+  s.a = 1000LL * n;
+  s.b = -n;
+  s.c = (char)('a' + n - 1);
+  s.d[0] = 'd';
+  s.d[1] = 'e';
+  s.d[2] = (char)('0' + n);
+  s.e = 0.5 * n;
+  s.f[0] = 11 * n;
+  s.f[1] = 22 * n;
+  s.g.c = 'g';
+  s.g.n = -8 * n;
+  return &s;
+}
+
+/* AP 6.7.7.8's optional record result (ADR-0187). NULL is the absent value and
+ * not a failure; any other address is storage the callee owns, and this copy is
+ * the end of this program's involvement with it.
+ *
+ * The mirror of `pas_cstr_take`, and it holds the same non-opinion: it is told
+ * where the value part of the optional is and how many bytes go there, and
+ * answers whether there were any. The flag is stored by the caller, because the
+ * layout of an optional is CodeGen's and no routine here may have a second idea
+ * about it.
+ *
+ * `size` is what LlSize computed for the record the program declared, so a
+ * record that is a prefix of the C struct reads the prefix. That the two agree
+ * at all is 6.7.7.6.2's claim, checked by `foreign-layout` and not here.
+ */
+int pas_rec_take(void *dst, long long size, const void *src) {
+  if (src == NULL)
+    return 0;
+  memcpy(dst, src, (size_t)size);
+  return 1;
+}
