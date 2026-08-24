@@ -65,7 +65,7 @@ type. It is what stands between here and a socket, and between here and a
 directory listing.
 
 Everything else a survey of daily needs found is closed. The library is
-seventeen modules — eight conforming, nine dialect — and that survey
+eighteen modules — eight conforming, ten dialect — and that survey
 (2026-08-23, against the thirteen that then existed) named six gaps. Three
 needed no language change and closed the same day: `PasFile` (after ADR-0172),
 `PasProcess`, `PasStrVec`. Of the three that needed one, the command line as a

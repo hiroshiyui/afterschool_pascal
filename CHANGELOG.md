@@ -52,6 +52,15 @@ three days, with every gate green. The rest only accept more.
   the first element. Like `int64`, `argcount`, `exit` and `try` it is a
   required identifier, so a program with a `take` of its own keeps it.
 
+- **`PasList`** in `lib/dialect/`: a chain of `string(255)` the declaring block
+  owns, and **the only container here with no `Free`** — the head is an
+  `owned ^`, so the chain is disposed when the variable holding it ceases to
+  exist and there is nothing for a caller to forget. `ListPush`, `ListPop`,
+  `ListPeek` and `ListEmpty` are constant time; `ListLen`, `ListAppend`,
+  `ListGet`, `ListDrop` and `ListReverse` are O(n) and recursive, because the
+  rule that stops a second pointer from dangling also stops one from walking.
+  A program wanting an index still wants `PasStrVec`.
+
 - **`try`** under `--std=afterschool`: `try(x)` is the value of a fallible `x`
   where it succeeded, and where it did not it assigns the cause to the
   enclosing function's result and terminates that activation — so error

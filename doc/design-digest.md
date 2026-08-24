@@ -320,6 +320,15 @@ checks they agree, which is the same arrangement the version number has. A
   entire body of pop-front. Lowered in `EmitAssign` in four instructions;
   `EmitCall` has no arm for it at all, and `partial_cases.txt` says why that
   is deliberate. `tests/dialect/take.pas` is the case.
+- **And the client, once it could be written, is `PasList`** — the only
+  container in `lib/` with no `Free`, because the block that declares the head
+  disposes the chain. What it pays is traversal: the rule stopping a second
+  pointer from dangling stops one from walking too, so only the four
+  operations at the front are constant time and the rest are recursive. **The
+  case that pins it is the one no gate can assert on**: 4000 chains of 50
+  nodes built and abandoned, peak RSS 5.8 MB, and 58 MB with the block's
+  release suppressed. Every oracle here reads what a program prints, and a
+  leak prints nothing, so that tenfold is taken by hand (`doc/sop.md` §7).
 - **And for anything holding one, at any depth** (ADR-0150). §6.4.6 a) is two
   conditions — "T1 and T2 are the same type, *and that type is permissible as
   the component-type of a file-type*" — and `Assignable` read only the first,

@@ -651,6 +651,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
 | `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
+| `lib/dialect/paslist.pas` | `List`, a chain of `string(255)` the declaring block owns — `ListPush`, `ListPop`, `ListPeek`, `ListEmpty`, `ListLen`, `ListAppend`, `ListGet`, `ListDrop`, `ListClear`, `ListReverse`. **The only container here with no `Free`**, because the head is an `owned ^` and the block disposes the chain (ADR-0181, ADR-0182). O(1) at the front; the rest is O(n) and recursive, an owned pointer admitting no cursor — a program wanting an index wants `PasStrVec` |
 
 The trade is stated rather than hidden: the layers duplicate, because
 `ParseInt` cannot call `PasText.TrimAll`. What it buys is that a caller who
@@ -735,6 +736,14 @@ integers. `PasSort` avoids this by phrasing itself over *positions* and never
 seeing an element, but a container holds the elements, so their type is part of
 its layout — and a schema parameterises a type by a value, never by another
 type. That is a real limitation, recorded rather than worked around.
+
+**One container has no `Free`, and it is the newest.** `PasList` is built on
+the owned pointer, so a chain is disposed when the variable holding it ceases
+to exist and there is nothing for a caller to forget. It pays for that in
+traversal: the same rule that stops a second pointer from dangling stops one
+from *walking*, so every operation but the four at the front is recursive and
+O(n). The vectors keep their `VecFree` and their index; the choice between
+them is real rather than a migration.
 
 **No container takes an allocator**, though the roadmap expected one to. An
 allocator record is not expressible — a record field may not have a procedure
