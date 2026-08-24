@@ -1,6 +1,6 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These nine modules are written in `--std=afterschool` and are the only part of
+These eleven modules are written in `--std=afterschool` and are the only part of
 this repository that reaches outside the program: the environment, the file
 system, file descriptors, `errno`, and the C functions behind them.
 
@@ -23,12 +23,20 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Sixteen exported routines take this
+**`ErrorCode`.** `errNone` is success. Eighteen exported routines take this
 shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
-`RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, and `PasStream`'s
-`OpenRead`, `OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush` —
-the three `Open`s included, because the stream they answer goes into the
-`var` parameter and what is left to return is whether the world refused.
+`RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `OpenRead`,
+`OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush`, and `PasDir`'s
+`Open`, `Next` and `List` — the four `Open`s included, because the stream or
+directory they answer goes into the `var` parameter and what is left to return
+is whether the world refused.
+
+`PasDir.Next` is the one that uses more than two of the six codes, and it is
+worth reading as the shape rather than as an exception: `errNone` with a name,
+`errAbsent` at the end of the directory, `errFull` for a name too long for the
+string it was going into, `errIO` for a refusal. Each is that code's own gloss
+applied unchanged — which is the argument for a small closed set, since a
+routine with four outcomes needed no type of its own.
 
 **2. Then: can the value be missing for a reason the caller could act on?**
 
@@ -110,7 +118,7 @@ whoever lent it, the kernel says `ssize_t`. A parameter is where that is exactly
 right — passing a slice *is* the caller's ownership written down. A result has
 no owner, so a boundary shape there is the boundary leaking into your interface.
 
-**Convert at the first opportunity**, which is what these nine modules already
+**Convert at the first opportunity**, which is what these eleven modules already
 do:
 
 - `o^` after a `= nil` test, and the value copied out — `PasEnv.LookupOr`,

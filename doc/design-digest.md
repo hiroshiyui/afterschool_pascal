@@ -2667,3 +2667,34 @@ admits, and the value is copied where the call occurs.
   and `struct addrinfo` are still only declarable as prefixes, and for the
   second that is not the useful part. A chained list of structs holding
   pointers is what ADR-0109 exists for.
+
+**A library may not declare the struct the program may** (ADR-0188). The module
+ADR-0187 was written to unblock does not use it. ADR-0185's fifth decision is
+categorical — a struct claim is checkable only where you build, and `lib/` runs
+where nobody here builds — and `struct dirent` is that case at its worst: glibc
+puts an `unsigned short` and an `unsigned char` before `d_name`, macOS a 64-bit
+seek offset and two 16-bit fields, and POSIX requires only `d_ino` and `d_name`,
+**in any order**. `struct tm` is the same, standardised by ISO C 7.27.1 and then
+declared order-free by it. So the set of structs a library may declare is close
+to empty, and ADR-0187 is a *program*-level feature.
+
+- **`PasDir` binds `opendir` and `closedir` itself** — neither has a struct in
+  its signature — and asks the runtime for one thing, `e->d_name`. The `DIR *`
+  is a handle (ADR-0174), so the stream is closed by leaving the block, which
+  is ADR-0174's own worked example arriving as a library.
+- **No entry kind, and that is the decision.** `d_type` is not POSIX, is
+  invisible under `_POSIX_C_SOURCE` — what `runtime-isoc` compiles the POSIX
+  half with — and is `DT_UNKNOWN` where it exists on filesystems that do not
+  carry it. A caller composes `PasFS.Info`.
+- **The capacity travels in, so `doc/sop.md` §7's unmeasured-string row is
+  closed for this module.** `pasx_dir_next` holds the pointer and can call
+  `strlen`, so an over-long name is `errFull` and never ADR-0123's capacity
+  trap; `Next` takes `var name: string` and passes `name.capacity`, so the
+  bound checked is the caller's own. The first version fixed it at 255, under
+  which no filesystem in existence could have reached the branch — a branch
+  that cannot fire is a branch nobody has checked. `PasEnv` could have the same
+  fix and does not.
+- **`Next` gives every entry; `List` skips `.` and `..`** — the iterator hides
+  nothing, and the convenience makes an empty vector mean an empty directory.
+- **Four outcomes and no new type**: `errNone`, `errAbsent` at the end (that
+  code's own gloss, *nothing was there to return*), `errFull`, `errIO`.

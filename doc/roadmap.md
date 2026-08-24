@@ -71,6 +71,16 @@ of it — nothing holds the address, so there is no lifetime to reason about.
 declarable is a member that is *itself* a pointer, so a chained list of structs
 — `getaddrinfo` — waits, and it waits on the model rather than on a clause.
 
+**And a rule this page had not noticed cuts across all of it** (ADR-0188).
+ADR-0187 is a *program*-level feature: a program knows what it was built for
+and can have its field list checked by `foreign-layout`, and a **library**
+cannot, ADR-0185's fifth decision being categorical. `struct dirent` differs on
+glibc and macOS and POSIX does not fix its member order; `struct tm` is
+standardised by ISO C and *that clause* does not fix its member order either.
+So the set of structs `lib/` may declare is close to empty, and a module
+wanting one asks the runtime — which is how `PasDir` was built, and why the row
+below closed without using the record that unblocked it.
+
 ~~The struct with a layout~~ is **done** (ADR-0184, AP 6.7.7.6.2), and the
 sentence that stood here — *crossing one needs the compiler and C to agree
 about offsets, which nothing here does for a foreign type* — was wrong in the
@@ -112,7 +122,7 @@ a pointer, which is a second name for storage and cannot be copied away.
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| ~~a directory listing~~ | **unblocked** (ADR-0187): `readdir` answers a `struct dirent *` the callee owns, and an optional of a record copies it at the call. `d_reclen` is an `unsigned short` and this language has no two-byte scalar, so it is spelled `array [1..2] of char` — same offset, same space. What is left is a module. Through the shell it was already done: `PasProcess.CaptureLines('ls -1 dir', names)`, over `popen` as a handle |
+| ~~a directory listing~~ | **done** — `PasDir` (ADR-0188), and it went a way the row above did not predict. ADR-0187 makes `readdir` declarable by a *program*; a **library** may not declare `struct dirent` at all, ADR-0185's fifth decision holding and POSIX not even fixing the member order. So `opendir` and `closedir` are bound directly, the `DIR *` is a handle, and the runtime supplies the one member access. `PasProcess.CaptureLines('ls -1 dir', names)` is superseded |
 | ~~a socket~~ | **unblocked** (ADR-0184): `sockaddr` is a caller-owned struct and crosses as a `var` parameter. What is left is a module and a decision about what a portable `sockaddr` declaration looks like, `struct stat` having shown that a hand-written field list is one platform's layout — not a language gap |
 | ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
 

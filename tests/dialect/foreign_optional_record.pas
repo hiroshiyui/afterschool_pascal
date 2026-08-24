@@ -22,7 +22,13 @@
   6.7.7.8's NOTE 4 is about: the copy is as long as the record declared here
   and not as long as the struct. It reads the nine and stops. The values pin
   the offsets on their own, a misplaced field putting a day count where the
-  year goes. }
+  year goes.
+
+  That the nine are the *first* nine, in this order, is a claim about the
+  platform: ISO C 7.27.1 lists them and then says the members may be in any
+  order. A program may make such a claim, which is what this case is; a library
+  may not, which is ADR-0188 and why lib/dialect/pasdir.pas declares no struct
+  at all. }
 program foreign_optional_record(output);
 
 type

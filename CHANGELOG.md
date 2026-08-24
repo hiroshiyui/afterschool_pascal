@@ -52,6 +52,15 @@ three days, with every gate green. The rest only accept more.
   value a record is refused in both directions. **You write the field list
   yourself and nothing checks it against the header** — the same unchecked
   claim as every `external` signature.
+- **`PasDir`**: reading a directory — `Open`, `Next`, `Close` and `List`, with
+  the `DIR *` owned as a handle, so it is closed by leaving the block that
+  declared it. `Next` writes into a string of the caller's own capacity and
+  answers `errFull` for a name too long for it, the length being checked by the
+  side that holds the pointer rather than by the copy. There is deliberately no
+  entry *kind*: `d_type` is not POSIX, so a caller composes `PasFS.Info`.
+  `List` leaves out `.` and `..`, so an empty vector means an empty directory.
+  It supersedes `PasProcess.CaptureLines('ls -1 dir', names)`, which forked a
+  shell and could not tell an empty directory from a failed `ls`.
 - **An `external` function may answer an optional of a record** under
   `--std=afterschool`, which is how a struct the *callee* owns comes back:
   `function GmTime(var t: int64): OptTm; external 'gmtime'`. A null address is

@@ -1353,9 +1353,18 @@ NOTE 4 — The quantity copied is what the record-type occupies **here**, not
 anything the far side reports, there being nothing it could report. A
 record-type declaring a *prefix* of the struct's members therefore copies that
 prefix, which is how `struct tm` is read without naming the `char *` member
-glibc puts after the nine that matter. A record-type occupying more than the
-struct reads storage the callee does not own; that is a requirement on the
-program, in the same way and for the same reason 6.7.7.9 c) is.
+glibc puts after the nine that matter — where those nine are the first nine and
+are in that order, which ISO C 7.27.1 does not require and every implementation
+does. A record-type occupying more than the struct reads storage the callee
+does not own; that is a requirement on the program, in the same way and for the
+same reason 6.7.7.9 c) is.
+
+NOTE 4a — A prefix is a claim about a platform, and this clause admits it
+because a *program* is entitled to make one: it knows what it was compiled for,
+and 6.7.7.6.2's annotation is how it may have the claim checked. A separately
+translated component intended for machines its author cannot build for is not
+so entitled, and that is a rule about libraries rather than about this clause
+(ADR-0188).
 
 NOTE 5 — A bare `string` result is refused, and the diagnostic names the remedy.
 A record-type result is refused for a different reason and the diagnostic names

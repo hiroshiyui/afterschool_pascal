@@ -376,7 +376,11 @@ and the value is copied where the call occurs, so `readdir`, `gmtime` and
 second call moves the callee's storage and does not move what you were given.
 The copy is as long as the record you declared, so a record naming a *prefix*
 of the struct's members reads the prefix, which is how `struct tm` is usable
-without naming the `char *` glibc puts after the nine that matter. A record
+without naming the `char *` glibc puts after the nine that matter — on a
+platform whose `struct tm` starts with those nine in that order, which ISO C
+does not require and every implementation does. **That is a claim about the
+platform, and it is a program's to make**: a library may not, which is
+ADR-0188 and why `lib/dialect/pasdir.pas` declares no struct at all. A record
 result **by value** names `?` as its remedy.
 
 **Part of an array can be passed** (ADR-0125). `array of T` is a formal
@@ -696,6 +700,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasfs.pas` | `Remove`, `Rename`, `MakeDirectory`, `RemoveDirectory`, `Exists`, `WorkingDirectory`, `LinkTarget`, `PathOr` — the file system through `external`, answering an `ErrorCode` or a `PathResult` — and `Info`, which answers a file's size, modification time and kind together, one `stat` giving all three. `Info` is the one routine here that deliberately does **not** cross a struct: `struct stat` is not the same struct on two systems, so a module may not declare one (ADR-0185) and the runtime answers instead |
 | `lib/dialect/pasenv.pas` | `Lookup`, `LookupOr`, `Defined`, `Define`, `Undefine` — the environment, where an unset variable is `nil` and one set to nothing is not |
 | `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see — `PasStream` is where to create one |
+| `lib/dialect/pasdir.pas` | `Open`, `Next`, `Close`, `List` — reading a directory, with the `DIR *` owned as a handle so it is closed by leaving the block. `Next` writes into a string of the caller's own capacity and answers `errFull` for a name too long for it, the length being checked by the side that holds the pointer. There is no entry *kind*: `d_type` is not POSIX, so a caller composes `PasFS.Info`. `List` leaves out `.` and `..`, so an empty vector means an empty directory |
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
 | `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
