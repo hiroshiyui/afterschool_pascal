@@ -1,0 +1,14 @@
+fresh is empty: TRUE
+built: a b c
+len 3
+peek a
+pop a
+after pop: b c
+reversed: c b a
+dropped the second
+after drop: c a
+drop past the end: FALSE
+moved: c a
+the old head is empty: TRUE
+cleared: TRUE len 0
+4000 chains built and abandoned, every one released by its block
