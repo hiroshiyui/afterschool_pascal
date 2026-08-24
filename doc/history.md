@@ -1958,6 +1958,59 @@ would have passed while checking nothing. Making the subject a function, with
 its result assigned before the snippet, was six lines. A gate that passes for
 the wrong reason is worth more attention than the feature that revealed it.
 
+### The eighteenth increment: the rule that did not transfer
+
+ADR-0178, and it closes error handling. `T ! E` says what a failure is
+(ADR-0176), `exit` is how a block is left (ADR-0177), and `try(x)` is the
+construct that connects them: the value where the operand succeeded, and
+otherwise the cause assigned to the enclosing function's result and that
+activation terminated.
+
+Both of the questions the roadmap had left open got answers, and neither was
+the answer the question expected.
+
+**What must the enclosing result type be?** Nothing in particular. The
+construct makes an assignment to the result and hands it to
+`CheckResultAssign` — ADR-0177's routine, where `f := e` and `exit(e)` already
+agree — so the requirement is assignment-compatibility and no more. A function
+answering the *error* type takes the cause directly; one answering a fallible
+type gets AP 6.4.13's arm shorthand; one answering neither is refused by the
+message any unassignable result is refused by. The question dissolved rather
+than being answered, which is the third time in this dialect that a feature
+turned out to need no machinery of its own.
+
+**Is there a spelling a conforming program could not have written?** No — and
+that is the finding worth keeping. ADR-0176 had sketched `try X` by the rule
+ADR-0175 uses for `defer`: an identifier followed by a token that could not
+follow it. That rule is about a *statement*, where six tokens may follow a
+statement-initial identifier. A **factor** is not so constrained. A factor may
+be a variable-access, so a conforming program that declares `try` may write
+
+    try (x)     try [x]     try + x     try - x     try.f     try^
+
+and mean something by each. Only an operand beginning with an identifier, a
+number, a character-string, `nil` or `not` would have been unambiguous, which
+is a rule about six of the operands rather than about the construct. So `try`
+took ADR-0177's shape — a required identifier, nobody's under a conformance
+mode, shadowable by §6.1.3 — and the parentheses became part of the spelling.
+Four features have that shape now; it is the commoner of the two.
+
+The implementation found one thing a reading would not have. All three parts
+of the construct read the operand, and a function-designator written three
+times is three calls — so the operand is bound once to a frame slot holding
+its address, which is a `with` statement's binding taken unchanged. Nothing
+else in CodeGen is new: the branch is `and then`'s, the transfer is `exit`'s,
+and a value-type that is a string or a record is a *field of a record*, so
+every path that carries one already carried it. The mutation that removed the
+binding left every behaviour case green and failed one spec scenario — the
+one that counts the calls, written for exactly that.
+
+It also found a defect in the increment before it. ADR-0177's NOTE said
+6.9.3.11.3 forbids an exit-statement in a deferred statement; 6.9.3.11.3
+listed three items and said nothing of the kind, so a processor reading only
+the numbered requirements would have been right to allow one. The clause now
+carries all five.
+
 ## What the roadmap answered
 
 `doc/roadmap.md` holds what is open. For two years it also held the full
