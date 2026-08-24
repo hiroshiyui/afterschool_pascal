@@ -48,7 +48,12 @@ message(STATUS "Afterschool Pascal: assembling with ${APASCAL_CLANG}")
 set(APASCAL_WARNINGS -Wall -Wextra)
 
 # ---- Pascal runtime library (linked into every compiled program) ----
-add_library(pasrt STATIC runtime/pasrt.c)
+# Two translation units, and the split is a decision (ADR-0186): pasrt.c is
+# strict ISO C apart from a catalogue of function *names*, and pasrt_posix.c is
+# where anything needing a POSIX *type* goes -- a `struct stat` cannot be
+# excused by a catalogue that is proved complete by stripping includes and
+# requiring what is left to compile.
+add_library(pasrt STATIC runtime/pasrt.c runtime/pasrt_posix.c)
 target_include_directories(pasrt PUBLIC runtime)
 target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 

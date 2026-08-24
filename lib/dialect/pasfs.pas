@@ -37,8 +37,14 @@
 module PasFS;
 
 export PasFS = (MaxPath, PathName, PathResult,
+                { 6.11.2: an enumerated type's values are constants of their
+                  own and are exported one by one -- the type name alone
+                  carries none of them, which is why PasError lists all six
+                  of its codes beside ErrorCode. }
+                FileKind, fkRegular, fkDirectory, fkOther,
+                FileInfo, InfoResult,
                 Remove, Rename, MakeDirectory, RemoveDirectory, Exists,
-                WorkingDirectory, LinkTarget, PathOr);
+                WorkingDirectory, LinkTarget, PathOr, Info);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -74,6 +80,23 @@ type
     the pointer stops being one at the call site (ADR-0123). }
   OptPathName = ?PathName;
 
+  { What a path names. `fkOther` is deliberately one arm and not six: this
+    module answers what a program deciding *what to do next* needs, and the
+    difference between a socket and a block device is not that. }
+  FileKind = (fkRegular, fkDirectory, fkOther);
+
+  { The three answers one `stat` gives, together because one call gives them
+    and because asking twice would let the file change in between. `modified`
+    counts seconds the way PasProcess.Seconds does -- 6.7.6.9's TimeStamp is
+    what a program wanting fields rather than a count should convert it to. }
+  FileInfo = record
+    size: int64;
+    modified: int64;
+    kind: FileKind
+  end;
+
+  InfoResult = FileInfo ! ErrorCode;
+
 { A routine with nothing to return still has to be able to fail, and ADR-0120's
   result record cannot serve it: the safety there comes from the *payload*
   being what sets the tag, and an arm with no payload has nothing to set it
@@ -103,6 +126,22 @@ function RemoveDirectory(path: PathName): ErrorCode;
   the answer is a boolean rather than a result because the failure *is* the
   answer -- there is nothing else it could mean. }
 function Exists(path: PathName): boolean;
+
+{ What the path names, how long it is, and when it last changed.
+
+  **This asks the runtime and not C**, and that is ADR-0185's fifth decision
+  rather than a convenience. The answer lives in `struct stat`, which AP
+  6.7.7.6.2 would let this module declare and cross -- and `struct stat` is not
+  the same struct on two systems, so the declaration would be one platform's
+  layout written into a module that has to work on machines nobody here can
+  build for. `pasx_file_info` is compiled by the C compiler *of the target*,
+  reading that machine's own header, which is where a layout question can
+  actually be answered. A program with a struct of its own should declare it
+  and let `foreign-layout` check the claim; a library may not make one.
+
+  `errAbsent` is nothing there, and `errIO` anything else -- most often a path
+  through a directory the caller may not search. }
+function Info(path: PathName) = r: InfoResult;
 
 { The process's current working directory.
 
@@ -144,6 +183,14 @@ function ExtMkdir(path: string; mode: integer): integer; external 'mkdir';
 function ExtRmdir(path: string): integer; external 'rmdir';
 function ExtAccess(path: string; mode: integer): integer; external 'access';
 
+{ The runtime's, not C's, and ADR-0185's fifth decision is why -- see Info.
+  Three out-parameters rather than a struct, so this module makes no claim
+  about a layout it could not check on the machine it will run on. 0 is
+  success, 1 is nothing there, 2 is refused. }
+function ExtFileInfo(path: string;
+                     var size, mtime: int64;
+                     var kind: integer): integer; external 'pasx_file_info';
+
 { The two that lend a buffer. A slice supplies the pointer *and* the size from
   one parameter (ADR-0129), so each of these headings has one formal fewer than
   its C counterpart. `getcwd` answers its own argument or null, which is an
@@ -162,6 +209,32 @@ end;
 function Remove;
 begin
   Remove := Refused(ExtRemove(path))
+end;
+
+function Info;
+var size, mtime: int64; kind, rc: integer; got: FileInfo;
+begin
+  size := 0;
+  mtime := 0;
+  kind := 0;
+  rc := ExtFileInfo(path, size, mtime, kind);
+  if rc = 1 then
+    r := errAbsent
+  else if rc <> 0 then
+    r := errIO
+  else begin
+    got.size := size;
+    got.modified := mtime;
+    { The runtime answers 1, 2 or 3 and this is where that stops being a
+      number. An arm for each, rather than an ordinal conversion, because a
+      value the far side invented is not a value of an enumerated type until
+      something here says which one it is -- the same reason AP 6.7.7.4
+      refuses an enumeration at the boundary outright. }
+    if kind = 1 then got.kind := fkRegular
+    else if kind = 2 then got.kind := fkDirectory
+    else got.kind := fkOther;
+    r := got
+  end
 end;
 
 function Rename;

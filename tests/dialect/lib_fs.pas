@@ -13,6 +13,8 @@ import PasError;
 var scratch, other: text;
     a, b, d: PathName;
     e: ErrorCode;
+    fi: InfoResult;   { not `info`: the module exports a function of that name }
+    sized: bindable text; bt: BindingType;
 
 procedure say(what: string(16); ok: boolean);
 begin
@@ -65,5 +67,48 @@ begin
 
   { A code is a value like any other, so a caller may branch on it. }
   e := Remove(d);
-  if e = errIO then writeln('branched      = errIO')
+  if e = errIO then writeln('branched      = errIO');
+
+  { --- what a path names (ADR-0185) ---------------------------------------
+
+    `Info` is the one routine here whose answer lives in a `struct stat`, and
+    the one that deliberately does **not** cross one. AP 6.7.7.6.2 would let
+    this module declare the struct; ADR-0185's fifth decision is that a
+    library may not, because that declaration is one platform's and `lib/` has
+    to work where nobody here can build it. So the runtime is asked, and its C
+    is compiled by the C compiler of the machine being built for.
+
+    The size is what this program wrote, so it is a number a golden can hold.
+    The times are not, and are not printed. }
+  { A length is only a fact once the file is closed, and §6.7.5.6's unbind is
+    what closes one -- so this is written through a *bindable* variable of its
+    own rather than through `scratch`, which the harness bound and which stays
+    open until the block ends. }
+  bt := binding(sized);
+  bt.name := a + '.sized';
+  bind(sized, bt);
+  rewrite(sized);
+  write(sized, 'twelve chars');
+  unbind(sized);
+  fi := Info(a + '.sized');
+  if fi.ok then begin
+    writeln('info size     = ', fi.val.size:1);
+    if fi.val.kind = fkRegular then writeln('info kind     = regular')
+  end
+  else
+    writeln('info failed   = ', ErrorText(fi.cause));
+
+  said('mkdir for dir = ', MakeDirectory(d));
+  fi := Info(d);
+  if fi.ok and (fi.val.kind = fkDirectory) then
+    writeln('dir kind      = directory');
+  said('rmdir for dir = ', RemoveDirectory(d));
+
+  { Nothing there is errAbsent and not errIO, which is the one distinction
+    `pasx_file_info` draws for this module -- it costs a second `access` and
+    is what lets a caller tell "no such file" from "you may not look". }
+  fi := Info(a + '.nothing-here');
+  writeln('absent        = ', ErrorText(fi.cause));
+
+  e := Remove(a + '.sized')
 end.

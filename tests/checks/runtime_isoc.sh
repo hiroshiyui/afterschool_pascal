@@ -153,7 +153,12 @@ else
   exit 77
 fi
 
-listed=$(grep -vE '^\s*(#|$)' "$list" | tr -d ' \t' | sort -u)
+# The identifier half of the catalogue. `header:` lines belong to the POSIX
+# unit's section (ADR-0186) and are read by pass 3, not here -- without this
+# they arrive as identifiers pasrt.c does not use, and the both-directions
+# check reports the new section as a stale entry.
+listed=$(grep -vE '^\s*(#|$)' "$list" | grep -v '^header:' |
+         tr -d ' \t' | sort -u)
 
 missing=$(comm -23 <(echo "$listed") <(echo "$found"))
 extra=$(comm -13 <(echo "$listed") <(echo "$found"))
@@ -190,6 +195,80 @@ if ! "$cc" "${std[@]}" -Wall -Wextra \
   exit 1
 fi
 
+# --- pass 3: and the POSIX unit is bounded by its headers -------------------
+#
+# ADR-0186 split the runtime because the catalogue above can only ever hold
+# *functions*: it is proved complete by stripping includes and requiring what
+# is left to compile, and an incomplete `struct stat` is an error no flag
+# silences. runtime/pasrt_posix.c is therefore not held to ISO C at all. What
+# is bounded for it is the set of non-ISO headers it may include -- the
+# granularity a port actually cares about, and one that can be checked without
+# conjuring a type.
+#
+# Both directions, like everything else here: a header appearing without an
+# entry, and an entry naming a header the file no longer includes.
+posix_src=$root/runtime/pasrt_posix.c
+if [[ ! -f $posix_src ]]; then
+  echo "runtime-isoc: no runtime/pasrt_posix.c -- ADR-0186 says the runtime" \
+       "has two translation units, and this one is where anything needing a" \
+       "POSIX type lives. If it went away, strike its section from" \
+       "$list." >&2
+  exit 1
+fi
+
+posix_used=$(grep -oE '^#include <[a-z0-9_/]+\.h>' "$posix_src" |
+             sed 's/.*<\(.*\)>/\1/' | while read -r h; do
+               base=${h%.h}
+               case " $iso_headers " in *" $base "*) ;; *) echo "<$h>" ;; esac
+             done | sort -u)
+posix_named=$(grep -oE '^header: <[a-z0-9_/]+\.h>' "$list" |
+              sed 's/^header: //' | sort -u)
+
+extra=$(comm -23 <(echo "$posix_used") <(echo "$posix_named"))
+gone=$(comm -13 <(echo "$posix_used") <(echo "$posix_named"))
+if [[ -n $extra ]]; then
+  echo "runtime-isoc: runtime/pasrt_posix.c includes a non-ISO header this" \
+       "catalogue does not name:" >&2
+  for h in $extra; do echo "          $h" >&2; done
+  echo "        That file's headers *are* its porting surface (ADR-0186)." \
+       "Add it to $list with the argument for why ISO C could not do it." >&2
+  exit 1
+fi
+if [[ -n $gone ]]; then
+  echo "runtime-isoc: the catalogue names a header runtime/pasrt_posix.c no" \
+       "longer includes:" >&2
+  for h in $gone; do echo "          $h" >&2; done
+  echo "        Good news, and it still fails, for verify/'s KNOWN_GAP" \
+       "reason. Strike the entry in the change that removed it." >&2
+  exit 1
+fi
+
+# It still has to be *clean* C -- POSIX rather than ISO, which is what the
+# feature macro selects, and nothing warned about at all.
+if ! "$cc" -std=c11 -D_POSIX_C_SOURCE=200809L -pedantic-errors \
+     -Wall -Wextra -Werror -I"$root/runtime" \
+     -c "$posix_src" -o "$work/posix.o" >"$work/p3.txt" 2>&1; then
+  echo "runtime-isoc: runtime/pasrt_posix.c is not clean POSIX C11:" >&2
+  head -20 "$work/p3.txt" >&2
+  exit 1
+fi
+
+# And nothing the *compiler* emits may call into it: everything there is
+# `pasx_`, which is what makes the whole file optional for a port (ADR-0131).
+bad=$(grep -oE '^[a-z].*\b(pas_[A-Za-z0-9_]*)\s*\(' "$posix_src" |
+      grep -oE 'pas_[A-Za-z0-9_]*' | grep -v '^pasx_' | sort -u)
+if [[ -n $bad ]]; then
+  echo "runtime-isoc: runtime/pasrt_posix.c defines or calls a pas_ name:" >&2
+  for n in $bad; do echo "          $n" >&2; done
+  echo "        Everything in that file has to be pasx_, or a system" \
+       "without these headers loses the language and not just a library" \
+       "routine (ADR-0186)." >&2
+  exit 1
+fi
+
 n=$(echo "$found" | wc -l)
-echo "runtime-isoc: the runtime is strict ISO C11 and the emitted module names" \
-     "nothing but its own, apart from $n catalogued: $(echo $found | tr '\n' ' ')"
+h=$(echo "$posix_named" | wc -l)
+echo "runtime-isoc: runtime/pasrt.c is strict ISO C11 apart from $n catalogued" \
+     "names ($(echo $found | tr '\n' ' ')), runtime/pasrt_posix.c is bounded by" \
+     "$h catalogued headers ($(echo $posix_named | tr '\n' ' ')), and the" \
+     "emitted module names nothing but its own"

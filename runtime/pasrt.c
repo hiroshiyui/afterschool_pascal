@@ -2653,7 +2653,6 @@ char *pas_time(int h, int m, int s) {
  * set it. That is C's contract and this does not improve on it.
  */
 int pasx_errno(void) { return errno; }
-
 /* AP 6.7.7.6.2's record, from the other side of the boundary (ADR-0184).
  *
  * A record whose fields C also has crosses as an address, and what makes that

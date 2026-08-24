@@ -1,13 +1,23 @@
 # Every identifier runtime/pasrt.c uses that ISO C does not declare.
 #
-# The runtime is the only C in this project, and how close it stays to the
-# standard decides what a port to another C library costs. Measured on
-# 2026-08-22 it was *three names*, and access made a fourth on 2026-08-23 -- see doc/roadmap.md's cross-platform chapter,
-# where this replaced the claim that "the file model is a POSIX assumption".
+# runtime/pasrt.c is the runtime proper, and how close it stays to the standard
+# decides what a port to another C library costs. Measured on 2026-08-22 it was
+# *three names*, and access made a fourth on 2026-08-23 -- see
+# doc/roadmap.md's cross-platform chapter, where this replaced the claim that
+# "the file model is a POSIX assumption".
 #
 # tests/checks/runtime_isoc.sh reads this file and fails in both directions: a
 # fifth dependency appearing, and one of these four going away while the
 # entry stays. Add a name only with the argument for why ISO C could not do it.
+#
+# **This list can only ever hold functions**, and ADR-0186 is where that turned
+# out to be a rule rather than a habit. The list is proved complete by
+# stripping the non-ISO includes from a copy and requiring what is left to
+# compile: an undeclared *function* is a warning that can be silenced, and an
+# incomplete `struct stat` is an error that cannot. So a POSIX dependency
+# needing a type could never be catalogued here however well it was argued for,
+# and runtime/pasrt_posix.c is where such a thing goes instead. The headers
+# that file may include are the second list below, and the gate reads both.
 #
 # Format: the identifier, then a blank-line-separated argument above it.
 
@@ -36,3 +46,32 @@ open_memstream
 # it -- fopen for reading says nothing about a file that is unreadable but
 # there, and fopen for appending creates what it asks about.
 access
+
+
+# --- runtime/pasrt_posix.c: the headers, not the names ----------------------
+#
+# The second translation unit (ADR-0186) is not held to ISO C, because what
+# puts a routine there is needing a POSIX *type*. So what is bounded for it is
+# the set of headers it may include -- the right granularity for "what a port
+# has to supply", and one a gate can check without conjuring a struct.
+#
+# Everything in that file is `pasx_`, the prefix a Pascal program binds by name
+# (ADR-0131), so a system without these loses library routines and not the
+# language. Format below: `header: <name.h>`, with the argument above it.
+
+# ADR-0185: what a file *is*, for PasFS.Info. ISO C reaches none of the three
+# answers -- <time.h> knows nothing of files, so a modification time has no
+# standard source at all; whether a path is a directory has none either; and a
+# size alone could be had from fseek and ftell, but only by *opening* the file,
+# which fails for a directory and for anything the caller may not read.
+#
+# It is in the runtime rather than in lib/dialect/pasfs.pas because of
+# ADR-0185's fifth decision: AP 6.7.7.6.2 would let the module declare
+# `struct stat` and cross it, and `struct stat` is a different struct on macOS.
+# This file is compiled by the C compiler of the machine being built for, which
+# is the only place that layout question has a known answer.
+header: <sys/stat.h>
+
+# F_OK, for telling "nothing there" from "you may not look" without ENOENT --
+# one header already in pasrt.c's own dependency for `access`.
+header: <unistd.h>
