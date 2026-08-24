@@ -1,0 +1,197 @@
+=== tokens
+4 1 kw program
+4 9 ident owned
+4 14 op (
+4 15 ident output
+4 21 op )
+4 22 op ;
+5 1 kw type
+6 3 ident nodeptr
+6 11 op =
+6 13 ident owned
+6 19 op ^
+6 20 ident node
+6 24 op ;
+7 3 ident node
+7 8 op =
+7 10 kw record
+7 17 ident key
+7 20 op :
+7 22 ident integer
+7 29 op ;
+7 31 ident next
+7 35 op :
+7 37 ident nodeptr
+7 45 kw end
+7 48 op ;
+8 3 ident plain
+8 9 op =
+8 11 op ^
+8 12 ident node
+8 16 op ;
+9 1 kw var
+9 5 ident a
+9 6 op :
+9 8 ident nodeptr
+9 15 op ;
+9 17 ident b
+9 18 op :
+9 20 ident plain
+9 25 op ;
+10 1 kw begin
+11 3 ident new
+11 6 op (
+11 7 ident a
+11 8 op )
+11 9 op ;
+12 3 ident a
+12 4 op ^
+12 5 op .
+12 6 ident key
+12 10 op :=
+12 13 int 1
+12 14 op ;
+13 3 ident writeln
+13 10 op (
+13 11 ident a
+13 12 op ^
+13 13 op .
+13 14 ident key
+13 17 op ,
+13 19 str [ ]
+13 22 op ,
+13 24 ident b
+13 26 op =
+13 28 kw nil
+13 31 op )
+14 1 kw end
+14 4 op .
+15 1 eof
+=== ast
+program owned
+  params
+    name output @4:15
+  block
+    imports
+    labels
+    consts
+    types
+      type nodeptr @6:3
+        owned pointer node @6:13
+      type node @7:3
+        record @7:10
+          fields
+            group
+              names
+                name key @7:17
+              type
+                named integer @7:22
+            group
+              names
+                name next @7:31
+              type
+                named nodeptr @7:37
+      type plain @8:3
+        pointer node @8:11
+    vars
+      var
+        names
+          name a @9:5
+        type
+          named nodeptr @9:8
+      var
+        names
+          name b @9:17
+        type
+          named plain @9:20
+    procs
+    body
+      compound @10:1
+        proccall new @11:3
+          args
+            var a @11:7
+        assign @12:3
+          field key @12:5
+            deref @12:4
+              var a @12:3
+          int 1 @12:13
+        writeln @13:3
+          arg - -
+            field key @13:13
+              deref @13:12
+                var a @13:11
+          arg - -
+            char 32 @13:19
+          arg - -
+            binary eq @13:26
+              var b @13:24
+              nil @13:28
+=== sema
+program owned
+  params
+    name output @4:15
+  frames
+    frame owned level 0
+      var output #0 : text (stdout 0)
+      var a #1 : nodeptr
+      var b #2 : plain
+  block
+    imports
+    labels
+    consts
+    types
+      type nodeptr @6:3
+        owned pointer node @6:13 = nodeptr
+      type node @7:3
+        record @7:10 = node
+          layout
+            field key #0/- : integer
+            field next #1/- : nodeptr
+          fields
+            group
+              names
+                name key @7:17
+              type
+                named integer @7:22 = integer
+            group
+              names
+                name next @7:31
+              type
+                named nodeptr @7:37 = nodeptr
+      type plain @8:3
+        pointer node @8:11 = plain
+    vars
+      var
+        names
+          name a @9:5
+        type
+          named nodeptr @9:8 = nodeptr
+      var
+        names
+          name b @9:17
+        type
+          named plain @9:20 = plain
+    procs
+    body
+      compound @10:1
+        proccall new -> standard 1 @11:3
+          args
+            var a @11:7 -> owned/1 : nodeptr
+        assign @12:3
+          field key @12:5 -> #0/- : integer
+            deref @12:4 : node
+              var a @12:3 -> owned/1 : nodeptr
+          int 1 @12:13 : integer
+        writeln @13:3
+          file
+            var output @13:3 -> owned/0 : text
+          arg - -
+            field key @13:13 -> #0/- : integer
+              deref @13:12 : node
+                var a @13:11 -> owned/1 : nodeptr
+          arg - -
+            char 32 @13:19 : char
+          arg - -
+            binary eq @13:26 : boolean
+              var b @13:24 -> owned/2 : plain
+              nil @13:28 : nil

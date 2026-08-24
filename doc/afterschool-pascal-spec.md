@@ -745,6 +745,92 @@ fallible-type and leaves the enclosing function where it is a cause. It needed
 an early exit, which neither standard has, and so arrived after 6.7.5.9
 (ADR-0176, ADR-0177, ADR-0178).
 
+#### 6.4.14 Owned-pointer-types [added]
+
+An owned-pointer-type denotes a type whose values identify variables created by
+`new` (§6.7.5.3), and whose variable **owns** the variable it identifies: that
+variable is disposed when the pointer's own variable ceases to exist, and the
+value cannot be copied. It is 6.4.12's ownership applied to storage this
+language allocates rather than to an address a foreign routine owns, and it is
+what gives a created variable an owner at all — a variable created by `new` and
+identified by an ordinary pointer-type (§6.4.4) exists in no activation, so
+6.4.12.3's release list reaches nothing of it and a program that does not
+dispose it never releases what it holds (ADR-0181).
+
+**6.4.14.1 The denoter.**
+
+    owned-pointer-type = 'owned' '^' type-identifier .
+
+`owned` shall not be a word-symbol. A type-denoter is complete after a
+type-identifier, so no conforming program can write `^` in the position
+following one, and the two tokens together are a juxtaposition the conformance
+modes reject as a syntax error — 6.4.12.1's test and 6.7.3.9's, asked of the
+juxtaposition rather than of a spelling (ADR-0140).
+
+The domain shall be a type-identifier and not a type-denoter, for §6.4.4's own
+reason: the name may be one whose defining-point is later in the same
+type-definition-part, which is what lets a type own a variable of its own type.
+
+**6.4.14.2 Restrictions on the domain and on the container.** The domain shall
+not be a schema-name (§6.4.7). An owned-pointer-type shall not be, nor be
+contained by, the type of a field of a variant-part (§6.4.3.4).
+
+**6.4.14.3 Ownership.** A value of an owned-pointer-type shall not be copied. It
+follows from §6.4.6 a) and this clause that such a type, and any type
+containing one, shall not be the type of an assignment's target or source, of a
+value parameter, of a function result, or of an operand of a relational operator
+other than as 6.4.14.4 admits.
+
+The variable a value identifies shall be disposed, and every value owned within
+it released, at the first of: termination of the activation in which the
+pointer's variable exists, including termination by a `goto` (§6.9.2.4) or
+`halt` (§6.7.5.7); `dispose` of a variable containing the pointer's variable;
+`new` applied to the pointer's variable; and `dispose` applied to it. A variable
+shall be disposed at most once.
+
+A variable of an owned-pointer-type shall have the value `nil` on the
+commencement of the activation in which it exists, and on the creation of a
+variable containing it.
+
+**6.4.14.4 Comparison.** A value of an owned-pointer-type shall be an operand of
+`=` and `<>` only, and the other operand shall be `nil`.
+
+**6.4.14.5 Type identity.** An owned-pointer-type shall be a **new-type** in the
+sense of ISO/IEC 10206:1991 §6.4.1, as 6.4.11, 6.4.12 and 6.4.13 are: two
+separately written `owned ^T` denote two types, and a program that lends one to
+a routine shall declare a type-identifier for it.
+
+NOTE 1 — What an owned pointer may be is a variable parameter (§6.7.3.3), which
+binds to the variable and not to the value, and a component of a record or an
+array, which then owns it. Those two are the whole of how a program reaches what
+it owns: a list is traversed by a recursive procedure taking `var` and not by a
+loop assigning a second pointer, because a second pointer is a copy. This is
+6.4.12's NOTE 3 with one addition — a handle cannot be reached through a
+container it owns, and this can, which is why 6.4.14.3's release is recursive
+and the handle's is not.
+
+NOTE 2 — The release is a generated routine per domain type, not straight-line
+code at each release point: a type may own a variable of its own type, so the
+depth is the program's and not the translation's. A list long enough will
+therefore exhaust the stack on release, as it would on any recursive traversal.
+
+NOTE 3 — This clause settles nothing about *aliasing*, and is available for that
+reason. ADR-0151 divides the memory-safety model into lifetime and aliasing and
+records that the second becomes decidable only at the first construct admitting
+two live names for one owned value. An owned pointer admits none — it cannot be
+copied at all — so it extends the lifetime half to the heap without deciding
+between ARC and borrowing, which is 6.4.12's move a second time.
+
+NOTE 4 — 6.4.14.3's release on termination by a `goto` or a `halt` is the one
+requirement of this clause this processor does not fully meet: it releases every
+file and handle inside the owned variable and does not dispose the storage.
+Annex C.11 is the entry, and ADR-0181 has why the alternative was declined.
+
+NOTE 5 — An ordinary pointer-type (§6.4.4) is unchanged, and `dispose` of one
+goes on being what a program says. This clause adds a type; it withdraws
+nothing, and 6.4.4's use-after-dispose through a second pointer stays what
+ADR-0019 made it.
+
 #### 6.4.5 Compatible types [extended]
 
 Two slices (6.7.3.9) shall be compatible when their component types are the same
@@ -1528,6 +1614,7 @@ the construct and Sema refuses it. One column became two.
 | `fallible` | `T ! E` | `unexpected character '!'` | `unexpected character '!'` |
 | `exit` | `exit`, `exit(e)` | `unknown procedure 'exit'` | `unknown procedure 'exit'` |
 | `try` | `try(x)` | `unknown function 'try'` | `unknown function 'try'` |
+| `owned` | `owned ^T` | `expected ';' after a variable declaration, found '^'` | `expected ';' after a variable declaration, found '^'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
@@ -1628,6 +1715,16 @@ discharges §6.7.2 on every path and 6.8.9.4 b) makes the assignment on one, so
 `function f: R; begin n := try(g) end` has a result only where g failed. A
 processor could ask this and none here does; the analysis is the same dataflow
 C.3 declines for the optional (ADR-0178).
+
+**C.11 An owned pointer's storage is not given back on a non-local `goto` or a
+`halt`** (6.4.14.3). What *is* released is every file and handle inside the
+variable the pointer owns: those are registered with the runtime individually
+when the variable is created, and the runtime's unwind walks them. What is not
+released is the block itself, so what a `goto` out of the activation abandons is
+memory and not a resource — and on `halt` the process is ending in any case.
+The requirement stands as 6.4.14.3 writes it; closing it means a runtime
+registry and a per-block release runner, which is 6.9.3.11's shape, and
+ADR-0181 declined that against what it buys. `doc/sop.md` §7 carries it.
 
 ## Annex D (informative) — The library
 
@@ -1810,3 +1907,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.7.5.9, Annex C.9 | ADR-0177 |
 | 6.8.9, 6.9.3.11.3, Annex C.10 | ADR-0178 |
 | 6.4.12.2 NOTE 1 | ADR-0180 |
+| 6.4.14, Annex B `owned`, Annex C.11 | ADR-0181 |

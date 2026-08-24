@@ -766,6 +766,13 @@ type
     aliasAt, aliasLen: integer;
     { tyHandle: the foreign name of the routine that releases the value. }
     handleAt, handleLen: integer;
+    { tyPointer: this pointer *owns* the variable it identifies (AP 6.4.14,
+      ADR-0181). A flag on the kind rather than a kind of its own, which is
+      isText's shape and setCanonical's: what changes is the ownership, and
+      nothing about the pointer. IsOwned answers yes for it, so 6.4.6 a)'s
+      refusals arrive through ContainsFile without a call site being edited --
+      the handle's own route (ADR-0174). }
+    owns: boolean;
     { 6.4.7 and 6.4.8: the schema this type was produced from and the tuple it
       was produced with, nil and empty for every type written out in full.
       Sema interns by the pair, so "one tuple, one type" needs no rule in
@@ -1191,6 +1198,25 @@ type
     next: constGlobalPtr
   end;
 
+  { AP 6.4.14 (ADR-0181): the release routine for one owned pointer's domain.
+    A generated function per domain type rather than straight-line code,
+    because a type may own something of its own type and a list has no length
+    the emitter knows -- so the recursion has to be in the emitted program.
+    Keyed by the *domain*, since that is the whole of what the routine walks;
+    two `owned ^Node` denoters are two types (6.4.1) and share one routine.
+
+    `emitted` is what makes the recursion terminate: the number is handed out
+    when the first call is written and the body is emitted from a worklist
+    afterwards, so a routine that calls itself finds its own entry rather than
+    asking for a second one. }
+  ownRelPtr = ^ownRelRec;
+  ownRelRec = record
+    dom: typePtr;
+    id: integer;
+    emitted: boolean;
+    next: ownRelPtr
+  end;
+
   { An argument's operand, held until the whole list is known: the call line
     cannot be written until every argument's instructions have been. }
   opndPtr = ^opndRec;
@@ -1466,7 +1492,12 @@ type
       nkRestricted: (rtAt, rtLen, rtQualAt, rtQualLen: integer);
       nkSchema:     (scAt, scLen, scQualAt, scQualLen: integer;
                      scArgs, scArgTail: nodePtr);
-      nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer);
+      { ptOwns: the denoter was `owned ^T` (AP 6.4.14, ADR-0181). A flag on
+        the pointer rather than a node kind of its own, because every rule
+        about a pointer -- the domain must be a name so a type may name
+        itself, `nil`, the dereference -- is a rule about this one too. }
+      nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer;
+                     ptOwns: boolean);
       nkOptional:   (opElem: nodePtr);
       nkHandle:     (hdAt, hdLen: integer);   { the closer's foreign name }
       nkFallible:   (faVal, faCause: nodePtr);
@@ -1921,6 +1952,9 @@ var
     Deferred to the end of the module exactly as the string constants are. }
   constHead, constTail: constGlobalPtr;
   nextConst: integer;
+  { AP 6.4.14's release routines, in the order their first call was written. }
+  ownRels, ownRelTail: ownRelPtr;
+  nextOwnRel: integer;
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
@@ -2384,7 +2418,7 @@ end;
   `_setjmp` has to be called in the frame `longjmp` returns to, so a wrapper
   would return before the jump. }
 function ReservedForeignName(at, len: integer): boolean;
-var k: integer; counter, dotted, frames: boolean;
+var k: integer; counter, dotted, frames, rels: boolean;
 begin
   dotted := false;
   for k := at to at + len - 1 do
@@ -2412,7 +2446,24 @@ begin
     for k := at + 5 to at + len - 1 do
       if (pool[k] < '0') or (pool[k] > '9') then frames := false;
 
-  ReservedForeignName := dotted or counter or frames or
+  { AP 6.4.14 (ADR-0181): `ownrel` and digits, a release routine per owned
+    pointer's domain. `frame`'s case, and found the same way -- by
+    tests/checks/foreign_reserved.py refusing to pass, which is what that gate
+    asking the *compiler* rather than its own copy of this list is for.
+
+    The bare spelling is reserved as well, where `frame` is not, and the
+    difference is in how the two names are built: `@frame1` is AppendLit and a
+    counter, so no literal in this file holds `@frame`, while the call to a
+    release routine is written as the literal `@ownrel` followed by the
+    number. That literal is what the gate harvests, so `ownrel` is a name it
+    offers -- and reserving one more spelling is the cheaper of the two ways
+    to answer it. }
+  rels := (len >= 6) and PoolStarts(at, len, 'ownrel   ');
+  if rels then
+    for k := at + 6 to at + len - 1 do
+      if (pool[k] < '0') or (pool[k] > '9') then rels := false;
+
+  ReservedForeignName := dotted or counter or frames or rels or
     PoolStarts(at, len, 'pas_     ') or
     PoolIs(at, len, 'main     ') or PoolIs(at, len, '_setjmp  ')
 end;
@@ -4933,10 +4984,38 @@ begin
       the same type part, so `node = record next: ^node end` closes the loop. }
     else if Check(tkCaret) then begin
       t := NewNode(nkPointer, CurLine, CurCol);
+      t^.ptOwns := false;
       pos := pos + 1;
       if not Check(tkIdent) then begin
         ErrorAtCur;
         writeln('the domain of a pointer type must be a type name');
+        Bail
+      end
+      else
+        ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen)
+    end
+    { owned-pointer-type = 'owned' '^' type-identifier (AP 6.4.14, ADR-0181).
+      Neither `owned` nor anything else here is reserved, and this feature
+      reserves nothing: a conforming program may have a type named `owned`,
+      and `var x: owned;` is still that program's. What no conforming program
+      can write is a type-name followed by `^` in a type-denoter position -- a
+      denoter is complete after the name, so the caret is a syntax error
+      there. That is ADR-0140's test asked of the *juxtaposition*, which is
+      `array of`'s shape (ADR-0125) and `handle external`'s (ADR-0174), and
+      the reason this is not a fourth required identifier.
+
+      The domain is a type *identifier* for 6.4.4's own reason, restated in
+      the arm above: the name may be one defined later in the same type part,
+      which is what lets a type own something of its own type. }
+    else if (langStd = stdAfterschool) and Check(tkIdent) and
+            PoolIs(tok[pos].at, tok[pos].len, 'owned    ') and
+            (PeekKind(1) = tkCaret) then begin
+      t := NewNode(nkPointer, CurLine, CurCol);
+      t^.ptOwns := true;
+      pos := pos + 2;
+      if not Check(tkIdent) then begin
+        ErrorAtCur;
+        writeln('the domain of an owned pointer type must be a type name');
         Bail
       end
       else
@@ -7117,6 +7196,7 @@ begin
   t^.aliasLen := 0;
   t^.handleAt := 0;
   t^.handleLen := 0;
+  t^.owns := false;
   t^.schema := nil;
   t^.tuple := nil;
   t^.tupleTail := nil;
@@ -7254,12 +7334,27 @@ begin IsFile := (t <> nil) and (t^.kind = tyFile) end;
 function IsHandle(t: typePtr): boolean;
 begin IsHandle := (t <> nil) and (t^.kind = tyHandle) end;
 
-{ A file or a handle: the two kinds of variable ADR-0151 calls *owned*. No
-  copy, no comparison, released when the variable dies. ContainsFile is the
-  walk over this, and the name stays because 6.4.6 a)'s condition is the
-  file's and the handle was fitted to it. }
+{ A file or a handle: the two owned things whose *value* lives in memory and
+  therefore travels by address. IsMemory is what asks this, and it is why the
+  owned pointer of AP 6.4.14 is not in it -- that one is affine like these two
+  and its value is still one word, so it goes on being loaded and stored the
+  way every other pointer is. Ask IsAffine for the ownership and IsOwned for
+  the representation; the two questions were one until ADR-0181. }
 function IsOwned(t: typePtr): boolean;
 begin IsOwned := IsFile(t) or IsHandle(t) end;
+
+{ AP 6.4.14's owned-pointer-type (ADR-0181): `owned ^T`, which identifies a
+  variable created by `new` and released when the pointer's own variable dies. }
+function IsOwnedPointer(t: typePtr): boolean;
+begin IsOwnedPointer := IsPointer(t) and t^.owns end;
+
+{ Affine: no copy, and released when the variable holding it dies -- the whole
+  of ADR-0151's *lifetime* half, which since ADR-0181 has three members rather
+  than two. ContainsFile is the walk over this, and the walk's name stays
+  because 6.4.6 a)'s condition is the file's and the other two were fitted to
+  it. }
+function IsAffine(t: typePtr): boolean;
+begin IsAffine := IsOwned(t) or IsOwnedPointer(t) end;
 
 { `text` as against `file of char`: see typeRec.isText. }
 function IsTextFile(t: typePtr): boolean;
@@ -7734,6 +7829,14 @@ begin
         itself without this looping forever. }
       tyPointer:
         if t^.elem <> nil then begin
+          { AP 6.4.14: spelled the way the source spells it, and the word is
+            not decoration -- two diagnostics about a parameter say "X, but
+            the value is Y" and would otherwise print `^node` twice for two
+            different types. }
+          if t^.owns then begin
+            PutLit('owned           ');
+            Put(' ')            { PutLit trims its padding }
+          end;
           Put('^');
           WriteTypeName(t^.elem)
         end
@@ -10316,10 +10419,27 @@ begin
   ErrorFieldNotA(line, col, at, len, true)
 end;
 
+{ AP 6.4.14.2: an owned pointer's domain shall not be a schema. Releasing the
+  variable means walking its type, and a schema-produced type's lengths are
+  discriminants (ADR-0040) read from the descriptor a *frame* holds -- the
+  tuple header a heap variable carries is stepped back over by dispose and
+  read by nothing else, so a release routine has no way to ask how long an
+  array in it is. Refused rather than deferred: the alternative is a release
+  that walks a length it guessed. }
+procedure ErrorOwnedSchema(line, col, at, len: integer);
+begin
+  ErrorAt(line, col);
+  write('the domain of an owned pointer cannot be the schema ''');
+  WritePool(at, len);
+  writeln(''': releasing the variable would have to walk it, and the lengths ',
+          'a schema''s tuple fixes are read from a frame the heap has not got')
+end;
+
 function ResolvePointer(d: nodePtr): typePtr;
 var t: typePtr; s: symPtr; busy: boolean; l: symListPtr;
 begin
   t := NewType(tyPointer);
+  t^.owns := d^.ptOwns;
   { 6.4.4's domain-type wants a type-identifier, and this is a question about
     regions rather than 6.2.2.9's order rule -- whose pointer-domain exception
     below stands untouched. }
@@ -10373,7 +10493,11 @@ begin
         if l^.sym = s then busy := true;
         l := l^.next
       end;
-      if busy then PendPointer(t, d, s)
+      if d^.ptOwns then begin
+        ErrorOwnedSchema(d^.line, d^.col, d^.ptAt, d^.ptLen);
+        t^.elem := intType   { keep the tree checkable }
+      end
+      else if busy then PendPointer(t, d, s)
       else t^.elem := HeapFromSchema(s, d)
     end
     else
@@ -10395,8 +10519,13 @@ begin
     s := Lookup(p^.at, p^.len);
     if (s <> nil) and (s^.kind = skType) then
       p^.ptype^.elem := s^.stype
+    else if (s <> nil) and (s^.kind = skSchema) and p^.ptype^.owns then begin
+      ErrorOwnedSchema(p^.line, p^.col, p^.at, p^.len);
+      p^.ptype^.elem := intType
+    end
     else if (s <> nil) and (s^.kind = skSchema) then begin
       d := NewNode(nkPointer, p^.line, p^.col);
+      d^.ptOwns := false;
       d^.ptAt := p^.at;
       d^.ptLen := p^.len;
       { A pending domain keeps the name and not the qualifier: what waits is a
@@ -10582,12 +10711,49 @@ begin
   ArmsContainFile := found
 end;
 
+{ AP 6.4.14.2: is this type, or anything it contains, an owned pointer?
+  ContainsFile's walk with one test changed, and a separate walk rather than a
+  parameter because the two answers are wanted in one place at once -- the
+  variant-part refusal reports which of the two it found, and a shared walk
+  answering "one of these" could not say. Stops *at* the pointer and does not
+  follow it: what a domain contains is that variable's business, and following
+  would not terminate for a type owning something of its own type. }
+function ContainsOwnedPointer(t: typePtr): boolean;
+var found: boolean; f: fieldPtr;
+begin
+  found := false;
+  if t <> nil then
+    if IsOwnedPointer(t) then found := true
+    else if IsArray(t) then found := ContainsOwnedPointer(t^.elem)
+    else if IsRecord(t) then begin
+      f := t^.fields;
+      while (f <> nil) and not found do begin
+        if ContainsOwnedPointer(f^.ftype) then found := true;
+        f := f^.next
+      end
+    end;
+  ContainsOwnedPointer := found
+end;
+
+{ Why an affine type has no copy, in the words of whichever kind is in it. The
+  file's words are unchanged and so are the goldens holding them; what this
+  adds is that an owned pointer is not told it contains a file it has not got
+  (AP 6.4.14.3). Asked only where ContainsFile has already said no. }
+procedure WriteNoCopyReason(t: typePtr);
+begin
+  if ContainsOwnedPointer(t) then
+    writeln(': it contains an owned pointer, and a second name for one would ',
+            'dispose one variable twice')
+  else
+    writeln(': it contains a file, and a file has no copy')
+end;
+
 function ContainsFile;
 var found: boolean; f: fieldPtr;
 begin
   found := false;
   if t <> nil then
-    if IsOwned(t) then found := true
+    if IsAffine(t) then found := true
     else if IsArray(t) then found := ContainsFile(t^.elem)
     else if IsRecord(t) then begin
       f := t^.fields;
@@ -11233,7 +11399,23 @@ begin
           under two numbers -- do not forbid this; this compiler does, because
           there is no answer to "which arm's file is this storage" at block
           entry (ADR-0070). }
-        if IsFile(fieldType) or ContainsFile(fieldType) then begin
+        { AP 6.4.14.2 (ADR-0181), and asked first because ContainsFile answers
+          yes for an owned pointer and the message below would then name a
+          file that is not there. The reason is the arm above's second half
+          rather than its first: two arms sharing one slot may both be set up
+          with `nil` harmlessly, but on the way out there is no answer to
+          *which arm's pointer this is* -- and releasing an owned pointer
+          means disposing what it identifies. ADR-0118 makes the tag
+          authoritative in the dialect and so could answer it, but WalkFiles
+          does not walk a variant part at all, and a release that walked the
+          wrong arm would dispose an address the program never allocated. }
+        if ContainsOwnedPointer(fieldType) then begin
+          ErrorAt(fieldLine, fieldCol);
+          writeln('an owned pointer cannot be a field of a variant part: the ',
+                  'arms share storage, and releasing one means disposing what ',
+                  'it identifies -- which needs an answer to which arm this is')
+        end
+        else if IsFile(fieldType) or ContainsFile(fieldType) then begin
           ErrorAt(fieldLine, fieldCol);
           writeln('a file cannot be a field of a variant part, because the ',
                   'arms share storage and a file''s storage is its own')
@@ -14437,7 +14619,30 @@ begin
           nothing else, the optional's rule for the optional's reason -- `=
           nil` asks whether there is anything there, and two handles have no
           equality that is not the C address's. }
-        if IsHandle(l) or IsHandle(r) then begin
+        { AP 6.4.14.4 (ADR-0181): an owned pointer compares with `nil` and
+          with nothing else, and this arm has to be written out for ADR-0058's
+          reason -- ContainsFile answers yes for it, so Assignable refuses
+          both directions and the fallthrough below would report "compatible"
+          about `p = nil`, which is the one comparison the clause admits. The
+          restriction is not arbitrary: no two owned pointers hold one value,
+          so `p = q` can be true only when both are empty, and `p = nil` says
+          that of each of them. }
+        if IsOwnedPointer(l) or IsOwnedPointer(r) then begin
+          if (b^.bnOp <> opEq) and (b^.bnOp <> opNe) then begin
+            ErrorAt(b^.line, b^.col);
+            write('an owned pointer can only be compared with = and <>, ',
+                  'not with ''');
+            WriteOpName(b^.bnOp);
+            writeln('''')
+          end
+          else if not (IsNil(l) or IsNil(r)) then begin
+            ErrorAt(b^.line, b^.col);
+            writeln('an owned pointer can only be compared with ''nil'': no ',
+                    'two of them hold one variable, so any other equality ',
+                    'could only ever say that both are empty')
+          end
+        end
+        else if IsHandle(l) or IsHandle(r) then begin
           if (b^.bnOp <> opEq) and (b^.bnOp <> opNe) then begin
             ErrorAt(b^.line, b^.col);
             write('a handle can only be compared with = and <>, not with ''');
@@ -18168,11 +18373,14 @@ begin
             else if ContainsFile(s^.asTarget^.ntype) or
                     ContainsFile(s^.asValue^.ntype) then begin
               write('cannot assign ');
-              if ContainsFile(s^.asValue^.ntype) then
-                WriteTypeName(s^.asValue^.ntype)
-              else
+              if ContainsFile(s^.asValue^.ntype) then begin
+                WriteTypeName(s^.asValue^.ntype);
+                WriteNoCopyReason(s^.asValue^.ntype)
+              end
+              else begin
                 WriteTypeName(s^.asTarget^.ntype);
-              writeln(': it contains a file, and a file has no copy')
+                WriteNoCopyReason(s^.asTarget^.ntype)
+              end
             end
             else begin
               write('cannot assign ');
@@ -18583,7 +18791,7 @@ begin
             ErrorAt(n^.line, n^.col);
             write('a value conformant array cannot have component type ');
             WriteTypeName(FixedComponent(ps^.stype));
-            writeln(': it contains a file, and a file has no copy')
+            WriteNoCopyReason(FixedComponent(ps^.stype))
           end;
           if first = nil then first := ps;
           g^.grType^.ntype := ps^.stype;
@@ -18689,10 +18897,18 @@ begin
           writeln('a handle parameter of a Pascal routine must be a var ',
                   'parameter: a handle has no copy, and only an ''external'' ',
                   'routine is lent one by value')
+        { AP 6.4.14.3: the variable form is what a routine is given, and it is
+          not a restriction so much as the only thing there is -- a value
+          parameter is a copy, and the whole of what an owned pointer refuses
+          is being copied. }
+        else if IsOwnedPointer(t) then
+          writeln('an owned pointer must be a var parameter: a value ',
+                  'parameter is a copy, and two names for one owned variable ',
+                  'would dispose it twice')
         else begin
           write('a value parameter cannot be ');
           WriteTypeName(t);
-          writeln(': it contains a file, and a file has no copy')
+          WriteNoCopyReason(t)
         end
       end;
       { A variable-string value parameter is converted rather than copied --
@@ -18793,6 +19009,11 @@ begin
       if IsHandle(t) then
         writeln('contain, a handle -- only an ''external'' function ',
                 'answers one, and only to a handle variable')
+      { AP 6.4.14.3. A result is a value and this is not one: the variable it
+        would have to be released with is the one a result has not got. }
+      else if ContainsOwnedPointer(t) then
+        writeln('contain, an owned pointer -- there is no variable to ',
+                'release it, so it would be owned by no one')
       else
         writeln('contain, a file');
       CheckedResultType := intType
@@ -22850,6 +23071,10 @@ begin
       level := level - 1
     end;
     nkPointer: begin
+      { AP 6.4.14: the word is part of what the parser decided, so a dump that
+        left it out would print one line for two type-denoters -- which is the
+        defect ADR-0176's fallible type had in this very walker. }
+      if n^.ptOwns then write('owned ');
       write('pointer ');
       WritePool(n^.ptAt, n^.ptLen);
       WritePos(n^.line, n^.col);
@@ -24940,7 +25165,7 @@ var found: boolean; f: fieldPtr;
 begin
   found := false;
   if t <> nil then
-    if IsOwned(t) then found := true
+    if IsAffine(t) then found := true
     else if IsArray(t) then found := HoldsFile(t^.elem)
     else if IsRecord(t) then begin
       f := t^.fields;
@@ -24950,6 +25175,29 @@ begin
       end
     end;
   HoldsFile := found
+end;
+
+{ The release routine for this domain, made if this is the first call to it.
+  The body is not emitted here: EmitOwnRels drains the worklist after the last
+  user function, which is what lets a routine's body contain a call to itself
+  (ADR-0181). }
+function OwnRelId(dom: typePtr): integer;
+var r, fresh: ownRelPtr;
+begin
+  r := ownRels;
+  while (r <> nil) and (r^.dom <> dom) do r := r^.next;
+  if r = nil then begin
+    new(fresh);
+    nextOwnRel := nextOwnRel + 1;
+    fresh^.dom := dom;
+    fresh^.id := nextOwnRel;
+    fresh^.emitted := false;
+    fresh^.next := nil;
+    if ownRelTail = nil then ownRels := fresh else ownRelTail^.next := fresh;
+    ownRelTail := fresh;
+    r := fresh
+  end;
+  OwnRelId := r^.id
 end;
 
 { Every file inside `addr`, set up or torn down. ISO 7185 6.5.1's own example
@@ -24965,7 +25213,7 @@ procedure WalkFiles(addr: str; t: typePtr; init: boolean;
                     binding, arg, name: integer);
 var comp, istext, direct, cap, ixLo, ixHi, headB, bodyB, doneB: integer;
     f: fieldPtr;
-    nohdr, count, iv, i, more, elem, next, zero, one: str;
+    nohdr, count, iv, i, more, elem, next, zero, one, held: str;
 begin
   { AP 6.4.12 (ADR-0174): a handle is set up empty with its closer and torn
     down by the runtime, which releases what it holds -- the file's own two
@@ -25026,6 +25274,28 @@ begin
       writeln(ircode, ', i32 ', binding:1, ', i32 ', arg:1,
               ', ptr @s', name:1, ', i32 ', comp:1, ', i32 ', istext:1,
               ', i32 ', direct:1, ', i32 ', cap:1, ')')
+    end
+  end
+  { AP 6.4.14 (ADR-0181). Setting up is storing `nil`, and it is not a
+    nicety: the release below reads the slot, and a frame slot is not zeroed,
+    so without this the epilogue of a block whose `new` never ran would
+    dispose whatever the stack happened to hold. Tearing down is the generated
+    routine, which tests for empty, walks the variable and disposes it -- all
+    three in the callee, because the third of them is the recursive case. }
+  else if IsOwnedPointer(t) then begin
+    if init then begin
+      write(ircode, '  store ptr null, ptr ');
+      PutOp(addr);
+      writeln(ircode)
+    end
+    else begin
+      Def(held);
+      write(ircode, 'load ptr, ptr ');
+      PutOp(addr);
+      writeln(ircode);
+      write(ircode, '  call void @ownrel', OwnRelId(t^.elem):1, '(ptr ');
+      PutOp(held);
+      writeln(ircode, ')')
     end
   end
   else if IsRecord(t) then begin
@@ -25100,6 +25370,84 @@ begin
       StartBlock(doneB)
     end
   end
+end;
+
+{ AP 6.4.14.3's release, as a function of the domain type (ADR-0181). Emitted
+  after the last user function, so nothing here interleaves with a body being
+  written -- the emitter is sequential and cannot return to a block it has
+  left (ADR-0025), and a function definition cannot be nested inside another.
+  Draining a worklist rather than recursing: a routine whose domain owns
+  something of its own type calls itself, and OwnRelId hands out that number
+  before this body exists.
+
+  The three things it does are the three the *callee* has to do. Testing for
+  empty is here rather than at the call, because a call site that tested would
+  be straight-line code for a list of unknown length. Walking the variable is
+  WalkFiles, which is the same walk the block epilogue uses -- so a file or a
+  handle inside a heap variable is closed by the routine that disposes the
+  variable, and neither of them needed a second implementation. Disposing is
+  last, for the obvious reason.
+
+  The parameter is named rather than numbered so it cannot collide with the
+  `%vN` Def hands out. }
+procedure EmitOwnRels;
+var r: ownRelPtr; more: boolean; own, empty: str; doneB, workB: integer;
+begin
+  repeat
+    more := false;
+    r := ownRels;
+    while r <> nil do begin
+      if not r^.emitted then begin
+        r^.emitted := true;
+        more := true;
+        writeln(ircode);
+        { The Pascal name of the domain, for a reader of -S output. Not
+          WriteTypeName: that goes through the Put sink, which is aimed at the
+          diagnostic stream or at msgBuf and never at the IR file. No arm for
+          a domain without a name: 6.4.14.1 makes it a type-identifier, so it
+          always has one, and a branch nothing can reach is a liability
+          line-coverage is right to name. }
+        write(ircode, '; release the variable ', r^.id:1, ' owns: ');
+        if r^.dom^.aliasLen > 0 then
+          WritePoolIr(r^.dom^.aliasAt, r^.dom^.aliasLen);
+        writeln(ircode);
+        writeln(ircode, 'define internal void @ownrel', r^.id:1,
+                '(ptr %own) {');
+        nextReg := 0;
+        nextBlock := 0;
+        StrClear(own);
+        AppendLit(own, '%own            ');
+        StartBlock(NewBlock);
+        workB := NewBlock;
+        doneB := NewBlock;
+        Def(empty);
+        write(ircode, 'icmp eq ptr ');
+        PutOp(own);
+        writeln(ircode, ', null');
+        write(ircode, '  br i1 ');
+        PutOp(empty);
+        writeln(ircode, ', label %L', doneB:1, ', label %L', workB:1);
+
+        StartBlock(workB);
+        if HoldsFile(r^.dom) then
+          WalkFiles(own, r^.dom, false, 0, 0, 0);
+        { No stepping back over a tuple header, where dispose's own arm does
+          it: 6.4.14.2 refuses a schema domain, so HeaderSize is zero for
+          every type that can reach here and the arm would be unreachable. If
+          that restriction is ever lifted, this is the second place to change
+          -- the release and dispose must give back the same address. }
+        write(ircode, '  call void @pas_dispose(ptr ');
+        PutOp(own);
+        writeln(ircode, ')');
+        writeln(ircode, '  br label %L', doneB:1);
+
+        StartBlock(doneB);
+        writeln(ircode, '  ret void');
+        writeln(ircode, '}')
+      end;
+      r := r^.next
+    end
+  until not more
 end;
 
 { ------------------------------------------------------------- conversions }
@@ -30122,6 +30470,23 @@ begin
     end;
     spNew: begin
       domain := s^.pcArgs^.ntype^.elem;
+      { AP 6.4.14.3: `new` is a release point for an owned pointer, the way
+        6.4.12.2's assignment is one for a handle. Without this a second `new`
+        over the same variable abandons the first, which is the very leak the
+        type exists to close -- and it was one: 3000 iterations of `new(b)`
+        with a stream in the domain reported "fopen answered empty at
+        iteration 62" under a 64-descriptor limit. The slot holds `nil` before
+        the first `new`, because WalkFiles set it up that way, so this is safe
+        on the first pass through as well. }
+      if IsOwnedPointer(s^.pcArgs^.ntype) then begin
+        Def(block);
+        write(ircode, 'load ptr, ptr ');
+        PutOp(slot);
+        writeln(ircode);
+        write(ircode, '  call void @ownrel', OwnRelId(domain):1, '(ptr ');
+        PutOp(block);
+        writeln(ircode, ')')
+      end;
       if domain^.heapTuple then EmitNewTuple(s, domain, slot)
       else begin
       { ISO 7185 6.6.5.3: with tag values, only the selected variants have to
@@ -32478,6 +32843,9 @@ begin
   nextConst := 0;
   constHead := nil;
   constTail := nil;
+  nextOwnRel := 0;
+  ownRels := nil;
+  ownRelTail := nil;
   externVars := nil;
   externVarTail := nil;
   externProcs := nil;
@@ -32539,6 +32907,12 @@ begin
     The component holding the main-program-declaration is what commences
     these, and it may be another translation. }
   if progBlock = nil then begin
+    { AP 6.4.14's release routines, before the globals for the globals'
+      reason: they are what the module has left to emit, and a function
+      definition cannot be nested inside the one that calls it. A module-only
+      translation reaches this arm, so it needs the drain as much as a program
+      does -- a module's own variables are released by its finalization. }
+    EmitOwnRels;
     writeln(ircode);
     EmitGlobals;
     EmitConstGlobals;
@@ -32568,6 +32942,8 @@ begin
   EmitDeferRunner(programSym);
 
   EmitProcs(progBlock);
+
+  EmitOwnRels;
 
   writeln(ircode);
   EmitGlobals;

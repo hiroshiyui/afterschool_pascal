@@ -1,0 +1,10 @@
+fresh: TRUE
+a type named owned: 42
+length 5, sum 55
+first 1 second 4
+after dispose: TRUE
+rebuilt length 1
+read back: closed by the block that owned it
+read back: first
+read back: closed through a record field
+read back: closed through an array element

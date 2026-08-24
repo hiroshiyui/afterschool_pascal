@@ -1,0 +1,12 @@
+<source>:18:12: error: the domain of an owned pointer cannot be the schema 'sch': releasing the variable would have to walk it, and the lengths a schema's tuple fixes are read from a frame the heap has not got
+<source>:27:39: error: an owned pointer cannot be a field of a variant part: the arms share storage, and releasing one means disposing what it identifies -- which needs an answer to which arm this is
+<source>:22:13: error: the domain of an owned pointer cannot be the schema 'late': releasing the variable would have to walk it, and the lengths a schema's tuple fixes are read from a frame the heap has not got
+<source>:33:1: error: a function cannot return nodeptr: a result may not be, or contain, an owned pointer -- there is no variable to release it, so it would be owned by no one
+<source>:36:19: error: an owned pointer must be a var parameter: a value parameter is a copy, and two names for one owned variable would dispose it twice
+<source>:48:3: error: cannot assign nodeptr: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:49:3: error: cannot assign nodeptr: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:50:3: error: cannot assign nodeptr: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:52:8: error: an owned pointer can only be compared with 'nil': no two of them hold one variable, so any other equality could only ever say that both are empty
+<source>:53:8: error: an owned pointer can only be compared with = and <>, not with '<'
+<source>:59:11: error: argument 1 of 'byvalue' is nodeptr, but the value is nodeptr
+<source>:63:12: error: var parameter 'n' is owned ^node, but the argument is nodeptr
