@@ -29,6 +29,16 @@ three days, with every gate green. The rest only accept more.
 
 ### Added
 
+- **`--dump-layout`**: compile as usual, then write the size, alignment and
+  field offsets of every record the source defines. It is the compiler's half
+  of a check on a foreign struct declaration — a source states what C struct it
+  believes a record to be, in a comment (`@cstruct`, `@cfield`), and a C
+  compiler holding the real header judges the two together. A wrong field list
+  now fails the build naming the field, where it used to be silent.
+- **`PasFS.Info`**: a file's size, modification time and kind, together,
+  answering `FileInfo ! ErrorCode` — `errAbsent` when nothing is there, told
+  apart from `errIO`. It is the one routine in the library that deliberately
+  does *not* cross a struct.
 - **A record may be a `var` parameter of an `external` declaration** under
   `--std=afterschool`, which is how a struct the *caller* owns crosses:
   `procedure ExtStat(path: string; var buf: StatBuf); external 'stat'`. There

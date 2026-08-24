@@ -2580,7 +2580,51 @@ estimate of this item was wrong.
   runtime because the claim is per *target* (ADR-0028), so the question has to
   be askable on a machine that is not this one.
 - **What it does not close** is that the declared fields are the struct's
-  fields — the same unchecked claim as every `external` signature, which is why
-  no POSIX struct is declared in `lib/`: `struct stat` differs between glibc and
-  macOS. And a callee-owned struct pointer is still AP 6.7.7.9 c), so `readdir`
-  waits. `doc/sop.md` §7 carries both.
+  fields — the same unchecked claim as every `external` signature. A
+  callee-owned struct pointer is still AP 6.7.7.9 c), so `readdir` waits.
+  `doc/sop.md` §7 carries both.
+
+**A struct claim is checkable, and a library may not make one** (ADR-0185). The
+half of the above that *can* be closed is closed by a gate rather than a
+language feature, because only a C compiler holding the real header can answer
+it and `tools/pascalcc` is already the one place that shells out to `clang`.
+
+- **The claim is a comment**, `{ @cstruct: TimeSpec = struct timespec, <time.h> }`
+  with a `@cfield:` per field — ADR-0166's route for `{ @std:iso7185 }`. A fact
+  about C is not a statement about this language, so it does not belong in the
+  grammar, and having no syntax it needs nothing from `src/`.
+- **`--dump-layout` is the compiler's half**, shaped like `--dump-limits`
+  (ADR-0148): whole pipeline, writes at the end, outside `--dump-all`, so
+  difftest's three sections and every `tests/dumps/` golden are untouched.
+- **Zipped in order, not matched by name.** A missing annotation then shifts
+  every one after it and the count check fires; matching by name would silently
+  check a subset and call it a pass. `-` is padding with no C member.
+- **`@cplatform` skips rather than fails.** A declaration nobody can check here
+  is the thing being made visible, and failing would make the honest answer
+  indistinguishable from a defect.
+- **And a library module may not make such a claim at all**, which is the
+  decision the gate does not imply: it makes a declaration checkable on the
+  machine you *build* on, and `lib/` must work on machines nobody here builds
+  on. `tests/checks/foreign_layout_stat.pas` is the worked example of the other
+  side — 18 fields, both glibc holes, and a gate fixture rather than a case
+  because a case that ran would print a wrong number where the gate skips.
+
+**The runtime has a POSIX half, and a catalogue that holds only functions**
+(ADR-0186). Making `PasFS.Info` ask the runtime met a constraint that had been
+there since ADR-0161 and had never been met: the catalogue is proved complete by
+stripping the non-ISO includes and requiring what is left to compile, which
+works for an undeclared *function* — a diagnostic that can be silenced — and
+cannot work for a *type*, an incomplete `struct stat` being an error no flag
+silences. All four earlier dependencies happened to be functions.
+
+- `runtime/pasrt.c` keeps its five names and its check unchanged; the split
+  cost that claim nothing.
+- `runtime/pasrt_posix.c` is bounded by its **headers**, which is the
+  granularity a port cares about — `<sys/stat.h>` rather than whichever members
+  are read today — and both directions are checked.
+- **Everything in it is `pasx_`**, enforced, so a system without those headers
+  loses library routines and not the language: `pascalc` still builds, still
+  compiles itself, and every conforming program still runs. That is what makes
+  the split safe rather than tidy.
+  `tests/checks/runtime_isoc.sh` fails on `#include <dirent.h>` there, and on a
+  `pas_` name defined in that file.
