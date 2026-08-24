@@ -2070,6 +2070,53 @@ ADR-0175's defer runner, and the first whose number has to be handed out
 before its body exists: a type may own a variable of its own type, so the
 routine calls itself.
 
+### The twentieth increment: the client that was never written
+
+ADR-0182, and it is the first increment here whose whole justification is a
+module that does not exist.
+
+The plan after ADR-0181 was `PasList`, on the reasoning this dialect has
+earned twice: write a client the same day and it finds something. It found
+something before a line of it was written. An owned pointer has no copy, so a
+chain of owned nodes admits push-back and pop-back by recursion, the walks by
+recursion, and `dispose` — every one O(n), and **no operation in constant time
+at all**. Push-front and pop-front are unwritable, because `fresh^.next := n`
+and `n := fresh` are each a copy.
+
+Beside `PasVector` — O(1) push, O(1) index, and a `VecFree` you must remember
+— such a module would have been worse at everything and its only merit would
+have been needing no free. The finding was not about the library. **The
+missing primitive was a move**, and the four refusals that said so were one
+diagnostic, right every time.
+
+`take(v)` empties the variable and yields what it held, in the one position
+6.4.12.2 already defines for the handle. Three things are worth keeping.
+
+**The position machinery was already built.** ADR-0174 wrote it for the
+handle, ADR-0179 taught it that a bare parameterless call is a call, and
+ADR-0180 made it reach both spellings. `take` needed a flag of the same shape
+and nothing else — the fifth construct spelled as a required identifier, which
+is now decisively the commoner of the dialect's two shapes.
+
+**The evaluation order is a language decision, not a lowering.** The source is
+read and emptied before the target's address is taken, because a target
+reached *through* the source would otherwise make a node its own successor: a
+cycle held by no variable and reachable by no release. Emptying first turns
+that program into a nil dereference. It is the same choice ADR-0018 makes
+everywhere here — a defect reported beats an answer that is wrong — and it
+bought something unlooked-for: `n := take(n^.next)` is pop-front entire,
+because the source is the head's own field, so releasing what the target held
+disposes the head alone.
+
+**A scenario was found asserting less than its name.** The mutation that
+removed the target's release left the spec suite green: the scenario written
+for exactly that check leaked a node holding nothing observable, so nothing
+could see it. It now puts the stream in the target's old value. This is the
+failure `tests/spec/` exists to prevent, it survived being written
+deliberately for the property it failed to check, and it was written by the
+hand that wrote the feature — which is when it happens and why the mutation
+step is not optional.
+
 ## What the roadmap answered
 
 `doc/roadmap.md` holds what is open. For two years it also held the full

@@ -487,6 +487,21 @@ begin
 end.                             { dispose runs here, all the way down }
 ```
 
+**`take` is how one variable stops holding what another starts holding**
+(ADR-0182). It is the only value of an owned pointer type an assignment
+admits, and it may stand nowhere else:
+
+```pascal
+fresh^.next := take(head);   head := take(fresh)   { push a node on the front }
+head := take(head^.next)                           { and pop one off it }
+```
+
+Without it a chain could be pushed at the far end and read and nothing else,
+because `head := fresh` is a copy. The second line is a complete pop: the
+source is the head's own field, so releasing what `head` held disposes that one
+node — its successor already emptied out of it — and the successor lands in
+`head`.
+
 The release is recursive, so a list or a tree is released by leaving the block
 that owns its root, and anything owned *inside* the variable — a file, a handle
 — goes with it. A second `new` over the same variable releases the first, and

@@ -164,7 +164,11 @@ load-bearing and the entry names the test that fails without it.
   were one name until ADR-0181**: `IsAffine` is what `ContainsFile` asks — a
   file, a handle, and the dialect's `owned ^T` — while `IsOwned` is what
   `IsMemory` asks, and an owned pointer is not in it, its value being one word.
-  A new affine kind joins the first and not the second.
+  A new affine kind joins the first and not the second. **And an affine type
+  needs a move to be usable**: `take` (ADR-0182) is the one value an owned
+  pointer may be assigned, in 6.4.12.2's position, and its source is emptied
+  before the target's address is taken -- which is what stops a target reached
+  through the source from building a cycle nothing owns.
 - **The emitted module states its own `target datalayout`** (ADR-0028), because
   `LlSize`/`LlAlign` decide what a whole-variable copy moves and there is no
   `DataLayout` to ask. Don't drop the line; a set in a record segfaulted without

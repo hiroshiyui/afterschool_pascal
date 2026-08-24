@@ -43,6 +43,15 @@ three days, with every gate green. The rest only accept more.
   limit, a loop allocating one such record per iteration ran out at the 62nd.
   `owned` is not reserved; a program may still have a type of that name.
 
+- **`take`** under `--std=afterschool`: the move. `take(v)` empties an owned
+  pointer variable and yields what it held, and may stand only as the whole
+  right side of an assignment to a variable of that type. It is what makes an
+  owned chain a usable one — without it `head := fresh` is a copy, so a chain
+  could be pushed at its far end and read and nothing else, with no operation
+  in constant time at all. `head := take(head^.next)` is a complete removal of
+  the first element. Like `int64`, `argcount`, `exit` and `try` it is a
+  required identifier, so a program with a `take` of its own keeps it.
+
 - **`try`** under `--std=afterschool`: `try(x)` is the value of a fallible `x`
   where it succeeded, and where it did not it assigns the cause to the
   enclosing function's result and terminates that activation — so error

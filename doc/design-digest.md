@@ -307,6 +307,19 @@ checks they agree, which is the same arrangement the version number has. A
   `IsAffine`, and `IsOwned` keeps `IsMemory` to itself — ownership and
   representation were one name until that record. `tests/dialect/owned.pas` is
   the case, and the leak it closes is what `new` being a release point is for.
+- **And a type with no copy needs a move, which writing the client found**
+  (ADR-0182). `PasList` over AP 6.4.14 was unwritable: push-front and
+  pop-front are each two copies, so an owned chain admitted insertion and
+  removal at its far end only, both by recursion, and no operation in constant
+  time. `take(v)` empties the variable and yields what it held, in the one
+  position 6.4.12.2 already defines for the handle — the whole right side of
+  an assignment to a variable of the type — reached by a flag set the way
+  `handleBirth` is and for the same reason. **The source is emptied before the
+  target's address is taken**, which turns `p^.next := take(p)` from a cycle
+  nothing owns into a nil dereference, and makes `n := take(n^.next)` the
+  entire body of pop-front. Lowered in `EmitAssign` in four instructions;
+  `EmitCall` has no arm for it at all, and `partial_cases.txt` says why that
+  is deliberate. `tests/dialect/take.pas` is the case.
 - **And for anything holding one, at any depth** (ADR-0150). §6.4.6 a) is two
   conditions — "T1 and T2 are the same type, *and that type is permissible as
   the component-type of a file-type*" — and `Assignable` read only the first,
