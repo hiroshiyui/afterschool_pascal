@@ -615,6 +615,14 @@ shall first release the value it holds, if any, and then hold the value the
 function answered; a null answer leaves it empty. A function-designator whose
 result type is a handle-type shall appear in no other position.
 
+NOTE 1 — "Function-designator" is the whole construct and not one spelling of
+it: §6.8.5 makes the actual-parameter-list optional, so a parameterless
+external-declaration written as a bare identifier is one. Both sentences reach
+it. This is stated because a processor implemented the two sentences from two
+node kinds and reached only the written-out spelling with either — the
+assignment refused `t := make`, and the restriction let it stand anywhere at
+all, which is a value nothing owns and therefore a leak (ADR-0179, ADR-0180).
+
 A handle-type shall not be a value of any other kind of assignment, of any
 other relational operator, of a value parameter of a routine that is not an
 external-declaration, or of a function result that is not an
@@ -623,7 +631,7 @@ handle-type shall be subject to the same restrictions, exactly as
 ISO/IEC 10206:1991 §6.4.6 a) and §6.8.3.5 treat a type having a file-type
 component.
 
-NOTE — Those are the file variable's restrictions, reached through the same
+NOTE 2 — Those are the file variable's restrictions, reached through the same
 predicate: §6.4.6 a)'s "permissible as the component-type of a file-type"
 excludes a handle as it excludes a file, for the same reason — there is no
 copy, the storage and the value being one object.
@@ -1801,3 +1809,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.4.13 | ADR-0176 |
 | 6.7.5.9, Annex C.9 | ADR-0177 |
 | 6.8.9, 6.9.3.11.3, Annex C.10 | ADR-0178 |
+| 6.4.12.2 NOTE 1 | ADR-0180 |

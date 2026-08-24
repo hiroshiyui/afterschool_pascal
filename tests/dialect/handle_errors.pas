@@ -10,6 +10,10 @@ type
   Own = handle external 'pas_handle_done';
   NoOpt = ?Dir;
 function ExtOpendir(path: string): Dir; external 'opendir';
+{ 6.8.5 makes a function-designator's parameter list optional, so this one is
+  written as a bare name -- and 6.4.12.2's two sentences must reach it the
+  same way they reach ExtOpendir above (ADR-0180). }
+function ExtOpencwd: Dir; external 'opendir_probe';
 function ExtReaddir(d: Dir): int64; external 'readdir';
 function ExtRewinddir(var d: Dir): integer; external 'rewinddir';
 function Mine(path: string): Dir;
@@ -29,5 +33,11 @@ begin
   if d = nil then writeln('empty');
   ByValue(d);
   n := ExtReaddir(o);
+  { the bare spelling of a handle-valued external, in the one position it may
+    stand and then in two it may not. The first line is legal and is here so
+    that the two are compared rather than only the refusals tested. }
+  d := ExtOpencwd;
+  n := ExtReaddir(ExtOpencwd);
+  if ExtOpencwd = nil then writeln('empty');
   writeln(n)
 end.

@@ -8584,6 +8584,45 @@ begin
   else IsCallValue := false
 end;
 
+{ The symbol a function-designator names, however the designator is spelled.
+  IsCallValue's companion: where that answers *whether* this is a call, this
+  answers *which* routine it calls. Nil where the answer is a required
+  function, which has no symbol of the program's (ADR-0180). }
+{ AP 6.4.12.2's last sentence: a function-designator whose result type is a
+  handle-type shall appear in no other position than the whole right side of
+  an assignment to a handle variable, which is the only thing that can own
+  what it answered. Anywhere else there is nothing to own it and the address
+  leaks (ADR-0174).
+
+  handleBirth is how that one position says so, and it is cleared here rather
+  than by its setter -- every designator that could be it passes through, and
+  exactly one of them is the first.
+
+  One routine because the designator has two spellings and the clause has one
+  sentence: CheckCall asks it of a written-out call and the bare-name arm of
+  CheckExpr asks it of a parameterless one, which for a long time asked
+  nothing (ADR-0180). }
+procedure CheckHandleBirth(t: typePtr; line, col, at, len: integer);
+begin
+  if IsHandle(t) and not handleBirth then begin
+    ErrorAt(line, col);
+    write('''');
+    WritePool(at, len);
+    writeln(''' answers a handle, which may stand only as the whole ',
+            'right side of an assignment to a handle variable')
+  end;
+  handleBirth := false
+end;
+
+function CalledSym(e: nodePtr): symPtr;
+begin
+  CalledSym := nil;
+  if IsCallValue(e) then
+    if e^.kind = nkCall then CalledSym := e^.clSym
+    else if e^.vrCall <> nil then CalledSym := e^.vrCall^.clSym
+    else CalledSym := e^.vrSym
+end;
+
 function IsDesignator(e: nodePtr): boolean;
 begin
   if e = nil then IsDesignator := false
@@ -14828,19 +14867,7 @@ begin
   if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
     c^.ntype := ResultTypeOf(sym);
-    { AP 6.4.12.2 (ADR-0174): a handle answered by a call has to land in a
-      handle variable, which is the only thing that can own it -- so the
-      call may stand only as the whole right side of such an assignment,
-      where the arm that sets handleBirth has already said so. Anywhere
-      else there is nothing to own it, and the address would leak. }
-    if IsHandle(c^.ntype) and not handleBirth then begin
-      ErrorAt(c^.line, c^.col);
-      write('''');
-      WritePool(c^.clAt, c^.clLen);
-      writeln(''' answers a handle, which may stand only as the whole ',
-              'right side of an assignment to a handle variable')
-    end;
-    handleBirth := false;
+    CheckHandleBirth(c^.ntype, c^.line, c^.col, c^.clAt, c^.clLen);
     GiveResultSlot(c);
     CheckArguments(sym, c^.clArgs, c^.line, c^.col)
   end
@@ -16277,6 +16304,13 @@ begin
             result (ISO 7185 6.8.2.2). }
           else if IsInvocable(e^.vrSym) and (e^.vrSym^.params = nil) then begin
             e^.ntype := ResultTypeOf(e^.vrSym);
+            { AP 6.4.12.2's last sentence, asked of this spelling as CheckCall
+              asks it of the other. It reaches only this one: the bare name
+              never goes through CheckCall, so without it a handle-valued
+              function written bare stood anywhere at all -- and
+              `if Opencwd = nil` opened a directory that nothing would ever
+              close (ADR-0180). }
+            CheckHandleBirth(e^.ntype, e^.line, e^.col, e^.vrAt, e^.vrLen);
             { The bare name *is* the call, so it needs the storage a written-out
               call site gets. Without this a result living in memory has nowhere
               to be built and the call is never emitted at all -- the address
@@ -18028,9 +18062,20 @@ begin
         else begin
           CheckExpr(s^.asTarget);
           { AP 6.4.12.2: this call, if it is one, is in the one position a
-            handle-valued call may stand. Cleared by CheckCall. }
+            handle-valued call may stand. Cleared by CheckHandleBirth.
+
+            The test is *syntactic*, and has to be: it is asked before the
+            value is checked, so nothing has resolved the name yet and
+            IsCallValue cannot answer -- a bare parameterless call is an
+            nkVar until Sema looks its symbol up (ADR-0179). So both kinds a
+            whole right side could be are admitted here, the flag is a
+            permission rather than a claim, and the first designator that
+            turns out to be a handle-valued call consumes it. Where the value
+            is not one, nothing reads the flag and the line below clears it
+            (ADR-0180). }
           handleBirth := IsHandle(s^.asTarget^.ntype) and
-                         (s^.asValue^.kind = nkCall);
+                         ((s^.asValue^.kind = nkCall) or
+                          (s^.asValue^.kind = nkVar));
           CheckExpr(s^.asValue);
           handleBirth := false;
           { AP 6.4.13 (ADR-0176): `r := x` where r is fallible and x is a value
@@ -18071,14 +18116,17 @@ begin
             and the statement is where the variable takes ownership of it --
             releasing what it held first. Asked *of the value's node*, not of
             a predicate: a handle-valued call is admitted in exactly this
-            position and refused in every other (CheckCall), so this arm and
-            that refusal are one rule read from two ends. Assignable still
+            position and refused in every other (CheckHandleBirth), so this
+            arm and that refusal are one rule read from two ends -- and asked
+            of the *construct* rather than of a node kind, because 6.8.5
+            makes the parameter list optional and a parameterless external
+            answers a handle by its bare name (ADR-0179, ADR-0180). Assignable still
             refuses a handle from any other handle, which predicate-callers
             sweeps. }
           else if IsHandle(s^.asTarget^.ntype) and
-                  (s^.asValue^.kind = nkCall) and
-                  (s^.asValue^.clSym <> nil) and
-                  (s^.asValue^.clSym^.linkKind = lnkForeign) and
+                  IsCallValue(s^.asValue) and
+                  (CalledSym(s^.asValue) <> nil) and
+                  (CalledSym(s^.asValue)^.linkKind = lnkForeign) and
                   (s^.asValue^.ntype = s^.asTarget^.ntype) then
             { admitted: the variable takes what the call answered }
           else if IsHandle(s^.asTarget^.ntype) then begin
