@@ -785,8 +785,8 @@ The variable a value identifies shall be disposed, and every value owned within
 it released, at the first of: termination of the activation in which the
 pointer's variable exists, including termination by a `goto` (§6.9.2.4) or
 `halt` (§6.7.5.7); `dispose` of a variable containing the pointer's variable;
-`new` applied to the pointer's variable; and `dispose` applied to it. A variable
-shall be disposed at most once.
+`new` applied to the pointer's variable; `dispose` applied to it; and an
+assignment to it (6.4.14.6). A variable shall be disposed at most once.
 
 A variable of an owned-pointer-type shall have the value `nil` on the
 commencement of the activation in which it exists, and on the creation of a
@@ -799,6 +799,45 @@ variable containing it.
 sense of ISO/IEC 10206:1991 §6.4.1, as 6.4.11, 6.4.12 and 6.4.13 are: two
 separately written `owned ^T` denote two types, and a program that lends one to
 a routine shall declare a type-identifier for it.
+
+**6.4.14.6 Move.** `take` shall be a required identifier denoting a function of
+one actual-parameter, which shall be a variable-access of an owned-pointer-type
+and shall not be threatened (§6.9.4). The function-designator shall stand only
+as the whole right side of an assignment-statement whose target is a
+variable-access of the same type; it shall be the only value of an
+owned-pointer-type an assignment-statement admits.
+
+The assignment shall, in this order: obtain the value the actual-parameter's
+variable holds; make that variable empty; release the value the target holds
+(6.4.14.3); and make the target hold the obtained value.
+
+NOTE 1 — The order is normative and not an implementation's convenience. Where
+the target is a variable-access reached *through* the actual-parameter's
+variable — `p^.next := take(p)` — obtaining and emptying first makes the target
+undefined, so the assignment attempts a dereference of `nil` and the error of
+§6.5.4 is reported. Any other order would make the identified variable its own
+successor, held by no variable and reachable by no release.
+
+NOTE 2 — `n := take(n^.next)` is therefore a complete removal of the first
+element of a chain: the actual-parameter is the identified variable's own
+field, so releasing what the target held disposes that variable alone, its
+successor having been emptied out of it, and the successor becomes the target's
+value.
+
+NOTE 3 — Without this clause an owned-pointer chain admits insertion and
+removal at its far end only, both by recursion, and no operation at all in
+constant time: `n := fresh` and `fresh^.next := n` are each a copy, which
+6.4.14.3 forbids. That was found by writing a list over 6.4.14 and is why this
+clause exists (ADR-0182).
+
+NOTE 4 — `take` of an empty variable is empty and is not an error. A move that
+moves nothing is the assignment of `nil` this type otherwise has no spelling
+for, and 6.4.14.3's release still applies to what the target held.
+
+NOTE 5 — This clause says nothing of handle-types (6.4.12), whose one
+assignment is 6.4.12.2's. A move between two handles would release the source
+without releasing its value, which is a distinct operation from the one here;
+it waits for a client (ADR-0182).
 
 NOTE 1 — What an owned pointer may be is a variable parameter (§6.7.3.3), which
 binds to the variable and not to the value, and a component of a record or an
@@ -1615,6 +1654,7 @@ the construct and Sema refuses it. One column became two.
 | `exit` | `exit`, `exit(e)` | `unknown procedure 'exit'` | `unknown procedure 'exit'` |
 | `try` | `try(x)` | `unknown function 'try'` | `unknown function 'try'` |
 | `owned` | `owned ^T` | `expected ';' after a variable declaration, found '^'` | `expected ';' after a variable declaration, found '^'` |
+| `take` | `take(v)` | `unknown function 'take'` | `unknown function 'take'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
@@ -1624,9 +1664,9 @@ exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
 (ADR-0154).
 
-`int64`, `argument`, `exit` and `try` are a third shape and not a fourth: each
-is a required *identifier* rather than a position, so a conformance mode
-refuses it by not having it — the name is nobody's there, and the message says
+`int64`, `argument`, `exit`, `try` and `take` are a third shape and not a
+fourth: each is a required *identifier* rather than a position, so a
+conformance mode refuses it by not having it — the name is nobody's there, and the message says
 so. The shape is now as common as the position rule it was once the exception
 to, and 6.8.9's NOTE 1 says why the last of them could not have used a
 position: the test that distinguishes a statement does not transfer to a
@@ -1908,3 +1948,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.8.9, 6.9.3.11.3, Annex C.10 | ADR-0178 |
 | 6.4.12.2 NOTE 1 | ADR-0180 |
 | 6.4.14, Annex B `owned`, Annex C.11 | ADR-0181 |
+| 6.4.14.6, Annex B `take` | ADR-0182 |

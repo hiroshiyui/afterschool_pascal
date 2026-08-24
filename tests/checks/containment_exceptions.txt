@@ -31,9 +31,9 @@
 # else: a case whose expectation *is* a refusal of the dialect cannot expect
 # the same refusal from the dialect.
 #
-# There are ten, one per row of Annex B of doc/afterschool-pascal-spec.md, and
-# the `annex-b` gate is what keeps that list and this one the same length: an
-# eleventh dialect construct needs a row there, a case here and an entry in
+# There are eleven, one per row of Annex B of doc/afterschool-pascal-spec.md,
+# and the `annex-b` gate is what keeps that list and this one the same length:
+# a twelfth dialect construct needs a row there, a case here and an entry in
 # this catalogue, and two of the three are now mechanical.
 foreign_refused
 optional_refused
@@ -72,3 +72,4 @@ fallible_refused
 exit_refused
 try_refused
 owned_refused
+take_refused

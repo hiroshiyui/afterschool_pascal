@@ -75,6 +75,7 @@
 6.4.14.3	Ownership
 6.4.14.4	Comparison
 6.4.14.5	Type identity
+6.4.14.6	Move
 6.5	Declarations and denotations of variables
 6.5.3	Component-variables
 6.5.3.2	Indexed-variables

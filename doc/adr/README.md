@@ -190,3 +190,4 @@ the alternatives that were rejected and why.
 | [0179](0179-a-bare-parameterless-call-is-a-call.md) | A bare parameterless call is a call | Accepted |
 | [0180](0180-the-handle-rule-reaches-both-spellings.md) | The handle rule reaches both spellings | Accepted |
 | [0181](0181-an-owned-pointer-gives-a-created-variable-an-owner.md) | An owned pointer gives a created variable an owner | Accepted |
+| [0182](0182-take-is-the-move-an-owned-pointer-needs.md) | `take` is the move an owned pointer needs | Accepted |

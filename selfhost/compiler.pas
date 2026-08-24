@@ -600,7 +600,14 @@ type
                    prints a required function as its ordinal (ADR-0067), so a
                    constant inserted anywhere else renumbers the ones after
                    it. }
-                 biTry);
+                 biTry,
+                 { AP 6.4.14.6's take, the dialect's move (ADR-0182).
+                   `take(v)` empties an owned pointer variable and yields what
+                   it held, and may stand only as the whole right side of an
+                   assignment to a variable of its own type -- 6.4.12.2's
+                   position rule, reached by the same flag. Appended for
+                   biTry's reason. }
+                 biTake);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
@@ -1988,6 +1995,10 @@ var
     call may stand in. Set by the assignment arm for that node and consumed by
     CheckCall before it looks at the arguments. }
   handleBirth: boolean;
+  { AP 6.4.14.6 (ADR-0182): the one position a `take` may stand in, said the
+    way handleBirth says the handle's. A permission rather than a claim, set
+    before the value is checked and cleared by CheckTake. }
+  takeOk: boolean;
   labelBlocks: labelBlockPtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
 
@@ -9678,7 +9689,7 @@ begin
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
           biStrGe, biBinding, biDate, biTime, biArgCount, biArgument,
-          biTry: ;
+          biTry, biTake: ;
         end
     end
     else if e^.clArgs^.next^.next = nil then
@@ -14851,6 +14862,10 @@ begin
     costs a conforming program (6.1.3). }
   else if (langStd = stdAfterschool) and PoolIs(at, len, 'try      ') then
     LookupBuiltin := biTry
+  { AP 6.4.14.6 (ADR-0182), and the same sentence: a program with a `take` of
+    its own keeps it. }
+  else if (langStd = stdAfterschool) and PoolIs(at, len, 'take     ') then
+    LookupBuiltin := biTake
   else if PoolIs(at, len, 'time     ') then LookupBuiltin := biTime
   else LookupBuiltin := biNone
 end;
@@ -14959,6 +14974,57 @@ end;
   therefore not required to be fallible. A function answering the cause-type
   itself takes the cause directly, and a function answering an unrelated type
   is refused by the message that refuses any other unassignable result. }
+{ AP 6.4.14.6's take, the dialect's move (ADR-0182). An owned pointer has no
+  copy, so the only way one variable can come to hold what another held is for
+  the other to stop holding it -- and without that, a chain of owned nodes can
+  be pushed at the far end and read and nothing else: `n := fresh` and
+  `fresh^.next := n` are both copies, so push-front and pop-front are
+  unwritable.
+
+  Everything about the position is 6.4.12.2's, reached by the same shape of
+  flag: the call may stand only as the whole right side of an assignment to a
+  variable of its own type, because anywhere else what it emptied would be
+  held by no one. The *lowering* is in EmitAssign and there is deliberately no
+  arm for biTake in EmitCall: a call reaching one would be a call in a
+  position this refuses, so an unwritten arm is a compiler that stops rather
+  than one that emits a move nobody can see. }
+procedure CheckTake(c: nodePtr; n: integer);
+begin
+  c^.ntype := intType;
+  if n <> 1 then begin
+    ErrorAt(c^.line, c^.col);
+    writeln('''take'' takes one variable of an owned pointer type')
+  end
+  else begin
+    CheckExpr(c^.clArgs);
+    if not IsOwnedPointer(c^.clArgs^.ntype) then begin
+      ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+      write('''take'' empties an owned pointer and this is ');
+      WriteTypeName(c^.clArgs^.ntype);
+      writeln(': nothing else has a value one variable can stop holding')
+    end
+    else if not IsDesignator(c^.clArgs) then begin
+      ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+      writeln('''take'' empties a variable, so its argument must be one')
+    end
+    else begin
+      c^.ntype := c^.clArgs^.ntype;
+      { 6.9.4 a) again: emptying a variable threatens it, which is what gives
+        `take` of a for-statement's control variable or of a protected
+        parameter the refusal those two already have. }
+      if Threatened(c^.clArgs) then
+        writeln('it cannot be emptied by ''take''');
+      if not takeOk then begin
+        ErrorAt(c^.line, c^.col);
+        write('''take'' may stand only as the whole right side of an ');
+        writeln('assignment to a variable of its own type: anywhere else ',
+                'what it emptied would be owned by no one')
+      end
+    end
+  end;
+  takeOk := false
+end;
+
 procedure CheckTry(c: nodePtr; n: integer);
 var t: typePtr; assign, target: nodePtr; at2, len2: integer;
 
@@ -15360,6 +15426,9 @@ begin
         where the husk it leaves behind is described. }
       else if c^.clBuiltin = biTry then
         CheckTry(c, n)
+      { AP 6.4.14.6 (ADR-0182). }
+      else if c^.clBuiltin = biTake then
+        CheckTake(c, n)
       else if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
         c^.ntype := boolType;
         if n = 0 then begin
@@ -18281,8 +18350,17 @@ begin
           handleBirth := IsHandle(s^.asTarget^.ntype) and
                          ((s^.asValue^.kind = nkCall) or
                           (s^.asValue^.kind = nkVar));
+          { AP 6.4.14.6 (ADR-0182), the same permission for the same reason.
+            Syntactic like the one above and for the same cause -- the value
+            is not checked yet -- but narrower: `take` is a required
+            identifier and always written with its parenthesised argument, so
+            only an nkCall could be one, where a handle-valued call has the
+            bare spelling too (ADR-0179). }
+          takeOk := IsOwnedPointer(s^.asTarget^.ntype) and
+                    (s^.asValue^.kind = nkCall);
           CheckExpr(s^.asValue);
           handleBirth := false;
+          takeOk := false;
           { AP 6.4.13 (ADR-0176): `r := x` where r is fallible and x is a value
             of one of its two sides *is* the field assignment that activates
             that arm, so Sema writes the selection the program did not and
@@ -18339,6 +18417,24 @@ begin
             write('a handle may be assigned only the result of an ');
             write('''external'' function of its own type: it is owned, ');
             writeln('and there is no copy')
+          end
+          { AP 6.4.14.6 (ADR-0182): the one assignment an owned pointer has,
+            and the handle's arm above read from the other end. `take` is the
+            only value of an owned pointer type a variable may be given,
+            because it is the only one that leaves nothing else holding it.
+            Asked of the *construct*: nothing but a required function can be
+            an nkCall answering an owned pointer, CheckedResultType having
+            refused a declared function of the type. }
+          else if IsOwnedPointer(s^.asTarget^.ntype) and
+                  (s^.asValue^.kind = nkCall) and
+                  (s^.asValue^.clBuiltin = biTake) and
+                  (s^.asValue^.ntype = s^.asTarget^.ntype) then
+            { admitted: the variable takes what the other stopped holding }
+          else if IsOwnedPointer(s^.asTarget^.ntype) then begin
+            ErrorAt(s^.line, s^.col);
+            write('an owned pointer may be assigned only ''take'' of a ');
+            writeln('variable of its own type: it owns what it identifies, ',
+                    'and there is no copy')
           end
           else if not Assignable(s^.asTarget^.ntype, s^.asValue^.ntype) then
           begin
@@ -21843,6 +21939,7 @@ begin
   foreignDeclTail := nil;
   handleClosers := nil;
   handleBirth := false;
+  takeOk := false;
   { `text`, the predefined file of char (ISO 7185 6.4.3.5). A singleton like
     the other predefined types, so every variable declared `text` has the same
     type -- a `file of char` written out longhand is a different one, exactly
@@ -29515,6 +29612,51 @@ begin
     write(ircode, ', ptr ');
     PutOp(src);
     writeln(ircode, ')')
+  end
+  { AP 6.4.14.6 (ADR-0182): the move. Four instructions and no runtime call --
+    read what the source holds, empty it, release what the target held, store.
+
+    **The source is read and emptied first, and that order is the decision.**
+    A target designator reached *through* the source -- `p^.next := take(p)`
+    -- would otherwise compute an address inside the very node it is about to
+    orphan, and the store would make the node its own successor: a cycle that
+    nothing owns and no release can reach. Emptying first makes that program
+    dereference `nil` and stop, which is a defect reported instead of a leak.
+    The order costs nothing where the two are unrelated, which is every other
+    program.
+
+    It also makes `n := take(n^.next)` the whole of pop-front: the source is
+    the head's own field, so releasing what the target held disposes the head
+    alone -- its successor having just been emptied out of it -- and the tail
+    lands in `n`.
+
+    This is where a `take` is lowered and the only place: EmitCall has no arm
+    for biTake, so a call anywhere else stops the compiler rather than
+    emitting a move nobody could see. AP 6.4.14.6 admits no other position,
+    which is what makes that unreachable rather than unfinished. }
+  else if IsOwnedPointer(s^.asTarget^.ntype) then begin
+    EmitAddress(s^.asValue^.clArgs, src);
+    Def(hdr);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(src);
+    writeln(ircode);
+    write(ircode, '  store ptr null, ptr ');
+    PutOp(src);
+    writeln(ircode);
+    EmitAddress(s^.asTarget, dst);
+    Def(td);
+    write(ircode, 'load ptr, ptr ');
+    PutOp(dst);
+    writeln(ircode);
+    write(ircode, '  call void @ownrel',
+          OwnRelId(s^.asTarget^.ntype^.elem):1, '(ptr ');
+    PutOp(td);
+    writeln(ircode, ')');
+    write(ircode, '  store ptr ');
+    PutOp(hdr);
+    write(ircode, ', ptr ');
+    PutOp(dst);
+    writeln(ircode)
   end
   else begin
   { ADR-0118: the target of an assignment is the one designator whose variant

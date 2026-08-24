@@ -110,7 +110,7 @@ Feature: Owned-pointer-types
     Then it is rejected
      And the diagnostic includes
       """
-      it contains an owned pointer, and a second name for one would dispose one variable twice
+      a result may not be, or contain, an owned pointer
       """
 
   @afterschool:6.4.14.3
@@ -292,4 +292,140 @@ Feature: Owned-pointer-types
       """
       empty
       9
+      """
+
+  @afterschool:6.4.14.6
+  Scenario: take is the move, so push-front and pop-front are writable
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer; next: np end;
+      var l: np; i: integer;
+      procedure pushfront(var n: np; k: integer);
+      var fresh: np;
+      begin
+        new(fresh);
+        fresh^.key := k;
+        fresh^.next := take(n);
+        n := take(fresh)
+      end;
+      procedure show(var n: np);
+      begin
+        if n <> nil then begin write(' ', n^.key:1); show(n^.next) end
+      end;
+      begin
+        for i := 1 to 4 do pushfront(l, i);
+        write('a:'); show(l); writeln;
+        { pop-front, entire }
+        l := take(l^.next);
+        write('b:'); show(l); writeln
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      a: 4 3 2 1
+      b: 3 2 1
+      """
+
+  @afterschool:6.4.14.6
+  Scenario: the source is emptied and the target's old value released
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+           node = record s: f end;
+           np = owned ^node;
+      function fo(path, mode: string): f; external 'fopen';
+      function fp(t: string; h: f): integer; external 'fputs';
+      var a, b: np; t: bindable text; bd: BindingType; line: string(40);
+          k: integer;
+      begin
+        new(a);
+        a^.s := fo('spec_take.tmp', 'w');
+        k := fp('released when a was overwritten', a^.s);
+        new(b);
+        { a holds the stream and is the *target*: the move must release what
+          a held before storing b's, or the stream is never closed and the
+          text below is still in its buffer }
+        a := take(b);
+        writeln('b empty: ', b = nil);
+        bd := binding(t);
+        bd.name := 'spec_take.tmp';
+        bind(t, bd);
+        reset(t);
+        readln(t, line);
+        writeln(line);
+        unbind(t)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      b empty: TRUE
+      released when a was overwritten
+      """
+
+  @afterschool:6.4.14.6
+  Scenario: a target reached through the source stops instead of making a cycle
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer; next: np end;
+      var p: np;
+      begin
+        new(p);
+        p^.next := take(p);
+        writeln('unreachable')
+      end.
+      """
+    When it is compiled and run
+    Then it stops at run time
+     And the run-time error includes
+      """
+      dereference of nil
+      """
+
+  @afterschool:6.4.14.6
+  Scenario: take stands nowhere but that one position
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      var a: np;
+      begin
+        new(a);
+        if take(a) = nil then writeln('empty')
+      end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      'take' may stand only as the whole right side of an assignment
+      """
+
+  @afterschool:6.4.14.6
+  Scenario: take of an empty variable is empty and is not an error
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type np = owned ^node;
+           node = record key: integer end;
+      var a, b: np;
+      begin
+        b := take(a);
+        writeln(a = nil, ' ', b = nil)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      TRUE TRUE
       """

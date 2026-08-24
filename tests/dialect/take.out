@@ -1,0 +1,6 @@
+pushed front: 55 44 33 22 11 len 5
+one popped: 44 33 22 11 len 4
+moved to spare: 44 33 22 11 and l is empty: TRUE
+moved back: 44 33 22 11 len 4
+empty spare: TRUE
+read back: closed by the pop that dropped it
