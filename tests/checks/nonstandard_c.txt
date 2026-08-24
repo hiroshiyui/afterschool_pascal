@@ -19,6 +19,13 @@
 # and runtime/pasrt_posix.c is where such a thing goes instead. The headers
 # that file may include are the second list below, and the gate reads both.
 #
+# **There is a third translation unit and it appears in neither list.**
+# runtime/pasrt_unicode.c (ADR-0190) needs nothing outside ISO C -- no
+# allocation, no locale, not even the names excused here -- so the gate holds it
+# to a strict compile with no catalogue at all. That is a stronger claim than
+# either file above carries, and it is free while it stays true; the day it
+# needs a name is the day it takes a section here, with the argument.
+#
 # Format: the identifier, then a blank-line-separated argument above it.
 
 # ISO 7185 §6.8.2.4 / ISO/IEC 10206:1991 §6.9.2.4's non-local goto. ISO C's setjmp is a macro whose expansion must

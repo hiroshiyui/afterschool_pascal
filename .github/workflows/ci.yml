@@ -185,6 +185,59 @@ jobs:
             exit 1
           fi
 
+  unicode-conformance:
+    # The second oracle in this repository that nobody here wrote, after the
+    # BSI suite above (ADR-0086, ADR-0189). AP 6.4.15 rests on Normalization
+    # Form C and on where an extended grapheme cluster ends, and neither is
+    # something a reading taken in this repository could be trusted to settle --
+    # which is ADR-0072's blind spot exactly. Unicode publishes the answers.
+    #
+    # A job of its own for the same reason the BSI one is: the fetch is a step
+    # with a name, so a red bar caused by unicode.org being unreachable is
+    # distinguishable from a red bar caused by the runtime being wrong.
+    name: the Unicode conformance files
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3 curl
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch the pinned Unicode Character Database
+        run: runtime/unicode/fetch.sh
+        # The version is pinned in that script and moving it is a decision
+        # (AP 6.4.15.12): which code points make one element, and whether two
+        # values are equal, both change with it. The directory it writes is
+        # gitignored and stays that way.
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Run it, and refuse to pass by skipping
+        env:
+          UNICODE_CONFORMANCE_REQUIRE: '1'
+        run: |
+          set -o pipefail
+          ctest --test-dir build -R unicode-conformance --output-on-failure \
+            2>&1 | tee /tmp/unicode.log
+          # The case skips (77) without the database and ctest calls a skip
+          # success, which is right for a checkout and wrong here -- this job
+          # would go green having compared nothing. The env above makes the
+          # script itself refuse; this is the belt to its braces, and it is what
+          # doc/sop.md 7's row about this file's single reader relies on.
+          if grep -q 'Skipped' /tmp/unicode.log; then
+            echo "the conformance files were skipped, so this job proved" \
+                 "nothing" >&2
+            exit 1
+          fi
+
   seed-is-current:
     # The seed is refreshed at release tags and nowhere else (ADR-0085), which
     # makes "was it refreshed?" a question only a tag can ask. At a release

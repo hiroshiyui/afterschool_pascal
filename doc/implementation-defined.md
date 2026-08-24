@@ -187,6 +187,29 @@ the rule against inventing extensions does not reach a dimension neither
 standard describes. It is what lets `pascalc` exit 1 for a program it
 rejects, which a build rule depends on.
 
+### 2.7 The dialect
+
+Neither standard's Annex E asks any of these; they are questions
+`doc/afterschool-pascal-spec.md` raises, and this is where it says the
+processor states its answer. They are listed here rather than in that document
+because a reader looking for what a processor decided should find every such
+answer in one place, whichever document required it.
+
+| Clause | Feature | This processor |
+|---|---|---|
+| AP 6.4.15.12 | the version of the Unicode Standard and of ISO/IEC 10646 determining Normalization Form C and the extent of an extended grapheme cluster | **Unicode 17.0.0** (2025-08-15). `pas_text_unicode_version()` reports it, `runtime/unicode/fetch.sh` pins it, and `runtime/pasrt_unicode_data.h` is generated from that version's database. |
+
+**This is the one answer in this document that moves for a reason outside this
+repository**, and AP 6.4.15.12's NOTE is why it has to be stated at all: which
+code points make one element, and whether two values are equal, both change
+with the version. A program entitled to depend on either is entitled to know
+what it was compiled against.
+
+Moving it is a decision and not an upgrade. `unicode-conformance` is what says
+a move was clean — it runs the new version's own `NormalizationTest.txt` and
+`GraphemeBreakTest.txt`, and it also refuses a version whose database does not
+reproduce the committed tables.
+
 ## 3. Errors not reported
 
 Clause 5.1 f) 1) permits an error to go unreported provided an accompanying

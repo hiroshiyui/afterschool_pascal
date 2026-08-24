@@ -198,3 +198,4 @@ the alternatives that were rejected and why.
 | [0187](0187-a-foreign-answer-of-a-record-is-a-copy.md) | A foreign answer of a record is a copy | Accepted |
 | [0188](0188-a-library-may-not-declare-the-struct-the-program-may.md) | A library may not declare the struct the program may | Accepted |
 | [0189](0189-text-is-utf-8-in-normal-form-c-and-its-element-is-a-grapheme.md) | Text is UTF-8 in normal form C, and its element is a grapheme | Accepted |
+| [0190](0190-the-text-models-runtime-half-and-the-oracle-that-judges-it.md) | The text model's runtime half, and the oracle that judges it | Accepted |

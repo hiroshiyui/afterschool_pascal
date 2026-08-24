@@ -266,9 +266,56 @@ if [[ -n $bad ]]; then
   exit 1
 fi
 
+# --- pass 4: and the Unicode unit is held to more than pasrt.c is -----------
+#
+# runtime/pasrt_unicode.c is AP 6.4.15's tables and the arithmetic over them,
+# and it needs *nothing* outside ISO C -- no allocation, no locale, no POSIX,
+# not even the five names pass 2 excuses pasrt.c. So it is compiled with no
+# catalogue at all, which is a stronger claim than either file above carries
+# and one that is free to make while it stays true.
+#
+# It is checked here rather than left to the build because the build compiles
+# it with the project's warnings and not with -pedantic-errors, and because a
+# third translation unit invisible to this gate is exactly the gap ADR-0186
+# closed for the second.
+uni_src=$root/runtime/pasrt_unicode.c
+if [[ ! -f $uni_src ]]; then
+  echo "runtime-isoc: no runtime/pasrt_unicode.c -- if the text primitives" \
+       "went away, strike this pass. If they moved, this pass follows them." >&2
+  exit 1
+fi
+
+if ! "$cc" -std=c11 -pedantic-errors -Wall -Wextra -Werror \
+     -I"$root/runtime" -c "$uni_src" -o "$work/uni.o" >"$work/p4.txt" 2>&1; then
+  echo "runtime-isoc: runtime/pasrt_unicode.c is not strict ISO C11:" >&2
+  head -20 "$work/p4.txt" >&2
+  echo "        It is held to ISO C with no catalogued name at all" \
+       "(ADR-0189). If it now needs one, that is a decision and not a" \
+       "compile flag." >&2
+  exit 1
+fi
+
+# The same both-directions question pass 2 asks of pasrt.c, asked of a file
+# whose answer must be zero: any non-ISO include here would be a dependency the
+# catalogue does not know about, and __STRICT_ANSI__ would hide it exactly as
+# <unistd.h> hid `access` (ADR-0186).
+uni_extra=$(grep -oE '^#include <[a-z0-9_/]+\.h>' "$uni_src" |
+            sed 's/.*<\(.*\)>/\1/' | while read -r hh; do
+              base=${hh%.h}
+              case " $iso_headers " in *" $base "*) ;; *) echo "<$hh>" ;; esac
+            done | sort -u)
+if [[ -n $uni_extra ]]; then
+  echo "runtime-isoc: runtime/pasrt_unicode.c includes a non-ISO header:" >&2
+  for hh in $uni_extra; do echo "          $hh" >&2; done
+  echo "        That file is the one part of the runtime a port gets for" \
+       "free. Keep it that way, or say in ADR why not." >&2
+  exit 1
+fi
+
 n=$(echo "$found" | wc -l)
 h=$(echo "$posix_named" | wc -l)
 echo "runtime-isoc: runtime/pasrt.c is strict ISO C11 apart from $n catalogued" \
      "names ($(echo $found | tr '\n' ' ')), runtime/pasrt_posix.c is bounded by" \
-     "$h catalogued headers ($(echo $posix_named | tr '\n' ' ')), and the" \
+     "$h catalogued headers ($(echo $posix_named | tr '\n' ' ')),"\
+     "runtime/pasrt_unicode.c needs no catalogue at all, and the" \
      "emitted module names nothing but its own"

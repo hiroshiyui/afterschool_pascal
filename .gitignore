@@ -16,6 +16,14 @@ __pycache__/
 # The BSI validation suite is fetched, never committed (tests/bsi/fetch.sh).
 tests/bsi/suite/
 
+# The Unicode Character Database, likewise (runtime/unicode/fetch.sh). What is
+# committed is what generate.py reads *out* of it --
+# runtime/pasrt_unicode_data.h -- which is the artefact a build needs; the
+# database is what a refresh needs. Unlike the two below, this is a size and
+# provenance decision and not a licensing one: Unicode does permit
+# redistribution.
+runtime/unicode/ucd/
+
 # The standards themselves, likewise. The online copies carry "Do not modify
 # this document. Do not include this document in another software product", so
 # they are read here and never redistributed; tests/spec/clauses/ holds the

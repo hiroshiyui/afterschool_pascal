@@ -2698,3 +2698,46 @@ to empty, and ADR-0187 is a *program*-level feature.
   nothing, and the convenience makes an empty vector mean an empty directory.
 - **Four outcomes and no new type**: `errNone`, `errAbsent` at the end (that
   code's own gloss, *nothing was there to return*), `errFull`, `errIO`.
+
+**The text model's runtime half** (ADR-0189, ADR-0190, AP 6.4.15). `char`
+cannot widen — `set of char` would stop compiling under ADR-0028's 256-value
+cap, which breaks ADR-0117's containment — so text is a type *beside*
+§6.4.3.3's strings and not a change to the character type. What was decided:
+`utf8(n)`, a value with a capacity in **bytes**, holding well-formed UTF-8 in
+Normalization Form C, whose elements are extended grapheme clusters. Only the
+runtime exists so far.
+
+- **Normalising on construction rather than on comparison is the load-bearing
+  choice.** Both operands being NFC makes `=` byte equality *and* canonical
+  equivalence at once, so `'é'` typed either way is one value, a text can be a
+  `pasmap` key, and nothing is decoded at a comparison. The cost is that a text
+  does not round-trip; `string(n)` is what a program holds when it means the
+  octets, and it round-trips exactly.
+- **`runtime/pasrt_unicode.c` is four functions**: `pas_text_validate`,
+  `pas_text_nfc`, `pas_text_next` and `pas_text_count`. Strict ISO C11 with no
+  catalogued name at all, which `runtime-isoc`'s fourth pass holds it to — a
+  stronger claim than either other translation unit carries.
+- **A starter is not always the beginning of a normalisation segment**, and
+  this is the trap. Fifty-nine primary composites have a *starter* as their
+  second element — 33 vowel signs over sixteen Indic and Southeast Asian
+  scripts, where U+09C7 + U+09BE composes although both are of class zero —
+  and Hangul's L + V and LV + T are the same case. A streaming normaliser that
+  flushes at every class-zero character silently drops exactly those and passes
+  everything else. `combines_back()` is the guard, and the set is derived from
+  the composition table rather than written by hand.
+- **The oracle is Unicode's own**, which is the whole reason this increment
+  came first: `NormalizationTest.txt` and `GraphemeBreakTest.txt` state an
+  input and the answer, and were written by people with no interest in this
+  compiler. `unicode-conformance` is the gate — 20 034 normalisation cases, 766
+  segmentation cases, and every code point the first does not list required to
+  be its own NFC. It is the second oracle here nobody wrote, after the BSI
+  suite (ADR-0086).
+- **The tables are committed and the database is not**, which is `seed/`'s
+  shape rather than `tests/bsi/`'s reason — Unicode does permit redistribution,
+  so this is size and provenance. The gate therefore asks a second question the
+  test files cannot: regenerating from the database must reproduce the
+  committed header, or the two drift and every case still passes.
+- **The compiler cannot call any of it.** `selfhost/compiler.std` is
+  `extended`, so `external` is refused there — which makes AP 6.4.15.5's
+  "converted … before the program is executed" the open question increment 2
+  has to answer. ADR-0190 registers the four ways out and takes none.

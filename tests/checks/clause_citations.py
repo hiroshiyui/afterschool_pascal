@@ -70,6 +70,19 @@ SKIP = {
     "tests/bsi/suite",  # BSI's 812 programs, fetched and never committed. Their
                         # headers cite clauses in BSI's numbering ("TEST
                         # 6.4.3.5-4"), which is not ours to correct.
+    "runtime/unicode/ucd",  # the Unicode Character Database, fetched and never
+                        # committed (runtime/unicode/fetch.sh). Its files
+                        # record, against each property, the Unicode *version*
+                        # that introduced it -- three numbers separated by
+                        # points, in exactly the shape this gate reads a clause
+                        # number from. A version is not a citation. Found the
+                        # day the database arrived, by this gate failing on
+                        # DerivedNormalizationProps.txt (ADR-0190).
+                        #
+                        # The numbers are not written out here on purpose:
+                        # this gate cannot tell a mention from a claim, so
+                        # spelling one would fail the check that this comment
+                        # explains.
 }
 
 

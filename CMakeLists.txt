@@ -53,7 +53,14 @@ set(APASCAL_WARNINGS -Wall -Wextra)
 # where anything needing a POSIX *type* goes -- a `struct stat` cannot be
 # excused by a catalogue that is proved complete by stripping includes and
 # requiring what is left to compile.
-add_library(pasrt STATIC runtime/pasrt.c runtime/pasrt_posix.c)
+# Three now, and the third is the one whose correctness is not settled here:
+# pasrt_unicode.c is strict ISO C11 over tables generated from the Unicode
+# Character Database, and `unicode-conformance` runs the database's own answers
+# through it (ADR-0189). Nothing calls it yet -- it is AP 6.4.15's runtime half,
+# landed before the language rests on it precisely so that it can be judged on
+# its own.
+add_library(pasrt STATIC runtime/pasrt.c runtime/pasrt_posix.c
+                         runtime/pasrt_unicode.c)
 target_include_directories(pasrt PUBLIC runtime)
 target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 
@@ -458,6 +465,24 @@ set_tests_properties(runtime-isoc PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600
                      ENVIRONMENT "${APASCAL_TEST_ENV}")
+
+# runtime/pasrt_unicode.c against Unicode's own conformance files -- 20 034
+# normalisation cases, 766 segmentation cases and a sweep of every code point
+# the first does not list. This is the one oracle in this repository, beside the
+# BSI suite, that nobody here wrote (ADR-0086, ADR-0189), and AP 6.4.15 rests on
+# two properties no reading taken here could be trusted to settle.
+#
+# It also regenerates the committed tables from the database and diffs them, so
+# the header cannot drift from the version it claims.
+#
+# Skips (77) when the database is absent; it is fetched, never committed
+# (runtime/unicode/fetch.sh). UNICODE_CONFORMANCE_REQUIRE is how CI refuses to
+# pass by skipping, as TARGET_SIZES_REQUIRE does.
+add_test(NAME unicode-conformance
+         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/unicode_conformance.sh)
+set_tests_properties(unicode-conformance PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 600)
 
 # Does a record declared here have the layout the C struct it claims to be has?
 # ADR-0184 made a record crossable because RecordLayout *is* C's struct rule,
