@@ -191,3 +191,4 @@ the alternatives that were rejected and why.
 | [0180](0180-the-handle-rule-reaches-both-spellings.md) | The handle rule reaches both spellings | Accepted |
 | [0181](0181-an-owned-pointer-gives-a-created-variable-an-owner.md) | An owned pointer gives a created variable an owner | Accepted |
 | [0182](0182-take-is-the-move-an-owned-pointer-needs.md) | `take` is the move an owned pointer needs | Accepted |
+| [0183](0183-the-heap-balance-is-the-oracle-that-reads-no-output.md) | The heap balance is the oracle that reads no output | Accepted |

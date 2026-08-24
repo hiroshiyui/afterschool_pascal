@@ -1664,8 +1664,53 @@ int pas_str_compare(const char *a, const char *b, int len) {
  * variable undefined, so a program may not rely on this, but a deterministic
  * value makes a program that does rely on it fail the same way every run
  * instead of differently on each. */
+/* --- the heap balance (ADR-0183) -------------------------------------------
+ *
+ * How many variables `new` created and `dispose` gave back, written at exit to
+ * the file $PASHEAP_BALANCE names. It exists because **no other oracle here
+ * can see a leak**: every one of them reads what a program prints, and a leak
+ * prints nothing, so two records that turned on a leak -- ADR-0181's handle in
+ * an unowned heap record, ADR-0182's abandoned chain -- were each measured by
+ * hand, once, and by nothing afterwards (doc/sop.md 7).
+ *
+ * A count and not a byte total: `dispose` is handed a pointer and no size, and
+ * a runtime header carrying one would move every address the compiler
+ * computes. The count is the exact question anyway -- one `new` unmatched is
+ * one variable nobody gave back, whatever it weighs.
+ *
+ * A nonzero balance is **not an error**. ISO 7185 obliges no program to
+ * dispose what it created, and many here deliberately do not. What the gate
+ * over this compares is the balance against a catalogue, in both directions,
+ * which is `tests/bsi/expected.tsv`'s shape: a program that starts leaking is
+ * as loud as one that stops.
+ *
+ * Counting is unconditional and costs two increments. The atexit hook is armed
+ * on the first `new` and only when the variable is set, so a program that is
+ * not being measured pays one getenv and nothing else -- pas_cov_hit's
+ * discipline, for pas_cov_hit's reason. */
+static long long pas_heap_news;
+static long long pas_heap_disposes;
+static int pas_heap_armed;
+
+static void pas_heap_dump(void) {
+  const char *path = getenv("PASHEAP_BALANCE");
+  FILE *f;
+
+  if (!path) return;
+  f = fopen(path, "a");
+  if (!f) return;
+  fprintf(f, "new=%lld dispose=%lld live=%lld\n", pas_heap_news,
+          pas_heap_disposes, pas_heap_news - pas_heap_disposes);
+  fclose(f);
+}
+
 void *pas_new(long long size) {
   void *p = calloc(1, size > 0 ? (size_t)size : 1);
+  pas_heap_news++;
+  if (!pas_heap_armed) {
+    pas_heap_armed = 1;
+    if (getenv("PASHEAP_BALANCE")) atexit(pas_heap_dump);
+  }
   if (!p) {
     fflush(stdout);
     fprintf(stderr, "runtime error: out of memory in new\n");
@@ -1674,7 +1719,15 @@ void *pas_new(long long size) {
   return p;
 }
 
-void pas_dispose(void *p) { free(p); }
+void pas_dispose(void *p) {
+  /* No path reaches this with a null today: `dispose(nil)` is an error the
+     compiler traps before the call, and an owned pointer's release routine
+     returns on empty before reaching it. The guard is here so the count
+     cannot quietly become a claim about a path added later -- a null counted
+     as a dispose would say a variable came back that never went out. */
+  if (p) pas_heap_disposes++;
+  free(p);
+}
 
 /* --- binding (§6.7.5.6, §6.7.6.8) -----------------------------------------
  *

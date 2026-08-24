@@ -245,6 +245,20 @@ if(Python3_FOUND)
   add_test(NAME kind-exhaustive
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
+
+  # ADR-0183: the oracle none of the others can be. Every gate here reads what
+  # a program *prints*, and a leak prints nothing -- which is how a handle in
+  # an unowned heap record (ADR-0181) and an abandoned chain (ADR-0182) were
+  # each found by a measurement taken once, by hand. The runtime counts what
+  # `new` made and `dispose` gave back; this compares the balance of every
+  # heap-using case against a catalogue, in both directions.
+  add_test(NAME heap-balance
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/heap_balance.py
+                   --pascalcc ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+  set_tests_properties(heap-balance PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}"
+                       TIMEOUT 900)
 endif()
 
 # ADR-0164: a clause number is the one claim here no other oracle can

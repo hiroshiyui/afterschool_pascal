@@ -103,9 +103,20 @@ normalise() {
 # out, and 8 MB is the ordinary Linux default -- so this changes nothing for
 # every other case and makes for_nested_stack.pas mean something wherever it
 # runs, including a container that inherited no limit at all.
+# ADR-0183's heap balance belongs to the *program under test*, and this script
+# runs a Pascal compiler to produce it -- `pascalc` is itself a Pascal program
+# on the same runtime, so an inherited PASHEAP_BALANCE would have it count its
+# own allocations into the same file. It did, on the first run of that gate:
+# every case reported hundreds of outstanding variables, which were the
+# compiler's. So the variable is taken out of the environment here and put back
+# only around the program.
+heap_balance="${PASHEAP_BALANCE:-}"
+unset PASHEAP_BALANCE
+
 run_program() {
   ( ulimit -n 256
     ulimit -s 8192
+    if [[ -n $heap_balance ]]; then export PASHEAP_BALANCE="$heap_balance"; fi
     exec "$work/$name" "$work/file1" "$work/file2" <"$stdin_file" )
 }
 

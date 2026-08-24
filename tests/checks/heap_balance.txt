@@ -1,0 +1,41 @@
+# The heap balance of every corpus case that calls `new`:
+# how many variables it created and never gave back (ADR-0183).
+#
+# A nonzero number is not a defect. No standard obliges a program
+# to dispose what it created, and a program that is about to end
+# has an operating system to do it. What this file is for is that
+# the number cannot move without someone saying why: it fails in
+# both directions, so a program that starts leaking is as loud as
+# one that stops.
+#
+# Regenerate with:  python3 tests/checks/heap_balance.py --write
+#                     --pascalcc tools/pascalcc
+case_ranges 0
+complex 0
+defer 0
+dynbounds_subrange 0
+fallible 0
+funcaccess 4
+lib_list 0
+lib_map 0
+lib_process 0
+lib_strvec 0
+lib_vector 0
+module_examples 0
+new_selectors 0
+new_threatens_result 5
+new_variants 0
+owned 0
+pointer_domain_shadow 2
+pointers 0
+required_identifiers 0
+schema_pointer 3
+schema_record 0
+schema_selfpointer_var 1
+schema_string_heap 0
+sets_records 0
+sweepgaps 0
+take 0
+variant_disc 0
+variant_otherwise 0
+withheap 0
