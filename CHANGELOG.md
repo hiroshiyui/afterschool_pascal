@@ -146,6 +146,15 @@ three days, with every gate green. The rest only accept more.
 
 ### Fixed
 
+- **A parameterless function written bare could not be a value parameter** of
+  a structured type. `take(mk)` was refused with *argument 1 of 'take' is
+  Point and needs a variable* where `take(mk(0))`, `q := mk` and `mk.x` were
+  all accepted — §6.8.5 makes a function-designator's actual-parameter-list
+  optional, so the bare name *is* the call, and the check tested the node kind
+  instead of the construct. Extended Pascal only: ISO 7185 §6.6.2 gives a
+  function no structured result to pass. ADR-0179.
+  `tests/extended/value_param_bare_call.pas`.
+
 - **`--dump-ast` and `--dump-sema` stopped the compiler** on any program
   declaring a fallible-type: `DumpTypeExpr` had no arm for the kind, and a
   case-statement whose selector matches no label halts. Present since fallible

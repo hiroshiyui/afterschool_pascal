@@ -1190,7 +1190,10 @@ funcs      a function may return a record, an array, a set or a string — any
            field at a time: without a name the only way to write it is
            `mk := e`, because reading `mk` is a recursive call. With a name
            the function identifier may not be assigned at all, and without
-           one the body must assign it at least once
+           one the body must assign it at least once. A parameterless one is
+           called by writing its name — Pascal has no empty argument list —
+           and that bare name is the call in every position the written-out
+           one stands in, a value parameter included
 f(x).y     a selector may follow a call: `mk(7, 8).y` reads a field of a
            result, `scale(10)[2]` a component, and `alloc(3)^` the variable
            a returned pointer identifies. Only the last of those is a
