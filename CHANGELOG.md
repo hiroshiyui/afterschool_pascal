@@ -41,9 +41,16 @@ three days, with every gate green. The rest only accept more.
   `é` and `'{decomposed}'` written with `e` and a combining acute compare equal, and
   the comparison is a byte comparison with nothing decoded. Assignment from a
   string or a char, comparison, `length`, `capacity` and `write` (whose field
-  width pads to a count of elements) are there; concatenation and iteration are
-  not yet. Ill-formed UTF-8 and a value too long for the capacity are errors
-  that stop the program, as a value outside a subrange has always been.
+  width pads to a count of elements) are all there. Ill-formed UTF-8 and a
+  value too long for the capacity are errors that stop the program, as a value
+  outside a subrange has always been.
+
+  `+` joins two texts and is **not** a byte concatenation: `'he' + '́llo'`
+  is six bytes, not seven, because the combining acute composes with the `e`
+  across the join, and the result equals `'héllo'`. `for g in t do`
+  walks the elements — joining them back together gives the original. Still to
+  come: case mapping and folding, a scalar view, and a conversion that reports
+  ill-formed input instead of stopping.
 
   `char` and `string(n)` are unchanged in all three modes, and `utf8` is a
   required identifier a program may shadow. The Unicode version behind it is

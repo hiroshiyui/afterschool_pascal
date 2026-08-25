@@ -685,7 +685,15 @@ unnormalised ones would answer wrongly rather than report. There is no `t[i]`:
 no integer index is meaningful at more than one of the three levels a text has,
 and an index over elements cannot be a constant-time operation.
 
-Not there yet: concatenation and iteration. The Unicode version is stated in
+`+` joins two texts, and it is **not** a byte concatenation: where the left
+ends in a base character and the right begins with a combining mark the two
+compose across the join, so `'he' + '́llo'` is six bytes and equals
+`'héllo'`. `for g in t do` walks the elements, `g` being a text of one
+element — and joining them back together gives the original, which is what
+says a character boundary is also a boundary of normal form.
+
+Not there yet: case mapping, case folding, a scalar view, and a conversion that
+reports ill-formed input instead of stopping. The Unicode version is stated in
 [`doc/implementation-defined.md`](doc/implementation-defined.md) §2.7.
 
 A binding is a module that exports Pascal and keeps the directive to itself —
