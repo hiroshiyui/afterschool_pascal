@@ -406,6 +406,24 @@ static void pas_handle_release(struct pas_handle *h) {
   }
 }
 
+/* AP 6.4.12.5 (ADR-0206): release now, and answer what the closer answered.
+ *
+ * The comment above `pas_handle_release` says why every other release throws
+ * the result away -- "there is no statement left to report to" -- and this is
+ * the statement. An empty variable answers 0 and is not an error, as the
+ * assignment of `nil` on one is harmless: a program that released nothing has
+ * nothing to be told about.
+ */
+int pas_handle_release_result(void *slot) {
+  struct pas_handle *h = slot;
+  int r = 0;
+  if (h->value) {
+    r = h->closer(h->value);
+    h->value = NULL;
+  }
+  return r;
+}
+
 void pas_handle_done(void *slot) {
   struct pas_handle *h = slot;
   pas_handle_release(h);

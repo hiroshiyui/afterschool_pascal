@@ -1,19 +1,22 @@
-<source>:23:33: error: 'n' cannot be protected: list is not a protectable type
-<source>:25:13: error: 'n' is a protected parameter, so it cannot be emptied by 'take'
-<source>:30:13: error: 'take' empties an owned pointer and this is integer: nothing else has a value one variable can stop holding
-<source>:30:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:31:13: error: 'take' empties an owned pointer and this is plain: nothing else has a value one variable can stop holding
-<source>:31:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:32:15: error: 'take' empties an owned pointer and this is integer: nothing else has a value one variable can stop holding
+<source>:25:33: error: 'n' cannot be protected: list is not a protectable type
+<source>:27:13: error: 'n' is a protected parameter, so it cannot be emptied by 'take'
+<source>:32:13: error: 'take' empties an owned pointer and this is integer: nothing else has a value one variable can stop holding
 <source>:32:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:34:13: error: 'take' empties an owned pointer and this is nil: nothing else has a value one variable can stop holding
+<source>:33:13: error: 'take' empties an owned pointer and this is plain: nothing else has a value one variable can stop holding
+<source>:33:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:34:15: error: 'take' empties an owned pointer and this is integer: nothing else has a value one variable can stop holding
 <source>:34:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:36:8: error: 'take' takes one variable of an owned pointer type
-<source>:36:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:39:6: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
-<source>:40:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
-<source>:40:8: error: argument 1 of 'lend' is a var parameter and needs a variable
-<source>:41:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
-<source>:43:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
-<source>:45:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
-<source>:45:3: error: cannot assign list: it contains an owned pointer, and a second name for one would dispose one variable twice
+<source>:41:13: error: 'take' empties an owned pointer and this is nil: nothing else has a value one variable can stop holding
+<source>:41:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:42:13: error: 'extstream' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:42:13: error: 'take' empties an owned pointer and this is stream: nothing else has a value one variable can stop holding
+<source>:42:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:44:8: error: 'take' takes one variable of an owned pointer type
+<source>:44:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:47:6: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:48:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:48:8: error: argument 1 of 'lend' is a var parameter and needs a variable
+<source>:49:11: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:51:3: error: an owned pointer may be assigned only 'take' of a variable of its own type: it owns what it identifies, and there is no copy
+<source>:53:8: error: 'take' may stand only as the whole right side of an assignment to a variable of its own type: anywhere else what it emptied would be owned by no one
+<source>:53:3: error: cannot assign list: it contains an owned pointer, and a second name for one would dispose one variable twice

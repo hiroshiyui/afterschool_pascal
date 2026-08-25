@@ -45,6 +45,16 @@ begin
   report('too short', Capture('echo 0123456789', small));
   writeln('  [', small, ']');
   report('not found', Capture('no-such-command-apascal 2>/dev/null', got));
+  { **The output a marker could not survive** (ADR-0206). Until `release`
+    existed, the child's exit status travelled through the stream behind a
+    newline and a control character 1, so a command that wrote those two
+    characters was read as having ended -- everything after them became the
+    code and everything before them became the whole output. `pclose`'s
+    result is the status now, so this is just text. }
+  report('a marker in the text', Capture('printf ''x\n\001 7\nz\n''', got));
+  writeln('  length ', length(got):1, ' code point 2 of line 2 is ',
+          ord(got[3]):1, ' and the last is ', got[length(got) - 1]);
+
   SVecNew(names, 2);
   report('lines', CaptureLines('printf ''x\n\ny''', names));
   for i := 1 to SVecLen(names) do

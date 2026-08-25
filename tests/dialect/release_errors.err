@@ -1,0 +1,10 @@
+<source>:23:16: error: 'p' is a protected parameter, so it cannot be emptied by 'release'
+<source>:28:16: error: 'release' closes a handle and this is integer: nothing else has a closer to answer for it
+<source>:29:16: error: 'release' closes a handle and this is owned: nothing else has a closer to answer for it
+<source>:30:16: error: 'release' closes a handle and this is text: nothing else has a closer to answer for it
+<source>:33:16: error: 'release' closes a handle and this is nil: nothing else has a closer to answer for it
+<source>:37:18: error: 'release' closes a handle and this is integer: nothing else has a closer to answer for it
+<source>:38:16: error: 'extfopen' answers a handle, which may stand only as the whole right side of an assignment to a handle variable
+<source>:38:16: error: 'release' empties a variable, so its argument must be one
+<source>:40:8: error: 'release' takes one variable of a handle-type
+<source>:41:8: error: undeclared identifier 'release'

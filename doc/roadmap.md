@@ -15,7 +15,7 @@ decide about, and the day it is decided it moves there.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
-| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the two things the handle and the socket left open behind them |
+| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the things the handle and the socket left open behind them, all struck |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, and the small thing it needs first |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the two oracles still worth building |
@@ -66,9 +66,10 @@ model turned out to need it for only part of its surface.
 
 What stands below it is a different thing and is why the chapter is still
 here: **one narrow foreign-interface item that genuinely waits on the model**,
-and **two things the modules built over the last two clauses left open**,
-each a consequence of a feature landing rather than a gap someone surveyed
-for. That is the shape to expect from here on — this page empties faster than
+and **the two things the modules built over the last two clauses left open**,
+both of which are now struck as well — each was a consequence of a feature
+landing rather than a gap someone surveyed for, and each closed within two
+days of being written down. That is the shape to expect from here on — this page empties faster than
 it fills, and a landed feature is both the commonest way it fills and, one
 increment later, the commonest way a row leaves it.
 
@@ -156,12 +157,13 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
   it land was the second caller: `PasDir` wanted it on the day it was written,
   and both modules had been closing a stream by opening a path they knew would
   fail, for a refused system call and a stale `errno` apiece.
-- **A closer's result is discarded**, 6.4.12.1 says, and `pclose`'s result is
-  the child's wait status. `PasProcess.Capture` gets the exit code through
-  the stream instead — the shell prints `$?` after the output, behind a marker
-  — which misreads a program that writes a control character 1 at the start
-  of a line. The language change would be a handle whose closer's result is
-  kept somewhere a program can read it, and nothing has said where.
+- ~~**A closer's result is discarded.**~~ **Done** (ADR-0206, AP 6.4.12.5).
+  Where it goes turned out to be the obvious place once the question was
+  asked properly: `release(h)` is a required function that releases and
+  *answers*, and the reason no release could report before is that none of
+  them is a statement. `PasProcess.Capture` loses the marker, the subshell
+  and the reader's lookahead, and its golden passed unchanged with all of it
+  removed — the strongest thing that can be said for a simplification.
 
 **The lesson from the FFI increments**, worth keeping for whatever replaces the
 rows above: a decision that looks like it needs a model may need it for only

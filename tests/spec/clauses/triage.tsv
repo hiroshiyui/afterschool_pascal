@@ -313,6 +313,7 @@ afterschool	6.4.12.1	testable
 afterschool	6.4.12.2	testable	
 afterschool	6.4.12.3	testable	
 afterschool	6.4.12.4	testable	
+afterschool	6.4.12.5	testable	a program can release a handle and print what the closer answered
 afterschool	6.4.13	structural	introduces the fallible-type; the requirements are in its subclauses
 afterschool	6.4.13.1	testable	
 afterschool	6.4.13.2	testable	

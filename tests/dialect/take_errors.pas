@@ -13,6 +13,8 @@ type
 var l, m: List; o: Other; z: Plain; k: integer;
 procedure Lend(var n: List);
 begin end;
+type Stream = handle external 'fclose';
+function ExtStream(path, mode: string): Stream; external 'fopen';
 { 6.9.4 a): emptying a variable threatens it, so `take` asks Threatened as
   every other threat does. Both lines below are errors and that is the point:
   an owned pointer is not a protectable type, so this arm of CheckTake is
@@ -30,8 +32,14 @@ begin
   m := take(k);
   m := take(z);
   m := take(l^.key);
-  { and a variable, not a value }
+  { and a variable, not a value -- the second is the one that reaches the
+    designator arm, an external's function-designator being the only
+    owned-or-handle value that is not one, and it is also what pins that a
+    refused argument reports **once**: CheckCall checks every builtin's
+    arguments before this dispatch, so CheckTake asking again reported the
+    same mistake twice (ADR-0206) }
   m := take(nil);
+  m := take(ExtStream('x', 'r'));
   { one argument }
   m := take(l, m);
   { the position: every one of these would empty l and hold what it emptied

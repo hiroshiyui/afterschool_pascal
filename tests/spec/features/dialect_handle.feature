@@ -153,3 +153,89 @@ Feature: Handle-types
       """
       a handle may be assigned only the result of an 'external' function
       """
+
+  # 6.4.12.5 (ADR-0206). Every other release throws the closer's result away
+  # and there is nowhere for it to go -- a release on the way out of a block
+  # has no statement left to report to. This is that statement, and what a
+  # closer answers is not decoration: `pclose` answers a child's wait status
+  # and `fclose` reports a flush that failed.
+  @afterschool:6.4.12.5
+  Scenario: release yields what the closer answered, and empties the variable
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function fopen(path, mode: string): f; external 'fopen';
+      var a: f;
+      begin
+        a := fopen('/dev/null', 'r');
+        writeln(release(a):1);
+        writeln(a = nil)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      0
+      TRUE
+      """
+
+  # 6.4.12.5's third paragraph: an empty variable is not an error, which is the
+  # assignment of `nil` rather than `dispose` of nil. A program that released
+  # nothing has nothing to be told about.
+  @afterschool:6.4.12.5
+  Scenario: releasing an empty handle yields zero and is not an error
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      var a: f;
+      begin writeln(release(a):1, ' ', a = nil) end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      0 TRUE
+      """
+
+  # 6.4.12.5's NOTE 2: this is `take` with the position rule removed, because
+  # what it yields is an integer and an integer needs no owner. So a
+  # function-designator stands wherever an integer may be written.
+  @afterschool:6.4.12.5
+  Scenario: a release may stand anywhere an integer may
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function fopen(path, mode: string): f; external 'fopen';
+      var a: f;
+      begin
+        a := fopen('/dev/null', 'r');
+        if release(a) = 0 then writeln('closed and said zero')
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      closed and said zero
+      """
+
+  # And the argument is a variable of a handle-type: 6.4.12.5's first sentence,
+  # which is what stops `release` becoming a way to call any closer at all.
+  @afterschool:6.4.12.5
+  Scenario: release refuses anything that is not a handle variable
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var t: text; k: integer;
+      begin k := release(t) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      nothing else has a closer to answer for it
+      """

@@ -97,8 +97,9 @@ EmitStringCompare:binaryOp:1 names 19 of 20
 # than a number and each has its own arity -- so this case sees only the ones
 # whose argument is arithmetic. AP 6.7.6.10's argcount and argument (ADR-0173)
 # are taken by arms of their own above it, as eof and eoln are, and so is
-# AP 6.8.9's try (ADR-0178) and AP 6.4.14.6's take (ADR-0182).
-CheckCall:builtinKind:1 names 27 of 44
+# AP 6.8.9's try (ADR-0178), AP 6.4.14.6's take (ADR-0182) and AP 6.4.12.5's
+# release (ADR-0206).
+CheckCall:builtinKind:1 names 27 of 45
 
 # EmitCall's first three are catch-all lists that mean to name every builtin,
 # and each omits the same four. biBinding, biDate and biTime are the builtins
@@ -120,14 +121,20 @@ CheckCall:builtinKind:1 names 27 of 44
 # A biTake reaching EmitCall would therefore be a call Sema should have
 # refused, and stopping is the answer that says so. Naming it in these three
 # would turn that into an `undef` and a program that quietly moved nothing.
-EmitCall:builtinKind:1 names 39 of 44
-EmitCall:builtinKind:2 names 39 of 44
-EmitCall:builtinKind:3 names 39 of 44
+#
+# AP 6.4.12.5's biRelease (ADR-0206) is the sixth and is biTry's case exactly:
+# an `else if` above these lists takes it, because its result is an `i32` from
+# one runtime call and none of the instruction-shaped arms below could spell
+# that. It is left out for the same reason as the other four -- a fallback
+# body would emit something rather than stop.
+EmitCall:builtinKind:1 names 39 of 45
+EmitCall:builtinKind:2 names 39 of 45
+EmitCall:builtinKind:3 names 39 of 45
 
 # The fourth is the real-valued intrinsics, guarded by the arm above it that
 # established the argument is real. argcount and argument never reach it: the
 # first is an arm near the top of EmitCall and the second goes to EmitString.
-EmitCall:builtinKind:4 names 18 of 44
+EmitCall:builtinKind:4 names 18 of 45
 
 # --- a required procedure the arm above already took ----------------------
 #

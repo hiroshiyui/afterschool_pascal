@@ -2485,6 +2485,31 @@ own and Pascal holds `Socket = handle external 'pasx_socket_close'`.
   it is a family of structs, and a program never declares the one it is really
   using.
 
+**A closer's result has a statement to report to** (ADR-0206). `release(h)`
+releases what a handle variable holds, yields what the closer answered, and
+leaves the variable empty (AP 6.4.12.5). Every other release in 6.4.12.3
+discards it and must — a block ending, a `goto` past it, a `halt`, a
+`dispose`, an assignment — none of them is a place a program could receive an
+integer, which is what `runtime/pasrt.c` had been saying since ADR-0174 as the
+reason for the gap rather than as a request to close it.
+
+- **It is `take` with the position rule removed**, and the difference is why
+  there is none: `take` yields an owned value that must land somewhere, and
+  this yields an integer, so a function-designator stands wherever an integer
+  may be written.
+- **A closer's result is not a formality.** `pclose` answers a child's wait
+  status and `fclose` reports a flush that failed. `PasProcess.Capture` had to
+  live without it and did so by running the command in a subshell and having
+  the shell print `$?` behind a marker — a newline and the character 1 — so a
+  program writing those two characters was misread. The marker, the subshell
+  and the reader's lookahead are all gone and the golden passed unchanged.
+- **The test runs a child that exits 7**, because `fclose` answers 0 for
+  everything a test can arrange: a processor that discarded the result would
+  print exactly the right goldens. A feature whose correct answer is always
+  zero is one no test can hold.
+- **An empty variable answers zero and is not an error** — the assignment of
+  `nil`, not `dispose` of nil.
+
 **A server serves many clients, and the language needed nothing** (ADR-0205).
 `PasNet.Wait` answers which of a list of sockets can be read, or accepted
 from, without blocking. The list is a schema — `SocketList(n: integer) =

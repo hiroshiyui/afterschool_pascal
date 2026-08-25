@@ -624,7 +624,12 @@ type
                    assignment to a variable of its own type -- 6.4.12.2's
                    position rule, reached by the same flag. Appended for
                    biTry's reason. }
-                 biTake);
+                 biTake,
+                 { AP 6.4.12.5's release, the dialect's early close with an
+                   answer (ADR-0206). `release(h)` releases what a handle
+                   variable holds and yields what the closer answered.
+                   Appended for biTry's reason. }
+                 biRelease);
   { ISO/IEC 10206:1991 6.7.5.2's direct-access procedures join ISO 7185's. The
     three seeks differ only in the mode they leave the file in; update writes
     the buffer variable back without advancing; extend opens for writing at the
@@ -9794,7 +9799,7 @@ begin
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
           biStrGe, biBinding, biDate, biTime, biArgCount, biArgument,
-          biTry, biTake: ;
+          biTry, biTake, biRelease: ;
         end
     end
     else if e^.clArgs^.next^.next = nil then
@@ -15065,6 +15070,10 @@ begin
     its own keeps it. }
   else if (langStd = stdAfterschool) and PoolIs(at, len, 'take     ') then
     LookupBuiltin := biTake
+  { AP 6.4.12.5 (ADR-0206), and the same sentence a third time: a program with
+    a `release` of its own keeps it. }
+  else if (langStd = stdAfterschool) and PoolIs(at, len, 'release  ') then
+    LookupBuiltin := biRelease
   else if PoolIs(at, len, 'time     ') then LookupBuiltin := biTime
   else LookupBuiltin := biNone
 end;
@@ -15200,7 +15209,8 @@ begin
     writeln('''take'' takes one variable of an owned pointer type')
   end
   else begin
-    CheckExpr(c^.clArgs);
+    { CheckCall has already checked it -- see CheckRelease, which is this
+      routine's twin and where the duplicate this removes is described. }
     if not IsOwnedPointer(c^.clArgs^.ntype) then begin
       ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
       write('''take'' empties an owned pointer and this is ');
@@ -15227,6 +15237,54 @@ begin
     end
   end;
   takeOk := false
+end;
+
+{ AP 6.4.12.5's release, the dialect's early close with an answer (ADR-0206).
+
+  Every other release throws the closer's result away, and the runtime says
+  why in as many words: a handle is released on the way out of a block, and
+  there is no statement left to report to. This is that statement. `pclose`
+  answers the child's wait status and `fclose` reports a flush that failed, so
+  the information a closer carries is exactly the kind a caller must not miss.
+
+  It is `take`'s shape with the position rule removed, and the difference is
+  the whole reason there is no rule: what `take` yields is an owned value that
+  must land somewhere, and what this yields is an **integer**. Nothing is left
+  unowned by writing it in the middle of an expression, so a
+  function-designator is all it needs to be.
+
+  An empty variable answers 0 and is not an error, which is the assignment of
+  `nil` on an empty one (AP 6.4.12.2) rather than `dispose` of nil: a program
+  that released nothing has nothing to be told about. }
+procedure CheckRelease(c: nodePtr; n: integer);
+begin
+  c^.ntype := intType;
+  if n <> 1 then begin
+    ErrorAt(c^.line, c^.col);
+    writeln('''release'' takes one variable of a handle-type')
+  end
+  else begin
+    { The argument is checked by the loop in CheckCall that reaches every
+      builtin's arguments before this dispatch. Checking it again here is
+      what made a refused argument report itself twice -- one mistake, two
+      messages -- which is the wart this shares with CheckTake and which the
+      ExtFopen line of each error case now pins. }
+    if not IsHandle(c^.clArgs^.ntype) then begin
+      ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+      write('''release'' closes a handle and this is ');
+      WriteTypeName(c^.clArgs^.ntype);
+      writeln(': nothing else has a closer to answer for it')
+    end
+    else if not IsDesignator(c^.clArgs) then begin
+      ErrorAt(c^.clArgs^.line, c^.clArgs^.col);
+      writeln('''release'' empties a variable, so its argument must be one')
+    end
+    { 6.9.4 a): emptying a variable threatens it, which is what gives
+      `release` of a control variable or of a protected parameter the refusal
+      those two already have -- CheckTake's sentence, and the same call. }
+    else if Threatened(c^.clArgs) then
+      writeln('it cannot be emptied by ''release''')
+  end
 end;
 
 procedure CheckTry(c: nodePtr; n: integer);
@@ -15633,6 +15691,9 @@ begin
       { AP 6.4.14.6 (ADR-0182). }
       else if c^.clBuiltin = biTake then
         CheckTake(c, n)
+      { AP 6.4.12.5 (ADR-0206). }
+      else if c^.clBuiltin = biRelease then
+        CheckRelease(c, n)
       else if (c^.clBuiltin = biEof) or (c^.clBuiltin = biEoln) then begin
         c^.ntype := boolType;
         if n = 0 then begin
@@ -28833,6 +28894,17 @@ begin
     Def(v);
     writeln(ircode, 'call i32 @pas_argcount()')
   end
+  { AP 6.4.12.5 (ADR-0206): the release with an answer. The slot's address,
+    exactly as `pas_handle_set` takes it -- the runtime owns the emptying,
+    because it is the same three lines every other release already runs and a
+    second copy of them here would be a copy free to drift. }
+  else if e^.clBuiltin = biRelease then begin
+    EmitAddress(e^.clArgs, x);
+    Def(v);
+    write(ircode, 'call i32 @pas_handle_release_result(ptr ');
+    PutOp(x);
+    writeln(ircode, ')')
+  end
   else if (e^.clBuiltin = biSubstr) or (e^.clBuiltin = biTrim) or
           (e^.clBuiltin = biArgument) then
     EmitStringValue(e, v)
@@ -33305,6 +33377,7 @@ begin
   writeln(ircode, 'declare void @pas_handle_done(ptr)');
   writeln(ircode, 'declare void @pas_handle_set(ptr, ptr)');
   writeln(ircode, 'declare ptr @pas_handle_lend(ptr)');
+  writeln(ircode, 'declare i32 @pas_handle_release_result(ptr)');
   writeln(ircode, 'declare ptr @pas_jump_env(ptr)');
   writeln(ircode, 'declare void @pas_jump_done(ptr)');
   writeln(ircode, 'declare void @pas_jump_go(ptr, i32)');

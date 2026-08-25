@@ -43,18 +43,29 @@
   reason PasStream gives.
 
   **Where the exit code comes from.** `pclose` answers the child's wait
-  status -- and `pclose` is the closer, whose result AP 6.4.12.1 discards.
-  Calling it by hand would leave the variable owning an address already
-  released, which 6.4.12.3 forbids. So the status travels through the
-  stream instead: the command is run in a subshell and the shell prints
-  `$?` after it, behind a marker no text contains (a newline, then the
-  character 1), and the reader takes the code from the marker and the
-  output from before it. The marker is what the program wrote only if it
-  wrote a control character 1 at the start of a line, which `Capture`
-  would then misread; that is the cost, and the roadmap carries the
-  language change that would remove it. A command that cannot be started
-  at all is `errIO`; one the shell could not find is code 127, as with
-  `Run`.
+  status, and `pclose` is the closer -- so `release(p)` is the whole of it
+  (AP 6.4.12.5, ADR-0206): the pipe is closed where the reading stops and
+  the result is the child's status, decoded by `ExitCode` exactly as `Run`
+  decodes `system`'s.
+
+  It used to be otherwise, and what it used to be is why AP 6.4.12.5
+  exists. Every release before that record discarded the closer's result,
+  so the status had to travel through the *stream*: the command ran in a
+  subshell, the shell printed `$?` behind a marker no text was expected to
+  contain -- a newline, then the character 1 -- and the reader split the
+  two apart. A program that wrote a control character 1 at the start of a
+  line was misread, and a `Capture` of anything binary was a gamble. The
+  marker, the subshell and the wrapping are all gone.
+
+  A command that cannot be started at all is `errIO`; one the shell could
+  not find is code 127, as with `Run`.
+
+  **What the command wrote is what a caller gets**, to the last newline.
+  That did not change and is worth saying, because it *nearly* did: the
+  marker was a newline and the character 1, and the newline it ate was the
+  wrapper's own, printed by the `printf` after the output. Reading the
+  reader as though it stripped the command's last newline is a mistake this
+  increment made and a test caught.
 
   **What is not here.** A pipe *into* a child, its environment, a signal:
   `posix_spawn` takes a `char *const argv[]`, which is the struct-layout
@@ -146,7 +157,6 @@ function ExtFgetc(f: Pipe): integer; external 'fgetc';
 
 const
   NewLine = 10;
-  Marker = 1;    { the character after the newline that ends the output }
 
 const
   { POSIX.1, XSI: "CLOCKS_PER_SEC is defined to be one million". A number a
@@ -171,52 +181,33 @@ begin
   Run := r
 end;
 
-{ The command wrapped so that the shell reports the status after the
-  output. The subshell is what makes `exit 3` a code rather than the end of
-  the shell before the printf. }
-function Wrapped(command: CommandLine): CommandLine;
-begin
-  Wrapped := '( ' + command + ' ); printf ''\n\001%d'' "$?"'
-end;
-
-{ Both readers are this one loop: every character before the marker goes to
-  `take`, and the digits after it are the code. `c` is the character read
-  and `prev` the one before it, because the marker is two characters and
-  the newline before it belongs to the marker, not to the output -- so a
-  newline is handed over only once the character after it is known. }
+{ Both readers are this one loop: every character goes to `take`, and the
+  status comes from closing the pipe. Nothing is held back or looked ahead
+  at -- which is the shape the marker cost, the old reader having had to
+  know the character after every newline before it could hand the newline
+  over. }
 procedure Collect(command: CommandLine; var r: RunResult;
                   procedure take(ch: char));
-var p: Pipe; status, c, code: integer; seen, pending: boolean;
+var p: Pipe; status, c: integer;
 begin
   status := ExtFflush(0);
-  p := ExtPopen(Wrapped(command), 'r');
+  p := ExtPopen(command, 'r');
   if p = nil then
     r := errIO
   else begin
-    seen := false;
-    pending := false;
-    code := 0;
     c := ExtFgetc(p);
     while c >= 0 do begin
-      if seen then begin
-        if (c >= ord('0')) and (c <= ord('9')) then
-          code := code * 10 + (c - ord('0'))
-      end
-      else if pending then begin
-        pending := false;
-        if c = Marker then seen := true
-        else begin
-          take(chr(NewLine));
-          if c = NewLine then pending := true
-          else take(chr(c))
-        end
-      end
-      else if c = NewLine then pending := true
-      else take(chr(c));
+      take(chr(c));
       c := ExtFgetc(p)
     end;
-    if seen then r := code
-    else r := errIO
+    { AP 6.4.12.5 (ADR-0206): `pclose` is this handle's closer and this is
+      what it answered -- the child's wait status. The variable is empty
+      afterwards, so the block's own release finds nothing and the stream is
+      closed once, which is what made calling `pclose` by hand impossible
+      before. }
+    status := release(p);
+    if status = -1 then r := errIO
+    else r := ExitCode(status)
   end
 end;
 

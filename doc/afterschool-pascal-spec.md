@@ -747,6 +747,47 @@ carries an address through 6.7.7.8, and this clause takes nothing from that
 door. What it adds is a type through which the address is owned, and Annex C.7
 is the register of what the other door still costs.
 
+**6.4.12.5 The release-function.** `release` shall be a required identifier
+denoting a function whose one actual-parameter shall be a variable-access of a
+handle-type. Its activation shall release (6.4.12.3) the value that variable
+holds, if any, and shall yield the value the routine 6.4.12.1 names answered.
+The variable shall be empty afterwards.
+
+It shall not be an error for the variable to be empty when the function is
+activated; the function shall then yield zero and the variable shall remain
+empty.
+
+The result type shall be `integer`.
+
+The actual-parameter shall be **threatened** in the sense of
+ISO/IEC 10206:1991 §6.9.4 a).
+
+NOTE 1 — Every other release in 6.4.12.3 discards what the closer answered,
+and there is nowhere for it to go: a release on the way out of a block, or by
+a `goto`, has no statement left to report to. This is that statement. What a
+closer answers is not decoration — `pclose` answers a child's wait status and
+`fclose` reports a flush that failed — so without this clause a program could
+own a foreign resource and never learn whether letting go of it worked
+(ADR-0206).
+
+NOTE 2 — This is 6.4.14.6's `take` with the position rule removed, and the
+difference is the reason there is none. What `take` yields is an owned value
+that must land in a variable of its own type or be held by no one; what this
+yields is an `integer`. A function-designator may therefore stand wherever an
+integer may be written.
+
+NOTE 3 — The variable being empty afterwards is what keeps 6.4.12.3's "at most
+once" without anyone counting: the block's own release finds nothing to do.
+Before this clause a program wanting a closer's result had to call the closer
+itself through 6.4.12.4's lend, which leaves the variable owning an address
+already released and the block closing it a second time.
+
+NOTE 4 — Yielding zero for an empty variable is the assignment of `nil`
+(6.4.12.2) rather than `dispose` of nil (ISO/IEC 10206:1991 §6.7.5.3): a
+program that released nothing has nothing to be told about. A caller that must
+distinguish "closed, and the closer said zero" from "there was nothing to
+close" has the variable itself to ask, before.
+
 #### 6.4.13 Fallible-types [added]
 
 A fallible-type denotes a value that is either an outcome of one type or a
@@ -2047,6 +2088,7 @@ the rule.
 | `try` | `try(x)` | `unknown function 'try'` | `unknown function 'try'` |
 | `owned` | `owned ^T` | `expected ';' after a variable declaration, found '^'` | `expected ';' after a variable declaration, found '^'` |
 | `take` | `take(v)` | `unknown function 'take'` | `unknown function 'take'` |
+| `release` | `release(h)` | `unknown function 'release'` | `unknown function 'release'` |
 | `utf8` | `utf8(n)` | `a discriminated schema is an Extended Pascal feature; compile with --std=extended` | `unknown schema 'utf8'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is

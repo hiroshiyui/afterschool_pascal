@@ -21,6 +21,8 @@ output and a code: code 5
 too short: code 0
   [0123]
 not found: code 127
+a marker in the text: code 0
+  length 8 code point 2 of line 2 is 1 and the last is z
 lines: code 0
   1: [x]
   2: []
