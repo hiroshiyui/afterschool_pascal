@@ -711,22 +711,24 @@ Unicode version is stated in
 [`doc/implementation-defined.md`](doc/implementation-defined.md) §2.7.
 
 A binding is a module that exports Pascal and keeps the directive to itself.
-Nine of the twelve dialect modules are one — `pasmathx`, `pasfs`, `pasenv`,
-`pasio`, `pasos`, `pasprocess`, `passtream`, `pasdir` and `pasunicode` — and
-they are what a caller sees instead of a foreign declaration. The other three
-need only the dialect's own features: `paserror`, `pasparse`, and `paslist`,
-which is built on the owned pointer. `lib/dialect/passtream.pas` is the first
-binding over a handle: a `Stream` the caller declares and the module fills, so
-what a program holds is a variable that closes itself and never the address.
+Ten of the thirteen dialect modules are one — `pasmathx`, `pasfs`, `pasenv`,
+`pasio`, `pasos`, `pasprocess`, `passtream`, `pasdir`, `pasunicode` and
+`pasnet` — and they are what a caller sees instead of a foreign declaration.
+The other three need only the dialect's own features: `paserror`, `pasparse`,
+and `paslist`, which is built on the owned pointer.
+`lib/dialect/passtream.pas` is the first binding over a handle: a `Stream` the
+caller declares and the module fills, so what a program holds is a variable
+that closes itself and never the address.
 
 **The runtime has a second surface** (ADR-0131). `pas_` names are what the
 compiler emits calls to and are refused as foreign names; `pasx_` names are
 what a *program* may bind. It was one routine wide when that record was
-written, and is now seven: `pasx_errno`, `pasx_file_info`, `pasx_dir_next`,
-`pasx_text_check`, `pasx_text_scalar`, and two that exist only so a test can
-be written against the boundary itself. `pasx_errno` is still the one that
-explains the surface, because C specifies `errno` as a **macro**, so it has no
-linker symbol any foreign-function interface could name.
+written and is now five families: `pasx_errno`, the file and directory pair
+`pasx_file_info` and `pasx_dir_next`, the six `pasx_text_*` the text model
+needs, the five `pasx_socket_*` behind `PasNet`, and two that exist only so a
+test can be written against the boundary itself. `pasx_errno` is still the one
+that explains the surface, because C specifies `errno` as a **macro**, so it
+has no linker symbol any foreign-function interface could name.
 
 ## The standard library
 
@@ -761,6 +763,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasio.pas` | `OpenRead`, `Close`, `ReadInto`, `WriteFrom`, `WriteAll`, `WriteText`, `AtEnd` — descriptor I/O through `external`, on ADR-0129's buffer. It reads files and writes to descriptors already open: creating one needs `O_WRONLY` and `O_CREAT`, which are header numbers this FFI cannot see — `PasStream` is where to create one |
 | `lib/dialect/pasdir.pas` | `Open`, `Next`, `Close`, `List` — reading a directory, with the `DIR *` owned as a handle so it is closed by leaving the block. `Next` writes into a string of the caller's own capacity and answers `errFull` for a name too long for it, the length being checked by the side that holds the pointer. There is no entry *kind*: `d_type` is not POSIX, so a caller composes `PasFS.Info`. `List` leaves out `.` and `..`, so an empty vector means an empty directory |
 | `lib/dialect/pasunicode.pas` | `ToText`, `NextScalar`, `ScalarCount`, `Encode`, `ElementEnd` — the things the text-type deliberately leaves to a library. `ToText` **reports** where an assignment to a `utf8(n)` stops the program: `errSyntax` for bytes that are not UTF-8, `errFull` for a value whose normal form will not fit, and nothing assigned unless it succeeds — which is what a program reading bytes it did not write needs. The rest is a **scalar view**, because an element of a text is a grapheme cluster and a program sometimes wants the code points under one: a family emoji is one element and five scalars, and the language can tell you the first number only. `Fold`, `Upper` and `Lower` are full Unicode case operations — **folding is not lowercasing**, and `Fold(a) = Fold(b)` is the caseless comparison a program actually wants: the German sharp s lowercases to itself and folds to `ss`, so `straße` and `STRASSE` are equal under folding and unequal under lowering. No mapping that depends on a language or a context is applied — Greek's final sigma and the Turkish dotless i are declined, because this library knows no language. `ElementEnd` answers where the element beginning at a byte ends, which is how a program reaches an element by number without an index that would hide the walk: the loop is written where it costs |
+| `lib/dialect/pasnet.pas` | `Connect`, `Listen`, `Accept`, `Service`, `WriteText`, `WriteLine`, `ReadLine`, `Close` — a TCP connection, as a **handle** and a line at a time. A descriptor is an integer and an integer is numeric, so a program holding one could add to it and close it twice; the runtime owns the socket and a program holds something that closes itself. **Both ends of every call are strings** — a host and a *service*, which is a name (`http`) or a number written out — so nothing names an address family or a port, `getaddrinfo` decides, and a caller gets IPv6 without asking. Ask to listen on service `'0'` and `Service` reports which port you were given, which is how a program talks to itself. Reading is by line because a socket delivers whatever arrived. One connection at a time: serving two at once needs a construct this language has not got |
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
 | `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
