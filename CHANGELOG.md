@@ -29,6 +29,26 @@ three days, with every gate green. The rest only accept more.
 
 ### Added
 
+- **`utf8(n)`, a text-type** (`--std=afterschool`, AP 6.4.15). What a program
+  holds when it means the characters rather than the octets. The capacity is
+  in **bytes** and `length` counts **elements**, an element being an extended
+  grapheme cluster — so a family emoji joined by zero-width joiners is one
+  element of eighteen bytes, and `length(t)` and `t.capacity` are in different
+  units.
+
+  A value is put into Unicode normal form C where it is constructed, so **two
+  spellings of one character are one value**: `'{composed}'` written with a single
+  `é` and `'{decomposed}'` written with `e` and a combining acute compare equal, and
+  the comparison is a byte comparison with nothing decoded. Assignment from a
+  string or a char, comparison, `length`, `capacity` and `write` (whose field
+  width pads to a count of elements) are there; concatenation and iteration are
+  not yet. Ill-formed UTF-8 and a value too long for the capacity are errors
+  that stop the program, as a value outside a subrange has always been.
+
+  `char` and `string(n)` are unchanged in all three modes, and `utf8` is a
+  required identifier a program may shadow. The Unicode version behind it is
+  stated in `doc/implementation-defined.md` §2.7.
+
 - **`--dump-layout`**: compile as usual, then write the size, alignment and
   field offsets of every record the source defines. It is the compiler's half
   of a check on a foreign struct declaration — a source states what C struct it

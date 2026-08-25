@@ -656,6 +656,38 @@ stand only in a function, the operand is evaluated once however many times its
 value is read, and `try` is nobody's word — a program that declares one keeps
 it. A deferred statement may not contain one.
 
+**Text is a type of its own, and a character is what a reader calls one**
+(AP 6.4.15). `char` stays a byte and `string(n)` stays bytes; `utf8(n)` is what
+a program holds when it means the characters. The capacity is in **bytes** and
+`length` counts **elements**, an element being an extended grapheme cluster:
+
+```pascal
+var t: utf8(64); s: string(64);
+begin
+  t := 'héllo';        { é written as one code point  }
+  s := t;
+  writeln(length(t), ' elements, ', length(s), ' bytes')   { 5 elements, 6 bytes }
+end
+```
+
+A value is put into normal form where it is constructed, so **two spellings of
+one character are one value**: `'héllo'` with a single `é` and `'héllo'`
+with `e` followed by a combining acute compare equal, and comparing them costs
+a byte comparison and no decoding. Three Hangul jamo written separately become
+one syllable; a family emoji joined by zero-width joiners is one element of
+eighteen bytes; a flag is one element of eight.
+
+Bytes that are not well-formed UTF-8, or a value too long for the capacity,
+stop the program — the same rule Pascal has always had for a value stored
+outside a subrange. A text may be assigned from a string and compared only
+with another text or with a literal, because comparing normalised bytes against
+unnormalised ones would answer wrongly rather than report. There is no `t[i]`:
+no integer index is meaningful at more than one of the three levels a text has,
+and an index over elements cannot be a constant-time operation.
+
+Not there yet: concatenation and iteration. The Unicode version is stated in
+[`doc/implementation-defined.md`](doc/implementation-defined.md) §2.7.
+
 A binding is a module that exports Pascal and keeps the directive to itself —
 `lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
 `lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are
@@ -1049,12 +1081,8 @@ language's.
 
 That is a decision about `char` and it is not going to change — widening it
 would stop `set of char` compiling and break the dialect's containment of
-Extended Pascal. The answer is a separate type beside the string, and it is
-**designed and specified but not built**: ADR-0189 and clause 6.4.15 of
-[the dialect specification](doc/afterschool-pascal-spec.md) describe `utf8(n)`,
-a value with a capacity in bytes holding normalised UTF-8 whose elements are
-grapheme clusters. Nothing in this compiler implements it yet, and clause 5.6
-of that document is what keeps it from claiming otherwise.
+Extended Pascal. The answer is a separate type beside the string, and
+`--std=afterschool` has it: see **`utf8(n)`** below.
 
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form with twelve fraction
