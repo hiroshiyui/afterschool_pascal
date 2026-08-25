@@ -18620,6 +18620,20 @@ begin
                   (CalledSym(s^.asValue)^.linkKind = lnkForeign) and
                   (s^.asValue^.ntype = s^.asTarget^.ntype) then
             { admitted: the variable takes what the call answered }
+          { AP 6.4.12.2's second form (ADR-0202): `h := nil` releases what the
+            variable holds and leaves it empty. Nothing else about the type
+            changes -- it is still the case that no *value* of a handle-type
+            may be assigned, `nil` being the empty state rather than one of
+            them, and the same sentence already admits it on the right of `=`.
+            What it removes is a library closing a stream by opening a file it
+            knows will fail: PasStream and PasDir each did that, with `fopen`
+            and `opendir` of the empty path, for a refused system call and a
+            stale errno apiece. The lowering is the arm above unchanged --
+            `pas_handle_set` releases first and then stores, and a null store
+            is the empty state -- so this is a Sema arm and nothing else. }
+          else if IsHandle(s^.asTarget^.ntype) and
+                  IsNil(s^.asValue^.ntype) then
+            { admitted: the variable releases what it holds and is empty }
           else if IsHandle(s^.asTarget^.ntype) then begin
             ErrorAt(s^.line, s^.col);
             write('a handle may be assigned only the result of an ');

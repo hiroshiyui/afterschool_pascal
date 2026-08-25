@@ -106,11 +106,11 @@ function Next(var d: Dir; var name: string): ErrorCode;
 { Release the directory now rather than at the block's end, and leave `d`
   empty. Harmless on an empty one.
 
-  AP 6.4.12.2 gives a handle exactly one assignment, from an external function
-  of its type, so this is that assignment with a function that always answers
-  null: `opendir` of the empty path, which POSIX refuses with ENOENT. It costs
-  one failed system call and a stale errno, exactly as PasStream.Close does,
-  and doc/roadmap.md carries the spelling that would remove both. }
+  AP 6.4.12.2's second form of assignment: `d := nil` releases what the
+  variable holds and leaves it empty. It was `opendir` of the empty path until
+  ADR-0202, the type having had one form of assignment and that one from an
+  external function, which cost a refused system call and a stale errno. This
+  module and PasStream are the two callers that argued for the form. }
 procedure Close(var d: Dir);
 
 { Every entry of a directory onto `names`, in the file system's own order,
@@ -169,9 +169,8 @@ end;
 
 procedure Close;
 begin
-  { the one assignment 6.4.12.2 admits, with an answer that is always null:
-    the release is the assignment's, and the empty path opens nothing }
-  d := ExtOpendir('')
+  { 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
+  d := nil
 end;
 
 function List;

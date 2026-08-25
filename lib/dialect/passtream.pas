@@ -20,14 +20,14 @@
   and nothing else about `s` is the caller's business: `s <> nil` asks whether
   it is open, and that is the only comparison the type has.
 
-  **Close.** AP 6.4.12.2 gives a handle exactly one assignment, from an
-  external function of its type, and the release happens on that assignment.
-  There is no `s := nil`, so `Close` here is that assignment with a function
-  that answers null: `fopen` of the empty path, which POSIX refuses with
-  ENOENT. It releases what `s` held and leaves it empty, and it costs one
-  failed system call and a stale `errno` -- `PasOS.LastErrorText` read after
-  `Close` names the empty path and not whatever failed before it. The
-  roadmap carries the spelling that would remove this.
+  **Close** is `s := nil`, AP 6.4.12.2's second form of assignment: the
+  variable releases what it holds and is empty afterwards, ready to be opened
+  again. It was `fopen` of the empty path until ADR-0202 -- the type had one
+  form of assignment, from an external function, so closing early meant
+  opening something that would fail. That cost a refused system call and a
+  stale `errno`, and `PasOS.LastErrorText` read after `Close` named the empty
+  path rather than whatever had actually failed. This module and `PasDir` are
+  the two callers that argued for the form.
 
   **Lines and capacity.** `ReadLine` reads up to and including the next
   newline, stores what fits in the caller's string, and discards the rest of
@@ -136,9 +136,12 @@ end;
 
 procedure Close;
 begin
-  { the one assignment 6.4.12.2 admits, with an answer that is always null:
-    the release is the assignment's, and the empty path opens nothing }
-  s := ExtFopen('', 'r')
+  { 6.4.12.2's second form: the assignment releases what the variable holds
+    and leaves it empty. It was `ExtFopen('', 'r')` until ADR-0202 -- an
+    assignment whose answer is always null, costing a refused system call and
+    a stale errno, because until then the type had one form of assignment and
+    it had to come from an external function }
+  s := nil
 end;
 
 function WriteText;

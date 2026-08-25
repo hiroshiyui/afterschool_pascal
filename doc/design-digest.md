@@ -2438,17 +2438,23 @@ closer, two list links — that `WalkFiles` sets up empty in the prologue and
 list beside the open files so that `pas_jump_go` and `pas_halt` release what
 they abandon with the walk they already do. `IsOwned` is a file or a handle,
 `ContainsFile` walks it, and every refusal a file has reaches a handle with no
-new arm — `predicate-callers` sweeps a third spelling. Three exceptions are
+new arm — `predicate-callers` sweeps a third spelling. Four exceptions are
 written beside the rules: the assignment from an external function-designator
 of the same type (`pas_handle_set`, releasing the old value; a handle-valued
 call may stand nowhere else, enforced by a flag the assignment arm sets),
-`= nil` (`EmitHandleTest`, a null word), and lending as an external's value
-parameter (`pas_handle_lend`, an error if empty). The closer is declared
+`h := nil` (ADR-0202 — the same `pas_handle_set` with a null value, so it is
+one Sema arm and no lowering: what it assigns is the *empty state* and not a
+value, which is why the type still has one way to acquire one), `= nil`
+(`EmitHandleTest`, a null word), and lending as an external's value parameter
+(`pas_handle_lend`, an error if empty). The closer is declared
 `i32 (ptr)` unless an `external` heading already declared the name. The
 spelling reserves nothing: an identifier followed by `external` and a string
 where a type-denoter ends is a syntax error in both standards.
 `tests/dialect/handle.pas` reads every file back, `fputs` being buffered until
-`fclose`, so each release is observed; `handle_errors.pas` is the refusals.
+`fclose`, so each release is observed; `handle_errors.pas` is the refusals; and
+`handle_nil.pas` opens and closes two thousand streams through one variable
+under the harness's `ulimit -n 256`, which is what makes an early release
+something a test can see.
 
 **A fallible type is a record Sema writes** (ADR-0176). `T ! E` resolves to
 `record case ok: boolean of true: (val: T); false: (cause: E) end`, built by

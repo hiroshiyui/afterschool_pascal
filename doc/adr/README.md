@@ -210,3 +210,4 @@ the alternatives that were rejected and why.
 | [0199](0199-the-cost-is-made-visible-by-not-offering-the-index.md) | The cost is made visible by not offering the index | Accepted |
 | [0200](0200-the-structural-rows-are-read-and-the-reverse-shape-exists.md) | The structural rows are read, and the reverse shape exists | Accepted |
 | [0201](0201-aliasing-was-answered-too-and-what-is-left-is-two-threads-of-control.md) | Aliasing was answered too, and what is left is two threads of control | Accepted |
+| [0202](0202-a-handle-is-released-by-assigning-nil.md) | A handle is released by assigning nil | Accepted |

@@ -107,3 +107,49 @@ Feature: Handle-types
       """
       a handle may be assigned only the result of an 'external' function
       """
+
+  # 6.4.12.2's second form (ADR-0202). `nil` is not a value of the type -- it is
+  # the empty state, which the same clause already admits on the right of `=` --
+  # so what this assignment gives a program is the release, before the
+  # variable's own lifetime ends. Two library modules closed a stream by opening
+  # a path they knew would fail until it existed.
+  @afterschool:6.4.12.2
+  Scenario: a handle is released by assigning nil, and is empty afterwards
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      function fopen(path, mode: string): f; external 'fopen';
+      var a: f;
+      begin
+        a := fopen('/dev/null', 'r');
+        writeln(a <> nil);
+        a := nil;
+        writeln(a = nil)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      TRUE
+      TRUE
+      """
+
+  # And it is the *empty state* and not a value, so nothing else may be assigned
+  # -- the refusal above is unchanged, and a pointer is not admitted either.
+  @afterschool:6.4.12.2
+  Scenario: a handle takes nil and no other pointer value
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      type f = handle external 'fclose';
+      var a: f; q: ^integer;
+      begin q := nil; a := q end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a handle may be assigned only the result of an 'external' function
+      """

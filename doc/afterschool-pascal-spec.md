@@ -667,14 +667,27 @@ The value `nil` shall denote the empty state of every handle-type. A handle
 shall be comparable with `nil` by `=` and `<>` and with nothing else, the
 comparison asking whether the variable is empty.
 
-There shall be exactly one form of assignment to a variable of a handle-type:
-an assignment-statement whose expression is a function-designator of an
-external-declaration (6.7.7) whose result type is the same type. The variable
-shall first release the value it holds, if any, and then hold the value the
-function answered; a null answer leaves it empty. A function-designator whose
-result type is a handle-type shall appear in no other position.
+There shall be exactly two forms of assignment to a variable of a handle-type.
 
-NOTE 1 — "Function-designator" is the whole construct and not one spelling of
+The first is an assignment-statement whose expression is a
+function-designator of an external-declaration (6.7.7) whose result type is
+the same type. The variable shall first release the value it holds, if any,
+and then hold the value the function answered; a null answer leaves it empty.
+A function-designator whose result type is a handle-type shall appear in no
+other position.
+
+The second is an assignment-statement whose expression is `nil`. The variable
+shall release the value it holds, if any, and shall be empty.
+
+NOTE 1 — The second form assigns no *value*: `nil` denotes the empty state and
+is not a value of the type, which is why the sentence above already admits it
+on the right of `=`. What it gives a program is the release, before the
+variable's own lifetime ends. Without it a library closing a stream early had
+to assign the answer of a call it knew would fail — `fopen` of the empty path —
+for a refused system call, a stale `errno` and a diagnostic naming the wrong
+path. `PasStream.Close` and `PasDir.Close` each did that.
+
+NOTE 2 — "Function-designator" is the whole construct and not one spelling of
 it: §6.8.5 makes the actual-parameter-list optional, so a parameterless
 external-declaration written as a bare identifier is one. Both sentences reach
 it. This is stated because a processor implemented the two sentences from two
@@ -690,7 +703,7 @@ handle-type shall be subject to the same restrictions, exactly as
 ISO/IEC 10206:1991 §6.4.6 a) and §6.8.3.5 treat a type having a file-type
 component.
 
-NOTE 2 — Those are the file variable's restrictions, reached through the same
+NOTE 3 — Those are the file variable's restrictions, reached through the same
 predicate: §6.4.6 a)'s "permissible as the component-type of a file-type"
 excludes a handle as it excludes a file, for the same reason — there is no
 copy, the storage and the value being one object.
@@ -699,7 +712,7 @@ copy, the storage and the value being one object.
 released by calling the routine 6.4.12.1 names with it, at the first of:
 termination of the activation in which the variable exists, including
 termination by a `goto` (§6.9.2.4) or `halt` (§6.7.5.7); `dispose` of a
-variable containing it; and the assignment 6.4.12.2 describes. A variable
+variable containing it; and either assignment 6.4.12.2 describes. A variable
 shall release a value at most once.
 
 **6.4.12.4 Crossing the boundary.** A handle-type shall be the result type of
