@@ -89,6 +89,30 @@ begin
     end;
   writeln('nested n=', n:1);
 
+  { The outer loop's own break, written *after* an inner loop has finished.
+    Nothing above reaches this: in every nested case the break belongs to the
+    inner loop, so an emitter that never put the enclosing loop's targets back
+    would answer all of them correctly. Here the outer break would branch to
+    where the inner loop ends -- which is the middle of the outer body -- and
+    the program would not terminate. Found by a mutation, not by reading. }
+  n := 0;
+  for i := 1 to 5 do begin
+    for j := 1 to 2 do n := n + 1;
+    if i = 3 then break
+  end;
+  writeln('restored n=', n:1);
+
+  { the same for a while, whose targets are the pair a for-statement does not
+    share: its continue is the condition and it has no step block }
+  n := 0;
+  i := 0;
+  while i < 5 do begin
+    i := i + 1;
+    for j := 1 to 2 do n := n + 1;
+    if i = 3 then break
+  end;
+  writeln('restored while n=', n:1);
+
   { for-in over a set: 6.7.5.11 d), the next member }
   s := ['a', 'e', 'i', 'x'];
   n := 0;
