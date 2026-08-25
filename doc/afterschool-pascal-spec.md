@@ -209,13 +209,15 @@ Three rules, and the first is the one that matters:
   when they were written; this states what the language is now. Annex E lists
   every such divergence found.
 - **d) Its clauses are cited by scenarios that run.** `tests/spec/` takes
-  `@afterschool:<clause>`, and 86 of this document's 89 testable clauses are
-  cited by at least one scenario; the clause table those citations are checked
-  against is **generated from these headings**, so a renamed clause fails the
-  traceability gate rather than drifting. Three are not cited: 6.13.1 and 6.11
-  each need two program-components and a link, and that harness compiles a
-  single program, and 6.7.7.6.1 is a rule about which record-types cross a
-  boundary that the `foreign-layout` gate checks instead.
+  `@afterschool:<clause>`, and every testable clause of this document is cited
+  by at least one scenario but for three; the clause table those citations are
+  checked against is **generated from these headings**, so a renamed clause
+  fails the traceability gate rather than drifting. The three are 6.13.1 and
+  6.11, which each need two program-components and a link where that harness
+  compiles a single program, and 6.7.7.6.1, a rule about which record-types
+  cross a boundary that the `foreign-layout` gate checks instead. They are
+  named rather than counted: a count moves whenever the triage does, and this
+  one had been stale through four increments before anybody read it.
 
   A clause a scenario may **not** cite is one the triage calls `structural` or
   `not-implemented`, and the gate fails on a citation of either. That is what

@@ -188,3 +188,46 @@ Feature: Slice parameters
       """
       6.8.3.5 gives an array no relational operators
       """
+
+  # AP 6.4.6's own sentence, and not the cross-reference its triage row described
+  # for a long time: *no value shall be assignment-compatible with a slice, and a
+  # slice shall not be assignment-compatible with any type*. Both directions,
+  # because a shared predicate that grants one grants the other -- ADR-0143's
+  # defect was `Assignable` letting an array through a slice arm placed ahead of
+  # it, so one array's contents were copied over another's and the program exited
+  # 0. Found by the triage audit rather than by a gate (ADR-0200).
+  @afterschool:6.4.6
+  Scenario: a slice cannot be assigned to
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var a: array [1..3] of integer;
+      procedure q(var s: array of integer);
+      var b: array [1..3] of integer;
+      begin b[1] := 1; s := b end;
+      begin a[1] := 1; q(a) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a slice cannot be assigned
+      """
+
+  @afterschool:6.4.6
+  Scenario: a slice cannot be assigned from
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var a: array [1..3] of integer;
+      procedure q(var s: array of integer);
+      var b: array [1..3] of integer;
+      begin b := s; writeln(b[1]) end;
+      begin a[1] := 1; q(a) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a slice cannot be assigned
+      """

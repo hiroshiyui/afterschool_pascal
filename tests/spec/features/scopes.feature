@@ -374,3 +374,37 @@ Feature: Scopes and activations
       """
       'plain' is not bindable
       """
+
+  # §6.2.3.3's last paragraph, which is the clause's own and not its heading's:
+  # within an activation, an applied occurrence of a variable-identifier denotes
+  # *that activation's* variable, and the exception is that a function-identifier
+  # in an assignment-statement denotes the result rather than calling. The two
+  # halves are one paragraph and this program needs both -- `f := f - 1` would be
+  # a recursive call on the right and an assignment to the result on the left, and
+  # each activation's `n` has to be its own for the answer to come out.
+  #
+  # ISO/IEC 10206:1991's §6.2.3.3 ends before that paragraph; it states the same
+  # rules at §6.7.2 and §6.9.2.2. So this is filed under ISO 7185 alone, which is
+  # the reverse of the shape the last triage audit found (ADR-0200).
+  @iso7185:6.2.3.3
+  Scenario: an applied occurrence denotes its own activation's variable
+    Given the ISO 7185 program
+      """
+      program p(output);
+      var n: integer;
+      function fact(n: integer): integer;
+      begin
+        if n <= 1 then fact := 1
+        else fact := n * fact(n - 1)
+      end;
+      begin
+        n := 4;
+        writeln(fact(n):1, ' ', n:1)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      24 4
+      """

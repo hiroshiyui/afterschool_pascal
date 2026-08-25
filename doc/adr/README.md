@@ -208,3 +208,4 @@ the alternatives that were rejected and why.
 | [0197](0197-a-register-only-appended-to-is-one-that-decays.md) | A register only appended to is one that decays | Accepted |
 | [0198](0198-the-kind-a-new-kind-resembles-is-the-question-and-a-person-names-it.md) | The kind a new kind resembles is the question, and a person names it | Accepted |
 | [0199](0199-the-cost-is-made-visible-by-not-offering-the-index.md) | The cost is made visible by not offering the index | Accepted |
+| [0200](0200-the-structural-rows-are-read-and-the-reverse-shape-exists.md) | The structural rows are read, and the reverse shape exists | Accepted |

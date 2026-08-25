@@ -47,8 +47,8 @@ iso7185	3.2	structural	defines a term the rest of the standard uses
 iso7185	3.3	structural	defines a term the rest of the standard uses
 iso7185	3.4	structural	defines a term the rest of the standard uses
 iso7185	3.5	structural	defines a term the rest of the standard uses
-iso7185	5.1	structural	states what a processor or a program is, not what either does
-iso7185	5.2	structural	states what a processor or a program is, not what either does
+iso7185	5.1	testable	not a statement of what a processor is: 5.1 e) requires a violation to be reported before the program-block is executed and execution then prevented, and f) 3) requires an error to be reported and the program stopped -- both stated nowhere else
+iso7185	5.2	structural	requires of a *program* and not of a processor -- a conformance level, and not relying on an implementation-dependent interpretation. What a processor must do about a program that fails this is 5.1 e)
 iso7185	6.1	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.1.1	testable	Lexical tokens / General
 iso7185	6.1.2	testable	Special-symbols
@@ -76,7 +76,7 @@ iso7185	6.2.2.11	testable	what a name denotes at its defining-point it denotes a
 iso7185	6.2.3	testable	Activations
 iso7185	6.2.3.1	structural	defines 'local to'
 iso7185	6.2.3.2	structural	what an activation contains -- the model the clauses after it are stated in
-iso7185	6.2.3.3	structural	defines when one activation is 'within' another
+iso7185	6.2.3.3	testable	not only 'within': its last paragraph says which activation's entity an applied occurrence denotes -- so a recursive call names its own variables -- and states the exception that a function-identifier in an assignment-statement denotes the result. ISO/IEC 10206:1991's clause of this number has neither sentence; it states them at 6.7.2 and 6.9.2.2
 iso7185	6.2.3.4	structural	defines 'activation-point'
 iso7185	6.2.3.5	testable	an activation's variables exist until it terminates, and each activation has its own
 iso7185	6.3	testable	Constant-definitions
@@ -123,12 +123,12 @@ iso7185	6.6.3.7.3	testable	conformant array parameters, accepted since this beca
 iso7185	6.6.3.8	testable	conformant array parameters, accepted since this became a level 1 processor
 iso7185	6.6.4	testable	Required procedures and functions
 iso7185	6.6.5	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.6.5.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.6.5.1	structural	classifies the required procedures into the categories the subclauses below enumerate; the members and their meanings are stated there, so nothing here can fail unless one of them does
 iso7185	6.6.5.2	testable	File handling procedures
 iso7185	6.6.5.3	testable	Dynamic allocation procedures
 iso7185	6.6.5.4	testable	Transfer procedures
 iso7185	6.6.6	structural	introduces the subclauses below it; states no requirement of its own
-iso7185	6.6.6.1	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.6.6.1	structural	classifies the required functions into the categories the subclauses below enumerate; the members and their meanings are stated there, so nothing here can fail unless one of them does
 iso7185	6.6.6.2	testable	Arithmetic functions
 iso7185	6.6.6.3	testable	Transfer functions
 iso7185	6.6.6.4	testable	Ordinal functions
@@ -155,7 +155,7 @@ iso7185	6.8.3.2	testable	Compound-statements
 iso7185	6.8.3.3	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.8.3.4	testable	If-statements
 iso7185	6.8.3.5	testable	Case-statements
-iso7185	6.8.3.6	structural	introduces the subclauses below it; states no requirement of its own
+iso7185	6.8.3.6	structural	a production naming the three subclauses below and one sentence each of them then states precisely; nothing here can fail unless one of them does
 iso7185	6.8.3.7	testable	Repeat-statements
 iso7185	6.8.3.8	testable	While-statements
 iso7185	6.8.3.9	testable	For-statements
@@ -198,9 +198,9 @@ afterschool	4.3	structural	a rule about how a clause of this document is labelle
 afterschool	4.4	structural	a licence rule about this repository, not about a program
 afterschool	4.5	structural	defines shall, should and may
 afterschool	5	structural	introduces the compliance clauses
-extended	5.1	structural	states what a processor or a program is, not what either does
+extended	5.1	testable	not a statement of what a processor is: 5.1 e) requires a violation to be reported before the program-block is activated and activation then prevented, and f) requires a dynamic-violation to be reported -- both stated nowhere else
 afterschool	5.1	structural	a statement about processors; no program can exercise it
-extended	5.2	structural	states what a processor or a program is, not what either does
+extended	5.2	structural	requires of a *program* and not of a processor -- a conformance level, and not relying on an implementation-dependent interpretation. What a processor must do about a program that fails this is 5.1 e)
 afterschool	5.2	structural	defines what a complying program is, in terms of the other clauses
 afterschool	5.3	testable	
 afterschool	5.4	structural	a policy about versioning, not a property of a translation
@@ -295,7 +295,7 @@ extended	6.4.4	testable	Pointer-Types
 extended	6.4.5	testable	Compatible types
 afterschool	6.4.5	testable	
 extended	6.4.6	testable	Assignment-compatibility
-afterschool	6.4.6	structural	a cross-reference to 6.4.2.6.3 and 6.4.11.6, which carry the requirements
+afterschool	6.4.6	testable	not only a cross-reference to 6.4.2.6.3 and 6.4.11.6: its second sentence is a prohibition of its own, that no value is assignment-compatible with a slice and a slice with no type, which is stated in no other clause and is what ADR-0143's defect violated
 extended	6.4.7	testable	Schema-definitions
 extended	6.4.8	testable	Discriminated-schemata
 extended	6.4.9	testable	Type-inquiry
@@ -378,7 +378,7 @@ afterschool	6.7.3.9.4	testable
 afterschool	6.7.3.9.5	testable	
 extended	6.7.4	testable	Required procedures and functions
 extended	6.7.5	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.7.5.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.7.5.1	structural	classifies the required procedures into the categories the subclauses below enumerate; the members and their meanings are stated there, so nothing here can fail unless one of them does
 extended	6.7.5.2	testable	File handling procedures
 extended	6.7.5.3	testable	Dynamic allocation procedures
 extended	6.7.5.4	testable	Transfer procedures
@@ -391,7 +391,7 @@ afterschool	6.7.5	structural	introduces 6.7.5.9
 afterschool	6.7.5.9	testable	
 afterschool	6.7.6	testable	
 afterschool	6.7.6.10	testable	
-extended	6.7.6.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.7.6.1	structural	classifies the required functions into the categories the subclauses below enumerate; the members and their meanings are stated there, so nothing here can fail unless one of them does
 extended	6.7.6.2	testable	Arithmetic functions
 extended	6.7.6.3	testable	Transfer functions
 extended	6.7.6.4	testable	Ordinal functions
@@ -465,7 +465,7 @@ extended	6.9.3.2	testable	Compound-statements
 extended	6.9.3.3	structural	introduces the subclauses below it; states no requirement of its own
 extended	6.9.3.4	testable	If-statements
 extended	6.9.3.5	testable	Case-statements
-extended	6.9.3.6	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.9.3.6	structural	a production naming the three subclauses below and one sentence each of them then states precisely; nothing here can fail unless one of them does
 extended	6.9.3.7	testable	Repeat-statements
 extended	6.9.3.8	testable	While-statements
 extended	6.9.3.9	structural	introduces the subclauses below it; states no requirement of its own
@@ -500,7 +500,7 @@ extended	6.11.1	testable	Module-declarations
 extended	6.11.2	testable	Export-part
 extended	6.11.3	testable	Import-specifications
 extended	6.11.4	structural	introduces the subclauses below it; states no requirement of its own
-extended	6.11.4.1	structural	introduces the subclauses below it; states no requirement of its own
+extended	6.11.4.1	structural	introduces the required interface-identifiers and constituent-identifiers; each identifier and its meaning is stated in the subclauses below
 extended	6.11.4.2	testable	StandardInput and StandardOutput
 extended	6.11.5	structural	the standard's own illustration, not a requirement
 extended	6.11.6	structural	the standard's own illustration, not a requirement
