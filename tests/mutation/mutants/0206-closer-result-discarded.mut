@@ -1,0 +1,8 @@
+adr: 0206
+file: runtime/pasrt.c
+kills: handle_release
+why: the whole of AP 6.4.12.5; with fclose alone every release answers 0 and this would look correct, which is why the case runs a child that exits 7
+--- old
+    r = h->closer(h->value);
+--- new
+    h->closer(h->value);

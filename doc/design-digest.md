@@ -2510,6 +2510,22 @@ reason for the gap rather than as a request to close it.
 - **An empty variable answers zero and is not an error** — the assignment of
   `nil`, not `dispose` of nil.
 
+**A mutation is a file the harness runs** (ADR-0207). `tests/mutation/` holds
+one `.mut` per recorded mutation — the substitution, the test that must fail,
+and why — and `run.py` applies each, rebuilds, requires the named test to
+fail, then restores **and rebuilds**. Not a `ctest` gate and it must not
+become one: it edits the tree, so ctest would run it beside seven hundred
+cases reading the same build directory. Four rules it makes mechanical, each
+of which has cost something here: the `old` text must match exactly once, or a
+mutation that matched nothing would pass by mutating nothing; a mutant that
+breaks the build proves nothing; a restore that keeps the mtime *or skips the
+rebuild* leaves the mutant in the build tree, which is how a golden came to be
+taken against one; and every run gets a wall clock and a file-size limit, for
+the looping mutant that once wrote 38 GB. It is a **register of
+demonstrations, not a measurement** — `doc/sop.md` §7 carries that, because
+"the mutation suite passes" is exactly the sentence that gets read as more
+than it says.
+
 **A server serves many clients, and the language needed nothing** (ADR-0205).
 `PasNet.Wait` answers which of a list of sockets can be read, or accepted
 from, without blocking. The list is a schema — `SocketList(n: integer) =

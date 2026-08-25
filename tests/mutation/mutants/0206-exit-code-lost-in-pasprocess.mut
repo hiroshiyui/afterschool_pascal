@@ -1,0 +1,12 @@
+adr: 0206
+file: lib/dialect/pasprocess.pas
+kills: lib_process
+why: the client the clause was written for -- pclose's status is the child's, and Capture answers it
+--- old
+    status := release(p);
+    if status = -1 then r := errIO
+    else r := ExitCode(status)
+--- new
+    status := release(p);
+    if status = -1 then r := errIO
+    else r := 0

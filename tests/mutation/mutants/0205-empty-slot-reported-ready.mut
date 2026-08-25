@@ -1,0 +1,9 @@
+adr: 0205
+file: runtime/pasrt_posix.c
+kills: lib_net_wait
+timeout: 30
+why: POSIX has poll ignore a negative descriptor, which is what lets a closed client be a hole; reporting one ready makes a server read a socket nobody is on, and it blocks
+--- old
+    if (pf[i].fd >= 0 && pf[i].revents != 0) {
+--- new
+    if (pf[i].revents != 0 || pf[i].fd < 0) {

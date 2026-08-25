@@ -1,0 +1,8 @@
+adr: 0205
+file: runtime/pasrt_posix.c
+kills: lib_net_wait
+why: a readiness call that never waits prints every right answer and burns a processor; only the idle wait against the clock can see it
+--- old
+    n = poll(pf, (nfds_t)nfds, timeout_ms);
+--- new
+    n = poll(pf, (nfds_t)nfds, 0);

@@ -1,0 +1,8 @@
+adr: 0205
+file: runtime/pasrt_posix.c
+kills: lib_net_wait
+why: a line already off the socket leaves the descriptor quiet, so a server asking only poll sits still holding a line it was handed
+--- old
+  return s && pasx_socket_buffered(s);
+--- new
+  return 0;

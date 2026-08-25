@@ -1,0 +1,9 @@
+adr: 0206
+file: runtime/pasrt.c
+kills: handle_release
+why: 6.4.12.3's "at most once" is kept by the variable being empty afterwards and by nothing else, so a slot left full is closed a second time by the block
+--- old
+    r = h->closer(h->value);
+    h->value = NULL;
+--- new
+    r = h->closer(h->value);

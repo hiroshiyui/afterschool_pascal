@@ -1,0 +1,8 @@
+adr: 0203
+file: runtime/pasrt_posix.c
+kills: lib_net
+why: SIGPIPE's default disposition ends the process with no diagnostic, which is not an outcome a routine answering an ErrorCode can report
+--- old
+  signal(SIGPIPE, SIG_IGN);
+--- new
+  (void)0;

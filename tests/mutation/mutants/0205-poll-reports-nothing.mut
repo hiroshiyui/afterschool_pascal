@@ -1,0 +1,8 @@
+adr: 0205
+file: runtime/pasrt_posix.c
+kills: lib_net_wait
+why: the descriptor half of readiness; without it nothing is ever ready and a server never serves anyone
+--- old
+    if (pf[i].fd >= 0 && pf[i].revents != 0) {
+--- new
+    if (0) {

@@ -18,7 +18,7 @@ decide about, and the day it is decided it moves there.
 | [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the things the handle and the socket left open behind them, all struck |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, and the small thing it needs first |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
-| [The open questions](#the-open-questions) | the one structural risk no record can close, and the two oracles still worth building |
+| [The open questions](#the-open-questions) | the one structural risk no record can close, and the one oracle still worth building |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 | [Answered, and where](#answered-and-where) | the questions this file used to carry, each with its record |
@@ -319,9 +319,11 @@ anything — it is the first item under the next heading.
 ## The open questions
 
 Seven structural questions about the dialect and five items of *what is next*
-used to stand here. Nine of the twelve are answered — the table at the end
-says where — and what each found on its first run is in
-[`doc/history.md`](history.md#what-the-roadmap-answered). Three remain.
+used to stand here. Ten of the twelve are answered — the table at the end says
+where — and what each found on its first run is in
+[`doc/history.md`](history.md#what-the-roadmap-answered). **Two remain**, and
+only the first of them is a task: the other is a standing risk no record can
+close.
 
 ### 1. The dialect has no external authority, and every gate here is anchored in one
 
@@ -391,16 +393,20 @@ fixed corpus from 1982, and `difftest` compares this project against itself,
 both front ends being written by one author from one reading. Closes as the
 language diverges, so it is worth more now than later.
 
-### 3. Mutation testing, committed to the tree
+### 3. ~~Mutation testing, committed to the tree~~ — done (ADR-0207)
 
-It has found something every time it has been run here — the occasions are
-listed in history under *Stage 1*, and ADR-0065's two mutants changed the
-compiler rather than the tests — and it exists only as prose in those records
-and as a step in `doc/sop.md`. Two things it needs, both learned the expensive
-way: a wall-clock and output-size limit per mutant, because a looping mutant
-fills the disk before anything notices; and a restore that does **not**
-preserve mtime, or the mutated binary stays in the build tree and the next
-control run reads as a broken feature.
+`tests/mutation/` holds one file per recorded mutation and a harness that runs
+them. Both conditions this entry named are enforced by it, and a **third**
+arrived while ADR-0205 was being written: a mutant restored with a plain `cp`
+and a `touch`, correctly by the old rule, and never rebuilt — so the next run
+measured the mutant and a golden was taken against it. The rule was right and
+one step too short.
+
+What is left of the entry is a caution rather than a task, and it is in
+`doc/sop.md` §7: the catalogue is a **register of demonstrations, not a
+measurement**. Eight mutations are files; two hundred records carry one in
+their prose, most naming code that has since moved. "The mutation suite
+passes" means those eight claims still hold and nothing more.
 
 ---
 
@@ -602,6 +608,7 @@ the record.
 | Diverse double-compiling | Run once, 2026-08-18, identical outputs; `seed/ddc.sh` | `seed/README.md` |
 | Conformant array parameters, and level 1 | Done, and the 51 BSI level-1 programs found nine defects in the first implementation | ADR-0153 |
 | Can anything measure what the corpus reaches? | Three coverage gates and a clause-cited suite | ADR-0103 – ADR-0106 |
+| Mutation testing, committed to the tree | One file per recorded mutation and a harness that runs them; not a `ctest` case, because it edits the tree. A register of demonstrations and not a measurement | ADR-0207 |
 | Is the platform lock scoped? | Three things, two done; 32-bit is what remains | ADR-0155 – ADR-0159 |
 | Can a conforming program learn that a file is missing? | `binding(f).bound` says whether it is there | ADR-0172 |
 | Can a program get its arguments as a list? | `argcount` and `argument(k)`, required identifiers of the dialect | ADR-0173 |
