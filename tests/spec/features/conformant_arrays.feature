@@ -17,7 +17,7 @@
 # body serves every extent, the bound identifiers denote the actual's own
 # bounds, and the abbreviated multi-index form means what the nested one means.
 
-@iso7185:6.6.3.7 @iso7185:6.6.3.7.1
+@iso7185:6.6.3.7.1
 Feature: Conformant array parameters
 
   Scenario: one body serves actuals of different extents

@@ -12,7 +12,6 @@ afterschool:6.7.7.6.1
 afterschool:6.11
 afterschool:6.13.1
 extended:6.1.1
-extended:6.1.2
 extended:6.1.3
 extended:6.1.4
 extended:6.1.5
@@ -51,7 +50,6 @@ extended:6.4.3.5
 extended:6.4.3.6
 extended:6.4.4
 extended:6.4.9
-extended:6.5.2
 extended:6.5.3.1
 extended:6.5.3.2
 extended:6.5.3.3
@@ -65,7 +63,6 @@ extended:6.7.3.3
 extended:6.7.3.4
 extended:6.7.3.5
 extended:6.7.3.6
-extended:6.7.3.7
 extended:6.7.3.8
 extended:6.7.4
 extended:6.7.5.2
@@ -129,7 +126,6 @@ extended:6.11.4.2
 extended:6.12
 extended:6.13
 iso7185:6.1.1
-iso7185:6.1.2
 iso7185:6.1.3
 iso7185:6.1.4
 iso7185:6.1.5
@@ -153,7 +149,6 @@ iso7185:6.4.4
 iso7185:6.4.5
 iso7185:6.4.6
 iso7185:6.5.1
-iso7185:6.5.2
 iso7185:6.5.3.1
 iso7185:6.5.3.2
 iso7185:6.5.3.3

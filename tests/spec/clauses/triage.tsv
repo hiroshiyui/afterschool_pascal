@@ -51,7 +51,7 @@ iso7185	5.1	testable	not a statement of what a processor is: 5.1 e) requires a v
 iso7185	5.2	structural	requires of a *program* and not of a processor -- a conformance level, and not relying on an implementation-dependent interpretation. What a processor must do about a program that fails this is 5.1 e)
 iso7185	6.1	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.1.1	testable	Lexical tokens / General
-iso7185	6.1.2	testable	Special-symbols
+iso7185	6.1.2	testable	not a title: it carries the special-symbol production, which is where `[`, `]`, `:=` and `..` are given as tokens and appear in no other clause
 iso7185	6.1.3	testable	Identifiers
 iso7185	6.1.4	testable	Directives
 iso7185	6.1.5	testable	Numbers
@@ -99,7 +99,7 @@ iso7185	6.4.6	testable	Assignment-compatibility
 iso7185	6.4.7	structural	the standard's own illustration, not a requirement
 iso7185	6.5	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.5.1	testable	Variable-declarations
-iso7185	6.5.2	testable	Entire-variables
+iso7185	6.5.2	structural	two productions naming what an entire-variable is; what one denotes is 6.2.2.11's and what declares one is 6.5.1's, so nothing can fail here alone
 iso7185	6.5.3	structural	introduces the subclauses below it; states no requirement of its own
 iso7185	6.5.3.1	testable	Component-variables / General
 iso7185	6.5.3.2	testable	Indexed-variables
@@ -116,7 +116,7 @@ iso7185	6.6.3.3	testable	Variable parameters
 iso7185	6.6.3.4	testable	Procedural parameters
 iso7185	6.6.3.5	testable	Functional parameters
 iso7185	6.6.3.6	testable	Parameter list congruity
-iso7185	6.6.3.7	testable	conformant array parameters, accepted since this became a level 1 processor
+iso7185	6.6.3.7	structural	its own text is a NOTE about the level at which this subclause is required, and a NOTE states no requirement; conformant array parameters are 6.6.3.7.1 to 6.6.3.7.3
 iso7185	6.6.3.7.1	testable	conformant array parameters, accepted since this became a level 1 processor
 iso7185	6.6.3.7.2	testable	conformant array parameters, accepted since this became a level 1 processor
 iso7185	6.6.3.7.3	testable	conformant array parameters, accepted since this became a level 1 processor
@@ -213,7 +213,7 @@ afterschool	6.0.2	testable
 extended	6.1	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.1	structural	introduces the lexical additions
 extended	6.1.1	testable	Lexical tokens / General
-extended	6.1.2	testable	Special-symbols
+extended	6.1.2	testable	not a title: it carries the special-symbol production, which is where `**`, `><` and `=>` are given as tokens and appear in no other clause
 afterschool	6.1.2	testable	
 extended	6.1.3	testable	Identifiers
 extended	6.1.4	testable	Remote-directives
@@ -341,7 +341,7 @@ afterschool	6.4.15.12	structural	a requirement that the processor state a versio
 extended	6.5	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.5	structural	introduces the variable-denotation additions
 extended	6.5.1	testable	Variable-declarations
-extended	6.5.2	testable	Entire-variables
+extended	6.5.2	structural	one production naming what an entire-variable is; what one denotes is 6.2.2.11's and what declares one is 6.5.1's, so nothing can fail here alone
 extended	6.5.3	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.5.3	structural	introduces the component-variable additions
 extended	6.5.3.1	testable	Component-variables / General
@@ -365,7 +365,7 @@ extended	6.7.3.3	testable	Variable parameters
 extended	6.7.3.4	testable	Procedural parameters
 extended	6.7.3.5	testable	Functional parameters
 extended	6.7.3.6	testable	Parameter list congruity
-extended	6.7.3.7	testable	conformant array parameters, accepted since this became a level 1 processor
+extended	6.7.3.7	structural	its own text is a NOTE about the level at which this subclause is required, and a NOTE states no requirement; conformant array parameters are 6.7.3.7.1 to 6.7.3.7.3
 extended	6.7.3.7.1	testable	conformant array parameters, accepted since this became a level 1 processor
 extended	6.7.3.7.2	testable	conformant array parameters, accepted since this became a level 1 processor
 extended	6.7.3.7.3	testable	conformant array parameters, accepted since this became a level 1 processor
