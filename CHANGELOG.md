@@ -49,8 +49,17 @@ three days, with every gate green. The rest only accept more.
   is six bytes, not seven, because the combining acute composes with the `e`
   across the join, and the result equals `'héllo'`. `for g in t do`
   walks the elements — joining them back together gives the original. Still to
-  come: case mapping and folding, a scalar view, and a conversion that reports
-  ill-formed input instead of stopping.
+  come: case mapping, case folding and grapheme-indexed slicing.
+
+- **`lib/dialect/pasunicode.pas`**, the two things the text-type leaves to a
+  library. `ToText(s, var t)` **reports** where an assignment to a `utf8(n)`
+  stops the program — `errSyntax` for bytes that are not UTF-8, `errFull` for a
+  value whose normal form will not fit, and nothing assigned unless it
+  succeeds. That is what a program reading bytes it did not write needs, where
+  the assignment's rule is right for a program's own literals. The rest is a
+  **scalar view** — `NextScalar`, `ScalarCount`, `Encode` — because an element
+  of a text is a grapheme cluster and a program sometimes wants the code points
+  under one: a family emoji is one element and five scalar values.
 
   `char` and `string(n)` are unchanged in all three modes, and `utf8` is a
   required identifier a program may shadow. The Unicode version behind it is
