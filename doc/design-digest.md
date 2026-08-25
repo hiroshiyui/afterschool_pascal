@@ -2890,3 +2890,30 @@ one, and the place the text model's oracle story ends.
   normalisation and segmentation are settled by a document written elsewhere
   and these three are settled by a transcription. `doc/sop.md` §7 carries it,
   and nothing will close it.
+
+**Reaching an element by number, and why there is no way to** (ADR-0199). The
+last of ADR-0193's three, and the answer to *spell it so the cost is visible*
+turned out to be **not to offer the index**. `ElementEnd(s, at)` answers the
+byte where the element beginning at `at` ends — or 0 at the end and on
+ill-formed bytes — and the element is `substr(s, at, ElementEnd(s, at) - at)`,
+taken by the caller.
+
+- **The walk is in the program**, so an O(n) access is n lines of loop rather
+  than one call spelled like a subscript. A slice of elements 2 to 4 is a nine-
+  line procedure, and `tests/dialect/lib_unicode.pas` contains it rather than
+  the module.
+- **Answering an offset removes the third answer.** Returning the bytes would
+  need a destination and therefore a failure for an element that does not fit;
+  the caller's own `substr` is where that error belongs, and it is the error
+  AP 6.4.15.9 already gives a control-variable too small for an element.
+- **A slice cut at element boundaries is already in normal form**, so `ToText`
+  back cannot fail for want of it — ADR-0192's property used rather than
+  restated.
+- **The element is validated and the string is not.** `pas_text_next` advances
+  one byte over a byte it cannot decode so an iteration still terminates; these
+  are bytes the caller did not write, so the wrapper checks the element it
+  names — over the element, because validating from the start on every call
+  makes an n-element walk quadratic.
+- **What it is for** is the three shapes `for g in t` cannot take: two texts in
+  lockstep, a walk that stops and resumes, and a range out of the middle. Not
+  convenience — an `ElementAt` would have been that, and is refused.

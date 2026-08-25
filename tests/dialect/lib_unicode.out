@@ -27,3 +27,14 @@ digraph up  = Ǳ
 greek lower = σοφοσ  (final sigma is not special-cased)
 into 4 bytes  no room left
 ill-formed    not of the expected form
+
+elements 5  bytes 22
+  element 1 is  1 bytes
+  element 2 is  1 bytes
+  element 3 is 18 bytes
+  element 4 is  1 bytes
+  element 5 is  1 bytes
+elements 2..4 = b👨‍👩‍👧c (20 bytes)
+back to a text: no error
+common prefix with ab👨‍👩‍👧xy = 3 elements
+ill-formed: element 1 ends at 2, and from there 0

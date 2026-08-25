@@ -2473,6 +2473,38 @@ int pasx_text_scalar(const char *src, int at, int *cp) {
   return at + k;
 }
 
+/* Where the element beginning at byte `at` ends: the 1-based offset of the
+ * next element, or 0 when `at` is past the end or the bytes of that element
+ * are ill-formed.
+ *
+ * The *element* and not the bytes, which is the whole shape of the thing. A
+ * caller takes `substr(s, at, next - at)` itself, so the walk is written where
+ * it costs and there is no capacity for this routine to have an opinion about
+ * -- an element too long for the destination is the caller's `substr` failing,
+ * which is the same error AP 6.4.15.9 gives a control-variable too small for
+ * an element. One integer in, one integer out, no failure to report but the
+ * end (ADR-0199).
+ *
+ * pas_text_next advances one byte over a byte it cannot decode, so that a
+ * caller iterating a text whose invariant has been established still
+ * terminates. This is over bytes the caller did not write, so the element it
+ * is about to name is validated: over the element rather than over the whole
+ * string, or a walk of n elements would be quadratic. */
+int pasx_text_element(const char *src, int at) {
+  long long len, i, next;
+
+  if (src == NULL)
+    return 0;
+  len = (long long)strlen(src);
+  i = (long long)at - 1;
+  if (at < 1 || i >= len)
+    return 0;
+  next = pas_text_next(src, len, i);
+  if (next <= i || pas_text_validate(src + i, next - i) != -1)
+    return 0;
+  return (int)(next + 1);
+}
+
 /* Where the element beginning at `at` ends, in bytes.
  *
  * A wrapper on pasrt_unicode.c's own, and it exists for the width: that file
