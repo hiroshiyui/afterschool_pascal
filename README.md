@@ -527,6 +527,27 @@ foreign routine as a value parameter, and lending an empty one stops the
 program. What it is not is a value: no Pascal function returns one and no
 record copies one.
 
+**`release(h)` closes it and answers what the closer said** (ADR-0206). Every
+other release throws that result away and must — a block ending, a `goto` past
+it, a `halt` — none of those is a place a program could receive an integer:
+
+```pascal
+type Child = handle external 'pclose';
+function ExtPopen(command, mode: string): Child; external 'popen';
+var kid: Child;
+begin
+  kid := ExtPopen('grep -q needle haystack', 'r');
+  if (release(kid) div 256) mod 256 = 0 then writeln('found it')
+end.
+```
+
+`pclose` answers the child's wait status and `fclose` reports a flush that
+failed, so what a closer says is often the only report a program will get. The
+variable is empty afterwards, so the block's own release finds nothing and the
+resource is closed once. Releasing an empty one answers 0 and is not an error.
+Unlike `take`, it may stand wherever an integer may be written: what it yields
+needs no owner.
+
 **An owned pointer owns what it identifies** (ADR-0181). A variable created by
 `new` belongs to no block, so nothing releases what it holds unless the program
 says `dispose` — and a heap record holding a stream leaks the descriptor. An
