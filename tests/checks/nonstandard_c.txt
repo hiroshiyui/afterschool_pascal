@@ -108,3 +108,15 @@ header: <sys/socket.h>
 # are not needed at all. It is also what gives a caller IPv6 without asking:
 # the loop takes the first address that works.
 header: <netdb.h>
+
+# ADR-0205: `struct pollfd`, for PasNet.Wait. This is the header that makes a
+# server serve more than one client, and it is a *type* dependency rather than
+# a name one for the usual reason -- ISO C has no way to ask whether reading a
+# descriptor would block, and the array `poll` takes is a struct whose members
+# a program would have to declare. `select` would have cost `fd_set`,
+# `FD_SETSIZE` and four macros for the same answer.
+#
+# It buys the readiness of a *descriptor* and nothing else: whether a line is
+# already sitting in the runtime's own buffer is the other half of the
+# question and is answered above it, in C the compiler can see.
+header: <poll.h>

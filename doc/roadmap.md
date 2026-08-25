@@ -15,7 +15,7 @@ decide about, and the day it is decided it moves there.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
-| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the three things the handle and the socket left open behind them |
+| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the two things the handle and the socket left open behind them |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, and the small thing it needs first |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the two oracles still worth building |
@@ -66,10 +66,11 @@ model turned out to need it for only part of its surface.
 
 What stands below it is a different thing and is why the chapter is still
 here: **one narrow foreign-interface item that genuinely waits on the model**,
-and **three things the modules built over the last two clauses left open**,
-each of which is a consequence of a feature landing rather than a gap someone
-surveyed for. That is the shape to expect from here on — this page empties
-faster than it fills, but a landed feature is the commonest way it fills.
+and **two things the modules built over the last two clauses left open**,
+each a consequence of a feature landing rather than a gap someone surveyed
+for. That is the shape to expect from here on — this page empties faster than
+it fills, and a landed feature is both the commonest way it fills and, one
+increment later, the commonest way a row leaves it.
 
 ~~A foreign struct the callee owns~~ is **done** (ADR-0187, AP 6.7.7.8): an
 `external` function may answer an optional of a record, a null address is the
@@ -134,17 +135,16 @@ a pointer, which is a second name for storage and cannot be copied away.
 | A daily program wanted | How it went |
 | --- | --- |
 | ~~a directory listing~~ | **done** — `PasDir` (ADR-0188), and it went a way the row above did not predict. ADR-0187 makes `readdir` declarable by a *program*; a **library** may not declare `struct dirent` at all, ADR-0185's fifth decision holding and POSIX not even fixing the member order. So `opendir` and `closedir` are bound directly, the `DIR *` is a handle, and the runtime supplies the one member access. `PasProcess.CaptureLines('ls -1 dir', names)` is superseded |
-| ~~a socket~~ | **done** — `PasNet` (ADR-0203), and it went a way this row did not predict. The row assumed the module would declare `sockaddr` and cross it as a `var` parameter; ADR-0185's fifth decision forbids a *library* from declaring any foreign struct, and sockets are the strongest case for that rule rather than an exception to it — `struct sockaddr` is not one struct but a family, and a program never declares the one it is really using. So both ends of every call are **strings**, a host and a service, and `getaddrinfo` decides what they mean: no address family, no port number, no byte order, and IPv6 without asking. A socket is a handle the runtime owns, closed by `s := nil` or by the block. One connection at a time, which is what the two live rows below are about |
+| ~~a socket~~ | **done** — `PasNet` (ADR-0203), and it went a way this row did not predict. The row assumed the module would declare `sockaddr` and cross it as a `var` parameter; ADR-0185's fifth decision forbids a *library* from declaring any foreign struct, and sockets are the strongest case for that rule rather than an exception to it — `struct sockaddr` is not one struct but a family, and a program never declares the one it is really using. So both ends of every call are **strings**, a host and a service, and `getaddrinfo` decides what they mean: no address family, no port number, no byte order, and IPv6 without asking. A socket is a handle the runtime owns, closed by `s := nil` or by the block. One connection at a time, which is what `Wait` then closed |
 | ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
 
-**And what the last of them opened as it closed.** Both entries below were
-created by `PasNet` landing rather than found by a survey, and neither is
-blocked on the memory-safety model:
+**And what the last of them opened as it closed** — one row, where two stood
+for a day:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| **a server that serves more than one client** | `PasNet` accepts, serves and closes one connection at a time. Waiting on several needs a readiness call — a set of sockets, a timeout, and a question about which are ready — which is a different shape from anything the module has and was declined for ADR-0116's reason, for want of a program that wants it (ADR-0203). It is worth stating which of the two answers this is: `select` is the **cheap** one and must be tried first; a thread per connection is ADR-0201's construct and is the expensive one. The row below stands between the language and that second answer |
-| **to hand an accepted connection to something else** | Of the three affine kinds only `owned ^T` moves. `take` is refused for a handle in as many words — *nothing else has a value one variable can stop holding* — and there is no move for a file at all (ADR-0182, AP 6.4.14 NOTE 5). So a socket cannot be put in a queue, returned from a function of this language, or **given** to a task. A move between two handles would release the source without releasing its value, which is a distinct operation from `take` and a smaller increment than the construct that would want it. Named here so it is not rediscovered as concurrency's first surprise |
+| ~~a server that serves more than one client~~ | **done** — `PasNet.Wait` (ADR-0205), and it needed nothing from the language. The server was written before the feature and compiled: an array of handles is admitted, `Accept(srv, clients[k])` writes a connection into a slot through a `var` parameter, `clients[k] := nil` releases one, and a schema gives the array whatever length a program wants. What was missing was only *which of these can I read without blocking*, which is a library routine over `poll`. The set is built and thrown away inside one call rather than being an object, because an object would hold a second name for every socket in it and `clients[k] := nil` would dangle it — ADR-0187's rule a second time |
+| **to hand an owned value to something else** | Of the three affine kinds only `owned ^T` moves. `take` is refused for a handle in as many words — *nothing else has a value one variable can stop holding* — and there is no move for a file at all (ADR-0182, AP 6.4.14 NOTE 5). This row **lost its stated client the day after it was written**: it was entered because a task cannot be given a socket, and a server turned out not to need a task or a move, a handle reaching its slot as the `var` parameter its producer writes through. So it is back to what AP 6.4.14 NOTE 5 already said — it waits for a client — and stands in front of nothing |
 
 **What building on the handle found.** Two modules were written over
 AP 6.4.12 the day it landed, and each met one edge of the clause:
@@ -263,7 +263,7 @@ the open decision it would settle.
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
 | Traits / protocols | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039) |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
-| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **The thing this row named as what would want it now exists**: ADR-0201 said "a socket module serving more than one client", and ADR-0203 landed the module the next day, serving one. So the demand is one increment nearer than when this row was written, and two things stand before the construct rather than one — `select`, still the cheaper answer to the same problem, and a **move for a handle**, without which a task cannot be given the connection it would serve |
+| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said |
 
 Two conclusions worth stating:
 

@@ -49,6 +49,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <netdb.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -411,4 +412,93 @@ const char *pasx_socket_readline(void *p, int cap, int *status) {
     }
     s->tail += n;
   }
+}
+
+/* Does a line already sit in the buffer above, so that
+ * `pasx_socket_readline` would answer without a `read`?
+ *
+ * This is the half of readiness `poll` cannot see, and it is not an
+ * optimisation: those bytes have already been taken off the socket, so the
+ * descriptor is *not* readable and a program waiting on it alone would sit
+ * there holding a line it had been handed. A full buffer with no newline
+ * counts too -- readline answers "too long" out of it without reading.
+ */
+static int pasx_socket_buffered(const struct pasx_socket *s) {
+  int i;
+  for (i = s->head; i < s->tail; i++)
+    if (s->buf[i] == '\n')
+      return 1;
+  return s->head == 0 && s->tail == PASX_SOCK_BUF;
+}
+
+int pasx_socket_pending(void *p) {
+  struct pasx_socket *s = p;
+  return s && pasx_socket_buffered(s);
+}
+
+/* The descriptor, for the caller to put in an array `pasx_socket_poll` reads.
+ *
+ * It is the one place a descriptor leaves this file, and PasNet keeps it to
+ * itself: what ADR-0203 refuses is a *program* holding one, a descriptor
+ * being an integer and an integer being numeric.
+ */
+int pasx_socket_fd(void *p) {
+  struct pasx_socket *s = p;
+  return s ? s->fd : -1;
+}
+
+/* Which of `fds` can be read from, or accepted from, without blocking.
+ *
+ * `nfds` descriptors in and `ngot` flags out, both counts coming from the
+ * slices the caller passed (ADR-0129) and required to agree -- which is the
+ * whole of the argument checking here, a slice's count being one the program
+ * cannot write. A **negative** descriptor is a slot nobody is watching:
+ * POSIX has `poll` ignore it and set its `revents` to zero, so a caller with
+ * holes in its list needs no compaction and this needs no skip list.
+ *
+ * `timeout_ms` is `poll`'s own: negative waits indefinitely, zero asks and
+ * returns.
+ *
+ * Answers how many are ready, or -1 on a refusal. `EINTR` is retried with
+ * the timeout unadjusted, which can make a signal-heavy program wait longer
+ * than it asked for; the alternative is a clock, and naming one here would
+ * cost a header for a case no program in this tree has.
+ */
+int pasx_socket_poll(const int *fds, long long nfds, int *got, long long ngot,
+                     int timeout_ms) {
+  struct pollfd *pf;
+  long long i;
+  int n;
+
+  if (!fds || !got || nfds < 0 || ngot != nfds)
+    return -1;
+  for (i = 0; i < ngot; i++)
+    got[i] = 0;
+  if (nfds == 0)
+    return 0;
+  pf = malloc((size_t)nfds * sizeof *pf);
+  if (!pf)
+    return -1;
+  for (i = 0; i < nfds; i++) {
+    pf[i].fd = fds[i];
+    pf[i].events = POLLIN;
+    pf[i].revents = 0;
+  }
+  for (;;) {
+    n = poll(pf, (nfds_t)nfds, timeout_ms);
+    if (n >= 0 || errno != EINTR)
+      break;
+  }
+  if (n < 0) {
+    free(pf);
+    return -1;
+  }
+  n = 0;
+  for (i = 0; i < nfds; i++)
+    if (pf[i].fd >= 0 && pf[i].revents != 0) {
+      got[i] = 1;
+      n++;
+    }
+  free(pf);
+  return n;
 }

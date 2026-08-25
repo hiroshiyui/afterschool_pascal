@@ -662,5 +662,12 @@ foreach(t ${APASCAL_DIALECT_TESTS})
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
                    ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} afterschool)
-  set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
+  # A timeout, which the other two corpora do not need and this one does: a
+  # dialect case may open a socket (ADR-0203), and a readiness defect makes a
+  # server *block* rather than print the wrong thing (ADR-0205). Every case
+  # here runs in well under a second, so 300 is a backstop and not a budget --
+  # what it buys is that a hang is reported as a failed case instead of
+  # stopping the suite.
+  set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
+                       TIMEOUT 300)
 endforeach()

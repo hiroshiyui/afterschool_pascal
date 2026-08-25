@@ -213,3 +213,4 @@ the alternatives that were rejected and why.
 | [0202](0202-a-handle-is-released-by-assigning-nil.md) | A handle is released by assigning nil | Accepted |
 | [0203](0203-a-socket-is-a-handle-and-both-ends-are-strings.md) | A socket is a handle, and both ends are strings | Accepted |
 | [0204](0204-the-testable-rows-swept-from-the-other-side.md) | The testable rows, swept from the other side | Accepted |
+| [0205](0205-a-server-serves-many-clients-and-the-language-needed-nothing.md) | A server serves many clients, and the language needed nothing | Accepted |

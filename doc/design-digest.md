@@ -2485,6 +2485,38 @@ own and Pascal holds `Socket = handle external 'pasx_socket_close'`.
   it is a family of structs, and a program never declares the one it is really
   using.
 
+**A server serves many clients, and the language needed nothing** (ADR-0205).
+`PasNet.Wait` answers which of a list of sockets can be read, or accepted
+from, without blocking. The list is a schema — `SocketList(n: integer) =
+array [1..n] of Socket` — and the flags come back in a slice of booleans; the
+whole feature is a library routine over AP 6.4.12, AP 6.4.8 and ADR-0125, and
+the specification gained no clause. The client was written before the feature
+and compiled, which is what showed that a **move** for a handle was not
+standing in front of this: a handle reaches its slot as the `var` parameter
+`Accept` writes through, so nothing is ever assigned and no second name is
+wanted.
+
+- **The set is built and thrown away inside one call**, which is the safety
+  argument and not a simplification. C's shape — a set object built up, waited
+  on and asked about — would hold a second name for every socket in it across
+  statements, and `clients[k] := nil` would dangle it. Between `Wait`'s first
+  statement and its last nothing can close a socket, so the question does not
+  arise: ADR-0187's *an ownership question is only a question while something
+  holds the address*, a second time.
+- **Readiness is two questions and `poll` answers one of them.** `ReadLine`
+  buffers, so a client sending two lines in one write leaves the second in the
+  runtime with the descriptor quiet. Asking only `poll` leaves a server
+  sitting still holding a line it was handed — which is the mutation that
+  argues for `pasx_socket_pending`, and why this is a call of the module
+  rather than a binding to `poll`.
+- **An empty slot is a hole.** POSIX has `poll` ignore a negative descriptor,
+  so a closed client needs no compaction and `Wait` needs no skip list.
+- **The timeout is pinned against a clock** (§6.7.6.9's `GetTimeStamp`),
+  because every other assertion in the case is satisfied by a `Wait` that
+  never waits: both ends are in one program, so whatever was written has
+  already arrived. `poll(…, 0)` is a mutation that would otherwise print every
+  right answer while burning a processor.
+
 **A fallible type is a record Sema writes** (ADR-0176). `T ! E` resolves to
 `record case ok: boolean of true: (val: T); false: (cause: E) end`, built by
 `ResolveFallible` rather than parsed from a synthesised denoter — §6.2.2.10

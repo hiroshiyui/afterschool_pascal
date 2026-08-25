@@ -30,17 +30,25 @@
   fifth decision -- `struct sockaddr` is not the same struct on two systems
   and a library may not declare one.
 
-  **What it is not.** There is no datagram socket, no timeout, no shutdown of
-  one direction, and no way to wait on several connections at once: a program
-  serving two clients at a time needs something this language does not have
-  (ADR-0201), and everything here is written for one connection at a time. A
-  server that accepts, serves and closes in a loop is what it is for. }
+  **Several connections at once, in one thread of control.** `Wait` answers
+  which of a list of sockets can be served without blocking, and a listening
+  socket in that list is ready when a connection is waiting -- so a server is
+  an ordinary loop over `Wait`, `Accept` and `ReadLine`, and needs no
+  concurrency construct (ADR-0205). That closes what this comment used to say
+  was the module's honest limit; ADR-0201's construct is still not here and is
+  still not what this needed.
+
+  **What it is not.** There is no datagram socket, no shutdown of one
+  direction, and no TLS. A connection is served by whoever called `Wait`,
+  which means a slow client is served slowly by the same thread as everyone
+  else -- what `Wait` removes is *blocking on the wrong one*, not the single
+  thread. }
 
 module PasNet;
 
-export PasNet = (HostName, ServiceName, NetLine, Socket,
+export PasNet = (HostName, ServiceName, NetLine, Socket, SocketList,
                  Connect, Listen, Accept, Service,
-                 WriteText, WriteLine, ReadLine, Close);
+                 WriteText, WriteLine, ReadLine, Close, Wait);
 
 import PasError;
 
@@ -61,6 +69,16 @@ type
   { An open connection, or a socket listening for them. `pasx_socket_close`
     closes the descriptor and frees what the runtime holds. }
   Socket = handle external 'pasx_socket_close';
+
+  { The sockets a server is watching, however many it decided on: a schema
+    (ISO/IEC 10206:1991 6.4.8), so `SocketList(64)` and `SocketList(4)` are
+    one type to `Wait` and the discriminant is what it reads for the count.
+
+    An empty element is a slot nobody is using, and `Wait` skips it -- so a
+    server that closes a client by `clients[k] := nil` leaves a hole and needs
+    no compaction. The array **owns** what it holds (AP 6.4.12 NOTE 3): every
+    element still open is closed when the variable dies. }
+  SocketList(n: integer) = array [1..n] of Socket;
 
   { How a string stops being a C pointer (ADR-0123). Not exported: a caller
     passes a string of its own and the copy is made at the call site. }
@@ -123,6 +141,33 @@ function ReadLine(var s: Socket; var line: string): ErrorCode;
   an empty one, and the socket may be opened again through the same variable. }
 procedure Close(var s: Socket);
 
+{ Which of `socks` can be read, or accepted from, without blocking: `ready[k]`
+  is set for each one that can, and cleared for every other -- including the
+  empty slots, which are never ready.
+
+  This is what lets one thread of control serve several connections, and it is
+  the *whole* of what that needs: a listening socket in the list becomes ready
+  when a connection is waiting, so `Accept` and `ReadLine` are both answered by
+  the same call. A server is then a loop -- wait, accept what arrived, read
+  from whoever spoke, close whoever left.
+
+  `timeoutMs` is a limit and not a promise: negative waits until something is
+  ready, zero asks and returns at once, and a positive number waits at most
+  that long. Answering `errNone` with nothing in `ready` is the ordinary way a
+  timeout reports, and is not a failure.
+
+  **A socket holding a line the runtime has already read is ready**, which the
+  operating system cannot tell you: those bytes are off the socket, so the
+  descriptor is quiet while `ReadLine` would answer at once. Waiting on the
+  descriptor alone is how a server comes to sit still holding a line it was
+  handed, and it is why this is a call of this module rather than a binding to
+  `poll`.
+
+  `errFull` where `ready` is shorter than `socks` has elements; `errIO` where
+  the system refused. }
+function Wait(var socks: SocketList; timeoutMs: integer;
+              var ready: array of boolean): ErrorCode;
+
 end;
 
 { The directive, kept to this module. Every one of these is the runtime's:
@@ -151,6 +196,23 @@ function ExtReadLine(s: Socket; cap: integer; var status: integer): OptLine;
 { 0, or 2 on a refusal. }
 function ExtWrite(s: Socket; text: string): integer;
   external 'pasx_socket_write';
+
+{ The readiness pair. `ExtFd` is the one place a descriptor becomes a number
+  in this language, and it is **not exported**: what ADR-0203 refuses is a
+  *program* holding one, AP 6.4.2.6.2 making an integer numeric so that a
+  program could add to it, copy it and close it twice. Here it lives inside
+  one call, in an array handed straight back to the runtime.
+
+  `ExtPending` is the half `poll` cannot answer -- see `Wait` above. }
+function ExtPending(s: Socket): integer; external 'pasx_socket_pending';
+function ExtFd(s: Socket): integer; external 'pasx_socket_fd';
+
+{ The descriptors in, the flags out, and the counts the compiler computed from
+  the two slices (ADR-0129). A negative descriptor is a slot nobody is
+  watching, which is what `poll` already does with one. }
+function ExtPoll(var fds: array of integer; var got: array of integer;
+                 timeoutMs: integer): integer;
+  external 'pasx_socket_poll';
 
 function Opened(var s: Socket; status: integer): ErrorCode;
 begin
@@ -238,6 +300,50 @@ procedure Close;
 begin
   { AP 6.4.12.2's second form: the release is the assignment's (ADR-0202) }
   s := nil
+end;
+
+function Wait;
+var
+  k, have, ms, n: integer;
+  { §6.2.3.8 b): a bound written in a variable-declaration is evaluated when
+    the block is activated, so these are exactly as long as the list the
+    caller passed -- no fixed maximum, and no bound this module invented. }
+  fds: array [1..socks.n] of integer;
+  got: array [1..socks.n] of integer;
+begin
+  { The caller's flags are cleared whole, so what `ready` says is only ever
+    about this call. }
+  for k := 1 to length(ready) do
+    ready[k] := false;
+  if length(ready) < socks.n then
+    exit(errFull);
+
+  have := 0;
+  for k := 1 to socks.n do
+    if socks[k] = nil then
+      fds[k] := -1                    { a slot nobody is using }
+    else if ExtPending(socks[k]) <> 0 then begin
+      { A line is already off the socket and in the runtime's buffer, so the
+        descriptor is quiet and there is nothing to ask the system about it. }
+      ready[k] := true;
+      have := have + 1;
+      fds[k] := -1
+    end
+    else
+      fds[k] := ExtFd(socks[k]);
+
+  { Something can be served already, so the wait is over before it begins --
+    but ask anyway, with no timeout, so one call reports everything that is
+    ready rather than only the buffered half. }
+  if have > 0 then ms := 0 else ms := timeoutMs;
+
+  n := ExtPoll(fds[1..socks.n], got[1..socks.n], ms);
+  if n < 0 then
+    exit(errIO);
+  for k := 1 to socks.n do
+    if got[k] <> 0 then
+      ready[k] := true;
+  Wait := errNone
 end;
 
 end.
