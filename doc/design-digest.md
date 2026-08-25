@@ -2852,3 +2852,30 @@ fit, and nothing assigned unless it succeeds.
   dispatch that is three in three increments, none of them a case-statement
   and so none of them visible to `kind-exhaustive`. All three were found by
   writing a client rather than by a gate.
+
+**Case folding and case mapping** (ADR-0196). The last of ADR-0189's list bar
+one, and the place the text model's oracle story ends.
+
+- **Folding is not lowercasing**, and `Fold` exists so a program need not know
+  that. `Fold(a) = Fold(b)` is the caseless comparison; comparing two
+  lowercased values answers it wrongly, because the German sharp s lowercases
+  to itself and folds to `ss`. Unicode publishes the mapping for that purpose.
+- **All three are full mappings** — `CaseFolding.txt` statuses C and F for the
+  fold, `UnicodeData.txt`'s simple mappings with `SpecialCasing.txt`'s
+  unconditional entries over them for the other two — so one code point may
+  become three and the caller's capacity goes in. `errFull` and `errSyntax`
+  stay separate for ADR-0193's reason.
+- **Every conditional mapping is declined**: a conditional entry names a
+  language or a context, and this language reads no environment variable and
+  knows where no word ends. `Lower('ΣΟΦΟΣ')` is therefore `σοφοσ`, with a
+  final σ rather than ς, and `tests/dialect/lib_unicode.pas` prints that on the
+  line that says so — a reader should meet the limitation in the test rather
+  than in a program.
+- **The result is bytes and not a text**, because case mapping does not
+  preserve normal form. A caller putting it into a `utf8(n)` renormalises
+  there, which AP 6.4.15.5's assignment does anyway, so the composition is
+  correct by construction.
+- **There is no conformance file for casing**, and that is the honest limit:
+  normalisation and segmentation are settled by a document written elsewhere
+  and these three are settled by a transcription. `doc/sop.md` §7 carries it,
+  and nothing will close it.

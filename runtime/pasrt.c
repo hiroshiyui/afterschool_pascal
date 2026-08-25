@@ -2395,6 +2395,58 @@ int pasx_text_check(const char *src, int cap) {
   return 0;
 }
 
+/* Case folding and case mapping for a library binding.
+ *
+ * Each answers a NUL-terminated result in the arena, or NULL when the bytes
+ * are not well-formed or the result will not fit `cap`. `*status` tells those
+ * two apart, because a caller can act on the difference: one is a fault in the
+ * data and the other in the capacity it chose -- PasDir.Next's shape, and for
+ * its reason (ADR-0193, ADR-0196).
+ *
+ * `cap` is the *caller's* destination capacity, passed in rather than assumed,
+ * so the bound checked is the one the program declared. A full case mapping
+ * can make one code point three, so a result that fits its source is not the
+ * common case and the caller cannot compute the room it needs. */
+static const char *case_x(long long (*f)(const char *, long long, char *,
+                                         long long),
+                          const char *src, int cap, int *status) {
+  char *out;
+  long long n, room;
+
+  if (status == NULL)
+    return NULL;
+  if (src == NULL || cap < 0) {
+    *status = 2;
+    return NULL;
+  }
+  room = (long long)cap;
+  out = pas_str_temp((int)room + 1);
+  n = f(src, (long long)strlen(src), out, room);
+  if (n == PAS_TEXT_OVERFLOW) {
+    *status = 1;
+    return NULL;
+  }
+  if (n < 0) {
+    *status = 2;
+    return NULL;
+  }
+  out[n] = '\0';
+  *status = 0;
+  return out;
+}
+
+const char *pasx_text_fold(const char *src, int cap, int *status) {
+  return case_x(pas_text_fold, src, cap, status);
+}
+
+const char *pasx_text_upper(const char *src, int cap, int *status) {
+  return case_x(pas_text_upper, src, cap, status);
+}
+
+const char *pasx_text_lower(const char *src, int cap, int *status) {
+  return case_x(pas_text_lower, src, cap, status);
+}
+
 /* The scalar value beginning at byte `at` (1-based, as a Pascal string is
  * indexed), and the 1-based offset of the next one -- 0 when `at` is past the
  * end or the bytes there are ill-formed.

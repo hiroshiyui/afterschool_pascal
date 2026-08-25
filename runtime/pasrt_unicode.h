@@ -71,6 +71,23 @@ long long pas_text_nfc(const char *s, long long n, char *dst, long long cap);
  * bad input still terminates. */
 long long pas_text_next(const char *s, long long n, long long at);
 
+/* Case folding and case mapping, all three *full*: one code point may become
+ * three, so none can be done in place and each answers the length written or a
+ * negative PAS_TEXT_* status.
+ *
+ * Folding is what a caseless comparison needs -- `fold(a) = fold(b)` is the
+ * question "are these the same word but for case", and it is not the same as
+ * lowercasing both: the German sharp s folds to two letters and lowercases to
+ * itself. Every locale- or context-conditional mapping is declined, so these
+ * know nothing about any language (ADR-0196).
+ *
+ * Case mapping does not preserve normal form, so a caller putting the result
+ * back into a text-type normalises it there -- which AP 6.4.15.5's assignment
+ * does anyway. */
+long long pas_text_fold(const char *s, long long n, char *dst, long long cap);
+long long pas_text_upper(const char *s, long long n, char *dst, long long cap);
+long long pas_text_lower(const char *s, long long n, char *dst, long long cap);
+
 /* One scalar value at byte offset `at`. Answers the bytes it occupies, or 0
  * when the sequence there is not well-formed; the value goes to *out.
  *

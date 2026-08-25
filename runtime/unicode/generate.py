@@ -199,6 +199,72 @@ widest = max(len(full(cp)) for cp in decomp)
 back = sorted({b for (a, b) in compose if ccc.get(b, 0) == 0})
 combines_back = coalesce([(cp, cp, 1) for cp in back])
 
+# --- Case folding and case mapping -----------------------------------------
+#
+# Three mappings, each from one code point to one, two or three. They are the
+# one part of this database with **no conformance file behind it** -- Unicode
+# publishes an answer for normalisation and for segmentation and none for
+# casing -- so what protects these is that they are a transcription and
+# nothing more (ADR-0196).
+
+def casing():
+    """(fold, upper, lower), each cp -> [cp, ...]."""
+    fold = {}
+    for text in lines("CaseFolding.txt"):
+        f = [x.strip() for x in text.split(";")]
+        if len(f) < 3:
+            continue
+        # C is the common mapping and F the full one; taking both is what makes
+        # this *full* folding, which is the kind a caseless comparison needs --
+        # the German sharp s folds to two letters and a simple mapping cannot
+        # say so. S is the 1:1 alternative to F and is skipped for that reason;
+        # T is Turkic and is declined with the rest of the locale (ADR-0189).
+        if f[1] not in ("C", "F"):
+            continue
+        fold[int(f[0], 16)] = [int(x, 16) for x in f[2].split()]
+
+    upper, lower = {}, {}
+    for text in lines("UnicodeData.txt"):
+        f = text.split(";")
+        cp = int(f[0], 16)
+        if f[12].strip():
+            upper[cp] = [int(x, 16) for x in f[12].split()]
+        if f[13].strip():
+            lower[cp] = [int(x, 16) for x in f[13].split()]
+
+    # ...and the mappings that are not one-to-one override the simple ones.
+    # A *conditional* entry has a fifth field naming a language or a context --
+    # final sigma, Turkic dotted i -- and every one of them is declined: this
+    # language consults no locale and nothing here knows where a word ends.
+    conditional = 0
+    for text in lines("SpecialCasing.txt"):
+        f = [x.strip() for x in text.split(";")]
+        if len(f) >= 5 and f[4]:
+            conditional += 1
+            continue
+        if len(f) < 4:
+            continue
+        cp = int(f[0], 16)
+        if f[1]:
+            lower[cp] = [int(x, 16) for x in f[1].split()]
+        if f[3]:
+            upper[cp] = [int(x, 16) for x in f[3].split()]
+
+    for name, m in (("fold", fold), ("upper", upper), ("lower", lower)):
+        for cp, to in m.items():
+            if len(to) > 3:
+                die(f"the {name} mapping of U+{cp:04X} is {len(to)} code "
+                    "points; the C side holds three")
+        # A mapping to itself is the default and carries no information.
+        for cp in [c for c, to in m.items() if to == [c]]:
+            del m[cp]
+    return fold, upper, lower, conditional
+
+
+fold, upper, lower, conditionalCasings = casing()
+if not fold or not upper or not lower:
+    die("a case table came out empty -- wrong file?")
+
 # --- The break properties -------------------------------------------------
 
 GCB = ["Other", "CR", "LF", "Control", "Extend", "ZWJ", "Regional_Indicator",
@@ -314,6 +380,43 @@ emit_ranges("pas_u_extpict", extpict,
             "/* Extended_Pictographic, from emoji/emoji-data.txt, which GB11\n"
             " * needs. The value is always 1; the range list is the property. */")
 
+w("/* Case folding and case mapping: one code point to one, two or three.")
+w(" * Sorted by `cp`; `n` is how many of a, b, c are used. A code point with")
+w(" * no entry maps to itself.")
+w(" *")
+w(" * pas_u_fold is **full** folding (CaseFolding.txt statuses C and F), which")
+w(" * is the kind a caseless comparison needs -- the sharp s folds to two")
+w(" * letters. pas_u_upper and pas_u_lower are UnicodeData.txt's simple")
+w(" * mappings with SpecialCasing.txt's unconditional entries over them, so")
+w(" * they are full too. Every *conditional* entry is declined: it names a")
+w(" * language or a context -- final sigma, Turkic dotted i -- and this")
+w(" * language consults no locale (ADR-0189). */")
+w("struct pas_u_case {")
+w("  unsigned int cp;")
+w("  unsigned char n;")
+w("  unsigned int a, b, c;")
+w("};")
+w("")
+
+
+def emit_case(name, table, what):
+    w(f"/* {what} */")
+    w(f"static const struct pas_u_case {name}[] = {{")
+    for cp in sorted(table):
+        to = table[cp] + [0, 0, 0]
+        w(f"    {{0x{cp:04X}, {len(table[cp])}, 0x{to[0]:04X}, "
+          f"0x{to[1]:04X}, 0x{to[2]:04X}}},")
+    w("};")
+    w(f"#define {name.upper()}_N (sizeof {name} / sizeof {name}[0])")
+    w("")
+
+
+emit_case("pas_u_fold", fold, "CaseFolding.txt, statuses C and F.")
+emit_case("pas_u_upper", upper,
+          "UnicodeData.txt field 12, with SpecialCasing.txt over it.")
+emit_case("pas_u_lower", lower,
+          "UnicodeData.txt field 13, with SpecialCasing.txt over it.")
+
 w("/* Canonical decomposition, from UnicodeData.txt field 5, excluding the")
 w(" * <tagged> compatibility mappings. `b` is 0 for a singleton. Sorted by")
 w(" * `cp`. The mapping is applied recursively by pasrt_unicode.c. */")
@@ -356,3 +459,5 @@ print(f"  ccc {len(ccc)} code points in {len(coalesce(sorted((c, c, v) for c, v 
 print(f"  gcb {len(gcb)} ranges, incb {len(incb)}, extpict {len(extpict)},"
       f" combines-back {len(combines_back)}")
 print(f"  a canonical decomposition is at most {widest} code points")
+print(f"  fold {len(fold)}, upper {len(upper)}, lower {len(lower)};"
+      f" {conditionalCasings} conditional casings declined")

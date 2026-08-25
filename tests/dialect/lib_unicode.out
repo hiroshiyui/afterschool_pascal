@@ -17,3 +17,13 @@ ill-formed = -1
 family: elements 1  scalars 5  bytes 18
   and it is one element
 the language can say the first number and not the second
+
+upper       = STRASSE
+lower       = strasse
+fold STRASSE= strasse
+fold straße = strasse
+caseless equal? see the two folds above
+digraph up  = Ǳ
+greek lower = σοφοσ  (final sigma is not special-cased)
+into 4 bytes  no room left
+ill-formed    not of the expected form

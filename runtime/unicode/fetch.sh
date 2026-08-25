@@ -59,12 +59,18 @@ base=https://www.unicode.org/Public/$version/ucd
 #   emoji/emoji-data.txt         Extended_Pictographic, which GB11 needs
 #   DerivedCoreProperties.txt    Indic_Conjunct_Break, which GB9c needs
 #                                (Unicode 15.1 and later)
+#   CaseFolding.txt              full case folding, which is what makes a
+#                                caseless comparison correct
+#   SpecialCasing.txt            the case mappings that are not one-to-one --
+#                                the German sharp s uppercasing to two letters
 #   NormalizationTest.txt        the oracle for normalisation
 #   auxiliary/GraphemeBreakTest.txt  the oracle for segmentation
 files=(
   UnicodeData.txt
   DerivedNormalizationProps.txt
   DerivedCoreProperties.txt
+  CaseFolding.txt
+  SpecialCasing.txt
   NormalizationTest.txt
   auxiliary/GraphemeBreakProperty.txt
   auxiliary/GraphemeBreakTest.txt

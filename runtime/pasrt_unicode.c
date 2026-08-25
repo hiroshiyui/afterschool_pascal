@@ -432,6 +432,87 @@ long long pas_text_nfc(const char *s, long long n, char *dst, long long cap) {
   return out;
 }
 
+/* --- case folding and case mapping ---------------------------------------
+ *
+ * The one part of this file with **no conformance file behind it**. Unicode
+ * publishes an answer for normalisation and for segmentation and none for
+ * casing, so what stands behind these is that the tables are a transcription
+ * and this is a table walk over them (ADR-0196).
+ *
+ * All three are *full* mappings: one code point may become three, which is
+ * why they cannot be done in place and why the length is answered rather than
+ * assumed. Every locale- or context-conditional mapping is declined -- final
+ * sigma, Turkic dotted i -- so what these implement is the unconditional
+ * default and nothing about any language. */
+
+static const struct pas_u_case *case_lookup(const struct pas_u_case *tbl,
+                                            size_t n, unsigned int cp) {
+  size_t lo = 0, hi = n;
+  while (lo < hi) {
+    size_t mid = lo + (hi - lo) / 2;
+    if (cp < tbl[mid].cp)
+      hi = mid;
+    else if (cp > tbl[mid].cp)
+      lo = mid + 1;
+    else
+      return &tbl[mid];
+  }
+  return NULL;
+}
+
+/* One scalar through one of the three tables, into out[0..2]. Answers how
+ * many; a code point with no entry maps to itself. */
+static int case_map(const struct pas_u_case *tbl, size_t n, unsigned int cp,
+                    unsigned int *out) {
+  const struct pas_u_case *e = case_lookup(tbl, n, cp);
+  if (e == NULL) {
+    out[0] = cp;
+    return 1;
+  }
+  out[0] = e->a;
+  out[1] = e->b;
+  out[2] = e->c;
+  return e->n;
+}
+
+static long long case_all(const struct pas_u_case *tbl, size_t n,
+                          const char *s, long long len, char *dst,
+                          long long cap) {
+  const unsigned char *u = (const unsigned char *)s;
+  long long i = 0, out = 0;
+
+  if (len < 0)
+    len = 0;
+  while (i < len) {
+    unsigned int cp, to[3];
+    int k = u8dec(u, len, i, &cp);
+    int m, j;
+    if (k == 0)
+      return PAS_TEXT_ILLFORMED;
+    i += k;
+    m = case_map(tbl, n, cp, to);
+    for (j = 0; j < m; j++) {
+      int w = u8len(to[j]);
+      if (out + w > cap)
+        return PAS_TEXT_OVERFLOW;
+      out += u8enc(to[j], dst + out);
+    }
+  }
+  return out;
+}
+
+long long pas_text_fold(const char *s, long long n, char *dst, long long cap) {
+  return case_all(pas_u_fold, PAS_U_FOLD_N, s, n, dst, cap);
+}
+
+long long pas_text_upper(const char *s, long long n, char *dst, long long cap) {
+  return case_all(pas_u_upper, PAS_U_UPPER_N, s, n, dst, cap);
+}
+
+long long pas_text_lower(const char *s, long long n, char *dst, long long cap) {
+  return case_all(pas_u_lower, PAS_U_LOWER_N, s, n, dst, cap);
+}
+
 /* --- UAX #29, extended grapheme clusters --------------------------------- */
 
 /* What the scan remembers about what it has already passed. Each field serves

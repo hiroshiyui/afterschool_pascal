@@ -42,8 +42,9 @@
 
 module PasUnicode;
 
-export PasUnicode = (Scalar, ScalarMax, ScalarBytes, Utf8Char,
-                     ToText, NextScalar, ScalarCount, Encode);
+export PasUnicode = (Scalar, ScalarMax, ScalarBytes, Utf8Char, CaseMax,
+                     ToText, NextScalar, ScalarCount, Encode,
+                     Fold, Upper, Lower);
 
 import PasError;
 
@@ -56,6 +57,13 @@ const
   { The most bytes one scalar occupies in UTF-8. Four since 2003, when
     RFC 3629 cut the encoding at U+10FFFF to match UTF-16's reach. }
   ScalarBytes = 4;
+
+  { The largest result the three case routines will hand back. A full case
+    mapping can make one code point three, so a bound is needed and this is
+    it; a caller wanting more than this needs a different interface, not a
+    bigger constant, because the value comes back through a `?string(n)` whose
+    capacity is part of the type. }
+  CaseMax = 1024;
 
 type
   Scalar = 0..ScalarMax;
@@ -92,6 +100,37 @@ function NextScalar(s: string; at: integer; var cp: Scalar): integer;
   extended grapheme clusters, and one cluster is one or more scalars. }
 function ScalarCount(s: string): integer;
 
+{ `s` with every character case-folded, written into `out`.
+
+  **Folding is not lowercasing**, and it is the operation a caseless comparison
+  wants: `Fold(a) = Fold(b)` asks "are these the same but for case", where
+  comparing two lowercased values gets the German sharp s wrong -- it folds to
+  `ss` and lowercases to itself. Unicode publishes the mapping for exactly this
+  purpose and it is the only one of the three that is *for* comparing.
+
+  `errNone`, or `errFull` when the result does not fit `out` -- a full mapping
+  can make one character three, so a destination the size of the source is not
+  enough in general -- or `errSyntax` when the bytes are not well-formed UTF-8.
+  Nothing is written unless the answer is `errNone`. }
+function Fold(s: string; var out: string): ErrorCode;
+
+{ `s` with every character mapped to upper or to lower case, into `out`.
+
+  Full mappings, so `Upper` of the German sharp s is `SS` and the result may be
+  longer than the source. The same three answers as `Fold`.
+
+  **Neither consults a locale**, and that is a decision rather than a gap: the
+  conditional mappings Unicode publishes name a language or a context -- final
+  sigma, the Turkish dotless i -- and this language reads no environment
+  variable to decide what a program means (ADR-0189). A program that needs
+  Turkish casing needs a Turkish library.
+
+  **Neither preserves normal form**, so a result going into a text-type is
+  normalised there. AP 6.4.15.5's assignment does that anyway, which is why
+  `Upper` answers bytes and not a text. }
+function Upper(s: string; var out: string): ErrorCode;
+function Lower(s: string; var out: string): ErrorCode;
+
 { One scalar value as its UTF-8 bytes.
 
   The null-string for a surrogate or for anything above ScalarMax, neither of
@@ -112,6 +151,22 @@ function ExtCheck(s: string; cap: integer): integer;
 { The 1-based offset of the scalar after the one at `at`, or 0. }
 function ExtScalar(s: string; at: integer; var cp: integer): integer;
   external 'pasx_text_scalar';
+
+{ The three cases, and the shape is PasDir.Next's: the value comes back
+  through an optional and the *caller's* capacity goes in, so the bound checked
+  is the one the program declared rather than one this module chose. }
+type CaseText = string(CaseMax);
+     OptCaseText = ?CaseText;
+
+function ExtFold(s: string; cap: integer;
+                 var status: integer): OptCaseText;
+  external 'pasx_text_fold';
+function ExtUpper(s: string; cap: integer;
+                  var status: integer): OptCaseText;
+  external 'pasx_text_upper';
+function ExtLower(s: string; cap: integer;
+                  var status: integer): OptCaseText;
+  external 'pasx_text_lower';
 
 function ToText;
 var status: integer;
@@ -165,6 +220,49 @@ begin
     ScalarCount := -1
   else
     ScalarCount := n
+end;
+
+{ One body for three routines would need a procedural parameter over an
+  `external` function, and 6.6.3.1's procedural parameter is a code-and-link
+  pair (ADR-0030) where a foreign routine has no link. So the three are
+  written out, and the duplication is three lines each. }
+function Fold;
+var got: OptCaseText; status: integer;
+begin
+  status := 0;
+  got := ExtFold(s, out.capacity, status);
+  if got = nil then
+    if status = 1 then Fold := errFull else Fold := errSyntax
+  else begin
+    out := got^;
+    Fold := errNone
+  end
+end;
+
+function Upper;
+var got: OptCaseText; status: integer;
+begin
+  status := 0;
+  got := ExtUpper(s, out.capacity, status);
+  if got = nil then
+    if status = 1 then Upper := errFull else Upper := errSyntax
+  else begin
+    out := got^;
+    Upper := errNone
+  end
+end;
+
+function Lower;
+var got: OptCaseText; status: integer;
+begin
+  status := 0;
+  got := ExtLower(s, out.capacity, status);
+  if got = nil then
+    if status = 1 then Lower := errFull else Lower := errSyntax
+  else begin
+    out := got^;
+    Lower := errNone
+  end
 end;
 
 function Encode;

@@ -23,11 +23,11 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Nineteen exported routines take this
+**`ErrorCode`.** `errNone` is success. Twenty-two exported routines take this
 shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
 `RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `OpenRead`,
 `OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush`, `PasDir`'s
-`Open`, `Next` and `List`, and `PasUnicode`'s `ToText` — the four `Open`s included, because the stream or
+`Open`, `Next` and `List`, and `PasUnicode`'s `ToText`, `Fold`, `Upper` and `Lower` — the four `Open`s included, because the stream or
 directory they answer goes into the `var` parameter and what is left to return
 is whether the world refused.
 
