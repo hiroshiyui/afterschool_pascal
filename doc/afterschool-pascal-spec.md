@@ -209,7 +209,7 @@ Three rules, and the first is the one that matters:
   when they were written; this states what the language is now. Annex E lists
   every such divergence found.
 - **d) Its clauses are cited by scenarios that run.** `tests/spec/` takes
-  `@afterschool:<clause>`, and 74 of this document's 77 testable clauses are
+  `@afterschool:<clause>`, and 86 of this document's 89 testable clauses are
   cited by at least one scenario; the clause table those citations are checked
   against is **generated from these headings**, so a renamed clause fails the
   traceability gate rather than drifting. Three are not cited: 6.13.1 and 6.11
@@ -219,8 +219,11 @@ Three rules, and the first is the one that matters:
 
   A clause a scenario may **not** cite is one the triage calls `structural` or
   `not-implemented`, and the gate fails on a citation of either. That is what
-  holds 5.6: the whole of 6.4.15 is `not-implemented`, so no scenario can
-  assert the text model works while it does not.
+  held 5.6 while 6.4.15 was written and unbuilt: the whole of it was
+  `not-implemented`, so no scenario could assert the text model worked while it
+  did not. It works now, nothing here is marked, and 5.6's mechanism is
+  vacuous — which is the state it expects to be in between one feature designed
+  ahead of its implementation and the next.
 
   This rule was added after a) to c) and is numbered after them for that
   reason: ADR-0135 cites 5.5 a) by letter, and renumbering would have made an

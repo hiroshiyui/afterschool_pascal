@@ -533,8 +533,8 @@ Five things about the dialect are worth knowing before adding anything:
   accept, and it must be expressible in what `seed/pascalc.ll` accepts or the
   seed is refreshed first.
 - **It is specified, and the specification is enforced.** `tests/spec/` takes
-  `@afterschool:<clause>` beside the two standards' tags, and 74 of the spec's
-  77 testable clauses are cited by a scenario. The clause table is **generated
+  `@afterschool:<clause>` beside the two standards' tags, and 86 of the spec's
+  89 testable clauses are cited by a scenario. The clause table is **generated
   from the document** (`tests/spec/clauses/extract_afterschool.py`), not
   transcribed, so a renamed clause fails the traceability gate rather than
   drifting. Regenerate it when the spec gains or renames one. **A clause may
@@ -542,7 +542,7 @@ Five things about the dialect are worth knowing before adding anything:
   `[not yet implemented]` and its rows in `triage.tsv` say `not-implemented`,
   which makes the traceability gate *refuse* a scenario citing it — so the
   specification cannot come to claim a feature is there by way of a passing
-  test. AP 6.4.15, the text model, is the whole of that list.
+  test. AP 6.4.15, the text model, was the whole of that list and is implemented; nothing is marked today, and `spec-clause-traceability` checks the marker against the triage in both directions (ADR-0195).
 - **difftest does not follow it.** `src/` is frozen at the conformance surface,
   so a dialect source is compared by no second implementation and
   `difftest.sh` *skips* it — counted and reported, because a silent skip is

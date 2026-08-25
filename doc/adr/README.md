@@ -205,3 +205,4 @@ the alternatives that were rejected and why.
 | [0194](0194-a-predicate-is-not-a-case-statement-and-nothing-was-reading-one.md) | A predicate is not a case-statement, and nothing was reading one | Accepted |
 | [0195](0195-the-marker-and-the-triage-are-one-truth-and-both-are-read-now.md) | The marker and the triage are one truth, and both are read now | Accepted |
 | [0196](0196-folding-is-not-lowercasing-and-casing-has-no-oracle.md) | Folding is not lowercasing, and casing has no oracle | Accepted |
+| [0197](0197-a-register-only-appended-to-is-one-that-decays.md) | A register only appended to is one that decays | Accepted |
