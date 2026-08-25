@@ -39,6 +39,13 @@ When performing documentation engineering, always follow these steps:
    - `seed/README.md` — the committed compiler's provenance, its target lock and its refresh policy. Stale here is worse than stale anywhere else: it is what a reader consults before trusting a binary artefact.
    - `verify/README.md` — how to run the proofs, what a rule is, and the three standing rules (the model is maintained with the lowering, a specification states a property and never a computation, a `KNOWN_GAP` that starts holding fails the build). The rule count is quoted in `README.md` and *not* here, which is deliberate — one place to move when it moves.
    - `tests/spec/README.md` — how to add a scenario, the recognised steps, the triage of the clause denominator, and what the suite deliberately is not. A new step kind is documented here or it is invisible.
+   - `tests/checks/stdannot/README.md` — the probes for ADR-0166's `@std:`
+     annotation, and the one document this skill's scope did not name until a
+     `git ls-files` audit found it. What it has to keep saying is *why they are
+     not under `tests/`*: every harness there passes `--std=` on the command
+     line, and the annotation is read only when no flag was given, so a case
+     registered by the ordinary glob could never reach it. A reader who does
+     not know that will move them and silently stop exercising the feature.
    - `tests/bsi/README.md` — **BSI's three conditions**, which are a licence obligation rather than a convenience: use is granted and redistribution is not, no representation may suggest a third-party validation, and any statement of results describes the whole suite. No document in this repository may call a BSI run a validation; check that none has started to.
 
    **The procedures an agent executes**, which are documentation that is *acted on* and so go stale in the same way and more expensively.

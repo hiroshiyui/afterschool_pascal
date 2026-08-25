@@ -303,7 +303,8 @@ Two smaller corpora have harnesses of their own, because what they compare is
 not what a compiled program wrote:
 
 * **`tests/dumps/`** compares what the *compiler* writes to standard output
-  under `--dump-tokens`, `--dump-ast`, `--dump-sema` and `--dump-all`. Sidecars
+  under `--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all`,
+  `--dump-layout` and `--dump-predicates`. Sidecars
   are `name.dump` (the golden), `name.flags` (which flag, `--dump-all` by
   default) and `name.std` (the standard, `iso7185` when absent — pinned by the
   harness rather than taken from the compiler's default, which moved in

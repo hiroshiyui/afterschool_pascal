@@ -65,6 +65,13 @@ three days, with every gate green. The rest only accept more.
   required identifier a program may shadow. The Unicode version behind it is
   stated in `doc/implementation-defined.md` §2.7.
 
+- **`--dump-predicates`**: what each of the compiler's type-classifying
+  predicates answers about a type of each kind. It exists for the
+  `predicate-kinds` gate, which is what three defects in three increments
+  argued for — a `case … of` with a constant left off has been checked since
+  ADR-0124, and all three of those lived in a *predicate* instead, where
+  nothing looked.
+
 - **`--dump-layout`**: compile as usual, then write the size, alignment and
   field offsets of every record the source defines. It is the compiler's half
   of a check on a foreign struct declaration — a source states what C struct it

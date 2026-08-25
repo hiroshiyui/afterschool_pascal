@@ -381,12 +381,51 @@ travels by address — and an owned pointer is not in it, its value being one
 word. The two were one name until ADR-0181 needed them apart.
 
 **The library's two layers.** `lib/` holds the modules written in
-`--std=extended` and usable from it — six of them, and the layer that could
-exist before the dialect did. `lib/dialect/` holds those that need the dialect:
-six **bindings**, each a module that exports Pascal and keeps its `external`
-declarations to itself, and four that need only the dialect's own features —
-the newest being `PasList`, which needs no binding at all and is built on the
-owned pointer (ADR-0114, ADR-0120, ADR-0181).
+`--std=extended` and usable from it — eight of them, and the layer that could
+exist before the dialect did. `lib/dialect/` holds the twelve that need the
+dialect, and they divide nine to three: nine **bindings**, each a module that
+exports Pascal and keeps its `external` declarations to itself, and three that
+need only the dialect's own features — `PasError`, `PasParse`, and `PasList`,
+which is built on the owned pointer and needs no binding at all (ADR-0114,
+ADR-0120, ADR-0181).
+
+**Text-type (`utf8(n)`).** What a program holds when it means the *characters*
+rather than the octets: a value whose bytes are well-formed UTF-8 in normal
+form C, with a capacity in **bytes** and elements that are grapheme clusters.
+It is a type **beside** ISO/IEC 10206:1991 §6.4.3.3's strings and not a
+replacement for them — `char` stays one byte and `string(n)` stays bytes,
+because widening `char` would stop `set of char` compiling and break the
+dialect's containment of Extended Pascal (ADR-0189, AP 6.4.15).
+
+**Element.** One extended grapheme cluster — what a *reader* calls a character.
+It is what `length` counts over a text and what `for g in t` yields, and it is
+not a `char`: a cluster is a sequence of scalar values of unbounded length, so
+it has no ordinal and the type of an element of a text is a text (AP 6.4.15.3).
+A family emoji joined by zero-width joiners is one element of eighteen bytes.
+
+**Scalar value.** A Unicode code point that is not a surrogate — the unit
+*under* an element. The language has no view of them on purpose, three
+sequences living in one text and a type offering all three having to say at
+every operation which it meant; `PasUnicode` is where a program that needs
+them goes (ADR-0193).
+
+**Normal form C.** The composed form of ISO/IEC 10646, and the invariant every
+text value satisfies. Normalising where a value is **constructed** rather than
+where two are compared is what makes `=` byte equality and canonical
+equivalence at once: `é` written as one code point and `é` written as `e` and a
+combining acute are one value (ADR-0189, AP 6.4.15.2).
+
+**Canonical-text-type.** The type `+` yields over texts — a text with **no
+capacity**, as ISO/IEC 10206:1991 §6.8.3.6's canonical-string-type is a string
+with none. What a join produces must fit any target, so it carries no capacity
+to exceed and the store is where the fit is checked (ADR-0192, AP 6.4.15.7).
+
+**Representation, against rules.** A text and a variable-string are *the same
+representation* — a length and that many bytes — and almost none of the same
+rules. `IsStringRep` asks the first question and `IsVarString` the second, and
+using one where the other was meant is a defect: it has been three times, none
+of them a case-statement and so none of them visible to `kind-exhaustive`
+(ADR-0191, ADR-0193, ADR-0194).
 
 ## The pipeline
 

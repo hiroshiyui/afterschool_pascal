@@ -73,6 +73,20 @@ that has only ever passed, so say which in the commit message. The audit also
 checks `clauses/triage.tsv`, since a requirement filed `structural` leaves the
 denominator and is never asked for again.
 
+**There is a third class and it is the one to know about.** `not-implemented`
+says the processor does not provide the feature, and a scenario citing such a
+clause **fails** — which is what lets the dialect's specification state a
+requirement *before* it is built without the document coming to claim, through
+a passing test, that the feature is there. AP 5.6 is the rule and the text
+model is what it was written for: the whole of AP 6.4.15 sat in this class for
+two increments and came off it a clause at a time (ADR-0189 – ADR-0192).
+
+Since ADR-0195 the class is checked from both sides: AP 5.6 also requires the
+clause's *heading* to carry `[not yet implemented]`, and `--check-clauses`
+compares the two sets and fails either way round. A clause triaged without the
+marker reads as implemented to every human and to no gate; one marked and left
+`testable` sits in the pending queue as ordinary work nobody has got to.
+
 It is also why the scenarios are phrased as the *requirement*, not as the
 implementation: "the bounds are checked only if the statement is executed" is a
 sentence about §6.8.3.9, and "the for loop emits its check inside the entry

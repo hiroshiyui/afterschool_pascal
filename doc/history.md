@@ -3039,3 +3039,82 @@ Both taught, and the split constant is reassembled from the datalayout's own
 `e`/`E` rather than a guess: big-endian `powerpc-linux-gnu` yields exactly the
 number little-endian `arm` and `mipsel` do, where a reversed word order gives
 4.0 × 10¹⁶. All nine of the targets that defeated it parse 4538 of 4538 now.
+
+## The text model
+
+`doc/roadmap.md` carried one row unchanged through eleven records: *"the text
+model — unstarted; `char` is a byte and nothing consults the locale. The
+largest thing on this page that no record has touched, and the one a
+'practical Pascal' would be judged on first."* It was settled in five
+increments over one day, and the interesting parts are the two places the plan
+was wrong.
+
+**The choice the roadmap offered did not exist.** It said *a wider character
+type **or** a text type distinct from §6.4.3.3's strings*. Widening `char`
+stops `set of char` compiling — every set here is one 256-bit word (ADR-0028) —
+which breaks ADR-0117's containment outright. So it was never two options, and
+ADR-0189 records the rejected one rather than omitting it, because a reader
+would otherwise wonder what became of it.
+
+**What was decided** (ADR-0189): a text is a bounded buffer of well-formed
+UTF-8 in normal form C whose elements are extended grapheme clusters, spelled
+`utf8(n)` with the capacity in bytes. The load-bearing choice is normalising
+where a value is *constructed* rather than where two are compared — it makes
+`=` byte equality and canonical equivalence at once, so a text can be a
+`pasmap` key and a comparison decodes nothing. That is not Swift's, and Swift
+cannot afford it: its `String` is a reference-counted heap buffer, which is
+the construct ADR-0151 says forces the aliasing decision.
+
+**The runtime came first, and on purpose** (ADR-0190). This is the one part of
+the language whose correctness is settled by a document written elsewhere:
+`NormalizationTest.txt` and `GraphemeBreakTest.txt` state an input and the
+answer, and were written by people with no interest in this compiler. Every
+other oracle here compares the compiler against a reading taken here, which is
+ADR-0072's blind spot. 20 034 normalisation cases, 766 segmentation cases and a
+sweep of every code point the first does not list — 1 094 978 of them — passed
+on the first run, so four mutations were made and each was caught by the
+section it should be. The sharpest: 59 primary composites have a **starter** as
+their second element, so the obvious streaming rule loses exactly those
+compositions and passes everything else.
+
+**Then the type** (ADR-0191), **joining and walking** (ADR-0192), and
+**`PasUnicode`** (ADR-0193). The last is where the fallible conversion lives —
+ill-formed bytes stop the program under AP 6.4.15.5, which is right for a
+program's own literals and wrong for a line off a socket.
+
+### What it cost, and what that argued for
+
+**A clause written three days earlier was wrong, and only implementing it
+showed that.** AP 6.4.15.5 refused an assignment from a `string`, routing every
+conversion through a fallible function on the argument that invalid input from
+the outside world is not an error in the program. True, and it does not reach
+the conclusion: §6.4.6 admits assignments that can fail everywhere, and a store
+outside a subrange has been an error since 1982. What made it visible was
+writing the tests — under the clause as written a text could be filled from a
+literal and from nothing else, so every test was a test about literals. AP
+Annex E.11, and the first divergence there found by implementing a clause
+rather than by auditing one. AP 5.6, invented on the first day so a design
+could be written down before it was built, is what made amending it legitimate.
+
+**Three defects of one shape, in three increments.** `IsMemory` asking
+`IsVarString`, so the relational operators took a text for a register value and
+emitted `icmp` on an aggregate; the code generator's comparison dispatch; and
+`EmitAssign` choosing the string store with `IsStringType`, so a text target
+fell through to a schema tuple-comparison and stopped the program. Each is a
+**predicate** used as a guard, none is a case-statement, and so `kind-exhaustive`
+— the gate that exists for exactly this class of mistake — saw none of them.
+`predicate-kinds` (ADR-0194) is what those three argued for, and ADR-0195
+closed the smaller gap beside it: AP 5.6's marker and the triage rows were one
+truth in two places with one of them read.
+
+**All three were found by writing a client**, not by a gate: two by probing
+every operation against the new type by hand on the day it existed, the third
+by writing the library the type exists to be used through. That is ADR-0182's
+lesson a second time, and it is now a rule rather than an observation —
+`doc/sop.md` §4a, *a feature with a surface needs a client, not a case*, with
+the corollary that a feature's library belongs inside its own work rather than
+after it.
+
+**What is left of the text model**: case mapping, case folding and
+grapheme-indexed slicing, each wanting a Unicode table the runtime does not
+carry.

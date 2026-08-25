@@ -702,17 +702,22 @@ Not there yet: case mapping, case folding and grapheme-indexed slicing. The
 Unicode version is stated in
 [`doc/implementation-defined.md`](doc/implementation-defined.md) §2.7.
 
-A binding is a module that exports Pascal and keeps the directive to itself —
-`lib/dialect/pasmathx.pas`, `lib/dialect/pasfs.pas`, `lib/dialect/pasenv.pas`,
-`lib/dialect/pasio.pas` and `lib/dialect/pasos.pas` are the five, and they are
-what a caller sees instead. `lib/dialect/passtream.pas` is the first binding
-over a handle: a `Stream` the caller declares and the module fills, so what a
-program holds is a variable that closes itself and never the address.
+A binding is a module that exports Pascal and keeps the directive to itself.
+Nine of the twelve dialect modules are one — `pasmathx`, `pasfs`, `pasenv`,
+`pasio`, `pasos`, `pasprocess`, `passtream`, `pasdir` and `pasunicode` — and
+they are what a caller sees instead of a foreign declaration. The other three
+need only the dialect's own features: `paserror`, `pasparse`, and `paslist`,
+which is built on the owned pointer. `lib/dialect/passtream.pas` is the first
+binding over a handle: a `Stream` the caller declares and the module fills, so
+what a program holds is a variable that closes itself and never the address.
 
-**The runtime has a second surface**, and it is one routine wide (ADR-0131).
-`pas_` names are what the compiler emits calls to and are refused as foreign
-names; `pasx_` names are what a *program* may bind, and `pasx_errno` is the
-only one. It exists because C specifies `errno` as a **macro**, so it has no
+**The runtime has a second surface** (ADR-0131). `pas_` names are what the
+compiler emits calls to and are refused as foreign names; `pasx_` names are
+what a *program* may bind. It was one routine wide when that record was
+written, and is now seven: `pasx_errno`, `pasx_file_info`, `pasx_dir_next`,
+`pasx_text_check`, `pasx_text_scalar`, and two that exist only so a test can
+be written against the boundary itself. `pasx_errno` is still the one that
+explains the surface, because C specifies `errno` as a **macro**, so it has no
 linker symbol any foreign-function interface could name.
 
 ## The standard library
