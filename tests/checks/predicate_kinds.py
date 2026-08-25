@@ -47,8 +47,20 @@ predicate added without a row in the dump fails here rather than passing
 unseen. A gate holding both halves of its own comparison cannot fail, which is
 what ADR-0144 found `foreign_reserved.py` doing.
 
+**And a second question, asked once**, when a kind is added rather than on
+every run. `--like OLD NEW` prints every predicate that answers differently
+about two kinds and, under each, the call sites in `selfhost/compiler.pas`. It
+exists because the gate above is satisfied by a *correct* row: a text is not a
+string-type, `IsStringType 1 of 22` is right, and the defect was at a call site
+that asked `IsStringType` when it meant "does this take the string store?".
+Naming the kind the new one resembles is what no tool can derive and a person
+knows; what follows from it is mechanical. For `--like tyString tyText` that is
+three predicates over 45 call sites, and all three defects above are in the
+list (ADR-0198).
+
 Usage:
     python3 tests/checks/predicate_kinds.py [--build build] [--write]
+    python3 tests/checks/predicate_kinds.py --like tyString tyText
 """
 
 import argparse
@@ -146,10 +158,90 @@ def render(total, rows, order):
     return "\n".join(out) + "\n"
 
 
+def call_sites(text, name):
+    """Every line calling `name`, less its own declaration and definition.
+
+    A predicate here is one or two lines -- `begin Is... := ... end` -- so the
+    definition matches its own name and would head every list. Both are dropped
+    by position rather than by pattern: the declaration is the line the gate
+    already greps for, and the definition is the line after it.
+    """
+    pat = re.compile(r"\b" + re.escape(name) + r"\(")
+    decl = re.compile(r"^function " + re.escape(name) + r"\(")
+    out, skip = [], -2
+    for i, line in enumerate(text.splitlines(), 1):
+        if decl.match(line):
+            skip = i
+            continue
+        if i == skip + 1:
+            continue
+        if pat.search(line):
+            out.append((i, line.rstrip()))
+    return out
+
+
+def like(rows, old, new, source):
+    """What the compiler still says is true of OLD and not of NEW.
+
+    The direction matters. A predicate true of the old kind and false of the
+    new one is a guard the new kind falls *out* of, which is where every defect
+    ADR-0194 lists actually was; a predicate true of the new one and false of
+    the old is the new kind's own, and is listed second and without call sites
+    because it is what the increment just wrote.
+    """
+    kinds = rows["kinds"]
+    for k in (old, new):
+        if k not in kinds:
+            print(f"predicate-kinds: no kind named {k}; the dump knows "
+                  + " ".join(kinds), file=sys.stderr)
+            return 1
+
+    falls_out, brought_in = [], []
+    for name, value in rows.items():
+        if name == "kinds":
+            continue          # the kind list, not a predicate's answer
+        answers = value[1]
+        a, b = old in answers, new in answers
+        if a and not b:
+            falls_out.append(name)
+        elif b and not a:
+            brought_in.append(name)
+
+    print(f"{new} against {old}: {len(falls_out)} predicates answer yes to "
+          f"{old} and no to {new}.")
+    print()
+    print(f"Each call site below is a question -- when this guard asks "
+          f"\"{old}?\" and means \"does this take that path?\", a {new} takes "
+          f"the wrong branch. That is where three defects in three increments "
+          f"were (ADR-0191, ADR-0193), and the row for each of these "
+          f"predicates in the catalogue is *correct*, which is why the gate "
+          f"cannot see them.")
+    total = 0
+    for name in falls_out:
+        sites = call_sites(source, name)
+        total += len(sites)
+        print()
+        print(f"  {name} -- {len(sites)} call sites")
+        for n, line in sites:
+            print(f"    selfhost/compiler.pas:{n}: {line.strip()}")
+    print()
+    print(f"{total} call sites over {len(falls_out)} predicates.")
+    if brought_in:
+        print()
+        print(f"{new} answers yes where {old} answers no to: "
+              + ", ".join(brought_in) + " -- the new kind's own, listed "
+              "without sites because they are what this increment wrote.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--build", default="build")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--like", nargs=2, metavar=("OLD", "NEW"),
+                    help="every predicate answering differently about two "
+                         "kinds, with the call sites of each -- the question "
+                         "to ask once, when a kind is added")
     args = ap.parse_args()
 
     compiler = ROOT / args.build / "bin" / "pascalc"
@@ -169,6 +261,9 @@ def main():
     if err:
         print(f"predicate-kinds: {err}", file=sys.stderr)
         return 1
+
+    if args.like:
+        return like(rows, args.like[0], args.like[1], SOURCE.read_text())
 
     # --- half one: the source says which predicates exist -------------------
     declared = declared_predicates(SOURCE.read_text())
@@ -219,6 +314,11 @@ def main():
               "these rows is a question: should this predicate be true of the "
               "new kind? Three defects in three increments were a `no` nobody "
               "was asked about (ADR-0191, ADR-0193).", file=sys.stderr)
+        print("        If the kind resembles one that already exists, "
+              "`--like <old> <new>` lists every predicate that answers "
+              "differently and every call site of each -- which is where a "
+              "*correct* row still hides a defect (ADR-0198).",
+              file=sys.stderr)
         print("        Regenerate with --write when the answers are right, "
               "and say in the commit message which ones changed and why.",
               file=sys.stderr)

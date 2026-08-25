@@ -474,6 +474,25 @@ add_test(NAME predicate-kinds
                  ${CMAKE_SOURCE_DIR}/tests/checks/predicate_kinds.py
                  --build ${CMAKE_BINARY_DIR})
 
+# The same script's other question, and the reason it is a separate case: the
+# gate above passes on a *correct* row. A text is not a string-type, so
+# `IsStringType 1 of 22` is right, and the defect was a call site asking
+# IsStringType where it meant "does this take the string store?" -- which is a
+# guard the new kind falls out of and no catalogue can see (ADR-0198).
+#
+# `--like` names the predicates that answer differently about two kinds and
+# every call site of each. This registers it so that a documented mode has a
+# case behind it, ADR-0103 having found four dump flags that no case had ever
+# passed. The pair is the one that has been through it: three predicates
+# answer yes to a string and no to a text, and a change making the two alike
+# everywhere fails here, which is a question worth being asked.
+add_test(NAME predicate-kinds-like
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tests/checks/predicate_kinds.py
+                 --build ${CMAKE_BINARY_DIR} --like tyString tyText)
+set_tests_properties(predicate-kinds-like PROPERTIES
+                     PASS_REGULAR_EXPRESSION "IsStringType -- [1-9][0-9]* call sites")
+
 # How far runtime/pasrt.c is from ISO C, which is the whole of what a port to
 # another C library has to satisfy. The cross-platform chapter used to answer
 # that by assertion; measured, the runtime's entire departure from the standard
