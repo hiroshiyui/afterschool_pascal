@@ -320,6 +320,17 @@ checks they agree, which is the same arrangement the version number has. A
   entire body of pop-front. Lowered in `EmitAssign` in four instructions;
   `EmitCall` has no arm for it at all, and `partial_cases.txt` says why that
   is deliberate. `tests/dialect/take.pas` is the case.
+- **A second name for an owned value exists, and cannot escape** (ADR-0201).
+  `Bump(o^)` binds a `var` parameter to what `o` owns, which is a borrow for
+  the duration of the call — and the borrow can never be stored, because
+  Pascal has no address-of operator (§6.1.9's `@` is refused) and `new` is the
+  only thing that produces a pointer, so `kept := n` is a type error and there
+  is no other way to write it. **Unformable rather than checked**: nothing in
+  the compiler knows this property, which makes it free while it holds and
+  silent when a future feature takes it away. It is why the ARC-or-borrowing
+  fork is withdrawn rather than decided — the two differ about escaping
+  aliases, and refusal covers the three affine kinds while containment fixes
+  what `^T` means. `doc/sop.md` §7 carries what nothing watches.
 - **And the client, once it could be written, is `PasList`** — the only
   container in `lib/` with no `Free`, because the block that declares the head
   disposes the chain. What it pays is traversal: the rule stopping a second

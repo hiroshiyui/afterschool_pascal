@@ -169,6 +169,12 @@ load-bearing and the entry names the test that fails without it.
   pointer may be assigned, in 6.4.12.2's position, and its source is emptied
   before the target's address is taken -- which is what stops a target reached
   through the source from building a cycle nothing owns.
+  **A second name for an owned value exists in exactly one form and cannot
+  escape** (ADR-0201): a `var` parameter bound to `o^` is a borrow for the
+  duration of the call, and no pointer can ever name it, because Pascal has no
+  address-of and `new` is the only producer of one. Unformable rather than
+  checked — nothing in the compiler knows it — so a feature that adds a way to
+  form such a value takes the property with it silently.
   **The same split, a second time, for text**: `IsVarString` asks whether
   §6.4.3.3.3's *rules* apply and `IsStringRep` asks whether the value is a
   length and that many bytes, which a text and a variable-string answer alike

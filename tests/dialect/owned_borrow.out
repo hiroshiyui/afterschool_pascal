@@ -1,0 +1,6 @@
+borrowed and bumped: 3
+read through it:     3
+owner still holds:   TRUE
+moved to spare:      3, o empty: TRUE
+self-move kept it:   3, spare empty: FALSE
+still one value:     6

@@ -177,11 +177,11 @@ the open decision it would settle.
 | ~~Propagation~~ | Zig's `try`, Rust's `?` | the rest of error handling | **Done** (ADR-0178, AP 6.8.9): `try(x)` yields the value or leaves the enclosing function with the cause. Spelled as a required function because no position would serve — see below |
 | ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
 | Unicode-correct `String` | Swift | the text model | **Done** (ADR-0189 – ADR-0193), less case mapping and folding. The grapheme as the unit and the refusal of an integer index are Swift's and are taken whole. Its *storage* is not: Swift's `String` is a reference-counted heap buffer, which is the construct ADR-0151 says forces the aliasing decision, so this is a value with a declared capacity instead — and that in turn is what makes normalise-on-construction affordable, which Swift cannot do and which buys a bytewise `=` |
-| ARC | Swift | aliasing | **Undecidable on the evidence in hand** (ADR-0151) |
-| Ownership and borrowing | Rust | aliasing | **The same, and the worst fit besides** — and the most expensive thing to mirror in `src/` |
+| ARC | Swift | aliasing | **The question is withdrawn** (ADR-0201). ADR-0117's containment fixes what `^T` means, and ARC changes it — so the candidate cannot reach the only reference type an ISO program has |
+| Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
 | Traits / protocols | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039) |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
-| Actors / `Send`+`Sync` | Swift, Rust | concurrency | **Blocked**, and it is what *unblocks* the two aliasing rows: concurrency is the construct that certainly demands two live names for one value |
+| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. A socket module serving more than one client is what would, and `select` is the cheaper answer to try first |
 
 Two conclusions worth stating:
 
@@ -507,7 +507,7 @@ the record.
 | Is containment witnessed by more than one program? | The whole of `tests/extended/` under `--std=afterschool`, every run | ADR-0138 |
 | Are the dialect's pieces coherent? | Four result shapes, one rule in two questions; a boundary shape may be a parameter and not a result | ADR-0141, ADR-0149 |
 | Do the conformance modes "stay exactly as they are"? | What they accept does not move for the dialect; what they say may | ADR-0154 |
-| Memory safety: deferral or discovery? | Lifetime was already answered, by the file variable; aliasing waits on concurrency | ADR-0151 |
+| Memory safety: deferral or discovery? | Discovery, twice. Lifetime was already answered, by the file variable (ADR-0151); aliasing was too, by refusal for the three affine kinds and by a **borrow that cannot escape** for the rest — Pascal has no address-of, so no pointer can name what a `var` parameter refers to. What is left of the fork is two threads of control and nothing else | ADR-0151, ADR-0201 |
 | An oracle nobody here wrote | The BSI suite, fetched not committed; `src/` back as a reference front end | ADR-0086, ADR-0108 |
 | Diverse double-compiling | Run once, 2026-08-18, identical outputs; `seed/ddc.sh` | `seed/README.md` |
 | Conformant array parameters, and level 1 | Done, and the 51 BSI level-1 programs found nine defects in the first implementation | ADR-0153 |
