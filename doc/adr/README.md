@@ -203,3 +203,4 @@ the alternatives that were rejected and why.
 | [0192](0192-joining-and-walking-a-text-are-inverses-and-that-is-the-test.md) | Joining and walking a text are inverses, and that is the test | Accepted |
 | [0193](0193-a-library-may-report-where-the-language-stops.md) | A library may report where the language stops | Accepted |
 | [0194](0194-a-predicate-is-not-a-case-statement-and-nothing-was-reading-one.md) | A predicate is not a case-statement, and nothing was reading one | Accepted |
+| [0195](0195-the-marker-and-the-triage-are-one-truth-and-both-are-read-now.md) | The marker and the triage are one truth, and both are read now | Accepted |

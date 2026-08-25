@@ -334,6 +334,49 @@ def read_pending():
             if line.strip() and not line.startswith("#")}
 
 
+# AP 5.6's marker, and the second half of it.
+#
+# A clause may state a requirement the processor does not meet at all, and 5.6
+# requires that to be said in two places: `[not yet implemented]` in the
+# heading, and `not-implemented` on every clause under it in triage.tsv. Only
+# the second was enforced -- it is what makes this gate refuse a scenario
+# claiming the feature works -- so the two could drift, and each direction is
+# its own kind of wrong. A clause triaged that way with the marker dropped
+# reads as implemented to every human and to no gate; a clause marked and left
+# `testable` sits in the pending queue as ordinary work nobody has got to.
+#
+# One truth in two places with one of them read is the shape ADR-0144 found a
+# gate green over, and this is that shape in a document rather than in a
+# compiler (ADR-0195).
+SPEC = HERE.parent.parent / "doc" / "afterschool-pascal-spec.md"
+MARKER = re.compile(r"^#+\s+(\d[\d.]*)\s+.*\[[^\]]*not yet implemented[^\]]*\]")
+
+
+def marked_ahead_of_processor():
+    """Every AP clause a `[not yet implemented]` heading covers.
+
+    A marked heading carries its sub-clauses with it: marking 6.4.15 says the
+    whole of 6.4.15 is stated ahead of the processor, which is what it meant
+    when the text model was three increments from being built.
+    """
+    if not SPEC.exists():
+        return None
+    heads = [m.group(1) for line in SPEC.read_text().splitlines()
+             for m in [MARKER.match(line)] if m]
+    if not heads:
+        return set()
+    every = set()
+    for line in SPEC.read_text().splitlines():
+        m = re.match(r"^#+\s+(\d[\d.]*)\s", line) or \
+            re.match(r"^\*\*(\d[\d.]*)\s", line)
+        if m:
+            every.add(m.group(1))
+    covered = set()
+    for h in heads:
+        covered |= {c for c in every if c == h or c.startswith(h + ".")}
+    return covered
+
+
 def check_clauses(scenarios):
     """The gate: fails in both directions, as uncovered_procedures.txt does.
 
@@ -374,6 +417,24 @@ def check_clauses(scenarios):
                     f"{std} §{clause} is a clause of that standard with no row "
                     "in clauses/triage.tsv -- classify it testable, structural "
                     "or not-implemented, or the denominator is short by one")
+
+    # AP 5.6: the marker and the triage rows say the same thing, both ways.
+    marked = marked_ahead_of_processor()
+    if marked is not None:
+        triaged = {c for c, (k, _) in tri.get("afterschool", {}).items()
+                   if k == "not-implemented"}
+        for c in sorted(marked - triaged):
+            problems.append(
+                f"afterschool §{c} is under a heading marked "
+                "'[not yet implemented]' but is not triaged not-implemented -- "
+                "so nothing stops a scenario claiming the feature works, which "
+                "is the whole of what AP 5.6's second half is for")
+        for c in sorted(triaged - marked):
+            problems.append(
+                f"afterschool §{c} is triaged not-implemented and no heading "
+                "over it carries '[not yet implemented]' -- so the document "
+                "reads as though the processor meets it. Add the marker, or "
+                "retriage the clause if it is now built")
 
     for std, clauses in cited.items():
         known = tri.get(std, {})

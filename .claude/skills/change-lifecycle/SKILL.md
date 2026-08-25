@@ -56,6 +56,20 @@ When landing a change, always follow these steps:
    parser stops at its first error) or `selfhost/badsema/` (shared files — Sema
    accumulates).
 
+3a. **If the change has a *surface* rather than a point, write a client.**
+   A new type kind, a new parameter form, a new directive — every position a
+   program can put one in is a place it can be wrong, and a case pins one
+   behaviour. Write a program that uses the construct where a program would:
+   assigned, compared, indexed, passed, returned, nested in a record,
+   iterated, written. Most positions will be refused and the refusals are the
+   point.
+
+   `doc/sop.md` §4a has the four this has caught, none of which any gate
+   found — including two where adding a type kind left a *predicate* answering
+   wrongly and the code generator emitting IR clang refuses. The library or
+   binding for a feature is part of that feature's work, not a tidying-up
+   afterwards: it is the cheapest enumerator of the surface.
+
 4. **Re-run `cmake`.** Cases are registered by `file(GLOB)` at configure time.
    A green bar that never ran the new case is not a green bar.
 

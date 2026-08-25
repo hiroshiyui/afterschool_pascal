@@ -209,6 +209,43 @@ Rules learned the hard way:
 - **A mutation that breaks the build proves nothing.** It has to produce a
   working compiler with the defect back in it.
 
+## 4a. A feature with a surface needs a client, not a case
+
+The mutation rule above is about a *point*: a defect, a fix, a test that fails
+without it. Some changes are not points. A new type kind, a new parameter form,
+a new directive — these have a **surface**, and every position a program can put
+one in is a place the change can be wrong.
+
+**Write a program that uses it in every position, before believing any gate.**
+Not a case that pins one behaviour; a client that exercises the construct
+where a program would: assigned, compared, indexed, passed, returned, nested
+in a record, iterated, written. Most of the positions will be refused, and the
+refusals are the point — what a gate cannot tell you is which of them should
+not have been.
+
+This is written down because it has now paid four times and no gate found any
+of them:
+
+- `take` was found by writing a list over `owned ^T`: without it a chain had
+  no constant-time operation at all, and nothing in the language said so
+  (ADR-0182).
+- `IsMemory` answering `no` for a new type kind, so the relational operators
+  emitted `icmp` on an aggregate — found by probing every operation against
+  the kind by hand on the day it existed (ADR-0191).
+- The code generator's comparison dispatch, the same probe.
+- `EmitAssign` choosing the string store with the wrong predicate — found by
+  writing the *library* the type exists to be used through (ADR-0193).
+
+`predicate-kinds` (ADR-0194) now asks the narrow version of the question a
+kind raises, and `kind-exhaustive` has asked the case-statement version since
+ADR-0124. Neither would have found any of the four. A gate asks a question
+somebody thought of; a client asks the questions a program asks.
+
+The corollary is about **order**. The library increment of a feature is not a
+tidying-up afterwards — it is the cheapest enumerator of the feature's surface,
+so it belongs inside the feature's own work rather than after it. ADR-0189
+staged the text model that way by accident and it found two defects.
+
 ## 5. Counting, not assuming
 
 Coverage here is measured at one granularity and argued at every other. The
@@ -396,7 +433,6 @@ from it when one is closed.
 | A module exporting an **undiscriminated schema** with a tagged variant is called portable | ADR-0137 locks a module whose interface reaches a record with a tagged variant-part, and ADR-0142 fixed the parameter walk that missed one route. A route still open: a module exporting `Box(n: integer) = record pad: array [1..n] of integer; case k: Sel of …` by *name*, undiscriminated, emits the dialect aliases and links into an Afterschool Pascal program, which AP §6.13.1 forbids. **No misbehaving program was built from it** — every way of giving the module something to write re-discriminates the schema and is caught, so it looks reachable only in combination with ADR-0142's defect, which is fixed. Left alone because the fix belongs with a probe that demonstrates the harm, and installing one on a forbidden-but-harmless link spends the meaning of the other seven combinations | ADR-0137, ADR-0142 |
 | A guard placed **ahead** of a predicate can silence the predicate's own test | ADR-0143's first version put a slice arm before the `Assignable` call in the assignment check, to give better words than the general message. It masked the predicate at the only site that reaches it, so removing `Assignable`'s own slice refusal changed nothing observable and **all 623 cases stayed green over a restored out-of-bounds write**. The fix is structural — ask the predicate, then choose words inside the failure — and nothing checks that a new diagnostic arm has not done this again. It is invisible to every gate here by construction: the behaviour is identical, so no golden moves, no coverage changes, and only a mutation of the *masked* code can see it | ADR-0143 |
 | The model-drift gate's **judgement** runs on CI only | it needs a push range, so no local run asks whether a CodeGen change carried its model — a `git push` is the first thing that does, and it reports after the fact rather than before. Its *base resolution* is checked locally (`model-drift-base`) because that half is a pure question about one repository and is the half that has broken; the judgement half is not, and `python3 tests/checks/model_drift.py origin/main HEAD` before a push is the manual substitute | ADR-0013 |
-| A clause **stated ahead of the processor** says so in two places, and nothing compares them | AP 5.6 lets a clause specify a feature that is designed and not built, and two things have to agree for that to be honest: the heading carries `[not yet implemented]`, and every clause under it is `not-implemented` in `tests/spec/clauses/triage.tsv`. Only the second is enforced — it is what makes the traceability gate refuse a scenario claiming the feature works. A clause triaged that way with the marker dropped reads as implemented to every human and to no gate; a clause marked and left `testable` puts it in the pending queue as ordinary work nobody has got to. This is the shape `foreign_reserved.py` had before ADR-0144 — one truth in two places, one of them read — and it is cheap to close: the extractor already parses both files. Not closed here because the whole of the list is AP 6.4.15 and the increment that builds it is what will remove the marker | ADR-0189, ADR-0106 |
 | `runtime/pasrt_unicode.c` has **one** reader, and it skips | Every other line of runtime C is reached by corpus programs at both optimisation levels; this file is reached by nothing. No Pascal program can call it — the functions are `pas_` and so refused as foreign names (ADR-0131) — `coverage.py` sees Pascal and not C, and difftest has no second implementation to compare. `unicode-conformance` is the whole of its oracle, and it **skips (77)** when the Unicode Character Database is absent, the database being fetched and never committed. So a clone that has not run `runtime/unicode/fetch.sh` tests 5 500 lines of tables and the arithmetic over them with nothing at all, and reports green. `UNICODE_CONFORMANCE_REQUIRE` is how CI refuses to pass by skipping, which is `TARGET_SIZES_REQUIRE`'s answer to the same shape; locally there is no such protection and the skip line is the only warning. This closes when increment 2 gives the language a text-type and corpus programs start reaching it | ADR-0189, ADR-0190 |
 | One claim in the text model rests on a **reading**, not on Unicode's files | AP 6.4.15.9's iteration copies an element without renormalising it, and must — the arena is released once per *statement* (ADR-0111), so a loop that allocated per element would exhaust it. That is sound only if a grapheme cluster boundary is also a boundary of normal form, which is an argument from UAX #29's GB9 and GB9a rather than something `NormalizationTest.txt` or `GraphemeBreakTest.txt` states: Unicode publishes the two properties separately and nothing published relates them. Everywhere else in the text model the oracle is theirs (ADR-0190); here it is a **property test** — `tests/dialect/text_join.pas` walks a text, joins the elements back and requires the original, so a boundary that split a normalisation segment would produce pieces that renormalise on rejoining and the comparison would fail. That is the nearest thing to an oracle available, and it is one program over one string rather than a sweep | ADR-0189, ADR-0192 |
 

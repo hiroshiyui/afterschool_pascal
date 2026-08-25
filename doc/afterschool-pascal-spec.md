@@ -236,6 +236,12 @@ clause it contains shall be classified `not-implemented` in
 scenario citing it — so the document cannot come to claim, through a passing
 test, that the feature is there.
 
+The marker and the classification are **compared**, both ways (ADR-0195). A
+clause triaged that way with no marker over it would read as though the
+processor met it; a clause marked and left `testable` would sit in the pending
+queue as ordinary work. One truth in two places with one of them read is what
+ADR-0144 found a gate green over, and this is that shape in a document.
+
 5.1 is read accordingly: a processor complies when it accepts every program
 this document admits **other than by such a clause**. The list is found by
 searching for the marker and **is currently empty**: 6.4.15 was the whole of
