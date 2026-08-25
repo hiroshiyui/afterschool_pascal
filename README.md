@@ -659,6 +659,29 @@ statements run, the block's files and handles close, and in the main program
 the module finalizations still run. `exit` is nobody's word either — a program
 that declares one keeps it — and a deferred statement may not contain one.
 
+**`break` and `continue` leave a loop early** (ADR-0208), which no standard
+Pascal has and every widely used one does:
+
+```pascal
+for i := 1 to length(line) do begin
+  if line[i] = '#' then break;         { the rest is a comment }
+  if line[i] = ' ' then continue;      { skip, and go on looking }
+  Emit(line[i])
+end;
+```
+
+`break` terminates the closest-containing loop and no other, so a `break` in a
+nested loop leaves the inner one. `continue` terminates the current iteration
+and goes on to the point the loop decides at — the condition of a `while` or
+`repeat`, the next member or element of a `for ... in`, and for an ordinary
+`for` the test against the final value, so the control variable still advances.
+Neither takes an argument, and both need a loop of the block they are written
+in: a `break` in a procedure called from a loop is refused, not a jump out of
+its caller. Where a `for` is left by a `break` the control variable keeps the
+value it had, which a completed `for` does not promise. Both are nobody's word
+— a program that declares its own `break` keeps it — and `defer break` is
+refused for naming no loop while `defer while c do break` means what it says.
+
 **`try` propagates a failure** (ADR-0178), which is what a fallible type was
 missing and what `exit` was landed for:
 
