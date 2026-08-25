@@ -94,3 +94,17 @@ header: <unistd.h>
 # in its signature, so lib/dialect/pasdir.pas binds them itself and owns the
 # `DIR *` as a handle (AP 6.4.12). Only the member access needed a header.
 header: <dirent.h>
+
+# ADR-0203: a TCP connection, for PasNet. `struct sockaddr` is the reason --
+# it is not one struct but a family of them, a program never declares the one
+# it is using, and a library may not declare any of them (ADR-0185's fifth
+# decision). Everything socket-shaped is behind `pasx_socket_*`.
+header: <sys/socket.h>
+
+# ADR-0203: `getaddrinfo` and `getnameinfo`, which is what keeps this list at
+# two headers rather than four. Both ends of every call in PasNet are
+# *strings* -- a host and a service -- so nothing here names an address
+# family, a port number or an address, and <netinet/in.h> and <arpa/inet.h>
+# are not needed at all. It is also what gives a caller IPv6 without asking:
+# the loop takes the first address that works.
+header: <netdb.h>

@@ -1,0 +1,13 @@
+listen:      no error
+service:     no error, and a port was given: TRUE
+connect:     no error
+accept:      no error
+  server got: no error [first line]
+  server got: no error [second line]
+  client got: no error [and a reply]
+unterminated:no error [no newline at the end]
+after close: not present
+write to closed: the operation was refused
+too long:    no room left []
+bad service: not present
+refused:     the operation was refused

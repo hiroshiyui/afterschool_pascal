@@ -2456,6 +2456,35 @@ where a type-denoter ends is a syntax error in both standards.
 under the harness's `ulimit -n 256`, which is what makes an early release
 something a test can see.
 
+**A socket is a handle and both ends are strings** (ADR-0203). `PasNet` is the
+thirteenth dialect module and the first to reach the network. A descriptor is
+an `int` and an integer is numeric (AP 6.4.2.6.2), so a program holding one
+could add to it and close it twice — ADR-0151's `int64` door, deliberately not
+walked through again. The runtime keeps the descriptor in a structure of its
+own and Pascal holds `Socket = handle external 'pasx_socket_close'`.
+
+- **Nothing names an address family, a port or a byte order.** A host and a
+  *service*, both strings, go to `getaddrinfo`. That is what keeps
+  `<netinet/in.h>` and `<arpa/inet.h>` out of `pasrt_posix.c` — the whole
+  addition is `<sys/socket.h>` and `<netdb.h>` — and it is what gives a caller
+  IPv6 without a line about it, the loop taking the first address that works.
+- **An ephemeral port is expressible without a number type**: listen on
+  service `'0'`, ask `Service`, hand the string back to `Connect`. That is how
+  `tests/dialect/lib_net.pas` talks to itself, in one activation, `listen`
+  having completed the handshake in the backlog before `accept` is called.
+- **The line buffer is in the runtime** because a socket cannot use `FILE *`
+  for it: a stream opened for update over a descriptor that cannot seek may
+  not switch between reading and writing without a file-positioning call.
+- **SIGPIPE is ignored where a socket is first made.** Its default disposition
+  ends the process with no diagnostic, which is not an outcome an `ErrorCode`
+  can report; dropping that one line ends the case with **exit 141** where the
+  golden has a code, which is the mutation that argues for it. `signal` is ISO
+  C and the alternatives are one system's each.
+- **A library may not declare `struct sockaddr`** (ADR-0185's fifth decision),
+  and sockets are the strongest case for that rule rather than an exception:
+  it is a family of structs, and a program never declares the one it is really
+  using.
+
 **A fallible type is a record Sema writes** (ADR-0176). `T ! E` resolves to
 `record case ok: boolean of true: (val: T); false: (cause: E) end`, built by
 `ResolveFallible` rather than parsed from a synthesised denoter — §6.2.2.10

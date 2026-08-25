@@ -382,7 +382,7 @@ word. The two were one name until ADR-0181 needed them apart.
 
 **The library's two layers.** `lib/` holds the modules written in
 `--std=extended` and usable from it — eight of them, and the layer that could
-exist before the dialect did. `lib/dialect/` holds the twelve that need the
+exist before the dialect did. `lib/dialect/` holds the thirteen that need the
 dialect, and they divide nine to three: nine **bindings**, each a module that
 exports Pascal and keeps its `external` declarations to itself, and three that
 need only the dialect's own features — `PasError`, `PasParse`, and `PasList`,

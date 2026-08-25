@@ -211,3 +211,4 @@ the alternatives that were rejected and why.
 | [0200](0200-the-structural-rows-are-read-and-the-reverse-shape-exists.md) | The structural rows are read, and the reverse shape exists | Accepted |
 | [0201](0201-aliasing-was-answered-too-and-what-is-left-is-two-threads-of-control.md) | Aliasing was answered too, and what is left is two threads of control | Accepted |
 | [0202](0202-a-handle-is-released-by-assigning-nil.md) | A handle is released by assigning nil | Accepted |
+| [0203](0203-a-socket-is-a-handle-and-both-ends-are-strings.md) | A socket is a handle, and both ends are strings | Accepted |
