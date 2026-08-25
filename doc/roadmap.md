@@ -16,6 +16,7 @@ decide about, and the day it is decided it moves there.
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
 | [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the three things the handle and the socket left open behind them |
+| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, and the small thing it needs first |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the two oracles still worth building |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
@@ -173,6 +174,68 @@ actually bites*. It did not bite there. It bites one level further in, at a
 struct member that is a pointer, and the reason is worth stating in general:
 **an ownership question is only a question while something holds the address.**
 Each of the four was answered by arranging for nothing to.
+
+---
+
+## The program that would judge the language
+
+**A text-mode IDE in Turbo Pascal's mould, written in Afterschool Pascal and
+for it**: an editor, a menu bar, a compile-and-run key, and an error list that
+takes you to the line. The artefact that made Pascal practical on a machine
+with 64K, rebuilt on what this dialect now has.
+
+It is not proposed as a feature and it is not part of the compiler. It is
+proposed as **the caller**, and the reason is ADR-0116's rule taken as far as
+it goes. Every feature since ADR-0117 has had to be demanded by something, and
+the discipline has held — the one facility that was designed rather than
+demanded did not survive contact, and `take` (ADR-0182), `h := nil` (ADR-0202)
+and the element walk (ADR-0199) were each shaped by the client written beside
+them, sometimes into a different feature than the one that was set out to be
+built. But every client so far has been a **library module or a test case**,
+and those are small, single-purpose, and written by whoever was already holding
+the feature. None of them can answer the question ADR-0109's goal is actually
+about.
+
+**What it measures is usability, and nothing here measures usability.** The
+gates say whether the compiler is correct. The specification says what the
+language is. `tests/spec/` says a clause is honoured. Not one of them can say
+whether a program large enough to get tired inside is *pleasant* to write in
+this dialect — where the boilerplate collects, which of the three affine kinds
+gets in the way, whether `T ! E` and `try` still read well at depth, whether a
+module's export list is a help or a chore at the fortieth import, what one
+reaches for and finds missing at the moment of reaching. Those are answered by
+writing something big, and by nothing else.
+
+**Why Turbo Pascal's shape and not another.** [The open questions](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+names the other Pascals as an authority available wherever one of them has
+already answered a question this dialect is asking, and this is that argument
+at the scale of a whole program: a Pascal programmer arriving here already
+knows that IDE, so it comes with an answer key. Where something is harder to
+write here than it was there, that is a **finding** and not a matter of taste.
+It is not a proposal to adopt Turbo Pascal's *language* — the dialect contains
+ISO/IEC 10206:1991 and goes on doing so (ADR-0117).
+
+**What is already in hand**, which is more than one would guess: `PasStream`
+and `PasFile` for the files, `PasProcess.Capture` for invoking `pascalc`,
+`PasParse` for reading `file:line:col: error:` back off it, `PasVector`,
+`PasList` and `PasMap` for the tables, `owned ^T` and `take` for an edit
+buffer and an undo stack with a constant-time operation (ADR-0181, ADR-0182),
+and `utf8(n)` for the content — which would be the text model's first client
+outside a test, an editor that counts a family emoji as one column being
+exactly what AP 6.4.15 was for.
+
+**What is missing, and the first of it is small.** There is **no terminal
+control anywhere in this tree**: no `termios`, no `isatty`, no way to read a
+key without waiting for a line, no cursor addressing, no window size. An IDE
+cannot start without it, and the shape is one ADR-0186 already decided — a
+`pasx_` binding in `runtime/pasrt_posix.c`, bounded by its headers, with
+`<termios.h>` joining that catalogue. Small, with an obvious client, and where
+this would begin.
+
+Everything after that is unknown on purpose. **The list of what an IDE demands
+is the product of writing one**, and enumerating it here would be designing
+features without a caller — which is the practice this entry exists to serve
+rather than to break.
 
 ---
 
