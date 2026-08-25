@@ -30250,8 +30250,15 @@ begin
   { A string is produced from the required schema, so it would otherwise take
     the tuple-comparison path below -- and must not: 6.4.6 f) makes two
     capacities *compatible*, and the check that matters is the value's length
-    against the destination's capacity, which the store makes. }
-  if IsStringType(t) then begin
+    against the destination's capacity, which the store makes.
+
+    A text is produced from a required schema too (AP 6.4.15.1) and 6.4.15.5
+    makes its capacities compatible the same way, so it joins this arm. Left
+    out, `t := s` between a schematic `var t: utf8` and a `string` compared
+    the *string's* capacity against the text's and trapped -- the tuple check
+    reads the destination's schema and does not ask whether the source was
+    produced from the same one. }
+  if IsStringType(t) or IsText(t) then begin
     HeapHeader(s^.asTarget, hdr);
     EmitStringStore(dst, t, s^.asValue, hdr)
   end

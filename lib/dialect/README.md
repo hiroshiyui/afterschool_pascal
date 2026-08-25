@@ -1,6 +1,6 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These eleven modules are written in `--std=afterschool` and are the only part of
+These twelve modules are written in `--std=afterschool` and are the only part of
 this repository that reaches outside the program: the environment, the file
 system, file descriptors, `errno`, and the C functions behind them.
 
@@ -23,11 +23,11 @@ No — the routine acts on the world and either succeeds or does not:
 function Remove(path: PathName): ErrorCode;
 ```
 
-**`ErrorCode`.** `errNone` is success. Eighteen exported routines take this
+**`ErrorCode`.** `errNone` is success. Nineteen exported routines take this
 shape: `Define`, `Undefine`, `Remove`, `Rename`, `MakeDirectory`,
 `RemoveDirectory`, `Close`, `WriteAll`, `WriteText`, `PasStream`'s `OpenRead`,
-`OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush`, and `PasDir`'s
-`Open`, `Next` and `List` — the four `Open`s included, because the stream or
+`OpenWrite`, `OpenAppend`, `WriteText`, `WriteLine` and `Flush`, `PasDir`'s
+`Open`, `Next` and `List`, and `PasUnicode`'s `ToText` — the four `Open`s included, because the stream or
 directory they answer goes into the `var` parameter and what is left to return
 is whether the world refused.
 
@@ -118,7 +118,7 @@ whoever lent it, the kernel says `ssize_t`. A parameter is where that is exactly
 right — passing a slice *is* the caller's ownership written down. A result has
 no owner, so a boundary shape there is the boundary leaking into your interface.
 
-**Convert at the first opportunity**, which is what these eleven modules already
+**Convert at the first opportunity**, which is what these twelve modules already
 do:
 
 - `o^` after a `= nil` test, and the value copied out — `PasEnv.LookupOr`,

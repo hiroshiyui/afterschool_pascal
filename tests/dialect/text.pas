@@ -20,6 +20,10 @@
 program text(output);
 
 type Name = utf8(64);
+     { The field is `title` and not `name`: 6.4.3.3 makes a record type a
+       region, so a field spelled like the type would shadow it inside this
+       very denoter (ADR-0112). }
+     Tagged = record title: Name; n: integer end;
 
 var
   composed, decomposed, hangul, hangulJamo, family, flag: Name;
@@ -28,6 +32,8 @@ var
     table `string` has always used, reached by the same route. }
   again: utf8(64);
   bytes: string(64);
+  opt: ?Name;
+  rec: Tagged;
 
 { 6.4.15.1 gives `utf8` the same one discriminant `string` has and in the same
   position, so a schematic formal reads its capacity from the actual -- the
@@ -78,6 +84,22 @@ begin
   writeln;
   writeln('|', family:5, '|');
   writeln('|', composed:8, '|');
+
+  { A text nested in something else. Both of these reach the store through a
+    different door than an assignment-statement does -- an optional writes its
+    value half (ADR-0123) and a structured-value builds its component where the
+    variable already is (ADR-0061) -- and 6.4.15.2's invariant has to be
+    established at each. There is nothing special about a text here, which is
+    the point: it is a value with a capacity, so it goes wherever one goes. }
+  writeln;
+  opt := 'hi';
+  if opt <> nil then begin
+    bytes := opt^;
+    writeln('in an optional  = ', bytes, '  elements ', length(opt^):1)
+  end;
+  rec := Tagged[title: composed; n: 7];
+  bytes := rec.title;
+  writeln('in a record     = ', bytes, '  n ', rec.n:1);
 
   { The way back out: bytes from a text are well-formed by 6.4.15.2, so a
     variable-string takes them with nothing to check. }

@@ -1,0 +1,19 @@
+plain      -> no error
+composed   -> no error
+decomposed -> no error
+too long   -> no room left
+bad bytes  -> not of the expected form
+after failures t = kept (no error)
+
+  scalar  1 =    104  encoded h
+  scalar  2 =    101  encoded e
+  scalar  3 =    769  encoded ́
+  scalar  4 =    108  encoded l
+  scalar  5 =    108  encoded l
+  scalar  6 =    111  encoded o
+scalars    = 6
+ill-formed = -1
+
+family: elements 1  scalars 5  bytes 18
+  and it is one element
+the language can say the first number and not the second

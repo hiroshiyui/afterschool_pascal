@@ -535,6 +535,13 @@ long long pas_text_next(const char *s, long long n, long long at) {
   return n;
 }
 
+long long pas_text_scalar_at(const char *s, long long n, long long at,
+                             unsigned int *out) {
+  if (at < 0 || at >= n || out == NULL)
+    return 0;
+  return u8dec((const unsigned char *)s, n, at, out);
+}
+
 long long pas_text_count(const char *s, long long n) {
   long long i = 0, count = 0;
   while (i < n) {

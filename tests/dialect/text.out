@@ -18,4 +18,7 @@ again = composed       TRUE
 |    👨‍👩‍👧|
 |   héllo|
 
+in an optional  = hi  elements 2
+in a record     = héllo  n 7
+
 round trip héllo

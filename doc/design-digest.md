@@ -2820,3 +2820,35 @@ are inverses and that is how they are tested.
   `long long` `pas_text_next`. Every `pas_text_*` entry point is: the emitted
   code speaks i32, and passing an i32 where a `long long` is declared is an ABI
   mismatch the IR verifier does not catch.
+
+**`PasUnicode`, and what a library may do that the language may not**
+(ADR-0193). AP 6.4.15.5 makes ill-formed bytes an *error* that stops the
+program, which is right for a program's own literals and wrong for bytes off a
+socket. `ToText(s, var t): ErrorCode` is the door for the second: `errSyntax`
+for bytes that are not UTF-8, `errFull` for a value whose normal form will not
+fit, and nothing assigned unless it succeeds.
+
+- **It is a binding, not an implementation** — `lib/dialect/README.md`'s term.
+  Both `ToText` and `NextScalar` go to `pasx_` runtime routines, because a
+  UTF-8 decoder in Pascal would be a second reading of The Unicode Standard's
+  table 3-7, and that table needs care for exactly the reason a second reading
+  would get it wrong: an overlong encoding, a surrogate and a code point above
+  the range each have a lead byte that looks ordinary.
+- **Encoding *is* written in Pascal**, and the asymmetry is the decision:
+  encoding is unambiguous arithmetic with one rejection, and table 3-7 is a
+  table about decoding. A duplicate reading is refused where it could be wrong
+  and allowed where it cannot.
+- **The scalar view is over `string` and not over `utf8`.** A program that
+  wants bytes holds a string (AP 6.4.15.8 NOTE), and a text crosses no foreign
+  boundary — so `ToText` is the bridge and everything below it is bytes.
+- **The fit cannot be computed from the byte counts.** Normal form can be
+  longer than its source, so `pasx_text_check` normalises to answer, and it
+  answers the two failures separately because a caller can act on which.
+- **A third guard of the same shape turned up here**, and that is the entry
+  worth remembering: `EmitAssign` selects the string store with
+  `IsStringType`, so a text target fell through to the schema
+  tuple-comparison, which compared a *string's* capacity against a text's and
+  stopped the program. With `IsMemory` (ADR-0191) and the codegen comparison
+  dispatch that is three in three increments, none of them a case-statement
+  and so none of them visible to `kind-exhaustive`. All three were found by
+  writing a client rather than by a gate.

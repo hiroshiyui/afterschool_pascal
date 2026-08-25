@@ -71,6 +71,16 @@ long long pas_text_nfc(const char *s, long long n, char *dst, long long cap);
  * bad input still terminates. */
 long long pas_text_next(const char *s, long long n, long long at);
 
+/* One scalar value at byte offset `at`. Answers the bytes it occupies, or 0
+ * when the sequence there is not well-formed; the value goes to *out.
+ *
+ * Exported so that a library binding can decode without a second reading of
+ * The Unicode Standard's table 3-7 (ADR-0193). Nothing in the language calls
+ * it: AP 6.4.15 has no scalar view, and a program that wants one goes through
+ * PasUnicode. */
+long long pas_text_scalar_at(const char *s, long long n, long long at,
+                             unsigned int *out);
+
 /* How many extended grapheme clusters s[0..n) has -- AP 6.4.15.8's `length`,
  * and not a constant-time operation (that clause's NOTE 11). */
 long long pas_text_count(const char *s, long long n);

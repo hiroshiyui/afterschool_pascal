@@ -2348,6 +2348,79 @@ char *pas_text_concat(const char *a, int la, const char *b, int lb) {
   return result;
 }
 
+/* --- what a library may bind (ADR-0131) ----------------------------------
+ *
+ * `pas_` is what the code generator emits calls to and what
+ * ReservedForeignName refuses; `pasx_` is what a *program* may name in an
+ * `external` directive. The two below are `pasx_` because AP 6.4.15 leaves two
+ * things to a library and neither can be written in Pascal without a second
+ * copy of a rule this runtime already holds.
+ *
+ * Both take a NUL-terminated string, which is what a `string` value parameter
+ * becomes at the boundary (ADR-0122). A text containing U+0000 therefore
+ * cannot reach them -- the marshalling traps on chr(0) rather than truncating
+ * -- which is the same restriction every foreign string call here has.
+ */
+
+/* Would these bytes make a text of capacity `cap`?
+ *
+ *   0  yes
+ *   1  they are not well-formed UTF-8
+ *   2  they are, and their normal form does not fit
+ *
+ * This is what lets a library offer a conversion that *reports* where
+ * 6.4.15.5's assignment stops the program. The distinction matters to a
+ * caller: one is a fault in the data and the other in the capacity it chose
+ * (ADR-0193). */
+int pasx_text_check(const char *src, int cap) {
+  long long len, n;
+  char *scratch;
+
+  if (src == NULL)
+    return 1;
+  len = (long long)strlen(src);
+  if (pas_text_validate(src, len) >= 0)
+    return 1;
+
+  /* Normal form is measured and not guessed. NFC can be longer than its
+   * source -- a singleton decomposition mapping to a wider character -- so
+   * comparing the byte counts would answer wrongly in both directions. The
+   * arena is the caller's statement's (ADR-0111). */
+  scratch = pas_str_temp((int)(len * 3 + 4));
+  n = pas_text_nfc(src, len, scratch, len * 3 + 4);
+  if (n < 0)
+    return 1;
+  if (n > (long long)cap)
+    return 2;
+  return 0;
+}
+
+/* The scalar value beginning at byte `at` (1-based, as a Pascal string is
+ * indexed), and the 1-based offset of the next one -- 0 when `at` is past the
+ * end or the bytes there are ill-formed.
+ *
+ * A decoder in Pascal would be a second reading of The Unicode Standard's
+ * table 3-7, and the whole reason that table needs care is that an overlong
+ * encoding, a surrogate and a code point above the range all have a lead byte
+ * that looks ordinary. One reading, in one place. */
+int pasx_text_scalar(const char *src, int at, int *cp) {
+  long long len, i;
+  unsigned int v;
+  int k;
+
+  if (src == NULL || cp == NULL)
+    return 0;
+  len = (long long)strlen(src);
+  i = (long long)at - 1;
+  if (at < 1 || i >= len)
+    return 0;
+  k = pas_text_scalar_at(src, len, i, &v);
+  if (k == 0)
+    return 0;
+  *cp = (int)v;
+  return at + k;
+}
+
 /* Where the element beginning at `at` ends, in bytes.
  *
  * A wrapper on pasrt_unicode.c's own, and it exists for the width: that file
