@@ -507,16 +507,20 @@ type Dir = handle external 'closedir';
 function ExtOpendir(path: string): Dir; external 'opendir';
 var d: Dir;
 begin
-  d := ExtOpendir('.');          { the one assignment a handle has }
-  if d <> nil then writeln('open')
-end.                             { closedir runs here, as a file closes }
+  d := ExtOpendir('.');          { how a handle acquires a value }
+  if d <> nil then writeln('open');
+  d := nil                       { closedir runs here instead }
+end.                             { ...or here, if it still held one }
 ```
 
 It has a file variable's rules, through the same predicate: no copy, no
 comparison but with `nil`, released when the variable dies — at the block's
 end, on a `goto` out of it, on `halt`, on `dispose`. Assigning another value
-releases the old one first. That assignment is the **only** place such a call
-may stand — anywhere else there would be nothing to own what it answered —
+releases the old one first, and `d := nil` releases what it holds and leaves it
+empty — which is how a library closes a stream before the block ends. That
+assigns no *value*: `nil` is the empty state, so a handle is still acquired
+from an external function and from nowhere else. That call is the **only**
+place such a call may stand — anywhere else there would be nothing to own what it answered —
 and a parameterless one written as a bare name is that call, in the one
 position it may stand and in none of the others. A handle may be lent to a
 foreign routine as a value parameter, and lending an empty one stops the

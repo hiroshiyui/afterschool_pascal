@@ -129,13 +129,13 @@ a pointer, which is a second name for storage and cannot be copied away.
 **What building on the handle found.** Two modules were written over
 AP 6.4.12 the day it landed, and each met one edge of the clause:
 
-- **There is no `h := nil`.** 6.4.12.2 gives a handle exactly one assignment,
-  from an external function of its type, so a program cannot close a stream
-  before its block ends except by opening another. `PasStream.Close` does it
-  with `fopen` of the empty path — an assignment whose answer is always null,
-  costing a refused system call and a stale `errno`. A second assignment form
-  is one Sema arm and one `pas_handle_set` with a null value; it waits for a
-  second module to want it.
+- ~~**There is no `h := nil`.**~~ **Done** (ADR-0202). It was one Sema arm and
+  no lowering, exactly as this bullet predicted — `pas_handle_set` already
+  released what the slot held, and `nil` is a null pointer, so the existing
+  emission of the first form *is* the second when the value is null. What made
+  it land was the second caller: `PasDir` wanted it on the day it was written,
+  and both modules had been closing a stream by opening a path they knew would
+  fail, for a refused system call and a stale `errno` apiece.
 - **A closer's result is discarded**, 6.4.12.1 says, and `pclose`'s result is
   the child's wait status. `PasProcess.Capture` gets the exit code through
   the stream instead — the shell prints `$?` after the output, behind a marker
