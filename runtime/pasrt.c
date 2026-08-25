@@ -2297,6 +2297,99 @@ void pas_text_store(void *dst, int cap, const char *src, int len) {
   memmove((char *)dst + PAS_STR_LENGTH_BYTES, scratch, (size_t)n);
 }
 
+/* AP 6.4.15.7's concatenation.
+ *
+ * The result is the Normalization Form C of the *concatenation of the scalar
+ * sequences* and not the concatenation of the bytes, and that clause says so
+ * normatively rather than as advice: normal form is not preserved by joining.
+ * Where the left operand ends in a base character and the right begins with a
+ * combining mark, the two compose across the join, and appending the bytes
+ * would give a value that is not in normal form and that compares unequal to
+ * the same text written whole.
+ *
+ * So this cannot return a length the compiler computes, the way
+ * pas_str_concat does under 6.8.3.6's "the sum of the length of a and the
+ * length of b". What it returns is a text *value* in the arena -- a length
+ * word and the bytes -- which is the representation a text variable already
+ * has, so the emitted code reads it with the same two getelementptrs it uses
+ * for a variable. */
+char *pas_text_concat(const char *a, int la, const char *b, int lb) {
+  char *joined, *result;
+  long long n;
+  int len32;
+
+  if (la < 0) la = 0;
+  if (lb < 0) lb = 0;
+
+  /* The length word is loaded as an i32, so the block has to be aligned for
+   * one. The arena hands out whatever offset it has reached, so the padding
+   * is burned here rather than assumed away. */
+  while ((pas_str_at % 4) != 0)
+    (void)pas_str_temp(1);
+
+  joined = pas_str_temp(la + lb);
+  memcpy(joined, a, (size_t)la);
+  memcpy(joined + la, b, (size_t)lb);
+
+  if (pas_text_validate(joined, (long long)(la + lb)) >= 0)
+    pas_runtime_error("text: a value joined to a text is not well-formed "
+                      "UTF-8");
+
+  /* Normal form can only shorten a concatenation of two values already in it
+   * -- composition removes code points and never adds any -- so la + lb is an
+   * upper bound on the result and no second pass is needed to size it. */
+  result = pas_str_temp(PAS_STR_LENGTH_BYTES + la + lb);
+  n = pas_text_nfc(joined, (long long)(la + lb),
+                   result + PAS_STR_LENGTH_BYTES, (long long)(la + lb));
+  if (n < 0)
+    pas_runtime_error("text: two values could not be joined");
+  len32 = (int)n;
+  memcpy(result, &len32, sizeof len32);
+  return result;
+}
+
+/* Where the element beginning at `at` ends, in bytes.
+ *
+ * A wrapper on pasrt_unicode.c's own, and it exists for the width: that file
+ * speaks `long long` because it is a library over the whole of a text, and the
+ * emitted code speaks i32 because every length in this compiler is one.
+ * Passing an i32 to a `long long` parameter would be an ABI mismatch the IR
+ * verifier does not catch, so the narrowing happens here where C can see both
+ * types. Every other pas_text_* entry point is an int wrapper for the same
+ * reason. */
+int pas_text_boundary(const char *s, int len, int at) {
+  if (len < 0)
+    len = 0;
+  if (at < 0)
+    at = 0;
+  return (int)pas_text_next(s, len, at);
+}
+
+/* AP 6.4.15.9's iteration: one element into the control-variable.
+ *
+ * Unlike pas_text_store this does **not** normalise, and does not touch the
+ * arena. Both follow from where it is called: the source is a slice of a value
+ * already in Normalization Form C, cut at a grapheme cluster boundary, and
+ * such a slice is itself in normal form. Every character that composes onto
+ * what precedes it is Extend or SpacingMark, and UAX #29's GB9 and GB9a make
+ * neither of those a boundary -- so a boundary never falls between a base
+ * character and a mark that would have composed with it.
+ *
+ * Not normalising is what makes this safe to call in a loop. pas_text_store
+ * takes arena scratch, and the arena is released once per *statement*
+ * (ADR-0111): an iteration that allocated would grow it once per element and
+ * a long text would exhaust it, which is the ring that wrapped in silence
+ * before. tests/dialect/text_for.pas joins the elements back together and
+ * requires the original, which is the property this comment claims. */
+void pas_text_take(void *dst, int cap, const char *src, int len) {
+  if (len < 0)
+    len = 0;
+  if (len > cap)
+    pas_runtime_error("text: an element does not fit the control variable");
+  *(int *)dst = len;
+  memmove((char *)dst + PAS_STR_LENGTH_BYTES, src, (size_t)len);
+}
+
 /* AP 6.4.15.8's `length`: the number of extended grapheme clusters, which is
  * not the number of bytes and is not a constant-time question (that clause's
  * NOTE on both). */

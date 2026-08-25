@@ -1,0 +1,16 @@
+a          bytes  2   b bytes  5
+a + b      bytes  6   elements  5
+joined     = héllo
+composed?    TRUE
+three      = héllo!
+literal    = xhe
+  element  1  bytes  1  = h
+  element  2  bytes  2  = é
+  element  3  bytes  1  = l
+  element  4  bytes  1  = l
+  element  5  bytes  1  = o
+  element  6  bytes  1  =  
+  element  7  bytes 18  = 👨‍👩‍👧
+elements   = 7
+rejoined   = héllo 👨‍👩‍👧
+round trip   TRUE

@@ -2005,6 +2005,11 @@ var
     would make every predicate that names it test the mode as well. }
   int64Type: typePtr;
   complexType, canonStringType, bindingTy, timeStampType: typePtr;
+  { AP 6.4.15.7's result: a text-type with no capacity, as
+    canonStringType is a variable-string with none. What `+` yields has
+    to fit any target, so it carries no capacity to exceed and the
+    store is where 6.4.15.5's fit is checked. }
+  canonTextType: typePtr;
   emptySetType: typePtr;
   { 6.4.3.3.3's required schema `string`. Kept because a type produced from it
     has to be interned by (schema, tuple) -- 6.4.8 -- and BindingType's `name`
@@ -14671,7 +14676,24 @@ begin
         string. char has no arithmetic `+` of its own in table 3, so nothing is
         taken away by reading the table as it is written. }
       opAdd, opSub, opMul:
-        if (b^.bnOp = opAdd) and (HasExtended(langStd)) and
+        { AP 6.4.15.7, taken before the string case because a text is not a
+          string: `+` is admitted where either operand is a text and the other
+          is a text or a character-string, and yields a text. A *string*
+          operand is refused for 6.4.15.6's reason -- one side normalised and
+          the other not is a wrong answer rather than a slow one. }
+        if (b^.bnOp = opAdd) and (IsText(l) or IsText(r)) then
+          if (IsText(l) or IsStringOrChar(l)) and
+             (IsText(r) or IsStringOrChar(r)) and
+             not IsVarString(l) and not IsVarString(r) then
+            b^.ntype := canonTextType
+          else begin
+            ErrorAt(b^.line, b^.col);
+            write('a text can be joined only to a text or to a literal: ');
+            write('a string is not in normal form, so joining it would need ');
+            writeln('a conversion this operator cannot report on');
+            b^.ntype := canonTextType
+          end
+        else if (b^.bnOp = opAdd) and (HasExtended(langStd)) and
            IsStringOrChar(l) and IsStringOrChar(r) then
           b^.ntype := canonStringType
         else if not IsArith(l) or not IsArith(r) then begin
@@ -18844,7 +18866,20 @@ begin
                     'control variable of a for statement')
           end
         end;
-        if (s^.frVar^.ntype <> nil) and not IsOrdinal(s^.frVar^.ntype) then
+        { AP 6.4.15.9 needs the operand's type before the control variable can
+          be judged -- a text admits a text where 6.9.3.9.1 admits only an
+          ordinal -- so the iteration-clause is checked first. It is checked
+          once: the arm below no longer calls CheckExpr. }
+        if s^.frSet <> nil then CheckExpr(s^.frSet);
+        { 6.9.3.9.1: "The control-variable shall possess an ordinal-type."
+          AP 6.4.15.9 is the one exception and it is a *different* iteration
+          rather than a relaxation of this one: an element of a text is an
+          extended grapheme cluster, which is a sequence of characters and has
+          no ordinal, so the control variable is a text and the check below
+          asks that instead. Keyed on the operand, because the control variable
+          is looked at before the operand's type is known to be either. }
+        if (s^.frVar^.ntype <> nil) and not IsOrdinal(s^.frVar^.ntype) and
+           not ((s^.frSet <> nil) and IsText(s^.frSet^.ntype)) then
         begin
           ErrorAt(s^.frVar^.line, s^.frVar^.col);
           writeln('the control variable of a for statement must be an ',
@@ -18878,10 +18913,31 @@ begin
             unpacked-canonical-set-of-T-type or a packed-canonical-set-of-T-
             type. The type of the control-variable of the for-statement shall
             be compatible with T." }
-          CheckExpr(s^.frSet);
           st := s^.frSet^.ntype;
-          if (st <> nil) and not IsSet(st) then begin
+          { AP 6.4.15.9: the same syntax over a text-type, and the operand's
+            type is what tells the two apart -- ask the symbol, not the parser
+            (ADR-0140). No word-symbol is reserved and a conforming program
+            that writes `for v in s` goes on getting 6.9.3.9.3's set. }
+          if (st <> nil) and IsText(st) then begin
+            if (s^.frVar^.ntype <> nil) and not IsText(s^.frVar^.ntype) then
+            begin
+              ErrorAt(s^.frVar^.line, s^.frVar^.col);
+              write('the control variable of a for statement over a text ');
+              write('must be a text: an element is an extended grapheme ');
+              write('cluster and so is a sequence of characters, not one -- ');
+              write('found ');
+              WriteTypeName(s^.frVar^.ntype);
+              writeln
+            end
+          end
+          else if (st <> nil) and not IsSet(st) then begin
             ErrorAt(s^.frSet^.line, s^.frSet^.col);
+            { The wording names a set only, and deliberately. This message is
+              what a *conformance* mode says, where no text-type exists; a
+              dialect diagnostic mentioning one here would put a feature of
+              this dialect into ISO 7185's mouth, which is the opposite of
+              ADR-0154's rule. In the dialect a text operand never reaches
+              this arm -- the one above takes it. }
             write('a for statement iterates over a set, not over ');
             WriteTypeName(st);
             writeln
@@ -22288,6 +22344,9 @@ begin
     capacity (hi is negative) because it has no storage: a value is only ever
     on its way into something that does, and 6.4.6 checks it against *that*
     capacity. No type-denoter produces one, so no variable has it. }
+  canonTextType := NewType(tyText);
+  canonTextType^.lo := 1;
+  canonTextType^.hi := -1;
   canonStringType := NewType(tyString);
   canonStringType^.lo := 1;
   canonStringType^.hi := -1;
@@ -27752,7 +27811,44 @@ begin
     deliberately does not see through. }
   st := Underlying(e^.ntype);
   { A concatenation, and the one operation that needs storage. }
-  if (e^.kind = nkBinary) and (e^.bnOp = opAdd) and IsStringType(st) then begin
+  { AP 6.4.15.7. Unlike 6.8.3.6's concatenation the length is not the sum of
+    the two -- normal form can shorten a join, `e` and a combining acute
+    becoming one composed character -- so the runtime returns a text *value*
+    in the arena, a length word and the bytes, and this reads it with the same
+    two getelementptrs a text variable is read with. }
+  if (e^.kind = nkBinary) and (e^.bnOp = opAdd) and IsText(st) then begin
+    EmitString(e^.bnLhs, ad, al);
+    EmitString(e^.bnRhs, bd, bl);
+    strTemps := strTemps + 1;   { ADR-0111: this statement must release }
+    Def(addr);
+    write(ircode, 'call ptr @pas_text_concat(ptr ');
+    PutOp(ad);
+    write(ircode, ', i32 ');
+    PutOp(al);
+    write(ircode, ', ptr ');
+    PutOp(bd);
+    write(ircode, ', i32 ');
+    PutOp(bl);
+    writeln(ircode, ')');
+    Def(at_);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(canonTextType);
+    write(ircode, ', ptr ');
+    PutOp(addr);
+    writeln(ircode, ', i32 0, i32 0');
+    Def(len);
+    write(ircode, 'load i32, ptr ');
+    PutOp(at_);
+    writeln(ircode);
+    Def(data);
+    write(ircode, 'getelementptr inbounds ');
+    PutLlType(canonTextType);
+    write(ircode, ', ptr ');
+    PutOp(addr);
+    writeln(ircode, ', i32 0, i32 1')
+  end
+  else if (e^.kind = nkBinary) and (e^.bnOp = opAdd) and IsStringType(st) then
+  begin
     EmitString(e^.bnLhs, ad, al);
     EmitString(e^.bnRhs, bd, bl);
     strTemps := strTemps + 1;   { ADR-0111: this statement must release }
@@ -28206,7 +28302,7 @@ begin
           IsOptional(Underlying(e^.bnRhs^.ntype)) then
     EmitOptionalTest(e, v)
   { 6.8.3.6's concatenation, which is a value and not a comparison. }
-  else if (e^.bnOp = opAdd) and IsStringType(e^.ntype) then
+  else if (e^.bnOp = opAdd) and (IsStringType(e^.ntype) or IsText(e^.ntype)) then
     EmitStringValue(e, v)
   { 6.8.3.5's padded comparison, whenever either side is a string and the
     lengths are not both statically equal char arrays -- the ISO 7185 path is
@@ -31405,6 +31501,101 @@ end;
   The order is ascending, and the standard leaves it open: 6.9.3.9.3 makes it
   "implementation-dependent", so this is a documented choice rather than a
   requirement. Ascending is what a walk over the bits gives. }
+{ AP 6.4.15.9's iteration. A loop of its own rather than an arm inside
+  EmitForIn, because nothing is shared: a set walks its base type's ordinals
+  and tests a bit, and this walks byte offsets and asks the runtime where the
+  next element ends.
+
+  What *is* shared is the frame slot Sema gave the statement. It holds a byte
+  offset here rather than an ordinal, and it is a frame slot for the same
+  reason: an alloca is emitted wherever the sequential emitter has reached, so
+  a nested one would be claimed per iteration of the outer loop and exhaust
+  the stack at -O0 (ADR-0102). }
+procedure EmitForInText(s: nodePtr);
+var slot, data, len, counter, at_, nextOp, elem, test, cap, hdr: str;
+    t: typePtr; condB, bodyB, endB: integer;
+begin
+  EmitAddress(s^.frVar, slot);
+  t := s^.frVar^.ntype;
+  { "shall be evaluated prior to the first execution" -- once, before the
+    loop, and the pair is a pair of SSA values defined here, so it dominates
+    every block below. Where the operand took arena storage (a concatenation)
+    that storage is this statement's and outlives the loop, which is why the
+    body may not release the arena. }
+  EmitString(s^.frSet, data, len);
+  StrClear(hdr);
+  StringCapacity(t, hdr, cap);
+
+  FrameSlot(s^.frCounter, counter);
+  write(ircode, '  store i32 0, ptr ');
+  PutOp(counter);
+  writeln(ircode);
+
+  condB := NewBlock;
+  bodyB := NewBlock;
+  endB := NewBlock;
+  writeln(ircode, '  br label %L', condB:1);
+
+  StartBlock(condB);
+  Def(at_);
+  write(ircode, 'load i32, ptr ');
+  PutOp(counter);
+  writeln(ircode);
+  Def(test);
+  write(ircode, 'icmp slt i32 ');
+  PutOp(at_);
+  write(ircode, ', ');
+  PutOp(len);
+  writeln(ircode);
+  write(ircode, '  br i1 ');
+  PutOp(test);
+  writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
+
+  StartBlock(bodyB);
+  { Where this element ends. The runtime answers with a byte offset, which is
+    the only unit a boundary has -- an element has no ordinal to count in. }
+  Def(nextOp);
+  write(ircode, 'call i32 @pas_text_boundary(ptr ');
+  PutOp(data);
+  write(ircode, ', i32 ');
+  PutOp(len);
+  write(ircode, ', i32 ');
+  PutOp(at_);
+  writeln(ircode, ')');
+  Def(elem);
+  write(ircode, 'getelementptr inbounds i8, ptr ');
+  PutOp(data);
+  write(ircode, ', i32 ');
+  PutOp(at_);
+  writeln(ircode);
+  Def(test);
+  write(ircode, 'sub i32 ');
+  PutOp(nextOp);
+  write(ircode, ', ');
+  PutOp(at_);
+  writeln(ircode);
+  { pas_text_take and not pas_text_store: the element is already in normal
+    form and this is inside a loop, so it must take nothing from the arena. }
+  write(ircode, '  call void @pas_text_take(ptr ');
+  PutOp(slot);
+  write(ircode, ', i32 ');
+  PutOp(cap);
+  write(ircode, ', ptr ');
+  PutOp(elem);
+  write(ircode, ', i32 ');
+  PutOp(test);
+  writeln(ircode, ')');
+  write(ircode, '  store i32 ');
+  PutOp(nextOp);
+  write(ircode, ', ptr ');
+  PutOp(counter);
+  writeln(ircode);
+  EmitStmt(s^.frBody);
+  writeln(ircode, '  br label %L', condB:1);
+
+  StartBlock(endB)
+end;
+
 procedure EmitForIn(s: nodePtr);
 var slot, set_, counter, i, hiOp, oneOp, zeroOp, test, widened: str;
     shifted, bit, hit, now, next: str;
@@ -31565,7 +31756,8 @@ var slot, from, toV, cur, test, now, same, next: str;
     t: typePtr; condB, bodyB, stepB, endB, checkB, skipB: integer;
     unsignedOrdinal: boolean;
 begin
-  if s^.frSet <> nil then EmitForIn(s)
+  if s^.frSet <> nil then
+    if IsText(s^.frSet^.ntype) then EmitForInText(s) else EmitForIn(s)
   else begin
   EmitAddress(s^.frVar, slot);
   t := s^.frVar^.ntype;
@@ -33168,6 +33360,9 @@ begin
     nothing calls costs a line of IR and no code. }
   writeln(ircode, 'declare void @pas_text_store(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare i32 @pas_text_length(ptr, i32)');
+  writeln(ircode, 'declare ptr @pas_text_concat(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare void @pas_text_take(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_text_boundary(ptr, i32, i32)');
   writeln(ircode, 'declare i32 @pas_text_cmp(ptr, i32, ptr, i32, i32)');
   writeln(ircode, 'declare void @pas_write_text(ptr, ptr, i32, i32)');
   writeln(ircode, 'declare void @pas_str_store_char(ptr, ptr, i32)');

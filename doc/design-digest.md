@@ -2780,3 +2780,43 @@ interns exactly as `string(n)` does and §6.1.3 lets any program shadow it.
   of decomposed `é` and six of composed are one value of five elements; three
   Hangul jamo compose to one syllable; a ZWJ family emoji is one element of
   eighteen bytes. None of those numbers was chosen here.
+
+**Joining and walking a text** (ADR-0192, AP 6.4.15.7 and 6.4.15.9). The two
+are inverses and that is how they are tested.
+
+- **`+` cannot return a length the compiler computes.** §6.8.3.6 makes a string
+  concatenation's length the sum of the two, so `pas_str_concat` returns bytes
+  and the emitter adds. Normal form is not preserved by joining — a base
+  character at the end of the left operand and a combining mark at the start of
+  the right compose across the join — so the result is *shorter* than the sum.
+  `pas_text_concat` therefore returns a text **value** in the arena, a length
+  word and the bytes, which is the shape a text variable already has and which
+  the emitter reads with the same two getelementptrs.
+- **One pass suffices** because composition removes code points and never adds
+  any, so `la + lb` bounds the result.
+- **The result is a text with no capacity**, as `canonStringType` is a
+  variable-string with none: it must fit any target, and 6.4.15.5's store is
+  where the fit is checked. Everything downstream asks `IsText` and needed
+  nothing.
+- **Iteration does not normalise, and must not.** `pas_text_take` copies the
+  element and checks the fit; `pas_text_store` would take arena scratch, and
+  the arena is released once per *statement* (ADR-0111), so a loop over a long
+  text would exhaust it. Sound because a grapheme cluster boundary is also a
+  boundary of normal form: everything that composes backwards is `Extend` or
+  `SpacingMark`, and GB9 and GB9a make neither a boundary.
+- **That argument is a reading, so it is a property test.**
+  `tests/dialect/text_join.pas` walks a text, joins the elements back and
+  requires the original. It is the one place in the text model whose
+  correctness does not rest on Unicode's own conformance files.
+- **The operand is evaluated once and outlives the loop**, which matters
+  because `for g in a + b` walks arena storage: the pair is SSA values defined
+  before the loop, and the body releases nothing.
+- **A text iteration is told from a set's by the operand's type** (ADR-0140),
+  so `for v in s` over a set is untouched. It cost one reordering: the
+  iteration-clause is now typed *before* the control variable is judged, since
+  §6.9.3.9.1's "shall possess an ordinal-type" has to know whether this is the
+  text form.
+- **`pas_text_boundary` is an `int` wrapper** over `pasrt_unicode.c`'s
+  `long long` `pas_text_next`. Every `pas_text_*` entry point is: the emitted
+  code speaks i32, and passing an i32 where a `long long` is declared is an ABI
+  mismatch the IR verifier does not catch.

@@ -237,10 +237,15 @@ scenario citing it — so the document cannot come to claim, through a passing
 test, that the feature is there.
 
 5.1 is read accordingly: a processor complies when it accepts every program
-this document admits **other than by such a clause**. The list is short and is
-found by searching for the marker; at the time of writing it is 6.4.15.7
-alone — the whole of 6.4.15 was on it, and the increment that built the
-text-type took the rest off (ADR-0190, ADR-0191).
+this document admits **other than by such a clause**. The list is found by
+searching for the marker and **is currently empty**: 6.4.15 was the whole of
+it, and the three increments that built the text model took it off a piece at
+a time (ADR-0190 – ADR-0192).
+
+An empty list is the state this sub-clause expects to be in. It exists so that
+a design may be written down before it is built, which is where the expensive
+mistakes are; ADR-0191 records one such clause that was wrong and was found to
+be wrong only when someone implemented it.
 
 NOTE — This is deliberately not the shape Annex C has. Annex C entries are
 requirements the processor accepts programs under and does not enforce, which
@@ -922,9 +927,8 @@ what a program holds when it means the characters of a text rather than the
 octets carrying them; ISO/IEC 10206:1991 §6.4.3.3's string-types remain what a
 program holds when it means the octets, and are unchanged (ADR-0189).
 
-**Concatenation alone is stated ahead of the processor** (5.6, and 6.4.15.7 is
-the clause): it is not implemented, and neither is the iteration 6.4.15.9
-describes. Everything else here is what `--std=afterschool` does (ADR-0191).
+This clause is implemented in full (ADR-0189 – ADR-0192): what it states is
+what `--std=afterschool` does.
 
 **6.4.15.1 The denoter.** `utf8` shall be a required identifier denoting a
 schema (§6.4.7) of one discriminant, whose identifier shall be `capacity`, as
@@ -1038,6 +1042,14 @@ text-type or is a character-string, and shall yield a text-type.
 
 The result shall be the Normalization Form C of the concatenation of the
 operands' scalar sequences, and **not** the concatenation of their bytes.
+
+The type of the result shall be a text-type having no capacity, as
+§6.8.3.6's canonical-string-type has none: what `+` yields shall fit any
+target, and 6.4.15.5's store is where the capacity is checked.
+
+A *string* operand shall be refused, for 6.4.15.6's reason: one operand in
+normal form and one not would need a conversion, and this operator has nowhere
+to report that it failed.
 
 NOTE 9 — The distinction is normative and is not an optimisation the processor
 may take back. Normalization Form C is not preserved by concatenation: where
@@ -2345,3 +2357,4 @@ nothing but a requirement no processor here could meet.
 | 6.7.7.8 (the record component) | ADR-0187 |
 | 5.6, 6.4.15 | ADR-0189 |
 | 6.4.15.5, 6.4.15.6, 6.4.15.8, 6.4.15.10, Annex B `utf8`, Annex E.11, Annex E.12 | ADR-0191 |
+| 6.4.15.7, 6.4.15.9 (the iteration) | ADR-0192 |

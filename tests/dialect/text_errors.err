@@ -5,6 +5,6 @@
 <source>:26:10: error: only a string can have a substring taken of it, not utf8(32)
 <source>:30:14: error: 'index' needs a string or a char, found utf8(32)
 <source>:31:15: error: 'substr' needs a string or a char, found utf8(32)
-<source>:35:10: error: operator '+' needs numeric operands, found utf8(32) and utf8(32)
-<source>:35:3: error: cannot assign integer to a variable of type utf8(32)
-<source>:39:8: error: a value of type utf8(32) cannot be read
+<source>:36:10: error: a text can be joined only to a text or to a literal: a string is not in normal form, so joining it would need a conversion this operator cannot report on
+<source>:44:7: error: the control variable of a for statement over a text must be a text: an element is an extended grapheme cluster and so is a sequence of characters, not one -- found char
+<source>:48:8: error: a value of type utf8(32) cannot be read

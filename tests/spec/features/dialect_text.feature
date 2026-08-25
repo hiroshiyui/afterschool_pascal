@@ -229,3 +229,75 @@ Feature: Text
       """
       cannot be read
       """
+
+  @afterschool:6.4.15.7
+  Scenario: joining composes across the join, so it is not a byte concatenation
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var a, b: utf8(64); s: string(64);
+      begin
+        a := 'he';
+        b := '́llo';
+        s := a + b;
+        writeln(length(s), ' ', a + b = 'héllo')
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      6 TRUE
+      """
+
+  @afterschool:6.4.15.7
+  Scenario: a string is not an operand of a text concatenation
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var t: utf8(16); s: string(16);
+      begin t := t + s end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      a text can be joined only to a text or to a literal
+      """
+
+  @afterschool:6.4.15.9
+  Scenario: iteration yields elements, and rejoining them gives the original
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var t, g, back: utf8(64); n: integer;
+      begin
+        t := 'héllo';
+        n := 0;
+        back := '';
+        for g in t do
+          begin n := n + 1; back := back + g end;
+        writeln(n, ' ', back = t)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      5 TRUE
+      """
+
+  @afterschool:6.4.15.9
+  Scenario: the control variable of an iteration over a text is a text
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var t: utf8(16); c: char;
+      begin for c in t do writeln(c) end.
+      """
+    When it is compiled
+    Then it is rejected
+     And the diagnostic includes
+      """
+      must be a text
+      """

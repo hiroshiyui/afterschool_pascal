@@ -20,10 +20,15 @@
 #                     Two kinds of decision land here and the class does not
 #                     distinguish them, because the gate's answer is the same:
 #                     a feature declined, and a feature specified ahead of the
-#                     processor (AP 5.6, the whole of AP 6.4.15). What the
-#                     class buys in the second case is that the specification
-#                     cannot come to claim, through a passing scenario, that
-#                     the feature is there.
+#                     processor (AP 5.6). What the class buys in the second
+#                     case is that the specification cannot come to claim,
+#                     through a passing scenario, that the feature is there.
+#
+#                     There are none of either kind at present. AP 6.4.15 held
+#                     every row of this class for three days and was taken off
+#                     a clause at a time as it was built (ADR-0190 - ADR-0192),
+#                     which is the class working rather than the class going
+#                     unused.
 #
 # So the gate is two-directional, as tests/checks/uncovered_procedures.txt is:
 # a clause that stops being cited fails, and a clause that starts being cited
@@ -327,7 +332,7 @@ afterschool	6.4.15.3	testable
 afterschool	6.4.15.4	testable	
 afterschool	6.4.15.5	testable	
 afterschool	6.4.15.6	testable	
-afterschool	6.4.15.7	not-implemented	concatenation; the one part of 6.4.15 still stated ahead of the processor (AP 5.6, ADR-0189 increment 3)
+afterschool	6.4.15.7	testable	
 afterschool	6.4.15.8	testable	
 afterschool	6.4.15.9	testable	
 afterschool	6.4.15.10	testable	

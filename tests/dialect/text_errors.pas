@@ -30,9 +30,18 @@ begin
   i := index(t, 'x');
   s := substr(t, 1, 2);
 
-  { 6.4.15.7 is concatenation and is not implemented yet (AP 5.6). What a
-    program meets until it is, is the ordinary arithmetic refusal. }
-  t := t + u;
+  { 6.4.15.7 admits a text and a character-string and refuses a *string*, for
+    6.4.15.6's reason: one side normalised and the other not would need a
+    conversion, and `+` has nowhere to report that it failed. }
+  t := t + s;
+
+  { The same sentence from the other side: two texts and a literal are fine,
+    so this line is here to show what the refusal above is not about. }
+  t := t + u + 'ok';
+
+  { 6.4.15.9's iteration: an element is a sequence of characters, so the
+    control variable cannot be a char. }
+  for c in t do writeln(c);
 
   { 6.4.15.11: reading yields bytes whose validity is not the program's to
     guarantee, so the conversion belongs where a failure can be reported. }
