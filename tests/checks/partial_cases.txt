@@ -145,14 +145,14 @@ EmitCall:builtinKind:4 names 18 of 45
 # exit is taken by an `if` before it too, and is still *named* by the arm that
 # says so, which is what keeps this count one short of the whole rather than
 # two (ADR-0177).
-EmitStdProc:stdProcKind:1 names 18 of 20
+EmitStdProc:stdProcKind:1 names 20 of 22
 
 # The two below it are nested inside that case's own arms -- one in the
 # `spReset, spRewrite, spGet, spPut, spUpdate, spExtend` arm and one in the
 # three-seek arm -- and each names the whole enumeration except the four that
 # no arm of the outer case can have narrowed to.
-EmitStdProc:stdProcKind:2 names 15 of 20
-EmitStdProc:stdProcKind:3 names 15 of 20
+EmitStdProc:stdProcKind:2 names 15 of 22
+EmitStdProc:stdProcKind:3 names 15 of 22
 
 # --- constants nothing dispatches on --------------------------------------
 #

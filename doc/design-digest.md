@@ -2624,6 +2624,34 @@ the three activations that are not a procedure's, and `exit_errors.pas` the
 refusals; moving `EmitExitTarget` after `CloseFiles` leaves the file empty and
 two armed statements unrun.
 
+**`break` and `continue` are one branch each, and the blocks were already
+there** (ADR-0208). AP 6.7.5.10 leaves the closest-containing
+repetitive-statement and 6.7.5.11 completes the current iteration of it; both
+are required procedure-identifiers, so §6.1.3 hands the spelling back to a
+program that declares its own and both conformance modes say *unknown
+procedure* with no change to `src/`. CodeGen keeps two integers, `breakBlock`
+and `contBlock`, saved and restored around each loop's body — the lexical
+nesting is the stack, so there is none to keep — and the statement writes
+`br label %LN` and opens a fresh block for what follows, which is `exit`'s
+shape. Three of the five loop forms needed no new block: a while-statement
+continues at its condition, a for-in over a text at its head (the counter is
+advanced before the body), and a for-in over a set at its step (the element
+test has already been passed). The two that did are the two AP 6.7.5.11 names
+for a reason — a repeat-statement's condition follows its sequence, and an
+ordinal for-statement tests the control-variable against the final-value
+*after* its statement, so continuing at the head would run the body again with
+the same value and never terminate. Sema's half is a `loopDepth` counter that a
+block boundary saves and zeroes exactly where `stmtPath` already is, and it is
+a second counter rather than a reading of that path because `CheckDefer` must
+zero one and must not zero the other: a deferred statement is checked where it
+is written, so §6.8.1's reachability has to go on seeing the loop while
+6.7.5.10's requirement must not. That zeroing *is* the rule refusing
+`defer break` — 6.9.3.11.3 deliberately does not list it, since a `break` whose
+loop is inside the deferred statement means what it says.
+`tests/dialect/break_continue.pas` observes every form including the armed
+statement that runs after the loop rather than at it, and `break_errors.pas`
+the refusals with both accepted `defer` spellings beside them.
+
 **`try` is a `with` binding and one branch** (ADR-0178). AP 6.8.9's `try(x)`
 yields `x.val` where `x` succeeded and otherwise leaves the enclosing function
 with the cause — and it is three husk nodes (ADR-0044) and a frame slot, with

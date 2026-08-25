@@ -82,3 +82,5 @@ owned_refused
 take_refused
 utf8_refused
 release_refused
+break_refused
+continue_refused

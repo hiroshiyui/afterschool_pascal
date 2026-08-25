@@ -1434,6 +1434,87 @@ NOTE 5 — Neither standard has an early exit; every widely used Pascal dialect
 does, and spells it `Exit` (ADR-0177). Nothing here gives a value to an
 exit-statement or lets one leave more than one activation.
 
+**6.7.5.10 The break procedure [added].** The required procedure-identifier
+`break` shall be a control procedure. It shall be written in one form:
+
+    break
+
+It shall terminate the execution of the repetitive-statement (§6.9.3.9) that
+closest-contains the procedure-statement, and execution shall continue with the
+statement following that repetitive-statement.
+
+The repetitive-statement shall be one of the block in which the
+procedure-statement occurs, and never one of an enclosing block: a `break` in a
+procedure nested in another leaves a loop of the nested procedure, and where
+that procedure has none it shall be an error detected before the program is
+executed.
+
+`break` shall not be a word-symbol; §6.1.3's shadowing is what keeps it out of
+the way of a program that declares its own, exactly as for `exit` (6.7.5.9).
+
+NOTE 1 — The repetitive-statement is the closest-containing one and there is no
+form that leaves more than one. A program leaving two loops at once writes a
+goto-statement, which both standards have and which this document does not
+change.
+
+NOTE 2 — Leaving a statement-sequence by a break-statement does not complete
+it, so what that sequence armed waits for 6.9.3.11.2 b) rather than a); the
+statement is executed late rather than not at all. This is 6.7.5.9's NOTE 1 and
+6.9.3.11's NOTE 2, for the third time and the same reason.
+
+NOTE 3 — A for-statement terminated by a break-statement is likewise not
+completed, so ISO 7185 §6.8.3.9's requirement that the control-variable be
+undefined after the for-statement is completed does not apply to it, and the
+control-variable retains the value it had when the break-statement was
+executed. Nothing here requires that of an implementation whose control-variable
+is completed normally.
+
+NOTE 4 — 6.9.3.11.3 does not forbid a break-statement in a deferred statement,
+and the omission is deliberate. A deferred statement is executed where its own
+sequence is completed and again in the block's runner, so the repetitive-
+statements enclosing the defer-statement enclose neither execution — but one
+written *within* the deferred statement encloses both. So the requirement above
+is the whole rule: `defer break` names no repetitive-statement of either and is
+refused by it, while `defer while c do break` means what it says.
+
+**6.7.5.11 The continue procedure [added].** The required procedure-identifier
+`continue` shall be a control procedure. It shall be written in one form:
+
+    continue
+
+It shall terminate the execution of the current iteration of the
+repetitive-statement (§6.9.3.9) that closest-contains the procedure-statement.
+Execution shall continue at the point at which that repetitive-statement
+determines whether a further iteration is to be performed, which is:
+
+a) for a while-statement (§6.9.3.6), the evaluation of its Boolean expression;
+
+b) for a repeat-statement (§6.9.3.7), the evaluation of its Boolean expression,
+   which follows the statement-sequence;
+
+c) for a for-statement (§6.9.3.9) in the form ISO 7185 §6.8.3.9 gives it, the
+   determination of whether the control-variable has attained the final-value,
+   before it is incremented or decremented;
+
+d) for a for-statement in ISO/IEC 10206:1991 §6.9.3.9.3's form over a set, and
+   for 6.4.15's form over a text, the selection of the next member or element.
+
+The requirements 6.7.5.10 states about the block, about shadowing, and about a
+deferred statement shall apply to `continue` unchanged.
+
+NOTE 1 — c) is why this clause enumerates the forms rather than saying "the
+beginning of the repetitive-statement". A for-statement tests the
+control-variable against the final-value *after* its statement and steps only
+where it has not been attained, so continuing at the beginning would execute the
+statement again with the same value and never terminate.
+
+NOTE 2 — Neither standard has either of these two procedures; every widely used
+Pascal dialect has both, and spells them `Break` and `Continue` (ADR-0208).
+They are 6.7.5.9's borrowing from the same source and were taken for the same
+reason: a Pascal programmer arriving here already knows them, and a language
+whose only early exit from a loop is a goto-statement is one people write a
+Boolean flag in instead.
+
 #### 6.7.6 Required functions [extended]
 
 `length` shall accept a slice (6.7.3.9.4), extending the required function
@@ -2086,6 +2167,8 @@ the rule.
 | `fallible` | `T ! E` | `unexpected character '!'` | `unexpected character '!'` |
 | `exit` | `exit`, `exit(e)` | `unknown procedure 'exit'` | `unknown procedure 'exit'` |
 | `try` | `try(x)` | `unknown function 'try'` | `unknown function 'try'` |
+| `break` | `break` | `unknown procedure 'break'` | `unknown procedure 'break'` |
+| `continue` | `continue` | `unknown procedure 'continue'` | `unknown procedure 'continue'` |
 | `owned` | `owned ^T` | `expected ';' after a variable declaration, found '^'` | `expected ';' after a variable declaration, found '^'` |
 | `take` | `take(v)` | `unknown function 'take'` | `unknown function 'take'` |
 | `release` | `release(h)` | `unknown function 'release'` | `unknown function 'release'` |
@@ -2099,7 +2182,8 @@ exception because §6.1.4 makes a directive an ordinary identifier in the one
 position it may occupy, so nothing but a rule about the mode can refuse it
 (ADR-0154).
 
-`int64`, `argument`, `exit`, `try` and `take` are a third shape and not a
+`int64`, `argument`, `exit`, `break`, `continue`, `try` and `take` are a third
+shape and not a
 fourth: each is a required *identifier* rather than a position, so a
 conformance mode refuses it by not having it — the name is nobody's there, and the message says
 so. The shape is now as common as the position rule it was once the exception

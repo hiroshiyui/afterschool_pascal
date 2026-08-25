@@ -1,0 +1,12 @@
+adr: 0208
+file: selfhost/compiler.pas
+kills: break_continue
+why: AP 6.7.5.10 NOTE 1 terminates the closest-containing repetitive-statement and no other. Not restoring the enclosing loop's targets after a body leaves the inner loop's blocks in scope for the outer one, so a later break in the outer loop branches into blocks that are no longer reachable -- and the nested case's count is wrong rather than the module being invalid, which is what makes this worth a file.
+--- old
+  breakBlock := savedBrk;
+  contBlock := savedCnt;
+  writeln(ircode, '  br label %L', contB:1);
+  StartBlock(contB);
+--- new
+  writeln(ircode, '  br label %L', contB:1);
+  StartBlock(contB);

@@ -216,3 +216,4 @@ the alternatives that were rejected and why.
 | [0205](0205-a-server-serves-many-clients-and-the-language-needed-nothing.md) | A server serves many clients, and the language needed nothing | Accepted |
 | [0206](0206-a-closers-result-has-a-statement-to-report-to.md) | A closer's result has a statement to report to | Accepted |
 | [0207](0207-a-mutation-is-a-file-the-harness-runs.md) | A mutation is a file the harness runs | Accepted |
+| [0208](0208-break-and-continue-leave-one-loop.md) | `break` and `continue` leave one loop | Accepted |

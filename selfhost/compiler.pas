@@ -657,7 +657,13 @@ type
                    dump prints a required procedure as its ordinal, so a
                    constant inserted anywhere else renumbers the ones after
                    it. }
-                 spExit);
+                 spExit,
+                 { AP 6.7.5.10's break and 6.7.5.11's continue, the dialect's
+                   two loop-control procedures (ADR-0208). Appended for
+                   spExit's reason, and next to it for a second one: the three
+                   of them are the only required procedures here that are a
+                   transfer of control rather than an operation. }
+                 spBreak, spContinue);
 
   typePtr = ^typeRec;
   symPtr = ^symbol;
@@ -1902,6 +1908,15 @@ var
     flag, because a nested defer-statement is reported and then checked like
     any other. }
   deferDepth: integer;
+  { How many repetitive-statements of *this block* enclose the statement being
+    checked, which is what AP 6.7.5.10 and 6.7.5.11 require one of. Deliberately
+    not read off `stmtPath`, which describes the same nesting and answers a
+    different question: a deferred statement is checked where it is written, so
+    the path there still holds the loop it stands in, and a break written in one
+    would be accepted and then emitted in a runner that has no loop. This is
+    zeroed for the duration of that check (CheckDefer) and stmtPath must not be,
+    6.8.1's reachability being about where the statement was written. }
+  loopDepth: integer;
   { The standard files, when the program parameters name them. }
   stdInput, stdOutput: symPtr;
   { --- CodeGen --- }
@@ -17435,6 +17450,9 @@ begin
   else if PoolIs(p^.pcAt, p^.pcLen, 'unpack   ') then p^.pcStd := spUnpack
   else if PoolIs(p^.pcAt, p^.pcLen, 'page     ') then p^.pcStd := spPage
   else if PoolIs(p^.pcAt, p^.pcLen, 'exit     ') then p^.pcStd := spExit
+  else if PoolIs(p^.pcAt, p^.pcLen, 'break    ') then p^.pcStd := spBreak
+  else if PoolIsWide(p^.pcAt, p^.pcLen, 'continue        ') then
+    p^.pcStd := spContinue
   else if PoolIs(p^.pcAt, p^.pcLen, 'new      ') then p^.pcStd := spNew
   else p^.pcStd := spDispose;
 
@@ -17517,6 +17535,31 @@ begin
         p^.pcExit := value_;
         CheckResultAssign(value_, currentProc, false)
       end
+  end
+  else
+  { AP 6.7.5.10 and 6.7.5.11, the dialect's two loop-control procedures. Both
+    take no argument and both require a repetitive-statement of *this* block to
+    be executing -- loopDepth and not stmtPath, for the reason its declaration
+    gives.
+
+    They are one arm rather than two because everything either has to satisfy
+    is the same sentence with a different name in it, and writing it twice is
+    how the two would come to disagree. What differs is only the message and
+    the block CodeGen branches to. }
+  if (p^.pcStd = spBreak) or (p^.pcStd = spContinue) then begin
+    if n > 0 then begin
+      ErrorAt(p^.pcArgs^.line, p^.pcArgs^.col);
+      write('''');
+      WritePool(p^.pcAt, p^.pcLen);
+      writeln(''' takes no argument: it leaves a loop and has nothing to say')
+    end;
+    if loopDepth = 0 then begin
+      ErrorAt(p^.line, p^.col);
+      write('''');
+      WritePool(p^.pcAt, p^.pcLen);
+      writeln(''' must stand within a repetitive-statement of the block it ',
+              'is written in')
+    end
   end
   else
   { 6.7.5.8: GetTimeStamp(t) attributes to t either the current date and time
@@ -18401,10 +18444,19 @@ end;
   source order: 6.9.3.11 runs the armed statements in the reverse of the order
   they are written, and walking this list forwards is that order. }
 procedure CheckDefer(s: nodePtr);
-var e: nodeListPtr;
+var e: nodeListPtr; saveLoops: integer;
 begin
   deferDepth := deferDepth + 1;
+  { AP 6.9.3.11's runner is a routine of its own, so a repetitive-statement
+    enclosing the defer-statement does not enclose the deferred one -- a break
+    written directly in it would be emitted where no loop is running. Refused
+    by construction rather than by a list: zeroing this is what makes
+    `defer break` say it is outside a loop, while `defer while c do break`
+    goes on meaning what it says (ADR-0208). }
+  saveLoops := loopDepth;
+  loopDepth := 0;
   CheckStmt(s^.dfStmt);
+  loopDepth := saveLoops;
   deferDepth := deferDepth - 1;
   CheckDeferBody(s^.dfStmt, s);
   if currentProc <> nil then begin
@@ -18819,7 +18871,11 @@ begin
               like every other required procedure, which is the whole of what
               keeps a program declaring its own `exit` (ADR-0117). }
             ((langStd = stdAfterschool) and
-             PoolIs(s^.pcAt, s^.pcLen, 'exit     ')) or
+             (PoolIs(s^.pcAt, s^.pcLen, 'exit     ') or
+              { AP 6.7.5.10, 6.7.5.11: for exit's reason, and shadowable by
+                a program that declares its own (ADR-0208). }
+              PoolIs(s^.pcAt, s^.pcLen, 'break    ') or
+              PoolIsWide(s^.pcAt, s^.pcLen, 'continue        '))) or
             ((HasExtended(langStd)) and
              IsRequiredProc(s^.pcAt, s^.pcLen))) then
           CheckStdProc(s)
@@ -18864,18 +18920,22 @@ begin
         end;
         saved := stmtPath;
         stmtPath := PushStmt(stmtPath, s);
+        loopDepth := loopDepth + 1;
         CheckStmt(s^.whBody);
+        loopDepth := loopDepth - 1;
         stmtPath := saved
       end;
 
       nkRepeat: begin
         saved := stmtPath;
         stmtPath := PushStmt(stmtPath, s);
+        loopDepth := loopDepth + 1;
         sub := s^.rpBody;
         while sub <> nil do begin
           CheckStmt(sub);
           sub := sub^.next
         end;
+        loopDepth := loopDepth - 1;
         stmtPath := saved;
         CheckExpr(s^.rpCond);
         if (s^.rpCond^.ntype <> nil) and not IsBoolean(s^.rpCond^.ntype) then
@@ -19072,7 +19132,9 @@ begin
           forEntry^.next := forTop;
           forTop := forEntry
         end;
+        loopDepth := loopDepth + 1;
         CheckStmt(s^.frBody);
+        loopDepth := loopDepth - 1;
         if forEntry <> nil then forTop := forTop^.next;
         stmtPath := saved
       end;
@@ -21541,7 +21603,7 @@ begin
 end;
 
 procedure CheckBlock;
-var d: nodePtr; outerPath: stmtPathPtr;
+var d: nodePtr; outerPath: stmtPathPtr; outerLoops: integer;
 begin
   { 6.2.1 puts the import-part at the head of every block. }
   CheckImports(b^.blImports, owner);
@@ -21571,6 +21633,10 @@ begin
     procedure is not inside the enclosing block's statements. }
   outerPath := stmtPath;
   stmtPath := nil;
+  { A repetitive-statement of an enclosing block does not enclose this one's
+    statements, exactly as its statement-path does not (AP 6.7.5.10). }
+  outerLoops := loopDepth;
+  loopDepth := 0;
   if b^.blBody <> nil then begin
     d := b^.blBody^.cpBody;
     while d <> nil do begin
@@ -21579,6 +21645,7 @@ begin
     end
   end;
   stmtPath := outerPath;
+  loopDepth := outerLoops;
   ResolveGotos
 end;
 
@@ -22018,6 +22085,7 @@ end;
 procedure CheckModuleBlock(m: nodePtr; info: modRecPtr);
 var saveCurrent, saveModule: symPtr; d: nodePtr; mark: entryPtr;
     saveDepth: integer; outerPath: stmtPathPtr; sc: labelScopePtr;
+    outerLoops: integer;
 begin
   saveCurrent := currentProc;
   saveModule := curModule;
@@ -22068,6 +22136,8 @@ begin
     ResolveGotos pops the scope, as it does for every block. }
   outerPath := stmtPath;
   stmtPath := nil;
+  outerLoops := loopDepth;
+  loopDepth := 0;
   new(sc);
   sc^.labels := nil;
   sc^.labelTail := nil;
@@ -22079,6 +22149,7 @@ begin
   if m^.mdFini <> nil then CheckStmt(m^.mdFini);
   ResolveGotos;
   stmtPath := outerPath;
+  loopDepth := outerLoops;
 
   scopeTop := mark;
   scopeDepth := saveDepth;
@@ -22445,6 +22516,7 @@ begin
   emptySetType^.setCanonical := true;
   labelScope := nil;
   stmtPath := nil;
+  loopDepth := 0;
   nextLabelId := 0;
   foreignDecls := nil;
   foreignDeclTail := nil;
@@ -26354,6 +26426,25 @@ begin
       HeaderOf(e^.ntype, base, v)
     end
 end;
+{ Where AP 6.7.5.10's break and 6.7.5.11's continue branch to: the block
+  after the innermost repetitive-statement being emitted, and the block that
+  decides whether it iterates again. Saved and restored around each loop's
+  body, so the lexical nesting *is* the stack and there is none to keep.
+
+  Zero means "no loop", which cannot be reached: Sema refuses both statements
+  outside one, and a block boundary resets its own copy of loopDepth. Kept as
+  a distinguishable value rather than left arbitrary so that a defect shows up
+  as a branch to %L0 -- an undefined label LLVM rejects -- and not as a branch
+  into some earlier loop's blocks.
+
+  The continue target is not always the condition. A for-statement tests
+  whether the control-variable has reached the limit *after* the body and
+  steps only if it has not, so what continue enters is that test and not the
+  loop's head; a for-in over a set enters the step, its element test having
+  already been passed. }
+var
+  breakBlock, contBlock: integer;
+
 procedure EmitStmt(s: nodePtr); forward;
 { AP 6.8.9's try assigns a result the way exit(e) does, and through the same
   routine -- which is defined among the statements, because until this
@@ -31192,6 +31283,22 @@ begin
     EmitLeaveBlock;
     StartBlock(NewBlock)
   end
+  { AP 6.7.5.10 and 6.7.5.11. Both are one branch and neither runs anything on
+    the way out: leaving a statement-sequence this way does not *complete* it,
+    so what it armed waits for the activation to terminate, which is 6.9.3.11's
+    NOTE 2 for a goto-statement and the same sentence here (6.7.5.10 NOTE 2).
+    The armed statement is executed late rather than not at all, because the
+    flag it is armed by is read again in the block's runner.
+
+    Whatever follows in the source is emitted into a fresh block, unreachable
+    and valid, exactly as an exit's is. }
+  else if (s^.pcStd = spBreak) or (s^.pcStd = spContinue) then begin
+    if s^.pcStd = spBreak then
+      writeln(ircode, '  br label %L', breakBlock:1)
+    else
+      writeln(ircode, '  br label %L', contBlock:1);
+    StartBlock(NewBlock)
+  end
   else if s^.pcStd = spHalt then begin
     { The operand is computed first: the emitter is sequential, so anything
       EmitExpr writes has to come out before the call line is begun. }
@@ -31462,9 +31569,9 @@ begin
         writeln(ircode)
       end
     end;
-    spNone, spHalt, spExit:
-      { spHalt and spExit were both answered above; spNone is not a standard
-        one }
+    spNone, spHalt, spExit, spBreak, spContinue:
+      { spHalt, spExit, spBreak and spContinue were all answered above; spNone
+        is not a standard one }
   end
   end
 end;
@@ -31495,7 +31602,7 @@ begin
 end;
 
 procedure EmitWhile(s: nodePtr);
-var cond: str; condB, bodyB, endB, mark: integer;
+var cond: str; condB, bodyB, endB, mark, savedBrk, savedCnt: integer;
 begin
   condB := NewBlock;
   bodyB := NewBlock;
@@ -31515,19 +31622,34 @@ begin
   writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
 
   StartBlock(bodyB);
+  savedBrk := breakBlock;
+  savedCnt := contBlock;
+  breakBlock := endB;
+  contBlock := condB;
   EmitStmt(s^.whBody);
+  breakBlock := savedBrk;
+  contBlock := savedCnt;
   writeln(ircode, '  br label %L', condB:1);
 
   StartBlock(endB)
 end;
 
 procedure EmitRepeat(s: nodePtr);
-var cond: str; bodyB, endB, mark: integer; sub: nodePtr;
+var cond: str; bodyB, contB, endB, mark, savedBrk, savedCnt: integer;
+    sub: nodePtr;
 begin
   bodyB := NewBlock;
+  { The condition is a block of its own rather than the tail of the body's,
+    because AP 6.7.5.11's continue enters it: 6.9.3.7 tests after the body, so
+    completing an iteration early means reaching the test and not the head. }
+  contB := NewBlock;
   endB := NewBlock;
   writeln(ircode, '  br label %L', bodyB:1);
   StartBlock(bodyB);
+  savedBrk := breakBlock;
+  savedCnt := contBlock;
+  breakBlock := endB;
+  contBlock := contB;
   sub := s^.rpBody;
   while sub <> nil do begin
     EmitStmt(sub);
@@ -31536,6 +31658,10 @@ begin
   { 6.9.3.7's body is a statement-sequence, so it is completed once per
     iteration and what it armed runs there (AP 6.9.3.11). }
   EndSequence(s^.rpBody);
+  breakBlock := savedBrk;
+  contBlock := savedCnt;
+  writeln(ircode, '  br label %L', contB:1);
+  StartBlock(contB);
   { repeat runs until the condition becomes true }
   mark := strTemps;
   EmitExpr(s^.rpCond, cond);
@@ -31614,7 +31740,7 @@ end;
   the stack at -O0 (ADR-0102). }
 procedure EmitForInText(s: nodePtr);
 var slot, data, len, counter, at_, nextOp, elem, test, cap, hdr: str;
-    t: typePtr; condB, bodyB, endB: integer;
+    t: typePtr; condB, bodyB, endB, savedBrk, savedCnt: integer;
 begin
   EmitAddress(s^.frVar, slot);
   t := s^.frVar^.ntype;
@@ -31691,7 +31817,15 @@ begin
   write(ircode, ', ptr ');
   PutOp(counter);
   writeln(ircode);
+  savedBrk := breakBlock;
+  savedCnt := contBlock;
+  breakBlock := endB;
+  { The counter is advanced *before* the body, so the head is what completes
+    an iteration here and there is no step block to enter. }
+  contBlock := condB;
   EmitStmt(s^.frBody);
+  breakBlock := savedBrk;
+  contBlock := savedCnt;
   writeln(ircode, '  br label %L', condB:1);
 
   StartBlock(endB)
@@ -31701,6 +31835,7 @@ procedure EmitForIn(s: nodePtr);
 var slot, set_, counter, i, hiOp, oneOp, zeroOp, test, widened: str;
     shifted, bit, hit, now, next: str;
     t, base: typePtr; condB, testB, bodyB, stepB, endB, lo, hi: integer;
+    savedBrk, savedCnt: integer;
 begin
   EmitAddress(s^.frVar, slot);
   t := s^.frVar^.ntype;
@@ -31826,7 +31961,15 @@ begin
   write(ircode, ', ptr ');
   PutOp(slot);
   writeln(ircode);
+  savedBrk := breakBlock;
+  savedCnt := contBlock;
+  breakBlock := endB;
+  { The element test has already been passed for this iteration, so completing
+    it early means stepping the counter and not re-entering the head. }
+  contBlock := stepB;
   EmitStmt(s^.frBody);
+  breakBlock := savedBrk;
+  contBlock := savedCnt;
   writeln(ircode, '  br label %L', stepB:1);
 
   StartBlock(stepB);
@@ -31855,6 +31998,7 @@ procedure EmitFor(s: nodePtr);
 var slot, from, toV, cur, test, now, same, next: str;
     willRun: str;
     t: typePtr; condB, bodyB, stepB, endB, checkB, skipB: integer;
+    contB, savedBrk, savedCnt: integer;
     unsignedOrdinal: boolean;
 begin
   if s^.frSet <> nil then
@@ -31965,7 +32109,20 @@ begin
   writeln(ircode, ', label %L', bodyB:1, ', label %L', endB:1);
 
   StartBlock(bodyB);
+  savedBrk := breakBlock;
+  savedCnt := contBlock;
+  breakBlock := endB;
+  { Not condB. 6.9.3.9 tests the control-variable against the limit *after* the
+    body and steps only if it has not been reached, so what AP 6.7.5.11's
+    continue enters is that test -- entering the head instead would run the
+    body again with the same value, forever. }
+  contB := NewBlock;
+  contBlock := contB;
   EmitStmt(s^.frBody);
+  breakBlock := savedBrk;
+  contBlock := savedCnt;
+  writeln(ircode, '  br label %L', contB:1);
+  StartBlock(contB);
   { Stop before stepping past the limit so the last iteration cannot overflow.
     verify/ carries the theorem that says the step is therefore unchecked. }
   Def(now);
@@ -33759,6 +33916,12 @@ end;
 procedure RunCodeGen;
 var m: nodePtr;
 begin
+  { No loop is being emitted yet. Sema refuses AP 6.7.5.10's break and
+    6.7.5.11's continue outside one, so nothing reads these before a loop sets
+    them; zero is what makes a defect in that reasoning an invalid module
+    rather than a branch into another loop's blocks. }
+  breakBlock := 0;
+  contBlock := 0;
   BindTo(ircode, outName);
   rewrite(ircode);
   { The layout LlSize and LlAlign model, stated so the assembler uses the same

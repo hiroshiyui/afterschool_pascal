@@ -1,0 +1,7 @@
+<source>:25:3: error: 'break' must stand within a repetitive-statement of the block it is written in
+<source>:30:3: error: 'break' must stand within a repetitive-statement of the block it is written in
+<source>:31:3: error: 'continue' must stand within a repetitive-statement of the block it is written in
+<source>:34:11: error: 'break' takes no argument: it leaves a loop and has nothing to say
+<source>:35:14: error: 'continue' takes no argument: it leaves a loop and has nothing to say
+<source>:37:11: error: 'break' must stand within a repetitive-statement of the block it is written in
+<source>:38:11: error: 'continue' must stand within a repetitive-statement of the block it is written in

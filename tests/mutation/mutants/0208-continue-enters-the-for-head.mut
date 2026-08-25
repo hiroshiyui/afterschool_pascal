@@ -1,0 +1,11 @@
+adr: 0208
+file: selfhost/compiler.pas
+kills: break_continue
+timeout: 30
+why: AP 6.7.5.11 c) makes a continue in a for-statement enter the final-value test, not the head. A for-statement steps only after that test, so continuing at the head runs the body again with the same control-variable and the program never terminates -- which is the whole reason the clause enumerates the four forms instead of saying "the beginning of the loop".
+--- old
+  contB := NewBlock;
+  contBlock := contB;
+--- new
+  contB := NewBlock;
+  contBlock := condB;

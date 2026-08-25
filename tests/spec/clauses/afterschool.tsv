@@ -105,6 +105,8 @@
 6.7.3.9.5	Bounds
 6.7.5	Required procedures
 6.7.5.9	The exit procedure
+6.7.5.10	The break procedure
+6.7.5.11	The continue procedure
 6.7.6	Required functions
 6.7.6.10	Program-argument functions
 6.7.7	External-declarations
