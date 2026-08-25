@@ -61,6 +61,16 @@ three days, with every gate green. The rest only accept more.
   of a text is a grapheme cluster and a program sometimes wants the code points
   under one: a family emoji is one element and five scalar values.
 
+  `Fold`, `Upper` and `Lower` are full Unicode case operations, and the first
+  is the one worth knowing about: **folding is not lowercasing**. `Fold(a) =
+  Fold(b)` asks whether two values are the same but for case, and comparing two
+  lowercased values answers it wrongly — the German sharp s lowercases to
+  itself and folds to `ss`, so `straße` and `STRASSE` are equal under folding
+  and unequal under lowering. All three are *full* mappings, so one character
+  may become two and the destination's capacity is checked; a mapping that
+  depends on a language or a context is declined, so Greek's final sigma is not
+  special-cased and there is no Turkish `I`.
+
   `char` and `string(n)` are unchanged in all three modes, and `utf8` is a
   required identifier a program may shadow. The Unicode version behind it is
   stated in `doc/implementation-defined.md` §2.7.
