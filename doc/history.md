@@ -3118,3 +3118,23 @@ after it.
 **What is left of the text model**: case mapping, case folding and
 grapheme-indexed slicing, each wanting a Unicode table the runtime does not
 carry.
+
+**Nothing is, two increments later**, and the second of them is the one worth
+keeping. Case mapping and case folding landed together (ADR-0196) over two more
+transcribed tables, and they are where this model's oracle story **ends**:
+Unicode publishes a conformance file for normalisation and one for
+segmentation and **none for casing**, so those routines rest on a transcription
+where everything above them rests on a document written elsewhere. That is a
+weaker footing than the rest of AP 6.4.15 has, and it is stated rather than
+averaged in.
+
+Grapheme-indexed slicing was then answered by **not offering the index**
+(ADR-0199). The clause had refused an integer index from the first day, for
+Swift's reason, and the open question was how to spell the operation that
+wants one. The answer was to spell a **boundary**: `PasUnicode.ElementEnd`
+says where one element ends, and a slice, a lockstep comparison of two texts
+and a resumable walk are all compositions over it, written in the program that
+pays for them. A feature can be finished by declining to add the thing that
+looked missing, and this is the second time on this page — ADR-0187 retired an
+address instead of modelling it, and this retires an index instead of hiding a
+walk behind it.

@@ -6,9 +6,12 @@ emitter has no `DataLayout` to ask (ADR-0028). They decide two things -- the
 length of a whole-variable copy, and the size `new` allocates -- and they answer
 with one number for every target. That is only correct while every target the
 compiler admits agrees about every frame it emits, and until this file nothing
-asked. The 4501 offsets doc/roadmap.md records were measured once, by hand, on
-2026-08-22; a divergence afterwards would have gone unnoticed until somebody
-tried the other machine.
+asked. The 25-target comparison doc/roadmap.md records was made once, by hand,
+on 2026-08-22; a divergence afterwards would have gone unnoticed until somebody
+tried the other machine. Don't write the offset count into this comment -- it
+is every field of every frame emitted for selfhost/compiler.pas and moves with
+each declaration added there, so a number here would be a third opinion beside
+the roadmap's and this run's. The run prints it.
 
 What it does: emits every frame type this compiler produces -- from
 selfhost/compiler.pas for breadth and from target_layout.pas for the types the

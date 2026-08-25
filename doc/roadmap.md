@@ -15,7 +15,7 @@ decide about, and the day it is decided it moves there.
 | Chapter | What it holds |
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
-| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the two edges the handle left behind |
+| [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and the three things the handle and the socket left open behind them |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the two oracles still worth building |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
@@ -45,9 +45,9 @@ the wrong mode (ADR-0154).
 
 | Decision | Where it stands |
 | --- | --- |
-| **The memory-safety model** | Half answered, and the answered half took two records rather than one. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — is undecidable on the evidence in hand, and becomes decidable at the first construct that demands two live names. Concurrency is that construct, and an owned pointer is deliberately not: it cannot be copied at all. |
+| **The memory-safety model** | **Answered, in both halves and by discovery rather than by design** — four records, and not one of them decided the question the row was written to pose. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — stood here for a long time as undecidable until the fork was **withdrawn as posed** (ADR-0201). Neither candidate can reach `^T`, ADR-0117's containment fixing what an ISO program's only reference type means; the dialect's answer for the three affine kinds is refusal, given three times, so there is no second name for either candidate to govern; and the one alias that does exist — a `var` parameter bound to an owned value's referent — cannot escape, because Pascal has no address-of and `new` is the only producer of a pointer. **Unformable rather than checked**, which is stronger and free, and silent if a future feature takes it away (`doc/sop.md` §7). What is left of the fork is exactly one thing: **two threads of control**, which is the only sentence that breaks *a borrow cannot outlive a call because the caller is not running during it*. See the concurrency row [below](#where-the-ideas-come-from). |
 | **The text model** | **Done** (ADR-0189 – ADR-0193, AP 6.4.15). The choice this row offered for eleven records — *a wider character type or a text type* — turned out not to exist: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap, which breaks ADR-0117's containment. So it is a type **beside** the string: `utf8(n)`, a value with a capacity in **bytes** holding well-formed UTF-8 in normal form C, whose elements are **extended grapheme clusters**. Normalising where a value is constructed rather than where two are compared is the load-bearing choice — it makes `=` byte equality *and* canonical equivalence at once, so `é` typed either way is one value and a text can be a `pasmap` key. There is no integer index, for Swift's reason. Four increments: the Unicode tables and runtime, judged by Unicode's own conformance files; the type, with assignment, comparison, `length` in elements and `write`; joining and walking, where `+` renormalises across the join and rejoining the elements of a text gives back the original; and `PasUnicode`, whose `ToText` reports where the assignment stops and whose scalar view answers what the language will not — a family emoji is one element and five scalar values. Case folding and case mapping followed (ADR-0196), and they are where the model's oracle story ends: Unicode publishes a conformance file for normalisation and for segmentation and **none for casing**, so those three routines rest on a transcription where the rest rests on a document written elsewhere. The last question was grapheme-indexed slicing, and the answer was **not to offer the index** (ADR-0199): `PasUnicode.ElementEnd` answers where an element ends, so the walk is written in the program that pays for it and a slice, a lockstep comparison and a resumable walk are all compositions over it. Nothing of AP 6.4.15 is left. |
-| **The memory model** | Unstarted, and it cannot be designed before the safety model: shared mutable state is where the two meet. |
+| **The memory model** | Unstarted, and **no longer blocked**: it could not be designed before the safety model, shared mutable state being where the two meet, and the safety model is answered. What that answer does to this row is shrink it — ADR-0201's construct is share-nothing, so there is no shared mutable state for a memory model to be about, and the question narrows to what a value crossing between two threads guarantees. It stays open because nothing has been designed, not because something is in its way. |
 | **How far the C++ reference front end follows** (ADR-0108) | Frozen at the conformance surface in practice — `difftest` skips a dialect source — and that is the obvious answer, not the decided one. |
 
 What is already in hand and was not built for this: modules and separate
@@ -58,9 +58,17 @@ mechanism, and `runtime/pasrt.c` is where the outside world already enters.
 
 ## What blocks the library
 
-**Nothing is left on this list.** It has been emptied, and the last row went
-the way the two before it did — a decision that looked like it needed the
-memory-safety model turned out to need it for only part of its surface.
+**Nothing is left of the list this chapter was named for.** Every row a survey
+of daily needs put here has been struck, and the last of them went the way the
+two before it did — a decision that looked like it needed the memory-safety
+model turned out to need it for only part of its surface.
+
+What stands below it is a different thing and is why the chapter is still
+here: **one narrow foreign-interface item that genuinely waits on the model**,
+and **three things the modules built over the last two clauses left open**,
+each of which is a consequence of a feature landing rather than a gap someone
+surveyed for. That is the shape to expect from here on — this page empties
+faster than it fills, but a landed feature is the commonest way it fills.
 
 ~~A foreign struct the callee owns~~ is **done** (ADR-0187, AP 6.7.7.8): an
 `external` function may answer an optional of a record, a null address is the
@@ -93,10 +101,12 @@ declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
-eighteen modules — eight conforming, ten dialect — and that survey
-(2026-08-23, against the thirteen that then existed) named six gaps. Three
-needed no language change and closed the same day: `PasFile` (after ADR-0172),
-`PasProcess`, `PasStrVec`. Of the three that needed one, the command line as a
+twenty-one modules — eight conforming and thirteen dialect, each listed by
+name in `README.md` and `lib/dialect/README.md`, which is where to count them:
+this sentence has held a number that went stale twice — and that survey
+(2026-08-23, against the thirteen modules that then existed in total) named
+six gaps. Three needed no language change and closed the same day:
+`PasFile` (after ADR-0172), `PasProcess`, `PasStrVec`. Of the three that needed one, the command line as a
 list turned out to be a feature rather than a module (ADR-0173), the opaque
 handle is ADR-0174, and the struct is ADR-0184 — so all six are closed, and
 what remains above is the narrower half none of them named.
@@ -118,13 +128,22 @@ copy retires the address at the end of the statement. What genuinely waits on
 the model is narrower than any row here ever said: a struct **member** that is
 a pointer, which is a second name for storage and cannot be copied away.
 
-**What that leaves open, by name:**
+**The three rows that stood here, and how each closed:**
+
+| A daily program wanted | How it went |
+| --- | --- |
+| ~~a directory listing~~ | **done** — `PasDir` (ADR-0188), and it went a way the row above did not predict. ADR-0187 makes `readdir` declarable by a *program*; a **library** may not declare `struct dirent` at all, ADR-0185's fifth decision holding and POSIX not even fixing the member order. So `opendir` and `closedir` are bound directly, the `DIR *` is a handle, and the runtime supplies the one member access. `PasProcess.CaptureLines('ls -1 dir', names)` is superseded |
+| ~~a socket~~ | **done** — `PasNet` (ADR-0203), and it went a way this row did not predict. The row assumed the module would declare `sockaddr` and cross it as a `var` parameter; ADR-0185's fifth decision forbids a *library* from declaring any foreign struct, and sockets are the strongest case for that rule rather than an exception to it — `struct sockaddr` is not one struct but a family, and a program never declares the one it is really using. So both ends of every call are **strings**, a host and a service, and `getaddrinfo` decides what they mean: no address family, no port number, no byte order, and IPv6 without asking. A socket is a handle the runtime owns, closed by `s := nil` or by the block. One connection at a time, which is what the two live rows below are about |
+| ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
+
+**And what the last of them opened as it closed.** Both entries below were
+created by `PasNet` landing rather than found by a survey, and neither is
+blocked on the memory-safety model:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| ~~a directory listing~~ | **done** — `PasDir` (ADR-0188), and it went a way the row above did not predict. ADR-0187 makes `readdir` declarable by a *program*; a **library** may not declare `struct dirent` at all, ADR-0185's fifth decision holding and POSIX not even fixing the member order. So `opendir` and `closedir` are bound directly, the `DIR *` is a handle, and the runtime supplies the one member access. `PasProcess.CaptureLines('ls -1 dir', names)` is superseded |
-| ~~a socket~~ | **done** — `PasNet` (ADR-0203), and it went a way this row did not predict. The row assumed the module would declare `sockaddr` and cross it as a `var` parameter; ADR-0185's fifth decision forbids a *library* from declaring any foreign struct, and sockets are the strongest case for that rule rather than an exception to it — `struct sockaddr` is not one struct but a family, and a program never declares the one it is really using. So both ends of every call are **strings**, a host and a service, and `getaddrinfo` decides what they mean: no address family, no port number, no byte order, and IPv6 without asking. A socket is a handle the runtime owns, closed by `s := nil` or by the block. One connection at a time — serving two needs ADR-0201's construct, and `select` is the cheaper answer to try first |
-| ~~creating a file through `PasIO`~~ | **done**, beside it rather than in it: `PasStream` opens a file through `fopen`, whose mode is a string and needs no header number, and owns the stream as a handle (ADR-0174). `PasIO` stays descriptor-only |
+| **a server that serves more than one client** | `PasNet` accepts, serves and closes one connection at a time. Waiting on several needs a readiness call — a set of sockets, a timeout, and a question about which are ready — which is a different shape from anything the module has and was declined for ADR-0116's reason, for want of a program that wants it (ADR-0203). It is worth stating which of the two answers this is: `select` is the **cheap** one and must be tried first; a thread per connection is ADR-0201's construct and is the expensive one. The row below stands between the language and that second answer |
+| **to hand an accepted connection to something else** | Of the three affine kinds only `owned ^T` moves. `take` is refused for a handle in as many words — *nothing else has a value one variable can stop holding* — and there is no move for a file at all (ADR-0182, AP 6.4.14 NOTE 5). So a socket cannot be put in a queue, returned from a function of this language, or **given** to a task. A move between two handles would release the source without releasing its value, which is a distinct operation from `take` and a smaller increment than the construct that would want it. Named here so it is not rediscovered as concurrency's first surprise |
 
 **What building on the handle found.** Two modules were written over
 AP 6.4.12 the day it landed, and each met one edge of the clause:
@@ -176,12 +195,12 @@ the open decision it would settle.
 | ~~An early exit~~ | Turbo Pascal, Delphi, FPC | what propagation stands on | **Done** (ADR-0177, AP 6.7.5.9): `exit` terminates one activation, `exit(e)` assigns the result first. The one borrowing here whose source is another *Pascal* rather than another language |
 | ~~Propagation~~ | Zig's `try`, Rust's `?` | the rest of error handling | **Done** (ADR-0178, AP 6.8.9): `try(x)` yields the value or leaves the enclosing function with the cause. Spelled as a required function because no position would serve — see below |
 | ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
-| Unicode-correct `String` | Swift | the text model | **Done** (ADR-0189 – ADR-0193), less case mapping and folding. The grapheme as the unit and the refusal of an integer index are Swift's and are taken whole. Its *storage* is not: Swift's `String` is a reference-counted heap buffer, which is the construct ADR-0151 says forces the aliasing decision, so this is a value with a declared capacity instead — and that in turn is what makes normalise-on-construction affordable, which Swift cannot do and which buys a bytewise `=` |
+| Unicode-correct `String` | Swift | the text model | **Done**, entirely — ADR-0189 – ADR-0193, then ADR-0196 and ADR-0199; the row in [the goal's table](#the-goal-adr-0109) is what the increments were and what each cost, and this one is only about the borrowing. The grapheme as the unit and the refusal of an integer index are Swift's and are taken whole. Its *storage* is not: Swift's `String` is a reference-counted heap buffer, which is the construct ADR-0151 says forces the aliasing decision, so this is a value with a declared capacity instead — and that in turn is what makes normalise-on-construction affordable, which Swift cannot do and which buys a bytewise `=` |
 | ARC | Swift | aliasing | **The question is withdrawn** (ADR-0201). ADR-0117's containment fixes what `^T` means, and ARC changes it — so the candidate cannot reach the only reference type an ISO program has |
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
 | Traits / protocols | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039) |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
-| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. A socket module serving more than one client is what would, and `select` is the cheaper answer to try first |
+| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **The thing this row named as what would want it now exists**: ADR-0201 said "a socket module serving more than one client", and ADR-0203 landed the module the next day, serving one. So the demand is one increment nearer than when this row was written, and two things stand before the construct rather than one — `select`, still the cheaper answer to the same problem, and a **move for a handle**, without which a task cannot be given the connection it would serve |
 
 Two conclusions worth stating:
 
@@ -332,7 +351,13 @@ are done (ADR-0155, ADR-0156, ADR-0157, ADR-0159). The measurements are in
 what they leave.
 
 **Where every target stands on layout**, from `target-layout`'s own comparison
-run over 25 targets, all 4538 offsets each:
+run by hand over 25 targets rather than the two the compiler admits, on
+2026-08-22, against the 4538 offsets there were that day. **Read the
+proportions and not the absolute**: the denominator is every field of every
+frame the compiler emits for its own source, so it moves with each declaration
+added to `selfhost/compiler.pas` — the gate reports 4965 as this is written,
+and the comparison has no mode that reproduces itself, so the day it was taken
+is part of what it says.
 
 | target | offsets differing | |
 | --- | --- | --- |
