@@ -41,6 +41,7 @@
 #include <unistd.h>
 
 #include "pasrt.h"
+#include "pasrt_unicode.h"
 
 void pas_runtime_error(const char *msg) {
   fflush(stdout);
@@ -2249,6 +2250,120 @@ void pas_str_store_var(void *dst, int cap, const char *src, int len) {
   pas_str_fits(len, cap);
   *(int *)dst = len;
   memmove((char *)dst + PAS_STR_LENGTH_BYTES, src, (size_t)len);
+}
+
+/* --- AP 6.4.15's text-type (ADR-0189, ADR-0191) ---------------------------
+ *
+ * The four the code generator names. Each is a thin thing over
+ * pasrt_unicode.c, which is where the tables and the arithmetic are; what is
+ * here is the Pascal side of it -- the {length, bytes} representation a text
+ * shares with a variable-string, the arena, and the errors of Annex A.
+ *
+ * Everything a text holds is well-formed UTF-8 in Normalization Form C
+ * (6.4.15.2), and pas_text_store is the only door into one, so the invariant
+ * is established in exactly one place. */
+
+/* AP 6.4.15.5's store, and 6.4.15.2's invariant with it: validate, normalise,
+ * check it fits, write {length, bytes}.
+ *
+ * Two errors of Annex A meet here and they are told apart because a program
+ * can act on the difference -- ill-formed input is a fault in the data, and a
+ * value that does not fit is a fault in the capacity that was declared. */
+void pas_text_store(void *dst, int cap, const char *src, int len) {
+  char *scratch;
+  long long n;
+
+  if (len < 0)
+    len = 0;
+  if (pas_text_validate(src, len) >= 0)
+    pas_runtime_error("text: the value is not well-formed UTF-8");
+
+  /* Normalise into the arena rather than into dst: the result may be longer
+   * than the source, and a partial write into the target would leave a text
+   * variable holding something 6.4.15.2 forbids even though the program is
+   * about to stop. The arena is the statement's (ADR-0111) and the caller has
+   * bumped its counter. */
+  scratch = pas_str_temp(cap > len ? cap : len);
+  n = pas_text_nfc(src, len, scratch, cap > len ? cap : len);
+  if (n == PAS_TEXT_ILLFORMED)
+    pas_runtime_error("text: the value is not well-formed UTF-8");
+  if (n == PAS_TEXT_SEGMENT)
+    pas_runtime_error("text: one character carries more combining marks than "
+                      "this implementation normalises at once");
+  if (n < 0 || n > cap)
+    pas_runtime_error("text: the value does not fit the capacity");
+
+  *(int *)dst = (int)n;
+  memmove((char *)dst + PAS_STR_LENGTH_BYTES, scratch, (size_t)n);
+}
+
+/* AP 6.4.15.8's `length`: the number of extended grapheme clusters, which is
+ * not the number of bytes and is not a constant-time question (that clause's
+ * NOTE on both). */
+int pas_text_length(const char *s, int len) {
+  if (len < 0)
+    len = 0;
+  return (int)pas_text_count(s, len);
+}
+
+/* AP 6.4.15.6's comparison: the byte sequences, lexicographically, as unsigned
+ * values -- which *is* canonical equivalence, both operands being in
+ * Normalization Form C (that clause's NOTE).
+ *
+ * `normb` is set when the right operand is a character-string rather than a
+ * text and so has not been through pas_text_store. It is normalised into the
+ * arena first, because comparing a normalised value against an unnormalised
+ * one would answer a question neither operand's type asks -- and would answer
+ * it wrongly, rather than reporting. */
+int pas_text_cmp(const char *a, int la, const char *b, int lb, int normb) {
+  char *scratch;
+  long long n;
+  int i, min;
+
+  if (la < 0) la = 0;
+  if (lb < 0) lb = 0;
+  if (normb) {
+    if (pas_text_validate(b, lb) >= 0)
+      pas_runtime_error("text: a value compared with a text is not well-formed "
+                        "UTF-8");
+    scratch = pas_str_temp(lb * 3 + 4);
+    n = pas_text_nfc(b, lb, scratch, lb * 3 + 4);
+    if (n < 0)
+      pas_runtime_error("text: a value compared with a text could not be "
+                        "normalised");
+    b = scratch;
+    lb = (int)n;
+  }
+
+  min = la < lb ? la : lb;
+  for (i = 0; i < min; i++) {
+    unsigned char ca = (unsigned char)a[i];
+    unsigned char cb = (unsigned char)b[i];
+    if (ca != cb)
+      return ca < cb ? -1 : 1;
+  }
+  if (la == lb)
+    return 0;
+  return la < lb ? -1 : 1;
+}
+
+/* AP 6.4.15.10: the bytes, padded on the left to `width` **elements**.
+ *
+ * The width is in elements and not in bytes, so the padding cannot be computed
+ * from the length -- and it is not the number of columns a display device
+ * gives the value either, which that clause's NOTE says and this cannot fix. */
+void pas_write_text(void *f, const char *s, int len, int width) {
+  long long count;
+  if (len < 0)
+    len = 0;
+  if (width > 0) {
+    count = pas_text_count(s, len);
+    while (count < width) {
+      pas_write_char(f, ' ', -1);
+      count++;
+    }
+  }
+  pas_write_str(f, s, len, -1);
 }
 
 /* ADR-0123: a C string arriving as an optional, which is the only direction a

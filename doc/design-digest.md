@@ -2741,3 +2741,42 @@ runtime exists so far.
   `extended`, so `external` is refused there — which makes AP 6.4.15.5's
   "converted … before the program is executed" the open question increment 2
   has to answer. ADR-0190 registers the four ways out and takes none.
+
+**The text-type itself** (ADR-0191, AP 6.4.15). `utf8(n)` is a type
+`--std=afterschool` has: a value with a capacity in bytes, holding well-formed
+UTF-8 in normal form C, whose elements are extended grapheme clusters. It is a
+required *schema* identifier with the discriminant `capacity`, so it reads and
+interns exactly as `string(n)` does and §6.1.3 lets any program shadow it.
+
+- **A new kind, `tyText`, and `IsStringRep` for what it shares.** The
+  representation is a variable-string's — a length and that many bytes — so
+  every frame slot, copy, parameter form and layout rule came free through one
+  new predicate at six sites. The *rules* are not shared, and that is why it is
+  a kind rather than a flag on `tyString`: indexing, substrings, `index`,
+  `substr` and §6.8.3.5's padded comparison are each about a `char`, and a
+  text has none. A flag would have granted all five and required five
+  refusals to be remembered, which is ADR-0146 arranged on purpose.
+- **Adding the kind granted comparison anyway, and it emitted invalid IR.**
+  `IsMemory` asked `IsVarString`, so a text was not memory, so the relational
+  operators took it for a simple type and wrote `icmp` on an aggregate —
+  ADR-0139's defect reproduced by adding a type. `kind-exhaustive` could not
+  see it: a predicate is not a case-statement. `doc/sop.md` §7 carries it.
+- **The assignment rule changed when the type was implemented.** A text takes
+  its value from any string-type or char and ill-formed input is an **error**,
+  not a refusal — §6.4.6's own model for a constrained type, and ISO 7185's
+  for a subrange since 1982 (ADR-0018). The clause said the opposite until
+  writing the tests showed that a text could then be filled from a literal and
+  from nothing else. AP Annex E.11, and the first divergence there found by
+  implementing a clause rather than by auditing one.
+- **Comparison refuses a string where assignment admits one**, and the
+  asymmetry is the point: an assignment normalises, so what the text holds
+  afterwards is right; a comparison against unnormalised bytes would give a
+  *wrong answer* rather than an error. A character-string operand is
+  normalised into the arena first; a string operand is named by Sema.
+- **`length` counts elements and `capacity` counts bytes.** Different units
+  for one value, so `length(t) <= t.capacity` is true and not tight, and
+  `length` is the only required string function a text gets.
+- **`tests/dialect/text.pas` is the readable statement**: seven source bytes
+  of decomposed `é` and six of composed are one value of five elements; three
+  Hangul jamo compose to one syllable; a ZWJ family emoji is one element of
+  eighteen bytes. None of those numbers was chosen here.

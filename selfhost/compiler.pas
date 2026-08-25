@@ -534,6 +534,23 @@ type
                 `substr` and `trim` -- is this kind with `hi` negative: a value
                 with no storage and so no capacity to exceed. }
               tyString,
+              { AP 6.4.15's text-type (ADR-0189, ADR-0190): a type produced
+                from the required schema `utf8`, whose value is well-formed
+                UTF-8 in Normalization Form C and whose *elements* are extended
+                grapheme clusters.
+
+                Its **representation** is tyString's exactly -- a length and
+                that many bytes -- and `IsStringRep` is what asks that, so
+                every copy, parameter and frame slot is the string's and needed
+                nothing added. Its **rules** are not the string's: an element is
+                not a char, so there is no indexing and no substring; `length`
+                counts elements and the capacity counts bytes; and a string is
+                not assignment-compatible to it, the conversion being able to
+                fail. Representation and rules being two questions asked by two
+                predicates is ADR-0181's lesson applied before it could cost
+                anything -- a flag on tyString would have handed a text every
+                permission a string has (ADR-0146). }
+              tyText,
               { ADR-0128's `int64`, and the reason it answers like `real` rather
                 than like `integer`: it is a *numeric* type and not an ordinal
                 one. Nothing this compiler can hold is a value of it -- its own
@@ -1009,6 +1026,11 @@ type
       the compiler fixes rather than the program's text. The flag is what tells
       ProduceFromSchema to build one instead of resolving a denoter. }
     isStringSchema: boolean;
+    { AP 6.4.15.1's required schema `utf8`, which produces a text-type the
+      way `string` produces a variable-string-type. Its one discriminant is
+      also spelled `capacity` and is also a count -- of bytes, where the
+      string's is of characters (ADR-0189). }
+    isTextSchema: boolean;
 
     { ISO/IEC 10206:1991 6.4.1's `bindable`. 6.7.5.6 makes it a
       dynamic-violation to `bind` a file variable that is not one, and 6.5.1
@@ -1989,6 +2011,8 @@ var
     field is such a production made where there is no denoter to resolve. See
     StringOfCapacity. }
   stringSchema: symPtr;
+  { AP 6.4.15.1's `utf8`, nil under a conformance mode. }
+  utf8Schema: symPtr;
   { the label declaration parts of the blocks currently open, innermost first }
   labelScope: labelScopePtr;
   stmtPath: stmtPathPtr;
@@ -7281,6 +7305,26 @@ begin IsComplex := (t <> nil) and (t^.kind = tyComplex) end;
 function IsVarString(t: typePtr): boolean;
 begin IsVarString := (t <> nil) and (t^.kind = tyString) end;
 
+{ AP 6.4.15's text-type. Asked of the kind and never through Base(): a text is
+  not a string and the whole point is that it does not answer for one. }
+function IsText(t: typePtr): boolean;
+begin IsText := (t <> nil) and (t^.kind = tyText) end;
+
+{ "Is this value a length and that many bytes?" -- a question about
+  *representation*, which a text and a variable-string answer alike, and which
+  is why AP 6.4.15 needed no new frame slot, no new copy and no new parameter
+  form (ADR-0189).
+
+  It is deliberately not the same question as IsVarString, and every use of one
+  where the other was meant is a defect. IsVarString asks whether the *rules*
+  of 6.4.3.3.3 apply -- indexing, substrings, `length` in characters,
+  assignment from a char -- and none of those is a text's. ADR-0181 had to
+  split `IsOwned` from `IsAffine` for exactly this reason after the two had
+  been one name; this one starts split. }
+function IsStringRep(t: typePtr): boolean;
+begin IsStringRep := (t <> nil) and ((t^.kind = tyString) or (t^.kind = tyText))
+end;
+
 { ADR-0123. Asked on the type itself and never through Base(): an optional is
   not its T and the whole point is that it does not answer for one. }
 function IsOptional(t: typePtr): boolean;
@@ -7438,8 +7482,8 @@ end;
 function IsMemory(t: typePtr): boolean;
 begin
   if IsRestricted(t) then
-    IsMemory := IsStructured(t) or IsOwned(t^.elem) or IsVarString(t^.elem)
-  else IsMemory := IsStructured(t) or IsOwned(t) or IsVarString(t)
+    IsMemory := IsStructured(t) or IsOwned(t^.elem) or IsStringRep(t^.elem)
+  else IsMemory := IsStructured(t) or IsOwned(t) or IsStringRep(t)
 end;
 
 { ISO/IEC 10206:1991 6.4.1: a type is protectable unless it is a file or a
@@ -7833,6 +7877,15 @@ begin
           PutInt(t^.hi);
           PutLit(')               ')
         end;
+      { AP 6.4.15.1. A schematic formal has no capacity of its own -- the
+        actual brings it -- so it prints bare, as a string does. }
+      tyText:
+        if t^.hi <= 0 then PutLit('utf8            ')
+        else begin
+          PutLit('utf8(           ');
+          PutInt(t^.hi);
+          PutLit(')               ')
+        end;
       tyBoolean: PutLit('boolean         ');
       tyChar:    PutLit('char            ');
       tyVoid:    PutLit('void            ');
@@ -8088,6 +8141,7 @@ begin
   s^.constValue := nil;
   s^.isConstBinding := false;
   s^.isStringSchema := false;
+  s^.isTextSchema := false;
   s^.isBindable := false;
   s^.isModuleSym := false;
   s^.stdInputOk := false;
@@ -8554,6 +8608,26 @@ begin
           (IsStringType(toT) or IsStringType(fromT)) and
           IsStringOrChar(toT) and IsStringOrChar(fromT) then
     Assignable := true
+  { AP 6.4.15.5. A text takes its value from any string-type or char and gives
+    it back to a variable-string, and the bytes are validated and normalised
+    where they enter -- so the invariant of 6.4.15.2 is established at exactly
+    one door and everything past it may assume it.
+
+    Ill-formed input is an **error** that stops the program, not a refusal:
+    that is 6.4.6's own model for a constrained type and ISO 7185's for a
+    subrange (ADR-0018), and a text's invariant is a constraint on the value
+    like any other. The alternative -- refusing the assignment and routing
+    every conversion through a fallible function -- was what AP 6.4.15.5 said
+    until this was written, and it makes a text a type that can hold only
+    literals until a library exists to fill one (ADR-0191, Annex E).
+
+    The other direction never fails: bytes out of a text are well-formed by
+    6.4.15.2 and a string imposes nothing on them. It is confined to a
+    variable-string because a *fixed*-string target would want 6.4.6's padding
+    to a length, which is a question about characters and a text has none. }
+  else if IsText(toT) or IsText(fromT) then
+    Assignable := (IsText(toT) and (IsText(fromT) or IsStringOrChar(fromT))) or
+                  (IsVarString(toT) and IsText(fromT))
   { A subrange is exempt, and has to be: since ADR-0133 one whose bounds are
     discriminants carries the anonymous schema ADR-0113 hangs a descriptor on,
     which is a compiler device and not 6.4.8's schema -- no schema-definition
@@ -12065,6 +12139,44 @@ begin
   StringOfCapacity := found
 end;
 
+{ AP 6.4.15.1's `utf8(cap)`, interned the same way and for 6.4.8's same reason:
+  one schema with one tuple is one type however often it is written.
+
+  `cap` is a count of **bytes** and not of elements (6.4.15.1). An element is a
+  sequence of scalar values of no fixed length, so a capacity counted in
+  elements would not determine the storage a variable occupies -- which is the
+  one place this differs from the string above, and it differs in the comment
+  rather than in the code. }
+function TextOfCapacity(cap: integer): typePtr;
+var pr: producedPtr; t, found: typePtr; tuple: numPtr;
+begin
+  new(tuple);
+  tuple^.value_ := cap;
+  tuple^.next := nil;
+  found := nil;
+  pr := producedHead;
+  while (pr <> nil) and (found = nil) do begin
+    if (pr^.schema = utf8Schema) and SameTuple(pr^.tuple, tuple) then
+      found := pr^.ty;
+    pr := pr^.next
+  end;
+  if found = nil then begin
+    t := NewType(tyText);
+    t^.lo := 1;
+    t^.hi := cap;
+    t^.schema := utf8Schema;
+    t^.tuple := tuple;
+    new(pr);
+    pr^.schema := utf8Schema;
+    pr^.tuple := tuple;
+    pr^.ty := t;
+    pr^.next := producedHead;
+    producedHead := pr;
+    found := t
+  end;
+  TextOfCapacity := found
+end;
+
 procedure AppendNum(var head, tail: numPtr; v: integer);
 var n: numPtr;
 begin
@@ -12254,6 +12366,18 @@ begin
         else t := StringOfCapacity(tuple^.value_)
       end;
 
+      { AP 6.4.15.1, and the same sentence: the discriminant "shall be greater
+        than zero". It is a count of bytes. }
+      if (t = nil) and schema^.isTextSchema then begin
+        if tuple^.value_ <= 0 then begin
+          ErrorAt(d^.line, d^.col);
+          writeln('the capacity of a text must be greater than zero, ',
+                  'found ', tuple^.value_:1);
+          t := intType
+        end
+        else t := TextOfCapacity(tuple^.value_)
+      end;
+
       if t = nil then begin
         begin
           { The discriminants become ordinary constants for as long as the
@@ -12421,7 +12545,7 @@ begin
         reason is the rule ADR-0125 makes rather than an approximation: a slice
         denoter may be written only as a formal parameter's own type, never in
         a schema body, so nothing inside it can name a discriminant. }
-      tyPointer, tyProc, tyComplex, tyString, tySlice:
+      tyPointer, tyProc, tyComplex, tyString, tyText, tySlice:
         StaticThroughout := true;
       tyRestricted: StaticThroughout := StaticThroughout(t^.elem)
     end
@@ -12580,10 +12704,15 @@ begin
     { 6.4.3.3.3 again: a schematic formal `var s: string` is a string whose
     capacity arrives with the actual, so the bound is the skDisc symbol rather
     than a number -- exactly as `array [1..n]` reaches ADR-0040's descriptor. }
-  if schema^.isStringSchema then begin
+  if schema^.isStringSchema or schema^.isTextSchema then begin
     scopeTop := mark;
     scopeDepth := scopeDepth - 1;
-    t := NewType(tyString);
+    { AP 6.4.15.1 gives `utf8` the same one discriminant in the same position,
+      so a schematic formal `var t: utf8` reads its capacity from the actual
+      exactly as `var s: string` does -- the descriptor, the bound-as-a-symbol
+      and ADR-0040's whole path are shared, and only the kind differs. }
+    if schema^.isTextSchema then t := NewType(tyText)
+    else t := NewType(tyString);
     t^.lo := 1;
     t^.hi := 0;
     t^.hiDisc := param^.discSyms^.sym;
@@ -14727,6 +14856,28 @@ begin
                 '6.8.3.5 gives an array no relational operators');
           writeln
         end
+        { AP 6.4.15.6, and it comes before the string arm because a text is
+          not a string and must not ride in on 6.8.3.5's padded comparison --
+          that rule extends the shorter operand with spaces, which is a
+          statement about characters.
+
+          A text compares with a text and with a character-string, and with
+          nothing else. Not with a *string*: the two would be compared as
+          bytes, one of them normalised and the other not, and the answer
+          would be wrong rather than reported (6.4.15.6 NOTE). The assignment
+          above is the way across, and it normalises. }
+        else if IsText(l) or IsText(r) then begin
+          if not ((IsText(l) or IsStringOrChar(l)) and
+                  (IsText(r) or IsStringOrChar(r))) then
+            BadOperands(b, l, r, 'comparable  ', false)
+          else if IsVarString(l) or IsVarString(r) then begin
+            ErrorAt(b^.line, b^.col);
+            write('a text and a string cannot be compared: a text is in ');
+            write('normal form and a string is not, so the two would be ');
+            writeln('compared as bytes and answer wrongly; assign the ',
+                    'string to a text first')
+          end
+        end
         else if (HasExtended(langStd)) and IsStringOrChar(l) and
            IsStringOrChar(r) and not (IsChar(l) and IsChar(r)) then
           { padded comparison: nothing to check }
@@ -14944,7 +15095,12 @@ begin
   k := 0;
   while (a <> nil) and (k < 2) do begin
     if a^.ntype <> nil then
-      if not IsStringOrChar(a^.ntype) then begin
+      { AP 6.4.15.8 gives `length` a text as well, where it counts *elements*.
+        The other string functions do not follow: `index`, `substr` and `trim`
+        are all about a position or a run of characters, and a text has no
+        character to be at a position (6.4.15.9). }
+      if not (IsStringOrChar(a^.ntype) or
+              (IsText(a^.ntype) and (c^.clBuiltin = biLength))) then begin
         ErrorAt(a^.line, a^.col);
         write('''');
         WritePool(c^.clAt, c^.clLen);
@@ -16726,8 +16882,12 @@ begin
       it joins is the integer one: 6.10.3.1's decimal representation is the
       same for both widths, so the runtime writes it through the call it has
       taken an i64 through since it was written. }
+    { AP 6.4.15.10 makes a text a write-parameter and its bytes what is
+      written. The field-width is in **elements**, not bytes and not columns,
+      which is a difference the runtime has to compute and that clause's NOTE
+      admits is still not what a terminal does. }
     if (t <> nil) and not (IsInteger(t) or IsInt64(t) or IsReal(t) or
-                           IsBoolean(t) or
+                           IsBoolean(t) or IsText(t) or
                            IsChar(t) or IsStringType(t)) then begin
       ErrorAt(a^.waValue^.line, a^.waValue^.col);
       write('a value of type ');
@@ -21382,6 +21542,34 @@ begin
     and a valid Extended Pascal program may define a type of this name. }
   if langStd = stdAfterschool then RequiredType('int64    ', int64Type);
 
+  { AP 6.4.15.1: "`utf8` shall be a required identifier denoting a schema of
+    one discriminant, whose identifier shall be `capacity`."
+
+    Declared exactly as 6.4.3.3.3's `string` is, in the outermost scope where
+    6.1.3 lets a program shadow it -- which is ADR-0140's second shape and the
+    whole of how the dialect adds a spelling without reserving a word-symbol.
+    A program that declares its own `utf8` keeps it, and
+    tests/dialect/inherits_extended.pas is where that is witnessed.
+
+    The discriminant is spelled `capacity` because 6.4.15.1 says so, and it
+    says so because reading `t.capacity` should not depend on which of the two
+    string-ish types `t` is. It counts **bytes** either way; what differs is
+    that a string's length is in the same unit as its capacity and a text's is
+    not (6.4.15.8, and its NOTE on the two units). }
+  if langStd = stdAfterschool then begin
+    InternWord('utf8     ', at, len);
+    s := Declare(at, len, skSchema, 0, 0);
+    s^.isTextSchema := true;
+    utf8Schema := s;
+    cap := NewSymbol;
+    InternWord('capacity ', at, len);
+    cap^.at := at;
+    cap^.len := len;
+    cap^.kind := skConst;
+    cap^.stype := intType;
+    AppendSym(s^.discs, s^.discTail, cap)
+  end;
+
   { 6.6.6's required functions. The 10206-only ones are declared only under
     that standard, so an ISO 7185 program may still declare a function called
     `re` and CheckCall may still say that `re` is an Extended Pascal function
@@ -24114,7 +24302,10 @@ begin
         size. }
       tyComplex: LlAlign := 16;
       tyRestricted: LlAlign := LlAlign(b^.elem);
-      tyString: LlAlign := 4;
+      { A text is laid out as a variable-string is (AP 6.4.15, ADR-0189): the
+        representation is shared and only the rules differ, which is why
+        IsStringRep exists and why these two arms are one. }
+      tyString, tyText: LlAlign := 4;
       { ADR-0123's flag-then-value pair. The flag is an i32 rather than the
         i8 a boolean field is, so the whole aligns at least as a length word
         does and the value after it starts where LLVM puts it. }
@@ -24166,7 +24357,7 @@ begin
         to the alignment like every other type, and it has to be -- a record
         holding one puts its next field after the *rounded* size, so a short
         answer here leaves that field outside a whole-record copy. }
-      tyString:
+      tyString, tyText:
         if b^.hi > 0 then LlSize := RoundUp(4 + b^.hi, 4) else LlSize := 4;
       { The flag, the padding LLVM puts before a value that wants more
         alignment than 4, the value, and the tail padding every type gets --
@@ -24272,7 +24463,7 @@ begin
         capacity is the discriminant -- so a string whose capacity arrives with
         the actual is that record's flexible array member and DynSize needs no
         new case. }
-      tyString: begin
+      tyString, tyText: begin
         write(ircode, '{ i32, [');
         if b^.hi > 0 then write(ircode, b^.hi:1) else write(ircode, '0');
         write(ircode, ' x i8] }')
@@ -25174,7 +25365,7 @@ begin
   { A variable-string is a length beside a buffer, so its size is four bytes
     and the capacity -- the shape ADR-0045 already described, laid out by hand
     because a string is not the record a program could have written. }
-  else if IsVarString(t) then begin
+  else if IsStringRep(t) then begin
     StringCapacity(t, header, count);
     Def(v);
     write(ircode, 'add i32 4, ');
@@ -26124,7 +26315,7 @@ begin
         reach it" is the argument that was wrong the last two times. It costs
         no coverage: a label is not a statement and the arm was already run. }
       tyVoid, tySubrange, tyArray, tyRecord, tyPointer, tyFile, tySet, tyProc,
-      tyComplex, tyRestricted, tyString, tyOptional, tySlice, tyHandle:
+      tyComplex, tyRestricted, tyString, tyText, tyOptional, tySlice, tyHandle:
         OpInt(0, v)
     end
 end;
@@ -26989,7 +27180,7 @@ begin
         dp := dp^.next
       end
     end
-    else if (p^.sym^.kind <> skVarParam) and IsVarString(p^.sym^.stype) then
+    else if (p^.sym^.kind <> skVarParam) and IsStringRep(p^.sym^.stype) then
     begin
       { The pair, not an address: the actual need not be a variable and need
         not have the formal's capacity, so what travels is the value 6.4.6
@@ -27751,7 +27942,7 @@ begin
   end
   { A variable-string variable: the length is stored in front of the
     characters, which is the whole of 6.4.3.3.3's representation. }
-  else if IsVarString(st) then begin
+  else if IsStringRep(st) then begin
     EmitAddress(e, addr);
     Def(at_);
     write(ircode, 'getelementptr inbounds ');
@@ -27792,7 +27983,26 @@ procedure EmitStringStoreValue(var dst: str; t: typePtr; var sd, sl: str;
                                var hdr: str);
 var cap: str;
 begin
-  if IsVarString(t) then begin
+  { AP 6.4.15.5: a text is the one target whose store is not a copy. The bytes
+    are validated and normalised on the way in, which is where 6.4.15.2's
+    invariant is established -- and it is established here and nowhere else,
+    so everything downstream may assume it. The runtime normalises through the
+    string arena, so this is an arena producer and the statement must release
+    (ADR-0111); the caller bumps the counter. }
+  if IsText(t) then begin
+    StringCapacity(t, hdr, cap);
+    strTemps := strTemps + 1;
+    write(ircode, '  call void @pas_text_store(ptr ');
+    PutOp(dst);
+    write(ircode, ', i32 ');
+    PutOp(cap);
+    write(ircode, ', ptr ');
+    PutOp(sd);
+    write(ircode, ', i32 ');
+    PutOp(sl);
+    writeln(ircode, ')')
+  end
+  else if IsStringRep(t) then begin
     StringCapacity(t, hdr, cap);
     write(ircode, '  call void @pas_str_store_var(ptr ');
     PutOp(dst);
@@ -27853,6 +28063,53 @@ var d, l: str;
 begin
   EmitString(e, d, l);
   v := d
+end;
+
+{ AP 6.4.15.6's comparison: the byte sequences, lexicographically. Both
+  operands being in Normalization Form C, that *is* canonical equivalence --
+  which is the whole benefit of normalising where a value is constructed rather
+  than where two are compared (ADR-0189).
+
+  An operand that is not a text has not been through that door, so the runtime
+  normalises it first and this becomes an arena producer. Sema has already
+  refused the one case where that would be wrong rather than slow: a *string*
+  against a text, where normalising silently would answer a question the
+  program did not ask. }
+procedure EmitTextCompare(e: nodePtr; var v: str);
+var ad, al, bd, bl, cmp: str;
+begin
+  EmitString(e^.bnLhs, ad, al);
+  EmitString(e^.bnRhs, bd, bl);
+  if not IsText(e^.bnLhs^.ntype) or not IsText(e^.bnRhs^.ntype) then
+    strTemps := strTemps + 1;   { ADR-0111: the normalised copy is arena }
+  Def(cmp);
+  write(ircode, 'call i32 @pas_text_cmp(ptr ');
+  PutOp(ad);
+  write(ircode, ', i32 ');
+  PutOp(al);
+  write(ircode, ', ptr ');
+  PutOp(bd);
+  write(ircode, ', i32 ');
+  PutOp(bl);
+  { The left operand is always the text -- Sema admits no pair without one --
+    so only the right may need normalising, and this flag is which. }
+  if IsText(e^.bnRhs^.ntype) then writeln(ircode, ', i32 0)')
+  else writeln(ircode, ', i32 1)');
+  Def(v);
+  write(ircode, 'icmp ');
+  case e^.bnOp of
+    opEq: write(ircode, 'eq');
+    opNe: write(ircode, 'ne');
+    opLt: write(ircode, 'slt');
+    opLe: write(ircode, 'sle');
+    opGt: write(ircode, 'sgt');
+    opGe: write(ircode, 'sge');
+    opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr, opAndThen,
+    opOrElse, opSymDiff, opIn, opExp, opPow: write(ircode, 'eq')
+  end;
+  write(ircode, ' i32 ');
+  PutOp(cmp);
+  writeln(ircode, ', 0')
 end;
 
 procedure EmitStringCompare2(e: nodePtr; var v: str);
@@ -27955,6 +28212,11 @@ begin
     lengths are not both statically equal char arrays -- the ISO 7185 path is
     kept for the case it already handled, so nothing about that language's
     emitted code moved. }
+  { AP 6.4.15.6, before the string arm for the same reason Sema's is: 6.8.3.5's
+    padded comparison extends the shorter operand with spaces, and a text has
+    no character for that to be about. }
+  else if IsText(e^.bnLhs^.ntype) or IsText(e^.bnRhs^.ntype) then
+    EmitTextCompare(e, v)
   else if IsStringOrChar(e^.bnLhs^.ntype) and IsStringOrChar(e^.bnRhs^.ntype)
           and not (IsChar(e^.bnLhs^.ntype) and IsChar(e^.bnRhs^.ntype)) then
     if IsCharArray(e^.bnLhs^.ntype) and IsCharArray(e^.bnRhs^.ntype) and
@@ -28418,6 +28680,19 @@ begin
   else if e^.clBuiltin = biLength then begin
     { ADR-0125: a slice answers the same question through the same pair. }
     if IsSlice(e^.clArgs^.ntype) then EmitSliceValue(e^.clArgs, x, v)
+    { AP 6.4.15.8: over a text the answer is the number of *elements*, which
+      the pair does not carry -- the length beside the bytes is a count of
+      bytes, and this is the one place the two units part company. So it is a
+      call, and by that clause's NOTE it is not a constant-time one. }
+    else if IsText(e^.clArgs^.ntype) then begin
+      EmitString(e^.clArgs, x, y);
+      Def(v);
+      write(ircode, 'call i32 @pas_text_length(ptr ');
+      PutOp(x);
+      write(ircode, ', i32 ');
+      PutOp(y);
+      writeln(ircode, ')')
+    end
     else EmitString(e^.clArgs, x, v)
   end
   else if e^.clBuiltin = biIndex then begin
@@ -29491,7 +29766,20 @@ begin
     Two chars are excluded because they are an ordinary scalar store, and
     IsChar(t) joins the disjunction because a char has no TypeLength to compare
     -- `or` short-circuits, so that comparison is never reached for one. }
-  if IsStringOrChar(t) and IsStringOrChar(from) and
+  { AP 6.4.15.5's store joins this arm rather than getting one of its own, and
+    for the reason the comment above gives about `c := s`: what decides is the
+    *destination*, and every source a text admits is already something
+    EmitString can hand over as a pointer and a length. The direction out --
+    a variable-string from a text -- is the same arm read the other way.
+
+    A text against a text is here too and is not a copy: 6.4.15.2's invariant
+    has to be established at the store even when the source already satisfies
+    it, because the two capacities may differ and only the store checks that. }
+  if IsText(t) or IsText(from) then begin
+    StrClear(hdr);
+    EmitStringStore(dst, t, src, hdr)
+  end
+  else if IsStringOrChar(t) and IsStringOrChar(from) and
      not (IsChar(t) and IsChar(from)) and
      (IsVarString(t) or IsVarString(from) or IsChar(from) or IsChar(t) or
       (TypeLength(t) <> TypeLength(from))) then begin
@@ -29977,7 +30265,25 @@ begin
       literal, since that is what a literal's type is, and a variable-string
       and a canonical value alike, since EmitString is what a string value
       *is*. 6.10.3.6 asks for exactly those two numbers. }
-    if IsStringType(a^.waValue^.ntype) then begin
+    { AP 6.4.15.10: the same two numbers, and a different writer -- because the
+      field-width is in **elements** and the pair carries bytes, so the padding
+      cannot be computed from the length the way it can for every other type
+      written here. That clause's NOTE admits the width is still not what a
+      terminal does: a wide character occupies two columns and a combining mark
+      none, and East Asian Width is a table this language does not carry. }
+    if IsText(a^.waValue^.ntype) then begin
+      EmitString(a^.waValue, sdata, slen);
+      write(ircode, '  call void @pas_write_text(ptr ');
+      PutOp(fh);
+      write(ircode, ', ptr ');
+      PutOp(sdata);
+      write(ircode, ', i32 ');
+      PutOp(slen);
+      write(ircode, ', i32 ');
+      PutOp(width);
+      writeln(ircode, ')')
+    end
+    else if IsStringType(a^.waValue^.ntype) then begin
       EmitString(a^.waValue, sdata, slen);
       write(ircode, '  call void @pas_write_str(ptr ');
       PutOp(fh);
@@ -31833,7 +32139,7 @@ begin
         no single object whose address could be passed instead. The callee's
         prologue converts the pair into its own slot, which is where 6.4.6's
         padding has somewhere to happen (ADR-0115). }
-      else if (p^.sym^.kind <> skVarParam) and IsVarString(p^.sym^.stype) then
+      else if (p^.sym^.kind <> skVarParam) and IsStringRep(p^.sym^.stype) then
       begin
         write(ircode, 'ptr');
         if named then write(ircode, ' %a', k:1);
@@ -32560,7 +32866,7 @@ begin
         PutOp(half);
         writeln(ircode)
       end
-      else if (l^.sym^.kind <> skVarParam) and IsVarString(l^.sym^.stype) then
+      else if (l^.sym^.kind <> skVarParam) and IsStringRep(l^.sym^.stype) then
       begin
         { 6.4.6's store, from the pair the caller passed into the slot this
           activation owns: shorter is padded with spaces, longer is refused,
@@ -32857,6 +33163,13 @@ begin
   writeln(ircode, 'declare ptr @pas_str_write_ptr(ptr)');
   writeln(ircode, 'declare void @pas_str_write_end(ptr)');
   writeln(ircode, 'declare void @pas_str_store_var(ptr, i32, ptr, i32)');
+  { AP 6.4.15's four (ADR-0191). Declared unconditionally with the rest: the
+    emitter writes one declaration list for every module, and a declaration
+    nothing calls costs a line of IR and no code. }
+  writeln(ircode, 'declare void @pas_text_store(ptr, i32, ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_text_length(ptr, i32)');
+  writeln(ircode, 'declare i32 @pas_text_cmp(ptr, i32, ptr, i32, i32)');
+  writeln(ircode, 'declare void @pas_write_text(ptr, ptr, i32, i32)');
   writeln(ircode, 'declare void @pas_str_store_char(ptr, ptr, i32)');
   writeln(ircode, 'declare void @pas_read_str(ptr, ptr, i32, i32)');
   { ISO/IEC 10206:1991 6.7.5.6 and 6.7.6.8's binding operations. }
@@ -33535,6 +33848,7 @@ begin
   forTop := nil;
   producedHead := nil;
   stringSchema := nil;
+  utf8Schema := nil;
   producingTop := nil;
   heapTypes := nil;
   layoutHead := nil;

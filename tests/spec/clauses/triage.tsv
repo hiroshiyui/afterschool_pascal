@@ -320,19 +320,19 @@ afterschool	6.4.14.3	testable
 afterschool	6.4.14.4	testable	
 afterschool	6.4.14.5	testable	
 afterschool	6.4.14.6	testable	
-afterschool	6.4.15	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.1	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.2	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.3	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.4	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.5	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.6	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.7	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.8	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.9	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.10	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.11	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
-afterschool	6.4.15.12	not-implemented	AP 6.4.15 is stated ahead of the processor (AP 5.6); ADR-0189 stages it
+afterschool	6.4.15	testable	
+afterschool	6.4.15.1	testable	
+afterschool	6.4.15.2	testable	
+afterschool	6.4.15.3	testable	
+afterschool	6.4.15.4	testable	
+afterschool	6.4.15.5	testable	
+afterschool	6.4.15.6	testable	
+afterschool	6.4.15.7	not-implemented	concatenation; the one part of 6.4.15 still stated ahead of the processor (AP 5.6, ADR-0189 increment 3)
+afterschool	6.4.15.8	testable	
+afterschool	6.4.15.9	testable	
+afterschool	6.4.15.10	testable	
+afterschool	6.4.15.11	testable	
+afterschool	6.4.15.12	structural	a requirement that the processor state a version, met by doc/implementation-defined.md 2.7 and not by anything a program can ask
 extended	6.5	structural	introduces the subclauses below it; states no requirement of its own
 afterschool	6.5	structural	introduces the variable-denotation additions
 extended	6.5.1	testable	Variable-declarations

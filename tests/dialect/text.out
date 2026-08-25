@@ -1,0 +1,21 @@
+composed   elements  5  bytes  6  capacity  64
+decomposed elements  5  bytes  6  capacity  64
+hangul     elements  1  bytes  3  capacity  64
+hangul-jamo elements  1  bytes  3  capacity  64
+family     elements  1  bytes 18  capacity  64
+flag       elements  1  bytes  8  capacity  64
+
+composed = decomposed  TRUE
+hangul = jamo spelling TRUE
+composed = literal     TRUE
+composed < flag        TRUE
+composed <> hangul     TRUE
+composed <= composed   TRUE
+flag > composed        TRUE
+flag >= flag           TRUE
+again = composed       TRUE
+
+|    👨‍👩‍👧|
+|   héllo|
+
+round trip héllo

@@ -67,6 +67,19 @@ begin
   Shadowed := n * n
 end;
 
+{ AP 6.4.15.1 adds a required *schema* identifier, and 6.1.3 covers it the same
+  way. This is the sharper case of the two: `utf8` is not merely a name a
+  program may reuse, it is one a program may reuse **as a variable**, and the
+  parser has to go on reading `utf8` as an ordinary identifier rather than
+  looking for a discriminant after it (ADR-0189, ADR-0191). }
+var utf8: integer;
+
+function AlsoShadowed(n: integer): integer;
+begin
+  utf8 := n + 1;
+  AlsoShadowed := utf8
+end;
+
 { ADR-0173 adds two required function-identifiers, `argcount` and `argument`,
   and the same sentence covers them: a program of the contained standard may
   use either spelling for something of its own. Here `argument` is an integer
@@ -168,6 +181,12 @@ begin
     tests/extended/int64_is_free.pas is the same declaration under
     --std=extended, where the name was never required at all. }
   writeln('shadowed=', Shadowed(3));
+  { The schema identifier, shadowed by a variable of this program's. If the
+    dialect had reserved `utf8` this line would not compile, and
+    `dialect-containment` would report it over every case that used the
+    spelling -- which is none, which is why the witness has to be written
+    rather than waited for. }
+  writeln('utf8 of this program=', AlsoShadowed(41):1);
   argument := 21;
   writeln('argcount of this program=', argcount:1);
   external := 3;

@@ -238,7 +238,9 @@ test, that the feature is there.
 
 5.1 is read accordingly: a processor complies when it accepts every program
 this document admits **other than by such a clause**. The list is short and is
-found by searching for the marker; at the time of writing it is 6.4.15 alone.
+found by searching for the marker; at the time of writing it is 6.4.15.7
+alone — the whole of 6.4.15 was on it, and the increment that built the
+text-type took the rest off (ADR-0190, ADR-0191).
 
 NOTE — This is deliberately not the shape Annex C has. Annex C entries are
 requirements the processor accepts programs under and does not enforce, which
@@ -911,7 +913,7 @@ goes on being what a program says. This clause adds a type; it withdraws
 nothing, and 6.4.4's use-after-dispose through a second pointer stays what
 ADR-0019 made it.
 
-#### 6.4.15 Text-types [added; not yet implemented]
+#### 6.4.15 Text-types [added]
 
 A text-type denotes a type whose values are bounded sequences of bytes
 constituting well-formed UTF-8 in Unicode Normalization Form C, and whose
@@ -920,7 +922,9 @@ what a program holds when it means the characters of a text rather than the
 octets carrying them; ISO/IEC 10206:1991 §6.4.3.3's string-types remain what a
 program holds when it means the octets, and are unchanged (ADR-0189).
 
-This clause is stated ahead of the processor (5.6).
+**Concatenation alone is stated ahead of the processor** (5.6, and 6.4.15.7 is
+the clause): it is not implemented, and neither is the iteration 6.4.15.9
+describes. Everything else here is what `--std=afterschool` does (ADR-0191).
 
 **6.4.15.1 The denoter.** `utf8` shall be a required identifier denoting a
 schema (§6.4.7) of one discriminant, whose identifier shall be `capacity`, as
@@ -971,40 +975,39 @@ produced by a schema, and the schema is what its identity comes from.
 
 **6.4.15.5 Assignment and conversion.**
 
-A text-type shall be assignment-compatible from a text-type, and it shall be an
-error (Annex A) if the value does not fit the capacity of the target.
+A text-type shall be assignment-compatible from a text-type, from a string-type
+(§6.4.3.3) and from the char-type. A variable-string-type (§6.4.3.3.3) shall be
+assignment-compatible from a text-type.
 
-A text-type shall be assignment-compatible from a character-string (§6.1.9)
-and from any constant-expression of type `char`. The bytes shall be validated
-and converted to Normalization Form C by the processor before the program is
-executed; it shall be a **violation**, reported where the expression is
-written, if they are not well-formed UTF-8, and an error if the converted value
-does not fit the target.
+Where the value assigned is not of a text-type, its bytes shall be validated
+and converted to Normalization Form C where the assignment occurs. It shall be
+an **error** (Annex A) if they are not well-formed UTF-8, and an error if the
+converted value does not fit the capacity of the target. Where the value is of
+a text-type the second error alone applies, 6.4.15.2 having established the
+first already.
 
-A string-type shall be assignment-compatible from a text-type, the value being
-the bytes, with §6.4.6's own error where it does not fit.
+NOTE 4 — Ill-formed input is an *error* and not a violation, and the assignment
+is admitted rather than refused. That is §6.4.6's own model for a constrained
+type and ISO 7185's for a subrange: `x := n` into a `1..10` is a legal
+assignment that stops the program when the value is out of range, and a text's
+invariant is a constraint on the value like any other. It is also what makes
+this type usable before a library exists to fill one — the alternative,
+refusing every assignment that could fail and routing each through a fallible
+function, would leave a text able to hold nothing but character-strings.
 
-A text-type shall **not** be assignment-compatible from a string-type, nor from
-an expression of type `char` that is not a constant-expression. In each of
-those the bytes are unconstrained and the conversion may fail, so it shall be
-written as a function whose result is a fallible-type (6.4.13) — the only
-construct in this language able to report a failure that is not a fault in the
-program.
+NOTE 5 — This clause said the opposite until the type was implemented, and
+Annex E.12 records the change. The refusal was argued from "invalid input from
+the outside world is not an error in the program", which is true and is not a
+reason to refuse an assignment: it is a reason for a program that expects
+invalid input to use a conversion that reports instead, and that conversion
+remains what 6.4.13's fallible-type is for.
 
-NOTE 4 — What divides the two lists is whether the processor can settle the
-question before the program runs, and not the width of the value. A
-character-string of length one has the type `char` (§6.1.9), so `t := 'a'` must
-be admitted or the model has no literal at all; but `c` declared `char` may
-hold `chr(200)`, which is not well-formed UTF-8 in any position, and `t := c`
-would be a run-time failure the target's type promises cannot happen.
-`t := chr(200)` is admitted to the *rule* and refused by it, the violation
-being reported where it is written.
+NOTE 6 — The target is confined to a *variable*-string in the other direction
+because a fixed-string-type would want §6.4.6's padding to a length, and a
+length in characters is a question a text does not answer.
 
-NOTE 5 — So `t := 'héllo'` is an ordinary assignment and `t := line` is not,
-`line` being a string-type; the second is written `t := try(ToText(line))`, or
-with the failure examined. The opposite direction, `line := t`, needs no
-function: bytes out of a text-type are well-formed by 6.4.15.2 and a string
-imposes nothing on them.
+NOTE 7 — There is therefore exactly one door into a text value, and every
+reader past it may assume 6.4.15.2. That is what lets 6.4.15.6 compare bytes.
 
 **6.4.15.6 Comparison.** The relational operators of §6.8.3.5 shall be
 applicable to two operands of text-types, and to one operand of a text-type and
@@ -1987,6 +1990,12 @@ they did until the rows were probed rather than read: ISO 7185 has no substring
 notation at all, so its parser stops at the `..` where Extended Pascal parses
 the construct and Sema refuses it. One column became two.
 
+`utf8` is the second such row and differs for the same kind of reason. It is a
+required *schema* identifier, and ISO 7185 has no discriminated schema at all —
+so that mode stops at the syntax, where Extended Pascal parses it and finds no
+schema of that name. A row whose two columns agree is the common case and not
+the rule.
+
 | Case | Construct | `--std=iso7185` says | `--std=extended` says |
 | --- | --- | --- | --- |
 | `foreign` | `external` | `the 'external' directive is an Afterschool Pascal feature` | `the 'external' directive is an Afterschool Pascal feature` |
@@ -2002,6 +2011,7 @@ the construct and Sema refuses it. One column became two.
 | `try` | `try(x)` | `unknown function 'try'` | `unknown function 'try'` |
 | `owned` | `owned ^T` | `expected ';' after a variable declaration, found '^'` | `expected ';' after a variable declaration, found '^'` |
 | `take` | `take(v)` | `unknown function 'take'` | `unknown function 'take'` |
+| `utf8` | `utf8(n)` | `a discriminated schema is an Extended Pascal feature; compile with --std=extended` | `unknown schema 'utf8'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is
 that a dialect construct is spelled in a *position* where a conforming program
@@ -2265,6 +2275,41 @@ is worth naming: a NOTE may cite, and nothing checks that what it cites says
 what it claims. `clause-citations` asks only whether a number names a clause
 at all, and 6.9.3.11.3 exists.
 
+**E.11 6.4.15.5 refused an assignment a Pascal type has no business
+refusing.** As first written, a text-type was assignment-compatible from a
+character-string and from a constant `char` and from nothing else: a
+string-type was refused, on the argument that the conversion may fail and that
+"invalid input from the outside world is not an error in the program", so it
+belonged in a function answering a fallible-type.
+
+The argument is sound and the conclusion did not follow. §6.4.6 admits
+assignments that can fail all the time — every store into a subrange is one,
+and ISO 7185 has made an out-of-range store an error since 1982 (ADR-0018). A
+text's invariant is a constraint on the value of exactly that kind, so the
+assignment is admitted and the failure is an error. What the fallible
+conversion is *for* is a program that expects invalid input and must not stop;
+that is a different requirement and 6.4.13 still serves it.
+
+**Found by implementing the clause** (ADR-0191), and it is the first divergence
+here found that way rather than by an audit or by a probe. What made it visible
+was writing the increment's own tests: under the clause as written, a text
+could be filled from a literal and from another text and from nothing else, so
+every test was a test about literals. A type whose only source is a literal is
+a type nobody would reach for, and the document had said so without noticing.
+
+**E.12 6.4.15.5 also over-specified *when* the conversion happens.** It
+required the bytes to be "converted to Normalization Form C by the processor
+**before the program is executed**". That is not implementable here and the
+reason is a fact about this compiler rather than about the language:
+`selfhost/compiler.pas` is an Extended Pascal source (ADR-0082), `external` is
+refused there, and so the compiler cannot reach the Unicode tables at all
+(ADR-0190). The conversion is emitted and happens where the assignment does.
+
+The clause now says "where the assignment occurs" and says nothing about
+translation time, which is the honest form: *when* a required conversion
+happens is not a property a program can observe, and stating it bought
+nothing but a requirement no processor here could meet.
+
 ## Annex F (informative) — Where each requirement was decided
 
 | Clause | Record |
@@ -2299,3 +2344,4 @@ at all, and 6.9.3.11.3 exists.
 | 6.7.7.6.1 – 6.7.7.6.3 | ADR-0184 |
 | 6.7.7.8 (the record component) | ADR-0187 |
 | 5.6, 6.4.15 | ADR-0189 |
+| 6.4.15.5, 6.4.15.6, 6.4.15.8, 6.4.15.10, Annex B `utf8`, Annex E.11, Annex E.12 | ADR-0191 |

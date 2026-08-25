@@ -169,6 +169,12 @@ load-bearing and the entry names the test that fails without it.
   pointer may be assigned, in 6.4.12.2's position, and its source is emptied
   before the target's address is taken -- which is what stops a target reached
   through the source from building a cycle nothing owns.
+  **The same split, a second time, for text**: `IsVarString` asks whether
+  §6.4.3.3.3's *rules* apply and `IsStringRep` asks whether the value is a
+  length and that many bytes, which a text and a variable-string answer alike
+  (ADR-0191). Six sites are about storage and ask the second; everything about
+  indexing, substrings and the padded comparison asks the first. Asking one
+  where the other was meant is how a text got `icmp` on an aggregate.
 - **The emitted module states its own `target datalayout`** (ADR-0028), because
   `LlSize`/`LlAlign` decide what a whole-variable copy moves and there is no
   `DataLayout` to ask. Don't drop the line; a set in a record segfaulted without

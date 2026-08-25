@@ -1,0 +1,10 @@
+<source>:15:8: error: the capacity of a text must be greater than zero, found 0
+<source>:20:8: error: a text and a string cannot be compared: a text is in normal form and a string is not, so the two would be compared as bytes and answer wrongly; assign the string to a text first
+<source>:25:10: error: cannot subscript a value of type utf8(32)
+<source>:25:3: error: cannot assign integer to a variable of type char
+<source>:26:10: error: only a string can have a substring taken of it, not utf8(32)
+<source>:30:14: error: 'index' needs a string or a char, found utf8(32)
+<source>:31:15: error: 'substr' needs a string or a char, found utf8(32)
+<source>:35:10: error: operator '+' needs numeric operands, found utf8(32) and utf8(32)
+<source>:35:3: error: cannot assign integer to a variable of type utf8(32)
+<source>:39:8: error: a value of type utf8(32) cannot be read
