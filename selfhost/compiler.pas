@@ -1937,6 +1937,10 @@ var
     everything. `dumping` therefore excludes it, a diagnostic during a limits
     run being for a person to read and keeping the file:line:col form. }
   dumpLimitsOpt: boolean;
+  { --dump-predicates: what each type-classifying predicate answers about a
+    type of each kind (ADR-0194). Needs nothing of the source but is a dump
+    like the others, so it runs the whole pipeline and reports after it. }
+  dumpPredsOpt: boolean;
   dumpLayoutOpt: boolean;
   { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
     what the seed was generated for and what this repository is built and
@@ -2948,6 +2952,8 @@ begin
   writeln('                  record type the source defines');
   writeln('  --dump-limits   compile as usual, then write how full the');
   writeln('                  compiler''s own fixed arrays were left');
+  writeln('  --dump-predicates  what each type predicate answers about');
+  writeln('                  a type of each kind');
   writeln('  --coverage      emit statement counters; the program then');
   writeln('                  writes the lines it ran to PASCOV_LINES');
   writeln('  --version       write the version and stop');
@@ -2994,6 +3000,7 @@ begin
   dumpSemaOpt := false;
   dumpAllOpt := false;
   dumpLimitsOpt := false;
+  dumpPredsOpt := false;
   dumpLayoutOpt := false;
   targetIx := tgtX86;
   covOpt := false;
@@ -3018,6 +3025,7 @@ begin
       dumpSemaOpt := true
     end
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
+    else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     else if EQ(a, '--std=extended') then begin
@@ -33880,6 +33888,144 @@ end;
   strMax by one identifier: each of those reports what happened in the words of
   the thing that happened, at the moment it happens, so a headroom figure for
   them would measure something nobody is approaching unawares. }
+{ --dump-predicates (ADR-0194). For every kind of type this compiler has, what
+  each of its type-classifying predicates answers about a type of that kind.
+
+  It exists because `kind-exhaustive` covers a `case ... of` over an
+  enumeration and nothing else, and three defects in three increments lived in
+  a **predicate** instead: `IsMemory` asking `IsVarString`, so that the
+  relational operators took a text for a register value and emitted `icmp` on
+  an aggregate; the code generator's comparison dispatch; and `EmitAssign`
+  choosing the string store with `IsStringType`, so a text target fell through
+  to a schema tuple-comparison and stopped the program (ADR-0191, ADR-0193).
+  None of the three is a case-statement. All three were found by writing a
+  program that used the new type.
+
+  What this reports is the answer for a type of that kind with **nothing else
+  set** -- a fresh `NewType(k)`, no element, no flags, no fields. That is the
+  answer a predicate gives by default, and it is where all three defects were.
+  A predicate that also reads a flag (`IsFallible`, `IsTextFile`,
+  `IsOwnedPointer`) therefore reports its flag-clear answer, and one that looks
+  through `Base` reports `tySubrange` as false. Both are stated rather than
+  hidden: the gate's job is to make somebody look at every cell when a kind is
+  added, not to know which answer is right.
+
+  The list of predicates below is written out, so it is a second copy of what
+  the source already says -- the shape ADR-0144 found a gate green over. The
+  `predicate-kinds` gate reads the source for every
+  `function Is...(t: typePtr): boolean` and requires this dump to name exactly
+  those, so a predicate added without a row here fails rather than passing
+  unseen. }
+procedure DumpPredicates;
+var kindTotal: integer; k: typeKind;
+
+  { A padded literal without its padding. }
+  procedure WriteTrim(w: msgLit);
+  var n, i: integer;
+  begin
+    n := msgWidth;
+    while (n > 1) and (w[n] = ' ') do n := n - 1;
+    for i := 1 to n do write(w[i])
+  end;
+
+  procedure PutKindName(k: typeKind);
+  begin
+    case k of
+      tyVoid: WriteTrim('tyVoid          ');
+      tyInteger: WriteTrim('tyInteger       ');
+      tyReal: WriteTrim('tyReal          ');
+      tyBoolean: WriteTrim('tyBoolean       ');
+      tyChar: WriteTrim('tyChar          ');
+      tyEnum: WriteTrim('tyEnum          ');
+      tySubrange: WriteTrim('tySubrange      ');
+      tyArray: WriteTrim('tyArray         ');
+      tyRecord: WriteTrim('tyRecord        ');
+      tyPointer: WriteTrim('tyPointer       ');
+      tyFile: WriteTrim('tyFile          ');
+      tySet: WriteTrim('tySet           ');
+      tyProc: WriteTrim('tyProc          ');
+      tyComplex: WriteTrim('tyComplex       ');
+      tyRestricted: WriteTrim('tyRestricted    ');
+      tySlice: WriteTrim('tySlice         ');
+      tyOptional: WriteTrim('tyOptional      ');
+      tyHandle: WriteTrim('tyHandle        ');
+      tyString: WriteTrim('tyString        ');
+      tyText: WriteTrim('tyText          ');
+      tyInt64: WriteTrim('tyInt64         ');
+    end
+  end;
+
+  { One predicate against every kind. A procedural parameter is what makes
+    this one routine rather than thirty-six (ISO 7185 6.6.3.1, ADR-0030). }
+  procedure Row(name: msgLit; function P(t: typePtr): boolean);
+  var k: typeKind; n: integer;
+  begin
+    n := 0;
+    for k := tyVoid to tyInt64 do
+      if P(NewType(k)) then n := n + 1;
+    WriteTrim(name);
+    write(' ', n:1, ' of ', kindTotal:1, ':');
+    for k := tyVoid to tyInt64 do
+      if P(NewType(k)) then begin
+        write(' ');
+        PutKindName(k)
+      end;
+    writeln
+  end;
+
+begin
+  kindTotal := 0;
+  for k := tyVoid to tyInt64 do kindTotal := kindTotal + 1;
+  { The kinds themselves, in order, before the answers. Two things come of
+    naming them: the table below is readable without the enumeration beside it,
+    and a kind that no predicate is true of is *visible* rather than merely
+    absent -- `tyVoid` is one, correctly, and a bare `tySubrange` is the other,
+    because every ordinal predicate looks through Base() and a type of that
+    kind with no host to look through answers no to all of them. }
+  write('kinds ', kindTotal:1, ':');
+  for k := tyVoid to tyInt64 do begin
+    write(' ');
+    PutKindName(k)
+  end;
+  writeln;
+  Row('IsInteger       ', IsInteger);
+  Row('IsReal          ', IsReal);
+  Row('IsInt64         ', IsInt64);
+  Row('IsComplex       ', IsComplex);
+  Row('IsVarString     ', IsVarString);
+  Row('IsText          ', IsText);
+  Row('IsStringRep     ', IsStringRep);
+  Row('IsOptional      ', IsOptional);
+  Row('IsFallible      ', IsFallible);
+  Row('IsSlice         ', IsSlice);
+  Row('IsNumeric       ', IsNumeric);
+  Row('IsArith         ', IsArith);
+  Row('IsBoolean       ', IsBoolean);
+  Row('IsChar          ', IsChar);
+  Row('IsEnum          ', IsEnum);
+  Row('IsArray         ', IsArray);
+  Row('IsRecord        ', IsRecord);
+  Row('IsPointer       ', IsPointer);
+  Row('IsFile          ', IsFile);
+  Row('IsHandle        ', IsHandle);
+  Row('IsOwned         ', IsOwned);
+  Row('IsOwnedPointer  ', IsOwnedPointer);
+  Row('IsAffine        ', IsAffine);
+  Row('IsTextFile      ', IsTextFile);
+  Row('IsNil           ', IsNil);
+  Row('IsSet           ', IsSet);
+  Row('IsProcType      ', IsProcType);
+  Row('IsEmptySet      ', IsEmptySet);
+  Row('IsRestricted    ', IsRestricted);
+  Row('IsStructured    ', IsStructured);
+  Row('IsMemory        ', IsMemory);
+  Row('IsOrdinal       ', IsOrdinal);
+  Row('IsCharArray     ', IsCharArray);
+  Row('IsStringType    ', IsStringType);
+  Row('IsStringOrChar  ', IsStringOrChar);
+  Row('IsGeneric       ', IsGeneric);
+end;
+
 procedure DumpLimits;
 begin
   writeln('pool ', poolLen:1, ' of ', poolMax:1);
@@ -33950,7 +34096,7 @@ begin
   { --dump-limits asks about a whole run, so it runs the whole pipeline exactly
     as --dump-all does. Without this `--dump-tokens --dump-limits` would report
     the pool as the lexer alone had left it and call that the answer. }
-  whole := dumpAllOpt or dumpLimitsOpt or dumpLayoutOpt;
+  whole := dumpAllOpt or dumpLimitsOpt or dumpLayoutOpt or dumpPredsOpt;
   { Before anything reads a token, and before the components are read: the
     standard decides the lexis, so it has to be settled first (ADR-0166). }
   ReadStdAnnotation;
@@ -34018,6 +34164,10 @@ begin
 
   { --- and how full it left the arrays ------------------------------------ }
   if dumpLimitsOpt then DumpLimits;
+  { ...and what its type predicates say about each kind. Reported after a
+    whole run for consistency with the two dumps beside it, though it asks
+    nothing of the program: the subject is the compiler (ADR-0194). }
+  if dumpPredsOpt then DumpPredicates;
   { --- and what it decided a record looks like ---------------------------- }
   if dumpLayoutOpt and not errorSeen then DumpLayout
 end;

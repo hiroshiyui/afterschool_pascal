@@ -1,0 +1,59 @@
+# What every type predicate answers about every kind of type.
+#
+# Generated from the compiler's own --dump-predicates (ADR-0194), and
+# checked against it on every run. `N of M` is the point: adding a
+# typeKind moves M on every line, so each of the 36 predicates has to
+# be looked at once -- which is the moment three defects in three
+# increments needed a reader and did not get one (ADR-0191,
+# ADR-0193).
+#
+# The answer is for a type of that kind with nothing else set: no
+# element, no flags, no fields. So a predicate that also reads a flag
+# reports its flag-clear answer, and one that looks through Base()
+# reports tySubrange as false. Both are stated rather than hidden.
+#
+# This records what the answers ARE and not what they should be. A
+# wrong cell written here passes; what cannot pass is nobody looking.
+#
+# Regenerate with:
+#   python3 tests/checks/predicate_kinds.py --write
+# Doing so is a decision to argue for in the commit message.
+
+kinds 21: tyVoid tyInteger tyReal tyBoolean tyChar tyEnum tySubrange tyArray tyRecord tyPointer tyFile tySet tyProc tyComplex tyRestricted tySlice tyOptional tyHandle tyString tyText tyInt64
+
+IsInteger 1 of 21: tyInteger
+IsReal 1 of 21: tyReal
+IsInt64 1 of 21: tyInt64
+IsComplex 1 of 21: tyComplex
+IsVarString 1 of 21: tyString
+IsText 1 of 21: tyText
+IsStringRep 2 of 21: tyString tyText
+IsOptional 1 of 21: tyOptional
+IsFallible 0 of 21:
+IsSlice 1 of 21: tySlice
+IsNumeric 3 of 21: tyInteger tyReal tyInt64
+IsArith 4 of 21: tyInteger tyReal tyComplex tyInt64
+IsBoolean 1 of 21: tyBoolean
+IsChar 1 of 21: tyChar
+IsEnum 1 of 21: tyEnum
+IsArray 1 of 21: tyArray
+IsRecord 1 of 21: tyRecord
+IsPointer 1 of 21: tyPointer
+IsFile 1 of 21: tyFile
+IsHandle 1 of 21: tyHandle
+IsOwned 2 of 21: tyFile tyHandle
+IsOwnedPointer 0 of 21:
+IsAffine 2 of 21: tyFile tyHandle
+IsTextFile 0 of 21:
+IsNil 1 of 21: tyPointer
+IsSet 1 of 21: tySet
+IsProcType 1 of 21: tyProc
+IsEmptySet 1 of 21: tySet
+IsRestricted 1 of 21: tyRestricted
+IsStructured 3 of 21: tyArray tyRecord tyOptional
+IsMemory 7 of 21: tyArray tyRecord tyFile tyOptional tyHandle tyString tyText
+IsOrdinal 4 of 21: tyInteger tyBoolean tyChar tyEnum
+IsCharArray 0 of 21:
+IsStringType 1 of 21: tyString
+IsStringOrChar 2 of 21: tyChar tyString
+IsGeneric 0 of 21:

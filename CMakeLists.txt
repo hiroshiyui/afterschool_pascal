@@ -450,6 +450,30 @@ set_tests_properties(target-sizes PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600)
 
+# What every type predicate answers about every kind of type (ADR-0194).
+#
+# `kind-exhaustive` reads every case-statement over an enumeration and cannot
+# see a *predicate*, and three defects in three increments lived in one:
+# IsMemory asking IsVarString, so a text was taken for a register value and the
+# relational operators emitted `icmp` on an aggregate; the code generator's
+# comparison dispatch; and EmitAssign choosing the string store with
+# IsStringType, so a text target fell through to a schema tuple-comparison and
+# stopped the program (ADR-0191, ADR-0193). None is a case-statement, and all
+# three were found by writing a program that used the new type.
+#
+# A prompt rather than a proof: the catalogue records what the answers are, not
+# what they should be. What it buys is that adding a kind moves `of N` on all
+# 36 rows, so every predicate is looked at once -- partial_cases.txt's
+# instrument for partial_cases.txt's reason (ADR-0145).
+#
+# Two halves, as buffer-headroom has since ADR-0148: the compiler answers
+# (--dump-predicates) and the *source* says which predicates exist, so one
+# added without a row fails rather than passing unseen.
+add_test(NAME predicate-kinds
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tests/checks/predicate_kinds.py
+                 --build ${CMAKE_BINARY_DIR})
+
 # How far runtime/pasrt.c is from ISO C, which is the whole of what a port to
 # another C library has to satisfy. The cross-platform chapter used to answer
 # that by assertion; measured, the runtime's entire departure from the standard
