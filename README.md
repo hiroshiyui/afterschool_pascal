@@ -659,6 +659,36 @@ statements run, the block's files and handles close, and in the main program
 the module finalizations still run. `exit` is nobody's word either — a program
 that declares one keeps it — and a deferred statement may not contain one.
 
+**A schema may be parameterised by a type** (ADR-0209). Extended Pascal's
+schemata parameterise a type by a *value* — `string(80)`, `array [1..n]` — so
+one container type had to be written once per element type. A discriminant may
+now name a type instead:
+
+```pascal
+type Vec(T: type; cap: integer) = record
+       n: integer;
+       a: array [1..cap] of T
+     end;
+     Point = record x, y: integer end;
+
+var xs: Vec(integer, 16);
+    ps: Vec(Point, 4);
+```
+
+`type` is a reserved word standing where a type name would go, so no conforming
+program could have written it there and nothing new is reserved. Two
+productions naming the same type **are** the same type — so a procedure over
+`Vec(integer, 16)` takes any variable of it and whole-variable assignment works
+between them — and two naming different types are different types, with their
+own layouts.
+
+What it does not yet do is parameterise a *routine*. A schema with a type
+discriminant cannot be a parameter form, because a schematic formal reads its
+discriminants from the actual at run time and a type is not something that can
+travel that way; a routine over such a schema names the types it is over, and a
+routine generic in `T` would have to be translated once per `T`. The compiler
+says so rather than leaving it to be discovered.
+
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
 
