@@ -705,6 +705,21 @@ Two calls naming the same type reach the same translated routine, which is what
 lets a generic routine recurse. A generic nothing calls is never translated and
 never checked.
 
+**A pointer's domain may name a schema's element types and leave its size
+open** (ADR-0213), which is what a *growable* container written once needs:
+
+```pascal
+type Vec(T: type; cap: integer) = record n: integer; a: array [1..cap] of T end;
+     IVec = ^Vec(integer);        { the element is chosen, the capacity is not }
+var v: IVec;
+begin new(v, 8) end;              { and `new` chooses it, per variable }
+```
+
+One routine can then create, copy and dispose vectors of every capacity, for
+whichever element type the domain named — so a routine that grows a container
+need not know what is in it. The types decide the layout, which a pointer type
+must know; the capacity decides the extent, which `new` may vary.
+
 A generic may be declared in a **separately translated component** and
 instantiated by a program that imports it, for types that component never heard
 of — the instantiation belongs to whoever named the types, so it is emitted in
