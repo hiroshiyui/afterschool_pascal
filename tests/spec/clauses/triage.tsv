@@ -295,6 +295,8 @@ extended	6.4.4	testable	Pointer-Types
 extended	6.4.5	testable	Compatible types
 afterschool	6.4.5	testable	
 extended	6.4.6	testable	Assignment-compatibility
+afterschool	6.4.7	structural	introduces 6.4.7.1
+afterschool	6.4.7.1	testable	
 afterschool	6.4.6	testable	not only a cross-reference to 6.4.2.6.3 and 6.4.11.6: its second sentence is a prohibition of its own, that no value is assignment-compatible with a slice and a slice with no type, which is stated in no other clause and is what ADR-0143's defect violated
 extended	6.4.7	testable	Schema-definitions
 extended	6.4.8	testable	Discriminated-schemata

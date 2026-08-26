@@ -52,6 +52,8 @@
 6.4.3.4.6	Assignment to the tag-field
 6.4.5	Compatible types
 6.4.6	Assignment-compatibility
+6.4.7	Schemata
+6.4.7.1	Type-valued discriminants
 6.4.11	Optional-types
 6.4.11.1	The denoter
 6.4.11.2	The component shall be neither an optional-type nor a file-type

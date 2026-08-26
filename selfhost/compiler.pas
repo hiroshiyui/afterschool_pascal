@@ -814,6 +814,14 @@ type
       Assignable -- two productions with equal tuples *are* the same record. }
     schema: symPtr;
     tuple, tupleTail: numPtr;
+    { AP 6.4.7's type-valued discriminant needs a tuple component that names a
+      *type*, and a tuple component is an integer (6.4.8). This is that integer:
+      one per type object, handed out by NewType and never reused, so equal ids
+      are the same object and the interning `Assignable` rests on goes on being
+      "one tuple, one type" (ADR-0017, ADR-0039, ADR-0209). Structural equality
+      is deliberately not what it answers -- two alike records are two types
+      here, and `Vector(a)` and `Vector(b)` over them must be two as well. }
+    typeId: integer;
     { 6.7.3.2 and 6.7.3.3: a bound that is not known until the block is
       entered -- the discriminant the source wrote there, whose value arrives
       with the actual. lo/hi are then not the bound and nothing reads them.
@@ -1529,8 +1537,11 @@ type
         procedural or functional parameter written as a heading of its own
         (ISO 7185 6.6.3.1), which uses grParams and grResult in place of
         grType and always has exactly one name. }
+      { grIsTypeDisc is AP 6.4.7's type-valued formal discriminant (ADR-0209),
+        written `T: type`. grType is then nil: there is no type-name there to
+        resolve, the word-symbol standing where one would be. }
       nkGroup:      (grNames, grType: nodePtr; grByRef, grIsProtected,
-                     grIsProc, grIsFunction: boolean;
+                     grIsProc, grIsFunction, grIsTypeDisc: boolean;
                      grParams, grResult: nodePtr);
       { nmQualAt/nmQualLen is 6.11.3's qualified name in a type-denoter. There
         is nothing else `a.b` could be there -- a type has no fields to select
@@ -2067,6 +2078,11 @@ var
   takeOk: boolean;
   labelBlocks: labelBlockPtr;
   stringIndex: integer;   { clearing the string-type cache at start-up }
+  { Handed out by NewType, one per type object and never reused, so that
+    AP 6.4.7's type-valued discriminant has an integer to put in a tuple
+    (ADR-0209). Starts at zero, which is therefore no type's -- a tuple
+    component of zero would be a defect rather than a type nobody named. }
+  nextTypeId: integer;
 
 { ------------------------------------------------------------------ strings }
 
@@ -6334,9 +6350,22 @@ begin
     g^.grIsProtected := false;
     g^.grIsProc := false;
     g^.grIsFunction := false;
+    g^.grIsTypeDisc := false;
     g^.grNames := ParseNameList(ctxFormalDisc);
     Expect(tkColon, ctxFormalDisc);
-    if not Check(tkIdent) then begin
+    { AP 6.4.7's type-valued discriminant, `T: type` (ADR-0209). 6.4.7 requires
+      an ordinal-type-name here, and `type` is a word-symbol of both standards
+      -- so no conforming program can have written it in this position, and the
+      dialect needs no word of its own for it (ADR-0140). The position is the
+      spelling, which is `external`'s shape and `array of`'s. }
+    if Check(tkType) and (langStd = stdAfterschool) then begin
+      g^.grIsTypeDisc := true;
+      pos := pos + 1;
+      g^.grType := nil;
+      Append(head, tail, g);
+      more := (not aborted) and Accept(tkSemi)
+    end
+    else if not Check(tkIdent) then begin
       ErrorAtCur;
       writeln('the type of a discriminant must be an ordinal type name');
       Bail
@@ -7291,6 +7320,8 @@ begin
   t^.hiDisc := nil;
   t^.heapTuple := false;
   t^.descOwner := nil;
+  nextTypeId := nextTypeId + 1;
+  t^.typeId := nextTypeId;
   t^.boundsVar := nil;
   NewType := t
 end;
@@ -9272,6 +9303,24 @@ procedure CheckExpr(e: nodePtr); forward;
 procedure CheckStructValue(e: nodePtr; want: typePtr); forward;
 function ResolveType(d: nodePtr): typePtr; forward;
 function InitialStateOf(d: nodePtr): nodePtr; forward;
+{ The type an actual-discriminant names, or nil where it names no type.
+  AP 6.4.7's type-valued discriminant is written in the position an expression
+  occupies, so the parser built an expression: a bare type-name is an nkVar and
+  a qualified one is an nkVar with a call-qualifier. Nothing is checked here --
+  CheckExpr is deliberately not called, because a type-name reaching it is an
+  error about a value and this position wants a type (ADR-0209). }
+function TypeArgument(a: nodePtr): typePtr;
+var sym: symPtr;
+begin
+  TypeArgument := nil;
+  if a <> nil then
+    if (a^.kind = nkVar) and (a^.vrField = nil) then begin
+      sym := Lookup(a^.vrAt, a^.vrLen);
+      if sym <> nil then
+        if sym^.kind = skType then TypeArgument := sym^.stype
+    end
+end;
+
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
   forward;
 function GenericFromSchema(schema, param: symPtr; d: nodePtr;
@@ -12058,6 +12107,11 @@ begin
     g := d^.tdDiscs;
     while g <> nil do begin
       t := nil;
+      if g^.grIsTypeDisc then
+        { AP 6.4.7 (ADR-0209): there is no type-name to resolve, and the
+          symbol's stype stays nil -- which is what every later reader asks,
+          a discriminant with no type being the only kind that has none. }
+      else begin
       seen := Lookup(g^.grType^.nmAt, g^.grType^.nmLen);
       if (seen <> nil) and (seen^.kind = skType) then t := seen^.stype;
       if t = nil then begin
@@ -12076,6 +12130,7 @@ begin
         WriteTypeName(t);
         writeln;
         t := intType
+      end
       end;
       n := g^.grNames;
       while n <> nil do begin
@@ -12097,7 +12152,12 @@ begin
         disc := NewSymbol;
         disc^.at := n^.dnAt;
         disc^.len := n^.dnLen;
-        disc^.kind := skConst;
+        { AP 6.4.7 (ADR-0209): a type-valued discriminant is bound to a *type*
+          where a production resolves the body, so its formal is skType and
+          stype nil until then. skConst for every other, which is what makes
+          `array [1..n]` reach the ordinary subrange code unchanged. }
+        if g^.grIsTypeDisc then disc^.kind := skType
+        else disc^.kind := skConst;
         disc^.stype := t;
         AppendSym(s^.discs, s^.discTail, disc);
         n := n^.next
@@ -12303,7 +12363,25 @@ begin
     while a <> nil do begin
       given := nil;
       value_ := 0;
-      if not EvalOrdinal(a, given, value_) then begin
+      { AP 6.4.7's type-valued discriminant (ADR-0209). The actual is a
+        type-name where every other discriminant's is an expression, and the
+        parser cannot tell them apart -- a bare name is an nkVar either way --
+        so this asks the symbol, which is the answer this compiler has reached
+        five times before (ADR-0044, ADR-0053, ADR-0066, ADR-0071, ADR-0087).
+        The tuple component is the type's own id, so two productions naming
+        one type *are* one type and the interning below needs no new rule. }
+      if (p <> nil) and (p^.sym^.kind = skType) then begin
+        given := TypeArgument(a);
+        if given = nil then begin
+          ErrorAt(a^.line, a^.col);
+          write('discriminant ''');
+          WritePool(p^.sym^.at, p^.sym^.len);
+          writeln(''' of this schema is a type, so a type name belongs here');
+          ok := false
+        end
+        else AppendNum(tuple, tupleTail, given^.typeId)
+      end
+      else if not EvalOrdinal(a, given, value_) then begin
         given := a^.ntype;
         if (dynamicVarFor <> nil) and IsOrdinal(given) then
           dynamic := true
@@ -12422,6 +12500,7 @@ begin
     scopeMark[scopeDepth] := applySeq;
           p := formals;
           tv := tuple;
+          arg := d^.scArgs;
           while p <> nil do begin
             repeated := false;
             q := formals;
@@ -12433,17 +12512,33 @@ begin
             { A discriminant named twice was already reported at the schema;
               binding it again would report it once more at every *use*, and
               point at the tuple rather than at the definition that is wrong. }
-            if not repeated then begin
-              disc := Declare(p^.sym^.at, p^.sym^.len, skConst, d^.line,
-                              d^.col);
-              disc^.stype := p^.sym^.stype;
-              disc^.discBinding := true;
-              disc^.intVal := tv^.value_;
-              disc^.charVal := chr(tv^.value_ mod 256);
-              disc^.boolVal := tv^.value_ <> 0
-            end;
+            if not repeated then
+              { AP 6.4.7's type-valued discriminant (ADR-0209): a *type-name*
+                for as long as the body is being resolved, which is what lets
+                `array [1..n] of T` reach the existing array code with nothing
+                added to it -- the ordinal case's own sentence, one kind over.
+                The type is re-derived from the argument rather than carried
+                beside the tuple: the tuple holds an id and there is no
+                registry to turn one back into a type, and the argument node
+                is still here. }
+              if p^.sym^.kind = skType then begin
+                disc := Declare(p^.sym^.at, p^.sym^.len, skType, d^.line,
+                                d^.col);
+                disc^.stype := TypeArgument(arg);
+                disc^.discBinding := true
+              end
+              else begin
+                disc := Declare(p^.sym^.at, p^.sym^.len, skConst, d^.line,
+                                d^.col);
+                disc^.stype := p^.sym^.stype;
+                disc^.discBinding := true;
+                disc^.intVal := tv^.value_;
+                disc^.charVal := chr(tv^.value_ mod 256);
+                disc^.boolVal := tv^.value_ <> 0
+              end;
             p := p^.next;
-            tv := tv^.next
+            tv := tv^.next;
+            if arg <> nil then arg := arg^.next
           end;
 
           ForgetResolved(schema^.schemaBody);
@@ -12494,14 +12589,22 @@ begin
           Put('(');
           p := formals;
           tv := tuple;
+          arg := d^.scArgs;
           while (p <> nil) and (tv <> nil) do begin
             if p <> formals then begin
               Put(',');
               Put(' ')
             end;
-            WriteOrdinalName(p^.sym^.stype, tv^.value_);
+            { AP 6.4.7 (ADR-0209): a type-valued discriminant's tuple component
+              is an id, and an id is not something to show anybody -- so the
+              name is written instead, from the argument the tuple was built
+              from. WriteOrdinalName would be asked about a nil type here and
+              stop the compiler, which is how this was found. }
+            if p^.sym^.kind = skType then WriteTypeName(TypeArgument(arg))
+            else WriteOrdinalName(p^.sym^.stype, tv^.value_);
             p := p^.next;
-            tv := tv^.next
+            tv := tv^.next;
+            if arg <> nil then arg := arg^.next
           end;
           Put(')');
           msgOut := false;
@@ -12686,17 +12789,63 @@ end;
   look. `noun` picks the word a diagnostic calls them by: a schematic
   formal parameter and a variable with non-constant discriminants need exactly
   the same thing of this. }
+{ Does any of this schema's formal discriminants stand for a type? One walk
+  rather than a flag on the symbol, because the list is short and a flag would
+  be a second place for the answer to live (ADR-0209). }
+function SchemaHasTypeDisc(schema: symPtr): boolean;
+var p: symListPtr; found: boolean;
+begin
+  found := false;
+  p := schema^.discs;
+  while (p <> nil) and not found do begin
+    if p^.sym^.kind = skType then found := true;
+    p := p^.next
+  end;
+  SchemaHasTypeDisc := found
+end;
+
 function GenericFromSchema;
 var t, comp: typePtr; p, q, push: symListPtr; disc: symPtr;
     mark: entryPtr; before, k: integer; repeated, savedSchemaBody: boolean;
 begin
   t := nil;
+  { Every path answers, which two of them did not. The result is assigned in
+    the branch that produces a type and in the string/text one, and the branch
+    for a schema whose discriminants were already reported assigned nothing at
+    all -- so it answered with whatever the result slot held, and the first
+    caller to print that type stopped the compiler on a case-statement with no
+    matching label. Reached only after an error, which is why it sat here; AP
+    6.4.7's type-valued discriminant added a second such branch and found it
+    (ADR-0209). }
+  GenericFromSchema := intType;
   { No self-reference guard here. 6.4.7's rule is enforced where the recursion
     would happen -- in the production the body reaches -- and a parameter-form
     is never resolved inside one, so a second copy of the check would be
     unreachable. Mutation testing is what said so. }
   if schema^.discs = nil then
     t := intType      { already reported at the schema-definition }
+  { AP 6.4.7 (ADR-0209). A schematic formal parameter's discriminants arrive
+    with the actual and are read from a descriptor at run time (ADR-0040),
+    which is what lets one compiled body serve every tuple. A *type* is not
+    something a descriptor can carry: the body's layout would differ per
+    tuple, so the routine would have to be compiled once for each -- which is
+    a mechanism this compiler does not have, and a large one, separate
+    translation here being by re-reading the component's source. So it is
+    refused in as many words rather than by whatever the body happens to say
+    about an unbound name. }
+  else if SchemaHasTypeDisc(schema) then begin
+    ErrorAt(d^.line, d^.col);
+    write('schema ''');
+    WritePool(schema^.at, schema^.len);
+    write(''' has a type discriminant, so ');
+    case noun of
+      nounVarType:       write('a variable');
+      nounParamForm:     write('a parameter');
+      nounPointerDomain: write('a pointer domain')
+    end;
+    writeln(' of it must name the types it was produced with');
+    t := intType
+  end
   else begin
     mark := scopeTop;
     scopeDepth := scopeDepth + 1;
@@ -24017,7 +24166,10 @@ begin
     while g <> nil do begin
       Pad;
       write('discriminant ');
-      WritePool(g^.grType^.nmAt, g^.grType^.nmLen);
+      { AP 6.4.7's type-valued discriminant has no type-name to show: the
+        word-symbol stood where one would be, and grType is nil (ADR-0209). }
+      if g^.grIsTypeDisc then write('type')
+      else WritePool(g^.grType^.nmAt, g^.grType^.nmLen);
       writeln;
       level := level + 1;
       DumpNames(g^.grNames);
@@ -34425,6 +34577,8 @@ end;
 begin
   ParseArgs;
   InstallKeywords;
+  { Before the first NewType, which is InstallRequired's (ADR-0209). }
+  nextTypeId := 0;
   poolLen := 0;
   tokCount := 0;
   pos := 1;

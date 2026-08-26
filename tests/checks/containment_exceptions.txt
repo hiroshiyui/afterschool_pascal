@@ -84,3 +84,4 @@ utf8_refused
 release_refused
 break_refused
 continue_refused
+typedisc_refused

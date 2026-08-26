@@ -1197,6 +1197,60 @@ this is the one area of this language whose correctness is settled by an oracle
 written by neither this processor's author nor its specification's. ADR-0086's
 argument for the BSI suite, in the place it is needed most.
 
+#### 6.4.7 Schemata [extended]
+
+**6.4.7.1 Type-valued discriminants [added].** A discriminant-specification
+shall admit the word-symbol `type` where ISO/IEC 10206:1991 §6.4.7 requires an
+ordinal-type-name:
+
+    discriminant-specification = identifier-list ':'
+                                 ( ordinal-type-name | 'type' ) .
+
+Each identifier of such a discriminant-specification shall denote, throughout
+the schema's type-denoter, the type named by the corresponding
+actual-discriminant of the tuple the type is produced with (§6.4.8). The
+corresponding actual-discriminant shall be a type-name and shall not be an
+expression.
+
+The domain of a schema having a type-valued discriminant shall be the set of
+tuples whose component in that position is a type. Two tuples shall have equal
+components in such a position when, and only when, they name the **same type**
+in the sense of ISO/IEC 10206:1991 §6.4.1 — so two occurrences of `Vec(T, 4)`
+denote the same type exactly when the two occurrences of `T` do, and two
+type-denoters written alike but separately denote two types and produce two.
+
+A schema-name denoting a schema that has a type-valued discriminant shall not
+be a parameter-form (§6.7.3.2); a parameter of such a schema's type shall be
+written with its actual-discriminant-part.
+
+`type` shall not become a required identifier, an ordinary identifier, or a
+word-symbol of the dialect that it is not already of ISO 7185 §6.1.2 and
+ISO/IEC 10206:1991 §6.1.2. It is admitted in one position and is a word-symbol
+of both standards there and everywhere else.
+
+NOTE 1 — A schema parameterises a type by a *value* in ISO/IEC 10206:1991,
+which is what makes `list of T` unsayable there and what a library here has
+been paying for: `PasVector` holds integers, `PasStrVec` and `PasList` hold
+strings, `PasMap` maps a string to an integer, and `PasSort` avoids the
+question entirely by taking two procedural parameters and never seeing an
+element. Four of those are one data structure written once per element type.
+
+NOTE 2 — Nothing here parameterises a *routine*. A schematic formal parameter
+(§6.7.3.2) reads its discriminants from a descriptor the actual brings, which
+is what lets one compiled body serve every tuple; a type is not something a
+descriptor can carry, since the body's layout differs for each. So a routine
+over such a schema names the types it is over, and a routine generic in `T`
+would have to be translated once per `T` — which this document does not
+describe and this processor does not do. That restriction is stated in the
+requirement above rather than left to be discovered.
+
+NOTE 3 — The spelling is a *position* and not a word (ADR-0140): §6.4.7
+requires a type-identifier there and `type` is a word-symbol of both standards,
+so no conforming program can have written it in that place. Annex B records
+that the two conformance modes refuse it differently — ISO 7185 has no schema
+at all and stops at the formal-discriminant-part, where Extended Pascal parses
+the schema and stops at the word-symbol.
+
 #### 6.4.5 Compatible types [extended]
 
 Two slices (6.7.3.9) shall be compatible when their component types are the same
@@ -2172,6 +2226,7 @@ the rule.
 | `owned` | `owned ^T` | `expected ';' after a variable declaration, found '^'` | `expected ';' after a variable declaration, found '^'` |
 | `take` | `take(v)` | `unknown function 'take'` | `unknown function 'take'` |
 | `release` | `release(h)` | `unknown function 'release'` | `unknown function 'release'` |
+| `typedisc` | `T: type` in a schema | `a schema is an Extended Pascal feature; compile with --std=extended` | `the type of a discriminant must be an ordinal type name` |
 | `utf8` | `utf8(n)` | `a discriminated schema is an Extended Pascal feature; compile with --std=extended` | `unknown schema 'utf8'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is

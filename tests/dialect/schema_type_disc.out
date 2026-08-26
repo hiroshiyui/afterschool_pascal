@@ -1,0 +1,6 @@
+p 101 104
+p 201 204
+long 8 64
+pts 3,4 5,6
+cs 0 1 2
+chs hello

@@ -2624,6 +2624,31 @@ the three activations that are not a procedure's, and `exit_errors.pas` the
 refusals; moving `EmitExitTarget` after `CloseFiles` leaves the file empty and
 two armed statements unrun.
 
+**A discriminant may name a type, and the tuple names it by an id**
+(ADR-0209). AP 6.4.7.1 admits `T: type` in a discriminant-specification, which
+is a *position* and not a word: §6.4.7 requires an ordinal-type-name there and
+`type` is a word-symbol of both standards, so no conforming program can have
+written it in that place and `reserved-words` is untouched. Everything else is
+ADR-0039's machinery reused. The intern key is `(schema, tuple)` and a tuple
+component is an integer, so every type object now carries a `typeId` from
+`NewType`, never reused — equal ids are the same object, which is ADR-0017's
+name equivalence and deliberately not a structural comparison, since two
+records written alike are two types and must produce two. While `schemaBody` is
+resolved, an ordinal discriminant is declared `skConst` with its value and a
+type-valued one `skType` with the argument's type, which is what lets
+`array [1..cap] of T` reach the existing subrange and array code with nothing
+added. The parser cannot tell the two actuals apart — an actual-discriminant is
+an expression either way — so Sema looks the name up, for the sixth time
+(ADR-0044, ADR-0053, ADR-0066, ADR-0071, ADR-0087). A schema with a type
+discriminant may **not** be a parameter-form and says so: a schematic formal
+reads its discriminants from a descriptor at run time (ADR-0040) and a type is
+not something a descriptor can carry, so a routine generic in `T` would have to
+be translated once per `T` — which is the next increment and not this one.
+`tests/dialect/schema_type_disc.pas` observes the productions and the identity,
+`schema_type_errors.pas` both directions of the tuple mistake and the
+parameter-form refusal; making the tuple component structural instead of the id
+makes two alike records one type and `p := q` a copy between them.
+
 **`break` and `continue` are one branch each, and the blocks were already
 there** (ADR-0208). AP 6.7.5.10 leaves the closest-containing
 repetitive-statement and 6.7.5.11 completes the current iteration of it; both

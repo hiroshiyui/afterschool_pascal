@@ -1,0 +1,8 @@
+<source>:25:15: error: discriminant 't' of this schema is a type, so a type name belongs here
+<source>:26:17: error: discriminant 't' of this schema is a type, so a type name belongs here
+<source>:29:24: error: 'point' is a type and has no value
+<source>:29:11: error: schema 'vec' has a type discriminant, so a variable of it must name the types it was produced with
+<source>:31:17: error: 'point' is a type and has no value
+<source>:36:26: error: schema 'vec' has a type discriminant, so a parameter of it must name the types it was produced with
+<source>:40:3: error: cannot assign vec(point, 4) to a variable of type vec(integer, 4)
+<source>:41:11: error: var parameter 'g' is integer, but the argument is vec(integer, 4)
