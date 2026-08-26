@@ -621,6 +621,18 @@ void Parser::parseFormalParameters(std::vector<ParamGroup> &into) {
         (check(Tok::KwPacked) && check(Tok::KwArray, 1))) {
       group.type = parseConfArraySchema(check(Tok::KwPacked));
     } else {
+      // AP §6.7.3.5's type parameter, `T: type` (ADR-0211). A type-inquiry is
+      // `type of` and nothing else, so `type` followed by anything else is a
+      // juxtaposition no conforming program can write — and what a conformance
+      // mode *says* about a dialect construct is conformance behaviour
+      // (ADR-0121, ADR-0154), which is why this front end carries the refusal
+      // and difftest compares the two. Unconditional here: Std has two values
+      // and this front end is never given --std=afterschool.
+      if (check(Tok::KwType) && !check(Tok::KwOf, 1) && std_ >= Std::Extended) {
+        errorAtCur("a type parameter is an Afterschool Pascal feature; "
+                   "compile with --std=afterschool");
+        bail();
+      }
       if (!check(Tok::Ident) && !check(Tok::KwType)) {
         errorAtCur("a parameter's type must be a type name or a conformant "
                    "array schema");

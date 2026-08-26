@@ -1416,6 +1416,66 @@ only bound in scope. That the two bounds always describe the same storage is the
 property the parameter form exists for, and it is what a pointer and a
 separately-passed count cannot promise.
 
+**6.7.3.10 The type parameter [added].** A formal-parameter-section may be a
+**type-parameter-specification**:
+
+    type-parameter-specification = identifier-list ':' 'type' .
+
+The identifiers of an identifier-list of a type-parameter-specification shall
+each have a defining-point as a type-identifier for the region that is the
+formal-parameter-list closest-containing it and for the region that is the
+block of the procedure-block or function-block, if any, associated with the
+procedure-heading or function-heading closest-containing it.
+
+A procedure-declaration or function-declaration whose formal-parameter-list
+contains a type-parameter-specification shall be a **generic** declaration.
+
+NOTE 1 — The spelling is a position and not a word-symbol, as every construct
+of this dialect is (Annex D). 6.7.3.1 already admits `type` as the first
+word-symbol of a type-inquiry (6.4.8), and a type-inquiry is `type` followed by
+`of` and nothing else — so `type` followed by anything else is a juxtaposition
+no conforming program can write. It is the spelling 6.4.7.1 gives a
+type-valued discriminant, in the other place where a type may be a parameter.
+
+**6.7.3.10.1 The actual.** In an activation of a generic routine, the
+actual-parameter matching a type-parameter-specification shall be a
+type-identifier. The types so named, in the order the type parameters are
+written, shall be the **type-argument-tuple** of that activation.
+
+It shall be an error for an actual-parameter matching a
+type-parameter-specification to denote anything other than a type.
+
+**6.7.3.10.2 Instantiation.** A generic declaration shall denote no single
+procedure or function. For each distinct type-argument-tuple with which a
+generic routine is activated, the processor shall produce one procedure or
+function, whose formal-parameter-list and result type are those of the generic
+declaration with each type parameter denoting the corresponding type of the
+tuple, and whose block is the block of the generic declaration.
+
+Two activations whose type-argument-tuples are the same shall activate the same
+procedure or function.
+
+NOTE 2 — Which makes a recursive activation of a generic routine terminate:
+the tuple is the same, so it reaches the routine already being produced rather
+than asking for another. It is 6.4.7's rule for a schema's productions, said
+for a routine — and for the same reason, since a type parameter is what a
+discriminant cannot be (6.7.3.7.1 passes discriminants in the actual, and a
+type is not a value that can travel there).
+
+NOTE 3 — A generic declaration activated by nothing produces nothing, and its
+block is therefore never subjected to the requirements of this document. A
+generic routine is checked once for each tuple a program actually asks for.
+
+**6.7.3.10.3 What a type parameter is not.** A type parameter shall occupy no
+position in the actual-parameter-list of the produced procedure or function,
+and 6.7.3.6's congruence shall be determined over the remaining
+formal-parameter-sections.
+
+NOTE 4 — It has already done its work by the time the produced routine exists:
+it chose which routine that is. What is passed at the activation is what
+6.7.3.1 admits, and a type is not among those things in any of the three
+languages this document is written against.
+
 #### 6.7.5 Required procedures [extended]
 
 **6.7.5.9 The exit procedure [added].** The required procedure-identifier
@@ -2227,6 +2287,7 @@ the rule.
 | `take` | `take(v)` | `unknown function 'take'` | `unknown function 'take'` |
 | `release` | `release(h)` | `unknown function 'release'` | `unknown function 'release'` |
 | `typedisc` | `T: type` in a schema | `a schema is an Extended Pascal feature; compile with --std=extended` | `the type of a discriminant must be an ordinal type name` |
+| `typeparam` | `T: type` in a formal-parameter-list | `a type-inquiry is an Extended Pascal feature; compile with --std=extended` | `a type parameter is an Afterschool Pascal feature; compile with --std=afterschool` |
 | `utf8` | `utf8(n)` | `a discriminated schema is an Extended Pascal feature; compile with --std=extended` | `unknown schema 'utf8'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is

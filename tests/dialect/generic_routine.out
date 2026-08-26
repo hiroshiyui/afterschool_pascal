@@ -1,0 +1,7 @@
+ints    7 3
+records 8,9 1,2
+again   3 7
+fn int  3
+fn rec  5
+vec int 42
+vec rec 7,6

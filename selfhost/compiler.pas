@@ -674,6 +674,8 @@ type
   ifacePtr = ^ifaceRec;
   modRecPtr = ^modRec;
   producedPtr = ^producedRec;
+  instPtr = ^instRec;
+  entryPtr = ^entryRec;
   { Forward, because a schema's symbol holds the *syntax* of its body: a
     schema-definition has no type until a tuple gives its discriminants
     values, so what the symbol keeps is a type-denoter (6.4.7). }
@@ -952,6 +954,28 @@ type
       values -- which is why a schema keeps its *syntax* and not a type. The
       formal discriminants carry only a name and an ordinal type. }
     schemaBody: nodePtr;
+    { AP 6.7.3.5's generic routine (ADR-0211), and the shape is the schema's
+      one line above: a routine with a type parameter keeps its *syntax* and
+      not a translation, because a type cannot travel in a descriptor
+      (ADR-0040) and so one compiled body cannot serve every T. What is kept
+      is where to start reading it again -- genBodyPos is the token index of
+      its block -- and everything needed to read it in the region it was
+      written in rather than the one a call stands in: the scope as it was at
+      the declaration, and which source it came from, for ADR-0210.
+
+      genInsts is the cache, keyed by the tuple of type-ids the call named, so
+      two calls with the same T share one translation and a recursive call
+      finds the instantiation already in progress. isGeneric is what stops the
+      generic itself from being given formals, a body or a frame: it is a
+      declaration and never a procedure. }
+    isGeneric: boolean;
+    genBodyPos: integer;
+    genDeclTop: entryPtr;
+    genDeclDepth, genFileIdx: integer;
+    genDecl: nodePtr;
+    genBlock: nodePtr;
+    genInsts: instPtr;
+    genOf: symPtr;
     discs, discTail: symListPtr;
     { 6.7.3.2 and 6.7.3.3: the schema a formal parameter was written as the
       bare name of. Its type is then produced *generically* -- the
@@ -1136,10 +1160,20 @@ type
     next: producedPtr
   end;
 
+  { AP 6.7.3.5: one translation of a generic routine, keyed by the tuple of
+    type-ids its call named -- ADR-0039's interning, for a routine instead of
+    a type, and for the same reason: two calls naming the same T must reach
+    one translated body, or a recursive one would instantiate for ever. The
+    tuple is the key and `sym` is the routine it produced. }
+  instRec = record
+    tuple: numPtr;
+    sym: symPtr;
+    next: instPtr
+  end;
+
   { A name bound in a scope. Kept apart from the symbol it names because the
     same symbol is bound twice -- once where a parameter is declared, and again
     when the procedure's body puts it back in scope. }
-  entryPtr = ^entryRec;
   entryRec = record
     at, len: integer;
     depth: integer;
@@ -1603,6 +1637,17 @@ type
         exactly. Zero length where the directive was not written. }
       nkProcDecl:   (pdAt, pdLen, pdResAt, pdResLen: integer;
                      pdExtAt, pdExtLen: integer;
+                     { AP 6.7.3.5 (ADR-0211): where this routine's block
+                       begins in the token stream, and which source those
+                       tokens came from. Both are needed only by a *generic*
+                       routine, which is read again once per distinct type
+                       argument -- what a schema does to its body's syntax
+                       (ADR-0039), done to a block by starting the parser over
+                       rather than by copying the tree it built. A copy would
+                       be a second statement of every node's shape and free to
+                       drift; re-reading the tokens is parsing, so it cannot
+                       disagree with parsing. }
+                     pdBodyPos, pdFileIdx: integer;
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward, pdInHeading: boolean;
                      pdIsExternal: boolean;
@@ -2000,6 +2045,11 @@ var
     (0 = the source named on the command line). Parse-time only: Sema reads
     nkModule's own copy, the parser having moved on by then. }
   curImportIdx: integer;
+  { The block whose declaration-part is being checked, so a generic routine
+    can record where its instantiations belong: they are appended to the
+    procedure-part of the block the generic itself was declared in, which is
+    the list DeclareProcs and EmitProcs walk (AP 6.7.3.5, ADR-0211). }
+  curDeclBlock: nodePtr;
   langStd: stdKind;
   { Whether --std= was written on the command line. A source may declare its
     own standard in a header comment (ADR-0166) and the flag wins, so the
@@ -4114,6 +4164,7 @@ begin
     nkGroup: begin
       n^.grIsProc := false;
       n^.grIsFunction := false;
+      n^.grIsTypeDisc := false;
       n^.grParams := nil;
       n^.grResult := nil
     end;
@@ -6513,7 +6564,7 @@ begin
 end;
 
 function ParseFormalParameters;
-var head, tail, g: nodePtr; more: boolean;
+var head, tail, g: nodePtr; more, isTypeParam: boolean;
 begin
   head := nil;
   tail := nil;
@@ -6525,6 +6576,7 @@ begin
     g^.grType := nil;
     g^.grByRef := false;
     g^.grIsProtected := false;
+    isTypeParam := false;
     if Check(tkProcedure) or Check(tkFunction) then
       ParseProcParam(g, Check(tkFunction))
     else begin
@@ -6536,6 +6588,32 @@ begin
       g^.grByRef := Accept(tkVar);
       g^.grNames := ParseNameList(ctxParamList);
       Expect(tkColon, ctxParamList);
+      { AP 6.7.3.5's type parameter, `T: type` (ADR-0211), spelled by its
+        position exactly as AP 6.4.7.1's discriminant is. 6.7.3.1 already
+        admits `type` here, because it begins 6.4.8's type-inquiry -- and a
+        type-inquiry is `type of` and nothing else, so `type` followed by
+        anything but `of` is a juxtaposition no conforming program can write.
+        One token of lookahead, which is ADR-0140's test asked of a
+        *parameter-form* rather than of a statement. }
+      { ADR-0154: what a conformance mode *says* about a dialect construct is
+        conformance behaviour, so the mode is named rather than the program
+        being told `type` needs an `of`. Asked of the juxtaposition and not of
+        the mode, or a conforming program's `x: type of v` would be caught by
+        it. }
+      if (langStd <> stdAfterschool) and Check(tkType) and
+         (PeekKind(1) <> tkOf) and HasExtended(langStd) then begin
+        ErrorAtCur;
+        write('a type parameter is an Afterschool Pascal feature; ');
+        writeln('compile with --std=afterschool');
+        Bail
+      end;
+      isTypeParam := (langStd = stdAfterschool) and Check(tkType) and
+                     (PeekKind(1) <> tkOf);
+      if isTypeParam then begin
+        g^.grIsTypeDisc := true;
+        g^.grType := nil;
+        pos := pos + 1
+      end
       { 6.7.3.1: `parameter-form = type-name | schema-name | type-inquiry`, so
         a parameter's type is still not a type-denoter -- it is a name, or one
         of those two other forms. `type` is the only word-symbol that may begin
@@ -6552,7 +6630,7 @@ begin
         `array of` opens a slice, and `packed array` can only be the first.
         Neither standard admits `array` in this position at level 0, so the
         spelling costs the grammar nothing. }
-      if (not aborted) and
+      else if (not aborted) and
          ((Check(tkArray) and (PeekKind(1) = tkLBracket)) or
           (Check(tkPacked) and (PeekKind(1) = tkArray))) then
         g^.grType := ParseConfArraySchema(Check(tkPacked))
@@ -6591,6 +6669,8 @@ begin
   d^.pdParams := nil;
   d^.pdResult := nil;
   d^.pdBody := nil;
+  d^.pdBodyPos := 0;
+  d^.pdFileIdx := curImportIdx;
   d^.pdAt := 0;
   d^.pdLen := 0;
   d^.pdResAt := 0;
@@ -6694,8 +6774,15 @@ begin
       end
     end
   end
-  else
-    d^.pdBody := ParseBlock;
+  else begin
+    { Where the block starts, for AP 6.7.3.5 to read it again from (ADR-0211).
+      Taken before ParseBlock and not after, and inside the begin/end this
+      `else` needs now that it governs two statements: without them ParseBlock
+      runs for an `external` declaration too, which has no block and whose
+      directive has already been consumed. }
+    d^.pdBodyPos := pos;
+    d^.pdBody := ParseBlock
+  end;
   Expect(tkSemi, ctxProcBody);
   ParseProcOrFunc := d
 end;
@@ -8199,6 +8286,15 @@ begin
   s^.resultTypeBad := false;
   s^.defined := false;
   s^.schemaBody := nil;
+  s^.isGeneric := false;
+  s^.genBodyPos := 0;
+  s^.genDeclTop := nil;
+  s^.genDeclDepth := 0;
+  s^.genFileIdx := 0;
+  s^.genDecl := nil;
+  s^.genBlock := nil;
+  s^.genInsts := nil;
+  s^.genOf := nil;
   s^.discs := nil;
   s^.discTail := nil;
   s^.descSchema := nil;
@@ -9334,6 +9430,13 @@ begin
         if sym^.kind = skType then TypeArgument := sym^.stype
     end
 end;
+
+{ AP 6.7.3.5 (ADR-0211): the translation of `gen` for the types this call
+  names, made if this is the first call to name them and found in the cache if
+  it is not. Forward, because the call site is checked long before the two
+  things this needs -- BuildFormals and CheckProcBody -- are declared. }
+function InstantiateGeneric(gen: symPtr; var args: nodePtr;
+                            line, col: integer): symPtr; forward;
 
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
   forward;
@@ -15575,6 +15678,12 @@ begin
     too (6.2.2.10), and LookupUser is what turns it back into the nil this
     branch reads as "not the program's own". }
   sym := LookupUser(c^.clAt, c^.clLen);
+  { AP 6.7.3.5, as for a procedure-statement: the instantiation is the callee
+    from here on. Asked before ResultTypeOf, because a generic function has no
+    result type until a call says what its types are. }
+  if sym <> nil then
+    if sym^.isGeneric then
+      sym := InstantiateGeneric(sym, c^.clArgs, c^.line, c^.col);
   if IsInvocable(sym) and (ResultTypeOf(sym) <> nil) then begin
     c^.clSym := sym;
     c^.ntype := ResultTypeOf(sym);
@@ -18801,8 +18910,16 @@ begin
           whose only assignment is a sibling's still never assigns its own. }
         if named <> nil then begin
           owning := currentProc;
+          { AP 6.7.3.5: inside a generic function's body the function's own
+            name is still bound to the *generic*, because a recursive call
+            names its types and so has to reach something generic to name them
+            to. What is being translated, though, is one instantiation -- so an
+            instantiation counts as its generic for 6.8.2.2's containment, and
+            the function whose result is assigned is the instantiation, which
+            is where the result variable actually lives. }
           while (owning <> nil) and (owning <> named) do
-            owning := owning^.owner;
+            if owning^.genOf = named then named := owning
+            else owning := owning^.owner;
           if owning = nil then begin
             ErrorAt(s^.line, s^.col);
             write('''');
@@ -19055,8 +19172,16 @@ begin
           writeln(''' is not a procedure')
         end
         else begin
-          s^.pcSym := sym;
-          CheckArguments(sym, s^.pcArgs, s^.line, s^.col)
+          { AP 6.7.3.5: a call to a generic routine names a translation before
+            it names arguments. The instantiation replaces the callee here, so
+            everything downstream -- the argument check, the frame, the emitted
+            call -- is about an ordinary routine and knows nothing of this. }
+          if sym^.isGeneric then
+            sym := InstantiateGeneric(sym, s^.pcArgs, s^.line, s^.col);
+          if sym <> nil then begin
+            s^.pcSym := sym;
+            CheckArguments(sym, s^.pcArgs, s^.line, s^.col)
+          end
         end
       end;
 
@@ -19336,7 +19461,13 @@ begin
   section := 0;
   while g <> nil do begin
     section := section + 1;
-    if g^.grIsProc then begin
+    { AP 6.7.3.5: a type parameter is not a parameter. It occupies no frame
+      slot and no argument position -- by the time this runs it has already
+      been bound as a type name, and what it contributed to the call was the
+      identity of a translation rather than a value. So it is passed over,
+      and every formal after it is numbered as though it were not there. }
+    if g^.grIsTypeDisc then section := section - 1
+    else if g^.grIsProc then begin
       { ISO 7185 6.6.3.1 spells a procedural parameter as a heading, so it
         declares exactly one name and the parser guarantees it is there. }
       t := NewType(tyProc);
@@ -20081,65 +20212,34 @@ begin
   writeln('formal-parameter-list')
 end;
 
-procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
-var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
-    p, q: symListPtr;
+{ AP 6.7.3.5: does this formal-parameter-list declare a type parameter? One
+  is enough to make the routine generic, because what follows it in the list
+  may name it -- `Push(T: type; var v: Vec(T, 8); x: T)` -- so nothing after
+  the first can be resolved until a call says what T is. }
+function HasTypeParam(groups: nodePtr): boolean;
+var g: nodePtr; found: boolean;
 begin
-  existing := LookupInScope(d^.pdAt, d^.pdLen);
-  if existing <> nil then
-    if not ((existing^.kind = skProc) or (existing^.kind = skFunc)) or
-       existing^.defined then
-      existing := nil;
+  found := false;
+  g := groups;
+  while g <> nil do begin
+    if g^.grIsTypeDisc then found := true;
+    g := g^.next
+  end;
+  HasTypeParam := found
+end;
 
-  if existing <> nil then begin
-    { ISO 7185 6.6.1: the full declaration of a forward-declared procedure
-      repeats the name only, so the parameters are already known. }
-    if (d^.pdParams <> nil) or (d^.pdResult <> nil) then begin
-      ErrorAt(d^.line, d^.col);
-      write('the parameters of ''');
-      WritePool(d^.pdAt, d^.pdLen);
-      writeln(''' were already given in its forward declaration')
-    end;
-    { 6.6.1: `forward` follows a procedure-*heading*. This is a
-      procedure-identification -- the name alone, resuming a forward
-      declaration -- and the clause gives such an identifier "exactly one of
-      its applied occurrences in a procedure-identification", followed by the
-      block. A second `forward` leaves two headings and no body. }
-    if d^.pdIsForward then begin
-      ErrorAt(d^.line, d^.col);
-      write('''');
-      WritePool(d^.pdAt, d^.pdLen);
-      write(''' was already declared forward, so this declaration needs ');
-      writeln('its body rather than ''forward'' again')
-    end;
-    { An `external` declaration says where the body is, and a completion is a
-      declaration whose heading was already read -- so a completion cannot be
-      one. It also could not be made to work: an exported name's linkage name
-      is composed from the interface and the constituent, and a foreign name
-      is whatever the program wrote, and the importing component would look up
-      the one this one did not emit (ADR-0121). Declare it once. }
-    if d^.pdIsExternal then begin
-      ErrorAt(d^.line, d^.col);
-      write('''');
-      WritePool(d^.pdAt, d^.pdLen);
-      write(''' was already declared, and a declaration that completes an ');
-      writeln('earlier heading cannot be ''external''')
-    end;
-    d^.pdSym := existing
-  end
-  else begin
-    if d^.pdIsFunction then
-      sym := Declare(d^.pdAt, d^.pdLen, skFunc, d^.line, d^.col)
-    else
-      sym := Declare(d^.pdAt, d^.pdLen, skProc, d^.line, d^.col);
-    sym^.level := owner^.level + 1;
-    sym^.owner := owner;
-    d^.pdSym := sym;
-    { Said now rather than in CheckForeignHeading: the result type and the
-      formals are checked below, and a handle is admitted in both positions
-      for an `external` heading and refused for any other (AP 6.4.12). }
-    if d^.pdIsExternal then sym^.linkKind := lnkForeign;
+{ The half of a procedure-declaration that says what a call is checked
+  against: the result type, the formals, and the frame slots they occupy.
 
+  Split out because a generic routine's instantiation needs exactly this and
+  needs it *later* -- once per distinct tuple of type arguments, in the scope
+  the generic was declared in (AP 6.7.3.5, ADR-0211). Writing it twice was the
+  alternative and is the thing this repository refuses on principle: two copies
+  of a heading rule would be free to drift, and a program would then be checked
+  against one and translated from the other. }
+procedure InstantiateHeading(d: nodePtr; sym: symPtr);
+var mark: entryPtr; at, len: integer; want: typePtr; p, q: symListPtr;
+begin
     if d^.pdIsFunction then
       if d^.pdResult = nil then begin
         ErrorAt(d^.line, d^.col);
@@ -20226,6 +20326,91 @@ begin
     if d^.pdIsExternal then CheckForeignHeading(d, sym);
     scopeDepth := scopeDepth - 1;
     scopeTop := mark
+end;
+
+procedure DeclareProcHeading(d: nodePtr; owner: symPtr);
+var existing, sym: symPtr; mark: entryPtr; at, len: integer; want: typePtr;
+    p, q: symListPtr;
+begin
+  existing := LookupInScope(d^.pdAt, d^.pdLen);
+  if existing <> nil then
+    if not ((existing^.kind = skProc) or (existing^.kind = skFunc)) or
+       existing^.defined then
+      existing := nil;
+
+  if existing <> nil then begin
+    { ISO 7185 6.6.1: the full declaration of a forward-declared procedure
+      repeats the name only, so the parameters are already known. }
+    if (d^.pdParams <> nil) or (d^.pdResult <> nil) then begin
+      ErrorAt(d^.line, d^.col);
+      write('the parameters of ''');
+      WritePool(d^.pdAt, d^.pdLen);
+      writeln(''' were already given in its forward declaration')
+    end;
+    { 6.6.1: `forward` follows a procedure-*heading*. This is a
+      procedure-identification -- the name alone, resuming a forward
+      declaration -- and the clause gives such an identifier "exactly one of
+      its applied occurrences in a procedure-identification", followed by the
+      block. A second `forward` leaves two headings and no body. }
+    if d^.pdIsForward then begin
+      ErrorAt(d^.line, d^.col);
+      write('''');
+      WritePool(d^.pdAt, d^.pdLen);
+      write(''' was already declared forward, so this declaration needs ');
+      writeln('its body rather than ''forward'' again')
+    end;
+    { An `external` declaration says where the body is, and a completion is a
+      declaration whose heading was already read -- so a completion cannot be
+      one. It also could not be made to work: an exported name's linkage name
+      is composed from the interface and the constituent, and a foreign name
+      is whatever the program wrote, and the importing component would look up
+      the one this one did not emit (ADR-0121). Declare it once. }
+    if d^.pdIsExternal then begin
+      ErrorAt(d^.line, d^.col);
+      write('''');
+      WritePool(d^.pdAt, d^.pdLen);
+      write(''' was already declared, and a declaration that completes an ');
+      writeln('earlier heading cannot be ''external''')
+    end;
+    d^.pdSym := existing
+  end
+  else begin
+    if d^.pdIsFunction then
+      sym := Declare(d^.pdAt, d^.pdLen, skFunc, d^.line, d^.col)
+    else
+      sym := Declare(d^.pdAt, d^.pdLen, skProc, d^.line, d^.col);
+    sym^.level := owner^.level + 1;
+    sym^.owner := owner;
+    d^.pdSym := sym;
+    { AP 6.7.3.5 (ADR-0211). A generic routine is a *declaration* and never a
+      procedure: it gets no formals, no result type, no frame and no body,
+      because every one of those is a question only a call can answer. What is
+      recorded instead is how to read it again -- the token its block starts
+      at, the source those tokens came from, and the scope as it stood here,
+      which is where the body has to be checked however far away the call is.
+      That last is ADR-0053's mechanism: a module heading saves its scope so
+      the block can be checked later, and this needs the same thing for the
+      same reason. }
+    sym^.isGeneric := HasTypeParam(d^.pdParams);
+    if sym^.isGeneric then begin
+      sym^.genDecl := d;
+      sym^.genBlock := curDeclBlock;
+      sym^.genBodyPos := d^.pdBodyPos;
+      sym^.genFileIdx := d^.pdFileIdx;
+      sym^.genDeclTop := scopeTop;
+      sym^.genDeclDepth := scopeDepth;
+      { It has a body in the source and must not be given one here: `defined`
+        is what stops CheckProcBody from checking a block whose types are not
+        known yet, and what makes a second declaration of the name the
+        ordinary error it already is. }
+      sym^.defined := true
+    end;
+    { Said now rather than in CheckForeignHeading: the result type and the
+      formals are checked below, and a handle is admitted in both positions
+      for an `external` heading and refused for any other (AP 6.4.12). }
+    if d^.pdIsExternal then sym^.linkKind := lnkForeign;
+
+    if not sym^.isGeneric then InstantiateHeading(d, sym)
   end
 end;
 
@@ -20233,6 +20418,16 @@ procedure CheckProcBody(d: nodePtr);
 var sym, outer: symPtr; p, q: symListPtr; mark: entryPtr;
 begin
   sym := d^.pdSym;
+  { AP 6.7.3.5: a generic routine's block is not checked here and is not
+    checked once. It has no formals to bind and no frame to bind them in until
+    a call names its types, so what happens to it is what happens to a schema's
+    body -- read again per distinct tuple (ADR-0039), by the instantiation,
+    in the scope this declaration saved. Passing over it is therefore not a
+    gap: the block is checked once for every set of types a program actually
+    asks for, and a generic nothing calls is never checked at all, which is
+    what `template` in another language does and what 6.7.3.5 says outright. }
+  if sym <> nil then
+    if sym^.isGeneric then sym := nil;
   if sym <> nil then
     if sym^.defined then begin
       ErrorAt(d^.line, d^.col);
@@ -21387,10 +21582,252 @@ end;
 
   Shared by a block and by both halves of a module, which have the same parts
   and differ only in what may surround them. }
+{ Where a generic's instantiation is put so the rest of the compiler finds it:
+  the procedure-part of the block the generic itself was declared in. Both
+  walks that matter -- DeclareProcs for the frame types and EmitProcs for the
+  bodies -- are over that list, so an instantiation appended to it is reached
+  without either being told generics exist. }
+procedure AppendProcDecl(b, d: nodePtr);
+var last: nodePtr;
+begin
+  if b <> nil then begin
+    d^.next := nil;
+    if b^.blProcs = nil then b^.blProcs := d
+    else begin
+      last := b^.blProcs;
+      while last^.next <> nil do last := last^.next;
+      last^.next := d
+    end
+  end
+end;
+
+{ AP 6.7.3.5's instantiation, and everything hard about a generic routine is
+  here.
+
+  The tuple is the key, exactly as it is for a schema production (ADR-0039):
+  the type-ids the call named, in order. Two calls naming the same types get
+  one translation, and a *recursive* call finds the instantiation because it
+  is registered before its body is read -- without that, a generic calling
+  itself would instantiate until the heap ran out.
+
+  What makes it work at all is that three things were saved where the generic
+  was declared: the scope, the token its block starts at, and which source
+  those tokens came from. A call may stand anywhere -- another block, another
+  procedure, another module -- and the body must still be read in the region it
+  was written in, or every name in it would resolve against the caller. That is
+  ADR-0053's module mechanism, which saves a scope so a block can be checked
+  later, used a second time for the same reason.
+
+  And the body is *re-parsed* rather than copied. A copy walker would be a
+  second statement of every node's shape, free to disagree with the parser in
+  one field of one kind and be caught by nothing here; starting the parser over
+  at a saved token cannot disagree with parsing, because it is parsing. }
+function InstantiateGeneric;
+var tuple, tupleTail: numPtr; g, a, decl, prev, nxt: nodePtr; inst: symPtr;
+    given: typePtr; found, ip: instPtr;
+    saveTop, mark: entryPtr; saveDepth, savePos, saveImport: integer;
+    saveCur: symPtr; saveFile: nameStr;
+    ok: boolean; tp: nodePtr; ts: symPtr;
+begin
+  InstantiateGeneric := nil;
+  tuple := nil;
+  tupleTail := nil;
+  ok := true;
+
+  { The type arguments, in the order the type parameters were written. An
+    actual in that position must name a type and nothing else: it is not an
+    expression, and TypeArgument is what Stage A already asks of a schema's
+    type-valued discriminant (ADR-0209). }
+  g := gen^.genDecl^.pdParams;
+  a := args;
+  while (g <> nil) and ok do begin
+    if g^.grIsTypeDisc then begin
+      if a = nil then begin
+        ErrorAt(line, col);
+        write('''');
+        WritePool(gen^.at, gen^.len);
+        writeln(''' needs a type here, and the argument list ended');
+        ok := false
+      end
+      else begin
+        given := TypeArgument(a);
+        if given = nil then begin
+          ErrorAt(a^.line, a^.col);
+          write('this argument of ''');
+          WritePool(gen^.at, gen^.len);
+          write(''' must name a type, because the parameter it matches ');
+          writeln('is declared ''type''');
+          ok := false
+        end
+        else AppendNum(tuple, tupleTail, given^.typeId)
+      end
+    end;
+    if a <> nil then a := a^.next;
+    g := g^.next
+  end;
+
+  if ok then begin
+    found := nil;
+    ip := gen^.genInsts;
+    while ip <> nil do begin
+      if SameTuple(ip^.tuple, tuple) then found := ip;
+      ip := ip^.next
+    end;
+    if found <> nil then InstantiateGeneric := found^.sym
+    else begin
+      saveTop := scopeTop;
+      saveDepth := scopeDepth;
+      saveCur := currentProc;
+      savePos := pos;
+      saveFile := curFile;
+      saveImport := curImportIdx;
+      { The region the generic was declared in, not the one this call stands
+        in -- and ADR-0210's file, so a diagnostic inside the body names the
+        source that wrote it rather than the one that called it. }
+      scopeTop := gen^.genDeclTop;
+      scopeDepth := gen^.genDeclDepth;
+      if gen^.genFileIdx > 0 then curFile := importName[gen^.genFileIdx];
+
+      mark := scopeTop;
+      scopeDepth := scopeDepth + 1;
+      scopeMark[scopeDepth] := applySeq;
+
+      { Each type parameter becomes an ordinary type name, for the rest of the
+        heading and for the whole body. That is the whole of what makes
+        `var v: Vec(T, 8)` and `var t: T` resolve: nothing below this knows a
+        generic is being instantiated. }
+      g := gen^.genDecl^.pdParams;
+      a := args;
+      while g <> nil do begin
+        if g^.grIsTypeDisc then begin
+          given := TypeArgument(a);
+          tp := g^.grNames;
+          while tp <> nil do begin
+            ts := Declare(tp^.dnAt, tp^.dnLen, skType, tp^.line, tp^.col);
+            ts^.stype := given;
+            tp := tp^.next
+          end
+        end;
+        if a <> nil then a := a^.next;
+        g := g^.next
+      end;
+
+      { An ordinary routine from here on, declared in the *generic's* scope
+        rather than the caller's, so it nests where the generic did and its
+        static link is the one its body expects. }
+      decl := NewNode(nkProcDecl, gen^.genDecl^.line, gen^.genDecl^.col);
+      decl^.pdIsFunction := gen^.genDecl^.pdIsFunction;
+      decl^.pdIsForward := false;
+      decl^.pdInHeading := false;
+      decl^.pdIsExternal := false;
+      decl^.pdExtAt := 0;
+      decl^.pdExtLen := 0;
+      decl^.pdAt := gen^.at;
+      decl^.pdLen := gen^.len;
+      decl^.pdResAt := gen^.genDecl^.pdResAt;
+      decl^.pdResLen := gen^.genDecl^.pdResLen;
+      decl^.pdParams := gen^.genDecl^.pdParams;
+      decl^.pdResult := gen^.genDecl^.pdResult;
+      decl^.pdBodyPos := gen^.genBodyPos;
+      decl^.pdFileIdx := gen^.genFileIdx;
+
+      inst := NewSymbol;
+      inst^.at := gen^.at;
+      inst^.len := gen^.len;
+      if gen^.genDecl^.pdIsFunction then inst^.kind := skFunc
+      else inst^.kind := skProc;
+      inst^.level := gen^.level;
+      inst^.owner := gen^.owner;
+      inst^.genOf := gen;
+      decl^.pdSym := inst;
+
+      { Registered before the body is read, so a recursive call finds it. }
+      new(ip);
+      ip^.tuple := tuple;
+      ip^.sym := inst;
+      ip^.next := gen^.genInsts;
+      gen^.genInsts := ip;
+
+      { The heading's denoters are the generic's own nodes, and a resolved
+        denoter caches the type it resolved to -- so without this the second
+        instantiation reads the first one's answer and `var a: T` is whatever
+        T was last time. Exactly a schema's problem and exactly its remedy
+        (ADR-0039): the body is re-resolved per tuple, and forgetting is what
+        makes "per tuple" true. The nodes are shared because the *body* is
+        re-parsed and the heading is not; forgetting is the cheaper half of
+        that bargain and is what the schema already does. }
+      g := gen^.genDecl^.pdParams;
+      while g <> nil do begin
+        if not g^.grIsTypeDisc then ForgetResolved(g^.grType);
+        g := g^.next
+      end;
+      ForgetResolved(gen^.genDecl^.pdResult);
+
+      InstantiateHeading(decl, inst);
+
+      { Read the block again. `pos` is a cursor into a token array that is
+        never cleared, so this is the same text the declaration parsed, parsed
+        a second time into a tree of its own. }
+      pos := gen^.genBodyPos;
+      curImportIdx := gen^.genFileIdx;
+      decl^.pdBody := ParseBlock;
+      curImportIdx := saveImport;
+
+      { Appended where the generic stands, so DeclareProcs and EmitProcs reach
+        it without being told it is there, and so its frame nests correctly.
+        CheckDeclarations skips a node whose symbol has a genOf: it is already
+        declared, and its body is checked here. }
+      AppendProcDecl(gen^.genBlock, decl);
+
+      { The body is checked with the type parameters still bound, which is why
+        this scope is not popped above where the heading's was. A formal is
+        re-bound from the symbol when a block is entered (CheckProcBody does
+        it); a type parameter has no symbol on the routine to be re-bound
+        from, and `var t: T` in the body needs it exactly as `var a: T` in the
+        heading did. }
+      CheckProcBody(decl);
+
+      scopeDepth := scopeDepth - 1;
+      scopeTop := mark;
+
+      scopeTop := saveTop;
+      scopeDepth := saveDepth;
+      currentProc := saveCur;
+      pos := savePos;
+      curFile := saveFile;
+      curImportIdx := saveImport;
+      InstantiateGeneric := inst
+    end;
+    { The type actuals have done their work -- they chose a translation -- and
+      the instantiation has no formal for them, so they are taken out of the
+      list before anything else reads it. This is the husk idiom one step
+      further on: elsewhere a parser's node is left in place and its real
+      operands moved out, and here the node is removed outright, because
+      CodeGen walks this list to emit actuals and a type has none. }
+    prev := nil;
+    a := args;
+    g := gen^.genDecl^.pdParams;
+    while (g <> nil) and (a <> nil) do begin
+      nxt := a^.next;
+      if g^.grIsTypeDisc then begin
+        if prev = nil then args := nxt else prev^.next := nxt
+      end
+      else prev := a;
+      a := nxt;
+      g := g^.next
+    end
+  end
+end;
+
 procedure CheckDeclarations(b: nodePtr; owner: symPtr; procs: nodePtr);
 var c, t, g, p: nodePtr; which, line, col: integer; inTypes, done: boolean;
-    savedInTypePart, bound: boolean;
+    savedInTypePart, bound, bound2: boolean; savedDeclBlock: nodePtr;
 begin
+  { Saved and restored rather than set: a procedure's own declaration-part is
+    checked inside its enclosing one, so a generic declared in the inner block
+    must record the inner block and not the outer. }
+  savedDeclBlock := curDeclBlock;
+  curDeclBlock := b;
   c := b^.blConsts;
   t := b^.blTypes;
   g := b^.blVars;
@@ -21480,14 +21917,24 @@ begin
       end;
       { Headings one at a time, in order, so that a procedure cannot call one
         declared after it without `forward`. }
-      DeclareProcHeading(p, owner);
-      if p^.pdBody <> nil then CheckProcBody(p);
+      { An instantiation appended by AP 6.7.3.5 is already declared and its
+        body already checked, in the scope its generic was written in. It is
+        in this list so DeclareProcs and EmitProcs reach it; declaring it a
+        second time here would give it the caller's region and a second
+        symbol. }
+      bound2 := false;
+      if p^.pdSym <> nil then bound2 := p^.pdSym^.genOf <> nil;
+      if not bound2 then begin
+        DeclareProcHeading(p, owner);
+        if p^.pdBody <> nil then CheckProcBody(p)
+      end;
       p := p^.next
     end
     else
       done := true   { a variable group with no names; the parser makes none }
   end;
   inTypePart := false;
+  curDeclBlock := savedDeclBlock;
   { 6.4.4's forward reference is completed where its own type-definition-part
     ends, which is what the run above does. What can still be pending here is
     a domain written *outside* one -- a variable's, or a schema body's -- and
@@ -23831,7 +24278,16 @@ begin
   Pad;
   writeln('type');
   level := level + 1;
-  DumpTypeExpr(g^.grType);
+  { AP 6.7.3.10's type parameter has no denoter to show -- `type` *is* the
+    parameter-form. Said in a word rather than left as an empty `type` line,
+    which is what a group whose denoter failed to parse would also print, and
+    the two are not the same thing. }
+  if g^.grIsTypeDisc then begin
+    Pad;
+    writeln('type-parameter')
+  end
+  else
+    DumpTypeExpr(g^.grType);
   level := level - 2
   end
 end;
@@ -33677,11 +34133,19 @@ begin
 end;
 
 procedure EmitProcs(b: nodePtr);
-var d: nodePtr;
+var d: nodePtr; gen: boolean;
 begin
   d := b^.blProcs;
   while d <> nil do begin
-    if d^.pdBody <> nil then begin   { a forward heading has no body of its own }
+    { AP 6.7.3.5: a generic routine has a block in the source and no
+      translation of its own -- one compiled body cannot serve every T, which
+      is the whole reason it is generic. What is emitted instead is its
+      instantiations, and each of those is an ordinary procedure-declaration
+      appended to this same list, so the walk below reaches them without being
+      told they are special. }
+    gen := false;
+    if d^.pdSym <> nil then gen := d^.pdSym^.isGeneric;
+    if (d^.pdBody <> nil) and not gen then begin
       EmitProcBody(d);
       EmitProcs(d^.pdBody)
     end;
@@ -34618,6 +35082,7 @@ begin
   readingImports := false;
   curFile := '';
   curImportIdx := 0;
+  curDeclBlock := nil;
   scopeTop := nil;
   scopeDepth := 0;
   applySeq := 0;

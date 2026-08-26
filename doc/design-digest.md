@@ -2671,6 +2671,44 @@ and fails the second — and
 `0210-import-diagnostic-names-the-client.mut` puts the defect back and is
 killed by `pascalc-product` and by nothing else.
 
+**A routine may be parameterised by a type, and is translated once per tuple**
+(ADR-0211, AP 6.7.3.10). `T: type` in a formal-parameter-list, spelled by its
+position exactly as ADR-0209's discriminant is: 6.7.3.1 admits `type` there as
+the first word of 6.4.8's type-inquiry, a type-inquiry is `type of` and nothing
+else, so `type` followed by anything else is a juxtaposition no conforming
+program can write. **The generic itself is nothing** — no formals, no result
+type, no frame, no emitted body, and its block is never checked, which is why a
+generic nothing calls may contain what it likes. Everything a call is checked
+against is built per instantiation, keyed by the tuple of ADR-0209's `typeId`s
+and registered *before* the body is read, without which a recursive generic
+instantiates until the heap runs out.
+
+Two mechanisms were reused rather than written. The body is checked in the
+scope saved at the declaration, which is ADR-0053's module mechanism — a
+heading saves `scopeTop` so a block can be checked later — used a second time
+for the same reason: a call may stand anywhere, and every name in the body must
+still resolve where it was written. And the body is **re-parsed** from a saved
+token position rather than copied, because a copy walker is a second statement
+of sixty-odd node shapes that can name every kind and still copy one field
+wrongly with `kind-exhaustive` satisfied; re-parsing cannot disagree with
+parsing. The *heading* is the asymmetry: its nodes are shared and
+`ForgetResolved` is run over them per instantiation, ADR-0039's remedy, because
+a resolved denoter caches its type and the second instantiation would otherwise
+read the first one's.
+
+`InstantiateHeading` is the half of `DeclareProcHeading` that resolves the
+result type and builds the formals, split out so a declaration and every
+instantiation run one copy of the rule. An instantiation is an ordinary
+procedure-declaration appended to the block the generic was declared in, so
+`DeclareProcs` and `EmitProcs` reach it untold; `CheckDeclarations` skips a node
+whose symbol carries a `genOf`. Two places had to learn a name can denote a
+generic: a type parameter is passed over by `BuildFormals` and numbered out of
+the sections, and 6.8.2.2's containment treats an instantiation as its generic,
+so a generic function assigns *the instantiation's* result. `generic_routine`
+is the case; `0211-instantiation-not-cached` does not terminate and
+`0211-heading-not-forgotten` type-checks the second instantiation against the
+first one's types.
+
 **`break` and `continue` are one branch each, and the blocks were already
 there** (ADR-0208). AP 6.7.5.10 leaves the closest-containing
 repetitive-statement and 6.7.5.11 completes the current iteration of it; both

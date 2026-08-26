@@ -379,6 +379,10 @@ afterschool	6.7.3.9.2	testable
 afterschool	6.7.3.9.3	testable	
 afterschool	6.7.3.9.4	testable	
 afterschool	6.7.3.9.5	testable	
+afterschool	6.7.3.10	testable	
+afterschool	6.7.3.10.1	testable	
+afterschool	6.7.3.10.2	testable	
+afterschool	6.7.3.10.3	testable	
 extended	6.7.4	testable	Required procedures and functions
 extended	6.7.5	structural	introduces the subclauses below it; states no requirement of its own
 extended	6.7.5.1	structural	classifies the required procedures into the categories the subclauses below enumerate; the members and their meanings are stated there, so nothing here can fail unless one of them does
