@@ -106,11 +106,13 @@ declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
-twenty-one modules — eight conforming and thirteen dialect, each listed by
-name in `README.md` and `lib/dialect/README.md`, which is where to count them:
-this sentence has held a number that went stale twice — and that survey
-(2026-08-23, against the thirteen modules that then existed in total) named
-six gaps. Three needed no language change and closed the same day:
+twenty-one modules, eight conforming and thirteen dialect. **`README.md`'s
+module table is the one place to count them** — one row each, checkable
+against `ls lib lib/dialect`, and this sentence has held a number that went
+stale twice. `lib/dialect/README.md` is not a second listing and should not be
+read as one: it is the error-shape convention, and it names only the modules
+that illustrate it. That survey (2026-08-23, against the thirteen modules that
+then existed in total) named six gaps. Three needed no language change and closed the same day:
 `PasFile` (after ADR-0172), `PasProcess`, `PasStrVec`. Of the three that needed one, the command line as a
 list turned out to be a feature rather than a module (ADR-0173), the opaque
 handle is ADR-0174, and the struct is ADR-0184 — so all six are closed, and
@@ -305,13 +307,14 @@ the open decision it would settle.
 | ~~A move~~ | Rust's `mem::take` | what an affine type needs to be usable | **Done** (ADR-0182, AP 6.4.14.6): `take(v)` empties a variable and yields what it held, in the one position an owned value may be assigned. Found by writing the client: without it push-front and pop-front are each two copies, so an owned chain had no constant-time operation at all |
 | Explicit allocator passing | Zig | part of memory safety | **Tried; does not survive contact** (ADR-0116) |
 | ~~Error unions / `Result`~~ | Zig, Rust | error handling | **Done** (ADR-0176, AP 6.4.13): `T ! E` is the result record ADR-0120's convention described, written by the compiler with the field names fixed |
-| ~~An early exit~~ | Turbo Pascal, Delphi, FPC | what propagation stands on | **Done** (ADR-0177, AP 6.7.5.9): `exit` terminates one activation, `exit(e)` assigns the result first. The one borrowing here whose source is another *Pascal* rather than another language |
+| ~~An early exit~~ | Turbo Pascal, Delphi, FPC | what propagation stands on | **Done** (ADR-0177, AP 6.7.5.9): `exit` terminates one activation, `exit(e)` assigns the result first. The first borrowing here whose source is another *Pascal* rather than another language, and the row below is the second |
+| ~~An early loop exit~~ | Turbo Pascal, Delphi, FPC | nothing structural — an ergonomic gap | **Done** (ADR-0208, AP 6.7.5.10 and 6.7.5.11): `break` leaves the closest-containing repetitive-statement, `continue` completes the current iteration of it. Taken whole from the three dialects that have it, down to the spelling and to leaving *one* loop rather than a named one. It settles no open decision, which is what makes it the plainest case in this table of the argument [above](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one): a question the standards do not answer and three Pascals answer alike is one where novelty would be a cost with nothing to show for it. It cost two branches — the blocks were already there, and AP 6.9.3.11 NOTE 2 already said what an armed statement does when a sequence is left by a jump |
 | ~~Propagation~~ | Zig's `try`, Rust's `?` | the rest of error handling | **Done** (ADR-0178, AP 6.8.9): `try(x)` yields the value or leaves the enclosing function with the cause. Spelled as a required function because no position would serve — see below |
 | ~~`defer`~~ | Zig, Swift | resource safety | **Done** (ADR-0175, AP 6.9.3.11): `defer S` arms a statement, executed when the statement-sequence it stands in is completed or when the activation terminates. Zig's unit rather than Go's, because a per-activation defer runs a loop's `dispose(p)` once with the last `p` |
 | Unicode-correct `String` | Swift | the text model | **Done**, entirely — ADR-0189 – ADR-0193, then ADR-0196 and ADR-0199; the row in [the goal's table](#the-goal-adr-0109) is what the increments were and what each cost, and this one is only about the borrowing. The grapheme as the unit and the refusal of an integer index are Swift's and are taken whole. Its *storage* is not: Swift's `String` is a reference-counted heap buffer, which is the construct ADR-0151 says forces the aliasing decision, so this is a value with a declared capacity instead — and that in turn is what makes normalise-on-construction affordable, which Swift cannot do and which buys a bytewise `=` |
 | ARC | Swift | aliasing | **The question is withdrawn** (ADR-0201). ADR-0117's containment fixes what `^T` means, and ARC changes it — so the candidate cannot reach the only reference type an ISO program has |
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
-| Traits / protocols | Rust, Swift | abstraction | **Later.** Schemata already give parametric types (ADR-0039) |
+| Traits / protocols | Rust, Swift | abstraction | **Later**, and the reason given here has since become half-true rather than true. Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so `Vec(T: type; cap: integer)` is a container written once. What that does not give is a routine over one — see [the row above](#what-blocks-the-library) — and abstraction over *behaviour* is a further thing again, which nothing has asked for |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
 | Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. That is a proposal and not a caller — nothing of it is written — so the row does not move, but it is the first time this one has had a candidate rather than a hypothesis |
 
@@ -370,8 +373,8 @@ Seven structural questions about the dialect and five items of *what is next*
 used to stand here. Ten of the twelve are answered — the table at the end says
 where — and what each found on its first run is in
 [`doc/history.md`](history.md#what-the-roadmap-answered). **Two remain**, and
-only the first of them is a task: the other is a standing risk no record can
-close.
+only one of them is a task: §2 below. §1 is a standing risk no record can
+close, which is why it is first — it is read every time and finished never.
 
 ### 1. The dialect has no external authority, and every gate here is anchored in one
 
@@ -457,9 +460,11 @@ one step too short.
 
 What is left of the entry is a caution rather than a task, and it is in
 `doc/sop.md` §7: the catalogue is a **register of demonstrations, not a
-measurement**. Eight mutations are files; two hundred records carry one in
-their prose, most naming code that has since moved. "The mutation suite
-passes" means those eight claims still hold and nothing more.
+measurement**. **Eleven** mutations are files, all eleven killed on
+2026-08-26 — and `ls tests/mutation/mutants/` is where to count them, because
+this sentence has already gone stale once. Two hundred records carry a
+mutation in their *prose*, most naming code that has since moved. "The
+mutation suite passes" means those eleven claims still hold and nothing more.
 
 ---
 
@@ -479,7 +484,7 @@ run by hand over 25 targets rather than the two the compiler admits, on
 2026-08-22, against the 4538 offsets there were that day. **Read the
 proportions and not the absolute**: the denominator is every field of every
 frame the compiler emits for its own source, so it moves with each declaration
-added to `selfhost/compiler.pas` — the gate reports 4965 as this is written,
+added to `selfhost/compiler.pas` — the gate reports 4999 as this is written,
 and the comparison has no mode that reproduces itself, so the day it was taken
 is part of what it says.
 
