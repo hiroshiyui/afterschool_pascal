@@ -174,7 +174,7 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and that a type argument a call passes is one the container's own type already knows, which `x: type of v^.a[1]` would remove — **not** a conformance gap, as this row said for a day: §6.4.9's object is a variable-name and no more, so the refusal is the standard's (ADR-0214). Whether the *dialect* should widen it is [open question 4](#4-should-the-dialect-read-a-type-off-a-component). **A generic map keyed by anything but a string** still waits on constraints |
+| ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and that a type argument a call passes is one the container's own type already knows, which `x: type of v^.a[1]` removes — **not** a conformance gap, as this row said for a day: §6.4.9's object is a variable-name and no more, so the refusal is the standard's (ADR-0214), and the dialect widening it is a feature (ADR-0215). Five of the module's headings have lost a type parameter; `VecGet` and `MapGet` keep theirs, because they return the element type and §6.7.1 makes a result-type a type-name. **A generic map keyed by anything but a string** still waits on constraints |
 
 **The lesson from the FFI increments**, worth keeping for whatever replaces the
 rows above: a decision that looks like it needs a model may need it for only
@@ -413,12 +413,12 @@ anything — it is the first item under the next heading.
 Seven structural questions about the dialect and five items of *what is next*
 used to stand here. Ten of the twelve are answered — the table at the end says
 where — and what each found on its first run is in
-[`doc/history.md`](history.md#what-the-roadmap-answered). **Three remain**, of
-which §4 arrived after the other two and by a route worth knowing: it is what
-was left when a limitation recorded here turned out to be a misreading
-(ADR-0214). Two of the three are tasks, §2 and §4. §1 is a standing risk no
-record can close, which is why it is first — it is read every time and finished
-never.
+[`doc/history.md`](history.md#what-the-roadmap-answered). **Two remain**, and
+only one of them is a task: §2 below. §1 is a standing risk no record can
+close, which is why it is first — it is read every time and finished never.
+§4 was opened and answered on one day, by the route its own entry records: it
+is what was left when a limitation written here turned out to be a misreading
+(ADR-0214, ADR-0215).
 
 ### 1. The dialect has no external authority, and every gate here is anchored in one
 
@@ -510,41 +510,46 @@ this sentence has already gone stale once. Two hundred records carry a
 mutation in their *prose*, most naming code that has since moved. "The
 mutation suite passes" means those eleven claims still hold and nothing more.
 
-### 4. Should the dialect read a type off a *component*?
+### 4. ~~Should the dialect read a type off a *component*?~~ — yes (ADR-0215)
 
-Extended Pascal's type-inquiry names a variable and nothing else —
-`type-inquiry-object = variable-name | parameter-identifier` — so `type of
-v^.a[1]` is not Pascal, under either standard, and this compiler is right to
-refuse it (ADR-0214). The question is whether the **dialect** should admit it,
-and it has a concrete caller: every generic call in
-`lib/dialect/pascontainer.pas` passes an element type the container's own type
-already knows.
+`type of` now takes §6.5.1's whole variable-access under `--std=afterschool`,
+and `lib/dialect/pascontainer.pas` is the caller it was built for: five of its
+headings lost a type parameter.
 
 ```pascal
-procedure VecPush(Ptr: type; Elem: type; var v: Ptr; x: Elem);  { today }
-procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);   { the wish }
+procedure VecPush(Ptr: type; Elem: type; var v: Ptr; x: Elem);  { was }
+procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);   { is }
 ```
 
-**The spelling is free**, which is unusual and is what makes the question worth
-asking rather than deciding: `type of` is a position the dialect already holds,
-so widening what may follow `of` adds no word-symbol and is a rule about an
-existing position rather than a construct — ADR-0184's shape, and ADR-0140 is
-satisfied without an argument.
+Three things it settled that the question above had only guessed at.
 
-**What it costs is the resolution.** §6.4.9 says the object is not evaluated,
-so a component-variable here is a designator whose type must be computed
-without running it, at a point inside declaration checking that is re-entrant
-through schema bodies and — since ADR-0211 — re-entered once per generic
-instantiation with the type parameters bound. The conformance modes must go on
-refusing it, so the message names the mode (ADR-0154) and `src/` carries the
-refusal (ADR-0121); it is specified as an AP 6.4.9 amendment with an Annex B
-row.
+**The cost was not the resolution.** The worry was a designator typed without
+being evaluated inside re-entrant declaration checking, re-entered per generic
+instantiation. It needed nothing: `ResolveType` caches on the denoter's own
+`ntype`, `ForgetResolved` clears exactly that, and `CheckExpr` re-resolves
+every name unconditionally rather than consulting what is already there. The
+non-evaluation is likewise free — the type of `a[i]` does not depend on `i`,
+and a type-denoter is never walked by CodeGen.
 
-**And the reason to hesitate**: it makes the *type* of one formal depend on a
-designator over another, which is a dependence nothing else in this dialect
-has. A constraint system — the thing a map keyed by anything but a string is
-already waiting on — might subsume it, and would be the wrong thing to
-pre-empt. *Undecided, and no record yet beyond the correction.*
+**What it cost instead was the substring**, which nothing above had thought of.
+§6.5.6's substring-variable *is* a variable-access and what it possesses is the
+canonical string-type — a pointer and a length with no capacity, which no
+variable may have. The program compiled, ran, and stopped at *a string of
+length 3 does not fit a capacity of 0*. It is refused now, and that is the only
+variable-access this denoter cannot answer for.
+
+**And it found where the widening stops.** `VecGet` and `MapGet` still take the
+element type, because they *return* it and §6.7.1 makes a result-type a
+`type-name`:
+
+```
+result-type = type-name .
+```
+
+So `function VecGet(…): type of v^.a[1]` is unwritable in the dialect too. That
+is a second production and wants the same argument made again about a different
+clause; it is not carried here as an open question, because nothing is waiting
+on it — the two-parameter form works and reads fine.
 
 ---
 
@@ -700,8 +705,10 @@ carries. ADR-0047 had quoted the production correctly since the feature landed
 and this entry contradicted it for a day; nothing here could see that, which is
 the point. What *did* come of it: the three refusals now say which rule they
 are, instead of stopping at the declaration's own semicolon and reporting a
-missing separator. The wish itself is a dialect question and is
-[open question 4](#4-should-the-dialect-read-a-type-off-a-component).
+missing separator, and the wish itself became a dialect feature the same day
+([question 4](#4-should-the-dialect-read-a-type-off-a-component-yes-adr-0215),
+ADR-0215) — which is the useful ending: the clause is unchanged and the thing
+that was wanted exists where it belongs.
 
 **A discriminated-schema is not a parameter-form, and this compiler accepts
 one** (ADR-0171). §6.7.3.1 admits `type-name | schema-name | type-inquiry`, so
@@ -771,3 +778,4 @@ the record.
 | Can a program get its arguments as a list? | `argcount` and `argument(k)`, required identifiers of the dialect | ADR-0173 |
 | Can a foreign address be owned? | A handle-type: a file variable for it, released where a file closes | ADR-0174 |
 | What is a character, once a byte is not one? | A grapheme cluster; text is UTF-8 in normal form C, in a value with a byte capacity, and `char` is left alone because it cannot widen | ADR-0189 |
+| Should the dialect read a type off a component? | Yes: `type of` takes a whole variable-access, so a generic reads an element type off the container it was handed. The substring is the one access it must refuse, and a *result* type is where the widening stops | ADR-0215 |

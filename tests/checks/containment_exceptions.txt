@@ -87,3 +87,22 @@ continue_refused
 typedisc_refused
 typeparam_refused
 ptrtypedisc_refused
+typeinquiry_refused
+
+# AP 6.4.9 (ADR-0215) is the first dialect construct whose refusal takes more
+# than one file, and the reason is the parser: `type of` may be followed by a
+# bracket, a caret or a second period, each a different arm of the same test,
+# and the parser stops at its first error. So three spellings are three
+# programs. The row above is the Annex B case and carries the bracket; these
+# three are the rest of the same refusal, and each is here for that one reason.
+#
+# `typeinquiry_field` is not a parse error at all and is the interesting one.
+# 6.5.1's variable-name admits a qualifier before an imported-interface-
+# identifier, so `r.f` and `iface.x` are one production and only the symbol
+# tells them apart -- the parser consumes both alike and Sema asks. Under the
+# dialect it is a field selection and the program runs; under --std=extended it
+# is a qualifier that names no interface. Same construct, refused one stage
+# later, which is why it cannot be folded into the row above.
+typeinquiry_deref
+typeinquiry_qualified
+typeinquiry_field

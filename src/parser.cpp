@@ -982,7 +982,8 @@ TypeExprPtr Parser::parseTypeDenoter() {
     // resolveInquiry asks the symbol and says the same sentence. The period
     // below is therefore the *second* one, in `r.f.g`.
     if (check(Tok::LBracket) || check(Tok::Caret) || check(Tok::Period)) {
-      errorAtCur("'type of' names a whole variable, not a component of one");
+      errorAtCur("a type-inquiry over a component of a variable is an "
+                 "Afterschool Pascal feature; compile with --std=afterschool");
       bail();
     }
     return t;

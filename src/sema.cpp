@@ -1335,7 +1335,9 @@ Type *Sema::resolveInquiry(TypeExpr &denoter) {
     Symbol *qual = denoter.qualifier.empty() ? nullptr : lookup(denoter.qualifier);
     if (qual && qual->kind != SymKind::Interface)
       diags_.error(denoter.line, denoter.col,
-                   "'type of' names a whole variable, not a component of one");
+                   "a type-inquiry over a component of a variable is an "
+                   "Afterschool Pascal feature; compile with "
+                   "--std=afterschool");
     else
       diags_.error(denoter.line, denoter.col,
                    "unknown variable '" + denoter.name + "' in 'type of'");

@@ -39,6 +39,7 @@ schema_selfpointer_var 1
 schema_string_heap 0
 sets_records 0
 sweepgaps 0
+typeinquiry_access 0
 take 0
 variant_disc 0
 variant_otherwise 0

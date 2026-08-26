@@ -22,13 +22,13 @@ var v: IntVec; w: PtVec;
     i, got: integer; p: Point; ok: boolean;
 begin
   VecInit(IntVec, v, 2);
-  for i := 1 to 8 do VecPush(IntVec, integer, v, i * i);
+  for i := 1 to 8 do VecPush(IntVec, v, i * i);
   writeln('vec int  len=', VecLen(IntVec, v):1,
           ' cap=', VecCap(IntVec, v):1,
           ' [3]=', VecGet(IntVec, integer, v, 3):1);
-  ok := VecPop(IntVec, integer, v, got);
+  ok := VecPop(IntVec, v, got);
   writeln('vec pop  ', got:1, ' len=', VecLen(IntVec, v):1);
-  VecSet(IntVec, integer, v, 1, 99);
+  VecSet(IntVec, v, 1, 99);
   writeln('vec set  ', VecGet(IntVec, integer, v, 1):1);
   VecClear(IntVec, v);
   writeln('vec clr  len=', VecLen(IntVec, v):1);
@@ -37,7 +37,7 @@ begin
   VecInit(PtVec, w, 1);
   for i := 1 to 5 do begin
     p.x := i; p.y := i * 10;
-    VecPush(PtVec, Point, w, p)
+    VecPush(PtVec, w, p)
   end;
   p := VecGet(PtVec, Point, w, 4);
   writeln('vec rec  len=', VecLen(PtVec, w):1, ' [4]=', p.x:1, ',', p.y:1);
@@ -45,7 +45,7 @@ begin
 
   MapInit(IntMap, m, 4);
   for i := 1 to 10 do
-    MapPut(IntMap, integer, m, 'k' + chr(ord('0') + i), i);
+    MapPut(IntMap, m, 'k' + chr(ord('0') + i), i);
   writeln('map int  count=', MapCount(IntMap, m):1,
           ' k3=', MapGet(IntMap, integer, m, 'k3', -1):1,
           ' has k9=', MapHas(IntMap, m, 'k9'));
@@ -56,7 +56,7 @@ begin
 
   MapInit(PtMap, q, 4);
   p.x := 7; p.y := 8;
-  MapPut(PtMap, Point, q, 'origin', p);
+  MapPut(PtMap, q, 'origin', p);
   p.x := 0; p.y := 0;
   p := MapGet(PtMap, Point, q, 'origin', p);
   writeln('map rec  count=', MapCount(PtMap, q):1, ' x=', p.x:1, ',', p.y:1);

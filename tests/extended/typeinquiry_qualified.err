@@ -1,1 +1,1 @@
-<source>:10:19: error: 'type of' names a whole variable, not a component of one
+<source>:10:19: error: a type-inquiry over a component of a variable is an Afterschool Pascal feature; compile with --std=afterschool

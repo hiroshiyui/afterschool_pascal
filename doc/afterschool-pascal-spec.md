@@ -1328,6 +1328,59 @@ NOTE 2 — A slice reaches its callee by 6.7.3.9.3, which is a rule about
 parameters and not about assignment. Nothing else in this document gives a
 slice a way to travel.
 
+#### 6.4.9 Type-inquiry [extended]
+
+The type-inquiry-object shall be extended to a variable-access:
+
+```
+type-inquiry-object = variable-access .
+```
+
+The type denoted by a type-inquiry shall be the type possessed by the
+variable-access contained by the type-inquiry.
+
+The variable-access shall not be evaluated, and no expression contained by it
+shall be evaluated.
+
+The type-inquiry-object shall denote a variable-access and not a
+function-access (ISO/IEC 10206:1991 §6.8.6) or a constant-access (§6.8.8).
+
+The type denoted shall not be the canonical-string-type (§6.4.3.3.1).
+
+NOTE 1 — ISO/IEC 10206:1991 §6.4.9's object is `variable-name |
+parameter-identifier`, and §6.5.1's variable-name is `[
+imported-interface-identifier '.' ] variable-identifier` — a name. The other
+five variable-accesses are outside that clause, so this is an extension and not
+a correction; a conformance mode refuses each of them and names this mode
+(Annex B).
+
+NOTE 2 — The restriction of §6.4.9 on a parameter-identifier applies to the
+*root* of the variable-access, which is a name exactly as that clause's own
+object is. So does ISO/IEC 10206:1991 §6.7.3.1's prohibition on an applied
+occurrence of the parameter-identifier: `x: type of x^.f` names x.
+
+NOTE 3 — The type of an indexed-variable does not depend on the index, so
+requiring the object not to be evaluated costs nothing. An expression contained
+by the object is still subject to every rule about its own well-formedness; it
+is checked and never computed.
+
+NOTE 4 — The canonical-string-type is excluded because no variable may possess
+it: it is a value with no capacity (§6.4.3.3.1), and the only variable-access
+that possesses one is a substring-variable (§6.5.6). Naming the string itself
+is what a program wants there.
+
+NOTE 5 — A slice-type (6.7.3.9) and the type of a schematic formal parameter
+are each refused as the type an inquiry denotes, and neither is reachable
+through a selector: a slice may be written only as a formal parameter's own
+type-denoter (6.7.3.9.2), and a type with no discriminant tuple belongs to a
+formal parameter. So `type of s` over `array of integer` is refused and `type
+of s[1]` is `integer`, which is the extension working rather than an
+inconsistency.
+
+NOTE 6 — This clause is what lets a routine parameterised by a type (6.7.3.5)
+read an element type off the container it was given, instead of being handed
+the same type twice. `lib/dialect/pascontainer.pas` is the caller.
+
 ### 6.5 Declarations and denotations of variables
 
 #### 6.5.3 Component-variables [extended]
@@ -2334,6 +2387,7 @@ the rule.
 | `typedisc` | `T: type` in a schema | `a schema is an Extended Pascal feature; compile with --std=extended` | `the type of a discriminant must be an ordinal type name` |
 | `typeparam` | `T: type` in a formal-parameter-list | `a type-inquiry is an Extended Pascal feature; compile with --std=extended` | `a type parameter is an Afterschool Pascal feature; compile with --std=afterschool` |
 | `ptrtypedisc` | `^Vec(integer)` | `a pointer domain with type arguments is an Afterschool Pascal feature; compile with --std=afterschool` | `a pointer domain with type arguments is an Afterschool Pascal feature; compile with --std=afterschool` |
+| `typeinquiry` | `type of a[1]` | `a type-inquiry is an Extended Pascal feature; compile with --std=extended` | `a type-inquiry over a component of a variable is an Afterschool Pascal feature; compile with --std=afterschool` |
 | `utf8` | `utf8(n)` | `a discriminated schema is an Extended Pascal feature; compile with --std=extended` | `unknown schema 'utf8'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is

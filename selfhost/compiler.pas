@@ -1599,7 +1599,16 @@ type
         is nothing else `a.b` could be there -- a type has no fields to select
         -- so unlike an expression this needs no help from Sema. }
       nkNamed:      (nmAt, nmLen, nmQualAt, nmQualLen: integer);
-      nkInquiry:    (tqAt, tqLen, tqQualAt, tqQualLen: integer);
+      { tqObj is AP 6.4.9's object when it is a *component* of a variable
+        rather than a name: the dialect widens the type-inquiry-object to
+        6.5.1's whole variable-access, and a selected one is parsed by the
+        very production an expression's designator uses. Exactly one of the
+        two shapes is filled -- a bare name stays a name, in tqAt/tqLen, so
+        every rule 6.4.9 already had is asked the question it was written
+        for and no conforming program takes a different path under
+        --std=afterschool (ADR-0215). }
+      nkInquiry:    (tqAt, tqLen, tqQualAt, tqQualLen: integer;
+                     tqObj: nodePtr);
       { 6.4.2.5's restricted-type, `restricted type-name`. The syntax admits a
         *name* and nothing else, so there is no nested denoter and no recursion
         to bound. }
@@ -4367,6 +4376,10 @@ function ParseExpr: nodePtr; forward;
 function ParseFactor: nodePtr; forward;
 function ParseTypeExpr: nodePtr; forward;
 function ParseTypeDenoter: nodePtr; forward;
+{ AP 6.4.9's type-inquiry-object is a variable-access, and a type-denoter is
+  the one place a designator is parsed before the expression parser exists.
+  Forward-declared for that one call site (ADR-0215). }
+function ParseSelectors(base: nodePtr): nodePtr; forward;
 function ParseStatement: nodePtr; forward;
 function ParseBlock: nodePtr; forward;
 function ParseImportPart: nodePtr; forward;
@@ -5136,7 +5149,7 @@ begin
 end;
 
 function ParseTypeDenoter;
-var t, n: nodePtr; packed_: boolean;
+var t, n, obj: nodePtr; packed_: boolean;
 begin
   EnterLevel;
   t := nil;
@@ -5304,6 +5317,7 @@ begin
       t^.tqLen := 0;
       t^.tqQualAt := 0;
       t^.tqQualLen := 0;
+      t^.tqObj := nil;
       if langStd = stdIso7185 then begin
         ErrorAtCur;
         writeln('a type-inquiry is an Extended Pascal feature; compile with ',
@@ -5319,6 +5333,30 @@ begin
             writeln('''type of'' must name a variable or a parameter');
             Bail
           end
+          { AP 6.4.9 (ADR-0215): the dialect's type-inquiry-object is 6.5.1's
+            whole variable-access, so the object is parsed by the production an
+            expression's designator is parsed by -- one production for `iface.x`
+            and `r.f` alike, told apart by the symbol in Sema, which is what the
+            expression parser has always done and is why fdQualified exists.
+
+            A bare name is put back where 6.4.9 keeps one. Every rule the clause
+            already had is written against tqAt/tqLen, and a conforming program
+            writes nothing else -- so under this mode such a program takes the
+            path it takes under --std=extended, instruction for instruction,
+            which is the containment ADR-0138 sweeps for. }
+          else if langStd = stdAfterschool then begin
+            obj := NewNode(nkVar, CurLine, CurCol);
+            obj^.vrAt := tok[pos].at;
+            obj^.vrLen := tok[pos].len;
+            pos := pos + 1;
+            obj := ParseSelectors(obj);
+            if obj^.kind = nkVar then begin
+              t^.tqAt := obj^.vrAt;
+              t^.tqLen := obj^.vrLen
+            end
+            else
+              t^.tqObj := obj
+          end
           else begin
             ParseQualifiedName(t^.tqQualAt, t^.tqQualLen, t^.tqAt, t^.tqLen);
             { 6.4.9's type-inquiry-object is a `variable-name` or a
@@ -5326,10 +5364,10 @@ begin
               not among them: an indexed one, an identified one, a
               field-designator and a substring are each a variable-access and
               none of them is a *name*. So `type of a[1]` and `type of p^` are
-              refused, and this is where to say so -- nothing legal follows a
-              type-inquiry with one of these three tokens, and without the test
-              the parser stops at the declaration's own semicolon and reports a
-              missing separator, naming neither the rule nor the construct.
+              refused here, and the message names the mode, the dialect having
+              them (ADR-0154): without the test the parser stops at the
+              declaration's own semicolon and reports a missing separator,
+              naming neither the rule nor the construct nor the mode.
 
               The field-designator has two spellings and only one reaches here.
               `r.f` is what ParseQualifiedName consumes as a qualified name,
@@ -5340,8 +5378,9 @@ begin
             if Check(tkLBracket) or Check(tkCaret) or Check(tkPeriod) then
             begin
               ErrorAtCur;
-              writeln('''type of'' names a whole variable, not a component ',
-                      'of one');
+              write('a type-inquiry over a component of a variable is an ');
+              writeln('Afterschool Pascal feature; compile with ',
+                      '--std=afterschool');
               Bail
             end
           end
@@ -5466,7 +5505,7 @@ end;
   A selector chain is a spine like an operator chain, built by this loop
   rather than by recursion; each selector wraps the designator one level
   deeper for the tree's walkers, so each counts. }
-function ParseSelectors(base: nodePtr): nodePtr;
+function ParseSelectors;
 var levels, l, c: integer; done, more, isSub: boolean; n, ix: nodePtr;
 begin
   levels := 0;
@@ -13452,9 +13491,132 @@ begin
   ParameterOf := found
 end;
 
+{ 6.4.9's other restriction on the object, asked of the symbol the object's
+  name resolved to. It is a predicate because AP 6.4.9 (ADR-0215) gave the
+  clause a second shape to ask it of: a variable-access has a root, and the
+  root is a name exactly as 6.4.9's own object is, so the rule is the same
+  question about the same symbol. }
+function OtherListsParameter(s: symPtr): boolean;
+begin
+  OtherListsParameter :=
+    (s <> nil) and (formalsFor <> nil) and (not inSchemaBody) and
+    ((s^.kind = skParam) or (s^.kind = skVarParam)) and
+    (s^.owner <> nil) and (s^.owner <> formalsFor) and
+    ParameterOf(s^.owner, s)
+end;
+
+procedure RootName(e: nodePtr; var s: symPtr; var at, len: integer);
+begin
+  s := nil;
+  at := 0;
+  len := 0;
+  if e <> nil then
+    if e^.kind = nkVar then begin
+      s := e^.vrSym;
+      at := e^.vrAt;
+      len := e^.vrLen
+    end
+    { RootDesignator stops at a qualified name, 6.11.3 making that whole
+      selection one symbol with no base under it -- so the name to print is
+      the constituent's and the symbol is fdQualified's. }
+    else if e^.kind = nkField then begin
+      s := e^.fdQualified;
+      at := e^.fdAt;
+      len := e^.fdLen
+    end
+end;
+
+{ The name at the root of a type-inquiry-object, whichever of the two shapes
+  it has. Asked before Sema has touched the object as well as after, so it
+  reads the tree and not a resolution: RootDesignator with no fdQualified set
+  walks through a field selection to the name underneath, which is the
+  syntactic root and the one 6.7.3.1 is about. }
+procedure InquiryRootName(d: nodePtr; var at, len: integer);
+var root: nodePtr;
+begin
+  at := d^.tqAt;
+  len := d^.tqLen;
+  if d^.tqObj <> nil then begin
+    root := RootDesignator(d^.tqObj);
+    if root <> nil then
+      if root^.kind = nkVar then begin
+        at := root^.vrAt;
+        len := root^.vrLen
+      end
+  end
+end;
+
+{ AP 6.4.9 (ADR-0215): the dialect's type-inquiry-object is 6.5.1's whole
+  variable-access, and this is the half of ResolveInquiry that answers for a
+  *selected* one. A bare name never reaches here -- the parser puts one back in
+  tqAt/tqLen -- so everything below is about what a selector denotes.
+
+  The object is checked as an expression and then not evaluated, which is
+  6.4.9's own requirement extended to what the selectors contain: the type of
+  `a[i]` does not depend on i, so the index is checked for its own sake and its
+  value is never wanted. Nothing emits this tree; a type-denoter is Sema's and
+  CodeGen never walks one.
+
+  **A selector cannot produce a slice or a schematic type**, which is why
+  neither of ResolveInquiry's two refusals is repeated here. A slice type may
+  be written only as a formal parameter's own denoter (AP 6.7.3.9.2), so no
+  component of anything has one; and a type with no tuple belongs to a
+  schematic *formal*, so no field, element, domain or buffer has one either.
+  Both remain refused for a bare name, where they are reachable. The
+  asymmetry is the feature working: `type of s` over `array of integer` is
+  refused because a slice cannot be named, and `type of s[1]` is `integer`,
+  which can. }
+function InquiryOfAccess(d: nodePtr): typePtr;
+var root: nodePtr; rs: symPtr; rat, rlen: integer;
+begin
+  CheckExpr(d^.tqObj);
+  root := RootDesignator(d^.tqObj);
+  RootName(root, rs, rat, rlen);
+  if OtherListsParameter(rs) then begin
+    ErrorAt(d^.line, d^.col);
+    write('''');
+    WritePool(rat, rlen);
+    write(''' is a parameter of another formal-parameter-list, so ');
+    writeln('''type of'' cannot name it here');
+    InquiryOfAccess := intType
+  end
+  { 6.8.6's NOTE: "a function-access is not equivalent to a variable-access".
+    A constant-access is the other value a selector chain reads, and 6.4.9
+    wants the type a *variable* possesses -- so both are refused by the one
+    predicate every other position in this compiler asks. }
+  else if not IsDesignator(d^.tqObj) then begin
+    ErrorAt(d^.line, d^.col);
+    writeln('''type of'' names a variable-access, and this is not one');
+    InquiryOfAccess := intType
+  end
+  { No nil test on the type: CheckExpr leaves every node's ntype non-null, a
+    placeholder standing in on an error path, which is the contract RunCodeGen
+    rests on and this reads the same field. ResolveInquiry's bare path does ask,
+    and about something else -- a *symbol's* stype, which an error symbol may
+    not have. }
+  { 6.5.6's substring-variable *is* a variable-access, and the type it
+    possesses is 6.4.3.3.1's canonical-string-type -- `hi` negative, a pointer
+    and a length with no storage behind them. A variable cannot have it: `var
+    x: string` is refused for the same reason, one clause earlier, and a
+    program that got one this way ran until the first assignment and then
+    stopped at a capacity of zero. So the substring is the one variable-access
+    this denoter cannot answer for, and it says which. }
+  else if d^.tqObj^.ntype = canonStringType then begin
+    ErrorAt(d^.line, d^.col);
+    write('a substring possesses the canonical string-type, which has no ');
+    writeln('capacity, so no variable may have it; name the string itself');
+    InquiryOfAccess := intType
+  end
+  else
+    InquiryOfAccess := d^.tqObj^.ntype
+end;
+
 function ResolveInquiry(d: nodePtr): typePtr;
 var s, q: symPtr; t: typePtr;
 begin
+  if d^.tqObj <> nil then
+    ResolveInquiry := InquiryOfAccess(d)
+  else begin
   { 6.4.9 also allows the object to be a parameter of the closest-containing
     formal-parameter-list, and that needs nothing added: DeclareProcHeading
     pushes a scope before building the formals, so a parameter declared earlier
@@ -13483,10 +13645,7 @@ begin
     parameter-identifier is in outer's. A schema body is lexically outside any
     formal-parameter-list, so it is exempt for the reason a record's region
     exempts it (ADR-0134). }
-  if (s <> nil) and (formalsFor <> nil) and (not inSchemaBody) and
-     ((s^.kind = skParam) or (s^.kind = skVarParam)) and
-     (s^.owner <> nil) and (s^.owner <> formalsFor) and
-     ParameterOf(s^.owner, s) then begin
+  if OtherListsParameter(s) then begin
     ErrorAt(d^.line, d^.col);
     write('''');
     WritePool(d^.tqAt, d^.tqLen);
@@ -13506,8 +13665,10 @@ begin
       rather than a report that the field is an undeclared variable. }
     q := nil;
     if d^.tqQualLen > 0 then q := Lookup(d^.tqQualAt, d^.tqQualLen);
-    if (q <> nil) and (q^.kind <> skInterface) then
-      writeln('''type of'' names a whole variable, not a component of one')
+    if (q <> nil) and (q^.kind <> skInterface) then begin
+      write('a type-inquiry over a component of a variable is an ');
+      writeln('Afterschool Pascal feature; compile with --std=afterschool')
+    end
     else begin
       write('unknown variable ''');
       WritePool(d^.tqAt, d^.tqLen);
@@ -13564,6 +13725,7 @@ begin
     end
     else
       ResolveInquiry := t
+  end
   end
 end;
 
@@ -19737,7 +19899,7 @@ function CheckedResultType(t: typePtr; bindable_: boolean;
 
 procedure BuildFormals(groups: nodePtr; into, frame: symPtr);
 var g, n: nodePtr; t: typePtr; ps, schema, named, first: symPtr;
-    section: integer; bindable_: boolean; savedFormals: symPtr;
+    section, objAt, objLen: integer; bindable_: boolean; savedFormals: symPtr;
 begin
   savedFormals := formalsFor;
   formalsFor := into;
@@ -19899,11 +20061,16 @@ begin
         occurrence of the parameter-identifier", so `x: type of x` is refused
         -- and it has to be refused *before* the names are declared, or the
         name would find itself. }
+      { AP 6.4.9's object may be a variable-access, and then the applied
+        occurrence 6.7.3.1 forbids is at its *root*: `x: type of x^.f` names x
+        as surely as `x: type of x` does. The root of a name is the name, so
+        one call answers for both shapes (ADR-0215). }
       if g^.grType <> nil then
         if g^.grType^.kind = nkInquiry then begin
+          InquiryRootName(g^.grType, objAt, objLen);
           n := g^.grNames;
           while n <> nil do begin
-            if PoolSame(n^.dnAt, n^.dnLen, g^.grType^.tqAt, g^.grType^.tqLen)
+            if PoolSame(n^.dnAt, n^.dnLen, objAt, objLen)
             then begin
               ErrorAt(g^.grType^.line, g^.grType^.col);
               write('''type of ');
@@ -24759,11 +24926,25 @@ begin
       WritePos(n^.line, n^.col);
       TypeEnd(n)
     end;
+    { AP 6.4.9's object may be a whole variable-access, and then there is no
+      name to write on the tag line: the access is a designator and prints
+      under here as one, by the walker every other designator prints through.
+      Exactly one of the two shapes is filled, so the tag says which. }
     nkInquiry: begin
-      write('typeof ');
-      WritePool(n^.tqAt, n^.tqLen);
-      WritePos(n^.line, n^.col);
-      TypeEnd(n)
+      if n^.tqObj <> nil then begin
+        write('typeof-access');
+        WritePos(n^.line, n^.col);
+        TypeEnd(n);
+        level := level + 1;
+        DumpExpr(n^.tqObj);
+        level := level - 1
+      end
+      else begin
+        write('typeof ');
+        WritePool(n^.tqAt, n^.tqLen);
+        WritePos(n^.line, n^.col);
+        TypeEnd(n)
+      end
     end;
     nkEnum: begin
       write('enum');

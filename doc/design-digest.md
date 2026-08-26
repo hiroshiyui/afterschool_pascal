@@ -877,6 +877,22 @@ able to make.
     one production for a qualified name and no way to tell an imported
     interface from a record variable. ADR-0214 also strikes a roadmap entry
     that had called the refusals a conformance gap — they are the conformance.
+  - **And the dialect has what the entry wanted** (AP §6.4.9, ADR-0215): under
+    `--std=afterschool` the object is the whole variable-access, parsed by the
+    production an expression's designator is parsed by, so `iface.x` and `r.f`
+    stay one production told apart by the symbol. A **bare name is put back in
+    `tqAt`/`tqLen`**, which is what makes containment hold by construction
+    rather than by sweep — every rule the clause already had is written against
+    those two fields. The object is not evaluated and needs no machinery not to
+    be: the type of `a[i]` does not depend on `i`, and a type-denoter is never
+    walked by CodeGen. Two refusals: a constant-access, by the same
+    `IsDesignator` every other position asks, and a **substring**, whose
+    canonical string-type no variable may possess — found by running the case,
+    which stopped at a capacity of zero. Where the widening stops is §6.7.1: a
+    result-type is a `type-name`, so a generic function returning its element
+    type still takes it as a parameter. Re-instantiation needed nothing, because
+    `ResolveType` caches on `ntype`, `ForgetResolved` clears it, and `CheckExpr`
+    re-resolves every name unconditionally.
 - **An initial state belongs to the type-denoter** (ADR-0048). §6.6's `value`
   hangs off the type-denoter (§6.4.1), not the declaration — so a **type-name
   hands it on** to every variable of that type, and it is recorded on the type

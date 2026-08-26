@@ -101,16 +101,16 @@ procedure VecInit(Ptr: type; var v: Ptr; cap: integer);
 procedure VecFree(Ptr: type; var v: Ptr);
 
 { Append, growing when full. }
-procedure VecPush(Ptr: type; Elem: type; var v: Ptr; x: Elem);
+procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);
 
 { Take the last element off. False when there was none. }
-function VecPop(Ptr: type; Elem: type; var v: Ptr; var out: Elem): boolean;
+function VecPop(Ptr: type; var v: Ptr; var out: type of v^.a[1]): boolean;
 
 { The i'th element, 1-based. Out of range is the caller's error and traps,
   exactly as an array subscript does. }
 function VecGet(Ptr: type; Elem: type; var v: Ptr; i: integer): Elem;
 
-procedure VecSet(Ptr: type; Elem: type; var v: Ptr; i: integer; x: Elem);
+procedure VecSet(Ptr: type; var v: Ptr; i: integer; x: type of v^.a[1]);
 
 function VecLen(Ptr: type; var v: Ptr): integer;
 
@@ -120,13 +120,14 @@ function VecCap(Ptr: type; var v: Ptr): integer;
 procedure VecClear(Ptr: type; var v: Ptr);
 
 { Make room for at least `want` without changing the length. }
-procedure VecReserve(Ptr: type; Elem: type; var v: Ptr; want: integer);
+procedure VecReserve(Ptr: type; var v: Ptr; want: integer);
 
 { --- the map ------------------------------------------------------------- }
 
 procedure MapInit(Ptr: type; var m: Ptr; want: integer);
 procedure MapFree(Ptr: type; var m: Ptr);
-procedure MapPut(Ptr: type; Elem: type; var m: Ptr; key: MapKey; val: Elem);
+procedure MapPut(Ptr: type; var m: Ptr; key: MapKey;
+                 val: type of m^.slots[1].val);
 function MapGet(Ptr: type; Elem: type; var m: Ptr; key: MapKey;
                 whenAbsent: Elem): Elem;
 function MapHas(Ptr: type; var m: Ptr; key: MapKey): boolean;
@@ -207,7 +208,7 @@ end;
 procedure VecPush;
 begin
   { Doubling, so `n` pushes cost O(n) altogether. }
-  if v^.n = v^.cap then VecReserve(Ptr, Elem, v, v^.cap * 2);
+  if v^.n = v^.cap then VecReserve(Ptr, v, v^.cap * 2);
   v^.n := v^.n + 1;
   v^.a[v^.n] := x
 end;

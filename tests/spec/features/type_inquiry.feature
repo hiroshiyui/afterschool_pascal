@@ -16,7 +16,11 @@
 # named a real clause, and all eleven corpus uses of `type of` name a simple
 # variable, so none of them decides between the two readings.
 #
-# These scenarios are what decides between them, attached to the clause.
+# These scenarios are what decides between them, attached to the clause. The
+# *dialect* does admit a variable-access (AP 6.4.9, ADR-0215), which is why the
+# refusals below name --std=afterschool: what a conformance mode says about a
+# dialect construct is conformance behaviour (ADR-0154). See
+# dialect_typeinquiry.feature for the other side.
 
 @extended:6.4.9
 Feature: A type-inquiry's object is a variable-name or a parameter-identifier
@@ -77,7 +81,7 @@ Feature: A type-inquiry's object is a variable-name or a parameter-identifier
     Then it is rejected
      And the diagnostic includes
       """
-      'type of' names a whole variable, not a component of one
+      a type-inquiry over a component of a variable is an Afterschool Pascal feature
       """
 
   Scenario: an identified-variable is not a variable-name
@@ -94,7 +98,7 @@ Feature: A type-inquiry's object is a variable-name or a parameter-identifier
     Then it is rejected
      And the diagnostic includes
       """
-      'type of' names a whole variable, not a component of one
+      a type-inquiry over a component of a variable is an Afterschool Pascal feature
       """
 
   Scenario: a field-designator is not a variable-name, though it is spelled like a qualified one
@@ -112,5 +116,5 @@ Feature: A type-inquiry's object is a variable-name or a parameter-identifier
     Then it is rejected
      And the diagnostic includes
       """
-      'type of' names a whole variable, not a component of one
+      a type-inquiry over a component of a variable is an Afterschool Pascal feature
       """
