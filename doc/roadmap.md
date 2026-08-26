@@ -16,6 +16,7 @@ decide about, and the day it is decided it moves there.
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
 | [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and what each landed feature left open behind it — two of those are still open |
+| [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the six library gaps and the two deliberate language absences, none of which is a mystery |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the one library gap in front of it |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the one oracle still worth building |
@@ -173,7 +174,7 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| ~~to write a container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212), and it took three records because the last one was a buffer rather than a clause. ADR-0209 made a container's *storage* writable once (`Vec(T: type; cap: integer)`), ADR-0211 made the routine over it writable once too (`Push(T: type; var v: Vec(T, 4); x: T)`), translated per distinct type and cached the way a schema production is — and the wall the first record named, that a schematic formal reads its discriminants from a run-time descriptor (ADR-0040) and a type cannot travel in one, was gone round rather than through: a type parameter is not passed at all, it *chooses a translation*. What was left after that was that a generic could not cross `--import`, because an instantiation re-parses the body from a saved token position and the import loop cleared the token array between components — so a generic in `lib/` pointed at tokens that now held a different source, which is a defect no check could have caught and which no case could reach, since no module could declare a generic until it was fixed. ADR-0212 keeps the tokens. The cost was measured rather than estimated: the compiler imports nothing so `buffer-headroom` does not move, and a client importing three modules reaches 1969 tokens of 300000. **The four modules can now be one**, which is work for the library rather than for the language |
+| **to write a *growable* container once** | The language half is done — ADR-0209 made a container's storage writable once, ADR-0211 the routine over it, ADR-0212 across `--import`. Collapsing `PasVector`, `PasStrVec`, `PasList` and `PasMap` into one module was then attempted and **got two of the four**, which is how the real boundary was found. A **generic owned chain works completely**: growth is one `new` per node, no tuple is involved, and one body serves `integer` and a record alike — the *list* type must be the type argument rather than the node's, because `owned ^INode` written twice is two types under ADR-0017. A **fixed-capacity vector works too**, with the client naming the production and passing the *pointer* type as the argument. What does not work is **growth on the heap**, which `PasVector`, `PasStrVec` and `PasMap` all do — `VecReserve` and `Rehash` are `new(p, cap)` with a fresh capacity, and that needs a pointer whose domain is the schema. Three spellings were probed and all three are refused: `^Vec` because a domain of a type-discriminant schema must name its types (ADR-0209, which advises a spelling that then does not parse); `^Vec(integer, 8)` because §6.4.4's domain is a type-name or a schema-name and never a discriminated schema; and `IntVec(cap) = Vec(integer, cap)` because a schema's actual discriminants must be ordinal **constants**. So the missing feature is one thing and it is nameable: **a pointer whose domain is a schema with its type discriminants bound and its ordinal ones open**, `^Vec(integer)`, with `new(p, 8)` supplying the rest. The layout is known at the domain — T is fixed, only the extent varies, which is exactly what `IntVec(cap)` already is — so this is a partial application in the intern table rather than a new mechanism. Until it exists the four modules stay four, and the one that could be replaced today is `PasList` |
 
 **The lesson from the FFI increments**, worth keeping for whatever replaces the
 rows above: a decision that looks like it needs a model may need it for only
@@ -186,6 +187,46 @@ actually bites*. It did not bite there. It bites one level further in, at a
 struct member that is a pointer, and the reason is worth stating in general:
 **an ownership question is only a question while something holds the address.**
 Each of the four was answered by arranging for nothing to.
+
+---
+
+## What a daily program still cannot reach for
+
+The chapter above is about what the *language* blocks. This one is about what
+is simply not written yet, and it is here because a survey of it was asked for
+and the answer turned out to be short and specific rather than vague. Nothing
+in it needs a language feature; each is a module somebody has to write, which
+is the cheap kind of gap and the kind this page should name rather than imply.
+
+**Twenty-one modules exist** — eight conforming and thirteen dialect, listed by
+name in `README.md`'s module table. What a program written today reaches for
+and does not find:
+
+| Missing | What exists instead | Why it is not built |
+| --- | --- | --- |
+| **JSON** | nothing — `PasParse` reads integers and `file:line:col:` diagnostics | Every LSP message is a JSON object, so [the program that would judge the language](#the-program-that-would-judge-the-language) needs this on its first day. It is the one gap on this page with a named client, and it needs no language feature: a value is a variant record over the seven JSON kinds, and AP 6.4.15's `utf8` already holds a string correctly |
+| **date and time** | `PasProcess` can shell out; ISO/IEC 10206:1991 §6.7.6.9's `date`/`time` give a `TimeStamp` for *now* | Arithmetic on a date, parsing one, formatting one, and any zone at all are absent. `TimeStamp` is a required type and a good foundation; nothing has needed a second one |
+| **terminal control** | nothing — no `termios`, no `isatty`, no raw key, no cursor, no window size | Its shape is decided (a `pasx_` binding in `runtime/pasrt_posix.c` bounded by its headers, `<termios.h>` joining ADR-0186's catalogue). It was the IDE's prerequisite and left with it when the judging program became a language server |
+| **regular expressions** | `PasStrings` has `Pos`, `Trim`, case conversion; `PasUnicode` has the element walk | The largest of these by far, and the only one where the right answer is not obvious — a backtracking matcher and a DFA are different programs with different failure modes |
+| **HTTP, TLS** | `PasNet` gives a socket and line reading | HTTP is a module over what exists. TLS is not: it means binding a C library, which puts the *whole* of that library's surface behind ADR-0185's rule that a library may not declare a foreign struct |
+| **a hash of anything but a string** | `PasMap` maps `string(n)` to `integer` | Which is the container row above, one step on: a generic map needs growth on the heap *and* a way to say that a key can be hashed and compared — the second being a constraint, and the dialect has none |
+
+**And two absences in the language rather than the library**, both deliberate
+and both now the shape of a decision rather than an omission:
+
+- **Concurrency.** Not one construct: no thread, task, process or channel.
+  ADR-0201 decided what it must be — share-nothing, a task owning what it is
+  given — and declined to build it, and the trigger it named was met and
+  answered by a library routine instead. What would demand it now is a slow
+  client not slowing the others, which is the language server's `didChange`
+  arriving mid-compile. See the concurrency row in
+  [where the ideas come from](#where-the-ideas-come-from).
+- **Generics have no inference and no constraints.** The types are written at
+  the call — `Swap(integer, i, j)` and not `Swap(i, j)` — and a body that adds
+  its `T` values is refused, at the instantiation, for a type that cannot be
+  added. Inference is a separate feature with a question of its own (what
+  happens when two arguments imply different types); constraints are what a
+  generic `PasMap` would need, and what the row above waits on second.
 
 ---
 
