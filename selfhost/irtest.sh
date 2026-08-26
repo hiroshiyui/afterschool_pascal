@@ -171,7 +171,11 @@ fi
 
 # --- the golden suite, run against what a given stage-1 compiler produces ---
 checked=0
-skipped=0
+# Two different things, counted apart because one line reporting both as
+# "rejected at compile time" said something false about the larger of them:
+# 262 of the 485 it reported had never been compiled at all.
+noexpect=0
+rejected=0
 failed=0
 golden() {
   local cc=$1 stage=$2 f name expected_out expected_err stdin_file status rc
@@ -198,7 +202,7 @@ golden() {
     # part of the cases that import them, never run on their own -- there is
     # no main-program-declaration in one to enter it through.
     if [[ ! -f $expected_out && ! -f $expected_err ]]; then
-      [[ $stage == stage1 ]] && skipped=$((skipped + 1))
+      [[ $stage == stage1 ]] && noexpect=$((noexpect + 1))
       continue
     fi
 
@@ -216,7 +220,7 @@ golden() {
     rc=$?
     if [[ $rc -ne 0 ]]; then
       if [[ -f $expected_err ]]; then
-        [[ $stage == stage1 ]] && skipped=$((skipped + 1))
+        [[ $stage == stage1 ]] && rejected=$((rejected + 1))
         continue
       fi
       case $rc in
@@ -229,7 +233,7 @@ golden() {
       continue
     fi
 
-    checked=$((checked + 1))
+    [[ $stage == stage1 ]] && checked=$((checked + 1))
     # A wrong lowering can make a program *loop* rather than answer wrongly --
     # a `downto` that steps upward runs 2^31 times before it wraps out. That is
     # a failure like any other, so it is bounded here instead of hanging ctest.
@@ -313,6 +317,15 @@ if [[ $failed -ne 0 ]]; then
   exit 1
 fi
 
-echo "stage-1 codegen test: $checked programs behave as the golden output says"\
-     "($skipped rejected at compile time), and stage 2 = stage 3:" \
-     "the compiler is a fixed point"
+# Three disjoint counts, each taken on the stage-1 sweep alone, and they add up
+# to every .pas under tests/ -- which is the property that makes them
+# checkable. This line used to say two wrong things at once. `skipped` was
+# incremented both where a source has no expectation and where a case was
+# rejected as its .err says, and the line called the sum "rejected at compile
+# time", which is false of the larger part: it is never compiled here at all.
+# And `checked` was not guarded by stage, so it counted every case twice, once
+# per compiler, and the line called that a number of programs.
+echo "stage-1 codegen test: $checked programs built, ran and match their"\
+     "golden under both compilers; $rejected more were rejected, as their .err"\
+     "says; $noexpect sources carry no expectation and are not cases."\
+     "Stage 2 = stage 3: the compiler is a fixed point"
