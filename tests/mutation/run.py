@@ -105,15 +105,39 @@ def die(message):
 
 
 def run(cmd, timeout=None, limit_file_size=False):
+    """Run a command, and on a timeout kill *everything it started*.
+
+    The child here is ctest, which starts run_test.sh, which starts the
+    compiled program -- and several mutations in this catalogue are killed
+    precisely by making that program loop for ever. `subprocess.run(timeout=)`
+    kills the direct child and nothing beneath it, so the looping binary was
+    surviving the harness that timed it out: four of them were found spinning
+    at 99.9% CPU hours after the run that made them, holding the machine at a
+    load average of 5.8 and making every later measurement on it unreliable.
+
+    So the child gets a session of its own and the whole group is killed. This
+    is the third condition this harness has had to learn -- after the file-size
+    limit (a looping mutant filled a disk) and the mtime-preserving restore (a
+    mutant binary stayed in the build tree) -- and it has the same shape as
+    both: the mutation is supposed to misbehave, so the harness has to be the
+    thing that is careful.
+    """
     def prepare():
+        os.setsid()
         if limit_file_size:
             resource.setrlimit(resource.RLIMIT_FSIZE, (FSIZE_LIMIT, FSIZE_LIMIT))
 
+    p = subprocess.Popen(cmd, cwd=ROOT, preexec_fn=prepare,
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
-        p = subprocess.run(cmd, cwd=ROOT, timeout=timeout, preexec_fn=prepare,
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        return p.returncode, p.stdout.decode("utf-8", "replace")
+        out, _ = p.communicate(timeout=timeout)
+        return p.returncode, out.decode("utf-8", "replace")
     except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            p.kill()
+        p.communicate()
         return None, ""
 
 
