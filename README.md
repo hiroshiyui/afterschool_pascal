@@ -726,7 +726,22 @@ of — the instantiation belongs to whoever named the types, so it is emitted in
 the importing program.
 
 The types are written at the call and are not inferred from the other
-arguments.
+arguments — except where the container already knows one, which is what
+**`type of` over a component** is for (ADR-0215):
+
+```pascal
+procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);
+```
+
+Extended Pascal's `type of` names a whole variable; here its object may be any
+variable-access, so a routine can read an element type off the container it was
+handed instead of being told the same thing twice. The access is never
+evaluated — the type of `a[i]` does not depend on `i` — so a call in one is
+written and not made.
+
+`lib/dialect/pascontainer.pas` is what it was built for: five of its headings
+lost a type parameter. The two that return the element type kept theirs,
+§6.7.1's result-type being a type-name and nothing else.
 
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
@@ -1354,7 +1369,9 @@ types      type of x — a type-inquiry: the type the variable x already
            makes `b: type of a` assignable from a, where a second
            `record x, y: integer end` written out would not be. It reaches
            a parameter of the same list, so `procedure p(var a: point;
-           b: type of a)` writes the type once
+           b: type of a)` writes the type once. Under --std=afterschool
+           the object may be any variable-access, so `type of v^.a[1]`
+           reads an element type off the container that has it
 types      integer value 1 — an initial-state specifier: the value a
            variable bears when the block declaring it is entered, and
            again on every later activation of that block. It belongs to
