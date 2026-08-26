@@ -1,0 +1,9 @@
+adr: 0213
+file: selfhost/compiler.pas
+kills: pointer_typedisc
+why: AP 6.4.4.1 binds the schema's type discriminants at the domain, and BindBoundTypes is the whole of where that binding becomes visible to the body. Without it the body resolves `array [1..cap] of T` with T unbound, so the element type is whatever an unbound name resolves to rather than the one the domain named -- and the case grows a vector of records, whose element size is then wrong. The derived schema still exists and still interns, which is why this is a wrong answer rather than a refusal.
+--- old
+    BindBoundTypes(schema);
+    param^.discSyms := nil;
+--- new
+    param^.discSyms := nil;

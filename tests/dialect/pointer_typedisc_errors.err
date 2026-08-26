@@ -1,0 +1,5 @@
+<source>:13:6: error: schema 'vec' has a type discriminant, so a pointer domain of it must name the types it was produced with
+<source>:15:20: error: schema 'vec' has fewer type discriminants than this domain names
+<source>:17:11: error: a type discriminant of a pointer domain must name a type
+<source>:19:13: error: schema 'plain' has fewer type discriminants than this domain names
+<source>:22:6: error: schema 'two' has more type discriminants than this domain names

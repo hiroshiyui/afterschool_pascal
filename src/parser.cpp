@@ -913,6 +913,18 @@ TypeExprPtr Parser::parseTypeDenoter() {
       bail();
     }
     parseQualifiedName(t->qualifier, t->name);
+    // AP §6.4.4.1's domain that binds type discriminants, `^Vec(integer)`
+    // (ADR-0213). §6.4.4 admits nothing after the domain name, so a
+    // parenthesis here is a juxtaposition no conforming program can write —
+    // and what a conformance mode *says* about a dialect construct is
+    // conformance behaviour (ADR-0121, ADR-0154), which is why this front end
+    // carries the refusal and difftest compares the two. Unconditional: this
+    // front end is never given --std=afterschool.
+    if (check(Tok::LParen)) {
+      errorAtCur("a pointer domain with type arguments is an Afterschool "
+                 "Pascal feature; compile with --std=afterschool");
+      bail();
+    }
     return t;
   }
 

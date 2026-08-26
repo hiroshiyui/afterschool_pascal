@@ -675,6 +675,7 @@ type
   modRecPtr = ^modRec;
   producedPtr = ^producedRec;
   instPtr = ^instRec;
+  boundPtr = ^boundRec;
   entryPtr = ^entryRec;
   { Forward, because a schema's symbol holds the *syntax* of its body: a
     schema-definition has no type until a tuple gives its discriminants
@@ -968,6 +969,14 @@ type
       finds the instantiation already in progress. isGeneric is what stops the
       generic itself from being given formals, a body or a frame: it is a
       declaration and never a procedure. }
+    { AP 6.4.4.1 (ADR-0213): a schema derived from another by binding its type
+      discriminants and leaving its ordinal ones open. `boundOf` is the schema
+      it came from and `boundTypes` are the bindings to install before the body
+      is resolved -- so everything downstream sees an ordinary schema whose
+      discriminants happen to be exactly the ordinal ones, and `^Vec(integer)`
+      is `^IntVec` with the element decided. }
+    boundOf: symPtr;
+    boundTypes, boundTypeTail: symListPtr;
     isGeneric: boolean;
     genBodyPos: integer;
     genDeclTop: entryPtr;
@@ -1169,6 +1178,15 @@ type
     tuple: numPtr;
     sym: symPtr;
     next: instPtr
+  end;
+
+  { AP 6.4.4.1: one derived schema per (schema, tuple of type-ids), so
+    `^Vec(integer)` written twice is one type (ADR-0213). }
+  boundRec = record
+    schema: symPtr;
+    tuple: numPtr;
+    derived: symPtr;
+    next: boundPtr
   end;
 
   { A name bound in a scope. Kept apart from the symbol it names because the
@@ -1593,7 +1611,14 @@ type
         about a pointer -- the domain must be a name so a type may name
         itself, `nil`, the dereference -- is a rule about this one too. }
       nkPointer:    (ptAt, ptLen, ptQualAt, ptQualLen: integer;
-                     ptOwns: boolean);
+                     ptOwns: boolean;
+                     { AP 6.4.4.1 (ADR-0213): the actual type-discriminants of
+                       a domain that names a schema with type discriminants,
+                       `^Vec(integer)`. Only the *type* ones are given here;
+                       the ordinal ones are still 6.7.5.3's, supplied by `new`.
+                       nil for every other pointer, which is every pointer a
+                       conforming program can write. }
+                     ptArgs: nodePtr);
       nkOptional:   (opElem: nodePtr);
       nkHandle:     (hdAt, hdLen: integer);   { the closer's foreign name }
       nkFallible:   (faVal, faCause: nodePtr);
@@ -2056,6 +2081,7 @@ var
     elsewhere -- and this translation is the one that asked for the type, so
     it is the one that must contain the routine. }
   instDeclHead, instDeclTail: nodePtr;
+  boundSchemas: boundPtr;
   { The block whose declaration-part is being checked, so a generic routine
     can record where its instantiations belong: they are appended to the
     procedure-part of the block the generic itself was declared in, which is
@@ -5072,6 +5098,43 @@ begin
   end
 end;
 
+{ AP 6.4.4.1 (ADR-0213): the actual type-discriminants of a pointer domain
+  that names a schema having them -- `^Vec(integer)`. ISO/IEC 10206:1991 6.4.4
+  makes a domain-type a type-name or a schema-name and nothing else, so a
+  parenthesis here is a juxtaposition no conforming program can write; that is
+  ADR-0140's test, asked where 6.4.4 ends rather than where a statement does.
+
+  Only the *type* discriminants are written. The ordinal ones stay open and are
+  6.7.5.3's, supplied by `new` -- which is the whole point: the layout is fixed
+  by the types and the extent still varies, so one pointer type serves every
+  capacity exactly as `^IntVec` does today. Admitted under the dialect only;
+  the conformance modes reach the message below and name the mode. }
+procedure ParsePointerTypeArgs(t: nodePtr);
+var head, tail, a: nodePtr; more: boolean;
+begin
+  if Check(tkLParen) then begin
+    if langStd <> stdAfterschool then begin
+      ErrorAtCur;
+      write('a pointer domain with type arguments is an Afterschool Pascal ');
+      writeln('feature; compile with --std=afterschool');
+      Bail
+    end
+    else begin
+      head := nil;
+      tail := nil;
+      pos := pos + 1;
+      more := true;
+      while more and not aborted do begin
+        a := ParseExpr;
+        Append(head, tail, a);
+        more := Accept(tkComma)
+      end;
+      Expect(tkRParen, ctxSchemaArgs);
+      t^.ptArgs := head
+    end
+  end
+end;
+
 function ParseTypeDenoter;
 var t, n: nodePtr; packed_: boolean;
 begin
@@ -5162,14 +5225,17 @@ begin
     else if Check(tkCaret) then begin
       t := NewNode(nkPointer, CurLine, CurCol);
       t^.ptOwns := false;
+      t^.ptArgs := nil;
       pos := pos + 1;
       if not Check(tkIdent) then begin
         ErrorAtCur;
         writeln('the domain of a pointer type must be a type name');
         Bail
       end
-      else
-        ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen)
+      else begin
+        ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen);
+        ParsePointerTypeArgs(t)
+      end
     end
     { owned-pointer-type = 'owned' '^' type-identifier (AP 6.4.14, ADR-0181).
       Neither `owned` nor anything else here is reserved, and this feature
@@ -5189,14 +5255,17 @@ begin
             (PeekKind(1) = tkCaret) then begin
       t := NewNode(nkPointer, CurLine, CurCol);
       t^.ptOwns := true;
+      t^.ptArgs := nil;
       pos := pos + 2;
       if not Check(tkIdent) then begin
         ErrorAtCur;
         writeln('the domain of an owned pointer type must be a type name');
         Bail
       end
-      else
-        ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen)
+      else begin
+        ParseQualifiedName(t^.ptQualAt, t^.ptQualLen, t^.ptAt, t^.ptLen);
+        ParsePointerTypeArgs(t)
+      end
     end
     { optional-type = '?' type-denoter (ADR-0123). A whole denoter and not a
       name, unlike the pointer above: `^T` takes a name so that a type may
@@ -8297,6 +8366,9 @@ begin
   s^.resultTypeBad := false;
   s^.defined := false;
   s^.schemaBody := nil;
+  s^.boundOf := nil;
+  s^.boundTypes := nil;
+  s^.boundTypeTail := nil;
   s^.isGeneric := false;
   s^.genBodyPos := 0;
   s^.genDeclTop := nil;
@@ -9448,6 +9520,12 @@ end;
   things this needs -- BuildFormals and CheckProcBody -- are declared. }
 function InstantiateGeneric(gen: symPtr; var args: nodePtr;
                             line, col: integer): symPtr; forward;
+
+{ AP 6.4.4.1's derived schema (ADR-0213). Forward: it is wanted where a
+  pointer domain is resolved, and the tuple routines it is built on are
+  declared with the schema machinery further down. }
+function BoundSchema(schema: symPtr; args: nodePtr; d: nodePtr): symPtr;
+  forward;
 
 function ProduceFromSchema(schema, dummy: symPtr; d: nodePtr): typePtr;
   forward;
@@ -10794,6 +10872,15 @@ begin
     else if (s <> nil) and (s^.kind = skType) then
       t^.elem := s^.stype
     else if (s <> nil) and (s^.kind = skSchema) then begin
+      { AP 6.4.4.1 (ADR-0213): `^Vec(integer)` binds the schema's type
+        discriminants here and leaves its ordinal ones to `new`. What the rest
+        of this branch then sees is an ordinary schema whose discriminants are
+        the ordinal ones, so nothing below had to learn about it. }
+      if d^.ptArgs <> nil then begin
+        s := BoundSchema(s, d^.ptArgs, d)
+      end;
+      if s = nil then t^.elem := intType
+      else begin
       { 6.4.4: a domain-type may be a schema-name. It is resolved here rather
         than deferred, because a pointer written in the *variable* part is past
         the point where deferred domains are completed -- unless the schema is
@@ -10812,6 +10899,7 @@ begin
       end
       else if busy then PendPointer(t, d, s)
       else t^.elem := HeapFromSchema(s, d)
+      end
     end
     else
       { Not yet -- it may arrive before the type part ends. }
@@ -10839,6 +10927,7 @@ begin
     else if (s <> nil) and (s^.kind = skSchema) then begin
       d := NewNode(nkPointer, p^.line, p^.col);
       d^.ptOwns := false;
+      d^.ptArgs := nil;
       d^.ptAt := p^.at;
       d^.ptLen := p^.len;
       { A pending domain keeps the name and not the qualifier: what waits is a
@@ -12409,6 +12498,141 @@ begin
 end;
 
 { Whether this schema's body is being resolved right now, at any depth. }
+{ AP 6.4.4.1's derived schema (ADR-0213): `Vec` with its type discriminants
+  bound to what a pointer domain named, and its ordinal ones still open.
+
+  Interned by (schema, tuple of type-ids), exactly as a production is
+  (ADR-0039) and for the same reason: `^Vec(integer)` written twice must be one
+  type, or two pointers to the same thing would not be assignable. The tuple is
+  ADR-0209's typeId again.
+
+  What comes back is an ordinary schema symbol. Its `discs` are the ordinal
+  discriminants and nothing else, so `SchemaHasTypeDisc` is false of it and
+  every refusal that reads that is quiet; its body is the original's syntax,
+  re-resolved per ordinal tuple as any schema's is; and the type bindings ride
+  along in `boundTypes` to be installed before that resolution. So the heap
+  machinery, `new(p, cap)`, the descriptor and the whole of ADR-0043 are
+  reached unchanged -- which is the argument for deriving a schema rather than
+  teaching each of them about type discriminants. }
+function BoundSchema;
+var tuple, tupleTail: numPtr; p: symListPtr; a: nodePtr;
+    given: typePtr; b: boundPtr; derived, ts: symPtr;
+    ok, isType: boolean; nOrd: integer;
+begin
+  BoundSchema := nil;
+  tuple := nil;
+  tupleTail := nil;
+  ok := true;
+  { The actuals are matched against the *type* discriminants only, in order.
+    An ordinal one is skipped here and stays open. }
+  p := schema^.discs;
+  a := args;
+  while (p <> nil) and ok do begin
+    isType := p^.sym^.stype = nil;
+    if isType then begin
+      if a = nil then begin
+        ErrorAt(d^.line, d^.col);
+        write('schema ''');
+        WritePool(schema^.at, schema^.len);
+        writeln(''' has more type discriminants than this domain names');
+        ok := false
+      end
+      else begin
+        given := TypeArgument(a);
+        if given = nil then begin
+          ErrorAt(a^.line, a^.col);
+          writeln('a type discriminant of a pointer domain must name a type');
+          ok := false
+        end
+        else begin
+          a^.ntype := given;
+          AppendNum(tuple, tupleTail, given^.typeId)
+        end;
+        a := a^.next
+      end
+    end;
+    p := p^.next
+  end;
+  if ok and (a <> nil) then begin
+    ErrorAt(a^.line, a^.col);
+    write('schema ''');
+    WritePool(schema^.at, schema^.len);
+    writeln(''' has fewer type discriminants than this domain names');
+    ok := false
+  end;
+
+  if ok then begin
+    b := boundSchemas;
+    while (b <> nil) and not ((b^.schema = schema) and SameTuple(b^.tuple, tuple)) do
+      b := b^.next;
+    if b <> nil then BoundSchema := b^.derived
+    else begin
+      derived := NewSymbol;
+      derived^.at := schema^.at;
+      derived^.len := schema^.len;
+      derived^.kind := skSchema;
+      derived^.schemaBody := schema^.schemaBody;
+      derived^.boundOf := schema;
+      derived^.level := schema^.level;
+      derived^.owner := schema^.owner;
+      { The ordinal discriminants become this schema's own, in order; the type
+        ones become bindings. Walked a second time rather than remembered from
+        the loop above, because that loop reports errors and this one must run
+        only when there were none. }
+      nOrd := 0;
+      p := schema^.discs;
+      a := args;
+      while p <> nil do begin
+        if p^.sym^.stype = nil then begin
+          ts := NewSymbol;
+          ts^.at := p^.sym^.at;
+          ts^.len := p^.sym^.len;
+          ts^.kind := skType;
+          ts^.stype := a^.ntype;
+          AppendSym(derived^.boundTypes, derived^.boundTypeTail, ts);
+          a := a^.next
+        end
+        else begin
+          AppendSym(derived^.discs, derived^.discTail, p^.sym);
+          nOrd := nOrd + 1
+        end;
+        p := p^.next
+      end;
+      new(b);
+      b^.schema := schema;
+      b^.tuple := tuple;
+      b^.derived := derived;
+      b^.next := boundSchemas;
+      boundSchemas := b;
+      BoundSchema := derived
+    end
+  end
+end;
+
+{ AP 6.4.4.1: install a derived schema's bound type discriminants, so the body
+  it shares with the schema it came from resolves with `T` meaning what the
+  pointer domain said. Immediately before the schema's own discriminants are
+  bound, since a type discriminant may be named in an ordinal one's denoter.
+
+  Called from GenericFromSchema and from nowhere else, which is not an
+  omission: a derived schema is made only by BoundSchema, which is reached
+  only from a pointer domain, which reaches the body only through this one
+  path -- HeapFromSchema builds *one* generic type per schema, its
+  discriminants read from each object's own header (ADR-0043), so there is no
+  per-tuple production of a derived schema for ProduceFromSchema to see. A
+  call there was written first and removed after the whole suite passed
+  without it: for an ordinary schema boundTypes is nil and it did nothing, and
+  for a derived one it was unreachable. }
+procedure BindBoundTypes(schema: symPtr);
+var b: symListPtr;
+begin
+  b := schema^.boundTypes;
+  while b <> nil do begin
+    Bind(b^.sym^.at, b^.sym^.len, b^.sym);
+    b := b^.next
+  end
+end;
+
 function SchemaIsBusy(schema: symPtr): boolean;
 var q: symListPtr; busy: boolean;
 begin
@@ -12956,11 +13180,21 @@ begin
     with the actual and are read from a descriptor at run time (ADR-0040),
     which is what lets one compiled body serve every tuple. A *type* is not
     something a descriptor can carry: the body's layout would differ per
-    tuple, so the routine would have to be compiled once for each -- which is
-    a mechanism this compiler does not have, and a large one, separate
-    translation here being by re-reading the component's source. So it is
-    refused in as many words rather than by whatever the body happens to say
-    about an unbound name. }
+    tuple, and a descriptor has one layout. So it is refused in as many words
+    rather than by whatever the body happens to say about an unbound name.
+
+    This once said the per-tuple mechanism did not exist here and would be
+    large. AP 6.7.3.10 built it (ADR-0211) and ADR-0212 carried it across
+    6.13, so that reason is gone and the clause-level one above is the whole
+    of what is left: a schematic formal reads a tuple that *arrives*, and no
+    amount of translating per tuple changes what a descriptor can hold.
+
+    A pointer domain is the one of these three nouns with a way out, because
+    its tuple is 6.7.5.3's rather than an actual's -- AP 6.4.4.1's
+    `^Vec(integer)` binds the types where the layout is decided and leaves the
+    extent to `new` (ADR-0213). That is why this message says *must name the
+    types it was produced with*: for a domain, there is now a spelling that
+    does. }
   else if SchemaHasTypeDisc(schema) then begin
     ErrorAt(d^.line, d^.col);
     write('schema ''');
@@ -12978,6 +13212,7 @@ begin
     mark := scopeTop;
     scopeDepth := scopeDepth + 1;
     scopeMark[scopeDepth] := applySeq;
+    BindBoundTypes(schema);
     param^.discSyms := nil;
     param^.discSymTail := nil;
     p := schema^.discs;
@@ -35175,6 +35410,7 @@ begin
   curDeclBlock := nil;
   instDeclHead := nil;
   instDeclTail := nil;
+  boundSchemas := nil;
   scopeTop := nil;
   scopeDepth := 0;
   applySeq := 0;

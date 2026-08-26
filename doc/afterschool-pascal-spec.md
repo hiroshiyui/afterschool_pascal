@@ -535,6 +535,51 @@ It appears in Annex C.
 directly, and the value assigned shall determine the active variant from that
 point. This is unchanged from ISO/IEC 10206:1991.
 
+##### 6.4.4 Pointer-types [extended]
+
+**6.4.4.1 A domain that binds type discriminants [added].** Where the
+domain-type of a new-pointer-type is a schema-name whose schema has
+type-valued discriminants (6.4.7.1), the domain-type may be followed by an
+actual-type-discriminant-part:
+
+    domain-type = type-name | schema-name [ '(' type-name { ',' type-name } ')' ] .
+
+There shall be exactly as many type-names as the schema has type-valued
+discriminants, and each shall denote a type. They shall bind the type-valued
+discriminants of that schema, in the order the schema declares them.
+
+The ordinal discriminants of the schema shall remain undetermined by the
+domain-type, and shall be determined for each variable created by 6.7.5.3's
+`new`, as they are for a domain-type that is a schema-name alone.
+
+NOTE 1 — The spelling is a position, as every construct of this dialect is
+(Annex D). ISO/IEC 10206:1991 6.4.4 makes a domain-type a type-name or a
+schema-name and admits nothing after either, so a parenthesis here is a
+juxtaposition no conforming program can write.
+
+NOTE 2 — Only the type discriminants are written, and this is the whole
+purpose of the construct. What the types decide is the *layout* of the
+identified variable, which a pointer-type must know; what the ordinal
+discriminants decide is its *extent*, which `new` may vary from one created
+variable to the next. `^Vec(integer)` is therefore what a schema of one
+ordinal discriminant already is, with the component type chosen — and a
+routine over it may create, copy and dispose variables of every capacity, for
+whichever type the domain named.
+
+NOTE 3 — Which is what a **growable container written once** requires, and
+what it could not have. A schema with a type discriminant may not be a
+parameter-form (6.7.3.7.1) and may not be a domain-type alone (6.4.7.1), so a
+generic routine could reach a container of fixed capacity and no other. This
+is the construct that makes `new(p, larger)` writable in a routine that does
+not know the element type.
+
+**6.4.4.2 Type identity [added].** Two domain-types naming the same schema
+with the same type-names shall determine the same type. 6.4.1's rule is
+unchanged and governs the pointer-types themselves: each type-denoter that is
+not a type-name denotes its own type, so two variables declared
+`^Vec(integer)` separately have two types, exactly as two declared `^integer`
+separately do.
+
 ##### 6.4.11 Optional-types [added]
 
 **6.4.11.1 The denoter.**
@@ -2288,6 +2333,7 @@ the rule.
 | `release` | `release(h)` | `unknown function 'release'` | `unknown function 'release'` |
 | `typedisc` | `T: type` in a schema | `a schema is an Extended Pascal feature; compile with --std=extended` | `the type of a discriminant must be an ordinal type name` |
 | `typeparam` | `T: type` in a formal-parameter-list | `a type-inquiry is an Extended Pascal feature; compile with --std=extended` | `a type parameter is an Afterschool Pascal feature; compile with --std=afterschool` |
+| `ptrtypedisc` | `^Vec(integer)` | `a pointer domain with type arguments is an Afterschool Pascal feature; compile with --std=afterschool` | `a pointer domain with type arguments is an Afterschool Pascal feature; compile with --std=afterschool` |
 | `utf8` | `utf8(n)` | `a discriminated schema is an Extended Pascal feature; compile with --std=extended` | `unknown schema 'utf8'` |
 
 Only the first names the dialect. That is not an oversight: ADR-0140's rule is

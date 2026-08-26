@@ -2709,6 +2709,33 @@ is the case; `0211-instantiation-not-cached` does not terminate and
 `0211-heading-not-forgotten` type-checks the second instantiation against the
 first one's types.
 
+**A pointer domain may bind a schema's type discriminants and leave its
+ordinal ones open** (ADR-0213, AP 6.4.4.1). `^Vec(integer)` with `new(p, 8)`
+supplying the rest, and the split is the idea rather than a convenience: the
+type discriminants decide the identified variable's **layout**, which a
+pointer-type must know, and the ordinal ones decide its **extent**, which
+`new` may vary per created variable. So `^Vec(integer)` is what `^IntVec`
+already was with the element chosen, and a routine over it creates, copies and
+disposes at every capacity for whichever type the domain named — which is what
+a *growable* container written once needs and could not have, a
+type-discriminant schema being admissible neither as a parameter-form nor as a
+bare domain.
+
+**It is a derived schema and not a new mechanism.** `BoundSchema` interns one
+schema symbol per `(schema, tuple of typeIds)` whose `discs` are the ordinal
+discriminants and nothing else, carrying the type bindings alongside for
+`BindBoundTypes` to install before the body resolves. Everything downstream
+then sees an ordinary schema: `SchemaHasTypeDisc` is false of it,
+`HeapFromSchema`, `new(p, cap)`, the heap header and ADR-0043's descriptor are
+reached unchanged. One routine and two one-line calls, against a change at
+every site that asks what a schema's discriminants are. **6.4.1 is untouched**
+— two variables declared `^Vec(integer)` separately have two types, as two
+declared `^integer` do; what is interned is the derived schema, not the
+pointer-type, which AP 6.4.4.2 says out loud because the two look alike from a
+program. `tests/dialect/pointer_typedisc.pas` grows past its capacity twice
+and grows a vector of records with the same routine;
+`0213-bound-types-not-installed` leaves the body resolving `T` unbound.
+
 **An imported component's tokens are kept, so a generic can cross §6.13**
 (ADR-0212). AP 6.7.3.10 re-parses a generic's body from a saved token position,
 and the import loop used to clear the array between components — so a generic

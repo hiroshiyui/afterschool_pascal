@@ -289,6 +289,9 @@ afterschool	6.4.3.4.3	testable
 afterschool	6.4.3.4.4	testable	
 afterschool	6.4.3.4.5	testable	
 afterschool	6.4.3.4.6	testable	
+afterschool	6.4.4	structural	introduces the extended pointer-type; the requirements are in its subclauses
+afterschool	6.4.4.1	testable	
+afterschool	6.4.4.2	testable	
 extended	6.4.3.5	testable	Set-types
 extended	6.4.3.6	testable	File-types
 extended	6.4.4	testable	Pointer-Types

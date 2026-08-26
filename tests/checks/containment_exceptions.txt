@@ -86,3 +86,4 @@ break_refused
 continue_refused
 typedisc_refused
 typeparam_refused
+ptrtypedisc_refused
