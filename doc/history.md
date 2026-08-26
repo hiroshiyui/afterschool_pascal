@@ -24,7 +24,11 @@ part that never changes was the first 2,000 lines a reader met.
 | [Stage 2](#stage-2--isoiec-102061991) | ISO/IEC 10206:1991 — [how it arrives](#how-the-second-standard-arrives), [every feature](#the-features-in-the-order-they-landed), [what is left](#what-is-left) |
 | [Conformance sweeps](#conformance-sweeps) | what was checked rather than asserted, and what that found |
 | [The two things that were not features](#the-two-things-that-were-not-features) | a required document, and an oracle nobody here wrote |
-| [The dialect, increment by increment](#the-dialect-increment-by-increment) | thirteen of them, [indexed](#the-increments-at-a-glance) |
+| [The dialect, increment by increment](#the-dialect-increment-by-increment) | thirty of them, [indexed](#the-increments-at-a-glance) |
+| [What the roadmap answered](#what-the-roadmap-answered) | the questions that page carried and closed, and what each found on its first run |
+| [Cross-platform support](#cross-platform-support-measured) | what the x86-64 lock turned out to be, measured over twenty-five targets |
+| [The text model](#the-text-model) | AP 6.4.15 in four increments, and where its oracle story ends |
+| [The oracles turned on themselves](#the-oracles-turned-on-themselves) | eight gates that check another gate's blind spot, five of them checking a *document* |
 
 If you are here for **what the language accepts today**, this is the wrong
 document: `README.md` is the user-facing statement and
@@ -1276,12 +1280,16 @@ built towards it so far.
 
 ### The increments at a glance
 
-Thirteen so far. What each one *is*, for someone who wants to use it, is in
+Thirty so far. What each one *is*, for someone who wants to use it, is in
 [README's "What it adds so far"](../README.md#what-it-adds-so-far); the
 sections below are why each was built in that order and what building it
-found. Six of the thirteen — 1, 2, 4, 11, 12 and 13 — are library work rather
-than language work, and several of those found a compiler defect nothing else
-in the tree could reach, which is a theme the sections return to.
+found. Nine of the thirty — 1, 2, 4, 11, 12, 13, 23, 26 and 27 — are library
+work rather than language work, and several of those found a compiler defect
+nothing else in the tree could reach, which is a theme the sections return
+to. One of the thirty, 24, built nothing at all: it is here because it is the
+last word on the question ADR-0151 deferred, and because withdrawing a
+question is a thing that happens to a language and has to be recorded
+somewhere.
 
 | # | What landed | Record |
 | --- | --- | --- |
@@ -1298,6 +1306,23 @@ in the tree could reach, which is a theme the sections return to.
 | 11 | `PasIO` — descriptor I/O on that buffer | ADR-0130 |
 | 12 | `errno` and `strerror`, through a second runtime surface (`pasx_`) | ADR-0131 |
 | 13 | `WorkingDirectory` and `LinkTarget`, with no compiler change at all | ADR-0132 |
+| 14 | The handle-type — `handle external '…'`, a foreign address with an owner | ADR-0174 |
+| 15 | `defer` — a statement armed where it is written | ADR-0175 |
+| 16 | `T ! E` — the result record, written by the compiler | ADR-0176 |
+| 17 | `exit` and `exit(e)` — one activation left early | ADR-0177 |
+| 18 | `try(x)` — propagation, and error handling closed | ADR-0178 |
+| 19 | `owned ^T` — a variable created by `new` given an owner | ADR-0181 |
+| 20 | `take(v)` — the move an affine type needs to be usable | ADR-0182 |
+| 21 | A record crosses to C as a `var` parameter | ADR-0184 |
+| 22 | A foreign routine may answer a record, and what comes back is a copy | ADR-0187 |
+| 23 | `PasDir` — a directory listing, without the struct | ADR-0188 |
+| 24 | *Nothing*: the aliasing fork withdrawn as posed, the concurrency shape settled | ADR-0201 |
+| 25 | `h := nil` — a handle released before its variable dies | ADR-0202 |
+| 26 | `PasNet` — a socket is a handle, and both ends are strings | ADR-0203 |
+| 27 | `PasNet.Wait` — a server serves many clients | ADR-0205 |
+| 28 | `release(h)` — the closer's result, at last | ADR-0206 |
+| 29 | `break` and `continue` — one loop left early | ADR-0208 |
+| 30 | A discriminant may name a type — a container written once | ADR-0209 |
 
 ### The first increment (done)
 
@@ -2117,6 +2142,412 @@ deliberately for the property it failed to check, and it was written by the
 hand that wrote the feature — which is when it happens and why the mutation
 step is not optional.
 
+### The twenty-first increment: the gap was permission, not arithmetic
+
+ADR-0184, and it is the fourth estimate in five FFI increments to be wrong in
+the same direction.
+
+`doc/roadmap.md` had carried a foreign **struct with a layout** — `struct
+stat`, `struct dirent`, `struct sockaddr` — as what stood between here and a
+directory listing, and had said what it needed: *the compiler and C to agree
+about offsets, which nothing here does for a foreign type*. The measurement was
+taken before anything was designed, and **nothing had to be made to agree**.
+`RecordLayout` rounds each field up to its own alignment, takes the widest
+field's alignment as the record's, and rounds the total — which is not a rule
+chosen to resemble C's, it *is* C's rule. A Pascal record of `struct stat`'s
+fields, with glibc's two holes written out as fields of their own, is 144 bytes
+at 144 bytes' offsets and emits one `llvm.memcpy` of that length.
+
+What was missing was **permission**. AP 6.7.7.6 admitted `integer`, `int64` and
+`real` at a `var` parameter of an `external` heading and refused everything
+else, so a caller-owned buffer had no way across as a single argument. Widening
+that list is the whole feature.
+
+**It is the first dialect feature to need neither of ADR-0140's two shapes.**
+`var buf: StatBuf` at an `external` heading is something a program could always
+write and was told it could not have: no word-symbol, no directive, no position
+that did not already exist. ADR-0140's rule assumes every feature needs a
+spelling, and this one inherits `external`'s — which is why `grep external`
+still finds it. `exit` had failed the same premise one step earlier by finding
+no position at all, so ADR-0184's consequences had to carry both.
+
+**What qualifies is decided by the fields and not by a marker**, and the list is
+ADR-0129's slice-component list for ADR-0129's reason: the callee writes through
+the address, so a type with a byte pattern that is not a value of it cannot be
+admitted. `boolean` has 254 such patterns, an enumeration has as many as it
+lacks constants, and nothing runs `CheckedForStore` over what a routine this
+compiler did not translate left behind. A **variant part** is refused, and it is
+the one refusal here about this compiler's own representation rather than about
+a value set: an arm's storage is `[k x iN]`, a shape chosen here (ADR-0028), and
+a C union is not laid out from it.
+
+The record shipped no library consumer on purpose, for a reason it stated and
+did not solve — which is the twenty-third increment.
+
+### The twenty-second increment: an address retired rather than modelled
+
+ADR-0187. ADR-0122 had refused every foreign result that is an address, rightly:
+a returned `char *` may be null, `getenv` of an unset name answers one in the
+ordinary course of things, and this language had nothing to say *no value* in.
+ADR-0123 built that something and lifted the refusal exactly as far as a string
+with a capacity, because the copy the call site makes needs somewhere of a known
+size to go. **The size was the whole of the condition, and after ADR-0184 a
+record has one.**
+
+So the question was not whether a struct can come back — two earlier increments
+had answered that between them — but what it comes back **as**. A null address
+yields the absent value; any other address yields a copy, made where the call
+occurs, into the frame slot Sema already gives every call whose result lives in
+memory.
+
+**The copy is the feature and not the implementation.** `readdir` answers one
+static object per directory stream and overwrites it on the next call. A view
+onto that would be a value of this language whose contents change when the
+program does something unrelated, and would hand ADR-0109's aliasing question to
+every program that lists a directory. Reading the address once, at the call, and
+letting it die at the end of the statement is the same sentence ADR-0123 wrote
+about a `char *` — and it is the fourth increment running to be answered by
+arranging for nothing to hold an address. *An ownership question is only a
+question while something holds the address.*
+
+**The length is the record's and not the struct's**, there being nothing the far
+side could report. A record declaring a *prefix* of the members reads the
+prefix, which is how `struct tm` is usable without naming the `char *` glibc
+puts after the nine that matter; a record larger than the struct reads storage
+the callee does not own, which is a requirement on the program of exactly the
+class AP 6.7.7.9 c) already is.
+
+A record result **by value** stays refused and gained a diagnostic naming the
+remedy, having been reaching the general *only `integer`, `int64` and `real`
+cross the boundary* — true, and unhelpful about a program whose mistake is the
+direction rather than the type. How a struct comes back by value is a fact about
+C's ABI, and ADR-0030 is the standing rule that nothing here may depend on one.
+
+### The twenty-third increment: the module did not use the feature that unblocked it
+
+ADR-0188. ADR-0187 closed the roadmap's last row, and both the record and the
+roadmap named what it unblocked: `readdir`, and with it a directory listing.
+`lib/dialect/pasdir.pas` is that module, and **it does not use ADR-0187**.
+
+The reason is three commits older. ADR-0185's fifth decision is that a
+**library may not make a struct claim**: a record crossing the boundary is a
+claim about some C compiler's layout, checkable by `foreign-layout` on the
+machine you build on, and `lib/` has to work on machines nobody here builds on.
+`struct dirent` is that case at its worst — glibc puts an `unsigned short` and
+an `unsigned char` in front of `d_name`, macOS puts a 64-bit seek offset and two
+16-bit fields, and POSIX itself requires only `d_ino` and `d_name`, **in any
+order**. There is no field list a portable module could write.
+
+**The generalisation is why this is a record and not a paragraph in the
+module.** `struct tm` is *standardised* — ISO C 7.27.1 — and a library may not
+declare that one either, because the same clause lets the members appear in any
+order. The set of structs a library may declare is close to empty. Nothing about
+ADR-0187 was wrong; what was wrong was reading *readdir is declarable* as *the
+module can declare it*.
+
+So `PasDir` binds `opendir` and `closedir`, neither of which has a struct in its
+signature, holds the `DIR *` as a handle-type with `closedir` as its closer —
+ADR-0174's own worked example arriving as a library at last — and asks the
+runtime for exactly one thing, the name.
+
+Two decisions in it are worth keeping. **There is no entry kind**, because
+`d_type` is not POSIX, is invisible under `_POSIX_C_SOURCE` — which is what
+`runtime-isoc` compiles the POSIX half with — and is `DT_UNKNOWN` on filesystems
+that do not carry the field; a caller composes `PasFS.Info(dir + '/' + name)`
+instead and gets an answer that is right everywhere. And **the capacity is
+checked on the far side**, which closed a `doc/sop.md` §7 row for this module:
+`pasx_dir_next` holds the pointer and can call `strlen`, so the caller's own
+capacity travels *in* and an over-long name comes back as `errFull` rather than
+stopping the program — which is what `PasEnv.Lookup` still does with `getenv`'s
+answer, and could be given the same treatment and has not been.
+
+### The twenty-fourth increment: the fork was withdrawn rather than decided
+
+ADR-0201, and nothing landed. It is here because it is the last word on the
+question ADR-0151 deferred with a criterion rather than a mood — ARC or
+borrow-checking, decidable *at the first construct that lets two live names
+reach one owned value* — and because the record was started to pick a
+concurrency construct and did four probes instead.
+
+**Containment forbids both candidates on `^T`.** `new(p); q := p; dispose(p)` is
+a conforming Extended Pascal program, and §6.6.5.3 makes a later use of `q^` an
+error this processor does not detect. ARC changes what `dispose` does and what a
+pointer costs; borrow-checking **refuses** the program. Either breaks ADR-0117,
+and `^T` is the only reference type an ISO program has — so the fork as posed
+cannot be applied to the pointer the question was about.
+
+**The dialect's own answer to aliasing is refusal, given three times.** A file,
+a handle and `owned ^T` are `IsAffine`, none may be copied, and a second name
+for one is refused in as many words. There is nothing left for either candidate
+to govern.
+
+**And a borrow was already here, unnamed.** `Bump(o^)` binds a `var` parameter
+to what an owned pointer owns, for the duration of the call. It cannot escape:
+Pascal has no address-of — §6.1.9's alternative `@` is refused, in
+`torture.pas` — and `new` is the only thing that produces a pointer, so no
+pointer can ever name what a `var` parameter refers to. `kept := n` is a type
+error and that is the whole enforcement. **Unformable rather than checked**,
+which is stronger and free, and which nothing in the compiler knows: a future
+feature adding a way to form such a value takes the property with it in silence,
+and `doc/sop.md` §7 is where that is written down rather than watched. Even the
+classic hazard is safe — `P(o, o)` over `a := take(b)` is a self-move, the
+variable is not nil afterwards, and the heap balances.
+
+That is ADR-0151 §1's pattern a second time: the property was already held, by
+construction, and unremarked.
+
+What is left of the fork is **two threads of control**, the only sentence that
+breaks *a borrow cannot outlive a call because the caller is not running during
+it*. So the construct must be share-nothing, a task owning what it is given, and
+the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had
+`process` and `monitor` in 1975. The record then declined to build it and named
+the trigger — *a socket module serving more than one client*, with `select` as
+the cheaper answer to try first. **The trigger came and went in two days**,
+three increments below, and the cheaper answer was enough.
+
+### The twenty-fifth increment: the release the type had no way to ask for
+
+ADR-0202. ADR-0174 gave the handle one form of assignment, the answer of an
+external function of its own type, which is what makes AP 6.4.12.3's *at most
+once* keepable — a value is born in one place and the variable receiving it owns
+it. It also meant a program could not release a handle before its own variable
+died, and both modules built over the type wanted to: `PasStream.Close` and
+`PasDir.Close` each assigned the answer of a call they knew would fail —
+`fopen('', 'r')`, `opendir('')` — because the release is the *assignment's* and
+a null answer leaves the variable empty. It worked, at the price of a refused
+system call, a stale `errno`, and a `LastErrorText` after `Close` naming the
+empty path rather than whatever had actually failed.
+
+**`h := nil` assigns no value, and that is why it fits rather than widening the
+type.** `nil` already denotes the empty state of every handle-type — 6.4.12.2's
+own second paragraph admits it on the right of `=` — so the type still has
+exactly one way to *acquire* a value and this is a way to give one up. Every
+restriction ADR-0174 argued for is untouched: no copy, no second name, no value
+parameter, no result.
+
+**One Sema arm and nothing else**, exactly as the roadmap had predicted:
+`pas_handle_set` already released what the slot held before storing, and
+`EmitExpr` of `nil` is a null pointer, so the existing lowering of the first
+form *is* the second when the value is null. CodeGen was not touched and neither
+was the runtime.
+
+What made it land was the **second caller**. The roadmap had said the spelling
+"waits for a second module to want it", and `PasDir` wanted it on the day it was
+written — ADR-0116's rule doing the thing it is for.
+
+Its evidence is a loop: two thousand streams opened and closed through one
+variable, under `run_test.sh`'s `ulimit -n 256`, so a release that does not
+happen stops the program at about the two hundred and fiftieth. That is
+`str_arena_loop.pas`'s argument and it needs the same thing to be true — a bound
+low enough that exhausting it is cheap. Releasing an empty handle is not an
+error, and the case says so on its own line, because a caller of a `Close` that
+answers nothing will call it twice.
+
+### The twenty-sixth increment: the module that could not declare what it talks to
+
+ADR-0203. Networking is the first of ADR-0109's four goals and was the only one
+with no module. The roadmap had said what was left: *a decision about what a
+portable `sockaddr` declaration looks like*. There is not one, and ADR-0188 had
+already generalised why — so the question was what the module asks for
+**instead**.
+
+**Both ends of every call are strings.** A host and a *service* — `http`, or a
+number written out — go to `getaddrinfo`, which decides what they mean. Nothing
+in the module or the runtime names an address family, a port number, an address
+or a byte order: no `sockaddr`, no `htons`, no `sin_port`, no choice between
+IPv4 and IPv6, and the loop takes the first address that works, so a caller gets
+IPv6 where it exists and IPv4 where it does not without a line about either.
+
+Two things fell out that were not the reason. `<netinet/in.h>` and
+`<arpa/inet.h>` are not needed, so ADR-0186's header catalogue grew by two
+rather than four. And an **ephemeral port is expressible**: listen on service
+`'0'`, ask `Service`, and get back the numeric string `Connect` takes — so a
+program can talk to itself with no number type involved at all, which is the
+whole of what the test needs.
+
+**A socket is a handle rather than an integer**, because AP 6.4.2.6.2 makes an
+integer numeric on purpose: a program holding a descriptor could add to it, copy
+it and close it twice, which is the door ADR-0151 records as open and unclosable
+for `int64`. The runtime keeps the descriptor in a structure of its own, and
+`s := nil` — landed the same day, one increment above — closes it early.
+
+**Reading is by line and the buffer is in the runtime**, forty lines of C rather
+than a trap for whoever writes the first program that reads and writes on one
+connection: `PasStream` gets lines from `FILE *` and a socket cannot, a stream
+over a non-seekable descriptor being forbidden to switch between reading and
+writing without a positioning call.
+
+And **SIGPIPE is ignored once**, where a socket is first made. Writing to a
+connection the far end has closed raises it, and its default disposition ends
+the process with no diagnostic — which is not an outcome a routine answering an
+`ErrorCode` can report. `signal` is ISO C; `MSG_NOSIGNAL` and `SO_NOSIGPIPE` are
+one system's each.
+
+### The twenty-seventh increment: the client was written first, and it compiled
+
+ADR-0205, and it is the cleanest demonstration in this file of `doc/sop.md`
+§4a — *a feature with a surface needs a client, not a case*.
+
+ADR-0203 had said in as many words that it could not wait on several
+connections, and ADR-0201 had said that a program serving two clients needs a
+construct this language has not got. The roadmap put a second row in front of
+it: of the three affine kinds only `owned ^T` moves, so a socket cannot be
+handed to anything and a task could not be **given** a connection.
+
+The work began by writing the server, and **the server compiled**. An array of
+handles is admitted (AP 6.4.12 NOTE 3), a `var` parameter binds to one of its
+elements, so `Accept(srv, clients[k])` puts a connection in a slot without
+anything being copied, `clients[k] := nil` releases one, and a schema gives the
+array whatever length the program wants. Nothing had to move because nothing was
+ever assigned: **a handle reaches its home by being the `var` parameter its
+producer writes through**, and a server never needs a second name for one. Two
+roadmap rows closed with no feature between them.
+
+What was actually missing was one answer — *which of these can I read without
+blocking* — and a probe pinned it exactly: two clients connect, the second
+speaks, the server reads the first, and the program hangs.
+
+`Wait` is one call, and **nothing is held between calls**, which is the safety
+argument rather than a simplification. The obvious API is C's — a set built up,
+waited on, asked about — and it would make the set a second name for every
+socket in it, held across statements, dangling the moment a program wrote
+`clients[k] := nil`: ADR-0151's aliasing question arriving through the library
+door. Building the list inside one call retires it the way ADR-0187's copy
+retired an address, and between the call's first statement and its last nothing
+can close a socket, because every statement in it is this module's.
+
+Three smaller decisions. **An empty slot is a hole, not something to compact** —
+POSIX has `poll` ignore a negative descriptor and zero its `revents`, so a
+server that closes a client needs no bookkeeping, which is a property of the far
+side taken whole. **`poll` and not `select`**: the roadmap said `select` and
+meant the shape, and `select` would have cost `fd_set`, `FD_SETSIZE` and four
+macros for the same answer, with a bound this module would then have inherited
+and had to explain. And **a socket holding a line the runtime has already read
+is ready, and the operating system cannot say so** — `ReadLine` buffers, so
+readiness is the descriptor's answer *or* the buffer's, and a server asking only
+`poll` sits still holding a line it was handed.
+
+### The twenty-eighth increment: the gap was a place to put the answer
+
+ADR-0206. `runtime/pasrt.c` had carried the argument for this clause since
+ADR-0174, written as the reason for the gap rather than as a request to close
+it: *the closer's result is deliberately not inspected — a handle is released on
+the way out of a block and there is no statement left to report to.* That is
+true of every release AP 6.4.12.3 lists — a block terminating, a `goto` past it,
+a `halt`, a `dispose`, an external's answer assigned, `nil` assigned. None of
+them is a place a program could receive an integer.
+
+**What a closer answers is not a formality.** `pclose` answers the child's wait
+status; `fclose` reports a flush that failed, which is the last chance to learn
+that a file was not written. `PasProcess.Capture` is the client that lived
+without it, and what it did instead is the argument entire: the command was
+wrapped in a subshell, `( cmd ); printf '\n\001%d' "$?"`, and the reader split
+the stream at a newline followed by the character 1 — so a program that wrote a
+control character 1 at the start of a line was **misread**, everything after it
+becoming the status and everything before it becoming the whole output.
+
+`release(h)` releases what the variable holds, yields what the closer answered,
+and leaves the variable empty. **It is `take`'s shape with the position rule
+removed, and the difference is the reason there is none**: AP 6.4.14.6 confines
+`take` to the right of an assignment because what it yields is an *owned value*
+and anywhere else it would be held by no one, while this yields an integer — so
+a function-designator may stand wherever an integer may be written, and
+`if release(a) = 0 then` is a scenario of the clause.
+
+**An empty variable answers zero and is not an error**, which is the assignment
+of `nil` rather than `dispose` of nil: a program that released nothing has
+nothing to be told about, and a caller needing to tell *closed, and the closer
+said zero* from *there was nothing to close* has the variable itself to ask,
+before. And the emptying stays in the runtime — `pas_handle_release_result` is
+`pas_handle_release` with the result kept, the same three lines rather than a
+second copy beside the first, because a copy is free to drift and this is the
+invariant 6.4.12.3's *at most once* rests on.
+
+The strongest thing that can be said for it is what it removed: `Capture`'s
+golden passed unchanged with the marker, the subshell and the reader's lookahead
+all deleted.
+
+### The twenty-ninth increment: the borrowing that settles nothing
+
+ADR-0208, and it is the plainest case in this file of the argument the roadmap
+makes about the other Pascals. `break` leaves the closest-containing
+repetitive-statement and `continue` completes the current iteration of it —
+taken whole from Turbo Pascal, Delphi and Free Pascal, down to the spelling and
+to leaving *one* loop rather than a named one. It settles no open decision and
+unblocks nothing. **A question the standards do not answer and three Pascals
+answer alike is one where novelty would be a cost with nothing to show for it.**
+
+**It cost two branches, because the blocks were already there.** CodeGen keeps
+two integers saved and restored around each loop's body — the lexical nesting is
+the stack, so there is none to keep — and the statement writes `br label %LN`
+and opens a fresh block for what follows, which is `exit`'s shape. Three of the
+five loop forms needed no new block at all: a while-statement continues at its
+condition, a for-in over a text at its head, and a for-in over a set at its
+step. The two that did are the two AP 6.7.5.11 names for a reason — a
+repeat-statement's condition follows its sequence, and a for-statement tests its
+control variable against the limit *after* the body, so *the beginning* is the
+wrong description of where `continue` goes and the clause enumerates the four
+forms instead of saying it.
+
+**And the deferred statements needed nothing.** AP 6.9.3.11 NOTE 2 already said
+that leaving a statement-sequence by a `goto` does not *complete* it, so what it
+armed waits for the activation to terminate. That sentence was written for
+`goto` and is true of these two unchanged — a clause paying for a feature
+written three increments after it. What `defer` did need was the other
+direction: `defer break` is refused, because the loop depth is zeroed for the
+duration of the deferred statement's check while the statement path is not,
+6.8.1's reachability being about where a statement was *written*.
+
+The spelling is ADR-0140's second shape, a required procedure-identifier
+shadowable by §6.1.3, so both conformance modes say *unknown procedure* and
+`src/` needed no change.
+
+### The thirtieth increment: half a container, and the wall was not where it was expected
+
+ADR-0209. `PasVector` holds integers, `PasStrVec` strings, `PasList` strings and
+`PasMap` maps a string to an integer — four modules where one would do, and the
+way to have a fifth for another element type is to copy a file. This is the
+increment that takes half of that away: `Vec(T: type; cap: integer)` is a schema
+whose production for each `T` is a distinct type with its own layout, and two
+productions naming the same type are the same type.
+
+**`type` in a discriminant position is a spelling nothing had to be reserved
+for.** It is a word-symbol of both standards standing where a type name would
+go, so no conforming program could have written it there and `reserved-words` is
+untouched.
+
+**Everything else is ADR-0039's machinery reused, and that is the finding.** The
+intern key was already `(schema, tuple)` and the body was already re-resolved
+per distinct tuple — *a schema keeps its syntax and not a type*. What was
+missing was only an integer for a tuple component to name a type by, so every
+type object now carries a `typeId` from `NewType`, never reused: equal ids are
+the same object, which is ADR-0017's name equivalence and deliberately not a
+structural comparison, since two records written alike are two types and must
+produce two. Binding `T` as `skType` rather than `skConst` is what lets
+`array [1..cap] of T` reach the existing subrange and array code with nothing
+added. And the parser cannot tell the two kinds of actual apart — an
+actual-discriminant is an expression either way — so Sema looks the name up, for
+the sixth time.
+
+**It found a latent defect nothing else could have.** `GenericFromSchema`
+assigned its result in two branches and had a third that assigned none,
+reachable only after an error, so it answered whatever the result slot held and
+the first caller to print that type stopped the compiler on a case with no
+matching label. No correct program could reach it, which is why it had sat
+there: every oracle here starts from a program.
+
+**And the wall is not where it was expected.** A schema with a type discriminant
+may not be a parameter-form, because a schematic formal reads its discriminants
+from a run-time descriptor (ADR-0040) and a type cannot travel in one — so
+`Push(var v: Vec; x: T)` is refused in as many words, and a routine generic in
+`T` needs translating once per `T`. The half that was *feared* — separate
+translation, and what a generic body would have to be delivered as — turned out
+not to exist: `--import` re-parses each component's full source and keeps only
+its module-headings, so the body is already in the client's memory and no
+header, template or mangled-name format is needed. **What is missing is
+instantiation, not delivery**, and the roadmap carries it as the row a container
+written once opened.
+
 ## What the roadmap answered
 
 `doc/roadmap.md` holds what is open. For two years it also held the full
@@ -2589,10 +3020,12 @@ The order above is the ranking, so what is left to say is the kind:
 
 ### The oracles the roadmap asked for
 
-*What is next* was five items. Two are open and stay on the roadmap — a
-third-party differential and mutation testing committed to the tree. The
-other three are done, and what each found on its first run is the argument
-the roadmap still makes for the two above them.
+*What is next* was five items. Two were open when this was written — a
+third-party differential and mutation testing committed to the tree — and
+mutation testing has since landed (ADR-0207,
+[below](#a-mutation-as-a-file)), so one is left. The other three are done,
+and what each found on its first run is the argument the roadmap still makes
+for the one above them.
 
 #### The oracle nobody here wrote — what the two restorations paid
 
@@ -3138,3 +3571,198 @@ pays for them. A feature can be finished by declining to add the thing that
 looked missing, and this is the second time on this page — ADR-0187 retired an
 address instead of modelling it, and this retires an index instead of hiding a
 walk behind it.
+
+---
+
+## The oracles turned on themselves
+
+Eight records between ADR-0183 and ADR-0207 are neither features nor
+conformance work. Each checks something another oracle could not see, and
+**five of them check a document rather than the compiler** — which is the
+shape this period found and had not been looking for.
+
+### The oracle that reads no output
+
+ADR-0183. Every oracle here reads what a program **prints**: a golden its
+output, a `.err` its diagnostics, `tests/dumps/` what the compiler wrote,
+`difftest` two front ends' answers, the BSI catalogue a pass or a fail,
+`verify/` a lowering against a model, `tests/spec/` a scenario's result.
+
+A leak prints nothing.
+
+Two records in one day turned on exactly that — ADR-0181's handle in an
+unowned heap record, measured with `ulimit -n 64` and a counting loop, run
+once, by hand; and ADR-0182's abandoned chain, 5.8 MB against 58 MB, taken the
+same way. Both had been reachable for as long as the constructs existed, with
+the suite green throughout, and after each fix nothing was left watching.
+
+So the runtime tallies `pas_new` against `pas_dispose` and writes the balance
+at exit when `$PASHEAP_BALANCE` is set — `--coverage`'s discipline, so a
+program not being measured pays one `getenv`. Three things were decided with
+it. **A count and not a byte total**: `dispose` is handed a pointer and no
+size, a runtime header carrying one would move every address the compiler
+computes, and the count is the exact question anyway — one `new` unmatched is
+one variable nobody gave back, where a byte total or a peak-RSS reading is a
+statistic that would miss a two-variable leak. **A nonzero balance is not an
+error**, no standard obliging a program to dispose what it created, and 7 of
+the 29 heap-using cases legitimately end with something outstanding — so it is
+a catalogue failing in **both** directions, `verify/`'s rule for a `KNOWN_GAP`
+that starts holding. And the whole argument for it is one number: making
+`dispose` free nothing leaves **735 of 735 cases and 230 of 230 scenarios
+green** and moves nineteen balances.
+
+### A claim about a struct, judged by the real header
+
+ADR-0185. ADR-0184's soundness rests on `RecordLayout` being C's rule, and that
+record wrote down in the same breath what it left open: *that the declared
+fields **are** `struct stat`'s, in that order and with that padding, is
+unchecked, and uncheckable without a header parser.*
+
+It is a worse claim than a signature in one specific way. A wrong signature is
+usually wrong immediately and loudly; a wrong field list can be right for
+eleven fields and wrong for the twelfth, with every field after the mistake
+silently wrong. `struct stat` on glibc/x86-64 is 144 bytes with **two holes** —
+four bytes after `st_gid`, twenty-four at the end — and a program that omits
+the first gets a plausible number out of `st_size` that is really
+`st_blksize`.
+
+So the source states its claim in a **comment** — `{ @cstruct: … }`,
+`{ @cfield: … }` — which costs the language nothing and has ADR-0166's
+`{ @std:iso7185 }` as precedent; the compiler reports the offsets it computed,
+through `--dump-layout`; and a C compiler holding the real header judges the
+two. The pairing is by **order** and not by name: a missing annotation shifts
+the rest and the count check fires, where name-matching would silently check a
+subset and call it a pass.
+
+**The second half of the record is the one that reached furthest.** A library
+may not make such a claim at all, because `lib/` has to work where nobody here
+can build — which then decided `PasFS.Info`, `PasDir`, `PasNet`, and the shape
+of every module since.
+
+### A catalogue that could only ever hold functions
+
+ADR-0186, and it was found by the gate rather than by a reader, within minutes
+of the code being written:
+
+    runtime/pasrt.c:2681: error: variable has incomplete type 'struct stat'
+
+ADR-0161 proves its five-name catalogue complete by a specific mechanism: strip
+every non-ISO `#include` from a copy, compile what is left, harvest what the
+compiler calls undeclared, then silence exactly those names and require the
+rest to still compile. That works for a **function**, whose undeclared use is a
+diagnostic. A *type* has no such behaviour — `struct stat` with `<sys/stat.h>`
+stripped is an incomplete type, a hard error no flag silences and no catalogue
+entry can excuse.
+
+**So a POSIX dependency needing a type could never live in that file, however
+well it was argued for** — not because it was rejected, but because the
+mechanism that keeps the file honest cannot describe it. The constraint had
+always been there and had never been met, because all four earlier non-ISO
+dependencies happened to be functions.
+
+The answer is a second translation unit, `runtime/pasrt_posix.c`, bounded by
+its **headers** rather than by its names — *what does a port have to supply* is
+answered better by `<sys/stat.h>` and `<unistd.h>` than by the members that
+happen to be read today — required to be clean POSIX C11 under `-Werror`, and
+required to contain nothing but `pasx_`, so a system without those headers
+loses library routines and **not the language**.
+
+### The register that was only ever appended to
+
+ADR-0197. `doc/sop.md` §7 is the live list of what is not checked here, and its
+own instruction is two sentences: add a row when a gate is declined, remove one
+when it closes. **Only the first had ever been followed.** The register reached
+57 rows over ninety-odd records with nobody reading it end to end — each change
+adding the row its own work argued for and leaving the rest alone, which is
+exactly the decay a blind-spot register exists to prevent, happening to the
+register.
+
+Four rows in 57 were stale, and **one had predicted its own violation**.
+ADR-0111's string arena is released at the end of any statement that took
+storage; which statements those are is a counter the emitter's producers bump;
+and the row about it ended *a fifth would still have nothing looking for it*.
+Three arrived at once with AP 6.4.15 — a text's join, its store, and the
+operand of a comparison that is not already a text — and none was pinned by
+anything. The sentence naming the hazard was in the tree, in the file whose job
+is naming hazards, while the hazard happened.
+
+**The failure mode is not carelessness about one row.** A row stating the
+condition under which it closes has no reader at the moment that condition is
+met, because the person who meets it is working on the feature and not on the
+register. The remedy is a dated end-to-end read, which `docs-engineering` now
+asks for — along with the sharper half of the same finding: a number quoted
+from a gate is checked by running the gate and never by trusting the sentence.
+
+### The question, not the answer
+
+ADR-0198. `predicate-kinds` (ADR-0194) had written its own limit into its
+record: it does not see a predicate's callers, and neither it nor
+`predicate-callers` covers the middle — a call site asking the **wrong
+predicate**, which is what all three of the text model's defects were.
+
+The shape they share is sharper than that. In each one the guard asked a
+predicate whose answer for the new kind is **right**: `IsMemory` asked
+`IsVarString`, correctly false of a text, since §6.4.3.3.3's rules do not apply
+to one; the code generator's comparison dispatch asked `IsStringOrChar`, and a
+text is neither; `EmitAssign` selected the string store with `IsStringType`,
+and `IsStringType 1 of 22` is a correct row. **No catalogue over answers can
+see any of them, and `predicate-kinds` is satisfied by exactly the row that
+hides the defect.** What was wrong was the *question*: each of those guards
+means *does this take the string path?* and spells it *is this a string?*,
+which were the same sentence until a second kind shared the representation.
+
+So `--like OLD NEW` is a query and not a gate. It lists every predicate true of
+the kind the new one resembles and false of the new one, with every call site
+of each — for the text, three predicates and 42 call sites, with all three
+defects among them. **The resemblance is a fact about why the kind was added,
+and a person has to name it**; nothing here can derive it.
+
+### Two sweeps of the triage, from opposite sides
+
+ADR-0200 and ADR-0204. ADR-0106 made the clause denominator a triage —
+`testable`, `structural`, `not-implemented` — with only the first entering the
+coverage figure and the work queue, so a requirement filed `structural`
+**disappears completely**: in no percentage, in no `pending.txt`, and nothing
+ever asks for it again. An earlier audit had read about twenty of those rows by
+hand and found four wrong, two of them sharing one copied reason string, and
+§7 had carried the rest as unaudited ever since. ADR-0197's sweep of that
+register is what brought the row back into view.
+
+ADR-0200 read every one of them. ADR-0204 then read the mirror, which ADR-0200
+had named and left open: a clause filed `testable` that states no requirement
+sits in `pending.txt` for ever as work nobody can do — about 350 rows wide, and
+a much weaker signal, since *states a requirement* cannot be read off the
+presence of `shall`. **The weaker signal turned out to be the same signal read
+the other way**: a `structural` row is wrong when its clause *does* say
+`shall`, and a `testable` row is suspect when its clause *never* does.
+
+### A mutation as a file
+
+ADR-0207. `doc/sop.md`'s rule is that a green suite is not evidence and
+evidence is a named case that fails without the change. Mutation is how that
+gets demonstrated, it is asked for by §4 of the same document, and it has found
+something every time it has been run here — ADR-0065's two mutants changed the
+compiler rather than the tests.
+
+**And it had never existed as anything but prose.** Two hundred records carry
+sentences of the form *the mutation that moves the slice arm one line down
+leaves all 625 cases green* — each a claim about the tree on the day it was
+written, in a document that may not be edited. Nobody could re-run one. A
+renamed test, moved code, or a later change that makes a mutation stop being
+caught were all invisible.
+
+The roadmap had carried it with two conditions attached, both learned the
+expensive way: a wall-clock and output-size limit per mutant, because a looping
+mutant filled a disk before anything noticed; and a restore that does not
+preserve the mtime, or the mutant binary stays in the build tree and the next
+control run reads as a broken feature. **A third arrived while ADR-0205 was
+being written**, which is why this landed then rather than staying on the list.
+A mutant was restored with a plain `cp` and a `touch` — correctly, by the rule
+— and nothing rebuilt, so the next run measured the mutant, reported a property
+of the new feature as false, and a golden was taken against it before the cause
+was found. The rule was right and one step too short.
+
+What it is, and the roadmap says so where a catalogue could be mistaken for a
+measurement: **eleven mutations are files**, and two hundred records carry one
+in their prose. *The mutation suite passes* means those eleven claims still
+hold and nothing more.
