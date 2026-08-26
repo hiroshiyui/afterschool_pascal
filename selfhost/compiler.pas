@@ -2045,6 +2045,17 @@ var
     (0 = the source named on the command line). Parse-time only: Sema reads
     nkModule's own copy, the parser having moved on by then. }
   curImportIdx: integer;
+  { Where the source named on the command line begins in the token array.
+    Everything before it belongs to an --import and is kept rather than
+    overwritten (ADR-0212), so the two places that mean *this source* -- the
+    token dump and nothing else -- start here instead of at 1. }
+  mainTokBase: integer;
+  { Every instantiation AP 6.7.3.10 produced, in the order they were demanded.
+    They are emitted from here rather than from the block their generic was
+    declared in, because that block may belong to a module translated
+    elsewhere -- and this translation is the one that asked for the type, so
+    it is the one that must contain the routine. }
+  instDeclHead, instDeclTail: nodePtr;
   { The block whose declaration-part is being checked, so a generic routine
     can record where its instantiations belong: they are appended to the
     procedure-part of the block the generic itself was declared in, which is
@@ -20212,6 +20223,26 @@ begin
   writeln('formal-parameter-list')
 end;
 
+{ Where a generic routine's block is, and the region it has to be read in.
+  Called from whichever declaration carries the body: for a program that is
+  the one declaration there is, and for a module it is the identification in
+  the block, its heading having been given in the interface (6.11.1). One
+  routine rather than two copies of six assignments, because the two callers
+  must agree about every one of them or a body is read in the wrong scope. }
+procedure RecordGenericBody(sym: symPtr; d: nodePtr);
+begin
+  sym^.genBlock := curDeclBlock;
+  sym^.genBodyPos := d^.pdBodyPos;
+  sym^.genFileIdx := d^.pdFileIdx;
+  sym^.genDeclTop := scopeTop;
+  sym^.genDeclDepth := scopeDepth;
+  { It has a body now, which is what the two "declared but never given one"
+    checks ask -- 6.6.1's for a forward and 6.11.1's for a module heading. It
+    is still never *checked* here: CheckProcBody passes over a generic, and
+    the block is read once per instantiation instead. }
+  sym^.defined := true
+end;
+
 { AP 6.7.3.5: does this formal-parameter-list declare a type parameter? One
   is enough to make the routine generic, because what follows it in the list
   may name it -- `Push(T: type; var v: Vec(T, 8); x: T)` -- so nothing after
@@ -20372,6 +20403,11 @@ begin
       write(''' was already declared, and a declaration that completes an ');
       writeln('earlier heading cannot be ''external''')
     end;
+    { AP 6.7.3.10: the completion of a generic heading is where its body
+      finally is, and the scope here is the one the body must be read in --
+      the module block's, not the interface's. }
+    if existing^.isGeneric and (d^.pdBody <> nil) then
+      RecordGenericBody(existing, d);
     d^.pdSym := existing
   end
   else begin
@@ -20393,17 +20429,17 @@ begin
       same reason. }
     sym^.isGeneric := HasTypeParam(d^.pdParams);
     if sym^.isGeneric then begin
+      { The heading is here whatever else is: it carries the parameter groups,
+        and those are what a call is matched against. }
       sym^.genDecl := d;
-      sym^.genBlock := curDeclBlock;
-      sym^.genBodyPos := d^.pdBodyPos;
-      sym^.genFileIdx := d^.pdFileIdx;
-      sym^.genDeclTop := scopeTop;
-      sym^.genDeclDepth := scopeDepth;
-      { It has a body in the source and must not be given one here: `defined`
-        is what stops CheckProcBody from checking a block whose types are not
-        known yet, and what makes a second declaration of the name the
-        ordinary error it already is. }
-      sym^.defined := true
+      { The block may not be. 6.11.1 splits a module routine into a heading in
+        the interface and an identification with the body below it, and this is
+        the heading half when pdBody is nil -- so where to read the body from
+        is recorded by whichever declaration actually has one, which for a
+        module is the completion below. `defined` is deliberately *not* set:
+        CheckProcBody already passes over a generic, and setting it here made
+        the module's own completion report that the name already had a body. }
+      if d^.pdBody <> nil then RecordGenericBody(sym, d)
     end;
     { Said now rather than in CheckForeignHeading: the result type and the
       formals are checked below, and a handle is admitted in both positions
@@ -21587,18 +21623,12 @@ end;
   walks that matter -- DeclareProcs for the frame types and EmitProcs for the
   bodies -- are over that list, so an instantiation appended to it is reached
   without either being told generics exist. }
-procedure AppendProcDecl(b, d: nodePtr);
-var last: nodePtr;
+procedure AppendInstDecl(d: nodePtr);
 begin
-  if b <> nil then begin
-    d^.next := nil;
-    if b^.blProcs = nil then b^.blProcs := d
-    else begin
-      last := b^.blProcs;
-      while last^.next <> nil do last := last^.next;
-      last^.next := d
-    end
-  end
+  d^.next := nil;
+  if instDeclHead = nil then instDeclHead := d
+  else instDeclTail^.next := d;
+  instDeclTail := d
 end;
 
 { AP 6.7.3.5's instantiation, and everything hard about a generic routine is
@@ -21659,7 +21689,19 @@ begin
           writeln('is declared ''type''');
           ok := false
         end
-        else AppendNum(tuple, tupleTail, given^.typeId)
+        else begin
+          { Kept on the argument node, because the type must be resolved
+            *here* -- in the caller's region, where a type the caller declared
+            is visible -- and read again below, after the generic's scope has
+            been restored, where it is not. Resolving it twice was the defect:
+            the second lookup ran in the generic's own region, so a client
+            calling an imported generic with a type of its own got a frame slot
+            of no type at all, which LLVM refuses as `void` in a struct. The
+            node is about to be unlinked from the argument list, so this is the
+            husk idiom with nothing left over. }
+          a^.ntype := given;
+          AppendNum(tuple, tupleTail, given^.typeId)
+        end
       end
     end;
     if a <> nil then a := a^.next;
@@ -21700,7 +21742,7 @@ begin
       a := args;
       while g <> nil do begin
         if g^.grIsTypeDisc then begin
-          given := TypeArgument(a);
+          given := a^.ntype;
           tp := g^.grNames;
           while tp <> nil do begin
             ts := Declare(tp^.dnAt, tp^.dnLen, skType, tp^.line, tp^.col);
@@ -21773,11 +21815,13 @@ begin
       decl^.pdBody := ParseBlock;
       curImportIdx := saveImport;
 
-      { Appended where the generic stands, so DeclareProcs and EmitProcs reach
-        it without being told it is there, and so its frame nests correctly.
-        CheckDeclarations skips a node whose symbol has a genOf: it is already
-        declared, and its body is checked here. }
-      AppendProcDecl(gen^.genBlock, decl);
+      { Kept on the translation's own list rather than put in the generic's
+        block. For a generic declared here the two would be the same thing;
+        for one imported from a module they are not, because 6.13 has this
+        translation emit none of that module -- and an instantiation for a
+        type *this* program named cannot exist in the component's object file,
+        which was translated without ever hearing of it. }
+      AppendInstDecl(decl);
 
       { The body is checked with the type parameters still bound, which is why
         this scope is not popped above where the heading's was. A formal is
@@ -24760,10 +24804,14 @@ end;
 { The token stream, in the format `pascalc-s0 --dump-tokens` writes. The lexer of
   component 1 emitted these as it scanned; here they are read back out of the
   table the parser was given, which is the same stream by another route. }
+{ This source's tokens, which since ADR-0212 are not all of them: an
+  --import's are kept in front of these so a generic in a component can be
+  read again. What a token dump has always meant is the source being
+  compiled, so it still means that. }
 procedure DumpTokens;
 var i: integer;
 begin
-  for i := 1 to tokCount do begin
+  for i := mainTokBase to tokCount do begin
     write(tok[i].line:1, ' ', tok[i].col:1, ' ');
     case tok[i].kind of
       tkEof: writeln('eof');
@@ -27995,7 +28043,14 @@ begin
       parent, not the caller. }
     FrameOf(callee^.owner, link);
     AppendProcName(target, callee);
-    if callee^.owner^.compiledElsewhere then NeedExternalProc(callee)
+    { An instantiation is the exception, and has to be: AP 6.7.3.10 produces it
+      *here*, in the translation that named the types, however far away the
+      generic was declared. Its owner may well be a module compiled elsewhere
+      -- that is the whole point of a generic in a library -- but the routine
+      itself is in this module's own output, so declaring it external would
+      make it defined and declared at once. }
+    if callee^.owner^.compiledElsewhere and (callee^.genOf = nil) then
+      NeedExternalProc(callee)
   end;
 
   head := nil;
@@ -33286,14 +33341,23 @@ begin
       { A foreign routine has no activation record here -- its body is on the
         other side of the link and was laid out by another processor -- so
         there is no frame type to name (ADR-0121). }
+      { AP 6.7.3.10: a generic routine has no activation record either, and
+        for a nearer reason than a foreign one's -- it has no formals and no
+        result type, because those are what a call decides. Asking for a frame
+        type here laid out a slot for a result of no type, which LLVM refuses
+        as `void` in a struct. Its instantiations are separate declarations in
+        this same list and each gets its own. }
       if (d^.pdSym^.irId = 0) and    { a forward declaration already made one }
-         (d^.pdSym^.linkKind <> lnkForeign) then
+         (d^.pdSym^.linkKind <> lnkForeign) and
+         (not d^.pdSym^.isGeneric) then
         EmitFrameType(d^.pdSym);
     d := d^.next
   end;
   d := b^.blProcs;
   while d <> nil do begin
-    if d^.pdBody <> nil then DeclareProcs(d^.pdBody);
+    if d^.pdBody <> nil then
+      if d^.pdSym = nil then DeclareProcs(d^.pdBody)
+      else if not d^.pdSym^.isGeneric then DeclareProcs(d^.pdBody);
     d := d^.next
   end
 end;
@@ -34553,7 +34617,7 @@ begin
 end;
 
 procedure RunCodeGen;
-var m: nodePtr;
+var m, d: nodePtr;
 begin
   { No loop is being emitted yet. Sema refuses AP 6.7.5.10's break and
     6.7.5.11's continue outside one, so nothing reads these before a loop sets
@@ -34632,6 +34696,15 @@ begin
     m := m^.next
   end;
   if progBlock <> nil then DeclareProcs(progBlock);
+  { AP 6.7.3.10's instantiations are in no block's procedure-part, so their
+    frame types are named here -- before any function that indexes one, which
+    is the rule every other frame type follows. }
+  d := instDeclHead;
+  while d <> nil do begin
+    if d^.pdSym^.irId = 0 then EmitFrameType(d^.pdSym);
+    DeclareProcs(d^.pdBody);
+    d := d^.next
+  end;
 
   { A level-0 activation record is a global (ADR-0053): the program has one
     activation and so has every module, and a module's must outlive the
@@ -34697,6 +34770,16 @@ begin
 
   EmitProcs(progBlock);
 
+  { AP 6.7.3.10's instantiations. A generic imported from a module is
+    instantiated *here*, by the translation that named the types, and so is
+    emitted here -- which is what lets 6.7.3.10 reach across 6.13 at all. }
+  d := instDeclHead;
+  while d <> nil do begin
+    EmitProcBody(d);
+    EmitProcs(d^.pdBody);
+    d := d^.next
+  end;
+
   EmitOwnRels;
 
   writeln(ircode);
@@ -34732,6 +34815,12 @@ begin
     BindTo(imports, importName[i]);
     reset(imports);
     readingImports := true;
+    { Appended after whatever the previous components left. A generic routine
+      is re-read from a saved token position when a client instantiates it
+      (AP 6.7.3.10), and until this the array was cleared between components,
+      so a generic in an imported module had a position pointing at tokens
+      that had been overwritten by the next source. }
+    pos := tokCount + 1;
     Tokenize;
     if not errorSeen then begin
       ParseProgram;
@@ -34755,8 +34844,6 @@ begin
     readingImports := false;
     curFile := srcName;
     curImportIdx := 0;
-    tokCount := 0;
-    pos := 1;
     depth := 0;
     aborted := false
   end
@@ -34995,6 +35082,8 @@ begin
 
   { --- lex ---------------------------------------------------------------- }
   if dumpAllOpt then writeln('=== tokens');
+  mainTokBase := tokCount + 1;
+  pos := mainTokBase;
   Tokenize;
   if dumpTokensOpt then DumpTokens;
   { A dump flag stops at the stage it names, which is how the C++ driver
@@ -35071,6 +35160,7 @@ begin
   poolLen := 0;
   tokCount := 0;
   pos := 1;
+  mainTokBase := 1;
   depth := 0;
   level := 0;
   aborted := false;
@@ -35083,6 +35173,8 @@ begin
   curFile := '';
   curImportIdx := 0;
   curDeclBlock := nil;
+  instDeclHead := nil;
+  instDeclTail := nil;
   scopeTop := nil;
   scopeDepth := 0;
   applySeq := 0;

@@ -220,3 +220,4 @@ the alternatives that were rejected and why.
 | [0209](0209-a-discriminant-may-name-a-type.md) | A discriminant may name a type | Accepted |
 | [0210](0210-a-diagnostic-about-a-component-names-that-component.md) | A diagnostic about a component names that component | Accepted |
 | [0211](0211-a-routine-may-be-parameterised-by-a-type.md) | A routine may be parameterised by a type | Accepted |
+| [0212](0212-an-imported-components-tokens-are-kept.md) | An imported component's tokens are kept | Accepted |

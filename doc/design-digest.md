@@ -2709,6 +2709,36 @@ is the case; `0211-instantiation-not-cached` does not terminate and
 `0211-heading-not-forgotten` type-checks the second instantiation against the
 first one's types.
 
+**An imported component's tokens are kept, so a generic can cross §6.13**
+(ADR-0212). AP 6.7.3.10 re-parses a generic's body from a saved token position,
+and the import loop used to clear the array between components — so a generic
+declared in `lib/` had a position indexing an array that still existed and now
+held *a different source*. Nothing nil, nothing out of range, no check that
+could fire, and no case that could reach it, since no module could declare a
+generic until this was fixed; `doc/sop.md` §7 carried it for exactly that
+circularity. The array is now appended to and `mainTokBase` records where the
+compiled source starts, so `--dump-tokens` still shows that source and nothing
+before it. The cost is what a fixed buffer *means* — it holds every source in a
+translation rather than one — and was measured, not estimated: the compiler
+imports nothing so `buffer-headroom` is unmoved, and a client importing three
+modules reaches 1969 of 300000.
+
+**The half that was not obvious: an instantiation belongs to whoever named the
+types.** §6.13 has a translation emit nothing of a module it imported, but an
+instantiation for a type *this* program declared cannot exist in that module's
+object file. So instantiations are kept on a translation-wide list and emitted
+from there, their frame types named beside every other one, and a call to one
+is exempt from the `compiledElsewhere` rule that would otherwise declare it
+external and define it in the same module. Two further things followed: a
+generic's body position is recorded by whichever declaration carries the body
+(6.11.1 puts a module routine's heading in the interface and its body in the
+block, so `RecordGenericBody` is called from the completion), and the type
+arguments are resolved **once**, in the caller's region — resolving them again
+after restoring the generic's scope looked up a client's record type where it
+does not exist and produced a frame slot of no type, which LLVM refuses as
+`void` in a struct. `tests/dialect/generic_import.pas` is the case that could
+not be written before, and `0212-imported-tokens-cleared` puts the defect back.
+
 **`break` and `continue` are one branch each, and the blocks were already
 there** (ADR-0208). AP 6.7.5.10 leaves the closest-containing
 repetitive-statement and 6.7.5.11 completes the current iteration of it; both

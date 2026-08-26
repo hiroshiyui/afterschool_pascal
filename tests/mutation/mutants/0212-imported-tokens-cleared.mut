@@ -1,0 +1,11 @@
+adr: 0212
+file: selfhost/compiler.pas
+kills: generic_import
+why: the defect this record removed, put back -- the import loop clearing the token array between components. A generic's saved body position is then an index into an array holding a *different* source, so what gets parsed in the generic's scope is whatever text now occupies those tokens. Nothing is nil and nothing is out of range, which is why no check could have caught it and why ADR-0211 had to register it in doc/sop.md §7 rather than test for it. It is caught here only because a module may now declare a generic at all: before ADR-0212 no case could reach the defect, and that circularity is the whole reason the row existed.
+--- old
+    curImportIdx := 0;
+    depth := 0;
+--- new
+    curImportIdx := 0;
+    tokCount := 0;
+    depth := 0;
