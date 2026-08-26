@@ -123,19 +123,31 @@ def run(cmd, timeout=None, limit_file_size=False):
     thing that is careful.
     """
     def prepare():
-        os.setsid()
         if limit_file_size:
             resource.setrlimit(resource.RLIMIT_FSIZE, (FSIZE_LIMIT, FSIZE_LIMIT))
 
+    # start_new_session puts the child in a session and process group of its
+    # own, which is what makes the group kill below safe to aim.
     p = subprocess.Popen(cmd, cwd=ROOT, preexec_fn=prepare,
+                         start_new_session=True,
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     try:
         out, _ = p.communicate(timeout=timeout)
         return p.returncode, out.decode("utf-8", "replace")
     except subprocess.TimeoutExpired:
+        # Kill the group, but *only* once it is established that the group is
+        # the child's own and not this process's. Getting that wrong kills the
+        # harness mid-run and leaves a mutation applied to the tree, which is
+        # this harness's worst failure and the one its restore step exists to
+        # prevent -- so the check is not defensive padding, it is the whole
+        # reason a group kill is safe to attempt at all.
         try:
-            os.killpg(os.getpgid(p.pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
+            pgid = os.getpgid(p.pid)
+            if pgid != os.getpgrp():
+                os.killpg(pgid, signal.SIGKILL)
+            else:
+                p.kill()
+        except (ProcessLookupError, PermissionError, OSError):
             p.kill()
         p.communicate()
         return None, ""
