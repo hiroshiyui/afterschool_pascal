@@ -2649,6 +2649,28 @@ be translated once per `T` — which is the next increment and not this one.
 parameter-form refusal; making the tuple component structural instead of the id
 makes two alike records one type and `p := q` a copy between them.
 
+**A diagnostic about an imported component names that component** (ADR-0210).
+`--import` re-parses a component's full source and `CheckModuleBlock` has no
+`mdElsewhere` guard, so the component's block is *checked* in the client and
+only its emission is suppressed. `curFile` is one global that `ErrorAt` writes,
+and the import loop puts it back before Sema runs — so every diagnostic about
+an imported block carried the client's name with the component's line and
+column, which is not merely the wrong file but a position the named file need
+not have (`client.pas:15:3` for a three-line `client.pas`). `nkModule` now
+records `mdFileIdx` — 0 for the source on the command line, *k* for the *k*'th
+`--import` — set at parse time, because that is the only moment the answer is
+known; `CheckModule` saves `curFile`, sets it from the node and puts it back.
+Asked once at the top of the subtree that is entirely about one file rather
+than at each of the several messages beneath it, so one added later inherits
+the answer. **The corpus cannot reach this**: `run_test.sh` translates every
+`.components` entry separately and first and gives up if one fails, so no case
+can hand `--import` a component that does not translate alone. The probe is in
+`selfhost/producttest.sh` over `tests/checks/importdiag/`, it fails in both
+directions — a fix naming the component for *everything* passes the first half
+and fails the second — and
+`0210-import-diagnostic-names-the-client.mut` puts the defect back and is
+killed by `pascalc-product` and by nothing else.
+
 **`break` and `continue` are one branch each, and the blocks were already
 there** (ADR-0208). AP 6.7.5.10 leaves the closest-containing
 repetitive-statement and 6.7.5.11 completes the current iteration of it; both

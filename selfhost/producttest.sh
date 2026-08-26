@@ -357,6 +357,41 @@ elif ! grep -q "unknown standard 'pascal'" "$work/annot.txt"; then
   failed=$((failed + 1))
 fi
 
+# ADR-0210: a diagnostic about an imported component names *that component*.
+# Nothing under tests/ can assert this either, and for a sharper reason than
+# stdannot's: run_test.sh translates every .components entry separately and
+# first, and gives up if one fails -- so no case can reach a component that
+# does not translate on its own being handed to --import anyway. A person
+# reaches it by typing it. tests/checks/importdiag/ has the two sources.
+diag="$root/tests/checks/importdiag"
+
+# The component's error carries the component's name. It used to carry the
+# client's, with the component's line number -- client.pas is three lines long
+# and the error was reported at line 12 of it.
+checked=$((checked + 1))
+if "$pascalc" --std=extended --import "$diag/badmod.pas" "$diag/client.pas" \
+     -o /dev/null >"$work/diag.txt" 2>&1; then
+  echo "--- importdiag: a component with a type error was accepted ---" >&2
+  failed=$((failed + 1))
+elif ! grep -q "badmod.pas:15:" "$work/diag.txt"; then
+  echo "--- importdiag: an imported component's error did not name it ---" >&2
+  cat "$work/diag.txt" >&2
+  failed=$((failed + 1))
+fi
+
+# And the other direction, which is what stops "name the component for
+# everything" from passing: the client's own error still names the client.
+checked=$((checked + 1))
+if "$pascalc" --std=extended --import "$diag/badmod.pas" "$diag/badclient.pas" \
+     -o /dev/null >"$work/diag.txt" 2>&1; then
+  echo "--- importdiag: a client with a type error was accepted ---" >&2
+  failed=$((failed + 1))
+elif ! grep -q "badclient.pas:3:" "$work/diag.txt"; then
+  echo "--- importdiag: the client's own error did not name the client ---" >&2
+  cat "$work/diag.txt" >&2
+  failed=$((failed + 1))
+fi
+
 # Only the header counts. An annotation after the first token is prose, so
 # this file stays Extended Pascal and its `value` is a word-symbol.
 checked=$((checked + 1))

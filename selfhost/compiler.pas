@@ -1622,6 +1622,15 @@ type
                      mdParams, mdExports, mdHeading, mdBlock,
                      mdInit, mdFini: nodePtr;
                      mdHasHeading, mdHasBlock: boolean;
+                     { Which source this component was read from: 0 for the
+                       one named on the command line, k for the k'th
+                       --import. A module's block is parsed while reading its
+                       own file and *checked* later, in the client, by which
+                       time curFile has been put back -- so without this a
+                       diagnostic inside an imported body carries the client's
+                       name and the component's line number, which is a
+                       position the named file need not even have. }
+                     mdFileIdx: integer;
                      { 6.13: this program-component was accepted separately
                        and is read only for the interfaces its heading
                        exports. }
@@ -1987,6 +1996,10 @@ var
     translated component is being read (6.13). Only the human-readable format
     names it -- inside a dump the file is the one the harness passed. }
   curFile: nameStr;
+  { Which --import is being read, for the module nodes built while reading it
+    (0 = the source named on the command line). Parse-time only: Sema reads
+    nkModule's own copy, the parser having moved on by then. }
+  curImportIdx: integer;
   langStd: stdKind;
   { Whether --std= was written on the command line. A source may declare its
     own standard in a header comment (ADR-0166) and the flag wins, so the
@@ -7082,6 +7095,7 @@ begin
   m^.mdElsewhere := false;
   m^.mdHasHeading := false;
   m^.mdHasBlock := false;
+  m^.mdFileIdx := curImportIdx;
   m^.mdSym := nil;
   m^.mdAt := 0;
   m^.mdLen := 0;
@@ -22306,9 +22320,17 @@ begin
   curModule := saveModule
 end;
 
+{ Everything this reports -- its own three messages, and everything
+  CheckModuleHeading and CheckModuleBlock report beneath it -- is about text
+  in the component the module was *parsed* from, which for an --import is not
+  the file being compiled. curFile is the client's by now (the import loop puts
+  it back before Sema runs), so it is set from the node and put back here
+  rather than at each of the several places that write a message. }
 procedure CheckModule(m: nodePtr);
-var info: modRecPtr;
+var info: modRecPtr; saveFile: nameStr;
 begin
+  saveFile := curFile;
+  if m^.mdFileIdx > 0 then curFile := importName[m^.mdFileIdx];
   info := FindModule(m^.mdAt, m^.mdLen);
   if info = nil then begin
     new(info);
@@ -22370,7 +22392,8 @@ begin
       info^.blockSeen := true;
       info^.blockDecl := m;
       CheckModuleBlock(m, info)
-    end
+    end;
+  curFile := saveFile
 end;
 
 { 6.2.2.13: "A module A shall be designated as supplying a ... block, B,
@@ -34241,6 +34264,7 @@ begin
     interface this one imports. }
   for i := 1 to importCount do begin
     curFile := importName[i];
+    curImportIdx := i;
     BindTo(imports, importName[i]);
     reset(imports);
     readingImports := true;
@@ -34266,6 +34290,7 @@ begin
     end;
     readingImports := false;
     curFile := srcName;
+    curImportIdx := 0;
     tokCount := 0;
     pos := 1;
     depth := 0;
@@ -34592,6 +34617,7 @@ begin
   StrClear(msgBuf);
   readingImports := false;
   curFile := '';
+  curImportIdx := 0;
   scopeTop := nil;
   scopeDepth := 0;
   applySeq := 0;
