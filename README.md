@@ -705,10 +705,13 @@ Two calls naming the same type reach the same translated routine, which is what
 lets a generic routine recurse. A generic nothing calls is never translated and
 never checked.
 
+A generic may be declared in a **separately translated component** and
+instantiated by a program that imports it, for types that component never heard
+of — the instantiation belongs to whoever named the types, so it is emitted in
+the importing program.
+
 The types are written at the call and are not inferred from the other
-arguments. And a generic declared in a *separately translated component* cannot
-be used yet — `--import` discards the component's tokens, and the body is read
-again from those — so `lib/` does not use this.
+arguments.
 
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
