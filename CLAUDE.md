@@ -722,11 +722,15 @@ scenario that asserts nothing.
     sub-clause of §6.2.2 and §6.2.3 in both standards is a bare number on its
     own line with the requirement under it, the extractor read only lines
     carrying a *title*, and so 37 real clauses were in no inventory, no triage
-    and no work queue. §6.2.2.9 is the most-cited clause in this repository —
-    56 citations — and `spec-clause-traceability` answered "not a clause of that
-    standard" about it. Reverting the extractor now fails the gate 37 times.
-- `clauses/pending.txt` is the **work queue**: the 211 testable clauses no
-  scenario cites yet.
+    and no work queue. §6.2.2.9 is among the most-cited clauses in this
+    repository — 88 occurrences of the `§6.2.2.9` spelling across tracked files
+    as this is written, against the 56 the record counted, and the count moves,
+    so take the shape and not the number — and `spec-clause-traceability`
+    answered "not a clause of that standard" about it. Reverting the extractor now fails the gate 37 times.
+- `clauses/pending.txt` is the **work queue**: the testable clauses no
+  scenario cites yet — 191 as this is written, and the file itself is the
+  count (`grep -vc '^#\|^$'`), because a number written here goes stale on
+  its own and this one had, by twenty.
 
 **The one oracle nobody here wrote is the BSI Pascal Validation Suite**
 (ADR-0086), 812 programs from 1982 tied to clauses of ISO 7185. It is
