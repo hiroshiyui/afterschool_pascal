@@ -966,6 +966,25 @@ TypeExprPtr Parser::parseTypeDenoter() {
       bail();
     }
     parseQualifiedName(t->qualifier, t->name);
+    // §6.4.9's type-inquiry-object is a `variable-name` or a
+    // `parameter-identifier`, and §6.5.1's other variable-accesses are not
+    // among them: an indexed one, an identified one, a field-designator and a
+    // substring are each a variable-access and none of them is a *name*. So
+    // `type of a[1]` and `type of p^` are refused, and this is where to say
+    // so — nothing legal follows a type-inquiry with one of these three
+    // tokens, and without the test the parser stops at the declaration's own
+    // semicolon and reports a missing separator, naming neither the rule nor
+    // the construct.
+    //
+    // The field-designator has two spellings and only one reaches here. `r.f`
+    // is what parseQualifiedName consumes as a qualified name, because the
+    // parser cannot tell an imported interface from a record variable;
+    // resolveInquiry asks the symbol and says the same sentence. The period
+    // below is therefore the *second* one, in `r.f.g`.
+    if (check(Tok::LBracket) || check(Tok::Caret) || check(Tok::Period)) {
+      errorAtCur("'type of' names a whole variable, not a component of one");
+      bail();
+    }
     return t;
   }
 

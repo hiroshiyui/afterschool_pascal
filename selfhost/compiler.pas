@@ -5319,8 +5319,32 @@ begin
             writeln('''type of'' must name a variable or a parameter');
             Bail
           end
-          else
-            ParseQualifiedName(t^.tqQualAt, t^.tqQualLen, t^.tqAt, t^.tqLen)
+          else begin
+            ParseQualifiedName(t^.tqQualAt, t^.tqQualLen, t^.tqAt, t^.tqLen);
+            { 6.4.9's type-inquiry-object is a `variable-name` or a
+              `parameter-identifier`, and 6.5.1's other variable-accesses are
+              not among them: an indexed one, an identified one, a
+              field-designator and a substring are each a variable-access and
+              none of them is a *name*. So `type of a[1]` and `type of p^` are
+              refused, and this is where to say so -- nothing legal follows a
+              type-inquiry with one of these three tokens, and without the test
+              the parser stops at the declaration's own semicolon and reports a
+              missing separator, naming neither the rule nor the construct.
+
+              The field-designator has two spellings and only one reaches here.
+              `r.f` is what ParseQualifiedName consumes as a qualified name,
+              because the parser cannot tell an imported interface from a
+              record variable; ResolveInquiry asks the symbol and says the same
+              sentence. The period below is therefore the *second* one, in
+              `r.f.g`. }
+            if Check(tkLBracket) or Check(tkCaret) or Check(tkPeriod) then
+            begin
+              ErrorAtCur;
+              writeln('''type of'' names a whole variable, not a component ',
+                      'of one');
+              Bail
+            end
+          end
       end
     end
     else if Check(tkLParen) then
@@ -13429,7 +13453,7 @@ begin
 end;
 
 function ResolveInquiry(d: nodePtr): typePtr;
-var s: symPtr; t: typePtr;
+var s, q: symPtr; t: typePtr;
 begin
   { 6.4.9 also allows the object to be a parameter of the closest-containing
     formal-parameter-list, and that needs nothing added: DeclareProcHeading
@@ -13472,9 +13496,23 @@ begin
   end
   else if s = nil then begin
     ErrorAt(d^.line, d^.col);
-    write('unknown variable ''');
-    WritePool(d^.tqAt, d^.tqLen);
-    writeln(''' in ''type of''');
+    { 6.4.9's object may be qualified, because a `variable-name` is
+      `[ imported-interface-identifier '.' ] variable-identifier` (6.5.1) --
+      and that is the *only* period it admits. `r.f` over a record variable is
+      a field-designator and reaches here spelled identically, the parser
+      having one production for both. Ask the symbol, not the syntax: a
+      qualifier naming something that is not an interface is the parser's
+      complaint arriving one stage late, so it gets the parser's sentence
+      rather than a report that the field is an undeclared variable. }
+    q := nil;
+    if d^.tqQualLen > 0 then q := Lookup(d^.tqQualAt, d^.tqQualLen);
+    if (q <> nil) and (q^.kind <> skInterface) then
+      writeln('''type of'' names a whole variable, not a component of one')
+    else begin
+      write('unknown variable ''');
+      WritePool(d^.tqAt, d^.tqLen);
+      writeln(''' in ''type of''')
+    end;
     ResolveInquiry := intType
   end
   else if not IsVariable(s) then begin

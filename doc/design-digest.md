@@ -865,6 +865,18 @@ able to make.
   - **Where a parameter-identifier object may live is not enforced**, and the
     deviation is permissive: ordinary lookup lets a procedural parameter's own
     list see the enclosing list's parameters, which §6.4.9 does not allow.
+  - **The object is a *name*** — `variable-name | parameter-identifier`, and
+    §6.5.1's variable-name is one identifier with at most an imported
+    interface before it. The other five variable-accesses are outside the
+    clause, so `type of a[1]`, `type of p^` and `type of r.f` are all refused,
+    and each now says which rule it is instead of stopping at the
+    declaration's own semicolon (ADR-0214). **Two tests, because the two
+    spellings of a field-designator part company**: a bracket, a caret or a
+    second period after the object is the parser's, since nothing legal can
+    follow a type-inquiry with one of them; `r.f` is Sema's, the parser having
+    one production for a qualified name and no way to tell an imported
+    interface from a record variable. ADR-0214 also strikes a roadmap entry
+    that had called the refusals a conformance gap — they are the conformance.
 - **An initial state belongs to the type-denoter** (ADR-0048). §6.6's `value`
   hangs off the type-denoter (§6.4.1), not the declaration — so a **type-name
   hands it on** to every variable of that type, and it is recorded on the type

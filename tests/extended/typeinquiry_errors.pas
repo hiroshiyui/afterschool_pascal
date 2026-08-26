@@ -14,6 +14,12 @@ var a: point;
     q: type of point;
     { a constant is not a variable either }
     r: type of maxint;
+    { A variable-name admits one period, and only before an
+      imported-interface-identifier (6.5.1). The parser has one production for
+      both spellings and cannot tell an interface from a record variable, so
+      the field-designator arrives here whole and the symbol settles it. The
+      *parse* half is in typeinquiry_component, _deref and _qualified. }
+    fd: type of a.x;
 
 { §6.7.3.1: "The parameter-form ... shall not contain an applied occurrence of
   the parameter-identifier." Without that rule the name would find itself. }

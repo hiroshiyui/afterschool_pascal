@@ -1324,8 +1324,21 @@ Type *Sema::resolveInquiry(TypeExpr &denoter) {
     return ty::Int();
   }
   if (!sym) {
-    diags_.error(denoter.line, denoter.col,
-                 "unknown variable '" + denoter.name + "' in 'type of'");
+    // §6.4.9's object may be qualified, because a `variable-name` is
+    // `[ imported-interface-identifier '.' ] variable-identifier` (§6.5.1) —
+    // and that is the *only* period it admits. `r.f` over a record variable is
+    // a field-designator and reaches here spelled identically, the parser
+    // having one production for both. Ask the symbol, not the syntax: a
+    // qualifier naming something that is not an interface is the parser's
+    // complaint arriving one stage late, so it gets the parser's sentence
+    // rather than a report that the field is an undeclared variable.
+    Symbol *qual = denoter.qualifier.empty() ? nullptr : lookup(denoter.qualifier);
+    if (qual && qual->kind != SymKind::Interface)
+      diags_.error(denoter.line, denoter.col,
+                   "'type of' names a whole variable, not a component of one");
+    else
+      diags_.error(denoter.line, denoter.col,
+                   "unknown variable '" + denoter.name + "' in 'type of'");
     return ty::Int();
   }
   if (!sym->isVariable()) {

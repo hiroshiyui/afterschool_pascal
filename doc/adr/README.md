@@ -222,3 +222,4 @@ the alternatives that were rejected and why.
 | [0211](0211-a-routine-may-be-parameterised-by-a-type.md) | A routine may be parameterised by a type | Accepted |
 | [0212](0212-an-imported-components-tokens-are-kept.md) | An imported component's tokens are kept | Accepted |
 | [0213](0213-a-pointer-domain-may-bind-type-discriminants.md) | A pointer domain may bind type discriminants | Accepted |
+| [0214](0214-a-type-inquiry-names-a-variable-and-the-gap-was-in-the-reading.md) | A type-inquiry names a variable, and the gap was in the reading | Accepted |
