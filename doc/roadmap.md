@@ -107,7 +107,7 @@ declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
-twenty-one modules, eight conforming and thirteen dialect. **`README.md`'s
+twenty-two modules, eight conforming and fourteen dialect. **`README.md`'s
 module table is the one place to count them** — one row each, checkable
 against `ls lib lib/dialect`, and this sentence has held a number that went
 stale twice. `lib/dialect/README.md` is not a second listing and should not be
@@ -174,7 +174,7 @@ AP 6.4.12 the day it landed, and each met one edge of the clause:
 
 | A daily program wants | Why it waits |
 | --- | --- |
-| ~~to write a *growable* container once~~ | **The language half is done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213). Storage writable once, the routine over it writable once, both across `--import`, and — the last piece — a pointer domain that binds a schema's type discriminants and leaves its ordinal ones to `new`. That last was found by attempting the collapse and getting two of the four: a generic owned chain works completely, and a fixed-capacity vector does, but `PasVector`, `PasStrVec` and `PasMap` all **grow**, and `new(p, cap)` with a fresh capacity needs a pointer whose domain is the schema. Three spellings were probed and all three refused, which is what made the missing feature nameable rather than vague: `^Vec` by ADR-0209, `^Vec(integer, 8)` by §6.4.4's grammar, and `IntVec(cap) = Vec(integer, cap)` because a schema's actual discriminants must be ordinal constants. `^Vec(integer)` is now written, and the split it rests on is the point — the types decide the layout a pointer-type must know, the ordinal ones decide an extent `new` may vary. **What is left is library work**: `PasVector` and `PasStrVec` become one module, `PasList` becomes a generic chain, and `PasMap` needs one thing more than this — a way to say a key can be hashed and compared, which is a constraint and the dialect has none (see [the gaps chapter](#what-a-daily-program-still-cannot-reach-for)) |
+| ~~to write a *growable* container once~~ | **Done** (ADR-0209, ADR-0211, ADR-0212, ADR-0213), and the module is `lib/dialect/pascontainer.pas`: one growable vector and one string-keyed map, over whatever element type a program names. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and the module is written once. `tests/dialect/lib_container.pas` runs both containers over `integer` and over a record, growing each past its opening capacity more than once. **What it does not replace**: `PasVector`, `PasStrVec` and `PasMap` are ordinary Extended Pascal and stay, because generics are the dialect's and a conforming program must still have a vector and a map; and `PasList` stays because an owned pointer's domain may not be a schema (ADR-0181), so a generic chain would make the *program* declare the node and list types. **What writing it found**, both recorded: a generic body may call only what its clients can reach, since the instantiation is emitted in the client and a module's private routines are internal to its own object file (`doc/sop.md` §7, and the module exports two helpers no caller wants); and §6.4.9's type-inquiry accepts only a simple name here, which is what would let `x: type of v^.a[1]` remove the second type argument from every call — a conformance gap and not a language limit, under [Known limitations](#under-isoiec-102061991). **A generic map keyed by anything but a string** still waits on constraints |
 
 **The lesson from the FFI increments**, worth keeping for whatever replaces the
 rows above: a decision that looks like it needs a model may need it for only
@@ -198,7 +198,7 @@ and the answer turned out to be short and specific rather than vague. Nothing
 in it needs a language feature; each is a module somebody has to write, which
 is the cheap kind of gap and the kind this page should name rather than imply.
 
-**Twenty-one modules exist** — eight conforming and thirteen dialect, listed by
+**Twenty-two modules exist** — eight conforming and fourteen dialect, listed by
 name in `README.md`'s module table. What a program written today reaches for
 and does not find:
 
@@ -644,6 +644,31 @@ pieces remain. *Work with no record yet, and a record is owed before either.*
   is refused with *'bind' needs a file variable*, and §6.7.5.6's "otherwise"
   branch presupposes it is legal. What binding an integer to an external entity
   means is implementation-defined and undesigned. *A feature, not a fix.*
+
+**§6.4.9's type-inquiry-object is a variable-access, and this compiler accepts
+only a name.** `type of v` works; `type of r.f`, `type of a[1]` and
+`type of p^` are refused, the last two as *parse* errors. §6.4.9 admits a
+`variable-access` or a `parameter-identifier`, and §6.5.1's variable-access is
+an entire-variable, a component-variable (indexed or a field-designator), an
+identified-variable, a buffer-variable or a substring — so five of the six
+forms are missing. *A fix, and one with no record yet.*
+
+Found while looking for a way to read a container's element type off its
+pointer (`x: type of v^.a[1]`), which is what a generic routine would want and
+cannot have. **Both front ends have the gap**, in the same shape and with the
+same message, so `difftest` agrees with itself and sees nothing — the blind
+spot `CLAUDE.md` names, met head-on. Every one of the eleven corpus uses of
+`type of` names a simple variable, which is ADR-0067's lesson a third time: a
+claim no test names is a claim nothing checks, and *complete* was asserted for
+this clause on the strength of the form that happens to be written.
+
+The fix is not a line. Both parsers hold the object as a name
+(`tqAt`/`tqLen` and a qualifier); a variable-access is a designator, so it
+wants a node and a resolution that computes its type **without evaluating it**
+— §6.4.9 says the object shall not be evaluated, and an indexed one contains
+an expression that must still be checked. It also has to work where a
+type-denoter is resolved, which is inside declaration checking and re-entrant
+through schema bodies.
 
 **A discriminated-schema is not a parameter-form, and this compiler accepts
 one** (ADR-0171). §6.7.3.1 admits `type-name | schema-name | type-inquiry`, so

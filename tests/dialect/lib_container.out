@@ -1,0 +1,8 @@
+vec int  len=8 cap=8 [3]=9
+vec pop  64 len=7
+vec set  99
+vec clr  len=0
+vec rec  len=5 [4]=4,40
+map int  count=10 k3=3 has k9=TRUE
+map del  TRUE count=9 k3=-1
+map rec  count=1 x=7,8

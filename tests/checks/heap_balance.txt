@@ -16,6 +16,7 @@ defer 0
 dynbounds_subrange 0
 fallible 0
 funcaccess 4
+lib_container 0
 lib_dir 0
 lib_list 0
 lib_map 0
