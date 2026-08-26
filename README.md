@@ -682,12 +682,33 @@ productions naming the same type **are** the same type — so a procedure over
 between them — and two naming different types are different types, with their
 own layouts.
 
-What it does not yet do is parameterise a *routine*. A schema with a type
-discriminant cannot be a parameter form, because a schematic formal reads its
-discriminants from the actual at run time and a type is not something that can
-travel that way; a routine over such a schema names the types it is over, and a
-routine generic in `T` would have to be translated once per `T`. The compiler
-says so rather than leaving it to be discovered.
+**A routine may be parameterised by a type too** (ADR-0211), and is then
+translated once per distinct type it is called with:
+
+```pascal
+procedure Swap(T: type; var a, b: T);
+var q: T;
+begin q := a; a := b; b := q end;
+...
+Swap(integer, i, j);
+Swap(Point, u, v);
+```
+
+The same spelling, in the other place a type can be a parameter: `type` is a
+word-symbol, and the only thing a conforming program may write after it here is
+`of`, so `T: type` is a position rather than a new reserved word. The two
+compose — `Vec(T: type; cap: integer)` is a container written once and
+`procedure Push(T: type; var v: Vec(T, 4); x: T)` is a routine over it written
+once.
+
+Two calls naming the same type reach the same translated routine, which is what
+lets a generic routine recurse. A generic nothing calls is never translated and
+never checked.
+
+The types are written at the call and are not inferred from the other
+arguments. And a generic declared in a *separately translated component* cannot
+be used yet — `--import` discards the component's tokens, and the body is read
+again from those — so `lib/` does not use this.
 
 **`break` and `continue` leave a loop early** (ADR-0208), which no standard
 Pascal has and every widely used one does:
