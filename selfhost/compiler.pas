@@ -29115,9 +29115,35 @@ end;
   The pair is what makes `substr` and `trim` free: they are a pointer and a
   shorter length into the string they came from, and copy nothing. Only `+`
   makes characters that did not exist. }
+{ The literal a name is bound to, or nil where the node is not a name bound to
+  one.
+
+  ADR-0220: the arm inside EmitString that answers for a literal is keyed on
+  the node's *kind*, and a constant reaches CodeGen as a designator -- so `''`
+  and `const e = ''` were two answers to one clause, the second reading a
+  length out of characters that are not there. Both spellings of a
+  constant-access are asked, a bare name and 6.11.3's qualified one, an
+  imported null-string being the same value arriving by another route. }
+function StringConstOf(e: nodePtr): nodePtr;
+var s: symPtr;
+begin
+  s := nil;
+  if e^.kind = nkVar then begin
+    if (e^.vrField = nil) and (e^.vrCall = nil) then s := e^.vrSym
+  end
+  else if e^.kind = nkField then
+    s := e^.fdQualified;
+  StringConstOf := nil;
+  if s <> nil then
+    if s^.kind = skConst then
+      if s^.constValue <> nil then
+        if s^.constValue^.kind = nkStr then
+          StringConstOf := s^.constValue
+end;
+
 procedure EmitString;
 var ad, al, bd, bl, at_, count, hdr, addr, c, one: str; st: typePtr;
-    part: array [0..2] of str; k, first: integer;
+    part: array [0..2] of str; k, first: integer; lit: nodePtr;
 begin
   { 6.4.2.5's states are one-to-one, so a restricted string *is* the string it
     restricts as far as its representation goes. Asked here rather than by
@@ -29349,6 +29375,18 @@ begin
     PutOp(c);
     writeln(ircode, ')');
     OpInt(1, len)
+  end
+  { ...and a *name* bound to a literal is that same value, which is where the
+    guard above was one node kind too narrow (ADR-0220). It stands here rather
+    than beside the literal so that its reach is exactly the arm it corrects:
+    a constant of a nonzero literal possesses a fixed-string-type and falls to
+    the last arm as it always has, so the only value this catches is the
+    null-string -- the one string constant whose type is the canonical one,
+    because 6.4.3.3.2 gives no fixed-string-type a capacity of zero. }
+  else if StringConstOf(e) <> nil then begin
+    lit := StringConstOf(e);
+    EmitAddress(e, data);
+    OpInt(lit^.stLen, len)
   end
   { A variable-string variable: the length is stored in front of the
     characters, which is the whole of 6.4.3.3.3's representation. }

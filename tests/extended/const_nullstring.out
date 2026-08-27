@@ -1,0 +1,9 @@
+write  []
+assign [] len=0
+length 0
+cat1   [hi]
+cat2   [hi]
+cat3   [] len=0
+eq     TRUE
+lt     TRUE
+index  1
