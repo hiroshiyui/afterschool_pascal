@@ -10371,7 +10371,8 @@ end;
   *string* constant is not: the characters are the value, so the two string
   forms are computed here (ADR-0069). }
 function EvalConstAccess;
-var node, lit, made: nodePtr; iv, lo, hi: symbol; ok: boolean; i, n: integer;
+var node, lit, made: nodePtr; iv, lo, hi: symbol; ok: boolean;
+    i, n, bound: integer;
 begin
   ok := false;
   node := ConstAccessNode(e);
@@ -10418,8 +10419,16 @@ begin
         if EvalConst(e^.ssLo, lo) and EvalConst(e^.ssHi, hi) then
           if IsInteger(lo.stype) and IsInteger(hi.stype) then begin
             n := lit^.stLen;
+            { AP 6.5.6 (ADR-0219): the dialect admits the empty substring, so
+              the third condition is `hi < lo - 1` there and `lo > hi` under
+              either conformance mode. The capacity 6.5.6 states -- one plus
+              the second index minus the first -- is then zero, and the node
+              built below is a length-zero literal, which is 6.1.9's
+              null-string and already has a type. }
+            if langStd = stdAfterschool then bound := lo.intVal - 1
+                                        else bound := lo.intVal;
             if (lo.intVal < 1) or (hi.intVal > n) or
-               (lo.intVal > hi.intVal) then begin
+               (hi.intVal < bound) then begin
               ErrorAt(e^.line, e^.col);
               writeln('the substring ', lo.intVal:1, '..', hi.intVal:1,
                       ' is not within the string constant''s 1..', n:1);
@@ -29335,15 +29344,24 @@ begin
     write(ircode, 'add i32 ');
     PutOp(count);
     writeln(ircode, ', 1');
-    { Not pas_str_slice_check. 6.7.6.7 lets `substr(s, i, 0)` yield the
-      null-string, and 6.5.6 makes i > j an error -- so the two conditions
-      differ at exactly the empty case and cannot share a check. }
+    { Not pas_str_slice_check, whose message calls its subject a sequence of
+      components. The fourth argument is AP 6.5.6 (ADR-0219): the empty
+      substring `s[i..i-1]` is admissible under the dialect and an error under
+      either conformance mode, which is the one disjunct the two rules differ
+      over -- so the check is one function and the mode is an argument to it.
+
+      6.7.6.7's `substr(s, i, 0)` already yields the null-string in Extended
+      Pascal and ADR-0125's `a[i..i-1]` is already the empty slice, so this
+      leaves `s[i..i-1]` as the only bracketed range in the dialect that could
+      not be empty. lib/dialect/pasparse.pas is where that cost a defect. }
     write(ircode, '  call void @pas_str_substr_check(i32 ');
     PutOp(bd);
     write(ircode, ', i32 ');
     PutOp(bl);
     write(ircode, ', i32 ');
     PutOp(al);
+    if langStd = stdAfterschool then write(ircode, ', i32 1')
+                                else write(ircode, ', i32 0');
     writeln(ircode, ')');
     Def(one);
     write(ircode, 'sub i32 ');
@@ -34798,7 +34816,7 @@ begin
   writeln(ircode, 'declare i32 @pas_str_trimlen(ptr, i32)');
   writeln(ircode, 'declare i32 @pas_str_index(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare void @pas_str_slice_check(i32, i32, i32)');
-  writeln(ircode, 'declare void @pas_str_substr_check(i32, i32, i32)');
+  writeln(ircode, 'declare void @pas_str_substr_check(i32, i32, i32, i32)');
   writeln(ircode, 'declare void @pas_str_store_fixed(ptr, i32, ptr, i32)');
   writeln(ircode, 'declare ptr @pas_str_pad(i32, ptr, i32)');
   { 6.7.5.5's auxiliary text variable, which the runtime owns }

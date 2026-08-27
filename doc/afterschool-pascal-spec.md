@@ -1398,8 +1398,17 @@ string-type and whose index-type is an integer type, `a[i..j]` shall denote a
 slice of that array (6.7.3.9.3) rather than the substring ISO/IEC 10206:1991
 §6.5.6 gives a string.
 
-Where it denotes a variable of a string-type, §6.5.6 is unchanged and `a[i..j]`
-shall denote a substring.
+Where it denotes a variable of a string-type, `a[i..j]` shall denote a
+substring, and §6.5.6 is unchanged but for its error conditions, which shall be
+as follows. It shall be an error if the string-variable of the substring-variable
+is undefined, or if the value of the first index-expression is less than 1, or
+if the value of the second index-expression is greater than the length of the
+value of the string-variable, or if the value of the second index-expression is
+less than one less than the value of the first index-expression.
+
+Where the value of the second index-expression is one less than the value of the
+first, the substring-variable shall denote a variable of a fixed-string-type of
+capacity 0, whose value is the null-string (§6.4.3.3.1).
 
 Which construct is denoted shall be determined by the type of the variable
 preceding `[`, and by nothing else.
@@ -1420,6 +1429,39 @@ away from every ISO/IEC 10206:1991 program that writes one, which is exactly
 what a dialect containing that standard may not do. The first draft of this
 clause omitted the exclusion and said the opposite of what the processor does;
 the processor was right. Recorded in Annex E.
+
+NOTE 4 — The amended error conditions differ from §6.5.6's in one value and no
+more. §6.5.6 states them as "an index-expression … less than 1 or greater than
+the length … or … the first index-expression … greater than the second"; here
+the first index-expression may equal one plus the length, the second may be one
+less than the first, and every other combination is an error as before. In
+particular `s[4..2]` remains an error, so a transposed pair of indices is still
+reported.
+
+NOTE 5 — Nothing else in §6.5.6 changes. The capacity is still "one plus the
+value of the second index-expression minus the value of the first", which for
+the admitted case is 0 — the clause's own arithmetic already yields the empty
+substring and only the prohibition stood in the way.
+
+NOTE 6 — This admits no program that ISO/IEC 10206:1991 accepts and gives it a
+different meaning. §3.1 of that standard defines an error as "a violation by a
+program of the requirements of this International Standard that a processor is
+permitted to leave undetected", so a program writing `s[i..i-1]` is erroneous
+and not a program the standard accepts. Containment (5.4) is a claim about the
+programs it accepts.
+
+NOTE 7 — The reason is consistency with two constructs that already answer this
+question the other way. §6.7.6.7's required function `substr(s, i, 0)` yields
+the null-string, and a slice `a[i..i-1]` is the empty slice (6.7.3.9.5) — so
+before this clause `s[i..i-1]` was the only bracketed range in the dialect that
+could not be empty, and the one whose emptiness a writer would reach for most.
+Two library modules written in this dialect got it wrong in the same week;
+ADR-0219 records both.
+
+NOTE 8 — A conformance mode reports the error as before and there is therefore
+no row for this clause in Annex B, which records refusals of *constructs*. The
+construct is one ISO/IEC 10206:1991 has; what the dialect changes is when using
+it is an error.
 
 ### 6.7 Procedure and function declarations
 

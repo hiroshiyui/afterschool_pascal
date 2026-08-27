@@ -74,19 +74,13 @@ begin
     Pascal module and ADR-0119 will not link one into a dialect program. The
     duplication is the price of the two layers and is named in ADR-0120.
 
-    The length test inside the loop is 6.5.6's third error condition: there is
-    no empty substring, so `b[2..length(b)]` on a string of one space is
-    `b[2..1]` and traps. `ParseInt(' ')` did, and answered nothing at all where
-    it should have answered errSyntax.
-
-    The *trailing* loop needs no such test, and the reason is an invariant
-    rather than an oversight: the loop above leaves `b` either empty or
-    beginning with a non-space, so a `b` of length one here cannot end in a
-    space and the loop below never runs on one. Writing the test there anyway
-    would be a statement no input reaches. }
+    Both loops are written the obvious way, and AP 6.5.6 (ADR-0219) is what
+    lets them be: `b[2..length(b)]` on a string of one space is `b[2..1]`, the
+    empty substring, and under 6.5.6 as the standard states it that stopped the
+    program. The guard this needed instead was two extra lines here, an
+    invariant to reconstruct for the second loop, and a defect that shipped. }
   while (length(b) > 0) and (b[1] = ' ') do
-    if length(b) = 1 then b := ''
-    else b := b[2..length(b)];
+    b := b[2..length(b)];
   while (length(b) > 0) and (b[length(b)] = ' ') do
     b := b[1..length(b) - 1];
 

@@ -2675,14 +2675,23 @@ void pas_str_store_char(char *dst, const char *src, int len) {
  * states them as `i <= 0`, `j < 0` and `i+j-1 > length`, which is the same
  * three once j is a count rather than an end. */
 /* ISO/IEC 10206:1991 6.5.6 and 6.8.6.5: `s[i..j]`. The conditions are "less
- * than 1", "greater than the length", and "the first greater than the second"
- * — and that last one is where this parts company with pas_str_slice_check
- * above. 6.7.6.7 lets `substr(s, i, 0)` yield the null-string, so a count of
- * zero is legal there; `s[3..2]` has i > j and is an error here. The two
- * conditions differ at exactly the empty case, which is why they cannot be one
- * function however alike they look. */
-void pas_str_substr_check(int lo, int hi, int len) {
-  if (lo < 1 || hi > len || lo > hi) {
+ * than 1", "greater than the length", and "the first greater than the second".
+ *
+ * `emptyok` is that last one, and it is AP 6.5.6 (ADR-0219): under
+ * --std=afterschool the empty substring `s[i..i-1]` is admissible, so the
+ * condition becomes `hi < lo - 1` — which still catches a transposed pair.
+ * Under either conformance mode the flag is zero and the rule is the
+ * standard's, 6.5.6 stating the error and ADR-0014 making an error trap.
+ *
+ * The two rules were argued here to be irreconcilable: "the two conditions
+ * differ at exactly the empty case, which is why they cannot be one function
+ * however alike they look" stood above this line. One disjunct differs, so one
+ * flag decides it, in the shape pas_read_str's `isvar` already uses. With the
+ * flag set the condition is pas_slice_check's below, character for character;
+ * the two stay separate functions because a substring is not a sequence of
+ * components and the two messages must not say it is. */
+void pas_str_substr_check(int lo, int hi, int len, int emptyok) {
+  if (lo < 1 || hi > len || hi < (emptyok ? lo - 1 : lo)) {
     char msg[160];
     snprintf(msg, sizeof msg,
              "substring: [%d..%d] is not within a string of length %d", lo, hi,
@@ -2693,12 +2702,18 @@ void pas_str_substr_check(int lo, int hi, int len) {
 
 /* ADR-0125: `a[i..j]`, after the indices have been normalised to the base's
  * own 1..n. Its own routine rather than pas_str_substr_check above, for two
- * reasons that are both about what it says: a slice is not a string, and an
- * *empty* slice is admissible where an empty substring range is not --
- * §6.7.6.7 already lets `substr(s, i, 0)` yield the null-string, and a loop
- * that consumes a slice down to nothing should not have to special-case its
- * last step. So `hi = lo - 1` is the empty slice and `hi < lo - 1` is an
- * error. */
+ * reasons that are both about what it says: a slice is not a string, and the
+ * message must not call one a sequence of components. So `hi = lo - 1` is the
+ * empty slice and `hi < lo - 1` is an error.
+ *
+ * The second reason given here was that "an *empty* slice is admissible where
+ * an empty substring range is not". That is no longer so: AP 6.5.6 (ADR-0219)
+ * gives the substring the same rule, and this condition and the substring
+ * check's are now the same expression under --std=afterschool. The argument
+ * that survives is the one this comment made first — §6.7.6.7 already lets
+ * `substr(s, i, 0)` yield the null-string, and a loop that consumes a
+ * sequence down to nothing should not have to special-case its last step.
+ * ADR-0219 is that sentence applied to the construct it was not applied to. */
 void pas_slice_check(int lo, int hi, int len) {
   if (lo < 1 || hi > len || hi < lo - 1) {
     char msg[160];

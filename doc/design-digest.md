@@ -2397,6 +2397,31 @@ generates but the *result* could not be received, this language having no
 64-bit integer. ADR-0128 is the half that answers and ADR-0129 is the decision,
 so the boundary is neither a decision nor a mechanism away any more.
 
+**And a range may be empty, which is the substring's rule now too**
+(ADR-0219). `pas_slice_check` admitted `a[i..i-1]` from the day slices landed,
+with the argument that "a loop that consumes a slice down to nothing should not
+have to special-case its last step" -- and §6.5.6 makes `s[i..i-1]` an *error*,
+so the same bracketed range meant two different things depending on the base's
+type. AP 6.5.6 widens §6.5.6's third error condition by exactly one value:
+`s[4..3]` is the null-string, `s[4..2]` is still an error, and the clause's own
+capacity ("one plus the second index minus the first") was already 0 for the
+admitted case, so only the prohibition was removed. **Extended Pascal already
+disagreed with itself** — §6.7.6.7's `substr(s, i, 0)` yields the null-string —
+which is what made this a consistency fix rather than an invention. It cost a
+fourth parameter on `pas_str_substr_check`, in the shape `pas_read_str`'s
+`isvar` uses, and with the flag set the condition is `pas_slice_check`'s
+character for character; the comment saying the two "cannot be one function
+however alike they look" was true of the messages and false of the condition.
+**The conformance modes keep the trap**, an ISO error condition trapping since
+ADR-0014, so `tests/extended/trap_substring.pas` is the first entry in
+`containment_exceptions.txt` whose divergence is about a construct Extended
+Pascal *has* -- admissible because §3.1 defines an error as a violation, so a
+program writing one is erroneous and not a program the standard accepts. Two
+callers demanded it and one had already shipped the defect: `paslsp.pas`'s
+carriage-return strip, where a frame's blank line is one character, and
+`pasparse.pas`'s blank trim, where `ParseInt(' ')` stopped the program instead
+of reporting a syntax error.
+
 **An integer wider than the compiler's own** (ADR-0128). `int64` is the type a
 `size_t` and an `ssize_t` cross as, and its whole shape comes from one
 constraint that is not a standard's: `selfhost/compiler.pas` is written in this

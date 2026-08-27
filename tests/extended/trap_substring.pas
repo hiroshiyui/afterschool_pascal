@@ -12,6 +12,14 @@
   everywhere except at the empty case, which is the one place a shared check
   would have been wrong in silence rather than loudly.
 
+  **This case is where the dialect parts company** (AP 6.5.6, ADR-0219). The
+  disagreement above between two constructs of one standard is what argued for
+  admitting `s[i..i-1]` there, so under --std=afterschool this program prints
+  `[]` and runs to the end. Everything above stays true of Extended Pascal, and
+  this file goes on asserting it; tests/checks/containment_exceptions.txt is
+  where the divergence is argued for, and tests/dialect/substring_empty.pas is
+  the other side of it.
+
   The legal cases are printed first, so a check that fired too eagerly would
   fail here rather than at the trap. }
 program TrapSubstring(output);

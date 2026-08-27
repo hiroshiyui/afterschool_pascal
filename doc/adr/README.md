@@ -227,3 +227,4 @@ the alternatives that were rejected and why.
 | [0216](0216-a-module-that-instantiates-a-generic-must-emit-it.md) | A module that instantiates a generic must emit it | Accepted |
 | [0217](0217-a-json-string-is-bytes-and-a-json-document-is-navigated.md) | A JSON string is bytes, and a JSON document is navigated | Accepted |
 | [0218](0218-the-frame-is-a-byte-count-and-the-buffer-is-the-callers.md) | The frame is a byte count, and the buffer is the caller's | Accepted |
+| [0219](0219-the-empty-substring.md) | The empty substring | Accepted |

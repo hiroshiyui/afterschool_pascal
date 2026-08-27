@@ -156,15 +156,14 @@ begin
   { The specification writes <CR><LF>; a bare <LF> is accepted, so the carriage
     return is stripped here rather than required above.
 
-    The length-one case is written out because §6.5.6 makes `s[1..0]` an
-    **error**: "it shall be an error if ... the value of the first
-    index-expression is greater than the value of the second". Extended Pascal
-    has no empty substring, so the ordinary way to drop a string's last
-    character traps on a string of one -- and the header line that ends a
-    frame's headers is exactly one character, a bare carriage return. }
+    This is where AP 6.5.6 (ADR-0219) was demanded. The line that ends a
+    frame's headers is exactly one character, a bare carriage return, so
+    `line[1..length(line) - 1]` is `line[1..0]` -- and §6.5.6 as the standard
+    states it makes that an error, so dropping a string's last character
+    stopped the server on every message it read. The guard was written out
+    here, and the same shape was got wrong in PasParse in the same week. }
   if (length(line) > 0) and (line[length(line)] = chr(13)) then
-    if length(line) = 1 then line := ''
-    else line := line[1..length(line) - 1];
+    line := line[1..length(line) - 1];
   ReadHeaderLine := any
 end;
 

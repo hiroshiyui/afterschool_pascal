@@ -330,18 +330,34 @@ sentence should have said.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Two entries so far, and both came from the framing alone.
+Two entries so far, and both came from the framing alone — the transport layer,
+before a single protocol message had been dispatched. **One of the two has
+already been acted on**, which is the discipline this chapter is for: a finding
+recorded and left is a finding wasted, and the rule that made it actionable was
+this section's own — one site is an anecdote, two are a demand (ADR-0116).
 
-- **There is no empty substring** (§6.5.6): *"it shall be an error if … the
-  value of the first index-expression is greater than the value of the
-  second"*. So `s[1..length(s) - 1]`, the ordinary way to drop a last
-  character, **traps on a string of one** — and the header line that ends a
-  frame's headers is exactly one character, a bare carriage return. Every such
-  site needs a length test written out beside it. This is a *conformance*
-  answer and not a defect: the compiler is right and the clause is explicit,
-  checked against the standard's own text before being written down here.
-  Whether the dialect should have `s[i..i-1] = ''` is undecided and wants a
-  second sighting; one site is an anecdote.
+- ~~**There is no empty substring**~~ — **answered, and it is the first
+  finding this chapter produced that changed the language** (AP 6.5.6,
+  ADR-0219). §6.5.6: *"it shall be an error if … the value of the first
+  index-expression is greater than the value of the second"*. So
+  `s[1..length(s) - 1]`, the ordinary way to drop a last character, **traps on
+  a string of one** — and the header line that ends a frame's headers is
+  exactly one character, a bare carriage return. This entry closed with
+  *"whether the dialect should have `s[i..i-1] = ''` is undecided and wants a
+  second sighting; one site is an anecdote."*
+
+  **The second sighting arrived the next day, and it had already shipped.**
+  `lib/dialect/pasparse.pas`'s blank trim is the same shape, written a week
+  earlier, and `ParseInt(' ')` stopped the program where it should have
+  reported a syntax error — through every gate, because no test passed a string
+  that trims down to exactly one character. Three sites in the tree, three
+  different treatments: `pastext.pas` builds its result a character at a time
+  and never takes a substring, `paslsp.pas` writes the guard out, `pasparse.pas`
+  gets it wrong. The dialect now admits `s[i..i-1]` and still refuses `s[4..2]`,
+  which cost one flag on one runtime check; the conformance modes keep the trap,
+  §6.5.6 stating the error. **The argument was in the tree already** — §6.7.6.7's
+  `substr(s, i, 0)` is the null-string and ADR-0125's `a[i..i-1]` is the empty
+  slice, so `s[i..i-1]` was the only bracketed range that could not be empty.
 - **A program may not mix `writeln` with a descriptor write.** `output` is
   buffered and `PasIO.WriteText` is not, so the two appear in an order that
   depends on when the buffer flushes, and neither standard gives a program a

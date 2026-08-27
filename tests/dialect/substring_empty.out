@@ -1,0 +1,10 @@
+const  [][][el]
+front  []
+middle []
+back   []
+some   [bcd]
+drop1  []
+drop2  [a]
+drop3  [ab]
+fixed  [][][bc]
+len    0 3
