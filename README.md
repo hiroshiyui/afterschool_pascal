@@ -1521,10 +1521,14 @@ const      const n = base * 2 — a constant-expression: wherever ISO 7185
            `index` — the last is what §6.3.2's own example needs, whose
            closing line is
            `hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')]`.
-           A real-, set- or string-valued *operation* is not folded: a
-           real constant is carried as the text that was written and never
-           converted, and building characters or a set in the compiler would
-           have to give the same answer in both of them. A string *literal*
+           A real-valued operation folds too since ADR-0227 — `third =
+           unity/3.0` and `pi = 4 * arctan(1)`, which are §6.3.2's own
+           example — and the six mathematical functions with it, by
+           calling what the emitted code calls, so the accuracy §6.8.2
+           NOTE 2 asks about is the same in both. String-valued
+           operations fold since ADR-0226. A **set**-valued one is what
+           is still refused: the folder builds no set node, so there is
+           nothing for the result to be. A string *literal*
            needs no folding and is a constant in either standard, and so is
            `nil` — §6.7.1 makes it an unsigned-constant, and it takes the
            type every pointer assignment will accept, so one `const q = nil`
