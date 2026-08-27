@@ -270,7 +270,8 @@ it is checked (ADR-0078).
 | §6.5.4 (D.5) | Removing the identifying-value of a variable while a *reference to it* exists — `dispose(p)` from inside `with p^ do`, or while `p^` is bound to somebody's `var` parameter. What references exist is a run-time fact. The `with` form is lexically visible and the parameter form is not, and a check reporting one of the two would say the rule holds when it does not. ADR-0019. |
 | §6.5.5 (D.6) | Altering a file-variable `f` while a reference to `f^` exists — a `put(f)` from inside `with f^ do`, or while `f^` is somebody's `var` parameter. Exactly D.5's shape, one type along. ADR-0021. |
 | §6.5.3.3 (D.2) | Reading or writing a field of a variant that is not active. A constant's tag is a constant, so §6.8.8.3's version of this *is* reported (ADR-0069); the rule for a variable has never been checked. ADR-0018, ADR-0056. |
-| §6.5.6 | Altering the length of a string-variable while a reference to a substring of it exists. ADR-0057. |
+| §6.5.6 (D.16) | That the string-variable of a substring-variable is **defined**. §6.5.6's first error condition, and the one of its three that is not an index test: `var s: packed array [1..6] of char; writeln(s[2..4])` prints three spaces rather than reporting anything. The other two disjuncts *are* checked, and exactly — the emitted `lo < 1 or hi > len or hi < lo` is logically identical to D.16's over both index-expressions. Same cause as D.43 below, nothing here tracking definedness at run time; named separately because a reader auditing D.16 previously found §6.5.6 in this table for D.17 only and could conclude D.16 was enforced (ADR-0224). |
+| §6.5.6 (D.17) | Altering the length of a string-variable while a reference to a substring of it exists. ADR-0057. |
 | §6.6.3.8 | That the smallest and largest values of the index-type of T1 lie within the closed interval of T2, where T1 is itself a conformant-array-schema. Both bounds are then a run-time fact, arriving with that parameter's own actual; where T1 is an ordinary array-type the check is made at compile time and the program refused. BSI's LEV1F44 and LEV1F49 are the two programs that report *ERROR NOT DETECTED*. ADR-0153. |
 | §6.7.5.5 | A write-parameter of `writestr` accessing the string-variable being written to. ADR-0060. |
 | §6.7.3.2 | That the actuals of one parameter form naming the required schema `string` all have the same **length**. The clause makes each formal possess the type produced with "the tuple having that length as its component", so `procedure p(a, b: string)` with actuals of unequal length is an error — and the lengths are run-time values, unlike every other tuple in a parameter form, which is why the sibling check reported before the program ran and this one cannot. Both formals are given their own actual's length, which is the answer the clause would give if the lengths agreed and is a defined answer either way. |
@@ -404,15 +405,32 @@ same clause anticipates exactly this direction — "an implementation is require
 to specify the accuracy of constant-expressions" — which is a sentence about
 real-valued ones, and this is that specification: there are none.
 
-`substr` is refused for the neighbouring reason: its result is a string, which
-has no scalar form to fold to. §6.3 makes a character-string a constant and
-this compiler carries such a constant as its *literal, named* (ADR-0068), so
-there is nothing for a computed string to be.
+**A constant-definition may not be given a string-valued or string-compared
+expression**, and this entry was wrong about it in two ways until ADR-0224's
+audit probed it. `substr` is only one of the refused forms; the others are
+§6.8.3.6's concatenation, `trim`, and §6.8.3.5's relational operators over
+strings — the last of which yields a *boolean*, so the reason previously given
+here, "its result is a string, which has no scalar form to fold to", does not
+cover it.
 
-The refusal says which of the two things is wrong, rather than reporting the
-expression as not constant — the clause permits it and this processor cannot
-evaluate it, and only one of those is a complaint about the program.
-`tests/extended/constexpr_errors.pas` pins it.
+    const k = 'ab' + 'cd';          const k = trim('ab  ');
+    const k = substr('abcd',2,2);   const k = ('ab' = 'ab');
+
+Each is refused with *the value of constant 'k' is not a compile-time
+constant*. This entry claimed the refusal "says which of the two things is
+wrong, rather than reporting the expression as not constant"; it does not, and
+no case pinned the claim — `constexpr_errors.pas` covers the real-valued
+message above and contained no string form at all.
+
+**And the stated cause is false.** The folder can produce a string constant,
+and does, one level down: `const c = ta[1: 'ab' + 'cd'; 2: 'xy']` is accepted
+and yields `abcd`. So the limit is not that a computed string has nowhere to
+live — §6.8.7's structured-value-constructor gives it somewhere — but that the
+constant-definition path alone does not take it. `length('abc')` and
+`index('abc','b')` fold, which is what §6.3.2's own `hex_alpha` example needs.
+
+It remains a **restriction** under §5.1 c) either way, and it is recorded here
+with the cause unknown rather than with a cause that is untrue.
 
 **A subrange whose bounds are not constants is refused as a set's base type.**
 `set of 1..m` inside a procedure is legal under §6.2.3.8 b) and is refused with

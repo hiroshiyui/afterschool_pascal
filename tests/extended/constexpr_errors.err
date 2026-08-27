@@ -18,4 +18,8 @@
 <source>:52:21: error: integer overflow in a constant expression
 <source>:62:19: error: the discriminants of a schema must be ordinal; 'cap' is not
 <source>:70:7: error: the value of constant 'varying' is not a compile-time constant
-<source>:76:12: error: integer overflow in a constant expression
+<source>:85:7: error: the value of constant 'strcat' is not a compile-time constant
+<source>:86:7: error: the value of constant 'strsub' is not a compile-time constant
+<source>:87:7: error: the value of constant 'strtrim' is not a compile-time constant
+<source>:88:7: error: the value of constant 'strrel' is not a compile-time constant
+<source>:93:12: error: integer overflow in a constant expression

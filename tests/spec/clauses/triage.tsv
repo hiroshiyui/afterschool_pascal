@@ -199,7 +199,7 @@ afterschool	4.4	structural	a licence rule about this repository, not about a pro
 afterschool	4.5	structural	defines shall, should and may
 afterschool	5	structural	introduces the compliance clauses
 extended	5.1	testable	not a statement of what a processor is: 5.1 e) requires a violation to be reported before the program-block is activated and activation then prevented, and f) requires a dynamic-violation to be reported -- both stated nowhere else
-afterschool	5.1	structural	a statement about processors; no program can exercise it
+afterschool	5.1	structural	a compliance statement whose every element is stated in a numbered clause: containment at 6.0.1, the meaning at each clause that states one, and the errors at Annex A's Clause column, which attributes all seven to 6.4.3.4.2, 6.4.11.5, 6.7.3.9.5 a), 6.7.7.5, 6.7.7.8, 6.7.6.10 and 6.4.12.4 -- all testable. NOT "a statement about processors", which is what this said and is the reason iso7185 5.1 and extended 5.1 explicitly reject: each of those states a *when* and *how* of reporting found nowhere else, and AP 5.1 states no such thing of its own
 extended	5.2	structural	requires of a *program* and not of a processor -- a conformance level, and not relying on an implementation-dependent interpretation. What a processor must do about a program that fails this is 5.1 e)
 afterschool	5.2	structural	defines what a complying program is, in terms of the other clauses
 afterschool	5.3	testable	
