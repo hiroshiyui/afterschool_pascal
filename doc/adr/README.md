@@ -228,3 +228,4 @@ the alternatives that were rejected and why.
 | [0217](0217-a-json-string-is-bytes-and-a-json-document-is-navigated.md) | A JSON string is bytes, and a JSON document is navigated | Accepted |
 | [0218](0218-the-frame-is-a-byte-count-and-the-buffer-is-the-callers.md) | The frame is a byte count, and the buffer is the caller's | Accepted |
 | [0219](0219-the-empty-substring.md) | The empty substring | Accepted |
+| [0220](0220-a-name-bound-to-the-null-string.md) | A name bound to the null-string | Accepted |

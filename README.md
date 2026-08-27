@@ -416,6 +416,36 @@ answers the count, and `a[4..3]` is the empty slice. It is a `var` or
 result, not a named type — a view of the caller's storage is not a thing that
 can outlive the call.
 
+**And a substring may be empty too** (ADR-0219). §6.5.6 makes `s[i..i-1]` an
+error — "the value of the first index-expression is greater than the value of
+the second" — so under both conformance modes the ordinary way to drop a
+string's last character stops the program on a string of one:
+
+```pascal
+while (length(b) > 0) and (b[1] = ' ') do
+  b := b[2..length(b)];        { b[2..1] when b is one space }
+```
+
+Here it is the null-string, and the condition is widened by exactly one value:
+`s[4..3]` is empty, `s[4..2]` is still an error, so a transposed pair of indices
+is still reported. `s[length(s) + 1 .. length(s)]` is the empty end.
+
+The reason is that this language already answered the same question twice the
+other way. §6.7.6.7's `substr(s, i, 0)` is the null-string — Extended Pascal's
+own answer for an operation differing from `s[i..j]` in nothing but spelling —
+and `a[i..i-1]` is the empty slice, one paragraph up. `s[i..i-1]` was the only
+bracketed range left that could not be empty, and it is the one whose emptiness
+a program reaches for most often.
+
+§6.5.6's own capacity is "one plus the value of the second index-expression
+minus the value of the first", which is already 0 for the admitted case: the
+clause's arithmetic allowed it and only the prohibition did not.
+
+As with a variant's tag above, §3.1 makes an error "a violation by a program …
+that a processor is permitted to leave undetected" — so a program that writes
+`s[i..i-1]` is erroneous, not accepted, and nothing valid changes meaning. The
+conformance modes go on trapping.
+
 **And a slice is how a buffer reaches C** (ADR-0129). The pair crosses as
 `(ptr, i64)` — the address of the first component, then how many there are —
 which is the argument shape `read`, `write`, `recv`, `send` and `snprintf` all
