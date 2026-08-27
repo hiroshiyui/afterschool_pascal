@@ -1,0 +1,9 @@
+adr: 0230
+file: selfhost/compiler.pas
+kills: kind-exhaustive
+why: A condition is one expression however it is spelled, so the collector walks through the boolean operators: `if (e^.kind = nkStr) and IsChar(t)` holds a tag test and `if (a^.kind = nkVar) or (a^.kind = nkField)` holds two. Not walking them loses every test that is not the whole condition -- which is most of them in this compiler, EmitString's arms testing a node's kind and its type in one condition being the case ADR-0220 was about.
+--- old
+      if (cond^.bnOp = opAnd) or (cond^.bnOp = opOr) or
+         (cond^.bnOp = opAndThen) or (cond^.bnOp = opOrElse) then begin
+--- new
+      if false then begin

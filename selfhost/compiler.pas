@@ -1308,6 +1308,40 @@ type
     next: dispatchPtr
   end;
 
+  { --dump-dispatch's other half (ADR-0230): an if-chain that dispatches on a
+    tag. Two lists, because a chain is a *shape* and not a node -- there is no
+    if-chain in the tree, only an if whose else-part is another if.
+
+    `chainRec` records every if-statement, so a head can be told from a
+    continuation: a head is one that is no other's else-part. `tagRec` records
+    every test of an enumeration-valued expression against a constant of its
+    own type, keyed by the if whose condition held it -- one record per test,
+    because a single condition may hold several and a single chain may
+    dispatch on more than one enumeration at once. }
+  chainPtr = ^chainRec;
+  chainRec = record
+    node, elsePart: nodePtr;
+    procAt, procLen: integer;
+    line, col: integer;
+    next: chainPtr
+  end;
+
+  tagPtr = ^tagRec;
+  tagRec = record
+    node: nodePtr;
+    ty: typePtr;
+    ord_: integer;
+    { the field the test read, when the tested side is a field-designator, and
+      zero when it is anything else. It is what tells a *tag* dispatch from a
+      lookahead ladder: `e^.kind = nkVar` asks a value for its own kind, and
+      `t = tkSemi` asks whether a token happens to be a semicolon. The reader
+      this replaces approximated the same thing by matching the text `^.kind`,
+      which is why it saw no chain over any other field -- and missed three
+      over the fields it could see. }
+    fieldAt, fieldLen: integer;
+    next: tagPtr
+  end;
+
   pendingPtr = ^pendingRec;
   pendingRec = record
     ptype: typePtr;
@@ -2103,6 +2137,8 @@ var
   dumpDispatchOpt: boolean;
   dispatchHead, dispatchTail: dispatchPtr;
   enumHead, enumTail: layoutPtr;
+  chainHead, chainTail: chainPtr;
+  tagHead, tagTail: tagPtr;
   { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
     what the seed was generated for and what this repository is built and
     tested on. }
@@ -3198,6 +3234,10 @@ begin
   dispatchTail := nil;
   enumHead := nil;
   enumTail := nil;
+  chainHead := nil;
+  chainTail := nil;
+  tagHead := nil;
+  tagTail := nil;
   targetIx := tgtX86;
   covOpt := false;
   { Before anything is parsed: an argument past the last program-parameter is
@@ -19325,6 +19365,83 @@ begin
   end
 end;
 
+{ The symbol an applied occurrence of an enumeration constant resolves to, or
+  nil when the expression is not one. A constant of an enumeration is the only
+  thing an arm of a tag dispatch may be compared against (ADR-0230). }
+function EnumConstOf(e: nodePtr): symPtr;
+var s: symPtr;
+begin
+  EnumConstOf := nil;
+  if e <> nil then
+    if e^.kind = nkVar then begin
+      s := e^.vrSym;
+      if s <> nil then
+        if s^.kind = skConst then
+          if s^.stype <> nil then
+            if Base(s^.stype)^.kind = tyEnum then
+              EnumConstOf := s
+    end
+end;
+
+{ ADR-0230. Every test of an enumeration-valued expression against a constant
+  of its own type, anywhere in one condition -- so `if (e^.kind = nkStr) and
+  IsChar(t)` yields one and `if (a^.kind = nkVar) or (a^.kind = nkField)`
+  yields two.
+
+  The boolean operators are walked through because a condition is one
+  expression however it is spelled, and `not` because a chain may be written
+  around it. Nothing else is: a comparison of two designators names no
+  constant, and a comparison against something that is not a constant of an
+  enumeration is not a tag test.
+
+  What counts as a tag is decided by the *type*, which is the whole difference
+  from the reader this replaces: that one matched the text `^.kind` and so saw
+  only dispatches on an AST node's kind, missing every chain over any other
+  enumeration-valued field. }
+procedure CollectTagTests(cond, owner: nodePtr);
+var side, konst: nodePtr; t: typePtr; tag: tagPtr;
+begin
+  if cond <> nil then
+    if cond^.kind = nkUnary then begin
+      if cond^.unOp = opNot then CollectTagTests(cond^.unArg, owner)
+    end
+    else if cond^.kind = nkBinary then
+      if (cond^.bnOp = opAnd) or (cond^.bnOp = opOr) or
+         (cond^.bnOp = opAndThen) or (cond^.bnOp = opOrElse) then begin
+        CollectTagTests(cond^.bnLhs, owner);
+        CollectTagTests(cond^.bnRhs, owner)
+      end
+      else if cond^.bnOp = opEq then begin
+        { either side may be the constant, and exactly one of them must be:
+          `nkVar = nkStr` compares two constants and dispatches on nothing }
+        konst := nil;
+        side := cond^.bnLhs;
+        if EnumConstOf(side) <> nil then konst := side;
+        side := cond^.bnRhs;
+        if EnumConstOf(side) <> nil then
+          if konst = nil then konst := side else konst := nil;
+        if konst <> nil then begin
+          t := Base(konst^.ntype);
+          if konst = cond^.bnLhs then side := cond^.bnRhs
+          else side := cond^.bnLhs;
+          new(tag);
+          tag^.node := owner;
+          tag^.ty := t;
+          tag^.ord_ := EnumConstOf(konst)^.intVal;
+          tag^.fieldAt := 0;
+          tag^.fieldLen := 0;
+          if side <> nil then
+            if side^.kind = nkField then begin
+              tag^.fieldAt := side^.fdAt;
+              tag^.fieldLen := side^.fdLen
+            end;
+          tag^.next := nil;
+          if tagTail = nil then tagHead := tag else tagTail^.next := tag;
+          tagTail := tag
+        end
+      end
+end;
+
 procedure CheckCase(c: nodePtr);
 var
   sel, labelType, named: typePtr;
@@ -19926,7 +20043,7 @@ end;
 procedure CheckStmt;
 var sub: nodePtr; sym, named: symPtr; saved: stmtPathPtr; st: typePtr;
     forEntry: symListPtr; owning: symPtr; badFunc: boolean;
-    counterAt, counterLen: integer;
+    counterAt, counterLen: integer; chn: chainPtr;
 begin
   if s <> nil then
     case s^.kind of
@@ -20252,6 +20369,24 @@ begin
         begin
           ErrorAt(s^.ifCond^.line, s^.ifCond^.col);
           writeln('the condition of an if statement must be boolean')
+        end;
+        { ADR-0230. *Every* if is recorded, not only one holding a tag test:
+          a chain is a shape and not a node, and telling its head from its
+          continuations needs to know which ifs are some other if's else-part.
+          An `if a then ... else if e^.kind = nkVar then ...` has its head in
+          the arm that dispatches on nothing. }
+        if dumpDispatchOpt then begin
+          new(chn);
+          chn^.node := s;
+          chn^.elsePart := s^.ifElse;
+          chn^.procAt := currentProc^.at;
+          chn^.procLen := currentProc^.len;
+          chn^.line := s^.line;
+          chn^.col := s^.col;
+          chn^.next := nil;
+          if chainTail = nil then chainHead := chn else chainTail^.next := chn;
+          chainTail := chn;
+          CollectTagTests(s^.ifCond, s)
         end;
         saved := stmtPath;
         stmtPath := PushStmt(stmtPath, s);
@@ -36195,6 +36330,96 @@ begin
   writeln('tokens ', tokCount:1, ' of ', tokMax:1)
 end;
 
+{ The four questions the chain half asks of a shape the tree does not hold
+  (ADR-0230). Each is a scan and each is a dump's own cost: --dump-dispatch is
+  asked once per compilation and never on a path a program pays for. }
+
+function ChainRecOf(n: nodePtr): chainPtr;
+var c: chainPtr;
+begin
+  c := chainHead;
+  while (c <> nil) and (c^.node <> n) do c := c^.next;
+  ChainRecOf := c
+end;
+
+{ an if that is some other if's else-part continues a chain; one that is not
+  begins one -- including an if that dispatches on nothing, which is how
+  `if a then ... else if e^.kind = nkVar then ...` has its head in the arm
+  that tests no tag at all }
+function IsContinuation(n: nodePtr): boolean;
+var c: chainPtr; found: boolean;
+begin
+  found := false;
+  c := chainHead;
+  while c <> nil do begin
+    if c^.elsePart = n then found := true;
+    c := c^.next
+  end;
+  IsContinuation := found
+end;
+
+function ChainArms(head: chainPtr): integer;
+var c: chainPtr; n: integer;
+begin
+  n := 0;
+  c := head;
+  while c <> nil do begin
+    n := n + 1;
+    c := ChainRecOf(c^.elsePart)
+  end;
+  ChainArms := n
+end;
+
+{ does any arm of this chain test this constant of this enumeration? }
+function ChainHas(head: chainPtr; t: typePtr; k: integer): boolean;
+var c: chainPtr; tg: tagPtr; found: boolean;
+begin
+  found := false;
+  c := head;
+  while c <> nil do begin
+    tg := tagHead;
+    while tg <> nil do begin
+      if (tg^.node = c^.node) and (tg^.ty = t) and (tg^.ord_ = k) then
+        found := true;
+      tg := tg^.next
+    end;
+    c := ChainRecOf(c^.elsePart)
+  end;
+  ChainHas := found
+end;
+
+{ The field the first test of this enumeration in this chain read, or a zero
+  length where the tested side was not a field-designator. Reported so that a
+  reader -- and the gate -- can tell a value asked for its own kind from a
+  lookahead comparing a token against a few spellings. }
+procedure ChainField(head: chainPtr; t: typePtr; var at, len: integer);
+var c: chainPtr; tg: tagPtr;
+begin
+  at := 0;
+  len := 0;
+  c := head;
+  while (c <> nil) and (len = 0) do begin
+    tg := tagHead;
+    while (tg <> nil) and (len = 0) do begin
+      if (tg^.node = c^.node) and (tg^.ty = t) then begin
+        at := tg^.fieldAt;
+        len := tg^.fieldLen
+      end;
+      tg := tg^.next
+    end;
+    c := ChainRecOf(c^.elsePart)
+  end
+end;
+
+function ChainNames(head: chainPtr; t: typePtr): integer;
+var k, n: integer;
+begin
+  n := 0;
+  for k := 0 to EnumCount(t) - 1 do
+    if ChainHas(head, t, k) then n := n + 1;
+  ChainNames := n
+end;
+
 { --dump-dispatch (ADR-0229). Every case-statement in the compiled program
   whose selector is an enumeration, with the enclosing routine, the
   enumeration, and how many of that enumeration's constants the labels name.
@@ -36225,9 +36450,10 @@ end;
   exact about *which* constants are named; it does not make it a proof that
   naming them was right. ADR-0194 says the same of --dump-predicates. }
 procedure DumpDispatch;
-var d, q: dispatchPtr; r: rangePtr; lay: layoutPtr; n, k: integer;
-    covered: boolean;
+var d, q, q3, chainOut: dispatchPtr; r: rangePtr; lay: layoutPtr;
+    c: chainPtr; n, k, named, fat, flen: integer; covered: boolean;
 begin
+  chainOut := nil;
   d := dispatchHead;
   while d <> nil do begin
     { the n-th case over this enumeration in this routine, counted the way the
@@ -36266,6 +36492,75 @@ begin
     end;
     writeln;
     d := d^.next
+  end;
+
+  { The declared enumerations, so the dump describes its own denominator. A
+    reader of it then needs no other source of truth about what an enumeration
+    is or how many constants it has -- which is what lets the gate stop reading
+    Pascal altogether (ADR-0230). }
+  lay := enumHead;
+  while lay <> nil do begin
+    write('enum ');
+    WritePool(lay^.at, lay^.len);
+    writeln(' ', EnumCount(lay^.ty):1);
+    lay := lay^.next
+  end;
+
+  { ADR-0230's half: the if-chains. A chain is a shape and not a node, so it is
+    reconstructed here rather than recorded -- a head is an if that is no other
+    if's else-part, and the chain is what the else-parts reach from there.
+
+    A chain answers for each enumeration it tests *separately*, which is the
+    ordinary case here and never happens to a case-statement: EmitString tests
+    a node's kind and its type in one set of conditions. Two tests of one
+    enumeration is the smallest thing a reader could have got wrong by leaving
+    a third off, so a chain naming one constant of a type is not reported --
+    that is a question, not a dispatch. }
+  c := chainHead;
+  while c <> nil do begin
+    if not IsContinuation(c^.node) then
+      if ChainArms(c) >= 2 then begin
+        lay := enumHead;
+        while lay <> nil do begin
+          named := ChainNames(c, lay^.ty);
+          if named >= 2 then begin
+            n := 1;
+            q3 := chainOut;
+            while q3 <> nil do begin
+              if (q3^.ty = lay^.ty) and
+                 PoolSame(q3^.procAt, q3^.procLen, c^.procAt, c^.procLen) then
+                n := n + 1;
+              q3 := q3^.next
+            end;
+            new(q3);
+            q3^.procAt := c^.procAt;
+            q3^.procLen := c^.procLen;
+            q3^.ty := lay^.ty;
+            q3^.next := chainOut;
+            chainOut := q3;
+            write('chain ');
+            WritePool(c^.procAt, c^.procLen);
+            write(':');
+            WritePool(lay^.at, lay^.len);
+            write(':', n:1, ' on ');
+            ChainField(c, lay^.ty, fat, flen);
+            if flen > 0 then WritePool(fat, flen) else write('?');
+            write(' names ', named:1, ' of ', EnumCount(lay^.ty):1);
+            write(' at ', c^.line:1, ':', c^.col:1);
+            if named < EnumCount(lay^.ty) then begin
+              write(' missing');
+              for k := 0 to EnumCount(lay^.ty) - 1 do
+                if not ChainHas(c, lay^.ty, k) then begin
+                  write(' ');
+                  WriteOrdinalName(lay^.ty, k)
+                end
+            end;
+            writeln
+          end;
+          lay := lay^.next
+        end
+      end;
+    c := c^.next
   end;
 
   { The other half of the catalogue's question: a constant that *no*

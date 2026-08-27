@@ -320,3 +320,45 @@ EmitWriteArgs:typeKind:1 chains 5 of 21
 # once, and no other type carries a discriminant at all.
 DynamicExtent:typeKind:1 chains 3 of 21
 CheckSchemaDomain:typeKind:1 chains 3 of 21
+
+# --- chains the source-parsing reader could not see (ADR-0230) --------------
+#
+# The five below are not new chains; they are chains the regular expression
+# that used to answer this question never matched. Four of them it missed on
+# its own terms -- it required the text `^.kind`, and these read `.kind` of a
+# record, or sit far enough apart that its eight-line window closed first --
+# and the fifth is in the walker that replaced it.
+
+# ADR-0038's `and then` and `or else`: the lexer joins two tokens into one
+# word-symbol, and this asks whether the last two are exactly one of the two
+# pairs. It is not a dispatch over the token kinds and the other 76 are not
+# left off -- there is nothing for them to do here, the pairs being the whole
+# of what the clause spells with two words.
+LexIdentOrKeyword:tokenKind:1 chains 4 of 80
+
+# 6.4.4's pointer domain resolves to a type-name or to a schema-name, and the
+# two schema arms differ only in whether the pointer is an owned one
+# (ADR-0181). Every other symbol kind is a name that may not stand there at
+# all, and the trailing `else` is the diagnostic for exactly that -- so what
+# the chain omits is reported and not silently accepted, which is the
+# distinction this catalogue exists to make.
+ResolvePendingPointers:symKind:1 chains 2 of 12
+
+# 6.7.3.3: an actual must be a designator where the formal is a variable
+# parameter, and may not be parenthesised. Both arms ask about skVarParam and
+# the pair is one requirement in two faults; skParam is the value-parameter
+# arm beside them. No other symbol kind reaches a formal-parameter position.
+CheckArguments:symKind:2 chains 2 of 12
+
+# The two node kinds a *condition* can be built out of, for ADR-0230's own
+# walker: `not` and a dyadic operator are the only nodes that contain another
+# expression a tag test could hide in. Every other kind is a leaf as far as
+# this walk is concerned, so there is nothing to recurse into and the trailing
+# fall-through is the answer for all 61 of them.
+CollectTagTests:nodeKind:1 chains 2 of 63
+
+# AP 6.7.7.6: what an `external` heading refuses in a parameter position -- a
+# procedural parameter, which would cross as a code pointer and its link where
+# C takes one word, and a variable parameter of a type C has no answer for.
+# The other ten symbol kinds cannot appear in a formal-parameter-list.
+CheckForeignHeading:symKind:1 chains 2 of 12

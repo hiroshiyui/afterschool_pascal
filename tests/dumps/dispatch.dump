@@ -1,12 +1,18 @@
-case total:colour:1 names 5 of 5 at 46:3
-case subset:colour:1 names 3 of 5 at 58:3 missing amber cyan
-case completed:colour:1 names 1 of 5 otherwise at 69:3 missing green blue amber cyan
-case nested:colour:1 names 5 of 5 at 79:3
-case nested:colour:2 names 3 of 5 at 81:7 missing amber cyan
-case ofsubrange:colour:1 names 2 of 5 otherwise at 94:3 missing red blue cyan
-case flagged:flag:1 names 2 of 3 otherwise at 104:3 missing paused
-case dispatch:colour:1 names 5 of 5 at 135:3
-case dispatch:?:1 names 2 of 3 otherwise at 139:3 missing gamma
+case total:colour:1 names 5 of 5 at 52:3
+case subset:colour:1 names 3 of 5 at 64:3 missing amber cyan
+case completed:colour:1 names 1 of 5 otherwise at 75:3 missing green blue amber cyan
+case nested:colour:1 names 5 of 5 at 85:3
+case nested:colour:2 names 3 of 5 at 87:7 missing amber cyan
+case ofsubrange:colour:1 names 2 of 5 otherwise at 100:3 missing red blue cyan
+case flagged:flag:1 names 2 of 3 otherwise at 110:3 missing paused
+case dispatch:colour:1 names 5 of 5 at 181:3
+case dispatch:?:1 names 2 of 3 otherwise at 185:3 missing gamma
+enum colour 5
+enum flag 3
+enum mode 3
+chain describe:colour:1 on kind names 3 of 5 at 135:3 missing amber cyan
+chain second:colour:1 on kind names 2 of 5 at 153:3 missing blue amber cyan
+chain second:colour:2 on kind names 2 of 5 at 157:3 missing red green cyan
 unused flag paused
 unused mode fast
 unused mode slow

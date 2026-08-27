@@ -23,6 +23,11 @@ type
     holding, because a constant that stops being named is one something used
     to reach and no longer does }
   flag = (stopped, running, paused);
+  { a record whose own `kind` field is what a chain dispatches on }
+  tagged = record
+    kind: colour;
+    ready: boolean
+  end;
   { and an enumeration no case-statement mentions at all, which is how
     stdKind looks: dispatched by a comparison and never by a case, so it
     reaches no site and only the *declarations* can find it }
@@ -35,6 +40,7 @@ var
   i: integer;
   f: flag;
   m: mode;
+  tg: tagged;
   { an enumeration with no type-definition has no name to report, so the dump
     writes `?` where one would go -- the type is still a type and the site is
     still a site }
@@ -114,6 +120,46 @@ begin
   Quick := x = fast
 end;
 
+{ An if-chain is a dispatch too, and a constant left off one is the *opposite*
+  failure from a case-statement's: it takes the trailing `else` in silence
+  rather than stopping the program. A chain is a shape and not a node -- an if
+  whose else-part is another if -- so the head here is the arm that tests no
+  tag at all, and all three arms belong to one chain.
+
+  `on kind` is what the dump reports and what tells a dispatch from a lookahead:
+  this reads a record's own kind field, where `n = green` below reads a
+  variable that merely happens to be of an enumeration. }
+function Describe(r: tagged; n: flag): char;
+begin
+  Describe := '.';
+  if r.ready then
+    Describe := '!'
+  else if r.kind = red then
+    Describe := 'r'
+  else if (r.kind = green) or (r.kind = blue) then
+    Describe := 'g'
+  { a chain naming one constant of a type is a question and not a dispatch, so
+    this second enumeration is not reported at all }
+  else if n = running then
+    Describe := 'a'
+end;
+
+{ Two chains over one enumeration in one routine, so the ordinal counts as it
+  does for case-statements -- and a tag test written under `not`, which is
+  found because a condition is one expression however it is spelled. }
+function Second(r: tagged): char;
+begin
+  Second := '.';
+  if not (r.kind = red) then
+    Second := 'x'
+  else if r.kind = green then
+    Second := 'y';
+  if r.kind = blue then
+    Second := 'b'
+  else if r.kind = amber then
+    Second := 'm'
+end;
+
 { neither of these is an enumeration, and neither is reported }
 procedure NotEnums(a: char; b: integer);
 begin
@@ -142,5 +188,7 @@ begin
     otherwise writeln('g')
   end;
   Total(c); Subset(c); Completed(c); Nested(c); OfSubrange(n); NotEnums(ch, i);
-  Flagged(f); writeln(Quick(m))
+  Flagged(f); writeln(Quick(m));
+  tg.kind := green; tg.ready := false;
+  writeln(Describe(tg, running), Second(tg))
 end.
