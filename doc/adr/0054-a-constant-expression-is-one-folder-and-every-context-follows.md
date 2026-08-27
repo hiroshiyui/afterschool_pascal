@@ -4,7 +4,15 @@ Date: 2026-08-12
 
 ## Status
 
-Accepted.
+Accepted. Two of the three refusals its *Decision* records have since been
+retired, and by the route it argued was unavailable. **A string-valued one** is
+folded by [ADR-0226](0226-a-string-valued-constant-expression.md); **a
+real-valued one** by [ADR-0227](0227-a-real-valued-constant-expression.md),
+which reads the literal with `readstr` and writes the result back with
+`writestr` rather than writing "a decimal-to-binary conversion in Pascal whose
+last bits agreed with C's" -- the cost this record priced the refusal at. The
+**set**-valued refusal stands, for the reason given here. Everything else in
+this record -- one folder, every context following it -- is unchanged.
 
 ## Context
 

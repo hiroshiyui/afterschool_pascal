@@ -4,7 +4,12 @@ Date: 2026-08-28
 
 ## Status
 
-Accepted.
+Accepted. Retires the **real-valued** half of
+[ADR-0054](0054-a-constant-expression-is-one-folder-and-every-context-follows.md)'s
+refusal, and with it the reason that record gave for it; the set-valued half
+stands. Retires the consequence
+[ADR-0226](0226-a-string-valued-constant-expression.md) recorded as *"eight
+refused required functions remain"*. Both records stand otherwise.
 
 ## Context
 

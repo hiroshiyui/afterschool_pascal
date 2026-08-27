@@ -4,7 +4,13 @@ Date: 2026-08-27
 
 ## Status
 
-Accepted.
+Accepted. One consequence below is retired by
+[ADR-0227](0227-a-real-valued-constant-expression.md): *"Eight refused required
+functions remain, all real-valued, and that entry is now true as written"* was
+true when written and is not now -- all eight fold, and the
+`doc/implementation-defined.md` §6 entry it points at is struck rather than
+reduced. The decision this record takes, and the set-valued refusal it leaves
+standing, are unchanged.
 
 ## Context
 

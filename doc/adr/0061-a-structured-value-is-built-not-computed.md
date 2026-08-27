@@ -4,7 +4,10 @@ Date: 2026-08-12
 
 ## Status
 
-Accepted.
+Accepted. Retires the deferral recorded in
+[ADR-0048](0048-an-initial-state-belongs-to-the-type-denoter.md); that record
+stands otherwise. The body says so and this line did not, which is the shape
+every other retirement here states in both places.
 
 ## Context
 
