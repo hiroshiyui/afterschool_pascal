@@ -85,6 +85,43 @@ What it does **not** do is judge whether an arm is right, or whether a subset
 is the right subset. `tyOptional: StaticThroughout := true` would satisfy this
 and be wrong. The claim is only that every constant was considered somewhere,
 which is what turns a crash into a review.
+
+## The other half: dispatch written as an if-chain
+
+Not every dispatch on a tag is a case-statement. `EmitString` is thirteen arms
+of `if e^.kind = nkBinary ... else if e^.kind = nkCall ...`, because its arms
+test a node's kind *and* its type in one condition and a case-statement cannot
+do that. Twenty-four routines over `nodeKind` alone are written that way, and
+until this section none of them was read by anything: ADR-0124 and ADR-0145
+both say "case-statement", and mean it.
+
+ADR-0220 is what that cost. `EmitString`'s arm for a literal is keyed on the
+node's kind, a constant reaches the code generator as a *designator*, and the
+value fell through to an arm that read four bytes of read-only data as a
+length. The guard was one node kind too narrow, in the one chain that
+dispatches on two axes at once.
+
+A chain is recognised by the shape of its conditions -- `<expr>^.kind = c`,
+a value asked for its own tag -- and by nothing else. That is what makes the
+scope self-selecting rather than a judgement: `Check(tkSemicolon)` is a
+lookahead predicate and not a dispatch, so the parser's long `if Check(...)`
+ladders are outside this and stay outside it however long they get. Three
+enumerations qualify today, and they qualify because of how they are written:
+`nodeKind`, `symKind` and `typeKind`.
+
+**A trailing bare `else` does not excuse a chain, and that is the difference
+from `otherwise`.** §6.9.3.5 makes an `otherwise` total by construction and the
+author wrote it as the catch-all for a value-dispatch; a bare `else` at the end
+of a tag chain is simply where a kind nobody considered lands, silently. So the
+two halves of this gate protect against opposite failures: a constant left off
+a case-statement is a **crash** (ADR-0018), and a constant left off a chain is
+a **wrong answer**, which is the harder of the two to find and the one no
+golden reports.
+
+Entries take a third form, `routine:enum:n chains N of M`, counted separately
+from the case-statements in the same routine so the two cannot collide. The
+mechanism is the one above and the whole point: adding a node kind moves M from
+63 to 64 on all twenty-four, so each is a question somebody has to answer.
 """
 
 import pathlib
@@ -255,15 +292,94 @@ def cases(lines, enums):
     return out
 
 
+# A dispatch written as an if-chain: `if x^.kind = c then ... else if ...`.
+# The condition may run over several lines before its `then`, and a chain lives
+# inside one routine -- without that last rule a chain runs off the end of its
+# procedure into the next one's arms, which is how a first draft credited
+# `EmitComplexPow` with naming `nkStr`.
+CHAIN_IF = re.compile(r"^(\s*)if(?![A-Za-z0-9_])", re.IGNORECASE)
+CHAIN_ELIF = re.compile(r"^(\s*)else if(?![A-Za-z0-9_])", re.IGNORECASE)
+THEN = re.compile(r"(?<![A-Za-z0-9_])then(?![A-Za-z0-9_])", re.IGNORECASE)
+# The dispatch shape, and the whole of what selects a chain: a value asked for
+# its own tag. `Check(tkSemicolon)` is a lookahead predicate and does not match.
+TAGTEST = re.compile(r"\^\.kind\s*=\s*([A-Za-z0-9_]+)")
+
+
+def chains(lines, enums):
+    """Every if-chain dispatching on a tag: line, routine, enum, constants.
+
+    A chain naming constants of two enumerations answers for each separately --
+    `EmitString` tests `nodeKind`, `binaryOp` and `builtinKind` in one set of
+    conditions, which is the ordinary case for a chain and never happens to a
+    case-statement. Only the tag tests count, so `binaryOp` and `builtinKind`
+    are absent here: they are compared as `e^.bnOp = opAdd`, a field that is
+    not a tag.
+    """
+    members = {c: e for e, cs in enums.items() for c in cs}
+    owner, cur = [], "?"
+    for line in lines:
+        m = HEADER.match(line)
+        if m:
+            cur = m.group(1)
+        owner.append(cur)
+
+    def condition(i):
+        """The condition at line i, up to and including the line with `then`."""
+        text = []
+        for j in range(i, min(i + 8, len(lines))):
+            text.append(lines[j])
+            if THEN.search(lines[j]):
+                break
+        return " ".join(text)
+
+    out, i = [], 0
+    while i < len(lines):
+        m = CHAIN_IF.match(lines[i])
+        if not m or CHAIN_ELIF.match(lines[i]):
+            i += 1
+            continue
+        indent = m.group(1)
+        conds, last, j = [condition(i)], i, i + 1
+        while j < len(lines):
+            if HEADER.match(lines[j]):
+                break
+            m2 = CHAIN_ELIF.match(lines[j])
+            if m2 and m2.group(1) == indent:
+                conds.append(condition(j))
+                last = j
+                j += 1
+            elif re.match("^" + indent + r"else(?![A-Za-z0-9_])", lines[j],
+                          re.IGNORECASE):
+                break
+            else:
+                j += 1
+        if len(conds) >= 2:
+            by = {}
+            for c in conds:
+                for name in TAGTEST.findall(c):
+                    enum = members.get(name)
+                    if enum:
+                        by.setdefault(enum, set()).add(name)
+            for enum, seen in sorted(by.items()):
+                # One arm is a test, not a dispatch. Two is the smallest thing
+                # a reader could have got wrong by leaving a third off.
+                if len(seen) >= 2:
+                    out.append((i + 1, owner[i], enum, seen))
+        i = last + 1
+    return out
+
+
 def catalogue(path):
     """Two entry forms, `#` a comment:
 
         routine:enum:n names N of M   -- a case-statement naming a subset
         enum:CONSTANT unused          -- a constant no case-statement names
     """
-    listed, unused = {}, {}
+    listed, unused, chained = {}, {}, {}
     partial = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+):(\d+)\s+names\s+"
                          r"(\d+)\s+of\s+(\d+)\b")
+    chain = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+):(\d+)\s+chains\s+"
+                       r"(\d+)\s+of\s+(\d+)\b")
     never = re.compile(r"^([A-Za-z0-9_]+):([A-Za-z0-9_]+)\s+unused\b")
     for n, raw in enumerate(path.read_text().splitlines(), 1):
         line = raw.split("#", 1)[0].strip()
@@ -274,21 +390,27 @@ def catalogue(path):
             listed[(m.group(1), m.group(2), int(m.group(3)))] = (
                 n, int(m.group(4)), int(m.group(5)))
             continue
+        m = chain.match(line)
+        if m:
+            chained[(m.group(1), m.group(2), int(m.group(3)))] = (
+                n, int(m.group(4)), int(m.group(5)))
+            continue
         m = never.match(line)
         if m:
             unused[(m.group(1), m.group(2))] = n
             continue
         print(f"kind-exhaustive: {path.name}:{n}: expected "
-              f"`routine:enum:n names N of M` or `enum:CONSTANT unused`, "
-              f"found {line!r}", file=sys.stderr)
+              f"`routine:enum:n names N of M`, `routine:enum:n chains N of M` "
+              f"or `enum:CONSTANT unused`, found {line!r}", file=sys.stderr)
         sys.exit(1)
-    return listed, unused
+    return listed, unused, chained
 
 
 def main():
     root = pathlib.Path(__file__).resolve().parents[2]
     lines = strip((root / SOURCE).read_text()).splitlines()
-    listed, unused = catalogue(pathlib.Path(__file__).with_name(CATALOGUE))
+    listed, unused, chained = catalogue(
+        pathlib.Path(__file__).with_name(CATALOGUE))
 
     enums = enumerations(lines)
     if not enums:
@@ -347,6 +469,45 @@ def main():
         bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}:{key[2]}, and "
                    f"there is no such case-statement")
 
+    # The chain half. Same five directions as the case half, and the reason a
+    # chain naming every constant still needs no entry is the same too: there
+    # is nothing left for a reader to be asked about.
+    found_chains = chains(lines, enums)
+    if not found_chains:
+        print("kind-exhaustive: no if-chain dispatching on a tag was found; "
+              "the pattern this reads for must have changed", file=sys.stderr)
+        return 1
+    chain_ord, chain_partial = {}, 0
+    for line, routine, enum, seen in found_chains:
+        missing = [c for c in enums[enum] if c not in seen]
+        n = chain_ord[(routine, enum)] = chain_ord.get((routine, enum), 0) + 1
+        entry = chained.pop((routine, enum, n), None)
+        if not missing:
+            if entry:
+                bad.append(f"{CATALOGUE}:{entry[0]} argues that {routine}'s "
+                           f"if-chain over {enum} names a subset, and it names "
+                           f"every one -- strike the entry")
+            continue
+        chain_partial += 1
+        if entry is None:
+            bad.append(f"{SOURCE}:{line} ({routine}) dispatches on "
+                       f"{len(seen)} of {len(enums[enum])} {enum} constants in "
+                       f"an if-chain and argues for none of it")
+            bad.append(f"  unlike a case-statement, a constant left off a "
+                       f"chain is a wrong answer and not a crash -- it takes "
+                       f"the trailing `else` in silence (ADR-0220). Add "
+                       f"`{routine}:{enum}:{n} chains {len(seen)} of "
+                       f"{len(enums[enum])}` to {CATALOGUE} with the reason "
+                       f"the rest do not belong")
+        elif (entry[1], entry[2]) != (len(seen), len(enums[enum])):
+            bad.append(f"{CATALOGUE}:{entry[0]} says {routine}'s if-chain over "
+                       f"{enum} names {entry[1]} of {entry[2]}; it names "
+                       f"{len(seen)} of {len(enums[enum])} -- "
+                       f"{'the enumeration grew and this chain did not' if entry[2] != len(enums[enum]) else 'an arm was added or removed'}")
+    for key, (n, _, _) in sorted(chained.items(), key=lambda kv: kv[1][0]):
+        bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}:{key[2]} as an "
+                   f"if-chain, and there is no such chain")
+
     for enum, names in sorted(enums.items()):
         for c in names:
             key = (enum, c)
@@ -371,7 +532,9 @@ def main():
 
     print(f"kind-exhaustive: {total} case-statements over "
           f"{len(enums)} enumerations; {total - partial} name every constant "
-          f"and {partial} argue for a subset")
+          f"and {partial} argue for a subset. "
+          f"{len(found_chains)} tag-dispatch if-chains, {chain_partial} of "
+          f"them arguing for a subset")
     return 0
 
 

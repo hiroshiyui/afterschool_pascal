@@ -229,3 +229,4 @@ the alternatives that were rejected and why.
 | [0218](0218-the-frame-is-a-byte-count-and-the-buffer-is-the-callers.md) | The frame is a byte count, and the buffer is the caller's | Accepted |
 | [0219](0219-the-empty-substring.md) | The empty substring | Accepted |
 | [0220](0220-a-name-bound-to-the-null-string.md) | A name bound to the null-string | Accepted |
+| [0221](0221-dispatch-written-as-an-if-chain.md) | Dispatch written as an if-chain | Accepted |

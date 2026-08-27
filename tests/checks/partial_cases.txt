@@ -172,3 +172,145 @@ stdKind:stdAfterschool unused
 # pair and the difference between them is a direction, not a dispatch.
 stdProcKind:spPack unused
 stdProcKind:spUnpack unused
+
+# ========================================================================
+# Dispatch written as an if-chain (ADR-0221)
+# ========================================================================
+#
+# `routine:enum:n chains N of M` -- the n-th if-chain in that routine whose
+# conditions ask a value for its own tag, `x^.kind = c`. It is the same claim
+# the `names` entries make and it protects against the opposite failure: a
+# constant left off a case-statement stops the program (ADR-0018), and a
+# constant left off a chain takes the trailing `else` in silence.
+#
+# ADR-0220 is the one that got out. EmitString's arm for a literal is keyed on
+# a node's kind, a constant reaches the code generator as a designator, and the
+# value read four bytes of read-only data as a length -- at -O0 only, so the
+# corpus agreed with it.
+
+# --- a designator, and the six productions one can be -----------------------
+#
+# ISO/IEC 10206:1991 6.5.1 makes a variable-access an entire-variable, a
+# component-variable (indexed or field), an identified-variable (`p^`), a
+# buffer-variable, or a substring-variable; 6.8.6 adds a function-access, which
+# is a value and not a variable. So a routine that walks or tests a designator
+# meets nkVar, nkIndex, nkField, nkDeref, nkSubstr and nkCall and no others,
+# and which of the six it names is decided by what it is asking.
+#
+# The rest of nodeKind is expressions, statements, declarations and type
+# denoters, none of which can stand in a designator spine. That is a property
+# of the parser rather than a convention: nothing else builds a spine.
+#
+# A new *designator* node kind is therefore the change these are waiting for,
+# and it would fail all of them at once, which is the point.
+IsDesignator:nodeKind:1 chains 6 of 63
+IsConstantAccess:nodeKind:1 chains 4 of 63
+DesignatorBindable:nodeKind:1 chains 4 of 63
+RootDesignator:nodeKind:1 chains 3 of 63
+ContainerOf:nodeKind:1 chains 3 of 63
+PackedComponent:nodeKind:1 chains 3 of 63
+ConstAccessNode:nodeKind:1 chains 3 of 63
+IsCallValue:nodeKind:1 chains 2 of 63
+NotBindable:nodeKind:1 chains 2 of 63
+VariantSelector:nodeKind:1 chains 2 of 63
+ThreatSym:nodeKind:1 chains 2 of 63
+EvalConstAccess:nodeKind:1 chains 2 of 63
+RootName:nodeKind:1 chains 2 of 63
+CheckWith:nodeKind:1 chains 2 of 63
+HeapHeader:nodeKind:1 chains 2 of 63
+EmitSliceValue:nodeKind:1 chains 2 of 63
+StringConstOf:nodeKind:1 chains 2 of 63
+
+# The two that reach a designator by way of 6.8.7.4's set-value, whose tokens
+# are a subscript's: only nkIndex and nkSubstr can be the spine the parser
+# built, because a set-value is written with brackets and nothing else.
+SetValueTypeOf:nodeKind:1 chains 2 of 63
+CheckSetValue:nodeKind:1 chains 2 of 63
+
+# 6.8.8's constant-accesses are three: an indexed-constant, a
+# field-designated-constant and a substring-constant. nkStructValue is the
+# fourth thing a constant-definition's value may be and is not an access.
+CheckConstDecl:nodeKind:1 chains 3 of 63
+
+# --- a type-denoter, and the three node kinds one can be --------------------
+#
+# A type-denoter is a TypeExpr and deliberately not an Expr, so the node kinds
+# it can be are its own: nkNamed for a type-name, nkSchema for a schema
+# production, nkRestricted for 6.4.2.5's restricted type. The structured
+# denoters -- nkArray, nkRecord, nkSetOf, nkFile, nkPointer -- are named by the
+# case-statements above and never reach these three, which ask about a *name*.
+CheckSchemaBodyNames:nodeKind:1 chains 3 of 63
+InitialStateOf:nodeKind:1 chains 2 of 63
+
+# --- the two mixed dispatchers ----------------------------------------------
+#
+# EmitString is the chain ADR-0220 was found in, and the only one here that
+# dispatches on a node's kind *and* on its type in one set of conditions. That
+# is why it cannot be a case-statement: nkBinary decides nothing on its own,
+# the arm being chosen by IsText or IsStringType after it. Four kinds name
+# themselves; every other node reaching it is a value whose *type* selects the
+# arm -- a char, a variable-string, a fixed-string -- and the trailing `else`
+# is the fixed-string one, which is where a fifth kind would land unseen.
+#
+# The other two enumerations its conditions test are not tags: `e^.bnOp` and
+# `e^.clBuiltin` are ordinary fields, so binaryOp and builtinKind are outside
+# this gate by the rule that selects it.
+EmitString:nodeKind:1 chains 4 of 63
+
+# DumpStmt's is the husk rule (ADR-0044) and not a dispatch over statements:
+# nkWrite and nkRead are the two statement kinds Sema may have replaced with a
+# call, so this asks those two and hands everything else to the case-statement
+# below it, which is where the other statement kinds are named.
+DumpStmt:nodeKind:1 chains 2 of 63
+
+# --- symKind: what a name may turn out to be at one position ----------------
+#
+# Each of these asks about a name in one syntactic position, and the positions
+# admit two or three kinds of symbol apiece. skConst, skField, skDisc and the
+# rest cannot arrive: a constant is not invocable, a field has no linkage name,
+# a discriminant is not a parameter.
+ResultTypeOf:symKind:1 chains 2 of 12
+ResolvePointer:symKind:1 chains 2 of 12
+ResolveType:symKind:1 chains 2 of 12
+CheckArguments:symKind:1 chains 2 of 12
+NameForLinkage:symKind:1 chains 2 of 12
+PutParamTypes:symKind:1 chains 2 of 12
+BindProgramParameters:symKind:1 chains 3 of 12
+
+# --- typeKind: the ordinal types, and the writable ones ---------------------
+#
+# 6.4.2.1 makes the ordinal-types the enumerated, boolean, char, integer and
+# subrange types, and OrdinalHi names exactly those five because each has a
+# different last value: t^.hi, maxint, 255, 1, EnumCount - 1.
+#
+# OrdinalLo names two, and the asymmetry is the answer rather than an
+# omission: char, boolean and enumerated all have a *first* value of zero, so
+# one `else` is right for the three of them at once. A sixth ordinal type would
+# have to be added to both -- to OrdinalHi because its last value is its own,
+# and to OrdinalLo only if its first value is not 0.
+OrdinalHi:typeKind:1 chains 5 of 21
+OrdinalLo:typeKind:1 chains 2 of 21
+
+# The three ordinal types whose name is *spelled* in a trap message. An integer
+# and a subrange are reported by their bounds instead, a bound the block
+# evaluated having no spelling in the source (ADR-0133).
+WriteOrdinalName:typeKind:1 chains 3 of 21
+
+# 6.10.3 lets a write-parameter be an integer, a real, a boolean, a char or a
+# string; EmitWriteArgs names the five that are *not* a string, the string
+# forms going through EmitString instead. int64 is ADR-0128's and joins the
+# integer arm.
+EmitWriteArgs:typeKind:1 chains 5 of 21
+
+# An array and a record are the two types that can *contain* a dynamic part, so
+# both of these recurse -- into the element type, and into the last field. The
+# third constant is named to be **excluded**, which is why the count is three
+# and not two: a subrange's size is its host's whatever its bounds are, so it
+# is answered before the discriminant test rather than by it. ADR-0133 is what
+# made a dynamically bounded subrange reachable at both sites.
+#
+# Every other type kind falls to a trailing `else` that is correct today for a
+# reason worth stating: a set and a file each have a size the runtime is told
+# once, and no other type carries a discriminant at all.
+DynamicExtent:typeKind:1 chains 3 of 21
+CheckSchemaDomain:typeKind:1 chains 3 of 21
