@@ -34066,6 +34066,39 @@ begin
       msg := MsgEnd;
       EmitTrapIf(bad, msg)
     end
+    { 6.4.3.3.3: "Each tuple in the domain of the schema shall have one
+      component that is a value of integer-type greater than zero", and
+      AP 6.4.15.1 says the same of `utf8`. So a capacity of zero or less is
+      outside the *domain*, which 6.4.8 makes a dynamic-violation -- and 3.1
+      permits one to be left undetected only "up to, but not beyond, execution
+      of the declaration", with 5.1 f)'s NOTE 1 stating that dynamic-violations
+      "must be detected".
+
+      Sema catches it where the tuple is a constant. Where a discriminant
+      brought it, nothing did: `procedure g(n: integer); var x: string(n)`
+      called with 0 produced a string of capacity 0 in silence, and `utf8(-1)`
+      ran to completion. Found by ADR-0224's audit (ADR-0225).
+
+      The two kinds share the arm because they share the shape -- `hi` is the
+      capacity and `hiDisc` the discriminant it came from -- and differ only in
+      the noun, which is the same pair of words Sema uses on the static path.
+      A canonical-string-type is excluded by the `hiDisc` test: it has no
+      capacity and no discriminant. }
+    else if IsStringRep(t) and (t^.hiDisc <> nil) then begin
+      BoundValue(t, true, header, hi);
+      Def(bad);
+      write(ircode, 'icmp slt i32 ');
+      PutOp(hi);
+      writeln(ircode, ', 1');
+      MsgStart;
+      if IsText(t) then
+        MsgText('the capacity of a text must be greater  ')
+      else
+        MsgText('the capacity of a string must be greater');
+      MsgText(' than zero                              ');
+      msg := MsgEnd;
+      EmitTrapIf(bad, msg)
+    end
     else if (t^.kind = tyArray) and DynamicExtent(t) then begin
       if (t^.loDisc <> nil) or (t^.hiDisc <> nil) then begin
         BoundValue(t, false, header, lo);

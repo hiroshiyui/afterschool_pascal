@@ -1,0 +1,8 @@
+adr: 0225
+file: selfhost/compiler.pas
+kills: trap_text_domain
+why: The same clause pair one type along, and the half that would be lost if the arm asked IsVarString instead of IsStringRep. AP 6.4.15.1 gives `utf8` the same "greater than zero" requirement, and a text was the worse of the two before this arm: a bad `string` capacity was at least reported by the first assignment's own capacity check, and a `utf8(-1)` ran to completion because no store on the text path asks about the capacity's sign. Narrowing the predicate leaves every string case green, which is exactly the shape ADR-0191 warns about -- asking one of the two string predicates where the other was meant.
+--- old
+    else if IsStringRep(t) and (t^.hiDisc <> nil) then begin
+--- new
+    else if IsVarString(t) and (t^.hiDisc <> nil) and not IsText(t) then begin

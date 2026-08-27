@@ -233,3 +233,4 @@ the alternatives that were rejected and why.
 | [0222](0222-a-variant-record-has-no-member-initialisers.md) | A variant record has no member initialisers | Accepted |
 | [0223](0223-the-compiler-checks-its-own-variant-record.md) | The compiler checks its own variant record | Accepted |
 | [0224](0224-the-empty-substring-audited.md) | The empty substring, audited | Accepted |
+| [0225](0225-a-capacity-outside-the-schemas-domain.md) | A capacity outside the schema's domain | Accepted |

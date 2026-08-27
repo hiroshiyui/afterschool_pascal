@@ -1,0 +1,8 @@
+adr: 0225
+file: selfhost/compiler.pas
+kills: trap_string_capacity
+why: §6.4.3.3.3 restricts the required schema `string`'s domain to a capacity greater than zero and §6.4.8 makes a tuple outside a schema's domain a dynamic-violation, which §3.1 forbids leaving undetected past the declaration and §5.1 f)'s NOTE 1 says must be detected. Sema catches it where the tuple is a constant; this arm is the only thing that catches it where a discriminant brought it. Without the arm `var x: string(n)` with n = 0 produces a capacity-0 string in silence and the block runs -- no diagnostic anywhere, and the -1 case reported only incidentally by a later assignment's own capacity check, well past the declaration the clause names. Only a case that calls such a procedure can see it, and no corpus program did until ADR-0224's audit.
+--- old
+    else if IsStringRep(t) and (t^.hiDisc <> nil) then begin
+--- new
+    else if false and (t^.hiDisc <> nil) then begin
