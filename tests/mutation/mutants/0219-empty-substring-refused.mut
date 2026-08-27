@@ -1,0 +1,9 @@
+adr: 0219
+file: selfhost/compiler.pas
+kills: substring_empty
+why: The fourth argument to the bounds check is the whole of AP 6.5.6 in the code generator -- it is what tells the runtime that the empty substring is admissible here. Emitting a zero unconditionally restores the standard's rule under every mode, which is the change reverted, and no diagnostic moves: a program that writes `s[i..i-1]` still compiles and simply stops when it reaches the statement. Only a case that *runs* one can tell.
+--- old
+    if langStd = stdAfterschool then write(ircode, ', i32 1')
+                                else write(ircode, ', i32 0');
+--- new
+    write(ircode, ', i32 0');

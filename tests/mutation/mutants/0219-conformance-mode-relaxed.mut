@@ -1,0 +1,9 @@
+adr: 0219
+file: selfhost/compiler.pas
+kills: trap_substring
+why: The other direction, and the one containment cares about. Emitting the flag unconditionally gives Extended Pascal and ISO 7185 a construct §6.5.6 makes an error, so a program that is erroneous under those standards runs quietly instead of stopping -- the dialect changing what a conformance mode accepts, which ADR-0117 forbids outright. Every dialect case still passes, which is why the conformance corpus is what kills this.
+--- old
+    if langStd = stdAfterschool then write(ircode, ', i32 1')
+                                else write(ircode, ', i32 0');
+--- new
+    write(ircode, ', i32 1');

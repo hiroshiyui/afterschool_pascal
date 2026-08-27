@@ -1,0 +1,14 @@
+adr: 0220
+file: selfhost/compiler.pas
+kills: const_nullstring
+why: A name bound to `''` possesses the canonical string-type, whose representation is a length word in front of the characters -- and the global holds the characters alone. Without this arm the value is read as though those four bytes were there, so what a program prints is whatever the linker put next in read-only data, for however many bytes the first four of them spell. It is invisible at -O2, where the out-of-bounds load folds to zero, which is why the case it kills carries a .opt sidecar saying -O0.
+--- old
+  else if StringConstOf(e) <> nil then begin
+    lit := StringConstOf(e);
+    EmitAddress(e, data);
+    OpInt(lit^.stLen, len)
+  end
+--- new
+  else if false then begin
+    OpInt(0, len)
+  end

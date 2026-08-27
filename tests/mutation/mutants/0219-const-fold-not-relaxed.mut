@@ -1,0 +1,9 @@
+adr: 0219
+file: selfhost/compiler.pas
+kills: substring_empty
+why: The rule is written twice in the compiler -- the code generator emits a runtime check, and EvalConstAccess folds §6.8.8.4's substring-constant with the same three disjuncts in Pascal. Fixing only the first leaves `const e = g[1..0]` refused at compile time under the mode that admits `s[1..0]` at run time, which is one clause with two answers. No program that avoids a constant can see it.
+--- old
+            if langStd = stdAfterschool then bound := lo.intVal - 1
+                                        else bound := lo.intVal;
+--- new
+            bound := lo.intVal;

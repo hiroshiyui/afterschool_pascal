@@ -1,0 +1,8 @@
+adr: 0219
+file: runtime/pasrt.c
+kills: substring_empty_trap
+why: AP 6.5.6 widens §6.5.6's third error condition by exactly one value, and this is the mutation that widens it by all of them. `hi < lo - 1` becomes `hi < 0`, so `s[4..2]` is no longer an error and a transposed pair of indices -- almost always a defect, and the only thing that reports one -- yields the null-string instead. Every scenario about the *empty* case still passes, which is the argument for having a case on the other side of the bound at all.
+--- old
+  if (lo < 1 || hi > len || hi < (emptyok ? lo - 1 : lo)) {
+--- new
+  if (lo < 1 || hi > len || hi < (emptyok ? 0 : lo)) {
