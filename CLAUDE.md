@@ -730,7 +730,7 @@ scenario that asserts nothing.
     so take the shape and not the number — and `spec-clause-traceability`
     answered "not a clause of that standard" about it. Reverting the extractor now fails the gate 37 times.
 - `clauses/pending.txt` is the **work queue**: the testable clauses no
-  scenario cites yet — 191 as this is written, and the file itself is the
+  scenario cites yet — 190 as this is written, and the file itself is the
   count (`grep -vc '^#\|^$'`), because a number written here goes stale on
   its own and this one had, by twenty.
 

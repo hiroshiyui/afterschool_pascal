@@ -260,6 +260,33 @@ three days, with every gate green. The rest only accept more.
   `hex_alpha = hex_string[index(hex_string,'A')..index(hex_string,'F')]`, and
   a constant-expression is what an array bound and a subrange bound are.
 
+- **A string-valued constant-expression folds**, under `--std=extended` and
+  `--std=afterschool`. `const k = 'ab' + 'cd'`, `substr('abcd', 2, 2)`,
+  `trim('ab  ')` and the six relational operators and functions over strings
+  are constant-expressions and were refused as *not a compile-time constant*.
+  §6.8.2 restricts one only by requiring it to be nonvarying, and none of
+  these varies.
+
+- **A real-valued constant-expression folds**, under the same two standards.
+  §6.3.2's own example opens `unity = 1.0; third = unity/3.0`, and that second
+  line did not compile; nor did `pi = 4 * arctan(1)`, `trunc`, `round`,
+  `sqrt`, `sin`, `cos`, `ln`, `exp` or `arctan` anywhere a constant is wanted.
+  All of them do now, and so do the arithmetic and relational operators over
+  reals.
+
+  Two consequences a program can see. **The accuracy of a folded expression is
+  the accuracy of the same operation at run time**, because the fold calls
+  what the emitted code calls — §6.8.2's NOTE 2 requires an implementation to
+  say this, and `doc/implementation-defined.md` now does, along with the half
+  that cannot be promised across a cross-compile. And an error the clause
+  names — a zero divisor, `ln` of a value that is not positive, `sqrt` of a
+  negative one, a negative base of `**`, `trunc` or `round` out of integer
+  range, overflow — is now a **compile-time diagnostic** where a constant
+  commits it, where it used to be a refusal to fold.
+
+  ISO 7185 is unaffected: §6.3 there admits a `constant` and not an
+  expression, so no ISO 7185 program has one of these to fold.
+
 ### Changed
 
 - **`binding(f).bound` now says whether the file is there.** A variable is
