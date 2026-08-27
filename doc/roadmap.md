@@ -692,6 +692,18 @@ exists.
 holds under whatever `--std` the seed accepts — so the objection is really
 about the seed, and a seed is refreshed in a release rather than casually.
 
+**The first half of that is now measured** (ADR-0231). `dialect-build` asks the
+second build what it *is* rather than what it reads, and both answers are new:
+it **is** a fixed point under `--std=afterschool`, and it is the **same
+compiler** — byte-identical IR on every source both accept and byte-identical
+diagnostics on every source either refuses, over 1025 of them, none differing.
+So ADR-0190's *"the fixed point holds only while the compiler is an Extended
+Pascal source"* is false as a statement about this source, and what it was
+protecting is untouched: the product still builds under `--std=extended`. The
+sentence above is now the whole of what stands in the way — the seed, and the
+question this chapter cannot answer by measurement, which is what the dialect
+would *buy* the compiler.
+
 ### 3. Have the compiler report its own dispatch, instead of scraping its source
 
 This project has already found the better pattern and has not generalised it.

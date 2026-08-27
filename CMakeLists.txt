@@ -285,6 +285,19 @@ if(Python3_FOUND)
                    ${CMAKE_BINARY_DIR}/bin/pascalc
                    ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
 
+  # ADR-0231: the same second build, asked what it *is* rather than what it
+  # reads. ADR-0190 refused to make the compiler a dialect source because "the
+  # fixed point holds only while the compiler is an Extended Pascal source";
+  # this measures that claim instead of arguing it, and measures a second one
+  # beside it -- that the dialect build emits byte-identical IR to the shipped
+  # compiler, or refuses with byte-identical diagnostics, over the whole
+  # corpus. The product does not change. Skips (77) without clang.
+  add_test(NAME dialect-build
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/dialect_build.sh
+                   ${CMAKE_BINARY_DIR}/bin/pascalc
+                   ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
+  set_tests_properties(dialect-build PROPERTIES SKIP_RETURN_CODE 77)
+
   # ADR-0183: the oracle none of the others can be. Every gate here reads what
   # a program *prints*, and a leak prints nothing -- which is how a handle in
   # an unowned heap record (ADR-0181) and an abandoned chain (ADR-0182) were

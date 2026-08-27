@@ -239,3 +239,4 @@ the alternatives that were rejected and why.
 | [0228](0228-the-audit-readers-are-isolated-by-the-harness.md) | The audit's readers are isolated by the harness, not by instruction | Accepted |
 | [0229](0229-the-compiler-reports-its-own-dispatch.md) | The compiler reports its own dispatch | Accepted |
 | [0230](0230-the-if-chain-half-moves-to-the-compiler.md) | The if-chain half moves to the compiler too | Accepted |
+| [0231](0231-the-dialect-build-measured.md) | The dialect build, measured | Accepted |
