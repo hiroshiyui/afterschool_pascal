@@ -35188,6 +35188,20 @@ begin
     The component holding the main-program-declaration is what commences
     these, and it may be another translation. }
   if progBlock = nil then begin
+    { AP 6.7.3.10's instantiations, for the reason the program arm emits them:
+      a generic imported from a module is instantiated by the translation that
+      *named the types*, and a module is such a translation as much as a
+      program is (ADR-0216). Without this the frame type is emitted -- the loop
+      above it is shared -- the call is emitted, and the body is not, so the
+      component assembles to a module referring to a function nobody defined.
+      Nothing in this compiler could see that: the translation succeeds, and
+      what fails is the *link*, one component later. }
+    d := instDeclHead;
+    while d <> nil do begin
+      EmitProcBody(d);
+      EmitProcs(d^.pdBody);
+      d := d^.next
+    end;
     { AP 6.4.14's release routines, before the globals for the globals'
       reason: they are what the module has left to emit, and a function
       definition cannot be nested inside the one that calls it. A module-only

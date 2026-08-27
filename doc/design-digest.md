@@ -2778,6 +2778,19 @@ translation rather than one — and was measured, not estimated: the compiler
 imports nothing so `buffer-headroom` is unmoved, and a client importing three
 modules reaches 1969 of 300000.
 
+  - **And a module may *import* a generic, not only declare one** (ADR-0216).
+    `RunCodeGen` splits its tail on whether the translation has a
+    main-program-declaration, and the loop emitting AP 6.7.3.10's instantiation
+    **bodies** lived only in the program arm — while the loop naming their
+    frame types sits above the branch and is shared. So a module-only
+    translation emitted a frame type, a call, and no body: a *valid* module
+    that was merely incomplete, which the compiler, LLVM's parser and the whole
+    corpus all passed, and the linker rejected one command later naming `@p10`.
+    Five lines. The rule stated positively is that an instantiation is emitted
+    by whichever translation named the types, and **translation means a
+    component and not a program** — the second time that sentence has been
+    needed, ADR-0212 having said it about tokens.
+
 **The half that was not obvious: an instantiation belongs to whoever named the
 types.** §6.13 has a translation emit nothing of a module it imported, but an
 instantiation for a type *this* program declared cannot exist in that module's

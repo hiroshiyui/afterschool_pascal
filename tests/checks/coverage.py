@@ -102,6 +102,13 @@ def corpus(root):
         # while an oracle reaches them on every run -- which was worth 195
         # statements the last time it happened.
         ("afterschool", sorted((root / "tests" / "dialect").glob("*.pas"))),
+        # And the dialect's §6.13 components, for the reason the line above
+        # gives about the dialect itself: a module-only translation reaches
+        # arms of RunCodeGen a program never does, and until ADR-0216 one of
+        # them was missing five statements nothing here could report as
+        # unreached -- because nothing here compiled such a component at all.
+        ("afterschool",
+         sorted((root / "tests" / "dialect" / "components").glob("*.pas"))),
         ("iso7185", sorted((root / "selfhost" / "badparse").glob("*.pas"))),
         ("iso7185", sorted((root / "selfhost" / "badsema").glob("*.pas"))),
         ("iso7185", [root / "selfhost" / "torture.pas"]),

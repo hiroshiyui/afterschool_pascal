@@ -1,0 +1,14 @@
+adr: 0216
+file: selfhost/compiler.pas
+kills: generic_module
+why: AP 6.7.3.10's instantiation belongs to the translation that named the types, and a module is such a translation as much as a program is. RunCodeGen's two arms split on whether the component has a main-program-declaration, and the loop that emits instantiation *bodies* was written only in the program arm -- while the loop naming their frame types sits above the branch and is shared. So a module translated on its own is internally consistent and incomplete: a frame type, a call, and no body. The compiler succeeds, LLVM's parser accepts the module, and the linker complains one command later about `@p10`, a name no source spells. Nothing else in the corpus notices, because no other component imports a generic and instantiates it.
+--- old
+    d := instDeclHead;
+    while d <> nil do begin
+      EmitProcBody(d);
+      EmitProcs(d^.pdBody);
+      d := d^.next
+    end;
+    { AP 6.4.14's release routines, before the globals for the globals'
+--- new
+    { AP 6.4.14's release routines, before the globals for the globals'
