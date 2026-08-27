@@ -27560,8 +27560,17 @@ begin
       HeaderOf(e^.vrSym^.stype, base, v);
       done := true
     end;
+  { `ntype` is read without a nil test, and that is the contract rather than an
+    omission: Sema leaves every node's type non-null, assigning a placeholder
+    on an error path rather than nil, so that CodeGen cannot crash on a
+    half-checked tree (ADR-0008). This routine carried `(e^.ntype = nil) or`
+    in front of the test for a long time, unreached by 807 cases and 323
+    scenarios -- and had it ever been reached it would have answered with an
+    empty header, which is a contract violation propagating quietly instead of
+    stopping where it happened. The check above it tests a *symbol's* type,
+    which is a different contract and stays. }
   if not done then
-    if (e^.ntype = nil) or not e^.ntype^.heapTuple then
+    if not e^.ntype^.heapTuple then
       StrClear(v)
     else begin
       EmitAddress(e, base);
