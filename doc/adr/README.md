@@ -226,3 +226,4 @@ the alternatives that were rejected and why.
 | [0215](0215-a-type-inquiry-object-is-a-variable-access.md) | A type-inquiry-object is a variable-access | Accepted |
 | [0216](0216-a-module-that-instantiates-a-generic-must-emit-it.md) | A module that instantiates a generic must emit it | Accepted |
 | [0217](0217-a-json-string-is-bytes-and-a-json-document-is-navigated.md) | A JSON string is bytes, and a JSON document is navigated | Accepted |
+| [0218](0218-the-frame-is-a-byte-count-and-the-buffer-is-the-callers.md) | The frame is a byte count, and the buffer is the caller's | Accepted |

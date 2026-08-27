@@ -1,11 +1,12 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These fifteen modules are written in `--std=afterschool`, and **thirteen** of
+These sixteen modules are written in `--std=afterschool`, and **thirteen** of
 them are the only part of this repository that reaches outside the program: the
 environment, the file system, file descriptors, `errno`, and the C functions
-behind them. `pascontainer` and `pasjson` are the two that do not — they are
-pure computation, here because they are dialect-only for ADR-0119's reason and
-not because they touch anything. The rule below is about the thirteen.
+behind them. `pascontainer`, `pasjson` and `paslsp` are the three that do not —
+they are pure computation over what the other thirteen hand them, here because
+they are dialect-only for ADR-0119's reason and not because they touch
+anything. The rule below is about the thirteen.
 
 They were built one at a time, each demanded by the boundary rather than
 designed, and they arrived with **four** ways of reporting a failure. This file

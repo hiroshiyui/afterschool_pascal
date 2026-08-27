@@ -1,1 +1,12 @@
 selfhost/torture.pas -text
+
+# The LSP framing case. `core.autocrlf = input` is set here, and its whole job
+# is to make a carriage return in a working tree not survive a commit -- which
+# is right for source and wrong for these two: LSP frames a message with
+# `Content-Length: N<CR><LF><CR><LF>`, so the carriage returns *are* the
+# subject. The input holds one frame written that way and one written with a
+# bare `<LF>`, because the reader is lenient and the writer is not; the golden
+# holds what the writer produced, which is the only thing that can say the
+# writer is strict (ADR-0218).
+tests/dialect/lib_lsp.in -text
+tests/dialect/lib_lsp.out -text

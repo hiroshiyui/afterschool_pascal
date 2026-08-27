@@ -1,0 +1,6 @@
+Content-Length: 46
+
+{"jsonrpc":"2.0","id":1,"method":"initialize"}Content-Type: application/vscode-jsonrpc
+Content-Length: 106
+
+{"jsonrpc":"2.0","id":2,"method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///t.pas"}}}

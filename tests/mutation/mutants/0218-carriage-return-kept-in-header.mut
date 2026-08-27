@@ -1,0 +1,10 @@
+adr: 0218
+file: lib/dialect/paslsp.pas
+kills: lib_lsp
+why: A header line arrives terminated by <CR><LF> and this module reads to the <LF>, so the carriage return is the line's last character and has to come off. Leaving it there makes `Content-Length: 46<CR>` a header whose value ends in a byte that is not a digit -- so ContentLength answers -1 and a perfectly ordinary frame is errSyntax. The reader is lenient about a bare <LF> precisely so that a hand-written message works; this is the other half of that leniency and the one a real client exercises on every message.
+--- old
+  if (length(line) > 0) and (line[length(line)] = chr(13)) then
+    if length(line) = 1 then line := ''
+    else line := line[1..length(line) - 1];
+--- new
+  if false then line := '';

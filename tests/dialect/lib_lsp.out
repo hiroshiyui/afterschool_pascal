@@ -1,0 +1,9 @@
+message 1 bytes=46 id=1
+  method=initialize
+message 2 bytes=106 id=2
+  method=textDocument/didOpen
+ended after 2 with not present
+Content-Length: 53
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{}}}
+write code=no error

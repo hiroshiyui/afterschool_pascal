@@ -1,0 +1,8 @@
+adr: 0218
+file: lib/dialect/paslsp.pas
+kills: lib_lsp
+why: A server's read loop ends when the client closes the pipe, and that is not a failure -- it is how every session ends. LspRead distinguishes it by whether any header line was seen: nothing at all is errAbsent, a frame that stops inside its headers is errSyntax. Collapsing the two makes a normal shutdown indistinguishable from a truncated message, so a server logs an error on every clean exit and a client that really did truncate one is invisible in the noise. Both paths still end the loop, which is why only a case printing the *cause* can tell.
+--- old
+        if sawAny then e := errSyntax else e := errAbsent
+--- new
+        e := errSyntax

@@ -107,7 +107,7 @@ declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
-twenty-three modules, eight conforming and fifteen dialect. **`README.md`'s
+twenty-four modules, eight conforming and sixteen dialect. **`README.md`'s
 module table is the one place to count them** — one row each, checkable
 against `ls lib lib/dialect`, and this sentence has held a number that went
 stale twice. `lib/dialect/README.md` is not a second listing and should not be
@@ -198,7 +198,7 @@ and the answer turned out to be short and specific rather than vague. Nothing
 in it needs a language feature; each is a module somebody has to write, which
 is the cheap kind of gap and the kind this page should name rather than imply.
 
-**Twenty-three modules exist** — eight conforming and fifteen dialect, listed
+**Twenty-four modules exist** — eight conforming and sixteen dialect, listed
 by name in `README.md`'s module table. What a program written today reaches for
 and does not find:
 
@@ -315,9 +315,40 @@ and `PasFile` for the files, `PasProcess.Capture` for invoking `pascalc`,
 `PasMap` for the tables, `owned ^T` and `take` for a document store whose
 entries are replaced rather than copied (ADR-0181, ADR-0182), and `utf8(n)` for
 the content — which would be the text model's first client outside a test.
-**One library gap is visible before starting**: there is no JSON anywhere in
-this tree, and LSP's every message is a JSON object. That is a module and not a
-clause, which is the kind of gap this page likes.
+~~**One library gap is visible before starting**: there is no JSON anywhere in
+this tree~~ — `PasJson` (ADR-0217), and it took two decisions this paragraph
+had guessed wrong.
+
+**And a second gap this paragraph did not see**: it says `PasStream` frames the
+messages, and `PasStream` cannot. A message is `Content-Length: N` and then
+exactly N bytes, so the header is line-oriented and the body is not — a reader
+that has just consumed a header line is usually holding the first bytes of the
+body, and nothing that reads *lines* can hand those back. `PasLsp` (ADR-0218)
+is the buffer between `PasIO`'s byte reads and the frame, and it is what the
+sentence should have said.
+
+### The first findings
+
+The roadmap says the product of writing this is the list of what it demands.
+Two entries so far, and both came from the framing alone.
+
+- **There is no empty substring** (§6.5.6): *"it shall be an error if … the
+  value of the first index-expression is greater than the value of the
+  second"*. So `s[1..length(s) - 1]`, the ordinary way to drop a last
+  character, **traps on a string of one** — and the header line that ends a
+  frame's headers is exactly one character, a bare carriage return. Every such
+  site needs a length test written out beside it. This is a *conformance*
+  answer and not a defect: the compiler is right and the clause is explicit,
+  checked against the standard's own text before being written down here.
+  Whether the dialect should have `s[i..i-1] = ''` is undecided and wants a
+  second sighting; one site is an anecdote.
+- **A program may not mix `writeln` with a descriptor write.** `output` is
+  buffered and `PasIO.WriteText` is not, so the two appear in an order that
+  depends on when the buffer flushes, and neither standard gives a program a
+  `flush`. A program that speaks a descriptor protocol has to say *everything*
+  that way, including its own diagnostics — which is what
+  `tests/dialect/lib_lsp.pas` does and says at the top. Nothing is wrong here;
+  it is a thing a writer has to know and nothing tells them.
 
 **The IDE is not struck; it is later.** An editor wants a language server
 inside it, so server-first is the right order even if both are eventually
