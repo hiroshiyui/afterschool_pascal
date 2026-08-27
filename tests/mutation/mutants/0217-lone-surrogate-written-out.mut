@@ -1,0 +1,8 @@
+adr: 0217
+file: lib/dialect/pasjson.pas
+kills: lib_json
+why: A `\uD800` with no low surrogate after it names half a character. Without the refusal PushUtf8 encodes it as an ordinary three-byte sequence -- which is what CESU-8 does and what UTF-8 forbids, so the bytes are ill-formed and PasUnicode.ToText would reject the result of a *successful* parse. Nothing about the document looks wrong: the parse returns ok, the string has a length, and the error surfaces in whatever the client does with the text next. Only a case that writes a lone surrogate and checks the parse *failed* can see it.
+--- old
+            if ok and (cp >= 55296) and (cp <= 56319) then
+--- new
+            if false and (cp >= 55296) and (cp <= 56319) then

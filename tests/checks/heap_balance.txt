@@ -18,6 +18,7 @@ fallible 0
 funcaccess 4
 lib_container 0
 lib_dir 0
+lib_json 0
 lib_list 0
 lib_map 0
 lib_process 0

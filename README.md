@@ -839,12 +839,13 @@ Unicode version is stated in
 [`doc/implementation-defined.md`](doc/implementation-defined.md) §2.7.
 
 A binding is a module that exports Pascal and keeps the directive to itself.
-Ten of the fourteen dialect modules are one — `pasmathx`, `pasfs`, `pasenv`,
+Ten of the fifteen dialect modules are one — `pasmathx`, `pasfs`, `pasenv`,
 `pasio`, `pasos`, `pasprocess`, `passtream`, `pasdir`, `pasunicode` and
 `pasnet` — and they are what a caller sees instead of a foreign declaration.
-The other four need only the dialect's own features: `paserror`, `pasparse`,
-`paslist`, which is built on the owned pointer, and `pascontainer`, which is
-built on generics and declares no foreign anything at all.
+The other five need only the dialect's own features: `paserror`, `pasparse`,
+`paslist`, which is built on the owned pointer, `pascontainer`, which is built
+on generics, and `pasjson`, which is built on `pascontainer` and declares no
+foreign anything at all.
 `lib/dialect/passtream.pas` is the first binding over a handle: a `Stream` the
 caller declares and the module fills, so what a program holds is a variable
 that closes itself and never the address.
@@ -899,6 +900,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
 | `lib/dialect/pascontainer.pas` | `Vec` and `Map` over **whatever element type a program names** — `VecInit`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecLen`, `VecCap`, `VecClear`, `VecReserve`, `VecFree`; `MapInit`, `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, `MapFree` and a slot walk. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and both containers grow. This is what `PasVector`, `PasStrVec` and `PasMap` are, written once; those three stay because they are ordinary Extended Pascal and a conforming program must still have a vector and a map |
+| `lib/dialect/pasjson.pas` | A **JSON document** read, navigated, built and written back — `JsonParse` and `JsonParseChars` answering a `JsonResult`; `JsonKindOf`, `JsonCount`, `JsonAt`, `JsonMember`, `JsonNameAt`; `JsonNumberOr`, `JsonIntegerOr`, `JsonBooleanOr`, `JsonIsNull`, `JsonTextInto`; the seven `JsonNew*` constructors with `JsonAppend` and `JsonPut`; and `JsonRender`. A string value is **bytes and unbounded** — a growable `JsonChars`, so a whole file fits in one — while a member name is a `string(255)`. It does not normalise: AP 6.4.15's `utf8` would establish normal form C on assignment, and a program that round-trips somebody's source file through this must not edit it |
 | `lib/dialect/paslist.pas` | `List`, a chain of `string(255)` the declaring block owns — `ListPush`, `ListPop`, `ListPeek`, `ListEmpty`, `ListLen`, `ListAppend`, `ListGet`, `ListDrop`, `ListClear`, `ListReverse`. **The only container here with no `Free`**, because the head is an `owned ^` and the block disposes the chain (ADR-0181, ADR-0182). O(1) at the front; the rest is O(n) and recursive, an owned pointer admitting no cursor — a program wanting an index wants `PasStrVec` |
 
 The trade is stated rather than hidden: the layers duplicate, because

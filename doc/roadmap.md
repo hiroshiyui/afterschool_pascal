@@ -107,7 +107,7 @@ declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
-twenty-two modules, eight conforming and fourteen dialect. **`README.md`'s
+twenty-three modules, eight conforming and fifteen dialect. **`README.md`'s
 module table is the one place to count them** — one row each, checkable
 against `ls lib lib/dialect`, and this sentence has held a number that went
 stale twice. `lib/dialect/README.md` is not a second listing and should not be
@@ -198,13 +198,13 @@ and the answer turned out to be short and specific rather than vague. Nothing
 in it needs a language feature; each is a module somebody has to write, which
 is the cheap kind of gap and the kind this page should name rather than imply.
 
-**Twenty-two modules exist** — eight conforming and fourteen dialect, listed by
-name in `README.md`'s module table. What a program written today reaches for
+**Twenty-three modules exist** — eight conforming and fifteen dialect, listed
+by name in `README.md`'s module table. What a program written today reaches for
 and does not find:
 
 | Missing | What exists instead | Why it is not built |
 | --- | --- | --- |
-| **JSON** | nothing — `PasParse` reads integers and `file:line:col:` diagnostics | Every LSP message is a JSON object, so [the program that would judge the language](#the-program-that-would-judge-the-language) needs this on its first day. It is the one gap on this page with a named client, and it needs no language feature: a value is a variant record over the seven JSON kinds, and AP 6.4.15's `utf8` already holds a string correctly |
+| ~~**JSON**~~ | **Done** — `lib/dialect/pasjson.pas` parses, navigates, builds and renders, and `tests/dialect/lib_json.pas` runs all four | It was the one gap here with a named client and it needed no language feature, as this row said. Two things it guessed wrong. A value is a variant record over the seven kinds — right — but a string is **bytes**, not AP 6.4.15's `utf8`: assignment to a text establishes normal form C, so round-tripping somebody's source file through it would edit their document, and `utf8` stops the program on ill-formed bytes where a parser must report. And the tree is plain pointers with `JsonFree`, not owned ones: AP 6.4.14.3 gives an owned pointer no copy, so `JsonMember(doc, 'params')` could not exist and navigation is the whole job. What it *did* need was ADR-0216 — it is the first module in the library to instantiate a generic imported from another, and until that fix the component linked to nothing |
 | **date and time** | `PasProcess` can shell out; ISO/IEC 10206:1991 §6.7.6.9's `date`/`time` give a `TimeStamp` for *now* | Arithmetic on a date, parsing one, formatting one, and any zone at all are absent. `TimeStamp` is a required type and a good foundation; nothing has needed a second one |
 | **terminal control** | nothing — no `termios`, no `isatty`, no raw key, no cursor, no window size | Its shape is decided (a `pasx_` binding in `runtime/pasrt_posix.c` bounded by its headers, `<termios.h>` joining ADR-0186's catalogue). It was the IDE's prerequisite and left with it when the judging program became a language server |
 | **regular expressions** | `PasStrings` has `Pos`, `Trim`, case conversion; `PasUnicode` has the element walk | The largest of these by far, and the only one where the right answer is not obvious — a backtracking matcher and a DFA are different programs with different failure modes |
