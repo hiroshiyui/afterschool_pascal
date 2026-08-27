@@ -64,31 +64,67 @@ When performing a language-specification audit, always follow these steps:
      being right. Prefer these when the audit is broad rather than following a
      specific change.
 
-2. **Fan out to independent readers, one group of clauses each.** Use the Agent
-   tool; three to five clauses per reader is the right size. Each must be told:
-   - **Do not read `doc/adr/`, `CLAUDE.md`, or any commit message.** They carry
-     the implementer's reasoning and will anchor the verdict.
-   - **Do not read `tests/spec/features/` for a clause under audit**, and this
-     one is easy to get wrong because the suite looks like evidence. A scenario
-     is the implementer's reading written in the standard's own vocabulary,
-     which makes it the most anchoring text in the repository — a reader who
-     sees "the bounds are checked only if the statement is executed" before
-     opening §6.8.3.9 will find that sentence in the clause whether or not it is
-     there. Cite it *after* reaching a verdict, never before. Reading scenarios
-     for clauses **not** under audit is fine and is how the dialect is learnt.
-   - Read only the standards, the compiler's *behaviour*, and
-     `selfhost/compiler.pas` where it is necessary to see what a check does.
+2. **Build the sandbox, then launch readers against it out of process.**
+   Isolation here is built, not asked for — ADR-0228, and the reason is
+   ADR-0107: isolation failed on all seven readers of the first real run,
+   identically, and that record named the cause. *"This is a property of
+   running the skill in-process, not of its instructions."* The instructions
+   already said not to read `CLAUDE.md`; the harness injected it before a
+   reader's first turn and none could decline.
+
+   ```sh
+   SANDBOX=$(.claude/skills/langspec-audit/sandbox.sh)     # prints the path
+   ```
+
+   It builds a directory **outside the repository** holding the two standards,
+   the BSI suite, a working `pascalcc`, and the compiler's source **with every
+   comment removed** — and nothing else. Three things follow, and each is a
+   fact about the harness rather than a request to the reader:
+
+   - there is no `CLAUDE.md` at or above it to discover;
+   - the project auto-memory is keyed on the repository's path and does not
+     match the sandbox's;
+   - `doc/adr/`, `doc/design-digest.md`, `doc/roadmap.md`, `doc/sop.md`,
+     `doc/implementation-defined.md`, `README.md`, `tests/spec/features/` and
+     the commit history are absent.
+
+   **The comment strip is the part that is easy to skip**, and it is not
+   fastidiousness. `selfhost/compiler.pas` carries 791 ADR citations and 1755
+   clause citations — 41% of what all of `doc/adr/` holds — and its comments
+   *argue* the readings rather than merely citing them. It is the densest
+   anchoring text in the tree, and every earlier version of this step invited a
+   reader to open it. `strip_comments.py` preserves line numbers so a finding
+   can still cite one, and the strip is provable rather than trusted: the
+   stripped source compiles to byte-identical IR.
+
+   **Launch each reader as its own process, three to five clauses each:**
+
+   ```sh
+   cd "$SANDBOX" && claude --safe-mode -p "<the brief>"
+   ```
+
+   `--safe-mode` disables `CLAUDE.md`, skills, plugins, hooks and custom agents
+   while auth and the built-in tools go on working — unlike `--bare`, which
+   also works but demands an `ANTHROPIC_API_KEY` that a subscription login does
+   not have. Do **not** use the Agent tool for this: a subagent of a session
+   rooted in the repository inherits that session's project context, which is
+   the whole of what ADR-0107 recorded.
+
+   Each reader's brief must:
    - **Be adversarial**: assume the implementer misread the clause and try to
      prove it. Hunt for programs **wrongly refused** as the primary target.
    - Describe the behaviour to audit **without the reasoning behind it** — say
      what the compiler accepts and refuses, never why.
+   - Say that probes go in `$SANDBOX/probes`, and that `MANIFEST.txt` says what
+     is present and what is deliberately absent.
 
-   **State plainly that the isolation is not guaranteed and require disclosure.**
-   The harness injects `CLAUDE.md` into a subagent's context automatically; one
-   reader in the first run of this skill was exposed before it could decline, and
-   said so. Ask every reader to report whether it saw project documentation and
-   what it did about it. An audit's independence is a property of the harness,
-   not of the instruction.
+   **Keep the disclosure question even though the leak is closed.** Ask every
+   reader to report whether it saw project documentation. It is now a *leak
+   detector* rather than an apology: a yes means the harness changed under us,
+   and that is worth knowing before the verdicts are read. Verify it the way
+   ADR-0228 did — ask a throwaway reader in the sandbox whether it was given
+   any project documentation, and compare with the same question asked in the
+   repository.
 
 3. **Set the evidence bar in the prompt, because it is what separates this from
    guessing.** Require:

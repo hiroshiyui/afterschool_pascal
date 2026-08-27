@@ -778,12 +778,22 @@ the blind spot open question §1 is about, and ADR-0107's registered limitation
 on the substitute for it: the independent readers are given `CLAUDE.md` before
 they run a command, and all four disclosed that they had it.
 
-Fixing *that* is cheaper than any of the four proposals above and is not a v3
-item at all; it is a change to how `.claude/skills/langspec-audit/` runs its
-readers, and it is the difference between *no independent oracle contradicts
-this* and *an uninfluenced reader agreed*. Whether `src/` earns its cost is the
-v3 question, and this chapter has no answer to it — only the observation that
-the cost has never been counted.
+Fixing *that* was cheaper than any of the four proposals above and was not a v3
+item at all, which is why it went first: **ADR-0228 did it.** Readers now run
+out of process against a sandbox built outside the repository — no `CLAUDE.md`
+to discover, no matching auto-memory, no `doc/adr/`, and the compiler's source
+comment-stripped, that last being the half missed for four records (791 ADR
+citations and 1755 clause citations live in `selfhost/compiler.pas`, which
+every version of the skill invited a reader to open). Asked whether it was
+given project documentation, a reader in the repository names this project and
+its path; one in the sandbox answers no.
+
+So the difference between *no independent oracle contradicts this* and *an
+uninfluenced reader agreed* is now bought — for the anchoring, at least. What
+it does not buy is a different *kind* of reader, which is the residue of
+[open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one).
+Whether `src/` earns its cost is still the v3 question, and this chapter has no
+answer to it — only the observation that the cost has never been counted.
 
 ---
 

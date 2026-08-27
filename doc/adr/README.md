@@ -236,3 +236,4 @@ the alternatives that were rejected and why.
 | [0225](0225-a-capacity-outside-the-schemas-domain.md) | A capacity outside the schema's domain | Accepted |
 | [0226](0226-a-string-valued-constant-expression.md) | A string-valued constant-expression | Accepted |
 | [0227](0227-a-real-valued-constant-expression.md) | A real-valued constant-expression | Accepted |
+| [0228](0228-the-audit-readers-are-isolated-by-the-harness.md) | The audit's readers are isolated by the harness, not by instruction | Accepted |
