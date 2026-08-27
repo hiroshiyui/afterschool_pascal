@@ -267,6 +267,17 @@ if(Python3_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/ast_fields.py)
 
+  # ADR-0223: ast-fields asks whether a node's fields were *written*; this asks
+  # whether they are read through the arm the tag selects. ADR-0118's check
+  # exists and the compiler was not using it on itself, `compiler.std` being
+  # `extended` -- so a second build under --std=afterschool carries 2821 guards
+  # and compiles the corpus. llc_check.sh's shape: a build used as a reader and
+  # never as the product.
+  add_test(NAME variant-check
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/variant_check.sh
+                   ${CMAKE_BINARY_DIR}/bin/pascalc
+                   ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
+
   # ADR-0183: the oracle none of the others can be. Every gate here reads what
   # a program *prints*, and a leak prints nothing -- which is how a handle in
   # an unowned heap record (ADR-0181) and an abandoned chain (ADR-0182) were

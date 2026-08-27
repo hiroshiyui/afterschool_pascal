@@ -231,3 +231,4 @@ the alternatives that were rejected and why.
 | [0220](0220-a-name-bound-to-the-null-string.md) | A name bound to the null-string | Accepted |
 | [0221](0221-dispatch-written-as-an-if-chain.md) | Dispatch written as an if-chain | Accepted |
 | [0222](0222-a-variant-record-has-no-member-initialisers.md) | A variant record has no member initialisers | Accepted |
+| [0223](0223-the-compiler-checks-its-own-variant-record.md) | The compiler checks its own variant record | Accepted |
