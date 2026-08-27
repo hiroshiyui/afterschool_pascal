@@ -254,9 +254,16 @@ if(Python3_FOUND)
   set_tests_properties(foreign-reserved PROPERTIES
                        ENVIRONMENT
                        "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
+  # Two halves since ADR-0229, as buffer-headroom has had since ADR-0148: the
+  # *compiler* answers for the case-statements (--dump-dispatch), because it
+  # knows which types are enumerations and how many constants each has, and
+  # the source is still read for the if-chains. Skips (77) when pascalc has
+  # not been built.
   add_test(NAME kind-exhaustive
            COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
+                   ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py
+                   --build ${CMAKE_BINARY_DIR})
+  set_tests_properties(kind-exhaustive PROPERTIES SKIP_RETURN_CODE 77)
 
   # ADR-0222: the AST is the only variant record here, and a variant record has
   # no member initialisers -- so a pointer field of the arm the tag selects

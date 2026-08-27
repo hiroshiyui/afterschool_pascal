@@ -124,7 +124,9 @@ mechanism is the one above and the whole point: adding a node kind moves M from
 63 to 64 on all twenty-four, so each is a question somebody has to answer.
 """
 
+import os
 import pathlib
+import subprocess
 import re
 import sys
 
@@ -140,10 +142,6 @@ ENUM = re.compile(r"^\s*([A-Za-z0-9_]+)\s*=\s*\(")
 # `case <expr> of` at the end of a line, which is how every one of them is
 # written -- and `case <name>: <type> of`, which is a variant part rather than
 # a statement and is excluded.
-CASE = re.compile(r"(?<![A-Za-z0-9_])case(?![A-Za-z0-9_]).*"
-                  r"(?<![A-Za-z0-9_])of\s*$", re.IGNORECASE)
-VARIANT = re.compile(r"(?<![A-Za-z0-9_])case\s+[A-Za-z0-9_]+\s*:\s*"
-                     r"[A-Za-z0-9_]+\s+of\s*$", re.IGNORECASE)
 HEADER = re.compile(r"^\s*(?:function|procedure)\s+([A-Za-z0-9_]+)",
                     re.IGNORECASE)
 
@@ -164,8 +162,6 @@ WORDS = {w: word(w) for w in OPENERS + ("end", "otherwise")}
 # held until the line that closes it -- StaticThroughout writes fourteen
 # constants over three lines that way, and a reader that lost them would call
 # an exhaustive case partial.
-LABEL = re.compile(r"^\s*([A-Za-z0-9_ ,.]+?)\s*:(?!=)")
-FRAGMENT = re.compile(r"^\s*[A-Za-z0-9_]+(\s*(,|\.\.)\s*[A-Za-z0-9_]+)*\s*,\s*$")
 
 
 def strip(text):
@@ -216,85 +212,6 @@ def enumerations(lines):
     return found
 
 
-def labels(text, members):
-    """The enumeration constants a label list names, or None if it is not one.
-
-    None and the empty set are different answers: `biAbs:` is a label list,
-    `PutOp(d_):` is not one, and a case-statement's arm bodies are full of the
-    second.
-    """
-    m = LABEL.match(text)
-    if not m:
-        return None
-    got = set()
-    for item in [x.strip() for x in m.group(1).split(",") if x.strip()]:
-        for part in item.split(".."):
-            part = part.strip()
-            if part in members:
-                got.add(part)
-            elif part:
-                return None
-    return got
-
-
-def cases(lines, enums):
-    """Every case-statement over an enumeration: line, routine, enum, labels."""
-    members = {c: e for e, cs in enums.items() for c in cs}
-    owner, cur = [], "?"
-    for line in lines:
-        m = HEADER.match(line)
-        if m:
-            cur = m.group(1)
-        owner.append(cur)
-
-    out = []
-    for i, line in enumerate(lines):
-        if not CASE.search(line) or VARIANT.search(line):
-            continue
-        depth, j, seen, other, pend = 1, i + 1, set(), False, ""
-        while j < len(lines) and depth > 0:
-            here = depth
-            for w in OPENERS:
-                depth += len(WORDS[w].findall(lines[j]))
-            depth -= len(WORDS["end"].findall(lines[j]))
-            if depth <= 0:
-                break
-            # Only this statement's own arms: a nested case answers for itself.
-            if here != 1 or not lines[j].strip():
-                j += 1
-                continue
-            if WORDS["otherwise"].search(lines[j]):
-                other = True
-            # Arms are separated by `;`, and two short ones share a line in
-            # WriteOperator -- `tkPlus: write(...);  tkMinus: write(...)`. A
-            # reader that took only the first label per line called that case
-            # partial and named eleven constants it does in fact handle.
-            pieces = lines[j].split(";")
-            if FRAGMENT.match(pieces[0]):
-                pend += pieces[0].strip()
-            else:
-                got = labels(pend + pieces[0], members)
-                if got:
-                    seen |= got
-                pend = ""
-            for piece in pieces[1:]:
-                got = labels(piece, members)
-                if got:
-                    seen |= got
-            j += 1
-        if not seen:
-            continue
-        which = {members[c] for c in seen}
-        if len(which) != 1:
-            out.append((i + 1, owner[i], None, seen, other, which))
-        else:
-            out.append((i + 1, owner[i], which.pop(), seen, other, None))
-    return out
-
-
-# A dispatch written as an if-chain: `if x^.kind = c then ... else if ...`.
-# The condition may run over several lines before its `then`, and a chain lives
-# inside one routine -- without that last rule a chain runs off the end of its
 # procedure into the next one's arms, which is how a first draft credited
 # `EmitComplexPow` with naming `nkStr`.
 CHAIN_IF = re.compile(r"^(\s*)if(?![A-Za-z0-9_])", re.IGNORECASE)
@@ -369,6 +286,55 @@ def chains(lines, enums):
     return out
 
 
+def dispatch(pascalc, source):
+    """Ask the compiler what it dispatches on (ADR-0229).
+
+    This used to be `cases()`, which read the source with regular expressions
+    -- and could not know what the compiler knows for nothing: which types are
+    enumerations, how many constants each has, and what a selector's type
+    actually is. It recognised an enumeration constant by a naming convention
+    and a routine by a header regex, and `doc/sop.md` §7 already calls the
+    source-parsing oracle the weaker of the two.
+
+    Returns the sites in source order and the constants no case-statement
+    names. Identifiers come back case-folded, because the lexer folds them and
+    the pool holds the folded spelling; the catalogue is matched
+    case-insensitively so it can go on being written the way the source spells
+    it.
+    """
+    out = subprocess.run([str(pascalc), "--dump-dispatch", str(source),
+                          "-o", os.devnull],
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        print(f"kind-exhaustive: {pascalc} --dump-dispatch failed:\n"
+              f"{out.stdout}{out.stderr}", file=sys.stderr)
+        sys.exit(1)
+    site = re.compile(r"^case ([A-Za-z0-9_]+):([A-Za-z0-9_?]+):(\d+) names "
+                      r"(\d+) of (\d+)( otherwise)? at (\d+):(\d+)"
+                      r"(?: missing (.*))?$")
+    never = re.compile(r"^unused ([A-Za-z0-9_]+) ([A-Za-z0-9_]+)$")
+    sites, unused = [], set()
+    for raw in out.stdout.splitlines():
+        line = raw.rstrip()
+        if not line:
+            continue
+        m = site.match(line)
+        if m:
+            sites.append((m.group(1), m.group(2), int(m.group(3)),
+                          int(m.group(4)), int(m.group(5)),
+                          bool(m.group(6)), int(m.group(7)),
+                          (m.group(9) or "").split()))
+            continue
+        m = never.match(line)
+        if m:
+            unused.add((m.group(1), m.group(2)))
+            continue
+        print(f"kind-exhaustive: --dump-dispatch wrote a line this does not "
+              f"understand: {line!r}", file=sys.stderr)
+        sys.exit(1)
+    return sites, unused
+
+
 def catalogue(path):
     """Two entry forms, `#` a comment:
 
@@ -408,66 +374,75 @@ def catalogue(path):
 
 def main():
     root = pathlib.Path(__file__).resolve().parents[2]
+    build = pathlib.Path(sys.argv[sys.argv.index("--build") + 1]) \
+        if "--build" in sys.argv else root / "build"
+    pascalc = build / "bin" / "pascalc"
+    if not pascalc.exists():
+        print(f"kind-exhaustive: {pascalc} is not built", file=sys.stderr)
+        return 77
+
     lines = strip((root / SOURCE).read_text()).splitlines()
     listed, unused, chained = catalogue(
         pathlib.Path(__file__).with_name(CATALOGUE))
 
+    # The case half comes from the compiler (ADR-0229); the chain half still
+    # reads the source, and `enumerations()` is what it needs to do that.
     enums = enumerations(lines)
     if not enums:
         print(f"kind-exhaustive: no enumeration in {SOURCE}; the pattern this "
               f"reads for must have changed", file=sys.stderr)
         return 1
 
-    found = cases(lines, enums)
+    # The catalogue is written the way the source spells a name; the compiler
+    # folds identifiers, so it answers in lower case. Fold the keys to match,
+    # and keep the written spelling for the messages.
+    listed = {(r.lower(), e.lower(), n): (line, a, b, r, e)
+              for (r, e, n), (line, a, b) in listed.items()}
+    unused = {(e.lower(), c.lower()): (n, e, c)
+              for (e, c), n in unused.items()}
+
+    found, never_named = dispatch(pascalc, root / SOURCE)
     if not found:
-        print("kind-exhaustive: no case-statement over an enumeration was "
-              "found; the pattern this reads for must have changed",
-              file=sys.stderr)
+        print("kind-exhaustive: --dump-dispatch reported no case-statement "
+              "over an enumeration at all", file=sys.stderr)
         return 1
 
     bad = []
-    covered = set()
-    ordinal = {}
     partial = total = 0
-    for line, routine, enum, seen, other, mixed in found:
-        if enum is None:
-            bad.append(f"{SOURCE}:{line} ({routine}) has labels from "
-                       f"{', '.join(sorted(mixed))} in one case-statement")
-            continue
-        covered |= seen
+    for routine, enum, n, named, count, other, line, missing in found:
         if other:
             continue
         total += 1
-        missing = [c for c in enums[enum] if c not in seen]
-        n = ordinal[(routine, enum)] = ordinal.get((routine, enum), 0) + 1
         key = (routine, enum, n)
         entry = listed.pop(key, None)
+        shown = f"{entry[3]}" if entry else routine
+        shown_enum = f"{entry[4]}" if entry else enum
         if not missing:
             if entry:
                 bad.append(f"{CATALOGUE}:{entry[0]} argues that "
-                           f"{routine}'s case over {enum} names a subset, and "
-                           f"it names every one -- strike the entry")
+                           f"{shown}'s case over {shown_enum} names a subset, "
+                           f"and it names every one -- strike the entry")
             continue
         partial += 1
         if entry is None:
             bad.append(f"{SOURCE}:{line} ({routine}) names "
-                       f"{len(seen)} of {len(enums[enum])} {enum} constants "
+                       f"{named} of {count} {enum} constants "
                        f"and argues for none of it -- missing "
                        f"{', '.join(missing[:6])}"
                        f"{' ...' if len(missing) > 6 else ''}")
             bad.append(f"  a constant left off is a crash, not a wrong answer "
                        f"(ADR-0018). Add `{routine}:{enum}:{n} names "
-                       f"{len(seen)} of {len(enums[enum])}` to {CATALOGUE} "
+                       f"{named} of {count}` to {CATALOGUE} "
                        f"with the reason no other constant reaches it")
-        elif (entry[1], entry[2]) != (len(seen), len(enums[enum])):
-            bad.append(f"{CATALOGUE}:{entry[0]} says {routine}'s case over "
-                       f"{enum} names {entry[1]} of {entry[2]}; it names "
-                       f"{len(seen)} of {len(enums[enum])} -- "
-                       f"{'the enumeration grew and this case did not' if entry[2] != len(enums[enum]) else 'an arm was added or removed'}")
+        elif (entry[1], entry[2]) != (named, count):
+            bad.append(f"{CATALOGUE}:{entry[0]} says {shown}'s case over "
+                       f"{shown_enum} names {entry[1]} of {entry[2]}; it names "
+                       f"{named} of {count} -- "
+                       f"{'the enumeration grew and this case did not' if entry[2] != count else 'an arm was added or removed'}")
 
-    for key, (n, _, _) in sorted(listed.items(), key=lambda kv: kv[1][0]):
-        bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}:{key[2]}, and "
-                   f"there is no such case-statement")
+    for key, entry in sorted(listed.items(), key=lambda kv: kv[1][0]):
+        bad.append(f"{CATALOGUE}:{entry[0]} names {entry[3]}:{entry[4]}:"
+                   f"{key[2]}, and there is no such case-statement")
 
     # The chain half. Same five directions as the case half, and the reason a
     # chain naming every constant still needs no entry is the same too: there
@@ -508,22 +483,20 @@ def main():
         bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}:{key[2]} as an "
                    f"if-chain, and there is no such chain")
 
-    for enum, names in sorted(enums.items()):
-        for c in names:
-            key = (enum, c)
-            if c not in covered:
-                if unused.pop(key, None) is None:
-                    bad.append(f"{c} is named by no case-statement at all -- "
-                               f"it is unused, or {enum} outlived it. Add "
-                               f"`{enum}:{c} unused` to {CATALOGUE} with what "
-                               f"dispatches on it instead")
-            elif key in unused:
-                bad.append(f"{CATALOGUE}:{unused.pop(key)} argues that {c} is "
-                           f"named by no case-statement, and one names it -- "
-                           f"strike the entry")
-    for key, n in sorted(unused.items(), key=lambda kv: kv[1]):
-        bad.append(f"{CATALOGUE}:{n} names {key[0]}:{key[1]}, and there is no "
-                   f"such enumeration constant")
+    # The constants no case-statement names at all, which the compiler unions
+    # over the *declared* enumerations rather than over the sites -- an
+    # enumeration no case mentions has every constant unnamed and appears at
+    # no site to be found at. `stdKind` is exactly that one.
+    for key in sorted(never_named):
+        if unused.pop(key, None) is None:
+            bad.append(f"{key[1]} is named by no case-statement at all -- "
+                       f"it is unused, or {key[0]} outlived it. Add "
+                       f"`{key[0]}:{key[1]} unused` to {CATALOGUE} with what "
+                       f"dispatches on it instead")
+    for key, (n, e, c) in sorted(unused.items(), key=lambda kv: kv[1][0]):
+        bad.append(f"{CATALOGUE}:{n} argues that {c} is named by no "
+                   f"case-statement; the compiler says otherwise -- either an "
+                   f"arm now names it, or {e} no longer has it")
 
     if bad:
         for b in bad:

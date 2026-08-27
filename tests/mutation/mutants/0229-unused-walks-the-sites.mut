@@ -1,0 +1,12 @@
+adr: 0229
+file: selfhost/compiler.pas
+kills: kind-exhaustive
+why: The unused pass walks the *declared* enumerations, not the dispatch sites, and that is the whole reason the declarations are collected. An enumeration no case-statement mentions has every constant unnamed and appears at no site to be found at -- stdKind is exactly that, dispatched by HasExtended's `>=` -- so walking the sites silently loses its three constants and the catalogue's three entries then name nothing.
+--- old
+  lay := enumHead;
+  while lay <> nil do begin
+    for k := 0 to EnumCount(lay^.ty) - 1 do begin
+--- new
+  lay := nil;
+  while lay <> nil do begin
+    for k := 0 to EnumCount(lay^.ty) - 1 do begin

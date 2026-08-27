@@ -95,15 +95,28 @@ reports an unsafe read as safe. Rebuilding half a program after changing
 
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
 `--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
-`--dump-limits` is the odd one out: it compiles as usual and then writes how
-full the compiler left its own fixed arrays, which is what says how much room a
-larger program still has.
+Four more compile as usual and then answer a question about what was compiled:
+`--dump-limits` writes how full the compiler left its own fixed arrays, which
+is what says how much room a larger program still has; `--dump-layout` writes
+the size, alignment and field offsets of every record; `--dump-predicates`
+answers each type predicate about each kind of type; and `--dump-dispatch`
+writes every case-statement whose selector is an enumeration, with how many of
+that enumeration's constants its labels name and which they miss.
 
 ```
 $ pascalc --std=extended --dump-limits big.pas -o /dev/null
 pool 491964 of 1000000
 tokens 144756 of 300000
+
+$ pascalc --std=extended --dump-dispatch prog.pas -o /dev/null
+case subset:colour:1 names 3 of 5 at 44:3 missing amber cyan
+unused mode idle
 ```
+
+A case-statement whose selector matches no label stops the program, so a
+constant left off one is a crash rather than a wrong answer — `names N of M` is
+what makes that findable, since a constant added to the enumeration moves every
+M over it at once.
 
 `--target=` says which machine the emitted module is for — `x86_64-pc-linux-gnu`
 by default, or `aarch64-linux-gnu`. `pascalcc` hands it to `clang` as well, so

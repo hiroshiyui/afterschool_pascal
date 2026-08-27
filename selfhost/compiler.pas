@@ -1270,12 +1270,42 @@ type
   { --dump-layout's subjects: every record type-definition Sema resolved, in
     the order they were written. Built only when the flag is set, which is
     --coverage's discipline (ADR-0104) -- a compilation that is not asking
-    this question pays one boolean test per type-definition. }
+    this question pays one boolean test per type-definition.
+
+    --dump-dispatch keeps a second list of the same shape, of every
+    *enumeration* type-definition (ADR-0229). It needs the declarations and
+    not only the dispatch sites, because an enumeration no case-statement
+    mentions at all has every constant unnamed and reaches no site to be found
+    at -- `stdKind` is one, dispatched by HasExtended's `>=`. }
   layoutPtr = ^layoutRec;
   layoutRec = record
     at, len: integer;
     ty: typePtr;
     next: layoutPtr
+  end;
+
+  { --dump-dispatch's subjects (ADR-0229): every case-statement whose selector
+    is an enumeration, with how many of that enumeration's constants its labels
+    name. Built only when the flag is set, which is --coverage's discipline
+    (ADR-0104) and --dump-layout's: a compilation not asking the question pays
+    one boolean test per case-statement. }
+  dispatchPtr = ^dispatchRec;
+  dispatchRec = record
+    { the enclosing routine, and the enumeration dispatched on }
+    procAt, procLen: integer;
+    ty: typePtr;
+    { how many constants the labels name, and how many the type has. The pair
+      is the point: a constant added to the enumeration moves every M over it,
+      so every site that names a subset has to be looked at again. }
+    named, total: integer;
+    hasOtherwise: boolean;
+    { the label ranges, kept so the dump can *name* the constants no arm
+      selects. A count says a site needs looking at; the names say what to
+      look for, which is what the catalogue's failure message has always
+      given and what a replacement for it must go on giving. }
+    ranges: rangePtr;
+    line, col: integer;
+    next: dispatchPtr
   end;
 
   pendingPtr = ^pendingRec;
@@ -2070,6 +2100,9 @@ var
     like the others, so it runs the whole pipeline and reports after it. }
   dumpPredsOpt: boolean;
   dumpLayoutOpt: boolean;
+  dumpDispatchOpt: boolean;
+  dispatchHead, dispatchTail: dispatchPtr;
+  enumHead, enumTail: layoutPtr;
   { Which target the emitted module states, 1..tgtCount. Default x86-64: it is
     what the seed was generated for and what this repository is built and
     tested on. }
@@ -3101,6 +3134,10 @@ begin
   writeln('                  for: x86_64-pc-linux-gnu (default) or');
   writeln('                  aarch64-linux-gnu');
   writeln('  --dump-all      write all three, with section headers');
+  writeln('  --dump-dispatch compile as usual, then write every');
+  writeln('                  case-statement that dispatches on an');
+  writeln('                  enumeration, and how many of its constants');
+  writeln('                  the labels name');
   writeln('  --dump-layout   compile as usual, then write the size,');
   writeln('                  alignment and field offsets of every');
   writeln('                  record type the source defines');
@@ -3156,6 +3193,11 @@ begin
   dumpLimitsOpt := false;
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
+  dumpDispatchOpt := false;
+  dispatchHead := nil;
+  dispatchTail := nil;
+  enumHead := nil;
+  enumTail := nil;
   targetIx := tgtX86;
   covOpt := false;
   { Before anything is parsed: an argument past the last program-parameter is
@@ -3181,6 +3223,7 @@ begin
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
+    else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     else if EQ(a, '--std=extended') then begin
       langStd := stdExtended; stdFromFlag := true
@@ -19290,6 +19333,7 @@ var
   seenHead, seenTail, r: rangePtr;
   lo, hi, at: integer;
   seen: boolean;
+  disp: dispatchPtr;
 begin
   CheckExpr(c^.csSelector);
   { The otherwise-part is a statement-sequence like any other; nothing about it
@@ -19319,6 +19363,41 @@ begin
     writeln;
     sel := nil
   end;
+
+  { ADR-0229. Recorded here rather than found by a walk of its own, because
+    this is the one place that has all of it at once -- the selector's type,
+    the label ranges the overlap test is about to build, and the routine being
+    checked.
+
+    Linked *before* the arms are walked, and that is not tidiness: a nested
+    case-statement inside an arm finishes before its enclosing one does, so
+    appending on the way out numbers the inner site first. The catalogue keys
+    an entry by source order, which is the order a reader of the file sees --
+    so the slot is claimed on the way in and filled on the way out. }
+  disp := nil;
+  if dumpDispatchOpt and (sel <> nil) then
+    if Base(sel)^.kind = tyEnum then begin
+      new(disp);
+      { A case-statement can only stand in a statement-part, and every one of
+        those is inside a block whose symbol is currentProc -- the *program's*
+        own block included, which is why there is no nil to handle here. That
+        was a guarded branch until the coverage ratchet reported it unreached
+        and tests/dumps/dispatch.pas showed why: a case in the main program
+        block is attributed to the program, through this same line. }
+      disp^.procAt := currentProc^.at;
+      disp^.procLen := currentProc^.len;
+      disp^.ty := Base(sel);
+      disp^.total := EnumCount(disp^.ty);
+      disp^.named := 0;
+      disp^.hasOtherwise := false;
+      disp^.ranges := nil;
+      disp^.line := c^.line;
+      disp^.col := c^.col;
+      disp^.next := nil;
+      if dispatchTail = nil then dispatchHead := disp
+      else dispatchTail^.next := disp;
+      dispatchTail := disp
+    end;
 
   seenHead := nil;
   seenTail := nil;
@@ -19371,6 +19450,18 @@ begin
     CheckStmt(arm^.caBody);
     stmtPath := saved;
     arm := arm^.next
+  end;
+
+  { the counts, once the arms have been walked. The record was linked *before*
+    that walk (see above), so this fills it rather than appending it. }
+  if disp <> nil then begin
+    r := seenHead;
+    while r <> nil do begin
+      disp^.named := disp^.named + r^.hi - r^.lo + 1;
+      r := r^.next
+    end;
+    disp^.hasOtherwise := c^.csHasOtherwise;
+    disp^.ranges := seenHead
   end
 end;
 
@@ -22378,7 +22469,20 @@ begin
           if layoutTail = nil then layoutHead := lay
           else layoutTail^.next := lay;
           layoutTail := lay
-        end
+        end;
+        { ADR-0229, and the same reason: this is the one place holding the name
+          as written beside the type it resolved to. }
+        if dumpDispatchOpt and (t <> nil) then
+          if t^.kind = tyEnum then begin
+            new(lay);
+            lay^.at := d^.tdAt;
+            lay^.len := d^.tdLen;
+            lay^.ty := t;
+            lay^.next := nil;
+            if enumTail = nil then enumHead := lay
+            else enumTail^.next := lay;
+            enumTail := lay
+          end
       end
     end
   end
@@ -36091,6 +36195,117 @@ begin
   writeln('tokens ', tokCount:1, ' of ', tokMax:1)
 end;
 
+{ --dump-dispatch (ADR-0229). Every case-statement in the compiled program
+  whose selector is an enumeration, with the enclosing routine, the
+  enumeration, and how many of that enumeration's constants the labels name.
+
+  It exists because a case-statement with no matching label *stops the
+  program* (ADR-0018), so a constant left off one is a crash and not a wrong
+  answer -- and no other oracle here can see that. A missing arm is not a
+  statement, so `line-coverage` cannot; a crash writes nothing, so no golden
+  holds it; and `src/`'s counterpart is a `switch` with a `default`, so
+  difftest has one side falling over rather than a disagreement.
+
+  `tests/checks/kind_exhaustive.py` has asked this question since ADR-0145 by
+  *parsing Pascal with regular expressions*, and doc/sop.md 7 already calls the
+  source-parsing oracle the weaker of the two. What it cannot know is what the
+  compiler knows for nothing: which types are enumerations, how many constants
+  each has, and what the selector's type actually is. It recognises an
+  enumeration constant by a naming convention -- two or three lower-case
+  letters then a capital -- and a routine by a header regex.
+
+  The pair `named of total` is the whole mechanism, as it is in the catalogue
+  this replaces: a constant added to an enumeration moves every `total` over
+  it, so every site naming a subset fails at once. That is exactly the moment
+  `tyString` and then `tyOptional` needed a reader and did not get one.
+
+  **What a dump does not do is judge an arm.** `tyOptional: StaticThroughout
+  := true` names the constant and is wrong, and this reports it as covered.
+  Moving the oracle out of a Python parser and into the compiler makes it
+  exact about *which* constants are named; it does not make it a proof that
+  naming them was right. ADR-0194 says the same of --dump-predicates. }
+procedure DumpDispatch;
+var d, q: dispatchPtr; r: rangePtr; lay: layoutPtr; n, k: integer;
+    covered: boolean;
+begin
+  d := dispatchHead;
+  while d <> nil do begin
+    { the n-th case over this enumeration in this routine, counted the way the
+      catalogue keys its entries -- by order of appearance, which is source
+      order because Sema checks a block's statements in the order written }
+    n := 1;
+    q := dispatchHead;
+    while q <> d do begin
+      if (q^.ty = d^.ty) and
+         PoolSame(q^.procAt, q^.procLen, d^.procAt, d^.procLen) then
+        n := n + 1;
+      q := q^.next
+    end;
+    write('case ');
+    WritePool(d^.procAt, d^.procLen);
+    write(':');
+    if d^.ty^.aliasLen > 0 then WritePool(d^.ty^.aliasAt, d^.ty^.aliasLen)
+    else write('?');
+    write(':', n:1, ' names ', d^.named:1, ' of ', d^.total:1);
+    if d^.hasOtherwise then write(' otherwise');
+    write(' at ', d^.line:1, ':', d^.col:1);
+    if d^.named < d^.total then begin
+      write(' missing');
+      for k := 0 to d^.total - 1 do begin
+        covered := false;
+        r := d^.ranges;
+        while r <> nil do begin
+          if (k >= r^.lo) and (k <= r^.hi) then covered := true;
+          r := r^.next
+        end;
+        if not covered then begin
+          write(' ');
+          WriteOrdinalName(d^.ty, k)
+        end
+      end
+    end;
+    writeln;
+    d := d^.next
+  end;
+
+  { The other half of the catalogue's question: a constant that *no*
+    case-statement anywhere names. That is not a defect -- it is how a
+    constant dispatched some other way looks -- but it is a fact worth
+    holding, because a constant that stops being named is one something used
+    to reach and no longer does.
+
+    Walked over the *declared* enumerations rather than over the sites, and
+    that distinction is the whole of why the declarations are collected at
+    all: an enumeration no case-statement mentions has every constant unnamed
+    and appears at no site to be found at. `stdKind` is exactly that, and a
+    pass over the sites reported none of its three. }
+  lay := enumHead;
+  while lay <> nil do begin
+    for k := 0 to EnumCount(lay^.ty) - 1 do begin
+      covered := false;
+      q := dispatchHead;
+      while q <> nil do begin
+        if q^.ty = lay^.ty then begin
+          r := q^.ranges;
+          while r <> nil do begin
+            if (k >= r^.lo) and (k <= r^.hi) then covered := true;
+            r := r^.next
+          end
+        end;
+        q := q^.next
+      end;
+      if not covered then begin
+        write('unused ');
+        WritePool(lay^.at, lay^.len);
+        write(' ');
+        WriteOrdinalName(lay^.ty, k);
+        writeln
+      end
+    end;
+    lay := lay^.next
+  end
+end;
+
 { --dump-layout (ADR-0185). Every record type-definition the source made, with
   the size and alignment this compiler gives it and the offset of each of its
   fields.
@@ -36155,7 +36370,8 @@ begin
   { --dump-limits asks about a whole run, so it runs the whole pipeline exactly
     as --dump-all does. Without this `--dump-tokens --dump-limits` would report
     the pool as the lexer alone had left it and call that the answer. }
-  whole := dumpAllOpt or dumpLimitsOpt or dumpLayoutOpt or dumpPredsOpt;
+  whole := dumpAllOpt or dumpLimitsOpt or dumpLayoutOpt or dumpPredsOpt or
+           dumpDispatchOpt;
   { Before anything reads a token, and before the components are read: the
     standard decides the lexis, so it has to be settled first (ADR-0166). }
   ReadStdAnnotation;
@@ -36230,7 +36446,8 @@ begin
     nothing of the program: the subject is the compiler (ADR-0194). }
   if dumpPredsOpt then DumpPredicates;
   { --- and what it decided a record looks like ---------------------------- }
-  if dumpLayoutOpt and not errorSeen then DumpLayout
+  if dumpLayoutOpt and not errorSeen then DumpLayout;
+  if dumpDispatchOpt and not errorSeen then DumpDispatch
 end;
 
 begin
