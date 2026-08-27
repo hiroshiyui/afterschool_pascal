@@ -207,23 +207,31 @@ Feature: Subrange bounds are expressions
       [anything!!!]
       """
 
-  # The other half, and it is a restriction of this processor rather than of
-  # the clause: a real constant is carried as the text that was written and is
-  # never converted to a number, so `trunc` in a constant-expression would need
-  # a conversion that does not exist here. §6.8.2 permits it; this says so
-  # rather than reporting the expression as not constant, which would be a
-  # complaint about the program. doc/implementation-defined.md §6 records it.
+  # The other half. This scenario asserted a *restriction* of this processor
+  # until ADR-0227: a real constant is carried as the text that was written and
+  # was never converted, so `trunc` in a constant-expression had no number to
+  # truncate. §6.8.2 permitted it all along, doc/implementation-defined.md §6
+  # recorded the refusal, and ADR-0224's audit found the reason was a fact about
+  # the compiler rather than a restriction §5.1 c) admits. The conversion exists
+  # now — §6.10.4's `readstr`, which this compiler already implemented — so what
+  # the clause permits is what the compiler does, and the scenario asserts that
+  # instead. It is kept here rather than deleted because a bound is exactly
+  # where the old refusal reached beyond constant-definitions.
   @extended:6.8.2
-  Scenario: a real-argument required function is a documented restriction
+  Scenario: a real-argument required function is a bound
     Given the Extended Pascal program
       """
       program p(output);
       const cut = trunc(3.7);
-      begin writeln(cut : 1) end.
+      var v: 1..cut;
+      begin
+        v := 3;
+        writeln(cut : 1, ' ', v : 1)
+      end.
       """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
       """
-      a real constant is carried as the text that was written
+      3 3
       """

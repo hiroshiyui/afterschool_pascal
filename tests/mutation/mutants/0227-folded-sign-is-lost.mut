@@ -1,0 +1,8 @@
+adr: 0227
+file: selfhost/compiler.pas
+kills: constexpr_reals
+why: The representation writes the sign into the text and EmitRealText looks for it on realNeg, so the fold moves it. Leaving it behind drops the sign from every negative folded constant while the digits stay right -- and a case whose real-valued constants all happen to be positive would not notice, which is why `diff = 1.25 - 2.5` is in the corpus.
+--- old
+      res.realNeg := true;
+--- new
+      res.realNeg := false;

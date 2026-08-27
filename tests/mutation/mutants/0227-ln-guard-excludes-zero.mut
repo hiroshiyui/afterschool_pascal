@@ -1,0 +1,8 @@
+adr: 0227
+file: selfhost/compiler.pas
+kills: constexpr_errors
+why: D.9 makes ln of a value that is *not positive* an error, so zero is inside the error and not on its edge. Testing for a negative value alone leaves ln(0.0) to the call, which traps -- and the boundary is exactly where a reading of the clause can go wrong without any other case noticing.
+--- old
+              if x <= 0.0 then begin
+--- new
+              if x < 0.0 then begin

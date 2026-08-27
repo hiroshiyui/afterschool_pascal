@@ -66,6 +66,15 @@ const
     in LexIdentOrKeyword. Stated in doc/implementation-defined.md 6, which
     5.1 c) asks for. }
   strMax   = 255;
+  { The total-width a folded real is written back with (ADR-0227). 6.10.3.4.2's
+    floating-point representation spends six characters on the sign, the point
+    and the exponent, so this asks for 24 significant digits where 17 are what
+    names a binary64 uniquely -- the margin is deliberate, the clause fixing
+    only the *form* of the representation and not its precision. A real
+    constant is text here (ADR-0025), so a folded one has to be written back
+    as text a strtod reads to the same value; ADR-0227 round-trips 0.1,
+    4*arctan(1), 1e300 and the smallest denormal through this width. }
+  realDigits = 30;
   { How a field selection is being used, for ADR-0118's variant guard.
     vgNone is the machinery that writes whole records -- the initial state, a
     whole-variable copy, the file walk -- which reaches every arm on purpose;
@@ -10034,16 +10043,215 @@ begin
   end
 end;
 
-{ 6.8.2's expression, once both operands have folded. What it will not fold is
-  stated rather than silently refused: a real-valued operation, because a real
-  constant is carried here as its source text and never converted (ADR-0025).
+{ The value of a numeric constant, as a real. 6.8.3.2 table 3 note (4) makes
+  an integer operand of a real operation stand for "a real-type approximation
+  to its value", so an integer constant answers here too and no caller has to
+  ask which it holds.
 
-  This used to say "and a set- or string-valued one, because a symbol has
-  nowhere to keep the value", and that was half false. A symbol has kept a
-  string since ADR-0068 -- `constValue` is where the substring-constant fold
-  puts one -- so ADR-0226 folds concatenation and the relational operators.
-  A **set** is the half that remains true: the folder builds no set node, so
-  there is nothing for a set-valued result to be. }
+  A real constant is its source text (ADR-0025), so this is a decimal-to-binary
+  conversion -- and the one this compiler is *compiled with* is the conversion
+  6.9.1 already specifies for reading a number from a text, which readstr
+  reaches (6.10.4). Nothing new was written for it, and that matters beyond
+  economy: a hand-rolled digit accumulation would be a second opinion about
+  what a decimal literal denotes, free to disagree with the assembler's strtod
+  on the very literals it was added to fold. This is the first call either
+  required procedure has in this compiler. }
+function ConstRealVal(s: symbol): real;
+var t: nameStr; k: integer; v: real;
+begin
+  if IsInteger(s.stype) then
+    ConstRealVal := s.intVal
+  else begin
+    t := '';
+    if s.realNeg then t := t + '-';
+    for k := 1 to s.realLen do t := t + pool[s.realAt + k - 1];
+    readstr(t, v);
+    ConstRealVal := v
+  end
+end;
+
+{ Whether a folded real is a value of the real-type at all. Real arithmetic
+  here does not trap on overflow -- 6.7.4 leaves it an error a processor may
+  leave undetected, and this one does: `1e300 * 1e300` yields an infinity and
+  writestr writes that as `INF`, which is not a signed-number any assembler
+  reads back. So the fold asks afterwards rather than predicting.
+
+  One test serves for an infinity and for a not-a-number, because inf/inf and
+  nan/nan are both nan and a nan compares equal to nothing. The zero is asked
+  first and in a statement of its own rather than through `or`: 6.8.3.2 makes
+  x/0.0 an error, this compiler's own division checks for it, and the check
+  would fire on the operand this predicate exists to accept. }
+function ConstRealFinite(v: real): boolean;
+begin
+  if v = 0.0 then
+    ConstRealFinite := true
+  else
+    ConstRealFinite := v / v = 1.0
+end;
+
+{ A folded real result, written back into the pool as decimal text. Every
+  reader downstream then sees what a *written* literal leaves behind -- an
+  offset, a length and a sign -- so ADR-0025 is fed rather than overturned and
+  no other part of this compiler learns that a real can be folded.
+
+  The representation pads on the left and puts the sign in the text; the sign
+  moves onto realNeg because that is where EmitRealText looks for one, and the
+  blanks are dropped because the pool holds the digits alone. }
+procedure MakeConstReal(v: real; var res: symbol);
+var t: nameStr; k, n: integer;
+begin
+  writestr(t, v: realDigits);
+  n := length(t);
+  k := 1;
+  while (k <= n) and (t[k] = ' ') do k := k + 1;
+  res.realNeg := false;
+  if k <= n then
+    if t[k] = '-' then begin
+      res.realNeg := true;
+      k := k + 1
+    end;
+  res.realAt := poolLen + 1;
+  while k <= n do begin
+    PoolPut(t[k]);
+    k := k + 1
+  end;
+  res.realLen := poolLen + 1 - res.realAt;
+  res.stype := realType
+end;
+
+{ What every real-valued fold has left to ask once it has a value: 6.7.4's
+  overflow, which is the one error real arithmetic here signals by *returning*
+  rather than by trapping. Shared so that the answer to "is this a real" is
+  given in one place; a fold that wrote the pool without asking would put an
+  `INF` where the assembler expects a signed-number. }
+function FinishReal(v: real; e: nodePtr; var res: symbol): boolean;
+begin
+  if ConstRealFinite(v) then begin
+    MakeConstReal(v, res);
+    FinishReal := true
+  end
+  else begin
+    ErrorAt(e^.line, e^.col);
+    writeln('real overflow in a constant expression');
+    constReported := true;
+    FinishReal := false
+  end
+end;
+
+{ 6.8.3.2's dyadic arithmetic and 6.8.3.5's relational operators, where the
+  operation is real-valued -- either operand real, or an operator that makes a
+  real of two integers (`/` and `**`, table 3 notes (3) and (5)).
+
+  Every error the clause names is asked *before* the operation, because this
+  compiler's own arithmetic is what performs it: the emitted code traps on
+  these and a fold that reached the trap would abort the compiler on a program
+  it was meant to diagnose. That is the one respect in which folding an error
+  differs from committing one.
+
+  The operations themselves are written as this compiler's own operators, so
+  `**` and `pow` reach pas_pow_real and pas_pow_realint -- the same routines
+  the emitted code calls. A constant-expression is then not a second
+  implementation of exponentiation, which is what 6.8.2 NOTE 2 makes worth
+  arranging: the accuracy a folded result has is the accuracy the run-time one
+  has, and doc/implementation-defined.md states it once for both. }
+function FoldRealBinary(l, r: symbol; e: nodePtr; var res: symbol): boolean;
+var x, y, v: real; ok, cmp, b: boolean;
+begin
+  ok := false;
+  if IsNumeric(l.stype) and IsNumeric(r.stype) then begin
+    x := ConstRealVal(l);
+    y := ConstRealVal(r);
+    v := 0.0;
+    b := false;
+    cmp := false;
+    ok := true;
+    case e^.bnOp of
+      opAdd: v := x + y;
+      opSub: v := x - y;
+      opMul: v := x * y;
+      opRealDiv:
+        if y = 0.0 then begin
+          ErrorAt(e^.line, e^.col);
+          writeln('division by zero in a constant expression');
+          constReported := true;
+          ok := false
+        end
+        else
+          v := x / y;
+      { "shall be an error if x is zero and y is less than or equal to zero",
+        and "shall be an error if x is negative" -- the second is what the two
+        operators are *for*, a negative base needing the integer exponent
+        `pow` takes. }
+      opExp:
+        if (x = 0.0) and (y <= 0.0) then begin
+          ErrorAt(e^.line, e^.col);
+          writeln('zero to a power that is not positive in a constant ',
+                  'expression');
+          constReported := true;
+          ok := false
+        end
+        else if x < 0.0 then begin
+          ErrorAt(e^.line, e^.col);
+          writeln('a negative base of ''**'' in a constant expression ',
+                  '(use pow)');
+          constReported := true;
+          ok := false
+        end
+        else
+          v := x ** y;
+      { Table 3 gives `pow` the type of its left operand, so this arm is the
+        real-based one; two integers never reach here and fold by repeated
+        multiplication below. Sema has already required the right operand to
+        be an integer, and the fold asks again rather than trusting it,
+        because r.intVal is not the field a real operand fills. }
+      opPow:
+        if not IsInteger(r.stype) then
+          ok := false
+        else if (x = 0.0) and (r.intVal <= 0) then begin
+          ErrorAt(e^.line, e^.col);
+          writeln('zero to a power that is not positive in a constant ',
+                  'expression');
+          constReported := true;
+          ok := false
+        end
+        else
+          v := x pow r.intVal;
+      opEq: begin cmp := true; b := x = y end;
+      opNe: begin cmp := true; b := x <> y end;
+      opLt: begin cmp := true; b := x < y end;
+      opLe: begin cmp := true; b := x <= y end;
+      opGt: begin cmp := true; b := x > y end;
+      opGe: begin cmp := true; b := x >= y end;
+      { Not real-valued operations at all: `div` and `mod` take integers,
+        the boolean operators booleans, `><` sets, and `in` asks a set about
+        a member. Sema has diagnosed the operand types already. }
+      opIntDiv, opMod, opAnd, opOr, opAndThen, opOrElse, opSymDiff, opIn:
+        ok := false;
+    end;
+    if ok then
+      if cmp then begin
+        res.stype := boolType;
+        res.boolVal := b
+      end
+      else
+        ok := FinishReal(v, e, res)
+  end;
+  FoldRealBinary := ok
+end;
+
+{ 6.8.2's expression, once both operands have folded.
+
+  This has twice said what it will not fold, and been wrong both times. It said
+  "a set- or string-valued one, because a symbol has nowhere to keep the
+  value"; a symbol has kept a string since ADR-0068 -- `constValue` is where
+  the substring-constant fold puts one -- so ADR-0226 folded concatenation and
+  the relational operators. It then said "a real-valued operation, because a
+  real constant is carried here as its source text and never converted"; the
+  text is still what a real constant is, and ADR-0227 folds by converting it
+  and writing the result back as more of the same.
+
+  A **set** is what remains: the folder builds no set node, so there is nothing
+  for a set-valued result to be. }
 function EvalConstBinary;
 var l, r: symbol; ok: boolean; a, c, v: integer; k: integer;
 begin
@@ -10053,12 +10261,8 @@ begin
   if EvalConst(e^.bnLhs, l) and EvalConst(e^.bnRhs, r) then
     if (l.stype <> nil) and (r.stype <> nil) then
       if IsReal(l.stype) or IsReal(r.stype) or (e^.bnOp = opRealDiv) or
-         (e^.bnOp = opExp) then begin
-        ErrorAt(e^.line, e^.col);
-        writeln('a real constant expression is not folded: a real constant ',
-                'is carried as the text that was written and never converted');
-        constReported := true
-      end
+         (e^.bnOp = opExp) then
+        ok := FoldRealBinary(l, r, e, res)
       { 6.8.3.6's concatenation and 6.8.3.5's relational operators over strings,
         folded since ADR-0226. They are asked before the case below because an
         operand of a string-type is not ordinal and would otherwise fall out of
@@ -10172,26 +10376,25 @@ end;
   function belongs in a constant-expression unless this compiler cannot
   evaluate it exactly.
 
-  **Eight cannot, and for one reason between them. A real constant is carried
-  as the text that was written** and is never converted to a number here --
-  LLVM's assembler is the strtod (ADR-0025). So `sqrt`, `sin`, `cos`, `ln`,
-  `exp` and `arctan` would need both a conversion and a formatter to write a
-  result back as text, and `trunc` and `round` would need the conversion even
-  though their results are integers. Those eight are a **restriction**,
-  recorded in doc/implementation-defined.md 6, not an oversight.
+  **Nothing is left out.** This said nine could not be folded, then eight, and
+  both counts were an account of what this compiler had rather than of what the
+  clause allows. The ninth was `substr`, "whose result is a string with no
+  scalar form to fold to" -- never true, a string constant being a literal,
+  named (ADR-0068), which is what ADR-0226's fold builds. The eight were
+  `sqrt`, `sin`, `cos`, `ln`, `exp`, `arctan`, `trunc` and `round`, held back
+  because a real constant is the text that was written and is never converted
+  (ADR-0025). The text is still what a real constant is; ADR-0227 converts it
+  with readstr, computes with this compiler's own arithmetic, and writes the
+  result back with writestr as more of the same.
 
-  It used to be nine, and the ninth was `substr`, "whose result is a string
-  with no scalar form to fold to". That reason was never true: a string
-  constant *is* a literal, named (ADR-0068), which is exactly what the
-  substring-constant fold builds. ADR-0226 folds `substr`, `trim` and the six
-  string relational functions.
-
-  What is left is exact: the ordinal-valued functions, `length`, the string
-  functions, and 6.7.6.4's two-argument succ and pred, which were missing only
-  because this walked one argument. }
+  So the list is now the ordinal-valued functions, `length`, the string
+  functions, 6.7.6.4's two-argument succ and pred, and the six mathematical
+  ones -- and the restriction doc/implementation-defined.md 6 recorded is
+  struck rather than reduced. }
 
 function EvalConstCall;
 var a, b, c: symbol; ok: boolean; v, k, lo, hi, j: integer; bad: boolean;
+    x: real;
 begin
   ok := false;
   a.stype := nil;
@@ -10200,6 +10403,11 @@ begin
     if e^.clArgs^.next = nil then begin
       if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
         case e^.clBuiltin of
+          { 6.7.6.1 gives abs and sqr "the type of the operand", so each is
+            two folds rather than one. The integer arm checks its overflow
+            through FoldIntOp, which reports; the real arm has nothing to
+            check until it has the value, 6.7.4's overflow being a returned
+            infinity here (ADR-0227). }
           biAbs, biSqr:
             if IsInteger(a.stype) then begin
               if e^.clBuiltin = biAbs then begin
@@ -10212,6 +10420,11 @@ begin
                 res.stype := intType;
                 res.intVal := v
               end
+            end
+            else if IsReal(a.stype) then begin
+              x := ConstRealVal(a);
+              if e^.clBuiltin = biAbs then x := abs(x) else x := sqr(x);
+              ok := FinishReal(x, e, res)
             end;
           biOdd:
             if IsInteger(a.stype) then begin
@@ -10317,13 +10530,78 @@ begin
                 MakeConstStr(a.constValue^.stAt, k, e^.line, e^.col, res);
               ok := true
             end;
-          biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound: begin
-            ErrorAt(e^.line, e^.col);
-            writeln('a real constant expression is not folded: a real ',
-                    'constant is carried as the text that was written and ',
-                    'never converted');
-            constReported := true
-          end;
+          { 6.7.6.2's six mathematical functions. Each is written as this
+            compiler's own call, so what a constant-expression computes is
+            what the emitted code computes -- 6.8.2 NOTE 2 requires the
+            accuracy of constant-expressions to be specified, and the way to
+            specify it once is to have one answer (ADR-0227).
+
+            D.9 and D.10's two errors are asked before the call and not after:
+            the emitted code traps on them, so a fold that let the call happen
+            would abort the compiler on a program it exists to diagnose. }
+          biSqrt:
+            if IsNumeric(a.stype) then begin
+              x := ConstRealVal(a);
+              if x < 0.0 then begin
+                ErrorAt(e^.line, e^.col);
+                writeln('sqrt of a negative value in a constant expression');
+                constReported := true
+              end
+              else
+                ok := FinishReal(sqrt(x), e, res)
+            end;
+          biLn:
+            if IsNumeric(a.stype) then begin
+              x := ConstRealVal(a);
+              if x <= 0.0 then begin
+                ErrorAt(e^.line, e^.col);
+                writeln('ln of a value that is not positive in a constant ',
+                        'expression');
+                constReported := true
+              end
+              else
+                ok := FinishReal(ln(x), e, res)
+            end;
+          biSin:
+            if IsNumeric(a.stype) then
+              ok := FinishReal(sin(ConstRealVal(a)), e, res);
+          biCos:
+            if IsNumeric(a.stype) then
+              ok := FinishReal(cos(ConstRealVal(a)), e, res);
+          biExp:
+            if IsNumeric(a.stype) then
+              ok := FinishReal(exp(ConstRealVal(a)), e, res);
+          biArcTan:
+            if IsNumeric(a.stype) then
+              ok := FinishReal(arctan(ConstRealVal(a)), e, res);
+          { 6.6.6.3's trunc and round, whose results are integers -- so what
+            they needed was the conversion alone, and never a formatter.
+
+            The bound is the emitted check's, character for character: a value
+            strictly inside +-2147483648.0, asked of the *shifted* value for
+            round because 6.6.6.3 defines round(x) as trunc(x+-0.5) and the
+            addition is where an in-range x can leave the range. Writing the
+            bound as the integer type's own -maxint..maxint would be the
+            tighter reading and would make the fold disagree with the run-time
+            answer for one value at each end. }
+          biTrunc, biRound:
+            if IsReal(a.stype) then begin
+              x := ConstRealVal(a);
+              if e^.clBuiltin = biRound then
+                if x >= 0.0 then x := x + 0.5 else x := x - 0.5;
+              if (x > -2147483648.0) and (x < 2147483648.0) then begin
+                res.stype := intType;
+                res.intVal := trunc(x);
+                ok := true
+              end
+              else begin
+                ErrorAt(e^.line, e^.col);
+                if e^.clBuiltin = biTrunc then write('trunc') else write('round');
+                writeln(' of a value out of integer range in a constant ',
+                        'expression');
+                constReported := true
+              end
+            end;
           biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
           biSubstr, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,

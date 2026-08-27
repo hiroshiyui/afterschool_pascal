@@ -1,0 +1,8 @@
+adr: 0227
+file: selfhost/compiler.pas
+kills: constexpr_reals
+why: 6.6.6.3 defines round(x) as trunc(x+0.5) where x is positive or zero and trunc(x-0.5) otherwise, so the addend is selected by the sign. Adding always is right for every non-negative value and wrong for every negative one that is not already an integer -- round(-3.5) becomes -3 instead of -4 -- which a corpus rounding only positive values cannot see.
+--- old
+                if x >= 0.0 then x := x + 0.5 else x := x - 0.5;
+--- new
+                x := x + 0.5;

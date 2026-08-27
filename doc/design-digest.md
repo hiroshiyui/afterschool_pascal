@@ -1334,6 +1334,52 @@ able to make.
     is an *operation*: since ADR-0068 a bare string literal is a constant, and
     always was one in ISO 7185 §6.3, because there is nothing to compute. Bare
     `nil` is the same shape and took until ADR-0075.
+    **Two of the three have since been struck.** ADR-0226 folds the
+    string-valued operations, and ADR-0227 the real-valued ones — the latter
+    by reading the source text with `readstr` and writing the result back with
+    `writestr`, so ADR-0025 is fed rather than overturned and the "no float to
+    fold with" reason turns out to have been about the compiler rather than
+    about the standard. §6.3.2's own worked example, `third = unity/3.0`, was
+    among what this sentence refused. The **set** is what remains.
+- **A real-valued constant-expression folds by round-tripping the text**
+  (ADR-0227). ADR-0025 carries a real literal as its source text all the way
+  into the IR — LLVM's assembler is the `strtod` — and that was recorded twice
+  as the reason §6.8.2's real-valued expressions could not fold, including
+  §6.3.2's own worked example `third = unity/3.0`. The text is still the
+  representation; what was missing was a way back and forth. Both were already
+  required procedures this compiler implements and had never called:
+  §6.10.4's `readstr` parses the literal, and `writestr` at a total-width of 30
+  writes the result back — 24 significant digits where 17 name a binary64
+  uniquely. A folded result goes into the string pool, so `realAt`/`realLen`/
+  `realNeg` keep their meaning and nothing downstream learns that a real can be
+  folded.
+  - **Reading with `readstr` is a decision, not economy.** The conversion it
+    reaches is the one §6.9.1 already specifies for reading a number from a
+    text. A hand-rolled digit accumulation would be a second opinion about what
+    a decimal literal denotes, free to disagree with the assembler's `strtod`
+    on the very literals it was added to fold.
+  - **The operations are written as this compiler's own**, so `**` and `pow`
+    reach `pas_pow_real` and `pas_pow_realint` and the six mathematical
+    functions reach the library the emitted code calls. That is what makes the
+    accuracy statement §6.8.2 NOTE 2 *requires* a short one: the accuracy of a
+    constant-expression is the accuracy of the same operation at run time. The
+    previous answer to NOTE 2 was "there are none".
+  - **Every error is asked before the operation, and overflow after it.** The
+    emitted code traps on a zero divisor, a negative base of `**`, `ln` of a
+    non-positive value and `sqrt` of a negative one — and the compiler's own
+    arithmetic is what performs the fold, so a guard that let the operation
+    happen would abort the compiler on the program it exists to diagnose.
+    Overflow is the exception: §6.7.4 lets it go undetected and this processor
+    returns an infinity, which `writestr` writes as `INF`. `v/v = 1.0` is false
+    for an infinity and for a NaN alike, and the zero is asked first because
+    `x/0.0` is itself an error this compiler checks for.
+  - **What a golden may pin.** The four arithmetic operators, `abs`, `sqr`, the
+    comparisons and the two conversions are exact under IEEE 754, so their
+    folded values are written out. The six mathematical functions are correctly
+    rounded by no standard, so `tests/extended/constexpr_reals.pas` asserts a
+    *property* of those instead — the folded constant equals what the emitted
+    code computes — because writing their digits down would pin this machine's
+    library rather than the language.
 - **A result that lives in memory is the caller's storage** (ADR-0055).
   §6.7.2 lets a function return anything that is not, and does not contain, a
   file and is not bindable — so a record, an array and a set. ADR-0017 gives a
@@ -1503,7 +1549,8 @@ able to make.
     on the index. `difftest` caught two as a number one apart.
   - Not done and stated: `minreal`/`maxreal`/`epsreal` need interned *text*
     rather than a value, because ADR-0025 never converts a real literal — the
-    same reason ADR-0054 refuses a real-valued constant-expression.
+    same reason ADR-0054 refused a real-valued constant-expression, until
+    ADR-0227 converted one.
     **ADR-0062 did them**, and by that route: the text was always the
     mechanism, so what was missing was somewhere to put twenty-two characters.
 - **readstr and writestr are a text file made of memory** (ADR-0060). §6.7.5.5

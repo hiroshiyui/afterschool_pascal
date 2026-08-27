@@ -1,6 +1,7 @@
 #include "sema.h"
 
 #include <climits>
+#include <cmath>
 #include <optional>
 #include <unordered_map>
 
@@ -5515,6 +5516,21 @@ bool Sema::foldSubstr(const std::string &s, long long i, long long j, int line,
       out);
 }
 
+// §6.7.4's overflow is the one error real arithmetic here signals by returning
+// rather than by trapping, so it is asked once a value exists. The Pascal
+// compiler tests `v/v = 1.0` because it has no other way to name an infinity;
+// this one says the same thing in the way C says it (ADR-0227).
+bool Sema::finishReal(double v, int line, int col, Symbol &out) {
+  if (!std::isfinite(v)) {
+    diags_.error(line, col, "real overflow in a constant expression");
+    constReported_ = true;
+    return false;
+  }
+  out.type = ty::Real();
+  out.realVal = v;
+  return true;
+}
+
 bool Sema::evalConstBinary(Binary *b, Symbol &out) {
   Symbol l, r;
   if (!evalConst(b->lhs.get(), l) || !evalConst(b->rhs.get(), r))
@@ -5522,14 +5538,102 @@ bool Sema::evalConstBinary(Binary *b, Symbol &out) {
   if (!l.type || !r.type)
     return false;
 
+  // §6.8.3.2's dyadic arithmetic and §6.8.3.5's relational operators, where the
+  // operation is real-valued — either operand real, or an operator that makes a
+  // real of two integers (`/` and `**`, table 3 notes (3) and (5)). ADR-0227.
+  //
+  // Every error the clause names is asked before the operation, because the
+  // Pascal compiler's own arithmetic is what performs the fold there and it
+  // traps on these; the two front ends have to refuse the same programs with
+  // the same words, which is what difftest compares.
   if (l.type->isReal() || r.type->isReal() || b->op == BinOp::RealDiv ||
       b->op == BinOp::Exp) {
-    diags_.error(b->line, b->col,
-                 "a real constant expression is not folded: a real constant "
-                 "is carried as the text that was written and never "
-                 "converted");
-    constReported_ = true;
-    return false;
+    if (!l.type->isNumeric() || !r.type->isNumeric())
+      return false;
+    double x = l.type->isInteger() ? static_cast<double>(l.intVal) : l.realVal;
+    double y = r.type->isInteger() ? static_cast<double>(r.intVal) : r.realVal;
+    double v = 0;
+    bool cmp = false, bv = false;
+    switch (b->op) {
+    case BinOp::Add: v = x + y; break;
+    case BinOp::Sub: v = x - y; break;
+    case BinOp::Mul: v = x * y; break;
+    case BinOp::RealDiv:
+      if (y == 0) {
+        diags_.error(b->line, b->col,
+                     "division by zero in a constant expression");
+        constReported_ = true;
+        return false;
+      }
+      v = x / y;
+      break;
+    // "shall be an error if x is zero and y is less than or equal to zero",
+    // and "shall be an error if x is negative" — the second is what the two
+    // operators are *for*, a negative base needing the integer exponent `pow`.
+    case BinOp::Exp:
+      if (x == 0 && y <= 0) {
+        diags_.error(b->line, b->col,
+                     "zero to a power that is not positive in a constant "
+                     "expression");
+        constReported_ = true;
+        return false;
+      }
+      if (x < 0) {
+        diags_.error(b->line, b->col,
+                     "a negative base of '**' in a constant expression "
+                     "(use pow)");
+        constReported_ = true;
+        return false;
+      }
+      v = std::pow(x, y);
+      break;
+    // Table 3 gives `pow` the type of its left operand, so this is the
+    // real-based one; two integers never reach here.
+    case BinOp::Pow:
+      if (!r.type->isInteger())
+        return false;
+      if (x == 0 && r.intVal <= 0) {
+        diags_.error(b->line, b->col,
+                     "zero to a power that is not positive in a constant "
+                     "expression");
+        constReported_ = true;
+        return false;
+      }
+      v = std::pow(x, static_cast<double>(r.intVal));
+      break;
+    case BinOp::Eq:
+      cmp = true;
+      bv = x == y;
+      break;
+    case BinOp::Ne:
+      cmp = true;
+      bv = x != y;
+      break;
+    case BinOp::Lt:
+      cmp = true;
+      bv = x < y;
+      break;
+    case BinOp::Le:
+      cmp = true;
+      bv = x <= y;
+      break;
+    case BinOp::Gt:
+      cmp = true;
+      bv = x > y;
+      break;
+    case BinOp::Ge:
+      cmp = true;
+      bv = x >= y;
+      break;
+    // Not real-valued operations at all; Sema has diagnosed the operands.
+    default: return false;
+    }
+    if (cmp) {
+      out.type = ty::Bool();
+      out.boolVal = bv;
+      return true;
+    }
+    return finishReal(v, b->line, b->col, out);
   }
 
   // §6.8.3.6's concatenation and §6.8.3.5's relational operators over strings,
@@ -5819,8 +5923,15 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
   }
 
   switch (c->builtin) {
+  // §6.7.6.1 gives abs and sqr "the type of the operand", so each is two folds
+  // rather than one (ADR-0227).
   case Builtin::Abs:
   case Builtin::Sqr: {
+    if (a.type->isReal()) {
+      double x = a.realVal;
+      x = c->builtin == Builtin::Abs ? std::fabs(x) : x * x;
+      return finishReal(x, c->line, c->col, out);
+    }
     if (!a.type->isInteger())
       return false;
     long long v = 0;
@@ -5905,21 +6016,64 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
       return true;
     }
     return false;
-  // Nonvarying by §6.8.2 and not evaluable here: these say which, because "the
-  // expression is not constant" would be a complaint about the program.
+  // §6.7.6.2's six mathematical functions, and §6.6.6.3's two conversions.
+  // Folded since ADR-0227; D.9 and D.10's errors are asked before the call.
   case Builtin::Sqrt:
   case Builtin::Sin:
   case Builtin::Cos:
   case Builtin::Ln:
   case Builtin::Exp:
-  case Builtin::ArcTan:
+  case Builtin::ArcTan: {
+    if (!a.type || !a.type->isNumeric())
+      return false;
+    double x = a.type->isInteger() ? static_cast<double>(a.intVal) : a.realVal;
+    if (c->builtin == Builtin::Sqrt && x < 0) {
+      diags_.error(c->line, c->col,
+                   "sqrt of a negative value in a constant expression");
+      constReported_ = true;
+      return false;
+    }
+    if (c->builtin == Builtin::Ln && x <= 0) {
+      diags_.error(c->line, c->col,
+                   "ln of a value that is not positive in a constant "
+                   "expression");
+      constReported_ = true;
+      return false;
+    }
+    switch (c->builtin) {
+    case Builtin::Sqrt: x = std::sqrt(x); break;
+    case Builtin::Sin: x = std::sin(x); break;
+    case Builtin::Cos: x = std::cos(x); break;
+    case Builtin::Ln: x = std::log(x); break;
+    case Builtin::Exp: x = std::exp(x); break;
+    default: x = std::atan(x); break;
+    }
+    return finishReal(x, c->line, c->col, out);
+  }
+  // The bound is the emitted check's, character for character: strictly inside
+  // ±2147483648.0, asked of the *shifted* value for round because §6.6.6.3
+  // defines round(x) as trunc(x±0.5) and the addition is where an in-range x
+  // can leave the range.
   case Builtin::Trunc:
-  case Builtin::Round:
-    diags_.error(c->line, c->col,
-                 "a real constant expression is not folded: a real constant "
-                 "is carried as the text that was written and never converted");
-    constReported_ = true;
-    return false;
+  case Builtin::Round: {
+    if (!a.type || !a.type->isReal())
+      return false;
+    double x = a.realVal;
+    if (c->builtin == Builtin::Round)
+      x = x >= 0 ? x + 0.5 : x - 0.5;
+    if (!(x > -2147483648.0 && x < 2147483648.0)) {
+      diags_.error(
+          c->line, c->col,
+          std::string(c->builtin == Builtin::Trunc ? "trunc" : "round") +
+              " of a value out of integer range in a constant "
+              "expression");
+      constReported_ = true;
+      return false;
+    }
+    out.type = ty::Int();
+    out.intVal = static_cast<long long>(x);
+    return true;
+  }
   default:
     return false;
   }

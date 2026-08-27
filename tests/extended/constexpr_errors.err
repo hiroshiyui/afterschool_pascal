@@ -8,14 +8,18 @@
 <source>:23:12: error: pred runs past the end of integer in a constant expression
 <source>:26:17: error: the right operand of pow must not be negative
 <source>:27:17: error: integer overflow in a constant expression
-<source>:30:16: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
-<source>:31:14: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
-<source>:40:12: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
-<source>:41:12: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
-<source>:42:12: error: a real constant expression is not folded: a real constant is carried as the text that was written and never converted
-<source>:46:15: error: succ runs past the end of integer in a constant expression
-<source>:47:15: error: pred runs past the end of integer in a constant expression
-<source>:52:21: error: integer overflow in a constant expression
-<source>:62:19: error: the discriminants of a schema must be ordinal; 'cap' is not
-<source>:70:7: error: the value of constant 'varying' is not a compile-time constant
-<source>:77:12: error: integer overflow in a constant expression
+<source>:33:16: error: division by zero in a constant expression
+<source>:34:20: error: real overflow in a constant expression
+<source>:35:16: error: zero to a power that is not positive in a constant expression
+<source>:36:19: error: a negative base of '**' in a constant expression (use pow)
+<source>:39:16: error: zero to a power that is not positive in a constant expression
+<source>:45:12: error: trunc of a value out of integer range in a constant expression
+<source>:46:12: error: round of a value out of integer range in a constant expression
+<source>:47:12: error: sqrt of a negative value in a constant expression
+<source>:48:12: error: ln of a value that is not positive in a constant expression
+<source>:52:15: error: succ runs past the end of integer in a constant expression
+<source>:53:15: error: pred runs past the end of integer in a constant expression
+<source>:58:21: error: integer overflow in a constant expression
+<source>:68:19: error: the discriminants of a schema must be ordinal; 'cap' is not
+<source>:76:7: error: the value of constant 'varying' is not a compile-time constant
+<source>:83:12: error: integer overflow in a constant expression

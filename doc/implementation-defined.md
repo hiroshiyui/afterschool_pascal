@@ -386,35 +386,55 @@ a design owed rather than a bug. What was missing is this entry: a restriction
 work queue, and reaching it a second time while probing ADR-0170 is what showed
 that §6 could not be searched for it.
 
-**Eight required functions are refused in a constant-expression.** ISO/IEC
-10206:1991 §6.8.2 makes an expression nonvarying unless it contains a
-variable-identifier, a non-static type-name, a function declared by the
-program, or `eof`/`eoln`; NOTE 1 adds `empty`, `position` and `LastPosition`
-and gives the reason — they need a variable as a parameter. Every other
-required function therefore belongs in a constant-expression, and `trunc`,
-`round`, `sqrt`, `sin`, `cos`, `ln`, `exp` and `arctan` are refused here with
-*a real constant expression is not folded*.
+**The accuracy of a real-valued constant-expression is the accuracy of the
+same operation at run time.** ISO/IEC 10206:1991 §6.8.2 NOTE 2 requires this
+sentence of every implementation — "since the accuracy of mathematical results
+of the real-type and of the complex-type are implementation-defined (see
+6.4.2.2), an implementation is required to specify the accuracy of
+constant-expressions" — and until ADR-0227 the answer given here was *there are
+none*: eight required functions and every real-valued operator were refused.
 
-One cause between them. **A real constant is carried as the text that was
-written and is never converted to a number by this compiler** — LLVM's
-assembler is the `strtod`, and three records deferred a conversion that turned
-out never to be needed elsewhere (ADR-0025). So `trunc(3.7)` would need that
-conversion even though its result is an integer, and the six real-valued ones
-would need a formatter to write a result back as text besides. NOTE 2 of the
-same clause anticipates exactly this direction — "an implementation is required
-to specify the accuracy of constant-expressions" — which is a sentence about
-real-valued ones, and this is that specification: there are none.
+They fold now, and the specification is the one sentence above. It is exact
+rather than approximate, and the mechanism is why. A real constant is still the
+text that was written (ADR-0025); a fold reads that text with §6.10.4's
+`readstr`, computes with **this compiler's own arithmetic**, and writes the
+result back with `writestr` at a total-width of 30 — 24 significant digits,
+where 17 name a binary64 uniquely. So `**` and `pow` reach `pas_pow_real` and
+`pas_pow_realint`, and `sqrt`, `sin`, `cos`, `ln`, `exp` and `arctan` reach the
+same library the emitted code calls: a constant-expression is not a second
+implementation of arithmetic, free to round differently from the first.
+`tests/extended/constexpr_reals.pas` asserts the six mathematical functions
+that way — the folded constant equals the run-time value — rather than by
+writing their digits down, because the digits would pin this machine's library
+and not the language.
 
-**Eight required functions are refused in a constant-expression, and that is
-now the whole of the restriction.** It read "nine" until ADR-0226, the ninth
-being `substr`, and the reason recorded for it — "its result is a string, which
-has no scalar form to fold to" — was never true: a string constant *is* a
-literal, named (ADR-0068), which is what the substring-constant fold builds.
-ADR-0224's audit found the entry wrong in three ways at once (it named `substr`
-alone where concatenation, `trim` and the string relationals were refused too;
-the relational yields a *boolean*, which the reason could not cover; and the
-folder demonstrably produced a string constant one level down, inside a
-structured-value-constructor). All of them now fold, in both front ends.
+Two consequences are worth stating plainly. The four arithmetic operators,
+`abs`, `sqr`, the comparisons and the two conversions are exact under IEEE 754,
+so a folded result of those is the same value on any conforming processor. The
+six mathematical functions are correctly rounded by no standard, so
+**cross-compiling to a target whose library differs from the host's may give a
+folded constant a different value from the same expression evaluated at run
+time on that target.** That is the latitude §6.4.2.2 leaves, and the reason
+NOTE 2 asks for this paragraph at all. And an error the clause names — a zero
+divisor, `ln` of a value that is not positive, `sqrt` of a negative one, a
+negative base of `**`, a zero base raised to a non-positive power, `trunc` or
+`round` out of integer range, and overflow — is a **compile-time diagnostic**
+where a constant-expression commits it, because the fold has to ask before it
+operates.
+
+**That entry has now been wrong twice and struck twice.** It read "nine" until
+ADR-0226, the ninth being `substr`, and the reason recorded for it — "its
+result is a string, which has no scalar form to fold to" — was never true: a
+string constant *is* a literal, named (ADR-0068), which is what the
+substring-constant fold builds. ADR-0224's audit found that entry wrong in
+three ways at once (it named `substr` alone where concatenation, `trim` and the
+string relationals were refused too; the relational yields a *boolean*, which
+the reason could not cover; and the folder demonstrably produced a string
+constant one level down, inside a structured-value-constructor). It then read
+"eight", and the reason recorded for those was true as a fact about this
+compiler and false as a restriction §5.1 c) permits — so ADR-0227 removed the
+cause rather than documenting it better. Both halves fold now, in both front
+ends.
 
 **A set-valued constant-expression is still refused**, and that half of the old
 sentence was true: the folder builds no set node, so there is nothing for the

@@ -1,0 +1,8 @@
+adr: 0227
+file: selfhost/compiler.pas
+kills: constexpr_errors
+why: 6.7.4's overflow is the one error real arithmetic here signals by returning rather than by trapping, so it is the one the fold must ask about afterwards. Accepting an infinity puts `INF` in the pool, which is not a signed-number any assembler reads back -- the failure moves from a diagnostic about the program to a broken module about nothing.
+--- old
+  if ConstRealFinite(v) then begin
+--- new
+  if true then begin

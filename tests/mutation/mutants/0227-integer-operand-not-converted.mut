@@ -1,0 +1,8 @@
+adr: 0227
+file: selfhost/compiler.pas
+kills: constexpr_reals
+why: 6.8.3.2 table 3 note (4) makes an integer operand of a real operation stand for "a real-type approximation to its value". Answering zero instead is what `4 * arctan(1)` is written to catch: every literal in it is an integer, and the standard's own example of the shape is `pi = 4 * arctan(1)`.
+--- old
+    ConstRealVal := s.intVal
+--- new
+    ConstRealVal := 0.0

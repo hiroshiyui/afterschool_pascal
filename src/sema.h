@@ -687,6 +687,10 @@ private:
   bool evalConstCall(Call *c, Symbol &out);
   // A folded string constant: a StrLit this owns, typed by the same rule a
   // written literal is (ADR-0226).
+  /// What every real-valued fold has left to ask once it has a value: §6.7.4's
+  /// overflow, which real arithmetic signals by *returning* rather than by
+  /// trapping. Shared so the answer is given in one place (ADR-0227).
+  bool finishReal(double v, int line, int col, Symbol &out);
   bool foldConstStr(const std::string &v, int line, int col, Symbol &out);
   // §6.7.6.7's substr, shared by its two forms; reports the clause's three
   // error conditions.

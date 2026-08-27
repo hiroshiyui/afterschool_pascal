@@ -25,21 +25,27 @@ const
     nothing to repeat, and the accumulator overflows like any other product. }
   backwards = 2 pow -1;
   huge      = 2 pow 40;
-  { A real constant is carried as the text that was written and never
-    converted, so there is nothing to fold with. }
-  real1  = 1.5 * 2.0;
-  real2  = 7 / 2;
-  { The same restriction reached through a call rather than an operator.
-    6.8.2 leaves every required function except eof, eoln, empty, position and
-    LastPosition nonvarying, so these are legal constant-expressions that this
-    processor cannot evaluate -- trunc and round because the argument would
-    have to be converted, sqrt because the result would have to be written
-    back as text as well. They say which, rather than reporting the expression
-    as not constant, because those are different complaints and only one of
-    them is about the program. }
-  cut    = trunc(3.7);
-  near   = round(3.5);
-  root   = sqrt(4.0);
+  { A real-valued constant-expression folds since ADR-0227, so what stands
+    here is no longer a restriction but 6.8.3.2's and Annex D's own errors.
+    They are diagnostics rather than traps for the reason the integer ones
+    above are: the folder must ask before it operates, this compiler's own
+    arithmetic being what performs the fold and trapping on each of them. }
+  real1  = 1.0 / 0.0;
+  real2  = 1.0e300 * 1.0e300;
+  real3  = 0.0 ** 0;
+  real4  = (-2.0) ** 0.5;
+  { `pow` is a separate arm with a separate guard: its exponent is an integer,
+    so the zero base is asked of r.intVal and not of a converted operand. }
+  real5  = 0.0 pow -1;
+  { The same errors reached through a call rather than an operator. 6.8.2
+    leaves every required function except eof, eoln, empty, position and
+    LastPosition nonvarying, and all eight of the real-valued ones are now
+    evaluated -- so what a call reports is the error in it, never that the
+    processor declined. }
+  cut    = trunc(1.0e300);
+  near   = round(1.0e300);
+  root   = sqrt(-4.0);
+  lg     = ln(0.0);
   { 6.7.6.4's two-argument forms run out at the same ends, and each direction
     has to be reported without the folder overflowing on the way to deciding
     (ADR-0014 makes the compiler's own arithmetic trap). }

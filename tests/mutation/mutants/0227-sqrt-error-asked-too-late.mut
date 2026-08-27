@@ -1,0 +1,12 @@
+adr: 0227
+file: selfhost/compiler.pas
+kills: constexpr_errors
+why: D.10 makes sqrt of a negative value an error, and the emitted code traps on it. The fold is performed by this compiler's own arithmetic, so a guard that lets the call happen aborts the compiler on the very program it exists to diagnose. That is the difference between folding an error and committing one, and it is why every guard here is asked before the operation rather than after.
+--- old
+              if x < 0.0 then begin
+                ErrorAt(e^.line, e^.col);
+                writeln('sqrt of a negative value in a constant expression');
+--- new
+              if false then begin
+                ErrorAt(e^.line, e^.col);
+                writeln('sqrt of a negative value in a constant expression');
