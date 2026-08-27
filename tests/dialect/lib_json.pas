@@ -87,6 +87,12 @@ begin
   writeln('trailing comma ok=', r.ok, ' cause=', ErrorText(r.cause));
   r := JsonParse('01', at);
   writeln('leading zero  ok=', r.ok, ' at=', at:1);
+  { RFC 8259 §7: a control character below U+0020 may not appear unescaped.
+    Without the check the byte goes into the string and the parse *succeeds*,
+    which is the only refusal here whose absence produces a document rather
+    than a different error. }
+  r := JsonParse('"a' + chr(10) + 'b"', at);
+  writeln('raw control   ok=', r.ok);
   r := JsonParse('{"a":1} {"b":2}', at);
   writeln('two values    ok=', r.ok);
   r := JsonParse('"\uD800"', at);

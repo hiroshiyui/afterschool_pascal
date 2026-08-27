@@ -1,0 +1,12 @@
+adr: 0217
+file: lib/dialect/pasjson.pas
+kills: lib_json
+why: RFC 8259 §2 makes a document one value. Two messages arriving in one buffer is the ordinary case for a client that frames by Content-Length and gets the framing wrong, and answering the first value hides that from the one code that could notice -- the parse succeeds, the second message is dropped, and the stream is out of step from then on with nothing to point at. This is also what makes the leading-zero refusal beside it redundant, so it is the check that carries both.
+--- old
+    SkipWhite(b, at);
+    if not AtEnd(b, at) then begin
+      JsonFree(v);
+      e := errSyntax
+    end
+--- new
+    SkipWhite(b, at)

@@ -1,0 +1,8 @@
+adr: 0217
+file: lib/dialect/pasjson.pas
+kills: lib_json
+why: RFC 8259 §7 forbids a control character below U+0020 inside a string unless it is escaped, and this is the only refusal in the parser whose absence produces a *document* rather than a different error: the raw byte goes into the string and the parse succeeds. A hand-written document with a real newline inside a string is the commonest way this happens, and what the caller then holds is a string no conforming peer would have sent -- rendered back out it is a message the peer cannot parse. The leading-zero and whole-word refusals beside it are each redundant with the one-value rule, which is written down in the module rather than mutated; this one is not.
+--- old
+        else if ord(c) < 32 then begin
+--- new
+        else if false then begin

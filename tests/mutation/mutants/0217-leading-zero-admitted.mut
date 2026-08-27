@@ -1,8 +1,0 @@
-adr: 0217
-file: lib/dialect/pasjson.pas
-kills: lib_json
-why: RFC 8259 §6 admits `0` or a nonzero digit followed by more, and nothing else -- so `01` is not a number. Admitting it makes the parser read `01` as 1 and stop, leaving `1` for whatever comes next: in an array that is a second element nobody wrote, and at the top level it is trailing text. This is the defect that gets a *stream* out of step rather than one message wrong, which is why it is worth a check the grammar could be read as not needing. The case parses `01` and requires the parse to fail.
---- old
-    if Digit(Peek(b, i)) then ok := false
---- new
-    if false then ok := false

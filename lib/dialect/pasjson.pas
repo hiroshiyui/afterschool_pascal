@@ -706,8 +706,14 @@ end;
   quoted: a `star-paren` closes a comment opened with a brace, §6.1.8 making
   the four delimiters two pairs in any combination, so a regular expression
   cannot be written in one.) The
-  leading-zero rule is enforced, because `01` being two values rather than one
-  is how a stream gets out of step.
+  leading-zero rule is enforced, and **no document is refused by it that would
+  not be refused anyway**: a digit cannot follow a value in any context this
+  parser has, so `01`, `[01]` and a leading zero in an object member all fail
+  one token later, at the same position and with the same code. It is kept because a parser should
+  implement the grammar it claims rather than lean on what encloses it -- and
+  the redundancy is written down here because it means no case can fail without
+  the check, which is the kind of claim this repository otherwise treats as
+  unchecked. Removing it is a decision about the grammar, not a simplification.
 
   The mantissa is accumulated as a real and the integer form is taken from it,
   so a value above maxint is a number and not an overflow -- ADR-0014 makes

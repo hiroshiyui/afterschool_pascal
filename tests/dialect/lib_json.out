@@ -10,6 +10,7 @@ built={"jsonrpc":"2.0","id":2,"params":[10,false,null]}
 long ok=TRUE len=300
 trailing comma ok=FALSE cause=not of the expected form
 leading zero  ok=FALSE at=2
+raw control   ok=FALSE
 two values    ok=FALSE
 lone surrogate ok=FALSE
 unclosed      ok=FALSE
