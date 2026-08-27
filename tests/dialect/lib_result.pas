@@ -33,6 +33,11 @@ begin
   Show('signed   ', '-7');
   Show('spaced   ', '   123   ');
   Show('empty    ', '');
+  { Blanks and nothing else. The trim loop reduces this to a string of one
+    space, and 6.5.6 has no empty substring -- so before the guard in PasParse
+    this line stopped the program rather than reporting a syntax error. Every
+    other input here trims to something, which is why the corpus missed it. }
+  Show('blanks   ', '   ');
   Show('lone sign', '+');
   Show('trailing ', '12x');
   Show('overflow ', '99999999999');
