@@ -1,6 +1,7 @@
 #include "sema.h"
 
 #include <climits>
+#include <optional>
 #include <unordered_map>
 
 namespace ap {
@@ -5428,6 +5429,92 @@ bool Sema::foldIntOp(long long a, long long b, BinOp op, int line, int col,
 /// real constant is carried here as its source text and never converted
 /// (ADR-0025), and a set- or string-valued one, because a `Symbol` has nowhere
 /// to keep the value.
+// §6.4.3.3.1 gives the char-type "length 1 and capacity 1", so a char constant
+// is a string of length one whose only component is itself. Answers the
+// characters of a foldable string constant, or nullopt where the symbol is
+// neither a char nor a literal (ADR-0226).
+static std::optional<std::string> constStr(const Symbol &s) {
+  if (!s.type)
+    return std::nullopt;
+  if (s.type->isChar())
+    return std::string(1, s.charVal);
+  if (!s.constValue)
+    return std::nullopt;
+  if (auto *lit = as<StrLit>(s.constValue))
+    return lit->value;
+  return std::nullopt;
+}
+
+// §6.8.3.5: the shorter value is extended to the right with spaces, so
+// `'' = ' '` is true and `'ab' = 'ab '` is true. Compares the first `ln`
+// characters of a against the first `rn` of b -- the lengths are parameters
+// because §6.7.6.7's LT is defined over prefixes.
+//
+// The cast is not decoration: Pascal's char is an ordinal 0..255 and C++'s may
+// be signed, so a plain `x < y` would order the high half of the character set
+// below the low one.
+static int constStrCmpN(const std::string &a, size_t ln, const std::string &b,
+                        size_t rn) {
+  size_t n = std::max(ln, rn);
+  for (size_t i = 0; i < n; ++i) {
+    unsigned char x = i < ln ? static_cast<unsigned char>(a[i]) : ' ';
+    unsigned char y = i < rn ? static_cast<unsigned char>(b[i]) : ' ';
+    if (x < y)
+      return -1;
+    if (x > y)
+      return 1;
+  }
+  return 0;
+}
+
+// §6.7.6.7's EQ and LT, from which the other four are defined. **These are not
+// the operators**: the operators pad, so `'ab' = 'ab '` is true; EQ asks the
+// lengths as well, so `EQ('ab','ab ')` is false.
+static bool constStrEqF(const std::string &a, const std::string &b) {
+  return constStrCmpN(a, a.size(), b, b.size()) == 0 && a.size() == b.size();
+}
+
+static bool constStrLtF(const std::string &a, const std::string &b) {
+  if (a.size() < b.size())
+    return constStrCmpN(a, a.size(), b, a.size()) <= 0;
+  return constStrCmpN(a, b.size(), b, b.size()) < 0;
+}
+
+bool Sema::foldConstStr(const std::string &v, int line, int col, Symbol &out) {
+  auto made = std::make_unique<StrLit>();
+  made->line = line;
+  made->col = col;
+  made->value = v;
+  checkExpr(made.get()); // the literal's type is the literal's business
+  out.type = made->type;
+  out.constValue = made.get();
+  constNodes_.push_back(std::move(made));
+  return true;
+}
+
+// §6.7.6.7's three error conditions: "the value of i is less than or equal to
+// 0", "the value of j is less than 0", and "the value of (i)+(j)-1 is greater
+// than the length of the value of s". The third is asked as `j > n - i + 1`
+// rather than by forming the sum, which the Pascal side must do because its
+// own arithmetic traps on overflow; the same shape is kept here so that the
+// two front ends refuse the same programs for the same reason.
+bool Sema::foldSubstr(const std::string &s, long long i, long long j, int line,
+                      int col, Symbol &out) {
+  long long n = static_cast<long long>(s.size());
+  if (i <= 0 || j < 0 || j > n - i + 1) {
+    diags_.error(line, col,
+                 "substr of " + std::to_string(j) +
+                     " characters from position " + std::to_string(i) +
+                     " is outside the string constant's 1.." +
+                     std::to_string(n));
+    constReported_ = true;
+    return false;
+  }
+  return foldConstStr(
+      s.substr(static_cast<size_t>(i - 1), static_cast<size_t>(j)), line, col,
+      out);
+}
+
 bool Sema::evalConstBinary(Binary *b, Symbol &out) {
   Symbol l, r;
   if (!evalConst(b->lhs.get(), l) || !evalConst(b->rhs.get(), r))
@@ -5443,6 +5530,32 @@ bool Sema::evalConstBinary(Binary *b, Symbol &out) {
                  "converted");
     constReported_ = true;
     return false;
+  }
+
+  // §6.8.3.6's concatenation and §6.8.3.5's relational operators over strings,
+  // folded since ADR-0226. Asked before the switch because an operand of a
+  // string-type is not ordinal and would fall out of every case below.
+  if (b->op == BinOp::Add || b->op == BinOp::Eq || b->op == BinOp::Ne ||
+      b->op == BinOp::Lt || b->op == BinOp::Le || b->op == BinOp::Gt ||
+      b->op == BinOp::Ge) {
+    auto ls = constStr(l), rs = constStr(r);
+    if (ls && rs) {
+      if (b->op == BinOp::Add)
+        // "a value of the canonical-string-type whose length shall be equal to
+        // the sum of the length of a and the length of b".
+        return foldConstStr(*ls + *rs, b->line, b->col, out);
+      int c = constStrCmpN(*ls, ls->size(), *rs, rs->size());
+      out.type = ty::Bool();
+      switch (b->op) {
+      case BinOp::Eq: out.boolVal = c == 0; break;
+      case BinOp::Ne: out.boolVal = c != 0; break;
+      case BinOp::Lt: out.boolVal = c < 0; break;
+      case BinOp::Le: out.boolVal = c <= 0; break;
+      case BinOp::Gt: out.boolVal = c > 0; break;
+      default: out.boolVal = c >= 0; break;
+      }
+      return true;
+    }
   }
 
   auto ordinalOf = [](const Symbol &s) -> long long {
@@ -5539,10 +5652,18 @@ bool Sema::evalConstBinary(Binary *b, Symbol &out) {
 /// here, so `trunc` and `round` would need a conversion and `sqrt` and the
 /// five transcendentals a formatter besides. That is a restriction of this
 /// processor rather than of the clause, so it says which rather than reporting
-/// the expression as not constant. `substr` is refused for the neighbouring
-/// reason: its result is a string, which has no scalar form to fold to.
+/// the expression as not constant.
+///
+/// This comment used to end "`substr` is refused for the neighbouring reason:
+/// its result is a string, which has no scalar form to fold to", and that was
+/// never true -- a string constant *is* a literal this owns, which is where the
+/// substring-constant fold has kept one since it was written. ADR-0226 folds
+/// substr, trim and the six string relational functions, so the only
+/// restriction left here is the real-valued one above.
 bool Sema::evalConstCall(Call *c, Symbol &out) {
-  if (c->args.empty() || c->args.size() > 2)
+  // Three, for substr(s, i, j) -- the only required function here that takes
+  // more than two arguments.
+  if (c->args.empty() || c->args.size() > 3)
     return false;
   Symbol a;
   if (!evalConst(c->args[0].get(), a) || !a.type)
@@ -5559,6 +5680,66 @@ bool Sema::evalConstCall(Call *c, Symbol &out) {
   // §6.7.6.4's succ(x,k) and pred(x,k), which the clause defines as
   // succ(x,-(k)). Nonvarying exactly as the one-argument forms are, and
   // refused only because this walked a single argument.
+  // §6.7.6.7's two- and three-argument substr, its trim, and the six string
+  // relational functions. All are nonvarying by §6.8.2 and all were refused
+  // until ADR-0226.
+  if (auto as_ = constStr(a)) {
+    if (c->args.size() == 1 && c->builtin == Builtin::Trim) {
+      // "if n equals 0, the function shall yield the null-string; if the value
+      // of sv[n] is not equal to the char-type value space, the function shall
+      // yield the value of sv; otherwise ... substr(sv,1,p-1), where p is the
+      // least value in 1..n such that each component of sv[p..n] is space."
+      size_t n = as_->size();
+      while (n > 0 && (*as_)[n - 1] == ' ')
+        --n;
+      return foldConstStr(as_->substr(0, n), c->line, c->col, out);
+    }
+    if (c->args.size() == 2 && c->builtin == Builtin::Substr) {
+      // substr(s, i) is "equivalent to substr(sv,iv,length(sv)-(iv)+1)".
+      Symbol b;
+      if (!evalConst(c->args[1].get(), b) || !b.type || !b.type->isInteger())
+        return false;
+      return foldSubstr(*as_, b.intVal,
+                        static_cast<long long>(as_->size()) - b.intVal + 1,
+                        c->line, c->col, out);
+    }
+    if (c->args.size() == 3 && c->builtin == Builtin::Substr) {
+      Symbol b, d;
+      if (!evalConst(c->args[1].get(), b) || !b.type || !b.type->isInteger())
+        return false;
+      if (!evalConst(c->args[2].get(), d) || !d.type || !d.type->isInteger())
+        return false;
+      return foldSubstr(*as_, b.intVal, d.intVal, c->line, c->col, out);
+    }
+    if (c->args.size() == 2 &&
+        (c->builtin == Builtin::StrEq || c->builtin == Builtin::StrNe ||
+         c->builtin == Builtin::StrLt || c->builtin == Builtin::StrGt ||
+         c->builtin == Builtin::StrLe || c->builtin == Builtin::StrGe)) {
+      Symbol b;
+      if (!evalConst(c->args[1].get(), b) || !b.type)
+        return false;
+      auto bs = constStr(b);
+      if (!bs)
+        return false;
+      // The four derived ones are the clause's own definitions: NE = not EQ,
+      // GT = not LT and not EQ, LE = LT or EQ, GE = not LT.
+      out.type = ty::Bool();
+      switch (c->builtin) {
+      case Builtin::StrEq: out.boolVal = constStrEqF(*as_, *bs); break;
+      case Builtin::StrNe: out.boolVal = !constStrEqF(*as_, *bs); break;
+      case Builtin::StrLt: out.boolVal = constStrLtF(*as_, *bs); break;
+      case Builtin::StrGe: out.boolVal = !constStrLtF(*as_, *bs); break;
+      case Builtin::StrLe:
+        out.boolVal = constStrLtF(*as_, *bs) || constStrEqF(*as_, *bs);
+        break;
+      default:
+        out.boolVal = !constStrLtF(*as_, *bs) && !constStrEqF(*as_, *bs);
+        break;
+      }
+      return true;
+    }
+  }
+
   if (c->args.size() == 2) {
     // §6.7.6.7's index, which nothing folded — and §6.3.2, the standard's own
     // example of a constant-definition-part, writes it twice:

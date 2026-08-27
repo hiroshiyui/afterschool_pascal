@@ -1,0 +1,8 @@
+adr: 0226
+file: selfhost/compiler.pas
+kills: constexpr_strings
+why: The other direction. §6.8.3.5 pads the shorter value with spaces, which is what makes `'' = ' '` true and `'' < ' '` false. Comparing only the characters that are there makes the shorter value a prefix and therefore *less*, so `'' < ' '` becomes true and `'ab' = 'ab '` false -- and the folder then disagrees with the runtime, which pads. Only a case that compares strings of unequal length can tell, and every equal-length comparison stays green.
+--- old
+  if ln > rn then n := ln else n := rn;
+--- new
+  if ln < rn then n := ln else n := rn;

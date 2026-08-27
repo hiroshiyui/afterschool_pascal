@@ -234,3 +234,4 @@ the alternatives that were rejected and why.
 | [0223](0223-the-compiler-checks-its-own-variant-record.md) | The compiler checks its own variant record | Accepted |
 | [0224](0224-the-empty-substring-audited.md) | The empty substring, audited | Accepted |
 | [0225](0225-a-capacity-outside-the-schemas-domain.md) | A capacity outside the schema's domain | Accepted |
+| [0226](0226-a-string-valued-constant-expression.md) | A string-valued constant-expression | Accepted |

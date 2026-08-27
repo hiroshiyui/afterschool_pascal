@@ -685,6 +685,13 @@ private:
   /// nothing else.
   bool evalConstBinary(Binary *b, Symbol &out);
   bool evalConstCall(Call *c, Symbol &out);
+  // A folded string constant: a StrLit this owns, typed by the same rule a
+  // written literal is (ADR-0226).
+  bool foldConstStr(const std::string &v, int line, int col, Symbol &out);
+  // §6.7.6.7's substr, shared by its two forms; reports the clause's three
+  // error conditions.
+  bool foldSubstr(const std::string &s, long long i, long long j, int line,
+                  int col, Symbol &out);
   bool foldIntOp(long long a, long long b, BinOp op, int line, int col,
                  long long &out);
   /// Set when the folder has said *why* a constant expression failed. Failing

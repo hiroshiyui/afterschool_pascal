@@ -68,7 +68,13 @@ DumpTypeExpr:nodeKind:1 names 15 of 63
 # The folder refuses a real constant expression before this case is reached and
 # opRealDiv and opExp are refused there; opSymDiff is a set operator, and
 # 6.8.8's constant-expression has no set-valued fold.
-EvalConstBinary:binaryOp:1 names 19 of 20
+#
+# It is `:2` and not `:1` because ADR-0226 put a case-statement in front of it:
+# the string-relational fold dispatches on the same enumeration, names every
+# constant, and so needs no entry of its own. The ordinal moving is this gate
+# working -- an arm inserted ahead of a catalogued one would otherwise silently
+# re-point the entry at a different case.
+EvalConstBinary:binaryOp:2 names 19 of 20
 
 # EmitBinary takes four operators before it evaluates anything. The four
 # short-circuiting ones go to EmitShortCircuit -- 6.8.3.3 makes `and then` and

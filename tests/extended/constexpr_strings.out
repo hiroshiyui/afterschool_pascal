@@ -1,0 +1,8 @@
+cat  abcd ab x xyz   run abcd
+op   TRUE TRUE FALSE TRUE TRUE TRUE TRUE TRUE   run TRUE
+pad  FALSE TRUE   run FALSE TRUE
+fn   FALSE TRUE TRUE TRUE TRUE TRUE TRUE   run FALSE TRUE
+sub  [bcd][bcde][][]  run [bcd][bcde]
+trim [ab][][ab]  run [ab]
+chr  [x][][x][] TRUE
+mix  [hello!]

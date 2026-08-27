@@ -1,0 +1,9 @@
+adr: 0226
+file: selfhost/compiler.pas
+kills: constexpr_strings
+why: §6.8.3.5's relational operators extend the shorter value with spaces, so `'ab' = 'ab '` is true; §6.7.6.7's EQ is "( (s1v = s2v) and (n1 = n2) )" -- the padded comparison AND equal lengths -- so `eq('ab','ab ')` is false. Dropping the length test makes the function mean what the operator means. Every equal-length case still agrees, which is most of them, and the fold would then disagree with the code generator on exactly the inputs the two rules were written to distinguish. This is why the case prints the folded answer beside the run-time one.
+--- old
+  ConstStrEq := (ConstStrCmpN(l, ConstStrLen(l), r, ConstStrLen(r)) = 0) and
+                (ConstStrLen(l) = ConstStrLen(r))
+--- new
+  ConstStrEq := ConstStrCmpN(l, ConstStrLen(l), r, ConstStrLen(r)) = 0

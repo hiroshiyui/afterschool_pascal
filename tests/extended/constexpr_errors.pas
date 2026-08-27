@@ -70,22 +70,6 @@ procedure inner;
 const varying = v + 1;
 begin end;
 
-{ ADR-0224's audit: the string-valued forms, which no case here covered. Each
-  is a valid constant-expression by §6.8.2 -- none contains a
-  variable-identifier, a non-static type-name, a program-declared function or
-  `eof`/`eoln` -- and each is refused. They are a restriction under §5.1 c) and
-  doc/implementation-defined.md §6 records them; what this case pins is the
-  *message*, which that document described wrongly until nothing held it to one.
-
-  The relational is the one that matters: its result is a boolean, so the reason
-  the document used to give -- "its result is a string, which has no scalar form
-  to fold to" -- never covered it. And the cause it gave is false besides:
-  `const c = ta[1: 'ab' + 'cd'; 2: 'xy']` is accepted, so a computed string can
-  be a constant here. It is the constant-definition path alone that declines. }
-const strcat  = 'ab' + 'cd';
-      strsub  = substr('abcd', 2, 2);
-      strtrim = trim('ab  ');
-      strrel  = ('ab' = 'ab');
 
 begin
   { ...and through a case label }

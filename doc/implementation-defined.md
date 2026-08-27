@@ -405,32 +405,23 @@ same clause anticipates exactly this direction — "an implementation is require
 to specify the accuracy of constant-expressions" — which is a sentence about
 real-valued ones, and this is that specification: there are none.
 
-**A constant-definition may not be given a string-valued or string-compared
-expression**, and this entry was wrong about it in two ways until ADR-0224's
-audit probed it. `substr` is only one of the refused forms; the others are
-§6.8.3.6's concatenation, `trim`, and §6.8.3.5's relational operators over
-strings — the last of which yields a *boolean*, so the reason previously given
-here, "its result is a string, which has no scalar form to fold to", does not
-cover it.
+**Eight required functions are refused in a constant-expression, and that is
+now the whole of the restriction.** It read "nine" until ADR-0226, the ninth
+being `substr`, and the reason recorded for it — "its result is a string, which
+has no scalar form to fold to" — was never true: a string constant *is* a
+literal, named (ADR-0068), which is what the substring-constant fold builds.
+ADR-0224's audit found the entry wrong in three ways at once (it named `substr`
+alone where concatenation, `trim` and the string relationals were refused too;
+the relational yields a *boolean*, which the reason could not cover; and the
+folder demonstrably produced a string constant one level down, inside a
+structured-value-constructor). All of them now fold, in both front ends.
 
-    const k = 'ab' + 'cd';          const k = trim('ab  ');
-    const k = substr('abcd',2,2);   const k = ('ab' = 'ab');
-
-Each is refused with *the value of constant 'k' is not a compile-time
-constant*. This entry claimed the refusal "says which of the two things is
-wrong, rather than reporting the expression as not constant"; it does not, and
-no case pinned the claim — `constexpr_errors.pas` covers the real-valued
-message above and contained no string form at all.
-
-**And the stated cause is false.** The folder can produce a string constant,
-and does, one level down: `const c = ta[1: 'ab' + 'cd'; 2: 'xy']` is accepted
-and yields `abcd`. So the limit is not that a computed string has nowhere to
-live — §6.8.7's structured-value-constructor gives it somewhere — but that the
-constant-definition path alone does not take it. `length('abc')` and
-`index('abc','b')` fold, which is what §6.3.2's own `hex_alpha` example needs.
-
-It remains a **restriction** under §5.1 c) either way, and it is recorded here
-with the cause unknown rather than with a cause that is untrue.
+**A set-valued constant-expression is still refused**, and that half of the old
+sentence was true: the folder builds no set node, so there is nothing for the
+result to be. `const s = [1] + [2]` is refused with *the value of constant 's'
+is not a compile-time constant*, which is the generic message and not one that
+says which — the same complaint ADR-0224 made about the string forms, still
+standing for this one.
 
 **A subrange whose bounds are not constants is refused as a set's base type.**
 `set of 1..m` inside a procedure is legal under §6.2.3.8 b) and is refused with

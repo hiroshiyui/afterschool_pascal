@@ -1,7 +1,8 @@
 # Roadmap
 
 What is open: the goal, what blocks it, the questions no record has answered,
-and what is wrong or absent today.
+what a redesign would change if one were started, and what is wrong or absent
+today.
 
 **How the compiler got here is [`doc/history.md`](history.md)** — the
 bootstrap, both standards, the conformance sweeps, the dialect increment by
@@ -20,6 +21,7 @@ decide about, and the day it is decided it moves there.
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the one library gap in front of it |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the one oracle still worth building |
+| [The next major release (v3)](#the-next-major-release-v3) | four proposals for a redesign, and why only one of them is what a major version number means here |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 | [Answered, and where](#answered-and-where) | the questions this file used to carry, each with its record |
@@ -597,6 +599,191 @@ So `function VecGet(…): type of v^.a[1]` is unwritable in the dialect too. Tha
 is a second production and wants the same argument made again about a different
 clause; it is not carried here as an open question, because nothing is waiting
 on it — the two-parameter form works and reads fine.
+
+---
+
+## The next major release (v3)
+
+**Four proposals, and a note about the number that reframes them.** This
+chapter is what a redesign would change if one were started today. It is here
+rather than in `doc/adr/` because none of it is decided: a record is what a
+decision gets, and these are four arguments still looking for one.
+
+Read the version note first. [`CHANGELOG.md`](../CHANGELOG.md) says what the
+number tracks — *the accepted language, the diagnostics and the command line* —
+and by that definition **three of the four below are invisible to it**. They
+change how the compiler is built and how it is checked, and not one line of
+what it accepts. Only §4 breaks a program, and §4 is the one argued for least
+confidently. So either v3 is named for §4, or what the number tracks widens to
+include the compiler's own construction — and that widening is itself a
+decision with a record of its own, not a footnote to this paragraph.
+
+If there is a theme, it is that **the compiler becomes its own best client**.
+It is the largest program within this project's reach, it is written in a
+language this project defines, and it is excluded today from nearly everything
+the dialect was built for.
+
+### 1. Split `selfhost/compiler.pas` into §6.13 program-components
+
+ADR-0024 made it one file because neither standard had an include mechanism.
+That was true when it was written and is not true now: ADR-0053 gave the
+project modules and separate translation, ADR-0079 gave the components, and
+`tests/extended/components/` already builds them from `.components` sidecars
+that `run_test.sh` and `irtest.sh` both read.
+
+The one-file constraint is therefore no longer a constraint. It is an unpaid
+debt, and the interest is measurable: 36 028 lines in a single translation
+unit, and `poolMax = 1000000` and `tokMax = 300000` sized so that the compiler
+can hold **its own source** — `--dump-limits` reports 589 915 and 171 178
+against them as this is written. An entire gate exists to watch those two
+numbers (`buffer-headroom`, ADR-0126 and ADR-0148), and it exists because
+raising the constant *here* does not raise the seed's, so an overflow arrives
+as a failed build rather than as a diagnostic. That has happened twice.
+Components make the problem structural instead of watched.
+
+The second thing it buys is a row in [`doc/sop.md`](sop.md) §7: **nothing links
+a component on its own**. Every harness here compiles a program, and a §6.13
+component is only ever one input to that — so a component that assembles to a
+valid but incomplete module passes the compiler, passes LLVM's parser, and
+fails in the linker about a name no source spells. That is precisely how
+AP 6.7.3.10's instantiation bodies came to be emitted in one of `RunCodeGen`'s
+two arms (ADR-0212, ADR-0216). If the compiler's own build linked components,
+the row closes by construction, because the build becomes the test.
+
+**What it costs**: a seed refresh, and `irtest.sh`, `difftest.sh` and
+`producttest.sh` learning a build order. The refresh is the part that has to be
+argued rather than assumed — `seed/pascalc.ll` is this repository's ability to
+build itself at all.
+
+**What this proposal does not answer** is what the split is *along*. Lexer /
+parser / Sema / CodeGen is the obvious cut and may well be the wrong one: Sema
+is the largest component and would still be the largest file.
+
+### 2. Let the compiler be written in the dialect
+
+`selfhost/compiler.std` says `extended`. So the most demanding program within
+this project's reach is locked out of `defer`, `T ! E`, `owned ^T`, slices,
+`break`, `exit`, the generics and `type of` — that is, out of nearly everything
+ADR-0109 exists to build.
+
+It has been rejected twice, and the rejection is narrower than it looks.
+ADR-0190 refused it on the ground that *"the fixed point holds only while the
+compiler is an Extended Pascal source"*, and ADR-0223 restates that in its
+Alternatives. But ADR-0223 is also the way through: it builds the compiler a
+**second** time under `--std=afterschool` and uses that build as a *reader*,
+never as the product — `variant-check`, 8.5 seconds, the shipped artefact
+untouched, and ADR-0118's variant guards armed over the one variant record in
+the tree.
+
+So the question v3 should put is not *does the product change its standard*
+but **how much of the dialect the reader build can use before the product
+follows**. Each increment the second build compiles is one the seed could be
+refreshed to accept, and the ordering constraint ADR-0109 already states — a
+dialect feature must be expressible in what `seed/pascalc.ll` accepts, or the
+seed is refreshed first — is the whole of the discipline required.
+
+**What it buys beyond dogfooding**: ADR-0109 wants to know whether this dialect
+is *pleasant* to write something large in, and
+[the chapter above](#the-program-that-would-judge-the-language) names one
+client big enough to answer that. The compiler is bigger, and it already
+exists.
+
+**What makes it genuinely hard**: the fixed point is stage 2 = stage 3, which
+holds under whatever `--std` the seed accepts — so the objection is really
+about the seed, and a seed is refreshed in a release rather than casually.
+
+### 3. Have the compiler report its own dispatch, instead of scraping its source
+
+This project has already found the better pattern and has not generalised it.
+`--dump-limits` (ADR-0148), `--dump-predicates` (ADR-0194) and `--dump-layout`
+(ADR-0185) all work one way: the compiler answers a question about itself, a
+catalogue holds the answers, and the gate compares the two. `buffer-headroom`
+goes further and reads its capacities **twice**, from the source and from the
+compiler, so that a stale binary is named rather than measured.
+
+The gates that instead parse Pascal with Python are the fragile ones, and each
+is shaped like the last defect it was taught about. `tests/checks/kind_exhaustive.py`
+is 542 lines, and it read `case … of` and nothing else until ADR-0221 taught it
+if-chains — **37 of them dispatch on a tag, 24 over `nodeKind`**, and not one
+was read by anything before that record. ADR-0220 is what the omission cost:
+one arm of `EmitString` keyed on a node's kind, a constant arriving as a
+designator, four bytes of read-only data read as a length, and every golden in
+agreement because it was invisible at `-O2`. [`doc/sop.md`](sop.md) §7 already
+calls the source-parsing oracle the weaker of the two.
+
+**What v3 should build** is `--dump-dispatch`: the compiler emitting every site
+at which it dispatches on a tag, with the enumeration and the constants each
+arm names. It subsumes both halves of `kind-exhaustive`, it reaches the
+dispatch written as a predicate that no gate sees today, and it cannot drift
+from the compiler, because the compiler is what emits it.
+
+**The limit is one the existing records already state**, and a dump does not
+lift it: neither form judges whether an arm is *right*.
+`tyOptional: StaticThroughout := true` satisfies the gate and is wrong. This
+moves the oracle from a Python parser to the compiler; it does not move it from
+a prompt to a proof.
+
+### 4. Reconsider containment-by-position — the one that earns the number, and the one least ready
+
+ADR-0140's rule — the dialect reserves no word-symbol, so every feature is
+spelled in a position where a conforming program could not have written it —
+has now reached its limit visibly, twice. `exit` had to become a required
+identifier because no position worked (ADR-0177). `try X` turned out
+unwritable as a factor, because a factor may be a variable-access, so the
+parentheses became the construct rather than the notation (ADR-0178). And
+ADR-0184 admitted a feature that spells nothing at all.
+
+**For withdrawing it**: ISO 7185 and Extended Pascal are already not nested
+(ADR-0033), so non-nesting has precedent here rather than being unthinkable;
+and a `--std=afterschool` that reserved further word-symbols would break
+programs in exactly the shape v2.0.0 did — loudly, a reserved word where an
+identifier belongs being a syntax error.
+
+**Against, and it is the stronger argument today**: containment is what buys
+`dialect-containment` (ADR-0138), and that sweep is the nearest thing to a
+second reading the dialect can have — the conformance corpus compiled a second
+way, with the other mode as the oracle.
+[Open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+records that everything the dialect *accepts* is compared by no second
+implementation. Withdrawing containment spends the one oracle that partly
+covers that, and buys spellings with it.
+
+So this is both the item that earns a major number and the item least ready to
+be taken. **What would have to be true first** is a replacement for what
+`dialect-containment` witnesses, and the only candidate named anywhere in this
+file is the third-party differential of
+[open question §2](#2-a-third-party-differential).
+
+### What v3 must not touch
+
+- **Textual `.ll` as the only backend.** ADR-0085 made it more load-bearing,
+  not less: it is what lets a clone with no LLVM development files build the
+  compiler.
+- **ADR immutability.** It is what let ADR-0224 correct ADR-0219's over-strong
+  NOTE 5 by superseding rather than editing, so that the correction is findable
+  *as* a correction.
+- **[`doc/sop.md`](sop.md) §7.** Twice in two days a row was written before the
+  thing it described happened.
+- **A green suite is not evidence; evidence is a named case that fails without
+  the change.** Everything good here descends from that sentence, and every
+  proposal above answers to it — a redesign is a change, and owes a failing
+  case like any other.
+
+### The question this chapter leaves open
+
+`src/`. It catches what no golden can, and it was right where the Pascal had
+gone wrong. But every front-end feature ships twice, and both sides are one
+author working from one reading, so a misreading passes through both — which is
+the blind spot open question §1 is about, and ADR-0107's registered limitation
+on the substitute for it: the independent readers are given `CLAUDE.md` before
+they run a command, and all four disclosed that they had it.
+
+Fixing *that* is cheaper than any of the four proposals above and is not a v3
+item at all; it is a change to how `.claude/skills/langspec-audit/` runs its
+readers, and it is the difference between *no independent oracle contradicts
+this* and *an uninfluenced reader agreed*. Whether `src/` earns its cost is the
+v3 question, and this chapter has no answer to it — only the observation that
+the cost has never been counted.
 
 ---
 

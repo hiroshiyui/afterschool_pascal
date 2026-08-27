@@ -9891,11 +9891,159 @@ begin
   EvalConst := ok
 end;
 
+function IsStringCompare(b: builtinKind): boolean;
+begin
+  IsStringCompare := (b = biStrEq) or (b = biStrNe) or (b = biStrLt) or
+                     (b = biStrGt) or (b = biStrLe) or (b = biStrGe)
+end;
+
+{ 6.4.3.3.1 gives the char-type "length 1 and capacity 1", so a char constant
+  is a string of length one whose only component is itself. These two functions
+  are the whole of that difference: a string constant is its literal, *named*
+  (ADR-0068), so its characters are in the pool and a char's is in the symbol.
+  A length of -1 means the constant is neither, which is the folder's way of
+  saying it has nothing to work on. }
+function ConstStrLen(s: symbol): integer;
+begin
+  if IsChar(s.stype) then ConstStrLen := 1
+  else if s.constValue = nil then ConstStrLen := -1
+  else if s.constValue^.kind <> nkStr then ConstStrLen := -1
+  else ConstStrLen := s.constValue^.stLen
+end;
+
+function ConstStrAt(s: symbol; i: integer): char;
+begin
+  if IsChar(s.stype) then ConstStrAt := s.charVal
+  else ConstStrAt := pool[s.constValue^.stAt + i - 1]
+end;
+
+{ A folded string constant: a run of pool and a node naming it, which is what
+  a string constant already is (ADR-0068) -- the substring-constant fold has
+  built one since ADR-0054 by narrowing the run its literal put there.
+
+  ADR-0226 is the other half. A concatenation has no run to narrow, so this
+  appends; and the comment above EvalConstBinary said a string-valued
+  operation could not fold "because a symbol has nowhere to keep the value",
+  which was never true of a string -- `constValue` is where the substring fold
+  keeps one. It is true of a *set*, which has no node kind the folder builds.
+
+  CheckExpr gives the node its type, so a folded result is typed by the same
+  rule a written literal is: 6.1.9's canonical-string-type for the null-string
+  and a fixed-string-type otherwise. }
+procedure MakeConstStr(at, len, l, c: integer; var res: symbol);
+var made: nodePtr;
+begin
+  made := NewNode(nkStr, l, c);
+  made^.stAt := at;
+  made^.stLen := len;
+  CheckExpr(made);
+  res.stype := made^.ntype;
+  res.constValue := made
+end;
+
+{ 6.8.3.5's comparison of two string values, over the first `ln` characters of
+  one and the first `rn` of the other: "the shorter is considered to be
+  extended to the right with spaces", so `'' = ' '` is true and `'ab' < 'ab '`
+  is false. Answers -1, 0 or 1.
+
+  The two lengths are parameters rather than read from the symbols because
+  6.7.6.7's LT is defined over *prefixes* -- `substr(s1v, 1, n2) < s2v` -- and
+  a second routine to compare a prefix would be this one with a shorter loop. }
+function ConstStrCmpN(l: symbol; ln: integer; r: symbol; rn: integer): integer;
+var i, n, ans: integer; a, b: char;
+begin
+  if ln > rn then n := ln else n := rn;
+  ans := 0;
+  i := 1;
+  while (i <= n) and (ans = 0) do begin
+    if i <= ln then a := ConstStrAt(l, i) else a := ' ';
+    if i <= rn then b := ConstStrAt(r, i) else b := ' ';
+    if a < b then ans := -1
+    else if a > b then ans := 1;
+    i := i + 1
+  end;
+  ConstStrCmpN := ans
+end;
+
+{ 6.7.6.7's EQ and LT, from which the other four are defined:
+
+    EQ(s1,s2)  =  ( (s1v = s2v) and (n1 = n2) )
+    LT(s1,s2)  =  ( s1v <= substr(s2v, 1, n1) )   where n1 < n2
+                  ( substr(s1v, 1, n2) < s2v )    otherwise
+
+  **These are not the operators.** The operators pad, so `'ab' = 'ab '` is
+  true; EQ asks the lengths as well, so `EQ('ab','ab ')` is false. The compiler
+  has carried that distinction in a comment beside the builtin kinds since the
+  functions landed, and this is the first thing to depend on it.
+
+  In each arm of LT both sides have the same length, so the padding in
+  ConstStrCmpN cannot fire there and the prefix comparison is an ordinary
+  one. }
+function ConstStrEq(l, r: symbol): boolean;
+begin
+  ConstStrEq := (ConstStrCmpN(l, ConstStrLen(l), r, ConstStrLen(r)) = 0) and
+                (ConstStrLen(l) = ConstStrLen(r))
+end;
+
+function ConstStrLt(l, r: symbol): boolean;
+var ln, rn: integer;
+begin
+  ln := ConstStrLen(l);
+  rn := ConstStrLen(r);
+  if ln < rn then ConstStrLt := ConstStrCmpN(l, ln, r, ln) <= 0
+  else ConstStrLt := ConstStrCmpN(l, rn, r, rn) < 0
+end;
+
+{ 6.7.6.7's substr(s, i, j), shared by its two forms -- substr(s, i) being
+  "equivalent to the expression substr(sv,iv,length(sv)-(iv)+1)" and so the
+  same fold with j computed.
+
+  Its three error conditions are "the value of i is less than or equal to 0",
+  "the value of j is less than 0", and "the value of (i)+(j)-1 is greater than
+  the length of the value of s". The third is asked as `j > n - i + 1` rather
+  than by forming the sum: i and j are a program's constants and may be
+  anything, and this compiler's own arithmetic traps on overflow (ADR-0014),
+  so `substr(s, maxint, maxint)` would stop the compiler instead of reporting
+  the error the clause names. `n - i + 1` cannot overflow, i being at least 1
+  by the time it is asked.
+
+  Where the source is a string constant the result is a *narrowing* of the run
+  the literal put in the pool. A char constant has no run -- its character
+  lives in the symbol -- so that one case appends. }
+procedure FoldSubstr(a: symbol; i, j, l, c: integer;
+                     var res: symbol; var ok: boolean);
+var n, at: integer;
+begin
+  ok := false;
+  n := ConstStrLen(a);
+  if (i <= 0) or (j < 0) or (j > n - i + 1) then begin
+    ErrorAt(l, c);
+    write('substr of ', j:1, ' characters from position ', i:1);
+    writeln(' is outside the string constant''s 1..', n:1);
+    constReported := true
+  end
+  else begin
+    if IsChar(a.stype) then begin
+      at := poolLen + 1;
+      if j > 0 then PoolPut(a.charVal)
+    end
+    else
+      at := a.constValue^.stAt + i - 1;
+    MakeConstStr(at, j, l, c, res);
+    ok := true
+  end
+end;
+
 { 6.8.2's expression, once both operands have folded. What it will not fold is
   stated rather than silently refused: a real-valued operation, because a real
-  constant is carried here as its source text and never converted (ADR-0025),
-  and a set- or string-valued one, because a symbol has nowhere to keep the
-  value. }
+  constant is carried here as its source text and never converted (ADR-0025).
+
+  This used to say "and a set- or string-valued one, because a symbol has
+  nowhere to keep the value", and that was half false. A symbol has kept a
+  string since ADR-0068 -- `constValue` is where the substring-constant fold
+  puts one -- so ADR-0226 folds concatenation and the relational operators.
+  A **set** is the half that remains true: the folder builds no set node, so
+  there is nothing for a set-valued result to be. }
 function EvalConstBinary;
 var l, r: symbol; ok: boolean; a, c, v: integer; k: integer;
 begin
@@ -9910,6 +10058,44 @@ begin
         writeln('a real constant expression is not folded: a real constant ',
                 'is carried as the text that was written and never converted');
         constReported := true
+      end
+      { 6.8.3.6's concatenation and 6.8.3.5's relational operators over strings,
+        folded since ADR-0226. They are asked before the case below because an
+        operand of a string-type is not ordinal and would otherwise fall out of
+        every arm -- `opAdd` on two integers reaches the case as it always has,
+        a string constant having ConstStrLen -1 for anything that is not a
+        char or a literal. }
+      else if (ConstStrLen(l) >= 0) and (ConstStrLen(r) >= 0) and
+              ((e^.bnOp = opAdd) or (e^.bnOp = opEq) or (e^.bnOp = opNe) or
+               (e^.bnOp = opLt) or (e^.bnOp = opLe) or (e^.bnOp = opGt) or
+               (e^.bnOp = opGe)) then begin
+        if e^.bnOp = opAdd then begin
+          { "a value of the canonical-string-type whose length shall be equal
+            to the sum of the length of a and the length of b". The characters
+            are new pool text: there is no run to narrow, which is the one way
+            this differs from the substring-constant fold. }
+          k := poolLen + 1;
+          for a := 1 to ConstStrLen(l) do PoolPut(ConstStrAt(l, a));
+          for a := 1 to ConstStrLen(r) do PoolPut(ConstStrAt(r, a));
+          MakeConstStr(k, ConstStrLen(l) + ConstStrLen(r), e^.line, e^.col,
+                       res);
+          ok := true
+        end
+        else begin
+          a := ConstStrCmpN(l, ConstStrLen(l), r, ConstStrLen(r));
+          res.stype := boolType;
+          case e^.bnOp of
+            opEq: res.boolVal := a = 0;
+            opNe: res.boolVal := a <> 0;
+            opLt: res.boolVal := a < 0;
+            opLe: res.boolVal := a <= 0;
+            opGt: res.boolVal := a > 0;
+            opGe: res.boolVal := a >= 0;
+            opAdd, opSub, opMul, opRealDiv, opIntDiv, opMod, opAnd, opOr,
+            opExp, opPow, opAndThen, opOrElse, opSymDiff, opIn: ;
+          end;
+          ok := true
+        end
       end
       else
         case e^.bnOp of
@@ -9986,40 +10172,26 @@ end;
   function belongs in a constant-expression unless this compiler cannot
   evaluate it exactly.
 
-  Two cannot, and for one reason between them. **A real constant is carried as
-  the text that was written** and is never converted to a number here -- LLVM's
-  assembler is the strtod (ADR-0025). So `sqrt`, `sin`, `cos`, `ln`, `exp` and
-  `arctan` would need both a conversion and a formatter to write a result back
-  as text, and `trunc` and `round` would need the conversion even though their
-  results are integers. Those eight are a **restriction**, recorded in
-  doc/implementation-defined.md 6, not an oversight -- and neither is `substr`,
-  whose result is a string with no scalar form to fold to.
+  **Eight cannot, and for one reason between them. A real constant is carried
+  as the text that was written** and is never converted to a number here --
+  LLVM's assembler is the strtod (ADR-0025). So `sqrt`, `sin`, `cos`, `ln`,
+  `exp` and `arctan` would need both a conversion and a formatter to write a
+  result back as text, and `trunc` and `round` would need the conversion even
+  though their results are integers. Those eight are a **restriction**,
+  recorded in doc/implementation-defined.md 6, not an oversight.
 
-  What is left is exact: the ordinal-valued functions, `length`, and 6.7.6.4's
-  two-argument succ and pred, which were missing only because this walked one
-  argument. }
-{ 6.4.3.3.1 gives the char-type "length 1 and capacity 1", so a char constant
-  is a string of length one whose only component is itself. These two functions
-  are the whole of that difference: a string constant is its literal, *named*
-  (ADR-0068), so its characters are in the pool and a char's is in the symbol.
-  A length of -1 means the constant is neither, which is the folder's way of
-  saying it has nothing to work on. }
-function ConstStrLen(s: symbol): integer;
-begin
-  if IsChar(s.stype) then ConstStrLen := 1
-  else if s.constValue = nil then ConstStrLen := -1
-  else if s.constValue^.kind <> nkStr then ConstStrLen := -1
-  else ConstStrLen := s.constValue^.stLen
-end;
+  It used to be nine, and the ninth was `substr`, "whose result is a string
+  with no scalar form to fold to". That reason was never true: a string
+  constant *is* a literal, named (ADR-0068), which is exactly what the
+  substring-constant fold builds. ADR-0226 folds `substr`, `trim` and the six
+  string relational functions.
 
-function ConstStrAt(s: symbol; i: integer): char;
-begin
-  if IsChar(s.stype) then ConstStrAt := s.charVal
-  else ConstStrAt := pool[s.constValue^.stAt + i - 1]
-end;
+  What is left is exact: the ordinal-valued functions, `length`, the string
+  functions, and 6.7.6.4's two-argument succ and pred, which were missing only
+  because this walked one argument. }
 
 function EvalConstCall;
-var a, b: symbol; ok: boolean; v, k, lo, hi, j: integer; bad: boolean;
+var a, b, c: symbol; ok: boolean; v, k, lo, hi, j: integer; bad: boolean;
 begin
   ok := false;
   a.stype := nil;
@@ -10121,6 +10293,30 @@ begin
             formatter as well. EvalConstBinary says the same sentence about a
             real *operator*, and it is the same restriction reached through a
             call. }
+          { 6.7.6.7's trim: "if n equals 0, the function shall yield the
+            null-string; if the value of sv[n] is not equal to the char-type
+            value space, the function shall yield the value of sv; otherwise,
+            the function shall yield the value of substr(sv,1,p-1), where p is
+            the least value in the closed interval 1..n such that each
+            component of sv[p..n] is the char-type value space."
+
+            So it is a *prefix*, and a prefix of a run already in the pool
+            needs no new pool text -- this narrows, as the substring-constant
+            fold does. A char constant has none, its character living in the
+            symbol, so it is the one case that appends (ADR-0226). }
+          biTrim:
+            if ConstStrLen(a) >= 0 then begin
+              k := ConstStrLen(a);
+              while (k > 0) and (ConstStrAt(a, k) = ' ') do k := k - 1;
+              if IsChar(a.stype) then begin
+                j := poolLen + 1;
+                if k > 0 then PoolPut(a.charVal);
+                MakeConstStr(j, k, e^.line, e^.col, res)
+              end
+              else
+                MakeConstStr(a.constValue^.stAt, k, e^.line, e^.col, res);
+              ok := true
+            end;
           biSqrt, biSin, biCos, biLn, biExp, biArcTan, biTrunc, biRound: begin
             ErrorAt(e^.line, e^.col);
             writeln('a real constant expression is not folded: a real ',
@@ -10130,12 +10326,12 @@ begin
           end;
           biNone, biEof, biEoln, biCmplx, biPolar, biRe, biIm, biArg,
           biPosition, biLastPosition, biEmpty, biCard, biIndex,
-          biSubstr, biTrim, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
+          biSubstr, biStrEq, biStrNe, biStrLt, biStrGt, biStrLe,
           biStrGe, biBinding, biDate, biTime, biArgCount, biArgument,
           biTry, biTake, biRelease: ;
         end
     end
-    else if e^.clArgs^.next^.next = nil then
+    else if e^.clArgs^.next^.next = nil then begin
       { 6.7.6.7's index, which nothing folded -- and 6.3.2, the standard's own
         example of a constant-definition-part, writes it twice:
 
@@ -10148,7 +10344,41 @@ begin
         required function out reaches index: its result is an integer, so no
         real is converted, and its operands are literals already in the pool,
         so no computed string has to be named. }
-      if e^.clBuiltin = biIndex then begin
+      { 6.7.6.7's two-argument substr, and the six string relational functions.
+        All seven are nonvarying by 6.8.2 -- none names a variable, none is
+        declared by the program, none is eof or eoln -- and all seven were
+        refused until ADR-0226. }
+      if e^.clBuiltin = biSubstr then begin
+        if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
+          if EvalConst(e^.clArgs^.next, b) and (b.stype <> nil) then
+            if (ConstStrLen(a) >= 0) and IsInteger(b.stype) then
+              FoldSubstr(a, b.intVal, ConstStrLen(a) - b.intVal + 1,
+                         e^.line, e^.col, res, ok)
+      end
+      else if IsStringCompare(e^.clBuiltin) then begin
+        if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
+          if EvalConst(e^.clArgs^.next, b) and (b.stype <> nil) then
+            if (ConstStrLen(a) >= 0) and (ConstStrLen(b) >= 0) then begin
+              res.stype := boolType;
+              { The four derived ones are the clause's own definitions:
+                NE = not EQ, GT = not LT and not EQ, LE = LT or EQ,
+                GE = not LT. }
+              if e^.clBuiltin = biStrEq then
+                res.boolVal := ConstStrEq(a, b)
+              else if e^.clBuiltin = biStrNe then
+                res.boolVal := not ConstStrEq(a, b)
+              else if e^.clBuiltin = biStrLt then
+                res.boolVal := ConstStrLt(a, b)
+              else if e^.clBuiltin = biStrGe then
+                res.boolVal := not ConstStrLt(a, b)
+              else if e^.clBuiltin = biStrLe then
+                res.boolVal := ConstStrLt(a, b) or ConstStrEq(a, b)
+              else
+                res.boolVal := not ConstStrLt(a, b) and not ConstStrEq(a, b);
+              ok := true
+            end
+      end
+      else if e^.clBuiltin = biIndex then begin
         if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
           if EvalConst(e^.clArgs^.next, b) and (b.stype <> nil) then begin
             lo := ConstStrLen(a);
@@ -10224,7 +10454,19 @@ begin
                 else res.intVal := v;
                 ok := true
               end
-            end;
+            end
+    end
+    { 6.7.6.7's three-argument substr, the only required function here that
+      takes three. The two-argument form above computes j and hands the same
+      fold the same work (ADR-0226). }
+    else if e^.clArgs^.next^.next^.next = nil then
+      if e^.clBuiltin = biSubstr then
+        if EvalConst(e^.clArgs, a) and (a.stype <> nil) then
+          if EvalConst(e^.clArgs^.next, b) and (b.stype <> nil) then
+            if EvalConst(e^.clArgs^.next^.next, c) and (c.stype <> nil) then
+              if (ConstStrLen(a) >= 0) and IsInteger(b.stype) and
+                 IsInteger(c.stype) then
+                FoldSubstr(a, b.intVal, c.intVal, e^.line, e^.col, res, ok);
   EvalConstCall := ok
 end;
 
@@ -15854,11 +16096,6 @@ begin IsBindingBuiltin := b = biBinding end;
 function IsTimeBuiltin(b: builtinKind): boolean;
 begin IsTimeBuiltin := (b = biDate) or (b = biTime) end;
 
-function IsStringCompare(b: builtinKind): boolean;
-begin
-  IsStringCompare := (b = biStrEq) or (b = biStrNe) or (b = biStrLt) or
-                     (b = biStrGt) or (b = biStrLe) or (b = biStrGe)
-end;
 
 { Every argument of a 6.7.6.7 function that is meant to be a string: "the
   expressions s1 and s2 shall each be of char-type or a string-type". Only the
