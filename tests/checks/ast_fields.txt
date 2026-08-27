@@ -1,0 +1,8 @@
+# Construction sites where a pointer field is filled somewhere this gate
+# cannot see -- through a second variable, or by a routine the node is handed
+# to. Form: `nkKind.field at Routine:line`, with the reason and where.
+#
+# Empty, and that is the finding rather than an accident (ADR-0222): every one
+# of the 138 pointer fields is either cleared in NewNode or assigned at its
+# own construction site, over 70 sites. An entry here is a site that stopped
+# being one of those two things.

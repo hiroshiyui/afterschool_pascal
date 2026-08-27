@@ -258,6 +258,15 @@ if(Python3_FOUND)
            COMMAND ${Python3_EXECUTABLE}
                    ${CMAKE_SOURCE_DIR}/tests/checks/kind_exhaustive.py)
 
+  # ADR-0222: the AST is the only variant record here, and a variant record has
+  # no member initialisers -- so a pointer field of the arm the tag selects
+  # holds whatever new() returned until something writes it. Two things write
+  # them, NewNode and the construction site, and which does which is a split
+  # nothing checked. This asks that every pointer field is on one side of it.
+  add_test(NAME ast-fields
+           COMMAND ${Python3_EXECUTABLE}
+                   ${CMAKE_SOURCE_DIR}/tests/checks/ast_fields.py)
+
   # ADR-0183: the oracle none of the others can be. Every gate here reads what
   # a program *prints*, and a leak prints nothing -- which is how a handle in
   # an unowned heap record (ADR-0181) and an abandoned chain (ADR-0182) were
