@@ -5,8 +5,8 @@ case nested:colour:1 names 5 of 5 at 85:3
 case nested:colour:2 names 3 of 5 at 87:7 missing amber cyan
 case ofsubrange:colour:1 names 2 of 5 otherwise at 100:3 missing red blue cyan
 case flagged:flag:1 names 2 of 3 otherwise at 110:3 missing paused
-case dispatch:colour:1 names 5 of 5 at 181:3
-case dispatch:?:1 names 2 of 3 otherwise at 185:3 missing gamma
+case dispatch:colour:1 names 5 of 5 at 187:3
+case dispatch:?:1 names 2 of 3 otherwise at 191:3 missing gamma
 enum colour 5
 enum flag 3
 enum mode 3

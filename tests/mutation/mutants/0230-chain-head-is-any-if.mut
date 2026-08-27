@@ -3,6 +3,6 @@ file: selfhost/compiler.pas
 kills: kind-exhaustive
 why: A chain is a shape and not a node, so a head has to be told from a continuation: an if that is some other if's else-part continues a chain rather than starting one. Treating every if as a head reports each arm of a chain as a chain of its own, so a three-arm dispatch over nodeKind becomes three one-arm chains -- and a one-arm chain names one constant, which is below the threshold, so the whole dispatch vanishes from the catalogue instead of being reported wrongly. The failure is silence, which is why the catalogue's entries are what notice.
 --- old
-    IsContinuation := found
+  IsContinuation := found
 --- new
-    IsContinuation := false
+  IsContinuation := false

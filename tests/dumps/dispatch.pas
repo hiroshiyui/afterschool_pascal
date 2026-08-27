@@ -158,6 +158,12 @@ begin
     Second := 'b'
   else if r.kind = amber then
     Second := 'm'
+  { Two constants compared with each other dispatch on nothing, so this arm
+    contributes no constant to the count -- exactly one side of a tag test has
+    to be a constant. The arm is degenerate on purpose: it is the shape the
+    guard exists for, and nothing else in the corpus has it. }
+  else if red = green then
+    Second := 'z'
 end;
 
 { neither of these is an enumeration, and neither is reported }
