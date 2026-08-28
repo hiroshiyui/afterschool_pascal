@@ -68,13 +68,13 @@ written in Extended Pascal now (ADR-0082), so it *could* spell one
 §6.4.3.4's `BindingType.name` is a variable-string, so everything reaching
 `bind` is one (ADR-0052). Everything else is still the record.
 
-**String type.** Under ISO 7185, `packed array [1..n] of char` and nothing
-else. A string literal is given that type in Sema rather than one of its own, so
-`write`, assignment, comparison and argument passing need no literal-shaped
-special case (ADR-0017); a one-character literal is a `char`. Under
-`--std=extended` §6.4.3.3 adds two more — a *variable-string* `string(n)` and
-the *canonical-string-type* every value has on its way into one — and a literal
-then belongs to all of them (ADR-0051).
+**String type.** ISO 7185 has one, `packed array [1..n] of char`. A string
+literal is given that type in Sema rather than one of its own, so `write`,
+assignment, comparison and argument passing need no literal-shaped special case
+(ADR-0017); a one-character literal is a `char`. ISO/IEC 10206:1991 §6.4.3.3
+adds two more, and this language has all three — a *variable-string* `string(n)`
+and the *canonical-string-type* every value has on its way into one — with a
+literal belonging to all of them (ADR-0051).
 
 **Designator.** The syntactic form that denotes a variable: a name, possibly
 followed by subscripts, field selections and dereferences — `a[i].next^.value`.
@@ -188,14 +188,15 @@ label, a dereference of `nil`. This compiler
 *traps*: it stops the program with a message rather than wrapping, reading past
 the array, or producing an arbitrary value (ADR-0014, ADR-0015).
 
-**Standard (`--std`).** Which language a source is written in: `iso7185`, the
-default, `extended` for ISO/IEC 10206:1991, or `afterschool` for the dialect.
-The first two are not a feature switch and are **not nested**, because Extended
-Pascal reserves word-symbols (`otherwise`, `value`, `only`, …) that a valid
-ISO 7185 program may use as ordinary identifiers, and `selfhost/compiler.pas`
-does. The third *is* nested — see **Dialect** below. The directory a test lives
-in says which language it is in, and the stage-1 compiler is told through a
-file because ISO 7185 gives a program no other channel (ADR-0033, ADR-0117).
+**Standard (`--std`).** *Historical.* Until ADR-0232 this named which of three
+languages a source was written in: `iso7185`, `extended` for
+ISO/IEC 10206:1991, or `afterschool` for the dialect. The first two were **not
+nested**, because Extended Pascal reserves word-symbols (`otherwise`, `value`,
+`only`, …) that a valid ISO 7185 program may use as ordinary identifiers. There
+is one language now and no option, comment or sidecar that selects one; the
+word survives only in these records and in `tools/pascalcc`, which accepts
+`--std=` and ignores it so a version 2 build script still runs (ADR-0033,
+ADR-0117, ADR-0232).
 
 **Schema.** ISO/IEC 10206:1991 §6.4.7's mapping from discriminant tuples to
 types: `type vector(n: integer) = array [1..n] of real`. Not a type — nothing
@@ -304,20 +305,25 @@ statement-sequence — carries a flag rather than asking a node's kind
 
 ## The dialect
 
-Everything here belongs to `--std=afterschool` and to no conforming mode. The
-distinction is the point: an extension inside `iso7185` or `extended` is a
-defect unless `doc/implementation-defined.md` lists it as one. The dialect
-does not change what those two *accept*; it does change what one of them
-**says**, `external` being refused there by a message that names the dialect
-(ADR-0109, ADR-0117, ADR-0154).
+Everything here is what this language has and no standard does. The
+distinction used to be enforced by a mode — an extension reachable inside
+`iso7185` or `extended` was a defect unless `doc/implementation-defined.md`
+listed it — and ADR-0232 removed the modes, so what keeps it honest now is the
+containment claim below and `tests/dialect/inherits_extended.pas`, which is the
+program that says every Extended Pascal construct still means what the standard
+says (ADR-0109, ADR-0117, ADR-0232).
 
-**Dialect (`--std=afterschool`).** The third mode, and the one place a feature
-neither standard has may land. Unlike the first two it **contains** Extended
-Pascal: `stdKind` is `(stdIso7185, stdExtended, stdAfterschool)` and the order
-*is* the containment, so every site asking "does this mode have Extended
-Pascal?" asks `HasExtended(s)`, which is `s >= stdExtended`. Writing
-`langStd = stdExtended` instead switches Extended Pascal off for the dialect
-and almost every case still passes, which is why the predicate exists.
+**Dialect.** The language, and the one place a feature neither standard has may
+land. It **contains** Extended Pascal, which was the whole of ADR-0117's
+argument for adding it as a third mode rather than a fourth language: `stdKind`
+was `(stdIso7185, stdExtended, stdAfterschool)` and the *order* was the
+containment, so every site asking "does this mode have Extended Pascal?" asked
+`HasExtended(s)`, which was `s >= stdExtended` at 40 sites. Writing
+`langStd = stdExtended` instead switched Extended Pascal off for the dialect
+while almost every case still passed, which is why the predicate existed.
+ADR-0232 removed the type, the predicate and all 40 comparisons: there is
+nothing left to get wrong, which is the strongest form the containment has
+taken.
 `tests/dialect/inherits_extended.pas` pins the containment (ADR-0117).
 
 **`int64`.** A 64-bit integer, and a **numeric** type rather than an ordinal
@@ -380,9 +386,9 @@ for all three at once. **`IsOwned` is a different question** — whether a value
 travels by address — and an owned pointer is not in it, its value being one
 word. The two were one name until ADR-0181 needed them apart.
 
-**The library's two layers.** `lib/` holds the modules written in
-`--std=extended` and usable from it — eight of them, and the layer that could
-exist before the dialect did. `lib/dialect/` holds the thirteen that need the
+**The library's two layers.** `lib/` holds the modules that are ordinary
+ISO/IEC 10206:1991 and would compile under another Extended Pascal — eight of
+them, and the layer that could exist before the dialect did. `lib/dialect/` holds the thirteen that need the
 dialect, and they divide nine to three: nine **bindings**, each a module that
 exports Pascal and keeps its `external` declarations to itself, and three that
 need only the dialect's own features — `PasError`, `PasParse`, and `PasList`,
@@ -455,8 +461,8 @@ therefore never inspects names, never re-derives types, and reports no
 user-facing errors. On an error path Sema still assigns a placeholder type
 rather than null, so codegen cannot crash on a half-checked tree.
 
-**`ParseAbort` / `aborted`.** What a parser that cannot make progress does. In
-`src/` it is the codebase's only exception; in the compiler it is a flag every
+**`ParseAbort` / `aborted`.** What a parser that cannot make progress does. It
+was the C++ codebase's only exception; in this compiler it is a flag every
 production and loop tests, Pascal having no exceptions (ADR-0023). Sema and the
 lexer instead accumulate into `Diagnostics`, so one run reports many errors.
 
@@ -599,35 +605,34 @@ stopped by a runtime check. A non-zero exit is then required. Source paths are
 rewritten to `<source>`, so diagnostics can be pinned without depending on where
 the checkout lives.
 
-**Differential test.** Comparing two independent implementations of the same
-question, rather than either against a recorded expectation. `difftest.sh` does
-that for this compiler and the reference front end in `src/`, diffing their
-dumps over every Pascal source in the tree; a golden pins a port to whatever it
-did the day it was written, where two implementations say "these two agree"
-(ADR-0022 to ADR-0024).
+**Differential test.** *Historical.* Comparing two independent implementations
+of the same question, rather than either against a recorded expectation.
+`difftest.sh` did that for this compiler and the reference front end in `src/`,
+diffing their dumps over every Pascal source in the tree; a golden pins a port
+to whatever it did the day it was written, where two implementations say "these
+two agree" (ADR-0022 to ADR-0024).
 
-**It was gone for a while.** ADR-0085 retired stage 0 and the second
-implementation with it, and ADR-0108 brought it back as a front end — lexer,
-parser and Sema, no code generator — which is the half a dump can compare
-anyway. It covers **tokens, AST and Sema** and never the code generator, and it
-cannot contradict a *reading*, one author writing both sides.
-
-**A count, not only a set.** The baseline records which files disagree and is
-empty, so an empty result is a pass — and an empty result is also what a run
-that reached no files produces. The number of files compared is checked against
-the corpus for that reason.
+**It went twice.** ADR-0085 retired stage 0 and the second implementation with
+it; ADR-0108 brought it back as a front end — lexer, parser and Sema, no code
+generator — which is the half a dump can compare anyway; and ADR-0232 retired
+it for good, `src/` having been frozen at a conformance surface that no longer
+exists. It covered **tokens, AST and Sema** and never the code generator, and
+it could not contradict a *reading*, one author writing both sides. What
+replaces it is nothing, which `doc/sop.md` §7 calls the largest blind spot on
+the page.
 
 **AST dump / Sema dump.** `--dump-ast` is the parse tree as one node per line,
 taken *before Sema*, with `@line:col` printed only where the tree actually
 records a position. `--dump-sema` is the same tree through the same walker,
 plus what Sema alone knows: the frame layouts, the type of every expression,
 the frame slot every name resolved to, and every record's field and variant
-numbering. `--dump-all` writes both with the token stream, in three sections,
-and is what the differential test compares. `src/astdump.cpp` and the Pascal
-walker have to agree, and **which of them is the specification reversed**: the
-C++ defined the format while it was the compiler being ported from, and since
-ADR-0085 the Pascal compiler is the product, so ADR-0108's returning front end
-is what was brought into line with it.
+numbering. `--dump-all` writes both with the token stream, in three sections.
+The format was a *specification* while two implementations wrote it, and
+**which of them specified it reversed twice**: the C++ defined it while it was
+the compiler being ported from; ADR-0085 made the Pascal compiler the product,
+so ADR-0108's returning front end was brought into line with it; and ADR-0232
+left one writer, which makes the format a debugging aid and its goldens the
+only thing holding it. `tests/dumps/` is that corpus (ADR-0103).
 
 **Torture file.** `selfhost/torture.pas` — deliberately not a valid program,
 carrying the lexical error paths and corner cases that valid test programs
