@@ -82,6 +82,20 @@ When performing release engineering, always follow these steps:
    at the tag: a stale seed still builds a working compiler, from the *previous*
    release's source, so nothing else would notice.
 
+   **Reseed last, and freeze `selfhost/compiler.pas` once you have.** The seed
+   is ~10 MB and 240 000 lines, so every refresh is that much churn in the
+   history, and `seed-is-current` compares it to the compiler **byte for byte**
+   at the tag — a single character changed in the source afterwards, even
+   inside a comment that costs no IR, is only *usually* free. A reworded
+   diagnostic is a string constant in the emitted module and is not. Version 3
+   paid this twice: the release commit reseeded, a diagnostic naming the removed
+   `--std=extended` was found afterwards, and the tree needed a second full
+   refresh before the tag could be cut. The order that avoids it is: land every
+   source change, *then* bump the version, *then* reseed, then tag. If a source
+   change turns out to be necessary after the reseed, redo the reseed — do not
+   tag over a stale seed, because the job that catches it runs only at the tag
+   and so has no earlier chance to tell you.
+
 6. **Update `CHANGELOG.md`** — add a new version entry at the top following
    [Keep a Changelog](https://keepachangelog.com/), grouped under `Added`,
    `Changed`, `Fixed`, `Removed`, or `Security`. For this project:

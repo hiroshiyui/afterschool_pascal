@@ -2370,13 +2370,17 @@ translated by some earlier processor of some other language is a file this
 document says nothing about, and linking it is outside this specification
 however well the names happen to match.
 
-NOTE 2 — It is enforced at the link, by the language forming part of the name
-of a module's activation procedures — a name §6.13 already requires the
-components to agree on. That name is now a constant, so no two components this
-processor translates can disagree; what it still buys is that an object left
-over from a processor that *did* vary the name fails to link, with an
-unresolved symbol a reader can be told about, rather than linking and
-disagreeing about 6.4.3.4 (ADR-0119, ADR-0232).
+NOTE 2 — It is enforced at the link. ADR-0119 decided that the language forms
+part of the name of a module's activation procedures — a name §6.13 already
+requires the components to agree on — and ADR-0232 decided that there is one
+language, so the two records together leave that part of the name with a single
+value. Two components a conforming processor translates therefore cannot
+disagree about it, and an object left over from a processor that admitted more
+than one language leaves the symbol undefined, which a reader can be told about
+rather than linking and disagreeing about 6.4.3.4. A probe demonstrates the
+requirement: a module translated separately and linked into a program that
+imports it resolves, and the same program linked against no object at all names
+the missing activation procedure (ADR-0119, ADR-0232).
 
 NOTE 3 — *historical.* This clause required considerably more until ADR-0232,
 and what it required is worth keeping legible, because 6.4.3.4's two
