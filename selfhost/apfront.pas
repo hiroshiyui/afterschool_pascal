@@ -4577,6 +4577,16 @@ begin
   end
 end;
 
+{ ==========================================================================
+  Sema: name resolution and type checking.
+
+  A port of src/sema.cpp and src/type.h. What it must leave behind is what
+  ADR-0008 promises codegen: every expression with a type, every name resolved
+  to a symbol, and every block with an activation record laid out. The type
+  arena it decides into is ApTypes' -- the code generator reads the same
+  records (ADR-0233).
+  ========================================================================== }
+
 { ---------------------------------------------------------------- symbols }
 
 function NewSymbol: symPtr;

@@ -477,13 +477,6 @@ begin
   bind(f, b)
 end;
 
-{ Every stage, in one pass, with a header before each. There is one program
-  because there is one source file, so there is no mode to select: what the
-  C++ driver does with --dump-all, this does by running.
-
-  Each section reports what its own stage found and then shows its result, and
-  only when nothing was found -- a stage that failed has nothing to show, and
-  the stages after it do not run. }
 { ========================================================================== }
 { CodeGen -- the annotated tree, written out as textual LLVM IR.
 

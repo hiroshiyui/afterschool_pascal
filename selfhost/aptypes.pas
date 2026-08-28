@@ -2060,8 +2060,6 @@ procedure Put(c: char);
   sink, which may be aimed at the message buffer; an instruction never is. }
 procedure PutIrLit(w: msgLit);
 
-procedure ErrorAt(l, c: integer);
-
 { ------------------------------------------------------------- diagnostics }
 
 { Begin a diagnostic. Every one in this compiler starts here, which is what
@@ -2073,6 +2071,8 @@ procedure ErrorAt(l, c: integer);
   tests/*.err goldens hold. Both go to `output` -- neither standard gives a
   program a second stream, and adding one would be a second invented extension
   for the sake of tidiness (ADR-0084 is the first and it earned its place). }
+
+procedure ErrorAt(l, c: integer);
 
 { -------------------------------------------------------------- the pool -- }
 
@@ -2178,11 +2178,14 @@ procedure InternBoundsName(slot: integer; var at, len: integer);
 procedure InternForName(slot: integer; var at, len: integer);
 
 { ==========================================================================
-  Sema: name resolution and type checking.
+  The type representation, and the two routines that spell a type.
 
-  A port of src/sema.cpp and src/type.h. What it must leave behind is what
-  ADR-0008 promises codegen: every expression with a type, every name resolved
-  to a symbol, and every block with an activation record laid out.
+  Sema decides what a type *is* and the code generator decides what it costs;
+  both of them read it, and both of them write it into text a person sees --
+  Sema into a diagnostic, CodeGen into the trap message a generated program
+  carries. So the arena, the predicates over it and WriteTypeName are ApTypes'
+  and not Sema's, and there is one of each rather than two that could drift
+  (ADR-0233).
   ========================================================================== }
 
 { ------------------------------------------------------------ the type arena }
@@ -2582,17 +2585,6 @@ begin
     Put(digits[k])
 end;
 
-procedure ErrorAt;
-begin
-  errorSeen := true;
-  { Counted as well as flagged: producing a type from a schema needs to know
-    whether *its* resolution reported anything, so that the tuple that chose
-    it can be named too (6.4.7's domain). }
-  errorCount := errorCount + 1;
-  if dumping then write(l:1, ' ', c:1, ' error ')
-  else write(curFile, ':', l:1, ':', c:1, ': error: ')
-end;
-
 { ------------------------------------------------------------- diagnostics }
 
 { Begin a diagnostic. Every one in this compiler starts here, which is what
@@ -2604,6 +2596,17 @@ end;
   tests/*.err goldens hold. Both go to `output` -- neither standard gives a
   program a second stream, and adding one would be a second invented extension
   for the sake of tidiness (ADR-0084 is the first and it earned its place). }
+
+procedure ErrorAt;
+begin
+  errorSeen := true;
+  { Counted as well as flagged: producing a type from a schema needs to know
+    whether *its* resolution reported anything, so that the tuple that chose
+    it can be named too (6.4.7's domain). }
+  errorCount := errorCount + 1;
+  if dumping then write(l:1, ' ', c:1, ' error ')
+  else write(curFile, ':', l:1, ':', c:1, ': error: ')
+end;
 
 { -------------------------------------------------------------- the pool -- }
 
@@ -2973,11 +2976,14 @@ begin
 end;
 
 { ==========================================================================
-  Sema: name resolution and type checking.
+  The type representation, and the two routines that spell a type.
 
-  A port of src/sema.cpp and src/type.h. What it must leave behind is what
-  ADR-0008 promises codegen: every expression with a type, every name resolved
-  to a symbol, and every block with an activation record laid out.
+  Sema decides what a type *is* and the code generator decides what it costs;
+  both of them read it, and both of them write it into text a person sees --
+  Sema into a diagnostic, CodeGen into the trap message a generated program
+  carries. So the arena, the predicates over it and WriteTypeName are ApTypes'
+  and not Sema's, and there is one of each rather than two that could drift
+  (ADR-0233).
   ========================================================================== }
 
 { ------------------------------------------------------------ the type arena }
