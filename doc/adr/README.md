@@ -241,4 +241,4 @@ the alternatives that were rejected and why.
 | [0230](0230-the-if-chain-half-moves-to-the-compiler.md) | The if-chain half moves to the compiler too | Accepted |
 | [0231](0231-the-dialect-build-measured.md) | The dialect build, measured | Accepted |
 | [0232](0232-afterschool-pascal-is-the-language.md) | Afterschool Pascal is the language | Accepted |
-| [0233](0233-the-compiler-becomes-three-program-components.md) | The compiler becomes three program-components | Proposed |
+| [0233](0233-the-compiler-becomes-three-program-components.md) | The compiler becomes three program-components | Accepted |

@@ -688,13 +688,13 @@ what Free Pascal does with `{$MODE ISO}` — was recommended and declined, on th
 ground that it leaves the project presenting itself as a conformance vehicle
 with a dialect attached, which is not what it is.
 
-### 1. Split `selfhost/compiler.pas` into §6.13 program-components — **recorded as ADR-0233**
+### 1. Split `selfhost/compiler.pas` into §6.13 program-components — **decided as ADR-0233**
 
 The one proposal v3 did not take. It has a record now
 ([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md),
-Proposed and not implemented), and writing it changed the proposal twice —
-which is what ADR-0001 means by writing the record while the alternatives are
-still live.
+Accepted and **not implemented**: what is settled is the cut and the seed, not
+that any of it is built). Writing it changed the proposal twice — which is what
+ADR-0001 means by writing the record while the alternatives are still live.
 
 **The buffer argument below is false**, and the record has the measurement:
 `--import` re-tokenises the whole imported file, so the unit that imports the

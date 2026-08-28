@@ -4,11 +4,17 @@ Date: 2026-08-28
 
 ## Status
 
-Proposed. It is the only record in this tree that is not Accepted, which is
-deliberate: ADR-0001 asks for the record *while the alternatives are still
-live*, and the expensive half of this change is a decision about
-`seed/pascalc.ll` that cannot be taken back once a release ships it. Nothing
-below is implemented.
+Accepted, 2026-08-28. It was written **Proposed** — the only record in this
+tree ever to be — and accepted two days later without a word of the argument
+changing, which is the outcome ADR-0001 is asking for: the record was made
+while the alternatives were still live, the expensive half was named before
+anyone was committed to it, and the decision was then taken on what the record
+says rather than on what had already been built.
+
+**Accepted is not implemented.** Nothing below exists yet; what is settled is
+the cut, the count, and that `seed/pascalc.ll` becomes three artefacts. That
+last is the irreversible half — a release ships the seed — and it is now agreed
+rather than open.
 
 It supersedes no record. It **narrows ADR-0024**, which made the compiler one
 source file because neither standard had an include mechanism — a reason that
