@@ -3457,6 +3457,23 @@ nothing else. What it would lose, mechanism by mechanism:
   bytes the client sent. A compilation reports few diagnostics, so the cost is
   paid where it does not matter; it would be the wrong shape for a feature that
   reported many.
+- **It reads `.components` to find a file's imports** (ADR-0238), and that file
+  is this tree's build description — already read by `run_test.sh`,
+  `irtest.sh`, CMake, `build.sh` and four gates. Without it the compiler is
+  handed a module alone and fails on every name it imports: 48 diagnostics for
+  `lib/dialect/pasjson.pas` and **21 171** for `selfhost/apfront.pas`, so the
+  server worked on `hello.pas` and on nothing in the repository it was written
+  in. **One rule covers every shape — take the entries before this file.** A
+  sidecar beside the file and named after it gives all of them, not naming it;
+  `selfhost/compiler.components` names `compiler.pas` and gives the two before
+  it, which is the case a second rule would have been written for. Otherwise
+  the workspace from `initialize` is walked, files before directories and both
+  sorted, skipping hidden directories and anything beginning with `build` — a
+  build tree holds a second copy of every sidecar and would answer with paths
+  into itself. `Resolve` collapses `.` and `..` first, the sidecars being
+  written `../../lib/dialect/paserror.pas` and two spellings of one file being
+  two strings. What it does **not** do is resolve an interface name to a file,
+  which is `README.md`'s standing gap and the compiler's to answer.
 - **The corpus sweeps reach it through a second root**, not through the glob.
   `coverage.py` names `lsp/pasls.pas` as a group, `variant_check.sh` adds
   `lsp/` to its `find`, and `build.sh` honours `AFTERSCHOOL_PASCAL_OPT` so the

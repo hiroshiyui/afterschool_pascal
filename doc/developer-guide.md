@@ -356,7 +356,10 @@ not what a compiled program wrote:
   server wrote in `name.out`, and what it told a person in `name.note`. The
   harness computes the `Content-Length` frames, so the session stays readable
   while the byte counts stay right, and a session that writes to standard error
-  with no `.note` beside it fails. `lsp/README.md` says how to add one; they are
+  with no `.note` beside it fails. A `name.workspace` marker says the session
+  opens files on disk: `%ROOT%` in the input becomes the checkout's path, and
+  the golden is compared with the root written back and the counts blanked,
+  neither being a thing that can be written down once. `lsp/README.md` says how to add one; they are
   all one `ctest` case, `lsp-server`, because the harness builds the server once
   and ten program-components is most of the cost.
 * **`tests/spec/`** is written against *clauses* rather than against the

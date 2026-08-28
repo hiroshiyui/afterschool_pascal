@@ -26,6 +26,13 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The language server finds a file's imports** by reading `.components`
+  (ADR-0238). Before this the compiler was handed a module on its own and
+  reported every name it imported as undeclared — 48 diagnostics for one
+  library module and 21 171 for the compiler's own front end — so the server
+  was useful on a single-file program and on nothing else. The rule is *take
+  the entries before this file*: a sidecar beside the file answers first,
+  otherwise the workspace named at `initialize` is searched for one naming it.
 - **The language server negotiates the position encoding** and converts
   columns when it must (ADR-0237). An LSP `Position.character` counts UTF-16
   code units by default and this compiler counts bytes, so a line holding a

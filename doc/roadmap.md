@@ -356,7 +356,7 @@ above real rather than theoretical; `lsp/build.sh` produces one and
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Ten entries so far, and **five of them have been acted on** — which is the
+Eleven entries so far, and **six of them have been acted on** — which is the
 discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -369,13 +369,15 @@ looked generous beside a test case and turned out not to be a limit a
 *program* could live inside, and it had to be fixed before the server could be
 compiled at all.
 
-The shape of the whole list is the argument for the chapter. Four of the ten
+The shape of the whole list is the argument for the chapter. Four of the eleven
 are bounds — 8 imports, 24 arguments, a 63-character key, a 255-character
 line — and every one of them was chosen by counting what the largest thing in
 the tree needed at the time. The largest thing in the tree was a test case.
 The tenth is the only one that is not a gap at all: the protocol asked the text
 model a question it had been designed to refuse, and the answer was already
-exported.
+exported. The eleventh is the largest of them and came from pointing the
+finished program at the repository it was written in, which is not a thing the
+first ten had needed.
 
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
@@ -488,6 +490,33 @@ exported.
   protocol's — so a server that converted unconditionally would be *introducing*
   the error it was written to remove. Two sessions in `lsp/sessions/` differ in
   nothing but the offer and in nothing but that number.
+- ~~**The server works on a single-file program and on nothing in this
+  repository**~~ — **answered by reading the build description** (ADR-0238).
+  The compiler is handed one file and a program is several, so a module
+  compiled alone fails on every name it imports: 48 diagnostics for
+  `lib/dialect/pasjson.pas`, two real and 46 cascade — and **21 171** for
+  `selfhost/apfront.pas`, which is not a partial answer but noise the length of
+  the file. Every module in `lib/` and every source in `selfhost/` behaved the
+  same way, and it was invisible for exactly as long as the server was only
+  ever pointed at documents this chapter wrote itself.
+
+  The answer is `.components`, which is this tree's build description and is
+  already read by five other things — `compile_commands.json` is what clangd
+  reads and `go.mod` is what gopls reads, and none of them makes the compiler
+  resolve names. **One rule covers every shape: take the entries before this
+  file.** A sidecar beside the file and named after it gives all of them,
+  because it does not name the file; `selfhost/compiler.components` names
+  `compiler.pas` and gives the two before it, which is the case a second rule
+  would have been written for.
+
+  **What this does not close is `README.md`'s gap**, and it is sharper now for
+  being worked around: *there is no install location and no resolution by
+  name.* A module says `import PasError;` in its own source and nothing here
+  turns that into a file. That belongs to the compiler — resolution is
+  transitive and in dependency order, so it means reading module headings
+  recursively, and the compiler is what reads module headings. A server doing
+  it would be a second reader of Pascal in this tree, which is the mistake this
+  chapter has named three times in another form.
 - **`binding(f).bound` is not a readiness test, and reads exactly like one.**
   `doc/implementation-defined.md` E.16 binds a variable when the external name
   *exists*, so a file about to be created reports `false` and one already
