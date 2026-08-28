@@ -1,8 +1,0 @@
-adr: 0214
-file: selfhost/compiler.pas
-kills: typeinquiry_refused
-why: 6.4.9's type-inquiry-object is a variable-name, so an indexed one is outside the clause -- and the parser is where three of the four spellings are caught, because a bracket, a caret or a second period cannot begin anything a type-inquiry may be followed by. Dropping the bracket arm alone leaves the caret and the period cases green, so `typeinquiry_deref` and `typeinquiry_qualified` do not notice: what the program then gets is the complaint the whole record is about, `expected ';' after a variable declaration, found '['`, which names the declaration's own separator and neither the rule nor the construct nor -- since ADR-0215 -- the mode that has the construct. Nothing else can see it -- the program is still refused, and the exit status, the stage and the file are unchanged.
---- old
-            if Check(tkLBracket) or Check(tkCaret) or Check(tkPeriod) then
---- new
-            if Check(tkCaret) or Check(tkPeriod) then

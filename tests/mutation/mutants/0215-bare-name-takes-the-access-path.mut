@@ -1,13 +1,13 @@
 adr: 0215
 file: selfhost/compiler.pas
-kills: dialect-containment
-why: AP 6.4.9's containment is by construction: a bare name is put back in tqAt/tqLen, so a conforming program takes 6.4.9's own path under --std=afterschool and every rule the clause already had is asked the question it was written for. Sending a bare name down the access path instead looks harmless -- InquiryOfAccess answers the same type for `type of n` -- and it is not: the closest-containing rule, the schematic-formal refusal and the slice refusal are all written against tqAt/tqLen and stop being asked. dialect-containment is the case that notices, and the only one: it compiles the whole conformance corpus a second way under --std=afterschool, which is where a bare `type of` is written. Every dialect case writes a selector, so all of them stay green, and so does typeinquiry -- that case is compiled under --std=extended, where this branch is not reached at all.
+kills: typeinquiry_access_errors
+why: AP 6.4.9's containment is by construction: a bare name is put back in tqAt/tqLen, so a program of ISO/IEC 10206:1991 takes 6.4.9's own path and every rule the clause already had is asked the question it was written for. Sending a bare name down the access path instead looks harmless -- InquiryOfAccess answers the same type for `type of n` -- and it is not: the closest-containing rule, the schematic-formal refusal and the slice refusal are all written against tqAt/tqLen and stop being asked. Re-anchored after ADR-0232, which reindented the arm; the killer moved too, `dialect-containment` having compiled the conformance corpus a second way and gone with the modes.
 --- old
-            if obj^.kind = nkVar then begin
-              t^.tqAt := obj^.vrAt;
-              t^.tqLen := obj^.vrLen
-            end
-            else
-              t^.tqObj := obj
---- new
+          if obj^.kind = nkVar then begin
+            t^.tqAt := obj^.vrAt;
+            t^.tqLen := obj^.vrLen
+          end
+          else
             t^.tqObj := obj
+--- new
+          t^.tqObj := obj

@@ -1,8 +1,0 @@
-adr: 0214
-file: selfhost/compiler.pas
-kills: typeinquiry_field
-why: `r.f` is the one spelling of a field-designator the parser cannot refuse, a variable-name admitting a qualifier (6.5.1) and the parser having no way to tell an imported interface from a record variable. So Sema asks the symbol. Without the question the lookup simply fails and the field is reported as an undeclared variable -- `unknown variable 'f' in 'type of'` -- which is a true sentence about a name that exists, pointing at neither the rule nor the record nor, since ADR-0215, at the mode that has the construct. The program is still refused, so only a golden holding the message itself can tell.
---- old
-    if (q <> nil) and (q^.kind <> skInterface) then begin
---- new
-    if false then begin

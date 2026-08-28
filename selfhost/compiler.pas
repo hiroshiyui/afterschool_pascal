@@ -29425,9 +29425,12 @@ begin
     writeln(ircode, ', 1');
     { Not pas_str_slice_check, whose message calls its subject a sequence of
       components. The fourth argument is AP 6.5.6 (ADR-0219): the empty
-      substring `s[i..i-1]` is admissible under the dialect and an error under
-      either conformance mode, which is the one disjunct the two rules differ
-      over -- so the check is one function and the mode is an argument to it.
+      substring `s[i..i-1]` is admissible, where both standards make it an
+      error, and that is the one disjunct the two rules differ over -- so the
+      check is one function and the disjunct is an argument to it. It was the
+      *mode* that chose the argument until ADR-0232; there is one language now
+      and the argument is the constant below, kept as an argument because the
+      runtime routine is shared with the slice check, which does not admit it.
 
       6.7.6.7's `substr(s, i, 0)` already yields the null-string in Extended
       Pascal and ADR-0125's `a[i..i-1]` is already the empty slice, so this
