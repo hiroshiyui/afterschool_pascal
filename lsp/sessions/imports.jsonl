@@ -1,0 +1,41 @@
+# Import resolution: the server reads `.components`, this tree's build
+# description, and hands the compiler the entries before the file it was
+# asked about (ADR-0238). Without it a module compiled alone fails on every
+# name it imports -- 48 diagnostics for lib/dialect/pasjson.pas, two of them
+# real and 46 cascade -- so the server was usable on a single-file program
+# and on nothing in the repository it was written in.
+#
+# The workspace beside this file is three files and covers all three shapes.
+# %ROOT% is this checkout, substituted by the harness; the golden is
+# normalised for the same reason and its Content-Lengths are blanked, an
+# absolute path being as long as somebody's home directory.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":"file://%ROOT%","capabilities":{}}}
+
+# The shape that needs the walk. There is no middle.components; the sidecar
+# that names middle.pas is client.components, and what must be taken from it
+# is base.pas and not middle.pas itself. An empty array is the whole claim:
+# with no resolution this reports `no interface named 'base' has been
+# exported` and eight more from the names that came with it.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","languageId":"pascal","version":1,"text":"{ The middle of the workspace, and the shape that needs the walk.\n\n  There is no `middle.components` beside this file. The sidecar that names it\n  is `client.components`, one directory entry along, and what the server must\n  take from it is the entries *before* this one -- `base.pas` and nothing\n  else. Opening this file with no resolution at all reports `no interface\n  named 'base' has been exported` and then every name that came from it. }\nmodule Middle;\n\nexport Middle = (Doubled);\n\nimport Base;\n\nfunction Doubled: integer;\n\nend;\n\nfunction Doubled;\nbegin\n  Doubled := Answer * 2\nend;\n\nend.\n"}}}
+
+# ...and a real error in the same file still arrives, at the right position.
+# An empty array can be produced by a server that failed to run the compiler
+# at all, so the pair is what says the imports were resolved *and* the
+# compilation happened.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","version":2},"contentChanges":[{"text":"{ The middle of the workspace, and the shape that needs the walk.\n\n  There is no `middle.components` beside this file. The sidecar that names it\n  is `client.components`, one directory entry along, and what the server must\n  take from it is the entries *before* this one -- `base.pas` and nothing\n  else. Opening this file with no resolution at all reports `no interface\n  named 'base' has been exported` and then every name that came from it. }\nmodule Middle;\n\nexport Middle = (Doubled);\n\nimport Base;\n\nfunction Doubled: integer;\n\nend;\n\nfunction Doubled;\nbegin\n  Doubled := Answer * missing\nend;\n\nend.\n"}]}}
+
+# The ordinary shape: a sidecar beside the file and named after it, which
+# does not name the file, so every entry is taken.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","languageId":"pascal","version":1,"text":"{ The top of the workspace: a program, with `client.components` beside it\n  naming the two modules under it and not naming this file.\n\n  That is the ordinary shape -- a case and its sidecar -- and the answer for\n  it is every entry the sidecar holds. The shape it does *not* cover is\n  `selfhost/compiler.components`, which sits beside `compiler.pas` and names\n  it: there the answer is the prefix, because handing a component its own\n  interface is what `tests/run_test.sh` is careful not to do. }\nprogram client(output);\n\nimport Middle;\n\nbegin\n  writeln(Doubled:1)\nend.\n"}}}
+
+# The bottom: named first by client.components, so the prefix is empty. It
+# compiles either way, which is why the file above is the one that proves
+# the walk found anything.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","languageId":"pascal","version":1,"text":"{ A workspace of three files, which is the smallest one that has all three\n  shapes the server's import resolution has to answer (ADR-0238).\n\n  This is the bottom of it: a module importing nothing, so opening it needs no\n  imports at all and the answer is the empty prefix. It is here to prove the\n  empty answer is *reached* rather than defaulted to -- a resolver that found\n  nothing and a resolver that found nothing to add look alike from outside,\n  and the middle file below is what tells them apart. }\nmodule Base;\n\nexport Base = (Answer);\n\nfunction Answer: integer;\n\nend;\n\nfunction Answer;\nbegin\n  Answer := 42\nend;\n\nend.\n"}}}
+
+# A document that is not on disk at all -- an unsaved buffer, which is the
+# ordinary state of the file an editor is showing. Nothing names it, so
+# nothing is imported and the compiler is still run.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/untitled.pas","languageId":"pascal","version":1,"text":"program u(output);\nbegin\n  writeln(nowhere)\nend.\n"}}}
+
+{"jsonrpc":"2.0","method":"exit"}

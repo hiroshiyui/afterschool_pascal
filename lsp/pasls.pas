@@ -60,9 +60,16 @@
 program pasls;
 
 import PasError;
+       PasFS;
        PasIO;
        PasEnv;
        PasStrVec;
+       { 6.11.3's import-clause, and the reason for it is a collision rather
+         than a preference: PasDir exports `Close` and `NameMax`, which PasIO
+         and PasJson also export. `List` is the whole of what this program
+         wants from it, and naming that is cheaper than qualifying every use
+         of the other two. }
+       PasDir only (List);
        PasProcess;
        PasContainer;
        PasJson;
@@ -85,6 +92,12 @@ const
 
   { JSON-RPC's own codes, from the specification's table. }
   MethodNotFound = -32601;
+
+  { How far below the workspace root a `.components` file is looked for. This
+    tree is three deep at its deepest (`tests/dialect/components/`); eight is
+    room without a checkout of somebody's whole home directory being walked
+    because they opened one file in it. }
+  WalkDepthMax = 8;
 
 type
   { A URI as far as this program can hold one. It is `JsonLine` deliberately
@@ -113,6 +126,9 @@ var
     until `initialize` says otherwise, which is also what a client that offers
     nothing means. }
   encoding: PosEncoding;
+  { The workspace, from `initialize`, or empty where the client named none.
+    Only `.components` files are looked for under it. }
+  rootPath: PathName;
   { The scratch file, bound to a computed name. 6.7.5.6's bind is the only way
     a program names a file while it is running. }
   scratchFile: bindable text;
@@ -268,6 +284,255 @@ begin
     Note('a document vanished from the store while it was being removed')
 end;
 
+{ --- where a file's imports come from ------------------------------------- }
+
+{ The compiler is handed one file and a program is several (6.13), so a module
+  compiled alone fails on every name it imports -- 48 diagnostics for
+  `lib/dialect/pasjson.pas`, two of them real and 46 cascade. A server that
+  did nothing about it would be usable on a single-file program and on nothing
+  in the repository it was written in.
+
+  **What it reads is `.components`, and that file is this tree's build
+  description.** `tests/run_test.sh`, `selfhost/irtest.sh`, CMake,
+  `lsp/build.sh` and four gates already read one: a path per line, relative to
+  the sidecar's own directory, in dependency order. It is what
+  `compile_commands.json` is to clangd and `go.mod` is to gopls, and a server
+  reading the project's build description is what every language server does.
+  The alternative -- resolving `import PasError;` to a file by name -- is the
+  gap `README.md` names, and it wants the *compiler* to answer rather than a
+  second reader of Pascal living here.
+
+  **One rule, and the file already means it: take the entries before this
+  one.** A sidecar that names the file gives its prefix, which is exactly the
+  set of components translated before it; a sidecar named after the file and
+  sitting beside it, which is the ordinary case, does not name it and gives
+  all of them. `selfhost/compiler.components` is the shape that needs the
+  first half — it sits beside `compiler.pas` *and* names it, and handing a
+  component its own interface is what `run_test.sh` is careful not to do. }
+
+function EndsWith(s: PathName; tail: PathName): boolean;
+begin
+  if length(tail) > length(s) then EndsWith := false
+  else EndsWith := s[length(s) - length(tail) + 1..length(s)] = tail
+end;
+
+{ The directory a path is in, without the separator; the empty string for a
+  path with none, which then resolves against the working directory. }
+function DirOf(p: PathName): PathName;
+var i: integer;
+begin
+  i := length(p);
+  while (i > 0) and (p[i] <> '/') do i := i - 1;
+  if i > 1 then DirOf := p[1..i - 1]
+  else if i = 1 then DirOf := '/'
+  else DirOf := ''
+end;
+
+{ `rel` resolved against `base`, with `.` and `..` taken out. The components
+  sidecars are written `../../lib/dialect/paserror.pas`, so nothing can be
+  compared until the dots are gone: two spellings of one file are two strings.
+  A leading `/` in `rel` makes it its own answer, as it does everywhere. }
+function Resolve(base: PathName; rel: PathName): PathName;
+var whole, out: PathName;
+    i, n, segAt: integer;
+    absolute: boolean;
+
+  { Drop the last segment, which is what `..` does. }
+  procedure PopSegment;
+  var k: integer;
+  begin
+    k := length(out);
+    while (k > 0) and (out[k] <> '/') do k := k - 1;
+    if k > 0 then out := out[1..k - 1] else out := ''
+  end;
+
+begin
+  if (length(rel) > 0) and (rel[1] = '/') then whole := rel
+  else if base = '' then whole := rel
+  else whole := base + '/' + rel;
+  absolute := (length(whole) > 0) and (whole[1] = '/');
+  out := '';
+  i := 1;
+  n := length(whole);
+  while i <= n do begin
+    while (i <= n) and (whole[i] = '/') do i := i + 1;
+    segAt := i;
+    while (i <= n) and (whole[i] <> '/') do i := i + 1;
+    if i > segAt then begin
+      if whole[segAt..i - 1] = '.' then { the current directory: nothing }
+      else if whole[segAt..i - 1] = '..' then PopSegment
+      else out := out + '/' + whole[segAt..i - 1]
+    end
+  end;
+  if out = '' then begin
+    if absolute then out := '/' else out := '.'
+  end
+  else if not absolute then out := out[2..length(out)];
+  Resolve := out
+end;
+
+function HexValue(c: char): integer;
+begin
+  if (c >= '0') and (c <= '9') then HexValue := ord(c) - ord('0')
+  else if (c >= 'a') and (c <= 'f') then HexValue := ord(c) - ord('a') + 10
+  else if (c >= 'A') and (c <= 'F') then HexValue := ord(c) - ord('A') + 10
+  else HexValue := -1
+end;
+
+{ A `file:///...` URI as a path, percent-escapes undone -- a project under a
+  directory with a space in its name arrives as `%20` and is otherwise a path
+  that is not there. The empty string for anything else: a URI with a host
+  part, or a scheme this server cannot open, is a document it cannot find on
+  disk, and the caller reads the empty answer as "no imports". }
+function UriToPath(uri: JsonLine): PathName;
+var out: PathName;
+    i, n, hi, lo: integer;
+    taken: boolean;
+begin
+  out := '';
+  if length(uri) < 8 then exit('');
+  if uri[1..8] <> 'file:///' then exit('');
+  { From the last slash of the prefix, so the path keeps its own root. }
+  i := 8;
+  n := length(uri);
+  while i <= n do begin
+    taken := false;
+    if (uri[i] = '%') and (i + 2 <= n) then begin
+      hi := HexValue(uri[i + 1]);
+      lo := HexValue(uri[i + 2]);
+      if (hi >= 0) and (lo >= 0) and (hi * 16 + lo > 0) then begin
+        if length(out) < MaxPath then out := out + chr(hi * 16 + lo);
+        i := i + 3;
+        taken := true
+      end
+    end;
+    if not taken then begin
+      if length(out) < MaxPath then out := out + uri[i];
+      i := i + 1
+    end
+  end;
+  UriToPath := out
+end;
+
+{ Read one sidecar. Where it names `target`, `words` receives `--import` for
+  each entry *before* it and the answer is true. Where it does not, the answer
+  is `whenAbsent` and `words` receives every entry.
+
+  A line is one path and anything after it is ignored, which is how
+  `run_test.sh` reads the same file: a second field used to name a standard
+  and ADR-0232 removed the modes. }
+function ReadSidecar(sidecar: PathName; target: PathName;
+                     whenAbsent: boolean; var words: CommandLine): boolean;
+var f: bindable text;
+    b: BindingType;
+    line, full: PathName;
+    acc: CommandLine;
+    i: integer;
+begin
+  ReadSidecar := false;
+  words := '';
+  acc := '';
+  b := binding(f);
+  b.name := sidecar;
+  bind(f, b);
+  { E.16 binds a variable when the external name *exists*, which is the wrong
+    question before a `rewrite` and exactly the right one before a `reset`. }
+  b := binding(f);
+  if not b.bound then exit(false);
+  reset(f);
+  while not eof(f) do begin
+    readln(f, line);
+    i := 1;
+    while (i <= length(line)) and (line[i] <> ' ') and (line[i] <> chr(9)) do
+      i := i + 1;
+    line := line[1..i - 1];
+    if line <> '' then begin
+      full := Resolve(DirOf(sidecar), line);
+      if full = target then begin
+        words := acc;
+        unbind(f);
+        exit(true)
+      end;
+      { A command line that would not fit is one the compiler would refuse
+        anyway (ADR-0235). Dropping the tail leaves the earlier components,
+        which is the half a reader is more likely to want. }
+      if length(acc) + length(full) + 13 <= CommandMax then
+        acc := acc + ' --import ''' + full + ''''
+    end
+  end;
+  unbind(f);
+  if whenAbsent then begin
+    words := acc;
+    ReadSidecar := true
+  end
+end;
+
+{ Look for a sidecar naming `target`, below `dir`. Files before directories,
+  so a sidecar in this directory answers before one further down, and both
+  lists sorted so that a workspace with two candidates answers the same way
+  twice. }
+function WalkFor(dir: PathName; depth: integer; target: PathName;
+                 var words: CommandLine): boolean;
+var names: StrVecPtr;
+    i: integer;
+    nm, full: PathName;
+    r: InfoResult;
+    found: boolean;
+begin
+  found := false;
+  if depth > WalkDepthMax then exit(false);
+  SVecNew(names, 32);
+  if List(dir, names) = errNone then begin
+    SVecSort(names);
+    for i := 1 to SVecLen(names) do begin
+      nm := SVecGet(names, i);
+      if EndsWith(nm, '.components') then
+        if ReadSidecar(Resolve(dir, nm), target, false, words) then begin
+          found := true;
+          break
+        end
+    end;
+    if not found then
+      for i := 1 to SVecLen(names) do begin
+        nm := SVecGet(names, i);
+        { A hidden directory holds no source anyone is editing, and a build
+          tree holds a second copy of everything -- including sidecars, which
+          would then answer with paths into it. }
+        if length(nm) = 0 then continue;
+        if nm[1] = '.' then continue;
+        if (length(nm) >= 5) and (nm[1..5] = 'build') then continue;
+        full := Resolve(dir, nm);
+        r := Info(full);
+        if r.ok then
+          if r.val.kind = fkDirectory then
+            if WalkFor(full, depth + 1, target, words) then begin
+              found := true;
+              break
+            end
+      end
+  end;
+  SVecFree(names);
+  WalkFor := found
+end;
+
+{ The `--import` words for a document, or none. }
+function ImportsFor(target: PathName; var words: CommandLine): boolean;
+var own: PathName;
+    i: integer;
+begin
+  words := '';
+  if target = '' then exit(false);
+  { A sidecar beside the file and named after it answers first: it is the one
+    whose author meant *this* file, and it is what run_test.sh would read. }
+  i := length(target);
+  while (i > 0) and (target[i] <> '.') and (target[i] <> '/') do i := i - 1;
+  if (i > 0) and (target[i] = '.') then own := target[1..i - 1] + '.components'
+  else own := target + '.components';
+  if Exists(own) then exit(ReadSidecar(own, target, true, words));
+  if rootPath = '' then exit(false);
+  ImportsFor := WalkFor(rootPath, 0, target, words)
+end;
+
 { --- compiling ------------------------------------------------------------ }
 
 { The document, as a file the compiler can open.
@@ -317,12 +582,19 @@ end;
   name -- but `tools/pascalcc`, which a user may just as well name in
   `PASLS_COMPILER`, moves them to standard error. Folding the two together is
   what makes either work. }
-function Compile(var out: CaptureText): boolean;
+function Compile(imports: CommandLine; var out: CaptureText): boolean;
 var cmd: CommandLine;
     r: RunResult;
 begin
   out := '';
-  cmd := compilerCmd + ' ''' + scratchPath + ''' -o ''' + scratchPath
+  { Checked rather than concatenated: a variable-string assignment past its
+    capacity is a run-time error, and the pieces here are all a caller's. }
+  if length(compilerCmd) + length(imports) + 2 * length(scratchPath) + 32
+     > CommandMax then begin
+    Note('the compiler command line would be longer than this program holds');
+    exit(false)
+  end;
+  cmd := compilerCmd + imports + ' ''' + scratchPath + ''' -o ''' + scratchPath
          + '.ll'' 2>&1';
   r := Capture(cmd, out);
   if not r.ok then begin
@@ -376,12 +648,18 @@ var at: integer;
     d: Document;
     out: CaptureText;
     note: JsonPtr;
+    words: CommandLine;
+    found: boolean;
 begin
   at := IndexOf(uri);
   if at = 0 then exit;
   d := VecGet(DocVec, Document, docs, at);
   WriteScratch(d.text);
-  if not Compile(out) then exit;
+  { The document's *real* path, not the scratch one: the sidecars name the
+    file the client is editing, and the scratch file is a copy of its bytes
+    somewhere else entirely. }
+  found := ImportsFor(UriToPath(uri), words);
+  if not Compile(words, out) then exit;
   note := DiagPublish(uri, DiagnosticsIn(out, d.text));
   Send(note);
   JsonFree(note)
@@ -409,6 +687,28 @@ begin
   end
 end;
 
+{ 3.6's `workspaceFolders` where the client sends them, and `rootUri` where it
+  sends the older field instead; neither where it opened a single file, and the
+  server then reads only a sidecar sitting beside the document. }
+procedure FindRoot(params: JsonPtr);
+var folders, one: JsonPtr;
+    uri: JsonLine;
+begin
+  rootPath := '';
+  uri := '';
+  folders := JsonMember(params, 'workspaceFolders');
+  if JsonCount(folders) > 0 then begin
+    one := JsonAt(folders, 1);
+    if JsonTextInto(JsonMember(one, 'uri'), uri) = errNone then
+      rootPath := UriToPath(uri)
+  end;
+  if rootPath = '' then begin
+    uri := '';
+    if JsonTextInto(JsonMember(params, 'rootUri'), uri) = errNone then
+      rootPath := UriToPath(uri)
+  end
+end;
+
 function EncodingName: JsonLine;
 begin
   if encoding = peUtf8 then EncodingName := 'utf-8'
@@ -419,6 +719,7 @@ procedure Initialize(id: JsonPtr; params: JsonPtr);
 var reply, result, caps, info: JsonPtr;
 begin
   Negotiate(params);
+  FindRoot(params);
   reply := NewResponse(id);
   result := JsonNewObject;
   caps := JsonNewObject;
@@ -565,6 +866,7 @@ var body: JsonChars;
 begin
   ReadEnvironment;
   encoding := peUtf16;
+  rootPath := '';
   LspOpen(reader, StdIn);
   VecInit(DocVec, docs, 4);
   running := true;

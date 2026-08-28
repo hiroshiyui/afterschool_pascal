@@ -42,9 +42,12 @@
 #   sessions/name.jsonl   one JSON-RPC message per line, framed by this script;
 #                         a blank line or one beginning with # is a comment,
 #                         because a session is worth annotating and JSON has
-#                         nowhere to say why a message is there
+#                         nowhere to say why a message is there. %ROOT% in a
+#                         message becomes the path of this checkout
 #   sessions/name.out     the exact bytes the server writes to standard output
 #   sessions/name.note    what it writes to standard error; absent means none
+#   sessions/name.workspace  a marker: this session names files on disk, so its
+#                         golden is normalised before the diff -- see below
 set -u
 
 if [[ $# -lt 1 ]]; then
@@ -54,6 +57,7 @@ fi
 
 pascalcc=$1
 pascalc=${2:-${PASCALC:-pascalc}}
+root=$(cd "$(dirname "$0")/.." && pwd)
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -83,6 +87,11 @@ frame() {
   while IFS= read -r line; do
     [[ -n $line ]] || continue
     [[ ${line:0:1} != '#' ]] || continue
+    # A session that opens a real file has to name it, and an absolute path is
+    # the checkout's. The count below is computed after the substitution, so
+    # the frame is still exact -- it is the *golden* that cannot be, which is
+    # what the .workspace marker is about.
+    line=${line//%ROOT%/$root}
     printf 'Content-Length: %d\r\n\r\n%s' "${#line}" "$line"
   done
 }
@@ -117,20 +126,36 @@ for session in "$here"/sessions/*.jsonl; do
     failed=$((failed + 1))
     continue
   fi
-  if ! diff -u "$expected_out" "$work/$name.out"; then
+  # A session that names files on disk echoes their URIs back, and an absolute
+  # path is as long as the checkout's -- so neither the path nor the
+  # Content-Length that counts it can be written down once and compared
+  # everywhere. The root is written back as %ROOT% and the counts are blanked,
+  # and what such a session pins is the *behaviour*: the sessions that name no
+  # file pin the framing, and they are the majority.
+  actual="$work/$name.out"
+  note_actual="$work/$name.note"
+  if [[ -f ${session%.jsonl}.workspace ]]; then
+    sed -e "s|$root|%ROOT%|g" \
+        -e 's/Content-Length: [0-9]*/Content-Length: -/g' \
+        "$work/$name.out" >"$work/$name.norm"
+    sed -e "s|$root|%ROOT%|g" "$work/$name.note" >"$work/$name.note.norm"
+    actual="$work/$name.norm"
+    note_actual="$work/$name.note.norm"
+  fi
+  if ! diff -u "$expected_out" "$actual"; then
     echo "--- $name: the session differs (expected vs actual above) ---" >&2
     failed=$((failed + 1))
     continue
   fi
   if [[ -f $expected_note ]]; then
-    if ! diff -u "$expected_note" "$work/$name.note"; then
+    if ! diff -u "$expected_note" "$note_actual"; then
       echo "--- $name: what the server told the user differs ---" >&2
       failed=$((failed + 1))
       continue
     fi
-  elif [[ -s $work/$name.note ]]; then
+  elif [[ -s $note_actual ]]; then
     echo "--- $name: the server wrote to standard error and no .note says so ---" >&2
-    cat "$work/$name.note" >&2
+    cat "$note_actual" >&2
     failed=$((failed + 1))
     continue
   fi

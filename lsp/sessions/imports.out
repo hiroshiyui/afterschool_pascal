@@ -1,0 +1,13 @@
+Content-Length: -
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","diagnostics":[{"range":{"start":{"line":19,"character":22},"end":{"line":19,"character":22}},"severity":1,"source":"pascalc","message":"undeclared identifier 'missing'"}]}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/base.pas","diagnostics":[]}}Content-Length: -
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file://%ROOT%/lsp/sessions/workspace/untitled.pas","diagnostics":[{"range":{"start":{"line":2,"character":10},"end":{"line":2,"character":10}},"severity":1,"source":"pascalc","message":"undeclared identifier 'nowhere'"}]}}

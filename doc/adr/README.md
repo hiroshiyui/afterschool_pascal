@@ -246,3 +246,4 @@ the alternatives that were rejected and why.
 | [0235](0235-the-two-command-line-bounds-move-together.md) | The two command-line bounds move together | Accepted |
 | [0236](0236-the-language-server-begins.md) | The language server begins | Accepted |
 | [0237](0237-the-protocols-position-unit-is-negotiated-not-assumed.md) | The protocol's position unit is negotiated, not assumed | Accepted |
+| [0238](0238-the-server-reads-the-build-description.md) | The server reads the build description | Accepted |

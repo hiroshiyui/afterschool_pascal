@@ -34,6 +34,18 @@ that sets no environment still works:
 | `PASLS_COMPILER` | what to invoke to compile a document. Default `pascalc`, so it must be on `PATH`; `tools/pascalcc` works too |
 | `PASLS_SCRATCH` | the file the current document is written to before it is compiled. Default `$TMPDIR/pasls-scratch.pas`, and `/tmp` where `TMPDIR` is unset |
 
+It finds a file's **imports** by reading `.components`, which is this tree's
+build description — the same sidecar `tests/run_test.sh`, `selfhost/irtest.sh`,
+CMake and `build.sh` read, a path per line in dependency order. The rule is one
+sentence: *take the entries before this file*. A sidecar beside the file and
+named after it answers first; otherwise the workspace the client named at
+`initialize` is searched for one that names the file. Without this the compiler
+is handed a module alone and reports every name it imports as undeclared —
+21 171 diagnostics for `selfhost/apfront.pas` — so a project that does not use
+the convention gets no imports and that noise back. Resolving an interface name
+to a file, which would need no sidecar at all, is a compiler feature this
+project does not have.
+
 The scratch file exists because a compiler reads a file and an editor holds a
 buffer that has never been saved — which is the whole reason a language server
 exists. There is no `getpid` in this tree and no `mkstemp`, so the name is
@@ -69,6 +81,7 @@ A session is three files:
 | `sessions/name.jsonl` | one JSON-RPC message per line. A blank line or one beginning with `#` is a comment — the harness computes the `Content-Length` frames, so the session stays readable and the byte counts stay right |
 | `sessions/name.out` | the **exact bytes** the server wrote to standard output, carriage returns and byte counts included. A change to what `JsonRender` or `LspWrite` produces fails here even when the JSON still parses |
 | `sessions/name.note` | what it wrote to standard error. Absent means none, and a session that writes something with no `.note` beside it **fails** — so a new complaint cannot appear unnoticed |
+| `sessions/name.workspace` | a marker: this session opens files on disk. `%ROOT%` in the `.jsonl` becomes this checkout's path, and before the diff the harness writes the root back and blanks the `Content-Length`s — an absolute path is as long as somebody's home directory, so neither it nor the count over it can be written down once. Such a session pins the *behaviour*; the sessions that name no file pin the framing |
 
 To add one, write the `.jsonl`, run `run.sh`, and read what it says before
 saving the output as the golden. A golden agrees with whatever wrote it, which

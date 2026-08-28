@@ -1,0 +1,4 @@
+# The presence of this file tells lsp/run.sh that the session opens files on
+# disk: %ROOT% is substituted into the input, and the golden is compared
+# after the root is written back and the Content-Lengths are blanked. See
+# run.sh for why neither can be written down once.
