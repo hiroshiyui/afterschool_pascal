@@ -17,8 +17,8 @@ decide about, and the day it is decided it moves there.
 | --- | --- |
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
 | [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and what each landed feature left open behind it — two of those are still open |
-| [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the six library gaps and the two deliberate language absences, none of which is a mystery |
-| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the one library gap in front of it |
+| [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the five library gaps still open — JSON was the sixth and is done — and the two deliberate language absences, none of which is a mystery |
+| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the two library gaps that were in front of it — both now closed, so nothing is |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is now the only entry left |
 | [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open — which has since been taken |
@@ -462,8 +462,8 @@ release.
 ## The open questions
 
 Seven structural questions about the dialect and five items of *what is next*
-used to stand here. Ten of the twelve are answered — the table at the end says
-where — and what each found on its first run is in
+used to stand here. **Eleven of the twelve are answered** — the table at the
+end says where — and what each found on its first run is in
 [`doc/history.md`](history.md#what-the-roadmap-answered). **One remains, and
 it is not a task**: §1 is a standing risk no record can close, which is why it
 is first — it is read every time and finished never. §2 was the last of the
@@ -607,11 +607,16 @@ one step too short.
 
 What is left of the entry is a caution rather than a task, and it is in
 `doc/sop.md` §7: the catalogue is a **register of demonstrations, not a
-measurement**. **Eleven** mutations are files, all eleven killed on
-2026-08-26 — and `ls tests/mutation/mutants/` is where to count them, because
-this sentence has already gone stale once. Two hundred records carry a
-mutation in their *prose*, most naming code that has since moved. "The
-mutation suite passes" means those eleven claims still hold and nothing more.
+measurement**. `ls tests/mutation/mutants/` is where to count them, and **this
+sentence no longer says how many**, having gone stale twice — it said eleven
+when there were eleven and again when there were forty-five. "The mutation
+suite passes" means those recorded claims still hold and nothing more.
+
+A hundred-odd records carry a mutation in their *prose* instead, most naming
+code that has since moved, and nothing runs one of those. `grep -lic
+'mutation\|mutant' doc/adr/*.md` finds 103 of the 234 records, which is an
+**upper bound** — it catches a record that merely refers to the harness — and
+the point survives either way: the register is much the smaller half.
 
 ### 4. ~~Should the dialect read a type off a *component*?~~ — yes (ADR-0215)
 
@@ -692,7 +697,7 @@ ADR-0232 records all of it. What actually landed, against what was predicted:
   tenth. That rename is the cost in its most concrete form.
 - **Five oracles retired and nothing replaced them**: the BSI suite (the only
   third-party corpus this project ever had), `difftest`, `dialect-containment`,
-  `annex-b` and `reserved-words`. The gate count went 24 → 19.
+  `annex-b` and `reserved-words`. The gate count went 24 → 19 — and to 20 since, `fpc-differential` being the first added after v3 (ADR-0234).
 - **And `src/` went with them**, which was not part of the proposal. With
   `difftest` and `annex_b.py` deleted it had no reader, and it was in no build
   chain — 16 936 lines of C++, and the last reason this build needed a C++
@@ -865,9 +870,22 @@ run by hand over 25 targets rather than the two the compiler admits, on
 2026-08-22, against the 4538 offsets there were that day. **Read the
 proportions and not the absolute**: the denominator is every field of every
 frame the compiler emits for its own source, so it moves with each declaration
-added to `selfhost/compiler.pas` — the gate reports 4999 as this is written,
-and the comparison has no mode that reproduces itself, so the day it was taken
-is part of what it says.
+added to any of the three program-components. **The gate prints its own count
+and this sentence does not**, that number having been quoted here and gone
+stale in two days: it said 4999 and the gate says 8955.
+
+**The split is why, and not by adding a declaration.** A module emits the
+frame *type* of every frame it can index, which includes the frames of the
+modules it imports — a static link is walked across a module boundary and its
+layout has to be spelled to do it — while the routines themselves are
+`declare`d and defined once. So the three translations emit 85, 487 and 706
+frame types against 710 functions defined in total: the counts are cumulative,
+and the gate folds roughly 1.8 frames per frame there is. Harmless, the gate
+comparing each against every target either way, and worth knowing before
+reading the denominator as a measure of the compiler's size.
+
+The comparison has no mode that reproduces itself, so the day it was taken is
+part of what it says.
 
 | target | offsets differing | |
 | --- | --- | --- |
