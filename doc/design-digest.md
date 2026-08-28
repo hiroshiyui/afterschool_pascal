@@ -2184,12 +2184,30 @@ able to make.
   everything past it is discarded in silence. `tests/dialect/lib_os.pas` needed
   exactly twelve, so one added flag pushed the `-o` file name off the end and
   the complaint named the wrong argument — `-o needs a file name`, about an
-  argument that had been written. The limit is `argMax = 24` and there are
-  **twenty-five** parameters: `argOver` is declared past the last usable one and
+  argument that had been written. The limit is `argMax` and there is always one
+  parameter more: `argOver` is declared past the last usable one and
   never read for its name, only for whether it bound at all, which is what turns
   "the list ended" into "the list ended because it ran out". `--dump-limits`
   reports the pool and the tokens and cannot report this one for the same
   reason — a count is what a bound needs and an argument list has none.
+- **The two command-line bounds move together** (ADR-0235). ADR-0158 raised
+  `argMax` to 24 and said it did not revisit `maxImports`, which was 8, because
+  nothing had asked. `lsp/pasls.pas` asked: its import chain is **ten** modules
+  and none of them is optional, so the first program in this tree written to be
+  used rather than tested could not be compiled at all. The two numbers are
+  **one number** — an import costs two words of the command line, so a bound on
+  imports is only real as far as the argument list can express it, and raising
+  `maxImports` alone would have moved the refusal to a worse diagnostic for the
+  same failure. They are 32 and 72, and 72 is *derived* in the comment that
+  declares it: 32 imports are 64 words, `--target=`, a `--dump` flag,
+  `--coverage`, the source, `-o` and its file name are six more, and two are
+  over. The cost is literal — 48 more declarations and 48 more arms of `Arg`'s
+  case-statement — because a program-parameter is a name and not a subscript.
+  Two harnesses count in terms of the bound and moved with it:
+  `selfhost/producttest.sh` builds a command line of `argMax` words and one of
+  `argMax + 1`, and `tests/checks/coverage.py` fills one to exactly `argMax` so
+  that every arm of `Arg` is reached. Without the second, 48 arms would have
+  been reported unreached — `line-coverage`'s ratchet doing its job.
 - **A non-decimal literal is lexical and nothing else** (ADR-0036). `16#ff` reaches the
   parser as an integer literal, so no later rule knows it was written that way.
   Two things the code says and a reader might undo: the extended-digit sequence
@@ -3379,3 +3397,51 @@ lose is the one below.
   the tree can perform. It is written in the module's own header rather than
   left in a roadmap chapter, because the next person to touch it is reading
   the module.
+
+### The language server (`lsp/pasls.pas`)
+
+**The first program in this tree written to be used rather than to be tested**
+(ADR-0236). The roadmap proposes it as *the caller* — the thing large enough to
+say whether the dialect is pleasant to write in, which no gate here can
+measure — and the first increment publishes the compiler's diagnostics and
+nothing else. What it would lose, mechanism by mechanism:
+
+- **It lives in `lsp/` and not in `tests/`.** A test case is compiled into a
+  temporary directory and thrown away; a server has to be a binary someone can
+  point an editor at, which is what makes the protocol's external authority
+  real rather than theoretical. `lsp/build.sh` produces one and reads
+  `lsp/pasls.components` — the sidecar convention `tests/run_test.sh` and
+  `selfhost/irtest.sh` already read, so the build order is written down once. A
+  script and not a CMake target, because nothing here installs anything;
+  `tools/pascalcc` is the precedent.
+- **A session is its own kind of golden**, which is why `lsp/run.sh` exists
+  beside `tests/dumps/run.sh` for the same reason: what is compared is neither
+  a compiled program's output nor a compiler's but a *conversation*. The input
+  is `sessions/name.jsonl`, one JSON-RPC message per line with `#` comments,
+  and the harness computes the `Content-Length` frames — a `.in` file would
+  have byte counts written into it by hand and rewritten whenever a message
+  changed. The golden holds the exact bytes, carriage returns and counts
+  included, so a change to `JsonRender` or `LspWrite` fails here even when the
+  JSON still parses. `name.note` holds standard error, and a session that
+  writes something with no `.note` beside it **fails** — so a new complaint
+  cannot appear unnoticed.
+- **The program declares no program-parameters, and that is the discipline
+  rather than an omission.** §6.9.1 makes the default file of `write` a
+  program-parameter, so a program that does not name `output` cannot call
+  `writeln` at all — which turns "do not mix buffered Pascal output with a
+  descriptor write" from a thing a writer has to remember into a compile-time
+  error. Everything for a person goes to `StdErr` through one procedure.
+- **The document store is a vector searched linearly**, because
+  `PasContainer`'s `MapKey` is 63 characters and a URI is past that before the
+  file name starts. The key type is `JsonLine` deliberately: `DiagPublish`
+  takes one, so a URI the server could hold and that module could not would be
+  a truncation at the boundary rather than a refusal at the door.
+- **`binding(f).bound` is not asked, and asking it was the first defect.**
+  `doc/implementation-defined.md` E.16 binds a variable when the external name
+  *exists*, so a file about to be created reports false and one already written
+  reports true — the opposite of a readiness test in both directions. The
+  unbind before the bind is what keeps the second bind legal, §6.7.5.6 making a
+  bind over an existing entity a dynamic-violation.
+- **The compile is synchronous**, so a `didChange` arriving mid-compile is
+  still the sentence no program here has said — the roadmap's concurrency row
+  keeps its candidate and does not move.

@@ -11,6 +11,29 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## [Unreleased]
+
+### Changed
+
+- **A translation may be given 32 `--import` arguments and 72 command-line
+  arguments**, where the limits were 8 and 24 (ADR-0235). The two are one
+  limit: an import costs two words of the command line, so a bound on imports
+  is only real as far as the argument list can express it, and `argMax` is now
+  derived from `maxImports` rather than counted separately. A command line
+  above either is still reported and never truncated. What asked for it was the
+  first program in this tree with ten modules — `lsp/pasls.pas`, whose import
+  chain could not be written at all.
+
+### Added
+
+- **A language server**, `lsp/pasls.pas`, written in Afterschool Pascal and
+  built by `lsp/build.sh` (ADR-0236). It speaks the Language Server Protocol
+  over standard input and output and publishes `pascalc`'s diagnostics for
+  every document a client opens or changes, so an editor shows them without the
+  file being saved. `PASLS_COMPILER` and `PASLS_SCRATCH` configure it; both
+  have defaults. It is not installed and it is not part of the compiler —
+  `lsp/README.md` says what it does and does not do.
+
 ## [3.0.1] — 2026-08-28
 
 **Nothing about the accepted language, the diagnostics or the command line

@@ -329,19 +329,35 @@ body, and nothing that reads *lines* can hand those back. `PasLsp` (ADR-0218)
 is the buffer between `PasIO`'s byte reads and the frame, and it is what the
 sentence should have said.
 
+**The first increment is written** (ADR-0236). `lsp/pasls.pas` holds documents
+by URI, writes the one it was asked about to a scratch file, invokes `pascalc`
+on it and publishes what came back — `initialize`, `didOpen`, `didChange`,
+`didClose`, `shutdown`, `exit`, and `MethodNotFound` for every other request.
+It lives in `lsp/` and not in `tests/` because a server has to be a binary
+someone can point an editor at, which is what makes the external authority
+above real rather than theoretical; `lsp/build.sh` produces one and
+`lsp/run.sh` replays recorded sessions against it as the `lsp-server` case.
+
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Four entries so far, and **three of the four have been acted on** — which is
-the discipline this chapter is for: a finding recorded and left is a finding
+Nine entries so far, and **four of them have been acted on** — which is the
+discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
 
 The first two came from the framing alone, before a single protocol message
-had been dispatched. The second two came from the diagnostics, before a server
-existed to send one: this chapter has now produced a language change, a
-library defect and a correction to its own plan without any of the program it
-proposes having been written.
+had been dispatched. The next two came from the diagnostics, before a server
+existed to send one. **The last five came from the program itself**, and the
+first of those is the one worth reading before the others: it is a limit that
+looked generous beside a test case and turned out not to be a limit a
+*program* could live inside, and it had to be fixed before the server could be
+compiled at all.
+
+The shape of the whole list is the argument for the chapter. Four of the nine
+are bounds — 8 imports, 24 arguments, a 63-character key, a 255-character
+line — and every one of them was chosen by counting what the largest thing in
+the tree needed at the time. The largest thing in the tree was a test case.
 
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
@@ -394,6 +410,60 @@ proposes having been written.
   `tests/dialect/lib_lsp.pas` does and says at the top. Nothing is wrong here;
   it is a thing a writer has to know and nothing tells them.
 
+  **The server closed this one by construction rather than by care.**
+  `lsp/pasls.pas` declares *no program-parameters at all*, and §6.9.1 makes the
+  default file of `write` a program-parameter — so a stray `writeln` in it is a
+  compile-time error and not a corrupted frame. The discipline is enforced by
+  the compiler; the finding stands for every other program that speaks a
+  descriptor protocol.
+- ~~**The command line cannot express a program with ten modules**~~ —
+  **answered, and it is the finding that had to be answered first** (ADR-0235).
+  `maxImports` was 8 and `argMax` was 24. The server's import chain is ten
+  modules and none is optional: `PasIO` needs `PasFS`, `PasJson` needs
+  `PasContainer`, `PasProcess` needs `PasStrVec`, and the server needs
+  `PasProcess`, `PasEnv` and the three protocol modules. The compiler answered
+  *"more than 8 --import arguments"* — ADR-0110's rule working exactly as
+  designed, reporting rather than truncating — and it was still a program that
+  could not be built.
+
+  **The two numbers are one number**, which is the part worth carrying
+  forward: an import costs two words of the command line, so a bound on
+  imports is only real as far as the argument list can express it. They are
+  now 32 and 72, and the second is *derived* from the first in the comment
+  that declares it. ADR-0114 recorded *"a library of more than eight modules
+  cannot be used whole"* as a limitation of the library; there are 25 modules
+  in `lib/` and that sentence is struck.
+- **`PasContainer`'s map cannot key on a URI.** `MapKey` is 63 characters and
+  `file:///home/someone/a/project/src/thing.pas` is past that before the file
+  name starts, so the document store is a vector searched linearly. For a
+  handful of open documents that costs nothing and the workaround is fine; the
+  finding is that the container's one dimension was sized for a test case's
+  keys and nothing said so.
+- **`JsonLine` is 255 characters and a URI is not a line.** Three modules pick
+  255 for "a string a caller hands over in one piece", which is right for a
+  message and wrong for an identifier that happens to be a path. The server
+  uses `JsonLine` for its document key *deliberately* — `DiagPublish` takes
+  one, so a URI the server could hold and that module could not would be a
+  truncation at the boundary instead of a refusal at the door — and reports and
+  ignores a document whose URI is longer.
+- **A program cannot make a temporary file, and cannot survive failing to.**
+  Two halves. There is no `getpid` anywhere in this tree, no `mkstemp`, and
+  nothing in `PasFS` that answers a temporary name, so the scratch path is one
+  fixed name under `TMPDIR` and two servers sharing a `TMPDIR` share the file.
+  Worse: `rewrite` on a bound name that cannot be created is a run-time error
+  and *stops the program*, and neither standard gives a program a way to ask
+  beforehand — so a server cannot survive a bad scratch path however carefully
+  it is written. The first is a library gap with an obvious shape; the second
+  is a language question and the sharper of the two.
+- **`binding(f).bound` is not a readiness test, and reads exactly like one.**
+  `doc/implementation-defined.md` E.16 binds a variable when the external name
+  *exists*, so a file about to be created reports `false` and one already
+  written reports `true` — the opposite of what a "can I write here?" check
+  wants, in both directions. The first `WriteScratch` asked it and refused to
+  write anything at all. The register says so and the compiler's own `BindTo`
+  does not ask; nothing else does either, which is why it survived to be met
+  by the first program that needed it.
+
 **The IDE is not struck; it is later.** An editor wants a language server
 inside it, so server-first is the right order even if both are eventually
 written — and the terminal binding the IDE needs is small and obviously shaped
@@ -432,7 +502,7 @@ the open decision it would settle.
 | Ownership and borrowing | Rust | aliasing | **The same, and half of it is already here**: a `var` parameter of an owned value's referent is a borrow, and it cannot escape because there is no address-of and `new` is the only producer of a pointer. Not checked — *unformable*, which is stronger and free (ADR-0201) |
 | Traits / protocols | Rust, Swift | abstraction | **Later**, and the reason given here has since become half-true rather than true. Schemata gave parametric types over a *value* (ADR-0039); ADR-0209 lets a discriminant name a **type**, so `Vec(T: type; cap: integer)` is a container written once. What that does not give is a routine over one — see [the row above](#what-blocks-the-library) — and abstraction over *behaviour* is a further thing again, which nothing has asked for |
 | `comptime` | Zig | metaprogramming | **Later.** Constant-expressions everywhere (ADR-0054) is as far as anything needs |
-| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. That is a proposal and not a caller — nothing of it is written — so the row does not move, but it is the first time this one has had a candidate rather than a hypothesis |
+| Actors / `Send`+`Sync` | Concurrent Pascal, Ada, Swift, Rust | concurrency | **Unblocked and unbuilt** (ADR-0201). It unblocks nothing, the two rows above having been answered without it; what it does is *end* the sentence the rest rests on — a borrow cannot outlive a call because the caller is not running during it. So the construct must be **share-nothing**, a task owning what it is given, and the lineage to read is Pascal's own rather than Rust's: Concurrent Pascal had `process` and `monitor` in 1975. Not built, for ADR-0116's reason — nothing here wants it. **This row named its trigger and the trigger came and went in two days.** ADR-0201 said "a socket module serving more than one client is what would demand it, and `select` is the cheaper answer to try first"; ADR-0203 landed the module and ADR-0205 made it serve many, with `poll` and no construct at all. The cheaper answer was tried first and was enough, which is what ADR-0201 asked for. What a thread would still buy is a **slow client not slowing the others** — a different sentence, and one no program here has yet said. **A program that would say it is now named**: the [language server](#the-program-that-would-judge-the-language), where a `didChange` arrives while a compile is in flight and a cancelled request has to stop something already running. **The candidate is now written and the row still does not move** (ADR-0236): `lsp/pasls.pas` exists, and it compiles *synchronously* — it writes the document to a file, waits for `pascalc`, publishes, and only then reads the next message. So the sentence is still unsaid. What has changed is that saying it is now a step rather than a proposal: the program that would is in the tree, the shape of what blocks it is visible, and the row is one increment away from having a caller instead of a candidate |
 
 Two conclusions worth stating:
 

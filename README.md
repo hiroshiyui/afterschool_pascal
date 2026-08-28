@@ -164,6 +164,24 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`;
 set `AFTERSCHOOL_PASCAL_RUNTIME` to point `pascalcc` at a copy outside the build
 tree.
 
+### In an editor
+
+`lsp/` holds a Language Server Protocol server, written in this language and
+using this library. Today it does one thing — it publishes the compiler's
+diagnostics for every file you open or edit, without your having to save one —
+and that is enough to be useful in any editor with an LSP client.
+
+```sh
+PASCALC=build/bin/pascalc AFTERSCHOOL_PASCAL_RUNTIME=build/lib \
+  lsp/build.sh tools/pascalcc ~/bin/pasls
+```
+
+Point your editor at the binary for Pascal files. It talks over standard input
+and output and needs no arguments; `PASLS_COMPILER` says what to invoke if
+`pascalc` is not on `PATH`, and `PASLS_SCRATCH` says where to put the file it
+writes your unsaved buffer into. `lsp/README.md` has the rest, including what
+it does not do yet.
+
 ## The language
 
 **There is one language and nothing to select** (ADR-0232). Version 2 had three
@@ -1031,7 +1049,8 @@ and `VecReserve` grows once so that no later push reallocates.
 
 **There is no install location and no resolution by name.** `--import` takes a
 path, so a program outside this checkout names paths into it, and `maxImports`
-bounds one program at eight components. Of the four things that stood here as absent — sockets, locales, threads and
+bounds one program at 32 components — which is more than the library has, and
+was eight until the first program that needed ten asked for it (ADR-0235). Of the four things that stood here as absent — sockets, locales, threads and
 containers — **two have since landed**: `lib/dialect/pasnet.pas` gives a socket
 that speaks in a host and a service and serves more than one client
 (ADR-0203, ADR-0205), and `lib/dialect/pascontainer.pas` gives a growable
@@ -1704,7 +1723,7 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 731 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 733 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 319 scenarios written against
 clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
 second Pascal compiler**: Free Pascal is run over every case that has a golden,

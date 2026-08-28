@@ -140,6 +140,15 @@ concatenated into a single program parameter, ISO 7185 giving a program no way
 to open a file whose name it computes, and since ADR-0081 it names them
 (§6.7.5.6's `bind`).
 
+**A translation takes at most 32 `--import` arguments and 72 command-line
+arguments in all**, so a program-block with more than 32 supplying components
+cannot be translated here. §6.13 puts no limit on how many a program-block has,
+so both numbers are this processor's, and each is *reported* — `more than 32
+--import arguments`, `more than 72 arguments` — rather than truncating the
+list. They are one limit rather than two: an import costs two words of the
+command line, so the second is derived from the first (ADR-0235). They were 8
+and 24 until a program with ten modules asked.
+
 **The artefact is the supplying component's source.** No interface file format
 is defined, and none is needed: §6.11.1 puts the whole of what a module exports
 in its module-heading, so `--import` reads that heading and nothing else of the

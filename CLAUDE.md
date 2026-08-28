@@ -107,7 +107,12 @@ address does not escape — see ADR-0102 and the two `-O0` cases it added.
 `tests/dumps/` is a corpus apart, with its own harness and its own sidecars
 (`foo.dump`, `foo.flags`) — the `--dump` flags write to standard output, so
 what a case there compares is what the *compiler* wrote and not what a program
-did (ADR-0103).
+did (ADR-0103). **`lsp/` is a second one**, and further out: `lsp/pasls.pas` is
+a language server written in the dialect, built by `lsp/build.sh` into a binary
+an editor can be pointed at rather than into a temporary directory, and checked
+by `lsp/run.sh` replaying `lsp/sessions/*.jsonl` — a *conversation*, framed by
+the harness and compared byte for byte (ADR-0236). It is outside every corpus
+glob, so `line-coverage`, `heap-balance` and `variant-check` do not see it.
 
 `tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009), and
 finds `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and
@@ -673,8 +678,8 @@ simply no longer written in it (ADR-0082). Until then the standard arrived in a
 file holding one word and §6.13's components arrived *concatenated* into a
 fifth, because a program that cannot name a file cannot open several — the
 shape ADR-0079 had to defend against the language rather than on its merits.
-**Twenty-four arguments and eight `--import`s are array bounds, and one of them
-needed an extra parameter to be a bound at all.** `maxImports` reports because a
+**Seventy-two arguments and thirty-two `--import`s are array bounds, and one of
+them needed an extra parameter to be a bound at all.** `maxImports` reports because a
 counter can be compared; the argument list could not, and for a long time did
 not — an unbound program-parameter being the only end-of-list there is, a
 compiler with *n* of them cannot tell *n* arguments from *n* + 9. It was twelve,
@@ -682,7 +687,12 @@ which was exactly what `tests/dialect/lib_os.pas` needs, so one more flag
 silently pushed the `-o` file name off the end and the complaint named the wrong
 argument. `argOver` is declared beyond the last usable one and never read for
 its name: bound exactly when an argument had nowhere to go, which is what turns
-"the list ended" into "the list ended because it ran out" (ADR-0158).
+"the list ended" into "the list ended because it ran out" (ADR-0158). **The two
+numbers are one number** (ADR-0235): an import costs two words, so a bound on
+imports is only real as far as the argument list can express it, and `argMax` is
+*derived* from `maxImports` in the comment that declares it. They were 24 and 8
+until `lsp/pasls.pas` — whose import chain is ten modules and none of them
+optional — could not be compiled at all.
 
 **The first three components are checked by golden files, and by nothing
 else.** `pascalc --dump-all` writes three sections (`=== tokens`, `=== ast`,

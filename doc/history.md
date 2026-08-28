@@ -3910,3 +3910,87 @@ with a golden, modules above all, and it can never reach `tests/dialect/` —
 which is open question §1 and not something a gate discharges. The row it adds
 to §1's table is a second *processor*, and it does not fill either of the two
 that ADR-0232 emptied.
+
+## The language server, and the bound it found before it ran
+
+`doc/roadmap.md` has proposed a language server since before version 3, and it
+has never been proposed as a feature. It is proposed as **the caller**: the
+program large enough to say whether this dialect is pleasant to write in, which
+is a question no gate here can answer and which ADR-0109's goal is actually
+about. Every client of the language so far had been a library module or a test
+case, and those are small, single-purpose, and written by whoever was already
+holding the feature.
+
+Three of its prerequisites had already been written, and each of the three
+corrected the plan rather than fulfilling it. The chapter said there was no
+JSON, and `PasJson` (ADR-0217) took two decisions the paragraph had guessed
+wrong. It said `PasStream` frames the messages, and `PasStream` cannot — a body
+is a byte count and a reader that has consumed a header line is holding the
+first bytes of it, so `PasLsp` (ADR-0218) had to exist. It said `PasParse`
+reads `file:line:col: error:` back off the compiler, and `PasParse` parses an
+integer; `PasLspDiag` is what actually reads one. Three guesses in one
+paragraph, and they share a shape that is worth carrying: **a module named by
+what its name suggests is a guess, not a survey.**
+
+Then the program was written, and it did not compile.
+
+`lsp/pasls.pas` imports ten modules, and not one of them is a convenience:
+`PasIO` needs `PasFS` for a path type, `PasJson` needs `PasContainer` for the
+vector that makes a string value unbounded, `PasProcess` needs `PasStrVec`, and
+the server itself needs `PasProcess` to invoke the compiler, `PasEnv` to find
+it and the three protocol modules to speak. `maxImports` was **8**. The
+compiler said so — *more than 8 --import arguments*, which is ADR-0110's rule
+working exactly as designed, a limit reported rather than a list truncated —
+and it was still a program that could not be built.
+
+ADR-0158 had raised the *other* command-line bound two months earlier and said
+in as many words that it did not revisit this one, because nothing had asked.
+ADR-0114 had recorded the consequence a year before that: *a library of more
+than eight modules cannot be used whole*. Both sentences were true and both had
+sat there, because the largest thing in the tree had always been a test case,
+and a test case with four components fits inside eight imports with room over.
+
+The fix is ADR-0235 and its one idea is that **the two numbers are one number**.
+An import costs two words of the command line, so a bound on imports is only
+real as far as the argument list can express it; raising `maxImports` alone
+would have moved the refusal to a message about arguments, which is a worse
+diagnostic for the same failure. They are 32 and 72 now, the second derived
+from the first in the comment that declares it, and the cost is literal — 48
+more program-parameters and 48 more arms of one case-statement, because §6.5.1
+gives a program-parameter a binding and not a subscript.
+
+Two harnesses count in terms of the bound and had to move with it, and the
+second is the interesting one: `tests/checks/coverage.py` fills a command line
+to exactly `argMax` so that every arm of `Arg` is reached, and without that
+edit 48 arms would have been reported unreached. That is `line-coverage`'s
+ratchet doing precisely its job, and it would have been a true finding about a
+change nobody had tested.
+
+**The server itself does one thing** (ADR-0236): it publishes the compiler's
+diagnostics for every document a client opens or changes. It holds documents by
+URI, writes the one it was asked about to a scratch file — an editor's buffer
+has never been saved, which is the whole reason a language server exists —
+invokes `pascalc` through `PasProcess.Capture`, and reads the diagnostics back
+with `PasLspDiag`. It lives in `lsp/` and not in `tests/`, because a test case
+is compiled into a temporary directory and thrown away and a server has to be a
+binary an editor can be pointed at; that is what makes the protocol's external
+authority real rather than theoretical, which is the third of the roadmap's
+three arguments for choosing a server over the text-mode IDE it proposed first.
+
+It produced five findings on the day it was written, of which the bound is one.
+`PasContainer`'s `MapKey` is 63 characters and a document URI is past that
+before the file name starts, so the store is a vector searched linearly.
+`JsonLine` is 255 and a URI is not a line. There is no `getpid` anywhere in
+this tree and no `mkstemp`, so a scratch file cannot be given a name no other
+process will choose — and `rewrite` on a name that cannot be created is a
+run-time error that *stops the program*, with no way to ask beforehand, so a
+server cannot survive a bad scratch path however carefully it is written. And
+`binding(f).bound` is not a readiness test although it reads exactly like one:
+E.16 binds a variable when the external name *exists*, so a file about to be
+created reports false and one already written reports true, and the first
+version of `WriteScratch` asked it and refused to write anything at all.
+
+Four of those five are bounds, and every one of them was chosen by counting
+what the largest thing in the tree needed at the time. That is the chapter's
+argument, arriving in its first hour: the finding is never that the library is
+weak, it is that nothing had yet asked it for anything the size of real work.
