@@ -3841,8 +3841,17 @@ body and reported that the predicate names no words it can read.
 numbers*, and three files whose line numbers overlap would have unioned
 ApTypes' unreached statements with ApFront's reached ones, so each component now
 gets a compiler in which only it is instrumented and the corpus is swept three
-times. The count improved on its own — 402 statements never run against 446 —
-because the corpus grew by two module-only translations.
+times.
+
+**And the first fix was not enough, which is the part worth keeping.** The
+ratchet then read 402 unreached where it had read 446, and that was written
+down here as an improvement the split had bought — the corpus having grown by
+two module-only translations. It had bought nothing. `--coverage` *appends*,
+and the three sweeps shared one work directory, so sweep two read sweep one's
+lines and every component looked better than it was. Given a directory apiece
+the figure is **446**, exactly what it was before the split, and the ratchet
+says so. The plausible explanation was the trap: a number that moves the right
+way after a change invites a reason, and the reason was available.
 
 **Three things it closed.** `doc/sop.md` §7's linking row is narrowed to the
 combinations the compiler's own structure does not use, the build having become
