@@ -3346,3 +3346,36 @@ taken by the caller.
 - **What it is for** is the three shapes `for g in t` cannot take: two texts in
   lockstep, a walk that stops and resumes, and a range out of the middle. Not
   convenience — an `ElementAt` would have been that, and is refused.
+
+### A compiler diagnostic in the protocol's shape (`PasLspDiag`)
+
+**What the language server needed and no module supplied** — the roadmap's
+chapter had said `PasParse` reads `file:line:col: error:` and it reads an
+integer and nothing else, so this is the module that closes the gap between
+`PasLsp`'s framing and `PasJson`'s documents. `DiagParse` answers a
+`Diagnostic ! ErrorCode`; `DiagJson` and `DiagPublish` build the protocol's
+objects. `tests/dialect/lsp_diag.pas` is the case, and the mechanism it would
+lose is the one below.
+
+- **A line that is not a diagnostic is the ordinary case.** Most of what a
+  compilation writes is not one, so `errSyntax` is the answer a sweep gets on
+  nearly every line and not a failure path. Seven such lines are in the case,
+  including the ones that are nearly right — a zero line number, a missing
+  column, a non-numeric position — because a parser that accepts those reports
+  a position no editor can show.
+- **The zero-based conversion is in `DiagJson` and nowhere else** (ADR-0234's
+  neighbour in time, not in subject). LSP counts lines and characters from
+  zero; `ErrorAt` counts from one. A `Diagnostic` therefore holds *what the
+  compiler said*, and the golden prints both numbers — the parse in the
+  compiler's numbering and the JSON in the protocol's — so an off-by-one in
+  either direction changes it. Undo the subtraction and
+  `tests/dialect/lsp_diag.pas` fails on two lines.
+- **The character is a byte offset, and this is the one thing the module
+  cannot make right.** LSP positions are UTF-16 code units by default and
+  UTF-8 only since 3.17; `ErrorAt` counts bytes. A line with nothing above
+  U+007F is correct under all three units and a line with one is wrong under
+  two. AP 6.4.15 offers no integer index and `PasUnicode` answers in scalar
+  values, a third unit again, so the conversion this wants is one nothing in
+  the tree can perform. It is written in the module's own header rather than
+  left in a roadmap chapter, because the next person to touch it is reading
+  the module.

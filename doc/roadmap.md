@@ -109,7 +109,7 @@ declarable; what a program still writes for itself is the field list, and
 nothing checks it against the header.
 
 Everything else a survey of daily needs found is closed. The library is
-twenty-four modules, eight conforming and sixteen dialect. **`README.md`'s
+twenty-five modules, eight conforming and seventeen dialect. **`README.md`'s
 module table is the one place to count them** — one row each, checkable
 against `ls lib lib/dialect`, and this sentence has held a number that went
 stale twice. `lib/dialect/README.md` is not a second listing and should not be
@@ -200,7 +200,7 @@ and the answer turned out to be short and specific rather than vague. Nothing
 in it needs a language feature; each is a module somebody has to write, which
 is the cheap kind of gap and the kind this page should name rather than imply.
 
-**Twenty-four modules exist** — eight conforming and sixteen dialect, listed
+**Twenty-five modules exist** — eight conforming and seventeen dialect, listed
 by name in `README.md`'s module table. What a program written today reaches for
 and does not find:
 
@@ -332,11 +332,16 @@ sentence should have said.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Two entries so far, and both came from the framing alone — the transport layer,
-before a single protocol message had been dispatched. **One of the two has
-already been acted on**, which is the discipline this chapter is for: a finding
-recorded and left is a finding wasted, and the rule that made it actionable was
-this section's own — one site is an anecdote, two are a demand (ADR-0116).
+Four entries so far, and **three of the four have been acted on** — which is
+the discipline this chapter is for: a finding recorded and left is a finding
+wasted, and the rule that made the first one actionable was this section's own
+— one site is an anecdote, two are a demand (ADR-0116).
+
+The first two came from the framing alone, before a single protocol message
+had been dispatched. The second two came from the diagnostics, before a server
+existed to send one: this chapter has now produced a language change, a
+library defect and a correction to its own plan without any of the program it
+proposes having been written.
 
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
@@ -361,6 +366,26 @@ this section's own — one site is an anecdote, two are a demand (ADR-0116).
   case. **The argument was in the tree already** — §6.7.6.7's
   `substr(s, i, 0)` is the null-string and ADR-0125's `a[i..i-1]` is the empty
   slice, so `s[i..i-1]` was the only bracketed range that could not be empty.
+- **The chapter named a module by what its name suggests, for the third
+  time.** It says `PasParse` reads `file:line:col: error:` back off the
+  compiler. `PasParse` parses an **integer** and nothing else — ADR-0120's
+  result shape applied to one parse — and reads no diagnostic. That is the
+  third prerequisite this chapter guessed wrong about its own plan, after the
+  JSON row and after `PasStream` framing a message it cannot frame, and the
+  three share a shape worth naming: **a module named by what its name suggests
+  is a guess, not a survey.** `lib/dialect/paslspdiag.pas` is the module that
+  actually reads them, and it landed with the conversion the protocol needs —
+  LSP counts lines and characters from zero where `ErrorAt` counts from one.
+- **The first realistic payload found a defect in `PasJson`.**
+  `JsonCharsInto` asks whether a rendered document fits the *caller's*
+  capacity and then built the answer through a 255-character local, so a
+  document between 256 and the caller's capacity passed the guard and stopped
+  the program. A `publishDiagnostics` notification carrying two diagnostics is
+  321 characters. Nothing had rendered one that long — every case in
+  `tests/dialect/lib_json.pas` fits a line — which is why it was invisible.
+  **This is the chapter's argument in miniature and it arrived before the
+  server did**: the finding is not that the library is weak but that nothing
+  had asked it for anything the size of real work.
 - **A program may not mix `writeln` with a descriptor write.** `output` is
   buffered and `PasIO.WriteText` is not, so the two appear in an order that
   depends on when the buffer flushes, and neither standard gives a program a
