@@ -157,8 +157,9 @@ def corpus(root):
 
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
-    # producttest.sh, verify.py -- drive the compiler in ways no glob finds. That is a limitation of the instrument and is recorded in
-    # doc/sop.md §7; these two are added rather than left to misreport, because
+    # producttest.sh, verify.py -- drive the compiler in ways no glob finds.
+    # That is a limitation of the instrument and is recorded in doc/sop.md §7;
+    # these two are added rather than left to misreport, because
     # `--version` *is* asserted (producttest.sh compares it against
     # CMakeLists.txt) and `-h` is too (producttest.sh checks it documents every
     # flag ParseArgs accepts). Running them here claims only what is true: some
