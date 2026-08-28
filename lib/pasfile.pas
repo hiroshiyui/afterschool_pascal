@@ -23,10 +23,10 @@
   that can say it ran out of room: `size` is the whole file's length, so the
   caller compares it with `dest.capacity`.
 
-  **This is the conforming layer** (ADR-0114, ADR-0120): ISO/IEC 10206:1991
-  throughout, importable by a program under `--std=extended` or the dialect,
-  and unable to name an error code because `PasError` is on the other side
-  of the line. The dialect's `PasFS` removes and renames; this one reads and
+  **This is the portable layer** (ADR-0114, ADR-0120): ISO/IEC 10206:1991
+  throughout, so it would compile under another Extended Pascal as well as
+  under this one, and unable to name an error code because `PasError` is on
+  the other side of the line. The dialect's `PasFS` removes and renames; this one reads and
   writes. }
 
 module PasFile;

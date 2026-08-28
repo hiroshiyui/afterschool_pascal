@@ -18,8 +18,8 @@ part of the corpus with that variable set and compares the balance against
 what it created, and plenty here deliberately do not -- a program that ends is
 a program whose heap the operating system reclaims. What this catalogue holds
 is what each program *does*, and it fails in **both** directions, which is
-`tests/bsi/expected.tsv`'s rule: a program that starts leaking is as loud as
-one that stops. Fix the catalogue in the change that changed the program, and
+`verify/`'s KNOWN_GAP rule (ADR-0013) applied once more: a program that starts
+leaking is as loud as one that stops. Fix the catalogue in the change that changed the program, and
 say in the commit message why the number moved.
 
 The sweep is the heap-using corpus and not all of it: a program that never

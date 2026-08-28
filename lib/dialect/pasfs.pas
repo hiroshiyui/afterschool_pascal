@@ -9,10 +9,12 @@
   and `strerror` all hand a pointer back and are absent for that reason, not
   because they were forgotten.
 
-  Like every module under lib/dialect/ it is **dialect-only**, twice over:
-  `external` is admitted under --std=afterschool alone (ADR-0117's
-  containment), and ADR-0119 makes a dialect module unimportable by a
-  conformance-mode program (ADR-0121 decision 5).
+  Like every module under lib/dialect/ it is **dialect-only**: `external` is
+  this dialect's and no standard has it, so nothing here would compile under
+  another Pascal (ADR-0121 decision 5). Until ADR-0232 that was two facts --
+  the directive needed `--std=afterschool`, and ADR-0119 made a dialect module
+  unimportable by a conformance-mode program -- and with one language the
+  second has nothing to say; the first is why the directory is separate.
 
   **What it cannot tell you is why, and PasOS can.** A failure here is `errIO`
   and nothing finer, so "the file was not there" and "the directory is not

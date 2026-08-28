@@ -9,7 +9,7 @@
 
   `complex` is a required *identifier*, not a word-symbol: a valid ISO 7185
   program may define a type of that name, so nothing about this feature is
-  lexical and the refusal under `--std=iso7185` happens where the name is
+  lexical and ISO 7185's refusal would happen where the name is
   resolved. }
 program Complex(output);
 const twopi = 6.2831853071795864769;

@@ -3,7 +3,7 @@
   part, which is what lets a type own a variable of its own type.
 
   Its own file because the parser stops at its first error, and its own
-  directory because selfhost/badparse/ is compiled under --std=iso7185, where
+  directory rather than in selfhost/badparse/, whose corpus was ISO 7185, where
   `owned ^` is not a construct at all (ADR-0181). }
 program owned_domain(output);
 type

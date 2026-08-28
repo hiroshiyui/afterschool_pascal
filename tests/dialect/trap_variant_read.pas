@@ -2,7 +2,8 @@
 
   §6.5.3.3 makes this an error (Annex D.2) and §3.1 permits leaving an error
   undetected, which both conformance modes do -- so this same program under
-  --std=extended prints a bit pattern instead of stopping, and that is
+  a Pascal without ADR-0118's rule prints a bit pattern instead of stopping,
+  and that is
   conforming. The dialect detects it.
 
   The read is the *last* statement so that everything before it is known to

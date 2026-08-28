@@ -14,7 +14,7 @@
 
       runtime error: variant: the tag selects another arm
 
-  under --std=afterschool while working under --std=extended. That is a
+  under ADR-0118's rule while working under a Pascal without it. That is a
   containment break (ADR-0117), and no case in tests/extended/ could find it
   because none of them reads into a variant -- which is what ADR-0138's sweep
   measures rather than what it can see.

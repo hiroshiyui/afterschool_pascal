@@ -9,10 +9,9 @@
   a foreign name is whatever the program wrote. So what crosses the interface
   is a Pascal routine with Pascal's rules, and what crosses the link is C.
 
-  It is **dialect-only**, twice over: `external` is admitted under
-  --std=afterschool alone (ADR-0117's containment), and ADR-0119 then makes a
-  dialect module unimportable by a conformance-mode program. lib/'s other
-  modules stay Extended Pascal and stay usable by anything; the outward-facing
+  It is **dialect-only**: `external` is admitted by this dialect alone
+  (ADR-0117's containment), so no standard Pascal would compile it. lib/'s
+  other modules stay Extended Pascal and stay portable to one; the outward-facing
   half of the library will not, and that is stated in ADR-0121 rather than
   discovered.
 

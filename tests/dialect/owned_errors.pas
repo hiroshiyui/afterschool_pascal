@@ -55,7 +55,7 @@ begin
     nodeptr" -- is not this clause's. A refused value parameter keeps its
     declared type, so the argument check then compares that type with itself
     and prints both; `procedure BV(x: Rec)` over a record holding a `text`
-    does the same under --std=extended, and has since long before ADR-0181. }
+    did the same under `--std=extended`, and has since long before ADR-0181. }
   ByValue(p);
   { 6.4.14.5: two separately written denoters are two types, so a program that
     lends one declares a name for it -- Lend takes NodePtr and is legal }

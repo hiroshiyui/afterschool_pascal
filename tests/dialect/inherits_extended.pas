@@ -1,15 +1,16 @@
 { The dialect contains Extended Pascal, and this is what says so.
 
-  ADR-0117 decides that `--std=afterschool` is ISO/IEC 10206:1991 *plus*, where
-  the first two modes are deliberately not nested. Today the "plus" is empty, so
-  this mode accepts exactly Extended Pascal -- which makes this case the whole
-  of the mode's behaviour and not a corner of it.
+  ADR-0117 decided that the dialect is ISO/IEC 10206:1991 *plus*, where the two
+  conformance modes it then had were deliberately not nested. ADR-0232 made that
+  containment the language itself: there is one, and everything below is simply
+  what it accepts. The case is kept because containment is still a claim -- a
+  feature may not disturb it (AP 6.0.1) -- and this is the program that says so.
 
   It is also the case that would have caught the mistake ADR-0117 was written to
   prevent. `stdKind` gained a third value, and 38 sites asked
   `langStd = stdExtended`; had they been left as equality, every construct below
-  would have been refused under this flag while nothing failed to compile and
-  the other two corpora stayed green. So this file deliberately reaches a wide
+  would have been refused under the dialect flag while nothing failed to compile
+  and the other two corpora stayed green. So this file deliberately reaches a wide
   spread of the features those sites guard, one per paragraph, rather than
   testing one thing well:
 
@@ -178,14 +179,15 @@ begin
     it contains. `int64` is ADR-0128's, and `Shadowed` below is a function
     whose formal is a type of that name declared in this program -- which is
     the whole of what containment means for a new required identifier.
-    tests/extended/int64_is_free.pas is the same declaration under
-    --std=extended, where the name was never required at all. }
+    tests/extended/int64_is_free.pas is the same declaration in a program
+    that declares its own, which is the ordinary case §6.1.3 provides for. }
   writeln('shadowed=', Shadowed(3));
   { The schema identifier, shadowed by a variable of this program's. If the
     dialect had reserved `utf8` this line would not compile, and
-    `dialect-containment` would report it over every case that used the
-    spelling -- which is none, which is why the witness has to be written
-    rather than waited for. }
+    a sweep over the corpus would report it wherever the spelling was used --
+    which is nowhere, which is why the witness has to be written rather than
+    waited for, and why it still has to be written now that ADR-0232 has
+    retired the sweep. }
   writeln('utf8 of this program=', AlsoShadowed(41):1);
   argument := 21;
   writeln('argcount of this program=', argcount:1);

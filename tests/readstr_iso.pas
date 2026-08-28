@@ -1,14 +1,12 @@
 { ISO/IEC 10206:1991 §6.7.5.5 makes `readstr` and `writestr` required
   *identifiers*, not word-symbols -- so the feature reserves nothing, and a
-  valid ISO 7185 program may use both names for whatever it likes. This is
-  that program, and it is compiled under `--std=iso7185`.
+  program may use both names for whatever it likes. This is that program.
 
-  It is only half a gate, and the half it is not is worth saying. Under
-  `--std=extended` these two names *are* claimed: the parser recognises them
-  by spelling, exactly as it recognises `read` and `write`, because it has no
-  scope to ask whether the program declared its own. ADR-0060 records that as
-  a deviation rather than a design. Here the names are ordinary, which is what
-  this file pins. }
+  The `_iso` in the name is what it was: one of a pair, compiled under
+  `--std=iso7185` against a companion under `--std=extended`, from when this
+  compiler had modes. ADR-0232 removed them and the companion; the name is
+  kept because moving a case renames it, and what the case asks is unchanged
+  and is now asked of the one language. }
 program ReadStrIso(output);
 var writestr: integer;
 

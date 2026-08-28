@@ -1,8 +1,8 @@
 # AP 6.0.1 -- the property every other clause is an addition to. It is a claim
 # about every Extended Pascal program, and a scenario can only witness it, so
 # what is written here is the shape of witness that would fail loudly: a
-# program using several of the standard's own features, meaning the same thing
-# under both modes. tests/dialect/inherits_extended.pas is the larger witness.
+# program using several of the standard's own features and meaning what the
+# standard says. tests/dialect/inherits_extended.pas is the larger witness.
 @afterschool:6.0.1
 Feature: The dialect contains Extended Pascal
 
@@ -30,8 +30,13 @@ Feature: The dialect contains Extended Pascal
       9 abcd green
       """
 
+  # AP 6.0.2 says there is nothing to select, and this is that stated as a
+  # program: the source below is the one above, offered under a different
+  # label, and the labels are all this suite has left of the modes -- run.py
+  # records which one a scenario used and passes no flag for it, because there
+  # is none to pass (ADR-0232). Two labels, one compiler, one answer.
   @afterschool:6.0.2
-  Scenario: the same source under --std=extended means exactly the same thing
+  Scenario: the same source under another label means exactly the same thing
     Given the Extended Pascal program
       """
       program p(output);
@@ -58,8 +63,11 @@ Feature: The dialect contains Extended Pascal
   # 6.1.2's second paragraph is the requirement the whole containment rests on,
   # and this is it stated as a program: every word the dialect introduced is
   # still a name a program may take. `?` has no identifier form and is covered
-  # by the scenario above. tests/checks/reserved_words.py asks the same question
-  # of all 46 word-symbols at once, which a scenario cannot.
+  # by the scenario above. tests/checks/reserved_words.py used to ask the same
+  # question of all 45 word-symbols at once -- which a scenario cannot -- by
+  # requiring the dialect's table to equal Extended Pascal's; ADR-0232 left one
+  # table and nothing to compare it against, so the requirement now stands on
+  # this scenario and on the review.
   @afterschool:6.1.2
   Scenario: the dialect adds no word-symbol, so its own spellings stay available
     Given the Afterschool Pascal program

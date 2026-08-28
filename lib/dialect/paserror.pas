@@ -14,11 +14,14 @@
   spelling of the tag.
 
   This module is **dialect-only**, and that is a decision rather than an
-  accident (ADR-0119, ADR-0120). Its safety comes from --std=afterschool making
-  a variant's tag authoritative, and a component holding half of that rule is
-  worse than one holding neither -- so the modules under lib/dialect/ are
-  dialect all the way down and will not link into a conformance-mode program.
-  lib/'s other modules stay Extended Pascal and stay usable by anything. }
+  accident (ADR-0119, ADR-0120). Its safety comes from this dialect making a
+  variant's tag authoritative (ADR-0118), which no standard Pascal does -- and
+  a component holding half of that rule is worse than one holding neither, so
+  the modules under lib/dialect/ are dialect all the way down. While there were
+  conformance modes, ADR-0119 stopped such a module linking into a program
+  compiled under one; ADR-0232 removed the modes and with them that half of the
+  argument, and the other half -- a tag nobody else guarantees -- is why the
+  split stands. lib/'s other modules stay Extended Pascal and stay portable. }
 
 module PasError;
 

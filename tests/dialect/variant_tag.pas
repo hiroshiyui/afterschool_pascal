@@ -11,7 +11,8 @@
   a conforming program never does either, and detecting them changes the
   meaning of nothing correct. That is what lets this be a dialect feature
   without weakening ADR-0117's containment, and it is why the same source under
-  --std=extended prints the same thing wherever it does not depend on the tag.
+  a Pascal without ADR-0118's rule prints the same thing wherever it does not
+  depend on the tag.
 
   The cases are separated because each reaches the guard by a different route,
   and three of them are where a careless implementation goes wrong. }

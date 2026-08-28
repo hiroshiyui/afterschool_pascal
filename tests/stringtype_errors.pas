@@ -19,7 +19,7 @@
   tests/extended/stringtype_capacity1.pas is the other half: ISO/IEC
   10206:1991 §6.4.3.3.2 drops the largest-value clause, so `packed array
   [1..1] of char` is a fixed-string-type there and is not a string-type here.
-  That is the only one of the four that --std decides. }
+  That was the only one the modes decided (ADR-0090, ADR-0232). }
 program StringTypeErrors(output);
 
 type

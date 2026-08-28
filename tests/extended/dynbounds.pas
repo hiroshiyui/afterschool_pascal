@@ -6,8 +6,8 @@
   is entered (ADR-0113).
 
   ISO 7185 6.4.2.4 writes `subrange-type = constant '..' constant` instead, so
-  none of this is that language and tests/dynbounds_iso.pas is the same program
-  refused. }
+  none of this is that language -- a companion case held the same program
+  refused, until ADR-0232 left one language and no mode to refuse it in. }
 program DynBounds(output);
 
 { The plainest form, and twice, so that nothing can be sized once and reused. }

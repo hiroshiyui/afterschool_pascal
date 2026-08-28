@@ -14,10 +14,10 @@ C++ is in it: `build/bin/pascalc` is `selfhost/compiler.pas` translated by
 `seed/pascalc.ll`, so the front end is a Pascal program with array bounds
 checked, subranges checked, and every pointer dereference nil-checked — the
 class of bug this audit used to be mostly about is now diagnosed by the compiler
-that compiled it. `src/` is C++ again since ADR-0108, and is **not** in this
-threat model: `pascalc-s0` is built for `difftest` alone, ships nothing, and
-nothing a user runs links it. A crash in it is a broken oracle, not a
-vulnerability — report it as a Tests finding. What is left is where those checks
+that compiled it. **There is no C++ left to keep out of the threat model** —
+ADR-0108's reference front end went with ADR-0232 — so what a user runs is the
+Pascal compiler, `runtime/pasrt.c`, `runtime/pasrt_posix.c` and
+`runtime/pasrt_unicode.c`, and nothing else. What is left is where those checks
 do not reach:
 
 - **`runtime/pasrt.c`** — the one piece of C, linked into *every* program this
@@ -41,9 +41,14 @@ When performing a security audit, always follow these steps:
    Any new third-party library is a decision that needs an ADR *and* a look at
    its own advisory history.
 
-   `tests/bsi/suite/` is fetched from a third party (ADR-0086) and is **not** a
-   build input — it is test data, gitignored, and pinned to one upstream
-   commit. Confirm nothing outside `tests/bsi/` reads it.
+   Two corpora are fetched from third parties rather than committed, and
+   neither is a build input. `doc/vendor/`'s standards PDFs are read by a human
+   and by nothing else. The Unicode Character Database is read by
+   `runtime/unicode/generate.py`, which writes a header that **is** committed
+   (ADR-0190) — so the database is a supply-chain input to a *generated source
+   file* even though no build step fetches it. Confirm the committed header is
+   what the pinned database produces; `unicode-conformance` asks that on every
+   run, and it is the check to name if it ever starts skipping.
 
 2. **Run the runtime under sanitizers** — this is the highest-value step, and
    the target is `runtime/pasrt.c` plus the programs the compiler emits, since

@@ -102,9 +102,8 @@ from it.
 
 What *is* committed is `clauses/*.tsv`: clause numbers and their headings. A
 clause number is a citation, and a suite meant to be traceable to a standard
-cannot work without one — the same position `tests/bsi/README.md` takes towards
-BSI's terms, and the same one CLAUDE.md has always taken by citing §6.8.3.9
-throughout. Regenerate with `clauses/extract.sh`, which needs `pdftotext` and
+cannot work without one — the same position CLAUDE.md has always taken by
+citing §6.8.3.9 throughout. Regenerate with `clauses/extract.sh`, which needs `pdftotext` and
 the PDFs and does nothing without them.
 
 Each scenario paraphrases its requirement **in this project's own words**. If
@@ -155,8 +154,10 @@ Two rules that keep a scenario honest:
 ## What this suite is not
 
 - **Not a conformance claim.** It cites clauses; it does not validate against
-  them, and no document here may say it does. `tests/bsi/` carries the same
-  caution for the same reason.
+  them, and no document here may say it does. This is now the whole of the
+  caution: the BSI Pascal Validation Suite carried it too, and ADR-0232
+  retired the suite, so nothing else here is close enough to a validation to
+  need disclaiming.
 - **Not a replacement for `tests/`.** The golden corpus is far larger and
   covers the compiler; this covers *readings*. A feature landing still needs
   its `tests/*.pas` pair.

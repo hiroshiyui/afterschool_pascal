@@ -5,7 +5,7 @@
   so `packed array [1..1] of char` is a fixed-string-type here and is not a
   string-type there.
 
-  That single clause is the only one of §6.4.3.2's four that --std decides, and
+  That single clause was the only one of §6.4.3.2's four the modes decided, and
   this file is what says so: the other three -- packed, a lower bound of 1, an
   index-type of integer, a component that is char and not a subrange of char --
   bind under both standards, and tests/stringtype_errors.pas is their half.

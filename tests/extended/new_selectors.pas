@@ -9,7 +9,7 @@
   ISO 7185 DOES NOT REQUIRE THIS, which is why this case lives here. Its
   6.6.5.3 says the created variable "shall be totally-undefined" and "shall
   have nested variants that correspond to the case-constants" -- a statement
-  about which variants exist, not about the tag. So under --std=iso7185 the tag
+  about which variants exist, not about the tag. So under ISO 7185 the tag
   is left alone, conformingly, and only the two standards that have the
   sentence store it.
 

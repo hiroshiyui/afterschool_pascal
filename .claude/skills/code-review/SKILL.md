@@ -10,8 +10,8 @@ When performing a project-wide code review, always follow these steps:
 2. **The constraints that are still live** — recorded in `doc/adr/` and load-bearing; a change that violates one is a **High** finding unless it comes with a superseding ADR:
    - **Textual `.ll` stays a working output** (ADR-0006). This got *more* load-bearing when stage 0 was retired: `seed/pascalc.ll` is the committed compiler, so the textual backend is now what makes the repository buildable at all (ADR-0085).
    - **The seed is refreshed at release tags, not per commit** (ADR-0085). A change that regenerates `seed/pascalc.ll` outside a release is 6 MB of churn and a finding.
-   - **`selfhost/compiler.pas` is one source file** (ADR-0024), written in Extended Pascal (ADR-0082), and is the compiler. Since ADR-0108 `src/` is back as a **reference front end** — lexer, parser, Sema, no code generator, no LLVM — so `difftest` compares two implementations again over tokens/AST/Sema. Its baseline is **empty** — it arrived red at 89 of 731 and every one of those rules has been ported — so any file it names is a disagreement the change under review introduced. **A lexer, parser or Sema change lands in both**, or `difftest` fails; a CodeGen change lands in one, because difftest never compared generated code.
-   - ADR-0005's *no C++ RTTI, no new exception types* is **historical**: it constrained the C++ *compiler*, which no longer exists — `src/` is back since ADR-0108, but as a front end that builds no `llvm::Module` and needs no downcast in a code generator. It is why the AST is a tag and a variant record, and reading it explains the shape of `selfhost/compiler.pas`; it constrains nothing now.
+   - **`selfhost/compiler.pas` is one source file** (ADR-0024) and is the whole compiler. There is no second implementation to compare it against: ADR-0108 brought `src/` back as a reference front end and ADR-0232 deleted it with the conformance surface it was frozen at, taking `difftest` with it. **So a lexer, parser or Sema change is checked by its goldens and by nothing else** — treat a change to one of those three stages as unwitnessed unless the reviewer can name a case that fails without it. `doc/sop.md` §7 calls this the largest blind spot on the page.
+   - ADR-0005's *no C++ RTTI, no new exception types* is **historical**: it constrained a C++ compiler that no longer exists, and there is no C++ in this tree at all. It is why the AST is a tag and a variant record, and reading it explains the shape of `selfhost/compiler.pas`; it constrains nothing now.
 
 3. **ISO 7185 conformance** — The project's design axis is conformance over convenience. Review for:
    - *Semantics that differ from the obvious C lowering:* `mod` must yield a non-negative result (not a bare `srem`); `/` is always real division; a leading sign binds to the whole term; `for` evaluates its limit exactly once and must not overflow on the final iteration; a one-character string literal is a `char`. These are pinned by `tests/arith.pas` and `tests/control.pas` — a change that "simplifies" one of them and still passes is a test gap, not a pass.
@@ -52,7 +52,7 @@ When performing a project-wide code review, always follow these steps:
    - Diagnostics are part of the interface: a change to an error message or a new error condition should come with a case, once the negative-test form exists (noted as a gap in ADR-0011 — if the change adds errors, say so).
 
    **There is a coverage tool now, and it answers a narrower question than the
-   one a review asks.** `gcov` went out with `src/`, but `pascalc --coverage`
+   one a review asks.** `gcov` went out with the C++, but `pascalc --coverage`
    (ADR-0104) instruments the compiler with itself, and three `ctest` cases read
    it: `diagnostic-coverage`, `procedure-coverage` and `line-coverage`. Run them
    before arguing about coverage — they are seconds, and they turn "is this
@@ -88,10 +88,11 @@ When performing a project-wide code review, always follow these steps:
    - **Remember what the goldens cannot do.** A golden agrees with whatever
      wrote it, so "the tests pass" says nothing about a construct no test
      *names*. That is the gap every conformance sweep in `doc/history.md` was
-     opened by. `difftest` closes part of it — a second implementation disagrees
-     without being asked a question someone here composed — but only for the
-     **front end**, and only for *slips*: both sides are written by one author
-     from one reading, which is how ADR-0073's comment rule was wrong in both.
+     opened by. `difftest` used to close part of it — a second implementation
+     disagreeing without being asked a question someone here composed — and it
+     is gone (ADR-0232). Note what it never closed, because that is the part
+     that still stands: both sides were written by one author from one reading,
+     which is how ADR-0073's comment rule was wrong in both.
 
 9. **Documentation quality** — Confirm:
    - New non-obvious behaviour carries a comment naming the ISO clause or the reason (the `mod` adjustment and the `for` limit-then-step both do).

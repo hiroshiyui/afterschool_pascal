@@ -8,20 +8,21 @@
   wrong, never what. This module answers one record that carries the value or
   the reason and never both.
 
-  **The tag is not assigned here, and that is the point.** Under
-  --std=afterschool a write to a variant's field activates that variant
-  (ADR-0118), so `r := acc` *is* the statement that makes the result
+  **The tag is not assigned here, and that is the point.** In this dialect a
+  write to a variant's field activates that variant (ADR-0118), so `r := acc`
+  *is* the statement that makes the result
   successful, and `r := errSyntax` is what makes it a failure -- the value's
   type says which outcome it is (AP 6.4.13). There is no line to forget,
   because the line that sets the tag is the line that sets the payload. A
   caller who reads `val` on a failed result does not get a stale integer; the
   read traps.
 
-  That is also why this module is dialect-only. Compiled under --std=extended
-  the same source parses and runs, and the tag would then be whatever the
-  record's storage happened to hold -- a result that lies. ADR-0119 stops that
-  from being possible: the mode is part of a module's linkage name, so this
-  cannot be linked into a conformance-mode program at all. }
+  That is also why this module is dialect-only. Under a Pascal that does not
+  make the tag authoritative the same source parses and runs, and the tag is
+  then whatever the record's storage happened to hold -- a result that lies.
+  While there were conformance modes ADR-0119 made that unlinkable, the mode
+  being part of a module's linkage name; ADR-0232 removed them, so what stops
+  it now is that there is no such Pascal here to compile this under. }
 
 module PasParse;
 

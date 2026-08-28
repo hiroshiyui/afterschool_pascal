@@ -4,9 +4,11 @@
   no variable-access, no non-static type-name, and no function the program
   declared, nor `eof`/`eoln`.
 
-  ISO 7185 §6.3 admits a signed literal or a name and nothing else, so this is
-  a change of language rather than an extension: everything here is refused
-  under `--std=iso7185`, and `tests/constexpr_iso.pas` is that program.
+  ISO 7185 §6.3 admits a signed literal or a name and nothing else, so this
+  was a change of language rather than an extension, and a companion case held
+  everything here refused under `--std=iso7185`. ADR-0232 left one language
+  and that case with it; what is below is simply what a constant-expression
+  is.
 
   There is one place to fold and every constant position follows, because
   every one of them already went through the same two functions: a constant

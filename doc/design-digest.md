@@ -1197,8 +1197,9 @@ able to make.
     reaches Sema through the deferred and pending paths where the denoter that
     knows is out of hand — `doc/implementation-defined.md` §6.1 carries it as
     the one program accepted that the standard requires rejected. `tests/extended/bind_qualified.pas`
-    is the case; dropping the field arm fails `binding_errors`, `difftest` and
-    `dialect-containment` at once.
+    is the case; dropping the field arm fails `binding_errors`. It used to
+    fail `difftest` and `dialect-containment` too, and both gates went with
+    the conformance modes (ADR-0232), so one golden is now the whole of it.
   - **`binding(f)` is built in a hidden frame slot** — the `with` mechanism —
     because it is the only required function returning a record and this
     compiler returns none. The call is then a designator, so `b := binding(f)`
@@ -1259,7 +1260,9 @@ able to make.
     an address is computed from.
   - Five word-symbols, not seven: §6.1.5 and §6.1.6 make `interface` and
     `implementation` *directives*, which are identifiers exactly as `forward`
-    is. `tests/module_iso.pas` uses all five reserved ones as variable names.
+    is. A case used all five reserved ones as variable names, and could not
+    survive ADR-0232: with one language every word-symbol §6.1.2 adds is
+    reserved for every source, which is exactly what that case denied.
   - Refused and stated: a module variable with computed discriminants (its
     activation outlives the stack the storage would be on), and a
     module-parameter that is not `input`/`output` is bound to nothing
@@ -1304,11 +1307,12 @@ able to make.
   a schema's discriminants, so the grammar was added to that one function and
   all six opened at once. No caller changed except to say less.
   - **Folding is gated on the standard, in the folder.** Everything ISO 7185
-    admits folds under both; `Binary` and `Call` fold only under
-    `--std=extended`, so the ISO 7185 diagnostic is unchanged — the expression
-    still fails to fold and the caller still says what it always said. That
-    gate is invisible to a corpus whose ISO program dies at a *parse* error
-    first, which is why `tests/constexpr_iso_fold.pas` has no subrange in it.
+    admitted folds under both, while `Binary` and `Call` folded only under
+    `--std=extended`, so the ISO 7185 diagnostic was unchanged — the expression
+    still failed to fold and the caller still said what it always said. That
+    gate was invisible to a corpus whose ISO program died at a *parse* error
+    first, which is why the case holding that half had no subrange in it. Both
+    the gate and the case went with the modes (ADR-0232): everything folds.
   - **A folded operator must answer what the emitted one answers**, and the
     two that can disagree are the two where C differs from Pascal: `mod` is
     non-negative and `odd` is the low bit. A leading sign binds to the whole
@@ -1931,12 +1935,13 @@ able to make.
   ISO/IEC 10206:1991's Annexes E and F and all 28 of ISO 7185's, names the
   errors that go unreported, and lists the extensions and restrictions.
   Answering an entry meant compiling a probe, which is what found the two.
-  - **The unreported-errors section is keyed to Annex D and regenerable.** Its
-    ISO 7185 half was reconciled against all fifty-nine entries using the BSI
-    suite's `ERROR` category, which has a program per entry; each such row of
-    `tests/bsi/expected.tsv` carries the Annex D number it names, so the list
-    is data rather than prose. Eight entries were missing when that was first
-    done — the section had been written one feature at a time and nothing had
+  - **The unreported-errors section is keyed to Annex D.** Its ISO 7185 half
+    was reconciled against all fifty-nine entries using the BSI suite's
+    `ERROR` category, which has a program per entry, and the catalogue carried
+    the Annex D number each named, so the list was data rather than prose.
+    ADR-0232 retired the suite and the catalogue with it, so the list is now
+    maintained by hand and `doc/implementation-defined.md` §3 says so. Eight
+    entries were missing when the reconciliation was first done — the section had been written one feature at a time and nothing had
     read the annex end to end against the compiler. Don't quote a count of
     them anywhere: it moved once and will again.
   - **A comment may end with the other delimiter.** §6.1.8 is one production —
@@ -2202,8 +2207,8 @@ able to make.
   of lookahead, and it is a *different* token in each place: a case label is
   followed by `:`, `,` or `..` and an otherwise-part is not, while the variant
   completer is followed by `(` and a variant's label list is not.
-  `tests/iso_identifiers.pas` pins both legal ISO 7185 programs that depend on
-  it.
+  A case pinned both legal ISO 7185 programs that depended on it, and could
+  not survive ADR-0232, `otherwise` now being reserved for every source.
 
 Strings *were* the length-plus-buffer record of ADR-0012; ISO/IEC 10206:1991's
 own `string` type landed as ADR-0051 and that decision is now closed. What
@@ -2262,9 +2267,11 @@ spellings and not three: what has to be separated is the dialect from the
 conformance modes, and §6.11's module makes `--std=iso7185` unreachable here
 anyway. `tools/pascalcc` translates the resulting link error, which otherwise
 names the mode the *program* wanted rather than the one the object has.
-`tests/checks/mixed_mode_link.sh` is the case, and it is a `ctest` case because
-`run_test.sh` compiles every component of a case under one `--std` and cannot
-express a mixture at all.
+`tests/checks/mixed_mode_link.sh` was the case, and it was a `ctest` case
+because `run_test.sh` compiled every component of a case under one `--std` and
+could not express a mixture at all. ADR-0232 removed the modes, so there is no
+mixture to express: every translation writes one tag, and the gate, its corpus
+and the sidecar's second field are all gone.
 
 **And a module is locked by what it exports, not by the flag** (ADR-0137). The
 mode is a proxy for the ABI and far too coarse a one: `lib/pasmath.pas` has no
@@ -2283,11 +2290,15 @@ name and not the reverse, because a dialect module may declare `external` and
 is not a conforming program-component (ADR-0120). A tagless variant-part is
 portable and falls out rather than being decided — `tagField` is `-1`, so no
 check is emitted against it under any mode. `tests/dialect/lib_conforming.pas`
-fails without the alias; `mixed_mode_link.sh` grew from four combinations to
-seven, and the three new ones are what fail if every module is called portable.
-The `.components` sidecar gained an optional second field naming a component's
-standard, in both harnesses, because without it no case in `tests/` could
-express the mixture.
+failed without the alias; `mixed_mode_link.sh` grew from four combinations to
+seven, and the three new ones were what failed if every module was called
+portable. The `.components` sidecar gained an optional second field naming a
+component's standard, in both harnesses, because without it no case in `tests/`
+could express the mixture. **All of it is gone** (ADR-0232): with one language
+no two components can disagree, so `ComputeModePortable`, the alias, the gate
+and the sidecar field were removed and AP 6.13.1 was rewritten around the
+requirement that survives. The reasoning above is kept because it is why a
+tagged variant-part and separate translation are a pair, which is still true.
 
 **A fallible routine answers one record** (ADR-0120), and the shape is the
 dialect's first real user rather than a fourth mechanism. `case ok: boolean of
@@ -2459,9 +2470,9 @@ fourth parameter on `pas_str_substr_check`, in the shape `pas_read_str`'s
 `isvar` uses, and with the flag set the condition is `pas_slice_check`'s
 character for character; the comment saying the two "cannot be one function
 however alike they look" was true of the messages and false of the condition.
-**The conformance modes keep the trap**, an ISO error condition trapping since
-ADR-0014, so `tests/extended/trap_substring.pas` is the first entry in
-`containment_exceptions.txt` whose divergence is about a construct Extended
+**The conformance modes kept the trap**, an ISO error condition trapping since
+ADR-0014, so a case under `tests/extended/` was the first entry in
+`containment_exceptions.txt` whose divergence was about a construct Extended
 Pascal *has* -- admissible because §3.1 defines an error as a violation, so a
 program writing one is erroneous and not a program the standard accepts. Two
 callers demanded it and one had already shipped the defect: `paslsp.pas`'s

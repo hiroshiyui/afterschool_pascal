@@ -46,12 +46,14 @@ for pdf in iso7185 iso10206; do
   fi
 done
 
-# --- the one oracle nobody here wrote (ADR-0086) -----------------------------
-if [ -d "$repo/tests/bsi/suite" ]; then
-  cp -r "$repo/tests/bsi/suite" "$dest/bsi"
-else
-  missing+=("tests/bsi/suite (run tests/bsi/fetch.sh)")
-fi
+# --- no third-party corpus ---------------------------------------------------
+# The BSI Pascal Validation Suite was copied in here until ADR-0232. Its
+# programs are conforming ISO 7185 and 25 of them use a word-symbol
+# ISO/IEC 10206:1991 6.1.2 reserves, so this compiler cannot compile the corpus
+# at all -- handing it to a reader would be handing over 812 programs that fail
+# for one reason having nothing to do with the clause under audit. The
+# standards text is now the whole of the external evidence, which SKILL.md
+# step 4 says out loud, because it changes what a verdict can rest on.
 
 # --- a toolchain, so a verdict rests on a compiled probe ---------------------
 for f in "$repo/build/bin/pascalc" "$repo/build/lib/libpasrt.a"; do
@@ -81,12 +83,10 @@ WHAT IS HERE
   standards/       ISO 7185 and ISO/IEC 10206:1991, as PDFs.  pdftotext -layout
                    works.  The extraction drops fi/fl ligatures -- "fixed" comes
                    out "xed", "file" comes out "le" -- and renders ^ as ".
-  bsi/             the BSI Pascal Validation Suite, 812 programs from 1982 tied
-                   to clauses of ISO 7185.  Not written by anyone on this
-                   project.
   bin/pascalcc     compiles and links a Pascal program.  bin/pascalc writes IR
-                   and stops.  Flags: --std=iso7185, --std=extended (the
-                   default), -o, -S.
+                   and stops.  Flags: -o, -S.  There is no flag that selects a
+                   language: this processor implements one, and a source is
+                   simply written in it.
   source/          the compiler's source with every comment removed.  Line
                    numbers match the real file, so a finding can cite one.
   probes/          write your probe programs here.
@@ -121,7 +121,7 @@ begin
   writeln('hi')
 end.
 EOF
-../bin/pascalcc --std=extended p.pas -o p && ./p     # or --std=iso7185
+../bin/pascalcc p.pas -o p && ./p
 ```
 
 `../bin/pascalcc` prints `file:line:col: error: message` and exits non-zero when

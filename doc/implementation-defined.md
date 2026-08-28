@@ -216,11 +216,16 @@ program for fifty-eight of them, each printing `ERROR NOT DETECTED` if it runs
 to completion. Forty-three are reported by every program that names them,
 fourteen by none, and D.4 by one of its two — see the note below. D.59 has no
 program in that category; a probe that `reset`s a program-parameter bound to a
-name which cannot be opened is reported, so it is a forty-fourth. The suite is
-the instrument and not the claim: running it is **not a validation** (`tests/bsi/README.md`
-has BSI's conditions), and the Annex D number of every one of those programs is
-recorded in `tests/bsi/expected.tsv`, so the list below is regenerable rather
-than asserted. The ISO/IEC 10206:1991 entries have no such corpus and were
+name which cannot be opened is reported, so it is a forty-fourth.
+
+**That measurement cannot be repeated here, and the list below is therefore
+asserted rather than regenerable.** The suite was the instrument and never the
+claim -- running it was **not a validation**, on BSI's own conditions -- and
+ADR-0232 retired it: its programs are conforming ISO 7185 and 25 use a
+word-symbol ISO/IEC 10206:1991 §6.1.2 reserves, so this compiler cannot compile
+the corpus. The numbers above stand as the finding they were, taken against a
+compiler this one still contains; what is gone is the ability to take them
+again. The ISO/IEC 10206:1991 entries have no such corpus and were
 probed one clause at a time, as ADR-0073 describes.
 
 **Two entries below stop these particular programs anyway, and that is not
@@ -518,8 +523,9 @@ They were found the way the unreported errors in §3 were — by the BSI Pascal
 Validation Suite's `DEVIANCE` category, whose programs a conforming processor
 must refuse or stop — and, as there, **no program written here had ever
 exercised one**, so every oracle in the repository agreed the compiler was
-right. The catalogue in `tests/bsi/expected.tsv` carries one row per program
-and is where the list is maintained; this is the summary by cause.
+right. The suite is gone (ADR-0232) and this list is now maintained here,
+by hand, which is worth knowing before trusting its completeness: what found
+these entries can no longer be re-run.
 
 **One is currently known.** ISO/IEC 10206:1991 §6.7.5.6 and §6.7.6.8 require
 the variable-access given to `bind`, `unbind` and `binding` to possess the

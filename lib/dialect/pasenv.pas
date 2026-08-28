@@ -6,10 +6,9 @@
   an empty string, and not a trap -- which is the distinction ADR-0122 could
   not make and the reason ADR-0123 exists.
 
-  It is the third binding module and, like the other two, is **dialect-only**
-  twice over: `external` is admitted under --std=afterschool alone (ADR-0117's
-  containment) and ADR-0119 makes a dialect module unimportable by a
-  conformance-mode program.
+  It is the third binding module and, like the other two, is **dialect-only**:
+  `external` is admitted by this dialect alone (ADR-0117's containment), and
+  no standard Pascal would compile the declarations below.
 
   **`putenv` is deliberately absent.** It keeps the pointer it is handed and
   the environment then refers to it forever -- which is exactly the hazard

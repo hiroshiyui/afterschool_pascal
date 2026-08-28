@@ -9,7 +9,7 @@
   and a function of that name, and none of the three is remarkable.
 
   The other half is 6.1.3, which makes a required identifier shadowable: the
-  same program compiles under --std=afterschool as well, where `int64` *is*
+  same program compiles where `int64` *is*
   required and the declaration below hides it. tests/dialect/int64.pas is
   where the type is used; this file is about the spelling. }
 program Int64IsFree(output);

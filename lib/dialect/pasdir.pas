@@ -41,7 +41,7 @@
   whatever the file system does.
 
   Like every module under lib/dialect/ it is dialect-only: `external` is
-  admitted under --std=afterschool alone (ADR-0117's containment), and
+  admitted by this dialect alone (ADR-0117's containment), and
   ADR-0119 makes a dialect module unimportable by a conformance-mode program. }
 
 module PasDir;

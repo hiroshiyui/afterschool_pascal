@@ -1,7 +1,7 @@
 { The tree shapes only ISO/IEC 10206:1991 has, for the dump walkers.
 
   Companion to iso_shapes.pas: that one covers what both standards share, this
-  one covers what --std=extended adds and what therefore has walker arms no ISO
+  one covers what ISO/IEC 10206:1991 adds and what therefore has walker arms no ISO
   program can reach -- a module and its two parts, an export- and import-list, a
   schema and its discriminants, a string type, an otherwise-part in both places
   it may appear, and the operators §6.1.2 adds.

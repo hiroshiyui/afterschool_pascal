@@ -1,6 +1,6 @@
 { What a case range may not be. Sema accumulates, so one run reports all of
-  them; the parse-level refusal under --std=iso7185 is in
-  selfhost/badparse/case-range-is-extended.pas instead. }
+  them. A second case held the *parse*-level refusal ISO 7185 gives the
+  range itself, and went with the modes (ADR-0232). }
 program CaseRangeErrors(output);
 type
   colour = (red, green, blue);

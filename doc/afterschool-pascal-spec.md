@@ -161,10 +161,9 @@ its context says, never this one.
 
 **4.4 Quotation.** No text of ISO 7185 or ISO/IEC 10206:1991 appears in this
 document. Where a requirement of one is relevant it is cited by number and
-paraphrased in this project's own words, which is `tests/spec/README.md`'s rule
-and the same position `tests/bsi/README.md` takes. The copies under
-`doc/vendor/` are not committed and their notice forbids inclusion in another
-product.
+paraphrased in this project's own words, which is `tests/spec/README.md`'s
+rule. The copies under `doc/vendor/` are not committed and their notice forbids
+inclusion in another product.
 
 **4.5 Verbal forms.** *Shall* states a requirement on a program or on the
 processor. *Should* states a recommendation. *May* states a permission. A
@@ -339,8 +338,9 @@ NOTE 1 — `?` is a character neither standard admits in any position outside a
 character-string (§6.1.9) or a commentary (§6.1.10) — not in an identifier, not
 as an operator, and not among ISO/IEC 10206:1991 §6.1.11's lexical
 alternatives. Taking it therefore costs the lexis nothing: no
-program that compiled before compiles differently, and both conformance modes
-report it as an unrecognised character exactly as they did (ADR-0123).
+program that compiled before compiles differently, and the two conformance
+modes that existed when it was taken each reported it as an unrecognised
+character exactly as they had (ADR-0123).
 
 NOTE 2 — The second paragraph is a requirement on this document rather than on
 a program, and it is what makes 6.0.1's containment possible. A word-symbol is
@@ -527,7 +527,8 @@ ISO/IEC 10206:1991 §6.10.1 requires for `integer`.
 
 ISO/IEC 10206:1991 §6.5.3.3 makes it an *error* to access a field of a variant
 other than the active one, and §3.2 permits a processor to leave an error
-undetected. Both conformance modes leave this one undetected, conformingly.
+undetected. A conforming processor may therefore leave this one undetected, and
+this one did, under both of the modes it used to have.
 
 **In the dialect it shall be detected**, by the following two requirements.
 
@@ -555,8 +556,8 @@ itself.
 
 **6.4.3.4.5 A variant-part with no tag-field.** Where a variant-part has no
 tag-field — which ISO/IEC 10206:1991 §6.4.3.4 permits — no requirement of
-6.4.3.4 applies, and the variant-part shall behave as it does under the
-conformance modes.
+6.4.3.4 applies, and the variant-part shall behave as ISO/IEC 10206:1991
+requires and no more.
 
 NOTE — **This is a hole in the guarantee and is stated rather than hidden.**
 There is no tag-field to make authoritative and nothing to check against, so
@@ -884,8 +885,8 @@ contain a file-type (§6.4.3.5) or a handle-type (6.4.12).
 
 `!` shall not be a word-symbol; it is a character neither ISO 7185 nor
 ISO/IEC 10206:1991 admits in any position outside a string or a comment, so no
-conforming program can contain one and the lexis of the conformance modes is
-unchanged (ADR-0140, and 6.4.11's `?` for the same reason).
+conforming program can contain one, so taking it costs the lexis nothing
+(ADR-0140, and 6.4.11's `?` for the same reason).
 
 A fallible-type shall be a **new-type** in the sense of ISO/IEC 10206:1991
 §6.4.1, as an optional-type and a handle-type are: two separately written
@@ -1072,7 +1073,7 @@ octets carrying them; ISO/IEC 10206:1991 §6.4.3.3's string-types remain what a
 program holds when it means the octets, and are unchanged (ADR-0189).
 
 This clause is implemented in full (ADR-0189 – ADR-0192): what it states is
-what `--std=afterschool` does.
+what the processor does.
 
 **6.4.15.1 The denoter.** `utf8` shall be a required identifier denoting a
 schema (§6.4.7) of one discriminant, whose identifier shall be `capacity`, as
@@ -1451,9 +1452,11 @@ NOTE 1 — The syntax is therefore unchanged; §6.5.6 already provides it. This 
 "ask the symbol, not the syntax", which this repository has now reached for
 seven times.
 
-NOTE 2 — In a conformance mode `a[i..j]` remains available only for a string,
-and the diagnostic is unchanged. The dialect's reading of the designator is
-gated on the mode for that reason (ADR-0125).
+NOTE 2 — While there were conformance modes, `a[i..j]` remained available in
+one only for a string, with the diagnostic unchanged, and the dialect's reading
+of the designator was gated on the mode for that reason (ADR-0125). ADR-0232
+removed the gate with the modes; the reading above is now the only one, which
+is why the exclusion this clause states has to be stated rather than inherited.
 
 NOTE 3 — The string-type exclusion is not a special case; it is what containment
 requires. A `packed array [1..n] of char` is a string-type (§6.4.3.3.2) *and* an
@@ -2355,53 +2358,51 @@ by construction while contradicting a `testable` one (ADR-0144).
 
 ### 6.13 Programs
 
-#### 6.13.1 Program-components shall agree where the language differs [added]
+#### 6.13.1 Program-components shall be of one language [added]
 
-A program-component translated under `--std=afterschool` shall be linked only
-with components that were translated under `--std=afterschool`, **or** whose
-interfaces expose nothing this document requires a check against.
+Every program-component shall be a component of Afterschool Pascal, and a
+program-component shall be linked only with components translated by a
+processor implementing this document.
 
-A module's interface **exposes nothing checked** when no type reachable from it
-— through a field, an array component, a file component, a pointer domain or a
-parameter — is a record-type having a variant-part with a tag-field (6.4.3.4).
-Such a module may be translated under `--std=extended` and linked into an
-Afterschool Pascal program.
+NOTE 1 — There is nothing here for a source to state and nothing for a
+processor to decide (6.0.2). The requirement is about *objects*: a component
+translated by some earlier processor of some other language is a file this
+document says nothing about, and linking it is outside this specification
+however well the names happen to match.
 
-The converse shall not hold: a module translated under `--std=afterschool`
-shall not be linked into a program translated under a conformance mode, whatever
-its interface exposes.
+NOTE 2 — It is enforced at the link, by the language forming part of the name
+of a module's activation procedures — a name §6.13 already requires the
+components to agree on. That name is now a constant, so no two components this
+processor translates can disagree; what it still buys is that an object left
+over from a processor that *did* vary the name fails to link, with an
+unresolved symbol a reader can be told about, rather than linking and
+disagreeing about 6.4.3.4 (ADR-0119, ADR-0232).
 
-NOTE 1 — The requirement is enforced at the link, by the language forming part
-of the name of a module's activation procedures — a name §6.13 already requires
-the components to agree on. A module that exposes nothing checked emits those
-names under both spellings. Nothing in a source can misstate any of it: the
-names come from the translation that is happening, not from an option, a
-sidecar or a claim (ADR-0119, ADR-0137).
+NOTE 3 — *historical.* This clause required considerably more until ADR-0232,
+and what it required is worth keeping legible, because 6.4.3.4's two
+requirements are a pair and §6.13's separate translation is exactly what could
+split them across components: the surviving half would check a tag the other
+half never set, and would answer *safe* for an unsafe access — worse than the
+documented hole it replaced. While there were two conformance modes, a
+component translated under `--std=extended` emitted no such check, so the
+clause forbade the mixture — and then had to admit it back for the one case
+`lib/` depends on, a module whose interface **exposed nothing checked**,
+meaning no type reachable from it through a field, an array component, a file
+component, a pointer domain or a parameter was a record-type with a tagged
+variant-part (ADR-0137). The exception was asymmetric: a dialect module may
+declare `external` routines (6.7.7) and so could not go the other way, into a
+program claiming conformance.
 
-NOTE 4 — The asymmetry in the third paragraph is deliberate. A module in this
-dialect may declare `external` routines (6.7.7) and is therefore not a
-conforming program-component; admitting one into a program that claims a
-conformance mode would put a component outside both standards inside it. The
-direction that was worth opening is the other one, where `lib/`'s modules are
-ordinary Extended Pascal and the language that contains Extended Pascal could
-not use them.
+With one language the split cannot occur: every component is translated by a
+processor implementing 6.4.3.4, so every half of every pair is emitted. The
+requirement was not relaxed, it was dissolved — which is a different thing, and
+the reason this NOTE says how it used to be met.
 
-NOTE 2 — This is not tidiness. 6.4.3.4's two requirements are a pair, and
-§6.13's separate translation would otherwise let them be split across
-components: the surviving half would check a tag the other half never set, and
-would answer *safe* for an unsafe access — worse than the documented hole it
-replaced, which is how the requirement came to be written. It is also the whole
-of what the first paragraph's exception is measured against: where no check can
-be emitted, no pair can be split.
-
-NOTE 3 — `lib/`'s six modules expose nothing checked and are usable from either
-language. `lib/dialect/`'s are not usable from a conforming program, and the
-third paragraph is what says so — for most of them the first paragraph would
-say it too, their result records (Annex D) being variant-parts with a
-tag-field, but `PasError` exports only an error code and a text type and would
-otherwise be portable. The two directories remain two for the reason Annex D
-gives; what has changed is that the duplication runs in one direction rather
-than both.
+NOTE 4 — `lib/` and `lib/dialect/` remain two directories, and no longer for
+this reason. The first holds modules a *conforming* processor could also
+translate; the second holds modules that need this document. Nothing in this
+clause distinguishes them any more, and Annex D gives the reason they are still
+apart.
 
 ---
 

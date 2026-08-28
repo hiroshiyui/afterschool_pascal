@@ -14,9 +14,9 @@ When performing release engineering, always follow these steps:
    ctest --test-dir build-rel --output-on-failure
    ```
    No `LLVM_DIR`: nothing links libLLVM since ADR-0085. What the build needs is
-   `clang` on PATH to assemble the IR the seed and the compiler emit, and — since
-   ADR-0108 brought `src/` back as a reference front end — a C++20 compiler for
-   `pascalc-s0`. Nothing `pascalc-s0` produces ships; it exists for `difftest`.
+   `clang` on PATH to assemble the IR the seed and the compiler emit, and
+   nothing else — no C++ compiler, since ADR-0232 deleted `src/`, and the
+   CMake project declares `LANGUAGES C`.
    A from-scratch build catches plumbing bugs that an incremental build hides —
    in this project specifically, a `tests/*.pas` pair added without re-running
    `cmake` is invisible until someone configures fresh, and a missing include

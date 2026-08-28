@@ -10,8 +10,9 @@
 
   The corpus had only ever written the `;`, in both constructs, which is why
   nothing caught it. Under ISO 7185 `otherwise` is an ordinary identifier and
-  is never this token, so the two standards are unaffected by each other —
-  `tests/iso_identifiers.pas` is what pins that. }
+  never this token at all, which a companion case pinned until ADR-0232: with
+  one language every word-symbol §6.1.2 adds is reserved for every source, so
+  there is no longer a reading in which this token is a name. }
 program otherwise_nosemi(output);
 
 type

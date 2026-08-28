@@ -1,5 +1,5 @@
 { What the exponentiating operators refuse. Sema accumulates, so one run
-  reports all of them; the refusal of `**` under --std=iso7185 is lexical and
+  reports all of them; ISO 7185's refusal of `**` would be lexical and
   lives in selfhost/torture.pas, and the non-associativity is a parse error and
   lives in selfhost/badparse/. }
 program PowErrors(output);

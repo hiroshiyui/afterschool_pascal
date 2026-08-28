@@ -1700,8 +1700,8 @@ int pas_str_compare(const char *a, const char *b, int len) {
  * A nonzero balance is **not an error**. ISO 7185 obliges no program to
  * dispose what it created, and many here deliberately do not. What the gate
  * over this compares is the balance against a catalogue, in both directions,
- * which is `tests/bsi/expected.tsv`'s shape: a program that starts leaking is
- * as loud as one that stops.
+ * which is `verify/`'s KNOWN_GAP rule (ADR-0013) applied once more: a program
+ * that starts leaking is as loud as one that stops.
  *
  * Counting is unconditional and costs two increments. The atexit hook is armed
  * on the first `new` and only when the variable is set, so a program that is
@@ -2554,7 +2554,7 @@ int pas_text_boundary(const char *s, int len, int at) {
  * takes arena scratch, and the arena is released once per *statement*
  * (ADR-0111): an iteration that allocated would grow it once per element and
  * a long text would exhaust it, which is the ring that wrapped in silence
- * before. tests/dialect/text_for.pas joins the elements back together and
+ * before. tests/dialect/text_join.pas joins the elements back together and
  * requires the original, which is the property this comment claims. */
 void pas_text_take(void *dst, int cap, const char *src, int len) {
   if (len < 0)

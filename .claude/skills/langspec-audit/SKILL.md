@@ -8,13 +8,14 @@ sentences of the standard that a conformance decision turned on — by asking
 readers who have not seen the reasoning to reach their own verdict and disagree.
 
 **Why it has to exist here.** No oracle here can contradict a *reading*. What
-they all have is one source. `difftest.sh` is back since ADR-0108 and green
-over every file, but its two implementations are written by one author from one
-reading — which is how ADR-0073's comment-delimiter rule came to be wrong in
-*both*, with the oracle comparing them happily. The goldens were written from this
-compiler's output, so they agree with whoever wrote them. `tests/bsi/expected.tsv`
-is a catalogue of what this compiler does, edited by the person who changed it.
-`verify/` proves the lowering matches a model of the lowering. None of them can
+they all have is one source. `difftest.sh` compared two front ends until
+ADR-0232 retired it, and even then both implementations were written by one
+author from one reading — which is how ADR-0073's comment-delimiter rule came
+to be wrong in *both*, with the oracle comparing them happily. The goldens were
+written from this compiler's output, so they agree with whoever wrote them.
+Every gate's catalogue records what this compiler does, edited by the person
+who changed it. `verify/` proves the lowering matches a model of the
+lowering. None of them can
 say "you read §6.4.3.3 wrong" — and a misreading is invisible to every one of
 them at once. ADR-0072's set-packing deviation survived in four documents and a
 purpose-written test for exactly that reason.
@@ -77,8 +78,8 @@ When performing a language-specification audit, always follow these steps:
    ```
 
    It builds a directory **outside the repository** holding the two standards,
-   the BSI suite, a working `pascalcc`, and the compiler's source **with every
-   comment removed** — and nothing else. Three things follow, and each is a
+   a working `pascalcc`, and the compiler's source **with every comment
+   removed** — and nothing else. Three things follow, and each is a
    fact about the harness rather than a request to the reader:
 
    - there is no `CLAUDE.md` at or above it to discover;
@@ -141,20 +142,23 @@ When performing a language-specification audit, always follow these steps:
      comes out `xed` and `file` comes out `le`; it renders `^` as `"`. A reader
      quoting mangled text should say so and restore it in brackets.
 
-4. **Point every reader at the BSI suite, which is the one oracle nobody here
-   wrote** (ADR-0086; `tests/bsi/suite/`, gitignored, fetched by
-   `tests/bsi/fetch.sh`). Three uses, in descending strength:
-   - **Recompile every CONFORM program.** One that this compiler refuses is the
-     strongest available evidence of over-strictness. Know the expected
-     exceptions first, from `tests/bsi/expected.tsv`, so a known deliberate
-     refusal is not reported as a discovery.
-   - **Read the DEVIANCE header comments.** BSI states which clause each program
-     violates, in its own words, and sometimes the history: DEV073 records *"Test
-     reclassified from CONFORMANCE to DEVIANCE due to change in DP7185"*, which
-     settled the hardest question in the first run of this skill. Nothing else
-     available here can date a rule's change.
-   - Check that the programs for the audited clause are catalogued as the
-     category expects.
+4. **Know that the third-party corpus is gone, because it changes what a
+   reader can be asked for.** The BSI Pascal Validation Suite was this skill's
+   strongest step — recompile every CONFORM program and a refusal is evidence
+   of over-strictness; read the DEVIANCE headers and BSI dates a rule's change
+   in its own words, as DEV073 did in settling the hardest question this skill
+   ever asked. ADR-0232 removed it: its programs are conforming ISO 7185 and 25
+   use a word-symbol §6.1.2 reserves, so this compiler cannot compile the
+   corpus at all.
+
+   What that means here is that **the standards text is now the whole of the
+   external evidence**, and a reading has nothing but another reading to argue
+   with. So weight the report accordingly: a verdict resting on a quoted clause
+   and a compiled probe is worth what it always was, and a verdict resting on
+   "no test disagrees" is worth less than it was, there being one fewer test.
+   Where the audited facility has an outside conformance corpus of its own —
+   Unicode's, for AP 6.4.15 — say so and use it; that is the shape of the thing
+   that was lost, and finding another is worth more than any single finding.
 
 5. **Audit the clause triage, because it is a reading and ADR-0106 says nothing
    here can check it.** `tests/spec/clauses/triage.tsv` classifies all 292

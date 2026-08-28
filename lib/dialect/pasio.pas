@@ -10,7 +10,7 @@
   the buffer holds, because there is no parameter through which to ask.
 
   Like every module here it is **dialect-only**, twice over: `external` and
-  `array of T` are admitted under --std=afterschool alone (ADR-0117's
+  `array of T` are admitted by this dialect alone (ADR-0117's
   containment), and ADR-0119 makes a dialect module unimportable by a
   conformance-mode program.
 

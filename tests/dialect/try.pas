@@ -7,9 +7,10 @@
   armed statements print from inside themselves, and the file case reopens the
   file and reads back what the epilogue flushed.
 
-  The refusals are tests/dialect/try_errors.pas, and what the two conformance
-  modes say about the name is tests/extended/try_refused.pas and
-  tests/try_refused_iso.pas. }
+  The refusals are tests/dialect/try_errors.pas. Two further cases held what
+  the conformance modes said about the name, and went with the modes
+  (ADR-0232); what keeps `try` a spelling a program may still take is
+  ADR-0178's argument about the position, and the review rather than a gate. }
 program try(output, fresh);
 
 type

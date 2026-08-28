@@ -4,7 +4,7 @@
   §6.4.3.3 gives a literal of more than one character a fixed-string-type —
   which this compiler spells as the packed array of char it has always been
   (ADR-0051). So the constant's type is the literal's type in either language,
-  and there is no `--std` case anywhere in the feature.
+  and there is no flag anywhere in the feature to make one.
 
   What is new here is what Extended Pascal can *do* with one. Every operation
   below is §6.7.6.7's or §6.8.3.6's, applied to a value that is not a variable.

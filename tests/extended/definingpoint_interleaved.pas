@@ -17,7 +17,7 @@
   could reach a procedure body, because the bodies were all walked afterwards.
   The procedure part is merged in now too.
 
-  Under --std=iso7185 this program is refused a clause earlier, by §6.2.1's
+  Under ISO 7185 this program would be refused a clause earlier, by §6.2.1's
   fixed order (ADR-0072), which is why the case is here rather than in tests/.
 
   Everything below the one reported use is a shape that must *not* be reported,

@@ -121,9 +121,12 @@ When landing a change, always follow these steps:
    selfhost/producttest.sh build/bin/pascalc build/lib
    ```
 
-   If the BSI catalogue moved, fix `tests/bsi/expected.tsv` in this change. **A
-   row that starts passing is as loud as one that starts failing** — do not
-   "fix" it by accepting the new value without saying why it changed.
+   If a gate's catalogue moved — `line_coverage.txt`, `heap_balance.txt`,
+   `partial_cases.txt`, `predicate_kinds.txt` and the rest — fix it in this
+   change. **A row that starts passing is as loud as one that starts failing**
+   — do not "fix" it by accepting the new value without saying why it changed.
+   That is `verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to a dozen
+   catalogues, and it is why most of them fail in both directions.
 
 8. **Write the ADR if the change constrains future work**, and write it while
    the alternatives are still live — a record written afterwards justifies

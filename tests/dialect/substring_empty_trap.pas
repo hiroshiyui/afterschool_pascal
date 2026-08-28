@@ -11,7 +11,7 @@
 
   The other two disjuncts need no case under this directory: `s[0..3]` and
   `s[2..9]` are unchanged by the dialect, so tests/extended/trap_substring_lo
-  and tests/extended/trap_substring_hi cover them under --std=afterschool too,
+  and tests/extended/trap_substring_hi cover them for a variable-string too,
   by way of the dialect-containment sweep. tests/extended/trap_substring is the
   one that diverges and has an entry in containment_exceptions.txt. }
 program SubstringEmptyTrap(output);

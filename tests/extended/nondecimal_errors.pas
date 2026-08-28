@@ -1,5 +1,5 @@
 { What an extended number may not be. The lexer accumulates rather than
-  bailing, so one run reports all of them; the refusal under --std=iso7185,
+  bailing, so one run reports all of them; ISO 7185's refusal,
   where `#` is not a character of the language at all, is in
   selfhost/torture.pas instead. }
 program NonDecimalErrors(output);

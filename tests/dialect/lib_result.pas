@@ -4,7 +4,7 @@
   What this pins is that the tag is right without anyone having set it.
   PasParse assigns `r := n` or `r := code` and never `r.ok`, so every `ok` printed
   below was decided by ADR-0118's rule that a write to a variant's field
-  activates that variant. Compiled under --std=extended the same source would
+  activates that variant. Under a Pascal without that rule the same source would
   print whatever the storage held -- which is why ADR-0119 refuses to link
   these modules into a conformance-mode program at all, and why this case is
   under tests/dialect/.

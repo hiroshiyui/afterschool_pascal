@@ -5,8 +5,8 @@
   expression that is nonvarying, and `nil` reads nothing at all. So
   `const q = nil` is a program the standard has. ISO 7185 §6.3's `constant` is
   a signed literal or the name of another constant and has no `nil` in it,
-  which is why the refusal was right in one language and wrong in the other —
-  `tests/constexpr_iso_fold.pas` is that half.
+  which is why the refusal was right in one language and wrong in the other.
+  A companion case held that half until ADR-0232 left one language.
 
   §6.4.4's NOTE 2 is what makes the feature one line: "The token nil does not
   have a single type, but assumes a suitable pointer-type to satisfy the

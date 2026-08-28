@@ -8,10 +8,10 @@
   is one ill-formed number rather than a number and a word-symbol -- nothing
   but a non-letter can follow one.
 
-  tests/extended/number_separator.pas is the same file under the other
-  standard, because the sentence is in both and the check is gated on neither.
-  The legal forms below are what keep the check from being a ban on any letter
-  after a digit. }
+  The sentence is in both standards and the check was gated on neither, so a
+  companion case compiled this same file under the other one; ADR-0232 left
+  one language and the pair became one case. The legal forms below are what
+  keep the check from being a ban on any letter after a digit. }
 program NumberSeparator(output);
 var i : integer;
     r : real;
