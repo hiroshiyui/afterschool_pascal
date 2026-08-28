@@ -3388,15 +3388,22 @@ lose is the one below.
   compiler's numbering and the JSON in the protocol's — so an off-by-one in
   either direction changes it. Undo the subtraction and
   `tests/dialect/lsp_diag.pas` fails on two lines.
-- **The character is a byte offset, and this is the one thing the module
-  cannot make right.** LSP positions are UTF-16 code units by default and
-  UTF-8 only since 3.17; `ErrorAt` counts bytes. A line with nothing above
-  U+007F is correct under all three units and a line with one is wrong under
-  two. AP 6.4.15 offers no integer index and `PasUnicode` answers in scalar
-  values, a third unit again, so the conversion this wants is one nothing in
-  the tree can perform. It is written in the module's own header rather than
-  left in a roadmap chapter, because the next person to touch it is reading
-  the module.
+- **The character is a byte offset and the protocol counts code units, so it
+  is converted — and the encoding is negotiated rather than assumed**
+  (ADR-0237). `ErrorAt` counts bytes; an LSP `Position.character` counts UTF-16
+  code units unless the client offered otherwise. The conversion looked
+  impossible from the roadmap's chair, AP 6.4.15 refusing an integer index and
+  `PasUnicode` answering in scalar values — a third unit again. The index is
+  still refused and the *count* never needed one: a scalar below U+10000 is one
+  code unit and one at or above it is two, so `Utf16Column` is a walk over
+  `NextScalar` and eleven lines. Three inputs fall back to counting bytes — a
+  column past the end of the line, one falling inside a scalar, and bytes that
+  are not well-formed UTF-8 — and all three are one decision: when the answer
+  is not knowable, hand back what the compiler said. **The negotiation is the
+  half the plan had not seen**: under `utf-8` the compiler's column already
+  *is* the protocol's, so converting unconditionally would introduce the error
+  the conversion exists to remove. `lsp/sessions/positions_utf16` and
+  `positions_utf8` differ in one offer and in one number.
 
 ### The language server (`lsp/pasls.pas`)
 
@@ -3442,6 +3449,14 @@ nothing else. What it would lose, mechanism by mechanism:
   reports true — the opposite of a readiness test in both directions. The
   unbind before the bind is what keeps the second bind legal, §6.7.5.6 making a
   bind over an existing entity a dynamic-violation.
+- **The line is found by walking the document**, because the conversion above
+  needs it and a `Diagnostic` cannot carry it — the compiler reports a position
+  and not a source. `LineOf` counts newlines from the start for every
+  diagnostic, dropping carriage returns exactly as `WriteScratch` does, since
+  the columns were counted over the file the server wrote and not over the
+  bytes the client sent. A compilation reports few diagnostics, so the cost is
+  paid where it does not matter; it would be the wrong shape for a feature that
+  reported many.
 - **The compile is synchronous**, so a `didChange` arriving mid-compile is
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.

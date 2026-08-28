@@ -50,7 +50,7 @@ reading in this tree still describes it — and not an obligation it is under.
 | Decision | Where it stands |
 | --- | --- |
 | **The memory-safety model** | **Answered, in both halves and by discovery rather than by design** — four records, and not one of them decided the question the row was written to pose. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — stood here for a long time as undecidable until the fork was **withdrawn as posed** (ADR-0201). Neither candidate can reach `^T`, ADR-0117's containment fixing what an ISO program's only reference type means; the dialect's answer for the three affine kinds is refusal, given three times, so there is no second name for either candidate to govern; and the one alias that does exist — a `var` parameter bound to an owned value's referent — cannot escape, because Pascal has no address-of and `new` is the only producer of a pointer. **Unformable rather than checked**, which is stronger and free, and silent if a future feature takes it away (`doc/sop.md` §7). What is left of the fork is exactly one thing: **two threads of control**, which is the only sentence that breaks *a borrow cannot outlive a call because the caller is not running during it*. See the concurrency row [below](#where-the-ideas-come-from). |
-| **The text model** | **Done** (ADR-0189 – ADR-0193, AP 6.4.15). The choice this row offered for eleven records — *a wider character type or a text type* — turned out not to exist: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap, which breaks ADR-0117's containment. So it is a type **beside** the string: `utf8(n)`, a value with a capacity in **bytes** holding well-formed UTF-8 in normal form C, whose elements are **extended grapheme clusters**. Normalising where a value is constructed rather than where two are compared is the load-bearing choice — it makes `=` byte equality *and* canonical equivalence at once, so `é` typed either way is one value and a text can be a `pasmap` key. There is no integer index, for Swift's reason. Four increments: the Unicode tables and runtime, judged by Unicode's own conformance files; the type, with assignment, comparison, `length` in elements and `write`; joining and walking, where `+` renormalises across the join and rejoining the elements of a text gives back the original; and `PasUnicode`, whose `ToText` reports where the assignment stops and whose scalar view answers what the language will not — a family emoji is one element and five scalar values. Case folding and case mapping followed (ADR-0196), and they are where the model's oracle story ends: Unicode publishes a conformance file for normalisation and for segmentation and **none for casing**, so those three routines rest on a transcription where the rest rests on a document written elsewhere. The last question was grapheme-indexed slicing, and the answer was **not to offer the index** (ADR-0199): `PasUnicode.ElementEnd` answers where an element ends, so the walk is written in the program that pays for it and a slice, a lockstep comparison and a resumable walk are all compositions over it. Nothing of AP 6.4.15 is left. |
+| **The text model** | **Done** (ADR-0189 – ADR-0193, AP 6.4.15). The choice this row offered for eleven records — *a wider character type or a text type* — turned out not to exist: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap, which breaks ADR-0117's containment. So it is a type **beside** the string: `utf8(n)`, a value with a capacity in **bytes** holding well-formed UTF-8 in normal form C, whose elements are **extended grapheme clusters**. Normalising where a value is constructed rather than where two are compared is the load-bearing choice — it makes `=` byte equality *and* canonical equivalence at once, so `é` typed either way is one value and a text can be a `pasmap` key. There is no integer index, for Swift's reason. Four increments: the Unicode tables and runtime, judged by Unicode's own conformance files; the type, with assignment, comparison, `length` in elements and `write`; joining and walking, where `+` renormalises across the join and rejoining the elements of a text gives back the original; and `PasUnicode`, whose `ToText` reports where the assignment stops and whose scalar view answers what the language will not — a family emoji is one element and five scalar values. Case folding and case mapping followed (ADR-0196), and they are where the model's oracle story ends: Unicode publishes a conformance file for normalisation and for segmentation and **none for casing**, so those three routines rest on a transcription where the rest rests on a document written elsewhere. The last question was grapheme-indexed slicing, and the answer was **not to offer the index** (ADR-0199): `PasUnicode.ElementEnd` answers where an element ends, so the walk is written in the program that pays for it and a slice, a lockstep comparison and a resumable walk are all compositions over it. Nothing of AP 6.4.15 is left. **And the refusal has since had its first external test** (ADR-0237): the Language Server Protocol counts positions in UTF-16 code units, which is a *fourth* unit and one this page said nothing in the text model answers in. The index is still refused and the count never needed one — a scalar below U+10000 is one code unit and one at or above it is two, so the conversion is a walk over the scalar view, unchanged. The one part of this row that was argued for rather than measured has now been measured by a specification nobody here wrote. |
 | **The memory model** | Unstarted, and **no longer blocked**: it could not be designed before the safety model, shared mutable state being where the two meet, and the safety model is answered. What that answer does to this row is shrink it — ADR-0201's construct is share-nothing, so there is no shared mutable state for a memory model to be about, and the question narrows to what a value crossing between two threads guarantees. It stays open because nothing has been designed, not because something is in its way. |
 | ~~**How far the C++ reference front end follows**~~ (ADR-0108) | **Answered by deletion** (ADR-0232). It was frozen at the conformance surface — `difftest` skipped every dialect source — and when the conformance surface went, `difftest` had nothing left to compare and `src/` had no reader. Both are gone. The question the row was really about survives as [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one) and as `doc/sop.md` §7's largest entry: nothing now compares this front end with a second answer. |
 
@@ -302,14 +302,29 @@ Three things buy it back.
   about a protocol — but the program judging the language is then held to
   something this project did not write.
 
-**One hazard, and it is the sharpest edge in the idea.** LSP positions are
-**UTF-16 code units** by default; UTF-8 is negotiable since 3.17 and not
-guaranteed. AP 6.4.15 refuses an integer index outright and makes an element an
-extended grapheme cluster, and `PasUnicode` offers a scalar view — so the
-protocol's unit is a **third** one, and nothing in the text model answers in it
-today. That reads as a reason to do it rather than a reason not to: it is an
-externally specified stress test of the text model's central choice, which is
-the one part of AP 6.4.15 that was argued for rather than measured.
+~~**One hazard, and it is the sharpest edge in the idea.**~~ **Answered, and
+the text model came through it** (ADR-0237). LSP positions are **UTF-16 code
+units** by default; UTF-8 is negotiable since 3.17 and not guaranteed. AP
+6.4.15 refuses an integer index outright and makes an element an extended
+grapheme cluster, and `PasUnicode` offers a scalar view — so the protocol's
+unit is a **third** one, and this page said nothing in the text model answers
+in it.
+
+**Half of that was wrong, and it is the useful half.** The index is refused and
+always will be, but the *count* the protocol wants never needed one: a scalar
+below U+10000 is one UTF-16 code unit and one at or above it is two, so
+`PasLspDiag.Utf16Column` is a walk over `PasUnicode.NextScalar` and nothing
+else. The externally specified stress test of AP 6.4.15's central choice was
+run, and what it found is that refusing the index cost this nothing — the
+scalar view was the right thing to have exported, and it was exported for a
+different reason (ADR-0199).
+
+**What the exercise did produce is a decision the plan had not seen**: the
+encoding must be *negotiated* rather than converted to. Under `utf-8` the
+compiler's own column is already the protocol's, so converting it would be the
+defect and not the fix — and a client that offers `utf-8` is the common case in
+practice. The server takes it when offered, echoes what it took, and converts
+only under the default.
 
 **What is already in hand**, which is more than one would guess: `PasStream`
 and `PasFile` for the files, `PasProcess.Capture` for invoking `pascalc`,
@@ -341,7 +356,7 @@ above real rather than theoretical; `lsp/build.sh` produces one and
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Nine entries so far, and **four of them have been acted on** — which is the
+Ten entries so far, and **five of them have been acted on** — which is the
 discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -354,10 +369,13 @@ looked generous beside a test case and turned out not to be a limit a
 *program* could live inside, and it had to be fixed before the server could be
 compiled at all.
 
-The shape of the whole list is the argument for the chapter. Four of the nine
+The shape of the whole list is the argument for the chapter. Four of the ten
 are bounds — 8 imports, 24 arguments, a 63-character key, a 255-character
 line — and every one of them was chosen by counting what the largest thing in
 the tree needed at the time. The largest thing in the tree was a test case.
+The tenth is the only one that is not a gap at all: the protocol asked the text
+model a question it had been designed to refuse, and the answer was already
+exported.
 
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
@@ -455,6 +473,21 @@ the tree needed at the time. The largest thing in the tree was a test case.
   beforehand — so a server cannot survive a bad scratch path however carefully
   it is written. The first is a library gap with an obvious shape; the second
   is a language question and the sharper of the two.
+- ~~**The protocol counts in a unit nothing here answers in**~~ — **answered,
+  and the text model needed no change at all** (ADR-0237). This chapter had
+  said the conversion was one nothing in the tree could do, because AP 6.4.15
+  refuses an integer index and `PasUnicode` answers in scalar values. The
+  refusal stands and the count did not need it: a scalar below U+10000 is one
+  UTF-16 code unit and one at or above it is two, so `Utf16Column` is a walk
+  over `NextScalar`. It is the fourth estimate on this page to be wrong in the
+  useful direction, after the three the FFI increments produced — *a decision
+  that looks like it needs a model may need it for only part of its surface.*
+
+  **What was genuinely missing was the negotiation.** 3.17 lets a client offer
+  `positionEncodings`, and under `utf-8` the compiler's column is already the
+  protocol's — so a server that converted unconditionally would be *introducing*
+  the error it was written to remove. Two sessions in `lsp/sessions/` differ in
+  nothing but the offer and in nothing but that number.
 - **`binding(f).bound` is not a readiness test, and reads exactly like one.**
   `doc/implementation-defined.md` E.16 binds a variable when the external name
   *exists*, so a file about to be created reports `false` and one already

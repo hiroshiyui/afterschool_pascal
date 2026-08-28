@@ -40,6 +40,13 @@ exists. There is no `getpid` in this tree and no `mkstemp`, so the name is
 fixed and two servers sharing a `TMPDIR` would share it. Point
 `PASLS_SCRATCH` somewhere of your own if you run more than one.
 
+It negotiates the **position encoding** at `initialize`. LSP counts a
+`Position.character` in UTF-16 code units by default; this compiler counts
+bytes. If your client offers `utf-8` in `general.positionEncodings` the server
+takes it and hands the compiler's own columns straight through; otherwise it
+converts, and either way it says which in `positionEncoding` so nothing is
+guessing. A file holding nothing above U+007F is identical under both.
+
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a
 descriptor write is not, so a program that used both would interleave them

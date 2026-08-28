@@ -26,6 +26,13 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The language server negotiates the position encoding** and converts
+  columns when it must (ADR-0237). An LSP `Position.character` counts UTF-16
+  code units by default and this compiler counts bytes, so a line holding a
+  character above U+007F was reported at the wrong column. The server now takes
+  `utf-8` when a client offers it — the compiler's column is then already
+  right — and converts to UTF-16 otherwise, echoing which in
+  `positionEncoding`.
 - **A language server**, `lsp/pasls.pas`, written in Afterschool Pascal and
   built by `lsp/build.sh` (ADR-0236). It speaks the Language Server Protocol
   over standard input and output and publishes `pascalc`'s diagnostics for
