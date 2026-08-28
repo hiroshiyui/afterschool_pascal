@@ -1,0 +1,29 @@
+# Everything a client may send that this server has to survive rather than
+# answer. Nothing here is a protocol error on the client's part except the
+# first, and none of it may stop the server: an editor sends all of it.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}
+
+# No method. There is nothing to dispatch on and nothing to answer.
+{"jsonrpc":"2.0","id":2,"params":{}}
+
+# A notification this server does not implement. Ignored in silence, which is
+# what the specification asks for -- an unimplemented *request* is answered
+# and an unimplemented notification is not.
+{"jsonrpc":"2.0","method":"workspace/didChangeConfiguration","params":{"settings":{}}}
+
+# A change to a document that was never opened. The protocol says a change
+# follows an open, and this server does not insist: it stores what it is given
+# and compiles it, so the client is answered rather than corrected. The empty
+# array below is that answer.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///never/opened.pas","version":2},"contentChanges":[{"text":"program p;\nbegin\nend.\n"}]}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/x.pas","languageId":"pascal","version":1,"text":"program x;\nbegin\nend.\n"}}}
+# A change list with nothing in it, which the protocol permits and which has
+# no text to store.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/x.pas","version":2},"contentChanges":[]}}
+
+# A close for a document nobody opened.
+{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///never/opened.pas"}}}
+
+# ...and the input simply stops. No `exit` arrives, which is how a session
+# ends when the editor is killed, and the server must exit 0 all the same.

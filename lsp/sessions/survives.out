@@ -1,0 +1,9 @@
+Content-Length: 103
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1},"serverInfo":{"name":"pasls"}}}Content-Length: 121
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///never/opened.pas","diagnostics":[]}}Content-Length: 118
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/x.pas","diagnostics":[]}}Content-Length: 121
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///never/opened.pas","diagnostics":[]}}

@@ -244,3 +244,4 @@ the alternatives that were rejected and why.
 | [0233](0233-the-compiler-becomes-three-program-components.md) | The compiler becomes three program-components | Accepted |
 | [0234](0234-a-second-processor-answers-the-corpus.md) | A second processor answers the corpus | Accepted |
 | [0235](0235-the-two-command-line-bounds-move-together.md) | The two command-line bounds move together | Accepted |
+| [0236](0236-the-language-server-begins.md) | The language server begins | Accepted |

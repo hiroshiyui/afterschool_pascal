@@ -10,3 +10,10 @@ selfhost/torture.pas -text
 # writer is strict (ADR-0218).
 tests/dialect/lib_lsp.in -text
 tests/dialect/lib_lsp.out -text
+
+# The language server's session goldens, for the reason above and one more:
+# what they hold is the exact bytes the server wrote, `Content-Length` header
+# and all, so the carriage returns are the subject and the byte counts are part
+# of what is pinned. A commit that rewrote them would move the counts too, and
+# the frames would then disagree with the numbers announcing them (ADR-0236).
+lsp/sessions/*.out -text

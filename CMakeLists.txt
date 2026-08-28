@@ -598,6 +598,21 @@ add_test(NAME pascalc-product
                  ${APASCAL_PASCALC} ${CMAKE_BINARY_DIR}/lib)
 set_tests_properties(pascalc-product PROPERTIES TIMEOUT 300)
 
+# The language server, and every recorded session replayed against it
+# (doc/roadmap.md's caller). It is the first program in this tree written to be
+# *used* rather than to be tested, so what it checks is not a language rule but
+# whether a program of that shape can be built and can hold a conversation.
+#
+# One case and not one per session, because the harness builds the server once
+# and ten program-components is most of the cost; a case apiece would pay it
+# again for each. The timeout is tests/dialect/'s and for its reason: a server
+# with a readiness defect blocks rather than printing the wrong thing.
+add_test(NAME lsp-server
+         COMMAND ${CMAKE_SOURCE_DIR}/lsp/run.sh
+                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${APASCAL_PASCALC})
+set_tests_properties(lsp-server PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}"
+                     TIMEOUT 300)
+
 file(GLOB APASCAL_TESTS ${CMAKE_SOURCE_DIR}/tests/*.pas)
 foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)

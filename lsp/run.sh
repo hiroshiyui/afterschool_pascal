@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# Afterschool Pascal -- an ISO 7185 / ISO/IEC 10206:1991 Pascal compiler.
+# Copyright (C) 2026 Hui-Hong You
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# Build the language server and replay every recorded session against it.
+#
+#   run.sh <path-to-pascalcc> <path-to-pascalc>
+#
+# A session needs its own harness, and the reason is the same one tests/dumps/
+# has: what is compared here is not what a compiled program printed but what a
+# *protocol* did, and the two differ in three ways tests/run_test.sh has no
+# sidecar for.
+#
+#   * The input is framed. `Content-Length: N<CR><LF><CR><LF>` and then exactly
+#     N bytes, so a .in file would have to be maintained with the byte counts
+#     written into it by hand and rewritten whenever a message changed. The
+#     session files here are one JSON message per line and this script computes
+#     the frames, which is what keeps them readable and correct at once.
+#   * The output is framed too, and the goldens hold the real carriage returns
+#     and the real byte counts -- so a change to what the server renders fails
+#     here even when the JSON still parses.
+#   * The server is a *server*: it needs a compiler to invoke and a scratch
+#     path to write, neither of which is a thing a test case is handed.
+#
+#   sessions/name.jsonl   one JSON-RPC message per line, framed by this script;
+#                         a blank line or one beginning with # is a comment,
+#                         because a session is worth annotating and JSON has
+#                         nowhere to say why a message is there
+#   sessions/name.out     the exact bytes the server writes to standard output
+#   sessions/name.note    what it writes to standard error; absent means none
+set -u
+
+if [[ $# -lt 2 ]]; then
+  echo "usage: run.sh <pascalcc> <pascalc>" >&2
+  exit 2
+fi
+
+pascalcc=$1
+pascalc=$2
+here=$(cd "$(dirname "$0")" && pwd)
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+if ! "$here/build.sh" "$pascalcc" "$work/pasls" >"$work/build.log" 2>&1; then
+  echo "--- the language server did not build ---" >&2
+  cat "$work/build.log" >&2
+  exit 1
+fi
+
+# One JSON message per line becomes one frame per message. `printf %s` and not
+# echo, because a body must not gain a newline it did not have: the byte count
+# in the header is the whole of what says where it ends.
+frame() {
+  local LC_ALL=C
+  local line
+  while IFS= read -r line; do
+    [[ -n $line ]] || continue
+    [[ ${line:0:1} != '#' ]] || continue
+    printf 'Content-Length: %d\r\n\r\n%s' "${#line}" "$line"
+  done
+}
+
+failed=0
+checked=0
+for session in "$here"/sessions/*.jsonl; do
+  name=$(basename "${session%.jsonl}")
+  expected_out="${session%.jsonl}.out"
+  expected_note="${session%.jsonl}.note"
+  if [[ ! -f $expected_out ]]; then
+    echo "--- $name: no golden ($expected_out) ---" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  checked=$((checked + 1))
+  frame <"$session" >"$work/$name.in"
+  # The scratch path is per session and inside the work directory: the default
+  # is one fixed name under TMPDIR, which two runs of the suite would share.
+  PASLS_COMPILER="$pascalc" PASLS_SCRATCH="$work/$name.pas" \
+    "$work/pasls" <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note"
+  status=$?
+  if [[ $status -ne 0 ]]; then
+    echo "--- $name: the server exited with status $status ---" >&2
+    cat "$work/$name.note" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if ! diff -u "$expected_out" "$work/$name.out"; then
+    echo "--- $name: the session differs (expected vs actual above) ---" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  if [[ -f $expected_note ]]; then
+    if ! diff -u "$expected_note" "$work/$name.note"; then
+      echo "--- $name: what the server told the user differs ---" >&2
+      failed=$((failed + 1))
+      continue
+    fi
+  elif [[ -s $work/$name.note ]]; then
+    echo "--- $name: the server wrote to standard error and no .note says so ---" >&2
+    cat "$work/$name.note" >&2
+    failed=$((failed + 1))
+    continue
+  fi
+  echo "$name: ok"
+done
+
+if [[ $checked -eq 0 ]]; then
+  echo "--- no sessions were replayed ---" >&2
+  exit 1
+fi
+echo "pasls: $checked session(s), $failed failed"
+[[ $failed -eq 0 ]]

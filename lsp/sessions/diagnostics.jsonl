@@ -1,0 +1,28 @@
+# The ordinary life of a document: opened with an error in it, changed twice,
+# closed. Every publishDiagnostics below is the compiler's own answer, with
+# the positions moved to the protocol's zero-based counting.
+#
+# The byte counts in the golden are part of what is pinned: LspWrite computes
+# them from what JsonRender produced, so a change to either fails here.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+# A notification, so no response -- and the golden is what says so.
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+
+# One error, at line 3 column 11 of the source and 2:10 in the notification.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/hello.pas","languageId":"pascal","version":1,"text":"program hello(output);\nbegin\n  writeln(greeting)\nend.\n"}}}
+
+# Two errors in one compilation, which is what says the sweep does not stop at
+# the first line it can parse.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":2},"contentChanges":[{"text":"program hello(output);\nvar n: integer;\nbegin\n  n := 'x';\n  writeln(undeclared)\nend.\n"}]}}
+
+# Fixed. The empty array is not silence: it is how the client is told the
+# problems it was showing are gone.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/hello.pas","version":3},"contentChanges":[{"text":"program hello(output);\nbegin\n  writeln('hello')\nend.\n"}]}}
+
+# A request this server does not implement, which must be answered rather than
+# ignored: a client waiting on an id it never gets back is a client that hangs.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"position":{"line":0,"character":0}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///scratch/hello.pas"}}}
+{"jsonrpc":"2.0","id":3,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}
