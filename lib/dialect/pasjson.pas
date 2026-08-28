@@ -256,16 +256,26 @@ begin
 end;
 
 function JsonCharsInto;
-var i, n: integer; acc: string(LineMax);
+var i, n: integer;
 begin
   n := VecLen(JsonChars, b);
   if n > s.capacity then
     JsonCharsInto := errFull
   else begin
-    acc := '';
+    { Built into `s` and not through a local accumulator. It was built through
+      `acc: string(LineMax)`, which made the capacity check a lie: the guard
+      asks the *caller's* capacity and the accumulator imposed 255 whatever
+      the caller passed, so a document between 256 and the caller's capacity
+      passed the check and then stopped the program at
+      `a string of length 256 does not fit a capacity of 255`. A
+      `publishDiagnostics` notification carrying two diagnostics is 300-odd
+      characters, which is how it was found: the first realistic client
+      exceeded it. `s` is 6.4.3.3.3's canonical string-type through a `var`
+      parameter, so its own capacity is what the appends are checked against,
+      which is the capacity the guard already asked about. }
+    s := '';
     for i := 1 to n do
-      acc := acc + VecGet(JsonChars, char, b, i);
-    s := acc;
+      s := s + VecGet(JsonChars, char, b, i);
     JsonCharsInto := errNone
   end
 end;

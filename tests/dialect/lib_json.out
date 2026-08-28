@@ -14,3 +14,5 @@ raw control   ok=FALSE
 two values    ok=FALSE
 lone surrogate ok=FALSE
 unclosed      ok=FALSE
+long render   code=no error len=321
+into a small  code=no room left

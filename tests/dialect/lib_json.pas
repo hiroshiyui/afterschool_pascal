@@ -13,6 +13,9 @@ var r: JsonResult; at: integer;
     doc, arr, obj, m: JsonPtr;
     buf, out: JsonChars;
     s: string(255); e: ErrorCode; i: integer;
+    { wider than a line, and narrower than one: the two sides of the
+      capacity JsonCharsInto promises to honour. }
+    wide: string(1024); narrow: string(16);
 
 begin
   { --- reading ---------------------------------------------------------- }
@@ -98,5 +101,28 @@ begin
   r := JsonParse('"\uD800"', at);
   writeln('lone surrogate ok=', r.ok);
   r := JsonParse('[1,2', at);
-  writeln('unclosed      ok=', r.ok)
+  writeln('unclosed      ok=', r.ok);
+
+  { --- a document longer than a line -------------------------------------- }
+  { `JsonCharsInto` asks whether the document fits the *caller's* capacity,
+    and used to build the answer through a `string(LineMax)` accumulator --
+    so a document between 256 characters and the caller's capacity passed the
+    guard and then stopped the program at `a string of length 256 does not fit
+    a capacity of 255`. Nothing here had rendered one that long: every case
+    above fits a line. This renders 320-odd characters into a `string(1024)`
+    and prints its length, which is the number the guard promised. }
+  obj := JsonNewArray;
+  for at := 1 to 40 do
+    JsonAppend(obj, JsonNewText('12345'));
+  JsonCharsNew(buf);
+  JsonRender(obj, buf);
+  e := JsonCharsInto(buf, wide);
+  writeln('long render   code=', ErrorText(e), ' len=', length(wide):1);
+  { And the guard itself still fires, into a target that genuinely cannot
+    hold it -- both directions, since answering errFull always would satisfy
+    one of them. }
+  e := JsonCharsInto(buf, narrow);
+  writeln('into a small  code=', ErrorText(e));
+  JsonCharsFree(buf);
+  JsonFree(obj)
 end.
