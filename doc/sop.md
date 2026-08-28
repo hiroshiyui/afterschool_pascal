@@ -532,6 +532,16 @@ only grows is a register nobody trusts:
   `model_drift.resolve_base`, one copy rather than one per caller, and
   `model-drift-base` is a `ctest` case over a repository built for the purpose.
   What is left of that gap is the row above.
+- *And a second time, in the same file.* `seed-is-current` runs only at a
+  release tag, so the fourteen lines of shell that were its whole check had
+  nowhere to be exercised first — and they were written in bash, while a
+  `run:` block in a container is `sh -e {0}`. The job died on a syntax error
+  at the tag, having translated nothing (run 33178547669). The answer is
+  ADR-0233's second commit and the same one as before: the check is
+  `tests/checks/seed_current.sh`, run by hand at a release and by the job at
+  the tag, so the text CI runs is the text a release ran. What is left is that
+  a `run:` block still has no local exercise, and the way to keep one honest
+  is to keep it to a line.
 - *`-O0` was two cases wide.* The `unoptimised` CI job now runs the whole
   corpus at `-O0`, and `AFTERSCHOOL_PASCAL_OPT=-O0 ctest` does it locally. What
   is left of that gap is the first two rows above.

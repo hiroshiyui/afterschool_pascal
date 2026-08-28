@@ -82,6 +82,11 @@ When performing release engineering, always follow these steps:
    at the tag: a stale seed still builds a working compiler, from the *previous*
    release's source, so nothing else would notice.
 
+   **Run `tests/checks/seed_current.sh` before tagging.** It is the whole of
+   what that job runs, and running it here is the only chance to be told
+   before a tag exists — including that the seed holds a module this source no
+   longer produces, which a per-module comparison alone would not see.
+
    **Reseed last, and freeze the compiler's sources once you have.** `seed/refresh.sh` writes **one seed module per program-component** (ADR-0233) and removes the old ones first, so a component dropped from the tree does not leave a module behind for CMake's glob to link. The seed
    is ~10 MB and 240 000 lines, so every refresh is that much churn in the
    history, and `seed-is-current` compares it to the compiler **byte for byte**
@@ -93,8 +98,9 @@ When performing release engineering, always follow these steps:
    refresh before the tag could be cut. The order that avoids it is: land every
    source change, *then* bump the version, *then* reseed, then tag. If a source
    change turns out to be necessary after the reseed, redo the reseed — do not
-   tag over a stale seed, because the job that catches it runs only at the tag
-   and so has no earlier chance to tell you.
+   tag over a stale seed: the job that catches it runs only at the tag, so
+   `tests/checks/seed_current.sh` is the earlier chance and the release has to
+   take it deliberately.
 
 6. **Update `CHANGELOG.md`** — add a new version entry at the top following
    [Keep a Changelog](https://keepachangelog.com/), grouped under `Added`,

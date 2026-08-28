@@ -47,6 +47,12 @@ reader of `seed/` will notice it immediately.
   dependencies (`cmake`, `make`, `clang`, `git`, `python3` and nothing else).
   It now adds in the shell. No effect on the compiler; the build's dependency
   list is the claim it was falsifying.
+- The `seed-is-current` CI job was written in bash, and a `run:` block in a
+  container is `sh -e {0}` — so the job died on a syntax error at the tag,
+  which is the only place it runs. Its check is now
+  `tests/checks/seed_current.sh`, which a release runs by hand before tagging.
+  No effect on the compiler; the seed it was meant to check is the one this
+  source produces, three modules, verified.
 
 ## [3.0.0] — 2026-08-28
 
