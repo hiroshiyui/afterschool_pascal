@@ -85,36 +85,36 @@ def run(*args, **kw):
 def corpus(root):
     """Every source the suite compiles, with the flags it compiles it under.
 
-    Mirrors what CMakeLists.txt registers rather than re-deciding it: the
-    directory picks the standard (ADR-0033), a name.std sidecar overrides that
-    (ADR-0082), and a name.components case is translated with its components
-    imported, because that path is reached in no other way.
+    Mirrors what CMakeLists.txt registers rather than re-deciding it: a
+    name.components case is translated with its components imported, because
+    that path is reached in no other way. Until ADR-0232 each group carried a
+    standard as well, the directory picking it (ADR-0033) and a name.std
+    sidecar overriding it (ADR-0082); there is one language now, so a group is
+    only a list of files and the directories are kept for what they enumerate.
     """
     jobs = []
     groups = [
-        ("iso7185", sorted((root / "tests").glob("*.pas"))),
-        ("extended", sorted((root / "tests" / "extended").glob("*.pas"))),
-        ("extended",
-         sorted((root / "tests" / "extended" / "components").glob("*.pas"))),
-        # The dialect (ADR-0117). Listed here for the same reason the dump
-        # corpus was added after ADR-0103: a case this does not enumerate
-        # contributes no coverage, so the lines it reaches report as unreached
-        # while an oracle reaches them on every run -- which was worth 195
-        # statements the last time it happened.
-        ("afterschool", sorted((root / "tests" / "dialect").glob("*.pas"))),
+        sorted((root / "tests").glob("*.pas")),
+        sorted((root / "tests" / "extended").glob("*.pas")),
+        sorted((root / "tests" / "extended" / "components").glob("*.pas")),
+        # The dialect. Listed here for the same reason the dump corpus was
+        # added after ADR-0103: a case this does not enumerate contributes no
+        # coverage, so the lines it reaches report as unreached while an oracle
+        # reaches them on every run -- which was worth 195 statements the last
+        # time it happened.
+        sorted((root / "tests" / "dialect").glob("*.pas")),
         # And the dialect's §6.13 components, for the reason the line above
         # gives about the dialect itself: a module-only translation reaches
         # arms of RunCodeGen a program never does, and until ADR-0216 one of
         # them was missing five statements nothing here could report as
         # unreached -- because nothing here compiled such a component at all.
-        ("afterschool",
-         sorted((root / "tests" / "dialect" / "components").glob("*.pas"))),
-        ("iso7185", sorted((root / "selfhost" / "badparse").glob("*.pas"))),
-        ("iso7185", sorted((root / "selfhost" / "badsema").glob("*.pas"))),
-        ("iso7185", [root / "selfhost" / "torture.pas"]),
-        ("extended", [root / "selfhost" / "compiler.pas"]),
+        sorted((root / "tests" / "dialect" / "components").glob("*.pas")),
+        sorted((root / "selfhost" / "badparse").glob("*.pas")),
+        sorted((root / "selfhost" / "badsema").glob("*.pas")),
+        [root / "selfhost" / "torture.pas"],
+        [root / "selfhost" / "compiler.pas"],
     ]
-    for _, files in groups:
+    for files in groups:
         for f in files:
             if not f.exists():
                 continue
@@ -132,33 +132,32 @@ def corpus(root):
         jobs.append((f, [flags.read_text().strip() if flags.exists()
                          else "--dump-all"]))
 
-    # ...and the same corpus again under --dump-all, because that is what
-    # `selfhost/difftest.sh` does with it on every run: it compares the three
-    # dump sections of both front ends over every Pascal source in the tree.
+    # ...and the same corpus again under --dump-all. It was added because
+    # `selfhost/difftest.sh` drove it that way on every run, comparing the
+    # three dump sections of two front ends over every Pascal source in the
+    # tree; ADR-0232 retired that harness with the conformance surface it
+    # compared, and the sweep stays, because what it measures is the walkers
+    # and not the oracle that used to read them.
     #
-    # Without this the measurement said the dump walkers were barely reached --
+    # Without it the measurement said the dump walkers were barely reached --
     # `dumpexpr` 75 statements never run of 186, `dumpstmt` 11, `dumpgroup` 18
     # -- because the only dump flags here were the six cases in tests/dumps/.
-    # Sweeping the corpus the way difftest drives it leaves `dumpexpr` at 1 and
-    # `dumpstmt` and `dumpgroup` at 0, and takes the whole figure from 649
-    # statements never run to 454. Those 195 were reported as unreached while
-    # an oracle in the suite reached them every time it ran.
+    # Sweeping the whole corpus leaves `dumpexpr` at 1 and `dumpstmt` and
+    # `dumpgroup` at 0, and takes the whole figure from 649 statements never
+    # run to 454. Those 195 were reported as unreached while an oracle in the
+    # suite reached them every time it ran.
     #
     # That is doc/sop.md §7's "coverage.py sees the sources, not the harnesses"
-    # closed for the one harness whose flags this file can mirror. It matters
-    # more than the number: the dumps *are* difftest's comparison surface, so
-    # phantom slack there is slack in the thing that guards the front end. The
-    # shell harnesses that build their own compilers -- irtest.sh,
-    # producttest.sh, verify.py, the BSI runner -- stay invisible, and the row
-    # stays for them.
+    # closed for the one harness whose flags this file could mirror -- and the
+    # row stays for the shell harnesses that build compilers of their own:
+    # irtest.sh, producttest.sh and verify.py are invisible here.
     for src, flags in list(jobs):
         if src is not None and not any(f.startswith("--dump") for f in flags):
             jobs.append((src, flags + ["--dump-all"]))
 
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
-    # producttest.sh, verify.py, the BSI runner -- drive the compiler in ways
-    # no glob finds. That is a limitation of the instrument and is recorded in
+    # producttest.sh, verify.py -- drive the compiler in ways no glob finds. That is a limitation of the instrument and is recorded in
     # doc/sop.md §7; these two are added rather than left to misreport, because
     # `--version` *is* asserted (producttest.sh compares it against
     # CMakeLists.txt) and `-h` is too (producttest.sh checks it documents every

@@ -220,8 +220,7 @@ jobs:
 
       - name: Regenerate and compare
         run: |
-          std=$(tr -d '[:space:]' <selfhost/compiler.std)
-          build/bin/pascalc "--std=$std" selfhost/compiler.pas -o /tmp/seed.ll
+          build/bin/pascalc selfhost/compiler.pas -o /tmp/seed.ll
           if ! cmp -s /tmp/seed.ll seed/pascalc.ll; then
             echo "seed/pascalc.ll is not what this source produces." >&2
             echo "Run seed/refresh.sh and amend the release commit." >&2
@@ -429,7 +428,7 @@ jobs:
           # The case skips (exit 77) without llc and ctest reports a skip as
           # success, so this job would go green having assembled nothing. The
           # install above is what makes it run; this is what makes a silent
-          # skip impossible. Same shape as the validation suite's guard, and
+          # skip impossible. Same shape as unicode-conformance's guard, and
           # for the same reason.
           if grep -q 'Skipped' /tmp/llc.log; then
             echo "llc was not found, so this job proved nothing" >&2

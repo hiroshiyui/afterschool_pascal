@@ -114,7 +114,7 @@ def subjects(path):
     return out
 
 
-def dumped(pascalc, source, std):
+def dumped(pascalc, source):
     """What the compiler says every record in this source looks like."""
     cmd = [pascalc, "--dump-layout", str(source),
            "-o", os.devnull]
@@ -175,11 +175,7 @@ def main():
         text = source.read_text(encoding="utf-8", errors="replace")
         if "@cstruct:" not in text:
             continue
-        std = "afterschool"
-        std_file = source.with_suffix(".std")
-        if std_file.exists():
-            std = std_file.read_text().strip()
-        records = dumped(pascalc, source, std)
+        records = dumped(pascalc, source)
         if records is None:
             failures += 1
             continue

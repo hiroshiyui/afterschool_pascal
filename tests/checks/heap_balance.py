@@ -46,23 +46,6 @@ CATALOGUE = ROOT / "tests" / "checks" / "heap_balance.txt"
 NEW_CALL = re.compile(r"\bnew\s*\(", re.IGNORECASE)
 
 
-def standard_of(source):
-    """The same rule every other harness derives: the directory decides.
-
-    Unanchored on purpose -- ADR-0034's glob quietly called a relative path
-    ISO 7185, which compares two identical rejections and passes.
-    """
-    text = str(source)
-    if "/tests/extended/" in text:
-        return "extended"
-    if "/tests/dialect/" in text:
-        return "afterschool"
-    sidecar = source.with_suffix(".std")
-    if sidecar.exists():
-        return sidecar.read_text().strip()
-    return "iso7185"
-
-
 def components_of(source):
     """The other program-components, as run_test.sh reads them."""
     sidecar = source.with_suffix(".components")
@@ -112,8 +95,7 @@ def balance(source, pascalcc, work):
     env = dict(os.environ)
     env["PASHEAP_BALANCE"] = str(out)
     done = subprocess.run(
-        [str(ROOT / "tests" / "run_test.sh"), pascalcc, str(source),
-         standard_of(source)],
+        [str(ROOT / "tests" / "run_test.sh"), pascalcc, str(source)],
         cwd=ROOT, env=env, capture_output=True, text=True)
     if done.returncode != 0:
         return None, done.stderr.strip().splitlines()[:3]

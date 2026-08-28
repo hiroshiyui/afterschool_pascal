@@ -90,9 +90,6 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas; do
   base=${src%.pas}
   # An error-path case has no module to assemble; it is expected not to compile.
   [[ -e $base.err ]] && continue
-  std=iso7185
-  [[ $src == */tests/extended/* ]] && std=extended
-  [[ -e $base.std ]] && std=$(tr -d '[:space:]' <"$base.std")
   "$pascalc" "$src" -o "$work/t.ll" >/dev/null 2>&1 || continue
   if ! llc "${llc_flags[@]}" "$work/t.ll" -o "$work/t.s" 2>"$work/err"; then
     echo "llc-second-backend: llc rejected the module for $src" >&2

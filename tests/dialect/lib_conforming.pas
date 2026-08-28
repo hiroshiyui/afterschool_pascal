@@ -1,18 +1,21 @@
-{ ADR-0137: a dialect program linking a module translated under --std=extended.
-  Before it, this did not link at all -- ADR-0119 spelled the mode into a
-  module's activation names, so `m.conforming.extended.init` was defined and
-  `m.conforming.afterschool.init` was what the program called.
-
-  The reason that mattered is not this file: it is `lib/`, six modules of
-  ordinary Extended Pascal that the language *containing* Extended Pascal could
-  not use. lib_conforming.components is what makes the two modes differ, and
-  without ADR-0137 the link fails with
+{ ADR-0137, and what is left of it. It was a dialect program linking a module
+  translated under `--std=extended`, which before that record did not link at
+  all: ADR-0119 spelled the mode into a module's activation names, so
+  `m.conforming.extended.init` was defined and `m.conforming.afterschool.init`
+  was what the program called, and the link failed with
 
       module 'conforming' was translated under a different --std
 
-  The program is dialect and says so by using a dialect feature -- the optional
-  -- so that it could not accidentally be a conforming program that happens to
-  compile under --std=afterschool. }
+  What made it matter was never this file. It was `lib/`, modules of ordinary
+  Extended Pascal that the language *containing* Extended Pascal could not use
+  -- and ADR-0232 dissolved the problem rather than solving it again: there is
+  one language, every translation writes the same tag, and no two components
+  here can disagree about which language they are in.
+
+  So what this case still witnesses is the ordinary half: a program using a
+  dialect feature -- the optional -- importing a separately translated
+  component that exports a structured type. Kept rather than deleted because
+  that is a §6.13 path worth a case, and this one already had it. }
 program LibConforming(output);
 
 import Conforming;
