@@ -4,7 +4,12 @@ Date: 2026-08-10
 
 ## Status
 
-Accepted
+Accepted. **The one-source-file half is superseded by ADR-0233**, which split
+the compiler into three §6.13 program-components; the reason given below --
+neither standard had an include mechanism -- expired at ADR-0053 and ADR-0079
+and had been an unpaid debt since. Everything else in this record stands, the
+half about checking Sema on the tree it annotates most of all: that contract
+(ADR-0008) is what makes ApFront's interface small enough to be worth having.
 
 ## Context
 

@@ -1,14 +1,33 @@
 # The seed
 
-`pascalc.ll` is a working Afterschool Pascal compiler, in LLVM IR, committed to
-this repository. It is what makes the tree buildable now that stage 0 is gone
-(ADR-0085): `clang` assembles it into a compiler, and that compiler translates
-`selfhost/compiler.pas` into the one `cmake --build` puts in `build/bin`.
+The `.ll` files here are a working Afterschool Pascal compiler, in LLVM IR,
+committed to this repository. They are what makes the tree buildable now that
+stage 0 is gone (ADR-0085): `clang` assembles them into a compiler, and that
+compiler translates the three sources under `selfhost/` into the one
+`cmake --build` puts in `build/bin`.
 
 ```sh
-clang -Wno-override-module seed/pascalc.ll build/lib/libpasrt.a -lm -o pascalc
-./pascalc --std=extended selfhost/compiler.pas -o next.ll
+clang -Wno-override-module seed/*.ll build/lib/libpasrt.a -lm -o pascalc
+./pascalc selfhost/aptypes.pas -o aptypes.ll
+./pascalc --import selfhost/aptypes.pas selfhost/apfront.pas -o apfront.ll
+./pascalc --import selfhost/aptypes.pas --import selfhost/apfront.pas \
+          selfhost/compiler.pas -o pascalc.ll
 ```
+
+**How many files there are is the seed's business, and both CMake and
+`tests/checks/llc_check.sh` match them with a glob.** The compiler is three
+§6.13 program-components since ADR-0233, so a refreshed seed is three modules
+named after them — `aptypes.ll`, `apfront.ll`, `compiler.ll` — and
+`seed/refresh.sh` removes the old ones before writing them, since a module left
+behind from a build with more components would be linked in beside the new ones
+and two definitions of the same program is a link error about a file nobody
+wrote.
+
+**A seed from before the split still works, and that is the point of a seed.**
+`pascalc.ll` is one module holding the whole compiler as it was at v3.0.0; it
+assembles into a compiler that translates the three sources perfectly well,
+because what a seed has to be is a *working compiler*, not a mirror of the
+current source layout. It is replaced at the next release, not at the split.
 
 It is **IR rather than a binary** because ADR-0006 made textual `.ll` a
 first-class output of this compiler — "the backend that survives the rewrite" —
@@ -18,8 +37,8 @@ can read it.
 
 ## What it is, exactly
 
-Generated from `selfhost/compiler.pas` at the commit it was last refreshed,
-by the compiler built from that same source. Its provenance is therefore the
+Generated from the compiler's own sources at the commit it was last refreshed,
+by the compiler built from those same sources. Its provenance is therefore the
 repository's own history and nothing else — but that is a claim about a chain,
 not something a reader can check by inspection, which is the trusting-trust
 problem in its ordinary form. Tag `v0.1.0` is the last commit where a C++
@@ -35,7 +54,7 @@ David A. Wheeler's diverse double-compiling, run by `seed/ddc.sh`:
 
 1. build the `v0.1.0` C++ compiler, whose code generator is LLVM's;
 2. have it translate today's `selfhost/compiler.pas`, and link that — **A**;
-3. `build/bin/pascalc`, which came from `seed/pascalc.ll` the ordinary way — **B**;
+3. `build/bin/pascalc`, which came from the seed the ordinary way — **B**;
 4. have A and B each translate `selfhost/compiler.pas`, and compare *those*.
 
 They were identical: 7,024,210 bytes, sha256
@@ -47,6 +66,14 @@ comparison is made one stage further on. What makes it evidence is that the two
 compilers reached the same source through unrelated implementations, so a seed
 carrying behaviour `selfhost/compiler.pas` does not account for would show up
 here.
+
+**The window closed at ADR-0233 and will not reopen.** `v0.1.0` has no
+`--import`: handed a compiler that is three program-components it reports
+`no interface named 'aptypes' has been exported` and stops, and it cannot link
+them separately either. `ddc.sh` now runs, says THE WINDOW HAS CLOSED, and
+exits 0. The result above is the only one that will ever be obtained, which is
+why it is dated here rather than left in a log. `doc/sop.md` §7 carries the gap
+that leaves.
 
 **What it does not establish.** `v0.1.0` is this project's own earlier compiler,
 so the two implementations are diverse but not independently *authored*. This
@@ -100,8 +127,8 @@ numbers and what they come to. None of it has been run, only linked.
 
 ## Its licence
 
-The seed is `selfhost/compiler.pas` in another form, so it is under the same
-GNU General Public License version 3 or later, and `selfhost/compiler.pas` is
+The seed is the compiler's own sources in another form, so it is under the same
+GNU General Public License version 3 or later, and those sources are
 the corresponding source the GPL asks for — committed beside it, in this
 repository, at the commit the seed was generated from. It carries **no** file
 header of its own: it is generated, and a notice written into it would be
@@ -111,13 +138,16 @@ the compiler, not the runtime.
 
 ## Refreshing it
 
-**At release tags, not per commit.** The file is 10.2 MB and 242,000 lines;
+**At release tags, not per commit.** The seed is 10.2 MB and 242,000 lines;
 regenerating it whenever the compiler changes would rewrite all of it on every
-commit that touches `selfhost/compiler.pas`, which is most of them.
+commit that touches the compiler, which is most of them. A refresh after
+ADR-0233 also changes the *set* of files, `pascalc.ll` giving way to one module
+per program-component — which is one more reason it belongs at a release, and
+why the `seed-is-current` CI job compares the set as well as the contents.
 
 Nothing forces a refresh, and nothing needs to: an older seed builds a newer
-compiler for as long as `selfhost/compiler.pas` stays within what the seed
-accepts. When it does not, the build fails at the first stage with an ordinary
+compiler for as long as the sources stay within what the seed
+accepts — a one-module seed building a three-component compiler included. When it does not, the build fails at the first stage with an ordinary
 diagnostic, and the fix is to refresh from the last commit that did build.
 
 **Two different things can put a source outside it, and only one is a
@@ -129,6 +159,8 @@ the compiler is its own largest input and `PoolAdd` does not deduplicate. The
 symptom is the seed reporting *"out of string space"* against
 `selfhost/compiler.pas`, and raising the constant in the source does **not**
 help: the seed still holds the old bound and is what has to read the file.
+Since ADR-0233 the bound that matters is the worst of *three* translations, and
+it is not the program's: `buffer-headroom` reports which component set it.
 
 That is the one case where a refresh is not optional and cannot wait for a
 release tag, because until it happens no diagnostic can be added to the

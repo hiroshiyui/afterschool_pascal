@@ -21,7 +21,7 @@ decide about, and the day it is decided it moves there.
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the one library gap in front of it |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the one oracle still worth building |
-| [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open |
+| [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open — which has since been taken |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 | [Answered, and where](#answered-and-where) | the questions this file used to carry, each with its record |
@@ -688,64 +688,29 @@ what Free Pascal does with `{$MODE ISO}` — was recommended and declined, on th
 ground that it leaves the project presenting itself as a conformance vehicle
 with a dialect attached, which is not what it is.
 
-### 1. Split `selfhost/compiler.pas` into §6.13 program-components — **decided as ADR-0233**
+### 1. Split the compiler into §6.13 program-components — **done** ✔
 
-The one proposal v3 did not take. It has a record now
-([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md),
-Accepted and **not implemented**: what is settled is the cut and the seed, not
-that any of it is built). Writing it changed the proposal twice — which is what
-ADR-0001 means by writing the record while the alternatives are still live.
+The one proposal v3 did not take, taken the day after v3 shipped:
+[ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md), written
+**Proposed** while the alternatives were still live, accepted two days later
+without a word of the argument changing, and implemented the same day. The
+compiler is `selfhost/aptypes.pas`, `selfhost/apfront.pas` and
+`selfhost/compiler.pas`, and `selfhost/compiler.components` is the order.
 
-**The buffer argument below is false**, and the record has the measurement:
-`--import` re-tokenises the whole imported file, so the unit that imports the
-rest pays for the entire tree again and the peak does not fall. A 2 011-line
-module whose interface is four lines costs 12 065 tokens as an import against
-12 043 compiled. Nor can it be recovered by reading only the interface, because
-AP 6.7.3.10 instantiates a generic in the *client's* translation and the client
-needs bodies. What survives is the second reason — the linking blind spot — and
-the record takes the split for that alone.
+Writing the record before the work changed the proposal twice, and doing the
+work corrected the record twice. All four are in
+[`doc/history.md`](history.md#the-compiler-becomes-three-program-components);
+the two that matter to a reader of this file are that **the buffer argument was
+false** — `--import` re-tokenises the whole imported file, so nothing about the
+peak follows from splitting — and that the pool peak nevertheless **fell by
+27%**, which the record predicted it would not. `buffer-headroom` measures all
+three translations now and reports the worst of them, which is a better
+question than it was asking before.
 
-**And the split is three components, not the four or five sketched here.** The
-66 `forward` declarations are the complete list of back-edges in source order,
-and all 66 are inside one stage, so the file order is already a topological
-order and no mutual recursion has to be broken. Three is the smallest number
-that makes every build translate a module alone, translate a module that imports
-another, and link the result — which is the whole of what closes the row. What
-follows is the case as it stood before the record, kept because the reasons are
-unchanged and only the conclusion moved.
-
-ADR-0024 made it one file because neither standard had an include mechanism.
-That was true when it was written and is not true now: ADR-0053 gave the
-project modules and separate translation, ADR-0079 gave the components, and
-`tests/extended/components/` already builds them from `.components` sidecars
-that `run_test.sh` and `irtest.sh` both read.
-
-The one-file constraint is therefore no longer a constraint. It is an unpaid
-debt, and the interest is measurable: one translation unit of ~36 000 lines,
-and `poolMax = 1000000` and `tokMax = 300000` sized so that the compiler can
-hold **its own source**. An entire gate exists to watch those two numbers
-(`buffer-headroom`, ADR-0126 and ADR-0148), and it exists because raising the
-constant *here* does not raise the seed's, so an overflow arrives as a failed
-build rather than as a diagnostic. That has happened twice. Components make the
-problem structural instead of watched.
-
-The second thing it buys is a row in [`doc/sop.md`](sop.md) §7: **nothing links
-a component on its own**. Every harness here compiles a program, and a §6.13
-component is only ever one input to that — so a component that assembles to a
-valid but incomplete module passes the compiler, passes LLVM's parser, and
-fails in the linker about a name no source spells. That is precisely how
-AP 6.7.3.10's instantiation bodies came to be emitted in one of `RunCodeGen`'s
-two arms (ADR-0212, ADR-0216). If the compiler's own build linked components,
-the row closes by construction, because the build becomes the test.
-
-**What it costs**: a seed refresh, and `irtest.sh` and `producttest.sh`
-learning a build order. The refresh is the part that has to be argued rather
-than assumed — `seed/pascalc.ll` is this repository's ability to build itself
-at all. (`difftest.sh` was on that list and is not a cost any more.)
-
-**What this proposal does not answer** is what the split is *along*. Lexer /
-parser / Sema / CodeGen is the obvious cut and may well be the wrong one: Sema
-is the largest component and would still be the largest file.
+What the split was taken for is the linking blind spot, and that closed:
+`doc/sop.md` §7's row is narrowed to the combinations the compiler's own
+structure does not use, because every build now translates a module alone,
+translates a module that imports another, and links the result.
 
 ### 2. Let the compiler be written in the dialect — **dissolved by §0** ✔
 
@@ -1088,7 +1053,8 @@ the record.
 | Do the conformance modes "stay exactly as they are"? | They did, until they were removed. What they accepted never moved for the dialect; then ADR-0232 removed the modes rather than the promise | ADR-0154, ADR-0232 |
 | Memory safety: deferral or discovery? | Discovery, twice. Lifetime was already answered, by the file variable (ADR-0151); aliasing was too, by refusal for the three affine kinds and by a **borrow that cannot escape** for the rest — Pascal has no address-of, so no pointer can name what a `var` parameter refers to. What is left of the fork is two threads of control and nothing else | ADR-0151, ADR-0201 |
 | An oracle nobody here wrote | The BSI suite and `src/` as a reference front end — **both retired with the conformance modes they were about**. What is left is `unicode-conformance`, which is a published third-party answer for one clause | ADR-0086, ADR-0108, ADR-0189, ADR-0232 |
-| Diverse double-compiling | Run once, 2026-08-18, identical outputs; `seed/ddc.sh` | `seed/README.md` |
+| Diverse double-compiling | Run once, 2026-08-18, identical outputs; `seed/ddc.sh`. **The window is closed**: `v0.1.0` has no `--import` and cannot read a compiler that is three program-components | `seed/README.md`, ADR-0233 |
+| Should the compiler be one source file? | No, and it had not needed to be since ADR-0053. Three program-components, cut where the file order already was a topological order — 66 `forward` declarations, all inside one stage. The reason is the linking blind spot and not the buffers | ADR-0024, ADR-0233 |
 | Conformant array parameters, and level 1 | Done, and the 51 BSI level-1 programs found nine defects in the first implementation | ADR-0153 |
 | Can anything measure what the corpus reaches? | Three coverage gates and a clause-cited suite | ADR-0103 – ADR-0106 |
 | Mutation testing, committed to the tree | One file per recorded mutation and a harness that runs them; not a `ctest` case, because it edits the tree. A register of demonstrations and not a measurement | ADR-0207 |

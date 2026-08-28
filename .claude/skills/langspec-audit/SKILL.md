@@ -90,8 +90,8 @@ When performing a language-specification audit, always follow these steps:
      the commit history are absent.
 
    **The comment strip is the part that is easy to skip**, and it is not
-   fastidiousness. `selfhost/compiler.pas` carries 791 ADR citations and 1755
-   clause citations — 41% of what all of `doc/adr/` holds — and its comments
+   fastidiousness. The compiler's three sources carry 842 ADR citations and
+   1811 clause citations between them, and their comments
    *argue* the readings rather than merely citing them. It is the densest
    anchoring text in the tree, and every earlier version of this step invited a
    reader to open it. `strip_comments.py` preserves line numbers so a finding

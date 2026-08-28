@@ -12,9 +12,13 @@ When committing and pushing changes, always follow these steps:
 2. **Stage** all relevant changes with `git add <paths>`. Be deliberate — stage only files related to the current topic. Never blindly use `git add -A` if unrelated changes are present. `build/` is ignored; check `git status --short` for stray `.ll`/`.o` artifacts left by manual runs.
 
 3. **Compose the message** following the [Conventional Commits](https://www.conventionalcommits.org/) standard. Use these scopes for this project:
-   There is one compiler source, `selfhost/compiler.pas` (ADR-0024), so the
-   scope names the *component* inside it that the change touches — the names
-   CLAUDE.md's "Where things live" uses:
+   The compiler is three §6.13 program-components (ADR-0233), and the scope
+   still names the *component* the change touches rather than the file — the
+   names CLAUDE.md's "Where things live" uses. `lexer`, `parser` and `sema` are
+   in `selfhost/apfront.pas`; `codegen` and `driver` are in
+   `selfhost/compiler.pas`; a change to the token kinds, the AST record, the
+   type records or the string pool is in `selfhost/aptypes.pas` and takes the
+   scope of whatever it is *for*:
    - `lexer` — the token kinds, the lexer, the keyword tables
    - `parser` — the node kinds and the recursive-descent productions
    - `sema` — scopes, type rules, type-denoter resolution, constant folding

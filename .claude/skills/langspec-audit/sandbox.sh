@@ -18,8 +18,8 @@
 #     the commit history and tests/spec/features/ are simply absent.
 #
 # and the compiler's source arrives with its comments removed, which is the
-# part that is easy to miss: selfhost/compiler.pas carries 791 ADR citations
-# and 1755 clause citations -- 41% of what all of doc/adr/ holds -- and its
+# part that is easy to miss: the compiler's three sources carry 842 ADR
+# citations and 1811 clause citations between them, and their
 # comments argue the readings rather than merely citing them.  It is the
 # densest anchoring text in the tree and step 2 of the skill has always
 # allowed a reader to open it.
@@ -71,8 +71,12 @@ WRAP
 chmod +x "$dest/bin/pascalcc"
 
 # --- the compiler's source, with the reasoning removed -----------------------
-python3 "$repo/.claude/skills/langspec-audit/strip_comments.py" \
-        "$repo/selfhost/compiler.pas" "$dest/source/compiler.pas"
+# Three program-components since ADR-0233, and all three go in: a reader given
+# the code generator alone could not answer a question about what Sema accepts.
+for component in $(cat "$repo/selfhost/compiler.components") compiler.pas; do
+  python3 "$repo/.claude/skills/langspec-audit/strip_comments.py" \
+          "$repo/selfhost/$component" "$dest/source/$component"
+done
 
 cat > "$dest/MANIFEST.txt" <<MAN
 This directory is an audit sandbox.  It is scratch: never commit it, never

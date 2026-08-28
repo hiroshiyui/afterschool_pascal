@@ -3766,3 +3766,88 @@ What it is, and the roadmap says so where a catalogue could be mistaken for a
 measurement: **eleven mutations are files**, and two hundred records carry one
 in their prose. *The mutation suite passes* means those eleven claims still
 hold and nothing more.
+
+## The compiler becomes three program-components
+
+ADR-0233. The compiler had been one source file since ADR-0024, and the reason
+given there — neither standard has an include mechanism, so a second file would
+need its own copy of everything below it — stopped being true at ADR-0053 and
+ADR-0079, which gave the language modules and §6.13's separately translated
+program-components. `doc/roadmap.md` carried the split as a proposal across two
+releases and version 3 did not take it.
+
+It was taken the day after v3 shipped, and it is the one record in this tree
+written **Proposed** — deliberately, because ADR-0001 asks for the record while
+the alternatives are still live and the expensive half was a decision about the
+seed that a release cannot take back. It was accepted two days later without a
+word of the argument changing, and implemented the same day.
+
+**Writing it before the work changed the proposal twice.** The roadmap's
+headline reason was the fixed arrays: `poolMax` and `tokMax` are sized to hold
+this compiler's own source, and components were supposed to make that
+structural instead of watched. Measured, that is wrong — `--import` re-tokenises
+the *entire* imported file, so a 2 011-line module with a four-line interface
+costs 12 065 tokens as an import against 12 043 compiled, and the unit that
+imports the rest pays for the whole tree again. Nor can it be recovered by
+reading only the interface, which is the obvious fix: AP 6.7.3.10 instantiates a
+generic in the *client's* translation, so the client needs bodies. What survives
+is the second reason, the linking blind spot, and the record takes the split for
+that alone. The second change was the shape: **three components and not the
+four or five the roadmap sketched**, because three is the smallest number that
+makes every build translate a module alone, translate a module that imports
+another, and link the result — and Pascal writes the cut down for you, a call to
+a later-defined routine requiring a `forward`, so the 66 forwards are the
+complete list of back-edges in source order and all 66 are inside one stage.
+The file order had been a topological order all along.
+
+**Doing the work corrected the record twice**, and both are recorded in its
+Status rather than in its argument, which stands as written.
+
+- **The pool peak does fall**, by 27%: 693 850 of 1 000 000 for the one file,
+  against 507 120 for the worst of the three translations — and the worst is
+  ApFront's, not the program's. The record's "this change does not lower the
+  peak" is right about the tokens (171 968 against 173 555, slightly worse, as
+  predicted) and wrong about the pool. `buffer-headroom` measures all three now
+  and reports the worst with the component that set it, which is a stronger
+  question than it was asking.
+- **The 179 globals did not have to be partitioned by hand.** §6.2.3.6 commences
+  a supplying module before the program-block, so the 47 assignments that opened
+  the main program body became three `to begin do` parts and each component
+  initialises its own state. ApFront exports **one** variable where a straight
+  partition would have exported 31, and 19 routines.
+
+**What it cost was the gates, not the compiler.** The three sources compile,
+link, and translate the old single file to byte-identical IR; the whole corpus
+of 503 sources came through with identical IR *and* identical diagnostics; the
+fixed point holds in every module. But eleven `ctest` cases failed at once, and
+every one of them for the same reason: a gate that reads "the compiler's
+source" or runs the compiler over it was reading or measuring a third of a
+compiler. `tests/checks/components.py` is what they all go through now — one
+place that says what the components are and in what order, read from
+`selfhost/compiler.components`, which is an ordinary §6.13 component sidecar and
+the same file CMake, `seed/refresh.sh`, `selfhost/irtest.sh` and the CI seed job
+read.
+
+Two of those failures were **silent**, and both are in `doc/sop.md` §7 now
+because neither is peculiar to this change. `procedure-coverage` and
+`line-coverage` degrade to a *skip* when the compiler cannot translate its own
+source, so a real break in them reads as a missing `clang`. And an exported
+routine's header appears **twice** — §6.11.1 puts it in the module-heading and
+leaves the block repeating the name alone — so `foreign-reserved`'s regex,
+anchored on `function ReservedForeignName`, matched an interface entry with no
+body and reported that the predicate names no words it can read.
+
+`line-coverage` needed more than a redirect. `--coverage` appends *line
+numbers*, and three files whose line numbers overlap would have unioned
+ApTypes' unreached statements with ApFront's reached ones, so each component now
+gets a compiler in which only it is instrumented and the corpus is swept three
+times. The count improved on its own — 402 statements never run against 446 —
+because the corpus grew by two module-only translations.
+
+**Three things it closed.** `doc/sop.md` §7's linking row is narrowed to the
+combinations the compiler's own structure does not use, the build having become
+the test. `seed/ddc.sh`'s diverse-double-compiling window closed for good: the
+`v0.1.0` C++ compiler has no `--import`, so it cannot read this compiler at all,
+and the check now says so and exits 0 — the row stays, because the gap it names
+does. And ADR-0024's one-file half is superseded, twelve records after the
+reason for it expired.

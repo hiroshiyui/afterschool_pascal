@@ -28,8 +28,9 @@ long-established linking-exception wording rather than GCC's, because this
 runtime has no notion of eligible compilation processes or target code to
 qualify.
 
-**The compiler itself is not covered by this exception.** `selfhost/compiler.pas`,
-`tools/pascalcc`, the build files and everything else in this repository are
+**The compiler itself is not covered by this exception.** The compiler's
+sources under `selfhost/`, `tools/pascalcc`, the build files and everything else
+in this repository are
 under the GNU General Public License version 3 or later, with no additional
 permissions. Modifying the compiler and distributing it means distributing your
 changes under the same terms.

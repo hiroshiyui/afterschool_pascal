@@ -10,7 +10,7 @@ produce a diagnostic — never a crash, a hang, or memory corruption. That is th
 whole audit in one sentence; the steps below are how it gets checked.
 
 **What the compiler is made of decides where the risk lives** (ADR-0085). No
-C++ is in it: `build/bin/pascalc` is `selfhost/compiler.pas` translated by
+C++ is in it: `build/bin/pascalc` is the compiler's three program-components translated by
 `seed/pascalc.ll`, so the front end is a Pascal program with array bounds
 checked, subranges checked, and every pointer dereference nil-checked — the
 class of bug this audit used to be mostly about is now diagnosed by the compiler
@@ -72,7 +72,7 @@ When performing a security audit, always follow these steps:
    pointer and a length from generated code and trust both.
 
 3. **Audit the untrusted-input boundary** — the lexer and parser, both in
-   `selfhost/compiler.pas`. Review for:
+   the compiler's own sources — all three of them (ADR-0233). Review for:
    - **Unterminated constructs** — comments, string literals, and a file ending
      mid-declaration must each produce a diagnostic and stop, not loop. `{`,
      `(*` and `'` all have explicit end-of-file checks; confirm new lexer states

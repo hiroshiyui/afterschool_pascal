@@ -283,7 +283,17 @@ everything importing its interface.
 **Module-parameter.** A name in `module m(...)`. `input` and `output` there are
 §6.11.4.2's way to make the required text file accessible *in that module*;
 every other spelling must be a variable the module declares, and is bound to
-nothing (NOTE 6 permits that).
+nothing (NOTE 6 permits that). That last clause is why this compiler's driver
+is in its program-component and not in a module: `binding(argk).name` is
+argument *k* only for a *program*-parameter (ADR-0081, ADR-0233).
+
+**Program-component.** §6.13's unit of separate translation: a sequence of
+module-declarations, at most one of which is the main-program-declaration. The
+compiler is three of them — `selfhost/aptypes.pas`, `selfhost/apfront.pas`,
+`selfhost/compiler.pas`, listed in dependency order by
+`selfhost/compiler.components` — and a translation of one names the sources of
+the ones before it with `--import`, there being no artefact for an interface
+other than the module-heading itself (ADR-0079, ADR-0233).
 
 **Otherwise-part.** The default arm of a case statement, which ISO 7185 does
 not have and ISO/IEC 10206:1991 does. It is *what the default block of the
@@ -555,9 +565,9 @@ result*, never a computation of it. Writing `iso.py` so it computes the answer
 the way the compiler does would make every proof circular and the circularity
 invisible.
 
-**Lowering model (`lowering.py`).** A model of the code generator in
-`selfhost/compiler.pas` — it was written against `codegen.cpp`, which ADR-0085
-retired — maintained with it. A drifted model keeps passing and proves nothing,
+**Lowering model (`lowering.py`).** A model of the code generator, which is in
+`selfhost/compiler.pas` — the program-component, since ADR-0233; it was written
+against `codegen.cpp`, which ADR-0085 retired — maintained with it. A drifted model keeps passing and proves nothing,
 so when a lowering changes the model changes in the same commit. Nothing reads
 the two against each other any more, which is why `--crosscheck` and the
 `trap_*.pas` goldens are the whole of what ties the model to the compiler.
@@ -668,7 +678,7 @@ rules (ADR-0024) and five code-generation rules (ADR-0025) were all discovered.
 Count what the corpus reaches; do not assume it.
 
 **Sibling list.** What a `std::vector<...Ptr>` in `ast.h` becomes in
-`selfhost/compiler.pas`: every node carries `next`, and a list is a head pointer
+`selfhost/aptypes.pas`: every node carries `next`, and a list is a head pointer
 plus a tail for appending. Cheaper than a growable array, and every walker
 reads these strictly in order anyway (ADR-0023).
 
@@ -680,10 +690,10 @@ green bar that never ran the new case is not a green bar.
 
 **Stage 0 / 1 / 2 / 3.** The classic three-stage build, and it is finished.
 Stage 0 *was* the C++ compiler in this repository and is retired (ADR-0085);
-what starts the chain now is `seed/pascalc.ll`, a working compiler in IR,
-committed. Stage 1 is what the seed produces from `selfhost/compiler.pas` and
-is `build/bin/pascalc`; stages 2 and 3 are that source compiled by its own
-output, and must be identical. They are. See [history.md](history.md#the-three-stage-build).
+what starts the chain now is the committed seed under `seed/`, a working
+compiler in IR. Stage 1 is what the seed produces from the compiler's three
+program-components and is `build/bin/pascalc`; stages 2 and 3 are those sources
+compiled by its own output, and every module must be identical. They are. See [history.md](history.md#the-three-stage-build).
 
 **Seed.** The committed artefact stage 0 became — 6.6 MB of IR that nobody
 reads and that builds the compiler, which is a supply-chain surface by
@@ -695,5 +705,5 @@ translatable into Pascal — no RTTI in the AST, textual IR as a supported outpu
 plain structs and explicit control flow over template or exception machinery.
 Most of the odd-looking decisions here are one of these, and each ADR says what
 it costs. Two of the three now constrain nothing and are kept because they
-explain the shape `selfhost/compiler.pas` has; the textual IR one got *more*
-load-bearing, not less.
+explain the shape the compiler's own sources have; the textual IR one got
+*more* load-bearing, not less.

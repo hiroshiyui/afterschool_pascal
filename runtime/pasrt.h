@@ -38,14 +38,14 @@
 
 #define PAS_FILE_SIZE 120
 /* AP 6.4.12's handle slot (ADR-0174): the value, its closer, and two links.
- * `handleSize` in selfhost/compiler.pas is the same number; irtest.sh checks. */
+ * `handleSize` in selfhost/aptypes.pas is the same number; irtest.sh checks. */
 #define PAS_HANDLE_SIZE 32
 
 /* AP 6.9.3.11's defer record (ADR-0175): the runner this block's armed
  * statements are executed by, the frame to run it against, and two links.
  * One per activation whose block contains a defer-statement, not one per
  * statement -- which is why a block that defers in a loop needs no more
- * storage than one that defers once. `deferSize` in selfhost/compiler.pas is
+ * storage than one that defers once. `deferSize` in selfhost/aptypes.pas is
  * the same number; irtest.sh checks. */
 #define PAS_DEFER_SIZE 32
 
@@ -70,7 +70,7 @@
  * and the cost is paid only by a block that is the target of a non-local goto,
  * which is the only kind that carries a record at all.
  *
- * It must equal `jumpSize` in selfhost/compiler.pas, which is what actually
+ * It must equal `jumpSize` in selfhost/aptypes.pas, which is what actually
  * allocates the bytes; selfhost/irtest.sh checks the two, and
  * tests/checks/target_sizes.sh checks that the number is enough for every
  * target a cross compiler is installed for. */

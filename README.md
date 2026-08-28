@@ -30,10 +30,11 @@ ctest --test-dir build --output-on-failure
 
 Requires `cmake`, a `make` and `clang` on PATH, and **nothing of LLVM's** — no development files, no `LLVM_DIR`. `clang` is wanted
 as an assembler and a linker, not as a compiler front end: **the compiler is
-written in Afterschool Pascal**, and the one that builds it is
-`seed/pascalc.ll`, a working compiler in LLVM IR committed to this repository.
-`clang` assembles the seed; the seed translates `selfhost/compiler.pas`; that is
-`build/bin/pascalc`, and it compiles itself to a fixed point.
+written in Afterschool Pascal**, and the one that builds it is the committed
+seed under `seed/`, a working compiler in LLVM IR. `clang` assembles the seed;
+the seed translates the compiler's three source files — they are separately
+translated program-components, and `selfhost/compiler.components` lists them in
+order; that is `build/bin/pascalc`, and it compiles itself to a fixed point.
 
 The build produces nothing else. A second front end in C++ was built beside it
 for a while, so that the two could be compared; it was frozen at the
@@ -489,7 +490,7 @@ bound, no set base, no `for` control variable, no `succ`, `pred`, `ord`, `odd`
 or `chr`. `trunc` is the one way back to `integer`, and it traps outside
 `-maxint..maxint`, which is §6.6.6.3's own error condition.
 
-The reason for the shape is the compiler: `selfhost/compiler.pas` is written in
+The reason for the shape is the compiler: it is written in
 this language, so its own integers are 32 bits and it has no value of the wide
 type to hold. A literal is carried as the **text** that was written, all the way
 into the IR — which is what a real literal has done since the beginning, for the
@@ -1749,12 +1750,12 @@ that program under the GPL. It does not:
 yours** — the IR `pascalc` writes is derived from your source rather than from
 the compiler, so it was never covered in the first place.
 
-**The compiler itself has no such exception.** `selfhost/compiler.pas`,
-`tools/pascalcc`, the build files and the proofs in `verify/` are GPLv3-or-later
-outright: modify the compiler and distribute it, and your changes travel under
-the same terms. `seed/pascalc.ll` is the compiler in another form — generated
-from `selfhost/compiler.pas`, which is the corresponding source the GPL asks
-for, and committed beside it.
+**The compiler itself has no such exception.** The three sources under
+`selfhost/`, `tools/pascalcc`, the build files and the proofs in `verify/` are
+GPLv3-or-later outright: modify the compiler and distribute it, and your
+changes travel under the same terms. The seed under `seed/` is the compiler in
+another form — generated from those sources, which are the corresponding source
+the GPL asks for, and committed beside it.
 
 **One thing in this repository is not covered by it, and it is not
 distributed.** The standards themselves live in `doc/vendor/`, which is

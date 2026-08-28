@@ -51,7 +51,7 @@ When performing release engineering, always follow these steps:
    reader of the emitted IR and the only one that is not `clang`: the corpus
    (both standards), the committed seed, and `selfhost/compiler.pas` itself. The
    strongest form is to link `llc`'s output into a compiler and have it
-   translate `compiler.pas` — the IR must be byte-identical to what the
+   translate every program-component — each module's IR must be byte-identical to what the
    clang-built compiler produced, since the two are the same program.
 
 4. **Determine the release type** — review all unreleased commits since the last
@@ -82,7 +82,7 @@ When performing release engineering, always follow these steps:
    at the tag: a stale seed still builds a working compiler, from the *previous*
    release's source, so nothing else would notice.
 
-   **Reseed last, and freeze `selfhost/compiler.pas` once you have.** The seed
+   **Reseed last, and freeze the compiler's sources once you have.** `seed/refresh.sh` writes **one seed module per program-component** (ADR-0233) and removes the old ones first, so a component dropped from the tree does not leave a module behind for CMake's glob to link. The seed
    is ~10 MB and 240 000 lines, so every refresh is that much churn in the
    history, and `seed-is-current` compares it to the compiler **byte for byte**
    at the tag — a single character changed in the source afterwards, even

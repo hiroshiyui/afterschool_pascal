@@ -13,8 +13,12 @@ cannot see, the Pascal semantics a change must not undo — and points here for
 the mechanism.
 
 **Read the entry before touching the feature it describes.** Most of what looks
-over-complicated in `selfhost/compiler.pas` is load-bearing, and the entry
-usually names the test that fails when it is undone.
+over-complicated in the compiler's own sources is load-bearing, and the entry
+usually names the test that fails when it is undone. Those sources are three
+§6.13 program-components since ADR-0233 — `selfhost/aptypes.pas`,
+`selfhost/apfront.pas`, `selfhost/compiler.pas` — so where an entry below names
+one file it is naming the compiler, and where it names a *component* of it
+(lexer, parser, Sema, CodeGen, driver) that is still what it means.
 
 ## The core mechanisms
 
@@ -2482,7 +2486,7 @@ of reporting a syntax error.
 
 **An integer wider than the compiler's own** (ADR-0128). `int64` is the type a
 `size_t` and an `ssize_t` cross as, and its whole shape comes from one
-constraint that is not a standard's: `selfhost/compiler.pas` is written in this
+constraint that is not a standard's: the compiler is written in this
 language, so its own integers are 32 bits and there is no value of the wide
 type anywhere in the compiler to fold with, compare, or put in a constant.
 

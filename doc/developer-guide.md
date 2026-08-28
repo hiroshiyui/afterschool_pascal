@@ -15,8 +15,11 @@ procedure — how a change is classified, what its class has to satisfy, and, in
 
 | File | Role |
 | --- | --- |
-| `selfhost/compiler.pas` | **the compiler** — lexer, parser, Sema, code generator and driver, one source file |
-| `seed/pascalc.ll` | a working compiler in IR, committed, so the tree can build itself |
+| `selfhost/aptypes.pas` | **the compiler**, first of three §6.13 program-components — the token kinds, the AST and its variant record, the type and symbol records, the string pool, the character sink, `ErrorAt` and the type arena. Imports nothing |
+| `selfhost/apfront.pas` | the lexer, the parser and Sema. Imports ApTypes |
+| `selfhost/compiler.pas` | the code generator and the driver, and the main-program-block. Imports both |
+| `selfhost/compiler.components` | the three in dependency order, one path per line — the sidecar every harness, CMake and the CI seed job reads, so the build order is written down once ([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md)) |
+| `seed/*.ll` | a working compiler in IR, committed, so the tree can build itself — one module per component once it has been refreshed after the split, and matched by a glob so the count is the seed's business |
 | `runtime/pasrt.c` | formatted output and runtime checks |
 | `runtime/pasrt_posix.c` | the POSIX half, bounded by its headers rather than its names (ADR-0186); everything in it is `pasx_` |
 | `runtime/pasrt_unicode.c` | AP 6.4.15's text primitives — Normalization Form C and where one grapheme cluster ends. Strict ISO C11, no catalogued name at all |
@@ -72,10 +75,12 @@ the Pascal compiler was the product, and what used to start the chain is now a
 committed artefact:
 
 ```
-seed      seed/pascalc.ll        — a working compiler, in IR, in this repository
-stage 1   pascalc1 = seed(compiler.pas)         this is build/bin/pascalc
-stage 2   pascalc2 = pascalc1(compiler.pas)
-stage 3   pascalc3 = pascalc2(compiler.pas)     require pascalc2 ≡ pascalc3 byte-for-byte
+seed      seed/*.ll              — a working compiler, in IR, in this repository
+stage 1   pascalc1 = seed(the three components)        this is build/bin/pascalc
+stage 2   pascalc2 = pascalc1(the three components)
+stage 3   pascalc3 = pascalc2(the three components)    require every module of
+                                                       pascalc2 ≡ pascalc3,
+                                                       byte-for-byte
 ```
 
 **This holds.** The compiler compiles itself, and stage 2 and stage 3 are
@@ -95,10 +100,17 @@ the history belongs there rather than in two places that can disagree.
 
 ## Stage 1
 
-`selfhost/compiler.pas` is the compiler written in its own language: the lexer,
-the parser, Sema, the code generator and its own driver, in **one source file**,
-because neither standard has an include mechanism and the finished compiler is
-one source. It is itself written in **Extended Pascal** — the language it is
+The compiler is written in its own language, as **three §6.13
+program-components** ([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md)):
+`aptypes.pas` holds what every stage agrees about, `apfront.pas` the lexer, the
+parser and Sema, and `compiler.pas` the code generator, the driver and the
+main-program-block. It was one file until version 3 — ADR-0024 made it one
+because neither standard had an include mechanism, and ADR-0053 and ADR-0079
+gave the language modules and separate translation, which expired that reason.
+What the split buys is that the compiler's own build translates a module alone,
+translates a module that imports another, and links the result — a combination
+nothing here used to check, and one that had already cost a defect
+([ADR-0212](adr/0212-an-imported-components-tokens-are-kept.md)). It is itself written in **Extended Pascal** — the language it is
 written in and the language it accepts are independent, and only that standard
 lets a program read its own command line
 ([ADR-0082](adr/0082-the-stage-1-compiler-is-extended-pascal.md)). It is
@@ -140,10 +152,17 @@ covers a *reading*. See
 Building the thing by hand, rather than through `cmake`, is three commands:
 
 ```sh
-clang -Wno-override-module seed/pascalc.ll build/lib/libpasrt.a -lm -o stage1
-./stage1 selfhost/compiler.pas -o stage2.ll
-clang stage2.ll build/lib/libpasrt.a -lm -o stage2
+clang -Wno-override-module seed/*.ll build/lib/libpasrt.a -lm -o stage1
+./stage1 selfhost/aptypes.pas -o aptypes.ll
+./stage1 --import selfhost/aptypes.pas selfhost/apfront.pas -o apfront.ll
+./stage1 --import selfhost/aptypes.pas --import selfhost/apfront.pas \
+         selfhost/compiler.pas -o pascalc.ll
+clang aptypes.ll apfront.ll pascalc.ll build/lib/libpasrt.a -lm -o stage2
 ```
+
+An `--import` names the *source* of a component already translated: §6.11.1 puts
+the whole interface in the module-heading, so there is no other artefact for one
+([ADR-0079](adr/0079-an-interface-is-a-set-of-names.md)).
 
 `stage2` is `build/bin/pascalc`, built the same way by `cmake --build`.
 
@@ -327,7 +346,7 @@ not what a compiled program wrote:
   golden would be regenerated for reasons that have nothing to do with what it
   asserts. `tests/checks/buffer_headroom.py` is its asserter instead, and what
   it asserts is stronger than a golden: the capacities the compiler reports
-  must equal the constants `selfhost/compiler.pas` declares, and each count
+  must equal the constants the compiler's own source declares, and each count
   must sit under 80% of its capacity.
 * **`tests/spec/`** is written against *clauses* rather than against the
   compiler: scenarios in a subset of Gherkin, each tagged with the clause of
