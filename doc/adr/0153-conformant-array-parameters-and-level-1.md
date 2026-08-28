@@ -4,9 +4,11 @@ Date: 2026-08-21
 
 ## Status
 
-Accepted. `doc/roadmap.md`'s *What is next* §3, which was the last language
-feature on that page and the only work that could change the compliance level
-`doc/implementation-defined.md` states.
+Accepted, and its *claim* withdrawn by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md). The conformant array
+parameters are still accepted, exactly as described here; what is gone is the
+level-1 compliance statement they were the whole of the difference for,
+`doc/implementation-defined.md` 1 having been withdrawn rather than reworded.
 
 ## Context
 

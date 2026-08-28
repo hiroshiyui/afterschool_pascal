@@ -4,8 +4,13 @@ Date: 2026-08-22
 
 ## Status
 
-Accepted. Part of `doc/roadmap.md`'s §2 — *the dialect has no external
-authority, and every gate here is anchored in one*.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. Annex B stated what
+each dialect construct got under a conformance mode, and `annex-b` required a
+golden to contain the message the annex named. Both halves are about a refusal
+surface that no longer exists; the annex is kept in the specification, marked
+historical, because it is the only construct-by-construct record of what the
+modes said.
 
 ## Context
 

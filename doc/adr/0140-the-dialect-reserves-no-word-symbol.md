@@ -4,10 +4,13 @@ Date: 2026-08-20
 
 ## Status
 
-Accepted. Answers the first of the seven open questions in `doc/roadmap.md`,
-which is the one that document ranks highest and calls a decision.
-
-Adds AP §6.1.2 to `doc/afterschool-pascal-spec.md`.
+Accepted, and its gate **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)** while the rule
+stands. `reserved-words` compared this language's reservation list against
+Extended Pascal's, which is not a question once there is one list. The rule --
+a dialect feature is spelled in a *position* no conforming program could have
+written, and reserves no word-symbol -- is what keeps ADR-0117's containment
+true and is now enforced by review rather than by a check.
 
 ## Context
 

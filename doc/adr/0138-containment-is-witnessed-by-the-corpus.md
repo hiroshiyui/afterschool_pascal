@@ -4,8 +4,12 @@ Date: 2026-08-20
 
 ## Status
 
-Accepted. Answers the fourth of the seven open questions in `doc/roadmap.md`,
-and is the gate ADR-0117's claim had been asserting without.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. The sweep compiled
+the conformance corpus a second way under `--std=afterschool` and required
+identical behaviour; there is one way to compile it.
+`tests/dialect/inherits_extended.pas` survives as the readable statement of
+the containment.
 
 ## Context
 

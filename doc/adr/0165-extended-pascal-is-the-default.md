@@ -4,7 +4,9 @@ Date: 2026-08-22
 
 ## Status
 
-Accepted.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. Which language an
+unflagged source is written in is not a question once there is one.
 
 ## Context
 

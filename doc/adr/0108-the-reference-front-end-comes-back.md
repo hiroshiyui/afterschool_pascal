@@ -2,8 +2,13 @@
 
 ## Status
 
-Accepted. Reverses part of [ADR-0085](0085-retire-stage-0.md), which remains
-accepted for the half it decided that this does not touch.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. `src/` answered
+conformance questions -- it was frozen at the conformance surface by ADR-0117
+and skipped every dialect source -- and there is no conformance surface, so
+difftest had nothing left to compare and the directory was deleted. The
+reasoning below about what a second implementation buys, and what it cannot
+see, is unchanged and is why nothing replaces it.
 
 ## Context
 

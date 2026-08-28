@@ -2,14 +2,12 @@
 
 ## Status
 
-Accepted. Opens the dialect mode ADR-0109 named and left unbuilt, and settles
-four things it listed as open or unstated. **No language feature lands here** —
-this record decides where one would go and what it must satisfy, so that the
-first feature is not also the thing that sets the precedent by accident.
-
-It answers ADR-0109's fourth open question ("how far the C++ reference front end
-follows") and leaves the other three — the memory-safety model, the text model
-and the memory model — exactly as open as it found them.
+Accepted, and **absorbed by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. The containment this
+record established is now the language itself: `stdKind`, `HasExtended` and
+the third `--std` are gone, and what they carried -- every Extended Pascal
+construct meaning what it meant -- is what Afterschool Pascal is. Read this as
+the record of how the dialect was reached, not of a mode.
 
 ## Context
 

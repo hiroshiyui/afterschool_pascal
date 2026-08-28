@@ -4,8 +4,10 @@ Date: 2026-08-21
 
 ## Status
 
-Accepted. Answers `doc/roadmap.md` §6, the last open entry of that chapter, and
-it is one sentence with a correction attached.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. A diagnostic naming
+the mode was the only way to tell a program it was compiled under the wrong
+one; there is no wrong one. The 35 messages this record is about are deleted.
 
 ## Context
 

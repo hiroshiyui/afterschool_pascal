@@ -4,11 +4,11 @@ Date: 2026-08-20
 
 ## Status
 
-Accepted. Narrows ADR-0119 without weakening it, and answers the third of the
-seven open questions in `doc/roadmap.md`.
-
-Amends AP §6.13.1 of `doc/afterschool-pascal-spec.md`, which is the first time
-that document has had to change because the language did.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. The mechanism -- a
+walk over a module's interface deciding whether it could be linked by a
+program in the other mode -- has no other mode to reconcile, and the 140 lines
+were deleted with it.
 
 ## Context
 

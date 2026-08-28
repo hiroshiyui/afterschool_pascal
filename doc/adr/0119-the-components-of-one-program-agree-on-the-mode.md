@@ -2,8 +2,12 @@
 
 ## Status
 
-Accepted. It closes a hole in ADR-0118's central claim, found by probing
-ADR-0117's containment across a `--import` rather than within one compilation.
+Accepted, and narrowed by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md). A module's activation
+names still carry a tag and the tag still keeps ADR-0118's pair of rules
+together across separately translated components; there is one value now,
+`afterschool`, so what a mismatch reports is an object from an older release
+rather than a mode disagreement.
 
 ## Context
 

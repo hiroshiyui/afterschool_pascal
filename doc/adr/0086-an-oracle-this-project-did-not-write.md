@@ -4,7 +4,13 @@ Date: 2026-08-14
 
 ## Status
 
-Accepted.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**. The suite validates
+ISO 7185, and 25 of its 812 programs use a word-symbol this compiler now
+reserves -- CONF005 exists precisely to check that a conforming processor
+still accepts them -- so the corpus cannot be compiled here at all. It was the
+only third-party oracle this project ever had, and there is no replacement;
+`doc/sop.md` 7 records the loss rather than glossing it.
 
 ## Context
 

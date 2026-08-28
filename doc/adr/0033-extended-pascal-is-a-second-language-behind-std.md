@@ -4,7 +4,14 @@ Date: 2026-08-10
 
 ## Status
 
-Accepted.
+Accepted, and **retired by
+[ADR-0232](0232-afterschool-pascal-is-the-language.md)**: there is one
+language and no `--std`. The clause the record turns on is unchanged and still
+governs -- ISO/IEC 10206:1991 6.1.2 reserves word-symbols a valid ISO 7185
+program may use as identifiers, so the two really are not nested. What changed
+is which of them this compiler implements: all of Extended Pascal's, so an ISO
+7185 program using one as an identifier is refused rather than being given a
+mode of its own.
 
 ## Context
 
