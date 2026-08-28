@@ -43,6 +43,10 @@ reader of `seed/` will notice it immediately.
   **skip** where they meant a failure, so a compiler that could not translate
   its own source read as a missing `clang`. They now tell the two apart. No
   effect on the compiler; it is a gate that was failing in no direction.
+- `tests/checks/variant-check` needed `bc`, which is not among the documented
+  dependencies (`cmake`, `make`, `clang`, `git`, `python3` and nothing else).
+  It now adds in the shell. No effect on the compiler; the build's dependency
+  list is the claim it was falsifying.
 
 ## [3.0.0] — 2026-08-28
 
