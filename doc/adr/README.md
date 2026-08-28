@@ -242,3 +242,4 @@ the alternatives that were rejected and why.
 | [0231](0231-the-dialect-build-measured.md) | The dialect build, measured | Accepted |
 | [0232](0232-afterschool-pascal-is-the-language.md) | Afterschool Pascal is the language | Accepted |
 | [0233](0233-the-compiler-becomes-three-program-components.md) | The compiler becomes three program-components | Accepted |
+| [0234](0234-a-second-processor-answers-the-corpus.md) | A second processor answers the corpus | Accepted |

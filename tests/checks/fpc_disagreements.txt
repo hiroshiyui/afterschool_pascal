@@ -1,0 +1,45 @@
+# Where this compiler and Free Pascal answer a program differently.
+#
+# `tests/checks/fpc_differential.py` compiles every case that has a golden
+# with FPC under -Miso (falling back to -Mextendedpascal) and runs it.  What
+# it cannot classify by rule lands here, one line per case, and the entry has
+# to say **which clause decides it and which way** -- because a disagreement
+# with no verdict written down is a second opinion nobody acted on.
+#
+# The gate fails in both directions.  A case that stops disagreeing is as loud
+# as one that starts, and it is the more interesting of the two: somebody
+# changed an answer this file explains, and it was either this compiler or a
+# new FPC.
+#
+# **FPC is not the authority here.**  It implements neither standard
+# completely; where the two disagree the clause decides.  Of the eleven
+# entries below, six turn on a clause and all six are decided for this
+# compiler; two are implementation-defined, where neither processor is wrong;
+# and three are not verdicts at all.
+# That is not a boast -- it is the reason the differential is worth running at
+# all and also its limit: a second processor can only contradict, and a
+# contradiction still has to be judged by reading the standard.
+#
+# Free Pascal 3.2.2 (Debian 3.2.2+dfsg-51), 2026-08-28.
+
+tests/comments: ISO 7185 6.1.8 NOTE 1 lets a comment open with a brace and close with a star-paren. This compiler accepts both mixed forms; FPC ends the comment only at the matching delimiter, so it swallows one statement and totals 27 where the clause gives 31. ADR-0073 is the record -- and this is the defect that record says nothing here could have caught, since a comment is invisible to every stage after the lexer.
+
+tests/round_equivalence: ISO 7185 6.6.6.3 defines round by *equivalence* to trunc(x+0.5), not by a rounding mode. At 0.49999999999999994 the addition itself rounds to 1.0, so the clause's answer is 1; FPC answers 0, which is the round-half-to-even the test's own comment predicted a processor would give. The two columns of the golden are the clause written twice, so this is the case the test exists for.
+
+tests/readlongest: ISO 7185 6.9.1 c) and d) make a read of a number take the longest prefix that *is* a number, which is one character more than a file's lookahead can decide -- `-1.` is the real -1 and then a point. This compiler gives the point back; FPC consumes it and then fails with its runtime error 106. ADR-0076 and the two-character give-back in `struct pas_file` are what implement it.
+
+tests/eoln_appended: ISO 7185 6.6.5.2 and 6.4.3.5 require a text file's last line to end in a terminator, so one is supplied when a file that lacks it is read. FPC reports eoln false there. ADR-0021 is the decision and `doc/implementation-defined.md` carries it.
+
+tests/rewritefile_page: two clauses at once, and FPC differs on both. 6.9.5 makes `page(f)` write the form feed unconditionally -- the implicit `writeln` is the conditional half -- and 6.6.5.2 appends the terminator to the last line. FPC's file holds `y` alone: no form feed, no appended end-of-line, one component where the two clauses give three.
+
+tests/extended/trap_fracdigits: D.103's error is detected by both; the disagreement is on the line before it. 6.10.3.4.2's fixed-point representation is "the character '.', the next FracDigits digit-characters" with the point unconditional and counted in MinNumChars, so `x:4:0` is `  2.` here and `   2` in FPC -- which is C's `%.0f`, and the reason ADR-0064 formats that one case by hand rather than with a format string.
+
+tests/resetinput: ISO 7185 6.10 and ISO/IEC 10206:1991 6.11.4.2 make `reset` applied to the required text file `input` **implementation-defined**, so both answers are permitted and neither processor is wrong. This compiler keeps the buffer variable, FPC fails with its runtime error 106. `doc/implementation-defined.md` is where this processor's answer is written down; the case exists to hold it to that answer.
+
+tests/rewriteoutput: the other half of the pair above, and implementation-defined by the same two clauses. `rewrite(output)` has nothing to discard, so doing nothing -- including to 6.9.5's line-state flag -- is the whole of the available effect here. FPC's output interleaves differently.
+
+tests/dispose_expression: FPC terminates with SIGSEGV where this compiler runs the program to completion. Nothing about a clause: a second processor crashing on a corpus program is a fact about that processor, kept here so the case is not read as a disagreement about Pascal.
+
+tests/files_scratch: a file variable that is not a program-parameter has no external name, and this is ISO 7185's whole file model with no operating system in the source. FPC reads back NUL bytes and counts no opens at all. Which clause governs is not obvious enough to call, so this entry claims only that the two disagree.
+
+tests/ordinals: **not comparable**, and the entry says so rather than pretending a verdict. Both processors write ordinals with the default TotalWidth 6.9.3.1 leaves to them; this compiler's is minimal, so five values run together as `01234`, and FPC's is padded. The harness compares numbers by value, and no rule can tell one number from five once the separators are gone.

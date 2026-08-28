@@ -516,6 +516,20 @@ set_tests_properties(unicode-conformance PROPERTIES
                      SKIP_RETURN_CODE 77
                      TIMEOUT 600)
 
+# A second processor for the corpus, which is the whole of what open question
+# 2 of doc/roadmap.md ever asked for (ADR-0234). Free Pascal implements
+# neither standard completely and has never heard of this dialect, so it is
+# not an authority -- what it is, is the only thing in this tree that can
+# contradict a reading without being asked a question somebody here composed.
+# Skips 77 without `fpc`, which is not a documented dependency;
+# FPC_DIFFERENTIAL_REQUIRE is how a CI job refuses to pass by skipping.
+add_test(NAME fpc-differential
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tests/checks/fpc_differential.py)
+set_tests_properties(fpc-differential PROPERTIES
+                     SKIP_RETURN_CODE 77
+                     TIMEOUT 1800)
+
 # Does a record declared here have the layout the C struct it claims to be has?
 # ADR-0184 made a record crossable because RecordLayout *is* C's struct rule,
 # and registered in doc/sop.md 7 what that leaves open: whether the fields
