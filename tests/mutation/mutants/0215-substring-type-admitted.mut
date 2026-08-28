@@ -1,5 +1,5 @@
 adr: 0215
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: typeinquiry_access_errors
 why: 6.5.6's substring-variable is a variable-access, so AP 6.4.9 admits it syntactically, and what it possesses is 6.4.3.3.1's canonical-string-type -- a pointer and a length with no storage behind them. A variable cannot have it. Without the test the declaration is accepted and nothing complains until the program runs: `a string of length 3 does not fit a capacity of 0`, at the first assignment, which is how this was found. The compile-time answer is the only one a golden holds, so only a case naming the message can see it.
 --- old

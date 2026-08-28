@@ -45,6 +45,14 @@
 # when it cannot run, as verify-lowering does without z3 -- but a skip is the
 # thing to read, not to ignore.
 #
+# **It closed at ADR-0233.** The compiler is three 6.13 program-components now,
+# and v0.1.0 has no `--import`: it reports `no interface named 'aptypes' has
+# been exported` and stops. That is the announcement the paragraph above says
+# nothing makes, made once, here -- the check runs, says THE WINDOW HAS CLOSED
+# and exits 0, and there is nothing to fix. seed/README.md records the last
+# result it obtained. Do not try to reopen it by feeding v0.1.0 the components
+# separately: it cannot link them either.
+#
 # Usage:  seed/ddc.sh [build-dir]        (default: build)
 
 set -eu

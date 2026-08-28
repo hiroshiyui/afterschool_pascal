@@ -66,16 +66,24 @@ TRAILER = re.compile(r"^Model-unchanged:\s*\S", re.MULTILINE)
 #
 # An end banner means the region is the section and not "everything after it";
 # CodeGen has none because it runs to the end of the file.
+# Each region names the program-component it is in (ADR-0233): the code
+# generator is the program's, the constant folder is Sema's and so ApFront's.
+# Before the split both were in one file and the file was the compiler; now
+# naming the wrong one would be a check that watches nothing and says nothing,
+# which is why `region_bounds` refuses a banner it cannot find.
 REGIONS = [
     ("CodeGen",
+     "selfhost/compiler.pas",
      "CodeGen -- the annotated tree, written out as textual LLVM IR",
      None),
     ("the constant folder",
+     "selfhost/apfront.pas",
      "------- constant folding }",
      "------ type resolution -- }"),
 ]
 
-COMPILER = "selfhost/compiler.pas"
+# Every component a region is in, in the order REGIONS names them.
+COMPILER = sorted({where for _, where, _, _ in REGIONS})
 
 # What has to change with a lowering. A `verify/` path is not enough: the
 # proofs are about `lowering.py`, and editing verify/README.md discharged this
@@ -129,15 +137,18 @@ def resolve_base(base, head):
 
 
 def region_bounds(rev):
-    """Each watched region as (name, first line, last line) in the *new*
+    """Each watched region as (name, file, first line, last line) in the *new*
     revision -- so a hunk's new-file line number can be compared against it."""
-    lines = run("git", "show", f"{rev}:{COMPILER}").splitlines()
+    cache = {}
     bounds = []
-    for name, opener, closer in REGIONS:
+    for name, where, opener, closer in REGIONS:
+        if where not in cache:
+            cache[where] = run("git", "show", f"{rev}:{where}").splitlines()
+        lines = cache[where]
         start = next((n for n, l in enumerate(lines, 1) if opener in l), None)
         if start is None:
             raise SystemExit(
-                f"model-drift: the banner for {name} is not in {COMPILER} at "
+                f"model-drift: the banner for {name} is not in {where} at "
                 f"{rev}.\nIf the file was reorganised, update REGIONS in this "
                 "script -- a check that cannot find its landmark must fail "
                 "loudly, not pass.")
@@ -147,23 +158,24 @@ def region_bounds(rev):
                         if n > start and closer in l), None)
             if end is None:
                 raise SystemExit(
-                    f"model-drift: {name} has no closing banner in {COMPILER} "
+                    f"model-drift: {name} has no closing banner in {where} "
                     f"at {rev}. Update REGIONS in this script.")
             end -= 1
-        bounds.append((name, start, end))
+        bounds.append((name, where, start, end))
     return bounds
 
 
 def touched_regions(base, head):
     """The watched regions this range edited, each with the hunk lines."""
     bounds = region_bounds(head)
-    diff = run("git", "diff", "-U0", f"{base}..{head}", "--", COMPILER)
-    hit = {name: [] for name, _, _ in bounds}
-    for m in re.finditer(r"^@@ -\S+ \+(\d+)", diff, re.MULTILINE):
-        start = int(m.group(1))
-        for name, lo, hi in bounds:
-            if lo <= start <= hi:
-                hit[name].append(start)
+    hit = {name: [] for name, _, _, _ in bounds}
+    for where in COMPILER:
+        diff = run("git", "diff", "-U0", f"{base}..{head}", "--", where)
+        for m in re.finditer(r"^@@ -\S+ \+(\d+)", diff, re.MULTILINE):
+            start = int(m.group(1))
+            for name, file_, lo, hi in bounds:
+                if file_ == where and lo <= start <= hi:
+                    hit[name].append(start)
     return {k: v for k, v in hit.items() if v}, bounds
 
 
@@ -173,16 +185,19 @@ def main():
     base = resolve_base(base, head)
 
     changed = run("git", "diff", "--name-only", f"{base}..{head}").split()
-    if COMPILER not in changed:
+    watched = [f for f in COMPILER if f in changed]
+    if not watched:
         # `git diff base..head` compares two *commits*, so work that is only in
         # the working tree is invisible to it -- and the honest answer for a
         # dirty tree is not "the compiler did not change", which is what this
         # said. Running it before committing therefore always passed, which is
         # how ADR-0153 reached CI without the trailer it owed: the local run
         # answered about a range that did not contain the change yet.
-        if COMPILER in run("git", "diff", "--name-only", "HEAD").split():
-            print(f"model-drift: {COMPILER} is modified in the working tree "
-                  f"and not in {base}..{head}, so this answers about a range "
+        dirty = [f for f in COMPILER
+                 if f in run("git", "diff", "--name-only", "HEAD").split()]
+        if dirty:
+            print(f"model-drift: {', '.join(dirty)} is modified in the working "
+                  f"tree and not in {base}..{head}, so this answers about a range "
                   "that does not contain your change yet. Commit first, then "
                   "run this again.")
             return 1
@@ -190,10 +205,10 @@ def main():
         return 0
 
     hit, bounds = touched_regions(base, head)
-    where = ", ".join(f"{n} ({lo}-{hi})" for n, lo, hi in bounds)
+    where = ", ".join(f"{n} ({f} {lo}-{hi})" for n, f, lo, hi in bounds)
     if not hit:
-        print(f"model-drift: {COMPILER} changed, but not in a modelled "
-              f"region -- {where}")
+        print(f"model-drift: {', '.join(watched)} changed, but not in a "
+              f"modelled region -- {where}")
         return 0
 
     what = "; ".join(f"{name}, {len(lines)} hunks" for name, lines in
@@ -208,8 +223,9 @@ def main():
               "says why")
         return 0
 
+    home = {n: f for n, f, _, _ in bounds}
     for name, lines in hit.items():
-        print(f"model-drift: {COMPILER} changed in {name} at lines "
+        print(f"model-drift: {home[name]} changed in {name} at lines "
               f"{', '.join(map(str, lines[:8]))}"
               f"{' ...' if len(lines) > 8 else ''}")
     print(f"            and {MODEL} did not change.")

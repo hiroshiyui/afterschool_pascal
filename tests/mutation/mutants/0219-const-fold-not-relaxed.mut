@@ -1,5 +1,5 @@
 adr: 0219
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: substring_empty
 why: The rule is written twice in the compiler -- the code generator emits a runtime check, and EvalConstAccess folds §6.8.8.4's substring-constant with the same three disjuncts in Pascal. Fixing only the first leaves `const e = g[1..0]` refused at compile time while `s[1..0]` is admitted at run time, which is one clause with two answers. No program that avoids a constant can see it. Re-anchored after ADR-0232: the fold was `if langStd = stdAfterschool then bound := lo.intVal - 1 else bound := lo.intVal`, and with one language the subtraction is unconditional -- so the mutation is now the restoration of the standard's rule rather than the loss of the mode's.
 --- old

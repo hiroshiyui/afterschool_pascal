@@ -1,5 +1,5 @@
 adr: 0229
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: dump-dispatch
 why: A case label may be a *range*, and every constant in it is named. Counting one per range answers 2 of 5 where a `red..green` arm and a `blue` arm name 3, so a case that covers its enumeration through ranges reads as a subset and one that names a subset reads as smaller still. Every count in the catalogue would move at once, which is the loudest possible failure -- and a corpus whose labels are all single constants would not notice at all, which is why tests/dumps/dispatch.pas has a range in it.
 --- old

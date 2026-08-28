@@ -57,14 +57,28 @@ trap 'rm -rf "$work"' EXIT
 # A failure here is not a skip -- the source this repository ships must compile
 # with the binary this repository built, or the fixed point irtest.sh proves is
 # about something else.
-if ! "$cc" "$root/selfhost/compiler.pas" -o "$work/ap.ll" \
-     >"$work/gen.out" 2>"$work/gen.err"; then
-  echo "variant-check: the compiler does not compile itself" >&2
-  head -20 "$work/gen.out" "$work/gen.err" >&2
-  exit 1
-fi
+#
+# Three program-components since ADR-0233, in the order
+# selfhost/compiler.components gives, each translated with the ones before it
+# as `--import` and all three linked together. The guards are counted over all
+# three modules: they are one compiler, and ApTypes is where the AST's variant
+# part is *declared*.
+modules=(); imports=(); n=0
+for component in $(cat "$root/selfhost/compiler.components") compiler.pas; do
+  n=$((n + 1))
+  if ! "$cc" "${imports[@]+"${imports[@]}"}" \
+       "$root/selfhost/$component" -o "$work/ap$n.ll" \
+       >"$work/gen.out" 2>"$work/gen.err"; then
+    echo "variant-check: the compiler does not compile $component" >&2
+    head -20 "$work/gen.out" "$work/gen.err" >&2
+    exit 1
+  fi
+  imports+=(--import "$root/selfhost/$component")
+  modules+=("$work/ap$n.ll")
+done
 
-guards=$(grep -c 'variant: the tag selects another arm' "$work/ap.ll" || true)
+guards=$(grep -hc 'variant: the tag selects another arm' "${modules[@]}" |
+         paste -sd+ | bc)
 if (( guards < 100 )); then
   echo "variant-check: the guarded build has $guards variant guards in it." \
        "ADR-0118's check is not being emitted, so this would pass by asking" \
@@ -72,7 +86,7 @@ if (( guards < 100 )); then
   exit 1
 fi
 
-if ! clang -O2 -Wno-override-module "$work/ap.ll" "$runtime" -lm \
+if ! clang -O2 -Wno-override-module "${modules[@]}" "$runtime" -lm \
      -o "$work/pascalc-ap" 2>"$work/link.err"; then
   echo "variant-check: the guarded compiler did not link" >&2
   head -20 "$work/link.err" >&2

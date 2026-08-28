@@ -65,6 +65,9 @@ import subprocess
 import sys
 import tempfile
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import components                                    # noqa: E402
+
 SKIP = 77
 
 # `; <spelling> <line>` immediately before the function it names -- written by
@@ -112,7 +115,12 @@ def corpus(root):
         sorted((root / "selfhost" / "badparse").glob("*.pas")),
         sorted((root / "selfhost" / "badsema").glob("*.pas")),
         [root / "selfhost" / "torture.pas"],
-        [root / "selfhost" / "compiler.pas"],
+        # Every program-component, and each on its own: a module-only
+        # translation reaches arms of RunCodeGen a program never does
+        # (ADR-0216), and since ADR-0233 the compiler's own sources are two
+        # such modules. The .components sidecar beside compiler.pas supplies
+        # the imports, through the branch below.
+        components.sources(root),
     ]
     for files in groups:
         for f in files:
@@ -236,40 +244,50 @@ def build_instrumented(root, build, work):
         print("coverage: clang is not on PATH", file=sys.stderr)
         return None
 
-    ir = work / "compiler.ll"
-    r = run(str(pascalc),
-            str(root / "selfhost" / "compiler.pas"), "-o", str(ir))
-    if r.returncode != 0 or not ir.exists():
-        print("coverage: the compiler failed to translate itself\n" + r.stdout,
-              file=sys.stderr)
-        return None
+    # Three program-components since ADR-0233, each translated with the ones
+    # before it as `--import` and each instrumented on its own: a procedure of
+    # ApFront is a procedure of the compiler, and instrumenting the program
+    # alone would report every one of them as entered by nothing.
+    irs = []
+    for name in components.COMPONENTS:
+        ir = work / (name[:-4] + ".ll")
+        r = run(str(pascalc), *components.translate(root, name),
+                "-o", str(ir))
+        if r.returncode != 0 or not ir.exists():
+            print(f"coverage: the compiler failed to translate {name}\n"
+                  + r.stdout, file=sys.stderr)
+            return None
+        irs.append((name, ir))
 
-    covo, shim, exe = work / "cov.o", work / "covrt.o", work / "pascalc-cov"
+    shim, exe = work / "covrt.o", work / "pascalc-cov"
     # Compiled and linked in two steps on purpose: passing -fsanitize-coverage
     # to the *link* makes clang add libclang_rt.ubsan_standalone.a, which
     # Debian's packages do not ship. The pass is applied at compile time and
     # the callbacks come from covrt.c, so the link needs nothing.
-    steps = [
-        ("instrumenting", ("clang", "-Wno-override-module", "-c", "-O0",
-                           "-fsanitize-coverage=func,trace-pc-guard,pc-table",
-                           str(ir), "-o", str(covo))),
+    covos = [work / (name[:-4] + ".o") for name, _ in irs]
+    steps = [("instrumenting " + name,
+              ("clang", "-Wno-override-module", "-c", "-O0",
+               "-fsanitize-coverage=func,trace-pc-guard,pc-table",
+               str(ir), "-o", str(o)))
+             for (name, ir), o in zip(irs, covos)]
+    steps += [
         ("the callback shim", ("clang", "-c", "-O1",
                                str(root / "tests" / "checks" / "covrt.c"),
                                "-o", str(shim))),
         # -no-pie so a reported address is the one `nm` prints, with no load
         # base to subtract and no chance of subtracting the wrong one.
-        ("linking", ("clang", "-no-pie", str(covo), str(shim), str(pasrt),
-                     "-lm", "-o", str(exe))),
+        ("linking", ("clang", "-no-pie", *[str(o) for o in covos], str(shim),
+                     str(pasrt), "-lm", "-o", str(exe))),
     ]
     for what, cmd in steps:
         r = run(*cmd)
         if r.returncode != 0:
             print(f"coverage: {what} failed\n{r.stderr}", file=sys.stderr)
             return None
-    return exe, ir
+    return exe, irs
 
 
-def procedures(ir, root):
+def procedures(irs, root):
     """pNNN -> (spelling, line), with the spelling as the source writes it.
 
     The comment carries the case-folded spelling, the lexer having folded it
@@ -277,16 +295,17 @@ def procedures(ir, root):
     the declaration on that line folds to the same word is what keeps this a
     mapping rather than a guess. A disagreement means the comment and the
     source have drifted, which is worth failing over rather than papering."""
-    src = (root / "selfhost" / "compiler.pas").read_text().splitlines()
     out = {}
-    for folded, line, sym in NAMED.findall(ir.read_text()):
-        n = int(line)
-        spelling = folded
-        if 1 <= n <= len(src):
-            m = DECL.match(src[n - 1])
-            if m and m.group(1).lower() == folded:
-                spelling = m.group(1)
-        out[sym] = (spelling, n)
+    for name, ir in irs:
+        src = (root / "selfhost" / name).read_text().splitlines()
+        for folded, line, sym in NAMED.findall(ir.read_text()):
+            n = int(line)
+            spelling = folded
+            if 1 <= n <= len(src):
+                m = DECL.match(src[n - 1])
+                if m and m.group(1).lower() == folded:
+                    spelling = m.group(1)
+            out[sym] = (spelling, n, name)
     return out
 
 
@@ -359,9 +378,9 @@ def main():
         if built is None:
             print("coverage: skipped")
             return SKIP
-        exe, ir = built
+        exe, irs = built
 
-        names = procedures(ir, root)
+        names = procedures(irs, root)
         syms = symbols(exe)
         if not syms or not names:
             print("coverage: no instrumented procedures found -- the IR or the "
@@ -382,7 +401,7 @@ def main():
     # Keyed on the spelling, not on the line: a line number moves with every
     # edit above it, and an allowlist that churned on unrelated changes would
     # be rewritten without being read.
-    uncovered = {names.get(sym, (sym, 0))[0]
+    uncovered = {names.get(sym, (sym, 0, "?"))[0]
                  for _, sym in syms if sym not in entered}
     listed = allowed(root)
 
@@ -390,9 +409,10 @@ def main():
         print(f"procedures: {covered}/{total} entered "
               f"({100.0 * covered / total:.1f}%)")
         for name in sorted(uncovered, key=str.lower):
-            line = next((l for n, l in names.values() if n == name), 0)
+            at = next((f"{f}:{l}" for n, l, f in names.values() if n == name),
+                      "?")
             mark = " " if name in listed else "*"
-            print(f"  {mark} {name}  (compiler.pas:{line})")
+            print(f"  {mark} {name}  ({at})")
         print("\n* = not in tests/checks/uncovered_procedures.txt")
         return 0
 
@@ -400,8 +420,8 @@ def main():
     revived = sorted(listed - uncovered, key=str.lower)
 
     for name in missing:
-        line = next((l for n, l in names.values() if n == name), 0)
-        print(f"no case enters this procedure (compiler.pas:{line}): {name}")
+        at = next((f"{f}:{l}" for n, l, f in names.values() if n == name), "?")
+        print(f"no case enters this procedure ({at}): {name}")
     for name in revived:
         print("listed as unentered, but some case now enters it -- either the "
               f"corpus grew or the argument was wrong: {name}")

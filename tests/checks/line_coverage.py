@@ -53,6 +53,9 @@ import sys
 import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import components                                    # noqa: E402
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import coverage  # noqa: E402  -- one definition of "the corpus", shared
 
 SKIP = 77
@@ -62,10 +65,19 @@ RATCHET = "line_coverage.txt"
 
 
 def build(root, build_dir, work):
-    """An instrumented compiler, and the IR it was built from.
+    """One instrumented compiler per program-component, each with the IR it
+    was built from.
 
     Stage 2 for ADR-0103's reason: build/pascalc.ll is the *seed's* output and
-    predates any change being measured."""
+    predates any change being measured.
+
+    **One component instrumented at a time, and that is not tidiness.**
+    `--coverage` appends *line numbers* to $PASCOV_LINES, and since ADR-0233
+    the compiler is three files whose line numbers overlap: a statement never
+    run at aptypes.pas:500 would read as covered because apfront.pas:500 ran.
+    So each component gets a compiler in which only it is instrumented, and
+    the corpus is swept once per component. Three sweeps is the price of the
+    numbers meaning anything."""
     pascalc = build_dir / "bin" / "pascalc"
     pasrt = build_dir / "lib" / "libpasrt.a"
     if not pascalc.exists() or not pasrt.exists() or not shutil.which("clang"):
@@ -73,24 +85,46 @@ def build(root, build_dir, work):
               file=sys.stderr)
         return None
 
-    ir, exe = work / "cov.ll", work / "pascalc-linecov"
-    r = subprocess.run([str(pascalc), "--coverage",
-                        str(root / "selfhost" / "compiler.pas"), "-o", str(ir)],
-                       capture_output=True, text=True)
-    if r.returncode != 0 or not ir.exists():
-        print("line-coverage: the compiler failed to translate itself\n"
-              + r.stdout, file=sys.stderr)
-        return None
-    r = subprocess.run(["clang", "-Wno-override-module", "-O1", str(ir),
-                        str(pasrt), "-lm", "-o", str(exe)],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        print(f"line-coverage: linking failed\n{r.stderr}", file=sys.stderr)
-        return None
-    return exe, ir
+    out = []
+    for subject in components.COMPONENTS:
+        mods = []
+        for name in components.COMPONENTS:
+            ir = work / f"{subject[:-4]}-{name[:-4]}.ll"
+            argv = [str(pascalc)]
+            if name == subject:
+                argv.append("--coverage")
+            argv += components.translate(root, name) + ["-o", str(ir)]
+            r = subprocess.run(argv, capture_output=True, text=True)
+            if r.returncode != 0 or not ir.exists():
+                print(f"line-coverage: the compiler failed to translate "
+                      f"{name}\n" + r.stdout, file=sys.stderr)
+                return None
+            mods.append(str(ir))
+            if name == subject:
+                subject_ir = ir
+        exe = work / f"pascalc-linecov-{subject[:-4]}"
+        r = subprocess.run(["clang", "-Wno-override-module", "-O1", *mods,
+                            str(pasrt), "-lm", "-o", str(exe)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            print(f"line-coverage: linking failed\n{r.stderr}",
+                  file=sys.stderr)
+            return None
+        out.append((subject, exe, subject_ir))
+    return out
 
 
 def sweep(exe, jobs, work):
+    """Run the corpus and collect the lines it reached.
+
+    `work` must be a directory of this sweep's own. `--coverage` **appends** to
+    $PASCOV_LINES, so three sweeps sharing one directory give the second one
+    the first's lines and the third both -- and `& mine` does not filter them
+    out, the three components' line numbers being the same numbers. That is a
+    silent inflation, and it showed itself as a comment-only commit moving the
+    ratchet by 17."""
+    work.mkdir(parents=True, exist_ok=True)
+
     def one(idx_job):
         idx, (src, flags) = idx_job
         out = work / f"L{idx}.txt"
@@ -119,13 +153,17 @@ def procedures(ir):
 
 
 def attribute(lines, procs):
-    """Group lines by the procedure they fall in."""
-    starts = [p[0] for p in procs]
+    """Group (component, line) pairs by the procedure they fall in.
+
+    `procs` is (component index, start line, name), sorted, so the bisect is
+    over the same pair the lines are keyed on and cannot walk off the end of
+    one component into the next."""
+    starts = [(p[0], p[1]) for p in procs]
     import bisect
     out = collections.defaultdict(list)
-    for ln in sorted(lines):
-        i = bisect.bisect_right(starts, ln) - 1
-        out[procs[i][1] if i >= 0 else "(program level)"].append(ln)
+    for key in sorted(lines):
+        i = bisect.bisect_right(starts, key) - 1
+        out[procs[i][2] if i >= 0 else "(program level)"].append(key[1])
     return out
 
 
@@ -158,12 +196,20 @@ def main():
         if made is None:
             print("line-coverage: skipped")
             return SKIP
-        exe, ir_path = made
-        text = ir_path.read_text()
-        instrumented = {int(n) for n in HIT.findall(text)}
-        procs = procedures(text)
-        ran = sweep(exe, coverage.corpus(root), work) & instrumented
+        jobs = coverage.corpus(root)
+        instrumented, ran, procs = set(), set(), []
+        # Lines are made globally unique by the component they are in: the
+        # three files overlap, and a set of bare line numbers would union
+        # ApTypes' unreached statements with ApFront's reached ones.
+        for i, (subject, exe, ir_path) in enumerate(made):
+            text = ir_path.read_text()
+            mine = {int(n) for n in HIT.findall(text)}
+            instrumented |= {(i, n) for n in mine}
+            procs += [(i, ln, name) for ln, name in procedures(text)]
+            hit = sweep(exe, jobs, work / subject[:-4]) & mine
+            ran |= {(i, n) for n in hit}
 
+    procs.sort()
     uncovered = instrumented - ran
     pct = 100.0 * len(ran) / len(instrumented) if instrumented else 0.0
 
@@ -184,7 +230,8 @@ def main():
         total = attribute(instrumented, procs)
         path = root / "tests" / "checks" / RATCHET
         out = [
-            "# Statement coverage of selfhost/compiler.pas over the corpus.",
+            "# Statement coverage of the compiler's three program-components",
+            "# over the corpus (ADR-0233).",
             "#",
             "# A ratchet, not a catalogue -- and the weaker instrument for it,",
             "# which doc/sop.md §7 records. tests/checks/uncovered_procedures.txt",

@@ -1,5 +1,5 @@
 adr: 0226
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: constexpr_string_errors
 why: §6.7.6.7's third error condition is "the value of (i)+(j)-1 is greater than the length of the value of s", and writing it that way is what this compiler must not do: i and j are a program's constants, this compiler's own integer arithmetic traps on overflow (ADR-0014), and `substr(s, maxint, maxint)` therefore stops the compiler instead of reporting the error the clause names. Asked as `j > n - i + 1` it cannot overflow, i being at least 1 by then. Every in-range and ordinary out-of-range case agrees under either spelling, so only a case carrying maxint can see it.
 --- old

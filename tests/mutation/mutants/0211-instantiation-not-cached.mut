@@ -1,5 +1,5 @@
 adr: 0211
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: generic_routine
 why: AP 6.7.3.10.2 requires two activations with the same type-argument-tuple to activate the same routine, and the cache is the whole of that requirement. Never finding an entry makes every call a fresh translation -- which for a *recursive* generic does not terminate, since the recursive call inside the body being instantiated asks for the same tuple again. The case has one, so the defect is a compiler that never finishes rather than a wrong answer, which is why the harness kills it on the timeout.
 --- old

@@ -1,5 +1,5 @@
 adr: 0230
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: dump-dispatch
 why: Exactly one side of the comparison must be an enumeration constant. Accepting the first side that is one makes `nkVar = nkStr` -- two constants compared with each other, which dispatches on nothing -- into a tag test, and makes the *field* reported whichever side happened to be scanned second. The corpus case has no such comparison and would not notice; what it does notice is the field, because the reported `on kind` becomes `on ?` wherever the constant is written on the left.
 --- old

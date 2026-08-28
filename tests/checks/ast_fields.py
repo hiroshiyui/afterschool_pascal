@@ -70,7 +70,8 @@ import pathlib
 import re
 import sys
 
-SOURCE = "selfhost/compiler.pas"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import components                                    # noqa: E402
 CATALOGUE = "ast_fields.txt"
 
 POINTER = ("nodePtr", "symPtr", "fieldPtr", "rangePtr", "numPtr", "typePtr",
@@ -107,7 +108,8 @@ def arms(text):
     key = "case kind: nodeKind of"
     if key not in text:
         raise SystemExit(
-            "ast-fields: the AST's variant part is not in " + SOURCE +
+            "ast-fields: the AST's variant part is in none of "
+            + ", ".join(components.COMPONENTS) +
             "; a check that cannot find its landmark must fail loudly")
     body = text[text.index(key):]
     body = body[:body.index("\n  end;")]
@@ -129,9 +131,10 @@ def arms(text):
 def cleared(lines):
     """The fields NewNode assigns, and the line range it occupies."""
     lo = next((n for n, l in enumerate(lines)
-               if l.startswith("function NewNode(")), None)
+               if l.startswith("function NewNode(")
+               or l.startswith("function NewNode;")), None)
     if lo is None:
-        raise SystemExit("ast-fields: NewNode is not in " + SOURCE)
+        return None, 0, 0
     hi = next(n for n, l in enumerate(lines) if n > lo and "NewNode := n" in l)
     body = "\n".join(lines[lo:hi])
     return set(re.findall(r"n\^\.([A-Za-z0-9_]+)\s*:=", body)), lo, hi
@@ -160,12 +163,67 @@ def catalogue(path):
 
 def main():
     root = pathlib.Path(__file__).resolve().parents[2]
-    text = strip((root / SOURCE).read_text())
-    lines = text.splitlines()
-    fields = arms(text)
-    done, lo, hi = cleared(lines)
+    # Three components since ADR-0233: the variant record is declared in
+    # ApTypes and every construction site is in the other two, so the landmark
+    # and the sites are no longer in one file. Positions stay per component --
+    # a line number that counted across a concatenation would name nothing a
+    # reader could open.
+    texts = {p.name: strip(p.read_text()) for p in components.sources(root)}
+    fields = None
+    for name, text in texts.items():
+        if "case kind: nodeKind of" in text:
+            fields = arms(text)
+    if fields is None:
+        arms("")                                     # raises, saying so
+    done = None
+    for name, text in texts.items():
+        got, home_lo, home_hi = cleared(text.splitlines())
+        if got is not None:
+            done, home = got, name
+            break
+    if done is None:
+        raise SystemExit("ast-fields: NewNode is in none of "
+                         + ", ".join(components.COMPONENTS))
     listed = catalogue(pathlib.Path(__file__).with_name(CATALOGUE))
+    bad, sites, checked = [], 0, 0
+    for SOURCE_NAME, text in texts.items():
+        lines = text.splitlines()
+        skip = (home_lo, home_hi) if SOURCE_NAME == home else (-1, -2)
+        bad_, sites_, checked_ = scan(SOURCE_NAME, lines, fields, done,
+                                      skip[0], skip[1], listed)
+        bad += bad_; sites += sites_; checked += checked_
 
+    # A field assigned in no component at all: asked once, over the three
+    # texts, because a field the parser fills is not in the same file as the
+    # arm that declares it.
+    whole = "\n".join(texts.values())
+    for kind, names in sorted(fields.items()):
+        for f in names:
+            if f in done:
+                continue
+            if not re.search(r"\^\." + f + r"\s*:=", whole):
+                bad.append(f"{kind}.{f} is assigned nowhere and cleared "
+                           f"nowhere -- it is dead, or the arm outlived it")
+
+    for key, n in sorted(listed.items(), key=lambda kv: kv[1]):
+        bad.append(f"{CATALOGUE}:{n} argues for {key[0]}.{key[1]} at "
+                   f"{key[2]}:{key[3]}, and there is no such unset field there")
+
+    if bad:
+        for b in bad:
+            print(f"ast-fields: {b}", file=sys.stderr)
+        return 1
+
+    print(f"ast-fields: {len(fields)} arms of the AST's variant part, "
+          f"{sum(len(v) for v in fields.values())} pointer fields; "
+          f"{len(done)} cleared by NewNode and {checked} assignments checked "
+          f"over {sites} construction sites in "
+          f"{len(components.COMPONENTS)} components")
+    return 0
+
+
+def scan(name, lines, fields, done, lo, hi, listed):
+    SOURCE = "selfhost/" + name
     owner, bound, cur, at = [], [], "?", 0
     for n, line in enumerate(lines):
         m = HEADER.match(line)
@@ -210,30 +268,8 @@ def main():
                 f"here. If it is filled somewhere this cannot see, add "
                 f"`{kind}.{f} at {owner[n]}:{n + 1}` to {CATALOGUE} with where")
 
-    for key, n in sorted(listed.items(), key=lambda kv: kv[1]):
-        bad.append(f"{CATALOGUE}:{n} argues for {key[0]}.{key[1]} at "
-                   f"{key[2]}:{key[3]}, and there is no such unset field there")
+    return bad, sites, checked
 
-    never = []
-    for kind, names in sorted(fields.items()):
-        for f in names:
-            if f in done:
-                continue
-            if not re.search(r"\^\." + f + r"\s*:=", text):
-                never.append(f"{kind}.{f} is assigned nowhere and cleared "
-                             f"nowhere -- it is dead, or the arm outlived it")
-    bad += never
-
-    if bad:
-        for b in bad:
-            print(f"ast-fields: {b}", file=sys.stderr)
-        return 1
-
-    print(f"ast-fields: {len(fields)} arms of the AST's variant part, "
-          f"{sum(len(v) for v in fields.values())} pointer fields; "
-          f"{len(done)} cleared by NewNode and {checked} assignments checked "
-          f"over {sites} construction sites")
-    return 0
 
 
 if __name__ == "__main__":

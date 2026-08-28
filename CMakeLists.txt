@@ -64,16 +64,55 @@ target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 
 # ---- The compiler: written in Afterschool Pascal, built by the seed ----
 #
-# `selfhost/compiler.pas` is the only compiler source in this repository, and
-# there is no C++ one to translate it (ADR-0085). `seed/pascalc.ll` is a working
-# compiler in LLVM IR, committed for exactly this: clang assembles it, and the
-# result translates the current source into the compiler that ships.
+# The compiler is three ISO/IEC 10206:1991 6.13 program-components and no C++
+# (ADR-0085, ADR-0233): `selfhost/aptypes.pas` imports nothing,
+# `selfhost/apfront.pas` imports it, and `selfhost/compiler.pas` holds the
+# main-program-block and imports both. They are translated in that order --
+# each `--import` reads the *source* of a component already translated, there
+# being no other artefact for an interface (ADR-0079) -- and the three modules
+# are linked together in one command.
+#
+# The build order is the whole reason the split was taken: it makes every build
+# translate a module on its own, translate a module that imports another, and
+# link the result, which is a row `doc/sop.md` 7 used to carry as unchecked.
+#
+# `seed/pascalc.ll` is a working compiler in LLVM IR, committed for exactly
+# this: clang assembles it, and the result translates the current sources into
+# the compiler that ships. The seed is matched with a glob rather than named,
+# because a refreshed seed is one module per component and the count is the
+# seed's business rather than this file's.
 #
 # Two stages, and the second is the point -- what `build/bin/pascalc` is built
 # from is the source in the tree, never the seed. The seed only bootstraps.
 # seed/README.md has its provenance, its target lock and when to refresh it.
 set(APASCAL_SEED_CC ${CMAKE_BINARY_DIR}/bin/pascalc-seed)
 set(APASCAL_PASCALC ${CMAKE_BINARY_DIR}/bin/pascalc)
+# The order is `selfhost/compiler.components`, which is an ordinary 6.13
+# component list -- the same sidecar `tests/run_test.sh` and
+# `selfhost/irtest.sh` read for a test case, so the compiler's own build is not
+# a special case of anything and the order is written down once.
+file(STRINGS ${CMAKE_SOURCE_DIR}/selfhost/compiler.components
+     APASCAL_COMPONENTS)
+set(APASCAL_SOURCES)
+set(APASCAL_IMPORTS)
+set(APASCAL_MODULES)
+set(APASCAL_TRANSLATE)
+foreach(component ${APASCAL_COMPONENTS} compiler.pas)
+  get_filename_component(base ${component} NAME_WE)
+  if(component STREQUAL "compiler.pas")
+    set(base pascalc)     # the program's IR keeps the name the linker knew
+  endif()
+  list(APPEND APASCAL_TRANSLATE
+       COMMAND ${APASCAL_SEED_CC} ${APASCAL_IMPORTS}
+               ${CMAKE_SOURCE_DIR}/selfhost/${component}
+               -o ${CMAKE_BINARY_DIR}/${base}.ll)
+  list(APPEND APASCAL_IMPORTS
+       --import ${CMAKE_SOURCE_DIR}/selfhost/${component})
+  list(APPEND APASCAL_MODULES ${CMAKE_BINARY_DIR}/${base}.ll)
+  list(APPEND APASCAL_SOURCES ${CMAKE_SOURCE_DIR}/selfhost/${component})
+endforeach()
+file(GLOB APASCAL_SEED_LL ${CMAKE_SOURCE_DIR}/seed/*.ll)
+list(SORT APASCAL_SEED_LL)
 
 add_custom_command(
   OUTPUT ${APASCAL_SEED_CC}
@@ -81,10 +120,10 @@ add_custom_command(
   # below never runs, and without this a stale build/bin/pascalc would survive
   # for `ctest` to pass against.
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_SEED_CC} ${APASCAL_PASCALC}
-  COMMAND ${APASCAL_CLANG} -Wno-override-module ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
+  COMMAND ${APASCAL_CLANG} -Wno-override-module ${APASCAL_SEED_LL}
           $<TARGET_FILE:pasrt> -lm -o ${APASCAL_SEED_CC}
-  DEPENDS pasrt ${CMAKE_SOURCE_DIR}/seed/pascalc.ll
-  COMMENT "Assembling the seed compiler from seed/pascalc.ll"
+  DEPENDS pasrt ${APASCAL_SEED_LL}
+  COMMENT "Assembling the seed compiler from seed/*.ll"
   VERBATIM
 )
 
@@ -96,13 +135,12 @@ add_custom_command(
 add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
-  COMMAND ${APASCAL_SEED_CC}
-          ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${CMAKE_BINARY_DIR}/pascalc.ll
-  COMMAND ${APASCAL_CLANG} -Wno-override-module ${CMAKE_BINARY_DIR}/pascalc.ll
+  ${APASCAL_TRANSLATE}
+  COMMAND ${APASCAL_CLANG} -Wno-override-module ${APASCAL_MODULES}
           $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
-  DEPENDS ${APASCAL_SEED_CC} pasrt
-          ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
-  COMMENT "Building pascalc from selfhost/compiler.pas with the seed compiler"
+  DEPENDS ${APASCAL_SEED_CC} pasrt ${APASCAL_SOURCES}
+          ${CMAKE_SOURCE_DIR}/selfhost/compiler.components
+  COMMENT "Building pascalc from the three program-components with the seed"
   VERBATIM
 )
 add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})

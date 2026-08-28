@@ -1,4 +1,5 @@
-# Statement coverage of selfhost/compiler.pas over the corpus.
+# Statement coverage of the compiler's three program-components
+# over the corpus (ADR-0233).
 #
 # A ratchet, not a catalogue -- and the weaker instrument for it,
 # which doc/sop.md §7 records. tests/checks/uncovered_procedures.txt
@@ -136,7 +137,7 @@ checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/18
 collecttagtests 0/31
-compile 0/90
+compile 0/41
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -200,7 +201,7 @@ dumpmodulesbefore 0/7
 dumpnames 0/11
 dumpoptional 0/7
 dumpproc 0/36
-dumpprogram 0/43
+dumpprogram 0/74
 dumprecordlayout 0/9
 dumpstmt 0/195
 dumpstmtlist 0/4
@@ -217,7 +218,7 @@ earlier 0/1
 emitaddress 3/191
 emitarrayvalue 0/24
 emitassign 0/65
-emitbinary 4/204
+emitbinary 6/204
 emitcall 8/503
 emitcase 0/83
 emitcheckedarith 0/45
@@ -694,13 +695,13 @@ writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
 writecontext 7/78
-writedistincttypenote 0/17
+writedistincttypenote 0/35
 writekeyword 0/2
 writekwword 0/3
 writelabelwhat 1/5
 writenocopyreason 0/3
 writeoperator 1/16
-writeopname 5/21
+writeopname 3/21
 writeordinalname 1/25
 writepool 0/2
 writepoolir 0/2

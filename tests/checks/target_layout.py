@@ -44,11 +44,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 PASCALC = os.environ.get("PASCALC", os.path.join(ROOT, "build", "bin", "pascalc"))
 CLANG = os.environ.get("APASCAL_CLANG", "clang")
 
-# The two sources whose frames are compared. The compiler is the breadth; the
-# probe is the depth -- see its header.
-SOURCES = [
-    os.path.join(ROOT, "selfhost", "compiler.pas"),
-    os.path.join(ROOT, "tests", "checks", "target_layout.pas"),
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import components                                    # noqa: E402
+
+# The sources whose frames are compared, each as the argument list that
+# translates it. The compiler is the breadth -- all three of its
+# program-components since ADR-0233, because a frame belongs to the component
+# that declares the block -- and the probe is the depth; see its header.
+SOURCES = [components.translate(ROOT, name)
+           for name in components.COMPONENTS] + [
+    [os.path.join(ROOT, "tests", "checks", "target_layout.pas")],
 ]
 
 # A floor, not a count. The exact number moves with every declaration added to
@@ -127,12 +132,16 @@ def top_level_fields(body):
     return n + 1 if body[1:-1].strip() else 0
 
 
-def frames_of(path):
-    """The frame type definitions this compiler emits for one source."""
+def frames_of(argv):
+    """The frame type definitions this compiler emits for one source.
+
+    `argv` is the whole translation -- a component's `--import` chain and then
+    the component (ADR-0233) -- so the source it is *of* is its last word."""
+    path = argv[-1]
     with tempfile.NamedTemporaryFile(suffix=".ll", delete=False) as f:
         out = f.name
     try:
-        r = run([PASCALC, path, "-o", out])
+        r = run([PASCALC, *argv, "-o", out])
         if r.returncode != 0:
             die("compiling %s failed:\n%s" % (path, r.stdout + r.stderr))
         found = []
@@ -150,8 +159,8 @@ def frames_of(path):
 def build_module(sources):
     """One module of folded constants, and the names to read back out."""
     types, consts, names = [], [], []
-    for i, path in enumerate(sources):
-        for name, body in frames_of(path):
+    for i, argv in enumerate(sources):
+        for name, body in frames_of(argv):
             # Renamed per source, because two sources both start at %frame1.
             # `name` arrives with its sigil, so it is dropped and one is put
             # back: source 0's %frame1 becomes %s0frame1.

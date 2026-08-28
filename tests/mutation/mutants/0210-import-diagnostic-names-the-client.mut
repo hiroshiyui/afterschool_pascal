@@ -1,5 +1,5 @@
 adr: 0210
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: pascalc-product
 why: the defect this fixed, put back. curFile is the client's by the time Sema runs -- the import loop restores it before returning -- so a diagnostic about an imported component's block carried the client's name and the component's line number, which is a position the named file need not have. Every case under tests/ stays green with the defect in: run_test.sh translates each component separately and first and gives up if one fails, so no case can reach a component that does not translate on its own being handed to --import anyway. Only the probe in producttest sees it.
 --- old

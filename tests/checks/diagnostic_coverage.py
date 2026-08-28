@@ -56,13 +56,23 @@ NOT_A_DIAGNOSTIC = re.compile(
 MIN_LENGTH = 20
 
 
+# The compiler is three program-components (ADR-0233), and a message is a
+# message wherever it is written: ApFront reports what Sema found and the
+# program reports what the code generator did. Reading one of the three would
+# have made every message in the other two look unreachable -- which is how
+# this gate failed on the day of the split, four entries of the catalogue at
+# once, in the direction that says "the argument was wrong".
+SOURCES = ("aptypes.pas", "apfront.pas", "compiler.pas")
+
+
 def messages(root):
     """Every string literal the compiler writes that is long enough to be a
-    diagnostic of its own, with the line it is written on."""
-    src = (root / "selfhost" / "compiler.pas").read_text()
+    diagnostic of its own, with the component and line it is written on."""
     out = {}
-    for m in re.finditer(r"write(?:ln)?\('([^']{%d,})'" % MIN_LENGTH, src):
-        out.setdefault(m.group(1), src[: m.start()].count("\n") + 1)
+    for name in SOURCES:
+        src = (root / "selfhost" / name).read_text()
+        for m in re.finditer(r"write(?:ln)?\('([^']{%d,})'" % MIN_LENGTH, src):
+            out.setdefault(m.group(1), f"{name}:{src[: m.start()].count(chr(10)) + 1}")
     return out
 
 
@@ -106,7 +116,7 @@ def main():
     revived = sorted(listed - uncovered)
 
     for m in missing:
-        print(f"no golden names this diagnostic (compiler.pas:{msgs[m]}):")
+        print(f"no golden names this diagnostic ({msgs[m]}):")
         print(f"    {m!r}")
     for m in revived:
         print("listed as unreachable, but a golden now names it -- either the "

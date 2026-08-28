@@ -101,7 +101,9 @@ import subprocess
 import sys
 import tempfile
 
-SOURCE = "selfhost/compiler.pas"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import components                                    # noqa: E402
+
 CATALOGUE = "predicate_callers.txt"
 
 PREDICATE = "Assignable"
@@ -372,7 +374,11 @@ def main():
     args = ap.parse_args()
 
     root = pathlib.Path(__file__).resolve().parents[2]
-    text = (root / SOURCE).read_text()
+    # The predicate and its callers are all in ApFront today, but the question
+    # is about the compiler and not about a file (ADR-0233): a caller that
+    # moved to another component would otherwise leave the gate green by
+    # disappearing. Nothing here is line-addressed.
+    text = components.text(root)
     listed = catalogue(pathlib.Path(__file__).with_name(CATALOGUE))
 
     bad = []

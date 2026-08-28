@@ -1,5 +1,5 @@
 adr: 0209
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: schema_type_errors
 why: AP 6.4.7.1 keys a production on the type a discriminant names, and ADR-0039's interning is by (schema, tuple). A constant tuple component makes every production of one schema the same type however different the element -- so Vec(integer) and Vec(Point) become one record, laid out for whichever was produced first, and assigning between them is accepted. It is caught by the error case rather than a running one because the wrong answer is an *accepted* program: the diagnostic that should say the two are different types is the thing that disappears.
 --- old

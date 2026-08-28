@@ -1,5 +1,5 @@
 adr: 0227
-file: selfhost/compiler.pas
+file: selfhost/aptypes.pas
 kills: constexpr_reals
 why: The width is the whole of the round-trip claim. 6.10.3.4.2's floating-point representation spends six characters on the sign, the point and the exponent, so a total-width of 30 asks for 24 significant digits where 17 name a binary64 uniquely; 17 asks for 11 and loses bits on almost every value. Nothing about the compilation fails -- the text is still a real-literal the assembler reads -- and the folded constant simply stops being the value the expression denotes, which only a case comparing a folded constant against the same expression at run time can see.
 --- old

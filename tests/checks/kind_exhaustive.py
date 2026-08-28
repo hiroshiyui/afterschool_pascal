@@ -135,7 +135,9 @@ import subprocess
 import re
 import sys
 
-SOURCE = "selfhost/compiler.pas"
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import components                                    # noqa: E402
+
 CATALOGUE = "partial_cases.txt"
 
 # A constant of one of these enumerations: two or three lowercase letters and
@@ -146,7 +148,22 @@ TAG_FIELD = "kind"
 
 
 
-def dispatch(pascalc, source):
+def where(root, routine):
+    """Which of the three components a routine is defined in (ADR-0233).
+
+    The dump reports a line and not a file -- a position in the component the
+    routine belongs to -- and every message here that quotes one has to say
+    which. Matched on the definition, so a `forward` in the same component
+    does not decide it."""
+    pat = re.compile(r"^(?:procedure|function)\s+%s\b" % re.escape(routine),
+                     re.I | re.M)
+    for p in components.sources(root):
+        for m in pat.finditer(p.read_text()):
+            return f"selfhost/{p.name}"
+    return "selfhost/" + components.PROGRAM
+
+
+def dispatch(pascalc, argv):
     """Ask the compiler what it dispatches on (ADR-0229).
 
     This used to be `cases()`, which read the source with regular expressions
@@ -162,7 +179,7 @@ def dispatch(pascalc, source):
     case-insensitively so it can go on being written the way the source spells
     it.
     """
-    out = subprocess.run([str(pascalc), "--dump-dispatch", str(source),
+    out = subprocess.run([str(pascalc), "--dump-dispatch", *argv,
                           "-o", os.devnull],
                          capture_output=True, text=True)
     if out.returncode != 0:
@@ -272,8 +289,8 @@ def main():
     unused = {(e.lower(), c.lower()): (n, e, c)
               for (e, c), n in unused.items()}
 
-    found, never_named, found_chains, enums = dispatch(pascalc,
-                                                       root / SOURCE)
+    found, never_named, found_chains, enums = dispatch(
+        pascalc, components.translate(root))
     if not found or not enums:
         print("kind-exhaustive: --dump-dispatch reported no enumeration or no "
               "case-statement over one at all", file=sys.stderr)
@@ -297,7 +314,7 @@ def main():
             continue
         partial += 1
         if entry is None:
-            bad.append(f"{SOURCE}:{line} ({routine}) names "
+            bad.append(f"{where(root, routine)}:{line} ({routine}) names "
                        f"{named} of {count} {enum} constants "
                        f"and argues for none of it -- missing "
                        f"{', '.join(missing[:6])}"
@@ -337,7 +354,8 @@ def main():
             continue
         chain_partial += 1
         if entry is None:
-            bad.append(f"{SOURCE}:{line} ({routine}) dispatches on "
+            bad.append(f"{where(root, routine)}:{line} ({routine}) "
+                       f"dispatches on "
                        f"{named} of {count} {enum} constants in "
                        f"an if-chain and argues for none of it -- missing "
                        f"{', '.join(missing[:6])}"

@@ -49,7 +49,16 @@ import tempfile
 import sys
 from pathlib import Path
 
-COMPILER = Path(__file__).resolve().parents[2] / "selfhost" / "compiler.pas"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import components                                    # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[2]
+# The predicate is in ApTypes and the emitter's literals are in the program
+# (ADR-0233), and this gate's question is about the compiler rather than about
+# a file: it reads the refusal out of one component and the names it has to
+# cover out of another. Nothing here is line-addressed, so the three are one
+# text.
+SOURCE = "selfhost/" + "/".join(components.COMPONENTS)
 
 # A Pascal string literal on one line, and the LLVM globals inside it.
 LITERAL = re.compile(r"'((?:[^']|'')*)'")
@@ -57,8 +66,13 @@ GLOBAL = re.compile(r"@([A-Za-z_][A-Za-z0-9_.]*)")
 
 # The predicate's own words, read back out of the source rather than repeated
 # here -- a third copy would be a third thing to drift.
+# The *definition*, not the heading: 6.11.1 puts an exported routine's heading
+# in the module-heading and leaves the block repeating the name alone, so
+# `function ReservedForeignName` now matches twice and the first match is an
+# interface entry with no body. Requiring a `begin` picks the body out.
 PREDICATE = re.compile(
-    r"function ReservedForeignName.*?\nend;", re.DOTALL)
+    r"function ReservedForeignName\b[^;]*;\n(?:var[^\n]*\n)*begin\n.*?\nend;",
+    re.DOTALL)
 POOL_IS = re.compile(r"PoolIs\(at, len, '([^']*)'\)")
 POOL_STARTS = re.compile(r"PoolStarts\(at, len, '([^']*)'\)")
 
@@ -90,7 +104,8 @@ def predicate_words(text):
     if body is None:
         raise SystemExit(
             "foreign-reserved: ReservedForeignName is not in "
-            f"{COMPILER.name}.\nIf it was renamed, update this check -- a "
+            f"any of {', '.join(components.COMPONENTS)}.\n"
+            f"If it was renamed, update this check -- a "
             "check that cannot find what it is about must fail loudly, not "
             "pass.")
     body = body.group(0)
@@ -184,7 +199,7 @@ def main():
     ap.add_argument("--pascalcc", help="ask the compiler, not only its source")
     args = ap.parse_args()
 
-    text = COMPILER.read_text(encoding="utf-8")
+    text = components.text(ROOT)
     emitted = emitted_names(text)
     exact, prefixes = predicate_words(text)
 

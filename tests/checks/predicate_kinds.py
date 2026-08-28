@@ -71,7 +71,8 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-SOURCE = ROOT / "selfhost" / "compiler.pas"
+sys.path.insert(0, str(HERE))
+import components                                    # noqa: E402
 CATALOGUE = HERE / "predicate_kinds.txt"
 
 # Any program at all: the subject is the compiler, and the dump reports after a
@@ -158,7 +159,7 @@ def render(total, rows, order):
     return "\n".join(out) + "\n"
 
 
-def call_sites(text, name):
+def call_sites(sources, name):
     """Every line calling `name`, less its own declaration and definition.
 
     A predicate here is one or two lines -- `begin Is... := ... end` -- so the
@@ -168,6 +169,13 @@ def call_sites(text, name):
     """
     pat = re.compile(r"\b" + re.escape(name) + r"\(")
     decl = re.compile(r"^function " + re.escape(name) + r"\(")
+    out = []
+    for path in sources:
+        out += _sites_in(path.name, path.read_text(), pat, decl)
+    return out
+
+
+def _sites_in(name_of_file, text, pat, decl):
     out, skip = [], -2
     for i, line in enumerate(text.splitlines(), 1):
         if decl.match(line):
@@ -176,12 +184,15 @@ def call_sites(text, name):
         if i == skip + 1:
             continue
         if pat.search(line):
-            out.append((i, line.rstrip()))
+            out.append((name_of_file, i, line.rstrip()))
     return out
 
 
 def like(rows, old, new, source):
     """What the compiler still says is true of OLD and not of NEW.
+
+    `source` is the list of component paths; a site is reported in the file it
+    is in (ADR-0233).
 
     The direction matters. A predicate true of the old kind and false of the
     new one is a guard the new kind falls *out* of, which is where every defect
@@ -222,8 +233,8 @@ def like(rows, old, new, source):
         total += len(sites)
         print()
         print(f"  {name} -- {len(sites)} call sites")
-        for n, line in sites:
-            print(f"    selfhost/compiler.pas:{n}: {line.strip()}")
+        for where, n, line in sites:
+            print(f"    selfhost/{where}:{n}: {line.strip()}")
     print()
     print(f"{total} call sites over {len(falls_out)} predicates.")
     if brought_in:
@@ -263,10 +274,15 @@ def main():
         return 1
 
     if args.like:
-        return like(rows, args.like[0], args.like[1], SOURCE.read_text())
+        return like(rows, args.like[0], args.like[1],
+                    components.sources(ROOT))
 
     # --- half one: the source says which predicates exist -------------------
-    declared = declared_predicates(SOURCE.read_text())
+    # Every component: the type predicates are ApTypes' since ADR-0233 and the
+    # gate's question is about the compiler. Reading one file would have made
+    # eight predicates look undeclared while the compiler went on answering
+    # for them, which is how this failed on the day of the split.
+    declared = declared_predicates(components.text(ROOT))
     missing = [p for p in declared if p not in rows]
     extra = [p for p in rows if p not in declared and p != "kinds"]
     if missing:

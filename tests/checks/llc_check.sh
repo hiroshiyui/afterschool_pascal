@@ -99,36 +99,61 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas; do
   accepted=$((accepted + 1))
 done
 
-# The committed seed is a module too, and the largest one here.
-if ! llc "${llc_flags[@]}" "$root/seed/pascalc.ll" -o "$work/seed.s" \
-        2>"$work/err"; then
-  echo "llc-second-backend: llc rejected seed/pascalc.ll" >&2
-  sed -n 1,10p "$work/err" >&2
-  exit 1
-fi
-accepted=$((accepted + 1))
+# The committed seed is a module too, and the largest here. It is matched with
+# a glob: the seed is one module per program-component once it has been
+# refreshed after ADR-0233, and how many that is is the seed's business.
+for seed in "$root"/seed/*.ll; do
+  if ! llc "${llc_flags[@]}" "$seed" -o "$work/seed.s" 2>"$work/err"; then
+    echo "llc-second-backend: llc rejected ${seed#$root/}" >&2
+    sed -n 1,10p "$work/err" >&2
+    exit 1
+  fi
+  accepted=$((accepted + 1))
+done
 
 # ---- 2. a compiler built a second way computes the same thing --------------
-"$pascalc" "$root/selfhost/compiler.pas" -o "$work/ref.ll"
+#
+# Three program-components since ADR-0233, in the order
+# selfhost/compiler.components gives; every one of them is translated, built a
+# second way and compared, because a miscompilation of ApFront is as much a
+# wrong compiler as a miscompilation of the code generator.
+comps=($(cat "$root/selfhost/compiler.components") compiler.pas)
+imports=(); n=0
+for component in "${comps[@]}"; do
+  n=$((n + 1))
+  "$pascalc" "${imports[@]+"${imports[@]}"}" \
+      "$root/selfhost/$component" -o "$work/ref$n.ll"
+  imports+=(--import "$root/selfhost/$component")
+done
 
 # Two backend configurations, both unlike the build's. -O0 is the one that
 # matters: it shares almost no code with the -O2 pipeline the build used, so an
 # optimiser that miscompiled the compiler cannot hide in both.
 for level in -O0 -O2; do
-  llc "$level" "${llc_flags[@]}" "$work/ref.ll" -o "$work/cc$level.s"
-  clang "$level" "$work/cc$level.s" "$runtime" -lm -o "$work/pascalc$level"
-  "$work/pascalc$level" "$root/selfhost/compiler.pas" \
-      -o "$work/out$level.ll"
-  if ! cmp -s "$work/ref.ll" "$work/out$level.ll"; then
-    echo "llc-second-backend: a compiler built with llc $level translates" >&2
-    echo "  selfhost/compiler.pas differently from the one this build ships." >&2
-    echo "  Two machine-code programs disagree about what the source means," >&2
-    echo "  so one of them is miscompiled." >&2
-    diff -u "$work/ref.ll" "$work/out$level.ll" | sed -n 1,40p >&2
-    exit 1
-  fi
+  objs=()
+  for k in $(seq 1 ${#comps[@]}); do
+    llc "$level" "${llc_flags[@]}" "$work/ref$k.ll" -o "$work/cc$level.$k.s"
+    clang "$level" -c "$work/cc$level.$k.s" -o "$work/cc$level.$k.o"
+    objs+=("$work/cc$level.$k.o")
+  done
+  clang "$level" "${objs[@]}" "$runtime" -lm -o "$work/pascalc$level"
+  imports=(); n=0
+  for component in "${comps[@]}"; do
+    n=$((n + 1))
+    "$work/pascalc$level" "${imports[@]+"${imports[@]}"}" \
+        "$root/selfhost/$component" -o "$work/out$level.$n.ll"
+    imports+=(--import "$root/selfhost/$component")
+    if ! cmp -s "$work/ref$n.ll" "$work/out$level.$n.ll"; then
+      echo "llc-second-backend: a compiler built with llc $level translates" >&2
+      echo "  selfhost/$component differently from the one this build ships." >&2
+      echo "  Two machine-code programs disagree about what the source means," >&2
+      echo "  so one of them is miscompiled." >&2
+      diff -u "$work/ref$n.ll" "$work/out$level.$n.ll" | sed -n 1,40p >&2
+      exit 1
+    fi
+  done
 done
 
 echo "llc-second-backend: llc assembled $accepted modules, and compilers built" \
-     "from its -O0 and -O2 output translate compiler.pas identically to this" \
-     "build's"
+     "from its -O0 and -O2 output translate all ${#comps[@]} program-components" \
+     "identically to this build's"

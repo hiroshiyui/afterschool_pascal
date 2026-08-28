@@ -17,8 +17,16 @@
 
 """How much of each fixed array this compiler's own source still leaves free.
 
-`selfhost/compiler.pas` is the largest Pascal in the tree and the one that has
-to keep fitting, and it reads its input into fixed arrays (ADR-0012). Twice the
+The compiler is the largest Pascal in the tree and the one that has to keep
+fitting, and it reads its input into fixed arrays (ADR-0012).
+
+**Since ADR-0233 that is three translations and the answer is the worst of
+them.** A component is read in full by every later one -- `--import` names a
+source, 6.11.1 putting the interface in the module-heading -- so the peak is
+not the program's translation and is not obviously any one of them: measured on
+the day of the split, the program held the most *tokens* and ApFront the most
+*pool*. Measuring one would have reported 448008 of the pool where the build's
+worst is 506825, and called a 27% margin a 55% one. Twice the
 loud failure that produced has been the **build**: the array that has to hold
 this source is the *seed's*, and raising the constant in the source does not
 raise the seed's, so the only way out is to reseed. ADR-0095 did that for the
@@ -54,6 +62,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import components                                    # noqa: E402
+
 THRESHOLD = 0.80
 
 # What --dump-limits reports, and the constant in the source that declares each
@@ -68,13 +79,12 @@ def main() -> int:
     root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[2]
     build = Path(sys.argv[sys.argv.index("--build") + 1]) if "--build" in sys.argv else root / "build"
 
-    source = root / "selfhost" / "compiler.pas"
     pascalc = build / "bin" / "pascalc"
     if not pascalc.exists():
         print(f"buffer-headroom: {pascalc} is missing -- skipping")
         return 77
 
-    text = source.read_text(encoding="utf-8", errors="replace")
+    text = components.text(root)
     declared = {}
     for array, const in ARRAYS:
         m = re.search(r"^\s*%s\s*=\s*(\d+)" % const, text, re.M)
@@ -83,20 +93,27 @@ def main() -> int:
             return 1
         declared[array] = int(m.group(1))
 
-    run = subprocess.run(
-        [str(pascalc), "--dump-limits", str(source), "-o", "/dev/null"],
-        capture_output=True, text=True,
-    )
-    if run.returncode != 0:
-        print("buffer-headroom: the compiler could not read its own source")
-        print(run.stdout[-2000:])
-        return 1
-
-    reported = {}
-    for line in run.stdout.splitlines():
-        m = REPORT.match(line)
-        if m:
-            reported[m.group(1)] = (int(m.group(2)), int(m.group(3)))
+    # Every component, and the worst of the three. `worst` keeps which one it
+    # was, because "the pool is 51% full" is a different fact to act on
+    # depending on whether it is ApFront or the program that is full.
+    reported, worst = {}, {}
+    for name in components.COMPONENTS:
+        run = subprocess.run(
+            [str(pascalc), "--dump-limits",
+             *components.translate(root, name), "-o", "/dev/null"],
+            capture_output=True, text=True,
+        )
+        if run.returncode != 0:
+            print(f"buffer-headroom: the compiler could not read {name}")
+            print(run.stdout[-2000:])
+            return 1
+        for line in run.stdout.splitlines():
+            m = REPORT.match(line)
+            if m:
+                array, used, cap = m.group(1), int(m.group(2)), int(m.group(3))
+                if array not in reported or used > reported[array][0]:
+                    reported[array] = (used, cap)
+                    worst[array] = name
 
     failed = False
     for array, const in ARRAYS:
@@ -111,7 +128,8 @@ def main() -> int:
                   f"any of this")
             return 1
         frac = used / cap
-        print(f"buffer-headroom: {array} {used} of {cap}, {100 * (1 - frac):.1f}% free")
+        print(f"buffer-headroom: {array} {used} of {cap}, "
+              f"{100 * (1 - frac):.1f}% free (worst: {worst[array]})")
         if frac > THRESHOLD:
             failed = True
             print(

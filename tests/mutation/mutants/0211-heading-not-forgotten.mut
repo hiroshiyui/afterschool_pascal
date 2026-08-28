@@ -1,5 +1,5 @@
 adr: 0211
-file: selfhost/compiler.pas
+file: selfhost/apfront.pas
 kills: generic_routine
 why: a resolved type-denoter caches the type it resolved to, and an instantiation shares the generic's parameter nodes -- so without forgetting, the second instantiation reads the first one's answer and `var a, b: T` is whatever T was last time. ADR-0039's remedy for a schema body, needed here for the same reason. It is caught by the case having two instantiations of one routine over different types: with the defect in, Swap(Point, u, v) is checked against integer and the program is refused with a message naming neither the line nor the type the program wrote.
 --- old

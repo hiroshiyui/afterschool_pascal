@@ -69,9 +69,13 @@ fi
 check_size() {
   local macro=$1 constant=$2 want have
   want=$(sed -n "s/^#define $macro \([0-9]*\).*/\1/p" "$root/runtime/pasrt.h")
-  have=$(sed -n "s/^ *$constant = \([0-9]*\);.*/\1/p" "$here/compiler.pas")
+  # The constants are ApTypes' since ADR-0233; asked of every component, so a
+  # constant that moves again is found rather than silently answering empty.
+  have=$(sed -n "s/^ *$constant = \([0-9]*\);.*/\1/p" \
+             "$here"/aptypes.pas "$here"/apfront.pas "$here"/compiler.pas |
+         head -1)
   if [[ -z $want || $want != "$have" ]]; then
-    echo "irtest: $macro is $want but compiler.pas says $have" >&2
+    echo "irtest: $macro is $want but the compiler's source says $have" >&2
     exit 1
   fi
 }
@@ -82,9 +86,17 @@ check_size PAS_DEFER_SIZE deferSize
 
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>
+# `IR_FILES` is every module this build translated, in order, so a caller can
+# compare *all* of them. The compiler is three program-components since
+# ADR-0233 and the fixed point is about the whole compiler: comparing only the
+# program's IR would let a change in ApTypes or ApFront reproduce itself
+# unnoticed, which is the exact shape of hole the bootstrap check exists to
+# close.
+IR_FILES=()
 build() {
   local cc=$1 src=$2 out=$3 rel comp n
   rm -f "$work/ir.ll"
+  IR_FILES=()
   # ISO/IEC 10206:1991 6.13's already-translated program-components. Each is
   # named with its own --import, and each is also translated on its own here,
   # so what is linked is genuinely several objects and not one -- which is the
@@ -102,16 +114,17 @@ build() {
       read -r rel _ <<<"$line"
       comp="$(dirname "$src")/$rel"
       n=$((n + 1))
-      rm -f "$work/comp.ll"
+      rm -f "$work/comp$n.ll"
       # With the components listed before it, and not with its own --import:
       # 6.13 lets one component import another and the list is in dependency
       # order, so the import is added after this translation rather than before.
       timeout 600 "$cc" "${imports[@]+"${imports[@]}"}" \
-          "$comp" -o "$work/comp.ll" \
+          "$comp" -o "$work/comp$n.ll" \
           >/dev/null 2>"$work/gen.err" || return 1
       imports+=(--import "$comp")
-      [[ -s $work/comp.ll ]] || return 1
-      clang -Wno-override-module -fPIC -c "$work/comp.ll" -o "$work/c$n.o" \
+      [[ -s $work/comp$n.ll ]] || return 1
+      IR_FILES+=("$work/comp$n.ll")
+      clang -Wno-override-module -fPIC -c "$work/comp$n.ll" -o "$work/c$n.o" \
           2>"$work/link.err" || return 2
       objects+=("$work/c$n.o")
     done <"${src%.pas}.components"
@@ -120,6 +133,7 @@ build() {
     "${imports[@]+"${imports[@]}"}" \
       >/dev/null 2>"$work/gen.err" || return 1
   [[ -s $work/ir.ll ]] || return 1
+  IR_FILES+=("$work/ir.ll")
   clang -Wno-override-module "$work/ir.ll" "${objects[@]+"${objects[@]}"}" \
       "$runtime" -lm -o "$out" 2>"$work/link.err" || return 2
 }
@@ -265,20 +279,36 @@ if ! build "$work/stage1" "$here/compiler.pas" "$work/stage2"; then
   head -20 "$work/gen.err" "$work/link.err" >&2
   exit 1
 fi
-cp "$work/ir.ll" "$work/stage2.ll"
+stage2_ir=(); n=0
+for f in "${IR_FILES[@]}"; do
+  n=$((n + 1)); cp "$f" "$work/stage2.$n.ll"; stage2_ir+=("$work/stage2.$n.ll")
+done
 
 if ! build "$work/stage2" "$here/compiler.pas" "$work/stage3"; then
   echo "--- stage 2 could not compile the compiler ---" >&2
   head -20 "$work/gen.err" "$work/link.err" >&2
   exit 1
 fi
-cp "$work/ir.ll" "$work/stage3.ll"
+stage3_ir=(); n=0
+for f in "${IR_FILES[@]}"; do
+  n=$((n + 1)); cp "$f" "$work/stage3.$n.ll"; stage3_ir+=("$work/stage3.$n.ll")
+done
 
-if ! diff -q "$work/stage2.ll" "$work/stage3.ll" >/dev/null; then
-  echo "--- stage 2 and stage 3 differ: the compiler is not a fixed point ---" >&2
-  diff -u "$work/stage2.ll" "$work/stage3.ll" | head -40 >&2
+if [[ ${#stage2_ir[@]} -ne ${#stage3_ir[@]} ]]; then
+  echo "--- stage 2 emitted ${#stage2_ir[@]} modules and stage 3" \
+       "${#stage3_ir[@]} ---" >&2
   exit 1
 fi
+n=0
+for f in "${stage2_ir[@]}"; do
+  n=$((n + 1))
+  if ! diff -q "$f" "${stage3_ir[$((n - 1))]}" >/dev/null; then
+    echo "--- stage 2 and stage 3 differ in module $n of" \
+         "${#stage2_ir[@]}: the compiler is not a fixed point ---" >&2
+    diff -u "$f" "${stage3_ir[$((n - 1))]}" | head -40 >&2
+    exit 1
+  fi
+done
 
 # A compiler that reproduces itself and nothing else would pass the line above,
 # so stage 2 is held to the same golden output stage 1 was.
