@@ -77,8 +77,15 @@ for component in $(cat "$root/selfhost/compiler.components") compiler.pas; do
   modules+=("$work/ap$n.ll")
 done
 
-guards=$(grep -hc 'variant: the tag selects another arm' "${modules[@]}" |
-         paste -sd+ | bc)
+# Summed in the shell rather than through `bc`, which is not among the
+# documented dependencies -- `ca-certificates cmake make clang git python3` is
+# the whole list, and a check that needs a seventh tool fails on every CI
+# platform at once, which is how this was found.
+guards=0
+for module in "${modules[@]}"; do
+  n=$(grep -c 'variant: the tag selects another arm' "$module" || true)
+  guards=$((guards + n))
+done
 if (( guards < 100 )); then
   echo "variant-check: the guarded build has $guards variant guards in it." \
        "ADR-0118's check is not being emitted, so this would pass by asking" \
