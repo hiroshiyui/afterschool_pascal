@@ -106,9 +106,15 @@ begin
   bnd := binding(a);
   bnd.name := '/tmp/apascal_bindprogparam.txt';
   bind(a, bnd);
+  { E.16 (ADR-0172): `bound` asks whether the entity exists *now*, so it is
+    asked after the `rewrite` that makes one. Asked before, the answer would
+    be whatever an earlier run left at that path -- which is what it was until
+    this was written, and why the case failed on a machine where /tmp had been
+    cleared. bind_missing.pas is where the unbound answer is pinned, with a
+    name it guarantees nothing is at. }
+  rewrite(a);
   bnd := binding(a);
   writeln('a rebound: ', bnd.bound, ' ', bnd.name);
-  rewrite(a);
   writeln(a, 'written through a rebound program parameter');
   reset(a);
   readln(a, bnd.name);

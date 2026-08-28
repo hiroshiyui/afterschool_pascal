@@ -1,11 +1,11 @@
 start FALSE []
-bound TRUE [/tmp/apascal_bind1.txt]
+bound TRUE same name=TRUE
 after FALSE []
 again FALSE
 hello from bind
 second line
 lines 2
-bound TRUE [/tmp/apascal_bind2.txt]
+attached TRUE same name=TRUE
 g FALSE
 padded 30
 t

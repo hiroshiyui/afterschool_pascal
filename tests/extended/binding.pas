@@ -14,7 +14,13 @@
 
   §6.4.1's `bindable` is what makes a variable bindable at all, and §6.7.5.6
   makes binding one that is not a dynamic-violation. }
-program Binding(output);
+{ `fresh` is a program parameter the harness binds to a path in a directory of
+  its own, and the names below are built from it -- so no answer here depends
+  on what an earlier run or an earlier case left behind. It used to use fixed
+  `/tmp` names and report `bound TRUE` for one that had not been created yet,
+  which passed only on a machine where a previous run had left the file
+  (ADR-0172 fixed three cases this way and missed this one). }
+program Binding(output, fresh);
 { §6.4.1 makes bindability a property of the *type-denoter*, and a type-name
   denotes "the type, bindability and initial state" of its definition — so a
   named bindable type is what lets a *parameter* be bindable. `var t: text`
@@ -23,10 +29,12 @@ type btext = bindable text;
 
 var f: btext;
     g: btext;
+    fresh: bindable text;
     b: BindingType;
     c: char;
     n: integer;
-    nm: string(64);
+    nm: string(255);
+    nm1: string(255);
     { a *fixed*-string name, which §6.4.6 pads to its capacity — so what
       reaches `bind` ends in spaces, and a file name that does is never what
       was meant }
@@ -40,15 +48,17 @@ var f: btext;
   would have to convert its argument — §6.4.6 pads or refuses by length, and a
   value parameter is copied bytewise — and there is nowhere yet to build the
   conversion (ADR-0052). }
-procedure attach(var t: btext; var nm: string(64));
+procedure attach(var t: btext; var nm: string(255));
 var v: BindingType;
 begin
   v := binding(t);
   if v.bound then unbind(t);
   v.name := nm;
-  bind(t, v);
-  v := binding(t);
-  writeln('bound ', v.bound, ' [', v.name, ']')
+  bind(t, v)
+  { The second ask NOTE 4 is about is made by the caller, after the `rewrite`
+    that gives the name something to be bound to (E.16, ADR-0172). It cannot
+    be made here: nothing is at the name yet, so the answer would depend on
+    what an earlier case left in the scratch directory. }
 end;
 
 procedure report(v: BindingType);
@@ -62,15 +72,24 @@ begin
   b := binding(f);
   writeln('start ', b.bound, ' [', b.name, ']');
 
-  b.name := '/tmp/apascal_bind1.txt';
+  nm1 := binding(fresh).name + '.binding1';
+  b.name := nm1;
   bind(f, b);
-  b := binding(f);
-  writeln('bound ', b.bound, ' [', b.name, ']');
 
   { Once bound, the file behaves as any external file does — the binding is
     what `reset` and `rewrite` look up, in place of the command-line argument a
-    program parameter would have had. }
+    program parameter would have had.
+
+    E.16 (ADR-0172): a variable is bound to an external entity when the entity
+    *exists*, asked whenever `binding` is called — so the question is asked
+    after the `rewrite` that makes one. Asking it *before* is what
+    bind_missing.pas is for, with a name it guarantees nothing is at; asked
+    here it would depend on what an earlier case left in the scratch
+    directory, which irtest.sh shares across the whole corpus. The name is
+    compared rather than printed, that directory differing on every run. }
   rewrite(f);
+  b := binding(f);
+  writeln('bound ', b.bound, ' same name=', b.name = nm1);
   writeln(f, 'hello from bind');
   writeln(f, 'second line');
 
@@ -87,7 +106,7 @@ begin
   writeln('again ', b.bound);
 
   { ...and binding it back reaches the same file. }
-  b.name := '/tmp/apascal_bind1.txt';
+  b.name := nm1;
   bind(f, b);
   reset(f);
   n := 0;
@@ -104,9 +123,11 @@ begin
 
   { A second bindable variable, bound through a procedure. The name is built
     in a variable first, because a string value parameter is refused. }
-  nm := '/tmp/apascal_bind2.txt';
+  nm := binding(fresh).name + '.binding2';
   attach(g, nm);
   rewrite(g);
+  b := binding(g);
+  writeln('attached ', b.bound, ' same name=', b.name = nm);
   writeln(g, 'other file');
   unbind(g);
   b := binding(g);
