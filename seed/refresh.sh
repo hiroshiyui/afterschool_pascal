@@ -41,16 +41,14 @@ done
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-std=$(tr -d '[:space:]' <"$root/selfhost/compiler.std")
-
 echo "refresh: generating a candidate seed with $($pascalc --version)"
-"$pascalc" "--std=$std" "$root/selfhost/compiler.pas" -o "$work/candidate.ll"
+"$pascalc" "$root/selfhost/compiler.pas" -o "$work/candidate.ll"
 
 echo "refresh: building a compiler from the candidate"
 clang -Wno-override-module "$work/candidate.ll" "$runtime" -lm -o "$work/from-seed"
 
 echo "refresh: requiring that compiler to reproduce itself"
-"$work/from-seed" "--std=$std" "$root/selfhost/compiler.pas" -o "$work/again.ll"
+"$work/from-seed" "$root/selfhost/compiler.pas" -o "$work/again.ll"
 if ! cmp -s "$work/candidate.ll" "$work/again.ll"; then
   echo "refresh: the candidate does not reproduce itself -- not committing it" >&2
   diff -u "$work/candidate.ll" "$work/again.ll" | head -40 >&2

@@ -210,8 +210,11 @@ def compile_and_maybe_run(out, pascalcc, work, run_it):
     src = work / "scenario.pas"
     src.write_text(out.source)
     exe = work / "scenario"
-    proc = subprocess.run([str(pascalcc), f"--std={out.standard}",
-                           str(src), "-o", str(exe)],
+    # No --std=: ADR-0232 removed the modes, and `out.standard` is now only
+    # which document the scenario is written against -- it still selects the
+    # clause inventory a citation is checked in, and no longer selects a
+    # language.
+    proc = subprocess.run([str(pascalcc), str(src), "-o", str(exe)],
                           capture_output=True, text=True, timeout=300)
     # pascalcc puts the compiler's diagnostics on stderr; take both so a
     # scenario cannot pass by matching the wrong stream.

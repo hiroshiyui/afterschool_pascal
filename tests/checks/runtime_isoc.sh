@@ -122,19 +122,18 @@ fi
 pascalc=${PASCALC:-$root/build/bin/pascalc}
 if [[ -x $pascalc ]]; then
   emitted=$(
-    # The two conformance corpora and not tests/dialect/: ADR-0121's `external`
-    # lets a dialect program name any C function it likes, so a declare there
-    # is the *program's* business and not the compiler's. What is being asked
-    # is what this compiler emits on its own account, and under --std=iso7185
-    # and --std=extended a program has no way to add to that.
+    # tests/ and tests/extended/ and not tests/dialect/: ADR-0121's `external`
+    # lets a program name any C function it likes, so a declare there is the
+    # *program's* business and not the compiler's. What is being asked is what
+    # this compiler emits on its own account, and no source in these two
+    # directories writes an `external` heading -- which used to be guaranteed
+    # by the conformance modes and is now a property of the corpus, checked
+    # here rather than assumed.
     for d in tests tests/extended; do
-      case $d in
-        tests) s=iso7185 ;;
-        *) s=extended ;;
-      esac
       for f in "$root/$d"/*.pas; do
         [[ -f $f ]] || continue
-        "$pascalc" "--std=$s" "$f" -o "$work/e.ll" >/dev/null 2>&1
+        grep -qw external "$f" && continue
+        "$pascalc" "$f" -o "$work/e.ll" >/dev/null 2>&1
         [[ -s $work/e.ll ]] && grep -hoE '^declare [^@]*@[A-Za-z_][A-Za-z0-9_.]*' \
           "$work/e.ll" | sed 's/.*@//'
       done

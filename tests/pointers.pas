@@ -9,7 +9,7 @@ type
   link = ^cell;        { cell is not declared until the next line }
 
   cell = record
-    value: integer;
+    datum: integer;
     next: link
   end;
 
@@ -18,7 +18,7 @@ type
   tree = ^node;
   node = record
     case kind: nodekind of
-      litnode:          (value: integer);
+      litnode:          (datum: integer);
       addnode, mulnode: (lhs, rhs: tree)   { a variant holding pointers }
   end;
 
@@ -33,7 +33,7 @@ var
   fresh: link;
 begin
   new(fresh);
-  fresh^.value := v;
+  fresh^.datum := v;
   fresh^.next := list;
   list := fresh
 end;
@@ -57,7 +57,7 @@ var
 begin
   new(t);
   t^.kind := litnode;
-  t^.value := v;
+  t^.datum := v;
   Leaf := t
 end;
 
@@ -75,7 +75,7 @@ end;
 function Eval(t: tree): integer;
 begin
   case t^.kind of
-    litnode: Eval := t^.value;
+    litnode: Eval := t^.datum;
     addnode: Eval := Eval(t^.lhs) + Eval(t^.rhs);
     mulnode: Eval := Eval(t^.lhs) * Eval(t^.rhs)
   end
@@ -107,15 +107,15 @@ begin
   p := head;
   while p <> nil do
     begin
-      write(p^.value:3);
+      write(p^.datum:3);
       p := p^.next
     end;
   writeln;
 
   { A pointer assignment shares the variable; it does not copy it. }
   p := head;
-  p^.value := 99;
-  writeln('shared: ', head^.value, ' same cell: ', p = head);
+  p^.datum := 99;
+  writeln('shared: ', head^.datum, ' same cell: ', p = head);
 
   { Give the list back one cell at a time. }
   while head <> nil do

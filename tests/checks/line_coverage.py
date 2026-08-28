@@ -74,8 +74,7 @@ def build(root, build_dir, work):
         return None
 
     ir, exe = work / "cov.ll", work / "pascalc-linecov"
-    std = (root / "selfhost" / "compiler.std").read_text().strip()
-    r = subprocess.run([str(pascalc), f"--std={std}", "--coverage",
+    r = subprocess.run([str(pascalc), "--coverage",
                         str(root / "selfhost" / "compiler.pas"), "-o", str(ir)],
                        capture_output=True, text=True)
     if r.returncode != 0 or not ir.exists():

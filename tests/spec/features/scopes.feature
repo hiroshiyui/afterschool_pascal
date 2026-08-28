@@ -75,13 +75,13 @@ Feature: Scopes and activations
       program p(output);
       type
         link = ^node;
-        node = record value: integer; next: link end;
+        node = record datum: integer; next: link end;
       var head: link;
       begin
         new(head);
-        head^.value := 4;
+        head^.datum := 4;
         head^.next := nil;
-        writeln(head^.value : 1);
+        writeln(head^.datum : 1);
         dispose(head)
       end.
       """

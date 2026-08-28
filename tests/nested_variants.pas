@@ -19,7 +19,7 @@ type
   node = record
     id: integer;
     case k: kind of
-      leaf: (value: real);
+      leaf: (datum: real);
       branch: (count: integer;
                case w: weight of
                  light: (feather: char);
@@ -62,8 +62,8 @@ begin
 
   { the outer arm, which the nested part is not part of }
   n.k := leaf;
-  n.value := 1.25;
-  writeln('leaf: ', n.id:1, ' ', n.value:4:2);
+  n.datum := 1.25;
+  writeln('leaf: ', n.id:1, ' ', n.datum:4:2);
 
   d.tag := 'x';
   d.a := 3;

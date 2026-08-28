@@ -80,38 +80,11 @@ check_size PAS_JUMP_SIZE jumpSize
 check_size PAS_HANDLE_SIZE handleSize
 check_size PAS_DEFER_SIZE deferSize
 
-# Which standard a source is written in is decided by where it lives. The glob
-# is deliberately unanchored: a file named on the command line arrives as a
-# relative path, and a leading-slash pattern would quietly call it ISO 7185 and
-# then compare two identical rejections.
-standard_of() {
-  # A source outside tests/extended/ may still be Extended Pascal, and says so
-  # with a `name.std` file beside it holding one word -- the same sidecar
-  # convention as `name.in`, `name.epoch` and `name.components`. It exists
-  # because selfhost/compiler.pas is Extended Pascal and does not live in the
-  # directory that would otherwise be the only way to say so (ADR-0033).
-  local sidecar="${1%.pas}.std"
-  if [[ -f $sidecar ]]; then
-    tr -d '[:space:]' <"$sidecar"
-    echo
-    return
-  fi
-  case $1 in
-    *tests/extended/*)  echo extended ;;
-    # The dialect (ADR-0117). Same construction as the line above, and the
-    # glob is unanchored for the same reason: a relative path named on the
-    # command line must not fall through to iso7185.
-    *tests/dialect/*)   echo afterschool ;;
-    *)                  echo iso7185 ;;
-  esac
-}
-
 # Compile one Pascal source with a stage-1 compiler and link the result.
 #   build <compiler> <source.pas> <output-binary>
 build() {
-  local cc=$1 src=$2 out=$3 rel comp n std
+  local cc=$1 src=$2 out=$3 rel comp n
   rm -f "$work/ir.ll"
-  std=$(standard_of "$src")
   # ISO/IEC 10206:1991 6.13's already-translated program-components. Each is
   # named with its own --import, and each is also translated on its own here,
   # so what is linked is genuinely several objects and not one -- which is the
@@ -123,18 +96,17 @@ build() {
   if [[ -f ${src%.pas}.components ]]; then
     while IFS= read -r line; do
       [[ -n $line ]] || continue
-      # `path` or `path std` -- see tests/run_test.sh for why the second field
-      # exists. The two harnesses must read the file the same way or a case
-      # means two things.
-      read -r rel comp_std <<<"$line"
-      [[ -n $comp_std ]] || comp_std="$std"
+      # One path per line; anything after it is ignored -- see
+      # tests/run_test.sh. The two harnesses must read the file the same way
+      # or a case means two things.
+      read -r rel _ <<<"$line"
       comp="$(dirname "$src")/$rel"
       n=$((n + 1))
       rm -f "$work/comp.ll"
       # With the components listed before it, and not with its own --import:
       # 6.13 lets one component import another and the list is in dependency
       # order, so the import is added after this translation rather than before.
-      timeout 600 "$cc" "--std=$comp_std" "${imports[@]+"${imports[@]}"}" \
+      timeout 600 "$cc" "${imports[@]+"${imports[@]}"}" \
           "$comp" -o "$work/comp.ll" \
           >/dev/null 2>"$work/gen.err" || return 1
       imports+=(--import "$comp")
@@ -144,7 +116,7 @@ build() {
       objects+=("$work/c$n.o")
     done <"${src%.pas}.components"
   fi
-  timeout 600 "$cc" "--std=$std" "$src" -o "$work/ir.ll" \
+  timeout 600 "$cc" "$src" -o "$work/ir.ll" \
     "${imports[@]+"${imports[@]}"}" \
       >/dev/null 2>"$work/gen.err" || return 1
   [[ -s $work/ir.ll ]] || return 1

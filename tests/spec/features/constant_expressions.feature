@@ -118,18 +118,3 @@ Feature: real-valued constant-expressions
       a negative base of '**' in a constant expression
       """
 
-  # ISO 7185 §6.3 admits `constant = [sign] (unsigned-number |
-  # constant-identifier) | character-string`, so there is no expression to fold
-  # and this program is refused for that reason and not for the folder's.
-  @iso7185:6.3
-  Scenario: ISO 7185 has no constant-expression to fold
-    Given the ISO 7185 program
-      """
-      program p(output);
-      const x = 1.0 + 1.0;
-      begin
-        writeln(x)
-      end.
-      """
-    When it is compiled
-    Then it is rejected

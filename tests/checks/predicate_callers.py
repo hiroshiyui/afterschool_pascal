@@ -358,7 +358,7 @@ def accepts(pascalc, src, work):
     """Does the compiler accept this program? The verdict, and nothing else."""
     p = work / "probe.pas"
     p.write_text(src)
-    r = subprocess.run([pascalc, "--std=afterschool", str(p),
+    r = subprocess.run([pascalc, str(p),
                         "-o", str(work / "probe.ll")],
                        capture_output=True, text=True)
     return r.returncode == 0, (r.stdout + r.stderr).strip()

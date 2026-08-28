@@ -1,6 +1,6 @@
 <source>:13:14: error: unknown type 'nosuchtype' as the domain of a pointer
 <source>:25:16: error: this array has too many elements: an index type may span at most maxint values
-<source>:27:1: error: a function cannot return vector; use a var parameter
+<source>:27:1: error: function 'bad' never assigns its result
 <source>:36:3: error: cannot assign array [1..3] of integer to a variable of type vector
 <source>:37:3: error: cannot assign vector to a variable of type integer
 <source>:38:3: error: cannot assign record a, b end to a variable of type integer
@@ -10,7 +10,7 @@
 <source>:42:8: error: operator '=' needs comparable operands, found record a, b end and record a, b end
 <source>:43:11: error: a value of type vector cannot be written
 <source>:44:15: error: argument 1 of 'takesvector' is vector, but the value is array [1..3] of integer
-<source>:45:8: error: 'with' needs a record variable, found integer
+<source>:45:8: error: 'with' needs a record variable or one produced from a schema, found integer
 <source>:47:3: error: cannot assign other to a variable of type link
 <source>:48:9: error: only a pointer can be dereferenced, found integer
 <source>:49:10: error: operator '+' needs numeric operands, found link and link

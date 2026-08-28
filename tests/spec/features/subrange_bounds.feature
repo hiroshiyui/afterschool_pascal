@@ -98,20 +98,6 @@ Feature: Subrange bounds are expressions
     When it is compiled and run
     Then it stops at run time
 
-  Scenario: ISO 7185 admits no such bound
-    Given the ISO 7185 program
-      """
-      program p(output);
-      procedure q(m: integer);
-      var x: 1..m;
-      begin
-        writeln(x : 1)
-      end;
-      begin q(3) end.
-      """
-    When it is compiled
-    Then it is rejected
-
   # ISO/IEC 10206:1991 §6.8.2 defines a constant-expression by what it must not
   # contain, and the exclusion for required functions is narrow: clause c)
   # reaches only a function "that has a defining-point contained by the

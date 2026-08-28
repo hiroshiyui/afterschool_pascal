@@ -1,14 +1,17 @@
 # Afterschool Pascal
 
-**A specification of the dialect selected by `--std=afterschool`, written as an
-amendment to ISO/IEC 10206:1991.**
+**The specification of the Afterschool Pascal programming language**, written
+by reference to ISO/IEC 10206:1991 and by stating the differences.
 
 | | |
 | --- | --- |
 | Status | Draft. Normative for this repository; see 5. |
-| Applies to | `pascalc --std=afterschool`, version 1.5.0 |
-| Amends | ISO/IEC 10206:1991 (Extended Pascal) |
-| Governing records | ADR-0117 – ADR-0132, ADR-0135 |
+| Applies to | `pascalc`, every program it accepts |
+| Normative reference | ISO/IEC 10206:1991 (Extended Pascal) |
+| Governing records | ADR-0117 – ADR-0132, ADR-0135, ADR-0232 |
+
+Since ADR-0232 there is one language and the processor has no mode: `pascalc`
+compiles Afterschool Pascal, and this document says what that is.
 
 ---
 
@@ -30,15 +33,15 @@ way.
 
 ## Introduction
 
-ISO 7185 and ISO/IEC 10206:1991 are complete in this processor and are not
-affected by anything in this document. They are the two modes with an external
-specification (see 5.3). Nothing here changes what either **accepts**; 6.7.7.1
-does change what `--std=extended` **says**, its refusal of the `external`
-directive naming this dialect, which is a diagnostic and not an acceptance.
+ISO 7185 and ISO/IEC 10206:1991 were both implemented completely by this
+processor, and until ADR-0232 each was selectable as a mode with an external
+specification (see 5.3). There are no modes now, and no external specification
+applies to anything this processor accepts.
 
-The dialect is the third mode. It **contains** Extended Pascal: every program
-that conforms to ISO/IEC 10206:1991 is an Afterschool Pascal program with the
-same meaning (6.0.1). Everything specified here is therefore an *addition*,
+What survives of them is the containment, and it is the reason this document
+can be short: the language **contains** Extended Pascal, so every program that
+conforms to ISO/IEC 10206:1991 is an Afterschool Pascal program with the same
+meaning (6.0.1). Everything specified here is therefore an *addition*,
 and this document is organised as a list of the clauses of ISO/IEC 10206:1991
 that the dialect changes or extends.
 
@@ -46,8 +49,17 @@ that the dialect changes or extends.
 
 ## 1 Scope
 
-This document specifies the programming language Afterschool Pascal, by
-reference to ISO/IEC 10206:1991 and by stating the differences.
+This document specifies the programming language Afterschool Pascal. It is
+**the** specification of that language: since ADR-0232 no standard governs it,
+and the processor has no mode in which some other document applies.
+
+It is written *by reference to* ISO/IEC 10206:1991 and by stating the
+differences, and that remains the most economical form — the language contains
+Extended Pascal, so the reference imports a complete and precise description of
+the greater part of it. What changed with ADR-0232 is the status of the
+reference: ISO/IEC 10206:1991 is a **normative reference**, in the ordinary
+sense that a specification may be written in terms of another document, and no
+longer an obligation this processor is under. Clause 2 says which edition.
 
 It specifies:
 
@@ -64,12 +76,17 @@ It specifies:
 It does **not** specify:
 
 - h) the library. `lib/` and `lib/dialect/` are programs written in the
-  languages this document and ISO/IEC 10206:1991 specify, not part of either
-  (Annex D is informative);
+  language this document specifies, not part of it (Annex D is informative);
 - i) any representation, storage layout or calling convention, except where a
-  requirement of 6.7.7 is stated in terms of one;
-- j) anything about ISO 7185 or ISO/IEC 10206:1991 conformance, which is
-  `doc/implementation-defined.md`'s subject.
+  requirement of 6.7.7 is stated in terms of one.
+
+**A note on what this document used to say.** Item j) here read *"anything
+about ISO 7185 or ISO/IEC 10206:1991 conformance, which is
+`doc/implementation-defined.md`'s subject"*, and Annex B tabulated what each
+conformance mode said about each dialect construct. ADR-0232 removed the modes
+and withdrew the clause 5.1 a) compliance statement, so there is no conformance
+to be outside the scope of: this document's subject is now the whole of the
+language. Annex B is retained as history and marked accordingly.
 
 ## 2 Normative references
 
@@ -100,8 +117,10 @@ The definitions of ISO/IEC 10206:1991 clause 3 apply. In addition:
 
 **3.1 dialect**: the language specified by this document.
 
-**3.2 conformance mode**: `--std=iso7185` or `--std=extended`. Neither is
-affected by this document.
+**3.2 conformance mode**: *historical*. Until ADR-0232 the processor had two
+modes, `--std=iso7185` and `--std=extended`, in which this document did not
+apply. There are none now; the term survives only where Annex B and Annex E
+record what those modes did.
 
 **3.3 active variant**: of a variant-part having a tag-field, the variant whose
 case-constant-list contains the current value of the tag-field (6.4.3.4).
@@ -174,12 +193,21 @@ listed in ISO/IEC 10206:1991 and in Annex A.
 
 ### 5.3 Effect on the conformance modes
 
-Nothing in this document changes what `--std=iso7185` or `--std=extended`
-accepts, or what either means by a program it accepts. Each feature specified
-here is refused under both, with a diagnostic naming the dialect where the
-construct is one the mode can recognise (Annex B). `tests/extended/` and
-`tests/` are what hold that, and `tests/dialect/inherits_extended.pas` holds
-6.0.1.
+*Historical.* This clause required that nothing in this document change what
+`--std=iso7185` or `--std=extended` accepted, and that every feature specified
+here be refused under both with a diagnostic naming the dialect. It was the
+containment guarantee, and `dialect-containment` was the sweep that held it —
+the whole of `tests/extended/` compiled a second way and required to behave
+identically.
+
+ADR-0232 removed the modes, so the requirement has no subject: there is no
+other language for this one to leave undisturbed. What it protected is not
+lost but absorbed — the language *contains* Extended Pascal, which is why an
+Extended Pascal program compiles unchanged and means the same thing, and that
+is now a property of the single language rather than a relation between two.
+
+`tests/dialect/inherits_extended.pas` is retained as the readable statement of
+it.
 
 ### 5.4 Stability
 
@@ -290,9 +318,13 @@ this project's own, so it simply contains the standard it amends (ADR-0117).
 
 #### 6.0.2 Selection
 
-The dialect shall be selected by `--std=afterschool`. A source is written in
-one language and the option says which; there is no directive, comment or
-in-source form that selects it.
+There is nothing to select. A source is written in Afterschool Pascal, and the
+processor has no option, directive or comment that chooses a language
+(ADR-0232).
+
+This clause required `--std=afterschool` until then, and the sentence it
+carried — *"a source is written in one language and the option says which"* —
+is now true with the option removed rather than because of it.
 
 ### 6.1 Lexical tokens
 
@@ -347,10 +379,12 @@ characters would miss it. A program that takes the name for its own keeps the na
 and loses the statement form within that scope, which is the direction this
 document requires: the addition yields to the standard it contains (ADR-0140).
 
-NOTE 5 — `tests/checks/reserved_words.py` enforces the second paragraph
-directly, asking of every spelling the processor's lexer knows whether a
-program may use it as a variable name, and requiring `--std=extended` and
-`--std=afterschool` to give the same answer.
+NOTE 5 — *historical.* `tests/checks/reserved_words.py` enforced the second
+paragraph directly until ADR-0232, asking of every spelling the processor's
+lexer knew whether a program might use it as a variable name, and requiring the
+Extended Pascal mode and the dialect to give the same answer. With one language
+there is nothing to compare against, and the requirement stands on this clause
+alone.
 
 #### 6.1.4 Remote-directives [extended]
 
@@ -2391,11 +2425,23 @@ standard error stream.
 Indexing a slice out of range (6.7.3.9.5 b) is reported by the array-index error
 ISO 7185 and ISO/IEC 10206:1991 already have, against the slice's own bounds.
 
-## Annex B (informative) — Refusal under the conformance modes
+## Annex B (historical) — Refusal under the conformance modes
 
-Each construct this document adds is refused under `--std=iso7185` and
-`--std=extended`, and this annex records how, because it is a conformance
-question even though the feature is not (5.3).
+**This annex describes a processor that no longer exists.** ADR-0232 removed
+`--std` and the two conformance modes, so there is no mode in which any of the
+constructs below is refused: they are the language. It is retained because it
+is the only place that records, construct by construct, what each conformance
+mode said about the dialect — which is the evidence the `annex-b` gate checked
+on every run until that gate was retired with its subject.
+
+Read it as history. Nothing in it is a requirement of this document, and the
+messages it quotes are no longer emitted.
+
+What follows is the annex as it stood.
+
+Each construct this document adds was refused under `--std=iso7185` and
+`--std=extended`, and this annex records how, because it was a conformance
+question even though the feature was not (5.3).
 
 **The two modes do not always say the same thing**, which this annex claimed
 they did until the rows were probed rather than read: ISO 7185 has no substring

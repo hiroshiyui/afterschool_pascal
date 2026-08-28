@@ -1,7 +1,0 @@
-<source>:15:3: error: the value of constant 'folded' is not a compile-time constant
-<source>:16:3: error: the value of constant 'called' is not a compile-time constant
-<source>:17:3: error: the value of constant 'compared' is not a compile-time constant
-<source>:23:3: error: the value of constant 'nilconst' is not a compile-time constant
-<source>:28:8: error: undeclared identifier 'folded'
-<source>:28:17: error: undeclared identifier 'called'
-<source>:29:16: error: undeclared identifier 'compared'

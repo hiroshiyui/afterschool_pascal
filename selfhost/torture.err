@@ -1,15 +1,7 @@
-<source>:31:8: error: integer literal out of range (maxint is 2147483647): 2147483648
-<source>:32:8: error: integer literal out of range (maxint is 2147483647): 99999999999999999999
+<source>:32:8: error: integer literal out of range (maxint64 is 9223372036854775807): 99999999999999999999
 <source>:81:11: error: unterminated string literal
-<source>:87:8: error: a non-decimal literal is an Extended Pascal feature; compile with --std=extended
-<source>:88:8: error: a non-decimal literal is an Extended Pascal feature; compile with --std=extended
 <source>:88:8: error: the base of a non-decimal literal must be between 2 and 36, found 1
-<source>:89:8: error: a non-decimal literal is an Extended Pascal feature; compile with --std=extended
 <source>:89:8: error: 'g' is not a digit of base 16
-<source>:95:10: error: '**' is an Extended Pascal operator; compile with --std=extended
-<source>:102:10: error: 'and then' is an Extended Pascal operator; compile with --std=extended
-<source>:103:10: error: 'or else' is an Extended Pascal operator; compile with --std=extended
-<source>:104:10: error: 'and then' is an Extended Pascal operator; compile with --std=extended
 <source>:119:10: error: unexpected character '@'
 <source>:120:10: error: unexpected character '$'
 <source>:121:10: error: unexpected character '"'

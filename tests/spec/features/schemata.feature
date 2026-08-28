@@ -109,20 +109,6 @@ Feature: Discriminated-schemata
     When it is compiled and run
     Then it stops at run time
 
-  Scenario: a schema is not available under ISO 7185
-    Given the ISO 7185 program
-      """
-      program p(output);
-      type vector(len: integer) = array [1 .. len] of integer;
-      var a: vector(3);
-      begin
-        a[1] := 1;
-        writeln(a[1] : 1)
-      end.
-      """
-    When it is compiled
-    Then it is rejected
-
   # §6.4.8's dynamic-violation, and the clause pair that makes it one a
   # processor may not decline to report. §6.4.3.3.3 restricts the required
   # schema `string`'s domain -- "Each tuple in the domain of the schema shall

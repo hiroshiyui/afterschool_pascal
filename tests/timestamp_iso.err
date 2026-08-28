@@ -1,4 +1,0 @@
-<source>:11:8: error: unknown type 'timestamp'
-<source>:13:3: error: unknown procedure 'gettimestamp'
-<source>:14:11: error: 'date' is an Extended Pascal function; compile with --std=extended
-<source>:14:20: error: 'time' is an Extended Pascal function; compile with --std=extended

@@ -114,14 +114,11 @@ def corpus(root):
         ("iso7185", [root / "selfhost" / "torture.pas"]),
         ("extended", [root / "selfhost" / "compiler.pas"]),
     ]
-    for std, files in groups:
+    for _, files in groups:
         for f in files:
             if not f.exists():
                 continue
-            sidecar = f.with_suffix(".std")
-            if sidecar.exists():
-                std = sidecar.read_text().strip() or std
-            flags = [f"--std={std}"]
+            flags = []
             comps = f.with_suffix(".components")
             if comps.exists():
                 for rel in comps.read_text().split():
@@ -131,11 +128,8 @@ def corpus(root):
     # The dump cases carry their own flag, and it is the reason they exist: the
     # dumps are reached by no ordinary case, which is what this harness found.
     for f in sorted((root / "tests" / "dumps").glob("*.pas")):
-        sidecar = f.with_suffix(".std")
-        std = sidecar.read_text().strip() if sidecar.exists() else "iso7185"
         flags = f.with_suffix(".flags")
-        jobs.append((f, [f"--std={std}",
-                         flags.read_text().strip() if flags.exists()
+        jobs.append((f, [flags.read_text().strip() if flags.exists()
                          else "--dump-all"]))
 
     # ...and the same corpus again under --dump-all, because that is what
@@ -183,15 +177,14 @@ def corpus(root):
     # and CLAUDE.md's rule is that regenerating a golden is a decision. What
     # buffer_headroom.py asserts instead is stronger than a golden anyway: the
     # capacities it reports must equal the constants this tree declares.
-    jobs.append((root / "selfhost" / "compiler.pas",
-                 ["--std=extended", "--dump-limits"]))
+    jobs.append((root / "selfhost" / "compiler.pas", ["--dump-limits"]))
 
     # ADR-0156's --target=, both ways. The accepting arm is driven over an
     # ordinary program because what it changes is two lines of the module the
     # code generator writes; the refusing arm is a driver message, which
     # diagnostic_coverage.py filters out as not being about a program, so
     # nothing but this reaches it. selfhost/producttest.sh is what asserts both.
-    jobs.append((hello, ["--std=iso7185", "--target=aarch64-linux-gnu"]))
+    jobs.append((hello, ["--target=aarch64-linux-gnu"]))
     jobs.append((None, ["--target=riscv64-linux-gnu", hello]))
 
     # The command-line error paths, for the same reason and with the same
@@ -204,24 +197,18 @@ def corpus(root):
     # `Arg` is argMax + 1 arms of `binding(argN)`, and nothing in the corpus is
     # invoked with more than a handful of arguments -- so twelve of those arms
     # were reported unreached the moment the bound was raised, which is the
-    # ratchet doing exactly its job. The filler is a repeated `--std=iso7185`
-    # because it is the one flag that is a no-op when written twice: what is
-    # being exercised is the *position*, not the option.
-    filler = ["--std=iso7185"] * 21          # + source + -o + name = argMax
+    # ratchet doing exactly its job. The filler is a repeated `--dump-limits`
+    # because it is a flag that is a no-op when written twice: what is being
+    # exercised is the *position*, not the option. It was `--std=iso7185`
+    # until ADR-0232 removed the modes, and producttest.sh fills its own
+    # copy of this check the same way.
+    filler = ["--dump-limits"] * 21          # + source + -o + name = argMax
     jobs.append((hello, list(filler)))
-    jobs.append((hello, filler + ["--std=iso7185"]))   # ...and one over it
+    jobs.append((hello, filler + ["--emit-llvm"]))     # ...and one over it
 
-    # ADR-0166's `@std:` annotation, which nothing under tests/ can reach: every
-    # harness there passes --std= from the directory, and the annotation is read
-    # only when no flag was given. So these are driven with no flag at all --
-    # which is also the only way ReadStdAnnotation runs its scan rather than
-    # returning at once. `late` is the header rule and is expected to fail:
-    # an annotation after the first token is prose.
-    annot = root / "tests" / "checks" / "stdannot"
-    for name in ("iso", "ext", "bad", "late"):
-        jobs.append((annot / f"{name}.pas", []))
-    # And the other side of the same branch: a source with no annotation at
-    # all, compiled with no flag, so the scan runs to the first token and stops.
+    # A source compiled with no flag at all -- which is now every source
+    # (ADR-0232), and is kept as a job because the argument loop's
+    # no-more-arguments arm is reached no other way.
     jobs.append((hello, []))
 
     jobs.append((None, ["--no-such-flag", hello]))
@@ -250,8 +237,7 @@ def build_instrumented(root, build, work):
         return None
 
     ir = work / "compiler.ll"
-    std = (root / "selfhost" / "compiler.std").read_text().strip()
-    r = run(str(pascalc), f"--std={std}",
+    r = run(str(pascalc),
             str(root / "selfhost" / "compiler.pas"), "-o", str(ir))
     if r.returncode != 0 or not ir.exists():
         print("coverage: the compiler failed to translate itself\n" + r.stdout,

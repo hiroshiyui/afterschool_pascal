@@ -9,18 +9,18 @@
 #   variable-name = [ imported-interface-identifier '.' ] variable-identifier .
 #
 # So an indexed-variable, an identified-variable and a field-designator are
-# each outside the clause. That is easy to state and was got wrong here in
-# prose -- `doc/roadmap.md` carried an entry calling these refusals a
-# conformance gap, when they are the conformance (ADR-0214). No oracle could
-# contradict it: the compiler was right, both front ends agreed, the citation
-# named a real clause, and all eleven corpus uses of `type of` name a simple
-# variable, so none of them decides between the two readings.
+# each outside *that* clause. That is easy to state and was got wrong here in
+# prose -- `doc/roadmap.md` carried an entry calling the refusals a conformance
+# gap, when they were the conformance (ADR-0214). No oracle could contradict
+# it: the compiler was right, both front ends agreed, the citation named a real
+# clause, and all eleven corpus uses of `type of` name a simple variable, so
+# none of them decides between the two readings.
 #
-# These scenarios are what decides between them, attached to the clause. The
-# *dialect* does admit a variable-access (AP 6.4.9, ADR-0215), which is why the
-# refusals below name --std=afterschool: what a conformance mode says about a
-# dialect construct is conformance behaviour (ADR-0154). See
-# dialect_typeinquiry.feature for the other side.
+# **This language admits the whole variable-access** (AP 6.4.9, ADR-0215), and
+# dialect_typeinquiry.feature is where that is stated. What is left here is the
+# clause's own reading of what a *variable-name* is, which every rule written
+# against 6.4.9 still rests on -- the three refusals that stood beside it went
+# with ADR-0232, there being no mode left to refuse anything.
 
 @extended:6.4.9
 Feature: A type-inquiry's object is a variable-name or a parameter-identifier
@@ -67,54 +67,3 @@ Feature: A type-inquiry's object is a variable-name or a parameter-identifier
       50
       """
 
-  Scenario: an indexed-variable is not a variable-name
-    Given the Extended Pascal program
-      """
-      program p(output);
-      var a: array [1..3] of integer;
-          b: type of a[1];
-      begin
-        a[1] := 1; b := a[1]; writeln(b:1)
-      end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      a type-inquiry over a component of a variable is an Afterschool Pascal feature
-      """
-
-  Scenario: an identified-variable is not a variable-name
-    Given the Extended Pascal program
-      """
-      program p(output);
-      var q: ^integer;
-          b: type of q^;
-      begin
-        new(q); q^ := 1; b := q^; writeln(b:1)
-      end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      a type-inquiry over a component of a variable is an Afterschool Pascal feature
-      """
-
-  Scenario: a field-designator is not a variable-name, though it is spelled like a qualified one
-    Given the Extended Pascal program
-      """
-      program p(output);
-      type point = record x, y: integer end;
-      var a: point;
-          b: type of a.x;
-      begin
-        a.x := 1; b := a.x; writeln(b:1)
-      end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      a type-inquiry over a component of a variable is an Afterschool Pascal feature
-      """

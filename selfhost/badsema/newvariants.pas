@@ -24,7 +24,7 @@ type
   end;
   { a record with no variant part at all, which is a different mistake from
     one tag value too many }
-  flat = record only: integer end;
+  flat = record sole: integer end;
   link = ^rec;
   plain = ^integer;
   simple = ^flat;

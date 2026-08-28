@@ -8,7 +8,7 @@ program TypeErrors(output);
 type
   vector = array [1..3] of integer;
   link = ^cell;
-  cell = record value: integer end;
+  cell = record datum: integer end;
   other = ^cell;                { a distinct type denoting the same domain }
   dangling = ^nosuchtype;       { the domain never arrives }
 

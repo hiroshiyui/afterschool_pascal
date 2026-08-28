@@ -7,7 +7,7 @@ program TrapNil(output);
 
 type
   cell = record
-    value: integer;
+    datum: integer;
     next: ^cell
   end;
 
@@ -16,10 +16,10 @@ var
 
 begin
   new(p);
-  p^.value := 7;
+  p^.datum := 7;
   p^.next := nil;
-  writeln('p^.value = ', p^.value);
+  writeln('p^.value = ', p^.datum);
 
   writeln('walking off the end of the list');
-  writeln('next value = ', p^.next^.value)
+  writeln('next value = ', p^.next^.datum)
 end.

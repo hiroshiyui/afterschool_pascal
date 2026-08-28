@@ -120,13 +120,17 @@ add_custom_command(
 add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
+  # `--std=extended` because the *seed* still has the conformance modes:
+  # seed/pascalc.ll was generated before ADR-0232 removed them, and Extended
+  # Pascal is the language selfhost/compiler.pas is written in. The flag goes
+  # when the seed is refreshed, and not before -- it is the one place in this
+  # repository where the removed modes are still real (seed/README.md).
   COMMAND ${APASCAL_SEED_CC} --std=extended
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${CMAKE_BINARY_DIR}/pascalc.ll
   COMMAND ${APASCAL_CLANG} -Wno-override-module ${CMAKE_BINARY_DIR}/pascalc.ll
           $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
   DEPENDS ${APASCAL_SEED_CC} pasrt
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas
-          ${CMAKE_SOURCE_DIR}/selfhost/compiler.std
   COMMENT "Building pascalc from selfhost/compiler.pas with the seed compiler"
   VERBATIM
 )
@@ -176,18 +180,6 @@ if(Python3_FOUND)
                        TIMEOUT 900)
 endif()
 
-# ...and the rule no `tests/` case can express: the program-components of one
-# program must agree on `--std` (ADR-0119). run_test.sh compiles every
-# component of a case with a single standard, so a *mixture* has to be built by
-# hand -- four builds of one pair of files, two that must link and two that must
-# be refused. It fails in both directions: a mixture that starts linking is as
-# loud as a matched pair that stops.
-add_test(NAME mixed-mode-link
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/mixed_mode_link.sh
-                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${CMAKE_SOURCE_DIR})
-set_tests_properties(mixed-mode-link PROPERTIES
-                     ENVIRONMENT
-                     "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
 
 # ADR-0140: the dialect reserves no word-symbol, which is the whole of what
 # keeps ADR-0117's containment true -- a reserved word breaks it by
@@ -199,31 +191,8 @@ set_tests_properties(mixed-mode-link PROPERTIES
 # starts reserving, and a word it starts allowing that Extended Pascal
 # reserves, which is the containment broken from the other side.
 if(Python3_FOUND)
-  add_test(NAME reserved-words
-           COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tests/checks/reserved_words.py
-                   --pascalcc ${CMAKE_SOURCE_DIR}/tools/pascalcc
-                   --source ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas)
-  set_tests_properties(reserved-words PROPERTIES
-                       ENVIRONMENT
-                       "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
 endif()
 
-# ADR-0117's containment, witnessed by the corpus rather than by one program.
-# Everything Extended Pascal accepts, --std=afterschool accepts and means the
-# same thing -- a claim about every program, asserted until now by a single
-# 122-line source. This compiles the whole of tests/extended/ a second way and
-# requires the same behaviour, against a catalogue of four argued divergences,
-# and fails in both directions. A mutation switching Extended Pascal off for
-# the dialect at one site (readstr and writestr, which the single witness never
-# writes) leaves all 617 other cases green and is named here in sixteen.
-add_test(NAME dialect-containment
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/containment.sh
-                 ${CMAKE_SOURCE_DIR}/tools/pascalcc ${CMAKE_SOURCE_DIR})
-set_tests_properties(dialect-containment PROPERTIES
-                     TIMEOUT 600
-                     ENVIRONMENT
-                     "PASCALC=${CMAKE_BINARY_DIR}/bin/pascalc;AFTERSCHOOL_PASCAL_RUNTIME=${CMAKE_BINARY_DIR}/lib")
 
 # ...and the half of the model-drift gate a local run *can* check. The gate
 # itself is CI-only, needing a push range; deciding which range to judge is not,
@@ -276,27 +245,15 @@ if(Python3_FOUND)
 
   # ADR-0223: ast-fields asks whether a node's fields were *written*; this asks
   # whether they are read through the arm the tag selects. ADR-0118's check
-  # exists and the compiler was not using it on itself, `compiler.std` being
-  # `extended` -- so a second build under --std=afterschool carries 2821 guards
-  # and compiles the corpus. llc_check.sh's shape: a build used as a reader and
-  # never as the product.
+  # was a dialect rule the compiler was not using on itself; ADR-0232 removed
+  # the modes, so the guards are in whatever this compiler emits and what is
+  # left is the sweep -- compile the compiler with itself, then read the corpus
+  # with the result.
   add_test(NAME variant-check
            COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/variant_check.sh
                    ${CMAKE_BINARY_DIR}/bin/pascalc
                    ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
 
-  # ADR-0231: the same second build, asked what it *is* rather than what it
-  # reads. ADR-0190 refused to make the compiler a dialect source because "the
-  # fixed point holds only while the compiler is an Extended Pascal source";
-  # this measures that claim instead of arguing it, and measures a second one
-  # beside it -- that the dialect build emits byte-identical IR to the shipped
-  # compiler, or refuses with byte-identical diagnostics, over the whole
-  # corpus. The product does not change. Skips (77) without clang.
-  add_test(NAME dialect-build
-           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/dialect_build.sh
-                   ${CMAKE_BINARY_DIR}/bin/pascalc
-                   ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
-  set_tests_properties(dialect-build PROPERTIES SKIP_RETURN_CODE 77)
 
   # ADR-0183: the oracle none of the others can be. Every gate here reads what
   # a program *prints*, and a leak prints nothing -- which is how a handle in
@@ -374,11 +331,6 @@ endif()
 # empty disagreement list is what a clean run and a run that compared nothing
 # both produce. Skips (77) when either binary is missing.
 if(Python3_FOUND)
-  add_test(NAME difftest
-           COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tests/checks/difftest_check.py
-                   ${CMAKE_SOURCE_DIR} --build ${CMAKE_BINARY_DIR})
-  set_tests_properties(difftest PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800)
 endif()
 
 # ...and the finer measurement procedure coverage cannot make: which
@@ -450,18 +402,6 @@ if(Python3_FOUND)
                        ENVIRONMENT "${APASCAL_TEST_ENV}")
 endif()
 
-# The BSI Pascal Validation Suite -- the one oracle here that this project did
-# not write. It skips rather than fails when the suite has not been fetched,
-# exactly as verify-lowering does without z3, because the suite is not in this
-# repository: BSI holds the copyright and grants no redistribution, so
-# tests/bsi/fetch.sh puts it in a gitignored directory. See tests/bsi/README.md.
-add_test(NAME bsi-validation-suite
-         COMMAND ${CMAKE_SOURCE_DIR}/tests/bsi/run.sh
-                 ${CMAKE_SOURCE_DIR}/tools/pascalcc)
-set_tests_properties(bsi-validation-suite PROPERTIES
-                     SKIP_RETURN_CODE 77
-                     TIMEOUT 1800
-                     ENVIRONMENT "${APASCAL_TEST_ENV}")
 
 # A second backend configuration, and the one thing it can say that
 # selfhost-codegen cannot: that the compiler *binary* is not miscompiled. That
@@ -605,9 +545,6 @@ set_tests_properties(foreign-layout PROPERTIES
 # Fails in both directions -- a row with no cases, and a `*_refused` case no
 # row names, which is the one a sixth dialect feature would trip.
 if(Python3_FOUND)
-  add_test(NAME annex-b
-           COMMAND ${Python3_EXECUTABLE}
-                   ${CMAKE_SOURCE_DIR}/tests/checks/annex_b.py)
 endif()
 
 if(Python3_FOUND)
@@ -643,14 +580,15 @@ foreach(t ${APASCAL_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} iso7185)
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()
 
-# ISO/IEC 10206:1991 cases. They live apart because the standard is a property
-# of the source, not of the case: a program using `otherwise` is not a valid
-# ISO 7185 program, and the directory is what says so to every harness that
-# walks the tree (ADR-0033).
+# The Extended Pascal cases. They live apart for a reason ADR-0232 dissolved --
+# the directory used to say which standard a source was written in -- and the
+# split is kept because the ctest names are what people run by, and because
+# `tests/` globs are not recursive: moving them would rename 219 cases and lose
+# every reference to them in the documents and the decision records.
 # The error-path corpus. These 157 sources exist to drive the compiler into a
 # diagnostic -- one file per parser message, because the parser stops at its
 # first (ADR-0023), and thirteen for Sema, which accumulates. Until stage 0 was
@@ -671,7 +609,7 @@ foreach(dir badparse badsema)
     get_filename_component(name ${t} NAME_WE)
     add_test(NAME ${dir}-${name}
              COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                     ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} iso7185)
+                     ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
     set_tests_properties(${dir}-${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
   endforeach()
 endforeach()
@@ -681,7 +619,7 @@ endforeach()
 add_test(NAME torture
          COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
                  ${CMAKE_SOURCE_DIR}/tools/pascalcc
-                 ${CMAKE_SOURCE_DIR}/selfhost/torture.pas iso7185)
+                 ${CMAKE_SOURCE_DIR}/selfhost/torture.pas)
 set_tests_properties(torture PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 
 file(GLOB APASCAL_EXTENDED_TESTS ${CMAKE_SOURCE_DIR}/tests/extended/*.pas)
@@ -689,19 +627,19 @@ foreach(t ${APASCAL_EXTENDED_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} extended)
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   set_tests_properties(${name} PROPERTIES ENVIRONMENT "${APASCAL_TEST_ENV}")
 endforeach()
 
-# The dialect (ADR-0117), globbed separately for the same reason tests/extended/
-# is: the directory decides the standard, and these are compiled under a flag
-# neither of the other two corpora may be given.
+# The dialect cases (ADR-0117), globbed separately -- which now buys the
+# per-case TIMEOUT below rather than a flag, there being one language since
+# ADR-0232.
 file(GLOB APASCAL_DIALECT_TESTS ${CMAKE_SOURCE_DIR}/tests/dialect/*.pas)
 foreach(t ${APASCAL_DIALECT_TESTS})
   get_filename_component(name ${t} NAME_WE)
   add_test(NAME ${name}
            COMMAND ${CMAKE_SOURCE_DIR}/tests/run_test.sh
-                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t} afterschool)
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc ${t})
   # A timeout, which the other two corpora do not need and this one does: a
   # dialect case may open a socket (ADR-0203), and a readiness defect makes a
   # server *block* rather than print the wrong thing (ADR-0205). Every case

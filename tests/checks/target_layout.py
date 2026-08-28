@@ -44,11 +44,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 PASCALC = os.environ.get("PASCALC", os.path.join(ROOT, "build", "bin", "pascalc"))
 CLANG = os.environ.get("APASCAL_CLANG", "clang")
 
-# The two sources whose frames are compared, and the standard each is written
-# in. The compiler is the breadth; the probe is the depth -- see its header.
+# The two sources whose frames are compared. The compiler is the breadth; the
+# probe is the depth -- see its header.
 SOURCES = [
-    (os.path.join(ROOT, "selfhost", "compiler.pas"), None),
-    (os.path.join(ROOT, "tests", "checks", "target_layout.pas"), "afterschool"),
+    os.path.join(ROOT, "selfhost", "compiler.pas"),
+    os.path.join(ROOT, "tests", "checks", "target_layout.pas"),
 ]
 
 # A floor, not a count. The exact number moves with every declaration added to
@@ -67,16 +67,6 @@ def die(msg):
 
 def run(cmd, **kw):
     return subprocess.run(cmd, capture_output=True, text=True, **kw)
-
-
-def std_of(path, given):
-    """The standard a source is written in, the way every harness derives it."""
-    if given:
-        return given
-    sidecar = os.path.splitext(path)[0] + ".std"
-    if os.path.exists(sidecar):
-        return open(sidecar).read().strip()
-    return "extended" if "/tests/extended/" in path else "iso7185"
 
 
 def admitted_targets():
@@ -137,13 +127,12 @@ def top_level_fields(body):
     return n + 1 if body[1:-1].strip() else 0
 
 
-def frames_of(path, given):
+def frames_of(path):
     """The frame type definitions this compiler emits for one source."""
-    std = std_of(path, given)
     with tempfile.NamedTemporaryFile(suffix=".ll", delete=False) as f:
         out = f.name
     try:
-        r = run([PASCALC, "--std=" + std, path, "-o", out])
+        r = run([PASCALC, path, "-o", out])
         if r.returncode != 0:
             die("compiling %s failed:\n%s" % (path, r.stdout + r.stderr))
         found = []
@@ -161,8 +150,8 @@ def frames_of(path, given):
 def build_module(sources):
     """One module of folded constants, and the names to read back out."""
     types, consts, names = [], [], []
-    for i, (path, std) in enumerate(sources):
-        for name, body in frames_of(path, std):
+    for i, path in enumerate(sources):
+        for name, body in frames_of(path):
             # Renamed per source, because two sources both start at %frame1.
             # `name` arrives with its sigil, so it is dropped and one is put
             # back: source 0's %frame1 becomes %s0frame1.

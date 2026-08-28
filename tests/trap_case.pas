@@ -8,21 +8,21 @@ program TrapCase(output);
 var
   i: integer;
 
-function Value(n: integer): integer;
+function Given(n: integer): integer;
 begin
-  Value := n * 2
+  Given := n * 2
 end;
 
 begin
   for i := 1 to 3 do
-    case Value(i) of
+    case Given(i) of
       2: writeln('two');
       4: writeln('four');
       6: writeln('six')
     end;
 
   writeln('now a value no arm lists');
-  case Value(4) of
+  case Given(4) of
     2: writeln('two');
     4: writeln('four');
     6: writeln('six')

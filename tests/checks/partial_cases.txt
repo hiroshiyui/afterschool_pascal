@@ -162,16 +162,10 @@ EmitStdProc:stdProcKind:3 names 15 of 22
 
 # --- constants nothing dispatches on --------------------------------------
 #
-# stdKind is **ordered**, not dispatched. ADR-0117 makes the dialect contain
-# Extended Pascal, and the containment is the order of these three constants:
-# every one of the forty sites asking "does this mode have Extended Pascal?"
-# goes through `HasExtended(s)`, which is `s >= stdExtended`. A case-statement
-# over the standard is what that predicate exists to prevent -- it would have
-# to be edited at each site when a fourth mode arrives, which is precisely how
-# `langStd = stdExtended` gets written.
-stdKind:stdIso7185 unused
-stdKind:stdExtended unused
-stdKind:stdAfterschool unused
+# `stdKind` stood here until ADR-0232 removed the conformance modes. It was
+# the enumeration this half of the gate was written for -- ordered rather than
+# dispatched, so no case-statement named any of its three constants and a pass
+# over the *sites* could not have found it at all.
 
 # pack and unpack are compared with `=` in the four places that need them --
 # CheckStdProc twice, EmitStdProc twice -- because each place wants one of the

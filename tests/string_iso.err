@@ -1,8 +1,0 @@
-<source>:14:8: error: unknown type 'string'
-<source>:17:8: error: 'length' is an Extended Pascal function; compile with --std=extended
-<source>:17:20: error: 'index' is an Extended Pascal function; compile with --std=extended
-<source>:17:38: error: 'eq' is an Extended Pascal function; compile with --std=extended
-<source>:18:8: error: 'trim' is an Extended Pascal function; compile with --std=extended
-<source>:18:21: error: 'substr' is an Extended Pascal function; compile with --std=extended
-<source>:19:8: error: a string literal cannot be empty
-<source>:19:3: error: cannot assign packed array [1..1] of char to a variable of type integer

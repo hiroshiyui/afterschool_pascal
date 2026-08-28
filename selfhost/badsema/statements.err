@@ -8,4 +8,4 @@
 <source>:12:3: error: the left side of an assignment must be a variable
 <source>:13:3: error: unknown procedure 'nosuchproc'
 <source>:14:3: error: 'i' is not a procedure
-<source>:15:8: error: 'with' needs a record variable, found integer
+<source>:15:8: error: 'with' needs a record variable or one produced from a schema, found integer

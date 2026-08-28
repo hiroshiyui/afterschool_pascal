@@ -127,19 +127,3 @@ Feature: Case-statements with an otherwise-part
       high
       """
 
-  Scenario: otherwise is an ordinary identifier under ISO 7185
-    Given the ISO 7185 program
-      """
-      program p(output);
-      var otherwise: integer;
-      begin
-        otherwise := 3;
-        writeln(otherwise : 1)
-      end.
-      """
-    When it is compiled and run
-    Then it exits successfully
-     And it prints
-      """
-      3
-      """

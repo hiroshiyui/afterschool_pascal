@@ -6,8 +6,5 @@
 <source>:15:10: error: operator 'div' needs integer operands, found integer and boolean
 <source>:16:10: error: operator 'and' needs boolean operands, found boolean and integer
 <source>:17:10: error: operator 'and' needs boolean operands, found integer and boolean
-<source>:18:11: error: strings of different lengths cannot be compared: packed array [1..5] of char and packed array [1..3] of char
 <source>:19:10: error: operator '<' needs compatible operands, found char and colour
 <source>:20:10: error: operator 'mod' needs integer operands, found integer and real
-<source>:21:8: error: a string literal cannot be empty
-<source>:21:3: error: cannot assign packed array [1..1] of char to a variable of type char

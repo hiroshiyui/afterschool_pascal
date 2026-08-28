@@ -55,21 +55,6 @@ Feature: The dialect contains Extended Pascal
       9 abcd green
       """
 
-  @afterschool:6.1.2
-  Scenario: the question mark is not a character a conformance mode admits
-    Given the Extended Pascal program
-      """
-      program p(output);
-      var v: ?integer;
-      begin end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      unexpected character '?'
-      """
-
   # 6.1.2's second paragraph is the requirement the whole containment rests on,
   # and this is it stated as a program: every word the dialect introduced is
   # still a name a program may take. `?` has no identifier form and is covered
@@ -153,17 +138,3 @@ Feature: The dialect contains Extended Pascal
       a slice cannot be assigned
       """
 
-  @afterschool:6.5.6
-  Scenario: the slice denoter is refused by the conformance mode
-    Given the Extended Pascal program
-      """
-      program p(output);
-      procedure f(var a: array of integer); begin end;
-      begin end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      a parameter's type must be a type name or a conformant array schema
-      """

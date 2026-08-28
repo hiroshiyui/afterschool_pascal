@@ -23,7 +23,7 @@ type
     header: array [1..50] of integer;
     id: integer;
     case k: kind of
-      leaf: (value: real);
+      leaf: (datum: real);
       branch: (count: integer;
                case w: weight of
                  light: (few: array [1..100] of integer);
@@ -41,8 +41,8 @@ begin
   new(p, leaf);
   p^.id := 1;
   p^.k := leaf;
-  p^.value := 2.5;
-  writeln('leaf: ', p^.id:1, ' ', p^.value:3:1);
+  p^.datum := 2.5;
+  writeln('leaf: ', p^.id:1, ' ', p^.datum:3:1);
 
   { both levels, choosing the narrow arm at the second }
   new(q, branch, light);

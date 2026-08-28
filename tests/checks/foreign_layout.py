@@ -116,7 +116,7 @@ def subjects(path):
 
 def dumped(pascalc, source, std):
     """What the compiler says every record in this source looks like."""
-    cmd = [pascalc, f"--std={std}", "--dump-layout", str(source),
+    cmd = [pascalc, "--dump-layout", str(source),
            "-o", os.devnull]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:

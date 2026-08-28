@@ -28,8 +28,8 @@
 # compiles a program correctly -- rather than the compiler, which the 276 cases
 # and the stage-2/stage-3 fixed point already cover.
 #
-# It is deliberately small for that reason. Two programs, one per standard,
-# because --std is part of the interface being checked.
+# It is deliberately small for that reason. Two programs, because one is not
+# evidence that the wiring works for anything but itself.
 set -u
 
 pascalc=${1:-}
@@ -50,33 +50,13 @@ if [[ ! -x $pascalc ]]; then
   exit 1
 fi
 
-# The default pair covers one program per standard. A caller may name others.
+# A caller may name others. The default pair is a small program and a larger
+# one; there is one language, so neither stands for a mode.
 if [[ $# -gt 0 ]]; then
   files=("$@")
 else
   files=("$root/tests/hello.pas" "$root/tests/extended/otherwise.pas")
 fi
-
-# Which standard a source is written in is decided by where it lives, exactly
-# as in run_test.sh, difftest.sh and irtest.sh -- so the four harnesses cannot
-# be told different things about one file. Unanchored on purpose (ADR-0034).
-standard_of() {
-  # A source outside tests/extended/ may still be Extended Pascal, and says so
-  # with a `name.std` file beside it holding one word -- the same sidecar
-  # convention as `name.in`, `name.epoch` and `name.components`. It exists
-  # because selfhost/compiler.pas is Extended Pascal and does not live in the
-  # directory that would otherwise be the only way to say so (ADR-0033).
-  local sidecar="${1%.pas}.std"
-  if [[ -f $sidecar ]]; then
-    tr -d '[:space:]' <"$sidecar"
-    echo
-    return
-  fi
-  case $1 in
-    *tests/extended/*)  echo extended ;;
-    *)                  echo iso7185 ;;
-  esac
-}
 
 failed=0
 checked=0
@@ -90,9 +70,9 @@ for f in "${files[@]}"; do
   fi
 
   # A command line, since ADR-0081: the compiler reads its own arguments
-  # through the binding of its program-parameters, so --std and -o are flags
-  # like any other compiler's rather than the files they used to be.
-  if ! timeout 120 "$pascalc" "--std=$(standard_of "$f")" "$f" \
+  # through the binding of its program-parameters, so -o is a flag like any
+  # other compiler's rather than the file it used to be.
+  if ! timeout 120 "$pascalc" "$f" \
        -o "$work/ir.ll" >/dev/null 2>"$work/gen.err"; then
     echo "--- $name: pascalc did not translate it ---" >&2
     cat "$work/gen.err" >&2
@@ -160,10 +140,6 @@ fi
 # matches the flags that actually exist" and a person did it by eye, once a
 # release. tests/checks/coverage.py is what surfaced it: `Usage` was entered by
 # no case in the corpus, so nothing ran -h at all.
-#
-# --std= is the one flag whose accepted spellings are the whole word
-# (--std=iso7185, --std=extended) while the help text writes the placeholder
-# form, so it is matched by its prefix.
 help_text=$("$pascalc" -h 2>/dev/null)
 checked=$((checked + 1))
 if [[ -z $help_text ]]; then
@@ -174,7 +150,6 @@ else
   while IFS= read -r flag; do
     [[ -n $flag ]] || continue
     probe=$flag
-    [[ $flag == --std=* ]] && probe="--std="
     [[ $flag == --target=* ]] && probe="--target="
     case $help_text in
       *"$probe"*) ;;
@@ -212,11 +187,11 @@ fi
 # argument parser rather than against a golden that would agree with whichever
 # was edited last.
 #
-# Two arms are written as a family rather than as themselves, in the help text
-# and in the parser both, so they are matched by the prefix they share:
-# `--std=*` against `--std=` as the check above does it, and `-O0|-O1|-O2|-O3`
+# One arm is written as a family rather than as itself, in the help text and in
+# the parser both, so it is matched by the prefix they share: `-O0|-O1|-O2|-O3`
 # against `-O`, which the text spells `-O0 .. -O3`. The catch-all arms (`-*`,
-# `*.o`, `*`) name no option and are dropped.
+# `*.o`, `*`) name no option and are dropped -- which is also what drops
+# `--std=*`, the arm ADR-0232 left behind to accept and ignore the flag.
 driver=$root/tools/pascalcc
 help_text=$("$driver" --help 2>/dev/null)
 checked=$((checked + 1))
@@ -233,10 +208,7 @@ else
     # stand as a token -- at the start of a line or after a space or comma, and
     # ended the same way -- which is how the text actually writes it
     # (`--emit-llvm,-S`, `-h, --help`).
-    if [[ $flag == --std=* ]]; then
-      found=$help_text; probe="--std="
-      [[ $found == *"$probe"* ]] || undocumented="$undocumented $flag"
-    elif [[ $flag == -O[0-9] ]]; then
+    if [[ $flag == -O[0-9] ]]; then
       # Written as the range `-O0 .. -O3` rather than one line per level.
       [[ $help_text == *"-O"* ]] || undocumented="$undocumented $flag"
     elif ! printf '%s\n' "$help_text" |
@@ -277,89 +249,61 @@ else
   failed=$((failed + 1))
 fi
 
-# --std has a default too, and until ADR-0165 nothing pinned it. Two harnesses
-# were riding on it silently -- verify/verify.py's crosscheck generator, whose
-# program uses `value` as an identifier, and tests/bsi/run.sh, whose 812
-# programs are ISO 7185 -- and both broke the moment it moved. Both directions
-# are checked, because a default that is merely *a* standard is not the claim:
-# an unflagged source is Extended Pascal, and `string(n)` is the cheapest
-# construct that only Extended Pascal has.
+# --- and that there is no standard to select ---------------------------------
+#
+# ADR-0232 removed `--std` and with it the two conformance modes, so there is
+# one language and the compiler has no mode to be put into. Three claims, and
+# each fails in a different direction.
+#
+# First, that the flag is gone from the compiler rather than quietly accepted:
+# a `--std=iso7185` that was ignored would compile an ISO 7185 program under
+# the dialect and say nothing, which is the outcome a caller has no way to
+# notice. The line above it -- ADR-0165's default -- is what this replaces, and
+# it was pinned here because two harnesses had been riding on the default
+# silently.
 checked=$((checked + 1))
 cat >"$work/dflt.pas" <<'PAS'
 program dflt(output);
 var s: string(5);
 begin s := 'hi'; writeln(s) end.
 PAS
-if "$pascalc" "$work/dflt.pas" -o "$work/dflt.ll" >/dev/null 2>&1; then
-  :
-else
-  echo "--- std: the default no longer accepts Extended Pascal ---" >&2
+if "$pascalc" --std=extended "$work/dflt.pas" -o /dev/null >"$work/std.txt" 2>&1
+then
+  echo "--- std: pascalc still accepts --std= ---" >&2
+  failed=$((failed + 1))
+elif ! grep -q "unknown option" "$work/std.txt"; then
+  echo "--- std: --std= was refused without naming why ---" >&2
+  cat "$work/std.txt" >&2
   failed=$((failed + 1))
 fi
 
+# Second, that an unflagged source is the whole language. `string(n)` is the
+# cheapest construct ISO 7185 does not have, and it is what the check this
+# replaces used to prove the default was Extended Pascal; it now proves there
+# is nothing left to select.
 checked=$((checked + 1))
-if "$pascalc" --std=iso7185 "$work/dflt.pas" -o /dev/null >/dev/null 2>&1; then
-  echo "--- std: --std=iso7185 accepted a string(n), so the modes are one ---" >&2
+if ! "$pascalc" "$work/dflt.pas" -o "$work/dflt.ll" >/dev/null 2>&1; then
+  echo "--- std: the compiler no longer accepts string(n) unflagged ---" >&2
   failed=$((failed + 1))
 fi
 
-# ISO 7185 has to stay reachable, which is the whole of what ADR-0165 kept it
-# for. `value` is an ordinary identifier there and a word-symbol in Extended
-# Pascal, which is the collision BSI's CONF005 was written about in 1982.
+# Third, that the *driver* still swallows the flag. `pascalcc --std=` is
+# accepted and ignored on purpose (ADR-0232), so a caller's build script
+# survives the release that removed it -- and a driver that passed it through
+# to a compiler which no longer knows it would break exactly the scripts that
+# arm was written for.
 checked=$((checked + 1))
-cat >"$work/iso.pas" <<'PAS'
-program iso(output);
-var value: integer;
-begin value := 1; writeln(value:1) end.
-PAS
-if "$pascalc" --std=iso7185 "$work/iso.pas" -o "$work/iso.ll" >/dev/null 2>&1; then
-  :
-else
-  echo "--- std: --std=iso7185 no longer accepts an ISO 7185 program ---" >&2
-  failed=$((failed + 1))
-fi
-
-# ADR-0166's `@std:` annotation. Nothing under tests/ can assert this: every
-# harness there passes --std= from the directory, and the annotation is read
-# only when no flag was given, so the corpus can never reach it. The probes are
-# in tests/checks/stdannot/ and each one is here.
-annot="$root/tests/checks/stdannot"
-
-# Honoured: `value` is an identifier in ISO 7185 and a word-symbol in Extended
-# Pascal, so this compiles only if the annotation was read.
-checked=$((checked + 1))
-if ! "$pascalc" "$annot/iso.pas" -o "$work/annot.ll" >/dev/null 2>&1; then
-  echo "--- std: @std:iso7185 was not honoured ---" >&2
-  failed=$((failed + 1))
-fi
-
-# The other delimiter, and the other direction.
-checked=$((checked + 1))
-if ! "$pascalc" "$annot/ext.pas" -o "$work/annot.ll" >/dev/null 2>&1; then
-  echo "--- std: @std:extended in a (* *) comment was not honoured ---" >&2
-  failed=$((failed + 1))
-fi
-
-# An explicit flag wins. A harness naming a standard means it.
-checked=$((checked + 1))
-if "$pascalc" --std=extended "$annot/iso.pas" -o /dev/null >/dev/null 2>&1; then
-  echo "--- std: --std= did not override a @std: annotation ---" >&2
-  failed=$((failed + 1))
-fi
-
-# A misspelt name is reported, not ignored.
-checked=$((checked + 1))
-if "$pascalc" "$annot/bad.pas" -o /dev/null >"$work/annot.txt" 2>&1; then
-  echo "--- std: a misspelt @std: annotation was accepted ---" >&2
-  failed=$((failed + 1))
-elif ! grep -q "unknown standard 'pascal'" "$work/annot.txt"; then
-  echo "--- std: a misspelt @std: annotation was not named ---" >&2
+if ! PASCALC=$pascalc AFTERSCHOOL_PASCAL_RUNTIME=$runtime \
+     "$root/tools/pascalcc" -S --std=iso7185 "$work/dflt.pas" \
+     -o "$work/dflt.ll" >"$work/std.txt" 2>&1; then
+  echo "--- std: pascalcc no longer accepts and ignores --std= ---" >&2
+  cat "$work/std.txt" >&2
   failed=$((failed + 1))
 fi
 
 # ADR-0210: a diagnostic about an imported component names *that component*.
-# Nothing under tests/ can assert this either, and for a sharper reason than
-# stdannot's: run_test.sh translates every .components entry separately and
+# Nothing under tests/ can assert this, and for a sharp reason:
+# run_test.sh translates every .components entry separately and
 # first, and gives up if one fails -- so no case can reach a component that
 # does not translate on its own being handed to --import anyway. A person
 # reaches it by typing it. tests/checks/importdiag/ has the two sources.
@@ -369,7 +313,7 @@ diag="$root/tests/checks/importdiag"
 # client's, with the component's line number -- client.pas is three lines long
 # and the error was reported at line 12 of it.
 checked=$((checked + 1))
-if "$pascalc" --std=extended --import "$diag/badmod.pas" "$diag/client.pas" \
+if "$pascalc" --import "$diag/badmod.pas" "$diag/client.pas" \
      -o /dev/null >"$work/diag.txt" 2>&1; then
   echo "--- importdiag: a component with a type error was accepted ---" >&2
   failed=$((failed + 1))
@@ -382,21 +326,13 @@ fi
 # And the other direction, which is what stops "name the component for
 # everything" from passing: the client's own error still names the client.
 checked=$((checked + 1))
-if "$pascalc" --std=extended --import "$diag/badmod.pas" "$diag/badclient.pas" \
+if "$pascalc" --import "$diag/badmod.pas" "$diag/badclient.pas" \
      -o /dev/null >"$work/diag.txt" 2>&1; then
   echo "--- importdiag: a client with a type error was accepted ---" >&2
   failed=$((failed + 1))
 elif ! grep -q "badclient.pas:3:" "$work/diag.txt"; then
   echo "--- importdiag: the client's own error did not name the client ---" >&2
   cat "$work/diag.txt" >&2
-  failed=$((failed + 1))
-fi
-
-# Only the header counts. An annotation after the first token is prose, so
-# this file stays Extended Pascal and its `value` is a word-symbol.
-checked=$((checked + 1))
-if "$pascalc" "$annot/late.pas" -o /dev/null >/dev/null 2>&1; then
-  echo "--- std: a @std: annotation past the first token took effect ---" >&2
   failed=$((failed + 1))
 fi
 
@@ -531,7 +467,7 @@ cli_check "more than one input file"  "$root/tests/hello.pas" "$root/tests/arith
 # command line report "-o needs a file name" about the argument that fell off
 # the end. The complaint has to name the length, not the last flag standing.
 long_args=()
-for _ in $(seq 22); do long_args+=(--std=iso7185); done
+for _ in $(seq 22); do long_args+=(--dump-limits); done
 cli_check "more than 24 arguments" "${long_args[@]}" "$root/tests/hello.pas" \
           -o "$work/ir.ll"
 
@@ -540,7 +476,7 @@ cli_check "more than 24 arguments" "${long_args[@]}" "$root/tests/hello.pas" \
 # with the bound left where it was.
 checked=$((checked + 1))
 ok_args=()
-for _ in $(seq 21); do ok_args+=(--std=iso7185); done
+for _ in $(seq 21); do ok_args+=(--dump-limits); done
 if ! "$pascalc" "${ok_args[@]}" "$root/tests/hello.pas" -o "$work/long.ll" \
      >"$work/long.txt" 2>&1 || [[ ! -s $work/long.ll ]]; then
   echo "--- cli: 24 arguments were refused or wrote no IR ---" >&2

@@ -4,11 +4,11 @@
 <source>:1:28: error: the program parameter 'missing' is not declared as a variable in the program block
 <source>:39:22: error: a value parameter cannot be book: it contains a file, and a file has no copy
 <source>:43:19: error: a file parameter must be a var parameter
-<source>:47:1: error: a function cannot return text; use a var parameter
+<source>:47:1: error: a function cannot return text: a result may not be, or contain, a file
 <source>:52:3: error: a file variable cannot be assigned to; use reset, rewrite and the buffer variable
 <source>:53:8: error: file variables cannot be compared
 <source>:54:11: error: a value of type rec cannot be read
-<source>:55:3: error: 'input' must be listed as a program parameter to use it
+<source>:55:3: error: 'input' must be listed as a program parameter or a module parameter, or imported through StandardInput, to use it
 <source>:55:10: error: read needs a variable, not a value
 <source>:56:9: error: 'reset' needs a file variable, found integer
 <source>:57:7: error: 'get' needs a file variable, found integer

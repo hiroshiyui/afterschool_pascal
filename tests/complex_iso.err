@@ -1,3 +1,0 @@
-<source>:7:8: error: unknown type 'complex'
-<source>:10:8: error: 'cmplx' is an Extended Pascal function; compile with --std=extended
-<source>:11:8: error: 're' is an Extended Pascal function; compile with --std=extended

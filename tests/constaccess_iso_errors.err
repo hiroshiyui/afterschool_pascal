@@ -1,3 +1,0 @@
-<source>:34:14: error: selecting from a constant is an Extended Pascal feature; compile with --std=extended
-<source>:44:15: error: selecting from a constant is an Extended Pascal feature; compile with --std=extended
-<source>:44:15: error: cannot select a field of a value of type integer

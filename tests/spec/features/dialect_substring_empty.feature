@@ -88,27 +88,6 @@ Feature: The empty substring
       substring: [8..7] is not within a string of length 6
       """
 
-  # Containment: the conformance mode reports the error 6.5.6 states, which is
-  # why there is no Annex B row -- the construct is one Extended Pascal has and
-  # what changes is when using it is an error.
-  @afterschool:6.5.6
-  Scenario: the conformance mode still reports the error 6.5.6 states
-    Given the Extended Pascal program
-      """
-      program p(output);
-      var s: string(10);
-      begin
-        s := 'abcdef';
-        writeln('[', s[3..2], ']')
-      end.
-      """
-    When it is compiled and run
-    Then it stops at run time
-     And the run-time error includes
-      """
-      substring: [3..2] is not within a string of length 6
-      """
-
   # 6.8.8.4's substring-constant is folded rather than emitted, so the same rule
   # is written twice in the compiler and this is the other one. A length-zero
   # literal is 6.1.9's null-string and already has a type.
@@ -128,18 +107,3 @@ Feature: The empty substring
       []
       """
 
-  @afterschool:6.5.6
-  Scenario: an empty substring-constant is refused by the conformance mode
-    Given the Extended Pascal program
-      """
-      program p(output);
-      const g = 'hello';
-            e = g[1..0];
-      begin writeln('[', e, ']') end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      the substring 1..0 is not within the string constant's 1..5
-      """

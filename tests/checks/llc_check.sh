@@ -93,7 +93,7 @@ for src in "$root"/tests/*.pas "$root"/tests/extended/*.pas; do
   std=iso7185
   [[ $src == */tests/extended/* ]] && std=extended
   [[ -e $base.std ]] && std=$(tr -d '[:space:]' <"$base.std")
-  "$pascalc" "--std=$std" "$src" -o "$work/t.ll" >/dev/null 2>&1 || continue
+  "$pascalc" "$src" -o "$work/t.ll" >/dev/null 2>&1 || continue
   if ! llc "${llc_flags[@]}" "$work/t.ll" -o "$work/t.s" 2>"$work/err"; then
     echo "llc-second-backend: llc rejected the module for $src" >&2
     sed -n 1,10p "$work/err" >&2
@@ -112,8 +112,7 @@ fi
 accepted=$((accepted + 1))
 
 # ---- 2. a compiler built a second way computes the same thing --------------
-std=$(tr -d '[:space:]' <"$root/selfhost/compiler.std")
-"$pascalc" "--std=$std" "$root/selfhost/compiler.pas" -o "$work/ref.ll"
+"$pascalc" "$root/selfhost/compiler.pas" -o "$work/ref.ll"
 
 # Two backend configurations, both unlike the build's. -O0 is the one that
 # matters: it shares almost no code with the -O2 pipeline the build used, so an
@@ -121,7 +120,7 @@ std=$(tr -d '[:space:]' <"$root/selfhost/compiler.std")
 for level in -O0 -O2; do
   llc "$level" "${llc_flags[@]}" "$work/ref.ll" -o "$work/cc$level.s"
   clang "$level" "$work/cc$level.s" "$runtime" -lm -o "$work/pascalc$level"
-  "$work/pascalc$level" "--std=$std" "$root/selfhost/compiler.pas" \
+  "$work/pascalc$level" "$root/selfhost/compiler.pas" \
       -o "$work/out$level.ll"
   if ! cmp -s "$work/ref.ll" "$work/out$level.ll"; then
     echo "llc-second-backend: a compiler built with llc $level translates" >&2

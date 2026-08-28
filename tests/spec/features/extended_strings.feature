@@ -105,21 +105,6 @@ Feature: Fixed-string-types and the string functions
       0
       """
 
-  Scenario: a substring-variable with a lower bound above its upper is an error
-    Given the Extended Pascal program
-      """
-      program p(output);
-      var s: string(20); i, j: integer;
-      begin
-        s := 'hello';
-        i := 3;
-        j := 2;
-        writeln(s[i .. j])
-      end.
-      """
-    When it is compiled and run
-    Then it stops at run time
-
   Scenario: assigning a value longer than the capacity is an error
     Given the Extended Pascal program
       """

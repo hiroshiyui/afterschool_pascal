@@ -122,8 +122,7 @@ const
   nounParamForm = 0;
   nounVarType = 1;
   nounPointerDomain = 2;
-  kwCount  = 45;     { 35 word-symbols of ISO 7185, then ISO 10206's }
-  isoKwCount = 35;   { how many of them ISO 7185 reserves }
+  kwCount  = 45;     { 35 word-symbols of ISO 7185, then ISO 10206's ten }
   nul      = 0;      { what Peek yields past the end, as the C++ lexer does }
   tab      = 9;
   newline  = 10;
@@ -299,24 +298,6 @@ type
       word-symbols of ISO 7185, and the scanner builds them by joining two
       tokens rather than by looking a spelling up. }
     tkAndThen, tkOrElse);
-
-  { Which language the source is written in. ISO 7185 is the default, and
-    selecting the language is a real choice rather than a convenience
-    (ADR-0033): the first two are *not* nested, because Extended Pascal
-    reserves word-symbols a valid ISO 7185 program may use as identifiers.
-
-    stdAfterschool is the dialect (ADR-0117) and is the exception -- it
-    **contains** ISO/IEC 10206:1991, because nothing forces otherwise when the
-    language is ours. So the order here is a containment and is load-bearing:
-    HasExtended is `>= stdExtended`, and every question of the form "does this
-    mode have Extended Pascal?" is asked that way rather than by equality.
-    Adding a fourth mode means deciding where it sits in this order before
-    anything else.
-
-    The dialect admits nothing yet. It is exactly Extended Pascal, which is
-    what tests/dialect/inherits_extended.pas pins -- and that is the property
-    every dialect feature will be added *to*. }
-  stdKind = (stdIso7185, stdExtended, stdAfterschool);
 
   token = record
     kind: tokenKind;
@@ -1122,13 +1103,6 @@ type
       exports carries a variant-part with a tag-field, so its object code is
       the same under `--std=extended` and `--std=afterschool` and a program in
       either may link it. Sema decides it; CodeGen only emits the second name
-      (ADR-0119 spells the mode into a module's activation names, and this is
-      what says the two spellings mean one thing here).
-
-      False until computed, which is the safe direction: a module nothing has
-      looked at stays mode-locked. }
-    modePortable: boolean;
-
     { 6.13. This module's own program-component was translated separately, so
       this translation has its heading and not its block: no body of its is
       emitted, its activation record is declared rather than defined, and
@@ -1275,8 +1249,8 @@ type
     --dump-dispatch keeps a second list of the same shape, of every
     *enumeration* type-definition (ADR-0229). It needs the declarations and
     not only the dispatch sites, because an enumeration no case-statement
-    mentions at all has every constant unnamed and reaches no site to be found
-    at -- `stdKind` is one, dispatched by HasExtended's `>=`. }
+    mentions at all has every constant unnamed and reaches no site to be
+    found at. }
   layoutPtr = ^layoutRec;
   layoutRec = record
     at, len: integer;
@@ -2174,12 +2148,6 @@ var
     procedure-part of the block the generic itself was declared in, which is
     the list DeclareProcs and EmitProcs walk (AP 6.7.3.5, ADR-0211). }
   curDeclBlock: nodePtr;
-  langStd: stdKind;
-  { Whether --std= was written on the command line. A source may declare its
-    own standard in a header comment (ADR-0166) and the flag wins, so the
-    annotation is read only when this is false. Without it the two cannot be
-    told apart: `--std=extended` and the default leave langStd the same. }
-  stdFromFlag: boolean;
   nextReg, nextBlock: integer;   { SSA values and basic blocks, per function }
   { Which way the designator being addressed is used (ADR-0118). vgWrite only
     while EmitAssign is taking its target's address; EmitExpr saves and clears
@@ -2470,105 +2438,6 @@ begin
   errorCount := errorCount + 1;
   if dumping then write(l:1, ' ', c:1, ' error ')
   else write(curFile, ':', l:1, ':', c:1, ': error: ')
-end;
-
-{ ADR-0166: a source may name its own standard in a header comment, by
-  writing one of
-
-      @std:iso7185      @std:extended      @std:afterschool
-
-  inside a comment before the program heading. (The delimiters are left off
-  here on purpose: a comment does not nest, and 6.1.8 lets either delimiter
-  close either opener, so an example carrying its own braces would end this
-  one.)
-
-  Read *before* Tokenize and not by it, because the standard decides which
-  words are reserved -- 6.1.2 makes `value` a word-symbol in Extended Pascal
-  and an ordinary identifier in ISO 7185, so by the time there are tokens the
-  question has been answered already. That is also why this scans characters
-  rather than reusing SkipTriviaAndComments, which belongs to a lexer that has
-  been told which language it is reading.
-
-  Only the *header* counts: the scan stops at the first character that is
-  neither a separator nor part of a comment, which is the first token of the
-  program. A comment further down means nothing, so a file cannot change
-  language halfway and a stray `@std:` in prose cannot reach back.
-
-  An explicit --std= wins and a disagreement is not reported. A harness naming
-  a standard means it -- 6.13's components are translated under one the
-  *program* chooses (ADR-0137) and run_test.sh passes one on every file -- so
-  a conflict is the flag being more specific, not a mistake.
-
-  Comments do not nest in either standard, so one level is the whole of it,
-  and 6.1.8 lets either delimiter close either opener. }
-procedure ReadStdAnnotation;
-var inComment, done, seen: boolean; word_: nameStr; c: char;
-
-  { Letters and digits from the current position, folded, bounded so a file of
-    one enormous token cannot overrun nameStr. }
-  procedure TakeWord;
-  begin
-    word_ := '';
-    while (not AtEof) and (length(word_) < 20) and
-          (IsAlpha(Peek(0)) or IsDigit(Peek(0))) do begin
-      word_ := word_ + Lower(Peek(0));
-      Advance
-    end
-  end;
-
-begin
-  if not stdFromFlag then begin
-    StartFile;
-    inComment := false;
-    done := false;
-    seen := false;
-    while not done do
-      if AtEof then done := true
-      else begin
-        c := Peek(0);
-        if not inComment then begin
-          if c = '{' then begin inComment := true; Advance end
-          else if (c = '(') and (Peek(1) = '*') then begin
-            inComment := true; Advance; Advance
-          end
-          else if IsSpace(c) then Advance
-          { The first token of the program. Everything after it is the
-            program's business and not this scan's. }
-          else done := true
-        end
-        else if c = '}' then begin inComment := false; Advance end
-        else if (c = '*') and (Peek(1) = ')') then begin
-          inComment := false; Advance; Advance
-        end
-        else if c = '@' then begin
-          Advance;
-          TakeWord;
-          if (word_ = 'std') and (not AtEof) and (Peek(0) = ':') then begin
-            Advance;
-            TakeWord;
-            { A second annotation is not an error and the first one wins:
-              a file states its language once, and a later line inside the
-              same header comment is prose about it. }
-            if not seen then begin
-              seen := true;
-              if word_ = 'iso7185' then langStd := stdIso7185
-              else if word_ = 'extended' then langStd := stdExtended
-              else if word_ = 'afterschool' then langStd := stdAfterschool
-              else begin
-                { Reported rather than ignored. A misspelt annotation that
-                  silently did nothing would compile the file under a standard
-                  its author had tried to say it was not. }
-                ErrorAt(line, col);
-                write('unknown standard ''', word_);
-                writeln(''' in a @std: annotation; expected iso7185, ',
-                        'extended or afterschool')
-              end
-            end
-          end
-        end
-        else Advance
-      end
-  end
 end;
 
 { ------------------------------------------------------------- diagnostics }
@@ -3039,7 +2908,10 @@ begin
   DefineKeyword(33, 'var      ', tkVar);
   DefineKeyword(34, 'while    ', tkWhile);
   DefineKeyword(35, 'with     ', tkWith);
-  { Beyond isoKwCount: looked up only under the extended standard. }
+  { ISO/IEC 10206:1991 6.1.2's ten. They were looked up only under
+    --std=extended until ADR-0232; there is one language now and all 45 are
+    reserved, which is the cost that decision was taken with -- a conforming
+    ISO 7185 program using `value` as an identifier no longer compiles. }
   DefineKeyword(36, 'otherwise', tkOtherwise);
   DefineKeyword(37, 'pow      ', tkPow);
   DefineKeyword(38, 'protected', tkProtected);
@@ -3158,7 +3030,6 @@ begin
   writeln('usage: pascalc [options] file.pas');
   writeln('  -o <file>       where to write the LLVM IR');
   writeln('                  (the source name with .ll, by default)');
-  writeln('  --std=<name>    extended (default), iso7185, or afterschool');
   writeln('                  (the dialect: Extended Pascal and what is');
   writeln('                  added to it)');
   writeln('  --import <f>    a program-component already translated; its');
@@ -3206,17 +3077,6 @@ end;
 procedure ParseArgs;
 var k: integer; a: nameStr; dot: integer; k2: integer; tname: nameStr;
 begin
-  { ISO/IEC 10206:1991 is the default (ADR-0165). The two conformance modes are
-    not nested -- 6.1.2 reserves thirteen word-symbols a conforming ISO 7185
-    program may use as identifiers -- so the default is a choice about which
-    language an unflagged source is written in, and the dialect this project
-    is aiming at contains Extended Pascal rather than ISO 7185. --std=iso7185
-    keeps the older standard reachable and is what CONF005 needs: BSI wrote
-    that program in 1982 to check that a conforming processor still accepts
-    `module` and `restricted` as identifiers, and it is the one program of 812
-    that only the older mode compiles. }
-  langStd := stdExtended;
-  stdFromFlag := false;
   srcName := '';
   outName := '';
   importCount := 0;
@@ -3265,18 +3125,6 @@ begin
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
     else if EQ(a, '--coverage') then covOpt := true
-    else if EQ(a, '--std=extended') then begin
-      langStd := stdExtended; stdFromFlag := true
-    end
-    else if EQ(a, '--std=iso7185') then begin
-      langStd := stdIso7185; stdFromFlag := true
-    end
-    { The dialect (ADR-0117). It accepts exactly Extended Pascal today; what
-      makes it a mode rather than an alias is that features may be added to it
-      and to neither of the others. }
-    else if EQ(a, '--std=afterschool') then begin
-      langStd := stdAfterschool; stdFromFlag := true
-    end
     { ADR-0156. Joined to its flag, like --std= and unlike -o and --import,
       which take file names a shell completes. }
     else if (length(a) > 9) and EQ(substr(a, 1, 9), '--target=') then begin
@@ -3379,30 +3227,6 @@ begin
   bind(f, b)
 end;
 
-{ True for every mode that has ISO/IEC 10206:1991 -- Extended Pascal, and
-  anything built on it. Asked at every site that used to compare langStd
-  against stdExtended for equality, all of which meant "does this mode have
-  Extended Pascal?" (ADR-0117).
-
-  The distinction is invisible while stdKind has two values, `>=` and `=` being
-  the same test, and that is the point: the conversion lands as a refactor with
-  no behaviour to change, so it is reviewable on its own. It stops being the
-  same test the day a third mode is added, and on that day 38 sites would
-  otherwise have switched Extended Pascal *off* for the dialect -- schemata,
-  `otherwise`, string types, `**`, binding, modules -- with nothing failing to
-  compile.
-
-  Two sites ask the negation and are `not HasExtended(...)` rather than
-  `= stdIso7185`: each guards a refusal of an Extended Pascal feature, so what
-  it wants is "this mode does not have Extended Pascal". The twelve sites
-  spelled `= stdIso7185` are asking a different question -- "is this exactly
-  ISO 7185?", in order to name --std=extended in a diagnostic -- and are left
-  alone. }
-function HasExtended(s: stdKind): boolean;
-begin
-  HasExtended := s >= stdExtended
-end;
-
 procedure WriteKwWord(i: integer);
 var n, k: integer;
 begin
@@ -3415,9 +3239,10 @@ function LookupKeyword(var s: str): tokenKind;
 var i, k, n, limit: integer; found: tokenKind; same: boolean;
 begin
   found := tkIdent;
-  { Reserving ISO 10206's word-symbols unconditionally would reject valid ISO
-    7185 programs -- including this one. }
-  if HasExtended(langStd) then limit := kwCount else limit := isoKwCount;
+  { Every word-symbol of the language, and there is one language: ADR-0232
+    removed the mode in which `value` and `otherwise` were ordinary
+    identifiers. `limit` survives the removal because the loop reads it. }
+  limit := kwCount;
   for i := 1 to limit do begin
     n := kwWidth;
     while (n > 0) and (kwText[i][n] = ' ') do
@@ -3434,7 +3259,7 @@ begin
     end
   end;
   { The one word-symbol too long for kwLit; see StrIsWide. }
-  if (HasExtended(langStd)) and (found = tkIdent) then
+  if found = tkIdent then
     if StrIsWide(s, 'restricted      ') then found := tkRestricted;
   LookupKeyword := found
 end;
@@ -3540,13 +3365,7 @@ begin
   if joined <> tkEof then begin
     { the operator starts where its first word does, which is where the token
       being rewritten already is }
-    tok[tokCount].kind := joined;
-    if langStd = stdIso7185 then begin
-      ErrorAt(tok[tokCount].line, tok[tokCount].col);
-      if joined = tkAndThen then write('''and then''')
-      else write('''or else''');
-      writeln(' is an Extended Pascal operator; compile with --std=extended')
-    end
+    tok[tokCount].kind := joined
   end
   else if k = tkIdent then
     AddText(sl, sc, tkIdent, PoolAdd(text), text.len)
@@ -3704,11 +3523,6 @@ begin
     if overflow then base := 0;
     StrAppend(text, Peek(0));
     Advance;
-    if langStd = stdIso7185 then begin
-      ErrorAt(sl, sc);
-      write('a non-decimal literal is an Extended Pascal feature; ');
-      writeln('compile with --std=extended')
-    end;
     { The digit sequence is maximal: `16#ffand` is one ill-formed number rather
       than a number and a word-symbol, because an extended digit *is* a
       letter. }
@@ -3814,16 +3628,13 @@ begin
       type to put there -- the same shape tkReal has had since ADR-0025, and
       arrived at the same way. Above maxint64 it is out of range again, and the
       message names the bound that was actually exceeded. }
-    if overflow and (langStd = stdAfterschool) and not Int64TooLarge(text) then
+    if overflow and not Int64TooLarge(text) then
       AddText(sl, sc, tkInt64, PoolAdd(text), text.len)
     else begin
       if overflow then begin
         ErrorAt(sl, sc);
-        if langStd = stdAfterschool then
-          write('integer literal out of range (maxint64 is ',
-                '9223372036854775807): ')
-        else
-          write('integer literal out of range (maxint is ', maxint:1, '): ');
+        write('integer literal out of range (maxint64 is ',
+              '9223372036854775807): ');
         for digit := 1 to text.len do
           write(text.ch[digit]);
         writeln
@@ -3915,10 +3726,6 @@ begin
       way two stars can be adjacent is the exponentiating-operator. }
     if Peek(0) = '*' then begin
       Advance;
-      if langStd = stdIso7185 then begin
-        ErrorAt(sl, sc);
-        writeln('''**'' is an Extended Pascal operator; compile with --std=extended')
-      end;
       AddSimple(sl, sc, tkStarStar)
     end
     else AddSimple(sl, sc, tkStar)
@@ -3956,13 +3763,9 @@ begin
   else if c = '[' then AddSimple(sl, sc, tkLBracket)
   else if c = ']' then AddSimple(sl, sc, tkRBracket)
   else if c = '^' then AddSimple(sl, sc, tkCaret)
-  { Refused outside the dialect by the path every other stray character takes,
-    so `?` in an ISO 7185 or Extended Pascal source still reports "unexpected
-    character" and still says which character it was. }
-  else if (c = '?') and (langStd = stdAfterschool) then
+  else if c = '?' then
     AddSimple(sl, sc, tkQuery)
-  { and the same for `!`, refused outside the dialect by the same path }
-  else if (c = '!') and (langStd = stdAfterschool) then
+  else if c = '!' then
     AddSimple(sl, sc, tkBang)
   else if c = ':' then begin
     if Peek(0) = '=' then begin Advance; AddSimple(sl, sc, tkAssign) end
@@ -3980,11 +3783,8 @@ begin
   end
   else if c = '>' then begin
     if Peek(0) = '=' then begin Advance; AddSimple(sl, sc, tkGe) end
-    { 6.1.2 spells the set symmetric difference `><`. Under ISO 7185 the two
-      characters can only be `>` followed by `<`, which no expression admits --
-      `a > <b` is not a program -- so the standard gate is here rather than in
-      the parser, and one token comes out instead of a cascade. }
-    else if (Peek(0) = '<') and (HasExtended(langStd)) then begin
+    { 6.1.2 spells the set symmetric difference `><`. }
+    else if Peek(0) = '<' then begin
       Advance;
       AddSimple(sl, sc, tkGtLt)
     end
@@ -4519,67 +4319,51 @@ end;
 function LooksLikeSubrange: boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
-  if HasExtended(langStd) then begin
-    { 6.4.2.4 makes a subrange-bound a constant-expression (6.8.2), so the
-      `..` is no longer two tokens away -- `base - 9 .. base + 1` is a subrange
-      and `base` alone is a type name. What still separates them is a `..`
-      before the denoter ends, so this scans for one at bracket depth zero.
-      Only the denoters beginning with a name, a literal or a sign reach here:
-      array, record, set, file and `^` are decided by their first token. }
-    depth := 0;
-    i := pos;
-    ok := false;
-    done := false;
-    while (not done) and (i <= tokCount) do begin
-      k := tok[i].kind;
-      if (k = tkLParen) or (k = tkLBracket) then
-        depth := depth + 1
-      else if (k = tkRParen) or (k = tkRBracket) then
-        if depth = 0 then done := true          { the denoter ended }
-        else depth := depth - 1
-      else if k = tkDotDot then begin
-        if depth = 0 then begin
-          ok := true;
+  { 6.4.2.4 makes a subrange-bound a constant-expression (6.8.2), so the
+    `..` is no longer two tokens away -- `base - 9 .. base + 1` is a subrange
+    and `base` alone is a type name. What still separates them is a `..`
+    before the denoter ends, so this scans for one at bracket depth zero.
+    Only the denoters beginning with a name, a literal or a sign reach here:
+    array, record, set, file and `^` are decided by their first token. }
+  depth := 0;
+  i := pos;
+  ok := false;
+  done := false;
+  while (not done) and (i <= tokCount) do begin
+    k := tok[i].kind;
+    if (k = tkLParen) or (k = tkLBracket) then
+      depth := depth + 1
+    else if (k = tkRParen) or (k = tkRBracket) then
+      if depth = 0 then done := true          { the denoter ended }
+      else depth := depth - 1
+    else if k = tkDotDot then begin
+      if depth = 0 then begin
+        ok := true;
+        done := true
+      end
+    end
+    else if k = tkPeriod then begin
+      { 6.11.3's qualified name puts a `.` *inside* a bound, so it ends the
+        denoter only when no identifier follows it. The program's final
+        `end.` is never reached: `end` stops the scan a token earlier. }
+      if depth = 0 then
+        if not ((i + 1 <= tokCount) and (tok[i + 1].kind = tkIdent)) then
           done := true
-        end
-      end
-      else if k = tkPeriod then begin
-        { 6.11.3's qualified name puts a `.` *inside* a bound, so it ends the
-          denoter only when no identifier follows it. The program's final
-          `end.` is never reached: `end` stops the scan a token earlier. }
-        if depth = 0 then
-          if not ((i + 1 <= tokCount) and (tok[i + 1].kind = tkIdent)) then
-            done := true
-      end
-      { AP 6.4.13's `!` ends the denoter on its left, so a `..` after one
-        belongs to the *cause* and not to a subrange spanning both: without
-        this line `integer ! 1..5` scans as one subrange whose lower bound is
-        `integer`, and the diagnostic is about a `..` that was never missing
-        (ADR-0176). }
-      else if (k = tkSemi) or (k = tkComma) or (k = tkColon) or (k = tkEq) or
-              (k = tkOf) or (k = tkEnd) or (k = tkBegin) or
-              (k = tkBang) or
-              (k = tkEof) then begin
-        if depth = 0 then done := true
-      end;
-      i := i + 1
+    end
+    { AP 6.4.13's `!` ends the denoter on its left, so a `..` after one
+      belongs to the *cause* and not to a subrange spanning both: without
+      this line `integer ! 1..5` scans as one subrange whose lower bound is
+      `integer`, and the diagnostic is about a `..` that was never missing
+      (ADR-0176). }
+    else if (k = tkSemi) or (k = tkComma) or (k = tkColon) or (k = tkEq) or
+            (k = tkOf) or (k = tkEnd) or (k = tkBegin) or
+            (k = tkBang) or
+            (k = tkEof) then begin
+      if depth = 0 then done := true
     end;
-    LooksLikeSubrange := ok
-  end
-  else begin
-    { ISO 7185 6.4.2.4's bound is a `constant` -- a signed literal or a name --
-      so the two forms diverge at the token after it and nowhere else. }
-    i := pos;
-    if (tok[i].kind = tkPlus) or (tok[i].kind = tkMinus) then
-      i := i + 1;
-    ok := (tok[i].kind = tkIdent) or (tok[i].kind = tkInt) or
-          (tok[i].kind = tkStr);
-    if ok then begin
-      i := i + 1;
-      ok := (i <= tokCount) and (tok[i].kind = tkDotDot)
-    end;
-    LooksLikeSubrange := ok
-  end
+    i := i + 1
+  end;
+  LooksLikeSubrange := ok
 end;
 
 { Is the bracketed thing starting at `from` (which indexes the '[') a 6.8.7
@@ -4601,8 +4385,7 @@ function LooksLikeStructuredValue(from: integer): boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
   ok := false;
-  if (HasExtended(langStd)) and (from <= tokCount) and
-     (tok[from].kind = tkLBracket) then begin
+  if (from <= tokCount) and (tok[from].kind = tkLBracket) then begin
     if (from + 1 <= tokCount) and (tok[from + 1].kind = tkRBracket) then
       ok := true
     else begin
@@ -4862,12 +4645,6 @@ begin
   m^.smHi := nil;
   m^.smLo := ParseExpr;
   if Check(tkDotDot) then begin
-    if langStd = stdIso7185 then begin
-      ErrorAtCur;
-      write('a range of case constants is an Extended Pascal feature; ');
-      writeln('compile with --std=extended');
-      Bail
-    end;
     pos := pos + 1;
     m^.smHi := ParseExpr
   end;
@@ -5023,16 +4800,6 @@ begin
       arm^.vaOtherwise := true
     end
     else begin
-      { Under ISO 7185 `otherwise` is an ordinary identifier and may well name
-        the constant a variant is labelled with. What follows parts them: a
-        label list is followed by ',' or ':', the completer by '('. }
-      if Check(tkIdent) and PoolIs(tok[pos].at, tok[pos].len, 'otherwise') and
-         (PeekKind(1) = tkLParen) then begin
-        ErrorAtCur;
-        write('the ''otherwise'' part of a variant part is an Extended ');
-        writeln('Pascal feature; compile with --std=extended');
-        Bail
-      end;
       lh := nil;
       lt := nil;
       moreLabels := true;
@@ -5151,7 +4918,7 @@ end;
   component stops at the word and the outer denoter takes it, which is what
   turns that example into the type error the note says it is.
 
-  There is no langStd test here, and there cannot be one: `value` is a
+  There is no standard test here, and there could not have been one: `value` is a
   word-symbol Extended Pascal *adds*, so under ISO 7185 the lexer yields an
   identifier and this token never appears. The lexer's decision is the whole of
   the feature's language gating -- unlike `type of`, whose words are reserved
@@ -5162,7 +4929,7 @@ begin
   { 6.4.1 puts `bindable` *before* the denoter and the initial-state specifier
     after it, so the two brackets of that production are parsed on either side
     of one call. Like `value`, this word is one Extended Pascal adds, so no
-    langStd test is possible: under ISO 7185 the lexer yields an identifier and
+    standard test would have been possible: under ISO 7185 the lexer yields an identifier and
     the token never appears. }
   bindable_ := Accept(tkBindable);
   t := ParseTypeDenoter;
@@ -5192,8 +4959,7 @@ begin
   qualAt := 0;
   qualLen := 0;
   pos := pos + 1;
-  if (HasExtended(langStd)) and Check(tkPeriod) and
-     (PeekKind(1) = tkIdent) then begin
+  if Check(tkPeriod) and (PeekKind(1) = tkIdent) then begin
     qualAt := at;
     qualLen := len;
     pos := pos + 1;
@@ -5212,31 +4978,22 @@ end;
   Only the *type* discriminants are written. The ordinal ones stay open and are
   6.7.5.3's, supplied by `new` -- which is the whole point: the layout is fixed
   by the types and the extent still varies, so one pointer type serves every
-  capacity exactly as `^IntVec` does today. Admitted under the dialect only;
-  the conformance modes reach the message below and name the mode. }
+  capacity exactly as `^IntVec` does today. }
 procedure ParsePointerTypeArgs(t: nodePtr);
 var head, tail, a: nodePtr; more: boolean;
 begin
   if Check(tkLParen) then begin
-    if langStd <> stdAfterschool then begin
-      ErrorAtCur;
-      write('a pointer domain with type arguments is an Afterschool Pascal ');
-      writeln('feature; compile with --std=afterschool');
-      Bail
-    end
-    else begin
-      head := nil;
-      tail := nil;
-      pos := pos + 1;
-      more := true;
-      while more and not aborted do begin
-        a := ParseExpr;
-        Append(head, tail, a);
-        more := Accept(tkComma)
-      end;
-      Expect(tkRParen, ctxSchemaArgs);
-      t^.ptArgs := head
-    end
+    head := nil;
+    tail := nil;
+    pos := pos + 1;
+    more := true;
+    while more and not aborted do begin
+      a := ParseExpr;
+      Append(head, tail, a);
+      more := Accept(tkComma)
+    end;
+    Expect(tkRParen, ctxSchemaArgs);
+    t^.ptArgs := head
   end
 end;
 
@@ -5269,17 +5026,9 @@ begin
         The brackets are what make a file direct-access, and nothing else
         does -- so this is the whole of the syntax the feature adds. }
       if Check(tkLBracket) then begin
-        if langStd = stdIso7185 then begin
-          ErrorAtCur;
-          writeln('a direct-access file is an Extended Pascal feature; ',
-                  'compile with --std=extended');
-          Bail
-        end
-        else begin
-          pos := pos + 1;
-          t^.flIndex := ParseTypeDenoter;
-          Expect(tkRBracket, ctxDirectIndex)
-        end
+        pos := pos + 1;
+        t^.flIndex := ParseTypeDenoter;
+        Expect(tkRBracket, ctxDirectIndex)
       end;
       if not aborted then begin
         Expect(tkOf, ctxAfterFile);
@@ -5355,7 +5104,7 @@ begin
       The domain is a type *identifier* for 6.4.4's own reason, restated in
       the arm above: the name may be one defined later in the same type part,
       which is what lets a type own something of its own type. }
-    else if (langStd = stdAfterschool) and Check(tkIdent) and
+    else if Check(tkIdent) and
             PoolIs(tok[pos].at, tok[pos].len, 'owned    ') and
             (PeekKind(1) = tkCaret) then begin
       t := NewNode(nkPointer, CurLine, CurCol);
@@ -5387,10 +5136,8 @@ begin
       `handle`, and `type T = handle;` is still that program's. What no
       conforming program can write is a type-name followed by an identifier
       and a string in this position -- ADR-0140's test, asked of the
-      *juxtaposition* -- so the dialect reads the three tokens as one
-      denoter and the conformance modes go on saying "expected ';'", which
-      is Annex B's row. }
-    else if (langStd = stdAfterschool) and Check(tkIdent) and
+      *juxtaposition* -- so the three tokens are read as one denoter. }
+    else if Check(tkIdent) and
             PoolIs(tok[pos].at, tok[pos].len, 'handle   ') and
             (PeekKind(1) = tkIdent) and (PeekKind(2) = tkStr) and
             PoolIs(tok[pos + 1].at, tok[pos + 1].len, 'external ') then begin
@@ -5410,73 +5157,35 @@ begin
       t^.tqQualAt := 0;
       t^.tqQualLen := 0;
       t^.tqObj := nil;
-      if langStd = stdIso7185 then begin
-        ErrorAtCur;
-        writeln('a type-inquiry is an Extended Pascal feature; compile with ',
-                '--std=extended');
-        Bail
-      end
-      else begin
-        pos := pos + 1;
-        Expect(tkOf, ctxTypeInquiry);
-        if not aborted then
-          if not Check(tkIdent) then begin
-            ErrorAtCur;
-            writeln('''type of'' must name a variable or a parameter');
-            Bail
-          end
-          { AP 6.4.9 (ADR-0215): the dialect's type-inquiry-object is 6.5.1's
-            whole variable-access, so the object is parsed by the production an
-            expression's designator is parsed by -- one production for `iface.x`
-            and `r.f` alike, told apart by the symbol in Sema, which is what the
-            expression parser has always done and is why fdQualified exists.
+      pos := pos + 1;
+      Expect(tkOf, ctxTypeInquiry);
+      if not aborted then
+        if not Check(tkIdent) then begin
+          ErrorAtCur;
+          writeln('''type of'' must name a variable or a parameter');
+          Bail
+        end
+        { AP 6.4.9 (ADR-0215): the type-inquiry-object is 6.5.1's whole
+          variable-access, so the object is parsed by the production an
+          expression's designator is parsed by -- one production for `iface.x`
+          and `r.f` alike, told apart by the symbol in Sema, which is what the
+          expression parser has always done and is why fdQualified exists.
 
-            A bare name is put back where 6.4.9 keeps one. Every rule the clause
-            already had is written against tqAt/tqLen, and a conforming program
-            writes nothing else -- so under this mode such a program takes the
-            path it takes under --std=extended, instruction for instruction,
-            which is the containment ADR-0138 sweeps for. }
-          else if langStd = stdAfterschool then begin
-            obj := NewNode(nkVar, CurLine, CurCol);
-            obj^.vrAt := tok[pos].at;
-            obj^.vrLen := tok[pos].len;
-            pos := pos + 1;
-            obj := ParseSelectors(obj);
-            if obj^.kind = nkVar then begin
-              t^.tqAt := obj^.vrAt;
-              t^.tqLen := obj^.vrLen
-            end
-            else
-              t^.tqObj := obj
+          A bare name is put back where 6.4.9 keeps one: every rule the clause
+          already had is written against tqAt/tqLen. }
+        else begin
+          obj := NewNode(nkVar, CurLine, CurCol);
+          obj^.vrAt := tok[pos].at;
+          obj^.vrLen := tok[pos].len;
+          pos := pos + 1;
+          obj := ParseSelectors(obj);
+          if obj^.kind = nkVar then begin
+            t^.tqAt := obj^.vrAt;
+            t^.tqLen := obj^.vrLen
           end
-          else begin
-            ParseQualifiedName(t^.tqQualAt, t^.tqQualLen, t^.tqAt, t^.tqLen);
-            { 6.4.9's type-inquiry-object is a `variable-name` or a
-              `parameter-identifier`, and 6.5.1's other variable-accesses are
-              not among them: an indexed one, an identified one, a
-              field-designator and a substring are each a variable-access and
-              none of them is a *name*. So `type of a[1]` and `type of p^` are
-              refused here, and the message names the mode, the dialect having
-              them (ADR-0154): without the test the parser stops at the
-              declaration's own semicolon and reports a missing separator,
-              naming neither the rule nor the construct nor the mode.
-
-              The field-designator has two spellings and only one reaches here.
-              `r.f` is what ParseQualifiedName consumes as a qualified name,
-              because the parser cannot tell an imported interface from a
-              record variable; ResolveInquiry asks the symbol and says the same
-              sentence. The period below is therefore the *second* one, in
-              `r.f.g`. }
-            if Check(tkLBracket) or Check(tkCaret) or Check(tkPeriod) then
-            begin
-              ErrorAtCur;
-              write('a type-inquiry over a component of a variable is an ');
-              writeln('Afterschool Pascal feature; compile with ',
-                      '--std=afterschool');
-              Bail
-            end
-          end
-      end
+          else
+            t^.tqObj := obj
+        end
     end
     else if Check(tkLParen) then
       t := ParseEnumType
@@ -5505,27 +5214,19 @@ begin
         token is needed -- and the parser does not care whether the name turns
         out to denote a schema, which is Sema's question. }
       if Check(tkLParen) then begin
-        if langStd = stdIso7185 then begin
-          ErrorAtCur;
-          writeln('a discriminated schema is an Extended Pascal feature; ',
-                  'compile with --std=extended');
-          Bail
-        end
-        else begin
-          n := t;
-          t := NewNode(nkSchema, n^.line, n^.col);
-          t^.scAt := n^.nmAt;
-          t^.scLen := n^.nmLen;
-          t^.scQualAt := n^.nmQualAt;
-          t^.scQualLen := n^.nmQualLen;
-          t^.scArgs := nil;
-          t^.scArgTail := nil;
-          pos := pos + 1;
-          repeat
-            Append(t^.scArgs, t^.scArgTail, ParseExpr)
-          until not Accept(tkComma);
-          Expect(tkRParen, ctxSchemaArgs)
-        end
+        n := t;
+        t := NewNode(nkSchema, n^.line, n^.col);
+        t^.scAt := n^.nmAt;
+        t^.scLen := n^.nmLen;
+        t^.scQualAt := n^.nmQualAt;
+        t^.scQualLen := n^.nmQualLen;
+        t^.scArgs := nil;
+        t^.scArgTail := nil;
+        pos := pos + 1;
+        repeat
+          Append(t^.scArgs, t^.scArgTail, ParseExpr)
+        until not Accept(tkComma);
+        Expect(tkRParen, ctxSchemaArgs)
       end
     end
   end;
@@ -5623,7 +5324,7 @@ begin
           written with a second selector is refused in Sema, which is the pass
           that knows whether the base is a string or a set-type name
           (ADR-0066). }
-        if (HasExtended(langStd)) and Check(tkDotDot) then begin
+        if Check(tkDotDot) then begin
           n := NewNode(nkSubstr, l, c);
           pos := pos + 1;
           n^.ssBase := base;
@@ -5679,9 +5380,7 @@ begin
 end;
 
 { 6.8.6: a function-access may carry selectors, so `mk(7, 8).y`, `scale(10)[2]`
-  and `alloc(3)^` are expressions. Under ISO 7185 6.6.2 a function result is a
-  simple type or a pointer, so only the last could arise and that standard does
-  not offer it either.
+  and `alloc(3)^` are expressions.
 
   Nothing else in the parser distinguishes a call's selectors from a variable's,
   and nothing in Sema or CodeGen is told which it walked. That is the whole of
@@ -5691,10 +5390,7 @@ end;
   `with`'s record, an assignment's target -- is a call site of that predicate. }
 function AfterCall(call: nodePtr): nodePtr;
 begin
-  if HasExtended(langStd) then
-    AfterCall := ParseSelectors(call)
-  else
-    AfterCall := call
+  AfterCall := ParseSelectors(call)
 end;
 
 function ParsePrimary: nodePtr;
@@ -6123,7 +5819,7 @@ begin
     `:= initial to final` or `in set-expression`. One token separates them, and
     `in` is a word-symbol of ISO 7185 already -- so the feature reserves
     nothing, exactly as `and then` does (ADR-0038). }
-  if (HasExtended(langStd)) and Accept(tkIn) then
+  if Accept(tkIn) then
     s^.frSet := ParseExpr
   else begin
   Expect(tkAssign, ctxFor);
@@ -6175,18 +5871,6 @@ begin
       more := false
     end
     else begin
-    { Under ISO 7185 `otherwise` is an ordinary identifier, so this reads as a
-      case label and fails somewhere unhelpful. It is only the construct if it
-      is not being used as a constant -- `otherwise: s` and `otherwise, 2:` are
-      a label list naming a constant, and stay one. }
-    if Check(tkIdent) and PoolIs(tok[pos].at, tok[pos].len, 'otherwise') and
-       (PeekKind(1) <> tkColon) and (PeekKind(1) <> tkComma) and
-       (PeekKind(1) <> tkDotDot) then begin
-      ErrorAtCur;
-      write('the ''otherwise'' part of a case statement is an Extended ');
-      writeln('Pascal feature; compile with --std=extended');
-      Bail
-    end;
     arm := NewNode(nkCaseArm, CurLine, CurCol);
     arm^.caLabels := nil;
     arm^.caBody := nil;
@@ -6369,8 +6053,7 @@ function CallTakesCaret(from: integer): boolean;
 var i, depth: integer; ok, done: boolean; k: tokenKind;
 begin
   ok := false;
-  if (HasExtended(langStd)) and (from <= tokCount) and
-     (tok[from].kind = tkLParen) then begin
+  if (from <= tokCount) and (tok[from].kind = tkLParen) then begin
     depth := 0;
     i := from;
     done := false;
@@ -6428,10 +6111,8 @@ begin
     statement being deferred.
 
     So `defer;`, `defer(x)`, `defer := 3` and `if c then defer else s` all
-    stay what a program that declared `defer` meant by them, and the
-    conformance modes reach none of this: they parse the name as a call and
-    stop at the token after it, which is Annex B's row. }
-  if (langStd = stdAfterschool) and PoolIs(at, len, 'defer    ') and
+    stay what a program that declared `defer` meant by them. }
+  if PoolIs(at, len, 'defer    ') and
      (k <> tkAssign) and (k <> tkLBracket) and (k <> tkPeriod) and
      (k <> tkCaret) and (k <> tkLParen) and
      (k <> tkSemi) and (k <> tkEnd) and (k <> tkElse) and (k <> tkUntil) and
@@ -6450,9 +6131,9 @@ begin
   else if PoolIs(at, len, 'readln   ') then s := ParseRead(true, false)
   { ISO/IEC 10206:1991 6.7.5.5's two are required identifiers as well, so they
     take the same treatment -- which is what retired ADR-0060's deviation. }
-  else if (HasExtended(langStd)) and PoolIs(at, len, 'readstr  ') then
+  else if PoolIs(at, len, 'readstr  ') then
     s := ParseRead(false, true)
-  else if (HasExtended(langStd)) and PoolIs(at, len, 'writestr ') then
+  else if PoolIs(at, len, 'writestr ') then
     s := ParseWrite(false, true)
   else handled := false;
 
@@ -6657,7 +6338,7 @@ begin
       -- so no conforming program can have written it in this position, and the
       dialect needs no word of its own for it (ADR-0140). The position is the
       spelling, which is `external`'s shape and `array of`'s. }
-    if Check(tkType) and (langStd = stdAfterschool) then begin
+    if Check(tkType) then begin
       g^.grIsTypeDisc := true;
       pos := pos + 1;
       g^.grType := nil;
@@ -6707,14 +6388,7 @@ begin
         formal-discriminant-part wedged between the name and the '='. One
         token tells them apart, and it is the same token in both languages. }
       if Check(tkLParen) then
-        if langStd = stdIso7185 then begin
-          ErrorAtCur;
-          writeln('a schema is an Extended Pascal feature; compile with ',
-                  '--std=extended');
-          Bail
-        end
-        else
-          ParseFormalDiscriminants(d^.tdDiscs, d^.tdDiscTail);
+        ParseFormalDiscriminants(d^.tdDiscs, d^.tdDiscTail);
       Expect(tkEq, ctxTypeDef);
       d^.tdType := ParseTypeExpr;
       Expect(tkSemi, ctxTypeDefEnd);
@@ -6830,20 +6504,7 @@ begin
         anything but `of` is a juxtaposition no conforming program can write.
         One token of lookahead, which is ADR-0140's test asked of a
         *parameter-form* rather than of a statement. }
-      { ADR-0154: what a conformance mode *says* about a dialect construct is
-        conformance behaviour, so the mode is named rather than the program
-        being told `type` needs an `of`. Asked of the juxtaposition and not of
-        the mode, or a conforming program's `x: type of v` would be caught by
-        it. }
-      if (langStd <> stdAfterschool) and Check(tkType) and
-         (PeekKind(1) <> tkOf) and HasExtended(langStd) then begin
-        ErrorAtCur;
-        write('a type parameter is an Afterschool Pascal feature; ');
-        writeln('compile with --std=afterschool');
-        Bail
-      end;
-      isTypeParam := (langStd = stdAfterschool) and Check(tkType) and
-                     (PeekKind(1) <> tkOf);
+      isTypeParam := Check(tkType) and (PeekKind(1) <> tkOf);
       if isTypeParam then begin
         g^.grIsTypeDisc := true;
         g^.grType := nil;
@@ -6872,8 +6533,7 @@ begin
       else begin
         if not aborted then
           if not (Check(tkIdent) or Check(tkType) or
-                  ((langStd = stdAfterschool) and Check(tkArray) and
-                   (PeekKind(1) = tkOf))) then begin
+                  (Check(tkArray) and (PeekKind(1) = tkOf))) then begin
             ErrorAtCur;
             writeln('a parameter''s type must be a type name or a ',
                     'conformant array schema');
@@ -6935,8 +6595,7 @@ begin
     `f` a recursive call -- so a structured result could be assigned whole and
     never built a field at a time. This is the standard's own answer to that,
     which is why the two halves of 6.7.2 arrive together. }
-  if (not aborted) and isFunction and (HasExtended(langStd))
-      and Accept(tkEq) then begin
+  if (not aborted) and isFunction and Accept(tkEq) then begin
     if not Check(tkIdent) then begin
       ErrorAtCur;
       writeln('expected the name of the result variable after ''=''');
@@ -6987,26 +6646,18 @@ begin
     greppable, the whole of the safety property this feature claims. }
   else if (not aborted) and Check(tkIdent) and
      PoolIs(tok[pos].at, tok[pos].len, 'external ') then begin
-    if langStd <> stdAfterschool then begin
+    pos := pos + 1;
+    if not Check(tkStr) then begin
       ErrorAtCur;
-      write('the ''external'' directive is an Afterschool Pascal feature; ');
-      writeln('compile with --std=afterschool');
+      write('expected the foreign name, as a string literal, after ');
+      writeln('''external''');
       Bail
     end
     else begin
-      pos := pos + 1;
-      if not Check(tkStr) then begin
-        ErrorAtCur;
-        write('expected the foreign name, as a string literal, after ');
-        writeln('''external''');
-        Bail
-      end
-      else begin
-        d^.pdIsExternal := true;
-        d^.pdExtAt := tok[pos].at;
-        d^.pdExtLen := tok[pos].len;
-        pos := pos + 1
-      end
+      d^.pdIsExternal := true;
+      d^.pdExtAt := tok[pos].at;
+      d^.pdExtLen := tok[pos].len;
+      pos := pos + 1
     end
   end
   else begin
@@ -7041,7 +6692,7 @@ end;
   no extra machinery here. }
 function ParseBlock;
 var b, ph, pt, ch, ct, th, tt, vh, vt, lh, lt: nodePtr; done: boolean;
-    part, highest: integer;
+    part: integer;
 begin
   { A block is a level of the tree, and it is the level Sema's scope stack is
     indexed by. Nothing counted it: a procedure declaration nested a *scope*
@@ -7084,15 +6735,9 @@ begin
     ISO/IEC 10206:1991 6.2.1 makes the same five a *repetition* in any order,
     which is what 6.2.2.9 then needs -- a defining-point must precede its
     applied occurrences, and interleaving is the only way to write some
-    programs at all (ADR-0069). Reading them in written order is right for
-    both; refusing the orders ISO 7185 has no grammar for is this loop's job,
-    because the parser is where the written order is visible.
-
-    The *highest* part begun so far, not the previous one: once a variable part
-    has been read, a constant part is misplaced however many parts came
-    between, so each misplaced part is reported rather than only the first of a
-    descending run. }
-  highest := -1;
+    programs at all (ADR-0069). Reading them in written order is what this
+    loop does, and the order is not otherwise constrained: ADR-0232 removed
+    the mode that had ISO 7185's fixed sequence to enforce. }
   done := false;
   while not done and not aborted do begin
     if Check(tkLabel) then part := 0
@@ -7105,20 +6750,6 @@ begin
       done := true
     end;
     if not done then begin
-      { Strictly increasing, not merely non-decreasing: each `const` after the
-        first is a second constant-definition-*part*, since one call consumes a
-        whole run of definitions. Procedures are the exception the grammar
-        itself makes -- the part holds a list of them. }
-      if (langStd = stdIso7185) and (part <= highest) and
-         not ((part = 4) and (highest = 4)) then begin
-        ErrorAtCur;
-        writeln('the declaration parts of a block are label, const, type, ',
-                'var, then procedures and functions, each at most once; any ',
-                'other order is an Extended Pascal feature, so compile with ',
-                '--std=extended')
-      end;
-      if part > highest then highest := part;
-
       if part = 0 then ParseLabelPart(lh, lt)
       else if part = 1 then ParseConstPart(ch, ct)
       else if part = 2 then ParseTypePart(th, tt)
@@ -7936,9 +7567,10 @@ end;
   the char-type, shall be designated a string-type." ISO/IEC 10206:1991
   6.4.3.3.2 says the same of its fixed-string-type with one clause dropped --
   the first bound must be nonvarying, contain no discriminant-identifier and
-  denote 1, and *nothing* is required of the largest value -- so
-  `packed array [1..1] of char` is a fixed-string-type there and is not a
-  string-type here. That one clause is the whole of what --std decides.
+  denote 1, and *nothing* is required of the largest value. This language
+  takes 6.4.3.3.2's reading, so `packed array [1..1] of char` is a
+  fixed-string-type; ISO 7185's extra clause was the whole of what `--std`
+  decided about a string-type, and ADR-0232 removed it.
 
   Two of these are easy to get wrong. IsChar is not what the component asks:
   it sees through a subrange to its host, and `packed array [1..4] of 'A'..'Z'`
@@ -7952,10 +7584,6 @@ begin
   if ok then ok := (t^.elem <> nil) and (t^.elem^.kind = tyChar);
   if ok then
     ok := IsInteger(t^.indexType) and (t^.loDisc = nil) and (t^.lo = 1);
-  { A schema may bound an array above (ADR-0040) and never below, so the
-    largest value is a number wherever this clause applies. }
-  if ok and (langStd = stdIso7185) then
-    ok := (t^.hiDisc = nil) and (t^.hi > 1);
   IsCharArray := ok
 end;
 
@@ -8068,11 +7696,7 @@ begin TypeLength := t^.hi - t^.lo + 1 end;
   lowered differently. }
 function PadsToFixedString(formal, actual: typePtr): boolean;
 begin
-  { 6.4.5 d) and 6.4.6 f) are Extended Pascal's, so this is too. ISO 7185 has
-    neither: there `packed array [1..3] of char` and `packed array [1..5] of
-    char` are two array types, compatible with nothing but themselves, and the
-    refusal Assignable already writes is the correct one. }
-  PadsToFixedString := HasExtended(langStd) and
+  PadsToFixedString :=
     (formal <> nil) and (actual <> nil) and
     IsCharArray(formal) and (formal^.loDisc = nil) and
     (formal^.hiDisc = nil) and IsStringOrChar(actual) and
@@ -8563,7 +8187,6 @@ begin
   s^.importedFrom := nil;
   s^.importedTail := nil;
   s^.compiledElsewhere := false;
-  s^.modePortable := false;
   s^.linkKind := lnkNone;
   s^.linkIfaceAt := 0;
   s^.linkIfaceLen := 0;
@@ -9016,8 +8639,7 @@ begin
     the required schema is what it is about. Two chars are not this rule --
     they are the ordinary compatibility further down, and routing them here
     would answer a different question. }
-  else if (HasExtended(langStd)) and
-          (IsStringType(toT) or IsStringType(fromT)) and
+  else if (IsStringType(toT) or IsStringType(fromT)) and
           IsStringOrChar(toT) and IsStringOrChar(fromT) then
     Assignable := true
   { AP 6.4.15.5. A text takes its value from any string-type or char and gives
@@ -9143,31 +8765,6 @@ begin
   else if e^.kind = nkSubstr then
     IsConstantAccess := (e^.ssSetValue = nil) and IsConstantAccess(e^.ssBase)
   else IsConstantAccess := false
-end;
-
-{ 6.8.8's constant-access belongs to ISO/IEC 10206:1991 alone. ISO 7185 6.3
-  gives a constant no selectors at all -- its unsigned-constant is a number, a
-  character-string, a constant-identifier or `nil` -- and 6.7.1 admits a `[`, a
-  `.` or a `^` only after a variable-access, which a constant is not.
-
-  It has to be refused *here* rather than in the parser, because a selector
-  over a name is a designator until the symbol says otherwise, and the parser
-  has no scope (ADR-0072). Called from the subscript and the field selection
-  with its own base, so a nested one is reported once, at the outermost.
-
-  *Two* of 6.8.8's three forms, not three. 6.8.8.4's substring needs a `..`
-  inside a subscript, which the parser reads only under --std=extended -- so no
-  substring node exists under ISO 7185, and a call from that arm could never
-  fire in either standard. It was written for symmetry and deleted for being
-  unreachable; tests/substring_iso.pas is where that half is refused, a stage
-  earlier. }
-procedure RefuseConstAccess(base: nodePtr; l, c: integer);
-begin
-  if (not HasExtended(langStd)) and IsConstantAccess(base) then begin
-    ErrorAt(l, c);
-    writeln('selecting from a constant is an Extended Pascal feature; ',
-            'compile with --std=extended')
-  end
 end;
 
 { Whether the expression is a constant-access whose value lives in memory. It
@@ -9929,14 +9526,11 @@ begin
                 ok := true
               end
           end;
-      { 6.8.2 opens every constant position from a *constant* to a
-        constant-expression. Everything above is ISO 7185's `constant` -- a
-        signed literal or a name -- and these two are the rest of an
-        expression, so the standard decides which language is being folded. }
-      nkBinary:
-        if HasExtended(langStd) then ok := EvalConstBinary(e, res);
-      nkCall:
-        if HasExtended(langStd) then ok := EvalConstCall(e, res);
+      { 6.8.2 opens every constant position from a *constant* -- a signed
+        literal or a name, which is everything above -- to a
+        constant-expression, and these two are the rest of an expression. }
+      nkBinary: ok := EvalConstBinary(e, res);
+      nkCall: ok := EvalConstCall(e, res);
       { ISO/IEC 10206:1991 6.8.7's structured-value-constructor, named. 6.8.2
         makes `nonvarying` the whole test of a constant-expression -- not "the
         compiler can fold it" -- so an array, record or set value whose
@@ -9956,20 +9550,18 @@ begin
         else ok := EvalConstAccess(e, res);
       { 6.7.1 makes `nil` an unsigned-constant, so it is a primary and 6.8.2
         admits it: it names a value and reads nothing, which is the whole of
-        nonvarying. ISO 7185 6.3's `constant` has no `nil` at all, so the fold
-        is gated like the two above rather than sitting with the literals.
+        nonvarying.
 
         The constant keeps the literal's own type. 6.4.4's NOTE 2 says the
         token "does not have a single type, but assumes a suitable pointer-type
         to satisfy the assignment-compatibility rules", which is ADR-0019's
         nil-type -- assignable to every pointer-type and nothing assignable to
         it -- so one `const q = nil` serves them all. }
-      nkNil:
-        if HasExtended(langStd) then begin
-          res.stype := e^.ntype;
-          res.constValue := e;
-          ok := true
-        end;
+      nkNil: begin
+        res.stype := e^.ntype;
+        res.constValue := e;
+        ok := true
+      end;
       nkValueElem,
       nkSetMember, nkDeref, nkInt64,
       nkEmpty, nkAssign, nkWrite, nkRead, nkCompound, nkIf, nkWhile, nkRepeat,
@@ -11022,14 +10614,12 @@ begin
         if EvalConst(e^.ssLo, lo) and EvalConst(e^.ssHi, hi) then
           if IsInteger(lo.stype) and IsInteger(hi.stype) then begin
             n := lit^.stLen;
-            { AP 6.5.6 (ADR-0219): the dialect admits the empty substring, so
-              the third condition is `hi < lo - 1` there and `lo > hi` under
-              either conformance mode. The capacity 6.5.6 states -- one plus
-              the second index minus the first -- is then zero, and the node
-              built below is a length-zero literal, which is 6.1.9's
+            { AP 6.5.6 (ADR-0219): the empty substring is admitted, so the
+              third condition is `hi < lo - 1`. The capacity 6.5.6 states --
+              one plus the second index minus the first -- is then zero, and
+              the node built below is a length-zero literal, which is 6.1.9's
               null-string and already has a type. }
-            if langStd = stdAfterschool then bound := lo.intVal - 1
-                                        else bound := lo.intVal;
+            bound := lo.intVal - 1;
             if (lo.intVal < 1) or (hi.intVal > n) or
                (hi.intVal < bound) then begin
               ErrorAt(e^.line, e^.col);
@@ -14224,7 +13814,7 @@ begin
 end;
 
 function ResolveInquiry(d: nodePtr): typePtr;
-var s, q: symPtr; t: typePtr;
+var s: symPtr; t: typePtr;
 begin
   if d^.tqObj <> nil then
     ResolveInquiry := InquiryOfAccess(d)
@@ -14267,25 +13857,13 @@ begin
   end
   else if s = nil then begin
     ErrorAt(d^.line, d^.col);
-    { 6.4.9's object may be qualified, because a `variable-name` is
-      `[ imported-interface-identifier '.' ] variable-identifier` (6.5.1) --
-      and that is the *only* period it admits. `r.f` over a record variable is
-      a field-designator and reaches here spelled identically, the parser
-      having one production for both. Ask the symbol, not the syntax: a
-      qualifier naming something that is not an interface is the parser's
-      complaint arriving one stage late, so it gets the parser's sentence
-      rather than a report that the field is an undeclared variable. }
-    q := nil;
-    if d^.tqQualLen > 0 then q := Lookup(d^.tqQualAt, d^.tqQualLen);
-    if (q <> nil) and (q^.kind <> skInterface) then begin
-      write('a type-inquiry over a component of a variable is an ');
-      writeln('Afterschool Pascal feature; compile with --std=afterschool')
-    end
-    else begin
-      write('unknown variable ''');
-      WritePool(d^.tqAt, d^.tqLen);
-      writeln(''' in ''type of''')
-    end;
+    { The qualifier is always empty here: AP 6.4.9 parses the whole
+      variable-access (ADR-0215), so `r.f` arrives as tqObj and only a bare
+      name reaches tqAt. It used to be a qualified name, and a qualifier that
+      named something other than an interface got a sentence naming the mode. }
+    write('unknown variable ''');
+    WritePool(d^.tqAt, d^.tqLen);
+    writeln(''' in ''type of''');
     ResolveInquiry := intType
   end
   else if not IsVariable(s) then begin
@@ -14928,17 +14506,13 @@ begin
   if f = nil then begin
     ErrorAt(line, col);
     if wantInput then write('''input''') else write('''output''');
-    { 6.11.4.2 gives Extended Pascal three more ways to make the file
-      implicitly accessible than 6.10's one, so the message lists them --
-      otherwise it names the only remedy a module cannot use. }
-    if HasExtended(langStd) then begin
-      write(' must be listed as a program parameter or a module parameter, ',
-            'or imported through ');
-      if wantInput then write('StandardInput') else write('StandardOutput');
-      writeln(', to use it')
-    end
-    else
-      writeln(' must be listed as a program parameter to use it');
+    { 6.11.4.2 gives three more ways to make the file implicitly accessible
+      than 6.10's one, so the message lists them -- otherwise it names the only
+      remedy a module cannot use. }
+    write(' must be listed as a program parameter or a module parameter, ',
+          'or imported through ');
+    if wantInput then write('StandardInput') else write('StandardOutput');
+    writeln(', to use it');
     StandardFileRef := nil
   end
   else begin
@@ -15017,7 +14591,7 @@ begin
       { 6.5.1: a program-parameter possesses the bindability that is bindable
         whatever its type-denoter said. Set here as well as below, the two
         standard files being program-parameters like any other. }
-      if HasExtended(langStd) then s^.isBindable := true
+      s^.isBindable := true
     end
     { Neither standard restricts a program-parameter to a file. ISO 7185 6.10
       makes the binding of one that does not possess a file-type
@@ -15032,7 +14606,7 @@ begin
     else if not IsFile(s^.stype) then begin
       { 6.5.1 confers bindability on a program-parameter whatever its type is,
         so a non-file one is bindable too -- it is simply bound to nothing. }
-      if HasExtended(langStd) then s^.isBindable := true
+      s^.isBindable := true
     end
     else begin
       { 6.5.1: "The variable-identifier shall possess the bindability denoted
@@ -15043,7 +14617,7 @@ begin
         becomes one -- being a program-parameter is. Without this, 6.7.6.8's own
         NOTE 2 use of `binding` cannot be written, its whole point there being
         to inspect a binding the program did not make. }
-      if HasExtended(langStd) then s^.isBindable := true;
+      s^.isBindable := true;
       s^.binding := fbArgument;
       s^.fileArg := argIndex;
       argIndex := argIndex + 1
@@ -15870,21 +15444,19 @@ function SetValueTypeOf(e: nodePtr): typePtr;
 var node: nodePtr; s: symPtr; res: typePtr; done: boolean;
 begin
   res := nil;
-  if HasExtended(langStd) then begin
-    node := e;
-    done := false;
-    while not done do
-      if node^.kind = nkIndex then node := node^.ixBase
-      else if node^.kind = nkSubstr then node := node^.ssBase
-      else done := true;
-    if node^.kind = nkVar then begin
-      { A silent lookup: a name that is not in scope is not a set-value, and
-        the ordinary path is about to report it far better than this could. }
-      s := Lookup(node^.vrAt, node^.vrLen);
-      if s <> nil then
-        if s^.kind = skType then
-          if IsSet(s^.stype) then res := s^.stype
-    end
+  node := e;
+  done := false;
+  while not done do
+    if node^.kind = nkIndex then node := node^.ixBase
+    else if node^.kind = nkSubstr then node := node^.ssBase
+    else done := true;
+  if node^.kind = nkVar then begin
+    { A silent lookup: a name that is not in scope is not a set-value, and
+      the ordinary path is about to report it far better than this could. }
+    s := Lookup(node^.vrAt, node^.vrLen);
+    if s <> nil then
+      if s^.kind = skType then
+        if IsSet(s^.stype) then res := s^.stype
   end;
   SetValueTypeOf := res
 end;
@@ -16045,7 +15617,7 @@ begin
             writeln('a conversion this operator cannot report on');
             b^.ntype := canonTextType
           end
-        else if (b^.bnOp = opAdd) and (HasExtended(langStd)) and
+        else if (b^.bnOp = opAdd) and
            IsStringOrChar(l) and IsStringOrChar(r) then
           b^.ntype := canonStringType
         else if not IsArith(l) or not IsArith(r) then begin
@@ -16252,25 +15824,13 @@ begin
                     'string to a text first')
           end
         end
-        else if (HasExtended(langStd)) and IsStringOrChar(l) and
+        else if IsStringOrChar(l) and
            IsStringOrChar(r) and not (IsChar(l) and IsChar(r)) then
           { padded comparison: nothing to check }
-        else if IsCharArray(l) and IsCharArray(r) then begin
-          { A length that is a discriminant is not known here, so the
-            requirement that the two agree is made where the values are.
-            TypeLength would answer with arithmetic on the placeholder bounds,
-            which is a number and so not visibly wrong. }
-          if DynamicExtent(l) or DynamicExtent(r) then
-            { checked when the program runs }
-          else if TypeLength(l) <> TypeLength(r) then begin
-            ErrorAt(b^.line, b^.col);
-            write('strings of different lengths cannot be compared: ');
-            WriteTypeName(l);
-            write(' and ');
-            WriteTypeName(r);
-            writeln
-          end
-        end
+        { Two fixed-strings of unequal length used to be refused here, ISO 7185
+          having no padding rule for them. 6.4.5 d) is the rule that made the
+          arm above take every pair of char arrays instead, so nothing reaches
+          this point and the refusal went with ADR-0232's modes. }
         { 6.7.2.5: pointers compare only for equality. There is no ordering on
           them -- a heap address is not a value the program may reason about
           beyond identity. }
@@ -16393,41 +15953,33 @@ begin
     LookupBuiltin := biBinding
   { 6.7.6.9's two. }
   else if PoolIs(at, len, 'date     ') then LookupBuiltin := biDate
-  { The dialect's alone: under a conformance mode the name is nobody's, and
-    saying "unknown function" there is Annex B's row for it, as for int64. }
-  else if (langStd = stdAfterschool) and PoolIs(at, len, 'argcount ') then
+  { AP 6.7.6.10's two. }
+  else if PoolIs(at, len, 'argcount ') then
     LookupBuiltin := biArgCount
-  else if (langStd = stdAfterschool) and PoolIs(at, len, 'argument ') then
+  else if PoolIs(at, len, 'argument ') then
     LookupBuiltin := biArgument
   { AP 6.8.9 (ADR-0178). Recognised only when nothing of that name was
     declared, as every required identifier here is, so a program with a `try`
     of its own keeps it -- which is the whole of what a required identifier
     costs a conforming program (6.1.3). }
-  else if (langStd = stdAfterschool) and PoolIs(at, len, 'try      ') then
+  else if PoolIs(at, len, 'try      ') then
     LookupBuiltin := biTry
   { AP 6.4.14.6 (ADR-0182), and the same sentence: a program with a `take` of
     its own keeps it. }
-  else if (langStd = stdAfterschool) and PoolIs(at, len, 'take     ') then
+  else if PoolIs(at, len, 'take     ') then
     LookupBuiltin := biTake
   { AP 6.4.12.5 (ADR-0206), and the same sentence a third time: a program with
     a `release` of its own keeps it. }
-  else if (langStd = stdAfterschool) and PoolIs(at, len, 'release  ') then
+  else if PoolIs(at, len, 'release  ') then
     LookupBuiltin := biRelease
   else if PoolIs(at, len, 'time     ') then LookupBuiltin := biTime
   else LookupBuiltin := biNone
 end;
 
-{ The five required functions ISO/IEC 10206:1991 adds for the complex type.
-  They are grouped because every question anyone asks about them is the same
-  one: does this standard have them? }
-function IsComplexBuiltin(b: builtinKind): boolean;
-begin
-  IsComplexBuiltin := (b = biCmplx) or (b = biPolar) or (b = biRe) or
-                      (b = biIm) or (b = biArg)
-end;
-
-{ 6.7.6.6's two and 6.7.6.5's one. Grouped for the same reason the complex ones
-  are: the only question anyone asks is whether this standard has them. }
+{ 6.7.6.6's two and 6.7.6.5's one, grouped because the only question asked of
+  them together is which arm of CheckCall they take. The complex functions had
+  a predicate of this shape too and it went with ADR-0232: the one question it
+  answered was whether the mode had them. }
 function IsFileEnquiry(b: builtinKind): boolean;
 begin
   IsFileEnquiry := (b = biPosition) or (b = biLastPosition) or (b = biEmpty)
@@ -16445,15 +15997,7 @@ end;
 
 { The six comparison functions of 6.7.6.7, which take two operands where the
   other four take one or three. }
-{ 6.7.6.8's one. Grouped with the rest for the same reason: the only question
-  asked of it alone is whether this standard has it. }
-function IsBindingBuiltin(b: builtinKind): boolean;
-begin IsBindingBuiltin := b = biBinding end;
-
-{ 6.7.6.9's two. Grouped for the same reason as the rest -- but note that date
-  and time are names an ISO 7185 program is especially likely to have used for
-  its own, which makes the grouping load-bearing here rather than tidy: it is
-  the gate that keeps them out of that language. }
+{ 6.7.6.9's two. }
 function IsTimeBuiltin(b: builtinKind): boolean;
 begin IsTimeBuiltin := (b = biDate) or (b = biTime) end;
 
@@ -16768,24 +16312,10 @@ begin
   end
   else begin
     c^.clBuiltin := LookupBuiltin(c^.clAt, c^.clLen);
-    { The complex functions are ISO/IEC 10206:1991's, and their names are not
-      reserved in either language -- a valid ISO 7185 program may declare a
-      function called `re`. So they are recognised only when nothing else of
-      that name was found, and only under the standard that has them; the
-      message then says the feature is missing rather than that the name is. }
-    if (langStd = stdIso7185) and
-       (IsComplexBuiltin(c^.clBuiltin) or IsFileEnquiry(c^.clBuiltin) or
-        IsStringBuiltin(c^.clBuiltin) or
-        IsBindingBuiltin(c^.clBuiltin) or IsTimeBuiltin(c^.clBuiltin) or
-        (c^.clBuiltin = biCard)) then begin
-      ErrorAt(c^.line, c^.col);
-      write('''');
-      WritePool(c^.clAt, c^.clLen);
-      writeln(''' is an Extended Pascal function; compile with ',
-              '--std=extended');
-      c^.ntype := intType
-    end
-    else if c^.clBuiltin = biNone then begin
+    { A required identifier is recognised only when nothing else of that name
+      was found: 6.1.3 lets a program declare its own `re`, and does not
+      reserve the spelling. }
+    if c^.clBuiltin = biNone then begin
       ErrorAt(c^.line, c^.col);
       write('unknown function ''');
       WritePool(c^.clAt, c^.clLen);
@@ -16806,7 +16336,7 @@ begin
         last := a;
         a := a^.next
       end;
-      stepped := (HasExtended(langStd)) and (n = 2) and
+      stepped := (n = 2) and
                  ((c^.clBuiltin = biSucc) or (c^.clBuiltin = biPred));
       if stepped then
         if last^.ntype <> nil then
@@ -17189,10 +16719,7 @@ begin
             unwritten run-time check under an ordinary assignment. `round` is
             not extended, there being nothing to round. }
           biTrunc: begin
-            if langStd = stdAfterschool then
-              RequireArg(c, IsReal(t) or IsInt64(t), 'a real      ', t)
-            else
-              RequireArg(c, IsReal(t), 'a real      ', t);
+            RequireArg(c, IsReal(t) or IsInt64(t), 'a real      ', t);
             c^.ntype := intType
           end;
           biRound: begin
@@ -17733,22 +17260,11 @@ begin
       { ISO 7185 6.4.3.2: a string literal *is* a packed array of char. Giving
         it that type rather than one of its own is what makes assignment,
         comparison and parameter passing work with no special cases. }
-      { ISO/IEC 10206:1991 6.1.9 spells a character-string with *zero or more*
-        string-elements, so `''` denotes the null-string 6.4.3.3.1 names.
-        ISO 7185's grammar has one element before the repetition, which is why
-        the two languages differ over two apostrophes and nothing else. }
+      { 6.1.9 spells a character-string with *zero or more* string-elements,
+        so `''` denotes the null-string 6.4.3.3.1 names. }
       nkStr:
-        if e^.stLen = 0 then begin
-          if langStd = stdIso7185 then begin
-            ErrorAt(e^.line, e^.col);
-            writeln('a string literal cannot be empty');
-            e^.ntype := StringType(1)
-          end
-          else
-            e^.ntype := canonStringType
-        end
-        else
-          e^.ntype := StringType(e^.stLen);
+        if e^.stLen = 0 then e^.ntype := canonStringType
+        else e^.ntype := StringType(e^.stLen);
 
       { 6.5.6's substring-variable and 6.8.6.5's substring-function-access,
         which are one kind here because they differ only in what the base is --
@@ -17778,14 +17294,9 @@ begin
           the base's type tells the two apart -- which Sema knows and the
           parser does not. That is why the feature needed no syntax: 6.5.6
           already spells `a[i..j]` for a string. }
-        { ADR-0125 is a dialect feature, and `a[i..j]` over an array is the
-          half of it that a conformance mode can *see*: §6.5.6 gives that
-          designator to a string only, so both other modes must go on saying
-          so. difftest is what noticed -- src/ is frozen at the conformance
-          surface and kept the old answer for tests/extended/substring_errors,
-          correctly. }
-        sliced := (langStd = stdAfterschool) and
-                  (IsSlice(b) or (IsArray(b) and not IsCharArray(b)));
+        { ADR-0125: §6.5.6 gives `a[i..j]` to a string, and this language
+          gives it to an array as well. }
+        sliced := IsSlice(b) or (IsArray(b) and not IsCharArray(b));
         if sliced then begin
           if IsArray(b) and not IsInteger(b^.indexType) then begin
             ErrorAt(e^.line, e^.col);
@@ -17840,7 +17351,6 @@ begin
         else begin
         CheckExpr(e^.ixBase);
         CheckExpr(e^.ixIndex);
-        RefuseConstAccess(e^.ixBase, e^.line, e^.col);
         b := e^.ixBase^.ntype;
         { 6.4.3.3.3 NOTE 1: a variable-string is indexed as an array, and every
           component is a char. 6.5.3.2 makes the subscript an *integer* -- not
@@ -17901,20 +17411,10 @@ begin
           *variable-access*, and 6.5.1's four are an entire variable, a
           component, an identified variable and a buffer variable -- a
           function-designator is none of them, and 6.8.2.2 makes a bare
-          function-identifier a recursive activation, so `f^` would dereference
-          a value. 6.8.6.4's function-identified-variable is Extended Pascal's
-          (ADR-0056), where a call *written with arguments* never reaches here
-          under ISO 7185 because AfterCall does not offer it the selectors. A
-          parameterless function is a bare name and the parser cannot tell, so
-          this is where it is told -- which is the whole of what IsCallValue
-          answers, and this is the site where that question was got right
-          first and then written out inline (ADR-0179). }
-        if not HasExtended(langStd) then
-          if IsCallValue(e^.drBase) then begin
-            ErrorAt(e^.line, e^.col);
-            writeln('dereferencing a function result is an Extended Pascal ',
-                    'feature; compile with --std=extended')
-          end;
+          function-identifier a recursive activation. 6.8.6.4's
+          function-identified-variable is what this language has instead
+          (ADR-0056), so `f^` over a call is admitted; IsCallValue is what
+          answered the older question and is kept where ADR-0179 put it. }
         { `f^` on a file is the buffer variable (ISO 7185 6.5.5), not a
           dereference: one component of the file, which for a text file is the
           character it is positioned at. The syntax is shared, so this is the
@@ -17997,7 +17497,6 @@ begin
           end;
         if qual = nil then begin
         CheckExpr(e^.fdBase);
-        RefuseConstAccess(e^.fdBase, e^.line, e^.col);
         b := e^.fdBase^.ntype;
         { 6.8.4: `v.d` where v possesses a type produced from a schema and d
           is one of that schema's formal discriminants. Looked for before the
@@ -18131,7 +17630,7 @@ begin
             the call; a program that declared its own took the branch above
             this one. The call is built and checked as any call is, and hangs
             off this node as a husk. }
-          if (e^.vrSym = nil) and (langStd = stdAfterschool) and
+          if (e^.vrSym = nil) and
              PoolIs(e^.vrAt, e^.vrLen, 'argcount ') then begin
             e^.vrCall := NewNode(nkCall, e^.line, e^.col);
             e^.vrCall^.clAt := e^.vrAt;
@@ -18620,9 +18119,8 @@ begin
           not, which was the one asymmetry the type had -- and 6.9.1's rule is
           the same at both widths, so what it needed was the bound and not a
           second reader (ADR-0134). }
-        okRead := IsInteger(t) or IsReal(t) or IsChar(t) or IsInt64(t);
-        if (not okRead) and (HasExtended(langStd)) then
-          okRead := IsStringType(t)
+        okRead := IsInteger(t) or IsReal(t) or IsChar(t) or IsInt64(t) or
+                  IsStringType(t)
       end
       else
         okRead := true;
@@ -19616,7 +19114,7 @@ begin
     binds the same way -- the value has storage and the binding is its address
     -- and differs only in that the field-identifiers it introduces are
     constant-field-identifiers, which denote values.
-    No langStd test: the only structured constant ISO 7185 has is a string
+    No standard test: the only structured constant ISO 7185 had is a string
     (ADR-0068), which is not a record, so a constant-access reaching here is
     already an Extended Pascal program. A gate would be unreachable. }
   constAccess := IsConstantAccess(w^.wtRecord);
@@ -19633,11 +19131,7 @@ begin
     field-identifiers. }
   else if not (IsRecord(t) or ((t <> nil) and (t^.schema <> nil))) then begin
     ErrorAt(w^.wtRecord^.line, w^.wtRecord^.col);
-    { ISO 7185 has no schemata, so naming one there would offer a remedy that
-      language does not have -- the same reason StandardFileRef words its
-      message by standard. }
-    write('''with'' needs a record variable');
-    if HasExtended(langStd) then write(' or one produced from a schema');
+    write('''with'' needs a record variable or one produced from a schema');
     write(', found ');
     if t = nil then write('nothing') else WriteTypeName(t);
     writeln;
@@ -20324,18 +19818,13 @@ begin
             PoolIs(s^.pcAt, s^.pcLen, 'pack     ') or
             PoolIs(s^.pcAt, s^.pcLen, 'unpack   ') or
             PoolIs(s^.pcAt, s^.pcLen, 'page     ') or
-            { AP 6.7.5.9's exit is the dialect's own, so the gate is the
-              dialect and not HasExtended -- and it is behind `sym = nil`
-              like every other required procedure, which is the whole of what
-              keeps a program declaring its own `exit` (ADR-0117). }
-            ((langStd = stdAfterschool) and
-             (PoolIs(s^.pcAt, s^.pcLen, 'exit     ') or
-              { AP 6.7.5.10, 6.7.5.11: for exit's reason, and shadowable by
-                a program that declares its own (ADR-0208). }
-              PoolIs(s^.pcAt, s^.pcLen, 'break    ') or
-              PoolIsWide(s^.pcAt, s^.pcLen, 'continue        '))) or
-            ((HasExtended(langStd)) and
-             IsRequiredProc(s^.pcAt, s^.pcLen))) then
+            { AP 6.7.5.9's exit, and AP 6.7.5.10 and 6.7.5.11's two -- each
+              behind `sym = nil` like every other required procedure, which is
+              the whole of what keeps a program declaring its own (ADR-0208). }
+            PoolIs(s^.pcAt, s^.pcLen, 'exit     ') or
+            PoolIs(s^.pcAt, s^.pcLen, 'break    ') or
+            PoolIsWide(s^.pcAt, s^.pcLen, 'continue        ') or
+            IsRequiredProc(s^.pcAt, s^.pcLen)) then
           CheckStdProc(s)
         else if sym = nil then begin
           ErrorAt(s^.line, s^.col);
@@ -20970,39 +20459,29 @@ end;
 function CheckedResultType;
 begin
   CheckedResultType := t;
-  if HasExtended(langStd) then begin
-    if IsFile(t) or ContainsFile(t) then begin
-      ErrorAt(line, col);
-      write('a function cannot return ');
-      WriteTypeName(t);
-      write(': a result may not be, or ');
-      if IsHandle(t) then
-        writeln('contain, a handle -- only an ''external'' function ',
-                'answers one, and only to a handle variable')
-      { AP 6.4.14.3. A result is a value and this is not one: the variable it
-        would have to be released with is the one a result has not got. }
-      else if ContainsOwnedPointer(t) then
-        writeln('contain, an owned pointer -- there is no variable to ',
-                'release it, so it would be owned by no one')
-      else
-        writeln('contain, a file');
-      CheckedResultType := intType
-    end
-    else if bindable_ then begin
-      ErrorAt(line, col);
-      write('a function cannot return a bindable ');
-      WriteTypeName(t);
-      write(': only a variable can be bound ');
-      writeln('to something outside the program');
-      CheckedResultType := intType
-    end
-  end
-  else if not IsOrdinal(t) and not IsReal(t) and not IsComplex(t) and
-          not IsPointer(t) then begin
+  if IsFile(t) or ContainsFile(t) then begin
     ErrorAt(line, col);
     write('a function cannot return ');
     WriteTypeName(t);
-    writeln('; use a var parameter');
+    write(': a result may not be, or ');
+    if IsHandle(t) then
+      writeln('contain, a handle -- only an ''external'' function ',
+              'answers one, and only to a handle variable')
+    { AP 6.4.14.3. A result is a value and this is not one: the variable it
+      would have to be released with is the one a result has not got. }
+    else if ContainsOwnedPointer(t) then
+      writeln('contain, an owned pointer -- there is no variable to ',
+              'release it, so it would be owned by no one')
+    else
+      writeln('contain, a file');
+    CheckedResultType := intType
+  end
+  else if bindable_ then begin
+    ErrorAt(line, col);
+    write('a function cannot return a bindable ');
+    WriteTypeName(t);
+    write(': only a variable can be bound ');
+    writeln('to something outside the program');
     CheckedResultType := intType
   end
 end;
@@ -22010,15 +21489,11 @@ end;
   frame for a required file to sit in -- the component that *has* the
   main-program-declaration owns the storage, and this one reaches it by name.
   The name is fixed rather than derived from the program's, because the two
-  translations have no way to agree on anything else. Under ISO 7185 there are
-  no modules, so nothing can reach these from outside the main-program-block
-  and the name would be an export with no importer. }
+  translations have no way to agree on anything else. }
 procedure LinkStdFile(s: symPtr; kind: integer);
 begin
-  if HasExtended(langStd) then begin
-    s^.linkKind := kind;
-    s^.storageElsewhere := progBlock = nil
-  end
+  s^.linkKind := kind;
+  s^.storageElsewhere := progBlock = nil
 end;
 
 function EnsureStdFile(wantInput: boolean): symPtr;
@@ -22082,36 +21557,34 @@ end;
 procedure InstallRequiredInterfaces;
 var i: ifacePtr; c: constitPtr; at, len: integer;
 begin
-  if HasExtended(langStd) then begin
-    new(i);
-    InternWide('standardinput   ', i^.at, i^.len);
-    i^.owner := nil;
-    i^.next := nil;
-    new(c);
-    InternWord('input    ', c^.at, c^.len);
-    c^.sym := nil;
-    c^.isProtected := false;
-    c^.next := nil;
-    i^.items := c;
-    i^.itemTail := c;
-    interfaces := i;
-    interfaceTail := i;
-    new(i);
-    InternWide('standardoutput  ', i^.at, i^.len);
-    i^.owner := nil;
-    i^.next := nil;
-    new(c);
-    InternWord('output   ', c^.at, c^.len);
-    c^.sym := nil;
-    c^.isProtected := false;
-    c^.next := nil;
-    i^.items := c;
-    i^.itemTail := c;
-    interfaceTail^.next := i;
-    interfaceTail := i;
-    at := 0;
-    len := 0
-  end
+  new(i);
+  InternWide('standardinput   ', i^.at, i^.len);
+  i^.owner := nil;
+  i^.next := nil;
+  new(c);
+  InternWord('input    ', c^.at, c^.len);
+  c^.sym := nil;
+  c^.isProtected := false;
+  c^.next := nil;
+  i^.items := c;
+  i^.itemTail := c;
+  interfaces := i;
+  interfaceTail := i;
+  new(i);
+  InternWide('standardoutput  ', i^.at, i^.len);
+  i^.owner := nil;
+  i^.next := nil;
+  new(c);
+  InternWord('output   ', c^.at, c^.len);
+  c^.sym := nil;
+  c^.isProtected := false;
+  c^.next := nil;
+  i^.items := c;
+  i^.itemTail := c;
+  interfaceTail^.next := i;
+  interfaceTail := i;
+  at := 0;
+  len := 0
 end;
 
 { The imported form of a constituent. A variable arrives as a *copy* of the
@@ -22537,49 +22010,44 @@ begin
         So the offer is made to a hidden frame variable standing for the
         type-definition rather than to any variable. If every bound folded it
         is withdrawn and nothing was claimed. }
-      hv := nil;
-      if HasExtended(langStd) then begin
-        hv := NewSymbol;
-        InternBoundsName(owner^.frameCount, at, len);
-        hv^.at := at;
-        hv^.len := len;
-        hv^.kind := skVar;
-        hv^.stype := intType;
-        hv^.level := owner^.level;
-        hv^.owner := owner;
-        hv^.frameIndex := -1;
-        dynBoundsFor := hv;
-        dynamicVarFor := hv;
-        t := ResolveType(d^.tdType);
-        dynBoundsFor := nil;
-        dynamicVarFor := nil;
-        if hv^.discSyms = nil then
-          hv := nil
-        else begin
-          hv^.stype := t;
-          hv^.boundsOwner := true;
-          { A written schema brought its own; a bare bound has none, so the
-            anonymous one ADR-0113 hangs the discriminants on is made here for
-            the same reason and by the same procedure. }
-          if hv^.descSchema = nil then BoundSchemaFor(hv);
-          ClaimBoundsSlot(hv, owner);
-          { The type is what a later variable-declaration will have; this is
-            how it finds the descriptor its extent is in. }
-          t^.boundsVar := hv;
-          { 6.2.3.6 makes a module's activation last as long as the program, so
-            there is no stack for storage sized on entry -- the same rule that
-            refuses it to a module's variable (ADR-0041, ADR-0113), and the
-            message names what the program wrote. }
-          if owner^.isModuleSym then begin
-            ErrorAt(d^.line, d^.col);
-            writeln('the bounds of a module''s type must be constants, ',
-                    'because a module''s activation lasts as long as the ',
-                    'program')
-          end
+      hv := NewSymbol;
+      InternBoundsName(owner^.frameCount, at, len);
+      hv^.at := at;
+      hv^.len := len;
+      hv^.kind := skVar;
+      hv^.stype := intType;
+      hv^.level := owner^.level;
+      hv^.owner := owner;
+      hv^.frameIndex := -1;
+      dynBoundsFor := hv;
+      dynamicVarFor := hv;
+      t := ResolveType(d^.tdType);
+      dynBoundsFor := nil;
+      dynamicVarFor := nil;
+      if hv^.discSyms = nil then
+        hv := nil
+      else begin
+        hv^.stype := t;
+        hv^.boundsOwner := true;
+        { A written schema brought its own; a bare bound has none, so the
+          anonymous one ADR-0113 hangs the discriminants on is made here for
+          the same reason and by the same procedure. }
+        if hv^.descSchema = nil then BoundSchemaFor(hv);
+        ClaimBoundsSlot(hv, owner);
+        { The type is what a later variable-declaration will have; this is
+          how it finds the descriptor its extent is in. }
+        t^.boundsVar := hv;
+        { 6.2.3.6 makes a module's activation last as long as the program, so
+          there is no stack for storage sized on entry -- the same rule that
+          refuses it to a module's variable (ADR-0041, ADR-0113), and the
+          message names what the program wrote. }
+        if owner^.isModuleSym then begin
+          ErrorAt(d^.line, d^.col);
+          writeln('the bounds of a module''s type must be constants, ',
+                  'because a module''s activation lasts as long as the ',
+                  'program')
         end
-      end
-      else
-        t := ResolveType(d^.tdType);
+      end;
       s := Declare(d^.tdAt, d^.tdLen, skType, d^.line, d^.col);
       if s^.stype = nil then begin   { a duplicate: keep the first definition }
         s^.stype := t;
@@ -22700,12 +22168,11 @@ begin
       discriminants are above; if every bound folded, nothing was created and
       the group is an ordinary one that shares one type.
 
-      ISO 7185 6.4.2.4 writes `subrange-type = constant '..' constant`, so the
-      offer is not made in that language and a bound that is not a constant is
-      the error it has always been. }
+      6.4.2.4's subrange-bound is an expression, which is what makes the
+      offer possible at all. }
     dynamic := false;
     firstDyn := nil;
-    if (HasExtended(langStd)) and (g^.grNames <> nil) then begin
+    if g^.grNames <> nil then begin
       n := g^.grNames;
       firstDyn := AddFrameVar(n^.dnAt, n^.dnLen, skVar, intType, owner,
                               n^.line, n^.col);
@@ -23592,18 +23059,19 @@ var s, cap: symPtr; at, len, stampIndex: integer;
   end;
 
 begin
-  { 6.4.1's required type-identifiers. `complex` is 10206's alone, and a valid
-    ISO 7185 program may define a type of that name -- which is why it is asked
-    of the standard here rather than of the lexer. }
+  { 6.4.1's required type-identifiers. Each is declared in the outermost
+    scope, where 6.1.3 lets a program shadow it, rather than being a
+    word-symbol the lexer knows. }
   RequiredType('integer  ', intType);
   RequiredType('real     ', realType);
   RequiredType('boolean  ', boolType);
   RequiredType('char     ', charType);
   RequiredType('text     ', textType);
-  if HasExtended(langStd) then RequiredType('complex  ', complexType);
-  { ADR-0128. The dialect's alone: neither standard has a second integer type,
-    and a valid Extended Pascal program may define a type of this name. }
-  if langStd = stdAfterschool then RequiredType('int64    ', int64Type);
+  RequiredType('complex  ', complexType);
+  { ADR-0128. Neither standard has a second integer type, and a valid Extended
+    Pascal program may define one of this name -- so it is a required
+    identifier and not a word-symbol. }
+  RequiredType('int64    ', int64Type);
 
   { AP 6.4.15.1: "`utf8` shall be a required identifier denoting a schema of
     one discriminant, whose identifier shall be `capacity`."
@@ -23619,24 +23087,20 @@ begin
     string-ish types `t` is. It counts **bytes** either way; what differs is
     that a string's length is in the same unit as its capacity and a text's is
     not (6.4.15.8, and its NOTE on the two units). }
-  if langStd = stdAfterschool then begin
-    InternWord('utf8     ', at, len);
-    s := Declare(at, len, skSchema, 0, 0);
-    s^.isTextSchema := true;
-    utf8Schema := s;
-    cap := NewSymbol;
-    InternWord('capacity ', at, len);
-    cap^.at := at;
-    cap^.len := len;
-    cap^.kind := skConst;
-    cap^.stype := intType;
-    AppendSym(s^.discs, s^.discTail, cap)
-  end;
+  InternWord('utf8     ', at, len);
+  s := Declare(at, len, skSchema, 0, 0);
+  s^.isTextSchema := true;
+  utf8Schema := s;
+  cap := NewSymbol;
+  InternWord('capacity ', at, len);
+  cap^.at := at;
+  cap^.len := len;
+  cap^.kind := skConst;
+  cap^.stype := intType;
+  AppendSym(s^.discs, s^.discTail, cap);
 
-  { 6.6.6's required functions. The 10206-only ones are declared only under
-    that standard, so an ISO 7185 program may still declare a function called
-    `re` and CheckCall may still say that `re` is an Extended Pascal function
-    rather than that the name is unknown. }
+  { 6.6.6's required functions, and AP 6.7.6.10's two. Each is a required
+    *identifier* (6.1.3), so a program declaring its own `re` keeps it. }
   RequiredFunc('abs      ');
   RequiredFunc('sqr      ');
   RequiredFunc('odd      ');
@@ -23654,37 +23118,32 @@ begin
   RequiredFunc('round    ');
   RequiredFunc('eof      ');
   RequiredFunc('eoln     ');
-  if HasExtended(langStd) then begin
-    RequiredFunc('card     ');
-    RequiredFunc('cmplx    ');
-    RequiredFunc('polar    ');
-    RequiredFunc('re       ');
-    RequiredFunc('im       ');
-    RequiredFunc('arg      ');
-    RequiredFunc('position ');
-    RequiredFuncWide('lastposition    ');
-    RequiredFunc('empty    ');
-    RequiredFunc('length   ');
-    RequiredFunc('index    ');
-    RequiredFunc('substr   ');
-    RequiredFunc('trim     ');
-    RequiredFunc('eq       ');
-    RequiredFunc('ne       ');
-    RequiredFunc('lt       ');
-    RequiredFunc('gt       ');
-    RequiredFunc('le       ');
-    RequiredFunc('ge       ');
-    RequiredFunc('binding  ');
-    RequiredFunc('date     ');
-    RequiredFunc('time     ')
-  end;
-  { AP 6.7.6.10, the dialect's alone (ADR-0173). Required identifiers and so
-    shadowable, §6.1.3 -- tests/dialect/arguments.pas declares its own
+  RequiredFunc('card     ');
+  RequiredFunc('cmplx    ');
+  RequiredFunc('polar    ');
+  RequiredFunc('re       ');
+  RequiredFunc('im       ');
+  RequiredFunc('arg      ');
+  RequiredFunc('position ');
+  RequiredFuncWide('lastposition    ');
+  RequiredFunc('empty    ');
+  RequiredFunc('length   ');
+  RequiredFunc('index    ');
+  RequiredFunc('substr   ');
+  RequiredFunc('trim     ');
+  RequiredFunc('eq       ');
+  RequiredFunc('ne       ');
+  RequiredFunc('lt       ');
+  RequiredFunc('gt       ');
+  RequiredFunc('le       ');
+  RequiredFunc('ge       ');
+  RequiredFunc('binding  ');
+  RequiredFunc('date     ');
+  RequiredFunc('time     ');
+  { AP 6.7.6.10 (ADR-0173) -- tests/dialect/arguments.pas declares its own
     `argument` and keeps it. }
-  if langStd = stdAfterschool then begin
-    RequiredFunc('argcount ');
-    RequiredFunc('argument ')
-  end;
+  RequiredFunc('argcount ');
+  RequiredFunc('argument ');
 
   InternWord('true     ', at, len);
   s := Declare(at, len, skConst, 0, 0);
@@ -23708,52 +23167,48 @@ begin
     below does and for exactly the reason ADR-0025 gave. The type is
     -maxint64..maxint64 as integer is -maxint..maxint, so the i64 whose bit
     pattern is the minimum is not a value of it. }
-  if langStd = stdAfterschool then begin
-    InternWord('maxint64 ', at, len);
-    s := Declare(at, len, skConst, 0, 0);
-    s^.stype := int64Type;
-    InternWide2('9223372036854775', '807             ', s^.realAt, s^.realLen)
-  end;
+  InternWord('maxint64 ', at, len);
+  s := Declare(at, len, skConst, 0, 0);
+  s^.stype := int64Type;
+  InternWide2('9223372036854775', '807             ', s^.realAt, s^.realLen);
 
   { 6.4.2.2 d): "The value of maxchar shall be the largest value of
     char-type." A char here is a byte (ADR-0021), so it is 255 -- and it is a
     required *identifier* declared in the outermost scope, which a program may
     shadow, rather than a word-symbol. }
-  if HasExtended(langStd) then begin
-    InternWord('maxchar  ', at, len);
-    s := Declare(at, len, skConst, 0, 0);
-    s^.stype := charType;
-    s^.charVal := chr(setLimit);
+  InternWord('maxchar  ', at, len);
+  s := Declare(at, len, skConst, 0, 0);
+  s^.stype := charType;
+  s^.charVal := chr(setLimit);
 
-    { 6.4.2.2 b): "Each of the required constant-identifiers minreal, maxreal,
-      and epsreal shall denote an implementation-defined positive value of
-      real-type", where maxreal and minreal bound the magnitudes arithmetic can
-      be expected to work over and "the value of epsreal shall be the result of
-      subtracting 1.0 from the smallest value of real-type that is greater than
-      1.0."
+  { 6.4.2.2 b): "Each of the required constant-identifiers minreal, maxreal,
+    and epsreal shall denote an implementation-defined positive value of
+    real-type", where maxreal and minreal bound the magnitudes arithmetic can
+    be expected to work over and "the value of epsreal shall be the result of
+    subtracting 1.0 from the smallest value of real-type that is greater than
+    1.0."
 
-      A real is an IEEE-754 binary64 here, so the three are its largest finite
-      value, its smallest positive *normal* one, and its epsilon. Each is
-      spelled as decimal text, the same characters the C++ compiler writes, and
-      that is the mechanism rather than a formatting choice: this compiler has
-      no floating-point type and carries a real as the characters that were
-      written, all the way into the IR (ADR-0025). Each spelling is the
-      shortest decimal that round-trips to the value it names. }
-    InternWord('maxreal  ', at, len);
-    s := Declare(at, len, skConst, 0, 0);
-    s^.stype := realType;
-    InternWide2('1.79769313486231', '57e308          ', s^.realAt, s^.realLen);
+    A real is an IEEE-754 binary64 here, so the three are its largest finite
+    value, its smallest positive *normal* one, and its epsilon. Each is
+    spelled as decimal text, the same characters the C++ compiler writes, and
+    that is the mechanism rather than a formatting choice: this compiler has
+    no floating-point type and carries a real as the characters that were
+    written, all the way into the IR (ADR-0025). Each spelling is the
+    shortest decimal that round-trips to the value it names. }
+  InternWord('maxreal  ', at, len);
+  s := Declare(at, len, skConst, 0, 0);
+  s^.stype := realType;
+  InternWide2('1.79769313486231', '57e308          ', s^.realAt, s^.realLen);
 
-    InternWord('minreal  ', at, len);
-    s := Declare(at, len, skConst, 0, 0);
-    s^.stype := realType;
-    InternWide2('2.22507385850720', '14e-308         ', s^.realAt, s^.realLen);
+  InternWord('minreal  ', at, len);
+  s := Declare(at, len, skConst, 0, 0);
+  s^.stype := realType;
+  InternWide2('2.22507385850720', '14e-308         ', s^.realAt, s^.realLen);
 
-    InternWord('epsreal  ', at, len);
-    s := Declare(at, len, skConst, 0, 0);
-    s^.stype := realType;
-    InternWide2('2.22044604925031', '3e-16           ', s^.realAt, s^.realLen)
-  end;
+  InternWord('epsreal  ', at, len);
+  s := Declare(at, len, skConst, 0, 0);
+  s^.stype := realType;
+  InternWide2('2.22044604925031', '3e-16           ', s^.realAt, s^.realLen);
 
   { ISO/IEC 10206:1991 6.4.3.3.3: "There shall be a schema that is denoted by
     the required schema-identifier `string`. The schema `string` shall have one
@@ -23764,95 +23219,93 @@ begin
     scope, where a program may shadow it -- and not as a word-symbol, because
     6.4.3.3.3 makes it an identifier and a valid ISO 7185 program may define a
     type of that name. }
-  if HasExtended(langStd) then begin
-    { 6.4.3.4: "There shall be a record-type designated packed and denoted by
-      the required type-identifier `BindingType`. For each of the required
-      field-identifiers `name` and `bound`, there shall be an associated
-      required field ... an implementation-defined variable-string-type and a
-      type denoted by the type-denoter Boolean, respectively."
+  { 6.4.3.4: "There shall be a record-type designated packed and denoted by
+    the required type-identifier `BindingType`. For each of the required
+    field-identifiers `name` and `bound`, there shall be an associated
+    required field ... an implementation-defined variable-string-type and a
+    type denoted by the type-denoter Boolean, respectively."
 
-      The capacity of `name` is the implementation-defined part, and it is what
-      made this feature wait for the string type: there was no
-      variable-string-type to give the field until 6.4.3.3 landed. }
-    { The schema is declared *first*, although 6.4.3.4 comes before 6.4.3.3.3
-      in the standard, because BindingType has a field produced from it and
-      6.4.8 makes that production the same type as the one a program writes.
-      Ordering the other way is what left the field with a string(255) of its
-      own. }
-    InternWord('string   ', at, len);
-    s := Declare(at, len, skSchema, 0, 0);
-    s^.isStringSchema := true;
-    stringSchema := s;
-    cap := NewSymbol;
-    InternWord('capacity ', at, len);
-    cap^.at := at;
-    cap^.len := len;
-    cap^.kind := skConst;
-    cap^.stype := intType;
-    AppendSym(s^.discs, s^.discTail, cap);
+    The capacity of `name` is the implementation-defined part, and it is what
+    made this feature wait for the string type: there was no
+    variable-string-type to give the field until 6.4.3.3 landed. }
+  { The schema is declared *first*, although 6.4.3.4 comes before 6.4.3.3.3
+    in the standard, because BindingType has a field produced from it and
+    6.4.8 makes that production the same type as the one a program writes.
+    Ordering the other way is what left the field with a string(255) of its
+    own. }
+  InternWord('string   ', at, len);
+  s := Declare(at, len, skSchema, 0, 0);
+  s^.isStringSchema := true;
+  stringSchema := s;
+  cap := NewSymbol;
+  InternWord('capacity ', at, len);
+  cap^.at := at;
+  cap^.len := len;
+  cap^.kind := skConst;
+  cap^.stype := intType;
+  AppendSym(s^.discs, s^.discTail, cap);
 
-    bindingTy := NewType(tyRecord);
-    bindingTy^.isPacked := true;
-    nameType := StringOfCapacity(bindNameCap);
-    new(fld);
-    InternWord('name     ', fld^.at, fld^.len);
-    fld^.ftype := nameType;
-    fld^.index := 0;
-    fld^.variant := nil;
-    fld^.line := 0;
-    fld^.col := 0;
-    fld^.initValue := nil;
-    fld^.isBindable := false;   { 6.4.3.4, as above }
-    fld^.next := nil;
-    bindingTy^.fields := fld;
-    bindingTy^.fieldTail := fld;
-    new(fld);
-    InternWord('bound    ', fld^.at, fld^.len);
-    fld^.ftype := boolType;
-    fld^.index := 1;
-    fld^.variant := nil;
-    fld^.line := 0;
-    fld^.col := 0;
-    fld^.initValue := nil;
-    fld^.isBindable := false;   { 6.4.3.4, as above }
-    fld^.next := nil;
-    bindingTy^.fieldTail^.next := fld;
-    bindingTy^.fieldTail := fld;
-    InternWide('bindingtype     ', at, len);
-    s := Declare(at, len, skType, 0, 0);
-    s^.stype := bindingTy;
-    { The name is folded for lookup, as every identifier is, but a diagnostic
-      spells it the way 6.4.3.4 does -- so the alias is interned separately in
-      the standard's own capitals. Nothing ever looks that copy up. }
-    InternWide('BindingType     ', at, len);
-    bindingTy^.aliasAt := at;
-    bindingTy^.aliasLen := len;
+  bindingTy := NewType(tyRecord);
+  bindingTy^.isPacked := true;
+  nameType := StringOfCapacity(bindNameCap);
+  new(fld);
+  InternWord('name     ', fld^.at, fld^.len);
+  fld^.ftype := nameType;
+  fld^.index := 0;
+  fld^.variant := nil;
+  fld^.line := 0;
+  fld^.col := 0;
+  fld^.initValue := nil;
+  fld^.isBindable := false;   { 6.4.3.4, as above }
+  fld^.next := nil;
+  bindingTy^.fields := fld;
+  bindingTy^.fieldTail := fld;
+  new(fld);
+  InternWord('bound    ', fld^.at, fld^.len);
+  fld^.ftype := boolType;
+  fld^.index := 1;
+  fld^.variant := nil;
+  fld^.line := 0;
+  fld^.col := 0;
+  fld^.initValue := nil;
+  fld^.isBindable := false;   { 6.4.3.4, as above }
+  fld^.next := nil;
+  bindingTy^.fieldTail^.next := fld;
+  bindingTy^.fieldTail := fld;
+  InternWide('bindingtype     ', at, len);
+  s := Declare(at, len, skType, 0, 0);
+  s^.stype := bindingTy;
+  { The name is folded for lookup, as every identifier is, but a diagnostic
+    spells it the way 6.4.3.4 does -- so the alias is interned separately in
+    the standard's own capitals. Nothing ever looks that copy up. }
+  InternWide('BindingType     ', at, len);
+  bindingTy^.aliasAt := at;
+  bindingTy^.aliasLen := len;
 
-    { 6.4.3.4: "There shall be a record-type designated packed and denoted by
-      the required type-identifier `TimeStamp`. For each of the required
-      field-identifiers DateValid, TimeValid, year, month, day, hour, minute,
-      and second, there shall be an associated required field ... and that
-      field shall have a type denoted by the type-denoter Boolean, Boolean,
-      integer, 1..12, 1..31, 0..23, 0..59, and 0..59, respectively." }
-    timeStampType := NewType(tyRecord);
-    timeStampType^.isPacked := true;
-    stampIndex := 0;
-    StampField('datevalid', boolType);
-    StampField('timevalid', boolType);
-    StampField('year     ', intType);
-    StampField('month    ', Span(1, 12));
-    StampField('day      ', Span(1, 31));
-    StampField('hour     ', Span(0, 23));
-    StampField('minute   ', Span(0, 59));
-    StampField('second   ', Span(0, 59));
-    InternWide('timestamp       ', at, len);
-    s := Declare(at, len, skType, 0, 0);
-    s^.stype := timeStampType;
-    InternWide('TimeStamp       ', at, len);
-    timeStampType^.aliasAt := at;
-    timeStampType^.aliasLen := len;
+  { 6.4.3.4: "There shall be a record-type designated packed and denoted by
+    the required type-identifier `TimeStamp`. For each of the required
+    field-identifiers DateValid, TimeValid, year, month, day, hour, minute,
+    and second, there shall be an associated required field ... and that
+    field shall have a type denoted by the type-denoter Boolean, Boolean,
+    integer, 1..12, 1..31, 0..23, 0..59, and 0..59, respectively." }
+  timeStampType := NewType(tyRecord);
+  timeStampType^.isPacked := true;
+  stampIndex := 0;
+  StampField('datevalid', boolType);
+  StampField('timevalid', boolType);
+  StampField('year     ', intType);
+  StampField('month    ', Span(1, 12));
+  StampField('day      ', Span(1, 31));
+  StampField('hour     ', Span(0, 23));
+  StampField('minute   ', Span(0, 59));
+  StampField('second   ', Span(0, 59));
+  InternWide('timestamp       ', at, len);
+  s := Declare(at, len, skType, 0, 0);
+  s^.stype := timeStampType;
+  InternWide('TimeStamp       ', at, len);
+  timeStampType^.aliasAt := at;
+  timeStampType^.aliasLen := len;
 
-  end
 end;
 
 function FindModule(at, len: integer): modRecPtr;
@@ -24160,145 +23613,6 @@ begin
   end
 end;
 
-{ ADR-0137. Is anything this module exports something the dialect would emit a
-  variant check against?
-
-  ADR-0119 spells `--std` into a module's activation names so that the
-  components of one program cannot disagree about the language, and the hazard
-  it closes is real: ADR-0118's two rules are a *pair*, and 6.13's separate
-  translation would otherwise let a dialect component check a tag that a
-  conformance-mode component never stored -- a check answering `safe` for an
-  unsafe read, which is worse than the documented gap it replaced.
-
-  What is too coarse is the *granularity*. The mode is a proxy for the ABI and
-  `lib/pasmath.pas` has no variant record in it at all, so its object code is
-  identical under both modes and a dialect program still could not link it.
-
-  So ask what actually differs, which is this repository's move everywhere else
-  (ADR-0044, ADR-0053, ADR-0066, ADR-0071, ADR-0087). The emitter's own
-  condition for the check is `TagFieldAt(t, path) >= 0` under the dialect, and
-  the walk below asks that question of every type a caller can reach instead of
-  at one access. Nothing else the dialect adds is a change to a construct
-  ISO/IEC 10206:1991 also has: `external`, `?T`, `array of` and `int64` are new
-  syntax, and a conformance-mode component cannot contain any of them.
-
-  A component, a domain, a field and a parameter are all followed, because a
-  value of the type crosses at any of them. The walk answers **true when it
-  cannot tell**: an exhausted depth means a cycle through a pointer domain, and
-  a cycle must never be what makes a module look portable. }
-function TypeCarriesTag(t: typePtr; depth: integer): boolean; forward;
-
-function ArmsCarryTag(v: variantPtr; depth: integer): boolean;
-var f: fieldPtr; found: boolean;
-begin
-  found := false;
-  while (v <> nil) and not found do begin
-    { the emitter's own test, arm by arm }
-    if v^.tagField >= 0 then found := true;
-    f := v^.fields;
-    while (f <> nil) and not found do begin
-      if TypeCarriesTag(f^.ftype, depth - 1) then found := true;
-      f := f^.next
-    end;
-    if not found then
-      if ArmsCarryTag(v^.variants, depth - 1) then found := true;
-    v := v^.next
-  end;
-  ArmsCarryTag := found
-end;
-
-function TypeCarriesTag;
-var f: fieldPtr; found: boolean;
-begin
-  found := false;
-  if t <> nil then
-    if depth <= 0 then found := true
-    else begin
-      if t^.kind = tyRecord then begin
-        if t^.tagField >= 0 then found := true;
-        if not found then
-          if ArmsCarryTag(t^.variants, depth - 1) then found := true;
-        f := t^.fields;
-        while (f <> nil) and not found do begin
-          if TypeCarriesTag(f^.ftype, depth - 1) then found := true;
-          f := f^.next
-        end
-      end;
-      { An array component, a file component, a pointer domain and a set base
-        all reach a type a caller can hold a value of. Asked by field rather
-        than by kind: `elem` is the one field all four use, and a kind that has
-        no elem holds nil there. }
-      if not found then
-        if TypeCarriesTag(t^.elem, depth - 1) then found := true
-    end;
-  TypeCarriesTag := found
-end;
-
-{ Every module's answer, computed once the interfaces are complete. A
-  constituent that is a procedure or a function is asked of its parameters and
-  of its result as well as of itself, because a variant record crosses at an
-  argument exactly as it does at a variable. }
-procedure ComputeModePortable;
-var i: ifacePtr; c: constitPtr; e: symListPtr; locked: boolean; s: symPtr;
-
-  { Recursive, and that is the whole of the fix ADR-0142 made. Asking each
-    parameter about its own `stype` alone stops one level too soon: the
-    parameters of a *procedural* parameter are in that parameter's own `params`
-    list, and `TypeCarriesTag` has no arm for tyProc because a procedure type
-    is not a type a value is held in. So
-
-        procedure Apply(procedure Q(var t: Tagged))
-
-    exports `Tagged` -- through a parameter, twice -- and the walk reported the
-    module portable. The link then succeeded and the dialect's variant check
-    ran in the program against a tag the module never stored, and *passed* an
-    unsafe read: the one outcome ADR-0118's claim cannot survive.
-
-    Depth-bounded and answering **true when it cannot tell**, as
-    TypeCarriesTag does, so an exhausted depth locks the module rather than
-    freeing it. A parameter list cannot be cyclic the way a pointer domain can,
-    the source having to write each nesting out, but the rule costs nothing and
-    a walk that can only be wrong in the safe direction is worth more than one
-    that is provably terminating. }
-  function SymCarriesTag(sym: symPtr; depth: integer): boolean;
-  var p: symListPtr; got: boolean;
-  begin
-    got := false;
-    if sym <> nil then
-      if depth <= 0 then got := true
-      else begin
-        { A function's `stype` is its result type; a procedure's is nil. }
-        if TypeCarriesTag(sym^.stype, 64) then got := true;
-        p := sym^.params;
-        while (p <> nil) and not got do begin
-          if SymCarriesTag(p^.sym, depth - 1) then got := true;
-          p := p^.next
-        end
-      end;
-    SymCarriesTag := got
-  end;
-
-begin
-  e := moduleOrder;
-  while e <> nil do begin
-    s := e^.sym;
-    locked := false;
-    i := interfaces;
-    while i <> nil do begin
-      if i^.owner = s then begin
-        c := i^.items;
-        while c <> nil do begin
-          if SymCarriesTag(c^.sym, 64) then locked := true;
-          c := c^.next
-        end
-      end;
-      i := i^.next
-    end;
-    s^.modePortable := not locked;
-    e := e^.next
-  end
-end;
-
 { 6.11.1: "For any two distinct modules A and B such that A supplies B and B
   supplies A, neither the module-block of A nor the module-block of B shall
   contain an initialization-part; neither module-block shall contain a
@@ -24444,7 +23758,6 @@ begin
     end;
     CheckPendingImplementations;
     ComputeActiveModules;
-    ComputeModePortable;
     CheckMutualSupply
   end
   else begin
@@ -24478,7 +23791,6 @@ begin
 
   CheckPendingImplementations;
   ComputeActiveModules;
-  ComputeModePortable;
   CheckMutualSupply
   end
 end;
@@ -26748,16 +26060,12 @@ begin
   write(ircode, '@m.');
   WritePoolIr(p^.at, p^.len);
   write(ircode, '.');
-  { Two spellings and not three, because what this has to separate is the
-    dialect from the conformance modes: it is ADR-0118's *pair* of rules that a
-    mixture splits, and only --std=afterschool has them. Mixing the two
-    conformance modes could not split a pair, and cannot arise anyway -- 6.11's
-    module is an Extended Pascal feature, so --std=iso7185 never reaches this.
-    Written as an if rather than a case over stdKind for the reason doc/sop.md
-    §7 gives: a mode left off a case traps, and this is on the path of every
-    program that has a module. }
-  if langStd = stdAfterschool then write(ircode, 'afterschool')
-  else write(ircode, 'extended');
+  { A fixed tag where ADR-0119 spelled the mode. There is one language since
+    ADR-0232, so nothing here varies -- what the tag still buys is that an
+    object left over from a release that *had* the modes fails to link with a
+    name a reader can be told about (tools/pascalcc translates it), rather
+    than linking and disagreeing about ADR-0118's pair of rules. }
+  write(ircode, 'afterschool');
   if init then write(ircode, '.init') else write(ircode, '.fini')
 end;
 
@@ -27627,7 +26935,7 @@ var tagIdx, msg, k: integer;
 
 begin
   tagIdx := TagFieldAt(t, prefix);
-  if (langStd = stdAfterschool) and (guard <> vgNone) and (tagIdx >= 0) then
+  if (guard <> vgNone) and (tagIdx >= 0) then
   begin
     arms := ArmsAt(t, prefix);
     arm := ArmAtIn(arms, armIndex);
@@ -30123,8 +29431,7 @@ begin
     PutOp(bl);
     write(ircode, ', i32 ');
     PutOp(al);
-    if langStd = stdAfterschool then write(ircode, ', i32 1')
-                                else write(ircode, ', i32 0');
+    write(ircode, ', i32 1');
     writeln(ircode, ')');
     Def(one);
     write(ircode, 'sub i32 ');
@@ -32467,7 +31774,7 @@ end;
 procedure CheckedWidth(var v: str; isPrec: boolean);
 var least, msg: integer; leastOp, bad: str;
 begin
-  if HasExtended(langStd) then least := 0 else least := 1;
+  least := 0;
   OpInt(least, leastOp);
   Def(bad);
   write(ircode, 'icmp slt i32 ');
@@ -32478,10 +31785,7 @@ begin
   MsgStart;
   if isPrec then MsgText('a fraction length                       ')
   else MsgText('a field width                           ');
-  if HasExtended(langStd) then
-    MsgText(' must not be negative                   ')
-  else
-    MsgText(' must be at least one                   ');
+  MsgText(' must not be negative                   ');
   msg := MsgEnd;
   EmitTrapIf(bad, msg)
 end;
@@ -32901,18 +32205,15 @@ procedure CheckSchemaDomain(t: typePtr; schema: symPtr;
   value denoted by ci", and its NOTE 1 spells out the consequence -- "any
   corresponding tag-field is also attributed the value of the case-constant".
 
-  **ISO 7185 does not require this.** Its 6.6.5.3 says the created variable
-  "shall be totally-undefined" and "shall have nested variants that correspond
-  to the case-constants", which is a statement about which variants exist and
-  not about the tag. So this is gated on HasExtended, and --std=iso7185 goes on
-  leaving the tag alone, conformingly.
+  ISO 7185 did not require it -- its 6.6.5.3 said the created variable "shall
+  be totally-undefined", a statement about which variants exist and not about
+  the tag -- so this used to be behind a mode test.
 
   It was not implemented at all: pcSelect was read for SelectedSize and for
   nothing else, so `new(p, green)` allocated the right amount of storage and
-  left the tag reading `red`. Under --std=extended that is a conforming program
-  given a wrong answer -- `case p^.k of` took the wrong arm -- and under the
-  dialect ADR-0118's guard then trapped on a read of the variant the program
-  had just asked for.
+  left the tag reading `red`. That is a program given a wrong answer -- `case
+  p^.k of` took the wrong arm -- and ADR-0118's guard then trapped on a read of
+  the variant the program had just asked for.
 
   The walk is FieldAddress's, without the guard: descend one variant part per
   selector, storing the tag at each level that has one. A variant part with no
@@ -32922,36 +32223,34 @@ procedure CheckSchemaDomain(t: typePtr; schema: symPtr;
 procedure EmitNewSelectors(rec: typePtr; block: str; sel, vals: numPtr);
 var path: numPtr; tagIdx: integer; tt: typePtr; cur, p, tagAddr: str;
 begin
-  if HasExtended(langStd) then begin
-    cur := block;
-    path := nil;
-    while (sel <> nil) and (vals <> nil) do begin
-      tagIdx := TagFieldAt(rec, path);
-      if tagIdx >= 0 then begin
-        tt := TagTypeAt(rec, path);
-        Def(tagAddr);
-        write(ircode, 'getelementptr inbounds ');
-        PutStructAt(rec, path);
-        write(ircode, ', ptr ');
-        PutOp(cur);
-        writeln(ircode, ', i32 0, i32 ', tagIdx:1);
-        write(ircode, '  store ');
-        PutLlType(tt);
-        write(ircode, ' ', vals^.value_:1, ', ptr ');
-        PutOp(tagAddr);
-        writeln(ircode)
-      end;
-      Def(p);
+  cur := block;
+  path := nil;
+  while (sel <> nil) and (vals <> nil) do begin
+    tagIdx := TagFieldAt(rec, path);
+    if tagIdx >= 0 then begin
+      tt := TagTypeAt(rec, path);
+      Def(tagAddr);
       write(ircode, 'getelementptr inbounds ');
       PutStructAt(rec, path);
       write(ircode, ', ptr ');
       PutOp(cur);
-      writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(rec, path)):1);
-      cur := p;
-      path := PathAppend(path, sel^.value_);
-      sel := sel^.next;
-      vals := vals^.next
-    end
+      writeln(ircode, ', i32 0, i32 ', tagIdx:1);
+      write(ircode, '  store ');
+      PutLlType(tt);
+      write(ircode, ' ', vals^.value_:1, ', ptr ');
+      PutOp(tagAddr);
+      writeln(ircode)
+    end;
+    Def(p);
+    write(ircode, 'getelementptr inbounds ');
+    PutStructAt(rec, path);
+    write(ircode, ', ptr ');
+    PutOp(cur);
+    writeln(ircode, ', i32 0, i32 ', FieldCount(FieldsAt(rec, path)):1);
+    cur := p;
+    path := PathAppend(path, sel^.value_);
+    sel := sel^.next;
+    vals := vals^.next
   end
 end;
 
@@ -35854,33 +35153,6 @@ end;
   the two `to` parts are its commencement and its finalization -- so it comes
   out as a pair of functions over one global frame, called by main around the
   program's own body. }
-{ ADR-0137. A module whose interface carries no variant-part with a tag-field
-  emits its activation names under the dialect's spelling as well as its own,
-  so a `--std=afterschool` program may link a module translated under
-  `--std=extended`. An alias and not a second definition: one body, two names,
-  and nothing for the two to disagree about.
-
-  **One direction only.** A conformance-mode module gains the dialect's
-  spelling; a dialect module does not gain a conformance mode's. That is
-  ADR-0120's decision and not an oversight -- a dialect module may call
-  `external` routines and is not a conforming program-component, so letting a
-  conforming program link one would put a component outside both standards into
-  a program that claims one. The direction that matters is the other: `lib/` is
-  ordinary Extended Pascal and the language that *contains* Extended Pascal
-  could not use it. }
-procedure PutModuleAlias(p: symPtr; init: boolean);
-begin
-  if (langStd <> stdAfterschool) and p^.modePortable then begin
-    write(ircode, '@m.');
-    WritePoolIr(p^.at, p^.len);
-    write(ircode, '.afterschool');
-    if init then write(ircode, '.init') else write(ircode, '.fini');
-    write(ircode, ' = alias void (), ptr ');
-    PutModulePart(p, init);
-    writeln(ircode)
-  end
-end;
-
 procedure EmitModule(m: nodePtr);
 var p: symPtr;
 begin
@@ -35916,8 +35188,6 @@ begin
 
   { After both definitions, because an alias names a global that must already
     have been written. }
-  PutModuleAlias(p, true);
-  PutModuleAlias(p, false);
 
   if m^.mdBlock <> nil then EmitProcs(m^.mdBlock)
 end;
@@ -36572,8 +35842,9 @@ begin
     Walked over the *declared* enumerations rather than over the sites, and
     that distinction is the whole of why the declarations are collected at
     all: an enumeration no case-statement mentions has every constant unnamed
-    and appears at no site to be found at. `stdKind` is exactly that, and a
-    pass over the sites reported none of its three. }
+    and appears at no site to be found at -- `stdKind` was exactly that until
+    ADR-0232 removed it, and a pass over the sites reported none of its
+    three. }
   lay := enumHead;
   while lay <> nil do begin
     for k := 0 to EnumCount(lay^.ty) - 1 do begin
@@ -36669,7 +35940,6 @@ begin
            dumpDispatchOpt;
   { Before anything reads a token, and before the components are read: the
     standard decides the lexis, so it has to be settled first (ADR-0166). }
-  ReadStdAnnotation;
   ReadTranslatedComponents(earlier, earlierTail, earlierCount);
 
   { --- lex ---------------------------------------------------------------- }

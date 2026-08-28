@@ -7,24 +7,24 @@
 # once in 36,000 lines -- and it is the AST: 63 arms, read by the parser, Sema,
 # both dump walkers and the code generator. ISO/IEC 10206:1991 6.5.3.3 makes
 # reading a field of an inactive variant an **error**, and 3.1 lets a processor
-# leave an error undetected. `selfhost/compiler.std` says `extended`, so this
-# compiler does leave it undetected -- in itself. A wrong-arm read of a node is
-# silent rubbish, and if the field is a pointer the next walk follows it.
+# leave an error undetected. A wrong-arm read of a node is silent rubbish, and
+# if the field is a pointer the next walk follows it.
 #
-# ADR-0118 already fixes this, for programs that ask: under `--std=afterschool`
-# a write to a variant's field activates that variant and a read of an inactive
-# one traps. So the check exists, it is tested, and the compiler was not using
-# it on itself. This builds a second compiler that does.
+# ADR-0118 is the rule that catches it: a write to a variant's field activates
+# that variant, and a read of an inactive one traps. It was a *dialect* rule
+# while there were conformance modes to keep it out of, and ADR-0223 was about
+# building the compiler a second way to get it -- under `--std=afterschool`,
+# used as a reader and never as the product. ADR-0232 removed the modes, so
+# there is nothing to select and nothing to build twice: the guards are in
+# whatever this compiler emits.
 #
-#   --std=extended     1 occurrence of the trap message -- a string constant
+#     1 occurrence of the trap message -- a string constant
 #                      the compiler *emits* into programs it compiles
-#   --std=afterschool  2821 guards
+#  2821 guards
 #
-# **The shipped compiler does not change.** This is `llc_check.sh`'s shape: a
-# second build used only as a reader, never as the product. `compiler.std` stays
-# `extended`, so the fixed point that irtest.sh proves is untouched -- and
-# ADR-0190's rejection of making the compiler a dialect source does not apply,
-# because that alternative made the dialect build *the compiler*.
+# What is left is the sweep, which is the half that was ever doing the work:
+# compile the compiler with itself, then read 1019 sources with the result and
+# require none of them to trap.
 #
 # **What it cannot see.** 6.4.3.3 permits a variant part with no tag field, and
 # there is then nothing to compare against -- doc/sop.md 7 carries that row. The
@@ -53,14 +53,13 @@ fi
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-# The guarded compiler: the same source, translated under the mode that has the
-# check. A failure here is a containment defect and not a skip -- the dialect
-# contains Extended Pascal (ADR-0117), so a source the shipped compiler accepts
-# must compile under --std=afterschool too.
-if ! "$cc" --std=afterschool "$root/selfhost/compiler.pas" -o "$work/ap.ll" \
+# The guarded compiler: the compiler's own source, translated by the compiler.
+# A failure here is not a skip -- the source this repository ships must compile
+# with the binary this repository built, or the fixed point irtest.sh proves is
+# about something else.
+if ! "$cc" "$root/selfhost/compiler.pas" -o "$work/ap.ll" \
      >"$work/gen.out" 2>"$work/gen.err"; then
-  echo "variant-check: the compiler does not compile under --std=afterschool," \
-       "which is a containment defect (ADR-0117)" >&2
+  echo "variant-check: the compiler does not compile itself" >&2
   head -20 "$work/gen.out" "$work/gen.err" >&2
   exit 1
 fi
@@ -80,27 +79,16 @@ if ! clang -O2 -Wno-override-module "$work/ap.ll" "$runtime" -lm \
   exit 1
 fi
 
-# The corpus, with the standard each source is written in -- the same rule every
-# other harness here derives from the path, plus the `.std` sidecar that speaks
-# for a source outside tests/extended/ (ADR-0082, ADR-0166).
-standard_of() {
-  local src=$1 sidecar=${1%.pas}.std
-  if [[ -f $sidecar ]]; then cat "$sidecar"; return; fi
-  case "$src" in
-    */tests/dialect/*|*/lib/dialect/*) echo afterschool ;;
-    */tests/extended/*)                echo extended ;;
-    */tests/*)                         echo iso7185 ;;
-    *)                                 echo extended ;;
-  esac
-}
-
+# The corpus. One language, so a source is handed over as it is -- which is
+# also why this now reaches sources the mode rule used to sort into three
+# groups and compile three ways.
 checked=0
 trapped=0
 while IFS= read -r src; do
-  std=$(standard_of "$src")
   # Every dump runs, so both walkers are exercised and not only the four
-  # passes -- difftest.sh drives them the same way and for the same reason.
-  "$work/pascalc-ap" "--std=$std" --dump-all "$src" -o "$work/out.ll" \
+  # passes -- ADR-0104's coverage corpus drives them the same way and for
+  # the same reason.
+  "$work/pascalc-ap" --dump-all "$src" -o "$work/out.ll" \
       >"$work/dump.out" 2>"$work/dump.err"
   checked=$((checked + 1))
   # The runtime's own wording, on the runtime's own stream. Matching the bare

@@ -32,7 +32,7 @@
 #     -c              write an object file and stop
 #     --emit-llvm,-S  write the IR and stop
 #     -O0 .. -O3      optimisation level, handed to clang (default -O2)
-#     --std=<name>    extended (default), iso7185, or afterschool
+#     --std=<name>    accepted and ignored; ADR-0232 removed the modes
 #     --target=<t>    the machine to compile for; handed to both halves, so
 #                     clang needs a cross toolchain and a --sysroot for it
 #     --import <f>    a program-component already translated
@@ -67,14 +67,6 @@ runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-$root/build/lib}
 
 die() { echo "pascalcc: $*" >&2; exit 1; }
 
-# Empty unless --std= is given. It held a default and passed it on every
-# invocation, which looks like the more explicit thing to do and which made
-# ADR-0166's `@std:` annotation unreachable through this script: `pascalc`
-# reads the annotation only when no flag was written, and a driver that always
-# writes one has answered the question before the file is opened. So the
-# default lives in exactly one place -- `pascalc` itself -- and this passes
-# through what it was given, which is what it does with every other flag.
-std=
 out=
 mode=link          # link | object | ir
 opt=-O2
@@ -102,7 +94,9 @@ while [[ $# -gt 0 ]]; do
     -c)            mode=object; shift ;;
     --emit-llvm|-S) mode=ir; shift ;;
     -O0|-O1|-O2|-O3) opt=$1; shift ;;
-    --std=*)       std=${1#--std=}; shift ;;
+    # ADR-0232 removed the modes; the flag is accepted and ignored so that a
+    # caller's script does not break on the release that removes it.
+    --std=*)       shift ;;
     # Handed to *both* halves and validated by neither here: `pascalc` refuses
     # a target it has no layout for, and clang refuses one it cannot find a
     # toolchain for, so a wrong spelling is reported by whichever knows why
@@ -124,19 +118,6 @@ done
 [[ -n $source_file ]] || die "no input file"
 [[ -x $pascalc ]] || die "$pascalc is not executable -- was it built?"
 
-case $std in
-  # Empty is the ordinary case now: no --std= was given, so the compiler
-  # decides -- from a `@std:` annotation in the source if it has one, and from
-  # its own default otherwise (ADR-0166).
-  "") ;;
-  # afterschool is the dialect (ADR-0117): Extended Pascal and whatever has
-  # been added to it. Validated here rather than passed straight through, so a
-  # typo is a message from this script and not an "unknown option" from the
-  # compiler.
-  iso7185|extended|afterschool) ;;
-  *) die "unknown standard '$std'; expected iso7185, extended or afterschool" ;;
-esac
-
 base=$(basename "${source_file%.pas}")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -146,7 +127,7 @@ trap 'rm -rf "$work"' EXIT
 # this script's stderr, which is where a caller expects a compiler's complaints
 # and where the golden .err files are compared from.
 ir=$work/$base.ll
-if ! "$pascalc" ${std:+"--std=$std"} ${target:+"$target"} \
+if ! "$pascalc" ${target:+"$target"} \
      "${covflag[@]+"${covflag[@]}"}" "$source_file" \
      "${imports[@]+"${imports[@]}"}" \
      -o "$ir" >"$work/diag.txt" 2>&1; then
@@ -168,13 +149,18 @@ if [[ $mode == object ]]; then
        -o "${out:-$base.o}"
 fi
 
-# The link is also where a **mode disagreement between program-components**
-# surfaces, and it is the one link failure worth translating. A module's two
-# activation functions carry the mode in their names (ADR-0119), so a component
-# built under a different `--std` leaves the caller's symbol undefined. That is
-# the correct outcome and an unreadable way to say it: `undefined reference to
-# 'm.pastext.extended.init'` names the mode the *program* wanted, not the one
-# the object has, and a reader has no reason to know the convention.
+# The link is also where a **component from a different compiler** surfaces,
+# and it is the one link failure worth translating. A module's two activation
+# functions carry a language tag in their names (ADR-0119), so an object left
+# over from a release that still had the conformance modes leaves this
+# program's symbol undefined. That is the correct outcome and an unreadable way
+# to say it: `undefined reference to 'm.pastext.afterschool.init'` names what
+# the *program* wanted, not what the object has, and a reader has no reason to
+# know the convention.
+#
+# ADR-0232 left one tag where there were three, so this can no longer fire
+# between two objects of the same release -- what it now reports is a stale
+# `.o`, which is exactly the case a reader is least equipped to diagnose.
 #
 # Only the diagnosis is added -- the linker's own output is passed through
 # first, and the exit status is still a failure. A driver that turned a link
@@ -190,11 +176,11 @@ mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\
            "$work/link.txt" | head -1)
 if [[ -n $mismatch ]]; then
   set -- $mismatch
-  echo "pascalcc: error: module '$1' was translated under a different --std" >&2
-  echo "pascalcc: this program is --std=$2, so every component it links must be" >&2
-  echo "pascalcc: too. The modes are not mixable: a variant's write-side and" >&2
-  echo "pascalcc: read-side rules are a pair, and a component holding one half" >&2
-  echo "pascalcc: without the other reports unsafe accesses as safe (ADR-0119)." >&2
-  echo "pascalcc: rebuild '$1' with --std=$2, or this program without it." >&2
+  echo "pascalcc: error: module '$1' was translated by a different compiler" >&2
+  echo "pascalcc: this program wants 'm.$1.$2.init', which the object it was" >&2
+  echo "pascalcc: linked against does not define. A component built before" >&2
+  echo "pascalcc: ADR-0232 removed the conformance modes carries the mode in" >&2
+  echo "pascalcc: that name instead (ADR-0119)." >&2
+  echo "pascalcc: recompile '$1' with this pascalc." >&2
 fi
 exit 1

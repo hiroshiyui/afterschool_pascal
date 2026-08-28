@@ -27,7 +27,6 @@
 #
 #   name.dump    expected standard output, in full
 #   name.flags   the flag to compile with; --dump-all when absent
-#   name.std     the standard, iso7185 when absent
 #
 # These exist because tests/checks/coverage.py found that no case in the corpus
 # passed any --dump flag, leaving thirty-one walker procedures entered by
@@ -44,16 +43,9 @@ name=$(basename "$base")
 
 expected="$base.dump"
 flags_file="$base.flags"
-std_file="$base.std"
 
 flags="--dump-all"
 [[ -f $flags_file ]] && flags=$(tr -d '[:space:]' <"$flags_file")
-# Pinned, not inherited. The compiler's own default moved to Extended Pascal
-# in ADR-0165; a harness that followed it would have silently recompiled five
-# cases under another standard and rewritten their goldens, which is the one
-# thing a golden must never do by itself.
-standard="iso7185"
-[[ -f $std_file ]] && standard=$(tr -d '[:space:]' <"$std_file")
 
 if [[ ! -f $expected ]]; then
   echo "missing expected-dump file: $expected" >&2
@@ -66,7 +58,7 @@ trap 'rm -rf "$work"' EXIT
 # The IR still gets written -- a --dump flag stops the *reporting* at the stage
 # it names, not the translation -- so it goes somewhere disposable. Only what
 # reaches standard output is the subject here.
-"$pascalc" "--std=$standard" "$flags" "$source_file" -o "$work/out.ll" \
+"$pascalc" "$flags" "$source_file" -o "$work/out.ll" \
   >"$work/actual" 2>"$work/stderr"
 status=$?
 

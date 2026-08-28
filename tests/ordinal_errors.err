@@ -1,6 +1,6 @@
 <source>:14:13: error: a subrange cannot be empty: 1 is below 9
 <source>:15:13: error: the bounds of a subrange must have the same type, found integer and char
-<source>:16:13: error: the bounds of a subrange must be ordinal constants
+<source>:16:13: error: the bounds of a subrange must be ordinal
 <source>:17:14: error: 'red' is already declared in this block
 <source>:21:10: error: the tag of a variant part must be an ordinal type, found real
 <source>:28:7: error: the tag value red already selects an earlier variant

@@ -27,8 +27,10 @@ end;
 begin
   s := 'abcdef';
 
-  { §6.5.6's string-variable must possess a string-type. An array of integers
-    has an index-domain but no components to make a string of. }
+  { §6.5.6's string-variable must possess a string-type, and ADR-0125 gives
+    `a[i..j]` over an array to the slice instead -- so what is refused here is
+    no longer the notation but what `write` will take: a slice is not a value
+    it has a form for. }
   writeln(a[1..2]);
 
   { The index-expressions "shall possess the integer-type" — not an ordinal

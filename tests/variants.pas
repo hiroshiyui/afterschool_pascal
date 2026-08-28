@@ -12,7 +12,7 @@ type
   node = record
     line: integer;
     case kind: nodekind of
-      litnode:          (value: integer);
+      litnode:          (datum: integer);
       negnode:          (operand: integer);
       addnode, mulnode: (lhs, rhs: integer)
   end;
@@ -52,7 +52,7 @@ begin
     line up exactly. }
   with tree[n] do
     case kind of
-      litnode: Eval := value;
+      litnode: Eval := datum;
       negnode: Eval := -Eval(operand);
       addnode: Eval := Eval(lhs) + Eval(rhs);
       mulnode: Eval := Eval(lhs) * Eval(rhs)
@@ -63,7 +63,7 @@ procedure Show(n: integer);
 begin
   with tree[n] do
     case kind of
-      litnode: write(value);
+      litnode: write(datum);
       negnode: begin write('-('); Show(operand); write(')') end;
       addnode: begin write('('); Show(lhs); write(' + '); Show(rhs);
                      write(')') end;
@@ -76,10 +76,10 @@ begin
   count := 0;
 
   { (3 + 4) * -(5) }
-  a := Make(litnode, 10);  tree[a].value := 3;
-  b := Make(litnode, 11);  tree[b].value := 4;
+  a := Make(litnode, 10);  tree[a].datum := 3;
+  b := Make(litnode, 11);  tree[b].datum := 4;
   c := Make(addnode, 12);  tree[c].lhs := a;  tree[c].rhs := b;
-  d := Make(litnode, 13);  tree[d].value := 5;
+  d := Make(litnode, 13);  tree[d].datum := 5;
   root := Make(negnode, 14);
   tree[root].operand := d;
   root := Make(mulnode, 15);

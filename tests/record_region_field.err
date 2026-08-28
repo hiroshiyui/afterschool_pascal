@@ -7,4 +7,5 @@
 <source>:54:25: error: 'item' is a field of this record type, so it does not name a type here
 <source>:67:20: error: 'integer' is a field of this record type, so it does not name a type here
 <source>:85:27: error: 'size' is a field of this record type, so it does not name a constant here
+<source>:85:10: error: the bounds of the field 'g' must be constants, because a field's storage is sized where the record is
 <source>:86:20: error: 'size' is a field of this record type, so it does not name a constant here

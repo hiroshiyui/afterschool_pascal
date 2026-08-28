@@ -141,7 +141,7 @@ def written_globals(pascalcc, workdir):
     src.write_text(GROUND_TRUTH_PROGRAM)
     out = workdir / "gt.ll"
     done = subprocess.run(
-        [pascalcc, "--std=afterschool", "-S", str(src), "-o", str(out)],
+        [pascalcc, "-S", str(src), "-o", str(out)],
         capture_output=True, text=True)
     if done.returncode != 0:
         raise SystemExit("foreign-reserved: the ground-truth probe did not "
@@ -173,7 +173,7 @@ def refuses(pascalcc, name, workdir):
         f"function probe(x: integer): integer; external '{name}';\n"
         "begin writeln(probe(1)) end.\n")
     done = subprocess.run(
-        [pascalcc, "--std=afterschool", "-S", str(src),
+        [pascalcc, "-S", str(src),
          "-o", str(workdir / "p.ll")],
         capture_output=True, text=True)
     return done.returncode != 0

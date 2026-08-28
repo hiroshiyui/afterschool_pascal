@@ -83,9 +83,8 @@ def main() -> int:
             return 1
         declared[array] = int(m.group(1))
 
-    std = (root / "selfhost" / "compiler.std").read_text().strip()
     run = subprocess.run(
-        [str(pascalc), f"--std={std}", "--dump-limits", str(source), "-o", "/dev/null"],
+        [str(pascalc), "--dump-limits", str(source), "-o", "/dev/null"],
         capture_output=True, text=True,
     )
     if run.returncode != 0:

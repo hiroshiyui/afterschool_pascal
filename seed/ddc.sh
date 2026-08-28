@@ -102,9 +102,13 @@ fi
 echo "ddc: linking compiler A from that IR"
 clang "$work/A.ll" "$builddir/lib/libpasrt.a" -lm -o "$work/A_compiler"
 
+# No --std= on either: A and B are both built from *today's* compiler.pas, and
+# ADR-0232 removed the flag from it. The line above keeps its `--std=extended`
+# because that one is the v0.1.0 binary, which still has the modes -- which is
+# the whole shape of this check, an old implementation translating a new source.
 echo "ddc: A and B each translate selfhost/compiler.pas"
-"$work/A_compiler" --std=extended "$root/selfhost/compiler.pas" -o "$work/from_A.ll"
-"$builddir/bin/pascalc" --std=extended "$root/selfhost/compiler.pas" -o "$work/from_B.ll"
+"$work/A_compiler" "$root/selfhost/compiler.pas" -o "$work/from_A.ll"
+"$builddir/bin/pascalc" "$root/selfhost/compiler.pas" -o "$work/from_B.ll"
 
 if cmp -s "$work/from_A.ll" "$work/from_B.ll"; then
   sum=$(sha256sum "$work/from_A.ll" | cut -d' ' -f1)

@@ -1,4 +1,3 @@
-<source>:52:30: error: a function cannot return vector; use a var parameter
 <source>:60:8: error: 'p' is a procedure and has no value
 <source>:61:8: error: 'p' is a procedure and returns no value
 <source>:68:3: error: 'f' is not a procedure

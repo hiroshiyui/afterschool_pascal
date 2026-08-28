@@ -195,3 +195,22 @@ Feature: A type-inquiry's object is a variable-access
       """
       names the very parameter it is the type of
       """
+
+  @afterschool:6.4.9
+  Scenario: an identified-variable denotes the domain type
+    Given the Afterschool Pascal program
+      """
+      program p(output);
+      var q: ^integer;
+          b: type of q^;
+      begin
+        new(q); q^ := 1; b := q^; writeln(b:1);
+        dispose(q)
+      end.
+      """
+    When it is compiled and run
+    Then it exits successfully
+     And it prints
+      """
+      1
+      """

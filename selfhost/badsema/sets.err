@@ -1,6 +1,6 @@
 <source>:7:10: error: a set base type must lie within 0..255, but integer spans -2147483647..2147483647
 <source>:8:16: error: the base type of a set must be an ordinal type, found real
-<source>:19:1: error: a function cannot return chars; use a var parameter
+<source>:19:1: error: function 'badresult' never assigns its result
 <source>:24:14: error: the members of a set must all have one type: this one is integer, not char
 <source>:25:3: error: cannot assign set of colour to a variable of type chars
 <source>:27:9: error: a set member must have an ordinal type, found real

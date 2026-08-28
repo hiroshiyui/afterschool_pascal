@@ -194,7 +194,7 @@ def build_crosscheck_program():
     lines = ["program Crosscheck(output);",
              "type colour = (red, green, blue);",
              "     link = ^cell;",
-             "     cell = record value: integer; next: link end;",
+             "     cell = record datum: integer; next: link end;",
              "var i, j: integer;",
              "    a: array [-3..3] of integer;",
              "    c: colour;",
@@ -273,10 +273,10 @@ def build_crosscheck_program():
     # what the verifier says about pointers.
     lines.append("  head := nil; j := 0;")
     lines.append("  for i := 1 to 5 do")
-    lines.append("    begin new(p); p^.value := i * i; p^.next := head;")
+    lines.append("    begin new(p); p^.datum := i * i; p^.next := head;")
     lines.append("          head := p end;")
     lines.append("  p := head;")
-    lines.append("  while p <> nil do begin j := j + p^.value; p := p^.next end;")
+    lines.append("  while p <> nil do begin j := j + p^.datum; p := p^.next end;")
     lines.append("  writeln(j);")
     expected.append(str(sum(i * i for i in range(1, 6))))
     lines.append("  while head <> nil do")
@@ -305,14 +305,12 @@ def run_crosscheck(pascalc):
         outputs = {}
         for opt in ("-O0", "-O2"):
             exe = os.path.join(work, f"crosscheck{opt}")
-            # --std=iso7185 explicitly. The generated program is ISO 7185 and
-            # uses `value` as an identifier, which Extended Pascal reserves;
-            # riding on the compiler's default broke this the moment the
-            # default moved (ADR-0165). The lowering rules are about the
-            # arithmetic both standards share, so the mode is a property of
-            # the generated source rather than of what is being proved.
-            built = subprocess.run([pascalc, "--std=iso7185", opt, src,
-                                    "-o", exe],
+            # No --std=: ADR-0232 removed the modes. This used to pass
+            # --std=iso7185 explicitly, because the generated program had a
+            # field called `value` and Extended Pascal reserves that spelling
+            # -- the field is `datum` now, which is the cost that decision was
+            # taken with, met here as it is met in the corpus.
+            built = subprocess.run([pascalc, opt, src, "-o", exe],
                                    capture_output=True, text=True)
             if built.returncode != 0:
                 print(f"  {RED}FAILED{RESET}   compilation at {opt}")

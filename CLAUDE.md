@@ -4,27 +4,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Afterschool Pascal: a Pascal compiler **written in Pascal** and compiled by
-itself. `selfhost/compiler.pas` is the compiler and the only compiler source;
-it emits textual LLVM IR and links nothing (ADR-0085). Both standards are
-complete — ISO 7185 and ISO/IEC 10206:1991.
+**Afterschool Pascal is a Pascal dialect that exists to meet modern computing
+requirements, and that is the top policy** (ADR-0109, ADR-0232). It is a
+dialect in the sense Turbo Pascal and Free Pascal are: the syntax is Pascal,
+and no standard governs it. When two goals conflict, this is the one that
+settles the order.
+
+**It is also the test for a feature.** Not "does a standard have it" — none
+governs this language — but *does a program someone would actually write today
+need it*. ADR-0109 names the areas: networking, internationalisation,
+concurrency, and memory safety as a property of the language rather than a
+convention. `doc/roadmap.md`'s "What a daily program still cannot reach for" is
+the running inventory of what is missing.
+
+It is a Pascal compiler **written in Pascal** and compiled by itself.
+`selfhost/compiler.pas` is the compiler and the only compiler source; it emits
+textual LLVM IR and links nothing (ADR-0085).
+
+**The standards are where the language came from, not an obligation it is
+under.** ISO 7185 and ISO/IEC 10206:1991 were both implemented completely, and
+the dialect *contains* Extended Pascal (ADR-0117) — so every clause reading in
+this tree is still true of the language, and every ADR about one is still live
+design rationale. What ADR-0232 removed is the claim: `--std`, the two
+conformance modes, ADR-0166's `{ @std: }` header comment and the clause 5.1 a)
+compliance statement are gone. There is one language and the compiler has no
+mode to be put into.
+
+**That decision was taken with its cost measured** and the numbers are in
+ADR-0232: 25 of 172 ISO 7185 cases become inexpressible (§6.1.2 reserves
+thirteen word-symbols a conforming program may use as identifiers, so a field
+called `value` is now a syntax error), and five oracles retire — the BSI suite
+among them, which was the only third-party corpus this project ever had. It was
+raised, measured and decided. **Don't reopen it**; note it in one line if a
+decision genuinely turns on it, then proceed.
 
 Since ADR-0108 there is a second C++ implementation in `src/`, but it is a
 **reference front end** and not the compiler: lexer, parser and Sema only, no
-code generator, no LLVM. It exists so `selfhost/difftest.sh` has two answers to
-compare. Read a mention of C++ below as naming that, or as history.
+code generator, no LLVM. It existed so `selfhost/difftest.sh` had two answers
+to compare, which ADR-0232 retires. Read a mention of C++ below as naming that,
+or as history.
 
-**The long-term goal is a practical Pascal** (ADR-0109): a dialect and a
-standard core library for networking, internationalisation, concurrency and
-memory safety, as a third `--std` beside the two conformance modes. **The
-dialect does not change what those two accept; it does change what they say** —
-ADR-0121 requires `src/` to carry the refusal of `external` and the message
-names the mode, so a program written for the dialect and compiled under
-`--std=extended` is told the dialect exists (ADR-0154). Their accepted language
-moves only for a reason inside their own standard, as it did when ISO 7185 went
-to level 1 (ADR-0153). Bootstrapping was the previous goal and is done; it is now
-a constraint on the *order* features land in — a dialect feature must be
-expressible in what `seed/pascalc.ll` accepts, or the seed is refreshed first.
+Bootstrapping was an earlier goal and is done; what survives of it is a
+constraint on the *order* features land in — a feature must be expressible in
+what `seed/pascalc.ll` accepts, or the seed is refreshed first.
 
 ## Commands
 

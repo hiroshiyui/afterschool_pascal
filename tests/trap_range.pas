@@ -10,9 +10,9 @@ var
   d: digit;
   i: integer;
 
-function Value(n: integer): integer;
+function Given(n: integer): integer;
 begin
-  Value := n * 5
+  Given := n * 5
 end;
 
 begin
@@ -20,10 +20,10 @@ begin
     d := i;
   writeln('d = ', d);
 
-  d := Value(1);
+  d := Given(1);
   writeln('d = ', d);
 
   writeln('about to leave the subrange');
-  d := Value(2);
+  d := Given(2);
   writeln('unreachable: ', d)
 end.

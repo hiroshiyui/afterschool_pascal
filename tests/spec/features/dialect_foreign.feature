@@ -335,21 +335,6 @@ Feature: Foreign functions
       7
       """
 
-  @afterschool:5.3
-  Scenario: the directive is refused under a conformance mode, naming the mode that has it
-    Given the Extended Pascal program
-      """
-      program p(output);
-      function cbrt(x: real): real; external 'cbrt';
-      begin end.
-      """
-    When it is compiled
-    Then it is rejected
-     And the diagnostic includes
-      """
-      compile with --std=afterschool
-      """
-
   @afterschool:6.7.7.2
   Scenario: the foreign name is required and is never derived from the identifier
     Given the Afterschool Pascal program
