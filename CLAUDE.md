@@ -57,15 +57,13 @@ cmake --build build -j
 
 ctest --test-dir build --output-on-failure
 ctest --test-dir build -R control --output-on-failure   # a single case, by name
-tests/run_test.sh tools/pascalcc tests/control.pas iso7185   # without ctest
-tests/run_test.sh tools/pascalcc tests/extended/otherwise.pas extended
+tests/run_test.sh tools/pascalcc tests/control.pas   # without ctest
 selfhost/irtest.sh build/bin/pascalc-seed   # what pascalc *builds*, and stage 2 = stage 3
 selfhost/producttest.sh build/bin/pascalc build/lib   # the built pascalc itself
 seed/refresh.sh                             # regenerate the seed (release only)
 
 tools/pascalcc tests/hello.pas -o /tmp/hello && /tmp/hello
 tools/pascalcc -S tests/hello.pas -o /dev/stdout   # inspect IR
-tools/pascalcc --std=extended prog.pas   # ISO/IEC 10206:1991 instead
 ```
 
 **There is one compiler, and it does not link.** `build/bin/pascalc` is
@@ -77,21 +75,19 @@ exists only to bootstrap: what ships is always built from the source in the tree
 (ADR-0085).
 
 Adding `tests/foo.pas` + `tests/foo.out` requires **re-running `cmake`** — cases
-are registered by a `file(GLOB)` at configure time, and `tests/` and
-`tests/extended/` are globbed separately because they are compiled under
-different standards.
+are registered by a `file(GLOB)` at configure time, and `tests/`,
+`tests/extended/` and `tests/dialect/` are globbed separately. The split used
+to say which standard each was compiled under; since ADR-0232 it says only
+which names the ctest cases have, and buys `tests/dialect/` the per-case
+`TIMEOUT` a program that opens a socket needs.
 
 A case may carry sidecars named after it: `foo.err` (expected diagnostics, and
 a non-zero exit is then required), `foo.in` (standard input), `foo.epoch` (a
 fixed `SOURCE_DATE_EPOCH`), `foo.components` (§6.13's other program-components,
-one per line, each `path` or `path std` — the second field naming a standard
-other than the case's own, which only ADR-0137's mixed-mode case needs) and
-`foo.opt` (an optimisation level). **`foo.std` is not one of them** — for a case
-under `tests/` the directory decides and `run_test.sh` never looks, taking the
-standard as an argument CMake passes by glob. The sidecar is real but belongs to
-`tests/dumps/` and to the selfhost harnesses, which is how `selfhost/compiler.std`
-speaks for a source outside `tests/extended/`. `foo.opt` is the newest and the one to reach
-for least: the corpus compiles at `-O2` and should go on doing so, but a defect
+one path per line) and `foo.opt` (an optimisation level). **`foo.std` was one
+and is gone**, along with `selfhost/compiler.std` and the second field of a
+`.components` line: there is one language and nothing left to name.
+`foo.opt` is the newest and the one to reach for least: the corpus compiles at `-O2` and should go on doing so, but a defect
 in *storage* is invisible there, LLVM being free to hoist an alloca whose
 address does not escape — see ADR-0102 and the two `-O0` cases it added.
 
@@ -239,9 +235,12 @@ a `verify/` model describing a compiler that had been replaced, over a stack
 leak the default `-O2` optimised out of sight, over 32 diagnostics nothing
 named, and over four documented `--dump` flags no case ever passed.
 
-Twenty-four gates make that mechanical, and each fails in **both** directions — a
+Nineteen gates make that mechanical, and each fails in **both** directions — a
 claim that stops being true is as loud as one that was never true, which is
-`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to fifteen catalogues. Three
+`verify/`'s `KNOWN_GAP` rule (ADR-0013) applied to a dozen catalogues. Five
+more stood here until ADR-0232 removed the surface they asked about: `difftest`,
+`dialect-containment`, `annex-b`, `reserved-words` and `dialect-build` are all
+questions about a conformance mode, and there is none. Three of the nineteen
 say in the table that they are one-directional in part: `line-coverage`, which
 is a ratchet; `buffer-headroom`, which watches a bound rather than a claim; and
 `spec-clause-traceability`, which does fail when a citation disappears and
@@ -252,25 +251,20 @@ deliberately does not when one appears:
 | `diagnostic-coverage` | `tests/checks/unreachable_diagnostics.txt` | is every message named by a golden? |
 | `procedure-coverage` | `tests/checks/uncovered_procedures.txt` | is every procedure entered by a case? (ADR-0103) |
 | `line-coverage` | `tests/checks/line_coverage.txt` | is every *statement* run by a case? (ADR-0104) — a ratchet, so it fails in one direction only |
-| `difftest` | `tests/checks/difftest_baseline.txt` | do the two front ends still agree on this file? (ADR-0108) — the baseline is **empty** (it was 89), so any entry is a disagreement this change introduced. It also checks *how many* files were compared, an empty list being what a clean run and a run that reached nothing both produce |
 | `foreign-reserved` | `ReservedForeignName` in the compiler | is every global the emitter names still refused as a foreign name? (ADR-0121) — LLVM rejects a redeclared global, so a collision is an error about a file nobody wrote. It reads the emitter's own literals **and compiles a probe to harvest the `@names` its IR actually contains**, then offers each back to the compiler and requires a refusal. The second half is ADR-0144's: `@frame1` is `AppendLit('frame')` plus a counter, so no literal in the source holds it and a check over literals could never have seen it |
-| `kind-exhaustive` | `tests/checks/partial_cases.txt` | does every dispatch over an enumeration name every constant? (ADR-0124, ADR-0145, ADR-0221) — a case-statement with no matching label *stops the program* (ADR-0018), so a constant left off is a compiler **crash** and not a wrong answer. No other gate can see that: a missing arm is not a statement, a crash writes nothing for a golden to hold, and `src/`'s counterpart is a `switch` with a `default`, so difftest has one side falling over rather than a disagreement. It has shipped twice — `tyString`, then `tyOptional`. ADR-0124 read one enumeration; ADR-0145 reads all **twelve** and 54 case-statements, 23 of which name a subset and each of which records **how many of how many** — so a constant added to an enumeration fails every partial case over it, which is exactly the moment those two needed a reader. **ADR-0221 added the other half**: not every dispatch on a tag is a case-statement, and 37 are if-chains — `EmitString` cannot be a case at all, its arms testing a node's kind *and* its type in one condition. The failure there is the **opposite** one: a constant left off a case-statement is a crash, and a constant left off a chain takes the trailing `else` in silence, which is why a bare `else` does not excuse a chain where `otherwise` excuses a case. A chain is selected by the shape `x^.kind = c` and nothing else, so the parser's `if Check(…)` ladders are outside it by construction. Adding one node kind now fires **33 entries**. **ADR-0229 moved the case half off the source parser and onto the compiler**: `--dump-dispatch` writes every case-statement whose selector is an enumeration, with the constants its labels name, the ones they miss, and the constants no case names at all. A regex could not know which types are enumerations or how many constants each has — it recognised one by a *naming convention* — and the two readers were compared before the old one was deleted: 60 sites, same routine, enumeration, ordinal, `N of M` and missing constants on every one. 85 lines of Pascal-parsing regex went with it. **ADR-0230 moved the if-chain half too, and the gate now reads no Pascal at all** — 542 lines to 384. A chain is a *shape* and not a node, so Sema records every if-statement with its else-part and every tag test in a condition, and a head is an if that is no other's else-part. The dump reports the **field** each chain reads, which is what selects a dispatch from a lookahead: `e^.kind = nkVar` asks a value for its own kind, `t = tkSemi` asks whether a token happens to be a semicolon. ADR-0221 picked that scope by matching the text `^.kind` and so picked it by accident — its "three enumerations qualify" sentence described what the regex could see, and the criterion admits one more. The compiler finds 70 chains and 42 read a tag, against the regex's 38: the three it adds within the old scope are chains the text match simply missed |
+| `kind-exhaustive` | `tests/checks/partial_cases.txt` | does every dispatch over an enumeration name every constant? (ADR-0124, ADR-0145, ADR-0221) — a case-statement with no matching label *stops the program* (ADR-0018), so a constant left off is a compiler **crash** and not a wrong answer. No other gate can see that: a missing arm is not a statement, a crash writes nothing for a golden to hold. It has shipped twice — `tyString`, then `tyOptional`. ADR-0124 read one enumeration; ADR-0145 reads all **twelve** and 54 case-statements, 23 of which name a subset and each of which records **how many of how many** — so a constant added to an enumeration fails every partial case over it, which is exactly the moment those two needed a reader. **ADR-0221 added the other half**: not every dispatch on a tag is a case-statement, and 37 are if-chains — `EmitString` cannot be a case at all, its arms testing a node's kind *and* its type in one condition. The failure there is the **opposite** one: a constant left off a case-statement is a crash, and a constant left off a chain takes the trailing `else` in silence, which is why a bare `else` does not excuse a chain where `otherwise` excuses a case. A chain is selected by the shape `x^.kind = c` and nothing else, so the parser's `if Check(…)` ladders are outside it by construction. Adding one node kind now fires **33 entries**. **ADR-0229 moved the case half off the source parser and onto the compiler**: `--dump-dispatch` writes every case-statement whose selector is an enumeration, with the constants its labels name, the ones they miss, and the constants no case names at all. A regex could not know which types are enumerations or how many constants each has — it recognised one by a *naming convention* — and the two readers were compared before the old one was deleted: 60 sites, same routine, enumeration, ordinal, `N of M` and missing constants on every one. 85 lines of Pascal-parsing regex went with it. **ADR-0230 moved the if-chain half too, and the gate now reads no Pascal at all** — 542 lines to 384. A chain is a *shape* and not a node, so Sema records every if-statement with its else-part and every tag test in a condition, and a head is an if that is no other's else-part. The dump reports the **field** each chain reads, which is what selects a dispatch from a lookahead: `e^.kind = nkVar` asks a value for its own kind, `t = tkSemi` asks whether a token happens to be a semicolon. ADR-0221 picked that scope by matching the text `^.kind` and so picked it by accident — its "three enumerations qualify" sentence described what the regex could see, and the criterion admits one more. The compiler finds 70 chains and 42 read a tag, against the regex's 38: the three it adds within the old scope are chains the text match simply missed |
 | `predicate-kinds` | `tests/checks/predicate_kinds.txt` | what does every type predicate answer about every kind of type? (ADR-0194) — the row above reads a `case … of` and **nothing else**, and three defects in three increments lived in a *predicate* instead: `IsMemory` asking `IsVarString`, so a text was taken for a register value and the relational operators emitted `icmp` on an aggregate; the code generator's comparison dispatch; and `EmitAssign` choosing the string store with `IsStringType`, so a text target fell through to a schema tuple-comparison and stopped the program. None is a case-statement, and all three were found by writing a program that used the new type. `--dump-predicates` asks each of the 36 `function Is…(t: typePtr): boolean` about a fresh `NewType(k)` for each of the 21 kinds; `N of M` is the mechanism, as `partial_cases.txt`'s is — adding a kind moves M on all 36 rows, so each is a question nobody was asked the last three times. **A prompt and not a proof**: it records what the answers *are*, and a wrong cell written in passes. Two halves like `buffer-headroom` — the compiler answers, and the *source* says which predicates exist, so one added without a row fails rather than passing unseen. **The row that hides a defect is a correct one**, which is what `--like OLD NEW` beside it is for (ADR-0198): a text is not a string-type, so the guard asking `IsStringType` where it meant *the string path* is green in the catalogue, and `--like` lists every predicate true of the kind the new one resembles and false of the new one, with every call site of each — three predicates, 42 call sites, all three defects among them. A query and not a gate; the resemblance is a fact about why the kind was added and has to be named |
 | `ast-fields` | `tests/checks/ast_fields.txt` | is every pointer field of an AST node written before it is read? (ADR-0222) — the AST is the **only** variant record here, `case kind:` appearing once in 36,000 lines, and Pascal gives a variant record no member initialisers: a field of the arm the tag selects holds whatever `new` returned. Two things write them and the split is *who fills the field* — `NewNode` clears the 88 Sema fills, the construction site assigns the 50 the parser fills — and it was written down nowhere a reader could check. 135 assignments over 70 sites, and the catalogue is **empty**, which is the finding: the convention is not merely a convention, it is universal |
-| `variant-check` | ADR-0118's guard, and the corpus | is every node read through the arm its tag selects? (ADR-0223) — §6.5.3.3 makes a wrong-arm read an error and §3.1 lets a processor leave it undetected, which `selfhost/compiler.std` being `extended` means this compiler does, in itself. ADR-0118's check already exists; the compiler was not using it on itself. A second build under `--std=afterschool` carries **2821 guards** against 1, and compiles 1019 sources with `--dump-all` in 8.5 seconds. `llc_check.sh`'s shape — a build used as a reader, never as the product, so `compiler.std` and the fixed point are untouched and ADR-0190's objection does not apply. **The mutation is the argument**: `nkStr`'s `(stAt, stLen)` and `nkVar`'s `(vrAt, vrLen)` share storage, so reading the wrong one yields the right value — 808 ctest cases, 882 difftest files and 323 scenarios all green, and this catches it on 582 of 1019. It refuses to pass by asking nothing: fewer than 100 guards is a failure |
-| `dialect-build` | the compiler's own source, built twice | is the compiler still the compiler when it is a *dialect* source? (ADR-0231) — ADR-0190 declined to make `compiler.std` `afterschool` because *"the fixed point holds only while the compiler is an Extended Pascal source"*, and that was an argument nobody had tested. ADR-0223's second build is the artefact that settles it, and had only ever been asked whether it trapped while reading. Two claims now: the dialect build **is** a fixed point (stage 2 = stage 3 under `--std=afterschool`), and it is the **same compiler** — byte-identical IR on every source both accept, byte-identical diagnostics on every source either refuses. **1025 sources, 564 compiled, 461 refused, 0 differing.** So the objection is narrowed rather than overturned: the shipped compiler still does not change, and what stands between it and the flip is the seed, not doubt about whether it would work. Neither half is vacuous — handed the seed compiler it reports the fixed point broken and exits 1 |
+| `variant-check` | ADR-0118's guard, and the corpus | is every node read through the arm its tag selects? (ADR-0223) — §6.5.3.3 makes a wrong-arm read an error and §3.1 lets a processor leave it undetected, which this compiler did in itself: ADR-0118's check existed and was a *dialect* rule, and `compiler.std` said `extended`. ADR-0223 answered that by building the compiler a second way to arm the 2821 guards; ADR-0232 removed the modes, so the guards are in whatever this compiler emits and what is left is the sweep — compile the compiler with itself, then read 1019 sources with the result. **The mutation is the argument**: `nkStr`'s `(stAt, stLen)` and `nkVar`'s `(vrAt, vrLen)` share storage, so reading the wrong one yields the right value — 808 ctest cases and 323 scenarios all green, and this catches it on 582 of 1019. It refuses to pass by asking nothing: fewer than 100 guards is a failure |
 | `predicate-callers` | `Assignable`'s own refusal arms and call sites | does every caller of a shared predicate refuse what the predicate refuses? (ADR-0146) — ADR-0058's sentence, *a permission granted in a shared predicate leaks to every caller*, has cost three times: the relational operators emitting invalid IR for two slices (ADR-0139), then assignment copying one array's contents over another's, exit 0 (ADR-0143), then §6.4.6 a)'s **second** condition never read at all, so two records holding a `text` were assignable and the block closed one file twice — a double free, SIGABRT (ADR-0150). The first two fixes were each followed by a probe over the positions someone thought of. This derives the positions from the **source** — 23 of them over 17 routines, against the five type spellings `Assignable` refuses outright — and requires the program to be refused. 115 pairs; moving the slice arm one line down leaves all 625 cases green. ADR-0177's `exit(e)` is the position that changed the *gate*: it can stand only in a function-block, so the probe program's subject had to become a function with its result assigned, or §6.7.2 would have refused every probe of it whatever type it was given |
-| `reserved-words` | the keyword table in the compiler | does the dialect reserve exactly what Extended Pascal reserves? (ADR-0140) — the dialect reserves **no** word-symbol, and that is the whole of what keeps ADR-0117's containment true, since reserving a spelling takes it from every conforming program using it as an identifier. `dialect-containment` sees such a word only where a corpus program happens to use it: reserving `defer` in the dialect leaves all 619 cases green, that sweep included. This asks every spelling the lexer knows, from the lexer's own table, and fails in both directions — a word the dialect starts reserving, and one it starts allowing that Extended Pascal reserves |
-| `dialect-containment` | `tests/checks/containment_exceptions.txt` | does every case under `tests/extended/` behave the same under `--std=afterschool`? (ADR-0138) — ADR-0117's containment was a claim about every program witnessed by **one**, `inherits_extended.pas`, and the corpus that witnesses it properly already existed compiled under a single mode. It runs the case rather than diffing the IR, because sixteen of 219 sources differ textually for reasons that are the dialect working. Four divergences are argued for, and the mutation it exists to catch — `langStd = stdExtended` where `HasExtended` belongs — leaves all 617 other cases green |
 | `buffer-headroom` | `poolMax` and `tokMax` in the compiler, and what `--dump-limits` reports | how much of each array sized for this compiler's own source is still free? (ADR-0126, ADR-0148) — a one-directional watch on a bound, not a claim. Twice a fixed buffer (ADR-0012) has failed as a **build** rather than as a diagnostic, because the array that has to hold this source is the *seed's*: raising the constant here does not raise the one that matters, so the only way out is an out-of-cycle reseed. ADR-0095 cleared the string pool at 74 characters over and closed with "nothing measures the headroom"; ADR-0126 cleared the tokens at 107 left of 140000 and is that measurement — of the tokens only, the pool having no count a token stream can carry. ADR-0148's `--dump-limits` is the other half: the compiler compiles as usual and then reports both counters against both capacities, and the gate reads the capacities **twice**, from the source and from the compiler, so a stale `build/bin/pascalc` is named rather than measured |
-| `annex-b` | Annex B of `doc/afterschool-pascal-spec.md` | does every dialect construct still get the answer the specification says a conformance mode gives it? (ADR-0160) — the refusal surface is *conformance* behaviour, not dialect behaviour (ADR-0121, ADR-0154), so both front ends have an opinion and difftest compares them. The annex was a table nothing read: of five constructs, one had a case, under one mode. Ten now, and each golden must **contain the message the annex states**, so the document is enforced rather than accompanied. Probing the five found the annex wrong — ISO 7185's parser stops at the `..` in `a[i..j]` where Extended Pascal parses it and Sema refuses it, and the table had one column claiming otherwise. Fails in both directions, and the one that matters is a `*_refused` case naming no row, which is what a sixth dialect construct trips |
 | `target-sizes` | `PAS_FILE_SIZE`/`PAS_JUMP_SIZE` and `fileSize`/`jumpSize` | are the two opaque struct sizes large enough on a machine that is not this one? (ADR-0155) — it compiles `runtime/pasrt.c` itself for every target a compiler is installed for, because the two `_Static_assert`s live in that file and a copy of the struct would be a copy free to drift. Both numbers were x86-64 measurements written as constants, and `struct pas_jump` embeds a `jmp_buf` — 200 bytes on x86-64, 312 on aarch64, 392 on 32-bit arm — so `PAS_JUMP_SIZE = 256` stopped an aarch64 build at the runtime's own assert. Skips with 77 where only the host is available; `TARGET_SIZES_REQUIRE` is how CI refuses to pass by skipping |
 | `runtime-isoc` | `tests/checks/nonstandard_c.txt` | how far is the runtime from ISO C? (ADR-0161, ADR-0186) — it is the only C here and the whole of what a port has to satisfy, and the answer is now in **two parts**, because the catalogue turned out to hold only *functions*. `runtime/pasrt.c` is **five names**: `_setjmp`/`_longjmp` for ISO 7185 §6.8.2.4 / ISO/IEC 10206:1991 §6.9.2.4's non-local goto, `fmemopen`/`open_memstream` for ADR-0057's `readstr` and `writestr`, and `access` for §6.7.5.6's `bind` asking whether a name exists (ADR-0172). The file model is `fopen` and is not one. It strips every non-ISO `#include` from a copy before the strict compile, because `__STRICT_ANSI__` hides only what POSIX adds to a header ISO C has — `<unistd.h>` declared `access` through it unseen. A C library honouring `__STRICT_ANSI__` hides its POSIX declarations, so `-std=c11 -pedantic-errors` harvests the list; a second compile with only those two diagnostics silenced is what says five is the whole list. It also sweeps the two **conformance** corpora and requires every `declare`d symbol to be `pas_*`, `llvm.*` or catalogued — not `tests/dialect/`, where `external` lets a program name any C function it likes. Skips 77 on a C library that declares POSIX anyway, macOS being one. **The second part is ADR-0186's**: the mechanism above proves the list complete by stripping the includes and requiring what is left to still compile, which works for a symbol and cannot work for a *type* — an incomplete `struct stat` is an error no flag silences. So a POSIX dependency needing a type could never be catalogued there, which nobody had met in four increments because all four were functions. **And a third unit joined on the day it arrived** (ADR-0190): `runtime/pasrt_unicode.c` is held to strict ISO C11 with *no* catalogued name at all, which is a stronger claim than either of the others carries and free to make while it stays true. `runtime/pasrt_posix.c` is where a POSIX dependency goes, bounded by its **headers** rather than its names (`<sys/stat.h>`, `<unistd.h>`,
 | `unicode-conformance` | Unicode's own `NormalizationTest.txt` and `GraphemeBreakTest.txt` | does the runtime agree with the Unicode Character Database about what a text value *is*? (ADR-0189, ADR-0190) — **the second oracle here that nobody wrote**, and the first since the BSI suite. AP 6.4.15 rests on two properties — Normalization Form C, and where one extended grapheme cluster ends — that no reading taken here could be trusted to settle, which is exactly ADR-0072's blind spot; Unicode publishes the answers. 20 034 normalisation cases, 766 segmentation cases, and a sweep of all 1 094 978 code points the first file does not list, each required to be its own NFC. It passed on the first run, so four mutations were made and each was caught by the section it should be — the sharpest being `combines_back` made constantly false, which loses **only** the 59 composites whose second element is a starter and nothing else. It asks a second question the files cannot: regenerating the tables from the database must reproduce the committed header, or the two could drift and every case would still pass. Skips 77 without the database, which is fetched and never committed; `UNICODE_CONFORMANCE_REQUIRE` is how CI refuses to pass by skipping |
 `<dirent.h>`), required to be clean POSIX C11 under `-Werror`, and required to contain nothing but `pasx_` — so a system without those headers loses library routines and **not the language** |
 | `foreign-layout` | the `@cstruct`/`@cfield` comments, and `--dump-layout` | does a record declared here have the layout the C struct it claims to be has? (ADR-0185) — ADR-0184 made a record crossable because `RecordLayout` *is* C's struct rule, and registered what that leaves open: whether the fields declared **are** the members the real struct has. `struct stat` is 144 bytes with two holes, and a hole in the wrong place makes every field after it wrong with no diagnostic anywhere. The source states its claim in a **comment**, which costs the language nothing (ADR-0166's route for `{ @std:iso7185 }`); the compiler reports the offsets it computed; a C compiler holding the real header judges the two. Zipped in **order**, so a missing annotation shifts the rest and the count check fires — name-matching would silently check a subset and call it a pass. `@cplatform` reports a subject as not-checked-here rather than failing it, a skip and a defect having to look different. Skips 77 with no C compiler |
 | `target-layout` | the frame types the compiler emits, and the targets `--target=` admits | do the admitted targets lay a frame out the same way? (ADR-0157) — `LlSize` and `LlAlign` are hand-written and answer with **one number for every target** (ADR-0028), which is correct only while they agree. It reads the `%frameN` definitions out of what the built compiler emits for `selfhost/compiler.pas` *and* for a probe carrying the types the compiler has no frame slot of — an `i256` in a record first, that being ADR-0028's segfault exactly — then folds them to offsets once per target — four and a half thousand of them, and the gate prints the count rather than any document pinning it, because it moves with every declaration added to the compiler. The target list comes from the compiler's own `--target=` refusal, so a third target is compared without the gate being edited; admitting `i686-linux-gnu` moves 86% of them |
-| `clause-citations` | `tests/checks/nonexistent_clauses.txt` | does every clause number this tree writes down name a clause of *some* standard? (ADR-0164) — a citation is the one claim here no oracle can contradict: a wrong number compiles, runs, passes every golden, agrees with the other front end and is proved correct by `verify/`, which is how ADR-0072's survived in four documents and a purpose-written test. It asks the **cheap half** and says so — whether the number names a clause at all, never whether it names the right one, so it would not have caught ADR-0163, where §6.4.3.4 was cited about an ISO 7185 program and that number is *Set-types*. Over 7382 citations it found one number naming nothing in either standard, standing in seven places. **A clause number written in this tree is a citation**: the gate cannot tell a mention from a claim, so a document discussing a wrong number either avoids spelling it or takes an entry. An entry is a claim about the **standard**, not the inventory — the inventories are generated and ADR-0152 found 37 real clauses in none of them |
+| `clause-citations` | `tests/checks/nonexistent_clauses.txt` | does every clause number this tree writes down name a clause of *some* standard? (ADR-0164) — a citation is the one claim here no oracle can contradict: a wrong number compiles, runs, passes every golden and is proved correct by `verify/`, which is how ADR-0072's survived in four documents and a purpose-written test. It asks the **cheap half** and says so — whether the number names a clause at all, never whether it names the right one, so it would not have caught ADR-0163, where §6.4.3.4 was cited about an ISO 7185 program and that number is *Set-types*. Over 7382 citations it found one number naming nothing in either standard, standing in seven places. **A clause number written in this tree is a citation**: the gate cannot tell a mention from a claim, so a document discussing a wrong number either avoids spelling it or takes an entry. An entry is a claim about the **standard**, not the inventory — the inventories are generated and ADR-0152 found 37 real clauses in none of them |
 | `spec-clause-traceability` | `tests/spec/clauses/triage.tsv` and `pending.txt` | is every clause a scenario cites still cited, and does every citation name a clause the triage calls testable? (ADR-0106) — the second half is what keeps the *triage* honest, since a scenario citing a `structural` or `not-implemented` clause fails. A clause that **starts** being cited does not fail; it asks for `--write-pending`, a gate that punished progress being one people learn to avoid |
 | `heap-balance` | `tests/checks/heap_balance.txt` | did every `new` a corpus program makes still come back through `dispose`? (ADR-0183) — **the one oracle here that reads no output**. Every other gate compares what a program *printed*, and a leak prints nothing, which is how a handle in an unowned heap record (ADR-0181) and an abandoned chain (ADR-0182) were each found by a measurement taken once, by hand, and by nothing afterwards. The runtime tallies `pas_new` against `pas_dispose` and writes the balance at exit when `$PASHEAP_BALANCE` is set — `--coverage`'s discipline, so an unmeasured program pays one `getenv`. A nonzero balance is **not** a defect: no standard obliges a program to dispose what it created, and 7 of the 29 heap-using cases legitimately end with something outstanding. So it is a catalogue, failing in both directions. Making `dispose` free nothing leaves **735 of 735 cases and 230 of 230 scenarios green** and moves nineteen balances, which is the whole argument for it. It counts no files and no handles, and takes the count at *exit*, so a leak that a loop would have balanced eventually is invisible |
 | `model-drift` (CI) | the `Model-unchanged:` trailer | did CodeGen **or the constant folder** change without `verify/lowering.py`? — its *base resolution* is checked locally as `model-drift-base`, that half being a pure question about one repository and the half that has broken |
@@ -279,11 +273,11 @@ All but `model-drift` are `ctest` cases, so they run before a push rather than
 reporting after one. **What none of them sees** is a branch: `line-coverage`
 counts a statement, so `if c then a else b` on one line is covered when either
 arm runs. That, and the corpus being enumerated by glob so the harnesses that
-build a compiler of their own — `irtest.sh`, `producttest.sh`, `verify.py`, the
-BSI runner — are invisible to it, are rows in `doc/sop.md` §7. The *flags* half
-of that second gap is closed: the coverage corpus now sweeps `--dump-all` the
-way `difftest.sh` drives it, which was worth 195 statements reported unreached
-while an oracle reached them on every run.
+build a compiler of their own — `irtest.sh`, `producttest.sh`, `verify.py` —
+are invisible to it, are rows in `doc/sop.md` §7. The *flags* half of that
+second gap is closed: the coverage corpus sweeps `--dump-all` over every
+source, which was worth 195 statements reported unreached while an oracle
+reached them on every run.
 
 `pascalc --coverage` is the product feature behind the last one (ADR-0104), and
 it works on any Pascal program: one counter per statement, the lines reached
@@ -388,62 +382,42 @@ design would have reported a false all-clear, because it asked whether a name
 *resolves* rather than whether it works, which is the same mistake that let
 `pack` and `page` sit in `isRequiredName` with no implementation behind them.
 
-**Stage 2 has begun** (ADR-0033). **`--std=extended` — ISO/IEC 10206:1991 —
-is the default since ADR-0165**, and `--std=iso7185` is the older standard,
-kept reachable rather than retired. **A source may name its own standard** in
-a header comment — `{ @std:iso7185 }` — which is read before the lexer runs,
-because the standard decides which words are reserved; an explicit `--std=`
-wins over it (ADR-0166). The two are *not* nested: Extended
-Pascal reserves word-symbols a valid ISO 7185 program may use as identifiers —
-so a source is written in one language or the other, and the standard is a
-property of the source.
+**Both standards were implemented, and there is one language now** (ADR-0232).
+`--std` is gone, and so are ADR-0166's `{ @std: }` header comment and the
+`.std` sidecars. What survives of the split is worth knowing, because the tree
+is laid out by it:
 
-- **`selfhost/compiler.pas` is itself an Extended Pascal source** (ADR-0082),
-  which reverses the example ADR-0033 gave: it *had* a field named `value`, and
+- **`selfhost/compiler.pas` was converted to Extended Pascal** (ADR-0082),
+  which reversed the example ADR-0033 gave: it *had* a field named `value`, and
   that one identifier was quoted here for a long time as the reason the stage-1
   compiler was ISO 7185. Renaming it and `bindable` — by *token position*, not
   by text, since both words also appear in the keyword tables the lexer matches
-  against — was the whole of the conversion, and the token stream and Sema dump
-  were byte-identical under the two standards before the harnesses were told.
-  The reason to do it is ADR-0081: only Extended Pascal lets a program read its
-  own command line, so only an Extended Pascal compiler can take a flag.
+  against — was the whole of the conversion. The reason to do it is ADR-0081:
+  only Extended Pascal lets a program read its own command line, so only an
+  Extended Pascal compiler can take a flag. ADR-0232 made that rename the
+  ordinary case: the ten word-symbols §6.1.2 adds are reserved for every
+  source, so nine more corpus programs were renamed the same way.
 
-- **`tests/extended/` is the Extended Pascal corpus**, and the directory is
-  what tells every harness which flag to use — except where a `name.std`
-  sidecar overrides it, which is how `selfhost/compiler.pas` says it is
-  Extended Pascal from outside that directory (ADR-0082). `run_test.sh` (via CMake),
-  `irtest.sh` and `producttest.sh` each derive it from the path, so none can be
-  told a different thing about one file. The glob is
-  **unanchored** on purpose: a file named on the command line arrives relative,
-  and `*/tests/extended/*` quietly called it ISO 7185 — which compares two
-  identical rejections and passes (ADR-0034).
+- **`tests/`, `tests/extended/` and `tests/dialect/` are three globs and no
+  longer three languages.** The directory used to tell every harness which flag
+  to use; the names are kept because 219 ctest cases and every document
+  referring to them are keyed on the path, and because moving a case renames it.
 - **`tests/extended/components/` holds §6.13's separately translated
   components**, and the subdirectory is load-bearing: the CMake glob is not
   recursive, so a source declaring no program is never registered as a case
   that fails to run. A case that needs one lists it in `name.components`, one
-  per line relative to the case's own directory — `path` or `path std`, the
-  second field being how ADR-0137's case translates one component under
-  `--std=extended` while the program is the dialect — and `run_test.sh` and
+  path per line relative to the case's own directory, and `run_test.sh` and
   `irtest.sh` each translate it separately and link the objects. The two
   harnesses must read that file the same way, or a case means two things.
   - `irtest.sh` skips a source with **no `.out` and no `.err`**, which is what
-    keeps a component from being run as a program. Selecting by "the C++
-    compiler rejected it" stopped working the moment a component became
-    something the C++ compiler accepts.
-- **The stage-1 compiler reads the standard from a file** — a third program
-  parameter, one word. ISO 7185 gives a program no access to its command line
-  beyond its program parameters, and those are files; `compiler.pas` cannot
-  take a flag. Same constraint as ADR-0024's one source file.
-- **A word-symbol is reserved when the feature needing it lands**, not before —
-  so until the list was complete, `--std=extended` accepted some programs a
-  conforming processor rejects. **It is complete now**: §6.1.2 adds thirteen
-  word-symbols to ISO 7185's, `restricted` (ADR-0058) was the last, and
+    keeps a component from being run as a program.
+- **Every word-symbol is reserved.** §6.1.2 adds ten to ISO 7185's 35, and
   `and then`/`or else` are reserved by the lexer joining two tokens rather than
-  from a table (ADR-0038). Nothing still unimplemented needs a fourteenth — the
-  time procedures are required *identifiers*, which §6.1.3 makes shadowable.
-  So the lexis was complete before the language was.
+  from a table (ADR-0038). Adding an eleventh is what `reserved-words` used to
+  refuse and nothing refuses now — the argument against it is ADR-0140's and
+  is about the *dialect's* spellings, which are positions rather than words.
 
-**Both standards are complete, and each feature's record is in
+**Every clause of both was implemented, and each feature's record is in
 `doc/design-digest.md`** — what the clause asked for, what it cost, and what was
 refused or deferred and why. Recurring answers worth carrying into a new
 feature, because each was arrived at more than once:
@@ -478,17 +452,15 @@ feature, because each was arrived at more than once:
   had; a discriminant-selected variant has no designator to attribute a value
   to. Where a check would have gone, the code says why it is not there.
 
-**Anything the standards do not have still waits.** Inside `--std=iso7185` and
-`--std=extended` an extension is a defect unless
-`doc/implementation-defined.md` lists it as one — it lists two, and a third is a
-decision with a record behind it rather than a convenience. **What the dialect
-may not do is change what those two accept**; it may and does change what they
-*say*, a diagnostic naming the mode being the only way to tell a program it was
-compiled under the wrong one (ADR-0154).
+**`doc/implementation-defined.md` is still the register of what this processor
+decides** where a clause leaves it open, and the two extensions listed there are
+still listed. What it no longer carries is the clause 5.1 a) compliance
+statement: ADR-0232 withdrew it rather than reword it, because a processor that
+cannot compile BSI's CONF005 does not conform and saying otherwise would be the
+one kind of false claim this project has been most careful about.
 
-**The third `--std` now exists**: `--std=afterschool` (ADR-0117), and it is
-where a feature neither standard has belongs. **`doc/afterschool-pascal-spec.md`
-is what it accepts, clause by clause** (ADR-0135) — an amendment to
+**`doc/afterschool-pascal-spec.md` is the specification of this language,
+clause by clause** (ADR-0135, ADR-0232) — an amendment to
 ISO/IEC 10206:1991 in that standard's own numbering, so AP §6.4.11 is the
 optional type because clause 6.4 ends at 6.4.10. Two rules govern it: it is
 derived from the decision records and verified by probe and **never from
@@ -497,7 +469,7 @@ agrees with it by construction and can contradict nothing; and where it and an
 ADR disagree, it wins and the divergence goes in its Annex E. A dialect feature
 now lands with a clause as well as a record.
 
-Five things about the dialect are worth knowing before adding anything:
+Four things about the dialect are worth knowing before adding anything:
 
 - **It reserves no word-symbol, and that is a decision** (ADR-0140), not the
   accident it looked like for four features. A dialect feature is spelled in a
@@ -512,7 +484,9 @@ Five things about the dialect are worth knowing before adding anything:
   `.`, `^` or a terminator. **`defer` is the first to use that last sentence**
   (ADR-0175): `defer S` is the case where the token after the identifier is
   none of those six, so `defer;`, `defer(x)` and `defer := 3` all still belong
-  to a program that declared one. `reserved-words` enforces it.
+  to a program that declared one. `reserved-words` enforced it until ADR-0232
+  retired the gate — there is no second reservation list to compare against, so
+  what keeps this true is the rule and the review rather than a check.
   **`exit` is the shape where no position works** (ADR-0177): a
   procedure-statement is something ISO/IEC 10206:1991 admits, so what makes
   the name the dialect's is only that it is *nobody's* under a conformance
@@ -536,33 +510,23 @@ Five things about the dialect are worth knowing before adding anything:
   identifier answers instead. ADR-0184's consequences carry both, because
   ADR-0140's "a feature with no position has found the real limit" assumes
   every feature needs a spelling, and twice now none has.
-- **It nests, where the first two do not.** ADR-0033's non-nesting was forced by
-  the two specifications disagreeing about word-symbols; nothing forces it here,
-  so the dialect *contains* Extended Pascal. `stdKind` is
-  `(stdIso7185, stdExtended, stdAfterschool)` and **the order is a
-  containment** — `HasExtended(s)` is `s >= stdExtended`, and every one of the
-  40 sites asking "does this mode have Extended Pascal?" goes through it. Never
-  write `langStd = stdExtended`; it silently switches Extended Pascal off for
-  the dialect and almost every case still passes — it was 545 of 547 when the
-  predicate was written, and the two that noticed are the reason it exists.
-- **The containment is witnessed twice**: everything Extended Pascal accepts,
-  the dialect accepts and means the same thing. `tests/dialect/inherits_extended.pas`
-  is the readable statement of it, and `dialect-containment` (ADR-0138) is the
-  sweep — the whole of `tests/extended/` compiled a second way under
-  `--std=afterschool` and required to behave identically. The witness alone was
-  122 lines against a claim about every program, and a mutation switching
-  Extended Pascal off for the dialect at the `readstr` site left all 617 cases
-  green. That is the property every feature is added *to*, and it is what a
-  dialect feature must not disturb. A feature that adds a **required identifier** has to write a
-  paragraph there rather than leave the file alone — §6.2.2.10 puts one in a
+- **It contains Extended Pascal, and that containment is now the language
+  itself.** ADR-0117 made the dialect a superset where ADR-0033's two modes were
+  disjoint, and `stdKind`'s order was what carried it — `HasExtended(s)` was
+  `s >= stdExtended` at 40 sites. ADR-0232 removed all three constants and the
+  predicate: there is nothing to compare, so nothing to get wrong.
+  `tests/dialect/inherits_extended.pas` is still the readable statement that
+  every Extended Pascal construct means what it meant, and `dialect-containment`
+  — the whole of `tests/extended/` compiled a second way — retires with the
+  second way. A feature that adds a **required identifier** still has to write a
+  paragraph in that file rather than leave it alone: §6.2.2.10 puts one in a
   scope enclosing the program, so it takes a spelling away from any program that
   does not shadow it, and §6.1.3's shadowing is what makes that survivable
   (ADR-0128's `int64`).
 - **A feature needs a reason of its own** — "the standard has it" is
-  unavailable, since none does — and should still be spelled the way a standard
-  spells it wherever one does. It must not change what the conformance modes
-  accept, and it must be expressible in what `seed/pascalc.ll` accepts or the
-  seed is refreshed first.
+  unavailable, since none governs this language — and should still be spelled
+  the way a standard spells it wherever one does. It must be expressible in what
+  `seed/pascalc.ll` accepts, or the seed is refreshed first.
 - **It is specified, and the specification is enforced.** `tests/spec/` takes
   `@afterschool:<clause>` beside the two standards' tags, and every testable
   clause of the spec is cited by a scenario but for the three AP 5.5 d) names. The clause table is **generated
@@ -574,21 +538,13 @@ Five things about the dialect are worth knowing before adding anything:
   which makes the traceability gate *refuse* a scenario citing it — so the
   specification cannot come to claim a feature is there by way of a passing
   test. AP 6.4.15, the text model, was the whole of that list and is implemented; nothing is marked today, and `spec-clause-traceability` checks the marker against the triage in both directions (ADR-0195).
-- **difftest does not follow it.** `src/` is frozen at the conformance surface,
-  so a dialect source is compared by no second implementation and
-  `difftest.sh` *skips* it — counted and reported, because a silent skip is
-  what the corpus-size check exists to prevent. `irtest.sh` does not skip, and
-  is what recovers part of that. `doc/sop.md` §7 carries the gap.
-  - **But the *refusal* is on the conformance surface, and `src/` must carry
-    it.** A dialect feature with a syntax of its own is one the reference front
-    end can see, and what `--std=extended` says about such a program is a
-    conformance question. ADR-0121's `external` was the first, and left alone
-    `src/` answered "expected 'begin'" where the compiler names the mode — a
-    difftest failure, correctly. Teaching `src/` the refusal is six lines and
-    is unconditional there (its `Std` has two values and it is never given
-    `--std=afterschool`); the alternative was one `difftest_baseline.txt` entry
-    per dialect diagnostic, which spends the emptiness that makes an entry mean
-    something.
+- **No second implementation follows it.** `src/` was frozen at the conformance
+  surface (ADR-0117), so a dialect source was compared by nothing; ADR-0232
+  removed the conformance surface, so *every* source is now in that position and
+  `difftest` retires. What is left is the goldens, `verify/` for a new lowering,
+  `tests/spec/` for a clause-shaped requirement, the stage-2/stage-3 fixed point
+  and `llc-second-backend`. `doc/sop.md` §7 carries the gap, which is now the
+  largest one here.
 
 ## Where things live
 
@@ -598,9 +554,10 @@ are the *components* inside it, and where a bullet names a `src/*.cpp` file it
 is naming the component that file used to be: the port is close enough that the
 reasoning transfers, and the C++ is at tag `v0.1.0` if you want to read it.
 
-The **lexer** case-folds identifiers and knows every reserved word of both
-standards, even ones the parser rejects — which of them are *reserved* is the
-one thing `--std` decides in the lexis (ADR-0033). The **parser** is recursive
+The **lexer** case-folds identifiers and reserves all 45 word-symbols, ISO
+7185's 35 and ISO/IEC 10206:1991's ten. Which of them were reserved used to be
+the one thing `--std` decided in the lexis (ADR-0033); ADR-0232 made the table
+whole. The **parser** is recursive
 descent shaped like the ISO grammar (`expression` → `simple-expression` →
 `term` → `factor`) — note a leading sign binds to the whole *term*, so
 `-7 mod 3` is `-(7 mod 3)`.
@@ -645,20 +602,20 @@ The lexer (ADR-0022), the parser (ADR-0023), Sema (ADR-0024) and CodeGen
 (ADR-0025) are all done, and **the bootstrap closes**: the compiler compiles
 itself and stage 2 equals stage 3. **It is one source file** — neither standard
 has an include mechanism, so each component was merged in as it was ported
-rather than kept as a program of its own. `selfhost/compiler.std` is the one
-word that says which standard it is written in, and
+rather than kept as a program of its own.
 `selfhost/producttest.sh` is what checks the built artefact — the other three
 harnesses build a stage-1 compiler of their own in a temporary directory, so
 `build/bin/pascalc` could be missing or stale with every one of them green.
 
 It takes a **command line** — `pascalc [options] file.pas`, with `-o`,
-`--std=`, `--import` (repeatable), `--dump-*` and `-h` (ADR-0083). It is quiet
+`--import` (repeatable), `--target=`, `--coverage`, `--dump-*` and `-h`
+(ADR-0083). It is quiet
 on success and writes `file:line:col: error: message` on failure, to `output`,
 because no standard Pascal program has a second stream. The dumps go to standard output; the IR goes to the file `-o`
 names, because it is the compiler's *product* rather than a dump and has to be
-assembled. It is written on every run, which is what keeps `difftest.sh`
-exercising the code generator on every file in the corpus even though it
-compares none of it.
+assembled. It is written on every run, which is what keeps the coverage sweep
+exercising the code generator on every file in the corpus even though it reads
+none of it.
 
 **How a Pascal program has a command line at all** is the part worth knowing.
 §6.5.1 makes every program-parameter possess "the bindability that is
@@ -687,28 +644,24 @@ argument. `argOver` is declared beyond the last usable one and never read for
 its name: bound exactly when an argument had nowhere to go, which is what turns
 "the list ended" into "the list ended because it ran out" (ADR-0158).
 
-**The first three components are checked twice: against `src/`, and against
-golden files.** `pascalc --dump-all` writes three sections (`=== tokens`,
-`=== ast`, `=== sema`), and `selfhost/difftest.sh` diffs them against the
-reference front end's over every `.pas` in the tree. That was the strongest
-oracle here, ADR-0085 gave it up with stage 0, and ADR-0108 brought it back —
-so the goldens are no longer the only reader of the 157 error-path sources, but
-they are still what covers CodeGen, which difftest never compared.
+**The first three components are checked by golden files, and by nothing
+else.** `pascalc --dump-all` writes three sections (`=== tokens`, `=== ast`,
+`=== sema`). `selfhost/difftest.sh` used to diff them against a second front
+end's over every `.pas` in the tree — the strongest oracle here; ADR-0085 gave
+it up with stage 0, ADR-0108 brought it back, and ADR-0232 retired it for good,
+because `src/` is frozen at a conformance surface that no longer exists.
 
 **Know what that means when you change a stage.** A golden agrees with whatever
 wrote it, so a change that is wrong in the dump *and* wrong in the goldens you
 regenerate is invisible. Regenerating a golden is a decision to be argued for in
-the commit message, not a step. Difftest is the check that does not have that
-weakness — and the one time it mattered, the *product* was the wrong one: the
-Pascal padded twice for a redefined `write`, and copying that into `src/` to
-make four files agree would have been ADR-0073's failure exactly.
+the commit message, not a step — and there is no longer a second implementation
+to catch you at it, which is exactly why the rule matters more than it did.
 
 **And no oracle here can contradict a *reading*.** The goldens agree with
-whoever wrote them, `tests/bsi/expected.tsv` records what this compiler does,
-`verify/` proves the lowering matches a model of the lowering, and difftest's
-two implementations are written by one author from one reading — so a
-misread clause is invisible to all of them at once, which is how ADR-0072's
-set-packing deviation survived in four documents and a purpose-written test.
+whoever wrote them and `verify/` proves the lowering matches a model of the
+lowering — so a misread clause is invisible to all of them at once, which is
+how ADR-0072's set-packing deviation survived in four documents and a
+purpose-written test.
 `.claude/skills/langspec-audit/SKILL.md` is the substitute: independent readers
 given the behaviour and not the reasoning, told to prove the compiler wrong from
 the standards text. ADR-0101 is what it found the first time — eleven readings
@@ -757,20 +710,14 @@ scenario that asserts nothing.
   count (`grep -vc '^#\|^$'`), because a number written here goes stale on
   its own and this one had, by twenty.
 
-**The one oracle nobody here wrote is the BSI Pascal Validation Suite**
-(ADR-0086), 812 programs from 1982 tied to clauses of ISO 7185. It is
-**fetched, never committed** — BSI grants use and not redistribution — so
-`tests/bsi/fetch.sh` puts it in a gitignored directory and the `ctest` case
-skips when it is absent, exactly as `verify-lowering` skips without z3.
-`tests/bsi/expected.tsv` records what this compiler does with all 812 and
-**any difference fails, in either direction**: a program that starts *passing*
-is as loud as one that starts failing, which is `verify/`'s rule for a
-`KNOWN_GAP` that begins to hold. Fix the catalogue in the change that fixed the
-compiler. Running it is **not a validation** and no document here may say it
-is; `tests/bsi/README.md` has BSI's three terms. It found three defects on its
-first run, all now fixed. Expect it to find little afterwards: it is a **fixed
-corpus**, where difftest compared every source in this tree and grew with the
-language. It is a strong oracle, not a replacement for the one v1.0.0 gave up.
+**The one oracle nobody here wrote was the BSI Pascal Validation Suite**
+(ADR-0086), 812 programs from 1982 tied to clauses of ISO 7185. It found three
+defects on its first run and it is **gone** (ADR-0232): its programs are
+conforming ISO 7185 and 25 of them use a word-symbol §6.1.2 now reserves, so
+the corpus cannot be compiled by this compiler at all. That is the sharpest
+single cost of the dialect decision, and `unicode-conformance` — Unicode's own
+`NormalizationTest.txt` and `GraphemeBreakTest.txt` — is now the only oracle
+here that nobody in this project wrote.
 
 - The dumps are **opt-in** — `--dump-tokens`, `--dump-ast`, `--dump-sema`,
   `--dump-all` — and each stops at the stage it names. They were unconditional
@@ -1011,9 +958,10 @@ discharges coverage and never membership.
 index-type that is an integer subrange, a smallest *value* of 1 — not a
 smallest ordinal, which is why an enum index fails even when `ord` of its lower
 bound is 1 — and a component that is `char` and not a subrange of one. ISO 7185
-adds a largest value above 1; ISO/IEC 10206:1991 §6.4.3.3.2 drops that clause
-and nothing else, so it is the only one `--std` decides. That gate is what lets
-the compiler compile itself, its schema strings having a discriminant bound.
+added a largest value above 1; ISO/IEC 10206:1991 §6.4.3.3.2 drops that clause
+and nothing else, and this language takes the later reading. Dropping it is
+what lets the compiler compile itself, its schema strings having a discriminant
+bound.
 
 **Packing decides set compatibility and does not propagate** — two rules that
 read alike and are not. §6.4.5 c) makes two set-types compatible only when they

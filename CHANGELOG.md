@@ -13,6 +13,39 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+**Afterschool Pascal is a Pascal dialect, and the conformance modes are gone**
+(ADR-0232). This is the breaking change of version 3 and it is larger than any
+before it.
+
+- `pascalc --std=<name>` is an **unknown option**. `tools/pascalcc --std=<name>`
+  is accepted and ignored, so a build script written for version 2 still runs.
+- A `{ @std:iso7185 }` header comment is now an **ordinary comment**
+  (ADR-0166 is withdrawn), and the `name.std` sidecar is gone from every
+  harness, as is the second field of a `.components` line.
+- **All 45 word-symbols are reserved.** ISO/IEC 10206:1991 §6.1.2 adds ten to
+  ISO 7185's 35 — `otherwise`, `value`, `only`, `module`, `export`, `import`,
+  `qualified`, `protected`, `bindable`, `pow`, and `restricted` besides — and a
+  valid ISO 7185 program may use any of them as an ordinary identifier. Such a
+  program no longer compiles and cannot be made to: 25 of the 172 ISO 7185
+  cases in this repository were rewritten or deleted for it, and BSI's CONF005
+  was written in 1982 to check exactly that a processor still accepts them.
+- **The clause 5.1 a) compliance statement is withdrawn**, not reworded. A
+  processor that cannot compile CONF005 does not comply with ISO 7185 at any
+  level. `doc/implementation-defined.md` keeps everything else it said.
+- **Five oracles retire with the surface they asked about**: the BSI Pascal
+  Validation Suite (the only third-party corpus this project ever had),
+  `difftest`, `dialect-containment`, `annex-b` and `reserved-words`. The front
+  end is now guarded by goldens and by `tests/spec/` alone; `doc/sop.md` §7
+  carries the gap and calls it the largest on the page.
+- **A module built by an older release does not link.** The activation names
+  carry a language tag (ADR-0119) and it is now fixed at `afterschool`, so an
+  object holding `.extended.init` leaves the symbol undefined; `pascalcc`
+  translates the linker's message.
+
+Everything the two standards accepted, this language still accepts and still
+means the same by — but for the ten word-symbols above. Every clause reading in
+this repository is still true of it.
+
 **One program that compiled and ran before now stops at run time**, and it is
 what an upgrade can cost you: `read(f, s)` for a string variable at **end of
 file** now reports an error and exits 1, where it used to answer with the

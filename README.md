@@ -1,18 +1,20 @@
 # Afterschool Pascal
 
-A Pascal compiler, written in Pascal, that compiles itself — conforming to
-ISO 7185 and to ISO/IEC 10206:1991 (Extended Pascal), both complete.
+**Afterschool Pascal is a Pascal dialect** — in the sense Turbo Pascal and Free
+Pascal are ones. The syntax is Pascal; no standard governs it. It is a compiler
+written in Pascal that compiles itself, and it exists to be **a Pascal you can
+get work done in**: networking, internationalisation, concurrent execution, and
+memory safety as a property of the language rather than a convention.
 
-**The long-term goal is a Pascal you can get work done in**: a dialect and a
-standard core library for the things modern programs actually do — networking,
-internationalisation, concurrent execution, and memory safety as a property of
-the language rather than a convention.
-
-The two conformance modes are not going anywhere. `--std=iso7185` and
-`--std=extended` stay exactly what they are — they are the only part of this
-compiler with an external specification, and they are what every check here is
-calibrated against. The dialect is a third mode beside them, not a relaxation
-of either.
+It came from the standards rather than away from them. ISO 7185 and
+ISO/IEC 10206:1991 (Extended Pascal) were both implemented completely, and this
+language contains Extended Pascal — every clause of it still describes what this
+compiler does. What went, in version 3, is the *claim*: there is no `--std`, no
+conformance mode, and no compliance statement (ADR-0232). The cost was measured
+before the decision was taken and it is in that record: §6.1.2 reserves thirteen
+word-symbols a conforming ISO 7185 program may use as identifiers, so a record
+field called `value` is now a syntax error, and five oracles retire with the
+surface they were asking about.
 
 Bootstrapping was the previous long-term goal and it is **done**: the compiler
 compiles itself, and stage 2 equals stage 3. It is now a constraint on the order
@@ -53,9 +55,10 @@ tools/pascalcc -o greet hello.pas
 tools/pascalcc -S hello.pas            # -> hello.ll, no linking
 tools/pascalcc -c hello.pas            # -> hello.o
 tools/pascalcc -O0 hello.pas           # -O0..-O3, handed to clang
-tools/pascalcc --std=extended hello.pas   # ISO/IEC 10206:1991 instead
-tools/pascalcc --std=afterschool hello.pas   # the dialect (ADR-0117)
 ```
+
+`--std=<name>` is accepted and ignored, so a build script written for version 2
+still runs. `pascalc` itself no longer knows the flag.
 
 The compiler underneath takes the same flags, and reads them the only way a
 Pascal program can: §6.5.1 makes every program-parameter bindable and §6.7.6.8
@@ -64,7 +67,6 @@ program-parameters what it was invoked with.
 
 ```sh
 build/bin/pascalc hello.pas                          # -> hello.ll
-build/bin/pascalc --std=extended prog.pas -o prog.ll
 build/bin/pascalc prog.pas --import counter.pas -o prog.ll
 clang hello.ll build/lib/libpasrt.a -lm -o hello     # the half it cannot do
 ```
@@ -75,23 +77,24 @@ component that declares the `program` is given the others' *sources*, which is
 where their interfaces are written:
 
 ```sh
-tools/pascalcc --std=extended -c counter.pas -o counter.o
-tools/pascalcc --std=extended prog.pas --import counter.pas counter.o -o prog
+tools/pascalcc -c counter.pas -o counter.o
+tools/pascalcc prog.pas --import counter.pas counter.o -o prog
 ```
 
-**Every component of one program must be translated under the same `--std`**
-(ADR-0119). The two `--std=extended` above are not repetition: a mixture does
-not link, and says so —
+**Every component of one program must be built by the same compiler.** A
+module's two activation functions carry a language tag in their names
+(ADR-0119), so an object left over from a release that still had the
+conformance modes does not link, and the driver says so —
 
 ```
-pascalcc: error: module 'counter' was translated under a different --std
+pascalcc: error: module 'counter' was translated by a different compiler
 ```
 
-The dialect's variant rules are a pair — a write activates a variant, a read of
-an inactive one traps — and each is emitted at the access, so a component
-holding one half without the other checks a tag the other half never stored and
-reports an unsafe read as safe. Rebuilding half a program after changing
-`--std` used to link and misbehave.
+The variant rules are a pair — a write activates a variant, a read of an
+inactive one traps — and each is emitted at the access, so a component holding
+one half without the other checks a tag the other half never stored and reports
+an unsafe read as safe. That is what the tag is for; there is one language now,
+so what it catches is a stale `.o`.
 
 `-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
 `--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
@@ -104,11 +107,11 @@ writes every case-statement whose selector is an enumeration, with how many of
 that enumeration's constants its labels name and which they miss.
 
 ```
-$ pascalc --std=extended --dump-limits big.pas -o /dev/null
+$ pascalc --dump-limits big.pas -o /dev/null
 pool 491964 of 1000000
 tokens 144756 of 300000
 
-$ pascalc --std=extended --dump-dispatch prog.pas -o /dev/null
+$ pascalc --dump-dispatch prog.pas -o /dev/null
 case subset:colour:1 names 3 of 5 at 44:3 missing amber cyan
 unused mode idle
 ```
@@ -160,44 +163,20 @@ The generated program links against `libpasrt.a`, built from `runtime/pasrt.c`;
 set `AFTERSCHOOL_PASCAL_RUNTIME` to point `pascalcc` at a copy outside the build
 tree.
 
-The language is selected per source. **`--std=extended` — ISO/IEC 10206:1991 —
-is the default** (ADR-0165); `--std=iso7185` selects the older standard and is
-kept for compatibility, because the two are **not** nested: Extended Pascal
-reserves word-symbols (`otherwise`, `value`, `only`, …) that a valid ISO 7185
-program may use as ordinary identifiers, so an ISO 7185 program with a field
-called `value` needs the flag.
+## The language
 
-**A source can say which standard it is written in**, in a comment before the
-program heading, so the flag is not needed on every invocation:
+**There is one language and nothing to select** (ADR-0232). Version 2 had three
+modes — `--std=iso7185`, `--std=extended` and `--std=afterschool` — and a
+`{ @std: }` header comment to pick one per source. All of it is gone.
 
-```pascal
-{ @std:iso7185 }
-program legacy(output);
-var value: integer;          { an ordinary identifier under ISO 7185 }
-begin value := 7; writeln(value:1) end.
-```
-
-`@std:iso7185`, `@std:extended` and `@std:afterschool` are the three spellings.
-Only the header counts — an annotation after the first token of the program is
-an ordinary comment — and an explicit `--std=` on the command line wins over
-it, so a build system that names a standard still gets what it asked for.
-`selfhost/compiler.pas` used to be the example of that and is now written in
-Extended Pascal itself, because only that standard lets a program read its own
-command line.
-
-There is a third: **`--std=afterschool`, the dialect** (ADR-0117), and it is
-where the goal at the top of this file will be built. Unlike the first two it
-*nests* — it contains ISO/IEC 10206:1991, so every Extended Pascal program is a
-valid Afterschool Pascal program meaning the same thing. Nothing forces the
-first two apart except the two specifications disagreeing; nothing forces this
-one apart at all, because the language is ours.
-
-The containment is the property every later feature is added to, and it is
-checked by compiling the whole ISO/IEC 10206:1991 test corpus a second time
-under `--std=afterschool` and requiring the same answers. The two conformance
-modes are not affected by anything that lands in it — they are the only part of
-this compiler with an external specification, and they stay exactly what they
-are.
+What is left is the dialect, and it **contains Extended Pascal**: every
+ISO/IEC 10206:1991 program is an Afterschool Pascal program meaning the same
+thing, which is the property every later feature is added to. ISO 7185 is
+inside that in every respect but one — §6.1.2 reserves ten word-symbols
+(`otherwise`, `value`, `only`, `module`, …) that a valid ISO 7185 program may
+use as ordinary identifiers, so an ISO 7185 program with a field called `value`
+does not compile here and cannot be made to. That is the price of having one
+language instead of two, and it was paid deliberately.
 
 It carries **no stability promise**. The dialect is what the compiler in your
 hand defines; a program that needs fixed behaviour should pin a compiler
@@ -233,9 +212,9 @@ end.
 ```
 
 §6.5.3.3 makes reading an inactive variant an **error**, and §3.1 lets a
-processor leave an error undetected — which is what `--std=iso7185` and
-`--std=extended` do, conformingly. A correct program never does it, so the
-dialect detecting it changes nothing that was already right.
+processor leave an error undetected — which every Pascal this one knows of
+does. A correct program never does it, so detecting it changes nothing that was
+already right.
 
 Two limits worth knowing. A write activates only when the arm has exactly one
 label — `aa, bb: (i: integer)` cannot decide between them, so it is checked
@@ -346,8 +325,7 @@ end
 
 `nil` is the absent value and `= nil` is the test, so no identifier and no
 operator is added; `?` is a character neither standard admits anywhere, so
-nothing that compiled stops compiling and `?` in either conformance mode is
-still `unexpected character '?'`.
+nothing that compiled stops compiling.
 
 **`o^` is the only way to the value, and it traps when there is none** — the
 same check §6.4.4's pointer already has, with the same spelling. Read the other
@@ -421,7 +399,7 @@ the callee was given.
 `array of T` is a syntax error in both standards — §6.4.3.2 requires a
 bracketed index-type — so nothing that compiled stops compiling. `a[i..j]` is
 the designator §6.5.6 already gives a substring; only the base's type tells the
-two apart, and in a conformance mode it still means a substring.
+two apart.
 
 A slice is indexed **1..length** however far into the base it starts, `length`
 answers the count, and `a[4..3]` is the empty slice. It is a `var` or
@@ -431,8 +409,8 @@ can outlive the call.
 
 **And a substring may be empty too** (ADR-0219). §6.5.6 makes `s[i..i-1]` an
 error — "the value of the first index-expression is greater than the value of
-the second" — so under both conformance modes the ordinary way to drop a
-string's last character stops the program on a string of one:
+the second" — so on the standard's reading the ordinary way to drop a string's
+last character stops the program on a string of one:
 
 ```pascal
 while (length(b) > 0) and (b[1] = ' ') do
@@ -456,8 +434,8 @@ clause's arithmetic allowed it and only the prohibition did not.
 
 As with a variant's tag above, §3.1 makes an error "a violation by a program …
 that a processor is permitted to leave undetected" — so a program that writes
-`s[i..i-1]` is erroneous, not accepted, and nothing valid changes meaning. The
-conformance modes go on trapping.
+`s[i..i-1]` is erroneous, not accepted, and nothing valid changes meaning.
+Every *other* bound is still checked and still stops the program.
 
 **And a slice is how a buffer reaches C** (ADR-0129). The pair crosses as
 `(ptr, i64)` — the address of the first component, then how many there are —
@@ -909,8 +887,8 @@ has no linker symbol any foreign-function interface could name.
 
 `lib/` holds the beginning of one (ADR-0114). It is ordinary Extended Pascal —
 §6.11 modules, translated separately as §6.13 program-components — so it needed
-no compiler change and changes nothing about what either conformance mode
-accepts. Eight modules so far:
+no compiler change, and a reader porting it to another Pascal has only the
+standard to satisfy. Eight modules so far:
 
 | Module | What it has |
 | --- | --- |
@@ -923,10 +901,11 @@ accepts. Eight modules so far:
 | `lib/pasfile.pas` | whole files by name: `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`, `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`, `CopyFile` — every reader answers **false** for a file that is not there rather than stopping, which is what ADR-0172's `binding(f).bound` made possible in conforming Pascal |
 | `lib/passtrvec.pas` | `StrVec`, a growable sequence of `string(255)`: `PasVector`'s interface under `SVec` names, plus `SVecIndexOf`, `SVecSort`, `SVecJoin` and `SVecSplit`. `PasFile.ForEachLine` with a nested procedure is how a file's lines become one |
 
-**`lib/dialect/` is a second layer, and it does not mix with the first**
-(ADR-0120). Its modules are `--std=afterschool` all the way down, so only a
-dialect program can link them — `--std` is part of a module's linkage name and
-a mixture is refused (ADR-0119).
+**`lib/dialect/` is a second layer** (ADR-0120): its modules use `external`,
+handles and owned pointers, so they are not conforming Extended Pascal in the
+way the modules above are. The distinction used to be enforced by the mode a
+module was translated under; there is one language now, and what the split
+records is which modules a reader can port to another Pascal.
 
 | module | what it is |
 | --- | --- |
@@ -942,7 +921,7 @@ a mixture is refused (ADR-0119).
 | `lib/dialect/pasos.pas` | `LastErrorNumber`, `LastErrorText`, `ErrorNumberText` — why the last call failed, in libc's own words. It gives the sentence and not a classification: ENOENT and EACCES are header numbers this compiler cannot read |
 | `lib/dialect/pasprocess.pas` | `Run` — a command through the shell, answering its exit code or `errIO` — `Capture` and `CaptureLines`, its output into a string or onto a `StrVec` with the code beside it, `ExitCode`, `Sleep`, `Seconds` and `CpuSeconds`. `Run` flushes the program's own output first, so what was written before the command comes out before it |
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
-| `lib/dialect/pascontainer.pas` | `Vec` and `Map` over **whatever element type a program names** — `VecInit`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecLen`, `VecCap`, `VecClear`, `VecReserve`, `VecFree`; `MapInit`, `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, `MapFree` and a slot walk. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and both containers grow. This is what `PasVector`, `PasStrVec` and `PasMap` are, written once; those three stay because they are ordinary Extended Pascal and a conforming program must still have a vector and a map |
+| `lib/dialect/pascontainer.pas` | `Vec` and `Map` over **whatever element type a program names** — `VecInit`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecLen`, `VecCap`, `VecClear`, `VecReserve`, `VecFree`; `MapInit`, `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, `MapFree` and a slot walk. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and both containers grow. This is what `PasVector`, `PasStrVec` and `PasMap` are, written once; those three stay because they are ordinary Extended Pascal and a program that avoids the dialect layer must still have a vector and a map |
 | `lib/dialect/pasjson.pas` | A **JSON document** read, navigated, built and written back — `JsonParse` and `JsonParseChars` answering a `JsonResult`; `JsonKindOf`, `JsonCount`, `JsonAt`, `JsonMember`, `JsonNameAt`; `JsonNumberOr`, `JsonIntegerOr`, `JsonBooleanOr`, `JsonIsNull`, `JsonTextInto`; the seven `JsonNew*` constructors with `JsonAppend` and `JsonPut`; and `JsonRender`. A string value is **bytes and unbounded** — a growable `JsonChars`, so a whole file fits in one — while a member name is a `string(255)`. It does not normalise: AP 6.4.15's `utf8` would establish normal form C on assignment, and a program that round-trips somebody's source file through this must not edit it |
 | `lib/dialect/paslsp.pas` | The **Language Server Protocol's framing** — `LspOpen`, `LspRead`, `LspWrite` over a descriptor. A message is `Content-Length: N` and then exactly N bytes, so the header is line-oriented and the body is not, and a reader that has just finished a header is usually holding the first bytes of the body: `PasStream` reads lines and cannot hand those back, `PasIO` reads bytes, and an `LspReader` is the buffer between them. It reads the body and does not read the *message* — `PasJson` makes a document of it — because framing and content are two failures with two causes. Lenient about a bare `<LF>`, strict about writing `<CR><LF>` |
 | `lib/dialect/paslist.pas` | `List`, a chain of `string(255)` the declaring block owns — `ListPush`, `ListPop`, `ListPeek`, `ListEmpty`, `ListLen`, `ListAppend`, `ListGet`, `ListDrop`, `ListClear`, `ListReverse`. **The only container here with no `Free`**, because the head is an `owned ^` and the block disposes the chain (ADR-0181, ADR-0182). O(1) at the front; the rest is O(n) and recursive, an owned pointer admitting no cursor — a program wanting an index wants `PasStrVec` |
@@ -963,8 +942,8 @@ Use one the way §6.13 asks: translate it, then hand the program its *source*,
 which is where the interface is written.
 
 ```sh
-tools/pascalcc --std=extended -c lib/passtrings.pas -o passtrings.o
-tools/pascalcc --std=extended prog.pas --import lib/passtrings.pas passtrings.o -o prog
+tools/pascalcc -c lib/passtrings.pas -o passtrings.o
+tools/pascalcc prog.pas --import lib/passtrings.pas passtrings.o -o prog
 ```
 
 Strings are passed by value, so an argument may be a literal, another
@@ -1082,7 +1061,7 @@ model rather than on a clause. A container waits on something else entirely —
 parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
 the ordering, and `doc/history.md` has each increment that got this far.
 
-## What the compiler accepts today, with `--std=iso7185`
+## The ISO 7185 core
 
 ```
 program-header, const part, type part, var part, compound statement
@@ -1135,11 +1114,10 @@ constants  named constants — a number, a char, a 'string' of any length, or
            true, false, maxint
 ```
 
-**This is the whole of ISO 7185, at level 1.** Conformant array parameters —
-§6.6.3.6 e), §6.6.3.7 and §6.6.3.8 — were the last of it, and are the whole of
-the difference clause 5.1 a) draws between the two levels; before them this was
-a level 0 processor, which is a complying level rather than a shortfall. The
-four before that were §6.6.5.4's `pack` and `unpack`, §6.9.5's `page` and
+**This is the whole of ISO 7185.** Conformant array parameters — §6.6.3.6 e),
+§6.6.3.7 and §6.6.3.8 — were the last of it, and are the whole of the
+difference clause 5.1 a) drew between its two levels. The four before that
+were §6.6.5.4's `pack` and `unpack`, §6.9.5's `page` and
 §6.3's string constant — each missed rather than declined, and each found by
 compiling a probe rather than by a test, because no program in the corpus had
 ever written one. What is left of the language is the next standard, not more
@@ -1156,14 +1134,12 @@ in the stage-1 compiler and the program headers of forty-three test programs,
 for a lexical rule that admits no ambiguity; the deviation is one a reader can
 see, so it is written down instead.
 
-This list used to hold the declaration-part order, which is now checked:
-§6.2.1's label, const, type, var, procedures is required again under
-`--std=iso7185`. Two other deviations were closed at the same time and had
-never been on the list at all, which is the more useful thing to know about
-them — a constant may not be selected from, §6.8.8 belonging to the next
-standard, and `f()` is refused in both standards, Pascal having no empty
-argument list. The underscore entry is new here for the same reason. All three
-were found by compiling a probe for a clause rather than by a test.
+This list used to hold the declaration-part order. §6.2.1 fixed it at label,
+const, type, var, procedures; ISO/IEC 10206:1991 §6.2.1 lets the parts
+interleave and repeat, and this language takes the later rule, so the entry is
+gone rather than closed. `f()` is still refused, Pascal having no empty
+argument list. The underscore entry above is a real deviation and is written
+down for that reason.
 
 It also used to hold **set compatibility ignoring packing**, and that entry was
 wrong rather than merely out of date. It was justified by the claim that the
@@ -1289,15 +1265,16 @@ passes through unchanged, but a multi-byte character is several `char` values:
 language's.
 
 That is a decision about `char` and it is not going to change — widening it
-would stop `set of char` compiling and break the dialect's containment of
-Extended Pascal. The answer is a separate type beside the string, and
-`--std=afterschool` has it: see **`utf8(n)`** below.
+would stop `set of char` compiling and break the containment of Extended
+Pascal. The answer is a separate type beside the string: see **`utf8(n)`**
+below.
 
 Field widths follow Pascal: `write(x:8)`, `write(x:8:3)` for reals.
 A real written without a width comes out in floating form with twelve fraction
 digits (` 5.000000000000E-01`); a width narrows the significand (`write(x:8)`
-gives ` 5.0E-01`), and a width with a fraction length gives fixed-point. Under
-`--std=iso7185` a width below 1 is itself an error, and stops the program.
+gives ` 5.0E-01`), and a width with a fraction length gives fixed-point. A
+width below **zero** is an error and stops the program; ISO 7185 §6.9.3.1 set
+that bound at one, and §6.10.3.1 moved it, so `write(x:0)` is legal here.
 
 **Errors are detected, not ignored.** ISO 7185 calls integer overflow, an array
 subscript outside its bounds, a value stored outside a subrange, a `case` whose
@@ -1329,13 +1306,12 @@ depth of the *tree* an operator chain builds — is a compile-time error rather
 than a stack overflow, in the parser or in any walk after it. A program's own
 block is one of those levels, so 999 remain inside it.
 
-## What `--std=extended` adds
+## What Extended Pascal adds
 
-ISO/IEC 10206:1991, one feature at a time. Everything above is accepted here
-too, except that Extended Pascal reserves the word-symbols its own features
-need — so an ISO 7185 program that uses one of them as an identifier compiles
-under `--std=iso7185` and not under `--std=extended`. That is the standard's
-rule, not a limitation of this compiler.
+ISO/IEC 10206:1991, one feature at a time. Everything above is accepted too,
+except that these features need word-symbols §6.1.2 reserves — so an ISO 7185
+program using one of them as an identifier does not compile here. That is the
+standard's rule and the one thing this language cannot give back.
 
 ```
 statements case ... otherwise <statements> end — the default arm
@@ -1415,9 +1391,10 @@ types      type of x — a type-inquiry: the type the variable x already
            makes `b: type of a` assignable from a, where a second
            `record x, y: integer end` written out would not be. It reaches
            a parameter of the same list, so `procedure p(var a: point;
-           b: type of a)` writes the type once. Under --std=afterschool
-           the object may be any variable-access, so `type of v^.a[1]`
-           reads an element type off the container that has it
+           b: type of a)` writes the type once. §6.4.9's object is a
+           variable-*name*; this language admits any variable-access, so
+           `type of v^.a[1]` reads an element type off the container that
+           has it
 types      integer value 1 — an initial-state specifier: the value a
            variable bears when the block declaring it is entered, and
            again on every later activation of that block. It belongs to
@@ -1716,23 +1693,25 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 816 cases under `ctest`, the compiler compiled with itself to a
-fixed point, scenarios written against clauses of the two standards, and the
-1982 BSI Pascal Validation Suite. What none of it sees is written down rather
-than left to be discovered — `doc/sop.md` §7 keeps that list.
+Beside that: 730 cases under `ctest`, the compiler compiled with itself to a
+fixed point and built a second way through `llc`, 319 scenarios written against
+clauses, and Unicode's own conformance files. What none of it sees is written
+down rather than left to be discovered — `doc/sop.md` §7 keeps that list, and
+version 3 made it longer: the 1982 BSI Pascal Validation Suite and the second
+front end both went with the conformance modes.
 
 [doc/developer-guide.md](doc/developer-guide.md) has the whole of it, including
 how to run the proofs.
 
 ## Documentation
 
-[`doc/implementation-defined.md`](doc/implementation-defined.md) is the document
-clause 5.1 requires a processor to be accompanied by, and it is the one to read
-next if you are *using* this compiler. It states the compliance level —
-**level 1**, conformant array parameters being accepted — answers every
-entry of both standards' annexes of implementation-defined and
-implementation-dependent features, names each error this compiler does not
-report, and lists the extensions and restrictions. If you want to know what
+[`doc/implementation-defined.md`](doc/implementation-defined.md) is what this
+processor decides where a clause leaves it open, and it is the one to read next
+if you are *using* this compiler. It answers every entry of both standards'
+annexes of implementation-defined and implementation-dependent features, names
+each error this compiler does not report, and lists the extensions and
+restrictions. It no longer states a compliance level: ADR-0232 withdrew that
+claim rather than reword it. If you want to know what
 `maxint` is, what order operands are evaluated in, or what `reset(input)` does,
 it is there rather than here.
 
@@ -1777,10 +1756,8 @@ the same terms. `seed/pascalc.ll` is the compiler in another form — generated
 from `selfhost/compiler.pas`, which is the corresponding source the GPL asks
 for, and committed beside it.
 
-**Two things in this repository are not covered by it, and neither is
-distributed.** The BSI Pascal Validation Suite is *(C) Copyright 1982, British
-Standards Institution*, used under terms that grant use and **not**
-redistribution — `tests/bsi/README.md` states all three conditions, and
-`tests/bsi/fetch.sh` puts it in a gitignored directory for that reason. The
-standards themselves live in `doc/vendor/`, also gitignored. Nothing in either
-place is ours to relicense.
+**One thing in this repository is not covered by it, and it is not
+distributed.** The standards themselves live in `doc/vendor/`, which is
+gitignored; nothing there is ours to relicense. The BSI Pascal Validation Suite
+was the other, fetched under terms granting use and not redistribution, and
+went with the conformance modes it validated (ADR-0232).

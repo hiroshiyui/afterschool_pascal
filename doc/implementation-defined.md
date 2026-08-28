@@ -1,53 +1,39 @@
 # Implementation-defined and implementation-dependent behaviour
 
-This is the document ISO/IEC 7185:1990 clause 5.1 d) and ISO/IEC 10206:1991
-clause 5.1 d) and j) require a complying processor to be accompanied by. It
-states the compliance level, defines every implementation-defined feature,
-describes the treatment of every implementation-dependent one, names each error
-this processor does not report, and describes the extensions it accepts.
+This document says what this processor decides where a clause of ISO 7185 or
+ISO/IEC 10206:1991 leaves the decision to it. It defines every
+implementation-defined feature, describes the treatment of every
+implementation-dependent one, names each error it does not report, and
+describes the extensions it accepts.
 
 Both standards list their own features again in informative annexes, and the
 tables below follow that numbering so an entry can be found from the standard
 rather than from this document's own headings. Where the two standards ask the
 same question, the answer is given once and both entry numbers are cited.
 
-Behaviour is the same under `--std=iso7185` and `--std=extended` unless an
-entry says otherwise.
+## 1. There is no compliance statement
 
-## 1. Compliance level
+**Withdrawn** (ADR-0232). Clause 5.1 of ISO 7185 requires a processor that
+purports to comply to do so "only in the following terms", and prescribes the
+sentence; this document carried that sentence, in both standards' wordings, and
+claimed level 1.
 
-Clause 5.1 of ISO 7185 requires a processor that purports to comply to do so
-**"only in the following terms"**, and prescribes the sentence. ISO/IEC
-10206:1991 prescribes its own. Both are given here rather than paraphrased,
-because the clause is about the wording:
+Afterschool Pascal is a Pascal *dialect* and no standard governs it. §6.1.2 of
+ISO/IEC 10206:1991 reserves ten word-symbols that a valid ISO 7185 program may
+use as ordinary identifiers, and this processor reserves all of them — so a
+conforming ISO 7185 program with a record field called `value` is refused, and
+BSI's CONF005 was written in 1982 to check exactly that. A processor that
+cannot compile CONF005 does not comply with ISO 7185 at any level, and the
+claim is withdrawn rather than reworded.
 
-> Afterschool Pascal complies with the requirements of level 1 of
-> ISO/IEC 7185, with the following exceptions: those listed in §6 of this
-> document.
+What the document keeps is everything else, because it is still useful and
+still true: this language contains Extended Pascal, so every clause below
+describes a decision this compiler actually makes. §6's restrictions list in
+particular is a description of a dialect whether or not a standard demands one.
 
-> Afterschool Pascal complies with the requirements of level 1 of
-> ISO/IEC 10206, with the following exceptions: those listed in §6 of this
-> document.
-
-The second form is the honest one. Clause 5.1 reserves the unqualified
-statement for a processor that "complies in all respects", and §6 below records
-restrictions — including §6.1, programs this processor accepts that the
-standard requires to be rejected. NOTE 3 permits "a brief reference to
-accompanying documentation" in place of a complete list, which is what the
-reference to §6 is. The errors of §3 are *not* exceptions in this sense: clause
-5.1 f) 1) admits an unreported error given exactly the statement and the
-separate section that §3 is.
-
-This section said only "This processor complies at level 1" until a
-specification audit read clause 5.1 against it. That sentence is true and is
-not a compliance statement: it keeps the standard's own placeholder text
-"(This processor)" where the clause requires "an unambiguous name identifying
-the processor", and omits the prescribed form entirely.
-
-**This processor complies at level 1.** ISO 7185 clause 5.1 a) defines level 0
-as accepting every feature of clause 6 except §6.6.3.6 e), §6.6.3.7 and
-§6.6.3.8 — the conformant array parameters — and level 1 as accepting them.
-They are accepted (ADR-0153):
+The conformant array parameters of ISO 7185 §6.6.3.6 e), §6.6.3.7 and §6.6.3.8
+— which were the whole of clause 5.1 a)'s difference between its two levels —
+are accepted (ADR-0153):
 
 ```pascal
 function total(var a: array [u..v: integer] of integer): integer;
@@ -58,12 +44,6 @@ largest values of the index-type the *actual* possesses, and §6.6.3.8's
 conformability decides which actuals fit. The abbreviated form
 `array [u..v: T1; j..k: T2] of T3` and the nested full form are equivalent, as
 §6.6.3.7 says they are, and both are accepted.
-
-It was level 0 until then, which is a complying level rather than a gap. A
-schematic formal parameter (ADR-0040) covered the same ground in Extended
-Pascal and did not make this a level 1 processor, being a different feature of
-a different standard; what it did do is supply the descriptor this one needed,
-which is why the two now share one.
 
 ## 2. Implementation-defined features
 
@@ -340,8 +320,7 @@ so there was no spelling to take from either — and without one a Pascal progra
 cannot tell whatever invoked it that it failed, which a compiler written in
 Pascal has to be able to do. No conforming program's meaning changes: `halt(1)`
 was a compile-time error until this landed, so no valid program contains it, and
-every path that reached `halt` before still exits 0. Under `--std=iso7185`
-nothing changes, that standard having no `halt`. ADR-0084;
+every path that reached `halt` before still exits 0. ADR-0084;
 `tests/extended/halt_status.pas`.
 
 **An identifier may contain an underscore**, where §6.1.3 makes an identifier
@@ -458,8 +437,10 @@ ADR-0127; the bare subrange as a variable's type, a type-definition and an
 array's component since ADR-0133; and as a **record's field** and a **file's
 component** since ADR-0134 — a record being no kind of block, so a bound
 written inside one is still closest-contained by the block the declaration is
-in. All of them in `--std=extended` and `--std=afterschool` only, ISO 7185
-§6.4.2.4 writing `subrange-type = constant '..' constant`. The type-definition
+in. ISO 7185 §6.4.2.4 wrote `subrange-type = constant '..' constant`, so none
+of this was available there; ISO/IEC 10206:1991 §6.4.2.4 writes
+`subrange-bound = expression`, and that is the reading this language takes. The
+type-definition
 half was the finding of the second independent reading most likely to break a
 real program (ADR-0107).
 
