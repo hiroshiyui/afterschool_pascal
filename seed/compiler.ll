@@ -51693,7 +51693,7 @@ L69:
 @s32 = private unnamed_addr constant [18 x i8] c"aarch64-linux-gnu\00"
 @s33 = private unnamed_addr constant [36 x i8] c"case: no label matches the selector\00"
 @s34 = private unnamed_addr constant [30 x i8] c"pascalc (Afterschool Pascal) \00"
-@s35 = private unnamed_addr constant [6 x i8] c"3.0.0\00"
+@s35 = private unnamed_addr constant [6 x i8] c"3.0.1\00"
 @s36 = private unnamed_addr constant [66 x i8] c"Afterschool Pascal -- the compiler, written in Afterschool Pascal\00"
 @s37 = private unnamed_addr constant [34 x i8] c"usage: pascalc [options] file.pas\00"
 @s38 = private unnamed_addr constant [45 x i8] c"  -o <file>       where to write the LLVM IR\00"

@@ -11,6 +11,39 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
+## [3.0.1] — 2026-08-28
+
+**Nothing about the accepted language, the diagnostics or the command line
+changed in this release, and that is the whole of what this file tracks.** The
+same 427 diagnostic messages, character for character; no test case added,
+removed or altered; no golden touched; no flag. A program that compiled under
+3.0.0 compiles here, to the same IR.
+
+What shipped is the compiler's own structure, and it is recorded because a
+reader of `seed/` will notice it immediately.
+
+### Changed
+
+- **The compiler is three ISO/IEC 10206:1991 §6.13 program-components**
+  (ADR-0233), where it was one source file: `selfhost/aptypes.pas` imports
+  nothing, `selfhost/apfront.pas` imports it, and `selfhost/compiler.pas` holds
+  the main-program-block and imports both.
+  `selfhost/compiler.components` lists them in order and is what CMake, the
+  harnesses and CI read. Building from source is unchanged — `cmake -S . -B
+  build && cmake --build build` — and needs nothing it did not need before.
+- **The committed seed is one module per component**: `seed/pascalc.ll` is
+  replaced by `seed/aptypes.ll`, `seed/apfront.ll` and `seed/compiler.ll`, and
+  the build matches `seed/*.ll` with a glob rather than naming a file. Anything
+  outside this repository that named `seed/pascalc.ll` has to be updated; the
+  documented build never did.
+
+### Fixed
+
+- `tests/checks/coverage.py` and `tests/checks/line_coverage.py` reported a
+  **skip** where they meant a failure, so a compiler that could not translate
+  its own source read as a missing `clang`. They now tell the two apart. No
+  effect on the compiler; it is a gate that was failing in no direction.
+
 ## [3.0.0] — 2026-08-28
 
 **Afterschool Pascal is a Pascal dialect, and the conformance modes are gone**
@@ -2507,6 +2540,8 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.0.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.0.1
+[3.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.0.0
 [2.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v2.1.0
 [2.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v2.0.0
 [1.8.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v1.8.0
