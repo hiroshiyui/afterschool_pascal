@@ -19,6 +19,12 @@ before it.
 
 - `pascalc --std=<name>` is an **unknown option**. `tools/pascalcc --std=<name>`
   is accepted and ignored, so a build script written for version 2 still runs.
+- **One diagnostic loses a sentence.** `succ` and `pred` given the wrong number
+  of arguments said *"takes exactly one argument, or two under `--std=extended`"*
+  and now say *"takes one or two arguments"*. It was the only message that named
+  a flag, and both halves of it had stopped being true: there is no
+  `--std=extended` to compile with, and the second argument is no longer
+  conditional on anything.
 - A `{ @std:iso7185 }` header comment is now an **ordinary comment**
   (ADR-0166 is withdrawn), and the `name.std` sidecar is gone from every
   harness, as is the second field of a `.components` line.
