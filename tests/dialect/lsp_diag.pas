@@ -14,7 +14,16 @@
 
   **A `Diagnostic` holds what the compiler said.** The conversion happens in
   `DiagJson` and nowhere else, which is why the parsed values printed below
-  are the compiler's numbers and the rendered object's are one less. }
+  are the compiler's numbers and the rendered object's are one less.
+
+  **And the column is converted as well as the line**, which is the fourth
+  thing and the one that needs a witness rather than a claim. `ErrorAt` counts
+  **bytes**; a Position.character counts **UTF-16 code units** unless the
+  client negotiated otherwise. A line holding nothing above U+007F converts to
+  itself, so every other case in this file would pass with the conversion
+  deleted -- the section below is the one that would not. `Utf16Column` is
+  1-based on both sides deliberately: it converts the unit and nothing else,
+  and `DiagJson` still owns the single subtraction. }
 program lsp_diag(output);
 
 import PasError; PasJson; PasLspDiag;
@@ -37,6 +46,30 @@ begin
     writeln('  not a diagnostic: ', ErrorText(got.cause))
 end;
 
+{ The conversion, printed as the pair it is: what the compiler said, and what
+  the protocol is told. }
+procedure ShowCol(what: string; line: DiagLine; col: integer);
+begin
+  writeln('  ', what, ' byte ', col:2, ' -> utf-16 ', Utf16Column(line, col):2)
+end;
+
+{ The whole object, so that the 0-based subtraction and the unit conversion are
+  seen composing rather than separately. }
+procedure Render(what: string; d: Diagnostic; line: DiagLine; enc: PosEncoding);
+var v: JsonPtr;
+    b: JsonChars;
+    text: string(1024);
+    junk: ErrorCode;
+begin
+  v := DiagJson(d, line, enc);
+  JsonCharsNew(b);
+  JsonRender(v, b);
+  junk := JsonCharsInto(b, text);
+  writeln('  ', what, '  ', text);
+  JsonCharsFree(b);
+  JsonFree(v)
+end;
+
 begin
   writeln('what DiagParse makes of a compilation''s output:');
   Show('hello.pas:12:7: error: ''x'' is not declared');
@@ -57,11 +90,49 @@ begin
   writeln('one diagnostic as the protocol writes it:');
   r := DiagParse('hello.pas:12:7: error: ''x'' is not declared');
   JsonCharsNew(out);
-  one := DiagJson(r.val);
+  { No line to convert with, so the byte column comes back unchanged -- which
+    is what every caller that never meets a non-ASCII line sees. }
+  one := DiagJson(r.val, '', peUtf16);
   JsonRender(one, out);
   e := JsonCharsInto(out, s);
   writeln('  ', s);
   JsonCharsFree(out);
+
+  writeln;
+  writeln('a byte column, as a UTF-16 code unit column:');
+  { The compiler's own answer for this line, measured rather than assumed:
+    `pascalc` reports column 22 for `zz`, because the e-acute is two bytes.
+    UTF-16 counts it as one, so the protocol's column is 21. }
+  ShowCol('e-acute before the error   ', '  writeln(''héllo''); zz := 1', 22);
+  { Nothing above U+007F: every unit is a byte and the answer is the input.
+    This is the row that makes the conversion invisible almost everywhere. }
+  ShowCol('the same line without it   ', '  writeln(''hello''); zz := 1', 21);
+  { U+1F600 is four bytes of UTF-8 and a *surrogate pair* in UTF-16, so it is
+    the one character that makes the protocol's column larger than a scalar
+    count would give. Two bytes fewer, one unit more. }
+  ShowCol('an astral character        ', '  writeln(''😀''); zz := 1', 20);
+  { A column *inside* a scalar. The compiler pointed at a byte and there is no
+    code unit at that position, so what comes back is the byte column. }
+  ShowCol('inside the e-acute         ', '  writeln(''héllo''); zz := 1', 14);
+  { Column 1 is column 1 under every encoding. }
+  ShowCol('the start of a line        ', '  writeln(''héllo'')', 1);
+  { A column past the end of what was handed over, which is also what an empty
+    line produces: one unit per byte, and the compiler's column back. }
+  ShowCol('past the end of the line   ', 'ab', 7);
+  ShowCol('no line at all             ', '', 7);
+  { A byte no well-formed UTF-8 sequence begins with. A source file may hold
+    one and the compiler read it as a byte, so this counts it as one. }
+  ShowCol('an ill-formed byte         ', 'a' + chr(255) + 'bc', 4);
+
+  writeln;
+  writeln('and the same diagnostic under each encoding:');
+  d.line := 3;
+  d.col := 22;
+  d.message := 'undeclared identifier ''zz''';
+  Render('utf-16 (the default)', d,
+         '  writeln(''héllo''); zz := 1', peUtf16);
+  Render('utf-8  (negotiated) ', d,
+         '  writeln(''héllo''); zz := 1', peUtf8);
 
   writeln;
   writeln('and the notification that carries them:');
@@ -70,7 +141,7 @@ begin
   d.line := 3;
   d.col := 1;
   d.message := 'a second one';
-  JsonAppend(arr, DiagJson(d));
+  JsonAppend(arr, DiagJson(d, '', peUtf16));
   note := DiagPublish('file:///tmp/hello.pas', arr);
   JsonCharsNew(out);
   JsonRender(note, out);

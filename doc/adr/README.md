@@ -245,3 +245,4 @@ the alternatives that were rejected and why.
 | [0234](0234-a-second-processor-answers-the-corpus.md) | A second processor answers the corpus | Accepted |
 | [0235](0235-the-two-command-line-bounds-move-together.md) | The two command-line bounds move together | Accepted |
 | [0236](0236-the-language-server-begins.md) | The language server begins | Accepted |
+| [0237](0237-the-protocols-position-unit-is-negotiated-not-assumed.md) | The protocol's position unit is negotiated, not assumed | Accepted |

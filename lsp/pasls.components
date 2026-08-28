@@ -7,4 +7,5 @@
 ../lib/dialect/pascontainer.pas
 ../lib/dialect/pasjson.pas
 ../lib/dialect/paslsp.pas
+../lib/dialect/pasunicode.pas
 ../lib/dialect/paslspdiag.pas

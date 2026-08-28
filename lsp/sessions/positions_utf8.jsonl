@@ -1,0 +1,23 @@
+# The same document under the two position encodings, and the whole point of
+# the pair is the number in `character`. `ErrorAt` counts bytes; a
+# Position.character counts UTF-16 code units unless the client negotiated
+# otherwise. The e-acute on line 3 is two bytes and one code unit, so the
+# compiler says column 22 and the protocol is told 20 (zero-based) here and 21
+# in the other file. Everything else about the two sessions is identical.
+#
+# doc/roadmap.md named this as the sharpest edge in the language-server idea
+# before any of it was written, and it is the one externally specified test of
+# what AP 6.4.15 chose.
+# `utf-8` offered and taken, so the compiler's own column is already the
+# protocol's and nothing is converted -- which is the case the conversion
+# must *not* be applied to, and the reason the encoding is negotiated at all
+# rather than assumed.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8","utf-16"]}}}}
+
+# Two diagnostics, both at the same position, so the pair of numbers is
+# read twice rather than once.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/accented.pas","languageId":"pascal","version":1,"text":"program hello(output);\nbegin\n  writeln('héllo'); zz := 1\nend.\n"}}}
+
+{"jsonrpc":"2.0","id":2,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

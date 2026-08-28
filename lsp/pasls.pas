@@ -43,10 +43,20 @@
   **The positions are the compiler's, converted once.** `ErrorAt` counts lines
   and columns from one; LSP counts both from zero, and `PasLspDiag.DiagJson`
   is the only place that subtracts. The protocol's character unit is a UTF-16
-  code unit by default and this server hands it a byte offset, which is the
-  hazard the roadmap named before any of this was written: it is right for
-  every ASCII line and wrong for the rest, and nothing in the text model
-  answers in UTF-16 yet. It is left visibly wrong rather than half-corrected. }
+  code unit by default and the compiler's column counts **bytes**, so the same
+  routine converts that too -- which is why this server has to hand it the
+  source *line* along with the diagnostic, the compiler having reported a
+  position and not a source. Finding the line means walking the stored
+  document for every diagnostic, which is the price of holding the text as
+  bytes and is paid in a place where there are never many.
+
+  **It negotiates the encoding, and negotiating is what makes the conversion
+  honest.** 3.17 lets a client offer `positionEncodings` and a server pick
+  one; this one takes `utf-8` when it is offered, because the compiler's
+  column is then already right and converting would be the defect. A client
+  that says nothing gets `utf-16`, which is the protocol's default and the
+  case the conversion exists for. Either way the answer is echoed in
+  `positionEncoding` so the client is never guessing. }
 program pasls;
 
 import PasError;
@@ -99,6 +109,10 @@ var
   reader: LspReader;
   docs: DocVec;
   running: boolean;
+  { What a Position.character counts in this session. The protocol's default
+    until `initialize` says otherwise, which is also what a client that offers
+    nothing means. }
+  encoding: PosEncoding;
   { The scratch file, bound to a computed name. 6.7.5.6's bind is the only way
     a program names a file while it is running. }
   scratchFile: bindable text;
@@ -186,6 +200,36 @@ begin
   JsonCharsNew(b);
   n := JsonTextLen(v);
   for i := 1 to n do JsonCharsAdd(b, JsonTextAt(v, i))
+end;
+
+{ The n'th line of a document, 1-based and without its terminator, as far as
+  `DiagLine` holds it. The empty string where the document has no such line,
+  which is what a caller passes when it has nothing to convert with.
+
+  Carriage returns are dropped, because `WriteScratch` drops them too: the
+  compiler's columns are counted over the file this server wrote, not over the
+  bytes the client sent, and the two must be walked the same way. }
+procedure LineOf(var b: JsonChars; n: integer; var line: DiagLine);
+var i, at, len: integer;
+    c: char;
+begin
+  line := '';
+  if n < 1 then exit;
+  len := JsonCharsLen(b);
+  at := 1;
+  i := 1;
+  while (i <= len) and (at < n) do begin
+    if JsonCharsAt(b, i) = chr(10) then at := at + 1;
+    i := i + 1
+  end;
+  { The document ended before that line began. }
+  if at <> n then exit;
+  while i <= len do begin
+    c := JsonCharsAt(b, i);
+    if c = chr(10) then exit;
+    if (c <> chr(13)) and (length(line) < DiagLineMax) then line := line + c;
+    i := i + 1
+  end
 end;
 
 { Remember what the client says this document now contains, replacing what it
@@ -295,9 +339,10 @@ end;
   A line that is not a diagnostic is skipped and is not an error -- most of
   what a compilation writes is not one, which is the first thing
   `tests/dialect/lsp_diag.pas` pins. }
-function DiagnosticsIn(var out: CaptureText): JsonPtr;
+function DiagnosticsIn(var out: CaptureText; var doc: JsonChars): JsonPtr;
 var arr: JsonPtr;
     line: DiagText;
+    source: DiagLine;
     i: integer;
     c: char;
     d: DiagResult;
@@ -309,7 +354,10 @@ begin
     if i <= length(out) then c := out[i] else c := chr(10);
     if c = chr(10) then begin
       d := DiagParse(line);
-      if d.ok then JsonAppend(arr, DiagJson(d.val));
+      if d.ok then begin
+        LineOf(doc, d.val.line, source);
+        JsonAppend(arr, DiagJson(d.val, source, encoding))
+      end;
       line := ''
     end else if (c <> chr(13)) and (length(line) < DiagMax) then
       line := line + c
@@ -334,20 +382,49 @@ begin
   d := VecGet(DocVec, Document, docs, at);
   WriteScratch(d.text);
   if not Compile(out) then exit;
-  note := DiagPublish(uri, DiagnosticsIn(out));
+  note := DiagPublish(uri, DiagnosticsIn(out, d.text));
   Send(note);
   JsonFree(note)
 end;
 
 { --- the methods ---------------------------------------------------------- }
 
-procedure Initialize(id: JsonPtr);
+{ 3.17's `general.positionEncodings`: the client offers a list and the server
+  picks one, or falls back to `utf-16` when it supports none of them. `utf-8`
+  is preferred here for a reason that is about this compiler and not about
+  taste -- its column already counts bytes, so under `utf-8` there is nothing
+  to convert and nothing to get wrong. }
+procedure Negotiate(params: JsonPtr);
+var offered, one: JsonPtr;
+    i: integer;
+    name: JsonLine;
+begin
+  encoding := peUtf16;
+  offered := JsonMember(JsonMember(JsonMember(params, 'capabilities'),
+                                   'general'), 'positionEncodings');
+  for i := 1 to JsonCount(offered) do begin
+    one := JsonAt(offered, i);
+    if JsonTextInto(one, name) <> errNone then name := '';
+    if name = 'utf-8' then encoding := peUtf8
+  end
+end;
+
+function EncodingName: JsonLine;
+begin
+  if encoding = peUtf8 then EncodingName := 'utf-8'
+  else EncodingName := 'utf-16'
+end;
+
+procedure Initialize(id: JsonPtr; params: JsonPtr);
 var reply, result, caps, info: JsonPtr;
 begin
+  Negotiate(params);
   reply := NewResponse(id);
   result := JsonNewObject;
   caps := JsonNewObject;
   JsonPut(caps, 'textDocumentSync', JsonNewInteger(SyncFull));
+  { Echoed whichever way it went, so the client is never guessing. }
+  JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
   info := JsonNewObject;
   JsonPut(info, 'name', JsonNewText('pasls'));
@@ -457,7 +534,7 @@ begin
   end;
   id := JsonMember(msg, 'id');
   params := JsonMember(msg, 'params');
-  if method = 'initialize' then Initialize(id)
+  if method = 'initialize' then Initialize(id, params)
   else if method = 'initialized' then { nothing to do }
   else if method = 'shutdown' then Shutdown(id)
   else if method = 'exit' then running := false
@@ -487,6 +564,7 @@ var body: JsonChars;
 
 begin
   ReadEnvironment;
+  encoding := peUtf16;
   LspOpen(reader, StdIn);
   VecInit(DocVec, docs, 4);
   running := true;
