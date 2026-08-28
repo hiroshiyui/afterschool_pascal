@@ -11,7 +11,7 @@ clang -Wno-override-module seed/*.ll build/lib/libpasrt.a -lm -o pascalc
 ./pascalc selfhost/aptypes.pas -o aptypes.ll
 ./pascalc --import selfhost/aptypes.pas selfhost/apfront.pas -o apfront.ll
 ./pascalc --import selfhost/aptypes.pas --import selfhost/apfront.pas \
-          selfhost/compiler.pas -o pascalc.ll
+          selfhost/compiler.pas -o compiler.ll
 ```
 
 **How many files there are is the seed's business, and both CMake and
@@ -23,11 +23,14 @@ behind from a build with more components would be linked in beside the new ones
 and two definitions of the same program is a link error about a file nobody
 wrote.
 
-**A seed from before the split still works, and that is the point of a seed.**
-`pascalc.ll` is one module holding the whole compiler as it was at v3.0.0; it
-assembles into a compiler that translates the three sources perfectly well,
-because what a seed has to be is a *working compiler*, not a mirror of the
-current source layout. It is replaced at the next release, not at the split.
+**A seed from before the split still worked, and that was the point of a
+seed.** Between ADR-0233 and the v3.0.1 release this directory held
+`pascalc.ll` alone — one module with the whole compiler in it, as at v3.0.0 —
+and it assembled into a compiler that translated the three new sources
+perfectly well, because what a seed has to be is a *working compiler* and not a
+mirror of the current source layout. It was replaced at the next release rather
+than at the split, which is ADR-0085's rule doing its job; the three modules
+here now are that replacement.
 
 It is **IR rather than a binary** because ADR-0006 made textual `.ll` a
 first-class output of this compiler — "the backend that survives the rewrite" —
@@ -117,9 +120,11 @@ cross-compiling this IR. That cost is stated here rather than discovered.
 **The second of those two is cheaper than this paragraph implies, and it has
 been measured.** Replacing the first two lines with another target's and running
 `clang --target=... -c` on each seed module produces a valid object for
-aarch64-linux-gnu from the whole file — the frame layouts LLVM computes from
-this module are identical under both targets' datalayouts, over 4501 sizes and
-offsets, so nothing inside it is x86-64's but those two lines. What stops the
+aarch64-linux-gnu — the frame layouts LLVM computes are identical under both
+targets' datalayouts, over the 4501 sizes and offsets there were when this was
+measured against the single module the seed then was, and the `target-layout`
+gate asks the same question of the current compiler on every run and prints its
+own count. So nothing inside a seed module is x86-64's but those two lines. What stops the
 build is `PAS_JUMP_SIZE` in the *runtime*, `jmp_buf` being 200 bytes here and
 312 there. `doc/roadmap.md`'s
 [Cross-platform support](../doc/roadmap.md#cross-platform-support) has the

@@ -2539,12 +2539,24 @@ NOTE 2).
 it does not retain an address after returning. Both are promises; what is
 claimed is that the number handed over is correct (6.7.7.7 NOTE 3).
 
-**C.5 No second implementation compares any of this.** `src/` is frozen at the
-conformance surface, so `selfhost/difftest.sh` skips a dialect source and counts
-the skip. The oracles that do reach it are the goldens in `tests/dialect/`,
-`selfhost/irtest.sh`, and `verify/` for any lowering with a rule (ADR-0117).
+**C.5 No second implementation compares any of this**, and since ADR-0232 none
+compares anything else either. `src/` was a reference front end frozen at the
+conformance surface, so `selfhost/difftest.sh` skipped a dialect source and
+counted the skip; the surface was withdrawn and both were deleted. The entry is
+therefore stronger than when it was written: what was true of the dialect alone
+is now true of the whole front end. The oracles that do reach a dialect source
+are the goldens in `tests/dialect/`, `selfhost/irtest.sh`, and `verify/` for
+any lowering with a rule (ADR-0117, ADR-0232).
 
-**C.6 No third-party corpus reaches it.** The BSI suite is ISO 7185 and fixed.
+**C.6 No third-party corpus reaches it, and no third-party processor either.**
+The BSI Pascal Validation Suite was ISO 7185 and fixed, and it is gone: 25 of
+its 812 programs use a word-symbol 6.1.2 reserves, so this compiler cannot
+compile the corpus at all (ADR-0232). A second *processor* was added instead —
+`fpc-differential` runs Free Pascal over every case in `tests/` and
+`tests/extended/` that has a golden (ADR-0234) — and it does not touch this
+document: nobody else implements this language, so `tests/dialect/` is compared
+by nothing. That is the entry, and it is the one thing here that no gate can
+ever discharge.
 
 **C.7 A result that is an address is forbidden and not refused** (6.7.7.9 c)).
 The clause states the requirement; 6.7.7.8's `int64` is a door through it that
@@ -2573,8 +2585,9 @@ standard states; whether the assignment was **executed** on the path the exit
 took is not asked. `function f: integer; begin if c then exit; f := 1 end`
 yields whatever the result storage held when `c` was true. This is the same
 omission as for a block that falls off its end without having assigned, which
-neither conformance mode detects either, and it is ISO 7185 §6.6.2's own
-error rather than a violation (ADR-0177).
+this processor does not detect either — nor did either conformance mode while
+they existed — and it is ISO 7185 §6.6.2's own error rather than a violation
+(ADR-0177).
 
 **C.10 A function whose only assignment to its result is a try-expression's is
 not detected** (6.8.9.5). This is C.9 reached by the other door and is worth

@@ -616,8 +616,15 @@ stopped by a runtime check. A non-zero exit is then required. Source paths are
 rewritten to `<source>`, so diagnostics can be pinned without depending on where
 the checkout lives.
 
-**Differential test.** *Historical.* Comparing two independent implementations
-of the same question, rather than either against a recorded expectation.
+**Differential test.** Comparing two independent implementations of the same
+question, rather than either against a recorded expectation. The term is
+**live again in a different shape**: `fpc-differential` (ADR-0234) runs Free
+Pascal over every case in `tests/` and `tests/extended/` that has a golden and
+compares the answers, which is two *processors* where the entry below is about
+two *front ends*. What that buys and what it cannot reach — nothing in
+`tests/dialect/`, nobody else implementing this language — is in ADR-0234 and
+in `tests/checks/fpc_disagreements.txt`, which records for each disagreement
+which clause decides it and which way. The rest of this entry is history.
 `difftest.sh` did that for this compiler and the reference front end in `src/`,
 diffing their dumps over every Pascal source in the tree; a golden pins a port
 to whatever it did the day it was written, where two implementations say "these
@@ -628,9 +635,11 @@ it; ADR-0108 brought it back as a front end — lexer, parser and Sema, no code
 generator — which is the half a dump can compare anyway; and ADR-0232 retired
 it for good, `src/` having been frozen at a conformance surface that no longer
 exists. It covered **tokens, AST and Sema** and never the code generator, and
-it could not contradict a *reading*, one author writing both sides. What
-replaces it is nothing, which `doc/sop.md` §7 calls the largest blind spot on
-the page.
+it could not contradict a *reading*, one author writing both sides — which is
+exactly what a second processor written by strangers *can* do, and what
+ADR-0234 was taken for. What replaces it for the **front end** is still
+nothing: a dump has no second writer, and `doc/sop.md` §7 calls that the
+largest blind spot on the page.
 
 **AST dump / Sema dump.** `--dump-ast` is the parse tree as one node per line,
 taken *before Sema*, with `@line:col` printed only where the tree actually

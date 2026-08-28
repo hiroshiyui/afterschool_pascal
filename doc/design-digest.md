@@ -2231,9 +2231,11 @@ decision being overturned on taste.
 Seven mechanisms, and the section exists because the first two landed without
 an entry here. Nothing in it changes what either conformance mode accepts.
 
-**The mode is an ordinal and the order is a containment** (ADR-0117). `stdKind`
-is `(stdIso7185, stdExtended, stdAfterschool)`, and `HasExtended(s)` is
-`s >= stdExtended`. Every one of the 40 sites that used to ask
+**The mode was an ordinal and the order was a containment** (ADR-0117), and
+ADR-0232 deleted all three constants and the predicate with the modes
+themselves — the entry is kept because the *containment* survives them and is
+now the language. `stdKind` was `(stdIso7185, stdExtended, stdAfterschool)`,
+and `HasExtended(s)` was `s >= stdExtended`. Every one of the 40 sites that used to ask
 `langStd = stdExtended` asks the predicate instead, which is the whole of what
 keeps the dialect from silently switching Extended Pascal off — the equality
 test still compiles, still reads correctly, and left 545 of 547 cases
@@ -2743,7 +2745,8 @@ two armed statements unrun.
 (ADR-0209). AP 6.4.7.1 admits `T: type` in a discriminant-specification, which
 is a *position* and not a word: §6.4.7 requires an ordinal-type-name there and
 `type` is a word-symbol of both standards, so no conforming program can have
-written it in that place and `reserved-words` is untouched. Everything else is
+written it in that place — which `reserved-words` checked until ADR-0232
+retired it, the rule now resting on ADR-0140 and review. Everything else is
 ADR-0039's machinery reused. The intern key is `(schema, tuple)` and a tuple
 component is an integer, so every type object now carries a `typeId` from
 `NewType`, never reused — equal ids are the same object, which is ADR-0017's
@@ -3165,10 +3168,19 @@ runtime exists so far.
   so this is size and provenance. The gate therefore asks a second question the
   test files cannot: regenerating from the database must reproduce the
   committed header, or the two drift and every case still passes.
-- **The compiler cannot call any of it.** `selfhost/compiler.std` is
-  `extended`, so `external` is refused there — which makes AP 6.4.15.5's
-  "converted … before the program is executed" the open question increment 2
-  has to answer. ADR-0190 registers the four ways out and takes none.
+- ~~**The compiler cannot call any of it.**~~ **Answered by the increments that
+  followed, and by a fifth way out ADR-0190 had not listed.** The entry said
+  `selfhost/compiler.std` is `extended` so `external` is refused there, and
+  neither half survives: ADR-0232 removed the modes and the sidecar, so
+  `external` is admitted in every source, and nothing had to use it anyway.
+  What reaches these routines is `runtime/pasrt.c` — it calls `pas_text_nfc`
+  and the rest directly, being C beside them — while the emitter names only
+  `pas_text_store`, `pas_text_concat`, `pas_text_cmp`, `pas_text_length`,
+  `pas_text_take` and `pas_text_boundary`. So the compiler never calls the
+  Unicode unit and never needed to, and AP 6.4.15.5's "converted … before the
+  program is executed" is discharged where a value is constructed. Compile any
+  program declaring a `utf8` and read the emitted `declare` lines to see the
+  whole of the boundary (ADR-0190, ADR-0191, ADR-0232).
 
 **The text-type itself** (ADR-0191, AP 6.4.15). `utf8(n)` is a type
 `--std=afterschool` has: a value with a capacity in bytes, holding well-formed

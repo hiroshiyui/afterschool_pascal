@@ -1030,10 +1030,15 @@ and `VecReserve` grows once so that no later push reallocates.
 
 **There is no install location and no resolution by name.** `--import` takes a
 path, so a program outside this checkout names paths into it, and `maxImports`
-bounds one program at eight components. Sockets, locales, threads and containers
-are still absent, and the reason has moved again for three of them: the
-foreign-function interface they waited on **exists** (ADR-0121) and a string
-now crosses it (ADR-0122). A string now comes back too
+bounds one program at eight components. Of the four things that stood here as absent — sockets, locales, threads and
+containers — **two have since landed**: `lib/dialect/pasnet.pas` gives a socket
+that speaks in a host and a service and serves more than one client
+(ADR-0203, ADR-0205), and `lib/dialect/pascontainer.pas` gives a growable
+vector and a string-keyed map over whatever element type a program names
+(ADR-0209). Both are in the module table above. Locales and threads are still
+absent, threads deliberately (ADR-0201). The reason had already moved for the
+rest: the foreign-function interface they waited on **exists** (ADR-0121) and a
+string now crosses it (ADR-0122). A string now comes back too
 (ADR-0123), ADR-0125 gives the language the buffer shape a socket needs,
 ADR-0128 the 64-bit integer an `ssize_t` comes back as, and ADR-0129 puts the
 two together: `read`, `write`, `recv` and `send` are bindable, every word of
@@ -1058,9 +1063,13 @@ hand back nor a buffer you lent. Choosing a copy is what kept the
 memory-safety model out of it: nothing holds the address, so there is no
 lifetime to reason about. What is still not declarable is a member that is
 itself a pointer, so a chained list of structs — `getaddrinfo` — waits on the
-model rather than on a clause. A container waits on something else entirely —
-parameterising a type by a type, which schemata do not do. `doc/roadmap.md` has
-the ordering, and `doc/history.md` has each increment that got this far.
+model rather than on a clause. A container waited on something else entirely —
+parameterising a type by a **type**, which schemata did not do; AP 6.4.7.1
+admits `T: type` in a discriminant-specification now, so `Vec(integer, 16)` is
+an ordinary type and the module is written once (ADR-0209). What a generic
+still has no way to say is a **constraint**, which is what a map keyed by
+anything but a string would need. `doc/roadmap.md` has the ordering, and
+`doc/history.md` has each increment that got this far.
 
 ## The ISO 7185 core
 
@@ -1694,9 +1703,12 @@ is proved to fire exactly when the standard says the operation is in error —
 both directions, since trapping always would satisfy one of them. There are
 currently **no known gaps**.
 
-Beside that: 730 cases under `ctest`, the compiler compiled with itself to a
+Beside that: 731 cases under `ctest`, the compiler compiled with itself to a
 fixed point and built a second way through `llc`, 319 scenarios written against
-clauses, and Unicode's own conformance files. What none of it sees is written
+clauses, Unicode's own conformance files, and — since version 3.0.1 — **a
+second Pascal compiler**: Free Pascal is run over every case that has a golden,
+and each of the eleven programs the two answer differently is recorded with the
+clause that decides it (ADR-0234). What none of it sees is written
 down rather than left to be discovered — `doc/sop.md` §7 keeps that list, and
 version 3 made it longer: the 1982 BSI Pascal Validation Suite and the second
 front end both went with the conformance modes.
