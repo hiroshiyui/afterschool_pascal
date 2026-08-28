@@ -29,8 +29,9 @@ program Compile(output,
   than kept as a program of its own: a second file would need its own copy of
   everything below it, and by Sema that would have been three copies of the
   lexer. What the merge costs is the ability to run one stage alone, which is
-  why the program dumps all three stages in one pass and difftest.sh compares
-  the lot against `pascalc-s0 --dump-all`.
+  why the program dumps all three stages in one pass -- a shape a differential
+  harness wanted while there were two front ends to compare (ADR-0232 retired
+  the last of them) and which is now a debugging aid.
 
   A port of src/lexer.cpp, src/parser.cpp, src/ast.h, src/sema.cpp and
   src/type.h into the language that compiler accepts, checked by comparing what
@@ -110,8 +111,8 @@ const
     program-parameter than that exists so that going over is reported rather
     than truncated -- see the declarations of arg1..argOver. Twenty-four is
     twice what a `--import`-heavy command line needs: eight imports are
-    sixteen words, and --std=, --target=, a --dump flag, --coverage, the
-    source, `-o` and its file name are seven more. }
+    sixteen words, and --target=, a --dump flag, --coverage, the source, `-o`
+    and its file name are six more. }
   argMax = 24;
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
@@ -255,7 +256,7 @@ type
 
   tokenKind = (
     tkEof, tkIdent, tkInt, tkReal, tkStr,
-    { ADR-0128: a decimal literal above maxint, under --std=afterschool. It is
+    { ADR-0128: a decimal literal above maxint. It is
       a token of its own rather than a flag on tkInt because what it carries is
       *text* -- this compiler has no value of the type to put in intVal -- and
       that is the same reason tkReal is a token of its own. }
@@ -1099,10 +1100,6 @@ type
       what decides which modules are activated at all. }
     importedFrom, importedTail: symListPtr;
 
-    { ADR-0137, and only ever asked of a module symbol: nothing this module
-      exports carries a variant-part with a tag-field, so its object code is
-      the same under `--std=extended` and `--std=afterschool` and a program in
-      either may link it. Sema decides it; CodeGen only emits the second name
     { 6.13. This module's own program-component was translated separately, so
       this translation has its heading and not its block: no body of its is
       emitted, its activation record is declared rather than defined, and
@@ -1652,8 +1649,8 @@ type
         very production an expression's designator uses. Exactly one of the
         two shapes is filled -- a bare name stays a name, in tqAt/tqLen, so
         every rule 6.4.9 already had is asked the question it was written
-        for and no conforming program takes a different path under
-        --std=afterschool (ADR-0215). }
+        for and a program of ISO/IEC 10206:1991 takes the path it always took
+        (ADR-0215). }
       nkInquiry:    (tqAt, tqLen, tqQualAt, tqQualLen: integer;
                      tqObj: nodePtr);
       { 6.4.2.5's restricted-type, `restricted type-name`. The syntax admits a
@@ -2081,21 +2078,25 @@ var
     no and the second with no as well. }
   argsOk, argsBad: boolean;
   { Which stages to dump, if any. Dumping is *off* by default: a compiler is
-    quiet when it succeeds. It was on unconditionally for as long as there were
-    two compilers to compare, because the dumps are what selfhost/difftest.sh
-    diffed and there was no second binary to select a mode on (ADR-0025) -- and
-    that reason expired with stage 0.
+    quiet when it succeeds. It was on unconditionally for as long as there
+    were two compilers to compare, because the dumps were what
+    selfhost/difftest.sh diffed and there was no second binary to select a mode
+    on (ADR-0025) -- and that reason expired with stage 0, twice over now that
+    ADR-0232 has retired difftest itself.
 
     `dumping` decides the diagnostic format as well as the sections. Inside a
     dump a diagnostic is `line col error message`, which is the format the two
-    compilers agreed on; outside one it is `file:line:col: error: message`,
-    which is what a person reads and what tests/*.err holds. }
+    compilers agreed on while there were two; outside one it is
+    `file:line:col: error: message`, which is what a person reads and what
+    tests/*.err holds. }
   dumpTokensOpt, dumpAstOpt, dumpSemaOpt, dumpAllOpt, dumping: boolean;
   { --dump-limits: how full the two arrays sized for this compiler's own source
     are (ADR-0148). Not a fifth member of the set above and deliberately not a
-    section of --dump-all -- those three sections are what selfhost/difftest.sh
-    diffs against the reference front end, which has no such arrays, so a
-    fourth would be a disagreement on every file in the corpus.
+    section of --dump-all -- those three sections were what
+    selfhost/difftest.sh diffed against the reference front end, which had no
+    such arrays, so a fourth would have been a disagreement on every file in
+    the corpus. The harness is gone (ADR-0232) and the separation is kept: the
+    reason below stands on its own.
 
     It is also the one dump that is not of a stage. The pool is filled by Sema
     and by CodeGen as well as by the lexer, so the question it answers has an
@@ -2190,9 +2191,10 @@ var
 
   { the predefined types, shared singletons }
   intType, realType, boolType, charType, voidType, nilType, textType: typePtr;
-  { ADR-0128. Only ever reached by name under --std=afterschool, but built
-    unconditionally: a type object costs one record, and a conditional one
-    would make every predicate that names it test the mode as well. }
+  { ADR-0128. A required identifier 6.1.3 lets any program shadow, so it is
+    reached by name only where nothing has, and it is built unconditionally:
+    a type object costs one record. It was conditional on nothing even while
+    there were modes, so that no predicate naming it had to test one. }
   int64Type: typePtr;
   complexType, canonStringType, bindingTy, timeStampType: typePtr;
   { AP 6.4.15.7's result: a text-type with no capacity, as
@@ -3125,8 +3127,8 @@ begin
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
     else if EQ(a, '--coverage') then covOpt := true
-    { ADR-0156. Joined to its flag, like --std= and unlike -o and --import,
-      which take file names a shell completes. }
+    { ADR-0156. Joined to its flag, unlike -o and --import, which take file
+      names a shell completes. }
     else if (length(a) > 9) and EQ(substr(a, 1, 9), '--target=') then begin
       tname := substr(a, 10, length(a) - 9);
       k2 := TargetIndex(tname);
@@ -8066,9 +8068,10 @@ end;
   question is "do these two print alike", so it is asked by rendering both
   through the msgBuf sink -- and a spelling that fills the buffer cannot be
   compared, so neither compiler says anything about one. The C++ carries the
-  same limit under the name kTypeNameCompareLimit; a diagnostic the two
-  disagree about is worse than one neither gives, and difftest is what reports
-  a drift in it. }
+  same limit under the name kTypeNameCompareLimit. That compiler and the
+  harness that compared the two are both gone (ADR-0232); the limit stays
+  because a spelling longer than the buffer cannot be compared, which is a fact
+  about msgBuf and not about a second implementation. }
 procedure WriteDistinctTypeNote(a, b: typePtr);
 var saved: str; i: integer; same: boolean;
 begin
@@ -16637,11 +16640,15 @@ begin
         ErrorAt(c^.line, c^.col);
         write('''');
         WritePool(c^.clAt, c^.clLen);
-        write(''' takes exactly one argument');
+        { 6.7.6.1's succ and pred take an optional second argument saying how
+          far to step. It was ISO/IEC 10206:1991's addition and this message
+          named the mode that admitted it; there is one language since
+          ADR-0232, so the second argument is part of what these two take and
+          there is no flag to send a reader to. }
         if (c^.clBuiltin = biSucc) or (c^.clBuiltin = biPred) then
-          writeln(', or two under --std=extended')
+          writeln(''' takes one or two arguments')
         else
-          writeln;
+          writeln(''' takes exactly one argument');
         c^.ntype := intType
       end
       else begin
@@ -17808,8 +17815,8 @@ begin
       has the same list with "a string-type" in place of the packed char
       array, so a variable-string and a canonical value join it.
 
-      ADR-0128's int64 joins the list under --std=afterschool, and the clause
-      it joins is the integer one: 6.10.3.1's decimal representation is the
+      ADR-0128's int64 joins the list, and the clause it joins is the integer
+      one: 6.10.3.1's decimal representation is the
       same for both widths, so the runtime writes it through the call it has
       taken an i64 through since it was written. }
     { AP 6.4.15.10 makes a text a write-parameter and its bytes what is
@@ -20010,8 +20017,9 @@ begin
           equivalent program fragment of 6.9.3.9.2 says nothing about. The
           clause settles it statically and this is that.
 
-          No `--std` guard: `bindable` is not in ISO 7185's lexis, so no ISO
-          7185 program can reach a true here. Asked of the designator rather
+          Guarded by nothing, and needing no guard even while there were
+          modes: `bindable` is not in ISO 7185's lexis, so no ISO 7185 program
+          could reach a true here. Asked of the designator rather
           than the symbol because 6.4.3.4 and 6.4.3.5 give a field and a
           component their own bindability -- the control-variable is an
           entire-variable and so answers for itself, but the question has one
@@ -26858,8 +26866,8 @@ end;
   an *error* -- Annex D.2, which doc/implementation-defined.md lists among the
   ones deliberately left unreported -- and 3.1 lets a processor leave an error
   undetected. So detecting it changes the meaning of no conforming program,
-  which is what lets this live in --std=afterschool without weakening
-  ADR-0117's containment.
+  which is what lets it be the language's rule without weakening ADR-0117's
+  containment.
 
   Called once per variant part crossed on the way to a field, because activity
   is a *chain*: an inner tag stays readable when the arm containing it is not
@@ -35698,8 +35706,9 @@ end;
   program* (ADR-0018), so a constant left off one is a crash and not a wrong
   answer -- and no other oracle here can see that. A missing arm is not a
   statement, so `line-coverage` cannot; a crash writes nothing, so no golden
-  holds it; and `src/`'s counterpart is a `switch` with a `default`, so
-  difftest has one side falling over rather than a disagreement.
+  holds it; and while there was a second front end its counterpart was a
+  `switch` with a `default`, so difftest had one side falling over rather than
+  a disagreement.
 
   `tests/checks/kind_exhaustive.py` has asked this question since ADR-0145 by
   *parsing Pascal with regular expressions*, and doc/sop.md 7 already calls the
@@ -35928,8 +35937,10 @@ end;
   would reject.
 
   `--dump-all` is the exception and runs everything, including the code
-  generator: that is the form selfhost/difftest.sh compares, and generating the
-  IR on every file in the corpus is free coverage of the backend. }
+  generator: that was the form selfhost/difftest.sh compared, and generating
+  the IR on every file in the corpus is free coverage of the backend --
+  which is why tests/checks/coverage.py still sweeps it that way now that the
+  harness is gone (ADR-0232). }
 procedure Compile;
 var earlier, earlierTail: nodePtr; earlierCount: integer; go, whole: boolean;
 begin

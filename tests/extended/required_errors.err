@@ -2,7 +2,7 @@
 <source>:12:10: error: operator '><' needs set operands, found integer and integer
 <source>:12:3: error: cannot assign [] to a variable of type integer
 <source>:15:18: error: the second argument of 'succ' is how far to step, and must be an integer, found real
-<source>:18:8: error: 'succ' takes exactly one argument, or two under --std=extended
+<source>:18:8: error: 'succ' takes one or two arguments
 <source>:18:3: error: cannot assign integer to a variable of type colour
 <source>:26:3: error: 'halt' takes at most one argument, the exit status
 <source>:27:8: error: the exit status of 'halt' must be an integer, found real
