@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-# Diverse double-compiling (David A. Wheeler), applied to `seed/pascalc.ll`.
+# Diverse double-compiling (David A. Wheeler), applied to `seed/*.ll`.
 #
 # The seed is an opaque committed artefact. Its provenance is this repository's
 # history -- a claim about a chain, not something a reader checks by
@@ -25,7 +25,7 @@
 #
 #   A = the v0.1.0 C++ compiler (LLVM's own code generator) translating
 #       today's selfhost/compiler.pas, then assembled and linked
-#   B = build/bin/pascalc, which came from seed/pascalc.ll the ordinary way
+#   B = build/bin/pascalc, which came from seed/*.ll the ordinary way
 #
 # A and B are then each asked to translate selfhost/compiler.pas, and *those*
 # two outputs must be identical. A and B themselves are **not** compared --

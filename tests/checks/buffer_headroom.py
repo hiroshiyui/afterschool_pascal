@@ -135,7 +135,7 @@ def main() -> int:
             print(
                 f"buffer-headroom: {array} is {100 * frac:.1f}% full, over the "
                 f"{100 * THRESHOLD:.0f}% mark.\n"
-                f"  Raising {const} alone does not help: seed/pascalc.ll carries the\n"
+                f"  Raising {const} alone does not help: seed/*.ll carries the\n"
                 "  old bound and it is the seed that translates this source. Raise it\n"
                 "  on a tree that still builds, then seed/refresh.sh, as ADR-0095 and\n"
                 "  ADR-0126 each did -- and say so in the commit, because it rewrites\n"

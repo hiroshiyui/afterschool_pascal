@@ -141,7 +141,7 @@ one machine without writing the flag each time; an explicit `--target=` wins.
 
 The repository is developed on x86-64 Linux, and the compiler is **built and
 tested on arm64 as well**: the same suite runs there natively on every push.
-No release ships an aarch64 binary, and `seed/pascalc.ll` is still generated
+No release ships an aarch64 binary, and the seed is still generated
 for x86-64 — but it needs no editing to be used elsewhere: `clang` overrides
 the two header lines with the host's, and the compiler that comes out passes
 the whole suite.

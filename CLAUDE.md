@@ -50,7 +50,7 @@ that, or as history; the code is at tag `v0.1.0` and in the log.
 
 Bootstrapping was an earlier goal and is done; what survives of it is a
 constraint on the *order* features land in — a feature must be expressible in
-what `seed/pascalc.ll` accepts, or the seed is refreshed first.
+what `seed/*.ll` accepts, or the seed is refreshed first.
 
 ## Commands
 
@@ -354,7 +354,7 @@ arbitrary.
    plus a variant record, and why the port needed nothing redesigned.
 2. **Textual `.ll` output stays a first-class path** — *live, and more so*. It
    was the backend that had to survive the rewrite; it is now the only backend,
-   and `seed/pascalc.ll` makes it what lets this repository build itself.
+   and `seed/*.ll` makes it what lets this repository build itself.
 3. **Prefer constructs that map onto Pascal** — *satisfied by construction*.
    There is no other language here to prefer them over.
 
@@ -538,7 +538,7 @@ Four things about the dialect are worth knowing before adding anything:
 - **A feature needs a reason of its own** — "the standard has it" is
   unavailable, since none governs this language — and should still be spelled
   the way a standard spells it wherever one does. It must be expressible in what
-  `seed/pascalc.ll` accepts, or the seed is refreshed first.
+  `seed/*.ll` accepts, or the seed is refreshed first.
 - **It is specified, and the specification is enforced.** `tests/spec/` takes
   `@afterschool:<clause>` beside the two standards' tags, and every testable
   clause of the spec is cited by a scenario but for the three AP 5.5 d) names. The clause table is **generated

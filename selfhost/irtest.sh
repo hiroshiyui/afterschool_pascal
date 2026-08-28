@@ -138,7 +138,7 @@ build() {
       "$runtime" -lm -o "$out" 2>"$work/link.err" || return 2
 }
 
-# Stage 1 is built by the seed -- seed/pascalc.ll assembled into a compiler --
+# Stage 1 is built by the seed -- seed/*.ll assembled into a compiler --
 # where it used to be built by the C++ one. Nothing else about the chain
 # changes: what the fixed point proves is that a compiler built from this
 # source reproduces itself, and which compiler started it off has never been

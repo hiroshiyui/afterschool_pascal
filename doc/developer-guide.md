@@ -41,7 +41,7 @@ Two constraints shaped this, and only one is still live:
 
 * **Textual `.ll` output is a first-class path, not a debugging aid.** It was
   the backend that had to survive the rewrite; it is now the backend, and
-  `seed/pascalc.ll` makes it the thing that lets the repository build itself.
+  `seed/*.ll` makes it the thing that lets the repository build itself.
 * **No `dynamic_cast`, no exceptions in the AST walk** — a rule about the C++
   that no longer exists. It is why the AST is a tag and a variant record, which
   is the shape `selfhost/compiler.pas` still has, so the record explains the

@@ -488,7 +488,7 @@ redesigned (ADR-0005).
 (`-S`) is the *driver* stopping there instead of going on to assemble and link.
 It was the backend that had to survive the rewrite, because a compiler written
 in Pascal cannot call LLVM's C++ API (ADR-0006); since ADR-0085 it is the only
-one, which is what lets `seed/pascalc.ll` build the tree.
+one, which is what lets `seed/*.ll` build the tree.
 
 **Runtime.** `runtime/pasrt.c`, linked as `libpasrt.a`. Holds anything not
 expressible in IR — formatted output, `pas_runtime_error`, `pas_new`/

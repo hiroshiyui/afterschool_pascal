@@ -29,7 +29,7 @@
 #
 # **Which LLVM that is varies by where this runs, and that is worth knowing.**
 # The `second-backend` CI job is debian:trixie, where both are 19.1.7; a
-# developer's machine at the time of writing had 21.1.8; `seed/pascalc.ll` was
+# developer's machine at the time of writing had 21.1.8; `seed/*.ll` was
 # emitted by clang 21. So the comparison is repeated on different LLVMs over
 # time rather than made between two at once, which is a weaker thing than it
 # sounds like and still not nothing: a miscompilation that hides here has to be

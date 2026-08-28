@@ -19,7 +19,7 @@
 #
 # What is committed here is what this reads *out* of the UCD --
 # runtime/pasrt_unicode_data.h, some 5500 lines of tables -- and not the UCD
-# itself. That follows seed/pascalc.ll rather than tests/bsi/suite: the
+# itself. That follows seed/*.ll rather than tests/bsi/suite: the
 # Unicode licence does permit redistribution, so this is a size and a
 # provenance decision and not a licensing one. The generated header is the
 # artefact a build needs; the database is what a *refresh* needs, and a refresh

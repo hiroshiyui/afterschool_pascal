@@ -728,7 +728,7 @@ objection had already narrowed to the seed before ADR-0232 arrived, and the
 seed was refreshed in this release.
 
 **What is left of it is an ordering discipline, not a question**: a dialect
-feature must be expressible in what `seed/pascalc.ll` accepts, or the seed is
+feature must be expressible in what `seed/*.ll` accepts, or the seed is
 refreshed first (ADR-0109). What the compiler now *may* use — `defer`, `T ! E`,
 `owned ^T`, slices, `break`, `exit`, the generics, `type of` over a
 variable-access — it does not yet use, and whether adopting any of them makes
@@ -881,7 +881,7 @@ tried, which makes it the cheapest unknown in the chapter.
 ### What is not claimed
 
 **aarch64 works; it is not supported.** No release ships an aarch64 binary,
-`seed/pascalc.ll` is generated for x86-64, and `seed/README.md`'s target lock
+`seed/*.ll` is generated for x86-64, and `seed/README.md`'s target lock
 stands. CI establishes that the port *works* — the seed retargets textually,
 the layout rules hold for a second machine, the runtime's constants clear it —
 not that an artefact is maintained for it.

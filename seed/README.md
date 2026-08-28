@@ -116,7 +116,7 @@ cross-compiling this IR. That cost is stated here rather than discovered.
 
 **The second of those two is cheaper than this paragraph implies, and it has
 been measured.** Replacing the first two lines with another target's and running
-`clang --target=... -c seed/pascalc.ll` produces a valid object for
+`clang --target=... -c` on each seed module produces a valid object for
 aarch64-linux-gnu from the whole file — the frame layouts LLVM computes from
 this module are identical under both targets' datalayouts, over 4501 sizes and
 offsets, so nothing inside it is x86-64's but those two lines. What stops the

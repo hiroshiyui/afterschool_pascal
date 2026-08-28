@@ -277,7 +277,7 @@ const
     could. The header carries the four measurements and why 1024. The cost is
     paid only by a block that is the target of a non-local goto -- the only
     kind that carries a record at all -- and this compiler contains no `goto`,
-    so no frame in seed/pascalc.ll has one. }
+    so no frame in seed/*.ll has one. }
   jumpSize = 1024;
   { AP 6.4.12's handle slot: the value, the routine that releases it, and the
     two links of the runtime's list of live handles -- four words, and

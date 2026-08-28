@@ -11,7 +11,7 @@ whole audit in one sentence; the steps below are how it gets checked.
 
 **What the compiler is made of decides where the risk lives** (ADR-0085). No
 C++ is in it: `build/bin/pascalc` is the compiler's three program-components translated by
-`seed/pascalc.ll`, so the front end is a Pascal program with array bounds
+`seed/*.ll`, so the front end is a Pascal program with array bounds
 checked, subranges checked, and every pointer dereference nil-checked — the
 class of bug this audit used to be mostly about is now diagnosed by the compiler
 that compiled it. **There is no C++ left to keep out of the threat model** —
@@ -133,7 +133,7 @@ When performing a security audit, always follow these steps:
 6. **Build and supply-chain check** — confirm no build step downloads anything
    or executes untrusted binaries, that `CMakeLists.txt` embeds no absolute
    paths from the developer's machine, and that nothing under `build/` is
-   committed. **`seed/pascalc.ll` is a committed binary artefact in source
+   committed. **`seed/*.ll` is a committed binary artefact in source
    form** — 153k lines of IR that nobody reads and that builds the compiler.
    That is a supply-chain surface by construction: `seed/README.md` states its
    provenance, and the release job in `.github/workflows/ci.yml` is what checks

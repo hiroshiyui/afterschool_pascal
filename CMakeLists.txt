@@ -76,7 +76,7 @@ target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
 # translate a module on its own, translate a module that imports another, and
 # link the result, which is a row `doc/sop.md` 7 used to carry as unchecked.
 #
-# `seed/pascalc.ll` is a working compiler in LLVM IR, committed for exactly
+# `seed/*.ll` is a working compiler in LLVM IR, committed for exactly
 # this: clang assembles it, and the result translates the current sources into
 # the compiler that ships. The seed is matched with a glob rather than named,
 # because a refreshed seed is one module per component and the count is the

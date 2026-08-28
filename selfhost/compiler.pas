@@ -42,7 +42,7 @@ program Compile(output,
   passed, the program sees it and a module sees an unbound parameter.
 
   The code generator writes textual LLVM IR and links nothing (ADR-0085), which
-  is what makes seed/pascalc.ll possible. Three things follow from writing text
+  is what makes seed/*.ll possible. Three things follow from writing text
   instead of building a module, and each shapes the emitter below.
 
   * The emitter is *sequential*. It never returns to a basic block it has left,
