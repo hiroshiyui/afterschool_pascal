@@ -3,7 +3,7 @@
 ## Status
 
 Accepted. Supersedes the goal statement of
-[ADR-0004](0004-feature-priority-follows-the-bootstrap.md), whose feature
+[ADR-0004](0004-self-hosting-is-the-near-term-goal.md), whose feature
 priority expired when the bootstrap closed; the conformance work it led to is
 untouched and stays.
 
