@@ -19,6 +19,14 @@ program Compile(output,
                 arg7, arg8, arg9, arg10, arg11, arg12,
                 arg13, arg14, arg15, arg16, arg17, arg18,
                 arg19, arg20, arg21, arg22, arg23, arg24,
+                arg25, arg26, arg27, arg28, arg29, arg30,
+                arg31, arg32, arg33, arg34, arg35, arg36,
+                arg37, arg38, arg39, arg40, arg41, arg42,
+                arg43, arg44, arg45, arg46, arg47, arg48,
+                arg49, arg50, arg51, arg52, arg53, arg54,
+                arg55, arg56, arg57, arg58, arg59, arg60,
+                arg61, arg62, arg63, arg64, arg65, arg66,
+                arg67, arg68, arg69, arg70, arg71, arg72,
                 argOver);
 
 { The compiler's third program-component: the code generator, and the driver
@@ -88,6 +96,11 @@ var
     name", an accusation against the last argument that arrived rather than the
     first that did not.
 
+    It was raised a second time, from twenty-four, and by a caller rather than
+    by an accident: `lsp/pasls.pas` imports ten modules, which is twenty-three
+    words before a flag is written, and `maxImports` was eight. The two bounds
+    move together and the comment on `argMax` in ApTypes says why.
+
     `argOver` is how that stops being silent. Nothing can count the arguments
     -- an unbound parameter is the only end-of-list there is -- so a compiler
     with argMax parameters cannot tell argMax from argMax + 9. One *extra*
@@ -98,6 +111,14 @@ var
   arg7, arg8, arg9, arg10, arg11, arg12: text;
   arg13, arg14, arg15, arg16, arg17, arg18: text;
   arg19, arg20, arg21, arg22, arg23, arg24: text;
+  arg25, arg26, arg27, arg28, arg29, arg30: text;
+  arg31, arg32, arg33, arg34, arg35, arg36: text;
+  arg37, arg38, arg39, arg40, arg41, arg42: text;
+  arg43, arg44, arg45, arg46, arg47, arg48: text;
+  arg49, arg50, arg51, arg52, arg53, arg54: text;
+  arg55, arg56, arg57, arg58, arg59, arg60: text;
+  arg61, arg62, arg63, arg64, arg65, arg66: text;
+  arg67, arg68, arg69, arg70, arg71, arg72: text;
   argOver: text;
   { The tuple `new` is building, for as long as it has nowhere to live: the
     block it will sit in front of is what the tuple is being used to size.
@@ -235,8 +256,56 @@ begin
     22: b := binding(arg22);
     23: b := binding(arg23);
     24: b := binding(arg24);
+    25: b := binding(arg25);
+    26: b := binding(arg26);
+    27: b := binding(arg27);
+    28: b := binding(arg28);
+    29: b := binding(arg29);
+    30: b := binding(arg30);
+    31: b := binding(arg31);
+    32: b := binding(arg32);
+    33: b := binding(arg33);
+    34: b := binding(arg34);
+    35: b := binding(arg35);
+    36: b := binding(arg36);
+    37: b := binding(arg37);
+    38: b := binding(arg38);
+    39: b := binding(arg39);
+    40: b := binding(arg40);
+    41: b := binding(arg41);
+    42: b := binding(arg42);
+    43: b := binding(arg43);
+    44: b := binding(arg44);
+    45: b := binding(arg45);
+    46: b := binding(arg46);
+    47: b := binding(arg47);
+    48: b := binding(arg48);
+    49: b := binding(arg49);
+    50: b := binding(arg50);
+    51: b := binding(arg51);
+    52: b := binding(arg52);
+    53: b := binding(arg53);
+    54: b := binding(arg54);
+    55: b := binding(arg55);
+    56: b := binding(arg56);
+    57: b := binding(arg57);
+    58: b := binding(arg58);
+    59: b := binding(arg59);
+    60: b := binding(arg60);
+    61: b := binding(arg61);
+    62: b := binding(arg62);
+    63: b := binding(arg63);
+    64: b := binding(arg64);
+    65: b := binding(arg65);
+    66: b := binding(arg66);
+    67: b := binding(arg67);
+    68: b := binding(arg68);
+    69: b := binding(arg69);
+    70: b := binding(arg70);
+    71: b := binding(arg71);
+    72: b := binding(arg72);
     { argMax + 1: bound only when an argument had nowhere to go. }
-    25: b := binding(argOver);
+    73: b := binding(argOver);
     otherwise
   end;
   if b.bound then s := b.name else s := '';

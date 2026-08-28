@@ -185,15 +185,28 @@ const
   apVersion = '3.0.1';
   { How many --import arguments one translation may be given. Bounded because
     an array is, and generous because 6.13 puts no limit on how many
-    program-components a program-block has. }
-  maxImports = 8;
+    program-components a program-block has.
+
+    It was eight, and eight was the number ADR-0114 recorded as the reason a
+    library of more than eight modules could not be used whole. ADR-0158 raised
+    argMax and said in as many words that it did not revisit this one, because
+    nothing had asked. `lsp/pasls.pas` asked: its import chain is ten modules
+    and none of them is optional -- PasIO needs PasFS, PasJson needs
+    PasContainer, PasProcess needs PasStrVec -- so the first program in this
+    tree written to be used rather than to be tested could not be compiled at
+    all. Thirty-two is the whole library today with room over it. }
+  maxImports = 32;
   { How many command-line arguments the compiler can be handed, and one more
     program-parameter than that exists so that going over is reported rather
-    than truncated -- see the declarations of arg1..argOver. Twenty-four is
-    twice what a `--import`-heavy command line needs: eight imports are
-    sixteen words, and --target=, a --dump flag, --coverage, the source, `-o`
-    and its file name are six more. }
-  argMax = 24;
+    than truncated -- see the declarations of arg1..argOver.
+
+    It is derived from maxImports and has to be: an import costs *two* words,
+    so a bound on imports that the argument list cannot express is not a bound
+    at all. Thirty-two imports are sixty-four words; --target=, a --dump flag,
+    --coverage, the source, `-o` and its file name are six more; seventy-two
+    leaves two over. Raising maxImports without raising this is the mistake the
+    number is written this way to prevent. }
+  argMax = 72;
   wordWidth = 12;    { the longest word a diagnostic passes about, padded }
   msgWidth = 16;     { 'packed array [', the longest piece of a type name }
   textWidth = 40;    { the longest fixed part of a runtime-error message }

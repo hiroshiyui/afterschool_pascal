@@ -243,3 +243,4 @@ the alternatives that were rejected and why.
 | [0232](0232-afterschool-pascal-is-the-language.md) | Afterschool Pascal is the language | Accepted |
 | [0233](0233-the-compiler-becomes-three-program-components.md) | The compiler becomes three program-components | Accepted |
 | [0234](0234-a-second-processor-answers-the-corpus.md) | A second processor answers the corpus | Accepted |
+| [0235](0235-the-two-command-line-bounds-move-together.md) | The two command-line bounds move together | Accepted |

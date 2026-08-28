@@ -467,8 +467,8 @@ cli_check "more than one input file"  "$root/tests/hello.pas" "$root/tests/arith
 # command line report "-o needs a file name" about the argument that fell off
 # the end. The complaint has to name the length, not the last flag standing.
 long_args=()
-for _ in $(seq 22); do long_args+=(--dump-limits); done
-cli_check "more than 24 arguments" "${long_args[@]}" "$root/tests/hello.pas" \
+for _ in $(seq 70); do long_args+=(--dump-limits); done
+cli_check "more than 72 arguments" "${long_args[@]}" "$root/tests/hello.pas" \
           -o "$work/ir.ll"
 
 # ...and the length below that is accepted, which is the half a bound-raising
@@ -476,7 +476,7 @@ cli_check "more than 24 arguments" "${long_args[@]}" "$root/tests/hello.pas" \
 # with the bound left where it was.
 checked=$((checked + 1))
 ok_args=()
-for _ in $(seq 21); do ok_args+=(--dump-limits); done
+for _ in $(seq 69); do ok_args+=(--dump-limits); done
 if ! "$pascalc" "${ok_args[@]}" "$root/tests/hello.pas" -o "$work/long.ll" \
      >"$work/long.txt" 2>&1 || [[ ! -s $work/long.ll ]]; then
   echo "--- cli: 24 arguments were refused or wrote no IR ---" >&2

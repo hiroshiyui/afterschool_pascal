@@ -213,12 +213,13 @@ def corpus(root):
     # `Arg` is argMax + 1 arms of `binding(argN)`, and nothing in the corpus is
     # invoked with more than a handful of arguments -- so twelve of those arms
     # were reported unreached the moment the bound was raised, which is the
-    # ratchet doing exactly its job. The filler is a repeated `--dump-limits`
+    # ratchet doing exactly its job, and forty-eight more the second time it
+    # was raised. The filler is a repeated `--dump-limits`
     # because it is a flag that is a no-op when written twice: what is being
     # exercised is the *position*, not the option. It was `--std=iso7185`
     # until ADR-0232 removed the modes, and producttest.sh fills its own
     # copy of this check the same way.
-    filler = ["--dump-limits"] * 21          # + source + -o + name = argMax
+    filler = ["--dump-limits"] * 69          # + source + -o + name = argMax
     jobs.append((hello, list(filler)))
     jobs.append((hello, filler + ["--emit-llvm"]))     # ...and one over it
 
