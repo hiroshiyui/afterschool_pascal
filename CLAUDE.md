@@ -111,8 +111,12 @@ did (ADR-0103). **`lsp/` is a second one**, and further out: `lsp/pasls.pas` is
 a language server written in the dialect, built by `lsp/build.sh` into a binary
 an editor can be pointed at rather than into a temporary directory, and checked
 by `lsp/run.sh` replaying `lsp/sessions/*.jsonl` — a *conversation*, framed by
-the harness and compared byte for byte (ADR-0236). It is outside every corpus
-glob, so `line-coverage`, `heap-balance` and `variant-check` do not see it.
+the harness and compared byte for byte (ADR-0236). The corpus sweeps reach it
+through a second root rather than through the glob: `coverage.py` names it,
+`variant_check.sh` finds it, `build.sh` honours `AFTERSCHOOL_PASCAL_OPT`, and
+`heap-balance` drives `lsp/run.sh` instead of `run_test.sh` — which has to take
+`PASHEAP_BALANCE` out of the environment **twice**, `pascalcc` building the
+server and the server starting `pascalc` once per document.
 
 `tools/pascalcc` shells out to `clang` to assemble and link (ADR-0009), and
 finds `libpasrt.a` beside the compiler; `AFTERSCHOOL_PASCAL_RUNTIME` and

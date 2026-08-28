@@ -121,6 +121,15 @@ def corpus(root):
         # such modules. The .components sidecar beside compiler.pas supplies
         # the imports, through the branch below.
         components.sources(root),
+        # The language server, which no directory glob above reaches: it lives
+        # in lsp/ because a server has to be a binary an editor can be pointed
+        # at rather than one compiled into a temporary directory (ADR-0236),
+        # and every group above is a `tests/` corpus. A source this does not
+        # enumerate contributes no coverage, so the lines it reaches report as
+        # unreached while an oracle reaches them on every run -- which is the
+        # sentence the dialect group above carries, met a second time. Its
+        # `.components` sidecar is read by the branch below like any other.
+        [root / "lsp" / "pasls.pas"],
     ]
     for files in groups:
         for f in files:

@@ -17,7 +17,11 @@
 
 # Build the language server and replay every recorded session against it.
 #
-#   run.sh <path-to-pascalcc> <path-to-pascalc>
+#   run.sh <path-to-pascalcc> [<path-to-pascalc>]
+#
+# The second is what the server invokes on a document; it defaults to $PASCALC
+# and then to whatever `pascalc` is on PATH, which is how tests/checks/
+# heap_balance.py drives this without being told twice where the compiler is.
 #
 # A session needs its own harness, and the reason is the same one tests/dumps/
 # has: what is compared here is not what a compiled program printed but what a
@@ -43,16 +47,26 @@
 #   sessions/name.note    what it writes to standard error; absent means none
 set -u
 
-if [[ $# -lt 2 ]]; then
-  echo "usage: run.sh <pascalcc> <pascalc>" >&2
+if [[ $# -lt 1 ]]; then
+  echo "usage: run.sh <pascalcc> [<pascalc>]" >&2
   exit 2
 fi
 
 pascalcc=$1
-pascalc=$2
+pascalc=${2:-${PASCALC:-pascalc}}
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+
+# ADR-0183's balance belongs to the *server*, and two other Pascal programs run
+# inside this script: `pascalcc` builds it, and the server then invokes
+# `pascalc` once per document. Both are Pascal programs on the same runtime, so
+# an inherited PASHEAP_BALANCE would have them count their own allocations into
+# the same file -- which is `tests/run_test.sh`'s hazard, met twice over. It is
+# taken out of the environment here, put back only around the server, and
+# stripped again from what the server starts.
+heap_balance="${PASHEAP_BALANCE:-}"
+unset PASHEAP_BALANCE
 
 if ! "$here/build.sh" "$pascalcc" "$work/pasls" >"$work/build.log" 2>&1; then
   echo "--- the language server did not build ---" >&2
@@ -88,8 +102,14 @@ for session in "$here"/sessions/*.jsonl; do
   frame <"$session" >"$work/$name.in"
   # The scratch path is per session and inside the work directory: the default
   # is one fixed name under TMPDIR, which two runs of the suite would share.
-  PASLS_COMPILER="$pascalc" PASLS_SCRATCH="$work/$name.pas" \
-    "$work/pasls" <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note"
+  #
+  # `env -u` rather than a wrapper script, and it works because PASLS_COMPILER
+  # is a *command* and not a path -- the server pastes it in front of the file
+  # name it computed.
+  ( if [[ -n $heap_balance ]]; then export PASHEAP_BALANCE="$heap_balance"; fi
+    PASLS_COMPILER="env -u PASHEAP_BALANCE $pascalc" \
+    PASLS_SCRATCH="$work/$name.pas" \
+      "$work/pasls" <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note" )
   status=$?
   if [[ $status -ne 0 ]]; then
     echo "--- $name: the server exited with status $status ---" >&2

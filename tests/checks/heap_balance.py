@@ -68,6 +68,19 @@ def uses_heap(source):
     return False
 
 
+# The language server, which no directory glob below reaches: it lives in lsp/
+# because a server has to be a binary an editor can be pointed at rather than
+# one compiled into a temporary directory (ADR-0236). It has no `.out` and
+# cannot have one -- what it produces is a protocol conversation -- so
+# run_test.sh cannot drive it and its own harness does. That harness reads the
+# same PASHEAP_BALANCE and takes the same care run_test.sh does, twice over:
+# `pascalcc` builds the server and the server then starts `pascalc` once per
+# document, and both are Pascal programs on this runtime whose allocations are
+# not the server's. Four sessions in four processes append four lines, which
+# `balance` below already sums.
+LSP = ROOT / "lsp" / "pasls.pas"
+
+
 def cases():
     """Every corpus case that runs -- a `.out` and no `.err` -- using the heap."""
     found = []
@@ -79,6 +92,8 @@ def cases():
                 continue
             if uses_heap(source):
                 found.append(source)
+    if LSP.exists() and uses_heap(LSP):
+        found.append(LSP)
     return found
 
 
@@ -94,9 +109,12 @@ def balance(source, pascalcc, work):
     out = work / (name + ".bal")
     env = dict(os.environ)
     env["PASHEAP_BALANCE"] = str(out)
+    if source == LSP:
+        harness = [str(ROOT / "lsp" / "run.sh"), pascalcc]
+    else:
+        harness = [str(ROOT / "tests" / "run_test.sh"), pascalcc, str(source)]
     done = subprocess.run(
-        [str(ROOT / "tests" / "run_test.sh"), pascalcc, str(source)],
-        cwd=ROOT, env=env, capture_output=True, text=True)
+        harness, cwd=ROOT, env=env, capture_output=True, text=True)
     if done.returncode != 0:
         return None, done.stderr.strip().splitlines()[:3]
     if not out.exists():

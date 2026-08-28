@@ -41,6 +41,15 @@ here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+# The optimisation level, so that the corpus-wide -O0 sweep (doc/sop.md 6's A3)
+# reaches this program too. It matters here for the reason ADR-0102 gives: an
+# alloca claimed inside a loop is invisible at -O2, LLVM being free to hoist one
+# whose address does not escape, and a server's whole shape is a loop.
+optflag=()
+if [[ -n ${AFTERSCHOOL_PASCAL_OPT:-} ]]; then
+  optflag=("$AFTERSCHOOL_PASCAL_OPT")
+fi
+
 imports=()
 objects=()
 n=0
@@ -50,10 +59,11 @@ while IFS= read -r rel; do
   # Translated with the components listed *before* it, since 6.13 lets one
   # component import another and the list is in dependency order; its own
   # --import is added after, so a component is never handed its own interface.
-  "$pascalcc" "${imports[@]+"${imports[@]}"}" -c "$here/$rel" -o "$work/c$n.o"
+  "$pascalcc" "${optflag[@]+"${optflag[@]}"}" \
+    "${imports[@]+"${imports[@]}"}" -c "$here/$rel" -o "$work/c$n.o"
   imports+=(--import "$here/$rel")
   objects+=("$work/c$n.o")
 done <"$here/pasls.components"
 
-"$pascalcc" "$here/pasls.pas" \
+"$pascalcc" "${optflag[@]+"${optflag[@]}"}" "$here/pasls.pas" \
   "${imports[@]+"${imports[@]}"}" "${objects[@]+"${objects[@]}"}" -o "$out"

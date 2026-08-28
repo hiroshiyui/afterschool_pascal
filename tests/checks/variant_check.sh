@@ -120,7 +120,8 @@ while IFS= read -r src; do
     grep -hs '^runtime error: variant:' "$work/dump.err" | head -3 >&2
     trapped=$((trapped + 1))
   fi
-done < <(find "$root/tests" "$root/selfhost" "$root/lib" -name '*.pas' | sort)
+done < <(find "$root/tests" "$root/selfhost" "$root/lib" "$root/lsp" \
+              -name '*.pas' | sort)
 
 if (( checked < 500 )); then
   echo "variant-check: only $checked sources were compiled, and the corpus is" \

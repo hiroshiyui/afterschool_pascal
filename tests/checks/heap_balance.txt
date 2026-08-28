@@ -32,6 +32,7 @@ new_threatens_result 5
 new_variants 0
 owned 0
 owned_borrow 0
+pasls 0
 pointer_domain_shadow 2
 pointer_typedisc 0
 pointers 0

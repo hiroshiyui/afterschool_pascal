@@ -6,6 +6,10 @@ Date: 2026-08-29
 
 Accepted, 2026-08-29.
 
+Its last consequence below — that `lsp/` is outside every corpus sweep — was
+closed the same day, and `doc/sop.md` §7 carries what closing it cost. The
+paragraph stands as written, being what was true when the decision was taken.
+
 It supersedes nothing. It is the first increment of the program
 [`doc/roadmap.md`](../roadmap.md) has proposed since before v3 as **the
 caller** — and it is the first program in this tree written to be *used*

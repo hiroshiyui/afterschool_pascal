@@ -3457,6 +3457,17 @@ nothing else. What it would lose, mechanism by mechanism:
   bytes the client sent. A compilation reports few diagnostics, so the cost is
   paid where it does not matter; it would be the wrong shape for a feature that
   reported many.
+- **The corpus sweeps reach it through a second root**, not through the glob.
+  `coverage.py` names `lsp/pasls.pas` as a group, `variant_check.sh` adds
+  `lsp/` to its `find`, and `build.sh` honours `AFTERSCHOOL_PASCAL_OPT` so the
+  corpus-wide `-O0` sweep reaches a program whose whole shape is a loop
+  (ADR-0102). `heap-balance` needed more: the server has no `.out` and cannot
+  have one, so it drives `lsp/run.sh` — and that harness has to take
+  `PASHEAP_BALANCE` out of the environment **twice**, since `pascalcc` builds
+  the server and the server then starts `pascalc` once per document, both being
+  Pascal programs on this runtime whose allocations are not the server's.
+  Without the second, the first measurement read 16 324 outstanding variables
+  instead of 0.
 - **The compile is synchronous**, so a `didChange` arriving mid-compile is
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.
