@@ -140,8 +140,9 @@ jobs:
         # from README.md, with nothing set.
 
   unicode-conformance:
-    # The one oracle in this repository that nobody here wrote, since the BSI
-    # suite went with the conformance modes (ADR-0189, ADR-0232). AP 6.4.15 rests on Normalization
+    # One of the two oracles in this repository that nobody here wrote -- the
+    # only one until ADR-0234, the BSI suite having gone with the conformance
+    # modes (ADR-0189, ADR-0232). AP 6.4.15 rests on Normalization
     # Form C and on where an extended grapheme cluster ends, and neither is
     # something a reading taken in this repository could be trusted to settle --
     # which is ADR-0072's blind spot exactly. Unicode publishes the answers.
@@ -189,6 +190,57 @@ jobs:
           if grep -q 'Skipped' /tmp/unicode.log; then
             echo "the conformance files were skipped, so this job proved" \
                  "nothing" >&2
+            exit 1
+          fi
+
+  fpc-differential:
+    # The other oracle nobody here wrote (ADR-0234), and the only one that is a
+    # *processor* rather than published data. Every program in tests/ otherwise
+    # has exactly one reader.
+    #
+    # A job of its own, and the reason is the row this closes in doc/sop.md 7:
+    # the gate skips without `fpc`, which is right -- `fpc` is not a documented
+    # dependency and must not become one, the whole build needing clang and
+    # nothing else. But a gate that skips everywhere runs nowhere, and every
+    # other skipping oracle here is covered by a job that refuses to skip. This
+    # is that job for this one.
+    #
+    # Free Pascal is not an authority: it implements neither standard
+    # completely and has never heard of this dialect. A disagreement is a
+    # contradiction to be judged against the clause, which is what
+    # tests/checks/fpc_disagreements.txt records for each.
+    name: a second processor answers the corpus
+    runs-on: ubuntu-latest
+    container: 'debian:trixie'
+
+    steps:
+      - name: Install the documented dependencies, and Free Pascal
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates cmake make clang git python3
+          apt-get install -y --no-install-recommends fpc
+
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j"$(nproc)"
+
+      - name: Run it, and refuse to pass by skipping
+        env:
+          FPC_DIFFERENTIAL_REQUIRE: '1'
+        run: |
+          set -o pipefail
+          ctest --test-dir build -R fpc-differential --output-on-failure \
+            2>&1 | tee /tmp/fpc.log
+          # The case skips (77) without `fpc` and ctest calls a skip success,
+          # which is right for a checkout and wrong here -- this job would go
+          # green having compared nothing. The env above makes the script itself
+          # refuse; this is the belt to its braces.
+          if grep -q 'Skipped' /tmp/fpc.log; then
+            echo "fpc was skipped, so this job compared nothing" >&2
             exit 1
           fi
 
