@@ -1,0 +1,16 @@
+what DiagParse makes of a compilation's output:
+  line 12 col 7 ['x' is not declared]
+  line 1 col 1 [a program must have a program-heading]
+  not a diagnostic: not of the expected form
+  not a diagnostic: not of the expected form
+  not a diagnostic: not of the expected form
+  not a diagnostic: not of the expected form
+  not a diagnostic: not of the expected form
+  not a diagnostic: not of the expected form
+  not a diagnostic: not of the expected form
+
+one diagnostic as the protocol writes it:
+  {"range":{"start":{"line":11,"character":6},"end":{"line":11,"character":6}},"severity":1,"source":"pascalc","message":"'x' is not declared"}
+
+and the notification that carries them:
+  {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///tmp/hello.pas","diagnostics":[{"range":{"start":{"line":11,"character":6},"end":{"line":11,"character":6}},"severity":1,"source":"pascalc","message":"'x' is not declared"},{"range":{"start":{"line":2,"character":0},"end":{"line":2,"character":0}},"severity":1,"source":"pascalc","message":"a second one"}]}}

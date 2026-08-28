@@ -1,0 +1,6 @@
+../../lib/dialect/paserror.pas
+../../lib/dialect/pasfs.pas
+../../lib/dialect/pasio.pas
+../../lib/dialect/pascontainer.pas
+../../lib/dialect/pasjson.pas
+../../lib/dialect/paslspdiag.pas

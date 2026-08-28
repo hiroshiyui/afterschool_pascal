@@ -25,6 +25,7 @@ lib_map 0
 lib_process 0
 lib_strvec 0
 lib_vector 0
+lsp_diag 0
 module_examples 0
 new_selectors 0
 new_threatens_result 5
@@ -41,8 +42,8 @@ schema_selfpointer_var 1
 schema_string_heap 0
 sets_records 0
 sweepgaps 0
-typeinquiry_access 0
 take 0
+typeinquiry_access 0
 variant_disc 0
 variant_otherwise 0
 withheap 0
