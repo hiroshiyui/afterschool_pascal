@@ -22,8 +22,10 @@ Generated from `selfhost/compiler.pas` at the commit it was last refreshed,
 by the compiler built from that same source. Its provenance is therefore the
 repository's own history and nothing else — but that is a claim about a chain,
 not something a reader can check by inspection, which is the trusting-trust
-problem in its ordinary form. Tag `v0.1.0` is the last commit where `src/`
-existed and a C++ compiler could reproduce a compiler from source alone.
+problem in its ordinary form. Tag `v0.1.0` is the last commit where a C++
+compiler in this repository could reproduce a compiler from source alone;
+`src/` itself was deleted at version 3 (ADR-0232), and `ddc.sh` takes its copy
+from that tag rather than from the working tree.
 
 ## That chain has been checked once, by diverse double-compiling
 
@@ -64,7 +66,11 @@ starting point would have reported nothing.
 
 **The window closes on its own and nothing will announce it.** The check works
 only while the `v0.1.0` compiler still accepts `selfhost/compiler.pas`, and
-every feature the compiler starts *using* risks ending that. `ddc.sh` says so in
+every feature the compiler starts *using* risks ending that. Version 3 did not
+close it — `--std=extended` is still what the v0.1.0 binary is given, that one
+being a v2 compiler; what changed is that *today's* compiler is handed no flag,
+which is the shape this check has always had (an old implementation reading a
+new source). `ddc.sh` says so in
 as many words when it happens, and reports it as a skip rather than a failure —
 there would be nothing to fix. The dated line above is what survives; the
 ability to repeat it is not guaranteed.
@@ -76,8 +82,8 @@ are not decoration: ADR-0028 records a segfault caused by leaving the datalayout
 unstated, because the compiler's own size and alignment rules have to be the
 ones the assembler uses. A seed carries the target it was generated for.
 
-So **the repository is now x86-64 Linux only** where before it was whatever
-LLVM and a C++ compiler supported. Porting means generating a seed on the new
+So **the repository is x86-64 Linux only** where before it was whatever LLVM
+and a C++ compiler supported. Porting means generating a seed on the new
 target, which needs a working compiler there first — from `v0.1.0`'s C++, or by
 cross-compiling this IR. That cost is stated here rather than discovered.
 
@@ -105,7 +111,7 @@ the compiler, not the runtime.
 
 ## Refreshing it
 
-**At release tags, not per commit.** The file is 7.7 MB and 185,000 lines;
+**At release tags, not per commit.** The file is 10.2 MB and 242,000 lines;
 regenerating it whenever the compiler changes would rewrite all of it on every
 commit that touches `selfhost/compiler.pas`, which is most of them.
 

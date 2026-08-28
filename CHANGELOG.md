@@ -11,7 +11,7 @@ number tracks.
 Entries for a released version are left as they were written, so `pascalc-s0`
 appears below in the release where it still existed.
 
-## [Unreleased]
+## [3.0.0] — 2026-08-28
 
 **Afterschool Pascal is a Pascal dialect, and the conformance modes are gone**
 (ADR-0232). This is the breaking change of version 3 and it is larger than any

@@ -17,7 +17,7 @@
 cmake_minimum_required(VERSION 3.20)
 # C only. The C++ reference front end went with ADR-0232's conformance modes,
 # and with it the last thing here that needed a C++ compiler.
-project(afterschool_pascal VERSION 2.1.0 LANGUAGES C)
+project(afterschool_pascal VERSION 3.0.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 11)
 
@@ -96,12 +96,7 @@ add_custom_command(
 add_custom_command(
   OUTPUT ${APASCAL_PASCALC}
   COMMAND ${CMAKE_COMMAND} -E rm -f ${APASCAL_PASCALC}
-  # `--std=extended` because the *seed* still has the conformance modes:
-  # seed/pascalc.ll was generated before ADR-0232 removed them, and Extended
-  # Pascal is the language selfhost/compiler.pas is written in. The flag goes
-  # when the seed is refreshed, and not before -- it is the one place in this
-  # repository where the removed modes are still real (seed/README.md).
-  COMMAND ${APASCAL_SEED_CC} --std=extended
+  COMMAND ${APASCAL_SEED_CC}
           ${CMAKE_SOURCE_DIR}/selfhost/compiler.pas -o ${CMAKE_BINARY_DIR}/pascalc.ll
   COMMAND ${APASCAL_CLANG} -Wno-override-module ${CMAKE_BINARY_DIR}/pascalc.ll
           $<TARGET_FILE:pasrt> -lm -o ${APASCAL_PASCALC}
