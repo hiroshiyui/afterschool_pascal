@@ -1004,7 +1004,7 @@ L16:
   ret i32 0
 }
 
-; strclear 2244
+; strclear 2246
 define internal void @p2(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1028,7 +1028,7 @@ L3:
   ret void
 }
 
-; strappend 2253
+; strappend 2255
 define internal void @p3(ptr %link, ptr %a0, i8 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1097,7 +1097,7 @@ L3:
   ret void
 }
 
-; put 2269
+; put 2271
 define internal void @p4(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1125,7 +1125,7 @@ L4:
   ret void
 }
 
-; putlit 2276
+; putlit 2278
 define internal void @p5(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1217,7 +1217,7 @@ L14:
   ret void
 }
 
-; putirlit 2288
+; putirlit 2290
 define internal void @p6(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1310,7 +1310,7 @@ L14:
   ret void
 }
 
-; putint 2300
+; putint 2302
 define internal void @p7(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1491,7 +1491,7 @@ L30:
   ret void
 }
 
-; isdigit 2323
+; isdigit 2325
 define internal i1 @p8(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1518,7 +1518,7 @@ L3:
   ret i1 %v13
 }
 
-; isalpha 2328
+; isalpha 2330
 define internal i1 @p9(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1561,7 +1561,7 @@ L5:
   ret i1 %v21
 }
 
-; isalnum 2333
+; isalnum 2335
 define internal i1 @p10(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1588,7 +1588,7 @@ L3:
   ret i1 %v13
 }
 
-; isspace 2339
+; isspace 2341
 define internal i1 @p11(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1625,7 +1625,7 @@ L3:
   ret i1 %v19
 }
 
-; lower 2344
+; lower 2346
 define internal i8 @p12(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1696,7 +1696,7 @@ L6:
   ret i8 %v35
 }
 
-; refill 2362
+; refill 2364
 define internal void @p13(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1970,7 +1970,7 @@ L4:
   ret void
 }
 
-; startfile 2396
+; startfile 2398
 define internal void @p14(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2017,7 +2017,7 @@ L8:
   ret void
 }
 
-; peek 2406
+; peek 2408
 define internal i8 @p15(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2047,7 +2047,7 @@ L3:
   ret i8 %v15
 }
 
-; ateof 2411
+; ateof 2413
 define internal i1 @p16(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2073,7 +2073,7 @@ L3:
   ret i1 %v12
 }
 
-; advance 2416
+; advance 2418
 define internal void @p17(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2236,7 +2236,7 @@ L16:
   ret void
 }
 
-; errorat 2432
+; errorat 2434
 define internal void @p18(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2326,7 +2326,7 @@ L6:
   ret void
 }
 
-; pooladd 2460
+; pooladd 2462
 define internal i32 @p19(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2478,7 +2478,7 @@ L6:
   ret i32 %v81
 }
 
-; writepool 2477
+; writepool 2479
 define internal void @p20(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2551,7 +2551,7 @@ L9:
   ret void
 }
 
-; pooliswide 2490
+; pooliswide 2492
 define internal i1 @p21(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2710,7 +2710,7 @@ L13:
   ret i1 %v80
 }
 
-; poolis 2506
+; poolis 2508
 define internal i1 @p22(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2879,7 +2879,7 @@ L13:
   ret i1 %v89
 }
 
-; poolstarts 2526
+; poolstarts 2528
 define internal i1 @p23(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3048,7 +3048,7 @@ L13:
   ret i1 %v89
 }
 
-; reservedforeignname 2569
+; reservedforeignname 2571
 define internal i1 @p24(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3564,7 +3564,7 @@ L101:
   ret i1 %v269
 }
 
-; poolsame 2622
+; poolsame 2624
 define internal i1 @p25(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3692,7 +3692,7 @@ L4:
   ret i1 %v69
 }
 
-; poolput 2640
+; poolput 2642
 define internal void @p26(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3741,7 +3741,7 @@ L3:
   ret void
 }
 
-; internword 2650
+; internword 2652
 define internal void @p27(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3857,7 +3857,7 @@ L16:
   ret void
 }
 
-; internwide 2662
+; internwide 2664
 define internal void @p28(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3973,7 +3973,7 @@ L16:
   ret void
 }
 
-; internwide2 2676
+; internwide2 2678
 define internal void @p29(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4205,7 +4205,7 @@ L39:
   ret void
 }
 
-; internresultname 2695
+; internresultname 2697
 define internal void @p30(ptr %link, i32 %a0, i32 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4317,7 +4317,7 @@ L16:
   ret void
 }
 
-; internbindingname 2708
+; internbindingname 2710
 define internal void @p31(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4513,7 +4513,7 @@ L31:
   ret void
 }
 
-; interncallresultname 2727
+; interncallresultname 2729
 define internal void @p32(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4708,7 +4708,7 @@ L31:
   ret void
 }
 
-; interntryname 2748
+; interntryname 2750
 define internal void @p33(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4887,7 +4887,7 @@ L29:
   ret void
 }
 
-; internwithname 2764
+; internwithname 2766
 define internal void @p34(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5067,7 +5067,7 @@ L29:
   ret void
 }
 
-; internboundsname 2790
+; internboundsname 2792
 define internal void @p35(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5246,7 +5246,7 @@ L29:
   ret void
 }
 
-; internforname 2806
+; internforname 2808
 define internal void @p36(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5425,7 +5425,7 @@ L29:
   ret void
 }
 
-; addtoken 2824
+; addtoken 2826
 define internal i32 @p37(ptr %link, i32 %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5601,7 +5601,7 @@ L4:
   ret i32 %v100
 }
 
-; addsimple 2844
+; addsimple 2846
 define internal void @p38(ptr %link, i32 %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5626,7 +5626,7 @@ L1:
   ret void
 }
 
-; addtext 2850
+; addtext 2852
 define internal void @p39(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5689,7 +5689,7 @@ L5:
   ret void
 }
 
-; addint 2858
+; addint 2860
 define internal void @p40(ptr %link, i32 %a0, i32 %a1, i32 %a2, i1 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5748,7 +5748,7 @@ L5:
   ret void
 }
 
-; definekeyword 2868
+; definekeyword 2870
 define internal void @p41(ptr %link, i32 %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5795,7 +5795,7 @@ L5:
   ret void
 }
 
-; installkeywords 2874
+; installkeywords 2876
 define internal void @p42(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5850,7 +5850,7 @@ L1:
   ret void
 }
 
-; striswide 2932
+; striswide 2934
 define internal i1 @p43(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5991,7 +5991,7 @@ L13:
   ret i1 %v79
 }
 
-; arg 2959
+; arg 2961
 define internal i1 @p44(ptr %link, i32 %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6417,7 +6417,7 @@ L31:
   ret i1 %v277
 }
 
-; targetindex 3000
+; targetindex 3002
 define internal i32 @p45(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6475,7 +6475,7 @@ L4:
   ret i32 %v30
 }
 
-; targetname 3014
+; targetname 3016
 define internal void @p46(ptr %link, i32 %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6506,7 +6506,7 @@ L5:
   ret void
 }
 
-; version 3022
+; version 3024
 define internal void @p47(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6520,7 +6520,7 @@ L1:
   ret void
 }
 
-; usage 3027
+; usage 3029
 define internal void @p48(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6644,7 +6644,7 @@ L1:
   ret void
 }
 
-; parseargs 3077
+; parseargs 3079
 define internal void @p49(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7422,7 +7422,7 @@ L114:
   ret void
 }
 
-; bindto 3221
+; bindto 3223
 define internal void @p50(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7477,7 +7477,7 @@ L3:
   ret void
 }
 
-; writekwword 3230
+; writekwword 3232
 define internal void @p51(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7594,7 +7594,7 @@ L16:
   ret void
 }
 
-; lookupkeyword 3238
+; lookupkeyword 3240
 define internal i32 @p52(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7823,7 +7823,7 @@ L38:
   ret i32 %v121
 }
 
-; skiptriviaandcomments 3280
+; skiptriviaandcomments 3282
 define internal void @p53(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7964,7 +7964,7 @@ L4:
   ret void
 }
 
-; lexidentorkeyword 3315
+; lexidentorkeyword 3317
 define internal void @p54(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8179,7 +8179,7 @@ L32:
   ret void
 }
 
-; extendeddigit 3379
+; extendeddigit 3381
 define internal i32 @p55(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8307,7 +8307,7 @@ L4:
   ret i32 %v64
 }
 
-; int64toolarge 3416
+; int64toolarge 3418
 define internal i1 @p56(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -8541,7 +8541,7 @@ L17:
   ret i1 %v128
 }
 
-; realtoolarge 3439
+; realtoolarge 3441
 define internal i1 @p57(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -9115,7 +9115,7 @@ L44:
   ret i1 %v324
 }
 
-; lexnumber 3490
+; lexnumber 3492
 define internal void @p58(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -9932,7 +9932,7 @@ L26:
   ret void
 }
 
-; lexstring 3663
+; lexstring 3665
 define internal void @p59(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -10111,7 +10111,7 @@ L27:
   ret void
 }
 
-; lexoperator 3715
+; lexoperator 3717
 define internal void @p60(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -10537,7 +10537,7 @@ L4:
   ret void
 }
 
-; tokenize 3801
+; tokenize 3803
 define internal void @p61(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -10616,7 +10616,7 @@ L4:
   ret void
 }
 
-; writetokenname 3830
+; writetokenname 3832
 define internal void @p62(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -10955,7 +10955,7 @@ L83:
   ret void
 }
 
-; writeoperator 3918
+; writeoperator 3920
 define internal void @p63(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -11082,7 +11082,7 @@ L30:
   ret void
 }
 
-; writekeyword 3947
+; writekeyword 3949
 define internal void @p64(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -11136,7 +11136,7 @@ L5:
   ret void
 }
 
-; writecontext 3955
+; writecontext 3957
 define internal void @p65(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -11465,7 +11465,7 @@ L81:
   ret void
 }
 
-; newnode 4045
+; newnode 4047
 define internal ptr @p66(ptr %link, i32 %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12673,7 +12673,7 @@ L46:
   ret ptr %v533
 }
 
-; append 4172
+; append 4174
 define internal void @p67(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12722,7 +12722,7 @@ L4:
   ret void
 }
 
-; bail 4183
+; bail 4185
 define internal void @p68(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12734,7 +12734,7 @@ L1:
   ret void
 }
 
-; curline 4188
+; curline 4190
 define internal i32 @p69(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12763,7 +12763,7 @@ L3:
   ret i32 %v15
 }
 
-; curcol 4193
+; curcol 4195
 define internal i32 @p70(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12792,7 +12792,7 @@ L3:
   ret i32 %v15
 }
 
-; erroratcur 4198
+; erroratcur 4200
 define internal void @p71(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12805,7 +12805,7 @@ L1:
   ret void
 }
 
-; check 4203
+; check 4205
 define internal i1 @p72(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12839,7 +12839,7 @@ L3:
   ret i1 %v19
 }
 
-; peekkind 4210
+; peekkind 4212
 define internal i32 @p73(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12899,7 +12899,7 @@ L7:
   ret i32 %v34
 }
 
-; accept 4219
+; accept 4221
 define internal i1 @p74(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -12948,7 +12948,7 @@ L6:
   ret i1 %v22
 }
 
-; expect 4229
+; expect 4231
 define internal void @p75(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13024,7 +13024,7 @@ L3:
   ret void
 }
 
-; enterlevel 4251
+; enterlevel 4253
 define internal void @p76(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13077,7 +13077,7 @@ L7:
   ret void
 }
 
-; leavelevels 4262
+; leavelevels 4264
 define internal void @p77(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13105,7 +13105,7 @@ L3:
   ret void
 }
 
-; parsenamelist 4284
+; parsenamelist 4286
 define internal ptr @p88(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13269,7 +13269,7 @@ L4:
   ret ptr %v78
 }
 
-; lookslikesubrange 4319
+; lookslikesubrange 4321
 define internal i1 @p89(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13587,7 +13587,7 @@ L4:
   ret i1 %v157
 }
 
-; lookslikestructuredvalue 4384
+; lookslikestructuredvalue 4386
 define internal i1 @p90(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13874,7 +13874,7 @@ L7:
   ret i1 %v146
 }
 
-; parseenumtype 4417
+; parseenumtype 4419
 define internal ptr @p91(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -13911,7 +13911,7 @@ L3:
   ret ptr %v18
 }
 
-; parsearraytype 4432
+; parsearraytype 4434
 define internal ptr @p92(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -14037,7 +14037,7 @@ L16:
   ret ptr %v61
 }
 
-; parseboundident 4461
+; parseboundident 4463
 define internal ptr @p93(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -14156,7 +14156,7 @@ L4:
   ret ptr %v59
 }
 
-; parseconfarrayschema 4503
+; parseconfarrayschema 4505
 define internal ptr @p94(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -14634,7 +14634,7 @@ L72:
   ret ptr %v217
 }
 
-; parsefieldgroups 4585
+; parsefieldgroups 4587
 define internal ptr @p95(ptr %link, i32 %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -14785,7 +14785,7 @@ L4:
   ret ptr %v68
 }
 
-; parsecaselabel 4640
+; parsecaselabel 4642
 define internal ptr @p96(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -14879,7 +14879,7 @@ L9:
   ret ptr %v46
 }
 
-; parsevariantpartvalue 4660
+; parsevariantpartvalue 4662
 define internal void @p97(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -15018,7 +15018,7 @@ L21:
   ret void
 }
 
-; parsestructuredvalue 4686
+; parsestructuredvalue 4688
 define internal ptr @p87(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -15257,7 +15257,7 @@ L8:
   ret ptr %v111
 }
 
-; parsecomponentvalue 4745
+; parsecomponentvalue 4747
 define internal ptr @p86(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -15292,7 +15292,7 @@ L6:
   ret ptr %v15
 }
 
-; parsevariantpart 4757
+; parsevariantpart 4759
 define internal void @p98(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -15789,7 +15789,7 @@ L54:
   ret void
 }
 
-; parserecordtype 4847
+; parserecordtype 4849
 define internal ptr @p99(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -15950,7 +15950,7 @@ L23:
   ret ptr %v76
 }
 
-; parselabel 4870
+; parselabel 4872
 define internal i32 @p100(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -16057,7 +16057,7 @@ L4:
   ret i32 %v54
 }
 
-; parselabelpart 4896
+; parselabelpart 4898
 define internal void @p101(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -16114,7 +16114,7 @@ L4:
   ret void
 }
 
-; parsetypeexpr 4926
+; parsetypeexpr 4928
 define internal ptr @p80(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -16186,7 +16186,7 @@ L9:
   ret ptr %v33
 }
 
-; parsequalifiedname 4955
+; parsequalifiedname 4957
 define internal void @p102(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -16348,7 +16348,7 @@ L11:
   ret void
 }
 
-; parsepointertypeargs 4982
+; parsepointertypeargs 4984
 define internal void @p103(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -16428,7 +16428,7 @@ L3:
   ret void
 }
 
-; parsetypedenoter 5000
+; parsetypedenoter 5002
 define internal ptr @p81(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -18282,7 +18282,7 @@ L326:
   ret ptr %v899
 }
 
-; emptyargumentlist 5269
+; emptyargumentlist 5271
 define internal i1 @p104(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -18325,7 +18325,7 @@ L4:
   ret i1 %v17
 }
 
-; parseactualparameters 5282
+; parseactualparameters 5284
 define internal void @p105(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -18377,7 +18377,7 @@ L3:
   ret void
 }
 
-; parseselectors 5301
+; parseselectors 5303
 define internal ptr @p82(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -18839,7 +18839,7 @@ L4:
   ret ptr %v239
 }
 
-; aftercall 5391
+; aftercall 5393
 define internal ptr @p106(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -18858,7 +18858,7 @@ L1:
   ret ptr %v9
 }
 
-; parseprimary 5396
+; parseprimary 5398
 define internal ptr @p107(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -20354,7 +20354,7 @@ L3:
   ret ptr %v798
 }
 
-; parsefactor 5583
+; parsefactor 5585
 define internal ptr @p79(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -20484,7 +20484,7 @@ L9:
   ret ptr %v59
 }
 
-; parseterm 5611
+; parseterm 5613
 define internal ptr @p108(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -20672,7 +20672,7 @@ L4:
   ret ptr %v82
 }
 
-; parsesimpleexpr 5642
+; parsesimpleexpr 5644
 define internal ptr @p109(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -20934,7 +20934,7 @@ L20:
   ret ptr %v118
 }
 
-; parseexpr 5689
+; parseexpr 5691
 define internal ptr @p78(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -21103,7 +21103,7 @@ L27:
   ret ptr %v69
 }
 
-; parsecompound 5717
+; parsecompound 5719
 define internal ptr @p110(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -21204,7 +21204,7 @@ L17:
   ret ptr %v45
 }
 
-; parseif 5740
+; parseif 5742
 define internal ptr @p111(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -21313,7 +21313,7 @@ L13:
   ret ptr %v51
 }
 
-; parsewhile 5756
+; parsewhile 5758
 define internal ptr @p112(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -21390,7 +21390,7 @@ L9:
   ret ptr %v37
 }
 
-; parserepeat 5769
+; parserepeat 5771
 define internal ptr @p113(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -21518,7 +21518,7 @@ L21:
   ret ptr %v58
 }
 
-; parsefor 5794
+; parsefor 5796
 define internal ptr @p114(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -21814,7 +21814,7 @@ L46:
   ret ptr %v141
 }
 
-; parsecase 5842
+; parsecase 5844
 define internal ptr @p115(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -22106,7 +22106,7 @@ L45:
   ret ptr %v141
 }
 
-; nestwith 5904
+; nestwith 5906
 define internal ptr @p116(ptr %link, ptr %a0, ptr %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -22209,7 +22209,7 @@ L4:
   ret ptr %v56
 }
 
-; parsewith 5921
+; parsewith 5923
 define internal ptr @p117(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -22362,7 +22362,7 @@ L4:
   ret ptr %v83
 }
 
-; parsewritearg 5955
+; parsewritearg 5957
 define internal ptr @p118(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -22474,7 +22474,7 @@ L11:
   ret ptr %v52
 }
 
-; parsewrite 5984
+; parsewrite 5986
 define internal ptr @p119(ptr %link, i1 %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -22682,7 +22682,7 @@ L31:
   ret ptr %v106
 }
 
-; parseread 6020
+; parseread 6022
 define internal ptr @p120(ptr %link, i1 %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -22861,7 +22861,7 @@ L24:
   ret ptr %v94
 }
 
-; calltakescaret 6052
+; calltakescaret 6054
 define internal i1 @p121(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -23087,7 +23087,7 @@ L7:
   ret i1 %v120
 }
 
-; parseidentstatement 6079
+; parseidentstatement 6081
 define internal ptr @p122(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -24048,7 +24048,7 @@ L69:
   ret ptr %v496
 }
 
-; parsestatement 6212
+; parsestatement 6214
 define internal ptr @p83(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -24307,7 +24307,7 @@ L3:
   ret ptr %v105
 }
 
-; parseconstpart 6284
+; parseconstpart 6286
 define internal void @p123(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -24475,7 +24475,7 @@ L4:
   ret void
 }
 
-; parseformaldiscriminants 6318
+; parseformaldiscriminants 6320
 define internal void @p124(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -24858,7 +24858,7 @@ L4:
   ret void
 }
 
-; parsetypepart 6368
+; parsetypepart 6370
 define internal void @p125(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -25096,7 +25096,7 @@ L4:
   ret void
 }
 
-; parsevarpart 6401
+; parsevarpart 6403
 define internal void @p126(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -25234,7 +25234,7 @@ L4:
   ret void
 }
 
-; parseprocparam 6436
+; parseprocparam 6438
 define internal void @p128(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -25510,7 +25510,7 @@ L43:
   ret void
 }
 
-; parseformalparameters 6475
+; parseformalparameters 6477
 define internal ptr @p127(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -25837,7 +25837,7 @@ L4:
   ret ptr %v146
 }
 
-; parseprocheading 6554
+; parseprocheading 6556
 define internal ptr @p129(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -26335,7 +26335,7 @@ L78:
   ret ptr %v237
 }
 
-; parseprocorfunc 6625
+; parseprocorfunc 6627
 define internal ptr @p130(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -26629,7 +26629,7 @@ L12:
   ret ptr %v153
 }
 
-; parseprocheadingonly 6680
+; parseprocheadingonly 6682
 define internal ptr @p131(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -26665,7 +26665,7 @@ L3:
   ret ptr %v18
 }
 
-; parseblock 6693
+; parseblock 6695
 define internal ptr @p84(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -27047,7 +27047,7 @@ L68:
   ret ptr %v170
 }
 
-; parseimportpart 6779
+; parseimportpart 6781
 define internal ptr @p85(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -27613,7 +27613,7 @@ L3:
   ret ptr %v276
 }
 
-; parseexportpart 6863
+; parseexportpart 6865
 define internal void @p132(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -28581,7 +28581,7 @@ L4:
   ret void
 }
 
-; parsemoduleparts 6967
+; parsemoduleparts 6969
 define internal ptr @p133(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -28817,7 +28817,7 @@ L41:
   ret ptr %v107
 }
 
-; parsemoduleblock 7008
+; parsemoduleblock 7010
 define internal void @p134(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -29011,7 +29011,7 @@ L35:
   ret void
 }
 
-; parsemodule 7038
+; parsemodule 7040
 define internal ptr @p135(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -29723,7 +29723,7 @@ L79:
   ret ptr %v349
 }
 
-; parsemainprogram 7136
+; parsemainprogram 7138
 define internal void @p136(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -29935,7 +29935,7 @@ L14:
   ret void
 }
 
-; parseprogram 7187
+; parseprogram 7189
 define internal void @p137(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30099,7 +30099,7 @@ L31:
   ret void
 }
 
-; newtype 7251
+; newtype 7253
 define internal ptr @p138(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30510,7 +30510,7 @@ L77:
   ret ptr %v172
 }
 
-; base 7300
+; base 7302
 define internal ptr @p139(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30581,7 +30581,7 @@ L12:
   ret ptr %v31
 }
 
-; isinteger 7315
+; isinteger 7317
 define internal i1 @p140(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30621,7 +30621,7 @@ L3:
   ret i1 %v20
 }
 
-; isreal 7322
+; isreal 7324
 define internal i1 @p141(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30656,7 +30656,7 @@ L3:
   ret i1 %v16
 }
 
-; isint64 7328
+; isint64 7330
 define internal i1 @p142(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30691,7 +30691,7 @@ L3:
   ret i1 %v16
 }
 
-; iscomplex 7331
+; iscomplex 7333
 define internal i1 @p143(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30726,7 +30726,7 @@ L3:
   ret i1 %v16
 }
 
-; isvarstring 7336
+; isvarstring 7338
 define internal i1 @p144(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30761,7 +30761,7 @@ L3:
   ret i1 %v16
 }
 
-; istext 7341
+; istext 7343
 define internal i1 @p145(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30796,7 +30796,7 @@ L3:
   ret i1 %v16
 }
 
-; isstringrep 7355
+; isstringrep 7357
 define internal i1 @p146(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30847,7 +30847,7 @@ L3:
   ret i1 %v23
 }
 
-; isoptional 7361
+; isoptional 7363
 define internal i1 @p147(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30882,7 +30882,7 @@ L3:
   ret i1 %v16
 }
 
-; isfallible 7368
+; isfallible 7370
 define internal i1 @p148(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30932,7 +30932,7 @@ L7:
   ret i1 %v22
 }
 
-; isslice 7374
+; isslice 7376
 define internal i1 @p149(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -30967,7 +30967,7 @@ L3:
   ret i1 %v16
 }
 
-; sliceof 7382
+; sliceof 7384
 define internal ptr @p150(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31010,7 +31010,7 @@ L5:
   ret ptr %v20
 }
 
-; isnumeric 7391
+; isnumeric 7393
 define internal i1 @p151(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31045,7 +31045,7 @@ L5:
   ret i1 %v17
 }
 
-; isarith 7398
+; isarith 7400
 define internal i1 @p152(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31072,7 +31072,7 @@ L3:
   ret i1 %v13
 }
 
-; isboolean 7401
+; isboolean 7403
 define internal i1 @p153(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31112,7 +31112,7 @@ L3:
   ret i1 %v20
 }
 
-; ischar 7408
+; ischar 7410
 define internal i1 @p154(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31152,7 +31152,7 @@ L3:
   ret i1 %v20
 }
 
-; isenum 7415
+; isenum 7417
 define internal i1 @p155(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31192,7 +31192,7 @@ L3:
   ret i1 %v20
 }
 
-; isarray 7422
+; isarray 7424
 define internal i1 @p156(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31227,7 +31227,7 @@ L3:
   ret i1 %v16
 }
 
-; isrecord 7425
+; isrecord 7427
 define internal i1 @p157(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31262,7 +31262,7 @@ L3:
   ret i1 %v16
 }
 
-; ispointer 7428
+; ispointer 7430
 define internal i1 @p158(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31297,7 +31297,7 @@ L3:
   ret i1 %v16
 }
 
-; isfile 7431
+; isfile 7433
 define internal i1 @p159(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31332,7 +31332,7 @@ L3:
   ret i1 %v16
 }
 
-; ishandle 7438
+; ishandle 7440
 define internal i1 @p160(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31367,7 +31367,7 @@ L3:
   ret i1 %v16
 }
 
-; isowned 7447
+; isowned 7449
 define internal i1 @p161(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31394,7 +31394,7 @@ L3:
   ret i1 %v13
 }
 
-; isownedpointer 7452
+; isownedpointer 7454
 define internal i1 @p162(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31428,7 +31428,7 @@ L3:
   ret i1 %v15
 }
 
-; isaffine 7460
+; isaffine 7462
 define internal i1 @p163(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31455,7 +31455,7 @@ L3:
   ret i1 %v13
 }
 
-; istextfile 7464
+; istextfile 7466
 define internal i1 @p164(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31489,7 +31489,7 @@ L3:
   ret i1 %v15
 }
 
-; isnil 7468
+; isnil 7470
 define internal i1 @p165(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31524,7 +31524,7 @@ L3:
   ret i1 %v16
 }
 
-; isset 7471
+; isset 7473
 define internal i1 @p166(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31559,7 +31559,7 @@ L3:
   ret i1 %v16
 }
 
-; isproctype 7475
+; isproctype 7477
 define internal i1 @p167(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31594,7 +31594,7 @@ L3:
   ret i1 %v16
 }
 
-; isemptyset 7480
+; isemptyset 7482
 define internal i1 @p168(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31629,7 +31629,7 @@ L3:
   ret i1 %v16
 }
 
-; isrestricted 7489
+; isrestricted 7491
 define internal i1 @p169(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31664,7 +31664,7 @@ L3:
   ret i1 %v16
 }
 
-; underlying 7494
+; underlying 7496
 define internal ptr @p170(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31703,7 +31703,7 @@ L4:
   ret ptr %v17
 }
 
-; isstructured 7505
+; isstructured 7507
 define internal i1 @p171(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31792,7 +31792,7 @@ L4:
   ret i1 %v41
 }
 
-; ismemory 7513
+; ismemory 7515
 define internal i1 @p172(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -31873,7 +31873,7 @@ L4:
   ret i1 %v38
 }
 
-; protectable 7525
+; protectable 7527
 define internal i1 @p173(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32014,7 +32014,7 @@ L4:
   ret i1 %v61
 }
 
-; isordinal 7547
+; isordinal 7549
 define internal i1 @p174(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32085,7 +32085,7 @@ L4:
   ret i1 %v35
 }
 
-; ischararray 7580
+; ischararray 7582
 define internal i1 @p175(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32217,7 +32217,7 @@ L17:
   ret i1 %v60
 }
 
-; isstringtype 7594
+; isstringtype 7596
 define internal i1 @p176(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32244,7 +32244,7 @@ L3:
   ret i1 %v13
 }
 
-; isstringorchar 7600
+; isstringorchar 7602
 define internal i1 @p177(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32271,7 +32271,7 @@ L3:
   ret i1 %v13
 }
 
-; stringvalueformal 7626
+; stringvalueformal 7628
 define internal i1 @p178(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32332,7 +32332,7 @@ L9:
   ret i1 %v28
 }
 
-; foreignstringformal 7638
+; foreignstringformal 7640
 define internal i1 @p179(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32391,7 +32391,7 @@ L9:
   ret i1 %v26
 }
 
-; enumcount 7644
+; enumcount 7646
 define internal i32 @p180(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32458,7 +32458,7 @@ L6:
   ret i32 %v32
 }
 
-; ordinallo 7658
+; ordinallo 7660
 define internal i32 @p181(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32523,7 +32523,7 @@ L6:
   ret i32 %v26
 }
 
-; ordinalhi 7665
+; ordinalhi 7667
 define internal i32 @p182(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32657,7 +32657,7 @@ L6:
   ret i32 %v54
 }
 
-; typelength 7675
+; typelength 7677
 define internal i32 @p183(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32713,7 +32713,7 @@ L9:
   ret i32 %v26
 }
 
-; padstofixedstring 7697
+; padstofixedstring 7699
 define internal i1 @p184(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32843,7 +32843,7 @@ L17:
   ret i1 %v63
 }
 
-; armatin 7710
+; armatin 7712
 define internal ptr @p185(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -32898,7 +32898,7 @@ L4:
   ret ptr %v26
 }
 
-; findfieldin 7719
+; findfieldin 7721
 define internal ptr @p186(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33049,7 +33049,7 @@ L4:
   ret ptr %v75
 }
 
-; findfield 7735
+; findfield 7737
 define internal ptr @p187(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33171,7 +33171,7 @@ L18:
   ret ptr %v62
 }
 
-; armat 7750
+; armat 7752
 define internal ptr @p188(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33298,7 +33298,7 @@ L6:
   ret ptr %v59
 }
 
-; armsat 7772
+; armsat 7774
 define internal ptr @p189(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33354,7 +33354,7 @@ L4:
   ret ptr %v27
 }
 
-; fieldsat 7783
+; fieldsat 7785
 define internal ptr @p190(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33410,7 +33410,7 @@ L4:
   ret ptr %v27
 }
 
-; tagfieldat 7797
+; tagfieldat 7799
 define internal i32 @p191(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33466,7 +33466,7 @@ L4:
   ret i32 %v27
 }
 
-; tagtypeat 7808
+; tagtypeat 7810
 define internal ptr @p192(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33522,7 +33522,7 @@ L4:
   ret ptr %v27
 }
 
-; writeordinalname 7825
+; writeordinalname 7827
 define internal void @p194(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33769,7 +33769,7 @@ L7:
   ret void
 }
 
-; writeboundname 7871
+; writeboundname 7873
 define internal void @p195(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -33820,7 +33820,7 @@ L4:
   ret void
 }
 
-; writetypename 7877
+; writetypename 7879
 define internal void @p193(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -34621,7 +34621,7 @@ L4:
   ret void
 }
 
-; writedistincttypenote 8072
+; writedistincttypenote 8075
 define internal void @p196(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -34808,7 +34808,7 @@ L7:
   ret void
 }
 
-; newsymbol 8107
+; newsymbol 8110
 define internal ptr @p197(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -35718,7 +35718,7 @@ L179:
   ret ptr %v367
 }
 
-; appendsym 8202
+; appendsym 8205
 define internal void @p198(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -35792,7 +35792,7 @@ L8:
   ret void
 }
 
-; bind 8212
+; bind 8215
 define internal void @p199(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -35875,7 +35875,7 @@ L11:
   ret void
 }
 
-; lookupraw 8227
+; lookupraw 8230
 define internal ptr @p200(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -35971,7 +35971,7 @@ L4:
   ret ptr %v47
 }
 
-; lookup 8250
+; lookup 8253
 define internal ptr @p201(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36031,7 +36031,7 @@ L3:
   ret ptr %v32
 }
 
-; lookupuser 8266
+; lookupuser 8269
 define internal ptr @p202(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36082,7 +36082,7 @@ L3:
   ret ptr %v25
 }
 
-; lookupinscope 8275
+; lookupinscope 8278
 define internal ptr @p203(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36196,7 +36196,7 @@ L4:
   ret ptr %v56
 }
 
-; declare 8287
+; declare 8290
 define internal ptr @p204(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36363,7 +36363,7 @@ L4:
   ret ptr %v95
 }
 
-; addframevar 8335
+; addframevar 8338
 define internal ptr @p205(ptr %link, i32 %a0, i32 %a1, i32 %a2, ptr %a3, ptr %a4, i32 %a5, i32 %a6) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36536,7 +36536,7 @@ L5:
   ret ptr %v86
 }
 
-; addhiddenvar 8354
+; addhiddenvar 8357
 define internal ptr @p206(ptr %link, i32 %a0, i32 %a1, i32 %a2, ptr %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36716,7 +36716,7 @@ L29:
   ret ptr %v86
 }
 
-; isvariable 8377
+; isvariable 8380
 define internal i1 @p207(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36783,7 +36783,7 @@ L3:
   ret i1 %v30
 }
 
-; isinvocable 8384
+; isinvocable 8387
 define internal i1 @p208(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36850,7 +36850,7 @@ L3:
   ret i1 %v30
 }
 
-; resulttypeof 8394
+; resulttypeof 8397
 define internal ptr @p209(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -36962,7 +36962,7 @@ L4:
   ret ptr %v44
 }
 
-; equivalentconf 8422
+; equivalentconf 8425
 define internal i1 @p210(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -37214,7 +37214,7 @@ L33:
   ret i1 %v112
 }
 
-; congruous 8445
+; congruous 8448
 define internal i1 @p211(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -37829,7 +37829,7 @@ L4:
   ret i1 %v265
 }
 
-; assignable 8533
+; assignable 8536
 define internal i1 @p214(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -38563,7 +38563,7 @@ L6:
   ret i1 %v352
 }
 
-; isconstantaccess 8752
+; isconstantaccess 8755
 define internal i1 @p215(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -38946,7 +38946,7 @@ L4:
   ret i1 %v171
 }
 
-; ismemoryconstant 8773
+; ismemoryconstant 8776
 define internal i1 @p216(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -38992,7 +38992,7 @@ L4:
   ret i1 %v20
 }
 
-; iscallvalue 8792
+; iscallvalue 8795
 define internal i1 @p217(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -39130,7 +39130,7 @@ L4:
   ret i1 %v59
 }
 
-; checkhandlebirth 8820
+; checkhandlebirth 8823
 define internal void @p218(ptr %link, ptr %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -39183,7 +39183,7 @@ L5:
   ret void
 }
 
-; calledsym 8832
+; calledsym 8835
 define internal ptr @p219(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -39334,7 +39334,7 @@ L3:
   ret ptr %v67
 }
 
-; isdesignator 8841
+; isdesignator 8844
 define internal i1 @p220(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -39743,7 +39743,7 @@ L4:
   ret i1 %v180
 }
 
-; designatorbindable 8902
+; designatorbindable 8905
 define internal i1 @p221(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -40154,7 +40154,7 @@ L3:
   ret i1 %v176
 }
 
-; rootdesignator 8935
+; rootdesignator 8938
 define internal ptr @p222(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -40334,7 +40334,7 @@ L4:
   ret ptr %v80
 }
 
-; notbindable 8953
+; notbindable 8956
 define internal void @p223(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -40880,7 +40880,7 @@ L116:
   ret void
 }
 
-; variantselector 9011
+; variantselector 9014
 define internal i1 @p224(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -41187,7 +41187,7 @@ L60:
   ret i1 %v143
 }
 
-; containerof 9037
+; containerof 9040
 define internal ptr @p225(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -41457,7 +41457,7 @@ L3:
   ret ptr %v120
 }
 
-; stringcomponent 9055
+; stringcomponent 9058
 define internal i1 @p226(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -41477,7 +41477,7 @@ L1:
   ret i1 %v10
 }
 
-; packedcomponent 9060
+; packedcomponent 9063
 define internal i1 @p227(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -41763,7 +41763,7 @@ L61:
   ret i1 %v127
 }
 
-; activecontrol 9088
+; activecontrol 9091
 define internal i1 @p228(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -41835,7 +41835,7 @@ L4:
   ret i1 %v34
 }
 
-; nestedin 9104
+; nestedin 9107
 define internal i1 @p229(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -41925,7 +41925,7 @@ L4:
   ret i1 %v45
 }
 
-; threatsym 9121
+; threatsym 9124
 define internal ptr @p230(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -42037,7 +42037,7 @@ L3:
   ret ptr %v54
 }
 
-; recordthreat 9138
+; recordthreat 9141
 define internal void @p231(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -42194,7 +42194,7 @@ L7:
   ret void
 }
 
-; threatened 9162
+; threatened 9165
 define internal i1 @p232(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -42710,7 +42710,7 @@ L58:
   ret i1 %v229
 }
 
-; lookupwithfield 9227
+; lookupwithfield 9230
 define internal ptr @p233(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -42816,7 +42816,7 @@ L4:
   ret ptr %v54
 }
 
-; typeargument 9257
+; typeargument 9260
 define internal ptr @p238(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -42957,7 +42957,7 @@ L3:
   ret ptr %v64
 }
 
-; pushstmt 9304
+; pushstmt 9307
 define internal ptr @p252(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -43090,7 +43090,7 @@ L16:
   ret ptr %v61
 }
 
-; pushseq 9317
+; pushseq 9320
 define internal ptr @p253(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -43127,7 +43127,7 @@ L3:
   ret ptr %v19
 }
 
-; pathdepth 9325
+; pathdepth 9328
 define internal i32 @p254(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -43164,7 +43164,7 @@ L4:
   ret i32 %v15
 }
 
-; constordinal 9345
+; constordinal 9348
 define internal i32 @p261(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -43227,7 +43227,7 @@ L4:
   ret i32 %v32
 }
 
-; foldintop 9358
+; foldintop 9361
 define internal i1 @p262(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4, ptr %a5) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -43608,7 +43608,7 @@ L69:
   ret i1 %v189
 }
 
-; evalconstvalue 9428
+; evalconstvalue 9431
 define internal i1 @p263(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -43678,7 +43678,7 @@ L8:
   ret i1 %v35
 }
 
-; evalconst 9440
+; evalconst 9443
 define internal i1 @p255(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44365,7 +44365,7 @@ L3:
   ret i1 %v355
 }
 
-; isstringcompare 9578
+; isstringcompare 9581
 define internal i1 @p264(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44424,7 +44424,7 @@ L11:
   ret i1 %v29
 }
 
-; conststrlen 9590
+; conststrlen 9593
 define internal i32 @p265(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44507,7 +44507,7 @@ L4:
   ret i32 %v37
 }
 
-; conststrat 9598
+; conststrat 9601
 define internal i8 @p266(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44595,7 +44595,7 @@ L4:
   ret i8 %v45
 }
 
-; makeconststr 9617
+; makeconststr 9620
 define internal void @p267(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44675,7 +44675,7 @@ L7:
   ret void
 }
 
-; conststrcmpn 9636
+; conststrcmpn 9639
 define internal i32 @p268(ptr %link, ptr %a0, i32 %a1, ptr %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44818,7 +44818,7 @@ L7:
   ret i32 %v76
 }
 
-; conststreq 9666
+; conststreq 9669
 define internal i1 @p269(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44854,7 +44854,7 @@ L3:
   ret i1 %v21
 }
 
-; conststrlt 9672
+; conststrlt 9675
 define internal i1 @p270(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -44909,7 +44909,7 @@ L4:
   ret i1 %v35
 }
 
-; foldsubstr 9697
+; foldsubstr 9700
 define internal void @p271(ptr %link, ptr %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4, ptr %a5, ptr %a6) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -45126,7 +45126,7 @@ L12:
   ret void
 }
 
-; constrealval 9734
+; constrealval 9737
 define internal double @p272(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -45259,7 +45259,7 @@ L4:
   ret double %v75
 }
 
-; constrealfinite 9759
+; constrealfinite 9762
 define internal i1 @p273(ptr %link, double %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -45298,7 +45298,7 @@ L4:
   ret i1 %v17
 }
 
-; makeconstreal 9775
+; makeconstreal 9778
 define internal void @p274(ptr %link, double %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -45531,7 +45531,7 @@ L33:
   ret void
 }
 
-; finishreal 9802
+; finishreal 9805
 define internal i1 @p275(ptr %link, double %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -45593,7 +45593,7 @@ L4:
   ret i1 %v28
 }
 
-; foldrealbinary 9832
+; foldrealbinary 9835
 define internal i1 @p276(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -46024,7 +46024,7 @@ L5:
   ret i1 %v223
 }
 
-; evalconstbinary 9930
+; evalconstbinary 9933
 define internal i1 @p256(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -47157,7 +47157,7 @@ L13:
   ret i1 %v600
 }
 
-; evalconstcall 10070
+; evalconstcall 10073
 define internal i1 @p257(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -49971,7 +49971,7 @@ L7:
   ret i1 %v1451
 }
 
-; arraycomponentof 10431
+; arraycomponentof 10434
 define internal ptr @p277(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -50215,7 +50215,7 @@ L49:
   ret ptr %v114
 }
 
-; recordcomponentof 10458
+; recordcomponentof 10461
 define internal ptr @p278(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -50530,7 +50530,7 @@ L4:
   ret ptr %v149
 }
 
-; constaccessnode 10495
+; constaccessnode 10498
 define internal ptr @p258(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -51283,7 +51283,7 @@ L3:
   ret ptr %v342
 }
 
-; evalconstaccess 10568
+; evalconstaccess 10571
 define internal i1 @p259(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -52018,7 +52018,7 @@ L4:
   ret i1 %v372
 }
 
-; evalordinal 10648
+; evalordinal 10651
 define internal i1 @p279(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -52127,7 +52127,7 @@ L4:
   ret i1 %v57
 }
 
-; dynbounddisc 10687
+; dynbounddisc 10690
 define internal ptr @p280(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -52343,7 +52343,7 @@ L38:
   ret ptr %v101
 }
 
-; evalbound 10722
+; evalbound 10725
 define internal i1 @p281(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -52585,7 +52585,7 @@ L4:
   ret i1 %v115
 }
 
-; writelabelwhat 10763
+; writelabelwhat 10766
 define internal void @p282(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -52620,7 +52620,7 @@ L7:
   ret void
 }
 
-; evallabelrange 10773
+; evallabelrange 10776
 define internal i1 @p283(ptr %link, ptr %a0, i32 %a1, ptr %a2, ptr %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -53090,7 +53090,7 @@ L8:
   ret i1 %v234
 }
 
-; overlaps 10831
+; overlaps 10834
 define internal i1 @p284(ptr %link, ptr %a0, i32 %a1, i32 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -53219,7 +53219,7 @@ L4:
   ret i1 %v62
 }
 
-; stringtype 10847
+; stringtype 10850
 define internal ptr @p285(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -53349,7 +53349,7 @@ L6:
   ret ptr %v66
 }
 
-; resolveenum 10867
+; resolveenum 10870
 define internal ptr @p286(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -53650,7 +53650,7 @@ L8:
   ret ptr %v142
 }
 
-; heapfromschema 10913
+; heapfromschema 10916
 define internal ptr @p287(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54053,7 +54053,7 @@ L13:
   ret ptr %v194
 }
 
-; pendpointer 10966
+; pendpointer 10969
 define internal void @p288(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54235,7 +54235,7 @@ L30:
   ret void
 }
 
-; groupfieldname 10990
+; groupfieldname 10993
 define internal i1 @p290(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54390,7 +54390,7 @@ L4:
   ret i1 %v74
 }
 
-; variantfieldname 11005
+; variantfieldname 11008
 define internal i1 @p289(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54582,7 +54582,7 @@ L4:
   ret i1 %v94
 }
 
-; fieldnameindenoter 11019
+; fieldnameindenoter 11022
 define internal i1 @p291(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54745,7 +54745,7 @@ L23:
   ret i1 %v86
 }
 
-; fieldofopenrecord 11045
+; fieldofopenrecord 11048
 define internal i1 @p292(ptr %link, i32 %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54822,7 +54822,7 @@ L3:
   ret i1 %v37
 }
 
-; errorfieldnota 11063
+; errorfieldnota 11066
 define internal void @p293(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, i1 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54870,7 +54870,7 @@ L4:
   ret void
 }
 
-; errorfieldnotatype 11073
+; errorfieldnotatype 11076
 define internal void @p294(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54897,7 +54897,7 @@ L1:
   ret void
 }
 
-; errorownedschema 11085
+; errorownedschema 11088
 define internal void @p295(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -54931,7 +54931,7 @@ L1:
   ret void
 }
 
-; resolvepointer 11094
+; resolvepointer 11097
 define internal ptr @p296(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -55708,7 +55708,7 @@ L22:
   ret ptr %v372
 }
 
-; resolvependingpointers 11176
+; resolvependingpointers 11179
 define internal void @p297(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -56177,7 +56177,7 @@ L4:
   ret void
 }
 
-; resolveset 11227
+; resolveset 11230
 define internal ptr @p298(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -56410,7 +56410,7 @@ L37:
   ret ptr %v117
 }
 
-; ishandlecloser 11267
+; ishandlecloser 11270
 define internal i1 @p299(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -56496,7 +56496,7 @@ L4:
   ret i1 %v42
 }
 
-; notehandlecloser 11279
+; notehandlecloser 11282
 define internal void @p300(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -56563,7 +56563,7 @@ L3:
   ret void
 }
 
-; resolvehandle 11298
+; resolvehandle 11301
 define internal ptr @p301(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -56852,7 +56852,7 @@ L20:
   ret ptr %v134
 }
 
-; resolveoptional 11320
+; resolveoptional 11323
 define internal ptr @p302(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57036,7 +57036,7 @@ L30:
   ret ptr %v86
 }
 
-; armscontainfile 11364
+; armscontainfile 11367
 define internal i1 @p303(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57167,7 +57167,7 @@ L4:
   ret i1 %v58
 }
 
-; containsownedpointer 11388
+; containsownedpointer 11391
 define internal i1 @p304(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57292,7 +57292,7 @@ L3:
   ret i1 %v55
 }
 
-; writenocopyreason 11409
+; writenocopyreason 11412
 define internal void @p305(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57320,7 +57320,7 @@ L4:
   ret void
 }
 
-; containsfile 11418
+; containsfile 11421
 define internal i1 @p213(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57465,7 +57465,7 @@ L3:
   ret i1 %v65
 }
 
-; armscontainrestricted 11462
+; armscontainrestricted 11465
 define internal i1 @p308(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57596,7 +57596,7 @@ L4:
   ret i1 %v58
 }
 
-; containsrestricted 11479
+; containsrestricted 11482
 define internal i1 @p306(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -57763,7 +57763,7 @@ L3:
   ret i1 %v75
 }
 
-; resolvefile 11510
+; resolvefile 11513
 define internal ptr @p310(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -58140,7 +58140,7 @@ L45:
   ret ptr %v178
 }
 
-; resolvesubrange 11555
+; resolvesubrange 11558
 define internal ptr @p311(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -58802,7 +58802,7 @@ L6:
   ret ptr %v330
 }
 
-; resolveslice 11683
+; resolveslice 11686
 define internal ptr @p312(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -58949,7 +58949,7 @@ L24:
   ret ptr %v70
 }
 
-; resolvearray 11704
+; resolvearray 11707
 define internal ptr @p313(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -59342,7 +59342,7 @@ L55:
   ret ptr %v191
 }
 
-; addfield 11763
+; addfield 11766
 define internal void @p314(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, ptr %a4, ptr %a5, i32 %a6, ptr %a7, i1 %a8) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -59793,7 +59793,7 @@ L32:
   ret void
 }
 
-; fieldcount 11809
+; fieldcount 11812
 define internal i32 @p315(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -59848,7 +59848,7 @@ L4:
   ret i32 %v26
 }
 
-; pathappend 11822
+; pathappend 11825
 define internal ptr @p316(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -60009,7 +60009,7 @@ L24:
   ret ptr %v77
 }
 
-; discselectorfor 11848
+; discselectorfor 11851
 define internal ptr @p317(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -60109,7 +60109,7 @@ L5:
   ret ptr %v46
 }
 
-; resolvevariantpart 11862
+; resolvevariantpart 11865
 define internal void @p318(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, ptr %a4, ptr %a5, ptr %a6, ptr %a7, ptr %a8, ptr %a9, ptr %a10, ptr %a11, ptr %a12, ptr %a13, ptr %a14) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -61935,7 +61935,7 @@ L11:
   ret void
 }
 
-; resolvefallible 12191
+; resolvefallible 12194
 define internal ptr @p319(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -62168,7 +62168,7 @@ L39:
   ret ptr %v115
 }
 
-; arm 12196
+; arm 12199
 define internal void @p695(ptr %link, i32 %a0, i32 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -62534,7 +62534,7 @@ L62:
   ret void
 }
 
-; tag 12229
+; tag 12232
 define internal void @p696(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -62654,7 +62654,7 @@ L17:
   ret void
 }
 
-; resolverecord 12284
+; resolverecord 12287
 define internal ptr @p320(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -63150,7 +63150,7 @@ L93:
   ret ptr %v245
 }
 
-; copytype 12327
+; copytype 12330
 define internal ptr @p321(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -63621,7 +63621,7 @@ L91:
   ret ptr %v213
 }
 
-; forgetlist 12359
+; forgetlist 12362
 define internal void @p323(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -63657,7 +63657,7 @@ L4:
   ret void
 }
 
-; forgetresolved 12373
+; forgetresolved 12376
 define internal void @p322(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -64071,7 +64071,7 @@ L3:
   ret void
 }
 
-; forgetarms 12435
+; forgetarms 12438
 define internal void @p324(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -64210,7 +64210,7 @@ L4:
   ret void
 }
 
-; isowndiscriminant 12474
+; isowndiscriminant 12477
 define internal i1 @p326(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -64329,7 +64329,7 @@ L3:
   ret i1 %v55
 }
 
-; checkschemabodynames 12488
+; checkschemabodynames 12491
 define internal void @p327(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -65026,7 +65026,7 @@ L3:
   ret void
 }
 
-; checkschemaarms 12562
+; checkschemaarms 12565
 define internal void @p325(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -65173,7 +65173,7 @@ L4:
   ret void
 }
 
-; declareschema 12582
+; declareschema 12585
 define internal void @p328(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -66158,7 +66158,7 @@ L17:
   ret void
 }
 
-; sametuple 12663
+; sametuple 12666
 define internal i1 @p329(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -66276,7 +66276,7 @@ L4:
   ret i1 %v52
 }
 
-; stringofcapacity 12687
+; stringofcapacity 12690
 define internal ptr @p330(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -66516,7 +66516,7 @@ L24:
   ret ptr %v119
 }
 
-; textofcapacity 12725
+; textofcapacity 12728
 define internal ptr @p331(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -66756,7 +66756,7 @@ L24:
   ret ptr %v119
 }
 
-; appendnum 12755
+; appendnum 12758
 define internal void @p332(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -66830,7 +66830,7 @@ L8:
   ret void
 }
 
-; boundschema 12782
+; boundschema 12785
 define internal ptr @p240(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -67627,7 +67627,7 @@ L54:
   ret ptr %v372
 }
 
-; bindboundtypes 12891
+; bindboundtypes 12894
 define internal void @p333(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -67719,7 +67719,7 @@ L6:
   ret void
 }
 
-; schemaisbusy 12901
+; schemaisbusy 12904
 define internal i1 @p334(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -67783,7 +67783,7 @@ L4:
   ret i1 %v30
 }
 
-; producefromschema 12916
+; producefromschema 12919
 define internal ptr @p241(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -70200,7 +70200,7 @@ L24:
   ret ptr %v1150
 }
 
-; staticvariants 13247
+; staticvariants 13250
 define internal i1 @p336(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -70310,7 +70310,7 @@ L4:
   ret i1 %v49
 }
 
-; staticthroughout 13266
+; staticthroughout 13269
 define internal i1 @p335(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -70546,7 +70546,7 @@ L4:
   ret i1 %v100
 }
 
-; lastfield 13315
+; lastfield 13318
 define internal ptr @p337(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -70587,7 +70587,7 @@ L4:
   ret ptr %v18
 }
 
-; dynamicextent 13330
+; dynamicextent 13333
 define internal i1 @p309(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -70752,7 +70752,7 @@ L4:
   ret i1 %v68
 }
 
-; dynamictail 13361
+; dynamictail 13364
 define internal i1 @p338(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -70953,7 +70953,7 @@ L4:
   ret i1 %v90
 }
 
-; isgeneric 13387
+; isgeneric 13390
 define internal i1 @p212(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -71004,7 +71004,7 @@ L7:
   ret i1 %v23
 }
 
-; schemahastypedisc 13412
+; schemahastypedisc 13415
 define internal i1 @p339(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -71090,7 +71090,7 @@ L6:
   ret i1 %v38
 }
 
-; genericfromschema 13424
+; genericfromschema 13427
 define internal ptr @p242(ptr %link, ptr %a0, ptr %a1, ptr %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -72211,7 +72211,7 @@ L6:
   ret ptr %v527
 }
 
-; resolverestricted 13608
+; resolverestricted 13611
 define internal ptr @p340(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -72740,7 +72740,7 @@ L67:
   ret ptr %v249
 }
 
-; parameterof 13684
+; parameterof 13687
 define internal i1 @p341(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -72822,7 +72822,7 @@ L6:
   ret i1 %v38
 }
 
-; otherlistsparameter 13701
+; otherlistsparameter 13704
 define internal i1 @p342(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -72941,7 +72941,7 @@ L23:
   ret i1 %v56
 }
 
-; rootname 13710
+; rootname 13713
 define internal void @p343(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -73145,7 +73145,7 @@ L3:
   ret void
 }
 
-; inquiryrootname 13736
+; inquiryrootname 13739
 define internal void @p344(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -73323,7 +73323,7 @@ L15:
   ret void
 }
 
-; inquiryofaccess 13771
+; inquiryofaccess 13774
 define internal ptr @p345(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -73586,7 +73586,7 @@ L12:
   ret ptr %v126
 }
 
-; resolveinquiry 13816
+; resolveinquiry 13819
 define internal ptr @p346(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -74192,7 +74192,7 @@ L8:
   ret ptr %v291
 }
 
-; schematicformal 13922
+; schematicformal 13925
 define internal ptr @p347(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -74242,7 +74242,7 @@ L3:
   ret ptr %v27
 }
 
-; confbound 13946
+; confbound 13949
 define internal ptr @p349(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, i1 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -74522,7 +74522,7 @@ L41:
   ret ptr %v134
 }
 
-; confarraytype 13984
+; confarraytype 13987
 define internal ptr @p350(ptr %link, ptr %a0, ptr %a1, i1 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -74965,7 +74965,7 @@ L74:
   ret ptr %v225
 }
 
-; conformable 14049
+; conformable 14052
 define internal i1 @p351(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -75227,7 +75227,7 @@ L37:
   ret i1 %v127
 }
 
-; fixedcomponent 14083
+; fixedcomponent 14086
 define internal ptr @p352(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -75289,7 +75289,7 @@ L12:
   ret ptr %v25
 }
 
-; conformantformal 14104
+; conformantformal 14107
 define internal ptr @p353(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -75393,7 +75393,7 @@ L13:
   ret ptr %v54
 }
 
-; nonvarying 14131
+; nonvarying 14134
 define internal i1 @p260(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -76295,7 +76295,7 @@ L4:
   ret i1 %v410
 }
 
-; checkinitialstate 14231
+; checkinitialstate 14234
 define internal void @p354(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -76589,7 +76589,7 @@ L5:
   ret void
 }
 
-; bindableof 14295
+; bindableof 14298
 define internal i1 @p307(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -76722,7 +76722,7 @@ L3:
   ret i1 %v58
 }
 
-; initialstateof 14309
+; initialstateof 14312
 define internal ptr @p237(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -76959,7 +76959,7 @@ L3:
   ret ptr %v106
 }
 
-; resolvetype 14333
+; resolvetype 14336
 define internal ptr @p236(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -78320,7 +78320,7 @@ L6:
   ret ptr %v661
 }
 
-; standardfileref 14497
+; standardfileref 14500
 define internal ptr @p355(ptr %link, i1 %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -78539,7 +78539,7 @@ L18:
   ret ptr %v101
 }
 
-; bindprogramparameters 14541
+; bindprogramparameters 14544
 define internal void @p356(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -79118,7 +79118,7 @@ L46:
   ret void
 }
 
-; isrequiredname 14641
+; isrequiredname 14644
 define internal i1 @p359(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -79262,7 +79262,7 @@ L25:
   ret i1 %v85
 }
 
-; procactualsym 14658
+; procactualsym 14661
 define internal ptr @p360(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -79337,7 +79337,7 @@ L6:
   ret ptr %v33
 }
 
-; checkprocargument 14667
+; checkprocargument 14670
 define internal void @p361(ptr %link, ptr %a0, ptr %a1, ptr %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -80056,7 +80056,7 @@ L40:
   ret void
 }
 
-; newresultslot 14779
+; newresultslot 14782
 define internal ptr @p362(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -80130,7 +80130,7 @@ L3:
   ret ptr %v40
 }
 
-; giveresultslot 14795
+; giveresultslot 14798
 define internal void @p363(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -80166,7 +80166,7 @@ L5:
   ret void
 }
 
-; badvaractual 14804
+; badvaractual 14807
 define internal i1 @p364(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -80389,7 +80389,7 @@ L4:
   ret i1 %v96
 }
 
-; checkarguments 14830
+; checkarguments 14833
 define internal void @p365(ptr %link, ptr %a0, ptr %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -84260,7 +84260,7 @@ L45:
   ret void
 }
 
-; writeopname 15315
+; writeopname 15318
 define internal void @p366(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -84359,7 +84359,7 @@ L23:
   ret void
 }
 
-; writeword 15343
+; writeword 15346
 define internal void @p367(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -84452,7 +84452,7 @@ L14:
   ret void
 }
 
-; badoperands 15359
+; badoperands 15362
 define internal void @p368(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, i1 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -84543,7 +84543,7 @@ L11:
   ret void
 }
 
-; checksetmember 15384
+; checksetmember 15387
 define internal void @p369(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -84739,7 +84739,7 @@ L7:
   ret void
 }
 
-; checksetexpr 15408
+; checksetexpr 15411
 define internal void @p370(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -84990,7 +84990,7 @@ L41:
   ret void
 }
 
-; setvaluetypeof 15443
+; setvaluetypeof 15446
 define internal ptr @p371(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -85212,7 +85212,7 @@ L26:
   ret ptr %v100
 }
 
-; checksetvalue 15466
+; checksetvalue 15469
 define internal void @p372(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -85727,7 +85727,7 @@ L87:
   ret void
 }
 
-; checkbinary 15528
+; checkbinary 15531
 define internal void @p373(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -88525,7 +88525,7 @@ L26:
   ret void
 }
 
-; lookupbuiltin 15904
+; lookupbuiltin 15907
 define internal i32 @p357(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89115,7 +89115,7 @@ L4:
   ret i32 %v271
 }
 
-; isfileenquiry 15983
+; isfileenquiry 15986
 define internal i1 @p374(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89150,7 +89150,7 @@ L5:
   ret i1 %v17
 }
 
-; isstringbuiltin 15990
+; isstringbuiltin 15993
 define internal i1 @p375(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89241,7 +89241,7 @@ L19:
   ret i1 %v45
 }
 
-; istimebuiltin 16001
+; istimebuiltin 16004
 define internal i1 @p376(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89268,7 +89268,7 @@ L3:
   ret i1 %v13
 }
 
-; checkstringargs 16008
+; checkstringargs 16011
 define internal void @p377(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89512,7 +89512,7 @@ L4:
   ret void
 }
 
-; requirearg 16033
+; requirearg 16036
 define internal void @p378(ptr %link, ptr %a0, i1 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89612,7 +89612,7 @@ L3:
   ret void
 }
 
-; checktake 16082
+; checktake 16085
 define internal void @p379(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -89988,7 +89988,7 @@ L6:
   ret void
 }
 
-; checkrelease 16137
+; checkrelease 16140
 define internal void @p380(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -90290,7 +90290,7 @@ L6:
   ret void
 }
 
-; checktry 16168
+; checktry 16171
 define internal void @p381(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -90795,7 +90795,7 @@ L6:
   ret void
 }
 
-; sel 16177
+; sel 16180
 define internal ptr @p697(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -91154,7 +91154,7 @@ L61:
   ret ptr %v180
 }
 
-; checkcall 16246
+; checkcall 16249
 define internal void @p382(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -95271,303 +95271,302 @@ L851:
   %v1931 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1930, i32 0, i32 1
   %v1932 = load i32, ptr %v1931
   call void @p20(ptr @frame1, i32 %v1922, i32 %v1932)
-  %v1933 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 1
-  call void @pas_write_str(ptr %v1933, ptr @s6252, i32 28, i32 -1)
-  %v1934 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1935 = load ptr, ptr %v1934
-  %v1936 = icmp eq ptr %v1935, null
-  br i1 %v1936, label %L852, label %L853
+  %v1933 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1934 = load ptr, ptr %v1933
+  %v1935 = icmp eq ptr %v1934, null
+  br i1 %v1935, label %L852, label %L853
 L852:
-  call void @pas_runtime_error(ptr @s6253)
+  call void @pas_runtime_error(ptr @s6252)
   unreachable
 L853:
-  %v1937 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1935, i32 0, i32 8
-  %v1938 = load i32, ptr %v1937
-  %v1939 = icmp eq i32 %v1938, 14
-  %v1940 = xor i1 %v1939, true
-  br i1 %v1940, label %L854, label %L855
+  %v1936 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1934, i32 0, i32 8
+  %v1937 = load i32, ptr %v1936
+  %v1938 = icmp eq i32 %v1937, 14
+  %v1939 = xor i1 %v1938, true
+  br i1 %v1939, label %L854, label %L855
 L854:
-  call void @pas_runtime_error(ptr @s6254)
+  call void @pas_runtime_error(ptr @s6253)
   unreachable
 L855:
-  %v1941 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1935, i32 0, i32 9
-  %v1942 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1941, i32 0, i32 5
-  %v1943 = load i32, ptr %v1942
-  %v1944 = icmp eq i32 %v1943, 6
-  br i1 %v1944, label %L857, label %L856
+  %v1940 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1934, i32 0, i32 9
+  %v1941 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1940, i32 0, i32 5
+  %v1942 = load i32, ptr %v1941
+  %v1943 = icmp eq i32 %v1942, 6
+  br i1 %v1943, label %L857, label %L856
 L856:
-  %v1945 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1946 = load ptr, ptr %v1945
-  %v1947 = icmp eq ptr %v1946, null
-  br i1 %v1947, label %L858, label %L859
+  %v1944 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1945 = load ptr, ptr %v1944
+  %v1946 = icmp eq ptr %v1945, null
+  br i1 %v1946, label %L858, label %L859
 L858:
-  call void @pas_runtime_error(ptr @s6255)
+  call void @pas_runtime_error(ptr @s6254)
   unreachable
 L859:
-  %v1948 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1946, i32 0, i32 8
-  %v1949 = load i32, ptr %v1948
-  %v1950 = icmp eq i32 %v1949, 14
-  %v1951 = xor i1 %v1950, true
-  br i1 %v1951, label %L860, label %L861
+  %v1947 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1945, i32 0, i32 8
+  %v1948 = load i32, ptr %v1947
+  %v1949 = icmp eq i32 %v1948, 14
+  %v1950 = xor i1 %v1949, true
+  br i1 %v1950, label %L860, label %L861
 L860:
-  call void @pas_runtime_error(ptr @s6256)
+  call void @pas_runtime_error(ptr @s6255)
   unreachable
 L861:
-  %v1952 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1946, i32 0, i32 9
-  %v1953 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1952, i32 0, i32 5
-  %v1954 = load i32, ptr %v1953
-  %v1955 = icmp eq i32 %v1954, 7
+  %v1951 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1945, i32 0, i32 9
+  %v1952 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1951, i32 0, i32 5
+  %v1953 = load i32, ptr %v1952
+  %v1954 = icmp eq i32 %v1953, 7
   br label %L857
 L857:
-  %v1956 = phi i1 [ true, %L855 ], [ %v1955, %L861 ]
-  br i1 %v1956, label %L862, label %L863
+  %v1955 = phi i1 [ true, %L855 ], [ %v1954, %L861 ]
+  br i1 %v1955, label %L862, label %L863
 L862:
-  %v1957 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 1
-  call void @pas_write_str(ptr %v1957, ptr @s6257, i32 29, i32 -1)
-  call void @pas_writeln(ptr %v1957)
+  %v1956 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 1
+  call void @pas_write_str(ptr %v1956, ptr @s6256, i32 28, i32 -1)
+  call void @pas_writeln(ptr %v1956)
   br label %L864
 L863:
-  %v1958 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 1
-  call void @pas_writeln(ptr %v1958)
+  %v1957 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 1
+  call void @pas_write_str(ptr %v1957, ptr @s6257, i32 28, i32 -1)
+  call void @pas_writeln(ptr %v1957)
   br label %L864
 L864:
-  %v1959 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1960 = load ptr, ptr %v1959
-  %v1961 = icmp eq ptr %v1960, null
-  br i1 %v1961, label %L865, label %L866
+  %v1958 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1959 = load ptr, ptr %v1958
+  %v1960 = icmp eq ptr %v1959, null
+  br i1 %v1960, label %L865, label %L866
 L865:
   call void @pas_runtime_error(ptr @s6258)
   unreachable
 L866:
-  %v1962 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1960, i32 0, i32 3
-  %v1963 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v1964 = load ptr, ptr %v1963
-  store ptr %v1964, ptr %v1962
+  %v1961 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1959, i32 0, i32 3
+  %v1962 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v1963 = load ptr, ptr %v1962
+  store ptr %v1963, ptr %v1961
   br label %L839
 L838:
-  %v1965 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v1966 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1967 = load ptr, ptr %v1966
-  %v1968 = icmp eq ptr %v1967, null
-  br i1 %v1968, label %L867, label %L868
+  %v1964 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v1965 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1966 = load ptr, ptr %v1965
+  %v1967 = icmp eq ptr %v1966, null
+  br i1 %v1967, label %L867, label %L868
 L867:
   call void @pas_runtime_error(ptr @s6259)
   unreachable
 L868:
-  %v1969 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1967, i32 0, i32 8
-  %v1970 = load i32, ptr %v1969
-  %v1971 = icmp eq i32 %v1970, 14
-  %v1972 = xor i1 %v1971, true
-  br i1 %v1972, label %L869, label %L870
+  %v1968 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1966, i32 0, i32 8
+  %v1969 = load i32, ptr %v1968
+  %v1970 = icmp eq i32 %v1969, 14
+  %v1971 = xor i1 %v1970, true
+  br i1 %v1971, label %L869, label %L870
 L869:
   call void @pas_runtime_error(ptr @s6260)
   unreachable
 L870:
-  %v1973 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1967, i32 0, i32 9
-  %v1974 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1973, i32 0, i32 4
-  %v1975 = load ptr, ptr %v1974
-  %v1976 = icmp eq ptr %v1975, null
-  br i1 %v1976, label %L871, label %L872
+  %v1972 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1966, i32 0, i32 9
+  %v1973 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1972, i32 0, i32 4
+  %v1974 = load ptr, ptr %v1973
+  %v1975 = icmp eq ptr %v1974, null
+  br i1 %v1975, label %L871, label %L872
 L871:
   call void @pas_runtime_error(ptr @s6261)
   unreachable
 L872:
-  %v1977 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1975, i32 0, i32 3
-  %v1978 = load ptr, ptr %v1977
-  store ptr %v1978, ptr %v1965
-  %v1979 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1980 = load ptr, ptr %v1979
-  %v1981 = icmp eq ptr %v1980, null
-  br i1 %v1981, label %L873, label %L874
+  %v1976 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1974, i32 0, i32 3
+  %v1977 = load ptr, ptr %v1976
+  store ptr %v1977, ptr %v1964
+  %v1978 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1979 = load ptr, ptr %v1978
+  %v1980 = icmp eq ptr %v1979, null
+  br i1 %v1980, label %L873, label %L874
 L873:
   call void @pas_runtime_error(ptr @s6262)
   unreachable
 L874:
-  %v1982 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1980, i32 0, i32 8
-  %v1983 = load i32, ptr %v1982
-  %v1984 = icmp eq i32 %v1983, 14
-  %v1985 = xor i1 %v1984, true
-  br i1 %v1985, label %L875, label %L876
+  %v1981 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1979, i32 0, i32 8
+  %v1982 = load i32, ptr %v1981
+  %v1983 = icmp eq i32 %v1982, 14
+  %v1984 = xor i1 %v1983, true
+  br i1 %v1984, label %L875, label %L876
 L875:
   call void @pas_runtime_error(ptr @s6263)
   unreachable
 L876:
-  %v1986 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1980, i32 0, i32 9
-  %v1987 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1986, i32 0, i32 5
-  %v1988 = load i32, ptr %v1987
-  switch i32 %v1988, label %L888 [ i32 23, label %L877 i32 1, label %L878 i32 2, label %L879 i32 20, label %L880 i32 21, label %L880 i32 22, label %L880 i32 3, label %L881 i32 4, label %L882 i32 5, label %L883 i32 6, label %L884 i32 7, label %L884 i32 14, label %L885 i32 15, label %L886 i32 0, label %L887 i32 8, label %L887 i32 9, label %L887 i32 10, label %L887 i32 11, label %L887 i32 12, label %L887 i32 13, label %L887 i32 16, label %L887 i32 17, label %L887 i32 18, label %L887 i32 19, label %L887 i32 24, label %L887 i32 25, label %L887 i32 26, label %L887 ]
+  %v1985 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1979, i32 0, i32 9
+  %v1986 = getelementptr inbounds { i32, i32, i32, i32, ptr, i32, ptr, ptr, ptr, ptr, ptr }, ptr %v1985, i32 0, i32 5
+  %v1987 = load i32, ptr %v1986
+  switch i32 %v1987, label %L888 [ i32 23, label %L877 i32 1, label %L878 i32 2, label %L879 i32 20, label %L880 i32 21, label %L880 i32 22, label %L880 i32 3, label %L881 i32 4, label %L882 i32 5, label %L883 i32 6, label %L884 i32 7, label %L884 i32 14, label %L885 i32 15, label %L886 i32 0, label %L887 i32 8, label %L887 i32 9, label %L887 i32 10, label %L887 i32 11, label %L887 i32 12, label %L887 i32 13, label %L887 i32 16, label %L887 i32 17, label %L887 i32 18, label %L887 i32 19, label %L887 i32 24, label %L887 i32 25, label %L887 i32 26, label %L887 ]
 L877:
-  %v1989 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1990 = load ptr, ptr %v1989
-  %v1991 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v1992 = load ptr, ptr %v1991
-  %v1993 = call i1 @p166(ptr @frame1, ptr %v1992)
-  %v1994 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v1995 = load ptr, ptr %v1994
-  call void @p378(ptr @frame1, ptr %v1990, i1 %v1993, ptr @s6264, ptr %v1995)
-  %v1996 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v1997 = load ptr, ptr %v1996
-  %v1998 = icmp eq ptr %v1997, null
-  br i1 %v1998, label %L890, label %L891
+  %v1988 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1989 = load ptr, ptr %v1988
+  %v1990 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v1991 = load ptr, ptr %v1990
+  %v1992 = call i1 @p166(ptr @frame1, ptr %v1991)
+  %v1993 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v1994 = load ptr, ptr %v1993
+  call void @p378(ptr @frame1, ptr %v1989, i1 %v1992, ptr @s6264, ptr %v1994)
+  %v1995 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v1996 = load ptr, ptr %v1995
+  %v1997 = icmp eq ptr %v1996, null
+  br i1 %v1997, label %L890, label %L891
 L890:
   call void @pas_runtime_error(ptr @s6265)
   unreachable
 L891:
-  %v1999 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1997, i32 0, i32 3
-  %v2000 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v2001 = load ptr, ptr %v2000
-  store ptr %v2001, ptr %v1999
+  %v1998 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v1996, i32 0, i32 3
+  %v1999 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v2000 = load ptr, ptr %v1999
+  store ptr %v2000, ptr %v1998
   br label %L889
 L878:
-  %v2002 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2003 = load ptr, ptr %v2002
-  %v2004 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2005 = load ptr, ptr %v2004
-  %v2006 = call i1 @p152(ptr @frame1, ptr %v2005)
-  %v2007 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2008 = load ptr, ptr %v2007
-  call void @p378(ptr @frame1, ptr %v2003, i1 %v2006, ptr @s6266, ptr %v2008)
-  %v2009 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2010 = load ptr, ptr %v2009
-  %v2011 = call i1 @p143(ptr @frame1, ptr %v2010)
-  br i1 %v2011, label %L893, label %L892
+  %v2001 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2002 = load ptr, ptr %v2001
+  %v2003 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2004 = load ptr, ptr %v2003
+  %v2005 = call i1 @p152(ptr @frame1, ptr %v2004)
+  %v2006 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2007 = load ptr, ptr %v2006
+  call void @p378(ptr @frame1, ptr %v2002, i1 %v2005, ptr @s6266, ptr %v2007)
+  %v2008 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2009 = load ptr, ptr %v2008
+  %v2010 = call i1 @p143(ptr @frame1, ptr %v2009)
+  br i1 %v2010, label %L893, label %L892
 L892:
-  %v2012 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2013 = load ptr, ptr %v2012
-  %v2014 = call i1 @p141(ptr @frame1, ptr %v2013)
+  %v2011 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2012 = load ptr, ptr %v2011
+  %v2013 = call i1 @p141(ptr @frame1, ptr %v2012)
   br label %L893
 L893:
-  %v2015 = phi i1 [ true, %L878 ], [ %v2014, %L892 ]
-  br i1 %v2015, label %L894, label %L895
+  %v2014 = phi i1 [ true, %L878 ], [ %v2013, %L892 ]
+  br i1 %v2014, label %L894, label %L895
 L894:
-  %v2016 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2017 = load ptr, ptr %v2016
-  %v2018 = icmp eq ptr %v2017, null
-  br i1 %v2018, label %L897, label %L898
+  %v2015 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2016 = load ptr, ptr %v2015
+  %v2017 = icmp eq ptr %v2016, null
+  br i1 %v2017, label %L897, label %L898
 L897:
   call void @pas_runtime_error(ptr @s6267)
   unreachable
 L898:
-  %v2019 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2017, i32 0, i32 3
-  %v2020 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
-  %v2021 = load ptr, ptr %v2020
-  store ptr %v2021, ptr %v2019
+  %v2018 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2016, i32 0, i32 3
+  %v2019 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
+  %v2020 = load ptr, ptr %v2019
+  store ptr %v2020, ptr %v2018
   br label %L896
 L895:
-  %v2022 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2023 = load ptr, ptr %v2022
-  %v2024 = call i1 @p142(ptr @frame1, ptr %v2023)
-  br i1 %v2024, label %L899, label %L900
+  %v2021 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2022 = load ptr, ptr %v2021
+  %v2023 = call i1 @p142(ptr @frame1, ptr %v2022)
+  br i1 %v2023, label %L899, label %L900
 L899:
-  %v2025 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2026 = load ptr, ptr %v2025
-  %v2027 = icmp eq ptr %v2026, null
-  br i1 %v2027, label %L902, label %L903
+  %v2024 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2025 = load ptr, ptr %v2024
+  %v2026 = icmp eq ptr %v2025, null
+  br i1 %v2026, label %L902, label %L903
 L902:
   call void @pas_runtime_error(ptr @s6268)
   unreachable
 L903:
-  %v2028 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2026, i32 0, i32 3
-  %v2029 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 161
-  %v2030 = load ptr, ptr %v2029
-  store ptr %v2030, ptr %v2028
+  %v2027 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2025, i32 0, i32 3
+  %v2028 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 161
+  %v2029 = load ptr, ptr %v2028
+  store ptr %v2029, ptr %v2027
   br label %L901
 L900:
-  %v2031 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2032 = load ptr, ptr %v2031
-  %v2033 = icmp eq ptr %v2032, null
-  br i1 %v2033, label %L904, label %L905
+  %v2030 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2031 = load ptr, ptr %v2030
+  %v2032 = icmp eq ptr %v2031, null
+  br i1 %v2032, label %L904, label %L905
 L904:
   call void @pas_runtime_error(ptr @s6269)
   unreachable
 L905:
-  %v2034 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2032, i32 0, i32 3
-  %v2035 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v2036 = load ptr, ptr %v2035
-  store ptr %v2036, ptr %v2034
+  %v2033 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2031, i32 0, i32 3
+  %v2034 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v2035 = load ptr, ptr %v2034
+  store ptr %v2035, ptr %v2033
   br label %L901
 L901:
   br label %L896
 L896:
   br label %L889
 L879:
-  %v2037 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2038 = load ptr, ptr %v2037
-  %v2039 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2040 = load ptr, ptr %v2039
-  %v2041 = call i1 @p152(ptr @frame1, ptr %v2040)
-  %v2042 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2043 = load ptr, ptr %v2042
-  call void @p378(ptr @frame1, ptr %v2038, i1 %v2041, ptr @s6270, ptr %v2043)
-  %v2044 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2045 = load ptr, ptr %v2044
-  %v2046 = call i1 @p143(ptr @frame1, ptr %v2045)
-  br i1 %v2046, label %L906, label %L907
+  %v2036 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2037 = load ptr, ptr %v2036
+  %v2038 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2039 = load ptr, ptr %v2038
+  %v2040 = call i1 @p152(ptr @frame1, ptr %v2039)
+  %v2041 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2042 = load ptr, ptr %v2041
+  call void @p378(ptr @frame1, ptr %v2037, i1 %v2040, ptr @s6270, ptr %v2042)
+  %v2043 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2044 = load ptr, ptr %v2043
+  %v2045 = call i1 @p143(ptr @frame1, ptr %v2044)
+  br i1 %v2045, label %L906, label %L907
 L906:
-  %v2047 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2048 = load ptr, ptr %v2047
-  %v2049 = icmp eq ptr %v2048, null
-  br i1 %v2049, label %L909, label %L910
+  %v2046 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2047 = load ptr, ptr %v2046
+  %v2048 = icmp eq ptr %v2047, null
+  br i1 %v2048, label %L909, label %L910
 L909:
   call void @pas_runtime_error(ptr @s6271)
   unreachable
 L910:
-  %v2050 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2048, i32 0, i32 3
-  %v2051 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 162
-  %v2052 = load ptr, ptr %v2051
-  store ptr %v2052, ptr %v2050
+  %v2049 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2047, i32 0, i32 3
+  %v2050 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 162
+  %v2051 = load ptr, ptr %v2050
+  store ptr %v2051, ptr %v2049
   br label %L908
 L907:
-  %v2053 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2054 = load ptr, ptr %v2053
-  %v2055 = call i1 @p141(ptr @frame1, ptr %v2054)
-  br i1 %v2055, label %L911, label %L912
+  %v2052 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2053 = load ptr, ptr %v2052
+  %v2054 = call i1 @p141(ptr @frame1, ptr %v2053)
+  br i1 %v2054, label %L911, label %L912
 L911:
-  %v2056 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2057 = load ptr, ptr %v2056
-  %v2058 = icmp eq ptr %v2057, null
-  br i1 %v2058, label %L914, label %L915
+  %v2055 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2056 = load ptr, ptr %v2055
+  %v2057 = icmp eq ptr %v2056, null
+  br i1 %v2057, label %L914, label %L915
 L914:
   call void @pas_runtime_error(ptr @s6272)
   unreachable
 L915:
-  %v2059 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2057, i32 0, i32 3
-  %v2060 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
-  %v2061 = load ptr, ptr %v2060
-  store ptr %v2061, ptr %v2059
+  %v2058 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2056, i32 0, i32 3
+  %v2059 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
+  %v2060 = load ptr, ptr %v2059
+  store ptr %v2060, ptr %v2058
   br label %L913
 L912:
-  %v2062 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2063 = load ptr, ptr %v2062
-  %v2064 = call i1 @p142(ptr @frame1, ptr %v2063)
-  br i1 %v2064, label %L916, label %L917
+  %v2061 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2062 = load ptr, ptr %v2061
+  %v2063 = call i1 @p142(ptr @frame1, ptr %v2062)
+  br i1 %v2063, label %L916, label %L917
 L916:
-  %v2065 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2066 = load ptr, ptr %v2065
-  %v2067 = icmp eq ptr %v2066, null
-  br i1 %v2067, label %L919, label %L920
+  %v2064 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2065 = load ptr, ptr %v2064
+  %v2066 = icmp eq ptr %v2065, null
+  br i1 %v2066, label %L919, label %L920
 L919:
   call void @pas_runtime_error(ptr @s6273)
   unreachable
 L920:
-  %v2068 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2066, i32 0, i32 3
-  %v2069 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 161
-  %v2070 = load ptr, ptr %v2069
-  store ptr %v2070, ptr %v2068
+  %v2067 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2065, i32 0, i32 3
+  %v2068 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 161
+  %v2069 = load ptr, ptr %v2068
+  store ptr %v2069, ptr %v2067
   br label %L918
 L917:
-  %v2071 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2072 = load ptr, ptr %v2071
-  %v2073 = icmp eq ptr %v2072, null
-  br i1 %v2073, label %L921, label %L922
+  %v2070 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2071 = load ptr, ptr %v2070
+  %v2072 = icmp eq ptr %v2071, null
+  br i1 %v2072, label %L921, label %L922
 L921:
   call void @pas_runtime_error(ptr @s6274)
   unreachable
 L922:
-  %v2074 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2072, i32 0, i32 3
-  %v2075 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v2076 = load ptr, ptr %v2075
-  store ptr %v2076, ptr %v2074
+  %v2073 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2071, i32 0, i32 3
+  %v2074 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v2075 = load ptr, ptr %v2074
+  store ptr %v2075, ptr %v2073
   br label %L918
 L918:
   br label %L913
@@ -95576,208 +95575,208 @@ L913:
 L908:
   br label %L889
 L880:
-  %v2077 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2078 = load ptr, ptr %v2077
-  %v2079 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2080 = load ptr, ptr %v2079
-  %v2081 = call i1 @p143(ptr @frame1, ptr %v2080)
-  %v2082 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2083 = load ptr, ptr %v2082
-  call void @p378(ptr @frame1, ptr %v2078, i1 %v2081, ptr @s6275, ptr %v2083)
-  %v2084 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2085 = load ptr, ptr %v2084
-  %v2086 = icmp eq ptr %v2085, null
-  br i1 %v2086, label %L923, label %L924
+  %v2076 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2077 = load ptr, ptr %v2076
+  %v2078 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2079 = load ptr, ptr %v2078
+  %v2080 = call i1 @p143(ptr @frame1, ptr %v2079)
+  %v2081 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2082 = load ptr, ptr %v2081
+  call void @p378(ptr @frame1, ptr %v2077, i1 %v2080, ptr @s6275, ptr %v2082)
+  %v2083 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2084 = load ptr, ptr %v2083
+  %v2085 = icmp eq ptr %v2084, null
+  br i1 %v2085, label %L923, label %L924
 L923:
   call void @pas_runtime_error(ptr @s6276)
   unreachable
 L924:
-  %v2087 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2085, i32 0, i32 3
-  %v2088 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
-  %v2089 = load ptr, ptr %v2088
-  store ptr %v2089, ptr %v2087
+  %v2086 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2084, i32 0, i32 3
+  %v2087 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
+  %v2088 = load ptr, ptr %v2087
+  store ptr %v2088, ptr %v2086
   br label %L889
 L881:
-  %v2090 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2091 = load ptr, ptr %v2090
-  %v2092 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2093 = load ptr, ptr %v2092
-  %v2094 = call i1 @p140(ptr @frame1, ptr %v2093)
-  %v2095 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2096 = load ptr, ptr %v2095
-  call void @p378(ptr @frame1, ptr %v2091, i1 %v2094, ptr @s6277, ptr %v2096)
-  %v2097 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2098 = load ptr, ptr %v2097
-  %v2099 = icmp eq ptr %v2098, null
-  br i1 %v2099, label %L925, label %L926
+  %v2089 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2090 = load ptr, ptr %v2089
+  %v2091 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2092 = load ptr, ptr %v2091
+  %v2093 = call i1 @p140(ptr @frame1, ptr %v2092)
+  %v2094 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2095 = load ptr, ptr %v2094
+  call void @p378(ptr @frame1, ptr %v2090, i1 %v2093, ptr @s6277, ptr %v2095)
+  %v2096 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2097 = load ptr, ptr %v2096
+  %v2098 = icmp eq ptr %v2097, null
+  br i1 %v2098, label %L925, label %L926
 L925:
   call void @pas_runtime_error(ptr @s6278)
   unreachable
 L926:
-  %v2100 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2098, i32 0, i32 3
-  %v2101 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 156
-  %v2102 = load ptr, ptr %v2101
-  store ptr %v2102, ptr %v2100
+  %v2099 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2097, i32 0, i32 3
+  %v2100 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 156
+  %v2101 = load ptr, ptr %v2100
+  store ptr %v2101, ptr %v2099
   br label %L889
 L882:
-  %v2103 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2104 = load ptr, ptr %v2103
-  %v2105 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2106 = load ptr, ptr %v2105
-  %v2107 = call i1 @p174(ptr @frame1, ptr %v2106)
-  %v2108 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2109 = load ptr, ptr %v2108
-  call void @p378(ptr @frame1, ptr %v2104, i1 %v2107, ptr @s6279, ptr %v2109)
-  %v2110 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2111 = load ptr, ptr %v2110
-  %v2112 = icmp eq ptr %v2111, null
-  br i1 %v2112, label %L927, label %L928
+  %v2102 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2103 = load ptr, ptr %v2102
+  %v2104 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2105 = load ptr, ptr %v2104
+  %v2106 = call i1 @p174(ptr @frame1, ptr %v2105)
+  %v2107 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2108 = load ptr, ptr %v2107
+  call void @p378(ptr @frame1, ptr %v2103, i1 %v2106, ptr @s6279, ptr %v2108)
+  %v2109 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2110 = load ptr, ptr %v2109
+  %v2111 = icmp eq ptr %v2110, null
+  br i1 %v2111, label %L927, label %L928
 L927:
   call void @pas_runtime_error(ptr @s6280)
   unreachable
 L928:
-  %v2113 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2111, i32 0, i32 3
-  %v2114 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v2115 = load ptr, ptr %v2114
-  store ptr %v2115, ptr %v2113
+  %v2112 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2110, i32 0, i32 3
+  %v2113 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v2114 = load ptr, ptr %v2113
+  store ptr %v2114, ptr %v2112
   br label %L889
 L883:
-  %v2116 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2117 = load ptr, ptr %v2116
-  %v2118 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2119 = load ptr, ptr %v2118
-  %v2120 = call i1 @p140(ptr @frame1, ptr %v2119)
-  %v2121 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2122 = load ptr, ptr %v2121
-  call void @p378(ptr @frame1, ptr %v2117, i1 %v2120, ptr @s6281, ptr %v2122)
-  %v2123 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2124 = load ptr, ptr %v2123
-  %v2125 = icmp eq ptr %v2124, null
-  br i1 %v2125, label %L929, label %L930
+  %v2115 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2116 = load ptr, ptr %v2115
+  %v2117 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2118 = load ptr, ptr %v2117
+  %v2119 = call i1 @p140(ptr @frame1, ptr %v2118)
+  %v2120 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2121 = load ptr, ptr %v2120
+  call void @p378(ptr @frame1, ptr %v2116, i1 %v2119, ptr @s6281, ptr %v2121)
+  %v2122 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2123 = load ptr, ptr %v2122
+  %v2124 = icmp eq ptr %v2123, null
+  br i1 %v2124, label %L929, label %L930
 L929:
   call void @pas_runtime_error(ptr @s6282)
   unreachable
 L930:
-  %v2126 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2124, i32 0, i32 3
-  %v2127 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 157
-  %v2128 = load ptr, ptr %v2127
-  store ptr %v2128, ptr %v2126
+  %v2125 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2123, i32 0, i32 3
+  %v2126 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 157
+  %v2127 = load ptr, ptr %v2126
+  store ptr %v2127, ptr %v2125
   br label %L889
 L884:
-  %v2129 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2130 = load ptr, ptr %v2129
-  %v2131 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2132 = load ptr, ptr %v2131
-  %v2133 = call i1 @p174(ptr @frame1, ptr %v2132)
-  %v2134 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2135 = load ptr, ptr %v2134
-  call void @p378(ptr @frame1, ptr %v2130, i1 %v2133, ptr @s6283, ptr %v2135)
-  %v2136 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2137 = load ptr, ptr %v2136
-  %v2138 = icmp eq ptr %v2137, null
-  br i1 %v2138, label %L931, label %L932
+  %v2128 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2129 = load ptr, ptr %v2128
+  %v2130 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2131 = load ptr, ptr %v2130
+  %v2132 = call i1 @p174(ptr @frame1, ptr %v2131)
+  %v2133 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2134 = load ptr, ptr %v2133
+  call void @p378(ptr @frame1, ptr %v2129, i1 %v2132, ptr @s6283, ptr %v2134)
+  %v2135 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2136 = load ptr, ptr %v2135
+  %v2137 = icmp eq ptr %v2136, null
+  br i1 %v2137, label %L931, label %L932
 L931:
   call void @pas_runtime_error(ptr @s6284)
   unreachable
 L932:
-  %v2139 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2137, i32 0, i32 3
-  %v2140 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2141 = load ptr, ptr %v2140
-  %v2142 = call ptr @p139(ptr @frame1, ptr %v2141)
-  store ptr %v2142, ptr %v2139
+  %v2138 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2136, i32 0, i32 3
+  %v2139 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2140 = load ptr, ptr %v2139
+  %v2141 = call ptr @p139(ptr @frame1, ptr %v2140)
+  store ptr %v2141, ptr %v2138
   br label %L889
 L885:
-  %v2143 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2144 = load ptr, ptr %v2143
-  %v2145 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2146 = load ptr, ptr %v2145
-  %v2147 = call i1 @p141(ptr @frame1, ptr %v2146)
-  br i1 %v2147, label %L934, label %L933
+  %v2142 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2143 = load ptr, ptr %v2142
+  %v2144 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2145 = load ptr, ptr %v2144
+  %v2146 = call i1 @p141(ptr @frame1, ptr %v2145)
+  br i1 %v2146, label %L934, label %L933
 L933:
-  %v2148 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2149 = load ptr, ptr %v2148
-  %v2150 = call i1 @p142(ptr @frame1, ptr %v2149)
+  %v2147 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2148 = load ptr, ptr %v2147
+  %v2149 = call i1 @p142(ptr @frame1, ptr %v2148)
   br label %L934
 L934:
-  %v2151 = phi i1 [ true, %L885 ], [ %v2150, %L933 ]
-  %v2152 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2153 = load ptr, ptr %v2152
-  call void @p378(ptr @frame1, ptr %v2144, i1 %v2151, ptr @s6285, ptr %v2153)
-  %v2154 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2155 = load ptr, ptr %v2154
-  %v2156 = icmp eq ptr %v2155, null
-  br i1 %v2156, label %L935, label %L936
+  %v2150 = phi i1 [ true, %L885 ], [ %v2149, %L933 ]
+  %v2151 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2152 = load ptr, ptr %v2151
+  call void @p378(ptr @frame1, ptr %v2143, i1 %v2150, ptr @s6285, ptr %v2152)
+  %v2153 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2154 = load ptr, ptr %v2153
+  %v2155 = icmp eq ptr %v2154, null
+  br i1 %v2155, label %L935, label %L936
 L935:
   call void @pas_runtime_error(ptr @s6286)
   unreachable
 L936:
-  %v2157 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2155, i32 0, i32 3
-  %v2158 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v2159 = load ptr, ptr %v2158
-  store ptr %v2159, ptr %v2157
+  %v2156 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2154, i32 0, i32 3
+  %v2157 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v2158 = load ptr, ptr %v2157
+  store ptr %v2158, ptr %v2156
   br label %L889
 L886:
-  %v2160 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2161 = load ptr, ptr %v2160
-  %v2162 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2163 = load ptr, ptr %v2162
-  %v2164 = call i1 @p141(ptr @frame1, ptr %v2163)
-  %v2165 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2166 = load ptr, ptr %v2165
-  call void @p378(ptr @frame1, ptr %v2161, i1 %v2164, ptr @s6287, ptr %v2166)
-  %v2167 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2168 = load ptr, ptr %v2167
-  %v2169 = icmp eq ptr %v2168, null
-  br i1 %v2169, label %L937, label %L938
+  %v2159 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2160 = load ptr, ptr %v2159
+  %v2161 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2162 = load ptr, ptr %v2161
+  %v2163 = call i1 @p141(ptr @frame1, ptr %v2162)
+  %v2164 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2165 = load ptr, ptr %v2164
+  call void @p378(ptr @frame1, ptr %v2160, i1 %v2163, ptr @s6287, ptr %v2165)
+  %v2166 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2167 = load ptr, ptr %v2166
+  %v2168 = icmp eq ptr %v2167, null
+  br i1 %v2168, label %L937, label %L938
 L937:
   call void @pas_runtime_error(ptr @s6288)
   unreachable
 L938:
-  %v2170 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2168, i32 0, i32 3
-  %v2171 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
-  %v2172 = load ptr, ptr %v2171
-  store ptr %v2172, ptr %v2170
+  %v2169 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2167, i32 0, i32 3
+  %v2170 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 154
+  %v2171 = load ptr, ptr %v2170
+  store ptr %v2171, ptr %v2169
   br label %L889
 L887:
-  %v2173 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2174 = load ptr, ptr %v2173
-  %v2175 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2176 = load ptr, ptr %v2175
-  %v2177 = call i1 @p152(ptr @frame1, ptr %v2176)
-  %v2178 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2179 = load ptr, ptr %v2178
-  call void @p378(ptr @frame1, ptr %v2174, i1 %v2177, ptr @s6289, ptr %v2179)
-  %v2180 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
-  %v2181 = load ptr, ptr %v2180
-  %v2182 = call i1 @p143(ptr @frame1, ptr %v2181)
-  br i1 %v2182, label %L939, label %L940
+  %v2172 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2173 = load ptr, ptr %v2172
+  %v2174 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2175 = load ptr, ptr %v2174
+  %v2176 = call i1 @p152(ptr @frame1, ptr %v2175)
+  %v2177 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2178 = load ptr, ptr %v2177
+  call void @p378(ptr @frame1, ptr %v2173, i1 %v2176, ptr @s6289, ptr %v2178)
+  %v2179 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 7
+  %v2180 = load ptr, ptr %v2179
+  %v2181 = call i1 @p143(ptr @frame1, ptr %v2180)
+  br i1 %v2181, label %L939, label %L940
 L939:
-  %v2183 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2184 = load ptr, ptr %v2183
-  %v2185 = icmp eq ptr %v2184, null
-  br i1 %v2185, label %L942, label %L943
+  %v2182 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2183 = load ptr, ptr %v2182
+  %v2184 = icmp eq ptr %v2183, null
+  br i1 %v2184, label %L942, label %L943
 L942:
   call void @pas_runtime_error(ptr @s6290)
   unreachable
 L943:
-  %v2186 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2184, i32 0, i32 3
-  %v2187 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 162
-  %v2188 = load ptr, ptr %v2187
-  store ptr %v2188, ptr %v2186
+  %v2185 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2183, i32 0, i32 3
+  %v2186 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 162
+  %v2187 = load ptr, ptr %v2186
+  store ptr %v2187, ptr %v2185
   br label %L941
 L940:
-  %v2189 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
-  %v2190 = load ptr, ptr %v2189
-  %v2191 = icmp eq ptr %v2190, null
-  br i1 %v2191, label %L944, label %L945
+  %v2188 = getelementptr inbounds %frame382, ptr %frame, i32 0, i32 1
+  %v2189 = load ptr, ptr %v2188
+  %v2190 = icmp eq ptr %v2189, null
+  br i1 %v2190, label %L944, label %L945
 L944:
   call void @pas_runtime_error(ptr @s6291)
   unreachable
 L945:
-  %v2192 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2190, i32 0, i32 3
-  %v2193 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
-  %v2194 = load ptr, ptr %v2193
-  store ptr %v2194, ptr %v2192
+  %v2191 = getelementptr inbounds { i32, i32, ptr, ptr, ptr, i1, i1, i1, i32, [10 x i64] }, ptr %v2189, i32 0, i32 3
+  %v2192 = getelementptr inbounds %frame1, ptr @frame1, i32 0, i32 155
+  %v2193 = load ptr, ptr %v2192
+  store ptr %v2193, ptr %v2191
   br label %L941
 L941:
   br label %L889
@@ -95822,7 +95821,7 @@ L8:
   ret void
 }
 
-; appendrange 16753
+; appendrange 16760
 define internal void @p384(ptr %link, ptr %a0, ptr %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -95910,7 +95909,7 @@ L10:
   ret void
 }
 
-; checkcomponentvalue 16767
+; checkcomponentvalue 16774
 define internal void @p385(ptr %link, ptr %a0, ptr %a1, i1 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -96043,7 +96042,7 @@ L6:
   ret void
 }
 
-; checkarrayvalue 16790
+; checkarrayvalue 16797
 define internal void @p386(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -96827,7 +96826,7 @@ L10:
   ret void
 }
 
-; checkvariantpartvalue 16885
+; checkvariantpartvalue 16892
 define internal void @p387(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, ptr %a4, i32 %a5) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -97942,7 +97941,7 @@ L4:
   ret void
 }
 
-; checkrecordvalue 17018
+; checkrecordvalue 17025
 define internal void @p383(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -99482,7 +99481,7 @@ L273:
   ret void
 }
 
-; checkstructvalue 17171
+; checkstructvalue 17178
 define internal void @p235(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -100099,7 +100098,7 @@ L58:
   ret void
 }
 
-; checkexpr 17244
+; checkexpr 17251
 define internal void @p234(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -105363,7 +105362,7 @@ L3:
   ret void
 }
 
-; redefinedfamily 17767
+; redefinedfamily 17774
 define internal ptr @p388(ptr %link, i32 %a0, i32 %a1, ptr %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -105541,7 +105540,7 @@ L3:
   ret ptr %v99
 }
 
-; checkwriteargs 17798
+; checkwriteargs 17805
 define internal void @p389(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -106137,7 +106136,7 @@ L8:
   ret void
 }
 
-; checkwrite 17853
+; checkwrite 17860
 define internal void @p390(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -108271,7 +108270,7 @@ L14:
   ret void
 }
 
-; checkread 18004
+; checkread 18011
 define internal void @p391(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -109654,7 +109653,7 @@ L14:
   ret void
 }
 
-; checknewtuple 18148
+; checknewtuple 18155
 define internal void @p392(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -110304,7 +110303,7 @@ L8:
   ret void
 }
 
-; isrequiredproc 18204
+; isrequiredproc 18211
 define internal i1 @p393(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -110407,7 +110406,7 @@ L17:
   ret i1 %v60
 }
 
-; transferargs 18220
+; transferargs 18227
 define internal void @p394(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -110528,7 +110527,7 @@ L16:
   ret void
 }
 
-; checkstdproc 18238
+; checkstdproc 18245
 define internal void @p395(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -117021,7 +117020,7 @@ L290:
   ret void
 }
 
-; enumconstof 18869
+; enumconstof 18876
 define internal ptr @p396(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -117146,7 +117145,7 @@ L3:
   ret ptr %v54
 }
 
-; collecttagtests 18899
+; collecttagtests 18906
 define internal void @p397(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -117786,7 +117785,7 @@ L3:
   ret void
 }
 
-; checkcase 18943
+; checkcase 18950
 define internal void @p398(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -118885,7 +118884,7 @@ L177:
   ret void
 }
 
-; repeateddisc 19088
+; repeateddisc 19095
 define internal i1 @p399(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -119021,7 +119020,7 @@ L4:
   ret i1 %v62
 }
 
-; checkwith 19104
+; checkwith 19111
 define internal void @p400(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -120881,7 +120880,7 @@ L24:
   ret void
 }
 
-; checkdeferbody 19302
+; checkdeferbody 19309
 define internal void @p401(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -121391,7 +121390,7 @@ L3:
   ret void
 }
 
-; checkdefer 19390
+; checkdefer 19397
 define internal void @p402(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -121592,7 +121591,7 @@ L15:
   ret void
 }
 
-; asfalliblearm 19428
+; asfalliblearm 19435
 define internal void @p403(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -121991,7 +121990,7 @@ L39:
   ret void
 }
 
-; checkresultassign 19488
+; checkresultassign 19495
 define internal void @p358(ptr %link, ptr %a0, ptr %a1, i1 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -122687,7 +122686,7 @@ L58:
   ret void
 }
 
-; checkstmt 19537
+; checkstmt 19544
 define internal void @p243(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -129077,7 +129076,7 @@ L3:
   ret void
 }
 
-; buildformals 20139
+; buildformals 20147
 define internal void @p405(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -132525,7 +132524,7 @@ L4:
   ret void
 }
 
-; checkedresulttype 20459
+; checkedresulttype 20467
 define internal ptr @p404(ptr %link, ptr %a0, i1 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -132636,7 +132635,7 @@ L6:
   ret ptr %v52
 }
 
-; foreigntype 20504
+; foreigntype 20512
 define internal i1 @p406(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -132677,7 +132676,7 @@ L5:
   ret i1 %v23
 }
 
-; foreignslicecomponent 20530
+; foreignslicecomponent 20538
 define internal i1 @p407(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -132706,7 +132705,7 @@ L3:
   ret i1 %v15
 }
 
-; badforeignfield 20562
+; badforeignfield 20570
 define internal ptr @p408(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -132857,7 +132856,7 @@ L6:
   ret ptr %v71
 }
 
-; foreignnamed 20600
+; foreignnamed 20608
 define internal ptr @p409(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -132961,7 +132960,7 @@ L4:
   ret ptr %v49
 }
 
-; checkforeignheading 20613
+; checkforeignheading 20621
 define internal void @p410(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -135108,7 +135107,7 @@ L189:
   ret void
 }
 
-; resultnameclash 20884
+; resultnameclash 20892
 define internal void @p411(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -135200,7 +135199,7 @@ L13:
   ret void
 }
 
-; recordgenericbody 20901
+; recordgenericbody 20909
 define internal void @p412(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -135320,7 +135319,7 @@ L21:
   ret void
 }
 
-; hastypeparam 20919
+; hastypeparam 20927
 define internal i1 @p413(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -135391,7 +135390,7 @@ L4:
   ret i1 %v32
 }
 
-; instantiateheading 20940
+; instantiateheading 20948
 define internal void @p414(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -136416,7 +136415,7 @@ L207:
   ret void
 }
 
-; declareprocheading 21031
+; declareprocheading 21039
 define internal void @p415(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -137252,7 +137251,7 @@ L26:
   ret void
 }
 
-; checkprocbody 21122
+; checkprocbody 21130
 define internal void @p416(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -138005,7 +138004,7 @@ L13:
   ret void
 }
 
-; checklabelpart 21236
+; checklabelpart 21244
 define internal void @p417(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -138486,7 +138485,7 @@ L18:
   ret void
 }
 
-; checklabeled 21284
+; checklabeled 21292
 define internal void @p251(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -138858,7 +138857,7 @@ L72:
   ret void
 }
 
-; checkgoto 21321
+; checkgoto 21329
 define internal void @p250(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -138985,7 +138984,7 @@ L3:
   ret void
 }
 
-; resolvegotos 21347
+; resolvegotos 21355
 define internal void @p418(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -140328,7 +140327,7 @@ L282:
   ret void
 }
 
-; linkstdfile 21493
+; linkstdfile 21501
 define internal void @p419(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -140367,7 +140366,7 @@ L5:
   ret void
 }
 
-; ensurestdfile 21499
+; ensurestdfile 21507
 define internal ptr @p420(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -140510,7 +140509,7 @@ L14:
   ret ptr %v74
 }
 
-; bindname 21529
+; bindname 21537
 define internal void @p248(ptr %link, i32 %a0, i32 %a1, ptr %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -140564,7 +140563,7 @@ L4:
   ret void
 }
 
-; findinterface 21541
+; findinterface 21549
 define internal ptr @p421(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -140652,7 +140651,7 @@ L4:
   ret ptr %v44
 }
 
-; installrequiredinterfaces 21557
+; installrequiredinterfaces 21565
 define internal void @p422(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -140926,7 +140925,7 @@ L47:
   ret void
 }
 
-; importedsymbol 21596
+; importedsymbol 21604
 define internal ptr @p423(ptr %link, ptr %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -141173,7 +141172,7 @@ L6:
   ret ptr %v112
 }
 
-; isinterfacename 21623
+; isinterfacename 21631
 define internal i1 @p245(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -141217,7 +141216,7 @@ L3:
   ret i1 %v23
 }
 
-; lookupquiet 21633
+; lookupquiet 21641
 define internal ptr @p247(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -141362,7 +141361,7 @@ L4:
   ret ptr %v72
 }
 
-; lookupname 21657
+; lookupname 21665
 define internal ptr @p246(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -141574,7 +141573,7 @@ L4:
   ret ptr %v112
 }
 
-; checkimports 21700
+; checkimports 21708
 define internal void @p249(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -143130,7 +143129,7 @@ L4:
   ret void
 }
 
-; checkconstdecl 21829
+; checkconstdecl 21837
 define internal void @p424(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -143728,7 +143727,7 @@ L12:
   ret void
 }
 
-; boundschemafor 21927
+; boundschemafor 21935
 define internal void @p348(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -143865,7 +143864,7 @@ L26:
   ret void
 }
 
-; claimboundsslot 21954
+; claimboundsslot 21962
 define internal void @p425(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -144011,7 +144010,7 @@ L20:
   ret void
 }
 
-; checktypedecl 21969
+; checktypedecl 21977
 define internal void @p426(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -145095,7 +145094,7 @@ L8:
   ret void
 }
 
-; checkvardecl 22095
+; checkvardecl 22103
 define internal void @p427(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -146524,7 +146523,7 @@ L56:
   ret void
 }
 
-; earlier 22259
+; earlier 22267
 define internal i1 @p428(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -146569,7 +146568,7 @@ L4:
   ret i1 %v25
 }
 
-; appendinstdecl 22296
+; appendinstdecl 22304
 define internal void @p429(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -146620,7 +146619,7 @@ L6:
   ret void
 }
 
-; instantiategeneric 22325
+; instantiategeneric 22333
 define internal ptr @p239(ptr %link, ptr %a0, ptr %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -148312,7 +148311,7 @@ L48:
   ret ptr %v824
 }
 
-; checkdeclarations 22536
+; checkdeclarations 22544
 define internal void @p430(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -149072,7 +149071,7 @@ L147:
   ret void
 }
 
-; exporthas 22673
+; exporthas 22681
 define internal i1 @p431(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -149160,7 +149159,7 @@ L6:
   ret i1 %v42
 }
 
-; addconstituent 22685
+; addconstituent 22693
 define internal void @p432(ptr %link, ptr %a0, i32 %a1, i32 %a2, ptr %a3, i1 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -149302,7 +149301,7 @@ L24:
   ret void
 }
 
-; addexportitem 22699
+; addexportitem 22707
 define internal void @p433(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -150845,7 +150844,7 @@ L8:
   ret void
 }
 
-; nameforlinkage 22852
+; nameforlinkage 22860
 define internal void @p434(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -151114,7 +151113,7 @@ L6:
   ret void
 }
 
-; checkpendingimplementations 22880
+; checkpendingimplementations 22888
 define internal void @p435(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -151266,7 +151265,7 @@ L4:
   ret void
 }
 
-; checkexports 22896
+; checkexports 22904
 define internal void @p436(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -151623,7 +151622,7 @@ L8:
   ret void
 }
 
-; checkblock 22929
+; checkblock 22937
 define internal void @p244(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -151968,7 +151967,7 @@ L50:
   ret void
 }
 
-; installpredefined 22976
+; installpredefined 22984
 define internal void @p437(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -152947,7 +152946,7 @@ L137:
   ret void
 }
 
-; span 22984
+; span 22992
 define internal ptr @p698(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -153006,7 +153005,7 @@ L7:
   ret ptr %v29
 }
 
-; stampfield 22996
+; stampfield 23004
 define internal void @p699(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -153213,7 +153212,7 @@ L36:
   ret void
 }
 
-; requiredtype 23026
+; requiredtype 23034
 define internal void @p700(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -153297,7 +153296,7 @@ L7:
   ret void
 }
 
-; requiredfunc 23048
+; requiredfunc 23056
 define internal void @p701(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -153325,7 +153324,7 @@ L1:
   ret void
 }
 
-; requiredfuncwide 23055
+; requiredfuncwide 23063
 define internal void @p702(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -153353,7 +153352,7 @@ L1:
   ret void
 }
 
-; findmodule 23311
+; findmodule 23319
 define internal ptr @p438(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -153441,7 +153440,7 @@ L4:
   ret ptr %v44
 }
 
-; checkmoduleheading 23323
+; checkmoduleheading 23331
 define internal void @p439(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -154270,7 +154269,7 @@ L158:
   ret void
 }
 
-; checkmoduleblock 23395
+; checkmoduleblock 23403
 define internal void @p440(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -155092,7 +155091,7 @@ L151:
   ret void
 }
 
-; checkmodule 23476
+; checkmodule 23484
 define internal void @p441(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -156026,7 +156025,7 @@ L147:
   ret void
 }
 
-; suppliersof 23553
+; suppliersof 23561
 define internal void @p442(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -156254,7 +156253,7 @@ L13:
   ret void
 }
 
-; reaches 23587
+; reaches 23595
 define internal i1 @p443(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -156320,7 +156319,7 @@ L4:
   ret i1 %v31
 }
 
-; computeactivemodules 23602
+; computeactivemodules 23610
 define internal void @p444(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -156386,7 +156385,7 @@ L4:
   ret void
 }
 
-; checkmutualsupply 23631
+; checkmutualsupply 23639
 define internal void @p445(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -156823,7 +156822,7 @@ L4:
   ret void
 }
 
-; runsema 23669
+; runsema 23677
 define internal void @p446(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -157576,7 +157575,7 @@ L43:
   ret void
 }
 
-; pad 23800
+; pad 23808
 define internal void @p447(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -157608,7 +157607,7 @@ L5:
   ret void
 }
 
-; at 23807
+; at 23815
 define internal void @p448(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -157646,7 +157645,7 @@ L5:
   ret void
 }
 
-; writepos 23814
+; writepos 23822
 define internal void @p449(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -157683,7 +157682,7 @@ L5:
   ret void
 }
 
-; writesymref 23822
+; writesymref 23830
 define internal void @p450(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158135,7 +158134,7 @@ L4:
   ret void
 }
 
-; exprend 23883
+; exprend 23891
 define internal void @p451(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158168,7 +158167,7 @@ L3:
   ret void
 }
 
-; typeend 23893
+; typeend 23901
 define internal void @p452(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158201,7 +158200,7 @@ L3:
   ret void
 }
 
-; writebinop 23902
+; writebinop 23910
 define internal void @p453(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158300,7 +158299,7 @@ L23:
   ret void
 }
 
-; writeunop 23928
+; writeunop 23936
 define internal void @p454(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158331,7 +158330,7 @@ L6:
   ret void
 }
 
-; dumpoptional 23944
+; dumpoptional 23952
 define internal void @p459(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158390,7 +158389,7 @@ L4:
   ret void
 }
 
-; dumpstrchild 23961
+; dumpstrchild 23969
 define internal void @p460(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158437,7 +158436,7 @@ L5:
   ret void
 }
 
-; writevariantref 23972
+; writevariantref 23980
 define internal void @p461(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158513,7 +158512,7 @@ L4:
   ret void
 }
 
-; dumpfield 23988
+; dumpfield 23996
 define internal void @p462(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158596,7 +158595,7 @@ L13:
   ret void
 }
 
-; dumpfieldlist 24003
+; dumpfieldlist 24011
 define internal void @p463(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158632,7 +158631,7 @@ L4:
   ret void
 }
 
-; dumparmlist 24013
+; dumparmlist 24021
 define internal void @p464(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -158927,7 +158926,7 @@ L4:
   ret void
 }
 
-; dumprecordlayout 24052
+; dumprecordlayout 24060
 define internal void @p465(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159030,7 +159029,7 @@ L17:
   ret void
 }
 
-; writesymkind 24066
+; writesymkind 24074
 define internal void @p466(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159097,7 +159096,7 @@ L15:
   ret void
 }
 
-; writebinding 24087
+; writebinding 24095
 define internal void @p467(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159132,7 +159131,7 @@ L7:
   ret void
 }
 
-; dumpframe 24100
+; dumpframe 24108
 define internal void @p468(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159444,7 +159443,7 @@ L4:
   ret void
 }
 
-; dumpframes 24132
+; dumpframes 24140
 define internal void @p469(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159566,7 +159565,7 @@ L8:
   ret void
 }
 
-; dumpexprlist 24143
+; dumpexprlist 24151
 define internal void @p470(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159606,7 +159605,7 @@ L4:
   ret void
 }
 
-; dumpcaselabels 24156
+; dumpcaselabels 24164
 define internal void @p471(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -159765,7 +159764,7 @@ L4:
   ret void
 }
 
-; dumpexpr 24175
+; dumpexpr 24183
 define internal void @p455(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -163032,7 +163031,7 @@ L22:
   ret void
 }
 
-; dumpstmtlist 24479
+; dumpstmtlist 24487
 define internal void @p472(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -163072,7 +163071,7 @@ L4:
   ret void
 }
 
-; dumpstmt 24489
+; dumpstmt 24497
 define internal void @p456(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -166104,7 +166103,7 @@ L49:
   ret void
 }
 
-; dumpnames 24775
+; dumpnames 24783
 define internal void @p473(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -166238,7 +166237,7 @@ L22:
   ret void
 }
 
-; dumpgroup 24800
+; dumpgroup 24808
 define internal void @p475(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -166846,7 +166845,7 @@ L8:
   ret void
 }
 
-; dumpgrouplist 24854
+; dumpgrouplist 24862
 define internal void @p474(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -166890,7 +166889,7 @@ L4:
   ret void
 }
 
-; dumpvariantpart 24867
+; dumpvariantpart 24875
 define internal void @p476(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3, ptr %a4, ptr %a5) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -167325,7 +167324,7 @@ L74:
   ret void
 }
 
-; dumptypeexpr 24908
+; dumptypeexpr 24916
 define internal void @p457(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -169482,7 +169481,7 @@ L20:
   ret void
 }
 
-; dumpimports 25105
+; dumpimports 25113
 define internal void @p477(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -169872,7 +169871,7 @@ L73:
   ret void
 }
 
-; dumpexports 25141
+; dumpexports 25149
 define internal void @p478(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -170442,7 +170441,7 @@ L110:
   ret void
 }
 
-; dumpdeclparts 25187
+; dumpdeclparts 25195
 define internal void @p479(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -171116,7 +171115,7 @@ L122:
   ret void
 }
 
-; dumpproc 25243
+; dumpproc 25251
 define internal void @p480(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -171605,7 +171604,7 @@ L93:
   ret void
 }
 
-; dumpblock 25298
+; dumpblock 25306
 define internal void @p458(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -171917,7 +171916,7 @@ L51:
   ret void
 }
 
-; dumptokens 25340
+; dumptokens 25348
 define internal void @p481(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -172283,7 +172282,7 @@ L5:
   ret void
 }
 
-; dumpmoduleparts 25402
+; dumpmoduleparts 25410
 define internal void @p482(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -172397,7 +172396,7 @@ L18:
   ret void
 }
 
-; dumpmodule 25418
+; dumpmodule 25426
 define internal void @p483(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -172987,7 +172986,7 @@ L104:
   ret void
 }
 
-; dumpmodulesbefore 25482
+; dumpmodulesbefore 25490
 define internal void @p484(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173053,7 +173052,7 @@ L4:
   ret void
 }
 
-; dumpmodulesafter 25495
+; dumpmodulesafter 25503
 define internal void @p485(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173132,7 +173131,7 @@ L11:
   ret void
 }
 
-; dumpprogram 25511
+; dumpprogram 25519
 define internal void @p486(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173575,7 +173574,7 @@ L4:
   ret void
 }
 
-; roundup 25619
+; roundup 25627
 define internal i32 @p487(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173646,7 +173645,7 @@ L11:
   ret i32 %v35
 }
 
-; armlayoutat 25635
+; armlayoutat 25643
 define internal void @p490(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173819,7 +173818,7 @@ L16:
   ret void
 }
 
-; variantstorageat 25657
+; variantstorageat 25665
 define internal void @p491(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173954,7 +173953,7 @@ L15:
   ret void
 }
 
-; recordlayout 25675
+; recordlayout 25683
 define internal void @p492(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -173977,7 +173976,7 @@ L1:
   ret void
 }
 
-; selectedsize 25684
+; selectedsize 25692
 define internal i32 @p493(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -174166,7 +174165,7 @@ L6:
   ret i32 %v111
 }
 
-; llalign 25712
+; llalign 25720
 define internal i32 @p489(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -174315,7 +174314,7 @@ L4:
   ret i32 %v61
 }
 
-; llsize 25761
+; llsize 25769
 define internal i32 @p488(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -174550,7 +174549,7 @@ L4:
   ret i32 %v103
 }
 
-; putstoragetypeat 25811
+; putstoragetypeat 25819
 define internal void @p496(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -174633,7 +174632,7 @@ L4:
   ret void
 }
 
-; putstructat 25821
+; putstructat 25829
 define internal void @p495(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -174727,7 +174726,7 @@ L12:
   ret void
 }
 
-; putlltype 25840
+; putlltype 25848
 define internal void @p494(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -174986,7 +174985,7 @@ L4:
   ret void
 }
 
-; appendint 25919
+; appendint 25927
 define internal void @p497(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175173,7 +175172,7 @@ L30:
   ret void
 }
 
-; appendlit 25939
+; appendlit 25947
 define internal void @p498(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175269,7 +175268,7 @@ L14:
   ret void
 }
 
-; appendpool 25952
+; appendpool 25960
 define internal void @p499(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175346,7 +175345,7 @@ L9:
   ret void
 }
 
-; appendlinkname 25961
+; appendlinkname 25969
 define internal void @p500(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175515,7 +175514,7 @@ L6:
   ret void
 }
 
-; appendprocname 25984
+; appendprocname 25992
 define internal void @p501(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175586,7 +175585,7 @@ L10:
   ret void
 }
 
-; opint 25995
+; opint 26003
 define internal void @p502(ptr %link, i32 %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175608,7 +175607,7 @@ L1:
   ret void
 }
 
-; opword 26001
+; opword 26009
 define internal void @p503(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175629,7 +175628,7 @@ L1:
   ret void
 }
 
-; opreg 26007
+; opreg 26015
 define internal void @p504(ptr %link, i32 %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175657,7 +175656,7 @@ L1:
   ret void
 }
 
-; opglobal 26015
+; opglobal 26023
 define internal void @p505(ptr %link, i32 %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175685,7 +175684,7 @@ L1:
   ret void
 }
 
-; putop 26023
+; putop 26031
 define internal void @p506(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175737,7 +175736,7 @@ L5:
   ret void
 }
 
-; writepoolir 26032
+; writepoolir 26040
 define internal void @p507(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175811,7 +175810,7 @@ L9:
   ret void
 }
 
-; putmodulepart 26058
+; putmodulepart 26066
 define internal void @p508(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175864,7 +175863,7 @@ L8:
   ret void
 }
 
-; def 26073
+; def 26081
 define internal void @p509(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175902,7 +175901,7 @@ L3:
   ret void
 }
 
-; newblock 26082
+; newblock 26090
 define internal i32 @p510(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175932,7 +175931,7 @@ L3:
   ret i32 %v15
 }
 
-; startblock 26088
+; startblock 26096
 define internal void @p511(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175962,7 +175961,7 @@ L3:
   ret void
 }
 
-; releasestrtemps 26101
+; releasestrtemps 26109
 define internal void @p512(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -175979,7 +175978,7 @@ L1:
   ret void
 }
 
-; labelblock 26111
+; labelblock 26119
 define internal i32 @p513(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176097,7 +176096,7 @@ L20:
   ret i32 %v57
 }
 
-; addglobal 26131
+; addglobal 26139
 define internal i32 @p514(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176209,7 +176208,7 @@ L14:
   ret i32 %v56
 }
 
-; msgstart 26147
+; msgstart 26155
 define internal void @p515(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176223,7 +176222,7 @@ L1:
   ret void
 }
 
-; msgtext 26153
+; msgtext 26161
 define internal void @p516(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176316,7 +176315,7 @@ L14:
   ret void
 }
 
-; msgend 26163
+; msgend 26171
 define internal i32 @p517(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176342,7 +176341,7 @@ L1:
   ret i32 %v15
 }
 
-; puthex 26171
+; puthex 26179
 define internal void @p518(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176521,7 +176520,7 @@ L23:
   ret void
 }
 
-; samelink 26187
+; samelink 26195
 define internal i1 @p519(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176664,7 +176663,7 @@ L25:
   ret i1 %v66
 }
 
-; needone 26196
+; needone 26204
 define internal void @p520(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176741,7 +176740,7 @@ L12:
   ret void
 }
 
-; needexternal 26208
+; needexternal 26216
 define internal void @p521(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176758,7 +176757,7 @@ L1:
   ret void
 }
 
-; needexternalproc 26213
+; needexternalproc 26221
 define internal void @p522(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176775,7 +176774,7 @@ L1:
   ret void
 }
 
-; foreigndeclared 26220
+; foreigndeclared 26228
 define internal i1 @p523(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176893,7 +176892,7 @@ L4:
   ret i1 %v54
 }
 
-; needexternalmodule 26234
+; needexternalmodule 26242
 define internal void @p524(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -176963,7 +176962,7 @@ L12:
   ret void
 }
 
-; emitglobals 26246
+; emitglobals 26254
 define internal void @p525(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177180,7 +177179,7 @@ L4:
   ret void
 }
 
-; emitconstglobals 26271
+; emitconstglobals 26279
 define internal void @p526(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177336,7 +177335,7 @@ L4:
   ret void
 }
 
-; optionalpart 26291
+; optionalpart 26299
 define internal void @p527(ptr %link, ptr %a0, ptr %a1, i32 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177380,7 +177379,7 @@ L3:
   ret void
 }
 
-; emittrapif 26301
+; emittrapif 26309
 define internal void @p528(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177452,7 +177451,7 @@ L7:
   ret void
 }
 
-; emittrapindex 26317
+; emittrapindex 26325
 define internal void @p529(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177525,7 +177524,7 @@ L5:
   ret void
 }
 
-; emittraprange 26340
+; emittraprange 26348
 define internal void @p530(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177598,7 +177597,7 @@ L5:
   ret void
 }
 
-; emittraplength 26366
+; emittraplength 26374
 define internal void @p531(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177671,7 +177670,7 @@ L5:
   ret void
 }
 
-; emittrapdisc 26387
+; emittrapdisc 26395
 define internal void @p532(ptr %link, ptr %a0, i32 %a1, i32 %a2, ptr %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177770,7 +177769,7 @@ L9:
   ret void
 }
 
-; frameglobal 26416
+; frameglobal 26424
 define internal void @p533(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177865,7 +177864,7 @@ L6:
   ret void
 }
 
-; frameat 26434
+; frameat 26442
 define internal void @p534(ptr %link, i32 %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177948,7 +177947,7 @@ L4:
   ret void
 }
 
-; frameof 26461
+; frameof 26469
 define internal void @p535(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -177997,7 +177996,7 @@ L6:
   ret void
 }
 
-; deferbase 26472
+; deferbase 26480
 define internal i32 @p536(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178066,7 +178065,7 @@ L9:
   ret i32 %v33
 }
 
-; deferrecord 26480
+; deferrecord 26488
 define internal void @p537(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178123,7 +178122,7 @@ L7:
   ret void
 }
 
-; deferflag 26488
+; deferflag 26496
 define internal void @p538(ptr %link, ptr %a0, ptr %a1, i32 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178203,7 +178202,7 @@ L11:
   ret void
 }
 
-; putdefername 26499
+; putdefername 26507
 define internal void @p539(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178236,7 +178235,7 @@ L5:
   ret void
 }
 
-; jumprecord 26506
+; jumprecord 26514
 define internal void @p540(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178310,7 +178309,7 @@ L11:
   ret void
 }
 
-; frameslot 26514
+; frameslot 26522
 define internal void @p541(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178432,7 +178431,7 @@ L6:
   ret void
 }
 
-; putdesctype 26542
+; putdesctype 26550
 define internal void @p542(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178510,7 +178509,7 @@ L8:
   ret void
 }
 
-; putdescparamtypes 26558
+; putdescparamtypes 26566
 define internal void @p543(ptr %link, ptr %a0, i1 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178660,7 +178659,7 @@ L14:
   ret void
 }
 
-; framevarat 26576
+; framevarat 26584
 define internal ptr @p544(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178758,7 +178757,7 @@ L15:
   ret ptr %v46
 }
 
-; addressofsym 26588
+; addressofsym 26596
 define internal void @p545(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -178939,7 +178938,7 @@ L6:
   ret void
 }
 
-; headersize 26643
+; headersize 26651
 define internal i32 @p546(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -179106,7 +179105,7 @@ L12:
   ret i32 %v76
 }
 
-; headerof 26662
+; headerof 26670
 define internal void @p547(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -179173,7 +179172,7 @@ L8:
   ret void
 }
 
-; boundvalue 26678
+; boundvalue 26686
 define internal void @p548(ptr %link, ptr %a0, i1 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -179522,7 +179521,7 @@ L11:
   ret void
 }
 
-; stringcapacity 26744
+; stringcapacity 26752
 define internal void @p549(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -179595,7 +179594,7 @@ L6:
   ret void
 }
 
-; dynlength 26753
+; dynlength 26761
 define internal void @p550(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -179687,7 +179686,7 @@ L10:
   ret void
 }
 
-; dynsize 26777
+; dynsize 26785
 define internal void @p551(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -180069,7 +180068,7 @@ L4:
   ret void
 }
 
-; emitvariantguard 26883
+; emitvariantguard 26891
 define internal void @p552(ptr %link, ptr %a0, ptr %a1, ptr %a2, i32 %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -180530,7 +180529,7 @@ L5:
   ret void
 }
 
-; accumulate 26891
+; accumulate 26899
 define internal void @p703(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -180688,7 +180687,7 @@ L13:
   ret void
 }
 
-; fieldaddress 27014
+; fieldaddress 27022
 define internal void @p553(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, i32 %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -180850,7 +180849,7 @@ L18:
   ret void
 }
 
-; holdsfile 27050
+; holdsfile 27058
 define internal i1 @p554(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -180975,7 +180974,7 @@ L3:
   ret i1 %v55
 }
 
-; ownrelid 27071
+; ownrelid 27079
 define internal i32 @p555(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -181145,7 +181144,7 @@ L29:
   ret i32 %v83
 }
 
-; walkfiles 27099
+; walkfiles 27107
 define internal void @p556(ptr %link, ptr %a0, ptr %a1, i1 %a2, i32 %a3, i32 %a4, i32 %a5) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -181830,7 +181829,7 @@ L4:
   ret void
 }
 
-; emitownrels 27280
+; emitownrels 27288
 define internal void @p557(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182124,7 +182123,7 @@ L4:
   ret void
 }
 
-; toreal 27343
+; toreal 27351
 define internal void @p558(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182181,7 +182180,7 @@ L5:
   ret void
 }
 
-; reof 27362
+; reof 27370
 define internal void @p559(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182205,7 +182204,7 @@ L1:
   ret void
 }
 
-; imof 27371
+; imof 27379
 define internal void @p560(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182229,7 +182228,7 @@ L1:
   ret void
 }
 
-; makecomplex 27383
+; makecomplex 27391
 define internal void @p561(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182269,7 +182268,7 @@ L1:
   ret void
 }
 
-; tocomplex 27400
+; tocomplex 27408
 define internal void @p562(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182309,7 +182308,7 @@ L3:
   ret void
 }
 
-; toint64 27415
+; toint64 27423
 define internal void @p563(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182351,7 +182350,7 @@ L3:
   ret void
 }
 
-; convertfor 27429
+; convertfor 27437
 define internal void @p564(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182407,7 +182406,7 @@ L4:
   ret void
 }
 
-; emitint64text 27449
+; emitint64text 27457
 define internal void @p565(ptr %link, i32 %a0, i32 %a1, i1 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182496,7 +182495,7 @@ L7:
   ret void
 }
 
-; emitrealtext 27458
+; emitrealtext 27466
 define internal void @p566(ptr %link, i32 %a0, i32 %a1, i1 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182846,7 +182845,7 @@ L56:
   ret void
 }
 
-; needssubrangecheck 27487
+; needssubrangecheck 27495
 define internal i1 @p567(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -182959,7 +182958,7 @@ L3:
   ret i1 %v53
 }
 
-; checkedforsubrange 27519
+; checkedforsubrange 27527
 define internal void @p568(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -183234,7 +183233,7 @@ L3:
   ret void
 }
 
-; heapheader 27606
+; heapheader 27614
 define internal void @p573(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -183591,7 +183590,7 @@ L68:
   ret void
 }
 
-; emitload 27673
+; emitload 27681
 define internal void @p577(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -183653,7 +183652,7 @@ L6:
   ret void
 }
 
-; constaddress 27696
+; constaddress 27704
 define internal void @p578(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -184023,7 +184022,7 @@ L8:
   ret void
 }
 
-; emitconst 27729
+; emitconst 27737
 define internal void @p579(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -184259,7 +184258,7 @@ L8:
   ret void
 }
 
-; setuniverse 27776
+; setuniverse 27784
 define internal void @p580(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -184364,7 +184363,7 @@ L9:
   ret void
 }
 
-; checkedforsetbase 27809
+; checkedforsetbase 27817
 define internal void @p581(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -184533,7 +184532,7 @@ L7:
   ret void
 }
 
-; checkedforstore 27850
+; checkedforstore 27858
 define internal void @p582(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -184557,7 +184556,7 @@ L1:
   ret void
 }
 
-; setindex 27860
+; setindex 27868
 define internal void @p583(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -184757,7 +184756,7 @@ L22:
   ret void
 }
 
-; emitset 27922
+; emitset 27930
 define internal void @p584(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -185094,7 +185093,7 @@ L8:
   ret void
 }
 
-; emitin 27999
+; emitin 28007
 define internal void @p585(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -185396,7 +185395,7 @@ L40:
   ret void
 }
 
-; emitsetbinary 28063
+; emitsetbinary 28071
 define internal void @p586(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -185749,7 +185748,7 @@ L13:
   ret void
 }
 
-; appendopnd 28150
+; appendopnd 28158
 define internal void @p587(ptr %link, ptr %a0, ptr %a1, ptr %a2, i1 %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -185851,7 +185850,7 @@ L12:
   ret void
 }
 
-; emitprocargument 28167
+; emitprocargument 28175
 define internal void @p588(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -186009,7 +186008,7 @@ L6:
   ret void
 }
 
-; putprocsignature 28216
+; putprocsignature 28224
 define internal void @p590(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -186082,7 +186081,7 @@ L13:
   ret void
 }
 
-; discvalue 28245
+; discvalue 28253
 define internal void @p591(ptr %link, ptr %a0, i32 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -186417,7 +186416,7 @@ L8:
   ret void
 }
 
-; narrowbound 28311
+; narrowbound 28319
 define internal void @p592(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -186465,7 +186464,7 @@ L5:
   ret void
 }
 
-; emitconfbounds 28325
+; emitconfbounds 28333
 define internal void @p593(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -186594,7 +186593,7 @@ L11:
   ret void
 }
 
-; emitslicevalue 28361
+; emitslicevalue 28369
 define internal void @p594(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -187105,7 +187104,7 @@ L22:
   ret void
 }
 
-; emitforeignargument 28474
+; emitforeignargument 28482
 define internal void @p595(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -187330,7 +187329,7 @@ L6:
   ret void
 }
 
-; emitusercall 28534
+; emitusercall 28542
 define internal void @p596(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -188675,7 +188674,7 @@ L234:
   ret void
 }
 
-; emitstringcompare 28799
+; emitstringcompare 28807
 define internal void @p597(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189008,7 +189007,7 @@ L58:
   ret void
 }
 
-; putintwidth 28850
+; putintwidth 28858
 define internal void @p598(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189032,7 +189031,7 @@ L4:
   ret void
 }
 
-; putintmin 28855
+; putintmin 28863
 define internal void @p599(ptr %link, i1 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189056,7 +189055,7 @@ L4:
   ret void
 }
 
-; emitcheckedarith 28861
+; emitcheckedarith 28869
 define internal void @p600(ptr %link, i8 %a0, ptr %a1, ptr %a2, ptr %a3, i32 %a4, i1 %a5) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189207,7 +189206,7 @@ L4:
   ret void
 }
 
-; guardnonzero 28915
+; guardnonzero 28923
 define internal void @p601(ptr %link, ptr %a0, i32 %a1, i1 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189243,7 +189242,7 @@ L1:
   ret void
 }
 
-; guardpositive 28932
+; guardpositive 28940
 define internal void @p602(ptr %link, ptr %a0, i32 %a1, i1 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189279,7 +189278,7 @@ L1:
   ret void
 }
 
-; guardrealnonzero 28948
+; guardrealnonzero 28956
 define internal void @p603(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189308,7 +189307,7 @@ L1:
   ret void
 }
 
-; guardsqrtarg 28960
+; guardsqrtarg 28968
 define internal void @p604(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189337,7 +189336,7 @@ L1:
   ret void
 }
 
-; guardlnarg 28973
+; guardlnarg 28981
 define internal void @p605(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189366,7 +189365,7 @@ L1:
   ret void
 }
 
-; checkedfptoint 28987
+; checkedfptoint 28995
 define internal void @p606(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189442,7 +189441,7 @@ L1:
   ret void
 }
 
-; emitshortcircuit 29020
+; emitshortcircuit 29028
 define internal void @p607(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189690,7 +189689,7 @@ L39:
   ret void
 }
 
-; emitfbin 29057
+; emitfbin 29065
 define internal void @p608(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189723,7 +189722,7 @@ L1:
   ret void
 }
 
-; emitcomplexpow 29071
+; emitcomplexpow 29079
 define internal void @p609(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, ptr %a4, i1 %a5, ptr %a6) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -189850,7 +189849,7 @@ L15:
   ret void
 }
 
-; emitcomplexbinary 29100
+; emitcomplexbinary 29108
 define internal void @p610(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -190144,7 +190143,7 @@ L12:
   ret void
 }
 
-; stringconstof 29207
+; stringconstof 29215
 define internal ptr @p611(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -190361,7 +190360,7 @@ L32:
   ret ptr %v94
 }
 
-; emitstring 29224
+; emitstring 29232
 define internal void @p572(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -191773,7 +191772,7 @@ L16:
   ret void
 }
 
-; emitstringstorevalue 29518
+; emitstringstorevalue 29529
 define internal void @p612(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3, ptr %a4) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -191937,7 +191936,7 @@ L4:
   ret void
 }
 
-; emitstringstore 29576
+; emitstringstore 29587
 define internal void @p613(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -191971,7 +191970,7 @@ L1:
   ret void
 }
 
-; emitstringvalue 29597
+; emitstringvalue 29608
 define internal void @p614(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -191996,7 +191995,7 @@ L1:
   ret void
 }
 
-; emittextcompare 29614
+; emittextcompare 29625
 define internal void @p615(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -192268,7 +192267,7 @@ L49:
   ret void
 }
 
-; emitstringcompare2 29651
+; emitstringcompare2 29662
 define internal void @p616(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -192419,7 +192418,7 @@ L22:
   ret void
 }
 
-; emitoptionaltest 29687
+; emitoptionaltest 29698
 define internal void @p617(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -192584,7 +192583,7 @@ L27:
   ret void
 }
 
-; emithandletest 29709
+; emithandletest 29720
 define internal void @p618(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -192730,7 +192729,7 @@ L25:
   ret void
 }
 
-; emitbinary 29725
+; emitbinary 29736
 define internal void @p619(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -194840,7 +194839,7 @@ L26:
   ret void
 }
 
-; emitunary 30027
+; emitunary 30038
 define internal void @p620(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -195081,7 +195080,7 @@ L14:
   ret void
 }
 
-; complexcall 30070
+; complexcall 30081
 define internal void @p621(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -195146,7 +195145,7 @@ L1:
   ret void
 }
 
-; emitleaveblock 30102
+; emitleaveblock 30113
 define internal void @p622(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -195203,7 +195202,7 @@ L11:
   ret void
 }
 
-; emittry 30126
+; emittry 30137
 define internal void @p623(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -195381,7 +195380,7 @@ L25:
   ret void
 }
 
-; emitcall 30149
+; emitcall 30160
 define internal void @p624(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -198531,7 +198530,7 @@ L8:
   ret void
 }
 
-; emitaddress 30854
+; emitaddress 30865
 define internal void @p570(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -200098,7 +200097,7 @@ L13:
   ret void
 }
 
-; emitexpr 31150
+; emitexpr 31161
 define internal void @p569(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201118,7 +201117,7 @@ L22:
   ret void
 }
 
-; emitcopyat 31263
+; emitcopyat 31274
 define internal void @p625(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201186,7 +201185,7 @@ L7:
   ret void
 }
 
-; emitcopy 31274
+; emitcopy 31285
 define internal void @p626(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201213,7 +201212,7 @@ L1:
   ret void
 }
 
-; emitstore 31285
+; emitstore 31296
 define internal void @p627(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201514,7 +201513,7 @@ L8:
   ret void
 }
 
-; emitcomponentvalue 31391
+; emitcomponentvalue 31402
 define internal void @p628(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201559,7 +201558,7 @@ L6:
   ret void
 }
 
-; copycomponent 31401
+; copycomponent 31412
 define internal void @p629(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201622,7 +201621,7 @@ L4:
   ret void
 }
 
-; arrayelement 31423
+; arrayelement 31434
 define internal void @p630(ptr %link, ptr %a0, ptr %a1, i32 %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -201686,7 +201685,7 @@ L7:
   ret void
 }
 
-; emitarrayvalue 31438
+; emitarrayvalue 31449
 define internal void @p631(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -202134,7 +202133,7 @@ L9:
   ret void
 }
 
-; emitrecordvalue 31483
+; emitrecordvalue 31494
 define internal void @p632(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -202662,7 +202661,7 @@ L67:
   ret void
 }
 
-; emitstructvalue 31549
+; emitstructvalue 31560
 define internal void @p571(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -202760,7 +202759,7 @@ L12:
   ret void
 }
 
-; widenordinal 31558
+; widenordinal 31569
 define internal void @p633(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -202809,7 +202808,7 @@ L5:
   ret void
 }
 
-; emittuplecheck 31577
+; emittuplecheck 31588
 define internal void @p634(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -203090,7 +203089,7 @@ L14:
   ret void
 }
 
-; emitassign 31614
+; emitassign 31625
 define internal void @p575(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -203872,7 +203871,7 @@ L10:
   ret void
 }
 
-; checkedwidth 31774
+; checkedwidth 31785
 define internal void @p635(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -203926,7 +203925,7 @@ L4:
   ret void
 }
 
-; emitwriteargs 31796
+; emitwriteargs 31807
 define internal void @p636(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -204625,7 +204624,7 @@ L8:
   ret void
 }
 
-; emitwrite 31925
+; emitwrite 31936
 define internal void @p637(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -205094,7 +205093,7 @@ L8:
   ret void
 }
 
-; emitreadargs 32001
+; emitreadargs 32012
 define internal void @p638(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -205385,7 +205384,7 @@ L8:
   ret void
 }
 
-; emitread 32118
+; emitread 32129
 define internal void @p639(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -205789,7 +205788,7 @@ L8:
   ret void
 }
 
-; emitnewselectors 32223
+; emitnewselectors 32234
 define internal void @p641(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -205981,7 +205980,7 @@ L4:
   ret void
 }
 
-; emitnewtuple 32257
+; emitnewtuple 32268
 define internal void @p642(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -206457,7 +206456,7 @@ L71:
   ret void
 }
 
-; emittransfer 32358
+; emittransfer 32369
 define internal void @p643(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -207012,7 +207011,7 @@ L63:
   ret void
 }
 
-; emitstdproc 32517
+; emitstdproc 32528
 define internal void @p644(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -208692,7 +208691,7 @@ L8:
   ret void
 }
 
-; emitif 32837
+; emitif 32848
 define internal void @p645(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -208899,7 +208898,7 @@ L29:
   ret void
 }
 
-; emitwhile 32862
+; emitwhile 32873
 define internal void @p646(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -209065,7 +209064,7 @@ L19:
   ret void
 }
 
-; emitrepeat 32895
+; emitrepeat 32906
 define internal void @p647(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -209277,7 +209276,7 @@ L28:
   ret void
 }
 
-; emitlabeled 32940
+; emitlabeled 32951
 define internal void @p648(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -209397,7 +209396,7 @@ L8:
   ret void
 }
 
-; emitgoto 32956
+; emitgoto 32967
 define internal void @p649(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -209590,7 +209589,7 @@ L7:
   ret void
 }
 
-; emitforintext 32999
+; emitforintext 33010
 define internal void @p650(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -209929,7 +209928,7 @@ L31:
   ret void
 }
 
-; emitforin 33092
+; emitforin 33103
 define internal void @p651(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -210567,7 +210566,7 @@ L79:
   ret void
 }
 
-; emitfor 33255
+; emitfor 33266
 define internal void @p652(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -211311,7 +211310,7 @@ L8:
   ret void
 }
 
-; emitwith 33427
+; emitwith 33438
 define internal void @p653(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -211771,7 +211770,7 @@ L76:
   ret void
 }
 
-; deferstmtof 33518
+; deferstmtof 33529
 define internal ptr @p654(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -211866,7 +211865,7 @@ L15:
   ret ptr %v40
 }
 
-; emitdeferrun 33527
+; emitdeferrun 33538
 define internal void @p655(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -212053,7 +212052,7 @@ L23:
   ret void
 }
 
-; rundefersreversed 33563
+; rundefersreversed 33574
 define internal void @p656(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -212098,7 +212097,7 @@ L3:
   ret void
 }
 
-; endsequence 33578
+; endsequence 33589
 define internal void @p576(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -212156,7 +212155,7 @@ L10:
   ret void
 }
 
-; emitcase 33590
+; emitcase 33601
 define internal void @p657(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -213048,7 +213047,7 @@ L141:
   ret void
 }
 
-; emitstmt 33711
+; emitstmt 33722
 define internal void @p574(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -213758,7 +213757,7 @@ L3:
   ret void
 }
 
-; putslottype 33808
+; putslottype 33819
 define internal void @p658(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -213848,7 +213847,7 @@ L6:
   ret void
 }
 
-; putparamtypes 33828
+; putparamtypes 33839
 define internal void @p589(ptr %link, ptr %a0, i1 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -214235,7 +214234,7 @@ L4:
   ret void
 }
 
-; emitframetype 33877
+; emitframetype 33888
 define internal void @p659(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -214446,7 +214445,7 @@ L32:
   ret void
 }
 
-; declareprocs 33907
+; declareprocs 33918
 define internal void @p660(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -214818,7 +214817,7 @@ L51:
   ret void
 }
 
-; initfiles 33942
+; initfiles 33953
 define internal void @p661(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -215043,7 +215042,7 @@ L6:
   ret void
 }
 
-; initdefers 33967
+; initdefers 33978
 define internal void @p662(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -215157,7 +215156,7 @@ L5:
   ret void
 }
 
-; emitexittarget 33996
+; emitexittarget 34007
 define internal void @p663(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -215216,7 +215215,7 @@ L5:
   ret void
 }
 
-; closefiles 34009
+; closefiles 34020
 define internal void @p664(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -215421,7 +215420,7 @@ L36:
   ret void
 }
 
-; jumpdispatch 34052
+; jumpdispatch 34063
 define internal void @p665(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -215598,7 +215597,7 @@ L5:
   ret void
 }
 
-; checkschemadomain 34084
+; checkschemadomain 34095
 define internal void @p640(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -215963,7 +215962,7 @@ L3:
   ret void
 }
 
-; initialstateinto 34202
+; initialstateinto 34213
 define internal void @p666(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -216097,7 +216096,7 @@ L4:
   ret void
 }
 
-; initinitialstates 34219
+; initinitialstates 34230
 define internal void @p667(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -216263,7 +216262,7 @@ L6:
   ret void
 }
 
-; initconstants 34242
+; initconstants 34253
 define internal void @p668(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -216341,7 +216340,7 @@ L6:
   ret void
 }
 
-; fillsowndescriptor 34259
+; fillsowndescriptor 34270
 define internal i1 @p669(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -216441,7 +216440,7 @@ L6:
   ret i1 %v39
 }
 
-; initdynamicvars 34267
+; initdynamicvars 34278
 define internal void @p670(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -217012,7 +217011,7 @@ L6:
   ret void
 }
 
-; beginfunction 34358
+; beginfunction 34369
 define internal void @p671(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -217098,7 +217097,7 @@ L12:
   ret void
 }
 
-; enterframe 34391
+; enterframe 34402
 define internal void @p672(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -218472,7 +218471,7 @@ L205:
   ret void
 }
 
-; emitdeferrunner 34714
+; emitdeferrunner 34725
 define internal void @p673(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -218587,7 +218586,7 @@ L5:
   ret void
 }
 
-; emitprocbody 34736
+; emitprocbody 34747
 define internal void @p674(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -218987,7 +218986,7 @@ L56:
   ret void
 }
 
-; emitprocs 34804
+; emitprocs 34815
 define internal void @p675(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -219156,7 +219155,7 @@ L8:
   ret void
 }
 
-; emitdeclares 34825
+; emitdeclares 34836
 define internal void @p676(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -219592,7 +219591,7 @@ L9:
   ret void
 }
 
-; emitframealiases 35007
+; emitframealiases 35018
 define internal void @p677(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -219784,7 +219783,7 @@ L6:
   ret void
 }
 
-; emitexterns 35033
+; emitexterns 35044
 define internal void @p678(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -220504,7 +220503,7 @@ L43:
   ret void
 }
 
-; emitframeglobal 35127
+; emitframeglobal 35138
 define internal void @p679(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -220585,7 +220584,7 @@ L6:
   ret void
 }
 
-; emitfinis 35142
+; emitfinis 35153
 define internal void @p680(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -220631,7 +220630,7 @@ L3:
   ret void
 }
 
-; emitmodule 35156
+; emitmodule 35167
 define internal void @p681(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -220853,7 +220852,7 @@ L31:
   ret void
 }
 
-; runcodegen 35195
+; runcodegen 35206
 define internal void @p682(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -221659,7 +221658,7 @@ L127:
   ret void
 }
 
-; readtranslatedcomponents 35390
+; readtranslatedcomponents 35401
 define internal void @p683(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -221896,7 +221895,7 @@ L5:
   ret void
 }
 
-; dumppredicates 35487
+; dumppredicates 35498
 define internal void @p684(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222014,7 +222013,7 @@ L14:
   ret void
 }
 
-; writetrim 35491
+; writetrim 35502
 define internal void @p704(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222107,7 +222106,7 @@ L14:
   ret void
 }
 
-; putkindname 35499
+; putkindname 35510
 define internal void @p705(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222210,7 +222209,7 @@ L24:
   ret void
 }
 
-; row 35528
+; row 35539
 define internal void @p706(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222341,7 +222340,7 @@ L18:
   ret void
 }
 
-; dumplimits 35597
+; dumplimits 35608
 define internal void @p685(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222395,7 +222394,7 @@ L9:
   ret void
 }
 
-; chainrecof 35607
+; chainrecof 35618
 define internal ptr @p686(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222456,7 +222455,7 @@ L4:
   ret ptr %v29
 }
 
-; iscontinuation 35619
+; iscontinuation 35630
 define internal i1 @p687(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222520,7 +222519,7 @@ L4:
   ret i1 %v30
 }
 
-; chainarms 35631
+; chainarms 35642
 define internal i32 @p688(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222580,7 +222579,7 @@ L4:
   ret i32 %v30
 }
 
-; chainhas 35644
+; chainhas 35655
 define internal i1 @p689(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222718,7 +222717,7 @@ L4:
   ret i1 %v66
 }
 
-; chainfield 35665
+; chainfield 35676
 define internal void @p690(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222880,7 +222879,7 @@ L4:
   ret void
 }
 
-; chainnames 35684
+; chainnames 35695
 define internal i32 @p691(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -222958,7 +222957,7 @@ L7:
   ret i32 %v39
 }
 
-; dumpdispatch 35722
+; dumpdispatch 35734
 define internal void @p692(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -224311,7 +224310,7 @@ L225:
   ret void
 }
 
-; dumplayout 35897
+; dumplayout 35909
 define internal void @p693(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -224587,7 +224586,7 @@ L4:
   ret void
 }
 
-; compile 35933
+; compile 35947
 define internal void @p694(ptr %link) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -231161,12 +231160,12 @@ L69:
 @s6249 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
 @s6250 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s6251 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
-@s6252 = private unnamed_addr constant [29 x i8] c"' takes exactly one argument\00"
-@s6253 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s6254 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
-@s6255 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s6256 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
-@s6257 = private unnamed_addr constant [30 x i8] c", or two under --std=extended\00"
+@s6252 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s6253 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
+@s6254 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s6255 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
+@s6256 = private unnamed_addr constant [29 x i8] c"' takes one or two arguments\00"
+@s6257 = private unnamed_addr constant [29 x i8] c"' takes exactly one argument\00"
 @s6258 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s6259 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s6260 = private unnamed_addr constant [37 x i8] c"variant: the tag selects another arm\00"
