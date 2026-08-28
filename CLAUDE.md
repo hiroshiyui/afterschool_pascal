@@ -38,11 +38,11 @@ among them, which was the only third-party corpus this project ever had. It was
 raised, measured and decided. **Don't reopen it**; note it in one line if a
 decision genuinely turns on it, then proceed.
 
-Since ADR-0108 there is a second C++ implementation in `src/`, but it is a
-**reference front end** and not the compiler: lexer, parser and Sema only, no
-code generator, no LLVM. It existed so `selfhost/difftest.sh` had two answers
-to compare, which ADR-0232 retires. Read a mention of C++ below as naming that,
-or as history.
+There was a second C++ implementation in `src/` from ADR-0108 — a **reference
+front end** and not a compiler: lexer, parser and Sema only, no code generator,
+no LLVM. It existed so `selfhost/difftest.sh` had two answers to compare, and
+was deleted with difftest (ADR-0232). Read a mention of C++ below as naming
+that, or as history; the code is at tag `v0.1.0` and in the log.
 
 Bootstrapping was an earlier goal and is done; what survives of it is a
 constraint on the *order* features land in — a feature must be expressible in
@@ -52,7 +52,7 @@ what `seed/pascalc.ll` accepts, or the seed is refreshed first.
 
 ```sh
 # configure -- no LLVM_DIR: nothing links libLLVM since ADR-0085
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang and a C++20 compiler
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release   # needs clang; no C++, no LLVM
 cmake --build build -j
 
 ctest --test-dir build --output-on-failure
@@ -115,9 +115,9 @@ fact about the source program, that fact belongs in Sema. On an error path Sema
 still assigns a placeholder type rather than nil, so codegen cannot crash on a
 half-checked tree.
 
-This was written about `src/codegen.cpp` and holds unchanged for the Pascal one
-it was ported to; the C++ compiler is gone (ADR-0085) and the contract is the
-thing that survived it. Where a document here still names a C++ file — several
+This was written about the C++ code generator and holds unchanged for the
+Pascal one it was ported to; that compiler is gone (ADR-0085) and the contract
+is the thing that survived it. Where a document here still names a C++ file — several
 entries in `doc/design-digest.md` do — read it as naming the component: the port
 is line-for-line enough that the reasoning transfers, which is what ADR-0022 to
 ADR-0024 were for.
@@ -540,8 +540,8 @@ Four things about the dialect are worth knowing before adding anything:
   test. AP 6.4.15, the text model, was the whole of that list and is implemented; nothing is marked today, and `spec-clause-traceability` checks the marker against the triage in both directions (ADR-0195).
 - **No second implementation follows it.** `src/` was frozen at the conformance
   surface (ADR-0117), so a dialect source was compared by nothing; ADR-0232
-  removed the conformance surface, so *every* source is now in that position and
-  `difftest` retires. What is left is the goldens, `verify/` for a new lowering,
+  removed the conformance surface, so *every* source is now in that position,
+  and `difftest` and `src/` are both gone. What is left is the goldens, `verify/` for a new lowering,
   `tests/spec/` for a clause-shaped requirement, the stage-2/stage-3 fixed point
   and `llc-second-backend`. `doc/sop.md` §7 carries the gap, which is now the
   largest one here.
@@ -649,7 +649,7 @@ else.** `pascalc --dump-all` writes three sections (`=== tokens`, `=== ast`,
 `=== sema`). `selfhost/difftest.sh` used to diff them against a second front
 end's over every `.pas` in the tree — the strongest oracle here; ADR-0085 gave
 it up with stage 0, ADR-0108 brought it back, and ADR-0232 retired it for good,
-because `src/` is frozen at a conformance surface that no longer exists.
+because `src/` was frozen at a conformance surface that no longer exists.
 
 **Know what that means when you change a stage.** A golden agrees with whatever
 wrote it, so a change that is wrong in the dump *and* wrong in the goldens you

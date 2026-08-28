@@ -22,9 +22,9 @@ a constant left off one of these lists is a **compiler crash** on the first
 program that reaches it -- not a wrong answer some golden could hold. That is
 why no other gate here can see it: a missing arm is not a statement, so
 line-coverage does not count it, and procedure-coverage asks only whether the
-procedure was entered. difftest cannot report it either, because src/'s
-counterparts are C++ `switch`es with a `default`, so the Pascal crashes where
-the C++ answers and there is no disagreement to compare.
+procedure was entered. difftest could not report it either while it existed,
+because the C++ counterparts were `switch`es with a `default`: the Pascal
+crashed where the C++ answered, and a crash is not a disagreement to compare.
 
 It has happened twice, both in `StaticThroughout`. It listed fifteen of sixteen
 type kinds and omitted `tyString`, and every schema type containing a

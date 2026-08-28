@@ -21,7 +21,7 @@ it staying one. When a lowering changes, this changes with it, and
 `verify.py --crosscheck` is what catches the two drifting apart.
 
 The generator it mirrors is `selfhost/compiler.pas`, which since ADR-0085 is the
-only one. It was written against `src/codegen.cpp` and re-pointed when stage 0
+only one. It was written against the C++ code generator and re-pointed when stage 0
 was retired; the model needed no change, because what it describes is the
 *emitted instruction sequence* and not any compiler's internals.
 

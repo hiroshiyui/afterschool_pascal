@@ -19,7 +19,7 @@
 #
 #   producttest.sh <path-to-pascalc> <runtime-dir> [files...]
 #
-# `pascalc` is `selfhost/compiler.pas` translated by `pascalc-s0` and linked by
+# `pascalc` is `selfhost/compiler.pas` translated by the seed and linked by
 # CMake, and until this existed nothing tested that artefact. `irtest.sh` looks
 # thorough enough to cover it and does not: it builds a stage-1 compiler of its
 # own in a temporary directory, so the binary in `build/bin` could be missing,

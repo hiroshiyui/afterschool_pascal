@@ -28,7 +28,7 @@ Two halves, and neither is sufficient alone:
                 computed independently in Python.
 
 The proof half reasons about `lowering.py`, which is a hand-written model of
-CodeGen -- of `selfhost/compiler.pas` since ADR-0085, and of `src/codegen.cpp`
+CodeGen -- of `selfhost/compiler.pas` since ADR-0085, and of the C++ one
 before it, which is a file that no longer exists. That model can drift from the
 compiler, and a proof about a stale
 model is worse than no proof because it is reassuring. The cross-check is what

@@ -3,8 +3,9 @@
 # What this checks that a developer's machine cannot: **the build needs cmake,
 # make and clang, and nothing of LLVM's**. That is the claim ADR-0085 made and
 # v1.0.0 shipped, and it is unfalsifiable on a machine that already has LLVM 21
-# and a C++ toolchain installed -- which every machine this compiler has ever
-# been built on does. So the jobs below run in minimal containers and install
+# installed -- which every machine this compiler has ever been built on does.
+# Since ADR-0232 removed the C++ reference front end it needs no C++ compiler
+# either, which this workflow is also where anyone would find out. So the jobs below run in minimal containers and install
 # exactly what the documented build instructions name.
 #
 # That is not decoration: the first run of this workflow failed, because
@@ -15,18 +16,18 @@
 # never seen this repository -- see doc/roadmap.md, "What is next", for what is
 # still missing and why CI does not supply it.
 #
-# One of those oracles is not in this repository. The BSI Pascal Validation
-# Suite is fetched rather than committed, so the `ctest` case for it *skips*
-# wherever nobody has fetched it -- which was every container here, leaving the
-# newest oracle running only on a developer's machine. The third job fetches it
-# and runs it. A clone of the upstream repository takes about five seconds, so
-# it is not cached: a cache would put a copy of somebody else's corpus on a
-# third service, and BSI grants use rather than redistribution.
+# One of those oracles is not in this repository. The Unicode Character
+# Database is fetched rather than committed, so the `ctest` case for it *skips*
+# wherever nobody has fetched it -- which was every container here, leaving that
+# oracle running only on a developer's machine. A job of its own fetches it and
+# runs it.
 #
-# Two jobs exist because a `ctest` case that *skips* is reported as a pass, and
-# a skip is how a check silently stops being one: `validation-suite` and
+# Such jobs exist because a `ctest` case that *skips* is reported as a pass, and
+# a skip is how a check silently stops being one: `unicode-conformance` and
 # `second-backend` each install what their case needs and then grep the log to
-# refuse a green bar that skipped. `second-backend` is also the one job that
+# refuse a green bar that skipped. A third, `validation-suite`, ran the 1982 BSI
+# Pascal Validation Suite until ADR-0232 removed the conformance modes it
+# validated. `second-backend` is also the one job that
 # installs something the documented build does not need -- `llvm`, for `llc` --
 # which is exactly why it is a job and not a step of `test`: putting it there
 # would falsify the claim the first paragraph makes, with nothing to report it.
@@ -138,61 +139,14 @@ jobs:
         # paths in the environment. This is the plain invocation a reader gets
         # from README.md, with nothing set.
 
-  validation-suite:
-    # The one oracle nobody here wrote (ADR-0086): 812 ISO 7185 programs from
-    # 1982, (C) British Standards Institution. Running it is NOT a validation
-    # and this job does not make it one -- see tests/bsi/README.md for BSI's
-    # three conditions, the third of which is why tests/bsi/run.sh prints every
-    # category's counts on every invocation rather than a single number.
-    #
-    # It is a job of its own so that a red bar says which oracle disagreed, and
-    # so that the fetch is a step with a name: this job can also go red because
-    # GitHub or the upstream repository is unreachable, and the step that
-    # failed is what tells the two apart.
-    name: the BSI validation suite
-    runs-on: ubuntu-latest
-    container: 'debian:trixie'
-
-    steps:
-      - name: Install the documented dependencies
-        run: |
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            ca-certificates cmake make clang git python3
-
-      - uses: actions/checkout@v4
-
-      - name: Fetch the suite from upstream
-        run: tests/bsi/fetch.sh
-        # Pinned to one commit, so a red bar cannot be a corpus edit. The
-        # directory it writes is gitignored and stays that way.
-
-      - name: Build
-        run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-          cmake --build build -j"$(nproc)"
-
-      - name: Run it, and refuse to pass by skipping
-        run: |
-          set -o pipefail
-          ctest --test-dir build -R bsi --output-on-failure 2>&1 | tee /tmp/bsi.log
-          # The case skips (exit 77) when the suite is absent, and ctest reports
-          # a skip as success. That is right for a checkout and wrong here: this
-          # job would go green having compiled none of the 812. The fetch above
-          # is what makes it run; this is what makes a silent skip impossible.
-          if grep -q 'Skipped' /tmp/bsi.log; then
-            echo "the validation suite was skipped, so this job proved nothing" >&2
-            exit 1
-          fi
-
   unicode-conformance:
-    # The second oracle in this repository that nobody here wrote, after the
-    # BSI suite above (ADR-0086, ADR-0189). AP 6.4.15 rests on Normalization
+    # The one oracle in this repository that nobody here wrote, since the BSI
+    # suite went with the conformance modes (ADR-0189, ADR-0232). AP 6.4.15 rests on Normalization
     # Form C and on where an extended grapheme cluster ends, and neither is
     # something a reading taken in this repository could be trusted to settle --
     # which is ADR-0072's blind spot exactly. Unicode publishes the answers.
     #
-    # A job of its own for the same reason the BSI one is: the fetch is a step
+    # A job of its own so a red bar names the oracle: the fetch is a step
     # with a name, so a red bar caused by unicode.org being unreachable is
     # distinguishable from a red bar caused by the runtime being wrong.
     name: the Unicode conformance files

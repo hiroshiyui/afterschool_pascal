@@ -28,17 +28,17 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Requires `cmake`, a `make`, `clang` and a **C++20 compiler** on PATH, and
-**nothing of LLVM's** — no development files, no `LLVM_DIR`. `clang` is wanted
+Requires `cmake`, a `make` and `clang` on PATH, and **nothing of LLVM's** — no development files, no `LLVM_DIR`. `clang` is wanted
 as an assembler and a linker, not as a compiler front end: **the compiler is
 written in Afterschool Pascal**, and the one that builds it is
 `seed/pascalc.ll`, a working compiler in LLVM IR committed to this repository.
 `clang` assembles the seed; the seed translates `selfhost/compiler.pas`; that is
 `build/bin/pascalc`, and it compiles itself to a fixed point.
 
-The build produces one other binary, `pascalc-s0`, which is **not a compiler** —
-a second front end kept only so the two can be compared. Nothing it produces
-ships, and `build/bin/pascalc` does not depend on it. See
+The build produces nothing else. A second front end in C++ was built beside it
+for a while, so that the two could be compared; it was frozen at the
+conformance surface and went with the conformance modes (ADR-0232), and with it
+the last reason this build needed a C++ compiler. See
 [doc/developer-guide.md](doc/developer-guide.md) if you are working on the
 compiler rather than with it.
 

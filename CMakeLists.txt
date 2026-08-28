@@ -15,10 +15,10 @@
 # with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 cmake_minimum_required(VERSION 3.20)
-project(afterschool_pascal VERSION 2.1.0 LANGUAGES C CXX)
+# C only. The C++ reference front end went with ADR-0232's conformance modes,
+# and with it the last thing here that needed a C++ compiler.
+project(afterschool_pascal VERSION 2.1.0 LANGUAGES C)
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -34,11 +34,9 @@ file(MAKE_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 find_program(APASCAL_CLANG clang REQUIRED)
 message(STATUS "Afterschool Pascal: assembling with ${APASCAL_CLANG}")
 
-# Warnings, for the two targets built from C and C++ here. There were none set
-# at all, so the three the compiler had to say went unheard: two functions in
-# src/main.cpp left over from when it drove the assembler, and a Sema parameter
-# that had stopped being read. All three are gone, and `runtime/pasrt.c` was
-# already clean, so this costs nothing to keep on.
+# Warnings, for the runtime -- the only C in this repository. There were none
+# set at all when this was written, and `runtime/pasrt.c` was already clean, so
+# it costs nothing to keep on.
 #
 # Not -Werror. doc/sop.md's gates fail a developer's `ctest` before a push, and
 # a warning introduced by a *newer* compiler than the one a change was written
@@ -63,28 +61,6 @@ add_library(pasrt STATIC runtime/pasrt.c runtime/pasrt_posix.c
                          runtime/pasrt_unicode.c)
 target_include_directories(pasrt PUBLIC runtime)
 target_compile_options(pasrt PRIVATE ${APASCAL_WARNINGS})
-
-# ---- The reference front end (ADR-0108) ----
-#
-# `src/` is a second implementation of the lexer, the parser and Sema, in C++.
-# It is NOT the compiler and generates no code: `selfhost/difftest.sh` compares
-# the three `--dump` sections, and code generation was never among them (two
-# backends' assembler text is not comparable, ADR-0025). So it links no LLVM,
-# which is what makes a second implementation affordable to keep.
-#
-# It exists because a golden agrees with whoever wrote it. It is the only thing
-# here that can disagree about the *front end* without being asked a question
-# someone here composed.
-add_executable(pascalc-s0
-  src/lexer.cpp src/parser.cpp src/sema.cpp src/astdump.cpp src/diag.cpp
-  src/main.cpp)
-target_include_directories(pascalc-s0 PRIVATE src)
-target_compile_features(pascalc-s0 PRIVATE cxx_std_20)
-target_compile_options(pascalc-s0 PRIVATE ${APASCAL_WARNINGS})
-target_compile_definitions(pascalc-s0 PRIVATE
-  APASCAL_VERSION="${PROJECT_VERSION}")
-set_target_properties(pascalc-s0 PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # ---- The compiler: written in Afterschool Pascal, built by the seed ----
 #
