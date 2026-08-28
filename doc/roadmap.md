@@ -20,7 +20,7 @@ decide about, and the day it is decided it moves there.
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the six library gaps and the two deliberate language absences, none of which is a mystery |
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the one library gap in front of it |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
-| [The open questions](#the-open-questions) | the one structural risk no record can close, and the one oracle still worth building |
+| [The open questions](#the-open-questions) | the one structural risk no record can close — and it is now the only entry left |
 | [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open — which has since been taken |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
@@ -451,10 +451,11 @@ Two conclusions worth stating:
   decide on that — cost is a reason to prefer one, not evidence about which the
   language needs.
 
-One option **closes** as the language diverges: a third-party differential
-(FPC under `-Miso`, or p5) can only ever check the ISO 7185 core, because
-nobody else implements this dialect. Worth spending while it is still worth
-anything — it is the first item under the next heading.
+One option was **closing** as the language diverges — a third-party
+differential can only ever check the ISO 7185 core, because nobody else
+implements this dialect — and it was taken for that reason (ADR-0234). It
+checks 103 of 244 cases with a golden today and will check fewer next
+release.
 
 ---
 
@@ -463,18 +464,19 @@ anything — it is the first item under the next heading.
 Seven structural questions about the dialect and five items of *what is next*
 used to stand here. Ten of the twelve are answered — the table at the end says
 where — and what each found on its first run is in
-[`doc/history.md`](history.md#what-the-roadmap-answered). **Two remain**, and
-only one of them is a task: §2 below. §1 is a standing risk no record can
-close, which is why it is first — it is read every time and finished never.
-§4 was opened and answered on one day, by the route its own entry records: it
-is what was left when a limitation written here turned out to be a misreading
-(ADR-0214, ADR-0215).
+[`doc/history.md`](history.md#what-the-roadmap-answered). **One remains, and
+it is not a task**: §1 is a standing risk no record can close, which is why it
+is first — it is read every time and finished never. §2 was the last of the
+tasks and is done (ADR-0234). §4 was opened and answered on one day, by the
+route its own entry records: it is what was left when a limitation written
+here turned out to be a misreading (ADR-0214, ADR-0215).
 
-**Version 3 made both of the two that remain heavier**, which is the one thing
-to know before reading them: ADR-0232 removed the conformance modes, and with
+**Version 3 made §1 heavier and §2 more urgent**, which is the one thing to
+know before reading them: ADR-0232 removed the conformance modes, and with
 them the BSI suite and `difftest` — the whole of §1's second column and the
 premise of §2. Neither entry gained a new problem; each lost what partly
-covered it.
+covered it, and §2 was then taken *because* it was shrinking. It bought §1 a
+row back, and not the two it lost.
 
 ### 1. The dialect has no external authority, and every gate here is anchored in one
 
@@ -492,6 +494,7 @@ one. The two struck rows went with the conformance modes they were about.
 | independent reading | [the spec](afterschool-pascal-spec.md), audited once (ADR-0144), by readers isolated since ADR-0228 |
 | goldens, irtest, `llc`, `verify/` | yes |
 | a published third-party answer | Unicode's own conformance files, for AP 6.4.15 alone (ADR-0189) |
+| a second **processor** | Free Pascal under `-Miso`, over the 103 of 244 cases with a golden that it will compile — programs only, never `tests/dialect/` (ADR-0234) |
 
 Every oracle in this repository bottoms out in *this project says X*, and no
 oracle here can contradict a **reading** — which is how ADR-0072's set-packing
@@ -511,7 +514,16 @@ none. A high citation fraction means the specification is young and was written
 against a compiler someone could probe, not that this language is as well
 checked as the conformance modes used to be.
 
-The one thing that grew is the last row. `unicode-conformance` (ADR-0189,
+**Two rows have grown since, and neither replaces what was lost.**
+`fpc-differential` (ADR-0234) is a second *processor* rather than a second
+corpus: it reaches 103 of the 244 cases with a golden, none of them in
+`tests/dialect/`, and it is not an authority — it implements neither standard
+completely, so a disagreement is a contradiction to be judged and not a
+verdict. What it is worth is that a reading now has something that will
+disagree with it out loud: three of its six clause-level disagreements
+corroborate readings nothing here could challenge, ADR-0073's among them.
+
+The other is `unicode-conformance` (ADR-0189,
 ADR-0190) is a published answer nobody in this project wrote, checked against
 20 034 normalisation cases and 766 segmentation cases — and it is the shape
 worth looking for again: **a facility whose correctness some outside body has
@@ -553,32 +565,36 @@ narrower than it looks — that a *misreading of the two standards* is invisible
 here — and it has nothing to say about a facility the dialect invents outright,
 where there is no reading to get wrong.
 
-### 2. A third-party differential — **narrower than it was, and more wanted**
+### 2. ~~A third-party differential~~ — done (ADR-0234)
 
-It used to read: FPC under `-Miso`, or p5, over the ISO 7185 half of `tests/`.
-Not a second implementation to maintain — a second *answer*, on programs that
-already exist. ADR-0232 took the premise away twice over: there is no ISO 7185
-half, and 25 of those programs no longer compile here.
+`fpc-differential` compiles every case with a golden under Free Pascal's
+`-Miso` and compares. It is a `ctest` case that skips without `fpc`, and
+`tests/checks/fpc_disagreements.txt` is the catalogue, failing in both
+directions like every other catalogue here.
 
-What is left is real but smaller, and it is worth more than before, because
-`difftest` and the BSI suite both went and nothing replaced either.
+**It found no defect in this compiler**, which is the result and not a
+disappointment: of eleven catalogued disagreements, six turn on a clause and
+all six are decided here, two are implementation-defined, and three are not
+verdicts. Three of the six corroborate a reading that nothing in this tree
+could previously challenge — ADR-0073's mixed comment delimiters, whose own
+record says a comment is invisible to every stage after the lexer so no oracle
+here could have caught it; `round` defined by equivalence rather than by a
+rounding mode, where the test's comment had predicted the disagreement and had
+never met a processor that made it true; and ADR-0076's longest-prefix number
+read.
 
-- **The portable half of `lib/`.** Eight modules are ordinary Extended Pascal
-  and were kept that way deliberately (ADR-0114, ADR-0120) — `passtrings`,
-  `passort`, `pasmath`, `pasvector`, `pasmap`, `pastext`, `pasfile`,
-  `passtrvec`, with the cases that exercise them. A second Extended Pascal
-  processor can run those, and a disagreement is a finding about this compiler.
-- **The corpus that never used a reserved spelling.** Most of `tests/` is
-  Extended Pascal that any conforming processor accepts; what disqualifies a
-  case is a word-symbol used as an identifier, which is now a property a script
-  can test for rather than a guess.
-- **Not `tests/dialect/`, and that is the point.** Everything this language
-  invents is compared by nothing, and no third party can be found for it —
-  which is [§1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
-  standing risk, not a task this entry can discharge.
+**Two things this entry got wrong, both worth keeping.** It named the eight
+conforming `lib/` modules first, as the portable half — and no second
+processor can run them: FPC's `-Mextendedpascal` does not implement §6.13's
+modules at all, so `module m interface;` is a syntax error. And it said the
+option was worth more now than later; the numbers say how much more. FPC
+refuses **141 of 244** cases with a golden, so the differential reaches 103,
+and every release moves that the wrong way.
 
-It closes further as the language diverges, so it is worth more now than
-later — the same sentence it always carried, with less behind it each release.
+What is left is not a task. `tests/dialect/` is compared by nothing and no
+third party can be found for it, which is
+[§1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
+standing risk.
 
 ### 3. ~~Mutation testing, committed to the tree~~ — done (ADR-0207)
 
@@ -1052,6 +1068,7 @@ the record.
 | Are the dialect's pieces coherent? | Four result shapes, one rule in two questions; a boundary shape may be a parameter and not a result | ADR-0141, ADR-0149 |
 | Do the conformance modes "stay exactly as they are"? | They did, until they were removed. What they accepted never moved for the dialect; then ADR-0232 removed the modes rather than the promise | ADR-0154, ADR-0232 |
 | Memory safety: deferral or discovery? | Discovery, twice. Lifetime was already answered, by the file variable (ADR-0151); aliasing was too, by refusal for the three affine kinds and by a **borrow that cannot escape** for the rest — Pascal has no address-of, so no pointer can name what a `var` parameter refers to. What is left of the fork is two threads of control and nothing else | ADR-0151, ADR-0201 |
+| A third-party differential | Free Pascal under `-Miso` over every case with a golden, catalogued by which clause decides each disagreement. No defect found here; six clause-level disagreements, all six decided here. It cannot reach the eight conforming `lib/` modules — FPC implements no Extended Pascal module — and it shrinks with every release | ADR-0234 |
 | An oracle nobody here wrote | The BSI suite and `src/` as a reference front end — **both retired with the conformance modes they were about**. What is left is `unicode-conformance`, which is a published third-party answer for one clause | ADR-0086, ADR-0108, ADR-0189, ADR-0232 |
 | Diverse double-compiling | Run once, 2026-08-18, identical outputs; `seed/ddc.sh`. **The window is closed**: `v0.1.0` has no `--import` and cannot read a compiler that is three program-components | `seed/README.md`, ADR-0233 |
 | Should the compiler be one source file? | No, and it had not needed to be since ADR-0053. Three program-components, cut where the file order already was a topological order — 66 `forward` declarations, all inside one stage. The reason is the linking blind spot and not the buffers | ADR-0024, ADR-0233 |

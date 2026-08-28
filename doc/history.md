@@ -3860,3 +3860,53 @@ the test. `seed/ddc.sh`'s diverse-double-compiling window closed for good: the
 and the check now says so and exits 0 — the row stays, because the gap it names
 does. And ADR-0024's one-file half is superseded, twelve records after the
 reason for it expired.
+
+## A second processor answers the corpus
+
+**2026-08-28** — ADR-0234, and the last of the roadmap's tasks. Open question
+§2 had stood since before v3 in one sentence that never changed: *a second
+answer, on programs that already exist*. It was taken because it was
+shrinking. Nobody else implements this dialect, so a third-party differential
+can only ever reach the part of the corpus that is still ordinary Pascal, and
+that part gets smaller with every release.
+
+**What it corrected before it ran.** The entry named the eight conforming
+`lib/` modules first, as the portable half a second Extended Pascal processor
+could run. None can: FPC's `-Mextendedpascal` does not implement §6.13's
+modules at all, and `module m interface;` is *"Syntax error, BEGIN
+expected"*. So the differential is over programs, and the estimate that had
+stood for three releases was wrong about its own best target.
+
+**What it found is nothing, and the shape of the nothing is the finding.**
+Sixty-four of the 103 comparable cases differ byte for byte, which is almost
+entirely padding — ISO 7185 §6.9.3.1 leaves the default TotalWidth to the
+processor, and FPC writes an integer in eleven columns where this one writes
+the fewest it can. Numbers compare by value and blanks are dropped; two
+classes are counted rather than listed, an ISO error this compiler traps and
+FPC runs past being one of them. Eleven disagreements survive that, six turn
+on a clause, and **all six are decided here**.
+
+**Three of the six corroborate a reading nothing in this tree could
+challenge**, which is the whole of what a second processor buys and is worth
+naming one by one:
+
+- ADR-0073's mixed comment delimiters. §6.1.8 NOTE 1 lets a comment open with
+  a brace and close with a star-paren; FPC ends one only at the matching
+  delimiter, swallows a statement, and totals 27 where the clause gives 31.
+  That record says in as many words that nothing here could have caught the
+  original defect — a comment is invisible to every stage after the lexer, so
+  the token dumps `difftest` compared would have agreed whatever a comment
+  did. It has now been caught by something.
+- `round`, which §6.6.6.3 defines by *equivalence* to `trunc(x+0.5)` rather
+  than by a rounding mode. At 0.49999999999999994 the addition itself rounds
+  to 1.0, so the clause's answer is 1. The test's own comment had predicted
+  that "a processor emitting a round-half-away-from-zero instruction answers
+  0" and had never met one. FPC answers 0.
+- ADR-0076's longest-prefix number read, where FPC consumes the point that
+  `-1.` leaves behind and then fails with its own runtime error.
+
+**What it cannot do is the honest headline.** FPC refuses 141 of the 244 cases
+with a golden, modules above all, and it can never reach `tests/dialect/` —
+which is open question §1 and not something a gate discharges. The row it adds
+to §1's table is a second *processor*, and it does not fill either of the two
+that ADR-0232 emptied.
