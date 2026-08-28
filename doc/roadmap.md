@@ -612,11 +612,11 @@ sentence no longer says how many**, having gone stale twice — it said eleven
 when there were eleven and again when there were forty-five. "The mutation
 suite passes" means those recorded claims still hold and nothing more.
 
-A hundred-odd records carry a mutation in their *prose* instead, most naming
-code that has since moved, and nothing runs one of those. `grep -lic
-'mutation\|mutant' doc/adr/*.md` finds 103 of the 234 records, which is an
-**upper bound** — it catches a record that merely refers to the harness — and
-the point survives either way: the register is much the smaller half.
+Many more records carry a mutation in their *prose* instead, most naming code
+that has since moved, and nothing runs one of those. **`doc/sop.md` §7 owns
+that comparison** and carries the count with the grep that produced it; this
+entry says only that the register is much the smaller half, so that one
+sentence does not come to disagree with itself in two files.
 
 ### 4. ~~Should the dialect read a type off a *component*?~~ — yes (ADR-0215)
 
