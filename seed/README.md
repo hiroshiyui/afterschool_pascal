@@ -147,7 +147,8 @@ why the `seed-is-current` CI job compares the set as well as the contents.
 
 Nothing forces a refresh, and nothing needs to: an older seed builds a newer
 compiler for as long as the sources stay within what the seed
-accepts — a one-module seed building a three-component compiler included. When it does not, the build fails at the first stage with an ordinary
+accepts — a one-module seed building a three-component compiler included.
+When it does not, the build fails at the first stage with an ordinary
 diagnostic, and the fix is to refresh from the last commit that did build.
 
 **Two different things can put a source outside it, and only one is a

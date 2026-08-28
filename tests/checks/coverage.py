@@ -131,6 +131,13 @@ def corpus(root):
             if comps.exists():
                 for rel in comps.read_text().split():
                     flags += ["--import", str(f.parent / rel)]
+            elif f.name in components.COMPONENTS:
+                # A component of the compiler's own has no sidecar of its
+                # own -- the list lives beside the program (ADR-0233) -- and
+                # translating it without its imports stops in Sema on the
+                # first type it cannot see, which reaches no code generator
+                # at all. That is the opposite of why it is in this corpus.
+                flags = components.imports(root, f.name)
             jobs.append((f, flags))
 
     # The dump cases carry their own flag, and it is the reason they exist: the
@@ -185,7 +192,8 @@ def corpus(root):
     # and CLAUDE.md's rule is that regenerating a golden is a decision. What
     # buffer_headroom.py asserts instead is stronger than a golden anyway: the
     # capacities it reports must equal the constants this tree declares.
-    jobs.append((root / "selfhost" / "compiler.pas", ["--dump-limits"]))
+    jobs.append((root / "selfhost" / "compiler.pas",
+                 components.imports(root) + ["--dump-limits"]))
 
     # ADR-0156's --target=, both ways. The accepting arm is driven over an
     # ordinary program because what it changes is two lines of the module the
@@ -235,6 +243,12 @@ def build_instrumented(root, build, work):
     measured -- including the name comments this harness reads. Stage 2 is the
     compiler built from the source in the tree, so stage 2 is what gets
     measured."""
+    # None means *skip* -- something this machine does not have -- and False
+    # means the measurement is broken, which must fail. They were one value
+    # until ADR-0233's split, and the day the compiler stopped being able to
+    # translate its own source this gate reported a missing clang (doc/sop.md
+    # §7). A gate that answers "skipped" to a real break fails in no direction
+    # at all.
     pascalc = build / "bin" / "pascalc"
     pasrt = build / "lib" / "libpasrt.a"
     if not pascalc.exists() or not pasrt.exists():
@@ -256,7 +270,7 @@ def build_instrumented(root, build, work):
         if r.returncode != 0 or not ir.exists():
             print(f"coverage: the compiler failed to translate {name}\n"
                   + r.stdout, file=sys.stderr)
-            return None
+            return False
         irs.append((name, ir))
 
     shim, exe = work / "covrt.o", work / "pascalc-cov"
@@ -283,7 +297,7 @@ def build_instrumented(root, build, work):
         r = run(*cmd)
         if r.returncode != 0:
             print(f"coverage: {what} failed\n{r.stderr}", file=sys.stderr)
-            return None
+            return False
     return exe, irs
 
 
@@ -375,6 +389,10 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp)
         built = build_instrumented(root, build, work)
+        if built is False:
+            print("coverage: the instrumented compiler could not be built, "
+                  "and that is a failure and not a skip", file=sys.stderr)
+            return 1
         if built is None:
             print("coverage: skipped")
             return SKIP

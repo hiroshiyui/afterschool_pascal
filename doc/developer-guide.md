@@ -101,7 +101,8 @@ the history belongs there rather than in two places that can disagree.
 ## Stage 1
 
 The compiler is written in its own language, as **three §6.13
-program-components** ([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md)):
+program-components**
+([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md)):
 `aptypes.pas` holds what every stage agrees about, `apfront.pas` the lexer, the
 parser and Sema, and `compiler.pas` the code generator, the driver and the
 main-program-block. It was one file until version 3 — ADR-0024 made it one
@@ -110,7 +111,8 @@ gave the language modules and separate translation, which expired that reason.
 What the split buys is that the compiler's own build translates a module alone,
 translates a module that imports another, and links the result — a combination
 nothing here used to check, and one that had already cost a defect
-([ADR-0212](adr/0212-an-imported-components-tokens-are-kept.md)). It is itself written in **Extended Pascal** — the language it is
+([ADR-0212](adr/0212-an-imported-components-tokens-are-kept.md)).
+It is itself written in **Extended Pascal** — the language it is
 written in and the language it accepts are independent, and only that standard
 lets a program read its own command line
 ([ADR-0082](adr/0082-the-stage-1-compiler-is-extended-pascal.md)). It is

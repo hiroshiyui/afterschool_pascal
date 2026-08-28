@@ -145,8 +145,9 @@ for level in -O0 -O2; do
     imports+=(--import "$root/selfhost/$component")
     if ! cmp -s "$work/ref$n.ll" "$work/out$level.$n.ll"; then
       echo "llc-second-backend: a compiler built with llc $level translates" >&2
-      echo "  selfhost/$component differently from the one this build ships." >&2
-      echo "  Two machine-code programs disagree about what the source means," >&2
+      echo "  selfhost/$component differently from the one this build" >&2
+      echo "  ships. Two machine-code programs disagree about what the" >&2
+      echo "  source means," >&2
       echo "  so one of them is miscompiled." >&2
       diff -u "$work/ref$n.ll" "$work/out$level.$n.ll" | sed -n 1,40p >&2
       exit 1
@@ -155,5 +156,6 @@ for level in -O0 -O2; do
 done
 
 echo "llc-second-backend: llc assembled $accepted modules, and compilers built" \
-     "from its -O0 and -O2 output translate all ${#comps[@]} program-components" \
+     "from its -O0 and -O2 output translate all ${#comps[@]}" \
+     "program-components" \
      "identically to this build's"

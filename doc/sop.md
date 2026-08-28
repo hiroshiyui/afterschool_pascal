@@ -416,12 +416,16 @@ the compiler over it was reading or measuring a third of a compiler the moment
 the split landed, and every one of them now goes through
 `tests/checks/components.py`. Two ways that failure was *silent* are worth
 carrying forward, because neither is peculiar to this change:
-`procedure-coverage` and `line-coverage` degrade to a **skip** when the
-compiler cannot translate its own source, so a break in them reads as a missing
-`clang`; and an exported routine's header now appears **twice** — §6.11.1 puts
-it in the module-heading and leaves the block repeating the name alone — so a
-regex anchored on `^function Name(` matches an interface entry with no body and
-finds nothing to read.
+`procedure-coverage` and `line-coverage` *degraded* to a **skip** when the
+compiler could not translate its own source, so a break in them read as a
+missing `clang` — and both were skipping on the day the split landed. **Fixed
+on review**: the two now tell a skip (nothing on this machine to run with) from
+a failure (the measurement is broken) and exit 1 for the second, which is what
+every other gate here does. The second hazard stands, being a property of the
+language: an exported routine's header appears **twice** — §6.11.1 puts it in
+the module-heading and leaves the block repeating the name alone — so a regex
+anchored on `^function Name(` matches an interface entry with no body and finds
+nothing to read.
 
 **Audited again on 2026-08-28**, after version 3, over 67 rows. Six had gone
 stale and the release is why five of them did — a register describing what is

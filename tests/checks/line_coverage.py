@@ -78,6 +78,9 @@ def build(root, build_dir, work):
     So each component gets a compiler in which only it is instrumented, and
     the corpus is swept once per component. Three sweeps is the price of the
     numbers meaning anything."""
+    # None is a skip and False is a failure; see coverage.py's note. This gate
+    # answered "skipped" on the day the compiler could not translate its own
+    # source, which is the one answer it must never give to a break.
     pascalc = build_dir / "bin" / "pascalc"
     pasrt = build_dir / "lib" / "libpasrt.a"
     if not pascalc.exists() or not pasrt.exists() or not shutil.which("clang"):
@@ -98,7 +101,7 @@ def build(root, build_dir, work):
             if r.returncode != 0 or not ir.exists():
                 print(f"line-coverage: the compiler failed to translate "
                       f"{name}\n" + r.stdout, file=sys.stderr)
-                return None
+                return False
             mods.append(str(ir))
             if name == subject:
                 subject_ir = ir
@@ -109,7 +112,7 @@ def build(root, build_dir, work):
         if r.returncode != 0:
             print(f"line-coverage: linking failed\n{r.stderr}",
                   file=sys.stderr)
-            return None
+            return False
         out.append((subject, exe, subject_ir))
     return out
 
@@ -193,6 +196,10 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         work = pathlib.Path(tmp)
         made = build(root, build_dir, work)
+        if made is False:
+            print("line-coverage: the instrumented compilers could not be "
+                  "built, and that is a failure and not a skip", file=sys.stderr)
+            return 1
         if made is None:
             print("line-coverage: skipped")
             return SKIP

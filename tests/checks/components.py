@@ -1,3 +1,20 @@
+#!/usr/bin/env python3
+# Afterschool Pascal -- an ISO 7185 / ISO/IEC 10206:1991 Pascal compiler.
+# Copyright (C) 2026 Hui-Hong You
+#
+# This program is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the Free
+# Software Foundation, either version 3 of the License, or (at your option)
+# any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+# or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+# for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 """Where the compiler's own sources are, and in what order they translate.
 
 The compiler is three ISO/IEC 10206:1991 6.13 program-components (ADR-0233):
@@ -51,13 +68,22 @@ def text(root):
     return "\n".join(p.read_text() for p in sources(root))
 
 
-def translate(root, target=None):
-    """The arguments that translate one component: every component before it
-    as an `--import`, then the component itself. Defaults to the program."""
+def imports(root, target=None):
+    """The `--import` arguments one component's translation needs: every
+    component before it in dependency order. Defaults to the program."""
     paths = sources(root)
     names = [p.name for p in paths]
     at = names.index(target or PROGRAM)
     argv = []
     for p in paths[:at]:
         argv += ["--import", str(p)]
-    return argv + [str(paths[at])]
+    return argv
+
+
+def translate(root, target=None):
+    """The arguments that translate one component: its imports, then the
+    component itself. Defaults to the program."""
+    paths = sources(root)
+    names = [p.name for p in paths]
+    at = names.index(target or PROGRAM)
+    return imports(root, target) + [str(paths[at])]

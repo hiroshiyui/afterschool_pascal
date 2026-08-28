@@ -567,7 +567,8 @@ invisible.
 
 **Lowering model (`lowering.py`).** A model of the code generator, which is in
 `selfhost/compiler.pas` — the program-component, since ADR-0233; it was written
-against `codegen.cpp`, which ADR-0085 retired — maintained with it. A drifted model keeps passing and proves nothing,
+against `codegen.cpp`, which ADR-0085 retired — maintained with it.
+A drifted model keeps passing and proves nothing,
 so when a lowering changes the model changes in the same commit. Nothing reads
 the two against each other any more, which is why `--crosscheck` and the
 `trap_*.pas` goldens are the whole of what ties the model to the compiler.
@@ -693,7 +694,8 @@ Stage 0 *was* the C++ compiler in this repository and is retired (ADR-0085);
 what starts the chain now is the committed seed under `seed/`, a working
 compiler in IR. Stage 1 is what the seed produces from the compiler's three
 program-components and is `build/bin/pascalc`; stages 2 and 3 are those sources
-compiled by its own output, and every module must be identical. They are. See [history.md](history.md#the-three-stage-build).
+compiled by its own output, and every module must be identical. They are.
+See [history.md](history.md#the-three-stage-build).
 
 **Seed.** The committed artefact stage 0 became — 6.6 MB of IR that nobody
 reads and that builds the compiler, which is a supply-chain surface by
