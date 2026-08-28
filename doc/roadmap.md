@@ -611,12 +611,58 @@ decision gets, and these are four arguments still looking for one.
 
 Read the version note first. [`CHANGELOG.md`](../CHANGELOG.md) says what the
 number tracks — *the accepted language, the diagnostics and the command line* —
-and by that definition **three of the four below are invisible to it**. They
-change how the compiler is built and how it is checked, and not one line of
-what it accepts. Only §4 breaks a program, and §4 is the one argued for least
-confidently. So either v3 is named for §4, or what the number tracks widens to
-include the compiler's own construction — and that widening is itself a
-decision with a record of its own, not a footnote to this paragraph.
+and by that definition **three of the four proposals below are invisible to
+it**. They change how the compiler is built and how it is checked, and not one
+line of what it accepts. Only §4 breaks a program, and §4 is the one argued for
+least confidently.
+
+**That question is now settled, and not by any of the four.** §0 below is what
+v3 is named for, and it is the largest change this project has made: the
+compiler stops being a conforming processor with a dialect attached and becomes
+a Pascal dialect, full stop. It is squarely what the version number tracks —
+the accepted language, the diagnostics and the command line all change — so the
+number needs no widening and §4 need not carry it.
+
+### 0. Afterschool Pascal is the language — **this is v3** (ADR-0232)
+
+`--std` is removed, and with it the two conformance modes, ADR-0166's
+`{ @std: }` header comment, the `.std` sidecars and the clause 5.1 a)
+compliance statement. A source is written in Afterschool Pascal; the compiler
+has no mode to be put into. The lexis is the dialect's, which is survivable
+only because the dialect contains Extended Pascal (ADR-0117).
+
+The decision was taken with the cost measured rather than estimated, and
+ADR-0232 records all of it. The three things worth carrying here:
+
+- **The Extended Pascal corpus is unaffected** — containment is what
+  `dialect-containment` has swept on every run, and its 26 exceptions are all
+  `*_refused` cases whose subject disappears with the modes.
+- **The ISO 7185 corpus does not survive intact.** Of 172 cases: 109 pass
+  unchanged, 38 behave differently, and **25 are refused outright**. §6.1.2
+  reserves thirteen word-symbols a conforming ISO 7185 program may use as
+  identifiers, so a record with a field called `value` becomes a syntax error
+  with no flag to rescue it. BSI's CONF005 — written in 1982 to check that a
+  conforming processor still accepts `module` and `restricted` as identifiers
+  — cannot pass, because the language can no longer express it.
+- **Five oracles retire and nothing replaces them**: the BSI suite (the only
+  third-party corpus this project has ever had), `difftest`'s subject matter,
+  `dialect-containment`, `annex-b` and `reserved-words`. The oracle table in
+  [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+  had one empty row, the dialect's; it now has only that row.
+
+The alternative — make the dialect the *default* and keep the modes, which is
+what Free Pascal does with `{$MODE ISO}` — was recommended and declined, on the
+ground that it leaves the project presenting itself as a conformance vehicle
+with a dialect attached, which is not what it is. The default flip was made
+first and is subsumed.
+
+**What the four proposals below become.** They were written when v3 had no
+subject; they now sit beneath one. §1 and §3 are unaffected — neither touches
+the modes. §2 loses its framing question, since a compiler with one language is
+a dialect source by construction. §4 is the one this dissolves: containment by
+position exists to keep the dialect from disturbing the conformance modes, and
+with no conformance modes there is nothing for it to disturb — the reason
+against withdrawing it was `dialect-containment`, which is one of the five.
 
 If there is a theme, it is that **the compiler becomes its own best client**.
 It is the largest program within this project's reach, it is written in a
