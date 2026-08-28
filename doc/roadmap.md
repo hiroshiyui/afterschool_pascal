@@ -688,10 +688,31 @@ what Free Pascal does with `{$MODE ISO}` — was recommended and declined, on th
 ground that it leaves the project presenting itself as a conformance vehicle
 with a dialect attached, which is not what it is.
 
-### 1. Split `selfhost/compiler.pas` into §6.13 program-components — **still open**
+### 1. Split `selfhost/compiler.pas` into §6.13 program-components — **recorded as ADR-0233**
 
-The one proposal v3 did not take. Nothing about it changed, and one thing about
-it got slightly worse: the file is larger.
+The one proposal v3 did not take. It has a record now
+([ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md),
+Proposed and not implemented), and writing it changed the proposal twice —
+which is what ADR-0001 means by writing the record while the alternatives are
+still live.
+
+**The buffer argument below is false**, and the record has the measurement:
+`--import` re-tokenises the whole imported file, so the unit that imports the
+rest pays for the entire tree again and the peak does not fall. A 2 011-line
+module whose interface is four lines costs 12 065 tokens as an import against
+12 043 compiled. Nor can it be recovered by reading only the interface, because
+AP 6.7.3.10 instantiates a generic in the *client's* translation and the client
+needs bodies. What survives is the second reason — the linking blind spot — and
+the record takes the split for that alone.
+
+**And the split is three components, not the four or five sketched here.** The
+66 `forward` declarations are the complete list of back-edges in source order,
+and all 66 are inside one stage, so the file order is already a topological
+order and no mutual recursion has to be broken. Three is the smallest number
+that makes every build translate a module alone, translate a module that imports
+another, and link the result — which is the whole of what closes the row. What
+follows is the case as it stood before the record, kept because the reasons are
+unchanged and only the conclusion moved.
 
 ADR-0024 made it one file because neither standard had an include mechanism.
 That was true when it was written and is not true now: ADR-0053 gave the
