@@ -21,7 +21,7 @@ decide about, and the day it is decided it moves there.
 | [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the one library gap in front of it |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close, and the one oracle still worth building |
-| [The next major release (v3)](#the-next-major-release-v3) | four proposals for a redesign, and why only one of them is what a major version number means here |
+| [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open |
 | [Cross-platform support](#cross-platform-support) | what the x86-64 lock turned out to be, and what is left of it |
 | [Known limitations](#known-limitations) | what is wrong or absent today, under [ISO 7185](#under-iso-7185) and [ISO/IEC 10206:1991](#under-isoiec-102061991) |
 | [Answered, and where](#answered-and-where) | the questions this file used to carry, each with its record |
@@ -38,12 +38,12 @@ library for networking, internationalisation, concurrent execution, and memory
 safety as a property of the language rather than a convention.
 
 Two goals came before this one — bootstrapping, then conformance — and both are
-**finished**: the compiler compiles itself, and both standards are complete to
-the last clause. The conformance modes are not going away. The dialect is a
-third mode beside `--std=iso7185` and `--std=extended`, and it changes
-neither: what they *accept* moves only for a reason inside their own standard,
-and what they *say* may mention the dialect where a program was compiled under
-the wrong mode (ADR-0154).
+**finished**: the compiler compiles itself, and every clause of both standards
+was implemented. **This is now the only goal**, and version 3 is what made that
+literally true: ADR-0232 removed `--std` and the two conformance modes, so
+there is one language and no mode to be put into. What the standards still are
+is where this language came from — it contains Extended Pascal, so every clause
+reading in this tree still describes it — and not an obligation it is under.
 
 **Four decisions the goal forces**, each to get its own record when it is made:
 
@@ -52,7 +52,7 @@ the wrong mode (ADR-0154).
 | **The memory-safety model** | **Answered, in both halves and by discovery rather than by design** — four records, and not one of them decided the question the row was written to pose. *Lifetime* — an owned value is released when the variable holding it dies and cannot be copied out of it — was already here, being what a file variable has been since 1982 (ADR-0151). But that sentence quantifies over a *variable*, and a variable created by `new` is held by nothing: it exists in no activation, so nothing released what a heap record owned unless the program said `dispose`, and under a 64-descriptor limit a loop allocating one per iteration ran out at the 62nd. `owned ^T` gives such a variable an owner and closes it (ADR-0181, AP 6.4.14). The *aliasing* half — may a second name hold one owned value, and if so how: ARC, or borrowing — stood here for a long time as undecidable until the fork was **withdrawn as posed** (ADR-0201). Neither candidate can reach `^T`, ADR-0117's containment fixing what an ISO program's only reference type means; the dialect's answer for the three affine kinds is refusal, given three times, so there is no second name for either candidate to govern; and the one alias that does exist — a `var` parameter bound to an owned value's referent — cannot escape, because Pascal has no address-of and `new` is the only producer of a pointer. **Unformable rather than checked**, which is stronger and free, and silent if a future feature takes it away (`doc/sop.md` §7). What is left of the fork is exactly one thing: **two threads of control**, which is the only sentence that breaks *a borrow cannot outlive a call because the caller is not running during it*. See the concurrency row [below](#where-the-ideas-come-from). |
 | **The text model** | **Done** (ADR-0189 – ADR-0193, AP 6.4.15). The choice this row offered for eleven records — *a wider character type or a text type* — turned out not to exist: widening `char` stops `set of char` compiling under ADR-0028's 256-value cap, which breaks ADR-0117's containment. So it is a type **beside** the string: `utf8(n)`, a value with a capacity in **bytes** holding well-formed UTF-8 in normal form C, whose elements are **extended grapheme clusters**. Normalising where a value is constructed rather than where two are compared is the load-bearing choice — it makes `=` byte equality *and* canonical equivalence at once, so `é` typed either way is one value and a text can be a `pasmap` key. There is no integer index, for Swift's reason. Four increments: the Unicode tables and runtime, judged by Unicode's own conformance files; the type, with assignment, comparison, `length` in elements and `write`; joining and walking, where `+` renormalises across the join and rejoining the elements of a text gives back the original; and `PasUnicode`, whose `ToText` reports where the assignment stops and whose scalar view answers what the language will not — a family emoji is one element and five scalar values. Case folding and case mapping followed (ADR-0196), and they are where the model's oracle story ends: Unicode publishes a conformance file for normalisation and for segmentation and **none for casing**, so those three routines rest on a transcription where the rest rests on a document written elsewhere. The last question was grapheme-indexed slicing, and the answer was **not to offer the index** (ADR-0199): `PasUnicode.ElementEnd` answers where an element ends, so the walk is written in the program that pays for it and a slice, a lockstep comparison and a resumable walk are all compositions over it. Nothing of AP 6.4.15 is left. |
 | **The memory model** | Unstarted, and **no longer blocked**: it could not be designed before the safety model, shared mutable state being where the two meet, and the safety model is answered. What that answer does to this row is shrink it — ADR-0201's construct is share-nothing, so there is no shared mutable state for a memory model to be about, and the question narrows to what a value crossing between two threads guarantees. It stays open because nothing has been designed, not because something is in its way. |
-| **How far the C++ reference front end follows** (ADR-0108) | Frozen at the conformance surface in practice — `difftest` skips a dialect source — and that is the obvious answer, not the decided one. |
+| ~~**How far the C++ reference front end follows**~~ (ADR-0108) | **Answered by deletion** (ADR-0232). It was frozen at the conformance surface — `difftest` skipped every dialect source — and when the conformance surface went, `difftest` had nothing left to compare and `src/` had no reader. Both are gone. The question the row was really about survives as [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one) and as `doc/sop.md` §7's largest entry: nothing now compares this front end with a second answer. |
 
 What is already in hand and was not built for this: modules and separate
 compilation (ADR-0053, ADR-0079) mean a library needs no new language
@@ -355,9 +355,10 @@ this section's own — one site is an anecdote, two are a demand (ADR-0116).
   that trims down to exactly one character. Three sites in the tree, three
   different treatments: `pastext.pas` builds its result a character at a time
   and never takes a substring, `paslsp.pas` writes the guard out, `pasparse.pas`
-  gets it wrong. The dialect now admits `s[i..i-1]` and still refuses `s[4..2]`,
-  which cost one flag on one runtime check; the conformance modes keep the trap,
-  §6.5.6 stating the error. **The argument was in the tree already** — §6.7.6.7's
+  gets it wrong. This language now admits `s[i..i-1]` and still refuses
+  `s[4..2]`, which cost one flag on one runtime check — a flag ADR-0232 then
+  removed, there being no mode left that keeps §6.5.6's trap for the empty
+  case. **The argument was in the tree already** — §6.7.6.7's
   `substr(s, i, 0)` is the null-string and ADR-0125's `a[i..i-1]` is the empty
   slice, so `s[i..i-1]` was the only bracketed range that could not be empty.
 - **A program may not mix `writeln` with a descriptor write.** `output` is
@@ -469,35 +470,54 @@ close, which is why it is first — it is read every time and finished never.
 is what was left when a limitation written here turned out to be a misreading
 (ADR-0214, ADR-0215).
 
+**Version 3 made both of the two that remain heavier**, which is the one thing
+to know before reading them: ADR-0232 removed the conformance modes, and with
+them the BSI suite and `difftest` — the whole of §1's second column and the
+premise of §2. Neither entry gained a new problem; each lost what partly
+covered it.
+
 ### 1. The dialect has no external authority, and every gate here is anchored in one
 
 A standing **risk** rather than a task, and the one entry no record can close.
 
-| | ISO 7185 | Extended Pascal | the dialect |
-| --- | --- | --- | --- |
-| third-party corpus | BSI, 812 programs | — | **—** |
-| second implementation (`difftest`) | yes | yes | the refusal surface only (ADR-0160) |
-| clause-cited scenarios | yes | yes | yes (ADR-0135) |
-| independent reading | ADR-0101, ADR-0107 | ADR-0101, ADR-0107 | [the spec](afterschool-pascal-spec.md), audited once (ADR-0144) |
-| goldens, irtest, `verify/` | yes | yes | yes |
+The table used to have three columns — ISO 7185, Extended Pascal, the dialect —
+and the whole of what ADR-0232 did to this entry is collapse it into the last
+one. The two struck rows went with the conformance modes they were about.
 
-Every oracle in this repository bottoms out in *the standard says X*, and no
+| | this language |
+| --- | --- |
+| ~~third-party corpus~~ | **—** (BSI, 812 programs, until ADR-0232) |
+| ~~second implementation (`difftest`)~~ | **—** (`src/`, the refusal surface only, until ADR-0232) |
+| clause-cited scenarios | yes (ADR-0135) |
+| independent reading | [the spec](afterschool-pascal-spec.md), audited once (ADR-0144), by readers isolated since ADR-0228 |
+| goldens, irtest, `llc`, `verify/` | yes |
+| a published third-party answer | Unicode's own conformance files, for AP 6.4.15 alone (ADR-0189) |
+
+Every oracle in this repository bottoms out in *this project says X*, and no
 oracle here can contradict a **reading** — which is how ADR-0072's set-packing
-deviation survived in four documents and a purpose-written test. For the two
-conformance modes the remedy is independent readers holding the standards text
-(`.claude/skills/langspec-audit/`). For the dialect there is no text but the
-one this project wrote, so an audit can check every claim the specification
-makes *about* the standards — nine were wrong the first time — and cannot check
-a requirement the dialect invents, where a reader can only ask whether the
+deviation survived in four documents and a purpose-written test. The remedy is
+independent readers (`.claude/skills/langspec-audit/`), and its reach is
+narrower than it was: an audit can check every claim the specification makes
+*about* the standards — nine were wrong the first time — and cannot check a
+requirement this language invents, where a reader can only ask whether the
 processor agrees with the document.
 
-What is still empty is the first row, and nothing can fill it: there is no
-third-party corpus for a language this project invented, and the BSI suite is
-unavailable for a second reason besides — the dialect contains Extended Pascal,
-not ISO 7185. The second row is partial: everything the dialect **accepts** is
-compared by no second implementation. A high citation fraction means the
-specification is young and was written against a compiler someone could probe,
-not that the dialect is as well checked as the conformance modes.
+**Both empty rows were partly filled once and are empty now**, which is the
+thing to carry out of ADR-0232. The BSI suite is unavailable for two reasons
+rather than one: it is ISO 7185, which this language is not, and 25 of its
+programs use a word-symbol this language reserves, so the corpus cannot be
+compiled here at all. `difftest` covered the conformance surface, and there is
+none. A high citation fraction means the specification is young and was written
+against a compiler someone could probe, not that this language is as well
+checked as the conformance modes used to be.
+
+The one thing that grew is the last row. `unicode-conformance` (ADR-0189,
+ADR-0190) is a published answer nobody in this project wrote, checked against
+20 034 normalisation cases and 766 segmentation cases — and it is the shape
+worth looking for again: **a facility whose correctness some outside body has
+already published**. It reaches exactly one clause. Where a future feature has
+such a body — POSIX, the C ABI, Unicode, an RFC — taking its conformance data
+into the tree buys more than any gate this project can write for itself.
 
 Two authorities *are* available and should be used wherever they reach: **POSIX
 and the C ABI** for anything FFI-facing (the slice's shape was the far side's
@@ -533,14 +553,32 @@ narrower than it looks — that a *misreading of the two standards* is invisible
 here — and it has nothing to say about a facility the dialect invents outright,
 where there is no reading to get wrong.
 
-### 2. A third-party differential
+### 2. A third-party differential — **narrower than it was, and more wanted**
 
-FPC under `-Miso`, or p5, over the ISO 7185 half of `tests/`. Not a second
-implementation to maintain: a second *answer*, on programs that already exist.
-**The only candidate that would contradict a misreading** — the BSI suite is a
-fixed corpus from 1982, and `difftest` compares this project against itself,
-both front ends being written by one author from one reading. Closes as the
-language diverges, so it is worth more now than later.
+It used to read: FPC under `-Miso`, or p5, over the ISO 7185 half of `tests/`.
+Not a second implementation to maintain — a second *answer*, on programs that
+already exist. ADR-0232 took the premise away twice over: there is no ISO 7185
+half, and 25 of those programs no longer compile here.
+
+What is left is real but smaller, and it is worth more than before, because
+`difftest` and the BSI suite both went and nothing replaced either.
+
+- **The portable half of `lib/`.** Eight modules are ordinary Extended Pascal
+  and were kept that way deliberately (ADR-0114, ADR-0120) — `passtrings`,
+  `passort`, `pasmath`, `pasvector`, `pasmap`, `pastext`, `pasfile`,
+  `passtrvec`, with the cases that exercise them. A second Extended Pascal
+  processor can run those, and a disagreement is a finding about this compiler.
+- **The corpus that never used a reserved spelling.** Most of `tests/` is
+  Extended Pascal that any conforming processor accepts; what disqualifies a
+  case is a word-symbol used as an identifier, which is now a property a script
+  can test for rather than a guess.
+- **Not `tests/dialect/`, and that is the point.** Everything this language
+  invents is compared by nothing, and no third party can be found for it —
+  which is [§1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
+  standing risk, not a task this entry can discharge.
+
+It closes further as the language diverges, so it is worth more now than
+later — the same sentence it always carried, with less behind it each release.
 
 ### 3. ~~Mutation testing, committed to the tree~~ — done (ADR-0207)
 
@@ -561,8 +599,8 @@ mutation suite passes" means those eleven claims still hold and nothing more.
 
 ### 4. ~~Should the dialect read a type off a *component*?~~ — yes (ADR-0215)
 
-`type of` now takes §6.5.1's whole variable-access under `--std=afterschool`,
-and `lib/dialect/pascontainer.pas` is the caller it was built for: five of its
+`type of` now takes §6.5.1's whole variable-access, and
+`lib/dialect/pascontainer.pas` is the caller it was built for: five of its
 headings lost a type parameter.
 
 ```pascal
@@ -602,74 +640,58 @@ on it — the two-parameter form works and reads fine.
 
 ---
 
-## The next major release (v3)
+## Version 3 — what it took, and what it left
 
-**Four proposals, and a note about the number that reframes them.** This
-chapter is what a redesign would change if one were started today. It is here
-rather than in `doc/adr/` because none of it is decided: a record is what a
-decision gets, and these are four arguments still looking for one.
+**Shipped, 2026-08-28.** This chapter was four proposals looking for a
+decision; three of them are now records and the fourth dissolved. What is left
+open is §1, and it is written out below rather than struck through, because it
+is the one that did not happen and the reasons it was wanted are unchanged.
 
-Read the version note first. [`CHANGELOG.md`](../CHANGELOG.md) says what the
-number tracks — *the accepted language, the diagnostics and the command line* —
-and by that definition **three of the four proposals below are invisible to
-it**. They change how the compiler is built and how it is checked, and not one
-line of what it accepts. Only §4 breaks a program, and §4 is the one argued for
-least confidently.
+[`CHANGELOG.md`](../CHANGELOG.md) says what the number tracks — *the accepted
+language, the diagnostics and the command line* — and by that definition three
+of the four original proposals were invisible to it. §0 is what the number is
+actually for.
 
-**That question is now settled, and not by any of the four.** §0 below is what
-v3 is named for, and it is the largest change this project has made: the
-compiler stops being a conforming processor with a dialect attached and becomes
-a Pascal dialect, full stop. It is squarely what the version number tracks —
-the accepted language, the diagnostics and the command line all change — so the
-number needs no widening and §4 need not carry it.
+### 0. Afterschool Pascal is the language — **this is v3** — ADR-0232 ✔
 
-### 0. Afterschool Pascal is the language — **this is v3** (ADR-0232)
-
-`--std` is removed, and with it the two conformance modes, ADR-0166's
-`{ @std: }` header comment, the `.std` sidecars and the clause 5.1 a)
-compliance statement. A source is written in Afterschool Pascal; the compiler
-has no mode to be put into. The lexis is the dialect's, which is survivable
-only because the dialect contains Extended Pascal (ADR-0117).
+`--std` is gone, and with it the two conformance modes, ADR-0166's `{ @std: }`
+header comment, the `.std` sidecars and the clause 5.1 a) compliance statement.
+A source is written in Afterschool Pascal; the compiler has no mode to be put
+into. The lexis is the dialect's, which is survivable only because the dialect
+contains Extended Pascal (ADR-0117).
 
 The decision was taken with the cost measured rather than estimated, and
-ADR-0232 records all of it. The three things worth carrying here:
+ADR-0232 records all of it. What actually landed, against what was predicted:
 
-- **The Extended Pascal corpus is unaffected** — containment is what
-  `dialect-containment` has swept on every run, and its 26 exceptions are all
-  `*_refused` cases whose subject disappears with the modes.
-- **The ISO 7185 corpus does not survive intact.** Of 172 cases: 109 pass
-  unchanged, 38 behave differently, and **25 are refused outright**. §6.1.2
-  reserves thirteen word-symbols a conforming ISO 7185 program may use as
-  identifiers, so a record with a field called `value` becomes a syntax error
-  with no flag to rescue it. BSI's CONF005 — written in 1982 to check that a
-  conforming processor still accepts `module` and `restricted` as identifiers
-  — cannot pass, because the language can no longer express it.
-- **Five oracles retire and nothing replaces them**: the BSI suite (the only
-  third-party corpus this project has ever had), `difftest`'s subject matter,
-  `dialect-containment`, `annex-b` and `reserved-words`. The oracle table in
-  [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
-  had one empty row, the dialect's; it now has only that row.
+- **The Extended Pascal corpus came through**, as predicted. Four cases went —
+  the three type-inquiry refusals and `trap_substring`, each of which asserted
+  that the *dialect's* answer was refused, and each with a positive counterpart
+  under `tests/dialect/` already.
+- **The ISO 7185 corpus did not survive intact**, as predicted, and the shape
+  was slightly different: 42 `*_refused` cases (Annex B's grid, 21 constructs
+  times two modes) and 28 `*_iso` mode gates were deleted outright, six
+  `badparse` gates with them, and **nine sources were renamed** because a
+  word-symbol took their identifier — `value` in seven, `only` in one, a
+  function called `Value` in two. `verify/verify.py`'s generated program was a
+  tenth. That rename is the cost in its most concrete form.
+- **Five oracles retired and nothing replaced them**: the BSI suite (the only
+  third-party corpus this project ever had), `difftest`, `dialect-containment`,
+  `annex-b` and `reserved-words`. The gate count went 24 → 19.
+- **And `src/` went with them**, which was not part of the proposal. With
+  `difftest` and `annex_b.py` deleted it had no reader, and it was in no build
+  chain — 16 936 lines of C++, and the last reason this build needed a C++
+  compiler. That is written up in the [question this chapter left
+  open](#the-question-this-chapter-left-open) below.
 
 The alternative — make the dialect the *default* and keep the modes, which is
 what Free Pascal does with `{$MODE ISO}` — was recommended and declined, on the
 ground that it leaves the project presenting itself as a conformance vehicle
-with a dialect attached, which is not what it is. The default flip was made
-first and is subsumed.
+with a dialect attached, which is not what it is.
 
-**What the four proposals below become.** They were written when v3 had no
-subject; they now sit beneath one. §1 and §3 are unaffected — neither touches
-the modes. §2 loses its framing question, since a compiler with one language is
-a dialect source by construction. §4 is the one this dissolves: containment by
-position exists to keep the dialect from disturbing the conformance modes, and
-with no conformance modes there is nothing for it to disturb — the reason
-against withdrawing it was `dialect-containment`, which is one of the five.
+### 1. Split `selfhost/compiler.pas` into §6.13 program-components — **still open**
 
-If there is a theme, it is that **the compiler becomes its own best client**.
-It is the largest program within this project's reach, it is written in a
-language this project defines, and it is excluded today from nearly everything
-the dialect was built for.
-
-### 1. Split `selfhost/compiler.pas` into §6.13 program-components
+The one proposal v3 did not take. Nothing about it changed, and one thing about
+it got slightly worse: the file is larger.
 
 ADR-0024 made it one file because neither standard had an include mechanism.
 That was true when it was written and is not true now: ADR-0053 gave the
@@ -678,14 +700,13 @@ project modules and separate translation, ADR-0079 gave the components, and
 that `run_test.sh` and `irtest.sh` both read.
 
 The one-file constraint is therefore no longer a constraint. It is an unpaid
-debt, and the interest is measurable: 36 028 lines in a single translation
-unit, and `poolMax = 1000000` and `tokMax = 300000` sized so that the compiler
-can hold **its own source** — `--dump-limits` reports 589 915 and 171 178
-against them as this is written. An entire gate exists to watch those two
-numbers (`buffer-headroom`, ADR-0126 and ADR-0148), and it exists because
-raising the constant *here* does not raise the seed's, so an overflow arrives
-as a failed build rather than as a diagnostic. That has happened twice.
-Components make the problem structural instead of watched.
+debt, and the interest is measurable: one translation unit of ~36 000 lines,
+and `poolMax = 1000000` and `tokMax = 300000` sized so that the compiler can
+hold **its own source**. An entire gate exists to watch those two numbers
+(`buffer-headroom`, ADR-0126 and ADR-0148), and it exists because raising the
+constant *here* does not raise the seed's, so an overflow arrives as a failed
+build rather than as a diagnostic. That has happened twice. Components make the
+problem structural instead of watched.
 
 The second thing it buys is a row in [`doc/sop.md`](sop.md) §7: **nothing links
 a component on its own**. Every harness here compiles a program, and a §6.13
@@ -696,162 +717,133 @@ AP 6.7.3.10's instantiation bodies came to be emitted in one of `RunCodeGen`'s
 two arms (ADR-0212, ADR-0216). If the compiler's own build linked components,
 the row closes by construction, because the build becomes the test.
 
-**What it costs**: a seed refresh, and `irtest.sh`, `difftest.sh` and
-`producttest.sh` learning a build order. The refresh is the part that has to be
-argued rather than assumed — `seed/pascalc.ll` is this repository's ability to
-build itself at all.
+**What it costs**: a seed refresh, and `irtest.sh` and `producttest.sh`
+learning a build order. The refresh is the part that has to be argued rather
+than assumed — `seed/pascalc.ll` is this repository's ability to build itself
+at all. (`difftest.sh` was on that list and is not a cost any more.)
 
 **What this proposal does not answer** is what the split is *along*. Lexer /
 parser / Sema / CodeGen is the obvious cut and may well be the wrong one: Sema
 is the largest component and would still be the largest file.
 
-### 2. Let the compiler be written in the dialect
+### 2. Let the compiler be written in the dialect — **dissolved by §0** ✔
 
-`selfhost/compiler.std` says `extended`. So the most demanding program within
-this project's reach is locked out of `defer`, `T ! E`, `owned ^T`, slices,
-`break`, `exit`, the generics and `type of` — that is, out of nearly everything
-ADR-0109 exists to build.
+It is. `selfhost/compiler.std` said `extended`, and there is no such file and
+no such mode: the compiler's own source is an Afterschool Pascal source by
+construction, as every source now is.
 
-It has been rejected twice, and the rejection is narrower than it looks.
-ADR-0190 refused it on the ground that *"the fixed point holds only while the
-compiler is an Extended Pascal source"*, and ADR-0223 restates that in its
-Alternatives. But ADR-0223 is also the way through: it builds the compiler a
-**second** time under `--std=afterschool` and uses that build as a *reader*,
-never as the product — `variant-check`, 8.5 seconds, the shipped artefact
-untouched, and ADR-0118's variant guards armed over the one variant record in
-the tree.
+The question was rejected twice before that. ADR-0190 refused it on the ground
+that *"the fixed point holds only while the compiler is an Extended Pascal
+source"*; ADR-0223 built the compiler a second time to arm ADR-0118's variant
+guards and used that build as a *reader*, never as the product; ADR-0231 then
+measured the sentence and found it false — the second build **is** a fixed
+point, and it is the **same compiler**, byte-identical on 1025 sources. So the
+objection had already narrowed to the seed before ADR-0232 arrived, and the
+seed was refreshed in this release.
 
-So the question v3 should put is not *does the product change its standard*
-but **how much of the dialect the reader build can use before the product
-follows**. Each increment the second build compiles is one the seed could be
-refreshed to accept, and the ordering constraint ADR-0109 already states — a
-dialect feature must be expressible in what `seed/pascalc.ll` accepts, or the
-seed is refreshed first — is the whole of the discipline required.
+**What is left of it is an ordering discipline, not a question**: a dialect
+feature must be expressible in what `seed/pascalc.ll` accepts, or the seed is
+refreshed first (ADR-0109). What the compiler now *may* use — `defer`, `T ! E`,
+`owned ^T`, slices, `break`, `exit`, the generics, `type of` over a
+variable-access — it does not yet use, and whether adopting any of them makes
+this compiler better is the thing ADR-0109 wanted to learn and still has no
+measurement of. That is worth a record when someone tries it, not a roadmap
+entry.
 
-**What it buys beyond dogfooding**: ADR-0109 wants to know whether this dialect
-is *pleasant* to write something large in, and
-[the chapter above](#the-program-that-would-judge-the-language) names one
-client big enough to answer that. The compiler is bigger, and it already
-exists.
+### 3. Have the compiler report its own dispatch — ADR-0229, ADR-0230 ✔
 
-**What makes it genuinely hard**: the fixed point is stage 2 = stage 3, which
-holds under whatever `--std` the seed accepts — so the objection is really
-about the seed, and a seed is refreshed in a release rather than casually.
+`--dump-dispatch`, in two halves. ADR-0229 moved the case-statement half off
+the Python source parser: the compiler writes every case-statement whose
+selector is an enumeration, with the constants its labels name, the ones they
+miss, and the constants no case names at all. The two readers were compared
+before the old one was deleted — 60 sites, same routine, enumeration, ordinal,
+`N of M` and missing constants on every one — and 85 lines of Pascal-parsing
+regex went with it.
 
-**The first half of that is now measured** (ADR-0231). `dialect-build` asks the
-second build what it *is* rather than what it reads, and both answers are new:
-it **is** a fixed point under `--std=afterschool`, and it is the **same
-compiler** — byte-identical IR on every source both accept and byte-identical
-diagnostics on every source either refuses, over 1025 of them, none differing.
-So ADR-0190's *"the fixed point holds only while the compiler is an Extended
-Pascal source"* is false as a statement about this source, and what it was
-protecting is untouched: the product still builds under `--std=extended`. The
-sentence above is now the whole of what stands in the way — the seed, and the
-question this chapter cannot answer by measurement, which is what the dialect
-would *buy* the compiler.
+ADR-0230 moved the if-chain half, and `tests/checks/kind_exhaustive.py` now
+reads **no Pascal at all**: 542 lines to 384. A chain is a *shape* and not a
+node, so Sema records every if-statement with its else-part and every tag test
+in a condition, and a head is an if that is no other's else-part. The dump
+reports the **field** each chain reads, which is what selects a dispatch from a
+lookahead — and that is where the regex turned out to have picked its scope by
+accident: ADR-0221's "three enumerations qualify" described what a text match
+could see, and the compiler finds 70 chains where the regex found 38.
 
-### 3. Have the compiler report its own dispatch, instead of scraping its source
+**The limit the proposal stated is unchanged and a dump does not lift it**:
+neither form judges whether an arm is *right*. `tyOptional: StaticThroughout :=
+true` satisfies the gate and is wrong. This moved the oracle from a Python
+parser to the compiler; it did not move it from a prompt to a proof.
 
-This project has already found the better pattern and has not generalised it.
-`--dump-limits` (ADR-0148), `--dump-predicates` (ADR-0194) and `--dump-layout`
-(ADR-0185) all work one way: the compiler answers a question about itself, a
-catalogue holds the answers, and the gate compares the two. `buffer-headroom`
-goes further and reads its capacities **twice**, from the source and from the
-compiler, so that a stale binary is named rather than measured.
+### 4. Reconsider containment-by-position — **dissolved by §0**, and the rule kept ✔
 
-The gates that instead parse Pascal with Python are the fragile ones, and each
-is shaped like the last defect it was taught about. `tests/checks/kind_exhaustive.py`
-is 542 lines, and it read `case … of` and nothing else until ADR-0221 taught it
-if-chains — **37 of them dispatch on a tag, 24 over `nodeKind`**, and not one
-was read by anything before that record. ADR-0220 is what the omission cost:
-one arm of `EmitString` keyed on a node's kind, a constant arriving as a
-designator, four bytes of read-only data read as a length, and every golden in
-agreement because it was invisible at `-O2`. [`doc/sop.md`](sop.md) §7 already
-calls the source-parsing oracle the weaker of the two.
+This was the proposal §0 predicted it would dissolve, and it did, though not
+quite in the way predicted.
 
-**What v3 should build** is `--dump-dispatch`: the compiler emitting every site
-at which it dispatches on a tag, with the enumeration and the constants each
-arm names. It subsumes both halves of `kind-exhaustive`, it reaches the
-dispatch written as a predicate that no gate sees today, and it cannot drift
-from the compiler, because the compiler is what emits it.
+The argument *against* withdrawing ADR-0140's rule was that containment buys
+`dialect-containment` — the conformance corpus compiled a second way, with the
+other mode as the oracle. That sweep is gone, so the argument is gone with it,
+and `reserved-words` — the gate that asked whether this language reserves
+exactly what Extended Pascal reserves — is not a question once there is one
+list.
 
-**The limit is one the existing records already state**, and a dump does not
-lift it: neither form judges whether an arm is *right*.
-`tyOptional: StaticThroughout := true` satisfies the gate and is wrong. This
-moves the oracle from a Python parser to the compiler; it does not move it from
-a prompt to a proof.
+**The rule is kept anyway**, and the reason is better than the one it had. It
+was stated as a constraint on a *mode*: the dialect must not disturb what the
+conformance modes accept. It now protects something this language claims about
+itself — that every Extended Pascal program is an Afterschool Pascal program
+meaning the same thing. Reserving a word-symbol takes that spelling from every
+such program that uses it as an identifier, which is exactly the 25-case cost
+§0 paid once and deliberately. Paying it again casually is what the rule
+forbids.
 
-### 4. Reconsider containment-by-position — the one that earns the number, and the one least ready
+What did change is who enforces it: `reserved-words` did, and nothing does now.
+ADR-0140's Status records that, and `.claude/skills/code-review` is where a new
+spelling gets looked at. ADR-0177's `exit`, ADR-0178's `try` and ADR-0184's
+unspelled feature remain the three shapes a reader should know before proposing
+a fourth.
 
-ADR-0140's rule — the dialect reserves no word-symbol, so every feature is
-spelled in a position where a conforming program could not have written it —
-has now reached its limit visibly, twice. `exit` had to become a required
-identifier because no position worked (ADR-0177). `try X` turned out
-unwritable as a factor, because a factor may be a variable-access, so the
-parentheses became the construct rather than the notation (ADR-0178). And
-ADR-0184 admitted a feature that spells nothing at all.
-
-**For withdrawing it**: ISO 7185 and Extended Pascal are already not nested
-(ADR-0033), so non-nesting has precedent here rather than being unthinkable;
-and a `--std=afterschool` that reserved further word-symbols would break
-programs in exactly the shape v2.0.0 did — loudly, a reserved word where an
-identifier belongs being a syntax error.
-
-**Against, and it is the stronger argument today**: containment is what buys
-`dialect-containment` (ADR-0138), and that sweep is the nearest thing to a
-second reading the dialect can have — the conformance corpus compiled a second
-way, with the other mode as the oracle.
-[Open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
-records that everything the dialect *accepts* is compared by no second
-implementation. Withdrawing containment spends the one oracle that partly
-covers that, and buys spellings with it.
-
-So this is both the item that earns a major number and the item least ready to
-be taken. **What would have to be true first** is a replacement for what
-`dialect-containment` witnesses, and the only candidate named anywhere in this
-file is the third-party differential of
-[open question §2](#2-a-third-party-differential).
-
-### What v3 must not touch
+### What v3 must not touch — and did not
 
 - **Textual `.ll` as the only backend.** ADR-0085 made it more load-bearing,
   not less: it is what lets a clone with no LLVM development files build the
-  compiler.
-- **ADR immutability.** It is what let ADR-0224 correct ADR-0219's over-strong
-  NOTE 5 by superseding rather than editing, so that the correction is findable
-  *as* a correction.
-- **[`doc/sop.md`](sop.md) §7.** Twice in two days a row was written before the
-  thing it described happened.
+  compiler. Untouched, and v3 went further — the build needs no C++ compiler
+  either now.
+- **ADR immutability.** Thirteen records were annotated at their Status with
+  what ADR-0232 did to them; not one had its argument edited.
+- **[`doc/sop.md`](sop.md) §7.** It grew: the front end has no second
+  implementation, and there is no third-party corpus.
 - **A green suite is not evidence; evidence is a named case that fails without
-  the change.** Everything good here descends from that sentence, and every
-  proposal above answers to it — a redesign is a change, and owes a failing
-  case like any other.
+  the change.** This is the one v3 made *harder* to honour and more necessary
+  to: with `difftest` gone, a golden regenerated after a change is agreed with
+  by nothing else. `doc/sop.md` B4a says so in as many words.
 
-### The question this chapter leaves open
+### The question this chapter left open
 
-`src/`. It catches what no golden can, and it was right where the Pascal had
-gone wrong. But every front-end feature ships twice, and both sides are one
-author working from one reading, so a misreading passes through both — which is
-the blind spot open question §1 is about, and ADR-0107's registered limitation
-on the substitute for it: the independent readers are given `CLAUDE.md` before
-they run a command, and all four disclosed that they had it.
+`src/` — whether the second front end earned its cost. The chapter had no
+answer and observed that the cost had never been counted. It has been:
+**16 936 lines of C++, and the whole of the build's need for a C++ compiler**,
+against a reader that ADR-0117 had frozen at the conformance surface and that
+skipped every dialect source.
 
-Fixing *that* was cheaper than any of the four proposals above and was not a v3
-item at all, which is why it went first: **ADR-0228 did it.** Readers now run
-out of process against a sandbox built outside the repository — no `CLAUDE.md`
-to discover, no matching auto-memory, no `doc/adr/`, and the compiler's source
-comment-stripped, that last being the half missed for four records (791 ADR
-citations and 1755 clause citations live in `selfhost/compiler.pas`, which
-every version of the skill invited a reader to open). Asked whether it was
-given project documentation, a reader in the repository names this project and
-its path; one in the sandbox answers no.
+§0 answered it by removing the surface. With `difftest.sh` and `annex_b.py`
+deleted, `src/` had no consumer at all; it was verified to be in no build chain
+— `pascalc` builds with the binary absent, and all 730 cases pass — and it was
+deleted. Reviving it would have meant first teaching it the language ADR-0117
+deliberately kept it out of, and a second implementation of a language with no
+external specification is two readings by one author, which is the one thing
+`difftest` could never contradict.
 
-So the difference between *no independent oracle contradicts this* and *an
-uninfluenced reader agreed* is now bought — for the anchoring, at least. What
-it does not buy is a different *kind* of reader, which is the residue of
-[open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one).
-Whether `src/` earns its cost is still the v3 question, and this chapter has no
-answer to it — only the observation that the cost has never been counted.
+What it *did* catch was drift between two ports of one reading, and that is the
+loss. It is recorded in [`doc/sop.md`](sop.md) §7 as the largest blind spot on
+that page, and [open question §1](#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+is where it belongs from now on.
+
+The fix for the *other* half of that question — that the independent readers
+were not independent — was cheaper than any of the four proposals and was not a
+v3 item at all, which is why it went first: **ADR-0228 did it.** Readers now
+run out of process against a sandbox built outside the repository, with the
+compiler's source comment-stripped, that last being the half missed for four
+records. Asked whether it was given project documentation, a reader in the
+repository names this project and its path; one in the sandbox answers no.
 
 ---
 
@@ -952,8 +944,8 @@ the two kinds are marked.
   0..255, UTF-8 passes through, a multi-byte character is several `char`
   values. This one is not going to change: ADR-0189 records that `char`
   *cannot* widen without breaking containment, and puts the answer in a type
-  beside the string rather than underneath it — `utf8(n)`, which
-  `--std=afterschool` now has (ADR-0191). *The text model, above.*
+  beside the string rather than underneath it — `utf8(n)` (ADR-0191).
+  *The text model, above.*
 
 - **A set's base type must have its values in 0..255**, every set being one
   256-bit word. §6.4.3.4 leaves the size to the implementation, so this is a
@@ -995,10 +987,12 @@ pieces remain. *Work with no record yet, and a record is owed before either.*
 entry was wrong** (ADR-0214). The clause reads `type-inquiry-object =
 variable-name | parameter-identifier`, and §6.5.1's variable-name is
 `[ imported-interface-identifier '.' ] variable-identifier` — a *name*. So
-`type of a[1]`, `type of p^` and `type of r.f` are outside the language, and
-refusing them is conformance rather than a gap in it. **Accepting them under
+`type of a[1]`, `type of p^` and `type of r.f` are outside *that clause*, and
+refusing them was conformance rather than a gap in it. **Accepting them under
 `--std=extended` would have been the defect**, which is the direction this
-entry pointed.
+entry pointed. This language admits them — AP 6.4.9, ADR-0215 — which is a
+different thing from having misread §6.4.9, and ADR-0232 removed the mode in
+which the distinction was enforced.
 
 It was written from the wish rather than the clause — the wish being to read a
 container's element type off its pointer, `x: type of v^.a[1]`, which would
@@ -1016,11 +1010,13 @@ that was wanted exists where it belongs.
 one** (ADR-0171). §6.7.3.1 admits `type-name | schema-name | type-inquiry`, so
 `procedure q(x: string)` is right and `procedure q(x: string(5))` is outside
 the grammar. Three sources under `tests/extended/` write the second spelling
-and would have to change. What is probably right is to refuse it under the two
-conformance modes and admit it in the dialect with a clause of its own — it is
-exactly the convenience ADR-0109 says belongs there, and the spelling already
-passes ADR-0140's test. *A feature with its own record, written down rather
-than done because it takes something away from every program that uses it.*
+and would have to change. **ADR-0232 dissolved half of this**: there is no
+conformance mode to refuse it under, so what is left is one decision — admit
+it with a clause of its own, or refuse it and edit three sources. It is
+exactly the convenience ADR-0109 says belongs here and the spelling already
+passes ADR-0140's test, so admitting it is the likely answer. *A feature with
+its own record, written down rather than done because refusing it takes
+something away from every program that uses it.*
 
 Five more, each stated in the record that made it:
 
@@ -1064,13 +1060,13 @@ the record.
 
 | Question | Answer | Record |
 | --- | --- | --- |
-| Does the dialect spend reserved words? | No, permanently: a feature is spelled where a conforming program could not have written it, and `reserved-words` enforces it | ADR-0140 |
-| Does containment survive the link? | Yes, except where the dialect would emit a check the other mode does not; the conforming `lib/` is reachable from the dialect | ADR-0137 |
-| Is containment witnessed by more than one program? | The whole of `tests/extended/` under `--std=afterschool`, every run | ADR-0138 |
+| Does the dialect spend reserved words? | No: a feature is spelled where a conforming program could not have written it. The `reserved-words` gate that enforced it retired with the conformance modes; the rule stands, and now protects this language's own claim to accept every Extended Pascal program | ADR-0140, ADR-0232 |
+| Does containment survive the link? | It did, except where the dialect would emit a check the other mode did not — and the mechanism went with the modes. A module's activation names still carry a fixed language tag, so an object from an older release is refused with a message rather than mislinked | ADR-0137, ADR-0119, ADR-0232 |
+| Is containment witnessed by more than one program? | It was — the whole of `tests/extended/` compiled a second way, every run — until there was only one way to compile it. `tests/dialect/inherits_extended.pas` is what remains | ADR-0138, ADR-0232 |
 | Are the dialect's pieces coherent? | Four result shapes, one rule in two questions; a boundary shape may be a parameter and not a result | ADR-0141, ADR-0149 |
-| Do the conformance modes "stay exactly as they are"? | What they accept does not move for the dialect; what they say may | ADR-0154 |
+| Do the conformance modes "stay exactly as they are"? | They did, until they were removed. What they accepted never moved for the dialect; then ADR-0232 removed the modes rather than the promise | ADR-0154, ADR-0232 |
 | Memory safety: deferral or discovery? | Discovery, twice. Lifetime was already answered, by the file variable (ADR-0151); aliasing was too, by refusal for the three affine kinds and by a **borrow that cannot escape** for the rest — Pascal has no address-of, so no pointer can name what a `var` parameter refers to. What is left of the fork is two threads of control and nothing else | ADR-0151, ADR-0201 |
-| An oracle nobody here wrote | The BSI suite, fetched not committed; `src/` back as a reference front end | ADR-0086, ADR-0108 |
+| An oracle nobody here wrote | The BSI suite and `src/` as a reference front end — **both retired with the conformance modes they were about**. What is left is `unicode-conformance`, which is a published third-party answer for one clause | ADR-0086, ADR-0108, ADR-0189, ADR-0232 |
 | Diverse double-compiling | Run once, 2026-08-18, identical outputs; `seed/ddc.sh` | `seed/README.md` |
 | Conformant array parameters, and level 1 | Done, and the 51 BSI level-1 programs found nine defects in the first implementation | ADR-0153 |
 | Can anything measure what the corpus reaches? | Three coverage gates and a clause-cited suite | ADR-0103 – ADR-0106 |
@@ -1081,3 +1077,4 @@ the record.
 | Can a foreign address be owned? | A handle-type: a file variable for it, released where a file closes | ADR-0174 |
 | What is a character, once a byte is not one? | A grapheme cluster; text is UTF-8 in normal form C, in a value with a byte capacity, and `char` is left alone because it cannot widen | ADR-0189 |
 | Should the dialect read a type off a component? | Yes: `type of` takes a whole variable-access, so a generic reads an element type off the container it was handed. The substring is the one access it must refuse, and a *result* type is where the widening stops | ADR-0215 |
+| Is this a conforming processor or a dialect? | A dialect. `--std` and the two conformance modes are removed, the clause 5.1 a) compliance statement withdrawn, and 25 of 172 ISO 7185 cases became inexpressible — a conforming ISO 7185 program with a field called `value` no longer compiles. Five oracles retired with the surface they asked about. It is what version 3 is named for | ADR-0232 |
