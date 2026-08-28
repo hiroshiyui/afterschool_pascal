@@ -219,36 +219,14 @@ jobs:
           cmake --build build -j"$(nproc)"
 
       - name: Regenerate and compare
-        # One module per program-component since ADR-0233, named after the
-        # component it came from, in the order selfhost/compiler.components
-        # gives. The *set* is compared too: a component removed from the tree
-        # leaves its seed module behind, and CMake's glob would go on linking
-        # it -- so an extra file here is as much a stale seed as a differing
-        # one.
-        run: |
-          imports=()
-          expected=()
-          for component in $(cat selfhost/compiler.components) compiler.pas; do
-            base=${component%.pas}
-            build/bin/pascalc "${imports[@]+"${imports[@]}"}" \
-                "selfhost/$component" -o "/tmp/$base.ll"
-            imports+=(--import "selfhost/$component")
-            expected+=("seed/$base.ll")
-            if ! cmp -s "/tmp/$base.ll" "seed/$base.ll"; then
-              echo "seed/$base.ll is not what this source produces." >&2
-              echo "Run seed/refresh.sh and amend the release commit." >&2
-              diff -u "seed/$base.ll" "/tmp/$base.ll" | head -40 >&2
-              exit 1
-            fi
-          done
-          have=$(ls seed/*.ll | sort)
-          want=$(printf '%s\n' "${expected[@]}" | sort)
-          if [ "$have" != "$want" ]; then
-            echo "seed/ holds modules this source does not produce:" >&2
-            diff <(echo "$want") <(echo "$have") >&2
-            exit 1
-          fi
-          echo "the seed matches, ${#expected[@]} modules."
+        # tests/checks/seed_current.sh is the whole of the check, and it is a
+        # script so that a release can run the same text by hand before it
+        # tags -- this job runs only at a tag, so anything living here has
+        # nowhere to be exercised first, and twice now something written here
+        # has failed for that reason alone. A `run:` block in a container is
+        # `sh -e {0}`, which is the sharper half of it: the bash this file's
+        # steps look like they are written in is not what runs them.
+        run: tests/checks/seed_current.sh
 
   unoptimised:
     # The corpus compiles at -O2, which is pascalcc's default and what a user
