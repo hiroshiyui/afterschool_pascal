@@ -295,6 +295,17 @@ if(Python3_FOUND)
                    ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
 
 
+  # Every Markdown table in the tree is a table. It exists because two were
+  # not, and neither was visible to anything: CLAUDE.md's gate list -- the file
+  # loaded into every session before any work starts -- had one row split in
+  # half by another wedged between its two pieces, and doc/sop.md had a row
+  # broken across two lines. A broken table renders as something that still
+  # looks like documentation, which is why it is a gate and not a proofread.
+  add_test(NAME markdown-tables
+           COMMAND ${CMAKE_COMMAND} -E env python3
+                   ${CMAKE_SOURCE_DIR}/tests/checks/markdown_tables.py
+                   ${CMAKE_SOURCE_DIR})
+
   # ADR-0245: is an object built from an older module-heading refused? §6.11.1
   # makes the heading the interface, and until this nothing noticed that an
   # object had been built from a different one -- the program wrote

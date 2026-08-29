@@ -488,8 +488,11 @@ with it, unfixed and unrecorded.
   cannot be used whole"* as a limitation of the library; there are 25 modules
   in `lib/` and that sentence is struck.
 - **`PasContainer`'s map cannot key on a URI.** `MapKey` is 63 characters and
-  `file:///home/someone/a/project/src/thing.pas` is past that before the file
-  name starts, so the document store is a vector searched linearly. For a
+  `file:///home/someone/projects/afterschool_pascal/selfhost/apfront.pas` is
+  69, so the document store is a vector searched linearly. The example that
+  stood here was 44 characters and fitted, which is worth saying rather than
+  quietly replacing: the finding was true and the illustration of it was not,
+  and nothing in this tree can check an arithmetic claim made in prose. For a
   handful of open documents that costs nothing and the workaround is fine; the
   finding is that the container's one dimension was sized for a test case's
   keys and nothing said so.

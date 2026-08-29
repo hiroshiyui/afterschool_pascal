@@ -26,8 +26,10 @@
 
   **The document store is a vector searched linearly, and not `PasContainer`'s
   map.** `MapKey` is 63 characters and a document URI is not a key of that
-  size -- `file:///home/someone/a/project/src/thing.pas` is past it before the
-  file name starts. A handful of open documents is what an editor has, so the
+  size -- this component's own is
+  `file:///home/someone/projects/afterschool_pascal/lsp/pasls.pas` under any
+  checkout deeper than a couple of directories, and 63 runs out inside the
+  project name. A handful of open documents is what an editor has, so the
   search costs nothing; the finding is recorded in the roadmap rather than
   worked around silently.
 
