@@ -18,7 +18,7 @@ decide about, and the day it is decided it moves there.
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
 | [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and what each landed feature left open behind it — two of those are still open |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the five library gaps still open — JSON was the sixth and is done — and the two deliberate language absences, none of which is a mystery |
-| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, and the two library gaps that were in front of it — both now closed, so nothing is |
+| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, the two library gaps that were in front of it — both now closed, so nothing is — and [a second transport](#mcp-implementation) recorded but not started |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is now the only entry left |
 | [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open — which has since been taken |
@@ -536,6 +536,90 @@ Everything after that is unknown on purpose. **The list of what this demands is
 the product of writing it**, and enumerating it here would be designing
 features without a caller — which is the practice this entry exists to serve
 rather than to break.
+
+### MCP implementation
+
+**A second transport over the same program**, asked about because an agent is
+now a reader of this repository as much as an editor is. It is recorded here
+rather than started: the paragraph above says enumerating what this chapter
+demands would be designing features without a caller, and this is a *transport*
+question with a prerequisite in front of it and an expected finding named in
+advance, which is the form that escapes that objection.
+
+**What is already shared, and it is most of it.** `lsp/pasls.pas` splits into a
+transport half and a work half, and the split is clean: `ImportsFor`,
+`WriteScratch`, `Compile`, `DiagnosticsIn`, the document store and `UriToPath`
+know nothing about LSP beyond taking a URI. MCP speaks the same JSON-RPC 2.0
+envelope with the same error codes, so `Dispatch`, `NewResponse`, `CopyId` and
+the `-32601` path carry over unchanged. That makes it `pasls --mcp` rather than
+a second binary — one document store, one import resolver, one scratch path.
+
+**The one real code change is the framing**, and it is the interesting part.
+MCP's stdio transport is newline-delimited JSON; LSP is `Content-Length: N` and
+then exactly N bytes. `PasLsp` (ADR-0218) exists *because* that framing is not
+line-oriented — a reader that has just consumed a header line is usually
+already holding the first bytes of the body, and nothing that reads lines can
+hand those back. Newline-delimited is the easier of the two, so the work is
+small and the value is not the work: it asks whether `PasLsp`'s seam is an
+abstraction or merely the one shape it was written for, which is a question one
+framing cannot answer.
+
+**The scenario that benefits is not the editor's.** LSP serves a human in an
+editor; MCP would serve an agent working on this repository, which is a real
+reader here. An agent editing `selfhost/apfront.pas` — 22 102 lines — has no
+semantic route into it and falls back on `grep`, which fails in a way this tree
+has already paid for: §6.11.1 puts an exported routine's header in the
+module-heading *and* leaves the block repeating the name, so `^function Name(`
+matches an interface entry with no body, which is how `foreign-reserved` broke
+on the day of the three-component split. *Where is this declared*, *what does
+this name resolve to* and *which component exports it* are questions the
+compiler answers exactly and a regex answers by accident.
+
+**That argument is already accepted here**, which is why this entry exists at
+all: ADR-0229 and ADR-0230 moved `kind-exhaustive` off a Pascal-parsing regex
+and onto the compiler's own `--dump-dispatch`, deleted 85 lines of it, and
+found three dispatch sites the text match had simply missed. The agent is the
+next reader in that line, and MCP is the socket it plugs into.
+
+**Where it buys little**, said plainly so the entry is not read as larger than
+it is. Compiling, running the suite and reading diagnostics are all done
+through a shell today and are not improved by wrapping them in a tool call. The
+gates gain nothing: a Python reader wants a line-oriented `--dump-*` flag,
+which is what it has and the better interface for it. Editor users gain nothing
+whatever.
+
+**What it would stress that LSP has not.** Two things, both live. `PasJson`
+under *construction* load — MCP tool descriptors are JSON Schema, nested and
+heterogeneous and kilobytes long, where a flat `publishDiagnostics` carrying
+two diagnostics is 321 characters and that alone found the `JsonCharsInto`
+defect; `JsonLine` at 255 and `MapKey` at 63 are both open findings above, and
+a tool list is the payload that turns them from recorded into blocking. And a
+second framing over one reader, which is ADR-0116's two-sites test applied to
+`PasLsp` itself.
+
+**The prerequisite, and it decides the ordering.** Nearly every tool worth
+exposing needs the compiler to answer a structured question *about a program*,
+and today it cannot: the only route is `--dump-sema`, which ADR-0085 demoted
+from a specification to a debugging aid the moment there was no second front
+end to diff it against. So MCP is gated on the same decision
+`textDocument/documentSymbol` forces, and cannot arrive before it. Do the
+compiler-side query surface first and both transports are cheap — there is then
+no reason to choose between them.
+
+**The finding it is expected to produce**, named in advance the way the
+concurrency row names its sentence, because a second surface added without one
+is breadth where this chapter wants depth: *`PasLsp` is a frame reader and not
+a transport, and the second transport is what says so.*
+
+**What it costs** is a second thing to keep green — a second session corpus,
+and an MCP analogue of `lsp/run.sh`'s byte-exact replay.
+
+One caveat about the reading above, in this page's own spirit: the LSP and
+`lsp/` facts here were taken from the sources, and the MCP-side ones —
+newline-delimited stdio framing, the JSON-RPC envelope, the shape of a tool
+descriptor — are from knowledge of that protocol and were not checked against
+its specification in this tree. Confirm them against the published version
+before any of this is built on.
 
 ---
 
