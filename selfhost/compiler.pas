@@ -5186,6 +5186,29 @@ begin
       PutOp(w);
       write(ircode, ', ptr ');
       PutOp(x);
+      writeln(ircode);
+      { AP 6.4.3.4's `writable` (ADR-0240), field 2. Asked on every `binding`
+        rather than on demand, because 6.7.6.8 makes the call yield a whole
+        record and there is no half of one to yield -- which is the same
+        reason `name` is copied for a caller that only wants `bound`. }
+      Def(d_);
+      write(ircode, 'call i32 @pas_binding_writable(ptr ');
+      PutOp(a);
+      writeln(ircode, ')');
+      Def(w);
+      write(ircode, 'trunc i32 ');
+      PutOp(d_);
+      writeln(ircode, ' to i1');
+      Def(x);
+      write(ircode, 'getelementptr inbounds ');
+      PutLlType(e^.clSlot^.stype);
+      write(ircode, ', ptr ');
+      PutOp(v);
+      writeln(ircode, ', i32 0, i32 2');
+      write(ircode, '  store i1 ');
+      PutOp(w);
+      write(ircode, ', ptr ');
+      PutOp(x);
       writeln(ircode)
     end
   end
@@ -9918,6 +9941,7 @@ begin
   writeln(ircode, 'declare void @pas_unbind(ptr)');
   writeln(ircode, 'declare void @pas_halt(i32)');
   writeln(ircode, 'declare i32 @pas_binding_bound(ptr)');
+  writeln(ircode, 'declare i32 @pas_binding_writable(ptr)');
   writeln(ircode, 'declare ptr @pas_binding_name(ptr)');
   writeln(ircode, 'declare i32 @pas_argcount()');
   writeln(ircode, 'declare ptr @pas_argument(i32)');

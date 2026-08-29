@@ -1,0 +1,23 @@
+# A scratch path the server cannot write, which until AP 6.4.3.4's `writable`
+# field it could not survive: `rewrite` on a name that cannot be created is a
+# run-time error and stops the program, and neither standard gives a program a
+# way to ask beforehand (ADR-0240).
+#
+# What this pins is that the session *continues*. The server says once per
+# document what is wrong and where to fix it, publishes nothing it cannot
+# stand behind, answers documentSymbol with an empty outline rather than a
+# stopped process, and shuts down cleanly. `.scratch` beside this file is the
+# path; it names no directory any machine has.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+
+# No publishDiagnostics follows: there is nothing to say and saying an empty
+# set would claim the file is clean.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/hello.pas","languageId":"pascal","version":1,"text":"program hello(output);\nbegin\n  writeln('hello')\nend.\n"}}}
+
+# And the outline is empty rather than absent, which is what a client that
+# asked for one has to be given.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"file:///scratch/hello.pas"}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///scratch/hello.pas"}}}
+{"jsonrpc":"2.0","id":3,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

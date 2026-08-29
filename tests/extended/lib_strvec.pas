@@ -84,7 +84,11 @@ begin
 
   { --- a file's lines, through a nested procedure --- }
   p := binding(fresh).name + '.lib_strvec';
-  WriteAllText(p, 'pear' + chr(10) + 'apple' + chr(10) + 'fig' + chr(10));
+  { A writer answers now (AP 6.4.3.4, ADR-0240) and a function call is not a
+    statement, so what was a bare call is a reported one. }
+  writeln('wrote: ',
+          WriteAllText(p, 'pear' + chr(10) + 'apple' + chr(10) + 'fig'
+                       + chr(10)));
   SVecClear(v);
   ok := ForEachLine(p, keep);
   dump('read', v);

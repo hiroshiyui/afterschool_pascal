@@ -575,7 +575,7 @@ end;
   not. 6.6.5.2 appends the line terminator that a last line without one is
   missing, so a buffer the user has not finished typing still reaches the
   compiler as a whole file. }
-procedure WriteScratch(var b: JsonChars);
+function WriteScratch(var b: JsonChars): boolean;
 var bt: BindingType;
     i, n: integer;
     c: char;
@@ -587,15 +587,24 @@ begin
     directions. Unbinding first is what keeps the second bind legal, 6.7.5.6
     making a bind over an existing entity a dynamic-violation.
 
-    There is no check that the path can be written either, because there is
-    nothing to check with: `rewrite` on a name that cannot be created is a
-    run-time error and stops the program, and neither standard gives a program
-    a way to ask beforehand. A server cannot survive a bad `PASLS_SCRATCH`,
-    and that is a finding rather than an oversight. }
+    `writable` is the field that *is* asked, and it is the one this program
+    demanded: AP 6.4.3.4 (ADR-0240). Until it existed there was nothing to ask
+    with -- `rewrite` on a name that cannot be created is a run-time error and
+    stops the program, and neither standard offers a program a question about
+    the write side of an open the way `bound` answers one about the read side.
+    A server cannot be killed by a bad `PASLS_SCRATCH` now; it says so and
+    keeps the session. It is a probe and not a guarantee, exactly as `bound`
+    is, so a disc that fills between these two statements still stops the
+    program -- what it covers is every failure the *path* can be blamed for. }
   bt := binding(scratchFile);
   if bt.bound then unbind(scratchFile);
   bt.name := scratchPath;
   bind(scratchFile, bt);
+  if not binding(scratchFile).writable then begin
+    Note('nothing can be written at ' + scratchPath
+         + ' -- set PASLS_SCRATCH to a path this program may create');
+    exit(false)
+  end;
   rewrite(scratchFile);
   n := JsonCharsLen(b);
   for i := 1 to n do begin
@@ -605,7 +614,8 @@ begin
   end;
   { Unbinding closes it, which is what makes the bytes readable by the process
     started on the next line. }
-  unbind(scratchFile)
+  unbind(scratchFile);
+  WriteScratch := true
 end;
 
 { Compile the scratch file and answer everything the compiler said.
@@ -695,7 +705,7 @@ begin
   at := IndexOf(uri);
   if at = 0 then exit;
   d := VecGet(DocVec, Document, docs, at);
-  WriteScratch(d.text);
+  if not WriteScratch(d.text) then exit;
   { The document's *real* path, not the scratch one: the sidecars name the
     file the client is editing, and the scratch file is a copy of its bytes
     somewhere else entirely. }
@@ -1001,10 +1011,13 @@ begin
   at := IndexOf(uri);
   if at <> 0 then begin
     d := VecGet(DocVec, Document, docs, at);
-    WriteScratch(d.text);
-    { No imports: the flag stops after the parse and a name is a name whether
-      or not the module it came from was found. }
-    if CompilerCommand(' --dump-symbols', '', cmd) then begin
+    { A scratch path that cannot be written leaves the outline empty rather
+      than stopping the server, which is what the answer below already is for
+      a document nobody opened. }
+    if WriteScratch(d.text)
+       { No imports: the flag stops after the parse and a name is a name
+         whether or not the module it came from was found. }
+       and CompilerCommand(' --dump-symbols', '', cmd) then begin
       SVecNew(lines, 64);
       r := CaptureLines(cmd, lines);
       if not r.ok then

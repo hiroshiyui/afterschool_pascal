@@ -111,6 +111,7 @@ both compilers (ADR-0062).
 |---|---|---|---|
 | E.15 | E.7 | when file operations are actually performed | At the call, through C stdio; `reset`, `rewrite` and `extend` open or reopen the stream, `get` and `put` transfer one component. One component of lookahead is held (ADR-0021), so the stream is one component ahead of the program. |
 | E.14 | — | the variable-string-type of `BindingType.name` | `string(255)`. |
+| — | — | the additional fields of `BindingType` (§6.4.3.4 NOTE 7) | One: `writable`, of type `Boolean`, true exactly when the bound external entity could be opened for writing at the moment `binding` was applied — and false where the variable is bound to nothing, as `bound` is. It is §5's extension rather than an implementation-defined choice, and it is here because a reader looking up binding will look here. AP 6.4.3.4.7, ADR-0240. |
 | E.16 | — | what `bind(f, b)` binds to | The file whose pathname is `b.name`, with trailing spaces trimmed; the file is thereafter an external one, as a program parameter is (ADR-0052). **The variable is bound to an external entity when that entity exists**, asked whenever `binding` is called — so `bound` is false for a name nothing is at, and true for the same variable once `rewrite` has created the file. §6.7.5.6 makes the binding implementation-defined and its NOTE 2 makes `binding(f).bound` the test of success, which is what lets a conforming program ask whether there is anything to read before `reset` stops it. Readability is not asked: that is the open's own question. The name is kept whatever the answer, so an unchecked `reset` still stops at the file that was named rather than reading a scratch file, and a second `bind` is the dynamic-violation only when the first is bound to something (ADR-0172). `tests/extended/bind_missing.pas`. |
 | E.19 | — | the value `binding(f)` returns | `bound` says whether the variable is bound to an external entity and `name` is the pathname it is bound to, or the null string when it is not. **A program-parameter that was given a command-line argument is bound, and `name` is that argument** — §6.7.6.8's NOTE 2 makes `binding` the way "to determine the result of any binding of program-parameters prior to activation of the main program", and it is the only channel either standard gives a program to its own command line (ADR-0081). A program-parameter with no argument is unbound, which is how a program counts the arguments it was given. **`input` and `output` answer as unbound**: they are bound to an external entity, but to one with no pathname, and reporting a name `bind` could not reproduce would be worse than reporting none. `unbind` clears the binding §6.12 made, as it clears one the program made. `tests/extended/bindprogparam.pas`. |
 | E.17 | — | "current date" for `GetTimeStamp` | `SOURCE_DATE_EPOCH` when that variable holds a value the whole of which parses, read as UTC; the system clock otherwise, also read as UTC (ADR-0065). |
@@ -324,7 +325,7 @@ excluded from the clause because they *require* it.
 ## 5. Extensions
 
 Clause 5.1 g) requires extensions to be described as *extensions to Pascal as
-specified by ISO/IEC 7185*. There are two.
+specified by ISO/IEC 7185*. There are three.
 
 **`halt` takes an optional integer argument, the exit status**, where
 §6.7.5.7 gives it no parameters. `halt` alone exits 0, as it always did;
@@ -335,6 +336,30 @@ Pascal has to be able to do. No conforming program's meaning changes: `halt(1)`
 was a compile-time error until this landed, so no valid program contains it, and
 every path that reached `halt` before still exits 0. ADR-0084;
 `tests/extended/halt_status.pas`.
+
+**`BindingType` has a third field, `writable`**, which ISO/IEC 10206:1991
+§6.4.3.4 NOTE 7 permits in as many words: *"A processor may provide additional
+fields as an extension."* Where the file-variable is bound to an external
+entity, it is true if and only if the entity could be opened for writing when
+`binding` was applied; where it is bound to nothing, it is false. It is an
+extension to ISO 7185 outright, that standard having no binding at all.
+
+It exists because the read side of an open has a question and the write side
+had none. §6.7.5.6's NOTE 2 offers `binding(f).bound` as the test of a binding,
+and E.16 above makes it *the entity exists* — which is what a program about to
+`reset` wants. A program about to `rewrite` wants the opposite question and
+there was no way to ask it: §6.7.5.2 leaves the activities on the external
+entity implementation-defined (E.15), this processor's choice on a failure to
+create is to terminate the program, and no conforming program could find out
+first. The four writers of `lib/pasfile.pas` were procedures that could not
+report and did fail, and `lsp/pasls.pas` could be killed by a bad
+`PASLS_SCRATCH` however carefully it was written.
+
+No conforming program's meaning changes: a field-identifier of a required
+record-type is not a name a program can otherwise use in that position, and
+`binding` returns the whole record whether or not a program reads the field.
+Like `bound`, it reports a moment and promises nothing about the next
+statement. AP 6.4.3.4.7, ADR-0240; `tests/dialect/binding_writable.pas`.
 
 **An identifier may contain an underscore**, where §6.1.3 makes an identifier
 `letter { letter | digit }`. It is how this project spells a name that would

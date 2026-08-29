@@ -12,5 +12,6 @@ sorted (20/100): [ka #0] [ka #0] [ka #5] [ka #5] [kb #3] [kb #3] [kb #8] [kb #8]
 ascending: TRUE
 tiny (1/4): [only]
 freed: TRUE
+wrote: TRUE
 read (3/100): [pear] [apple] [fig]
 sorted lines: apple < fig < pear

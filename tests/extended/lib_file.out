@@ -4,6 +4,7 @@ absent line: FALSE untouched
 absent each: FALSE 0
 absent all: FALSE untouch -1
 absent copy: FALSE FALSE
+write all: TRUE
 exists: TRUE
 count: TRUE 3
 line 2: TRUE [two]
@@ -17,12 +18,23 @@ all: TRUE size=14 length=14 fits=TRUE
 prefix: TRUE size=14 [one
 two
 ] fits=FALSE
+append line: TRUE
+append text: TRUE
 after append: 6
 line 6: [six]
+append creates: TRUE
 q: TRUE [created by append]
+write line: TRUE
 q count: 1
 copy: TRUE
 copied size: 28 same=TRUE
 copied line 5: [five]
+write bare: TRUE
 unterminated: lines=1 size=11 ends in newline=TRUE
+write empty: TRUE
 empty: lines=0 size=0
+write all refused: FALSE
+write line refused: FALSE
+append line refused: FALSE
+append text refused: FALSE
+copy refused: FALSE source intact=6

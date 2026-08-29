@@ -1,0 +1,6 @@
+a name nothing is at: bound=FALSE writable=TRUE -- not attempted
+one that is there: bound=TRUE writable=TRUE -- written
+the directory itself: bound=TRUE writable=FALSE -- left alone
+below a file: bound=FALSE writable=FALSE -- left alone
+under a missing directory: bound=FALSE writable=FALSE -- left alone
+never bound: bound=FALSE writable=FALSE

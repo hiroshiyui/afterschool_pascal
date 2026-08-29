@@ -10,7 +10,7 @@ import PasFile;
 
 var
   fresh: bindable text;
-  base, p, q, absent: FilePath;
+  base, p, q, absent, bad: FilePath;
   n, size, seen: integer;
   l: FileLine;
   small: string(8);
@@ -45,7 +45,11 @@ begin
           FileExists(absent + '.copy'));
 
   { --- write, then read every way --- }
-  WriteAllText(p, 'one' + chr(10) + 'two' + chr(10) + 'three' + chr(10));
+  { The writers answer now (AP 6.4.3.4, ADR-0240); every call here is at a
+    path the harness gave us, so every answer below is true and a false one
+    would be a defect this case reports rather than a line it loses. }
+  writeln('write all: ',
+          WriteAllText(p, 'one' + chr(10) + 'two' + chr(10) + 'three' + chr(10)));
   writeln('exists: ', FileExists(p));
   ok := LineCount(p, n);
   writeln('count: ', ok, ' ', n:1);
@@ -68,18 +72,19 @@ begin
           size <= small.capacity);
 
   { --- append, on a file that is there and on one that is not --- }
-  AppendLine(p, 'four');
-  AppendText(p, 'fi' + 've' + chr(10) + 'six' + chr(10));
+  writeln('append line: ', AppendLine(p, 'four'));
+  writeln('append text: ',
+          AppendText(p, 'fi' + 've' + chr(10) + 'six' + chr(10)));
   ok := LineCount(p, n);
   writeln('after append: ', n:1);
   ok := ReadLine(p, 6, l);
   writeln('line 6: [', l, ']');
-  AppendLine(q, 'created by append');
+  writeln('append creates: ', AppendLine(q, 'created by append'));
   ok := ReadLine(q, 1, l);
   writeln('q: ', FileExists(q), ' [', l, ']');
 
   { --- one line, replacing whatever was there --- }
-  WriteLine(q, 'replaced');
+  writeln('write line: ', WriteLine(q, 'replaced'));
   ok := LineCount(q, n);
   writeln('q count: ', n:1);
 
@@ -92,15 +97,30 @@ begin
   writeln('copied line 5: [', l, ']');
 
   { --- an unterminated last line is still a line (6.4.3.5) --- }
-  WriteAllText(q, 'no newline');
+  writeln('write bare: ', WriteAllText(q, 'no newline'));
   ok := LineCount(q, n);
   ok := ReadAllText(q, big, size);
   writeln('unterminated: lines=', n:1, ' size=', size:1,
           ' ends in newline=', big[size] = chr(10));
 
   { --- an empty file has no lines and no characters --- }
-  WriteAllText(q, '');
+  writeln('write empty: ', WriteAllText(q, ''));
   ok := LineCount(q, n);
   ok := ReadAllText(q, big, size);
-  writeln('empty: lines=', n:1, ' size=', size:1)
+  writeln('empty: lines=', n:1, ' size=', size:1);
+
+  { --- a path nothing can be written at, which stopped the program until
+        AP 6.4.3.4's `writable` field (ADR-0240). `absent` is a name nothing
+        is at, so a name *below* it has a parent that is not there.
+
+        The last line is the one worth reading: CopyFile answers false with
+        `p` still holding what it held, where a destination opened before the
+        source was judged would have truncated it. --- }
+  bad := absent + '/below';
+  writeln('write all refused: ', WriteAllText(bad, 'x'));
+  writeln('write line refused: ', WriteLine(bad, 'x'));
+  writeln('append line refused: ', AppendLine(bad, 'x'));
+  writeln('append text refused: ', AppendText(bad, 'x'));
+  ok := LineCount(p, n);
+  writeln('copy refused: ', CopyFile(p, bad), ' source intact=', n:1)
 end.

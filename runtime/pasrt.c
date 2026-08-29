@@ -1775,8 +1775,82 @@ void pas_dispose(void *p) {
  * catalogue's one name is the whole of the dependency. */
 #define PAS_F_OK 0
 
+/* W_OK, which POSIX fixes at 2, for AP 6.4.3.4's `writable` field. Spelled as
+ * the number for PAS_F_OK's reason: `access` stays the one catalogued name
+ * and neither mode brings a header with it. */
+#define PAS_W_OK 2
+
 static int pas_bound_exists(const struct pas_file *f) {
   return f->bound_name && access(f->bound_name, PAS_F_OK) == 0;
+}
+
+/* Whether `name` could be opened for writing -- AP 6.4.3.4's extension field,
+ * and the only question a program can ask before `rewrite` that `rewrite`
+ * itself answers by stopping the program.
+ *
+ * Two cases, because they are two questions. An entity that is *there* is
+ * asked whether it admits a write. A name that nothing is at is not asked at
+ * all -- there is nothing to ask -- so the question moves to the directory
+ * that would hold it, which is the name up to its last '/', or the working
+ * directory when it has none.
+ *
+ * What this is not is a guarantee, and the specification says so in the same
+ * words: it is exactly as strong as `bound`, which reports that an entity
+ * exists and cannot promise it still will when `reset` runs. A full disc, a
+ * descriptor table that has run out and a name replaced between the two
+ * statements are all outside it. What it does cover is every failure a
+ * *program* can be blamed for -- a directory that is not there, a path with a
+ * file where a directory was meant, a read-only mount, no permission -- which
+ * is the whole of what a server pointed at a bad scratch path meets. */
+/* Whether `name` resolves to a directory, asked without `struct stat` -- which
+ * this translation unit cannot have, ADR-0186's catalogue being able to hold a
+ * function and never a type. POSIX requires a pathname with a trailing slash
+ * to resolve to a directory, so appending one and asking whether it still
+ * exists is the same question by a route `access` can answer. A directory
+ * passes `access(W_OK)` -- that is permission to create entries *in* it -- and
+ * then stops the program at `fopen`, so this is what stands between a
+ * plausible mistake and the trap the field exists to avoid. */
+static int pas_is_directory(const char *name) {
+  size_t n = strlen(name);
+  char *probe;
+  int ok;
+  if (n > 0 && name[n - 1] == '/')
+    return access(name, PAS_F_OK) == 0;
+  probe = malloc(n + 2);
+  if (!probe)
+    return 0;
+  memcpy(probe, name, n);
+  probe[n] = '/';
+  probe[n + 1] = '\0';
+  ok = access(probe, PAS_F_OK) == 0;
+  free(probe);
+  return ok;
+}
+
+static int pas_can_write(const char *name) {
+  const char *slash;
+  char *dir;
+  int ok;
+  if (access(name, PAS_F_OK) == 0)
+    return !pas_is_directory(name) && access(name, PAS_W_OK) == 0;
+  slash = strrchr(name, '/');
+  if (!slash)
+    return access(".", PAS_W_OK) == 0;
+  /* "/x" -- the last slash is the root, which is a directory of one character
+   * and not the empty string the arithmetic below would give. */
+  if (slash == name)
+    return access("/", PAS_W_OK) == 0;
+  dir = malloc((size_t)(slash - name) + 1);
+  if (!dir)
+    return 0;
+  memcpy(dir, name, (size_t)(slash - name));
+  dir[slash - name] = '\0';
+  /* And that it *is* a directory: `a/b` where `a` is a writable regular file
+   * passes the permission test and stops the program at `fopen` with ENOTDIR,
+   * which is the same false answer a directory gives one branch up. */
+  ok = pas_is_directory(dir) && access(dir, PAS_W_OK) == 0;
+  free(dir);
+  return ok;
 }
 
 void pas_bind(void *v, const char *name, int len) {
@@ -1906,6 +1980,17 @@ void pas_unbind(void *v) {
  * bind the parameters before the program starts and give it no other channel.
  *
  * The three questions have one answer between them, so they share one. */
+/* The name this variable was given, whether or not anything is at it. Only
+ * `writable` asks in these terms, and it has to: a file about to be created
+ * is exactly the case `pas_bound_to` answers NULL for. */
+static const char *pas_named_by(struct pas_file *f) {
+  if (f->bound_name)
+    return f->bound_name;
+  if (f->binding == PAS_BIND_ARG && f->arg < pas_argc)
+    return pas_argv[f->arg];
+  return NULL;
+}
+
 static const char *pas_bound_to(struct pas_file *f) {
   /* A binding the program made wins, as it does in `pas_external`: §6.7.5.6's
    * `bind` is a program naming a file it was not started with. */
@@ -1924,6 +2009,17 @@ static const char *pas_bound_to(struct pas_file *f) {
 }
 
 int pas_binding_bound(void *v) { return pas_bound_to(v) != NULL; }
+
+/* AP 6.4.3.4's third field, which ISO/IEC 10206:1991 §6.4.3.4 NOTE 7 admits as
+ * an extension: "A processor may provide additional fields as an extension."
+ * False for a variable bound to nothing, as `bound` is -- the record describes
+ * a binding, and where there is none there is nothing to report. A variable
+ * that was never bound writes to a processor-supplied temporary and this says
+ * nothing about that. */
+int pas_binding_writable(void *v) {
+  const char *name = pas_named_by(v);
+  return name != NULL && pas_can_write(name);
+}
 
 /* AP 6.7.6.10 (ADR-0173): the command line as a list. `argcount` is what
  * §6.12 would have bound program-parameters to, counted; `argument(k)` is

@@ -19785,6 +19785,24 @@ begin
   fld^.next := nil;
   bindingTy^.fieldTail^.next := fld;
   bindingTy^.fieldTail := fld;
+  { AP 6.4.3.4's third field (ADR-0240), which 6.4.3.4 NOTE 7 admits in as
+    many words: "A processor may provide additional fields as an extension."
+    It is what a program asks before `rewrite`, which is otherwise the one
+    open in either standard that can only answer by stopping the program --
+    `bound` answers the same question for `reset` and there was nothing for
+    the write side. }
+  new(fld);
+  InternWord('writable ', fld^.at, fld^.len);
+  fld^.ftype := boolType;
+  fld^.index := 2;
+  fld^.variant := nil;
+  fld^.line := 0;
+  fld^.col := 0;
+  fld^.initValue := nil;
+  fld^.isBindable := false;   { 6.4.3.4, as above }
+  fld^.next := nil;
+  bindingTy^.fieldTail^.next := fld;
+  bindingTy^.fieldTail := fld;
   InternWide('bindingtype     ', at, len);
   s := Declare(at, len, skType, 0, 0);
   s^.stype := bindingTy;

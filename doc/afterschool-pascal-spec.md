@@ -570,6 +570,35 @@ It appears in Annex C.
 directly, and the value assigned shall determine the active variant from that
 point. This is unchanged from ISO/IEC 10206:1991.
 
+**6.4.3.4.7 A third field of BindingType [added].** ISO/IEC 10206:1991
+§6.4.3.4 requires the record-type denoted by `BindingType` to have fields
+associated with the required field-identifiers `name` and `bound`, and its
+NOTE 7 permits a processor to provide additional fields as an extension. The
+dialect requires one:
+
+There shall be a field associated with the required field-identifier
+`writable`, of the type denoted by `Boolean`. Where the file-variable is bound
+to an external entity, the value of that field shall be true if and only if the
+entity could be opened for writing at the time `binding` was applied. Where the
+file-variable is not bound to an external entity, the value shall be false.
+
+NOTE — The field is a report about a moment and not an undertaking, exactly as
+`bound` is: an external entity that exists when `binding` is applied may be
+gone when `reset` is applied, and one that could be opened for writing then may
+not be when `rewrite` is applied. A processor is not required to detect a
+condition that arises between the two.
+
+NOTE — §6.7.5.6's NOTE 2 offers `bound` as the way to test a binding, which
+serves a program that is about to read: it may ask whether there is anything to
+read. A program that is about to *write* had no such question. §6.7.5.2 defines
+`rewrite` and `extend` by post-assertions and says that those "imply
+corresponding activities on the external entities, if any, to which the
+file-variables are bound", leaving those activities implementation-defined
+(§5.1 c), E.15) — so what a processor does when the external entity cannot be
+created is its own to decide, and terminating the program is a permitted
+choice. This processor makes that choice (Annex A.1). The field is what lets a
+program avoid it.
+
 ##### 6.4.4 Pointer-types [extended]
 
 **6.4.4.1 A domain that binds type discriminants [added].** Where the

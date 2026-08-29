@@ -48,6 +48,10 @@
 #   sessions/name.note    what it writes to standard error; absent means none
 #   sessions/name.workspace  a marker: this session names files on disk, so its
 #                         golden is normalised before the diff -- see below
+#   sessions/name.scratch a scratch path for this session, one line, in place
+#                         of the work directory's. It exists for the sessions
+#                         that are about a path the server *cannot* write, and
+#                         so must name one no work directory would be
 set -u
 
 if [[ $# -lt 1 ]]; then
@@ -115,9 +119,13 @@ for session in "$here"/sessions/*.jsonl; do
   # `env -u` rather than a wrapper script, and it works because PASLS_COMPILER
   # is a *command* and not a path -- the server pastes it in front of the file
   # name it computed.
+  scratch="$work/$name.pas"
+  if [[ -f ${session%.jsonl}.scratch ]]; then
+    scratch=$(<"${session%.jsonl}.scratch")
+  fi
   ( if [[ -n $heap_balance ]]; then export PASHEAP_BALANCE="$heap_balance"; fi
     PASLS_COMPILER="env -u PASHEAP_BALANCE $pascalc" \
-    PASLS_SCRATCH="$work/$name.pas" \
+    PASLS_SCRATCH="$scratch" \
       "$work/pasls" <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note" )
   status=$?
   if [[ $status -ne 0 ]]; then

@@ -50,6 +50,7 @@
 6.4.3.4.4	A variant-part whose case-constant-list is not a singleton
 6.4.3.4.5	A variant-part with no tag-field
 6.4.3.4.6	Assignment to the tag-field
+6.4.3.4.7	A third field of BindingType
 6.4.4	Pointer-types
 6.4.4.1	A domain that binds type discriminants
 6.4.4.2	Type identity

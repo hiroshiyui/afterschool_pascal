@@ -70,26 +70,40 @@ function ForEachLine(path: FilePath;
 function ReadAllText(path: FilePath; var dest: string;
                      var size: integer): boolean;
 
+{ **Every writer here answers whether it wrote**, and until AP 6.4.3.4's
+  `writable` field there was nothing for them to answer with (ADR-0240): a
+  `rewrite` at a path that cannot be created is a run-time error and *stops
+  the program*, so these four were procedures that could not fail and did.
+  Five sites in one module is what made the field a demand rather than an
+  idea (ADR-0116).
+
+  False means nothing was written and nothing was truncated -- the file is
+  left exactly as it was found. It is a probe and not a promise, exactly as
+  `bound` is one, so a disc that fills mid-write still stops the program;
+  what it covers is every failure the *path* can be blamed for. }
+
 { Create or truncate the file and write `content` to it, a chr(10) in `content`
   becoming a line terminator. A `content` that does not end in one leaves the
   last line unterminated on the stream; §6.4.3.5 will supply one when the
   file is read back, so `ReadAllText` after `WriteAllText(p, 'a')` reads two
   characters. }
-procedure WriteAllText(path: FilePath; content: string);
+function WriteAllText(path: FilePath; content: string): boolean;
 
 { Create or truncate the file and write one terminated line. }
-procedure WriteLine(path: FilePath; line: string);
+function WriteLine(path: FilePath; line: string): boolean;
 
 { Add one terminated line at the end, creating the file if nothing is there. }
-procedure AppendLine(path: FilePath; line: string);
+function AppendLine(path: FilePath; line: string): boolean;
 
 { Add `content` at the end, as WriteAllText writes it, creating the file if
   nothing is there. }
-procedure AppendText(path: FilePath; content: string);
+function AppendText(path: FilePath; content: string): boolean;
 
 { Copy `src` to `dst`, line by line, creating or truncating `dst`. False, and
-  `dst` untouched, when nothing is at `src`. A copy, not a rename: the dialect
-  has `PasFS.Rename` for that. }
+  `dst` untouched, when nothing is at `src` **or nothing can be written at
+  `dst`** -- the second was a stopped program until AP 6.4.3.4, and the one
+  this routine's `boolean` had always looked as though it covered. A copy, not
+  a rename: the dialect has `PasFS.Rename` for that. }
 function CopyFile(src, dst: FilePath): boolean;
 
 end;
@@ -214,48 +228,54 @@ begin
     else write(f, content[i])
 end;
 
-procedure WriteAllText;
+{ The whole of what the four exported writers do, and they are one routine
+  with two flags because they could not be four routines sharing a check.
+
+  **A bindable file cannot cross a parameter.** §6.4.1 makes `bindable` part
+  of a *variable-declaration* and not of a type-denoter, so there is no formal
+  parameter that accepts one -- `var f: text` compiles and then `bind(f, b)`
+  is refused, *"only a variable whose type-denoter says 'bindable' can be
+  bound to something outside the program"*. A helper taking the file was the
+  obvious shape and is unwritable, so the helper takes the job instead: one
+  bindable variable, one check, four callers. }
+function Written(path: FilePath; content: string;
+                 append, terminated: boolean): boolean;
 var f: bindable text; b: BindingType;
 begin
   b := binding(f);
   b.name := path;
   bind(f, b);
-  rewrite(f);
+  { AP 6.4.3.4 (ADR-0240). Nothing is opened on the refusal path, so a file
+    that was already there is not truncated by a call that then fails. }
+  if not binding(f).writable then begin
+    unbind(f);
+    exit(false)
+  end;
+  if append then extend(f) else rewrite(f);
   PutText(f, content);
-  unbind(f)
+  if terminated then writeln(f);
+  unbind(f);
+  Written := true
 end;
 
-procedure WriteLine;
-var f: bindable text; b: BindingType;
+function WriteAllText;
 begin
-  b := binding(f);
-  b.name := path;
-  bind(f, b);
-  rewrite(f);
-  writeln(f, line);
-  unbind(f)
+  WriteAllText := Written(path, content, false, false)
 end;
 
-procedure AppendLine;
-var f: bindable text; b: BindingType;
+function WriteLine;
 begin
-  b := binding(f);
-  b.name := path;
-  bind(f, b);
-  extend(f);
-  writeln(f, line);
-  unbind(f)
+  WriteLine := Written(path, line, false, true)
 end;
 
-procedure AppendText;
-var f: bindable text; b: BindingType;
+function AppendLine;
 begin
-  b := binding(f);
-  b.name := path;
-  bind(f, b);
-  extend(f);
-  PutText(f, content);
-  unbind(f)
+  AppendLine := Written(path, line, true, true)
+end;
+
+function AppendText;
+begin
+  AppendText := Written(path, content, true, false)
 end;
 
 function CopyFile;
@@ -264,10 +284,21 @@ begin
   bi := binding(i);
   bi.name := src;
   bind(i, bi);
+  { The source has to exist and the destination has to be creatable, and the
+    two are different questions with different fields: `bound` for the read
+    (E.16) and AP 6.4.3.4's `writable` for the write. Asked in that order and
+    both before anything is opened, so a refusal leaves both files alone --
+    which the destination's `rewrite` would not have, having truncated it
+    before the source was found wanting. }
   if binding(i).bound then begin
     bo := binding(o);
     bo.name := dst;
     bind(o, bo);
+    if not binding(o).writable then begin
+      unbind(o);
+      unbind(i);
+      exit(false)
+    end;
     reset(i);
     rewrite(o);
     { Character by character, for ReadAllText's reason: nothing is lost to
