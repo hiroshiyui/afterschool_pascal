@@ -11,7 +11,7 @@ the alternatives that were rejected and why.
 | --- | --- | --- |
 | [0001](0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
 | [0002](0002-target-iso-7185-standard-pascal.md) | Target ISO 7185 Standard Pascal | Accepted |
-| [0003](0003-llvm-backend-via-cpp-api.md) | Compile through LLVM, driven by the C++ API | Accepted |
+| [0003](0003-llvm-backend-via-cpp-api.md) | Compile through LLVM, driven by the C++ API | Deprecated (retired by 0085) |
 | [0004](0004-self-hosting-is-the-near-term-goal.md) | Self-hosting is the near-term goal | Accepted |
 | [0005](0005-tag-dispatched-ast-without-cpp-rtti.md) | Tag-dispatched AST instead of C++ RTTI | Accepted |
 | [0006](0006-textual-llvm-ir-as-a-first-class-output.md) | Textual LLVM IR is a first-class output | Accepted |

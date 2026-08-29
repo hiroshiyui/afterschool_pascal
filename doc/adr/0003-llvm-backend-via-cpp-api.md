@@ -4,7 +4,28 @@ Date: 2026-08-09
 
 ## Status
 
-Accepted
+**Deprecated.** It was accepted, and is retired by
+[ADR-0085](0085-stage-0-is-retired.md). This record covers stage 0 only -- it
+says so in its own last paragraph -- and stage 0 is gone, so every mechanism
+below it is: there is no `Module` built with `IRBuilder`, no pass manager, no
+`TargetMachine`, no `verifyModule`, and no `find_package(LLVM CONFIG)`. The
+project declares `LANGUAGES C` and links nothing of LLVM's; there is not one
+C++ source tracked in the tree, the last of them having gone with `src/` in
+[ADR-0232](0232-afterschool-pascal-is-the-language.md).
+
+What replaced it is the alternative this record listed third and did not take:
+[ADR-0006](0006-textual-llvm-ir-as-a-first-class-output.md)'s textual IR,
+which was written as a second output to keep the Pascal-hosted compiler
+possible and is now the only one. That is the reversal worth reading here --
+the option chosen for what it inherited (optimisation, retargeting, a verifier)
+lost to the option chosen for what it did *not* require.
+
+Two consequences below outlived it. The verifier did not, and nothing replaced
+it: `clang` refusing to assemble a module catches malformed IR and never wrong
+IR, which is why `llc-second-backend` exists. And Debian's LLVM being built
+without RTTI is the reason behind
+[ADR-0005](0005-tag-dispatched-ast-without-cpp-rtti.md), which is itself
+historical now and still explains why the AST is a tag and a variant record.
 
 ## Context
 
