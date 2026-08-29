@@ -250,3 +250,4 @@ the alternatives that were rejected and why.
 | [0239](0239-the-compiler-answers-a-tools-question.md) | The compiler answers a tool's question about a program | Accepted |
 | [0240](0240-a-program-may-ask-before-it-writes.md) | A program may ask before it writes | Accepted |
 | [0241](0241-a-second-transport-over-one-program.md) | A second transport over one program | Accepted |
+| [0242](0242-a-name-no-other-live-process-will-choose.md) | A name no other live process will choose | Accepted |

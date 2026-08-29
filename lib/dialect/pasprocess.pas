@@ -8,7 +8,7 @@
   declarations for it (ADR-0121) with the numbers each answers made
   meaningful.
 
-  **Four names, all ISO C or POSIX.1, and no header number this module
+  **Five names, all ISO C or POSIX.1, and no header number this module
   cannot check.**
 
   - `system` is ISO C. What it returns is "implementation-defined" there and
@@ -26,6 +26,11 @@
     target this compiler admits is. `CpuSeconds` divides by it and says so.
   - `sleep` is POSIX.1, in whole seconds, and returns how many were left if
     it was interrupted.
+  - `getpid` is POSIX.1 and answers a `pid_t`, which is the one place here a
+    *typedef* rather than a number had to be judged. The judgement is written
+    beside the declaration; what makes it this module's rather than the
+    runtime's is that a scalar typedef can be judged at all, where
+    `struct stat` and `struct pollfd` cannot (ADR-0186).
 
   **`Run` flushes first.** §6.10's `output` is buffered by the runtime and a
   child process writes straight to the descriptor, so without this a
@@ -76,7 +81,7 @@ module PasProcess;
 
 export PasProcess = (CommandMax, CommandLine, RunResult,
                      Run, Capture, CaptureLines,
-                     ExitCode, Sleep, Seconds, CpuSeconds);
+                     ExitCode, Sleep, Seconds, CpuSeconds, ProcessId);
 
 import PasError;
        PasStrVec;
@@ -140,12 +145,28 @@ function Seconds: int64;
   on every target this compiler admits it is 64. }
 function CpuSeconds: real;
 
+{ The number the operating system knows this program by, from `getpid`.
+  Positive, and no other program running at the same moment has it -- which
+  is the whole of what it is for here: a program that must choose a file name
+  no other *live* process will choose has nothing else to build one from
+  (ADR-0242). It says nothing about a process that has exited; the system is
+  free to hand the number out again. }
+function ProcessId: integer;
+
 end;
 
 function ExtSystem(command: string): integer; external 'system';
 function ExtTime(where: int64): int64; external 'time';
 function ExtClock: int64; external 'clock';
 function ExtSleep(seconds: integer): integer; external 'sleep';
+{ `pid_t` is the one POSIX scalar typedef this module binds, and POSIX says
+  only that it is a signed integer type. `integer` is the safe direction of
+  the two this FFI has: where the typedef is wider, the low word is read and
+  a process identifier fits it on every system anybody runs; where `int64`
+  were used and the typedef is `int`, the high word would be whatever the
+  call left in the register. `time_t` above is `int64` for the opposite
+  reason -- it is 64 bits everywhere and a truncated one is wrong in 2038. }
+function ExtGetpid: integer; external 'getpid';
 function ExtFflush(stream: int64): integer; external 'fflush';
 
 type
@@ -167,6 +188,11 @@ const
 function ExitCode;
 begin
   ExitCode := (status div 256) mod 256
+end;
+
+function ProcessId;
+begin
+  ProcessId := ExtGetpid
 end;
 
 function Run;

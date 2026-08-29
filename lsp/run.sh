@@ -52,6 +52,13 @@
 #                         of the work directory's. It exists for the sessions
 #                         that are about a path the server *cannot* write, and
 #                         so must name one no work directory would be
+#   sessions/name.tmpdir  a marker: this session is about the scratch path the
+#                         server picks when it is told none. PASLS_SCRATCH is
+#                         left unset, TMPDIR is a directory of this session's
+#                         own, and what is checked afterwards is the name of
+#                         the file left in it -- which must carry the server's
+#                         own process id (ADR-0242). Every other session sets
+#                         the path, so this is the only one that can see it
 #   sessions/name.mcp     a marker: this session is MCP and not LSP. The server
 #                         is started with --mcp, the framing is one JSON
 #                         message to a line rather than Content-Length, and it
@@ -143,8 +150,11 @@ for session in "$here"/sessions/*.jsonl; do
   else
     frame <"$session" >"$work/$name.in"
   fi
-  # The scratch path is per session and inside the work directory: the default
-  # is one fixed name under TMPDIR, which two runs of the suite would share.
+  # The scratch path is per session and inside the work directory. The default
+  # the server would pick is under TMPDIR and carries its pid, so two servers
+  # would not collide -- but two *runs of this suite* would still hand the same
+  # session the same name, and a session is entitled to a path nothing else has
+  # touched.
   #
   # `env -u` rather than a wrapper script, and it works because PASLS_COMPILER
   # is a *command* and not a path -- the server pastes it in front of the file
@@ -153,6 +163,13 @@ for session in "$here"/sessions/*.jsonl; do
   if [[ -f ${session%.jsonl}.scratch ]]; then
     scratch=$(<"${session%.jsonl}.scratch")
   fi
+  # The one session that is about the name the server picks for itself. Its
+  # TMPDIR is empty and its own, and the server's pid is captured so the file
+  # left in it can be named exactly -- `$!` and `wait`, because a pid is not a
+  # thing a subshell can hand back after the fact.
+  own_tmpdir=
+  [[ -f ${session%.jsonl}.tmpdir ]] && own_tmpdir="$work/$name.tmp"
+  [[ -n $own_tmpdir ]] && mkdir -p "$own_tmpdir"
   mode=()
   [[ -f ${session%.jsonl}.mcp ]] && mode=(--mcp)
   ( if [[ -n $heap_balance ]]; then export PASHEAP_BALANCE="$heap_balance"; fi
@@ -160,10 +177,20 @@ for session in "$here"/sessions/*.jsonl; do
     # takes its workspace from where it was started. An LSP session names no
     # file it does not spell out, so the directory is nothing to it either way.
     cd "$root" || exit 1
-    PASLS_COMPILER="env -u PASHEAP_BALANCE $pascalc" \
-    PASLS_SCRATCH="$scratch" \
-      "$work/pasls" "${mode[@]+"${mode[@]}"}" \
-      <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note" )
+    export PASLS_COMPILER="env -u PASHEAP_BALANCE $pascalc"
+    if [[ -n $own_tmpdir ]]; then
+      export TMPDIR="$own_tmpdir"
+      unset PASLS_SCRATCH
+    else
+      export PASLS_SCRATCH="$scratch"
+    fi
+    "$work/pasls" "${mode[@]+"${mode[@]}"}" \
+      <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note" &
+    server=$!
+    wait $server
+    server_status=$?
+    printf '%s\n' "$server" >"$work/$name.pid"
+    exit $server_status )
   status=$?
   if [[ $status -ne 0 ]]; then
     echo "--- $name: the server exited with status $status ---" >&2
@@ -191,6 +218,24 @@ for session in "$here"/sessions/*.jsonl; do
     echo "--- $name: the session differs (expected vs actual above) ---" >&2
     failed=$((failed + 1))
     continue
+  fi
+  if [[ -n $own_tmpdir ]]; then
+    # What the server chose when it was told nothing: one file, under TMPDIR,
+    # named for the process that wrote it. A name that carried no pid would be
+    # a name a second server would collide with, and nothing else here can see
+    # that -- every other session hands the server a path.
+    left=$(cd "$own_tmpdir" && ls -A | sort | tr '\n' ' ')
+    pid=$(<"$work/$name.pid")
+    # Two files and not one: the compiler is told to write its IR beside the
+    # source it was handed, so the `.ll` carries the same name. Both are named
+    # here, because "everything this server left is its own" is the property
+    # and a second server's leavings would be a second pair.
+    want="pasls-$pid.pas pasls-$pid.pas.ll "
+    if [[ $left != "$want" ]]; then
+      echo "--- $name: TMPDIR holds [$left] and not [$want] ---" >&2
+      failed=$((failed + 1))
+      continue
+    fi
   fi
   if [[ -f $expected_note ]]; then
     if ! diff -u "$expected_note" "$note_actual"; then

@@ -1,0 +1,20 @@
+# **The name the server picks when it is told none**, which is the only thing
+# this session is about: every other one is handed a PASLS_SCRATCH by the
+# harness, so none of them can see it. The `.tmpdir` marker leaves the variable
+# unset and gives the server an empty TMPDIR of its own; what is checked is the
+# file left in it afterwards, and it must be `pasls-<the server's pid>.pas`.
+#
+# A name without the pid is what stood here until ADR-0242, and two servers on
+# one machine then wrote each other's documents. The mutation is exactly that:
+# take the number out of the name and this session is the one thing that fails.
+#
+# The document is deliberately correct, because the scratch file is written
+# whether or not the compilation says anything -- and a session that also
+# pinned a diagnostic would be pinning two things at once.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/quiet.pas","languageId":"pascal","version":1,"text":"program quiet(output);\nbegin\n  writeln('quiet')\nend.\n"}}}
+
+{"jsonrpc":"2.0","id":2,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

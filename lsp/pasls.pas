@@ -34,11 +34,17 @@
   **The compiler reads a file, so the document has to become one.** An editor
   holds a buffer that has never been saved, which is the whole reason a server
   exists, so the text is written to a scratch file and the scratch file is
-  what `pascalc` is pointed at. The path is one fixed name, overridable with
-  `PASLS_SCRATCH`, and that is a limitation with a cause: there is no `getpid`
-  anywhere in this tree, no `mkstemp`, and nothing in `PasFS` that answers a
-  temporary name -- so a program wanting a name no other process will choose
-  cannot make one. Two servers sharing a `TMPDIR` would share the file.
+  what `pascalc` is pointed at. The name carries this program's process
+  identifier -- `PasProcess.ProcessId`, which the language did not have until
+  this server needed it (ADR-0242) -- so two servers sharing a `TMPDIR` do not
+  share the file. `PASLS_SCRATCH` still overrides it whole, which is how a
+  harness points every session at a path of its own, and two servers told the
+  same path share it again by the instruction of whoever told them.
+
+  The file is left behind when the server ends, and deliberately: it is the
+  exact source `pascalc` was handed, which is the one artefact worth having
+  when the server and the editor disagree about a document. One file per
+  process under `TMPDIR` is what `TMPDIR` is for.
 
   **The positions are the compiler's, converted once.** `ErrorAt` counts lines
   and columns from one; LSP counts both from zero, and `PasLspDiag.DiagJson`
@@ -1513,10 +1519,20 @@ begin
 end;
 
 procedure ReadEnvironment;
+var mine: EnvText;
 begin
   compilerCmd := LookupOr('PASLS_COMPILER', 'pascalc');
+  { The process identifier is in the default name, and that is the whole of
+    what keeps two servers on one machine out of each other's way
+    (ADR-0242). It is not `mkstemp`'s guarantee and could not be: §6.7.5.6
+    binds by *name*, so a file created exclusively would have to be opened a
+    second time to be written, and the exclusivity is given up at that
+    moment. What a name can carry is a number no other *live* process has,
+    which is exactly the case this had to answer. }
+  writestr(mine, ProcessId:1);
   scratchPath := LookupOr('PASLS_SCRATCH',
-                          LookupOr('TMPDIR', '/tmp') + '/pasls-scratch.pas')
+                          LookupOr('TMPDIR', '/tmp') + '/pasls-' + mine
+                          + '.pas')
 end;
 
 var body: JsonChars;

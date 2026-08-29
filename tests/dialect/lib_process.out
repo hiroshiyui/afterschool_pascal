@@ -31,6 +31,7 @@ listing: code 0
   a
   b
   c
+the shell agrees about my pid: TRUE
 epoch plausible: TRUE
 cpu advanced: TRUE positive: TRUE
 slept: 0 left

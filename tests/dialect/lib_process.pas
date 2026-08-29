@@ -14,7 +14,7 @@ import PasError;
        PasProcess;
 
 var r: RunResult; t0, t1: int64; c0, c1: real; i, acc: integer;
-    got: string(200); small: string(4); names: StrVecPtr;
+    got: string(200); small: string(4); mine: string(24); names: StrVecPtr;
     fresh: bindable text; dir: string(255);
 
 procedure report(what: string(24); r: RunResult);
@@ -68,6 +68,17 @@ begin
     writeln('  ', SVecGet(names, i));
   r := Run('rm -rf ' + dir);
   SVecFree(names);
+
+  { **The process identifier, pinned against the operating system rather
+    than against a golden.** A number that differs on every run cannot be
+    written down, so what is compared is the module's answer with the
+    *shell's*: `popen` starts a child, the child is the shell, and a shell's
+    `$PPID` is this program. Nothing here had asked libc a question whose
+    answer only libc knows the truth of, and this is the shape for it. }
+  r := Capture('echo $PPID', got);
+  writestr(mine, ProcessId:1);
+  writeln('the shell agrees about my pid: ',
+          (got = mine + chr(10)) and (ProcessId > 0));
 
   t0 := Seconds;
   c0 := CpuSeconds;
