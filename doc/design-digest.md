@@ -3718,8 +3718,8 @@ nothing else. What it would lose, mechanism by mechanism:
   outline reaches that by stopping *before* Sema and a defining-point cannot,
   so it carries on instead. The defect it shipped with was a JSON `null` made and replaced on every
   successful reply — thirteen leaked nodes, every golden green, found by
-  `heap-balance` and by nothing else. What it still does not answer is a
-  *defining* occurrence, a declaration not being an applied one.
+  `heap-balance` and by nothing else. Only an interface's own export-part is
+  left unanswered, §6.11.1 registering one beside the scope rather than in it.
 - **A field is the one applied occurrence that resolves to no symbol**
   (ADR-0247). §6.4.3.3 makes a record type a *region* and puts a
   defining-point in it for every field-identifier — so a field is as much an
@@ -3764,6 +3764,20 @@ nothing else. What it would lose, mechanism by mechanism:
   distinct tuples and not to uses; `tests/dumps/uses_module.pas` produces a
   schema from its component so that the *negative* half — another file's body,
   reported nowhere — is asserted rather than assumed.
+- **A declaration is an occurrence of itself** (ADR-0250), which is what makes
+  a hover over `var Total: Counter` answer at all. Reported from the **scope**
+  and not from the declaration sites: every name a block declares is on the
+  chain at that block's depth, so one walk after `CheckDeclarations` covers
+  eight kinds and needs nothing added for a ninth — and *after*, because at
+  `Declare` a variable has no type and the hover would have shown `?`. §6.6.1's
+  `forward` and §6.11.1's heading are the half that is not a no-op: the
+  completing block is the same routine and `Declare` ran at the heading, so
+  the name at the implementation resolves to the interface that promised it.
+  The defect it shipped with is the one to remember — guarding on *which file
+  Sema is checking* rather than on the **symbol's** file reported an imported
+  constituent's defining-point as an occurrence in the importing document, and
+  a hover over `Doubled` came back as `(Double`. ADR-0249's mistake from the
+  other side, caught by a session golden and not by reasoning.
 - **The scratch name carries the server's process id** (ADR-0242), which is
   what keeps two servers on one machine out of each other's file. It is not
   `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file

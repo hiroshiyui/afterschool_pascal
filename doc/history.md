@@ -4378,6 +4378,35 @@ with it, unfixed and unrecorded.
   chapter's own argument, met from the other side: the value of a client large
   enough to get tired inside is not only what it demands but what it trips.
 
+- **A declaration answered nothing, where every editor answers one** —
+  answered (ADR-0250), and it is the entry that came from *using* the feature
+  rather than from writing it. `--dump-uses` reports 6.2.2.1's **applied**
+  occurrences, so standing on `Total` in `var Total: Counter` and asking
+  either question got silence. Hover there is the most ordinary question a
+  reader has, and it is the one this could not answer.
+
+  A declaration is now an occurrence of itself, reported from the **scope** —
+  every name a block declares is on the chain at that block's depth, so one
+  walk covers eight declaration kinds and needs nothing when a ninth arrives.
+  It runs *after* the declarations are checked rather than at `Declare`,
+  because a variable has no type until its caller sets one and the hover would
+  have shown a question mark.
+
+  **And it is not a no-op everywhere.** 6.6.1's `forward` and 6.11.1's
+  module-heading declare a routine whose body arrives later, and 6.2.2.12
+  makes the two the same routine — so the name written at the implementation
+  resolves to the interface that promised it. That is the navigation C readers
+  use go-to-definition for, and this language had no way to ask for it.
+
+  **It shipped a defect and a session caught it.** The first version asked
+  which file *Sema* was checking, which is right for an applied occurrence and
+  wrong for a defining one: 6.11.3 binds an imported constituent into the
+  importing block's scope, so the walk found `Doubled` from `middle.pas` and
+  reported its position as an occurrence in `client.pas`. The server sliced
+  that document there and a hover over `Doubled` came back as **`(Double`** —
+  a name not in the file. The golden moved and the moved value was visibly
+  wrong; nothing about it was caught by reasoning.
+
 ## A second transport over one program
 
 The entry below was written in `doc/roadmap.md` before the work was started,

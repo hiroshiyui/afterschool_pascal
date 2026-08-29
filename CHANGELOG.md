@@ -72,6 +72,12 @@ appears below in the release where it still existed.
   what says whether to report it is the schema's own file and not the one
   being compiled. A schema declared in another component still answers
   nothing about its body, that text not being in this document.
+- **A declaration answers as an occurrence of itself** (ADR-0250), so a hover
+  over `var Total: Counter` gives the type where it used to give nothing. The
+  one place it is more than a no-op is Pascal's declaration/definition split:
+  §6.6.1's `forward` and §6.11.1's module-heading declare a routine whose body
+  arrives later, and the name at the implementation now leads back to the
+  interface that promised it.
 - **An `import` can name no file at all.** An interface no `--import` supplied
   is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
   identifier — in the directory the source is in, then in each

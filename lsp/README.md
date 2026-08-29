@@ -134,10 +134,17 @@ compiler is reading one file's text while it believes it is checking another.
 A schema declared in another component still answers nothing about its body —
 that text is not in this document.
 
-One thing it does not answer. A **declaration** gives nothing back: this
-reports *applied* occurrences, so a position on a `var` line or a procedure
-heading has no answer over it, where most editors would give you the
-declaration itself.
+A **declaration** answers as an occurrence of itself
+([ADR-0250](../doc/adr/0250-a-declaration-is-an-occurrence-of-itself.md)), so
+a hover over `var Total: Counter` gives the type — the most ordinary question
+a reader has. Go-to-definition there is a no-op jump, except in the one place
+Pascal has a declaration/definition split: §6.6.1's `forward` and §6.11.1's
+module-heading declare a routine whose body arrives later, and the name
+written at the implementation leads back to the interface that promised it.
+
+One thing it does not answer: an **interface's own export-part**. §6.11.1
+registers an interface in a table beside the scope rather than in it, so it is
+not a block declaration and the line that declares it has nothing over it.
 
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a

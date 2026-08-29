@@ -396,15 +396,15 @@ not already know is exactly the one declared somewhere else.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Twenty-one entries so far, and **fifteen of them have been acted on** — which
+Twenty-two entries so far, and **sixteen of them have been acted on** — which
 is the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
 
-**The fifteen that closed are in
+**The sixteen that closed are in
 [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded)**,
 each with what closing it found. The shape of that list is the argument for
-the chapter: five of the twenty-one were **bounds** — 8 imports, 24 arguments,
+the chapter: five of the twenty-two were **bounds** — 8 imports, 24 arguments,
 a 63-character key, a 255-character line, a 16 384-byte capture — and every
 one of them was chosen by counting what the largest thing in the tree needed
 at the time. The largest thing in the tree was a test case.

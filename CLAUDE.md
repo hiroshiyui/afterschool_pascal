@@ -887,9 +887,14 @@ here that nobody in this project wrote.
   too (ADR-0249), and the shape of that one is worth carrying: §6.4.7
   re-resolves a body once per distinct tuple *where the type is written*, so
   `curFile` is the wrong question there and the schema's own `declFile` is the
-  right one. What is still unanswered is a *defining* occurrence — a position
-  on a declaration has no `use` line over it, so go-to-definition on one
-  answers nothing where an editor would answer the declaration itself.
+  right one. A **declaration** answers too, as an
+  occurrence of itself (ADR-0250) — reported from the *scope* after the
+  declarations are checked, which is one site where the kinds are eight and is
+  late enough that a variable has its type. §6.6.1's `forward` and §6.11.1's
+  heading are where that is not a no-op: the completing block is the same
+  routine, so the name at the implementation resolves to the interface. Only
+  an interface's own export-part is left, §6.11.1 registering one beside the
+  scope rather than in it.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`
