@@ -1,0 +1,42 @@
+# Go-to-definition across a program-component (ADR-0246), which is the case
+# the method is worth having for: the name a reader does not already know is
+# exactly the one that was declared somewhere else.
+#
+# It rests on two things that are not this method's. The imports come from
+# `.components`, this tree's build description, read by the same walk the
+# diagnostics use (ADR-0238) -- without them `Answer` resolves to nothing and
+# there is no defining-point to report. And the compiler's `file` lines are
+# the table its `declfile` field indexes into, so the answer names a path
+# this server was never told about and had no way to guess.
+#
+# The workspace beside this file is the one the imports session uses. %ROOT%
+# is this checkout, substituted by the harness; the golden is normalised for
+# the same reason and its Content-Lengths are blanked, an absolute path being
+# as long as somebody's home directory.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":"file://%ROOT%","capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","languageId":"pascal","version":1,"text":"{ The middle of the workspace, and the shape that needs the walk.\n\n  There is no `middle.components` beside this file. The sidecar that names it\n  is `client.components`, one directory entry along, and what the server must\n  take from it is the entries *before* this one -- `base.pas` and nothing\n  else. Opening this file with no resolution at all reports `no interface\n  named 'base' has been exported` and then every name that came from it. }\nmodule Middle;\n\nexport Middle = (Doubled);\n\nimport Base;\n\nfunction Doubled: integer;\n\nend;\n\nfunction Doubled;\nbegin\n  Doubled := Answer * 2\nend;\n\nend.\n"}}}
+
+# `Answer` on line 19 of middle.pas is declared in base.pas, which this
+# document does not name and the sidecar one directory along does. The answer
+# is a URI for a file the client never opened.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":19,"character":13}}}
+
+{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":19,"character":13}}}
+
+# `Doubled` in the same line is this module's own, and answers with this
+# document's URI -- which the server has to substitute deliberately: the
+# compiler's file 0 is the *scratch* copy it was handed and not a path the
+# client has ever heard of.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":19,"character":2}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas","languageId":"pascal","version":1,"text":"{ The top of the workspace: a program, with `client.components` beside it\n  naming the two modules under it and not naming this file.\n\n  That is the ordinary shape -- a case and its sidecar -- and the answer for\n  it is every entry the sidecar holds. The shape it does *not* cover is\n  `selfhost/compiler.components`, which sits beside `compiler.pas` and names\n  it: there the answer is the prefix, because handing a component its own\n  interface is what `tests/run_test.sh` is careful not to do. }\nprogram client(output);\n\nimport Middle;\n\nbegin\n  writeln(Doubled:1)\nend.\n"}}}
+
+# And one level further out: client.pas imports Middle, whose `Doubled` is in
+# middle.pas. The walk that finds it is the ordinary one.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":13,"character":10}}}
+
+{"jsonrpc":"2.0","id":6,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":13,"character":10}}}
+
+{"jsonrpc":"2.0","id":7,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

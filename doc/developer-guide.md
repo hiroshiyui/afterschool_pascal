@@ -337,11 +337,20 @@ not what a compiled program wrote:
 
 * **`tests/dumps/`** compares what the *compiler* writes to standard output
   under `--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all`,
-  `--dump-layout`, `--dump-predicates` and `--dump-symbols`. Sidecars
-  are `name.dump` (the golden) and `name.flags` (which flag, `--dump-all` by
-  default). There was a third, `name.std`, pinning the standard against a
+  `--dump-layout`, `--dump-predicates`, `--dump-symbols`, `--dump-imports` and
+  `--dump-uses`. Sidecars are `name.dump` (the golden), `name.flags` (which
+  flag, `--dump-all` by default), `name.components` (§6.13's other
+  program-components, one path per line relative to the case, each passed as
+  an `--import`) and `name.status` (the exit status the case expects, when it
+  is not 0). There was another, `name.std`, pinning the standard against a
   compiler default that had moved once; ADR-0232 removed the modes and the
   sidecar with them.
+
+  The last two arrived with `--dump-uses` (ADR-0246) and each answers a shape
+  that corpus had not met: a dump whose answer is *cross-file*, and a dump of
+  a program the compiler **rejects**. That second one is the decision behind
+  the flag — it reports what Sema resolved whether or not Sema was happy — and
+  requiring status 0 of everything here is what would have made it unwritable.
 
   `--dump-limits` is the one dump flag with no case here, deliberately
   (ADR-0148). It reports how full the compiler left its own fixed arrays, and

@@ -168,8 +168,18 @@ def corpus(root):
     # dumps are reached by no ordinary case, which is what this harness found.
     for f in sorted((root / "tests" / "dumps").glob("*.pas")):
         flags = f.with_suffix(".flags")
-        jobs.append((f, [flags.read_text().strip() if flags.exists()
-                         else "--dump-all"]))
+        argv = []
+        # ADR-0246's sidecar, read the way the harness beside it reads one: a
+        # dump of what a name resolves to has a *cross-file* answer, and the
+        # file table it writes is one line per component -- so a case with no
+        # import reaches the header and not its loop.
+        comps = f.with_suffix(".components")
+        if comps.exists():
+            for rel in comps.read_text().split():
+                argv += ["--import", str(f.parent / rel)]
+        argv.append(flags.read_text().strip() if flags.exists()
+                    else "--dump-all")
+        jobs.append((f, argv))
 
     # ...and the same corpus again under --dump-all. It was added because
     # `selfhost/difftest.sh` drove it that way on every run, comparing the

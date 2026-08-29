@@ -1,6 +1,6 @@
-Content-Length: 160
+Content-Length: 207
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: 445
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"positionEncoding":"utf-8"},"serverInfo":{"name":"pasls"}}}Content-Length: 445
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/accented.pas","diagnostics":[{"range":{"start":{"line":2,"character":21},"end":{"line":2,"character":21}},"severity":1,"source":"pascalc","message":"undeclared identifier 'zz'"},{"range":{"start":{"line":2,"character":21},"end":{"line":2,"character":21}},"severity":1,"source":"pascalc","message":"the left side of an assignment must be a variable"}]}}Content-Length: 38
 

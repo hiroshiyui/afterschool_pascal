@@ -121,7 +121,7 @@ export ApTypes = (
   layoutHead, programSym, ircode, imports, importName, dumping,
   dumpLayoutOpt, dumpDispatchOpt, dispatchHead, dispatchTail, enumHead,
   enumTail, chainHead, chainTail, tagHead, tagTail, curFile, curImportIdx,
-  mainTokBase, instDeclHead, intType, int64Type, canonTextType,
+  mainTokBase, notingUses, mainFile, FileIndexOf, instDeclHead, intType, int64Type, canonTextType,
   stringSchema, handleClosers, StrClear, StrAppend, Put, PutIrLit,
   ErrorAt, PoolAdd, WritePool, PoolIsWide, PoolIs, ReservedForeignName,
   PoolSame, PoolPut, InternWord, InternWide, InternWide2,
@@ -946,6 +946,20 @@ type
     at, len: integer;
     kind: symKind;
     stype: typePtr;
+    { 6.2.2.1's **defining-point**: where this identifier was written, and in
+      which source. Every applied occurrence resolves to a symbol and the
+      symbol could not say where it came from -- `Declare` was handed a line
+      and a column for its own duplicate-declaration message and threw them
+      away. Go-to-definition is the first caller that wanted the pair kept,
+      and it is the compiler's answer to give: the alternative is a tool
+      re-deciding 6.2.2's scope rules from an outline, which is the reader of
+      Pascal-shaped output that ADR-0239 exists to refuse.
+
+      declLine is 0 for a symbol with no defining-point in any source -- a
+      required identifier (6.2.2.10), a result variable, a `with` binding --
+      and that zero is the answer, not a missing one: there is nowhere to go.
+      declFile indexes importName, 0 being the source being compiled. }
+    declLine, declCol, declFile: integer;
     binding: fileBinding;
     fileArg: integer;
     { The value of a constant, in whichever field its type selects. A real
@@ -1601,6 +1615,14 @@ type
         this is -- the syntax is the same, and only the symbol the base
         resolves to can tell them apart. }
       nkField:      (fdBase: nodePtr; fdAt, fdLen: integer;
+                     { Where the field-identifier itself is, which the node's
+                       own line and column are not: those are the `.` before
+                       it, the parser having built this node before reading
+                       the name. Whitespace is legal on either side of a
+                       point, so the two cannot be derived from each other --
+                       and a caller resolving a source position needs the
+                       name's own extent (ADR-0246). }
+                     fdLine, fdCol: integer;
                      fdResolved: fieldPtr; fdQualified: symPtr;
                      fdIsDisc: boolean; fdDiscValue: integer;
                      { ...unless the base is a schematic formal parameter,
@@ -2038,6 +2060,24 @@ var
     (0 = the source named on the command line). Parse-time only: Sema reads
     nkModule's own copy, the parser having moved on by then. }
   curImportIdx: integer;
+  { --dump-uses: write every applied occurrence and the defining-point it
+    resolved to, as Sema resolves it (ADR-0246). It is a flag on the *lookup*
+    and not a walk over the finished tree, for the reason ADR-0111 gives about
+    the string arena's counter and ADR-0230 gives about the dispatch dump: the
+    stage that resolved a name already knows it resolved one, and a second
+    reader of the tree would be a second opinion free to drift -- and free to
+    miss a node kind, silently, which is the failure `kind-exhaustive` exists
+    to make loud.
+
+    Off by default and read once per lookup, which is --coverage's discipline
+    (ADR-0104): a compilation that is not asking pays one boolean test. }
+  notingUses: boolean;
+  { The source named on the command line, against which `curFile` says whether
+    the text Sema is checking belongs to *this* document. It is the one fact
+    already maintained for that purpose -- CheckModule sets curFile from the
+    module's own file and puts it back -- so nothing new has to be kept in
+    step with it, which a shadow index would have been. }
+  mainFile: nameStr;
   { Where the source named on the command line begins in the token array.
     Everything before it belongs to an --import and is kept rather than
     overwritten (ADR-0212), so the two places that mean *this source* -- the
@@ -2511,6 +2551,19 @@ function TagTypeAt(rec: typePtr; path: numPtr): typePtr;
 { How a value of an ordinal type is written in source: 7, 'a', true, or an
   enumeration constant's own name. }
 procedure WriteOrdinalName(t: typePtr; value_: integer);
+
+{ Which of the sources this translation has read is named by `n`: 0 for the
+  one on the command line, otherwise its --import index. It answers 0 for a
+  name it does not recognise, which is the safe direction -- a use attributed
+  to the document being edited is checked against that document's own text by
+  the caller, and one attributed to a file that was never opened is not.
+
+  It is a scan and not a stored index, and that is the point. `curFile` is
+  already maintained across a module's check and put back afterwards, so
+  asking it beats keeping a second variable that says the same thing and can
+  stop agreeing with it. It is asked once per defining-point and only when
+  --dump-uses is set, which is a few thousand short comparisons at most. }
+function FileIndexOf(n: nameStr): integer;
 
 { ------------------------------------------------------------- type names }
 procedure WriteTypeName(t: typePtr);
@@ -3592,6 +3645,19 @@ begin
   end
 end;
 
+function FileIndexOf;
+var i: integer;
+begin
+  FileIndexOf := 0;
+  { To maxImports and not to a count, because the count is the driver's and
+    this component imports nothing (ADR-0233). An unused entry is the empty
+    string and no file this compiler opened is named by one, so the two are
+    distinguishable without one. }
+  if n <> mainFile then
+    for i := 1 to maxImports do
+      if n = importName[i] then FileIndexOf := i
+end;
+
 { ------------------------------------------------------------- type names }
 
 { How a value of an ordinal type is written in source: 7, 'a', true, or an
@@ -3898,6 +3964,8 @@ to begin do
     readingImports := false;
     curFile := '';
     curImportIdx := 0;
+    notingUses := false;
+    mainFile := '';
     instDeclHead := nil;
     stringSchema := nil;
     layoutHead := nil

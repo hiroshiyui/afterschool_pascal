@@ -27,6 +27,18 @@
 #
 #   name.dump    expected standard output, in full
 #   name.flags   the flag to compile with; --dump-all when absent
+#   name.components  §6.13's other program-components, one path per line
+#                relative to this directory, each passed as an --import. It
+#                is the same sidecar tests/run_test.sh and irtest.sh read and
+#                it means less here: a dump is not linked, so what these
+#                supply is the *declarations* a name can resolve to. They
+#                live in components/, which this corpus's glob does not
+#                reach, for the reason tests/extended/components/ does
+#   name.status  the exit status this case expects, when it is not 0. A dump
+#                that reports what a *failed* compilation still found is the
+#                one kind of case here whose subject is a program the
+#                compiler rejects, and requiring status 0 of everything is
+#                what would make it unwritable (ADR-0246)
 #
 # The case's own directory is rewritten to <dir>/ in what is compared, which
 # tests/run_test.sh does to a diagnostic for the same reason: --dump-imports
@@ -53,6 +65,19 @@ flags_file="$base.flags"
 flags="--dump-all"
 [[ -f $flags_file ]] && flags=$(tr -d '[:space:]' <"$flags_file")
 
+# One --import per line, resolved against this case's own directory so the
+# golden does not depend on where the checkout lives.
+imports=()
+if [[ -f $base.components ]]; then
+  while read -r rel; do
+    [[ -n $rel ]] || continue
+    imports+=(--import "$(dirname "$source_file")/$rel")
+  done <"$base.components"
+fi
+
+want_status=0
+[[ -f $base.status ]] && want_status=$(tr -d '[:space:]' <"$base.status")
+
 if [[ ! -f $expected ]]; then
   echo "missing expected-dump file: $expected" >&2
   exit 1
@@ -64,16 +89,17 @@ trap 'rm -rf "$work"' EXIT
 # The IR still gets written -- a --dump flag stops the *reporting* at the stage
 # it names, not the translation -- so it goes somewhere disposable. Only what
 # reaches standard output is the subject here.
-"$pascalc" "$flags" "$source_file" -o "$work/out.ll" \
-  >"$work/actual" 2>"$work/stderr"
+"$pascalc" "${imports[@]+"${imports[@]}"}" "$flags" "$source_file" \
+  -o "$work/out.ll" >"$work/actual" 2>"$work/stderr"
 status=$?
 
 # Diagnostics go to `output` too (no standard Pascal program has a second
 # stream), so a case that stopped compiling would show up as a dump diff rather
-# than as a mystery. The exit status is still checked: these are valid programs
-# and a non-zero status means the golden is recording a failure.
-if [[ $status -ne 0 ]]; then
-  echo "--- $name: the compiler exited with status $status ---" >&2
+# than as a mystery. The exit status is still checked, against what the case
+# says it expects: almost every case here is a valid program, and a status the
+# case did not ask for means the golden is recording a failure nobody meant.
+if [[ $status -ne $want_status ]]; then
+  echo "--- $name: the compiler exited with status $status, wanted $want_status ---" >&2
   cat "$work/actual" "$work/stderr" >&2
   exit 1
 fi

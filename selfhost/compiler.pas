@@ -212,6 +212,15 @@ var
     same kind of reason: what a caller wants is the *list*, and a source Sema
     would reject still has one. }
   dumpImportsOpt: boolean;
+  { --dump-uses: every applied occurrence in this source and the defining-point
+    it resolved to (ADR-0246). It is the first dump that needs *Sema* -- an
+    outline is the parser's and a definition is not -- and so the first that
+    had to say what it does about a file that does not check. It dumps
+    anyway: Sema accumulates diagnostics rather than stopping at the first,
+    so a source with three mistakes has resolved everything else correctly,
+    and an editor asks where a name is declared exactly while the file is
+    being edited into shape. }
+  dumpUsesOpt: boolean;
   { --dump-limits: how full the two arrays sized for this compiler's own source
     are (ADR-0148). Not a fifth member of the set above and deliberately not a
     section of --dump-all -- those three sections were what
@@ -445,6 +454,8 @@ begin
   writeln('                  in the order they must be activated, and stop');
   writeln('  --dump-symbols  write every name this source declares, with');
   writeln('                  its kind, position and nesting, and stop');
+  writeln('  --dump-uses     check as usual, then write every name this');
+  writeln('                  source uses and where it was declared');
   writeln('  --coverage      emit statement counters; the program then');
   writeln('                  writes the lines it ran to PASCOV_LINES');
   writeln('  --version       write the version and stop');
@@ -487,6 +498,7 @@ begin
   dumpLayoutOpt := false;
   dumpSymbolsOpt := false;
   dumpImportsOpt := false;
+  dumpUsesOpt := false;
   dumpDispatchOpt := false;
   dispatchHead := nil;
   dispatchTail := nil;
@@ -523,6 +535,7 @@ begin
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
     else if EQ(a, '--dump-imports') then dumpImportsOpt := true
+    else if EQ(a, '--dump-uses') then dumpUsesOpt := true
     else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     { ADR-0156. Joined to its flag, unlike -o and --import, which take file
@@ -11385,6 +11398,25 @@ begin
   end
 end;
 
+{ The table the `use` lines' `declfile` field indexes into: the source, then
+  the components this translation read, in the order --dump-imports gives them
+  (ADR-0246). It comes first because a caller reading the stream in order must
+  be able to resolve a defining-point as soon as it sees one, and because the
+  list is complete by now -- resolution has run and every import is known.
+
+  A defining-point in an --import is reported with the path this compiler
+  opened, which is the path a caller can open too. That is what makes
+  go-to-definition cross a file at all: the alternative is a server that can
+  only answer about the document in front of it, which is the question an
+  editor asks least. }
+procedure DumpUseFiles;
+var i: integer;
+begin
+  writeln('file 0 ', srcName);
+  for i := 1 to importCount do
+    writeln('file ', i:1, ' ', importName[i])
+end;
+
 { The pipeline. What it *writes* depends on which dumps were asked for; what
   it *runs* is decided the same way, because a dump flag stops at the stage it
   names -- `--dump-tokens` does not parse, which is how the C++ driver behaves
@@ -11467,13 +11499,23 @@ begin
   if go then begin
     if dumpAllOpt then writeln('=== sema');
     if not errorSeen then begin
+      if dumpUsesOpt then DumpUseFiles;
       RunSema;
       if (not errorSeen) and (dumpSemaOpt or dumpAllOpt) then begin
         annotate := true;
         DumpProgram
       end
     end;
-    go := not (dumpSemaOpt and not whole)
+    { The `use` lines were written by Sema as it resolved each name, so there
+      is nothing to do here; what this says is the *ending*. Every other dump
+      is guarded by `not errorSeen` because it shows a stage's result and a
+      stage that failed has none -- but this dump is not one answer, it is one
+      line per name, and a source Sema rejected has resolved every name but
+      the ones it complained about. Stopping here rather than emitting IR is
+      all that is left, and it is unconditional for the same reason
+      --dump-symbols is: whatever a caller asked this question for, it did not
+      ask for an object file. }
+    go := not ((dumpSemaOpt or dumpUsesOpt) and not whole)
   end;
 
   { --- emit --------------------------------------------------------------- }
@@ -11504,6 +11546,12 @@ begin
     inside the test. }
   if argsOk then begin
     curFile := srcName;
+    { The two facts NoteUse asks: whether to write at all, and which file
+      `curFile` has to equal for the text to be this document's. Set before
+      anything is read, because a defining-point in an --import is declared
+      while curFile names that import. }
+    notingUses := dumpUsesOpt;
+    mainFile := srcName;
     BindTo(source, srcName);
     Compile
   end;

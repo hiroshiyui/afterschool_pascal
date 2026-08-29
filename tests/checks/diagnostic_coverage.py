@@ -77,14 +77,26 @@ def messages(root):
 
 
 def goldens(root):
-    """Everything every .err file records, as one blob. A message is 'named'
-    when it appears in one -- which is a weaker claim than a test asserting it
-    fires for the right reason, and the strongest one that can be made
-    mechanically."""
+    """Everything every .err and .dump golden records, as one blob. A message
+    is 'named' when it appears in one -- which is a weaker claim than a test
+    asserting it fires for the right reason, and the strongest one that can be
+    made mechanically.
+
+    The dumps were added when a *dump* first wrote a literal twenty characters
+    long. `messages` cannot tell a diagnostic from any other thing the
+    compiler writes -- it reads write-literals and nothing else -- so
+    --dump-uses spelling 6.7.3.1's `procedural-parameter` looked exactly like
+    a message no golden named (ADR-0246). A .dump golden holding a literal is
+    the same evidence a .err golden holding one is, and it is evidence this
+    gate could not have used before tests/dumps/ existed. It cuts the other
+    way too, and is meant to: a diagnostic catalogued as unreachable that
+    turns up in a dump golden fails here, because tests/dumps/uses_broken.dump
+    holds the diagnostics of a compilation that failed."""
     return "\n".join(
         p.read_text()
         for d in ("tests", "selfhost")
-        for p in (root / d).rglob("*.err")
+        for pat in ("*.err", "*.dump")
+        for p in (root / d).rglob(pat)
     )
 
 

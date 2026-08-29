@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 448
-instrumented 17709
+instrumented 17812
 
 accept 0/4
 accumulate 0/84
@@ -52,7 +52,7 @@ armscontainfile 0/10
 armscontainrestricted 0/10
 arraycomponentof 0/13
 arrayelement 0/6
-asfalliblearm 0/25
+asfalliblearm 0/27
 assignable 1/47
 at 0/1
 ateof 0/1
@@ -85,7 +85,7 @@ checkarguments 6/235
 checkarrayvalue 7/60
 checkbinary 6/165
 checkblock 0/24
-checkcall 24/272
+checkcall 24/273
 checkcase 0/82
 checkcomponentvalue 0/12
 checkconstdecl 0/32
@@ -99,7 +99,7 @@ checkedfptoint 0/23
 checkedresulttype 0/19
 checkedwidth 0/14
 checkexports 0/23
-checkexpr 12/258
+checkexpr 12/262
 checkforeignheading 0/130
 checkgoto 0/9
 checkhandlebirth 0/6
@@ -126,20 +126,20 @@ checksetexpr 0/14
 checksetmember 0/15
 checksetvalue 0/36
 checkstdproc 19/347
-checkstmt 2/225
+checkstmt 2/226
 checkstringargs 0/13
 checkstructvalue 0/39
 checktake 2/20
 checktypedecl 0/60
 checkvardecl 1/67
 checkvariantpartvalue 4/74
-checkwith 1/98
+checkwith 1/101
 checkwrite 2/83
 checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/18
 collecttagtests 0/31
-compile 0/46
+compile 0/49
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -166,10 +166,10 @@ copycomponent 1/15
 copytype 0/24
 curcol 0/1
 curline 0/1
-declare 0/21
-declareprocheading 0/37
+declare 0/24
+declareprocheading 0/39
 declareprocs 0/12
-declareschema 9/51
+declareschema 9/54
 def 0/5
 deferbase 0/3
 deferflag 0/4
@@ -217,6 +217,7 @@ dumpsymtype 0/10
 dumpsymvariants 0/9
 dumptokens 0/27
 dumptypeexpr 2/128
+dumpusefiles 0/3
 dumpvariantpart 0/29
 dynamicextent 0/9
 dynamictail 0/13
@@ -335,6 +336,7 @@ fieldcount 0/5
 fieldnameindenoter 0/5
 fieldofopenrecord 0/7
 fieldsat 0/4
+fileindexof 0/4
 filethere 0/6
 fillsowndescriptor 0/4
 findfield 0/7
@@ -359,7 +361,7 @@ frameglobal 0/8
 frameof 0/2
 frameslot 0/10
 framevarat 0/6
-genericfromschema 5/95
+genericfromschema 5/98
 giveresultslot 0/1
 groupfieldname 0/8
 guardlnarg 0/5
@@ -370,6 +372,7 @@ guardsqrtarg 0/5
 hastypeparam 0/6
 headerof 0/6
 headersize 0/9
+headingdigest 0/10
 heapfromschema 1/35
 heapheader 0/16
 holdsfile 0/10
@@ -474,7 +477,7 @@ lookup 0/5
 lookupbuiltin 0/54
 lookupinscope 0/6
 lookupkeyword 0/17
-lookupname 8/26
+lookupname 8/30
 lookupquiet 0/11
 lookupraw 0/6
 lookupuser 0/4
@@ -483,6 +486,7 @@ lower 0/3
 makecomplex 0/10
 makeconstreal 0/15
 makeconststr 0/6
+moduledigest 0/9
 msgend 0/3
 msgstart 0/2
 msgtext 0/5
@@ -498,11 +502,12 @@ nestwith 0/8
 newblock 0/2
 newnode 0/80
 newresultslot 0/7
-newsymbol 0/90
+newsymbol 0/93
 newtype 0/40
 nonvarying 3/42
 notbindable 3/29
 notehandlecloser 0/6
+noteuse 0/7
 offer 0/38
 opglobal 0/4
 opint 0/2
@@ -519,7 +524,7 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/123
+parseargs 10/125
 parsearraytype 0/17
 parseblock 0/39
 parseboundident 1/12
@@ -544,7 +549,7 @@ parseimportpart 0/58
 parselabel 0/16
 parselabelpart 0/6
 parsemainprogram 0/31
-parsemodule 0/71
+parsemodule 0/76
 parsemoduleblock 0/16
 parsemoduleparts 0/28
 parsenamelist 1/22
@@ -559,7 +564,7 @@ parsequalifiedname 0/12
 parseread 0/14
 parserecordtype 0/15
 parserepeat 1/18
-parseselectors 0/54
+parseselectors 0/56
 parsesimpleexpr 1/29
 parsestatement 0/30
 parsestructuredvalue 0/29
@@ -595,6 +600,7 @@ putdefername 0/1
 putdescparamtypes 0/10
 putdesctype 0/7
 puthex 0/6
+puthex8 0/6
 putint 0/13
 putintmin 0/2
 putintwidth 0/1
@@ -602,13 +608,14 @@ putirlit 0/5
 putkindname 0/22
 putlit 0/5
 putlltype 2/28
-putmodulepart 0/5
+putmodulepart 0/9
 putop 0/2
 putparamtypes 0/26
 putprocsignature 0/9
 putslottype 0/4
 putstoragetypeat 1/4
 putstructat 0/12
+putsymkindword 0/13
 reaches 0/6
 readimportsin 2/15
 readone 0/41
@@ -660,7 +667,7 @@ sametuple 0/7
 schemahastypedisc 0/6
 schemaisbusy 0/6
 schematicformal 0/3
-sel 0/43
+sel 0/45
 selectedsize 0/14
 setindex 0/47
 setuniverse 0/21
@@ -705,7 +712,7 @@ typeargument 0/6
 typeend 0/4
 typelength 0/1
 underlying 0/1
-usage 0/47
+usage 0/49
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/12
@@ -716,7 +723,7 @@ writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
 writecontext 7/78
-writedistincttypenote 0/35
+writedistincttypenote 0/37
 writekeyword 0/2
 writekwword 0/3
 writelabelwhat 1/5

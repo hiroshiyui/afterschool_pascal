@@ -21,7 +21,11 @@
 
 # A request this server does not implement, which must be answered rather than
 # ignored: a client waiting on an id it never gets back is a client that hangs.
-{"jsonrpc":"2.0","id":2,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"position":{"line":0,"character":0}}}
+# It was `textDocument/hover` until ADR-0246 answered that one, which is the
+# reason to say what this probe is for rather than which method it names: the
+# method here is whichever one is still unimplemented, and what is asserted is
+# the -32601 and not anything about completion.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/completion","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"position":{"line":0,"character":0}}}
 
 {"jsonrpc":"2.0","method":"textDocument/didClose","params":{"textDocument":{"uri":"file:///scratch/hello.pas"}}}
 {"jsonrpc":"2.0","id":3,"method":"shutdown"}

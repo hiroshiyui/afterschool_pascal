@@ -7,10 +7,21 @@
   it invokes `pascalc` as a separate process and reads what it wrote, exactly
   as an editor would.
 
-  This is the first increment and it does one thing: it answers
-  `textDocument/publishDiagnostics` for every document a client opens or
-  changes. The roadmap's sentence for it is *"a server that does nothing
-  whatever but publishDiagnostics is producing findings on the first day"*.
+  It answers four questions about a document: the diagnostics it publishes on
+  every open and change, the outline `textDocument/documentSymbol` asks for
+  (ADR-0239), and `textDocument/definition` and `textDocument/hover`, which
+  are one question asked twice -- what the name under this position denotes,
+  and where it was written (ADR-0246). The roadmap's sentence for the first of
+  them is *"a server that does nothing whatever but publishDiagnostics is
+  producing findings on the first day"*, and it has produced more since.
+
+  **The three answers do not all cost the same, and that is deliberate.** The
+  diagnostics and the definitions run the compiler through Sema and need the
+  document's imports; the outline stops after the *parse* and needs none,
+  because an outline is what an editor draws while the file is wrong. So a
+  file whose components cannot be found still outlines exactly right, and a
+  file Sema rejects still says where its names were declared -- which is the
+  state a file being edited is in most of the time.
 
   **Four decisions, and each of them is a thing a reader will otherwise
   wonder about.**
@@ -437,6 +448,14 @@ begin
   Resolve := out
 end;
 
+{ The other direction of HexValue, for PathToUri. Upper case because RFC 3986
+  says a percent-escape "should" use it. }
+function HexDigit(n: integer): char;
+begin
+  if n < 10 then HexDigit := chr(ord('0') + n)
+  else HexDigit := chr(ord('A') + n - 10)
+end;
+
 function HexValue(c: char): integer;
 begin
   if (c >= '0') and (c <= '9') then HexValue := ord(c) - ord('0')
@@ -478,6 +497,38 @@ begin
     end
   end;
   UriToPath := out
+end;
+
+{ A path as a `file://` URI, which is the direction `UriToPath` does not go.
+  It is needed because a defining-point may be in a file the client never
+  opened -- that is most of what go-to-definition is for -- and the protocol
+  names a location by URI and nothing else.
+
+  Everything outside RFC 3986's unreserved set is percent-escaped, `/` apart.
+  Escaping more than is required is always legal and never ambiguous, which
+  is the safe direction for a rule this program has one reader of. }
+function PathToUri(path: PathName): DocUri;
+var out: DocUri;
+    i, b: integer;
+    c: char;
+    plain: boolean;
+begin
+  out := 'file://';
+  for i := 1 to length(path) do begin
+    c := path[i];
+    plain := ((c >= 'a') and (c <= 'z')) or ((c >= 'A') and (c <= 'Z'))
+             or ((c >= '0') and (c <= '9'))
+             or (c = '-') or (c = '.') or (c = '_') or (c = '~') or (c = '/');
+    if plain then begin
+      if length(out) < LineMax then out := out + c
+    end
+    else begin
+      b := ord(c);
+      if length(out) + 3 <= LineMax then
+        out := out + '%' + HexDigit(b div 16) + HexDigit(b mod 16)
+    end
+  end;
+  PathToUri := out
 end;
 
 { Read one sidecar. Where it names `target`, `words` receives `--import` for
@@ -818,6 +869,10 @@ begin
   { ADR-0239. Answered from --dump-symbols, which is the compiler's own
     account of what a source declares. }
   JsonPut(caps, 'documentSymbolProvider', JsonNewBoolean(true));
+  { Both are answered from one compilation and one dump (ADR-0246): what a
+    name denotes and where it was declared are the same question. }
+  JsonPut(caps, 'definitionProvider', JsonNewBoolean(true));
+  JsonPut(caps, 'hoverProvider', JsonNewBoolean(true));
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -1126,6 +1181,297 @@ begin
       SVecFree(lines)
     end
   end;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
+{ --- where a name was declared, and what it is ----------------------------- }
+
+{ `textDocument/definition` and `textDocument/hover`, which are one question
+  asked twice: what does the name under this position denote, and where was it
+  written (ADR-0246)?
+
+  **It is the first method here that needs Sema.** An outline is the parser's
+  answer and stops before the checker on purpose, so that a file being edited
+  into shape still has one; a defining-point is not knowable that way -- which
+  identifier a name denotes is 6.2.2's scope rules and nothing less. So this
+  runs the compiler further, and passes the imports: a name from another
+  program-component resolves to nothing without them, and a name from another
+  component is exactly the one a reader does not already know.
+
+  **What it does about a file that does not check** is the decision the
+  compiler makes rather than this program: `--dump-uses` reports what Sema
+  resolved whether or not Sema was happy, because Sema accumulates its
+  diagnostics rather than stopping at the first. A file with a mistake in it
+  answers about every name but the ones the mistake is about, and that is the
+  state an editor is in most of the time.
+
+  **The narrowest span wins.** 6.11.3's `M.x` is two applied occurrences and
+  the compiler reports two overlapping spans for it -- the interface's own
+  name, and the whole of `M.x` -- so a position inside `M` is contained by
+  both and must resolve to the inner one. Nothing else in the dump overlaps,
+  so the rule costs one comparison and buys the qualified case exactly. }
+
+type
+  { What one line of the dump said, once a position picked it out. }
+  UseHit = record
+    found: boolean;
+    { The occurrence, in the document's own coordinates. }
+    line, col, len: integer;
+    { Its defining-point. `declLine = 0` means there is nowhere to go: a
+      required identifier is declared in a region enclosing the program
+      (6.2.2.10) and an interface is registered by name and not by position. }
+    declFile, declLine, declCol, declLen: integer;
+    kind: ParseLine;
+    denotes: DiagLine
+  end;
+
+{ Everything from the n'th space-separated field to the end of the line, which
+  is how the type is read: it is the last field because it is the only one
+  that may contain a space -- `array [1..3] of integer` is one answer. }
+function SymRest(line: StrItem; n: integer): DiagLine;
+var i, k: integer;
+    out: DiagLine;
+begin
+  out := '';
+  k := 0;
+  i := 1;
+  while (i <= length(line)) and (k < n) do begin
+    while (i <= length(line)) and (line[i] = ' ') do i := i + 1;
+    if i <= length(line) then begin
+      k := k + 1;
+      if k < n then
+        while (i <= length(line)) and (line[i] <> ' ') do i := i + 1
+    end
+  end;
+  while i <= length(line) do begin
+    if length(out) < DiagLineMax then out := out + line[i];
+    i := i + 1
+  end;
+  SymRest := out
+end;
+
+{ A Position.character as a byte column of a source line -- `CharacterAt`
+  backwards, and the only place this program converts in that direction.
+  Under `utf-8` the two units are the same and the arithmetic is the
+  0-based/1-based step alone; under `utf-16` it is a walk, because the
+  conversion has no inverse that is not one (ADR-0237). }
+function ByteColumn(line: DiagLine; ch: integer): integer;
+var col: integer;
+begin
+  if encoding = peUtf8 then ByteColumn := ch + 1
+  else begin
+    col := 1;
+    while (col <= length(line)) and (Utf16Column(line, col) - 1 < ch) do
+      col := col + 1;
+    ByteColumn := col
+  end
+end;
+
+{ True where the span this `use` line describes contains (line, col). }
+function Covers(useLine, useCol, useLen, line, col: integer): boolean;
+begin
+  Covers := (useLine = line) and (col >= useCol) and (col < useCol + useLen)
+end;
+
+{ Ask the compiler what the name at this position denotes.
+
+  `path` receives the file the defining-point is in, empty where it is this
+  document's own -- the dump names file 0 by the path it was handed, which is
+  the *scratch* copy and not a file the client has ever heard of. The caller
+  answers with the document's own URI for that case, which is the common one. }
+function FindUse(uri: DocUri; line, col: integer;
+                 var hit: UseHit; var path: PathName): boolean;
+var at, i, ul, uc, un, want: integer;
+    d: Document;
+    lines: StrVecPtr;
+    cmd, words: CommandLine;
+    r: RunResult;
+    text: StrItem;
+    source: DiagLine;
+    found: boolean;
+begin
+  hit.found := false;
+  path := '';
+  at := IndexOf(uri);
+  if at = 0 then exit(false);
+  d := VecGet(DocVec, Document, docs, at);
+  if not WriteScratch(d.text) then exit(false);
+  { The document's real path, as Analyse uses it: the sidecar names the file
+    the client is editing and the scratch file is a copy of its bytes. }
+  found := ImportsFor(UriToPath(uri), words);
+  if not CompilerCommand(' --dump-uses', words, scratchPath, cmd) then
+    exit(false);
+  { A list of lines and not one buffer, for ADR-0239's reason met a second
+    time: this answer is one line per name in the file and `CaptureMax` was
+    sized for diagnostics. }
+  SVecNew(lines, 64);
+  r := CaptureLines(cmd, lines);
+  if not r.ok then begin
+    Note('could not run the compiler: ' + ErrorText(r.cause));
+    SVecFree(lines);
+    exit(false)
+  end;
+  for i := 1 to SVecLen(lines) do begin
+    text := SVecGet(lines, i);
+    if SymField(text, 1) = 'use' then begin
+      ul := IntOr(ParseInt(SymField(text, 2)), 0);
+      uc := IntOr(ParseInt(SymField(text, 3)), 0);
+      un := IntOr(ParseInt(SymField(text, 4)), 0);
+      if Covers(ul, uc, un, line, col) then
+        { Narrowest wins, so the interface inside a qualified name is
+          reachable at all. }
+        if (not hit.found) or (un < hit.len) then begin
+          hit.found := true;
+          hit.line := ul;
+          hit.col := uc;
+          hit.len := un;
+          hit.declFile := IntOr(ParseInt(SymField(text, 5)), 0);
+          hit.declLine := IntOr(ParseInt(SymField(text, 6)), 0);
+          hit.declCol := IntOr(ParseInt(SymField(text, 7)), 0);
+          hit.declLen := IntOr(ParseInt(SymField(text, 8)), 0);
+          hit.kind := SymField(text, 9);
+          hit.denotes := SymRest(text, 10)
+        end
+    end
+  end;
+  { A second pass, and only when there is something to look up: the file table
+    is at the head of the dump and the index that selects from it is not known
+    until the answer is. Nothing is held between the two but an integer. }
+  if hit.found and (hit.declFile > 0) then
+    for i := 1 to SVecLen(lines) do begin
+      text := SVecGet(lines, i);
+      if SymField(text, 1) = 'file' then
+        if IntOr(ParseInt(SymField(text, 2)), -1) = hit.declFile then
+          path := SymRest(text, 3)
+    end;
+  SVecFree(lines);
+  FindUse := hit.found
+end;
+
+{ The position a request asks about, as a line and a byte column of the
+  document this server is holding. }
+procedure AskedAt(params: JsonPtr; uri: DocUri; var line, col: integer);
+var p: JsonPtr;
+    at: integer;
+    d: Document;
+    source: DiagLine;
+begin
+  p := JsonMember(params, 'position');
+  line := JsonIntegerOr(JsonMember(p, 'line'), -1) + 1;
+  col := 0;
+  at := IndexOf(uri);
+  if (at <> 0) and (line >= 1) then begin
+    d := VecGet(DocVec, Document, docs, at);
+    LineOf(d.text, line, source);
+    col := ByteColumn(source, JsonIntegerOr(JsonMember(p, 'character'), 0))
+  end
+end;
+
+{ `textDocument/definition`, as a single `Location` or `null`.
+
+  `null` is the protocol's own answer for "there is nowhere to go", and there
+  are three ways to reach it here: the position is on no name at all, the name
+  did not resolve, or it resolved to something with no defining-point in any
+  source -- `integer`, `abs`, an interface. The last is not a failure and is
+  reported the same way, there being nothing else the protocol can be told. }
+procedure Definition(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    line, col, at: integer;
+    hit: UseHit;
+    path: PathName;
+    d: Document;
+    source: DiagLine;
+    reply, result: JsonPtr;
+begin
+  reply := NewResponse(id);
+  { nil until there is an answer, and `null` made at the end where there is
+    none. Starting with a `null` and replacing it would abandon that value on
+    every request that succeeds, which is a leak of one JSON node per answer
+    -- and the one oracle here that would see it reads no output at all
+    (ADR-0183). }
+  result := nil;
+  uri := UriOf(params);
+  AskedAt(params, uri, line, col);
+  if (line >= 1) and (col >= 1) then
+    if FindUse(uri, line, col, hit, path) then
+      if hit.declLine > 0 then begin
+        { The range is in the *target* file, whose text this server does not
+          hold when that file is not the document. So the column is converted
+          against the line it is on where that is knowable and taken as bytes
+          where it is not -- which is exact under `utf-8` and right under
+          `utf-16` for every line that is ASCII, and those are the two cases a
+          declaration is almost always in. It degrades to a column a little
+          left of the name and never to a wrong line. }
+        source := '';
+        if hit.declFile = 0 then begin
+          at := IndexOf(uri);
+          if at <> 0 then begin
+            d := VecGet(DocVec, Document, docs, at);
+            LineOf(d.text, hit.declLine, source)
+          end
+        end;
+        result := JsonNewObject;
+        if hit.declFile = 0 then JsonPut(result, 'uri', JsonNewText(uri))
+        else JsonPut(result, 'uri', JsonNewText(PathToUri(path)));
+        JsonPut(result, 'range',
+                NameRange(source, hit.declLine, hit.declCol, hit.declLen))
+      end;
+  if result = nil then result := JsonNewNull;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
+{ `textDocument/hover`, as `MarkupContent` of kind `plaintext` with the range
+  the answer is about.
+
+  What it shows is the compiler's own two words -- 6.7.3.1's
+  `variable-parameter`, 6.4.7's `discriminant`, the type as `WriteTypeName`
+  spells it -- with the name sliced out of the document, because the pool
+  holds the folded spelling and `CaseTest` would otherwise be shown back as
+  `casetest`. A procedure has no type and the compiler writes `?` for one, so
+  the kind stands alone there rather than a question mark being shown to a
+  reader as if it meant something. }
+procedure Hover(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    line, col, at: integer;
+    hit: UseHit;
+    path: PathName;
+    d: Document;
+    source: DiagLine;
+    name, body: DiagLine;
+    reply, result, content: JsonPtr;
+begin
+  reply := NewResponse(id);
+  result := nil;
+  uri := UriOf(params);
+  AskedAt(params, uri, line, col);
+  if (line >= 1) and (col >= 1) then
+    if FindUse(uri, line, col, hit, path) then begin
+      at := IndexOf(uri);
+      source := '';
+      if at <> 0 then begin
+        d := VecGet(DocVec, Document, docs, at);
+        LineOf(d.text, hit.line, source)
+      end;
+      name := '';
+      if (hit.col >= 1) and (hit.len > 0)
+         and (hit.col + hit.len - 1 <= length(source)) then
+        name := source[hit.col..hit.col + hit.len - 1];
+      body := hit.kind;
+      if name <> '' then body := body + ' ' + name;
+      if (hit.denotes <> '') and (hit.denotes <> '?') then
+        body := body + ': ' + hit.denotes;
+      content := JsonNewObject;
+      JsonPut(content, 'kind', JsonNewText('plaintext'));
+      JsonPut(content, 'value', JsonNewText(body));
+      result := JsonNewObject;
+      JsonPut(result, 'contents', content);
+      JsonPut(result, 'range', NameRange(source, hit.line, hit.col, hit.len))
+    end;
+  if result = nil then result := JsonNewNull;
   JsonPut(reply, 'result', result);
   Send(reply);
   JsonFree(reply)
@@ -1494,6 +1840,8 @@ begin
   else if method = 'textDocument/didChange' then DidChange(params)
   else if method = 'textDocument/didClose' then DidClose(params)
   else if method = 'textDocument/documentSymbol' then Outline(id, params)
+  else if method = 'textDocument/definition' then Definition(id, params)
+  else if method = 'textDocument/hover' then Hover(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 

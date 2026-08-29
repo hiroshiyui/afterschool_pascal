@@ -1,6 +1,6 @@
-Content-Length: 161
+Content-Length: 208
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 124
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 124
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/outline.pas","diagnostics":[]}}Content-Length: 2137
 

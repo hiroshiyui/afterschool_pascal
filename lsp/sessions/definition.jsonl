@@ -1,0 +1,60 @@
+# textDocument/definition and textDocument/hover (ADR-0246): what the name
+# under a position denotes, and where it was written.
+#
+# These are the first methods here that need Sema. An outline is the parser's
+# answer and stops before the checker on purpose, so that a file being edited
+# still has one; which declaration a name denotes is 6.2.2's scope rules and
+# nothing less can say. So `--dump-uses` runs the compiler through Sema, and
+# reports what resolved whether or not Sema was happy -- which is the whole
+# reason the last request below is worth reading.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/where.pas","languageId":"pascal","version":1,"text":"program where(output);\n\nconst Limit = 3;\n\ntype Counter = integer;\n\nvar Total: Counter;\n\nfunction Twice(k: integer): integer;\nbegin\n  Twice := k + k\nend;\n\nbegin\n  Total := Twice(Limit);\n  writeln(Total)\nend.\n"}}}
+
+# A variable, at its use on the last line. Line 15 and character 10 are
+# 0-based: `writeln(Total)`, on the `T`.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":15,"character":10}}}
+
+# The same position asked the other way. The name comes back with the case
+# the programmer wrote -- `Total` and not the folded `total` the compiler's
+# string pool holds -- because this server slices it out of the document.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":15,"character":10}}}
+
+# A function at its call, which is line 14: `  Total := Twice(Limit);`. The
+# answer is the *name* in the heading and not the `function` word-symbol that
+# begins the declaration -- Declare is handed the declaration's position for
+# its duplicate message and a procedure-declaration is the one kind that does
+# not begin with its own identifier.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":14,"character":12}}}
+
+# A constant, in an argument position.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":14,"character":18}}}
+
+# A type-identifier the program declared, used in a variable-declaration.
+{"jsonrpc":"2.0","id":6,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":6,"character":11}}}
+
+# `integer`, which is a required identifier: a symbol in a region enclosing
+# the program (6.2.2.10) with no defining-point in any source. There is
+# nowhere to go and `null` says so -- but the hover after it still answers,
+# which is the distinction worth having.
+{"jsonrpc":"2.0","id":7,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":4,"character":15}}}
+
+{"jsonrpc":"2.0","id":8,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":4,"character":15}}}
+
+# A position on no name at all -- inside `begin`.
+{"jsonrpc":"2.0","id":9,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":13,"character":2}}}
+
+# A document nobody opened.
+{"jsonrpc":"2.0","id":10,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/never-opened.pas"},"position":{"line":0,"character":0}}}
+
+# And the claim the outline cannot make: a file Sema *rejects* still answers
+# about every name that resolved. `Nowhere` is undeclared, and `Total` two
+# lines further on is unaffected by it.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/where.pas","version":2},"contentChanges":[{"text":"program where(output);\n\nconst Limit = 3;\n\ntype Counter = integer;\n\nvar Total: Counter;\n\nfunction Twice(k: integer): integer;\nbegin\n  Twice := k + Nowhere\nend;\n\nbegin\n  Total := Twice(Limit);\n  writeln(Total)\nend.\n"}]}}
+
+{"jsonrpc":"2.0","id":11,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":15,"character":10}}}
+
+{"jsonrpc":"2.0","id":12,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":14,"character":12}}}
+
+{"jsonrpc":"2.0","id":13,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

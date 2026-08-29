@@ -2732,6 +2732,8 @@ begin
         n^.fdBase := base;
         n^.fdAt := tok[pos].at;
         n^.fdLen := tok[pos].len;
+        n^.fdLine := tok[pos].line;
+        n^.fdCol := tok[pos].col;
         pos := pos + 1;
         base := n
       end
@@ -4710,6 +4712,12 @@ begin
   s^.len := 0;
   s^.kind := skVar;
   s^.stype := nil;
+  { 0 until `Declare` says otherwise, and it stays 0 for every symbol that has
+    no defining-point a programmer wrote: a required identifier, a result
+    variable, a `with` binding, a module's own activation symbol. }
+  s^.declLine := 0;
+  s^.declCol := 0;
+  s^.declFile := 0;
   s^.binding := fbInternal;
   s^.fileArg := 0;
   s^.intVal := 0;
@@ -4923,8 +4931,88 @@ begin
     s^.at := at;
     s^.len := len;
     s^.kind := k;
+    { 6.2.2.1's defining-point, kept rather than used and dropped. The two
+      numbers arrived for the duplicate-declaration message above and this is
+      the same position: the identifier's occurrence in this declaration is
+      the defining-point, by that clause's own words. The file is asked for
+      only when something will read it (ADR-0246). }
+    s^.declLine := line;
+    s^.declCol := col;
+    if notingUses then s^.declFile := FileIndexOf(curFile);
     Bind(at, len, s);
     Declare := s
+  end
+end;
+
+{ The word this symbol is, in Pascal's vocabulary and not a protocol's
+  numbering -- ADR-0239's decision, and the same one: a table owned by a third
+  party changing under a Pascal compiler would be a version of that protocol
+  baked into it. The three parameter kinds are spelled as 6.7.3.1 spells them,
+  hyphenated, which makes each of them one field of one line. }
+procedure PutSymKindWord(k: symKind);
+begin
+  case k of
+    skConst:     write('const');
+    skType:      write('type');
+    skVar:       write('var');
+    skParam:     write('value-parameter');
+    skVarParam:  write('variable-parameter');
+    skProcParam: write('procedural-parameter');
+    skDisc:      write('discriminant');
+    skProc:      write('procedure');
+    skFunc:      write('function');
+    skSchema:    write('schema');
+    skInterface: write('interface');
+    skRequired:  write('required')
+  end
+end;
+
+{ One applied occurrence, and the defining-point it resolved to (ADR-0246).
+
+    use <line> <col> <len> <declfile> <declline> <declcol> <decllen>
+        <kind> <type>
+
+  The first three locate the occurrence in the source being compiled; the next
+  four locate its defining-point, `declline` being 0 where there is none to go
+  to. The two lengths are usually the same identifier and so the same number,
+  and 6.11.3's qualified name is why they are written separately: the
+  occurrence there spans `M.x` and the defining-point is `x` alone. The type
+  is last because it is the only field that may contain a space.
+
+  Nothing is written for a use in text that is not this document's. `curFile`
+  is what says so, and it is the fact already kept for diagnostics: Sema puts
+  it to an --import's name across that module's check and back afterwards, and
+  AP 6.7.3.10's instantiation does the same across a body re-read from the
+  file the generic was declared in. A use dumped from either would carry a
+  line and a column a caller would resolve against the wrong text. }
+procedure NoteUse(line, col, len: integer; s: symPtr);
+begin
+  { `producingTop` is the schemas 6.4.7 is producing a type from right now,
+    and a production re-resolves the schema's *body* -- the same text, once
+    per tuple, with each discriminant bound to that tuple's value.
+
+    Those resolutions are not reported, and the reason is the file and not the
+    noise. A production happens where the type is *written*, so `curFile` is
+    the writer's; the body's line and column belong to wherever the schema was
+    declared, which for `string(80)` or any schema out of lib/ is another file
+    entirely. The test above cannot see that -- it asks which file Sema is
+    checking, and Sema is checking this one -- so a use dumped from here would
+    carry a position a caller would resolve against the wrong text. AP
+    6.7.3.10's instantiation is the same shape and is *not* excluded, because
+    it puts `curFile` to the generic's own file and the test then answers.
+
+    What this costs is a use inside a schema's own body: `cap` in
+    `array [1..cap]` is resolved nowhere else, so nothing is reported for it
+    (ADR-0246). }
+  if notingUses and (s <> nil) and (curFile = mainFile) and
+     (producingTop = nil) then begin
+    write('use ', line:1, ' ', col:1, ' ', len:1, ' ');
+    write(s^.declFile:1, ' ', s^.declLine:1, ' ', s^.declCol:1, ' ',
+          s^.len:1, ' ');
+    PutSymKindWord(s^.kind);
+    write(' ');
+    WriteTypeName(s^.stype);
+    writeln
   end
 end;
 
@@ -9230,6 +9318,12 @@ begin
         disc := NewSymbol;
         disc^.at := n^.dnAt;
         disc^.len := n^.dnLen;
+        { 6.2.2.1: the discriminant-specification's identifier is a
+          defining-point like any other, and this is the one every skDisc
+          symbol derived from it below inherits. }
+        disc^.declLine := n^.line;
+        disc^.declCol := n^.col;
+        if notingUses then disc^.declFile := FileIndexOf(curFile);
         { AP 6.4.7 (ADR-0209): a type-valued discriminant is bound to a *type*
           where a production resolves the body, so its formal is skType and
           stype nil until then. skConst for every other, which is what makes
@@ -10084,6 +10178,11 @@ begin
       disc^.len := p^.sym^.len;
       disc^.kind := skDisc;
       disc^.stype := p^.sym^.stype;
+      { The schema's formal is where this name was written, and a binding
+        derived from it is the same identifier (ADR-0246). }
+      disc^.declLine := p^.sym^.declLine;
+      disc^.declCol := p^.sym^.declCol;
+      disc^.declFile := p^.sym^.declFile;
       disc^.discBinding := true;
       { The discriminant lives in the parameter's own frame slot, after the
         address, so it is reached exactly as the parameter is and a recursive
@@ -12780,6 +12879,8 @@ var t: typePtr; assign, target: nodePtr; at2, len2: integer;
     b^.ntype := c^.clSlot^.stype;
     InternWord(w, a3, l3);
     f := NewNode(nkField, c^.line, c^.col);
+    f^.fdLine := c^.line;
+    f^.fdCol := c^.col;
     f^.fdBase := b;
     f^.fdAt := a3;
     f^.fdLen := l3;
@@ -12871,6 +12972,11 @@ begin
     too (6.2.2.10), and LookupUser is what turns it back into the nil this
     branch reads as "not the program's own". }
   sym := LookupUser(c^.clAt, c^.clLen);
+  { Before the instantiation below, so a call to a generic reports the generic
+    the programmer wrote and not the translation AP 6.7.3.10 made of it: the
+    instantiation's defining-point is the generic's own text, but the symbol
+    is one of a family the source never named. }
+  NoteUse(c^.line, c^.col, c^.clLen, sym);
   { AP 6.7.3.5, as for a procedure-statement: the instantiation is the callee
     from here on. Asked before ResultTypeOf, because a generic function has no
     result type until a call says what its types are. }
@@ -14126,7 +14232,14 @@ begin
                   found := true;
                   e^.fdIsDisc := true;
                   e^.fdDiscSym := ds^.sym;
-                  e^.ntype := p^.sym^.stype
+                  e^.ntype := p^.sym^.stype;
+                  { The binding reads the descriptor and the *formal* is
+                    where the name was written, which is what a reader wants
+                    from either (ADR-0246). The binding is reported because
+                    it is what this occurrence denotes -- 6.4.7's
+                    discriminant-identifier and not a constant -- and it
+                    carries the formal's defining-point. }
+                  NoteUse(e^.fdLine, e^.fdCol, e^.fdLen, ds^.sym)
                 end;
                 p := nil
               end
@@ -14134,7 +14247,10 @@ begin
                 found := true;
                 e^.fdIsDisc := true;
                 e^.fdDiscValue := tv^.value_;
-                e^.ntype := p^.sym^.stype
+                e^.ntype := p^.sym^.stype;
+                { A folded tuple has no binding symbol to name -- the value is
+                  a constant by now -- so the formal answers instead. }
+                NoteUse(e^.fdLine, e^.fdCol, e^.fdLen, p^.sym)
               end;
             if p <> nil then begin
               p := p^.next;
@@ -14216,7 +14332,14 @@ begin
         binding := LookupWithField(e^.vrAt, e^.vrLen, e^.vrField);
         if binding <> nil then begin
           e^.vrSym := binding;
-          e^.ntype := e^.vrField^.ftype
+          e^.ntype := e^.vrField^.ftype;
+          { The `with` binding, whose own defining-point is 0: 6.8.3.10 gives
+            a field-identifier a defining-point in the with-statement, and the
+            record-variable's is where a reader would want to go -- but the
+            binding symbol is a hidden frame variable and knows neither. The
+            field is not a symbol at all (ADR-0246 records that as the one
+            thing this dump does not answer). }
+          NoteUse(e^.line, e^.col, e^.vrLen, binding)
         end
         else begin
           { LookupUser, not Lookup: a bare `abs` is not a designator and has no
@@ -14224,6 +14347,7 @@ begin
             the contract that Sema hands CodeGen a type on every node. Nilling
             it here reproduces the "undeclared identifier" this always said. }
           e^.vrSym := LookupUser(e^.vrAt, e^.vrLen);
+          NoteUse(e^.line, e^.col, e^.vrLen, e^.vrSym);
           { AP 6.7.6.10's argcount, bare. LookupUser answered nil because what
             it found was the required marker and not a declaration of the
             program's -- which is exactly the case in which the bare name is
@@ -15819,6 +15943,9 @@ begin
           disc^.len := p^.sym^.len;
           disc^.kind := skDisc;
           disc^.stype := p^.sym^.stype;
+          disc^.declLine := p^.sym^.declLine;
+          disc^.declCol := p^.sym^.declCol;
+          disc^.declFile := p^.sym^.declFile;
           disc^.discBinding := true;
           disc^.owner := entry^.sym^.owner;
           disc^.level := entry^.sym^.level;
@@ -16055,6 +16182,8 @@ begin
   if wrap then begin
     InternWord(w, at, len);
     sel := NewNode(nkField, s^.asTarget^.line, s^.asTarget^.col);
+    sel^.fdLine := s^.asTarget^.line;
+    sel^.fdCol := s^.asTarget^.col;
     sel^.fdBase := s^.asTarget;
     sel^.fdAt := at;
     sel^.fdLen := len;
@@ -16087,6 +16216,15 @@ end;
   ADR-0176's stack overflow was. }
 procedure CheckResultAssign;
 begin
+  { 6.8.2.2's `f := e` names the *function*, and the symbol that goes on the
+    node is the result variable -- which is a hidden frame slot with no
+    defining-point, so a reader sent there would be sent nowhere. The
+    occurrence denotes the function-identifier and that is what is reported
+    (ADR-0246). `byName` is what says the program wrote a name here at all:
+    AP 6.7.5.9's `exit(e)` reaches this with a target Sema built, and there is
+    no occurrence in the source to report. }
+  if byName then
+    NoteUse(s^.asTarget^.line, s^.asTarget^.col, s^.asTarget^.vrLen, named);
   s^.asTarget^.vrSym := named^.resultVar;
   s^.asTarget^.ntype := named^.stype;
   named^.assignedResult := true;
@@ -16403,6 +16541,7 @@ begin
       end
       else begin
         sym := LookupUser(s^.pcAt, s^.pcLen);
+        NoteUse(s^.line, s^.col, s^.pcLen, sym);
         { A user-declared procedure of the same name wins, exactly as it does
           for the required functions in CheckCall. }
         if (sym = nil) and
@@ -17687,6 +17826,14 @@ begin
       sym := Declare(d^.pdAt, d^.pdLen, skProc, d^.line, d^.col);
     sym^.level := owner^.level + 1;
     sym^.owner := owner;
+    { The *name's* position and not the heading's. `Declare` is handed the
+      declaration's own line and column because that is where its duplicate
+      message points, and for every other kind of declaration those are the
+      identifier's -- a procedure-declaration is the one that begins with a
+      word-symbol, so `procedure` is what a reader would be sent to. It is the
+      same position --dump-symbols reports, and for the same reason. }
+    sym^.declLine := d^.pdNameLine;
+    sym^.declCol := d^.pdNameCol;
     d^.pdSym := sym;
     { AP 6.7.3.5 (ADR-0211). A generic routine is a *declaration* and never a
       procedure: it gets no formals, no result type, no frame and no body,
@@ -18258,8 +18405,11 @@ end;
 function LookupName;
 var iface, found: symPtr; c: constitPtr;
 begin
-  if qLen = 0 then
-    LookupName := Lookup(at, len)
+  if qLen = 0 then begin
+    found := Lookup(at, len);
+    NoteUse(line, col, len, found);
+    LookupName := found
+  end
   else begin
     found := nil;
     iface := Lookup(qAt, qLen);
@@ -18290,6 +18440,22 @@ begin
         writeln('''')
       end
     end;
+    { A qualified name is two applied occurrences in one node and the node
+      keeps one position, so the two are reported as nested spans: the
+      interface for its own `qLen` characters from the start, and the whole
+      `M.x` for the length the three parts have when they are written the way
+      anyone writes them. A caller resolves a position by the *narrowest* span
+      that contains it, so a point inside `M` finds the interface and a point
+      inside `x` finds only the wider one. Written with spaces around the
+      point, the wider span stops short and the tail answers nothing -- which
+      is a worse answer and not a wrong one.
+
+      The constituent's defining-point is in the module that exported it:
+      6.11.3 makes an imported constituent *the* symbol the module declared
+      and not a copy, so the position it carries is that module's and
+      `declFile` says which file to open. }
+    NoteUse(line, col, qLen, iface);
+    NoteUse(line, col, qLen + 1 + len, found);
     LookupName := found
   end
 end;
