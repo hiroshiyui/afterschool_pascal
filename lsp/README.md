@@ -32,7 +32,7 @@ that sets no environment still works:
 | | |
 | --- | --- |
 | `PASLS_COMPILER` | what to invoke to compile a document. Default `pascalc`, so it must be on `PATH`; `tools/pascalcc` works too, and passes a `--dump-` flag through untouched — which it did not until the outline below asked it to |
-| `PASLS_SCRATCH` | the file the current document is written to before it is compiled. Default `$TMPDIR/pasls-scratch.pas`, and `/tmp` where `TMPDIR` is unset |
+| `PASLS_SCRATCH` | the file the current document is written to before it is compiled. Default `$TMPDIR/pasls-<pid>.pas`, and `/tmp` where `TMPDIR` is unset |
 
 It finds a file's **imports** by reading `.components`, which is this tree's
 build description — the same sidecar `tests/run_test.sh`, `selfhost/irtest.sh`,
@@ -48,9 +48,18 @@ project does not have.
 
 The scratch file exists because a compiler reads a file and an editor holds a
 buffer that has never been saved — which is the whole reason a language server
-exists. There is no `getpid` in this tree and no `mkstemp`, so the name is
-fixed and two servers sharing a `TMPDIR` would share it. Point
-`PASLS_SCRATCH` somewhere of your own if you run more than one.
+exists. **Its name carries the server's own process id**
+([ADR-0242](../doc/adr/0242-a-name-no-other-live-process-will-choose.md)), so
+two servers on one machine do not share it; run as many as you like. It is not
+`mkstemp` — §6.7.5.6 binds a file by *name*, so an exclusive creation could not
+survive being opened a second time to be written — and what the name carries is
+a number no other **live** process has. `PASLS_SCRATCH` still overrides the
+whole path, and two servers told the same one share it again.
+
+The file is left behind when the server ends. That is deliberate: it is the
+exact source `pascalc` was handed, which is what you want when the server and
+the editor disagree about a document, and it is one file per process under
+`TMPDIR`.
 
 **A path it cannot write is reported and survived**, which it was not until
 AP 6.4.3.4.7 ([ADR-0240](../doc/adr/0240-a-program-may-ask-before-it-writes.md)):
@@ -138,6 +147,7 @@ A session is up to six files, of which the first two are required:
 | `sessions/name.note` | what it wrote to standard error. Absent means none, and a session that writes something with no `.note` beside it **fails** — so a new complaint cannot appear unnoticed |
 | `sessions/name.mcp` | a marker: this session is MCP rather than LSP. The server is started with `--mcp` and each line of the `.jsonl` **is** a frame, since that transport delimits by newlines and has no header to compute |
 | `sessions/name.scratch` | the scratch path for this session, one line, in place of the work directory's. It exists for a session that is about a path the server **cannot** write, and so must name one no work directory would be |
+| `sessions/name.tmpdir` | a marker: this session is about the path the server picks when it is told none. `PASLS_SCRATCH` is left unset, `TMPDIR` is a directory of the session's own, and the files left in it must be named for the server's process id. Every other session is handed a path, so this is the only one that can see the default |
 | `sessions/name.workspace` | a marker: this session opens files on disk. `%ROOT%` in the `.jsonl` becomes this checkout's path, and before the diff the harness writes the root back and blanks the `Content-Length`s — an absolute path is as long as somebody's home directory, so neither it nor the count over it can be written down once. Such a session pins the *behaviour*; the sessions that name no file pin the framing |
 
 To add one, write the `.jsonl`, run `run.sh`, and read what it says before

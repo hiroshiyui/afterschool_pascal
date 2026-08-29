@@ -404,6 +404,15 @@ demand for it turned out not to be this program at all but a library module
 written a year of increments earlier, whose five writers could fail and could
 not say so. A finding this chapter produced was already true everywhere else.
 
+**One entry took two records to close and they are not the same kind of
+thing.** *A program cannot make a temporary file, and cannot survive failing
+to* was written as two halves; the second was a language question and became
+AP 6.4.3.4.7 (ADR-0240), the first was a library one and became
+`PasProcess.ProcessId` (ADR-0242). Splitting it when it was recorded is what
+made that visible — a single entry would have been closed by the language
+change and the sharing of one scratch file between two servers would have gone
+with it, unfixed and unrecorded.
+
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
   ADR-0219). §6.5.6: *"it shall be an error if … the value of the first
@@ -491,14 +500,30 @@ not say so. A finding this chapter produced was already true everywhere else.
   one, so a URI the server could hold and that module could not would be a
   truncation at the boundary instead of a refusal at the door — and reports and
   ignores a document whose URI is longer.
-- **A program cannot make a temporary file, and cannot survive failing to.**
-  Two halves. There is no `getpid` anywhere in this tree, no `mkstemp`, and
-  nothing in `PasFS` that answers a temporary name, so the scratch path is one
-  fixed name under `TMPDIR` and two servers sharing a `TMPDIR` share the file —
-  **still open**, and a library gap with an obvious shape. Worse: `rewrite` on
-  a bound name that cannot be created is a run-time error and *stops the
-  program*, and neither standard gives a program a way to ask beforehand — so a
-  server could not survive a bad scratch path however carefully it was written.
+- ~~**A program cannot make a temporary file, and cannot survive failing to.**~~
+  **Both halves answered.** There was no `getpid` anywhere in this tree, no
+  `mkstemp`, and nothing in `PasFS` that answered a temporary name, so the
+  scratch path was one fixed name under `TMPDIR` and two servers sharing a
+  `TMPDIR` shared the file. Worse: `rewrite` on a bound name that cannot be
+  created is a run-time error and *stops the program*, and neither standard
+  gives a program a way to ask beforehand — so a server could not survive a bad
+  scratch path however carefully it was written.
+
+  ~~The first half~~ — **answered, and it stayed a library question** (ADR-0242).
+  `PasProcess` exports `ProcessId`, the server's default name carries it, and
+  two servers no longer share a file. It is *not* `mkstemp`'s guarantee and
+  could not be: §6.7.5.6 binds by **name**, so a file created exclusively would
+  have to be opened a second time to be written and the exclusivity is given up
+  at that moment. What a name can carry is a number no other **live** process
+  has. `getpid` is bound by the module rather than by the runtime because
+  `pid_t` is a *scalar* typedef and ADR-0186's rule reaches structs — the one
+  case that distinction has been tested on. The primitive landed and the *name*
+  did not: there is one caller, and ADR-0116 says one site is an anecdote.
+
+  **The residue, and it is smaller than the finding.** No `mkstemp`, no
+  `PasFS.TemporaryPath`, and no name unique against processes that have already
+  exited. A leftover from a dead process is truncated by `rewrite`, which is the
+  right answer for one.
 
   ~~That second half~~ — **answered, and it is the second finding this chapter
   produced that changed the language** (AP 6.4.3.4.7, ADR-0240). §6.7.5.6's

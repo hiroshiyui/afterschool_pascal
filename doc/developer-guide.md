@@ -361,7 +361,14 @@ not what a compiled program wrote:
   the golden is compared with the root written back and the counts blanked,
   neither being a thing that can be written down once. A `name.scratch` sidecar
   names the scratch path for that session in place of the work directory's,
-  which is what lets a session be about a path the server *cannot* write.
+  which is what lets a session be about a path the server *cannot* write, and a
+  `name.tmpdir` marker does the opposite — it takes `PASLS_SCRATCH` away and
+  gives the session an empty `TMPDIR`, so what the server picks *for itself*
+  can be checked (ADR-0242). That is the only session that can see the default
+  name, every other one being handed a path. A `name.mcp` marker says the
+  session is the *other protocol*: the server is started with `--mcp` and the
+  framing is one JSON message to a line rather than `Content-Length`, the same
+  binary answering both (ADR-0241).
   `lsp/README.md` says how to add one; they are
   all one `ctest` case, `lsp-server`, because the harness builds the server once
   and ten program-components is most of the cost.

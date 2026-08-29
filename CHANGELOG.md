@@ -26,6 +26,14 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`PasProcess.ProcessId`** — the number the operating system knows a program
+  by, from `getpid` (ADR-0242). Positive, and held by no other program running
+  at the same moment, which is the whole of what it is for: a program that must
+  choose a file name no other *live* process will choose had nothing to build
+  one from. It is not `mkstemp` and cannot be — §6.7.5.6 binds a file by
+  **name**, so an exclusive creation is given up the moment the name is opened
+  a second time to be written. The language server's scratch path carries it,
+  so two servers sharing a `TMPDIR` no longer share a file.
 - **The language server speaks a second protocol.** `pasls --mcp` answers the
   Model Context Protocol over standard input and output — the same binary, the
   same import resolution, the same compiler (ADR-0241). Two tools: `outline`,

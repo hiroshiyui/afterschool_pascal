@@ -3994,3 +3994,37 @@ Four of those five are bounds, and every one of them was chosen by counting
 what the largest thing in the tree needed at the time. That is the chapter's
 argument, arriving in its first hour: the finding is never that the library is
 weak, it is that nothing had yet asked it for anything the size of real work.
+
+**Six records followed in the same week, and the five findings did not
+survive them.** The server negotiated its position encoding (ADR-0237), so a
+client offering `utf-8` gets the compiler's own columns and one that says
+nothing gets the protocol's default with the conversion done — which is what
+made the UTF-16 edge, named as the sharpest one in the idea before any of it
+was written, an externally specified test rather than a reading. It learned to
+find a file's **imports** by reading `.components`, this tree's own build
+description, on the rule *take the entries before this file* (ADR-0238);
+without that the compiler is handed a module alone and answers 21 171
+diagnostics about names it was never shown. It drew an **outline**, and the
+decision behind it outlived the method: `--dump-symbols` is the compiler
+answering a tool's question in Pascal's own words, because the alternative was
+a second reader of Pascal-shaped output living outside the compiler, which is
+the shape two gates had already been moved off (ADR-0239). It gained a second
+**transport** — the same binary answering MCP over stdio with two tools, one
+of which is that outline (ADR-0241).
+
+And the two library findings were closed by two records that are not the same
+kind of thing. `binding(f)` gained a third field, `writable`, so a program may
+ask whether it could create a file before `rewrite` stops it for trying (AP
+6.4.3.4.7, ADR-0240) — a **language** change, and the demand for it turned out
+not to be the server at all but `lib/pasfile.pas`, whose four exported writers
+were procedures that could fail and could not say so, written long before this
+chapter existed. Then `PasProcess` gained `ProcessId`, and the scratch name
+carries it, so two servers sharing a `TMPDIR` no longer share a file
+(ADR-0242) — a **library** change, and one that had to say what it was not:
+§6.7.5.6 binds a file by *name*, so `mkstemp`'s exclusive creation could never
+have survived being opened a second time to be written, and what a name can
+carry is a number no other **live** process has.
+
+That the one entry needed two records is the argument for having written it as
+two halves. A single finding would have been closed by the language change,
+and the shared scratch file would have gone with it.

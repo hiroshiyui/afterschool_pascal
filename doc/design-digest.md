@@ -3590,6 +3590,21 @@ nothing else. What it would lose, mechanism by mechanism:
   and not `Capture`, because `CaptureMax` is 16384 and the outline of
   `selfhost/apfront.pas` is 51 192 bytes — an outline is a list of lines, so
   the bound is removed rather than raised.
+- **The scratch name carries the server's process id** (ADR-0242), which is
+  what keeps two servers on one machine out of each other's file. It is not
+  `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file
+  created exclusively would have to be opened a second time to be written and
+  the exclusivity ends there — what a name can carry is a number no other
+  **live** process has. `PasProcess.ProcessId` is the primitive and the *name*
+  is built at the one call site, ADR-0116's rule being that one site is an
+  anecdote. `getpid` is bound by the module rather than by the runtime because
+  `pid_t` is a **scalar** typedef: ADR-0186's rule sends a struct whose layout
+  differs between systems to `runtime/pasrt_posix.c`, and a scalar one can be
+  judged against POSIX's own words — `integer` is the safe direction of the two
+  widths this FFI has, where `time_t` is `int64` for the mirror-image reason.
+  `lsp/sessions/scratchname.jsonl` is the case, and it needed a `.tmpdir`
+  marker to exist at all: every other session is handed a `PASLS_SCRATCH`, so
+  the default name was exercised by nothing.
 - **The compile is synchronous**, so a `didChange` arriving mid-compile is
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.

@@ -96,6 +96,13 @@ state the caller would have to handle for nothing. `ReadLine` is the one that
 looks like an operation, and its `false` means *nothing more*, which is the
 answer and not a refusal.
 
+The same reasoning admits a bare number where the call it wraps cannot fail.
+`PasProcess.ProcessId` is `getpid`, of which POSIX says *"shall always be
+successful and no return value is reserved to indicate an error"* — so a
+`RunResult` around it would be a `cause` field no caller could ever read. Check
+the specification before taking this route; it is the narrow case, and every
+other call in these modules can fail.
+
 ## Two conveniences, and their names are fixed
 
 - **`XOr(r, whenBad)`** takes a result and a default, for a caller who has a
