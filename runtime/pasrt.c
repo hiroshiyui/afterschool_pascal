@@ -3147,6 +3147,80 @@ char *pas_time(int h, int m, int s) {
  * set it. That is C's contract and this does not improve on it.
  */
 int pasx_errno(void) { return errno; }
+
+/* A path in `dir` that names nothing else, with the file created empty so it
+ * goes on naming nothing else after this process has exited (ADR-0243).
+ *
+ * It is here rather than in lib/dialect/pasfs.pas for the reason `pasx_errno`
+ * is: the thing a program would have to bind cannot be bound. `mkstemp` takes
+ * a `char *` it *modifies*, and this foreign-function interface lends mutable
+ * storage only as a slice (ADR-0129) -- which supplies a pointer *and* a
+ * count, so binding a one-argument C function through it would be a claim
+ * about what the second argument does to a call this project cannot make.
+ *
+ * And it is **ISO C**, which is why `mkstemp` is not in
+ * tests/checks/nonstandard_c.txt beside `access`. C11 7.21.5.3 gives `fopen`
+ * the exclusive mode: with `x`, it "fails if the file exists or cannot be
+ * created". So the loop below is the whole mechanism -- compose a name, try to
+ * create it and nobody else's, and go round again on the one that lost. The
+ * counter is seeded from the clock so two processes starting together do not
+ * walk the same names for long, and the exclusive create is what makes that an
+ * optimisation rather than the guarantee.
+ *
+ * A process id would have been the other seed and is deliberately not used:
+ * `getpid` is POSIX, this routine is not, and what a pid buys here -- fewer
+ * collisions on the first try -- the retry already covers. ADR-0242's
+ * ProcessId answers the different question of a *predictable* name.
+ *
+ * The file is the caller's from here. Nothing removes it.
+ *
+ * 0 with the name, 2 on a refusal, 3 where the name would be longer than the
+ * caller said it can hold.
+ */
+#define PASX_TEMP_MAX 4096
+#define PASX_TEMP_TRIES 4096
+
+static char pasx_temp_buf[PASX_TEMP_MAX + 1];
+
+const char *pasx_temp_name(const char *dir, const char *prefix, int cap,
+                           int *status) {
+  static unsigned long pasx_temp_next = 0;
+  int tries;
+  if (!status)
+    return NULL;
+  if (!dir || !prefix || cap < 0 || cap > PASX_TEMP_MAX) {
+    *status = 2;
+    return NULL;
+  }
+  if (pasx_temp_next == 0)
+    pasx_temp_next = (unsigned long)time(NULL);
+  for (tries = 0; tries < PASX_TEMP_TRIES; tries++) {
+    FILE *f;
+    int n = snprintf(pasx_temp_buf, sizeof pasx_temp_buf, "%s%s%s%08lx", dir,
+                     (*dir && dir[strlen(dir) - 1] == '/') ? "" : "/", prefix,
+                     pasx_temp_next & 0xffffffffUL);
+    pasx_temp_next++;
+    if (n < 0) {
+      *status = 2;
+      return NULL;
+    }
+    if (n > cap || (size_t)n >= sizeof pasx_temp_buf) {
+      *status = 3;
+      return NULL;
+    }
+    f = fopen(pasx_temp_buf, "wx");
+    if (f) {
+      if (fclose(f) != 0) {
+        *status = 2;
+        return NULL;
+      }
+      *status = 0;
+      return pasx_temp_buf;
+    }
+  }
+  *status = 2;
+  return NULL;
+}
 /* AP 6.7.7.6.2's record, from the other side of the boundary (ADR-0184).
  *
  * A record whose fields C also has crosses as an address, and what makes that

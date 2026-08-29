@@ -520,10 +520,24 @@ with it, unfixed and unrecorded.
   case that distinction has been tested on. The primitive landed and the *name*
   did not: there is one caller, and ADR-0116 says one site is an anecdote.
 
-  **The residue, and it is smaller than the finding.** No `mkstemp`, no
-  `PasFS.TemporaryPath`, and no name unique against processes that have already
-  exited. A leftover from a dead process is truncated by `rewrite`, which is the
-  right answer for one.
+  ~~**The residue**~~ — **answered too, and by ISO C** (ADR-0243).
+  `PasFS.TemporaryPath(dir, prefix)` answers a path that names nothing else
+  **with the file created**, which is what makes it unique against a process
+  that has already exited as well as against one running now; the caller
+  removes it. `mkstemp` is still absent and stays absent: it takes a `char *`
+  it *modifies*, and the only mutable storage this FFI lends is a slice, which
+  supplies a pointer **and** a count — so binding a one-argument C function
+  through it would be a claim about an ABI. C11 7.21.5.3's exclusive `fopen`
+  mode is the mechanism instead, tried in a loop, and the non-ISO-C catalogue
+  stays at five names where `mkstemp` would have brought `close` and made it
+  seven.
+
+  **The two records answer different questions** and the language server is the
+  reason to say so: `ProcessId` gives a **predictable** name and `TemporaryPath`
+  a **unique** one. A server started a thousand times should leave one file in
+  `TMPDIR` and not a thousand, and a predictable name is what makes the scratch
+  source findable when the server and the editor disagree — so the server keeps
+  the first and is not a caller of the second.
 
   ~~That second half~~ — **answered, and it is the second finding this chapter
   produced that changed the language** (AP 6.4.3.4.7, ADR-0240). §6.7.5.6's

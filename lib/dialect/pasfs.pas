@@ -1,13 +1,23 @@
 { PasFS -- the file system as an operating system offers it, reached by
   ADR-0122's string boundary.
 
-  This module is the first user of a foreign *pointer*, and it exists to hold
-  one claim still: **a string crosses as a `const char` pointer and nothing
-  comes back as one.** Everything below takes a path and answers a number,
-  which is exactly the shape ADR-0122 admits -- and it is not a coincidence
-  that the operations here are the ones with that shape. `getcwd`, `readlink`
-  and `strerror` all hand a pointer back and are absent for that reason, not
-  because they were forgotten.
+  This module is the first user of a foreign *pointer*, and it was written to
+  hold one claim: **a string crosses as a `const char` pointer and nothing
+  comes back as one.** Most of what is below takes a path and answers a
+  number, which is exactly the shape ADR-0122 admits, and it was not a
+  coincidence that the operations here were the ones with that shape:
+  `getcwd`, `readlink` and `strerror` all hand a pointer back and were absent
+  for that reason and not because they had been forgotten.
+
+  **Three of them are here now and the claim survived**, which is worth more
+  than the claim did. `WorkingDirectory` and `LinkTarget` are `getcwd` and
+  `readlink` (ADR-0132), and what they hand back is *the caller's own buffer
+  coming home* -- ADR-0129's slice lends the storage and ADR-0123's optional
+  copies the characters out at the call site, so no C pointer becomes a value
+  this module holds. `TemporaryPath` is the third and the one exception to the
+  shape (ADR-0243): what it names cannot be reached from Pascal at all, so the
+  runtime answers, and the pointer that comes back is read once and copied in
+  the same statement.
 
   Like every module under lib/dialect/ it is **dialect-only**: `external` is
   this dialect's and no standard has it, so nothing here would compile under
@@ -46,7 +56,7 @@ export PasFS = (MaxPath, PathName, PathResult,
                 FileKind, fkRegular, fkDirectory, fkOther,
                 FileInfo, InfoResult,
                 Remove, Rename, MakeDirectory, RemoveDirectory, Exists,
-                WorkingDirectory, LinkTarget, PathOr, Info);
+                WorkingDirectory, LinkTarget, PathOr, Info, TemporaryPath);
 
 { 6.11.1 puts the import-part inside the module-block, after the export-part. }
 import PasError;
@@ -168,6 +178,25 @@ function WorkingDirectory = r: PathResult;
   may be short. }
 function LinkTarget(path: PathName) = r: PathResult;
 
+{ A path in `dir` that names nothing else, `prefix` in front of it.
+
+  **The file is created, empty, and is the caller's from that moment**
+  (ADR-0243). That is the whole difference between this and composing a name
+  from `PasProcess.ProcessId`: a name is unique against every process running
+  *now*, and a name whose file exists is unique against the ones that have
+  already exited too. Nothing removes it -- `Remove` it when you are done with
+  it, or it is a file in `dir` for ever.
+
+  `dir` is where, and a trailing separator is optional; `prefix` is the front
+  of the name and may be empty. What follows it is eight hexadecimal digits
+  and nothing else, so a caller wanting an extension puts it in the prefix and
+  gets it in the middle, or renames what it was given.
+
+  `errFull` where the composed path would be longer than `MaxPath`, `errIO`
+  where `dir` is not a directory the program may write, or where the names
+  were all taken. }
+function TemporaryPath(dir, prefix: PathName) = r: PathResult;
+
 { The path of a successful result, or `whenBad` for a failed one. Reading
   `path` here is safe for the reason the dialect makes it safe: the read is
   inside the arm the tag selects. }
@@ -197,6 +226,16 @@ function ExtFileInfo(path: string;
   one parameter (ADR-0129), so each of these headings has one formal fewer than
   its C counterpart. `getcwd` answers its own argument or null, which is an
   optional string (ADR-0123); `readlink` answers a count. }
+{ The runtime's again, and for a reason unlike Info's. `mkstemp` takes a
+  `char *` it *modifies*, and the only mutable storage this interface lends is
+  a slice -- which supplies a pointer and a count, so a one-argument C function
+  cannot be reached through it. What is behind this name is ISO C rather than
+  `mkstemp`: C11 7.21.5.3's exclusive `fopen` mode, tried in a loop. 0 with the
+  name, 2 refused, 3 too long for the capacity given. }
+function ExtTempName(dir, prefix: string; cap: integer;
+                     var status: integer): OptPathName;
+                     external 'pasx_temp_name';
+
 function ExtGetcwd(var b: array of char): OptPathName; external 'getcwd';
 function ExtReadlink(path: string;
                      var b: array of char): int64; external 'readlink';
@@ -273,6 +312,16 @@ begin
       a bound was reached: a path this module cannot hold is the overwhelmingly
       likely reading, and PasOS.LastErrorText is where the difference is. }
     r := errFull
+  else
+    r := got^
+end;
+
+function TemporaryPath;
+var got: OptPathName; st: integer;
+begin
+  got := ExtTempName(dir, prefix, MaxPath, st);
+  if got = nil then
+    if st = 3 then r := errFull else r := errIO
   else
     r := got^
 end;

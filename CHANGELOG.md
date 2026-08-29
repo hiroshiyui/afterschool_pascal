@@ -26,6 +26,13 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`PasFS.TemporaryPath(dir, prefix)`** — a path in `dir` that names nothing
+  else, with the file created empty so it goes on naming nothing else after
+  this process has exited (ADR-0243). Nothing removes it; `Remove` is how it
+  goes away. It is **not** `mkstemp`, which takes a `char *` it modifies and
+  cannot be reached through this foreign-function interface, and it costs the
+  runtime's non-ISO-C catalogue nothing: C11 7.21.5.3's exclusive `fopen` mode
+  is the whole mechanism, tried in a loop.
 - **`PasProcess.ProcessId`** — the number the operating system knows a program
   by, from `getpid` (ADR-0242). Positive, and held by no other program running
   at the same moment, which is the whole of what it is for: a program that must

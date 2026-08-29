@@ -3605,6 +3605,20 @@ nothing else. What it would lose, mechanism by mechanism:
   `lsp/sessions/scratchname.jsonl` is the case, and it needed a `.tmpdir`
   marker to exist at all: every other session is handed a `PASLS_SCRATCH`, so
   the default name was exercised by nothing.
+
+  **`PasFS.TemporaryPath` is the other half and the server is not its caller**
+  (ADR-0243). It answers a path that names nothing else **with the file
+  created**, which is what carries the property past this process's exit; a
+  predictable name and a unique name are different questions, and a server
+  started a thousand times should leave one file and not a thousand. The
+  mechanism is C11 7.21.5.3's exclusive `fopen` in a loop, not `mkstemp` —
+  which takes a `char *` it modifies, and the only mutable storage this FFI
+  lends is a slice supplying a pointer *and* a count, so a one-argument C
+  function cannot be reached through it. The ISO route also costs the
+  non-ISO-C catalogue nothing, where `mkstemp` would have brought `close` and
+  taken it from five names to seven. Stopping the counter is what pins the
+  exclusivity: the second call's 4 096 tries then all find the first call's
+  file.
 - **The compile is synchronous**, so a `didChange` arriving mid-compile is
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.
