@@ -253,3 +253,4 @@ the alternatives that were rejected and why.
 | [0242](0242-a-name-no-other-live-process-will-choose.md) | A name no other live process will choose | Accepted |
 | [0243](0243-a-name-that-stays-taken.md) | A name that stays taken | Accepted |
 | [0244](0244-an-import-that-names-no-file.md) | An import that names no file | Accepted |
+| [0245](0245-an-object-older-than-its-heading.md) | An object older than its heading | Accepted |

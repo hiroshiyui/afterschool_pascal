@@ -295,6 +295,18 @@ if(Python3_FOUND)
                    ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
 
 
+  # ADR-0245: is an object built from an older module-heading refused? §6.11.1
+  # makes the heading the interface, and until this nothing noticed that an
+  # object had been built from a different one -- the program wrote
+  # `a=11 b=22` and read back `a=11 b=0`, exit 0, no diagnostic anywhere. It
+  # needs a harness of its own because no test case can edit its own source
+  # between two compilations.
+  add_test(NAME stale-component
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/stale_component.sh
+                   ${CMAKE_SOURCE_DIR}/tools/pascalcc)
+  set_tests_properties(stale-component PROPERTIES
+                       ENVIRONMENT "${APASCAL_TEST_ENV}")
+
   # ADR-0244: can this compiler be put somewhere and found there? Every other
   # harness drives it out of the build tree with PASCALC and
   # AFTERSCHOOL_PASCAL_RUNTIME saying where that tree is, which is exactly the

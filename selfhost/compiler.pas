@@ -1119,7 +1119,53 @@ end;
   program calls this name for every module it activates, so a mixture cannot
   reach an executable. It cannot be misdeclared either -- the name is written
   from the translation that is happening, not from anything a caller says. }
+{ Eight hexadecimal digits of a number, low digit last. Written here rather
+  than through `write(x:1)` because a digest is compared and never read, and
+  hexadecimal keeps a 30-bit one to eight characters instead of ten. }
+procedure PutHex8(v: int64);
+const digits = '0123456789abcdef';
+var i, j, d: integer; sh: int64;
+begin
+  for i := 7 downto 0 do begin
+    sh := 1;
+    for j := 1 to i do
+      sh := sh * 16;
+    { AP 6.4.2.6.4's one narrowing, and the digest is well inside integer --
+      each half is below its modulus and each modulus below maxint -- so the
+      error condition trunc carries cannot arise here. }
+    d := trunc((v div sh) mod 16);
+    write(ircode, digits[d + 1])
+  end
+end;
+
+{ The digest of the heading that declares the module `p` names, from whichever
+  component's node holds one (ADR-0245).
+
+  By **name** and not by symbol, which is what makes 6.11.1's split form work:
+  a component written as `module M implementation;` holds no heading of its
+  own and reads one through --import, so the node with the digest is the
+  imported one and the node being emitted is not. Both name the same module. }
+procedure ModuleDigest(p: symPtr; var d1, d2: int64);
+var m: nodePtr;
+begin
+  d1 := 0;
+  d2 := 0;
+  m := progModules;
+  while m <> nil do begin
+    if PoolSame(m^.mdAt, m^.mdLen, p^.at, p^.len) then
+      { `mdHasHeading` and not a test on the digest itself: a hash may
+        legitimately land on zero, and a node that holds no heading is the
+        question being asked. }
+      if m^.mdHasHeading then begin
+        d1 := m^.mdDigest1;
+        d2 := m^.mdDigest2
+      end;
+    m := m^.next
+  end
+end;
+
 procedure PutModulePart(p: symPtr; init: boolean);
+var d1, d2: int64;
 begin
   write(ircode, '@m.');
   WritePoolIr(p^.at, p^.len);
@@ -1130,6 +1176,21 @@ begin
     name a reader can be told about (tools/pascalcc translates it), rather
     than linking and disagreeing about ADR-0118's pair of rules. }
   write(ircode, 'afterschool');
+  { ...and the interface's own digest after it (ADR-0245). ADR-0119 put a fact
+    the components of one program must agree on into the symbol they already
+    have to agree on, and this is the same move for a second such fact: the
+    program calls this name once per module it activates, so a component built
+    from a *different heading* than the one the program was compiled against
+    cannot reach an executable. It is the linker that checks, and it costs
+    nothing to ask.
+
+    Nothing to say is written as zeros, which happens only where the heading
+    failed to parse -- and a translation that did not parse emits nothing to
+    link. }
+  write(ircode, '.');
+  ModuleDigest(p, d1, d2);
+  PutHex8(d1);
+  PutHex8(d2);
   if init then write(ircode, '.init') else write(ircode, '.fini')
 end;
 

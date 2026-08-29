@@ -153,3 +153,4 @@
 6.11	Modules
 6.13	Programs
 6.13.1	Program-components shall be of one language
+6.13.2	Program-components shall agree about the interfaces they share

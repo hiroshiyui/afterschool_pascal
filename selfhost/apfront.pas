@@ -4403,9 +4403,46 @@ end;
   component. Both words are *directives* (6.1.5, 6.1.6) and so ordinary
   identifiers here, exactly as `forward` is -- which is why modules reserve
   five words and not seven. }
+{ A digest of the tokens in [from, to), which is how one translation says to
+  another that they read the same module-heading (ADR-0245).
+
+  **Tokens and not text**, so a comment or a line break in a heading costs
+  nobody a relink, and so that the answer does not depend on where the lexer
+  happened to put a spelling in the pool: what is folded in is each token's
+  kind and each character of its spelling.
+
+  Two 30-bit hashes and not one 64-bit one. Integer arithmetic in this
+  language *traps* on overflow (ADR-0014, ISO 7185 6.7.2.2), so the wrapping
+  multiply every hash function in C is written with does not exist here -- and
+  the modulus is what keeps the product inside the type rather than something
+  the compiler has to be told to ignore. `h * 131` with `h` under 10^9 is
+  1.3 * 10^11, comfortably inside int64, and the two moduli are coprime, so
+  the pair is worth about 60 bits. }
+procedure HeadingDigest(from, to_: integer; var d1, d2: int64);
+const
+  m1 = 1000000007;
+  m2 = 998244353;
+var i, k: integer; h1, h2: int64;
+begin
+  h1 := 1;
+  h2 := 1;
+  for i := from to to_ - 1 do begin
+    h1 := (h1 * 131 + ord(tok[i].kind)) mod m1;
+    h2 := (h2 * 1000003 + ord(tok[i].kind)) mod m2;
+    for k := tok[i].at to tok[i].at + tok[i].len - 1 do begin
+      h1 := (h1 * 131 + ord(pool[k])) mod m1;
+      h2 := (h2 * 1000003 + ord(pool[k])) mod m2
+    end
+  end;
+  d1 := h1;
+  d2 := h2
+end;
+
 function ParseModule: nodePtr;
 var m, head, tail, n: nodePtr; implementation_, more: boolean;
+    headFrom: integer;
 begin
+  headFrom := pos;
   m := NewNode(nkModule, CurLine, CurCol);
   m^.mdParams := nil;
   m^.mdExports := nil;
@@ -4416,6 +4453,8 @@ begin
   m^.mdElsewhere := false;
   m^.mdHasHeading := false;
   m^.mdHasBlock := false;
+  m^.mdDigest1 := 0;
+  m^.mdDigest2 := 0;
   m^.mdFileIdx := curImportIdx;
   m^.mdSym := nil;
   m^.mdAt := 0;
@@ -4493,6 +4532,12 @@ begin
     m^.mdExports := head;
     m^.mdHeading := ParseModuleParts(true);
     Expect(tkEnd, ctxModuleEnd);
+    { Everything from `module` to the heading's own `end`, which is exactly
+      what 6.11.1 puts in a module-heading and exactly what --import reads. A
+      failed parse leaves it at zero: a digest over tokens the parser gave up
+      on would be a claim about a heading nobody has. }
+    if not aborted then
+      HeadingDigest(headFrom, pos, m^.mdDigest1, m^.mdDigest2);
     if m^.mdHasBlock then begin
       Expect(tkSemi, ctxModuleHeadEnd);
       ParseModuleBlock(m);

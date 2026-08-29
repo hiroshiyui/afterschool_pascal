@@ -2437,6 +2437,47 @@ translate; the second holds modules that need this document. Nothing in this
 clause distinguishes them any more, and Annex D gives the reason they are still
 apart.
 
+#### 6.13.2 Program-components shall agree about the interfaces they share [added]
+
+A program-component shall be linked only with components translated against
+the same module-heading for every interface they both name.
+
+NOTE 1 — As with 6.13.1 there is nothing here for a source to state. §6.11.1
+makes a module-heading the whole of what a client may depend on, and §6.13
+translates the components separately, so two translations may read two
+different headings for one module and agree about every *name* in them. The
+requirement is about objects and is met at the link.
+
+NOTE 2 — It is enforced the way 6.13.1 is, and deliberately: a digest of the
+module-heading's tokens forms part of the name of that module's activation
+procedures, which §6.13 already requires the components to agree on. A program
+calls that name once for every module it activates (§6.2.3.6), so a component
+translated against a different heading leaves the symbol undefined and cannot
+reach an executable (ADR-0245).
+
+NOTE 3 — The digest is of *tokens*, so a heading that differs only in comment,
+spelling of a separator or layout is the same heading for the purpose of this
+clause, and a change confined to a module-block is not a change to a heading at
+all. This is a requirement about interfaces and not about files; a processor
+that refused every object whose source had been edited would satisfy the words
+and be useless.
+
+NOTE 4 — What this clause costs when it is not met is why it is stated. A
+module-heading declaring `record a, b: integer` and one declaring
+`record tag: integer; a, b: integer` name the same type, the same fields and
+the same procedures, so a program built against the second and linked against
+an object built from the first resolves every symbol, runs, and reads a field
+from an offset the other component never wrote. The processor's own probe
+measured it: `a=11 b=22` written and `a=11 b=0` read back, with a zero exit
+status and no diagnostic from the translator, the driver or the linker
+(`tests/checks/stale_component.sh`).
+
+NOTE 5 — No interface artefact is defined by this document, and this clause is
+what stands in place of one. A processor that wrote a compiled interface file
+would have a second artefact to keep in step with the source; the requirement
+here is met without one, because the heading a translation read is the only
+thing the digest is over.
+
 ---
 
 ## Annex A (normative) — Errors this dialect detects

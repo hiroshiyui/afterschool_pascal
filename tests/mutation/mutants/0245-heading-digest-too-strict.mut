@@ -1,0 +1,8 @@
+adr: 0245
+file: selfhost/apfront.pas
+kills: stale-component
+why: The other direction, and the one a check of this kind fails in far more easily. Folding a token's *line* into the digest makes it a digest of the heading's layout as well as of the heading, so adding a comment or reflowing a declaration refuses a link that must succeed. A check that refuses too much trains people to rebuild everything and is then worth nothing -- which is why the gate pins the comment and the module-block as hard as it pins the field.
+--- old
+    h1 := (h1 * 131 + ord(tok[i].kind)) mod m1;
+--- new
+    h1 := (h1 * 131 + tok[i].line) mod m1;

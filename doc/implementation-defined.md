@@ -154,8 +154,18 @@ and 24 until a program with ten modules asked.
 is defined, and none is needed: §6.11.1 puts the whole of what a module exports
 in its module-heading, so `--import` reads that heading and nothing else of the
 component. The consequence a user sees is that a heading's own errors are
-reported again in each component that imports it, and that nothing detects a
-component whose object is older than its heading.
+reported again in each component that imports it.
+
+**An object built from an older heading is refused** (AP 6.13.2, ADR-0245).
+Two translations may read two different headings for one module and agree
+about every name in them, and what stood here said that nothing detected it —
+which cost a wrong answer with a zero exit status and no diagnostic anywhere.
+A digest of the module-heading's **tokens** is now part of the name of that
+module's activation procedures, which §6.13 already requires the components to
+agree on, so the linker refuses the mixture and `tools/pascalcc` says which
+module and why. Tokens rather than text: a heading differing only in a comment,
+a separator or its layout is the same heading, and a change confined to a
+module-block is not a change to a heading at all.
 
 **A component may also be found rather than named** (ADR-0244). An `import`
 naming an interface no `--import` supplied is looked for as

@@ -1,0 +1,12 @@
+adr: 0245
+file: selfhost/compiler.pas
+kills: stale-component
+why: The digest of a module-heading is what makes an object built from an older one fail to link. Emitting a constant in its place reproduces the original defect exactly, and the shape of that defect is the argument for the whole record: the stale object resolves every symbol, links, runs, and answers `a=11 b=0` for what the program wrote as `a=11 b=22` -- exit 0, with nothing said by the compiler, the driver or the linker. Every other oracle here compiles the two halves together and so cannot see it.
+--- old
+  ModuleDigest(p, d1, d2);
+  PutHex8(d1);
+  PutHex8(d2);
+--- new
+  ModuleDigest(p, d1, d2);
+  PutHex8(0);
+  PutHex8(0);

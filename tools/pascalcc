@@ -295,15 +295,42 @@ if clang ${target:+"$target"} -Wno-override-module "$opt" "$ir" \
   exit 0
 fi
 cat "$work/link.txt" >&2
-mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\(init\|fini\).*/\1 \2/p" \
+# A module's activation functions carry two facts the components of one program
+# must agree on: the language (ADR-0119) and, since ADR-0245, a digest of the
+# module-*heading* they were translated against. Either disagreement is an
+# undefined reference to a name a reader has no reason to be able to decode, so
+# it is decoded here.
+#
+# The two cases are told apart by whether the missing name has a digest in it.
+# A name without one comes from a release that predates the digest; a name with
+# one means the object was built from a *different heading* than the one this
+# program was compiled against -- which is the stale-object hazard
+# doc/implementation-defined.md 2.5 recorded as detected by nothing, and which
+# silently produced a wrong answer rather than a diagnostic.
+mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\([0-9a-f]*\)\.\(init\|fini\).*/\1 \2 \3/p" \
            "$work/link.txt" | head -1)
 if [[ -n $mismatch ]]; then
   set -- $mismatch
-  echo "pascalcc: error: module '$1' was translated by a different compiler" >&2
-  echo "pascalcc: this program wants 'm.$1.$2.init', which the object it was" >&2
-  echo "pascalcc: linked against does not define. A component built before" >&2
-  echo "pascalcc: ADR-0232 removed the conformance modes carries the mode in" >&2
-  echo "pascalcc: that name instead (ADR-0119)." >&2
-  echo "pascalcc: recompile '$1' with this pascalc." >&2
+  echo "pascalcc: error: module '$1' was translated from a different" >&2
+  echo "pascalcc: module-heading than the one this program was compiled" >&2
+  echo "pascalcc: against. The interface is the heading (§6.11.1), so an" >&2
+  echo "pascalcc: object built before it changed agrees about every name and" >&2
+  echo "pascalcc: about nothing else -- which is why the digest '$3' is in" >&2
+  echo "pascalcc: the symbol and why this is a link error rather than a" >&2
+  echo "pascalcc: wrong answer (ADR-0245)." >&2
+  echo "pascalcc: recompile '$1'." >&2
+else
+  mismatch=$(sed -n "s/.*undefined reference to .m\.\([A-Za-z0-9_]*\)\.\(extended\|afterschool\)\.\(init\|fini\).*/\1 \2/p" \
+             "$work/link.txt" | head -1)
+  if [[ -n $mismatch ]]; then
+    set -- $mismatch
+    echo "pascalcc: error: module '$1' was translated by a different compiler" >&2
+    echo "pascalcc: this program wants 'm.$1.$2.<digest>.init', and the object" >&2
+    echo "pascalcc: it was linked against defines a name with no digest in it." >&2
+    echo "pascalcc: A component built before ADR-0245 carries no digest, and" >&2
+    echo "pascalcc: one built before ADR-0232 carries the conformance mode in" >&2
+    echo "pascalcc: that position instead (ADR-0119)." >&2
+    echo "pascalcc: recompile '$1' with this pascalc." >&2
+  fi
 fi
 exit 1

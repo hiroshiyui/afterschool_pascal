@@ -1849,6 +1849,19 @@ type
                      mdParams, mdExports, mdHeading, mdBlock,
                      mdInit, mdFini: nodePtr;
                      mdHasHeading, mdHasBlock: boolean;
+                     { A digest of the module-**heading**'s tokens, which is
+                       what 6.11.1 makes the interface and therefore the whole
+                       of what a client depends on (ADR-0245). Two 30-bit
+                       hashes rather than one 64-bit one, because integer
+                       arithmetic here traps on overflow (ADR-0014) and a
+                       wrapping multiply is not available to say so.
+
+                       Zero when this component holds no heading for the
+                       module -- 6.11.1's `implementation` form, whose heading
+                       came from another component -- and the emitter then
+                       looks the digest up by name on whichever node does
+                       hold one. }
+                     mdDigest1, mdDigest2: int64;
                      { Which source this component was read from: 0 for the
                        one named on the command line, k for the k'th
                        --import. A module's block is parsed while reading its

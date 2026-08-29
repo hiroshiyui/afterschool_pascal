@@ -521,5 +521,6 @@ extended	6.11.6	structural	the standard's own illustration, not a requirement
 extended	6.11.7	structural	the standard's own illustration, not a requirement
 extended	6.12	testable	Main-program-declarations
 extended	6.13	testable	Programs
-afterschool	6.13	structural	introduces 6.13.1
+afterschool	6.13	structural	introduces 6.13.1 and 6.13.2
 afterschool	6.13.1	testable	
+afterschool	6.13.2	testable	
