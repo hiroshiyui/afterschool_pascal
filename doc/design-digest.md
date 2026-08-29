@@ -3486,6 +3486,51 @@ characters holding 1 624 of them, in one 41 859-byte line, because
 `JsonRender` writes each as `\n`. `JsonlWrite` refuses a body holding a real
 newline rather than assuming that.
 
+### An object older than its heading (ADR-0245, AP 6.13.2)
+
+**A digest of the module-heading's tokens is part of the name of that module's
+activation procedures.** ADR-0119 put a fact the components of one program must
+agree on into the symbol they already have to agree on; this is the same move
+for a second such fact, chosen *because* that record had proved the mechanism.
+A program calls `@m.<name>.afterschool.<digest>.init` once per module it
+activates (§6.2.3.6), so a component translated against a different heading
+cannot reach an executable — and the **linker** performs the check, which is
+why it costs the compiler nothing.
+
+It exists because §6.11.1 makes a heading the interface and §6.13 translates
+components separately, so two translations may read two different headings and
+agree about every *name* in both: exported variables cross by linkage name and
+never by frame index (ADR-0079), and a procedure's name says nothing about its
+parameters. The measurement is the argument — a program compiled against
+`record tag: integer; a, b: integer` and linked against an object built from
+`record a, b: integer` wrote `a=11 b=22` and read back `a=11 b=0`, exit 0, no
+diagnostic from the compiler, the driver or the linker.
+
+Four decisions inside it:
+
+- **Tokens and not text**, so a comment, a separator or a reflow costs nobody a
+  relink and the answer does not depend on where the lexer put a spelling in
+  the pool. A digest over text would satisfy AP 6.13.2's words and be useless.
+- **The heading and not the module**: exactly `module` to the heading's own
+  `end`, so a change confined to a module-block forces no relink — which is
+  §6.11.1's own rule and not a convenience.
+- **Two 30-bit hashes and not one 64-bit one.** Integer arithmetic here traps
+  on overflow (ADR-0014), so the wrapping multiply every C hash is written with
+  does not exist; the modulus keeps `h * 131` inside `int64`, and two coprime
+  moduli give about 60 bits.
+- **Looked up by name at emission.** §6.11.1's `implementation` form declares a
+  module whose heading came from another component, so the node being emitted
+  is not the node holding the heading; `mdHasHeading` is what selects it,
+  because a hash may legitimately be zero.
+
+`tests/checks/stale_component.sh` is the gate, and it is a shell harness for a
+reason no sidecar can meet: no test case can edit its own source between two
+compilations. Four claims, each failing on its own, and the two mutations land
+on the two halves — a constant digest reproduces `a=11 b=0`, and folding a
+token's *line* into the hash makes a reflow refuse to link. The second is the
+one worth having: a check of this kind fails by being too strict far more
+easily than by being too loose.
+
 ### An import that names no file (ADR-0244)
 
 **An `import` naming an interface no `--import` supplied is looked for on a

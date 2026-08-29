@@ -24,6 +24,21 @@ appears below in the release where it still existed.
   first program in this tree with ten modules — `lsp/pasls.pas`, whose import
   chain could not be written at all.
 
+### Fixed
+
+- **An object built from an older module-heading is refused** (AP 6.13.2,
+  ADR-0245). §6.11.1 makes the heading the interface and §6.13 translates the
+  components separately, so two translations could read two different headings
+  for one module and agree about every name in both: a program compiled
+  against `record tag: integer; a, b: integer` and linked against an object
+  built from `record a, b: integer` resolved every symbol, ran, and printed
+  `a=11 b=0` for what it wrote as `a=11 b=22` — exit 0, no diagnostic
+  anywhere. A digest of the heading's **tokens** is now part of the name of
+  that module's activation procedures, so the linker refuses the mixture and
+  `pascalcc` says which module and why. Tokens rather than text: a comment, a
+  separator or a reflow in a heading forces no relink, and a change confined
+  to a module-block is not a change to a heading.
+
 ### Added
 
 - **An `import` can name no file at all.** An interface no `--import` supplied

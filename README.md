@@ -124,14 +124,24 @@ search, since nothing opens a directory to read what a file declares. A name
 the search does not find is reported the way it always was, as an interface
 nothing supplies.
 
-**Every component of one program must be built by the same compiler.** A
-module's two activation functions carry a language tag in their names
-(ADR-0119), so an object left over from a release that still had the
-conformance modes does not link, and the driver says so —
+**Every component of one program must be built by the same compiler, and
+against the same headings.** A module's two activation functions carry a
+language tag in their names (ADR-0119) and, since ADR-0245, a digest of the
+module-**heading** they were translated against — so an object built before
+the heading changed does not link, and the driver says which module and why:
 
 ```
-pascalcc: error: module 'counter' was translated by a different compiler
+pascalcc: error: module 'counter' was translated from a different
+pascalcc: module-heading than the one this program was compiled against.
 ```
+
+That is the whole of what stands in place of a compiled interface file. It
+costs nothing to ask, because the linker is what checks; the digest is of
+*tokens*, so a comment or a reflow in a heading forces no relink, and a change
+confined to a module's own block is not a change to a heading at all. Without
+it a program built against `record tag: integer; a, b: integer` and linked
+against an object built from `record a, b: integer` resolves every symbol,
+runs, and prints `a=11 b=0` for what it wrote as `a=11 b=22`.
 
 The variant rules are a pair — a write activates a variant, a read of an
 inactive one traps — and each is emitted at the access, so a component holding
