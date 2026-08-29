@@ -20,7 +20,7 @@ Content-Length: -
 
 {"jsonrpc":"2.0","id":9,"result":{"contents":{"kind":"plaintext","value":"interface Base"},"range":{"start":{"line":11,"character":7},"end":{"line":11,"character":11}}}}Content-Length: -
 
-{"jsonrpc":"2.0","id":10,"result":null}Content-Length: -
+{"jsonrpc":"2.0","id":10,"result":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":9,"character":7},"end":{"line":9,"character":13}}}}Content-Length: -
 
 {"jsonrpc":"2.0","id":11,"result":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":13,"character":9},"end":{"line":13,"character":16}}}}Content-Length: -
 

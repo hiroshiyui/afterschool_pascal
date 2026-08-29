@@ -1,0 +1,17 @@
+file 0 <source>
+use 28 11 7 0 0 0 7 type integer
+use 32 12 7 0 0 0 7 type integer
+use 33 20 7 0 0 0 7 type integer
+use 33 11 4 0 33 11 4 procedure ?
+use 32 3 7 0 32 3 7 var integer
+use 27 3 4 0 27 3 4 type mark
+use 24 21 7 0 32 3 7 var integer
+use 24 30 4 0 27 3 4 type mark
+use 24 36 4 0 33 11 4 procedure ?
+use 24 8 9 0 24 8 9 interface ?
+use 36 11 4 0 33 11 4 procedure ?
+use 33 16 2 0 33 16 2 value-parameter integer
+use 38 3 7 0 32 3 7 var integer
+use 38 14 7 0 32 3 7 var integer
+use 38 24 2 0 33 16 2 value-parameter integer
+use 42 3 7 0 32 3 7 var integer

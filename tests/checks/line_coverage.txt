@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 448
-instrumented 17861
+instrumented 17871
 
 accept 0/4
 accumulate 0/84
@@ -98,7 +98,7 @@ checkedforsubrange 0/52
 checkedfptoint 0/23
 checkedresulttype 0/19
 checkedwidth 0/14
-checkexports 0/27
+checkexports 0/28
 checkexpr 12/263
 checkforeignheading 0/130
 checkgoto 0/9
@@ -108,8 +108,8 @@ checkinitialstate 0/24
 checklabeled 0/21
 checklabelpart 0/34
 checkmodule 4/52
-checkmoduleblock 4/51
-checkmoduleheading 2/38
+checkmoduleblock 4/52
+checkmoduleheading 2/39
 checkmutualsupply 0/24
 checknewtuple 0/32
 checkpendingimplementations 0/8
@@ -506,8 +506,10 @@ newsymbol 0/93
 newtype 0/40
 nonvarying 3/42
 notbindable 3/29
-noteblockdeclarations 0/6
+noteblockdeclarations 0/1
+notedeclarationsto 0/6
 notedefining 0/7
+noteexportedinterface 0/6
 notehandlecloser 0/6
 noteuse 0/6
 noteusefield 0/5

@@ -142,9 +142,10 @@ Pascal has a declaration/definition split: §6.6.1's `forward` and §6.11.1's
 module-heading declare a routine whose body arrives later, and the name
 written at the implementation leads back to the interface that promised it.
 
-One thing it does not answer: an **interface's own export-part**. §6.11.1
-registers an interface in a table beside the scope rather than in it, so it is
-not a block declaration and the line that declares it has nothing over it.
+An **interface's own export-part** answers too
+([ADR-0251](../doc/adr/0251-an-interface-declares-itself.md)) — §6.11.1
+registers an interface in a table beside the scope rather than in it, so it
+needed a reporter of its own rather than falling out of the walk.
 
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a

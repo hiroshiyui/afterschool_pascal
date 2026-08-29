@@ -5089,12 +5089,12 @@ end;
   a ninth arrives. A hidden variable is never bound into a scope (a function
   result, a `with` binding) and so is never reported, which is right: no
   programmer wrote it. }
-procedure NoteBlockDeclarations;
+procedure NoteDeclarationsTo(stop: entryPtr);
 var e: entryPtr;
 begin
-  if NotingHere then begin
+  if notingUses then begin
     e := scopeTop;
-    while e <> nil do begin
+    while (e <> nil) and (e <> stop) do begin
       if e^.depth <> scopeDepth then e := nil
       else begin
         NoteDefining(e^.sym);
@@ -5102,6 +5102,12 @@ begin
       end
     end
   end
+end;
+
+{ Every name this block declared, which is the whole of its own entries. }
+procedure NoteBlockDeclarations;
+begin
+  NoteDeclarationsTo(nil)
 end;
 
 { 6.2.2.4's field-identifier, which is the one applied occurrence in this
@@ -5114,6 +5120,32 @@ end;
   The word is `field`, which is --dump-symbols's own word for one, and the
   reason the two reporters are not one routine is that a field has no
   `symKind` to write and no scope depth to have come from. }
+{ 6.11.1's interface-identifier at its own export-part, which is the third
+  thing here with a defining-point and no symbol to hang it on -- a field was
+  the first (ADR-0247) and an interface is registered in a table beside the
+  scope rather than in it, which is why `NoteBlockDeclarations` cannot see it
+  (ADR-0251).
+
+  It is a *defining* occurrence and nothing else: an interface is applied in
+  an import-clause and in a qualified name, and both of those are reported
+  where they resolve, through the symbol the importing block makes. So this
+  writes the same position at both ends, as NoteDefining does, and asks the
+  record's own file for the reason NoteDefining asks the symbol's. }
+procedure NoteExportedInterface(i: ifacePtr);
+begin
+  if notingUses and (i <> nil) then
+    if (i^.line > 0) and (i^.declFile = 0) then begin
+      PutUseNumbers(i^.line, i^.col, i^.len, i^.declFile, i^.line, i^.col,
+                    i^.len);
+      write('interface ');
+      { An interface denotes no type: it is a set of names (ADR-0079), so
+        `WriteTypeName(nil)`'s own answer is the honest one and the caller
+        renders the kind alone. }
+      WriteTypeName(nil);
+      writeln
+    end
+end;
+
 procedure NoteUseField(line, col, len: integer; f: fieldPtr);
 begin
   if NotingHere and (f <> nil) then begin
@@ -19852,6 +19884,9 @@ begin
         item := item^.next
       end;
       NameForLinkage(i);
+      { After the constituents, so nothing about the record is still being
+        filled in when it is reported (ADR-0251). }
+      NoteExportedInterface(i);
       if interfaces = nil then interfaces := i
       else interfaceTail^.next := i;
       interfaceTail := i
@@ -20335,6 +20370,16 @@ begin
   { The export parts are resolved last although they are written first: an
     export-clause names something the module declares, and 6.11.2's example 2
     exports a type defined below the `export` that names it. }
+  { 6.11.1's interface is a block of its own for this purpose: what it
+    declares is reported here, and the module-block reports only what it
+    *adds*, because 6.2.2.12 makes these defining-points the block's too and
+    the scope is kept rather than rebuilt (ADR-0251).
+
+    After the procedure headings above and not after CheckDeclarations, which
+    is where the ordinary block reports: a module-heading declares its
+    routines separately and later, so a walk taken there would have found
+    every constant, type and variable and none of the procedures. }
+  NoteBlockDeclarations;
   CheckExports(m, info^.sym);
 
   { Every name the heading defined is also a defining-point of the block
@@ -20364,6 +20409,12 @@ begin
 
   CheckImports(m^.mdBlock^.blImports, info^.sym);
   CheckDeclarations(m^.mdBlock, info^.sym, m^.mdBlock^.blProcs);
+  { Down to the scope as the heading left it and no further: 6.2.2.12 makes
+    every defining-point of the heading one of this block's as well, and the
+    scope was restored rather than rebuilt -- so a walk to the bottom would
+    report the heading's names a second time (ADR-0251). `savedTop` is the
+    boundary and is read before anything can clear it. }
+  NoteDeclarationsTo(info^.savedTop);
 
   d := m^.mdBlock^.blProcs;
   while d <> nil do begin
