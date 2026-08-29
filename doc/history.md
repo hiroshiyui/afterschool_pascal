@@ -4028,3 +4028,775 @@ carry is a number no other **live** process has.
 That the one entry needed two records is the argument for having written it as
 two halves. A single finding would have been closed by the language change,
 and the shared scratch file would have gone with it.
+
+### The language server's findings, as they were recorded
+
+The section above narrates the first of these. This is the register itself,
+moved out of `doc/roadmap.md` as each entry closed — fifteen of the
+twenty-one, each with what closing it found. Six are still open and stay
+there; a finding recorded and left is a finding wasted, which is what the
+register is for.
+
+There is deliberate overlap with the prose above: that is the story of the
+first week, and these are the entries in the words they were written in, which
+is how a reader can tell an estimate from an outcome.
+
+The first two came from the framing alone, before a single protocol message
+had been dispatched. The next two came from the diagnostics, before a server
+existed to send one. **Everything after that came from the program itself**,
+and the first of those is the one worth reading before the others: it is a
+limit that looked generous beside a test case and turned out not to be a limit
+a *program* could live inside, and it had to be fixed before the server could
+be compiled at all.
+
+The shape of the whole list is the argument for the chapter. **Five of the
+twenty-one are bounds** — 8 imports, 24 arguments, a 63-character key, a
+255-character line, a 16 384-byte capture — and every one of them was chosen by
+counting what the largest thing in the tree needed at the time. The largest
+thing in the tree was a test case. One is not a gap at all: the protocol asked
+the text model a question it had been designed to refuse, and the answer was
+already exported. One came from pointing the finished program at the
+repository it was written in, which is not a thing the earlier ones had needed
+— and two more came from asking the compiler a question no gate had ever asked
+it. **One pair is worth reading last**: one of them changed the language and
+the demand for it turned out not to be this program at all but a library
+module written a year of increments earlier, whose five writers could fail and
+could not say so. A finding this chapter produced was already true everywhere
+else.
+
+**And the last six are all about what the compiler had never been asked.**
+Two are things it did not keep — where a symbol was declared, and where a
+field-identifier is — each thrown away by code that had the answer in its hand
+and no reason to hold it. One is a fact it *did* keep, for a diagnostic, and
+that answered a second question with nothing added but a file index. One is a
+fact nothing had ever wanted, because the thing it describes is found by
+spelling. One needed no new fact at all: the first of the four had already
+added it, for something else. The last is not a demand on the language at all:
+it is a defect this program shipped and an oracle caught, and it is here
+because of *which* oracle.
+
+**One entry took two records to close and they are not the same kind of
+thing.** *A program cannot make a temporary file, and cannot survive failing
+to* was written as two halves; the second was a language question and became
+AP 6.4.3.4.7 (ADR-0240), the first was a library one and became
+`PasProcess.ProcessId` (ADR-0242). Splitting it when it was recorded is what
+made that visible — a single entry would have been closed by the language
+change and the sharing of one scratch file between two servers would have gone
+with it, unfixed and unrecorded.
+
+- ~~**There is no empty substring**~~ — **answered, and it is the first
+  finding this chapter produced that changed the language** (AP 6.5.6,
+  ADR-0219). §6.5.6: *"it shall be an error if … the value of the first
+  index-expression is greater than the value of the second"*. So
+  `s[1..length(s) - 1]`, the ordinary way to drop a last character, **traps on
+  a string of one** — and the header line that ends a frame's headers is
+  exactly one character, a bare carriage return. This entry closed with
+  *"whether the dialect should have `s[i..i-1] = ''` is undecided and wants a
+  second sighting; one site is an anecdote."*
+
+  **The second sighting arrived the next day, and it had already shipped.**
+  `lib/dialect/pasparse.pas`'s blank trim is the same shape, written a week
+  earlier, and `ParseInt(' ')` stopped the program where it should have
+  reported a syntax error — through every gate, because no test passed a string
+  that trims down to exactly one character. Three sites in the tree, three
+  different treatments: `pastext.pas` builds its result a character at a time
+  and never takes a substring, `paslsp.pas` writes the guard out, `pasparse.pas`
+  gets it wrong. This language now admits `s[i..i-1]` and still refuses
+  `s[4..2]`, which cost one flag on one runtime check — a flag ADR-0232 then
+  removed, there being no mode left that keeps §6.5.6's trap for the empty
+  case. **The argument was in the tree already** — §6.7.6.7's
+  `substr(s, i, 0)` is the null-string and ADR-0125's `a[i..i-1]` is the empty
+  slice, so `s[i..i-1]` was the only bracketed range that could not be empty.
+
+- **The chapter named a module by what its name suggests, for the third
+  time.** It says `PasParse` reads `file:line:col: error:` back off the
+  compiler. `PasParse` parses an **integer** and nothing else — ADR-0120's
+  result shape applied to one parse — and reads no diagnostic. That is the
+  third prerequisite this chapter guessed wrong about its own plan, after the
+  JSON row and after `PasStream` framing a message it cannot frame, and the
+  three share a shape worth naming: **a module named by what its name suggests
+  is a guess, not a survey.** `lib/dialect/paslspdiag.pas` is the module that
+  actually reads them, and it landed with the conversion the protocol needs —
+  LSP counts lines and characters from zero where `ErrorAt` counts from one.
+
+- **The first realistic payload found a defect in `PasJson`.**
+  `JsonCharsInto` asks whether a rendered document fits the *caller's*
+  capacity and then built the answer through a 255-character local, so a
+  document between 256 and the caller's capacity passed the guard and stopped
+  the program. A `publishDiagnostics` notification carrying two diagnostics is
+  321 characters. Nothing had rendered one that long — every case in
+  `tests/dialect/lib_json.pas` fits a line — which is why it was invisible.
+  **This is the chapter's argument in miniature and it arrived before the
+  server did**: the finding is not that the library is weak but that nothing
+  had asked it for anything the size of real work.
+
+- ~~**The command line cannot express a program with ten modules**~~ —
+  **answered, and it is the finding that had to be answered first** (ADR-0235).
+  `maxImports` was 8 and `argMax` was 24. The server's import chain is ten
+  modules and none is optional: `PasIO` needs `PasFS`, `PasJson` needs
+  `PasContainer`, `PasProcess` needs `PasStrVec`, and the server needs
+  `PasProcess`, `PasEnv` and the three protocol modules. The compiler answered
+  *"more than 8 --import arguments"* — ADR-0110's rule working exactly as
+  designed, reporting rather than truncating — and it was still a program that
+  could not be built.
+
+  **The two numbers are one number**, which is the part worth carrying
+  forward: an import costs two words of the command line, so a bound on
+  imports is only real as far as the argument list can express it. They are
+  now 32 and 72, and the second is *derived* from the first in the comment
+  that declares it. ADR-0114 recorded *"a library of more than eight modules
+  cannot be used whole"* as a limitation of the library; there are 25 modules
+  in `lib/` and that sentence is struck.
+
+- ~~**A program cannot make a temporary file, and cannot survive failing to.**~~
+  **Both halves answered.** There was no `getpid` anywhere in this tree, no
+  `mkstemp`, and nothing in `PasFS` that answered a temporary name, so the
+  scratch path was one fixed name under `TMPDIR` and two servers sharing a
+  `TMPDIR` shared the file. Worse: `rewrite` on a bound name that cannot be
+  created is a run-time error and *stops the program*, and neither standard
+  gives a program a way to ask beforehand — so a server could not survive a bad
+  scratch path however carefully it was written.
+
+  ~~The first half~~ — **answered, and it stayed a library question** (ADR-0242).
+  `PasProcess` exports `ProcessId`, the server's default name carries it, and
+  two servers no longer share a file. It is *not* `mkstemp`'s guarantee and
+  could not be: §6.7.5.6 binds by **name**, so a file created exclusively would
+  have to be opened a second time to be written and the exclusivity is given up
+  at that moment. What a name can carry is a number no other **live** process
+  has. `getpid` is bound by the module rather than by the runtime because
+  `pid_t` is a *scalar* typedef and ADR-0186's rule reaches structs — the one
+  case that distinction has been tested on. The primitive landed and the *name*
+  did not: there is one caller, and ADR-0116 says one site is an anecdote.
+
+  ~~**The residue**~~ — **answered too, and by ISO C** (ADR-0243).
+  `PasFS.TemporaryPath(dir, prefix)` answers a path that names nothing else
+  **with the file created**, which is what makes it unique against a process
+  that has already exited as well as against one running now; the caller
+  removes it. `mkstemp` is still absent and stays absent: it takes a `char *`
+  it *modifies*, and the only mutable storage this FFI lends is a slice, which
+  supplies a pointer **and** a count — so binding a one-argument C function
+  through it would be a claim about an ABI. C11 7.21.5.3's exclusive `fopen`
+  mode is the mechanism instead, tried in a loop, and the non-ISO-C catalogue
+  stays at five names where `mkstemp` would have brought `close` and made it
+  seven.
+
+  **The two records answer different questions** and the language server is the
+  reason to say so: `ProcessId` gives a **predictable** name and `TemporaryPath`
+  a **unique** one. A server started a thousand times should leave one file in
+  `TMPDIR` and not a thousand, and a predictable name is what makes the scratch
+  source findable when the server and the editor disagree — so the server keeps
+  the first and is not a caller of the second.
+
+  ~~That second half~~ — **answered, and it is the second finding this chapter
+  produced that changed the language** (AP 6.4.3.4.7, ADR-0240). §6.7.5.6's
+  NOTE 2 offers `bound` to a program about to *read* and the write side had
+  nothing, so `BindingType` gained a third field, `writable`. It needed **no
+  spelling**: §6.4.3.4 NOTE 7 says *"a processor may provide additional fields
+  as an extension"*, so the standard named the extension point and `binding`
+  is a required function that already returns a record. That is the second
+  feature in this dialect to need no position at all, after ADR-0184's, and
+  the first where a standard put the door there.
+
+  **The demand was not the server.** It was `lib/pasfile.pas`, whose four
+  exported writers were *procedures* — routines that could not report failure
+  and could fail, killing their caller — and whose `CopyFile` returned a
+  boolean that covered only the source. Five sites in one module, written long
+  before this chapter existed and never noticed, because nothing had pointed
+  any of them at a path it could not write. One site is an anecdote and this
+  was six.
+
+- ~~**The protocol counts in a unit nothing here answers in**~~ — **answered,
+  and the text model needed no change at all** (ADR-0237). This chapter had
+  said the conversion was one nothing in the tree could do, because AP 6.4.15
+  refuses an integer index and `PasUnicode` answers in scalar values. The
+  refusal stands and the count did not need it: a scalar below U+10000 is one
+  UTF-16 code unit and one at or above it is two, so `Utf16Column` is a walk
+  over `NextScalar`. It is the fourth estimate on this page to be wrong in the
+  useful direction, after the three the FFI increments produced — *a decision
+  that looks like it needs a model may need it for only part of its surface.*
+
+  **What was genuinely missing was the negotiation.** 3.17 lets a client offer
+  `positionEncodings`, and under `utf-8` the compiler's column is already the
+  protocol's — so a server that converted unconditionally would be *introducing*
+  the error it was written to remove. Two sessions in `lsp/sessions/` differ in
+  nothing but the offer and in nothing but that number.
+
+- ~~**The server works on a single-file program and on nothing in this
+  repository**~~ — **answered by reading the build description** (ADR-0238).
+  The compiler is handed one file and a program is several, so a module
+  compiled alone fails on every name it imports: 48 diagnostics for
+  `lib/dialect/pasjson.pas`, two real and 46 cascade — and **21 171** for
+  `selfhost/apfront.pas`, which is not a partial answer but noise the length of
+  the file. Every module in `lib/` and every source in `selfhost/` behaved the
+  same way, and it was invisible for exactly as long as the server was only
+  ever pointed at documents this chapter wrote itself.
+
+  The answer is `.components`, which is this tree's build description and is
+  already read by five other things — `compile_commands.json` is what clangd
+  reads and `go.mod` is what gopls reads, and none of them makes the compiler
+  resolve names. **One rule covers every shape: take the entries before this
+  file.** A sidecar beside the file and named after it gives all of them,
+  because it does not name the file; `selfhost/compiler.components` names
+  `compiler.pas` and gives the two before it, which is the case a second rule
+  would have been written for.
+
+  ~~**What this does not close is `README.md`'s gap**~~ — **closed**
+  (ADR-0244), and by the compiler, exactly where this entry said it belonged.
+  An `import` naming an interface no `--import` supplied is looked for as
+  `<directory>/<name>.pas` in the source's own directory, then in each
+  `--import-path`, then in each entry of `AFTERSCHOOL_PASCAL_PATH`; the search
+  is transitive and post-order, so the list it produces is the activation order
+  §6.2.3.6 requires. `--dump-imports` is the other half — resolution finds an
+  *interface* and something still has to translate the file and link it, and
+  that something is `tools/pascalcc`, which is now the second caller of a dump
+  flag after the language server.
+
+  **The install location went with it.** `cmake --install` lays out
+  `<prefix>/bin`, `<prefix>/lib` and `<prefix>/lib/afterschool`; `pascalcc`
+  looks for its compiler and its runtime beside itself before it looks in a
+  build tree, and adds the installed library to the search path only when the
+  variable says nothing. `install-layout` is the gate and is the first oracle
+  here that runs an *installed* compiler — every other harness drives one out
+  of the build tree, which is exactly the configuration an installed copy does
+  not have.
+
+  The server keeps reading `.components`, and that is not redundant: it needs
+  the imports of a file it is *not* compiling as a program, for a document that
+  may not parse, and the sidecar answers without the compiler having to.
+
+- ~~**The whole-output buffer was sized for diagnostics**~~ — **answered by
+  not having one** (ADR-0239). `CaptureMax` is 16 384 and the outline of
+  `selfhost/apfront.pas` is **51 192 bytes**, so `documentSymbol` on the
+  largest thing in this tree would have stopped a third of the way through and
+  said nothing about it — `Capture` reads and drops the tail, which is right
+  for a diagnostic and wrong for an answer whose length is proportional to the
+  file. The fifth bound on this page, and the first that was *removed* rather
+  than raised: an outline is a **list of lines**, so `CaptureLines` collects it
+  on the heap and what is left is a per-line bound against six short fields.
+  The diagnostics path keeps `Capture` deliberately — a compilation is long
+  only when the file is badly broken, where an outline is long whenever the
+  file is.
+
+- ~~**The driver had never been handed a dump**~~ — **answered** (ADR-0239),
+  and it is the entry on this page that failed most quietly. `PASLS_COMPILER`
+  may name `tools/pascalcc` as readily as `pascalc` — `lsp/README.md` said so —
+  and `pascalcc` knew no `--dump-` flag at all: it wrote `pascalcc: unknown
+  option '--dump-symbols'` to *standard error*, which the server was not
+  reading, and answered an empty outline with no complaint anywhere. Nothing in
+  the tree had ever run a dump through the driver, because every dump case is
+  handed `pascalc` and every ordinary case wants a program. It passes them
+  through now and `producttest.sh` asks; the general shape is that **the two
+  halves of this compiler have a seam and only one side of it is swept**.
+
+- **The compiler did not know where a symbol was declared** — answered, and
+  it is the finding that made go-to-definition possible at all (ADR-0246).
+  Every applied occurrence in this compiler resolves to a `symbol`, and a
+  `symbol` could not say where it came from. `Declare` is *handed* a line and
+  a column — for its own "is already declared in this block" message — and
+  threw them away, at the one site every named declaration passes through.
+
+  Nothing had ever wanted them, and the reason is worth keeping: a diagnostic
+  reports where the **mistake** is, and for thirty-six thousand lines of
+  compiler that was the only question anyone asked about a position. A tool
+  asks the opposite one. Three integers on the record and three lines at the
+  site were the whole of it, which is what makes it a finding rather than a
+  feature: the fact was already in the hand of the code that discarded it, and
+  what it cost to keep was nothing.
+
+- **A schema's body is read where it was not written** — answered
+  (ADR-0249), and it is the one of these four that was not a missing fact at
+  all. §6.4.7 keeps a schema's *syntax* and resolves that body again per
+  distinct tuple, at the place the type is **written** — so the compiler reads
+  line 35 while `curFile`, the one thing it knows about which source it is
+  checking, names the file line 43 is in. For a schema out of `lib/` those are
+  two files, and a position reported from there would send a reader to
+  whatever happens to sit at that line and column of the wrong document.
+
+  What closed it was already in the tree: a schema is a symbol, and a symbol
+  carries a file since the first of these four. So the question becomes *is
+  the schema this document's* rather than *is Sema checking this document*,
+  and the fact answering it was created three increments earlier for naming a
+  defining-point in an import. **The negative half is what needed a case
+  written**: a rule that silently reports nothing and one that correctly
+  reports nothing are indistinguishable from outside, so a component's schema
+  is produced on every run of a dump case and the golden shows no line from
+  its body.
+
+- **An interface was registered by spelling and by nothing else** — answered
+  (ADR-0248). `ifaceRec` held a name, an owner and its constituents, and never
+  where the `export` clause was written: every question the compiler asks
+  about an interface is answered by walking a list and comparing the string
+  pool, so no position had ever been needed. Three integers on that record
+  closed it, at the one site §6.11.1 puts a defining-point.
+
+  **What it changed is which occurrence matters, and the estimate was wrong
+  in the useful direction again.** The row this closes was written about
+  §6.11.3's `M.x` — the qualifier hovered and jumped nowhere — and that form
+  is one most programs never write. The occurrence a reader actually points at
+  is `import Middle;`, which is where a module says where it gets things from,
+  and *no code path had taken it anywhere near the reporter*. The gap was
+  larger than the row describing it, which is the fifth estimate on this page
+  to be wrong that way.
+
+- **A record field resolves to nothing a report could name** — answered
+  (ADR-0247), and it is the finding this chapter produced by *reading its own
+  output*. `--dump-uses` answered `v.cap` and not `r.x`: a schema's
+  discriminant is a symbol and a field is a `fieldPtr`, §6.4.3.3 making a
+  record a region with a defining-point in it while nothing about a field is
+  ever looked up in a scope. The two look identical in the source, the
+  asymmetry was visible in the golden, and it was explained nowhere in it.
+
+  It cost **one integer**. `fieldRec` was already keeping `line` and `col` for
+  a diagnostic (ADR-0045); what was missing is which *file*, a record declared
+  in an imported module having fields whose positions are that module's. That
+  is the same shape as the symbol finding below and the opposite conclusion:
+  there the fact was thrown away, here it was kept for one purpose and served
+  another untouched. **A program that uses records writes more field
+  selections than anything else**, so what looked like a corner was most of a
+  file.
+
+- **The parse tree records a field-designator's `.` and not its name** —
+  answered, and it is the other half of the extent finding above. A field node
+  is built when the parser sees the point and before it reads the identifier,
+  so the node's own line and column are the point's; whitespace is legal on
+  either side of one, so `col + 1` is a guess and not a derivation. `nkField`
+  carries `fdLine`/`fdCol` now, which is what lets a schema's discriminant be
+  reported at the name a reader is pointing at. The declaration end is still
+  not recorded and that half stays open.
+
+- **A leak with every golden green, and only one oracle here could see it**
+  (ADR-0246). Both new methods began by making a JSON `null` and replacing it
+  where there was an answer, which abandoned one node per successful request —
+  thirteen over two sessions. Every reply was byte-for-byte correct, because
+  what leaked was a value nobody printed.
+
+  It is not a demand on the language and it is here for **which** oracle
+  caught it: `heap-balance` is the one gate in this tree that reads no output
+  at all (ADR-0183), written after two leaks had each been found by a
+  measurement taken once, by hand, and by nothing afterwards. This is the
+  first program to exercise it since, and it failed on the first run. The
+  chapter's own argument, met from the other side: the value of a client large
+  enough to get tired inside is not only what it demands but what it trips.
+
+## A second transport over one program
+
+The entry below was written in `doc/roadmap.md` before the work was started,
+with a prerequisite in front of it and an expected finding named in advance,
+and it is kept in the form it had — the proposal, with what actually happened
+marked where the two differ. Both the prerequisite and the prediction did
+their job, which is the reason it is worth keeping rather than summarising:
+the prediction was **half** right, and the half that was wrong is the useful
+half.
+
+**A second transport over the same program**, asked about because an agent is
+now a reader of this repository as much as an editor is. It was recorded here
+before it was started, with a prerequisite in front of it and an expected
+finding named in advance, and both of those did their job: the prerequisite was
+ADR-0239 and the prediction was half right in a way worth reading. What follows
+is the entry as it was written, with what actually happened marked where it
+differs.
+
+**What is already shared, and it is most of it.** `lsp/pasls.pas` splits into a
+transport half and a work half, and the split is clean: `ImportsFor`,
+`WriteScratch`, `Compile`, `DiagnosticsIn`, the document store and `UriToPath`
+know nothing about LSP beyond taking a URI. MCP speaks the same JSON-RPC 2.0
+envelope with the same error codes, so `Dispatch`, `NewResponse`, `CopyId` and
+the `-32601` path carry over unchanged. That makes it `pasls --mcp` rather than
+a second binary — one document store, one import resolver, one scratch path.
+
+**The one real code change is the framing**, and it is the interesting part.
+MCP's stdio transport is newline-delimited JSON; LSP is `Content-Length: N` and
+then exactly N bytes. `PasLsp` (ADR-0218) exists *because* that framing is not
+line-oriented — a reader that has just consumed a header line is usually
+already holding the first bytes of the body, and nothing that reads lines can
+hand those back. Newline-delimited is the easier of the two, so the work is
+small and the value is not the work: it asks whether `PasLsp`'s seam is an
+abstraction or merely the one shape it was written for, which is a question one
+framing cannot answer.
+
+**The scenario that benefits is not the editor's.** LSP serves a human in an
+editor; MCP would serve an agent working on this repository, which is a real
+reader here. An agent editing `selfhost/apfront.pas` — 22 102 lines — has no
+semantic route into it and falls back on `grep`, which fails in a way this tree
+has already paid for: §6.11.1 puts an exported routine's header in the
+module-heading *and* leaves the block repeating the name, so `^function Name(`
+matches an interface entry with no body, which is how `foreign-reserved` broke
+on the day of the three-component split. *Where is this declared*, *what does
+this name resolve to* and *which component exports it* are questions the
+compiler answers exactly and a regex answers by accident.
+
+**That argument is already accepted here**, which is why this entry exists at
+all: ADR-0229 and ADR-0230 moved `kind-exhaustive` off a Pascal-parsing regex
+and onto the compiler's own `--dump-dispatch`, deleted 85 lines of it, and
+found three dispatch sites the text match had simply missed. The agent is the
+next reader in that line, and MCP is the socket it plugs into.
+
+**Where it buys little**, said plainly so the entry is not read as larger than
+it is. Compiling, running the suite and reading diagnostics are all done
+through a shell today and are not improved by wrapping them in a tool call. The
+gates gain nothing: a Python reader wants a line-oriented `--dump-*` flag,
+which is what it has and the better interface for it. Editor users gain nothing
+whatever.
+
+**What it would stress that LSP has not.** Two things, both live. `PasJson`
+under *construction* load — MCP tool descriptors are JSON Schema, nested and
+heterogeneous and kilobytes long, where a flat `publishDiagnostics` carrying
+two diagnostics is 321 characters and that alone found the `JsonCharsInto`
+defect; `JsonLine` at 255 and `MapKey` at 63 are both open findings above, and
+a tool list is the payload that turns them from recorded into blocking. And a
+second framing over one reader, which is ADR-0116's two-sites test applied to
+`PasLsp` itself.
+
+**The prerequisite, and it decided the ordering.** Nearly every tool worth
+exposing needs the compiler to answer a structured question *about a program*,
+and when this was written it could not: the only route was `--dump-sema`, which
+ADR-0085 demoted from a specification to a debugging aid the moment there was
+no second front end to diff it against. That is **settled now** — ADR-0239
+gave the compiler `--dump-symbols` and the decision behind it, which is that
+the answer comes from the compiler and not from a second reader of its
+debugging output. One question is answered and the surface is one question
+wide; what the tool list above would need is more of them, and each will ask
+the question ADR-0239 deliberately left open — whether it belongs behind this
+flag, behind another, or behind something that is not a flag.
+
+**The finding it is expected to produce**, named in advance the way the
+concurrency row names its sentence, because a second surface added without one
+is breadth where this chapter wants depth: *`PasLsp` is a frame reader and not
+a transport, and the second transport is what says so.*
+
+**That was right, and it was the smaller of the two.** `LspReader`, `Ready` and
+`NextByte` are shared unchanged; `LspRead` is 40 lines and the pair that
+replaces it 58. The module's name is now narrower than its contents and is kept
+anyway — a third caller wanting the reader and *neither* framing would be the
+reason to rename it.
+
+**The finding the prediction did not have is the one worth carrying.** The
+*work* half was less transport-neutral than the paragraph above claims, and only
+a second caller could say so. `CompilerCommand` had the scratch path baked in
+as the **source**, which is an LSP assumption — a document may never have been
+saved, where MCP's unit is a file on disk. And the tool's `path` has to be made
+absolute, because `ImportsFor` compares against sidecar entries it resolved
+against the sidecar's own directory: a relative path matches none of them and
+`lib/dialect/pasjson.pas` reports its 48 diagnostics again. **That is
+ADR-0238's defect arriving a second time by a different road**, and the LSP
+side never met it because `UriToPath` always yields an absolute path. *A
+routine is not neutral because it has one caller; it is neutral when a second
+one does not have to change it* — which is ADR-0116's two-sites rule applied to
+an interface rather than to a feature, and is the sentence this entry adds to
+the page.
+
+**And one prediction above is wrong**, which is worth leaving visible rather
+than editing away. The tool descriptors were expected to stress `PasJson` and
+turn `JsonLine`'s 255 and `MapKey`'s 63 from recorded findings into blocking
+ones. The whole `tools/list` frame is **931 bytes** and every literal in it is
+under 255. What stressed something was the *outline*: 40 146 characters holding
+1 624 newlines, in a frame of 41 859 bytes and one line, because `JsonRender`
+escapes a newline and the frame therefore holds none — so what it stressed was
+the framing, and `JsonlWrite` refuses a body holding a real newline rather than
+assuming the property.
+
+**What it cost** is what was estimated: a second thing to keep green. It is
+one more session in the same corpus rather than a corpus of its own —
+`lsp/sessions/mcp.jsonl` with a `.mcp` marker that says the framing is one
+message to a line — plus `tests/dialect/lib_lsp_jsonl.pas` for the module half,
+which had to be a second *program* because one program has one standard input
+and the two framings cannot be read from it at once.
+
+One caveat about the reading above, in this page's own spirit: the LSP and
+`lsp/` facts here were taken from the sources, and the MCP-side ones —
+newline-delimited stdio framing, the JSON-RPC envelope, the shape of a tool
+descriptor — are from knowledge of that protocol and were not checked against
+its specification in this tree. Confirm them against the published version
+before any of this is built on.
+
+## The three questions the roadmap closed after version 3
+
+Four questions stood in that chapter and one is still open — the dialect has
+no external authority, which no record can close. These are the other three,
+in the form they had when they were struck.
+
+### 2. ~~A third-party differential~~ — done (ADR-0234)
+
+`fpc-differential` compiles every case with a golden under Free Pascal's
+`-Miso` and compares. It is a `ctest` case that skips without `fpc`, and
+`tests/checks/fpc_disagreements.txt` is the catalogue, failing in both
+directions like every other catalogue here.
+
+**It found no defect in this compiler**, which is the result and not a
+disappointment: of eleven catalogued disagreements, six turn on a clause and
+all six are decided here, two are implementation-defined, and three are not
+verdicts. Three of the six corroborate a reading that nothing in this tree
+could previously challenge — ADR-0073's mixed comment delimiters, whose own
+record says a comment is invisible to every stage after the lexer so no oracle
+here could have caught it; `round` defined by equivalence rather than by a
+rounding mode, where the test's comment had predicted the disagreement and had
+never met a processor that made it true; and ADR-0076's longest-prefix number
+read.
+
+**Two things this entry got wrong, both worth keeping.** It named the eight
+conforming `lib/` modules first, as the portable half — and no second
+processor can run them: FPC's `-Mextendedpascal` does not implement §6.13's
+modules at all, so `module m interface;` is a syntax error. And it said the
+option was worth more now than later; the numbers say how much more. FPC
+refuses **141 of 244** cases with a golden, so the differential reaches 103,
+and every release moves that the wrong way.
+
+What is left is not a task. `tests/dialect/` is compared by nothing and no
+third party can be found for it, which is
+[§1](roadmap.md#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)'s
+standing risk.
+
+### 3. ~~Mutation testing, committed to the tree~~ — done (ADR-0207)
+
+`tests/mutation/` holds one file per recorded mutation and a harness that runs
+them. Both conditions this entry named are enforced by it, and a **third**
+arrived while ADR-0205 was being written: a mutant restored with a plain `cp`
+and a `touch`, correctly by the old rule, and never rebuilt — so the next run
+measured the mutant and a golden was taken against it. The rule was right and
+one step too short.
+
+What is left of the entry is a caution rather than a task, and it is in
+`doc/sop.md` §7: the catalogue is a **register of demonstrations, not a
+measurement**. `ls tests/mutation/mutants/` is where to count them, and **this
+sentence no longer says how many**, having gone stale twice — it said eleven
+when there were eleven and again when there were forty-five. "The mutation
+suite passes" means those recorded claims still hold and nothing more.
+
+Many more records carry a mutation in their *prose* instead, most naming code
+that has since moved, and nothing runs one of those. **`doc/sop.md` §7 owns
+that comparison** and carries the count with the grep that produced it; this
+entry says only that the register is much the smaller half, so that one
+sentence does not come to disagree with itself in two files.
+
+### 4. ~~Should the dialect read a type off a *component*?~~ — yes (ADR-0215)
+
+`type of` now takes §6.5.1's whole variable-access, and
+`lib/dialect/pascontainer.pas` is the caller it was built for: five of its
+headings lost a type parameter.
+
+```pascal
+procedure VecPush(Ptr: type; Elem: type; var v: Ptr; x: Elem);  { was }
+procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);   { is }
+```
+
+Three things it settled that the question above had only guessed at.
+
+**The cost was not the resolution.** The worry was a designator typed without
+being evaluated inside re-entrant declaration checking, re-entered per generic
+instantiation. It needed nothing: `ResolveType` caches on the denoter's own
+`ntype`, `ForgetResolved` clears exactly that, and `CheckExpr` re-resolves
+every name unconditionally rather than consulting what is already there. The
+non-evaluation is likewise free — the type of `a[i]` does not depend on `i`,
+and a type-denoter is never walked by CodeGen.
+
+**What it cost instead was the substring**, which nothing above had thought of.
+§6.5.6's substring-variable *is* a variable-access and what it possesses is the
+canonical string-type — a pointer and a length with no capacity, which no
+variable may have. The program compiled, ran, and stopped at *a string of
+length 3 does not fit a capacity of 0*. It is refused now, and that is the only
+variable-access this denoter cannot answer for.
+
+**And it found where the widening stops.** `VecGet` and `MapGet` still take the
+element type, because they *return* it and §6.7.1 makes a result-type a
+`type-name`:
+
+```
+result-type = type-name .
+```
+
+So `function VecGet(…): type of v^.a[1]` is unwritable in the dialect too. That
+is a second production and wants the same argument made again about a different
+clause; it is not carried here as an open question, because nothing is waiting
+on it — the two-parameter form works and reads fine.
+
+## Version 3 — what it took, and what it left
+
+**Shipped, 2026-08-28.** This chapter was four proposals looking for a
+decision; three of them are now records and the fourth dissolved. What is left
+open is §1, and it is written out below rather than struck through, because it
+is the one that did not happen and the reasons it was wanted are unchanged.
+
+[`CHANGELOG.md`](../CHANGELOG.md) says what the number tracks — *the accepted
+language, the diagnostics and the command line* — and by that definition three
+of the four original proposals were invisible to it. §0 is what the number is
+actually for.
+
+### 0. Afterschool Pascal is the language — **this is v3** — ADR-0232 ✔
+
+`--std` is gone, and with it the two conformance modes, ADR-0166's `{ @std: }`
+header comment, the `.std` sidecars and the clause 5.1 a) compliance statement.
+A source is written in Afterschool Pascal; the compiler has no mode to be put
+into. The lexis is the dialect's, which is survivable only because the dialect
+contains Extended Pascal (ADR-0117).
+
+The decision was taken with the cost measured rather than estimated, and
+ADR-0232 records all of it. What actually landed, against what was predicted:
+
+- **The Extended Pascal corpus came through**, as predicted. Four cases went —
+  the three type-inquiry refusals and `trap_substring`, each of which asserted
+  that the *dialect's* answer was refused, and each with a positive counterpart
+  under `tests/dialect/` already.
+- **The ISO 7185 corpus did not survive intact**, as predicted, and the shape
+  was slightly different: 42 `*_refused` cases (Annex B's grid, 21 constructs
+  times two modes) and 28 `*_iso` mode gates were deleted outright, six
+  `badparse` gates with them, and **nine sources were renamed** because a
+  word-symbol took their identifier — `value` in seven, `only` in one, a
+  function called `Value` in two. `verify/verify.py`'s generated program was a
+  tenth. That rename is the cost in its most concrete form.
+- **Five oracles retired and nothing replaced them**: the BSI suite (the only
+  third-party corpus this project ever had), `difftest`, `dialect-containment`,
+  `annex-b` and `reserved-words`. The gate count went 24 → 19 — and to 20 since, `fpc-differential` being the first added after v3 (ADR-0234).
+- **And `src/` went with them**, which was not part of the proposal. With
+  `difftest` and `annex_b.py` deleted it had no reader, and it was in no build
+  chain — 16 936 lines of C++, and the last reason this build needed a C++
+  compiler. That is written up in the [question this chapter left
+  open](#the-question-this-chapter-left-open) below.
+
+The alternative — make the dialect the *default* and keep the modes, which is
+what Free Pascal does with `{$MODE ISO}` — was recommended and declined, on the
+ground that it leaves the project presenting itself as a conformance vehicle
+with a dialect attached, which is not what it is.
+
+### 1. Split the compiler into §6.13 program-components — **done** ✔
+
+The one proposal v3 did not take, taken the day after v3 shipped:
+[ADR-0233](adr/0233-the-compiler-becomes-three-program-components.md), written
+**Proposed** while the alternatives were still live, accepted two days later
+without a word of the argument changing, and implemented the same day. The
+compiler is `selfhost/aptypes.pas`, `selfhost/apfront.pas` and
+`selfhost/compiler.pas`, and `selfhost/compiler.components` is the order.
+
+Writing the record before the work changed the proposal twice, and doing the
+work corrected the record twice. All four are in
+[`doc/history.md`](history.md#the-compiler-becomes-three-program-components);
+the two that matter to a reader of this file are that **the buffer argument was
+false** — `--import` re-tokenises the whole imported file, so nothing about the
+peak follows from splitting — and that the pool peak nevertheless **fell by
+27%**, which the record predicted it would not. `buffer-headroom` measures all
+three translations now and reports the worst of them, which is a better
+question than it was asking before.
+
+What the split was taken for is the linking blind spot, and that closed:
+`doc/sop.md` §7's row is narrowed to the combinations the compiler's own
+structure does not use, because every build now translates a module alone,
+translates a module that imports another, and links the result.
+
+### 2. Let the compiler be written in the dialect — **dissolved by §0** ✔
+
+It is. `selfhost/compiler.std` said `extended`, and there is no such file and
+no such mode: the compiler's own source is an Afterschool Pascal source by
+construction, as every source now is.
+
+The question was rejected twice before that. ADR-0190 refused it on the ground
+that *"the fixed point holds only while the compiler is an Extended Pascal
+source"*; ADR-0223 built the compiler a second time to arm ADR-0118's variant
+guards and used that build as a *reader*, never as the product; ADR-0231 then
+measured the sentence and found it false — the second build **is** a fixed
+point, and it is the **same compiler**, byte-identical on 1025 sources. So the
+objection had already narrowed to the seed before ADR-0232 arrived, and the
+seed was refreshed in this release.
+
+**What is left of it is an ordering discipline, not a question**: a dialect
+feature must be expressible in what `seed/*.ll` accepts, or the seed is
+refreshed first (ADR-0109). What the compiler now *may* use — `defer`, `T ! E`,
+`owned ^T`, slices, `break`, `exit`, the generics, `type of` over a
+variable-access — it does not yet use, and whether adopting any of them makes
+this compiler better is the thing ADR-0109 wanted to learn and still has no
+measurement of. That is worth a record when someone tries it, not a roadmap
+entry.
+
+### 3. Have the compiler report its own dispatch — ADR-0229, ADR-0230 ✔
+
+`--dump-dispatch`, in two halves. ADR-0229 moved the case-statement half off
+the Python source parser: the compiler writes every case-statement whose
+selector is an enumeration, with the constants its labels name, the ones they
+miss, and the constants no case names at all. The two readers were compared
+before the old one was deleted — 60 sites, same routine, enumeration, ordinal,
+`N of M` and missing constants on every one — and 85 lines of Pascal-parsing
+regex went with it.
+
+ADR-0230 moved the if-chain half, and `tests/checks/kind_exhaustive.py` now
+reads **no Pascal at all**: 542 lines to 384. A chain is a *shape* and not a
+node, so Sema records every if-statement with its else-part and every tag test
+in a condition, and a head is an if that is no other's else-part. The dump
+reports the **field** each chain reads, which is what selects a dispatch from a
+lookahead — and that is where the regex turned out to have picked its scope by
+accident: ADR-0221's "three enumerations qualify" described what a text match
+could see, and the compiler finds 70 chains where the regex found 38.
+
+**The limit the proposal stated is unchanged and a dump does not lift it**:
+neither form judges whether an arm is *right*. `tyOptional: StaticThroughout :=
+true` satisfies the gate and is wrong. This moved the oracle from a Python
+parser to the compiler; it did not move it from a prompt to a proof.
+
+### 4. Reconsider containment-by-position — **dissolved by §0**, and the rule kept ✔
+
+This was the proposal §0 predicted it would dissolve, and it did, though not
+quite in the way predicted.
+
+The argument *against* withdrawing ADR-0140's rule was that containment buys
+`dialect-containment` — the conformance corpus compiled a second way, with the
+other mode as the oracle. That sweep is gone, so the argument is gone with it,
+and `reserved-words` — the gate that asked whether this language reserves
+exactly what Extended Pascal reserves — is not a question once there is one
+list.
+
+**The rule is kept anyway**, and the reason is better than the one it had. It
+was stated as a constraint on a *mode*: the dialect must not disturb what the
+conformance modes accept. It now protects something this language claims about
+itself — that every Extended Pascal program is an Afterschool Pascal program
+meaning the same thing. Reserving a word-symbol takes that spelling from every
+such program that uses it as an identifier, which is exactly the 25-case cost
+§0 paid once and deliberately. Paying it again casually is what the rule
+forbids.
+
+What did change is who enforces it: `reserved-words` did, and nothing does now.
+ADR-0140's Status records that, and `.claude/skills/code-review` is where a new
+spelling gets looked at. ADR-0177's `exit`, ADR-0178's `try` and ADR-0184's
+unspelled feature remain the three shapes a reader should know before proposing
+a fourth.
+
+### What v3 must not touch — and did not
+
+- **Textual `.ll` as the only backend.** ADR-0085 made it more load-bearing,
+  not less: it is what lets a clone with no LLVM development files build the
+  compiler. Untouched, and v3 went further — the build needs no C++ compiler
+  either now.
+- **ADR immutability.** Thirteen records were annotated at their Status with
+  what ADR-0232 did to them; not one had its argument edited.
+- **[`doc/sop.md`](sop.md) §7.** It grew: the front end has no second
+  implementation, and there is no third-party corpus.
+- **A green suite is not evidence; evidence is a named case that fails without
+  the change.** This is the one v3 made *harder* to honour and more necessary
+  to: with `difftest` gone, a golden regenerated after a change is agreed with
+  by nothing else. `doc/sop.md` B4a says so in as many words.
+
+### The question this chapter left open
+
+`src/` — whether the second front end earned its cost. The chapter had no
+answer and observed that the cost had never been counted. It has been:
+**16 936 lines of C++, and the whole of the build's need for a C++ compiler**,
+against a reader that ADR-0117 had frozen at the conformance surface and that
+skipped every dialect source.
+
+§0 answered it by removing the surface. With `difftest.sh` and `annex_b.py`
+deleted, `src/` had no consumer at all; it was verified to be in no build chain
+— `pascalc` builds with the binary absent, and all 730 cases pass — and it was
+deleted. Reviving it would have meant first teaching it the language ADR-0117
+deliberately kept it out of, and a second implementation of a language with no
+external specification is two readings by one author, which is the one thing
+`difftest` could never contradict.
+
+What it *did* catch was drift between two ports of one reading, and that is the
+loss. It is recorded in [`doc/sop.md`](sop.md) §7 as the largest blind spot on
+that page, and [open question §1](roadmap.md#1-the-dialect-has-no-external-authority-and-every-gate-here-is-anchored-in-one)
+is where it belongs from now on.
+
+The fix for the *other* half of that question — that the independent readers
+were not independent — was cheaper than any of the four proposals and was not a
+v3 item at all, which is why it went first: **ADR-0228 did it.** Readers now
+run out of process against a sandbox built outside the repository, with the
+compiler's source comment-stripped, that last being the half missed for four
+records. Asked whether it was given project documentation, a reader in the
+repository names this project and its path; one in the sandbox answers no.
+
