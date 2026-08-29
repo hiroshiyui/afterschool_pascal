@@ -11,6 +11,15 @@ selfhost/torture.pas -text
 tests/dialect/lib_lsp.in -text
 tests/dialect/lib_lsp.out -text
 
+# MCP's framing, and the carriage return is the subject for the opposite
+# reason: that transport is one message to a *line*, so a `<CR>` before the
+# newline belongs to neither the framing nor the message and the reader drops
+# it. The input holds one message written CRLF for exactly that, and a commit
+# that normalised it would leave the case passing with nothing to drop --
+# reporting the same byte count for the wrong reason, which is worse than
+# failing (ADR-0241).
+tests/dialect/lib_lsp_jsonl.in -text
+
 # The language server's session goldens, for the reason above and one more:
 # what they hold is the exact bytes the server wrote, `Content-Length` header
 # and all, so the carriage returns are the subject and the byte counts are part
