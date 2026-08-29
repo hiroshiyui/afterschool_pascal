@@ -13,7 +13,37 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-08-30
+
+The release the **language server** was written for. `lsp/pasls.pas` is a
+Language Server Protocol implementation written in Afterschool Pascal and for
+it — the first client here large enough to say whether the dialect is pleasant
+to write in, which no gate can measure — and it also answers MCP over the same
+binary. Writing it produced twenty-three findings, seventeen acted on, two of
+which changed the language.
+
+Beside it, the compiler became something you can **install**: an `import` that
+names no file is resolved by search, `cmake --install` lays out a prefix, and
+`pascalc` and its runtime are found beside `pascalcc`.
+
 ### Changed
+
+- **Objects built by an earlier release will not link with objects built by
+  this one.** A digest of a module-heading's tokens is now part of the name of
+  that module's activation procedures (ADR-0245), so a mixture the linker
+  used to accept is refused. That is the point of it — the mixture produced a
+  wrong answer with a zero exit status, and the entry under *Fixed* below has
+  the detail — but it means a partial rebuild across this version boundary
+  fails at the link step rather than silently working. Rebuild every
+  component. A comment, a reflow or a change confined to a module-block still
+  forces no relink.
+- **An `import` that names no file now searches instead of failing.** Where a
+  translation gave no `--import` for an interface, the compiler used to report
+  that the interface had not been exported; it now looks for
+  `<directory>/<name>.pas` in the source's own directory, then each
+  `--import-path`, then each entry of `AFTERSCHOOL_PASCAL_PATH` (ADR-0244).
+  A program that relied on the old failure — a stray `counter.pas` beside a
+  source that imports `counter` — will now find and translate that file.
 
 - **A translation may be given 32 `--import` arguments and 72 command-line
   arguments**, where the limits were 8 and 24 (ADR-0235). The two are one
@@ -2717,6 +2747,7 @@ by compiling a probe for a clause rather than by a test failing.
 - No binary release: `pascalc-s0` links `libLLVM`, needs `clang` on `PATH`, and
   finds `libpasrt.a` through a baked-in path.
 
+[3.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.1.0
 [3.0.1]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.0.1
 [3.0.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v3.0.0
 [2.1.0]: https://github.com/hiroshiyui/afterschool_pascal/releases/tag/v2.1.0

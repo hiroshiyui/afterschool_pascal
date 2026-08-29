@@ -1,7 +1,7 @@
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-pc-linux-gnu"
 
-%frame1 = type { ptr, i1, i32, i32, [1000000 x i8], i32, i32, i32, i32, i1, i1, i32, ptr, ptr, ptr, i32, ptr, i1, { i32, [255 x i8] }, i1, ptr, ptr, [15 x i64], [15 x i64], [8 x { i32, [255 x i8] }], i1, i1, i1, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, { i32, [255 x i8] }, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32 }
+%frame1 = type { ptr, i1, i32, i32, [1000000 x i8], i32, i32, i32, i32, i1, i1, i32, ptr, ptr, ptr, i32, ptr, i1, { i32, [255 x i8] }, i1, ptr, ptr, [15 x i64], [15 x i64], [32 x { i32, [255 x i8] }], i1, i1, i1, ptr, ptr, ptr, ptr, ptr, ptr, ptr, ptr, { i32, [255 x i8] }, i32, i1, { i32, [255 x i8] }, i32, ptr, ptr, ptr, ptr, ptr, ptr, i32 }
 %frame2 = type { ptr, ptr }
 %frame3 = type { ptr, ptr, i8 }
 %frame4 = type { ptr, i8 }
@@ -78,14 +78,15 @@ target triple = "x86_64-pc-linux-gnu"
 %frame75 = type { ptr, ptr, ptr, i32, ptr }
 %frame76 = type { ptr, ptr, ptr, ptr, ptr }
 %frame77 = type { ptr, ptr, i32, ptr, ptr, i32, i1 }
-%frame78 = type { ptr, ptr, ptr, ptr, i1 }
-%frame79 = type { ptr, ptr, ptr, { i32, [255 x i8] }, i32, i1 }
-%frame80 = type { ptr, [16 x i8], i32, i32 }
-%frame81 = type { ptr, i32, [12 x i8], i32, i32, i1 }
-%frame82 = type { ptr, i32, i32, [9 x i8], i1, i32, i32, i1 }
-%frame83 = type { ptr, ptr, i32, i32, ptr, ptr, ptr }
-%frame84 = type { ptr, ptr, ptr, ptr, ptr, i32 }
-%frame85 = type { ptr, ptr, ptr, i32 }
+%frame78 = type { ptr, { i32, [255 x i8] }, i32, i32 }
+%frame79 = type { ptr, ptr, ptr, ptr, i1 }
+%frame80 = type { ptr, ptr, ptr, { i32, [255 x i8] }, i32, i1 }
+%frame81 = type { ptr, [16 x i8], i32, i32 }
+%frame82 = type { ptr, i32, [12 x i8], i32, i32, i1 }
+%frame83 = type { ptr, i32, i32, [9 x i8], i1, i32, i32, i1 }
+%frame84 = type { ptr, ptr, i32, i32, ptr, ptr, ptr }
+%frame85 = type { ptr, ptr, ptr, ptr, ptr, i32 }
+%frame86 = type { ptr, ptr, ptr, i32 }
 
 @frame.aptypes = global %frame1 zeroinitializer
 @v.aptypes.readingimports = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 1)
@@ -111,7 +112,7 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.programsym = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 21)
 @v.aptypes.ircode = alias [15 x i64], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 22)
 @v.aptypes.imports = alias [15 x i64], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 23)
-@v.aptypes.importname = alias [8 x { i32, [255 x i8] }], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 24)
+@v.aptypes.importname = alias [32 x { i32, [255 x i8] }], ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 24)
 @v.aptypes.dumping = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 25)
 @v.aptypes.dumplayoutopt = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 26)
 @v.aptypes.dumpdispatchopt = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 27)
@@ -125,15 +126,17 @@ target triple = "x86_64-pc-linux-gnu"
 @v.aptypes.tagtail = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 35)
 @v.aptypes.curfile = alias { i32, [255 x i8] }, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 36)
 @v.aptypes.curimportidx = alias i32, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 37)
-@v.aptypes.maintokbase = alias i32, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 38)
-@v.aptypes.instdeclhead = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 39)
-@v.aptypes.inttype = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 40)
-@v.aptypes.int64type = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 41)
-@v.aptypes.canontexttype = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 42)
-@v.aptypes.stringschema = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 43)
-@v.aptypes.handleclosers = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 44)
+@v.aptypes.notinguses = alias i1, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 38)
+@v.aptypes.mainfile = alias { i32, [255 x i8] }, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 39)
+@v.aptypes.maintokbase = alias i32, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 40)
+@v.aptypes.instdeclhead = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 41)
+@v.aptypes.inttype = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 42)
+@v.aptypes.int64type = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 43)
+@v.aptypes.canontexttype = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 44)
+@v.aptypes.stringschema = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 45)
+@v.aptypes.handleclosers = alias ptr, ptr getelementptr inbounds (%frame1, ptr @frame.aptypes, i32 0, i32 46)
 
-define void @m.aptypes.afterschool.init() {
+define void @m.aptypes.afterschool.196db62e040a5d93.init() {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
@@ -141,7 +144,7 @@ L1:
   call void @pas_file_init(ptr %v3, i32 0, i32 0, ptr @s1, i32 1, i32 1, i32 0, i32 0)
   %v4 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 23
   call void @pas_file_init(ptr %v4, i32 0, i32 0, ptr @s2, i32 1, i32 1, i32 0, i32 0)
-  %v5 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 45
+  %v5 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 47
   store i32 0, ptr %v5
   %v6 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 5
   store i32 0, ptr %v6
@@ -149,7 +152,7 @@ L1:
   store i32 0, ptr %v7
   %v8 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 7
   store i32 1, ptr %v8
-  %v9 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 38
+  %v9 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 40
   store i32 1, ptr %v9
   %v10 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 8
   store i32 0, ptr %v10
@@ -171,16 +174,20 @@ L1:
   call void @pas_str_store_var(ptr %v18, i32 255, ptr @s3, i32 0)
   %v19 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 37
   store i32 0, ptr %v19
-  %v20 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 39
-  store ptr null, ptr %v20
-  %v21 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 43
-  store ptr null, ptr %v21
-  %v22 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 20
+  %v20 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 38
+  store i1 false, ptr %v20
+  %v21 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 39
+  call void @pas_str_store_var(ptr %v21, i32 255, ptr @s4, i32 0)
+  %v22 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 41
   store ptr null, ptr %v22
+  %v23 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 45
+  store ptr null, ptr %v23
+  %v24 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 20
+  store ptr null, ptr %v24
   ret void
 }
 
-define void @m.aptypes.afterschool.fini() {
+define void @m.aptypes.afterschool.196db62e040a5d93.fini() {
 L1:
   %v1 = load i32, ptr @pas_str_at
   %v2 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 22
@@ -190,7 +197,7 @@ L1:
   ret void
 }
 
-; strclear 2511
+; strclear 2622
 define void @p.aptypes.strclear(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -207,14 +214,14 @@ L1:
   %v9 = or i1 %v7, %v8
   br i1 %v9, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s4)
+  call void @pas_runtime_error(ptr @s5)
   unreachable
 L3:
   store i32 0, ptr %v6
   ret void
 }
 
-; strappend 2520
+; strappend 2631
 define void @p.aptypes.strappend(ptr %link, ptr %a0, i8 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -246,7 +253,7 @@ L2:
   %v21 = or i1 %v19, %v20
   br i1 %v21, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s5)
+  call void @pas_runtime_error(ptr @s6)
   unreachable
 L5:
   %v22 = icmp slt i32 %v18, 0
@@ -254,7 +261,7 @@ L5:
   %v24 = or i1 %v22, %v23
   br i1 %v24, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s6)
+  call void @pas_runtime_error(ptr @s7)
   unreachable
 L7:
   store i32 %v18, ptr %v12
@@ -270,7 +277,7 @@ L7:
   %v34 = or i1 %v32, %v33
   br i1 %v34, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s7)
+  call void @pas_runtime_error(ptr @s8)
   unreachable
 L9:
   %v35 = sub i32 %v31, 1
@@ -283,7 +290,7 @@ L3:
   ret void
 }
 
-; put 2536
+; put 2647
 define void @p.aptypes.put(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -310,33 +317,33 @@ L4:
   ret void
 }
 
-; putlit 2543
-define internal void @p80(ptr %link, ptr %a0) {
+; putlit 2654
+define internal void @p81(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame80
-  %v2 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame81
+  %v2 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
   call void @llvm.memcpy.p0.p0.i64(ptr align 1 %v3, ptr align 1 %a0, i64 16, i1 false)
-  %v4 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
   store i32 16, ptr %v4
   br label %L2
 L2:
-  %v5 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
+  %v5 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
   %v6 = load i32, ptr %v5
   %v7 = icmp sgt i32 %v6, 0
   br i1 %v7, label %L5, label %L6
 L5:
-  %v8 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
-  %v9 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
+  %v8 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v9 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
   %v10 = load i32, ptr %v9
   %v11 = icmp slt i32 %v10, 1
   %v12 = icmp sgt i32 %v10, 16
   %v13 = or i1 %v11, %v12
   br i1 %v13, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s8)
+  call void @pas_runtime_error(ptr @s9)
   unreachable
 L8:
   %v14 = sub i32 %v10, 1
@@ -348,8 +355,8 @@ L6:
   %v18 = phi i1 [ false, %L2 ], [ %v17, %L8 ]
   br i1 %v18, label %L3, label %L4
 L3:
-  %v19 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
-  %v20 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
+  %v19 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
+  %v20 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
   %v21 = load i32, ptr %v20
   %v22 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v21, i32 1)
   %v23 = extractvalue { i32, i1 } %v22, 0
@@ -358,14 +365,14 @@ L3:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s9)
+  call void @pas_runtime_error(ptr @s10)
   unreachable
 L10:
   store i32 %v23, ptr %v19
   br label %L2
 L4:
-  %v27 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
-  %v28 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
+  %v27 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
+  %v28 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
   %v29 = load i32, ptr %v28
   store i32 1, ptr %v27
   br label %L11
@@ -374,15 +381,15 @@ L11:
   %v31 = icmp sle i32 %v30, %v29
   br i1 %v31, label %L12, label %L14
 L12:
-  %v32 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
-  %v33 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
+  %v32 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v33 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
   %v34 = load i32, ptr %v33
   %v35 = icmp slt i32 %v34, 1
   %v36 = icmp sgt i32 %v34, 16
   %v37 = or i1 %v35, %v36
   br i1 %v37, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s10)
+  call void @pas_runtime_error(ptr @s11)
   unreachable
 L17:
   %v38 = sub i32 %v34, 1
@@ -402,7 +409,7 @@ L14:
   ret void
 }
 
-; putirlit 2555
+; putirlit 2666
 define void @p.aptypes.putirlit(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -428,7 +435,7 @@ L5:
   %v13 = or i1 %v11, %v12
   br i1 %v13, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s11)
+  call void @pas_runtime_error(ptr @s12)
   unreachable
 L8:
   %v14 = sub i32 %v10, 1
@@ -450,7 +457,7 @@ L3:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s12)
+  call void @pas_runtime_error(ptr @s13)
   unreachable
 L10:
   store i32 %v23, ptr %v19
@@ -475,7 +482,7 @@ L12:
   %v38 = or i1 %v36, %v37
   br i1 %v38, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s13)
+  call void @pas_runtime_error(ptr @s14)
   unreachable
 L17:
   %v39 = sub i32 %v35, 1
@@ -495,47 +502,47 @@ L14:
   ret void
 }
 
-; putint 2567
-define internal void @p81(ptr %link, i32 %a0) {
+; putint 2678
+define internal void @p82(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame81
-  %v2 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame82
+  %v2 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   store i32 %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 5
-  %v5 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v4 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v5 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   %v6 = load i32, ptr %v5
   %v7 = icmp slt i32 %v6, 0
   store i1 %v7, ptr %v4
-  %v8 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
+  %v8 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
   store i32 0, ptr %v8
-  %v9 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 5
+  %v9 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
   %v10 = load i1, ptr %v9
   br i1 %v10, label %L2, label %L3
 L2:
-  %v11 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
-  %v12 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v11 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
+  %v12 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   %v13 = load i32, ptr %v12
   %v14 = sub nsw i32 0, %v13
   store i32 %v14, ptr %v11
   br label %L3
 L3:
-  %v15 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v15 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   %v16 = load i32, ptr %v15
   %v17 = icmp eq i32 %v16, 0
   br i1 %v17, label %L4, label %L5
 L4:
-  %v18 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
+  %v18 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
   store i32 1, ptr %v18
-  %v19 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
+  %v19 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 2
   %v20 = icmp slt i32 1, 1
   %v21 = icmp sgt i32 1, 12
   %v22 = or i1 %v20, %v21
   br i1 %v22, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s14)
+  call void @pas_runtime_error(ptr @s15)
   unreachable
 L7:
   %v23 = sub i32 1, 1
@@ -545,13 +552,13 @@ L7:
 L5:
   br label %L8
 L8:
-  %v25 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v25 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   %v26 = load i32, ptr %v25
   %v27 = icmp sgt i32 %v26, 0
   br i1 %v27, label %L9, label %L10
 L9:
-  %v28 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
-  %v29 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
+  %v28 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
+  %v29 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
   %v30 = load i32, ptr %v29
   %v31 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v30, i32 1)
   %v32 = extractvalue { i32, i1 } %v31, 0
@@ -560,30 +567,30 @@ L9:
   %v35 = or i1 %v33, %v34
   br i1 %v35, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s15)
+  call void @pas_runtime_error(ptr @s16)
   unreachable
 L12:
   store i32 %v32, ptr %v28
-  %v36 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
-  %v37 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
+  %v36 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 2
+  %v37 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
   %v38 = load i32, ptr %v37
   %v39 = icmp slt i32 %v38, 1
   %v40 = icmp sgt i32 %v38, 12
   %v41 = or i1 %v39, %v40
   br i1 %v41, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s16)
+  call void @pas_runtime_error(ptr @s17)
   unreachable
 L14:
   %v42 = sub i32 %v38, 1
   %v43 = getelementptr inbounds [12 x i8], ptr %v36, i32 0, i32 %v42
   %v44 = zext i8 48 to i32
-  %v45 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v45 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   %v46 = load i32, ptr %v45
   %v47 = icmp sle i32 10, 0
   br i1 %v47, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s17)
+  call void @pas_runtime_error(ptr @s18)
   unreachable
 L16:
   %v48 = srem i32 %v46, 10
@@ -597,7 +604,7 @@ L16:
   %v56 = or i1 %v54, %v55
   br i1 %v56, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s18)
+  call void @pas_runtime_error(ptr @s19)
   unreachable
 L18:
   %v57 = icmp slt i32 %v53, 0
@@ -605,18 +612,18 @@ L18:
   %v59 = or i1 %v57, %v58
   br i1 %v59, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s19)
+  call void @pas_runtime_error(ptr @s20)
   unreachable
 L20:
   %v60 = trunc i32 %v53 to i8
   store i8 %v60, ptr %v43
-  %v61 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
-  %v62 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 1
+  %v61 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
+  %v62 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
   %v63 = load i32, ptr %v62
   %v64 = icmp eq i32 10, 0
   br i1 %v64, label %L21, label %L22
 L21:
-  call void @pas_runtime_error(ptr @s20)
+  call void @pas_runtime_error(ptr @s21)
   unreachable
 L22:
   %v65 = icmp eq i32 %v63, -2147483648
@@ -624,22 +631,22 @@ L22:
   %v67 = and i1 %v65, %v66
   br i1 %v67, label %L23, label %L24
 L23:
-  call void @pas_runtime_error(ptr @s21)
+  call void @pas_runtime_error(ptr @s22)
   unreachable
 L24:
   %v68 = sdiv i32 %v63, 10
   store i32 %v68, ptr %v61
   br label %L8
 L10:
-  %v69 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 5
+  %v69 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
   %v70 = load i1, ptr %v69
   br i1 %v70, label %L25, label %L26
 L25:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 45)
   br label %L26
 L26:
-  %v71 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 4
-  %v72 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 3
+  %v71 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 4
+  %v72 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
   %v73 = load i32, ptr %v72
   store i32 %v73, ptr %v71
   br label %L27
@@ -648,15 +655,15 @@ L27:
   %v75 = icmp sge i32 %v74, 1
   br i1 %v75, label %L28, label %L30
 L28:
-  %v76 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 2
-  %v77 = getelementptr inbounds %frame81, ptr %frame, i32 0, i32 4
+  %v76 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 2
+  %v77 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 4
   %v78 = load i32, ptr %v77
   %v79 = icmp slt i32 %v78, 1
   %v80 = icmp sgt i32 %v78, 12
   %v81 = or i1 %v79, %v80
   br i1 %v81, label %L32, label %L33
 L32:
-  call void @pas_runtime_error(ptr @s22)
+  call void @pas_runtime_error(ptr @s23)
   unreachable
 L33:
   %v82 = sub i32 %v78, 1
@@ -676,7 +683,7 @@ L30:
   ret void
 }
 
-; errorat 2600
+; errorat 2711
 define void @p.aptypes.errorat(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -699,7 +706,7 @@ L1:
   %v13 = or i1 %v11, %v12
   br i1 %v13, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s23)
+  call void @pas_runtime_error(ptr @s24)
   unreachable
 L3:
   store i32 %v10, ptr %v6
@@ -710,7 +717,7 @@ L4:
   %v16 = icmp slt i32 1, 0
   br i1 %v16, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s24)
+  call void @pas_runtime_error(ptr @s25)
   unreachable
 L8:
   %v17 = getelementptr inbounds %frame6, ptr %frame, i32 0, i32 1
@@ -721,14 +728,14 @@ L8:
   %v20 = icmp slt i32 1, 0
   br i1 %v20, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s25)
+  call void @pas_runtime_error(ptr @s26)
   unreachable
 L10:
   %v21 = getelementptr inbounds %frame6, ptr %frame, i32 0, i32 2
   %v22 = load i32, ptr %v21
   %v23 = sext i32 %v22 to i64
   call void @pas_write_int(ptr @pas.output, i64 %v23, i32 1)
-  call void @pas_write_str(ptr @pas.output, ptr @s26, i32 7, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s27, i32 7, i32 -1)
   br label %L6
 L5:
   %v24 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 36
@@ -740,7 +747,7 @@ L5:
   %v28 = icmp slt i32 1, 0
   br i1 %v28, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s27)
+  call void @pas_runtime_error(ptr @s28)
   unreachable
 L12:
   %v29 = getelementptr inbounds %frame6, ptr %frame, i32 0, i32 1
@@ -751,20 +758,20 @@ L12:
   %v32 = icmp slt i32 1, 0
   br i1 %v32, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s28)
+  call void @pas_runtime_error(ptr @s29)
   unreachable
 L14:
   %v33 = getelementptr inbounds %frame6, ptr %frame, i32 0, i32 2
   %v34 = load i32, ptr %v33
   %v35 = sext i32 %v34 to i64
   call void @pas_write_int(ptr @pas.output, i64 %v35, i32 1)
-  call void @pas_write_str(ptr @pas.output, ptr @s29, i32 9, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s30, i32 9, i32 -1)
   br label %L6
 L6:
   ret void
 }
 
-; pooladd 2616
+; pooladd 2727
 define i32 @p.aptypes.pooladd(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -786,7 +793,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s30)
+  call void @pas_runtime_error(ptr @s31)
   unreachable
 L3:
   %v15 = icmp sgt i32 %v11, 1000000
@@ -797,16 +804,16 @@ L4:
   %v18 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 3
   %v19 = load i32, ptr %v18
   call void @p.aptypes.errorat(ptr @frame.aptypes, i32 %v17, i32 %v19)
-  call void @pas_write_str(ptr @pas.output, ptr @s31, i32 41, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s32, i32 41, i32 -1)
   %v20 = icmp slt i32 1, 0
   br i1 %v20, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s32)
+  call void @pas_runtime_error(ptr @s33)
   unreachable
 L8:
   %v21 = sext i32 1000000 to i64
   call void @pas_write_int(ptr @pas.output, i64 %v21, i32 1)
-  call void @pas_write_str(ptr @pas.output, ptr @s33, i32 19, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s34, i32 19, i32 -1)
   call void @pas_writeln(ptr @pas.output)
   %v22 = getelementptr inbounds %frame7, ptr %frame, i32 0, i32 2
   store i32 1, ptr %v22
@@ -822,7 +829,7 @@ L5:
   %v30 = or i1 %v28, %v29
   br i1 %v30, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s34)
+  call void @pas_runtime_error(ptr @s35)
   unreachable
 L10:
   store i32 %v27, ptr %v23
@@ -850,7 +857,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s35)
+  call void @pas_runtime_error(ptr @s36)
   unreachable
 L17:
   %v48 = icmp slt i32 %v44, 1
@@ -858,7 +865,7 @@ L17:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s36)
+  call void @pas_runtime_error(ptr @s37)
   unreachable
 L19:
   %v51 = sub i32 %v44, 1
@@ -873,7 +880,7 @@ L19:
   %v60 = or i1 %v58, %v59
   br i1 %v60, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s37)
+  call void @pas_runtime_error(ptr @s38)
   unreachable
 L21:
   %v61 = sub i32 %v57, 1
@@ -904,7 +911,7 @@ L14:
   %v78 = or i1 %v76, %v77
   br i1 %v78, label %L22, label %L23
 L22:
-  call void @pas_runtime_error(ptr @s38)
+  call void @pas_runtime_error(ptr @s39)
   unreachable
 L23:
   store i32 %v75, ptr %v67
@@ -915,7 +922,7 @@ L6:
   ret i32 %v80
 }
 
-; writepool 2633
+; writepool 2744
 define void @p.aptypes.writepool(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -940,7 +947,7 @@ L1:
   %v16 = or i1 %v14, %v15
   br i1 %v16, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s39)
+  call void @pas_runtime_error(ptr @s40)
   unreachable
 L3:
   %v17 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v13, i32 1)
@@ -950,7 +957,7 @@ L3:
   %v21 = or i1 %v19, %v20
   br i1 %v21, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s40)
+  call void @pas_runtime_error(ptr @s41)
   unreachable
 L5:
   store i32 %v7, ptr %v5
@@ -968,7 +975,7 @@ L7:
   %v29 = or i1 %v27, %v28
   br i1 %v29, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s41)
+  call void @pas_runtime_error(ptr @s42)
   unreachable
 L12:
   %v30 = sub i32 %v26, 1
@@ -988,7 +995,7 @@ L9:
   ret void
 }
 
-; pooliswide 2646
+; pooliswide 2757
 define i1 @p.aptypes.pooliswide(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1018,7 +1025,7 @@ L5:
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s42)
+  call void @pas_runtime_error(ptr @s43)
   unreachable
 L8:
   %v16 = sub i32 %v12, 1
@@ -1040,7 +1047,7 @@ L3:
   %v28 = or i1 %v26, %v27
   br i1 %v28, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s43)
+  call void @pas_runtime_error(ptr @s44)
   unreachable
 L10:
   store i32 %v25, ptr %v21
@@ -1081,7 +1088,7 @@ L15:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s44)
+  call void @pas_runtime_error(ptr @s45)
   unreachable
 L20:
   %v51 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v47, i32 1)
@@ -1091,7 +1098,7 @@ L20:
   %v55 = or i1 %v53, %v54
   br i1 %v55, label %L21, label %L22
 L21:
-  call void @pas_runtime_error(ptr @s45)
+  call void @pas_runtime_error(ptr @s46)
   unreachable
 L22:
   %v56 = icmp slt i32 %v52, 1
@@ -1099,7 +1106,7 @@ L22:
   %v58 = or i1 %v56, %v57
   br i1 %v58, label %L23, label %L24
 L23:
-  call void @pas_runtime_error(ptr @s46)
+  call void @pas_runtime_error(ptr @s47)
   unreachable
 L24:
   %v59 = sub i32 %v52, 1
@@ -1113,7 +1120,7 @@ L24:
   %v67 = or i1 %v65, %v66
   br i1 %v67, label %L25, label %L26
 L25:
-  call void @pas_runtime_error(ptr @s47)
+  call void @pas_runtime_error(ptr @s48)
   unreachable
 L26:
   %v68 = sub i32 %v64, 1
@@ -1147,7 +1154,7 @@ L13:
   ret i1 %v80
 }
 
-; poolis 2662
+; poolis 2773
 define i1 @p.aptypes.poolis(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1177,7 +1184,7 @@ L5:
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s48)
+  call void @pas_runtime_error(ptr @s49)
   unreachable
 L8:
   %v16 = sub i32 %v12, 1
@@ -1199,7 +1206,7 @@ L3:
   %v28 = or i1 %v26, %v27
   br i1 %v28, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s49)
+  call void @pas_runtime_error(ptr @s50)
   unreachable
 L10:
   store i32 %v25, ptr %v21
@@ -1245,7 +1252,7 @@ L15:
   %v51 = or i1 %v49, %v50
   br i1 %v51, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s50)
+  call void @pas_runtime_error(ptr @s51)
   unreachable
 L20:
   %v52 = sub i32 %v48, 1
@@ -1263,7 +1270,7 @@ L20:
   %v64 = or i1 %v62, %v63
   br i1 %v64, label %L21, label %L22
 L21:
-  call void @pas_runtime_error(ptr @s51)
+  call void @pas_runtime_error(ptr @s52)
   unreachable
 L22:
   %v65 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v61, i32 1)
@@ -1273,7 +1280,7 @@ L22:
   %v69 = or i1 %v67, %v68
   br i1 %v69, label %L23, label %L24
 L23:
-  call void @pas_runtime_error(ptr @s52)
+  call void @pas_runtime_error(ptr @s53)
   unreachable
 L24:
   %v70 = icmp slt i32 %v66, 1
@@ -1281,7 +1288,7 @@ L24:
   %v72 = or i1 %v70, %v71
   br i1 %v72, label %L25, label %L26
 L25:
-  call void @pas_runtime_error(ptr @s53)
+  call void @pas_runtime_error(ptr @s54)
   unreachable
 L26:
   %v73 = sub i32 %v66, 1
@@ -1299,7 +1306,7 @@ L26:
   %v84 = or i1 %v82, %v83
   br i1 %v84, label %L27, label %L28
 L27:
-  call void @pas_runtime_error(ptr @s54)
+  call void @pas_runtime_error(ptr @s55)
   unreachable
 L28:
   store i32 %v81, ptr %v77
@@ -1316,37 +1323,37 @@ L13:
   ret i1 %v89
 }
 
-; poolstarts 2682
-define internal i1 @p82(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
+; poolstarts 2793
+define internal i1 @p83(ptr %link, i32 %a0, i32 %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame82
-  %v2 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame83
+  %v2 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
   store i32 %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 2
   store i32 %a1, ptr %v4
-  %v5 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
+  %v5 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 3
   call void @llvm.memcpy.p0.p0.i64(ptr align 1 %v5, ptr align 1 %a2, i64 9, i1 false)
-  %v6 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v6 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
   store i32 9, ptr %v6
   br label %L2
 L2:
-  %v7 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v7 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
   %v8 = load i32, ptr %v7
   %v9 = icmp sgt i32 %v8, 0
   br i1 %v9, label %L5, label %L6
 L5:
-  %v10 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
-  %v11 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v10 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 3
+  %v11 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
   %v12 = load i32, ptr %v11
   %v13 = icmp slt i32 %v12, 1
   %v14 = icmp sgt i32 %v12, 9
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s55)
+  call void @pas_runtime_error(ptr @s56)
   unreachable
 L8:
   %v16 = sub i32 %v12, 1
@@ -1358,8 +1365,8 @@ L6:
   %v20 = phi i1 [ false, %L2 ], [ %v19, %L8 ]
   br i1 %v20, label %L3, label %L4
 L3:
-  %v21 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
-  %v22 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v21 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
+  %v22 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
   %v23 = load i32, ptr %v22
   %v24 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v23, i32 1)
   %v25 = extractvalue { i32, i1 } %v24, 0
@@ -1368,36 +1375,36 @@ L3:
   %v28 = or i1 %v26, %v27
   br i1 %v28, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s56)
+  call void @pas_runtime_error(ptr @s57)
   unreachable
 L10:
   store i32 %v25, ptr %v21
   br label %L2
 L4:
-  %v29 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 2
+  %v29 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 2
   %v30 = load i32, ptr %v29
-  %v31 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v31 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
   %v32 = load i32, ptr %v31
   %v33 = icmp slt i32 %v30, %v32
   br i1 %v33, label %L11, label %L12
 L11:
-  %v34 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 4
+  %v34 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 4
   store i1 false, ptr %v34
   br label %L13
 L12:
-  %v35 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 7
+  %v35 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 7
   store i1 true, ptr %v35
-  %v36 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 6
+  %v36 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
   store i32 1, ptr %v36
   br label %L14
 L14:
-  %v37 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 7
+  %v37 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 7
   %v38 = load i1, ptr %v37
   br i1 %v38, label %L17, label %L18
 L17:
-  %v39 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 6
+  %v39 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
   %v40 = load i32, ptr %v39
-  %v41 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 5
+  %v41 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
   %v42 = load i32, ptr %v41
   %v43 = icmp sle i32 %v40, %v42
   br label %L18
@@ -1405,25 +1412,25 @@ L18:
   %v44 = phi i1 [ false, %L14 ], [ %v43, %L17 ]
   br i1 %v44, label %L15, label %L16
 L15:
-  %v45 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 7
-  %v46 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 3
-  %v47 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 6
+  %v45 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 7
+  %v46 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 3
+  %v47 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
   %v48 = load i32, ptr %v47
   %v49 = icmp slt i32 %v48, 1
   %v50 = icmp sgt i32 %v48, 9
   %v51 = or i1 %v49, %v50
   br i1 %v51, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s57)
+  call void @pas_runtime_error(ptr @s58)
   unreachable
 L20:
   %v52 = sub i32 %v48, 1
   %v53 = getelementptr inbounds [9 x i8], ptr %v46, i32 0, i32 %v52
   %v54 = load i8, ptr %v53
   %v55 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 4
-  %v56 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 1
+  %v56 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
   %v57 = load i32, ptr %v56
-  %v58 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 6
+  %v58 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
   %v59 = load i32, ptr %v58
   %v60 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v57, i32 %v59)
   %v61 = extractvalue { i32, i1 } %v60, 0
@@ -1432,7 +1439,7 @@ L20:
   %v64 = or i1 %v62, %v63
   br i1 %v64, label %L21, label %L22
 L21:
-  call void @pas_runtime_error(ptr @s58)
+  call void @pas_runtime_error(ptr @s59)
   unreachable
 L22:
   %v65 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v61, i32 1)
@@ -1442,7 +1449,7 @@ L22:
   %v69 = or i1 %v67, %v68
   br i1 %v69, label %L23, label %L24
 L23:
-  call void @pas_runtime_error(ptr @s59)
+  call void @pas_runtime_error(ptr @s60)
   unreachable
 L24:
   %v70 = icmp slt i32 %v66, 1
@@ -1450,7 +1457,7 @@ L24:
   %v72 = or i1 %v70, %v71
   br i1 %v72, label %L25, label %L26
 L25:
-  call void @pas_runtime_error(ptr @s60)
+  call void @pas_runtime_error(ptr @s61)
   unreachable
 L26:
   %v73 = sub i32 %v66, 1
@@ -1458,8 +1465,8 @@ L26:
   %v75 = load i8, ptr %v74
   %v76 = icmp eq i8 %v54, %v75
   store i1 %v76, ptr %v45
-  %v77 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 6
-  %v78 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 6
+  %v77 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
+  %v78 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
   %v79 = load i32, ptr %v78
   %v80 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v79, i32 1)
   %v81 = extractvalue { i32, i1 } %v80, 0
@@ -1468,24 +1475,24 @@ L26:
   %v84 = or i1 %v82, %v83
   br i1 %v84, label %L27, label %L28
 L27:
-  call void @pas_runtime_error(ptr @s61)
+  call void @pas_runtime_error(ptr @s62)
   unreachable
 L28:
   store i32 %v81, ptr %v77
   br label %L14
 L16:
-  %v85 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 4
-  %v86 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 7
+  %v85 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 4
+  %v86 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 7
   %v87 = load i1, ptr %v86
   store i1 %v87, ptr %v85
   br label %L13
 L13:
-  %v88 = getelementptr inbounds %frame82, ptr %frame, i32 0, i32 4
+  %v88 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 4
   %v89 = load i1, ptr %v88
   ret i1 %v89
 }
 
-; reservedforeignname 2725
+; reservedforeignname 2836
 define i1 @p.aptypes.reservedforeignname(ptr %link, i32 %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -1512,7 +1519,7 @@ L1:
   %v17 = or i1 %v15, %v16
   br i1 %v17, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s62)
+  call void @pas_runtime_error(ptr @s63)
   unreachable
 L3:
   %v18 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v14, i32 1)
@@ -1522,7 +1529,7 @@ L3:
   %v22 = or i1 %v20, %v21
   br i1 %v22, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s63)
+  call void @pas_runtime_error(ptr @s64)
   unreachable
 L5:
   store i32 %v8, ptr %v6
@@ -1540,7 +1547,7 @@ L7:
   %v30 = or i1 %v28, %v29
   br i1 %v30, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s64)
+  call void @pas_runtime_error(ptr @s65)
   unreachable
 L12:
   %v31 = sub i32 %v27, 1
@@ -1577,7 +1584,7 @@ L15:
   %v48 = or i1 %v46, %v47
   br i1 %v48, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s65)
+  call void @pas_runtime_error(ptr @s66)
   unreachable
 L18:
   %v49 = sub i32 %v45, 1
@@ -1594,7 +1601,7 @@ L19:
   %v58 = or i1 %v56, %v57
   br i1 %v58, label %L21, label %L22
 L21:
-  call void @pas_runtime_error(ptr @s66)
+  call void @pas_runtime_error(ptr @s67)
   unreachable
 L22:
   %v59 = sub i32 %v55, 1
@@ -1622,7 +1629,7 @@ L23:
   %v74 = or i1 %v72, %v73
   br i1 %v74, label %L25, label %L26
 L25:
-  call void @pas_runtime_error(ptr @s67)
+  call void @pas_runtime_error(ptr @s68)
   unreachable
 L26:
   %v75 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 1
@@ -1636,7 +1643,7 @@ L26:
   %v83 = or i1 %v81, %v82
   br i1 %v83, label %L27, label %L28
 L27:
-  call void @pas_runtime_error(ptr @s68)
+  call void @pas_runtime_error(ptr @s69)
   unreachable
 L28:
   %v84 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v80, i32 1)
@@ -1646,7 +1653,7 @@ L28:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L29, label %L30
 L29:
-  call void @pas_runtime_error(ptr @s69)
+  call void @pas_runtime_error(ptr @s70)
   unreachable
 L30:
   store i32 %v71, ptr %v67
@@ -1664,7 +1671,7 @@ L32:
   %v96 = or i1 %v94, %v95
   br i1 %v96, label %L36, label %L37
 L36:
-  call void @pas_runtime_error(ptr @s70)
+  call void @pas_runtime_error(ptr @s71)
   unreachable
 L37:
   %v97 = sub i32 %v93, 1
@@ -1681,7 +1688,7 @@ L38:
   %v106 = or i1 %v104, %v105
   br i1 %v106, label %L40, label %L41
 L40:
-  call void @pas_runtime_error(ptr @s71)
+  call void @pas_runtime_error(ptr @s72)
   unreachable
 L41:
   %v107 = sub i32 %v103, 1
@@ -1719,7 +1726,7 @@ L44:
   %v121 = load i32, ptr %v120
   %v122 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 2
   %v123 = load i32, ptr %v122
-  %v124 = call i1 @p82(ptr @frame.aptypes, i32 %v121, i32 %v123, ptr @s72)
+  %v124 = call i1 @p83(ptr @frame.aptypes, i32 %v121, i32 %v123, ptr @s73)
   br label %L45
 L45:
   %v125 = phi i1 [ false, %L24 ], [ %v124, %L44 ]
@@ -1738,7 +1745,7 @@ L46:
   %v135 = or i1 %v133, %v134
   br i1 %v135, label %L48, label %L49
 L48:
-  call void @pas_runtime_error(ptr @s73)
+  call void @pas_runtime_error(ptr @s74)
   unreachable
 L49:
   %v136 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 1
@@ -1752,7 +1759,7 @@ L49:
   %v144 = or i1 %v142, %v143
   br i1 %v144, label %L50, label %L51
 L50:
-  call void @pas_runtime_error(ptr @s74)
+  call void @pas_runtime_error(ptr @s75)
   unreachable
 L51:
   %v145 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v141, i32 1)
@@ -1762,7 +1769,7 @@ L51:
   %v149 = or i1 %v147, %v148
   br i1 %v149, label %L52, label %L53
 L52:
-  call void @pas_runtime_error(ptr @s75)
+  call void @pas_runtime_error(ptr @s76)
   unreachable
 L53:
   store i32 %v132, ptr %v128
@@ -1780,7 +1787,7 @@ L55:
   %v157 = or i1 %v155, %v156
   br i1 %v157, label %L59, label %L60
 L59:
-  call void @pas_runtime_error(ptr @s76)
+  call void @pas_runtime_error(ptr @s77)
   unreachable
 L60:
   %v158 = sub i32 %v154, 1
@@ -1797,7 +1804,7 @@ L61:
   %v167 = or i1 %v165, %v166
   br i1 %v167, label %L63, label %L64
 L63:
-  call void @pas_runtime_error(ptr @s77)
+  call void @pas_runtime_error(ptr @s78)
   unreachable
 L64:
   %v168 = sub i32 %v164, 1
@@ -1835,7 +1842,7 @@ L67:
   %v182 = load i32, ptr %v181
   %v183 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 2
   %v184 = load i32, ptr %v183
-  %v185 = call i1 @p82(ptr @frame.aptypes, i32 %v182, i32 %v184, ptr @s78)
+  %v185 = call i1 @p83(ptr @frame.aptypes, i32 %v182, i32 %v184, ptr @s79)
   br label %L68
 L68:
   %v186 = phi i1 [ false, %L47 ], [ %v185, %L67 ]
@@ -1854,7 +1861,7 @@ L69:
   %v196 = or i1 %v194, %v195
   br i1 %v196, label %L71, label %L72
 L71:
-  call void @pas_runtime_error(ptr @s79)
+  call void @pas_runtime_error(ptr @s80)
   unreachable
 L72:
   %v197 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 1
@@ -1868,7 +1875,7 @@ L72:
   %v205 = or i1 %v203, %v204
   br i1 %v205, label %L73, label %L74
 L73:
-  call void @pas_runtime_error(ptr @s80)
+  call void @pas_runtime_error(ptr @s81)
   unreachable
 L74:
   %v206 = call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %v202, i32 1)
@@ -1878,7 +1885,7 @@ L74:
   %v210 = or i1 %v208, %v209
   br i1 %v210, label %L75, label %L76
 L75:
-  call void @pas_runtime_error(ptr @s81)
+  call void @pas_runtime_error(ptr @s82)
   unreachable
 L76:
   store i32 %v193, ptr %v189
@@ -1896,7 +1903,7 @@ L78:
   %v218 = or i1 %v216, %v217
   br i1 %v218, label %L82, label %L83
 L82:
-  call void @pas_runtime_error(ptr @s82)
+  call void @pas_runtime_error(ptr @s83)
   unreachable
 L83:
   %v219 = sub i32 %v215, 1
@@ -1913,7 +1920,7 @@ L84:
   %v228 = or i1 %v226, %v227
   br i1 %v228, label %L86, label %L87
 L86:
-  call void @pas_runtime_error(ptr @s83)
+  call void @pas_runtime_error(ptr @s84)
   unreachable
 L87:
   %v229 = sub i32 %v225, 1
@@ -1971,7 +1978,7 @@ L96:
   %v251 = load i32, ptr %v250
   %v252 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 2
   %v253 = load i32, ptr %v252
-  %v254 = call i1 @p82(ptr @frame.aptypes, i32 %v251, i32 %v253, ptr @s84)
+  %v254 = call i1 @p83(ptr @frame.aptypes, i32 %v251, i32 %v253, ptr @s85)
   br label %L97
 L97:
   %v255 = phi i1 [ true, %L95 ], [ %v254, %L96 ]
@@ -1981,7 +1988,7 @@ L98:
   %v257 = load i32, ptr %v256
   %v258 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 2
   %v259 = load i32, ptr %v258
-  %v260 = call i1 @p.aptypes.poolis(ptr @frame.aptypes, i32 %v257, i32 %v259, ptr @s85)
+  %v260 = call i1 @p.aptypes.poolis(ptr @frame.aptypes, i32 %v257, i32 %v259, ptr @s86)
   br label %L99
 L99:
   %v261 = phi i1 [ true, %L97 ], [ %v260, %L98 ]
@@ -1991,7 +1998,7 @@ L100:
   %v263 = load i32, ptr %v262
   %v264 = getelementptr inbounds %frame11, ptr %frame, i32 0, i32 2
   %v265 = load i32, ptr %v264
-  %v266 = call i1 @p.aptypes.poolis(ptr @frame.aptypes, i32 %v263, i32 %v265, ptr @s86)
+  %v266 = call i1 @p.aptypes.poolis(ptr @frame.aptypes, i32 %v263, i32 %v265, ptr @s87)
   br label %L101
 L101:
   %v267 = phi i1 [ true, %L99 ], [ %v266, %L100 ]
@@ -2001,7 +2008,7 @@ L101:
   ret i1 %v269
 }
 
-; poolsame 2778
+; poolsame 2889
 define i1 @p.aptypes.poolsame(ptr %link, i32 %a0, i32 %a1, i32 %a2, i32 %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2060,7 +2067,7 @@ L6:
   %v33 = or i1 %v31, %v32
   br i1 %v33, label %L10, label %L11
 L10:
-  call void @pas_runtime_error(ptr @s87)
+  call void @pas_runtime_error(ptr @s88)
   unreachable
 L11:
   %v34 = icmp slt i32 %v30, 1
@@ -2068,7 +2075,7 @@ L11:
   %v36 = or i1 %v34, %v35
   br i1 %v36, label %L12, label %L13
 L12:
-  call void @pas_runtime_error(ptr @s88)
+  call void @pas_runtime_error(ptr @s89)
   unreachable
 L13:
   %v37 = sub i32 %v30, 1
@@ -2086,7 +2093,7 @@ L13:
   %v49 = or i1 %v47, %v48
   br i1 %v49, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s89)
+  call void @pas_runtime_error(ptr @s90)
   unreachable
 L15:
   %v50 = icmp slt i32 %v46, 1
@@ -2094,7 +2101,7 @@ L15:
   %v52 = or i1 %v50, %v51
   br i1 %v52, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s90)
+  call void @pas_runtime_error(ptr @s91)
   unreachable
 L17:
   %v53 = sub i32 %v46, 1
@@ -2112,7 +2119,7 @@ L17:
   %v64 = or i1 %v62, %v63
   br i1 %v64, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s91)
+  call void @pas_runtime_error(ptr @s92)
   unreachable
 L19:
   store i32 %v61, ptr %v57
@@ -2129,7 +2136,7 @@ L4:
   ret i1 %v69
 }
 
-; poolput 2796
+; poolput 2907
 define void @p.aptypes.poolput(ptr %link, i8 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2153,7 +2160,7 @@ L2:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s92)
+  call void @pas_runtime_error(ptr @s93)
   unreachable
 L5:
   store i32 %v11, ptr %v7
@@ -2165,7 +2172,7 @@ L5:
   %v20 = or i1 %v18, %v19
   br i1 %v20, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s93)
+  call void @pas_runtime_error(ptr @s94)
   unreachable
 L7:
   %v21 = sub i32 %v17, 1
@@ -2178,7 +2185,7 @@ L3:
   ret void
 }
 
-; internword 2806
+; internword 2917
 define void @p.aptypes.internword(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2208,7 +2215,7 @@ L5:
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s94)
+  call void @pas_runtime_error(ptr @s95)
   unreachable
 L8:
   %v16 = sub i32 %v12, 1
@@ -2230,7 +2237,7 @@ L3:
   %v28 = or i1 %v26, %v27
   br i1 %v28, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s95)
+  call void @pas_runtime_error(ptr @s96)
   unreachable
 L10:
   store i32 %v25, ptr %v21
@@ -2247,7 +2254,7 @@ L4:
   %v37 = or i1 %v35, %v36
   br i1 %v37, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s96)
+  call void @pas_runtime_error(ptr @s97)
   unreachable
 L12:
   store i32 %v34, ptr %v30
@@ -2274,7 +2281,7 @@ L14:
   %v52 = or i1 %v50, %v51
   br i1 %v52, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s97)
+  call void @pas_runtime_error(ptr @s98)
   unreachable
 L19:
   %v53 = sub i32 %v49, 1
@@ -2294,7 +2301,7 @@ L16:
   ret void
 }
 
-; internwide 2818
+; internwide 2929
 define void @p.aptypes.internwide(ptr %link, ptr %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2324,7 +2331,7 @@ L5:
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s98)
+  call void @pas_runtime_error(ptr @s99)
   unreachable
 L8:
   %v16 = sub i32 %v12, 1
@@ -2346,7 +2353,7 @@ L3:
   %v28 = or i1 %v26, %v27
   br i1 %v28, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s99)
+  call void @pas_runtime_error(ptr @s100)
   unreachable
 L10:
   store i32 %v25, ptr %v21
@@ -2363,7 +2370,7 @@ L4:
   %v37 = or i1 %v35, %v36
   br i1 %v37, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s100)
+  call void @pas_runtime_error(ptr @s101)
   unreachable
 L12:
   store i32 %v34, ptr %v30
@@ -2390,7 +2397,7 @@ L14:
   %v52 = or i1 %v50, %v51
   br i1 %v52, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s101)
+  call void @pas_runtime_error(ptr @s102)
   unreachable
 L19:
   %v53 = sub i32 %v49, 1
@@ -2410,7 +2417,7 @@ L16:
   ret void
 }
 
-; internwide2 2832
+; internwide2 2943
 define void @p.aptypes.internwide2(ptr %link, ptr %a0, ptr %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2436,7 +2443,7 @@ L1:
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s102)
+  call void @pas_runtime_error(ptr @s103)
   unreachable
 L3:
   store i32 %v12, ptr %v8
@@ -2460,7 +2467,7 @@ L7:
   %v27 = or i1 %v25, %v26
   br i1 %v27, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s103)
+  call void @pas_runtime_error(ptr @s104)
   unreachable
 L10:
   %v28 = sub i32 %v24, 1
@@ -2482,7 +2489,7 @@ L5:
   %v40 = or i1 %v38, %v39
   br i1 %v40, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s104)
+  call void @pas_runtime_error(ptr @s105)
   unreachable
 L12:
   store i32 %v37, ptr %v33
@@ -2506,7 +2513,7 @@ L14:
   %v51 = or i1 %v49, %v50
   br i1 %v51, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s105)
+  call void @pas_runtime_error(ptr @s106)
   unreachable
 L19:
   %v52 = sub i32 %v48, 1
@@ -2537,7 +2544,7 @@ L16:
   %v69 = or i1 %v67, %v68
   br i1 %v69, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s106)
+  call void @pas_runtime_error(ptr @s107)
   unreachable
 L21:
   store i32 %v66, ptr %v59
@@ -2558,7 +2565,7 @@ L25:
   %v79 = or i1 %v77, %v78
   br i1 %v79, label %L27, label %L28
 L27:
-  call void @pas_runtime_error(ptr @s107)
+  call void @pas_runtime_error(ptr @s108)
   unreachable
 L28:
   %v80 = sub i32 %v76, 1
@@ -2580,7 +2587,7 @@ L23:
   %v92 = or i1 %v90, %v91
   br i1 %v92, label %L29, label %L30
 L29:
-  call void @pas_runtime_error(ptr @s108)
+  call void @pas_runtime_error(ptr @s109)
   unreachable
 L30:
   store i32 %v89, ptr %v85
@@ -2604,7 +2611,7 @@ L32:
   %v103 = or i1 %v101, %v102
   br i1 %v103, label %L36, label %L37
 L36:
-  call void @pas_runtime_error(ptr @s109)
+  call void @pas_runtime_error(ptr @s110)
   unreachable
 L37:
   %v104 = sub i32 %v100, 1
@@ -2635,14 +2642,14 @@ L34:
   %v121 = or i1 %v119, %v120
   br i1 %v121, label %L38, label %L39
 L38:
-  call void @pas_runtime_error(ptr @s110)
+  call void @pas_runtime_error(ptr @s111)
   unreachable
 L39:
   store i32 %v118, ptr %v111
   ret void
 }
 
-; internresultname 2851
+; internresultname 2962
 define void @p.aptypes.internresultname(ptr %link, i32 %a0, i32 %a1, ptr %a2, ptr %a3) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2668,7 +2675,7 @@ L1:
   %v15 = or i1 %v13, %v14
   br i1 %v15, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s111)
+  call void @pas_runtime_error(ptr @s112)
   unreachable
 L3:
   store i32 %v12, ptr %v8
@@ -2682,7 +2689,7 @@ L3:
   %v23 = or i1 %v21, %v22
   br i1 %v23, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s112)
+  call void @pas_runtime_error(ptr @s113)
   unreachable
 L5:
   store i32 0, ptr %v16
@@ -2704,7 +2711,7 @@ L7:
   %v35 = or i1 %v33, %v34
   br i1 %v35, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s113)
+  call void @pas_runtime_error(ptr @s114)
   unreachable
 L12:
   %v36 = icmp slt i32 %v32, 1
@@ -2712,7 +2719,7 @@ L12:
   %v38 = or i1 %v36, %v37
   br i1 %v38, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s114)
+  call void @pas_runtime_error(ptr @s115)
   unreachable
 L14:
   %v39 = sub i32 %v32, 1
@@ -2747,14 +2754,14 @@ L9:
   %v53 = or i1 %v51, %v52
   br i1 %v53, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s115)
+  call void @pas_runtime_error(ptr @s116)
   unreachable
 L16:
   store i32 %v50, ptr %v46
   ret void
 }
 
-; internbindingname 2864
+; internbindingname 2975
 define void @p.aptypes.internbindingname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2778,7 +2785,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s116)
+  call void @pas_runtime_error(ptr @s117)
   unreachable
 L3:
   store i32 %v11, ptr %v7
@@ -2808,7 +2815,7 @@ L4:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s117)
+  call void @pas_runtime_error(ptr @s118)
   unreachable
 L8:
   store i32 %v23, ptr %v19
@@ -2820,7 +2827,7 @@ L8:
   %v32 = or i1 %v30, %v31
   br i1 %v32, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s118)
+  call void @pas_runtime_error(ptr @s119)
   unreachable
 L10:
   %v33 = sub i32 %v29, 1
@@ -2831,7 +2838,7 @@ L10:
   %v38 = icmp sle i32 10, 0
   br i1 %v38, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s119)
+  call void @pas_runtime_error(ptr @s120)
   unreachable
 L12:
   %v39 = srem i32 %v37, 10
@@ -2845,7 +2852,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s120)
+  call void @pas_runtime_error(ptr @s121)
   unreachable
 L14:
   %v48 = icmp slt i32 %v44, 0
@@ -2853,7 +2860,7 @@ L14:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s121)
+  call void @pas_runtime_error(ptr @s122)
   unreachable
 L16:
   %v51 = trunc i32 %v44 to i8
@@ -2864,7 +2871,7 @@ L16:
   %v55 = icmp eq i32 10, 0
   br i1 %v55, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s122)
+  call void @pas_runtime_error(ptr @s123)
   unreachable
 L18:
   %v56 = icmp eq i32 %v54, -2147483648
@@ -2872,7 +2879,7 @@ L18:
   %v58 = and i1 %v56, %v57
   br i1 %v58, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s123)
+  call void @pas_runtime_error(ptr @s124)
   unreachable
 L20:
   %v59 = sdiv i32 %v54, 10
@@ -2902,7 +2909,7 @@ L22:
   %v73 = or i1 %v71, %v72
   br i1 %v73, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s124)
+  call void @pas_runtime_error(ptr @s125)
   unreachable
 L27:
   %v74 = sub i32 %v70, 1
@@ -2930,7 +2937,7 @@ L24:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s125)
+  call void @pas_runtime_error(ptr @s126)
   unreachable
 L29:
   %v89 = getelementptr inbounds %frame18, ptr %frame, i32 0, i32 2
@@ -2943,14 +2950,14 @@ L29:
   %v96 = or i1 %v94, %v95
   br i1 %v96, label %L30, label %L31
 L30:
-  call void @pas_runtime_error(ptr @s126)
+  call void @pas_runtime_error(ptr @s127)
   unreachable
 L31:
   store i32 %v93, ptr %v81
   ret void
 }
 
-; interncallresultname 2883
+; interncallresultname 2994
 define void @p.aptypes.interncallresultname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -2974,7 +2981,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s127)
+  call void @pas_runtime_error(ptr @s128)
   unreachable
 L3:
   store i32 %v11, ptr %v7
@@ -3003,7 +3010,7 @@ L4:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s128)
+  call void @pas_runtime_error(ptr @s129)
   unreachable
 L8:
   store i32 %v23, ptr %v19
@@ -3015,7 +3022,7 @@ L8:
   %v32 = or i1 %v30, %v31
   br i1 %v32, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s129)
+  call void @pas_runtime_error(ptr @s130)
   unreachable
 L10:
   %v33 = sub i32 %v29, 1
@@ -3026,7 +3033,7 @@ L10:
   %v38 = icmp sle i32 10, 0
   br i1 %v38, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s130)
+  call void @pas_runtime_error(ptr @s131)
   unreachable
 L12:
   %v39 = srem i32 %v37, 10
@@ -3040,7 +3047,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s131)
+  call void @pas_runtime_error(ptr @s132)
   unreachable
 L14:
   %v48 = icmp slt i32 %v44, 0
@@ -3048,7 +3055,7 @@ L14:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s132)
+  call void @pas_runtime_error(ptr @s133)
   unreachable
 L16:
   %v51 = trunc i32 %v44 to i8
@@ -3059,7 +3066,7 @@ L16:
   %v55 = icmp eq i32 10, 0
   br i1 %v55, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s133)
+  call void @pas_runtime_error(ptr @s134)
   unreachable
 L18:
   %v56 = icmp eq i32 %v54, -2147483648
@@ -3067,7 +3074,7 @@ L18:
   %v58 = and i1 %v56, %v57
   br i1 %v58, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s134)
+  call void @pas_runtime_error(ptr @s135)
   unreachable
 L20:
   %v59 = sdiv i32 %v54, 10
@@ -3097,7 +3104,7 @@ L22:
   %v73 = or i1 %v71, %v72
   br i1 %v73, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s135)
+  call void @pas_runtime_error(ptr @s136)
   unreachable
 L27:
   %v74 = sub i32 %v70, 1
@@ -3125,7 +3132,7 @@ L24:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s136)
+  call void @pas_runtime_error(ptr @s137)
   unreachable
 L29:
   %v89 = getelementptr inbounds %frame19, ptr %frame, i32 0, i32 2
@@ -3138,14 +3145,14 @@ L29:
   %v96 = or i1 %v94, %v95
   br i1 %v96, label %L30, label %L31
 L30:
-  call void @pas_runtime_error(ptr @s137)
+  call void @pas_runtime_error(ptr @s138)
   unreachable
 L31:
   store i32 %v93, ptr %v81
   ret void
 }
 
-; interntryname 2904
+; interntryname 3015
 define void @p.aptypes.interntryname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3169,7 +3176,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s138)
+  call void @pas_runtime_error(ptr @s139)
   unreachable
 L3:
   store i32 %v11, ptr %v7
@@ -3195,7 +3202,7 @@ L4:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s139)
+  call void @pas_runtime_error(ptr @s140)
   unreachable
 L8:
   store i32 %v23, ptr %v19
@@ -3207,7 +3214,7 @@ L8:
   %v32 = or i1 %v30, %v31
   br i1 %v32, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s140)
+  call void @pas_runtime_error(ptr @s141)
   unreachable
 L10:
   %v33 = sub i32 %v29, 1
@@ -3218,7 +3225,7 @@ L10:
   %v38 = icmp sle i32 10, 0
   br i1 %v38, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s141)
+  call void @pas_runtime_error(ptr @s142)
   unreachable
 L12:
   %v39 = srem i32 %v37, 10
@@ -3232,7 +3239,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s142)
+  call void @pas_runtime_error(ptr @s143)
   unreachable
 L14:
   %v48 = icmp slt i32 %v44, 0
@@ -3240,7 +3247,7 @@ L14:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s143)
+  call void @pas_runtime_error(ptr @s144)
   unreachable
 L16:
   %v51 = trunc i32 %v44 to i8
@@ -3251,7 +3258,7 @@ L16:
   %v55 = icmp eq i32 10, 0
   br i1 %v55, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s144)
+  call void @pas_runtime_error(ptr @s145)
   unreachable
 L18:
   %v56 = icmp eq i32 %v54, -2147483648
@@ -3259,7 +3266,7 @@ L18:
   %v58 = and i1 %v56, %v57
   br i1 %v58, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s145)
+  call void @pas_runtime_error(ptr @s146)
   unreachable
 L20:
   %v59 = sdiv i32 %v54, 10
@@ -3289,7 +3296,7 @@ L22:
   %v73 = or i1 %v71, %v72
   br i1 %v73, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s146)
+  call void @pas_runtime_error(ptr @s147)
   unreachable
 L27:
   %v74 = sub i32 %v70, 1
@@ -3317,14 +3324,14 @@ L24:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s147)
+  call void @pas_runtime_error(ptr @s148)
   unreachable
 L29:
   store i32 %v85, ptr %v81
   ret void
 }
 
-; internwithname 2920
+; internwithname 3031
 define void @p.aptypes.internwithname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3348,7 +3355,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s148)
+  call void @pas_runtime_error(ptr @s149)
   unreachable
 L3:
   store i32 %v11, ptr %v7
@@ -3375,7 +3382,7 @@ L4:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s149)
+  call void @pas_runtime_error(ptr @s150)
   unreachable
 L8:
   store i32 %v23, ptr %v19
@@ -3387,7 +3394,7 @@ L8:
   %v32 = or i1 %v30, %v31
   br i1 %v32, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s150)
+  call void @pas_runtime_error(ptr @s151)
   unreachable
 L10:
   %v33 = sub i32 %v29, 1
@@ -3398,7 +3405,7 @@ L10:
   %v38 = icmp sle i32 10, 0
   br i1 %v38, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s151)
+  call void @pas_runtime_error(ptr @s152)
   unreachable
 L12:
   %v39 = srem i32 %v37, 10
@@ -3412,7 +3419,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s152)
+  call void @pas_runtime_error(ptr @s153)
   unreachable
 L14:
   %v48 = icmp slt i32 %v44, 0
@@ -3420,7 +3427,7 @@ L14:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s153)
+  call void @pas_runtime_error(ptr @s154)
   unreachable
 L16:
   %v51 = trunc i32 %v44 to i8
@@ -3431,7 +3438,7 @@ L16:
   %v55 = icmp eq i32 10, 0
   br i1 %v55, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s154)
+  call void @pas_runtime_error(ptr @s155)
   unreachable
 L18:
   %v56 = icmp eq i32 %v54, -2147483648
@@ -3439,7 +3446,7 @@ L18:
   %v58 = and i1 %v56, %v57
   br i1 %v58, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s155)
+  call void @pas_runtime_error(ptr @s156)
   unreachable
 L20:
   %v59 = sdiv i32 %v54, 10
@@ -3469,7 +3476,7 @@ L22:
   %v73 = or i1 %v71, %v72
   br i1 %v73, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s156)
+  call void @pas_runtime_error(ptr @s157)
   unreachable
 L27:
   %v74 = sub i32 %v70, 1
@@ -3497,14 +3504,14 @@ L24:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s157)
+  call void @pas_runtime_error(ptr @s158)
   unreachable
 L29:
   store i32 %v85, ptr %v81
   ret void
 }
 
-; internboundsname 2946
+; internboundsname 3057
 define void @p.aptypes.internboundsname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3528,7 +3535,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s158)
+  call void @pas_runtime_error(ptr @s159)
   unreachable
 L3:
   store i32 %v11, ptr %v7
@@ -3554,7 +3561,7 @@ L4:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s159)
+  call void @pas_runtime_error(ptr @s160)
   unreachable
 L8:
   store i32 %v23, ptr %v19
@@ -3566,7 +3573,7 @@ L8:
   %v32 = or i1 %v30, %v31
   br i1 %v32, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s160)
+  call void @pas_runtime_error(ptr @s161)
   unreachable
 L10:
   %v33 = sub i32 %v29, 1
@@ -3577,7 +3584,7 @@ L10:
   %v38 = icmp sle i32 10, 0
   br i1 %v38, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s161)
+  call void @pas_runtime_error(ptr @s162)
   unreachable
 L12:
   %v39 = srem i32 %v37, 10
@@ -3591,7 +3598,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s162)
+  call void @pas_runtime_error(ptr @s163)
   unreachable
 L14:
   %v48 = icmp slt i32 %v44, 0
@@ -3599,7 +3606,7 @@ L14:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s163)
+  call void @pas_runtime_error(ptr @s164)
   unreachable
 L16:
   %v51 = trunc i32 %v44 to i8
@@ -3610,7 +3617,7 @@ L16:
   %v55 = icmp eq i32 10, 0
   br i1 %v55, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s164)
+  call void @pas_runtime_error(ptr @s165)
   unreachable
 L18:
   %v56 = icmp eq i32 %v54, -2147483648
@@ -3618,7 +3625,7 @@ L18:
   %v58 = and i1 %v56, %v57
   br i1 %v58, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s165)
+  call void @pas_runtime_error(ptr @s166)
   unreachable
 L20:
   %v59 = sdiv i32 %v54, 10
@@ -3648,7 +3655,7 @@ L22:
   %v73 = or i1 %v71, %v72
   br i1 %v73, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s166)
+  call void @pas_runtime_error(ptr @s167)
   unreachable
 L27:
   %v74 = sub i32 %v70, 1
@@ -3676,14 +3683,14 @@ L24:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s167)
+  call void @pas_runtime_error(ptr @s168)
   unreachable
 L29:
   store i32 %v85, ptr %v81
   ret void
 }
 
-; internforname 2962
+; internforname 3073
 define void @p.aptypes.internforname(ptr %link, i32 %a0, ptr %a1, ptr %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3707,7 +3714,7 @@ L1:
   %v14 = or i1 %v12, %v13
   br i1 %v14, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s168)
+  call void @pas_runtime_error(ptr @s169)
   unreachable
 L3:
   store i32 %v11, ptr %v7
@@ -3733,7 +3740,7 @@ L4:
   %v26 = or i1 %v24, %v25
   br i1 %v26, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s169)
+  call void @pas_runtime_error(ptr @s170)
   unreachable
 L8:
   store i32 %v23, ptr %v19
@@ -3745,7 +3752,7 @@ L8:
   %v32 = or i1 %v30, %v31
   br i1 %v32, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s170)
+  call void @pas_runtime_error(ptr @s171)
   unreachable
 L10:
   %v33 = sub i32 %v29, 1
@@ -3756,7 +3763,7 @@ L10:
   %v38 = icmp sle i32 10, 0
   br i1 %v38, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s171)
+  call void @pas_runtime_error(ptr @s172)
   unreachable
 L12:
   %v39 = srem i32 %v37, 10
@@ -3770,7 +3777,7 @@ L12:
   %v47 = or i1 %v45, %v46
   br i1 %v47, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s172)
+  call void @pas_runtime_error(ptr @s173)
   unreachable
 L14:
   %v48 = icmp slt i32 %v44, 0
@@ -3778,7 +3785,7 @@ L14:
   %v50 = or i1 %v48, %v49
   br i1 %v50, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s173)
+  call void @pas_runtime_error(ptr @s174)
   unreachable
 L16:
   %v51 = trunc i32 %v44 to i8
@@ -3789,7 +3796,7 @@ L16:
   %v55 = icmp eq i32 10, 0
   br i1 %v55, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s174)
+  call void @pas_runtime_error(ptr @s175)
   unreachable
 L18:
   %v56 = icmp eq i32 %v54, -2147483648
@@ -3797,7 +3804,7 @@ L18:
   %v58 = and i1 %v56, %v57
   br i1 %v58, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s175)
+  call void @pas_runtime_error(ptr @s176)
   unreachable
 L20:
   %v59 = sdiv i32 %v54, 10
@@ -3827,7 +3834,7 @@ L22:
   %v73 = or i1 %v71, %v72
   br i1 %v73, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s176)
+  call void @pas_runtime_error(ptr @s177)
   unreachable
 L27:
   %v74 = sub i32 %v70, 1
@@ -3855,14 +3862,14 @@ L24:
   %v88 = or i1 %v86, %v87
   br i1 %v88, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s177)
+  call void @pas_runtime_error(ptr @s178)
   unreachable
 L29:
   store i32 %v85, ptr %v81
   ret void
 }
 
-; newtype 2991
+; newtype 3102
 define ptr @p.aptypes.newtype(ptr %link, i32 %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -3879,7 +3886,7 @@ L1:
   %v8 = icmp eq ptr %v7, null
   br i1 %v8, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s178)
+  call void @pas_runtime_error(ptr @s179)
   unreachable
 L3:
   %v9 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v7, i32 0, i32 0
@@ -3891,7 +3898,7 @@ L3:
   %v14 = icmp eq ptr %v13, null
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s179)
+  call void @pas_runtime_error(ptr @s180)
   unreachable
 L5:
   %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 1
@@ -3901,7 +3908,7 @@ L5:
   %v18 = icmp eq ptr %v17, null
   br i1 %v18, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s180)
+  call void @pas_runtime_error(ptr @s181)
   unreachable
 L7:
   %v19 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v17, i32 0, i32 5
@@ -3911,7 +3918,7 @@ L7:
   %v22 = icmp eq ptr %v21, null
   br i1 %v22, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s181)
+  call void @pas_runtime_error(ptr @s182)
   unreachable
 L9:
   %v23 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v21, i32 0, i32 2
@@ -3921,7 +3928,7 @@ L9:
   %v26 = icmp eq ptr %v25, null
   br i1 %v26, label %L10, label %L11
 L10:
-  call void @pas_runtime_error(ptr @s182)
+  call void @pas_runtime_error(ptr @s183)
   unreachable
 L11:
   %v27 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v25, i32 0, i32 3
@@ -3931,7 +3938,7 @@ L11:
   %v30 = icmp eq ptr %v29, null
   br i1 %v30, label %L12, label %L13
 L12:
-  call void @pas_runtime_error(ptr @s183)
+  call void @pas_runtime_error(ptr @s184)
   unreachable
 L13:
   %v31 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v29, i32 0, i32 4
@@ -3941,7 +3948,7 @@ L13:
   %v34 = icmp eq ptr %v33, null
   br i1 %v34, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s184)
+  call void @pas_runtime_error(ptr @s185)
   unreachable
 L15:
   %v35 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v33, i32 0, i32 6
@@ -3951,7 +3958,7 @@ L15:
   %v38 = icmp eq ptr %v37, null
   br i1 %v38, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s185)
+  call void @pas_runtime_error(ptr @s186)
   unreachable
 L17:
   %v39 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v37, i32 0, i32 7
@@ -3961,7 +3968,7 @@ L17:
   %v42 = icmp eq ptr %v41, null
   br i1 %v42, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s186)
+  call void @pas_runtime_error(ptr @s187)
   unreachable
 L19:
   %v43 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v41, i32 0, i32 8
@@ -3971,7 +3978,7 @@ L19:
   %v46 = icmp eq ptr %v45, null
   br i1 %v46, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s187)
+  call void @pas_runtime_error(ptr @s188)
   unreachable
 L21:
   %v47 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v45, i32 0, i32 9
@@ -3981,7 +3988,7 @@ L21:
   %v50 = icmp eq ptr %v49, null
   br i1 %v50, label %L22, label %L23
 L22:
-  call void @pas_runtime_error(ptr @s188)
+  call void @pas_runtime_error(ptr @s189)
   unreachable
 L23:
   %v51 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v49, i32 0, i32 10
@@ -3992,7 +3999,7 @@ L23:
   %v55 = icmp eq ptr %v54, null
   br i1 %v55, label %L24, label %L25
 L24:
-  call void @pas_runtime_error(ptr @s189)
+  call void @pas_runtime_error(ptr @s190)
   unreachable
 L25:
   %v56 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v54, i32 0, i32 11
@@ -4002,7 +4009,7 @@ L25:
   %v59 = icmp eq ptr %v58, null
   br i1 %v59, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s190)
+  call void @pas_runtime_error(ptr @s191)
   unreachable
 L27:
   %v60 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v58, i32 0, i32 12
@@ -4012,7 +4019,7 @@ L27:
   %v63 = icmp eq ptr %v62, null
   br i1 %v63, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s191)
+  call void @pas_runtime_error(ptr @s192)
   unreachable
 L29:
   %v64 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v62, i32 0, i32 13
@@ -4022,7 +4029,7 @@ L29:
   %v67 = icmp eq ptr %v66, null
   br i1 %v67, label %L30, label %L31
 L30:
-  call void @pas_runtime_error(ptr @s192)
+  call void @pas_runtime_error(ptr @s193)
   unreachable
 L31:
   %v68 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v66, i32 0, i32 14
@@ -4032,7 +4039,7 @@ L31:
   %v71 = icmp eq ptr %v70, null
   br i1 %v71, label %L32, label %L33
 L32:
-  call void @pas_runtime_error(ptr @s193)
+  call void @pas_runtime_error(ptr @s194)
   unreachable
 L33:
   %v72 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v70, i32 0, i32 15
@@ -4042,7 +4049,7 @@ L33:
   %v75 = icmp eq ptr %v74, null
   br i1 %v75, label %L34, label %L35
 L34:
-  call void @pas_runtime_error(ptr @s194)
+  call void @pas_runtime_error(ptr @s195)
   unreachable
 L35:
   %v76 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v74, i32 0, i32 16
@@ -4052,7 +4059,7 @@ L35:
   %v79 = icmp eq ptr %v78, null
   br i1 %v79, label %L36, label %L37
 L36:
-  call void @pas_runtime_error(ptr @s195)
+  call void @pas_runtime_error(ptr @s196)
   unreachable
 L37:
   %v80 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v78, i32 0, i32 21
@@ -4062,7 +4069,7 @@ L37:
   %v83 = icmp eq ptr %v82, null
   br i1 %v83, label %L38, label %L39
 L38:
-  call void @pas_runtime_error(ptr @s196)
+  call void @pas_runtime_error(ptr @s197)
   unreachable
 L39:
   %v84 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v82, i32 0, i32 17
@@ -4072,7 +4079,7 @@ L39:
   %v87 = icmp eq ptr %v86, null
   br i1 %v87, label %L40, label %L41
 L40:
-  call void @pas_runtime_error(ptr @s197)
+  call void @pas_runtime_error(ptr @s198)
   unreachable
 L41:
   %v88 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v86, i32 0, i32 18
@@ -4082,7 +4089,7 @@ L41:
   %v91 = icmp eq ptr %v90, null
   br i1 %v91, label %L42, label %L43
 L42:
-  call void @pas_runtime_error(ptr @s198)
+  call void @pas_runtime_error(ptr @s199)
   unreachable
 L43:
   %v92 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v90, i32 0, i32 19
@@ -4092,7 +4099,7 @@ L43:
   %v95 = icmp eq ptr %v94, null
   br i1 %v95, label %L44, label %L45
 L44:
-  call void @pas_runtime_error(ptr @s199)
+  call void @pas_runtime_error(ptr @s200)
   unreachable
 L45:
   %v96 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v94, i32 0, i32 20
@@ -4103,7 +4110,7 @@ L45:
   %v100 = icmp eq ptr %v99, null
   br i1 %v100, label %L46, label %L47
 L46:
-  call void @pas_runtime_error(ptr @s200)
+  call void @pas_runtime_error(ptr @s201)
   unreachable
 L47:
   %v101 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v99, i32 0, i32 22
@@ -4113,7 +4120,7 @@ L47:
   %v104 = icmp eq ptr %v103, null
   br i1 %v104, label %L48, label %L49
 L48:
-  call void @pas_runtime_error(ptr @s201)
+  call void @pas_runtime_error(ptr @s202)
   unreachable
 L49:
   %v105 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v103, i32 0, i32 23
@@ -4123,7 +4130,7 @@ L49:
   %v108 = icmp eq ptr %v107, null
   br i1 %v108, label %L50, label %L51
 L50:
-  call void @pas_runtime_error(ptr @s202)
+  call void @pas_runtime_error(ptr @s203)
   unreachable
 L51:
   %v109 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v107, i32 0, i32 24
@@ -4133,7 +4140,7 @@ L51:
   %v112 = icmp eq ptr %v111, null
   br i1 %v112, label %L52, label %L53
 L52:
-  call void @pas_runtime_error(ptr @s203)
+  call void @pas_runtime_error(ptr @s204)
   unreachable
 L53:
   %v113 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v111, i32 0, i32 25
@@ -4143,7 +4150,7 @@ L53:
   %v116 = icmp eq ptr %v115, null
   br i1 %v116, label %L54, label %L55
 L54:
-  call void @pas_runtime_error(ptr @s204)
+  call void @pas_runtime_error(ptr @s205)
   unreachable
 L55:
   %v117 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v115, i32 0, i32 26
@@ -4153,7 +4160,7 @@ L55:
   %v120 = icmp eq ptr %v119, null
   br i1 %v120, label %L56, label %L57
 L56:
-  call void @pas_runtime_error(ptr @s205)
+  call void @pas_runtime_error(ptr @s206)
   unreachable
 L57:
   %v121 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v119, i32 0, i32 27
@@ -4163,7 +4170,7 @@ L57:
   %v124 = icmp eq ptr %v123, null
   br i1 %v124, label %L58, label %L59
 L58:
-  call void @pas_runtime_error(ptr @s206)
+  call void @pas_runtime_error(ptr @s207)
   unreachable
 L59:
   %v125 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v123, i32 0, i32 28
@@ -4173,7 +4180,7 @@ L59:
   %v128 = icmp eq ptr %v127, null
   br i1 %v128, label %L60, label %L61
 L60:
-  call void @pas_runtime_error(ptr @s207)
+  call void @pas_runtime_error(ptr @s208)
   unreachable
 L61:
   %v129 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v127, i32 0, i32 29
@@ -4183,7 +4190,7 @@ L61:
   %v132 = icmp eq ptr %v131, null
   br i1 %v132, label %L62, label %L63
 L62:
-  call void @pas_runtime_error(ptr @s208)
+  call void @pas_runtime_error(ptr @s209)
   unreachable
 L63:
   %v133 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v131, i32 0, i32 31
@@ -4193,7 +4200,7 @@ L63:
   %v136 = icmp eq ptr %v135, null
   br i1 %v136, label %L64, label %L65
 L64:
-  call void @pas_runtime_error(ptr @s209)
+  call void @pas_runtime_error(ptr @s210)
   unreachable
 L65:
   %v137 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v135, i32 0, i32 33
@@ -4203,7 +4210,7 @@ L65:
   %v140 = icmp eq ptr %v139, null
   br i1 %v140, label %L66, label %L67
 L66:
-  call void @pas_runtime_error(ptr @s210)
+  call void @pas_runtime_error(ptr @s211)
   unreachable
 L67:
   %v141 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v139, i32 0, i32 32
@@ -4213,7 +4220,7 @@ L67:
   %v144 = icmp eq ptr %v143, null
   br i1 %v144, label %L68, label %L69
 L68:
-  call void @pas_runtime_error(ptr @s211)
+  call void @pas_runtime_error(ptr @s212)
   unreachable
 L69:
   %v145 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v143, i32 0, i32 34
@@ -4223,13 +4230,13 @@ L69:
   %v148 = icmp eq ptr %v147, null
   br i1 %v148, label %L70, label %L71
 L70:
-  call void @pas_runtime_error(ptr @s212)
+  call void @pas_runtime_error(ptr @s213)
   unreachable
 L71:
   %v149 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v147, i32 0, i32 35
   store ptr null, ptr %v149
-  %v150 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 45
-  %v151 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 45
+  %v150 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 47
+  %v151 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 47
   %v152 = load i32, ptr %v151
   %v153 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v152, i32 1)
   %v154 = extractvalue { i32, i1 } %v153, 0
@@ -4238,7 +4245,7 @@ L71:
   %v157 = or i1 %v155, %v156
   br i1 %v157, label %L72, label %L73
 L72:
-  call void @pas_runtime_error(ptr @s213)
+  call void @pas_runtime_error(ptr @s214)
   unreachable
 L73:
   store i32 %v154, ptr %v150
@@ -4247,11 +4254,11 @@ L73:
   %v160 = icmp eq ptr %v159, null
   br i1 %v160, label %L74, label %L75
 L74:
-  call void @pas_runtime_error(ptr @s214)
+  call void @pas_runtime_error(ptr @s215)
   unreachable
 L75:
   %v161 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v159, i32 0, i32 30
-  %v162 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 45
+  %v162 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 47
   %v163 = load i32, ptr %v162
   store i32 %v163, ptr %v161
   %v164 = getelementptr inbounds %frame24, ptr %frame, i32 0, i32 3
@@ -4259,7 +4266,7 @@ L75:
   %v166 = icmp eq ptr %v165, null
   br i1 %v166, label %L76, label %L77
 L76:
-  call void @pas_runtime_error(ptr @s215)
+  call void @pas_runtime_error(ptr @s216)
   unreachable
 L77:
   %v167 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v165, i32 0, i32 36
@@ -4273,7 +4280,7 @@ L77:
   ret ptr %v172
 }
 
-; base 3040
+; base 3151
 define ptr @p.aptypes.base(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4292,7 +4299,7 @@ L2:
   %v9 = icmp eq ptr %v8, null
   br i1 %v9, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s216)
+  call void @pas_runtime_error(ptr @s217)
   unreachable
 L5:
   %v10 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v8, i32 0, i32 0
@@ -4308,7 +4315,7 @@ L6:
   %v16 = icmp eq ptr %v15, null
   br i1 %v16, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s217)
+  call void @pas_runtime_error(ptr @s218)
   unreachable
 L9:
   %v17 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v15, i32 0, i32 3
@@ -4325,7 +4332,7 @@ L10:
   %v24 = icmp eq ptr %v23, null
   br i1 %v24, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s218)
+  call void @pas_runtime_error(ptr @s219)
   unreachable
 L14:
   %v25 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v23, i32 0, i32 3
@@ -4344,7 +4351,7 @@ L12:
   ret ptr %v31
 }
 
-; isinteger 3055
+; isinteger 3166
 define i1 @p.aptypes.isinteger(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4369,7 +4376,7 @@ L2:
   %v14 = icmp eq ptr %v13, null
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s219)
+  call void @pas_runtime_error(ptr @s220)
   unreachable
 L5:
   %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 0
@@ -4384,7 +4391,7 @@ L3:
   ret i1 %v20
 }
 
-; isreal 3062
+; isreal 3173
 define i1 @p.aptypes.isreal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4404,7 +4411,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s220)
+  call void @pas_runtime_error(ptr @s221)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4419,7 +4426,7 @@ L3:
   ret i1 %v16
 }
 
-; isint64 3068
+; isint64 3179
 define i1 @p.aptypes.isint64(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4439,7 +4446,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s221)
+  call void @pas_runtime_error(ptr @s222)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4454,7 +4461,7 @@ L3:
   ret i1 %v16
 }
 
-; iscomplex 3071
+; iscomplex 3182
 define i1 @p.aptypes.iscomplex(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4474,7 +4481,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s222)
+  call void @pas_runtime_error(ptr @s223)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4489,7 +4496,7 @@ L3:
   ret i1 %v16
 }
 
-; isvarstring 3076
+; isvarstring 3187
 define i1 @p.aptypes.isvarstring(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4509,7 +4516,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s223)
+  call void @pas_runtime_error(ptr @s224)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4524,7 +4531,7 @@ L3:
   ret i1 %v16
 }
 
-; istext 3081
+; istext 3192
 define i1 @p.aptypes.istext(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4544,7 +4551,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s224)
+  call void @pas_runtime_error(ptr @s225)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4559,7 +4566,7 @@ L3:
   ret i1 %v16
 }
 
-; isstringrep 3095
+; isstringrep 3206
 define i1 @p.aptypes.isstringrep(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4579,7 +4586,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s225)
+  call void @pas_runtime_error(ptr @s226)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4592,7 +4599,7 @@ L6:
   %v16 = icmp eq ptr %v15, null
   br i1 %v16, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s226)
+  call void @pas_runtime_error(ptr @s227)
   unreachable
 L9:
   %v17 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v15, i32 0, i32 0
@@ -4610,7 +4617,7 @@ L3:
   ret i1 %v23
 }
 
-; isoptional 3101
+; isoptional 3212
 define i1 @p.aptypes.isoptional(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4630,7 +4637,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s227)
+  call void @pas_runtime_error(ptr @s228)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4645,7 +4652,7 @@ L3:
   ret i1 %v16
 }
 
-; isfallible 3108
+; isfallible 3219
 define i1 @p.aptypes.isfallible(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4665,7 +4672,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s228)
+  call void @pas_runtime_error(ptr @s229)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4681,7 +4688,7 @@ L6:
   %v17 = icmp eq ptr %v16, null
   br i1 %v17, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s229)
+  call void @pas_runtime_error(ptr @s230)
   unreachable
 L9:
   %v18 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v16, i32 0, i32 17
@@ -4695,7 +4702,7 @@ L7:
   ret i1 %v22
 }
 
-; isslice 3114
+; isslice 3225
 define i1 @p.aptypes.isslice(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4715,7 +4722,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s230)
+  call void @pas_runtime_error(ptr @s231)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4730,7 +4737,7 @@ L3:
   ret i1 %v16
 }
 
-; sliceof 3122
+; sliceof 3233
 define ptr @p.aptypes.sliceof(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4747,7 +4754,7 @@ L1:
   %v8 = icmp eq ptr %v7, null
   br i1 %v8, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s231)
+  call void @pas_runtime_error(ptr @s232)
   unreachable
 L3:
   %v9 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v7, i32 0, i32 1
@@ -4759,7 +4766,7 @@ L3:
   %v14 = icmp eq ptr %v13, null
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s232)
+  call void @pas_runtime_error(ptr @s233)
   unreachable
 L5:
   %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 9
@@ -4773,7 +4780,7 @@ L5:
   ret ptr %v20
 }
 
-; isnumeric 3131
+; isnumeric 3242
 define i1 @p.aptypes.isnumeric(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4808,7 +4815,7 @@ L5:
   ret i1 %v17
 }
 
-; isarith 3138
+; isarith 3249
 define i1 @p.aptypes.isarith(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4835,7 +4842,7 @@ L3:
   ret i1 %v13
 }
 
-; isboolean 3141
+; isboolean 3252
 define i1 @p.aptypes.isboolean(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4860,7 +4867,7 @@ L2:
   %v14 = icmp eq ptr %v13, null
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s233)
+  call void @pas_runtime_error(ptr @s234)
   unreachable
 L5:
   %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 0
@@ -4875,7 +4882,7 @@ L3:
   ret i1 %v20
 }
 
-; ischar 3148
+; ischar 3259
 define i1 @p.aptypes.ischar(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4900,7 +4907,7 @@ L2:
   %v14 = icmp eq ptr %v13, null
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s234)
+  call void @pas_runtime_error(ptr @s235)
   unreachable
 L5:
   %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 0
@@ -4915,7 +4922,7 @@ L3:
   ret i1 %v20
 }
 
-; isenum 3155
+; isenum 3266
 define i1 @p.aptypes.isenum(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4940,7 +4947,7 @@ L2:
   %v14 = icmp eq ptr %v13, null
   br i1 %v14, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s235)
+  call void @pas_runtime_error(ptr @s236)
   unreachable
 L5:
   %v15 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v13, i32 0, i32 0
@@ -4955,7 +4962,7 @@ L3:
   ret i1 %v20
 }
 
-; isarray 3162
+; isarray 3273
 define i1 @p.aptypes.isarray(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -4975,7 +4982,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s236)
+  call void @pas_runtime_error(ptr @s237)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -4990,7 +4997,7 @@ L3:
   ret i1 %v16
 }
 
-; isrecord 3165
+; isrecord 3276
 define i1 @p.aptypes.isrecord(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5010,7 +5017,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s237)
+  call void @pas_runtime_error(ptr @s238)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5025,7 +5032,7 @@ L3:
   ret i1 %v16
 }
 
-; ispointer 3168
+; ispointer 3279
 define i1 @p.aptypes.ispointer(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5045,7 +5052,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s238)
+  call void @pas_runtime_error(ptr @s239)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5060,7 +5067,7 @@ L3:
   ret i1 %v16
 }
 
-; isfile 3171
+; isfile 3282
 define i1 @p.aptypes.isfile(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5080,7 +5087,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s239)
+  call void @pas_runtime_error(ptr @s240)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5095,7 +5102,7 @@ L3:
   ret i1 %v16
 }
 
-; ishandle 3178
+; ishandle 3289
 define i1 @p.aptypes.ishandle(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5115,7 +5122,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s240)
+  call void @pas_runtime_error(ptr @s241)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5130,7 +5137,7 @@ L3:
   ret i1 %v16
 }
 
-; isowned 3187
+; isowned 3298
 define i1 @p.aptypes.isowned(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5157,7 +5164,7 @@ L3:
   ret i1 %v13
 }
 
-; isownedpointer 3192
+; isownedpointer 3303
 define i1 @p.aptypes.isownedpointer(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5177,7 +5184,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s241)
+  call void @pas_runtime_error(ptr @s242)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 26
@@ -5191,7 +5198,7 @@ L3:
   ret i1 %v15
 }
 
-; isaffine 3200
+; isaffine 3311
 define i1 @p.aptypes.isaffine(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5218,7 +5225,7 @@ L3:
   ret i1 %v13
 }
 
-; istextfile 3204
+; istextfile 3315
 define i1 @p.aptypes.istextfile(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5238,7 +5245,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s242)
+  call void @pas_runtime_error(ptr @s243)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 8
@@ -5252,7 +5259,7 @@ L3:
   ret i1 %v15
 }
 
-; isnil 3208
+; isnil 3319
 define i1 @p.aptypes.isnil(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5272,7 +5279,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s243)
+  call void @pas_runtime_error(ptr @s244)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 1
@@ -5287,7 +5294,7 @@ L3:
   ret i1 %v16
 }
 
-; isset 3211
+; isset 3322
 define i1 @p.aptypes.isset(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5307,7 +5314,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s244)
+  call void @pas_runtime_error(ptr @s245)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5322,7 +5329,7 @@ L3:
   ret i1 %v16
 }
 
-; isproctype 3215
+; isproctype 3326
 define i1 @p.aptypes.isproctype(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5342,7 +5349,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s245)
+  call void @pas_runtime_error(ptr @s246)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5357,7 +5364,7 @@ L3:
   ret i1 %v16
 }
 
-; isemptyset 3220
+; isemptyset 3331
 define i1 @p.aptypes.isemptyset(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5377,7 +5384,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s246)
+  call void @pas_runtime_error(ptr @s247)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 1
@@ -5392,7 +5399,7 @@ L3:
   ret i1 %v16
 }
 
-; isrestricted 3229
+; isrestricted 3340
 define i1 @p.aptypes.isrestricted(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5412,7 +5419,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s247)
+  call void @pas_runtime_error(ptr @s248)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 0
@@ -5427,7 +5434,7 @@ L3:
   ret i1 %v16
 }
 
-; underlying 3234
+; underlying 3345
 define ptr @p.aptypes.underlying(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5447,7 +5454,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s248)
+  call void @pas_runtime_error(ptr @s249)
   unreachable
 L6:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 1
@@ -5466,7 +5473,7 @@ L4:
   ret ptr %v17
 }
 
-; isstructured 3245
+; isstructured 3356
 define i1 @p.aptypes.isstructured(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5486,7 +5493,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s249)
+  call void @pas_runtime_error(ptr @s250)
   unreachable
 L6:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 1
@@ -5499,7 +5506,7 @@ L7:
   %v16 = icmp eq ptr %v15, null
   br i1 %v16, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s250)
+  call void @pas_runtime_error(ptr @s251)
   unreachable
 L10:
   %v17 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v15, i32 0, i32 1
@@ -5515,7 +5522,7 @@ L11:
   %v23 = icmp eq ptr %v22, null
   br i1 %v23, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s251)
+  call void @pas_runtime_error(ptr @s252)
   unreachable
 L14:
   %v24 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v22, i32 0, i32 1
@@ -5555,7 +5562,7 @@ L4:
   ret i1 %v41
 }
 
-; ismemory 3253
+; ismemory 3364
 define i1 @p.aptypes.ismemory(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5580,7 +5587,7 @@ L5:
   %v13 = icmp eq ptr %v12, null
   br i1 %v13, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s252)
+  call void @pas_runtime_error(ptr @s253)
   unreachable
 L8:
   %v14 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v12, i32 0, i32 1
@@ -5596,7 +5603,7 @@ L9:
   %v20 = icmp eq ptr %v19, null
   br i1 %v20, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s253)
+  call void @pas_runtime_error(ptr @s254)
   unreachable
 L12:
   %v21 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v19, i32 0, i32 1
@@ -5636,7 +5643,7 @@ L4:
   ret i1 %v38
 }
 
-; protectable 3265
+; protectable 3376
 define i1 @p.aptypes.protectable(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5682,7 +5689,7 @@ L10:
   %v22 = icmp eq ptr %v21, null
   br i1 %v22, label %L13, label %L14
 L13:
-  call void @pas_runtime_error(ptr @s254)
+  call void @pas_runtime_error(ptr @s255)
   unreachable
 L14:
   %v23 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v21, i32 0, i32 1
@@ -5704,7 +5711,7 @@ L15:
   %v33 = icmp eq ptr %v32, null
   br i1 %v33, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s255)
+  call void @pas_runtime_error(ptr @s256)
   unreachable
 L19:
   %v34 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v32, i32 0, i32 13
@@ -5729,10 +5736,10 @@ L21:
   %v44 = icmp eq ptr %v43, null
   br i1 %v44, label %L25, label %L26
 L25:
-  call void @pas_runtime_error(ptr @s256)
+  call void @pas_runtime_error(ptr @s257)
   unreachable
 L26:
-  %v45 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v43, i32 0, i32 2
+  %v45 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v43, i32 0, i32 2
   %v46 = load ptr, ptr %v45
   %v47 = call i1 @p.aptypes.protectable(ptr @frame.aptypes, ptr %v46)
   %v48 = xor i1 %v47, true
@@ -5748,10 +5755,10 @@ L28:
   %v53 = icmp eq ptr %v52, null
   br i1 %v53, label %L29, label %L30
 L29:
-  call void @pas_runtime_error(ptr @s257)
+  call void @pas_runtime_error(ptr @s258)
   unreachable
 L30:
-  %v54 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v52, i32 0, i32 9
+  %v54 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v52, i32 0, i32 10
   %v55 = load ptr, ptr %v54
   store ptr %v55, ptr %v50
   br label %L20
@@ -5777,7 +5784,7 @@ L4:
   ret i1 %v61
 }
 
-; isordinal 3287
+; isordinal 3398
 define i1 @p.aptypes.isordinal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5806,7 +5813,7 @@ L3:
   %v15 = icmp eq ptr %v14, null
   br i1 %v15, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s258)
+  call void @pas_runtime_error(ptr @s259)
   unreachable
 L6:
   %v16 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v14, i32 0, i32 0
@@ -5848,7 +5855,7 @@ L4:
   ret i1 %v35
 }
 
-; ischararray 3320
+; ischararray 3431
 define i1 @p.aptypes.ischararray(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -5868,7 +5875,7 @@ L2:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s259)
+  call void @pas_runtime_error(ptr @s260)
   unreachable
 L5:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 6
@@ -5887,7 +5894,7 @@ L6:
   %v19 = icmp eq ptr %v18, null
   br i1 %v19, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s260)
+  call void @pas_runtime_error(ptr @s261)
   unreachable
 L9:
   %v20 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v18, i32 0, i32 1
@@ -5900,7 +5907,7 @@ L10:
   %v25 = icmp eq ptr %v24, null
   br i1 %v25, label %L12, label %L13
 L12:
-  call void @pas_runtime_error(ptr @s261)
+  call void @pas_runtime_error(ptr @s262)
   unreachable
 L13:
   %v26 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v24, i32 0, i32 1
@@ -5908,7 +5915,7 @@ L13:
   %v28 = icmp eq ptr %v27, null
   br i1 %v28, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s262)
+  call void @pas_runtime_error(ptr @s263)
   unreachable
 L15:
   %v29 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v27, i32 0, i32 0
@@ -5930,7 +5937,7 @@ L16:
   %v38 = icmp eq ptr %v37, null
   br i1 %v38, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s263)
+  call void @pas_runtime_error(ptr @s264)
   unreachable
 L19:
   %v39 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v37, i32 0, i32 2
@@ -5943,7 +5950,7 @@ L20:
   %v44 = icmp eq ptr %v43, null
   br i1 %v44, label %L22, label %L23
 L22:
-  call void @pas_runtime_error(ptr @s264)
+  call void @pas_runtime_error(ptr @s265)
   unreachable
 L23:
   %v45 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v43, i32 0, i32 31
@@ -5959,7 +5966,7 @@ L24:
   %v51 = icmp eq ptr %v50, null
   br i1 %v51, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s265)
+  call void @pas_runtime_error(ptr @s266)
   unreachable
 L27:
   %v52 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v50, i32 0, i32 9
@@ -5980,7 +5987,7 @@ L17:
   ret i1 %v60
 }
 
-; isstringtype 3334
+; isstringtype 3445
 define i1 @p.aptypes.isstringtype(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6007,7 +6014,7 @@ L3:
   ret i1 %v13
 }
 
-; isstringorchar 3340
+; isstringorchar 3451
 define i1 @p.aptypes.isstringorchar(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6034,7 +6041,7 @@ L3:
   ret i1 %v13
 }
 
-; stringvalueformal 3366
+; stringvalueformal 3477
 define i1 @p.aptypes.stringvalueformal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6049,10 +6056,10 @@ L1:
   %v7 = icmp eq ptr %v6, null
   br i1 %v7, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s266)
+  call void @pas_runtime_error(ptr @s267)
   unreachable
 L3:
-  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
+  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
   %v9 = load i32, ptr %v8
   %v10 = icmp eq i32 %v9, 3
   br i1 %v10, label %L4, label %L5
@@ -6062,10 +6069,10 @@ L4:
   %v13 = icmp eq ptr %v12, null
   br i1 %v13, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s267)
+  call void @pas_runtime_error(ptr @s268)
   unreachable
 L7:
-  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 53
+  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 56
   %v15 = load ptr, ptr %v14
   %v16 = icmp ne ptr %v15, null
   br label %L5
@@ -6078,12 +6085,12 @@ L8:
   %v20 = icmp eq ptr %v19, null
   br i1 %v20, label %L10, label %L11
 L10:
-  call void @pas_runtime_error(ptr @s268)
+  call void @pas_runtime_error(ptr @s269)
   unreachable
 L11:
-  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 53
+  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 56
   %v22 = load ptr, ptr %v21
-  %v23 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 43
+  %v23 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 45
   %v24 = load ptr, ptr %v23
   %v25 = icmp eq ptr %v22, %v24
   br label %L9
@@ -6095,7 +6102,7 @@ L9:
   ret i1 %v28
 }
 
-; foreignstringformal 3378
+; foreignstringformal 3489
 define i1 @p.aptypes.foreignstringformal(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6110,10 +6117,10 @@ L1:
   %v7 = icmp eq ptr %v6, null
   br i1 %v7, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s269)
+  call void @pas_runtime_error(ptr @s270)
   unreachable
 L3:
-  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
+  %v8 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v6, i32 0, i32 2
   %v9 = load i32, ptr %v8
   %v10 = icmp eq i32 %v9, 3
   br i1 %v10, label %L4, label %L5
@@ -6123,10 +6130,10 @@ L4:
   %v13 = icmp eq ptr %v12, null
   br i1 %v13, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s270)
+  call void @pas_runtime_error(ptr @s271)
   unreachable
 L7:
-  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 53
+  %v14 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v12, i32 0, i32 56
   %v15 = load ptr, ptr %v14
   %v16 = icmp ne ptr %v15, null
   br label %L5
@@ -6139,10 +6146,10 @@ L8:
   %v20 = icmp eq ptr %v19, null
   br i1 %v20, label %L10, label %L11
 L10:
-  call void @pas_runtime_error(ptr @s271)
+  call void @pas_runtime_error(ptr @s272)
   unreachable
 L11:
-  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 3
+  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 3
   %v22 = load ptr, ptr %v21
   %v23 = call i1 @p.aptypes.isvarstring(ptr @frame.aptypes, ptr %v22)
   br label %L9
@@ -6154,7 +6161,7 @@ L9:
   ret i1 %v26
 }
 
-; enumcount 3384
+; enumcount 3495
 define i32 @p.aptypes.enumcount(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6171,7 +6178,7 @@ L1:
   %v8 = icmp eq ptr %v7, null
   br i1 %v8, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s272)
+  call void @pas_runtime_error(ptr @s273)
   unreachable
 L3:
   %v9 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v7, i32 0, i32 11
@@ -6194,7 +6201,7 @@ L5:
   %v21 = or i1 %v19, %v20
   br i1 %v21, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s273)
+  call void @pas_runtime_error(ptr @s274)
   unreachable
 L8:
   store i32 %v18, ptr %v14
@@ -6204,7 +6211,7 @@ L8:
   %v25 = icmp eq ptr %v24, null
   br i1 %v25, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s274)
+  call void @pas_runtime_error(ptr @s275)
   unreachable
 L10:
   %v26 = getelementptr inbounds { i32, i32, ptr }, ptr %v24, i32 0, i32 2
@@ -6221,7 +6228,7 @@ L6:
   ret i32 %v32
 }
 
-; ordinallo 3398
+; ordinallo 3509
 define i32 @p.aptypes.ordinallo(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6235,7 +6242,7 @@ L1:
   %v6 = icmp eq ptr %v5, null
   br i1 %v6, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s275)
+  call void @pas_runtime_error(ptr @s276)
   unreachable
 L3:
   %v7 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v5, i32 0, i32 0
@@ -6249,7 +6256,7 @@ L4:
   %v13 = icmp eq ptr %v12, null
   br i1 %v13, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s276)
+  call void @pas_runtime_error(ptr @s277)
   unreachable
 L8:
   %v14 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v12, i32 0, i32 9
@@ -6262,7 +6269,7 @@ L5:
   %v18 = icmp eq ptr %v17, null
   br i1 %v18, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s277)
+  call void @pas_runtime_error(ptr @s278)
   unreachable
 L10:
   %v19 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v17, i32 0, i32 0
@@ -6286,7 +6293,7 @@ L6:
   ret i32 %v26
 }
 
-; ordinalhi 3405
+; ordinalhi 3516
 define i32 @p.aptypes.ordinalhi(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6300,7 +6307,7 @@ L1:
   %v6 = icmp eq ptr %v5, null
   br i1 %v6, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s278)
+  call void @pas_runtime_error(ptr @s279)
   unreachable
 L3:
   %v7 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v5, i32 0, i32 0
@@ -6314,7 +6321,7 @@ L4:
   %v13 = icmp eq ptr %v12, null
   br i1 %v13, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s279)
+  call void @pas_runtime_error(ptr @s280)
   unreachable
 L8:
   %v14 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v12, i32 0, i32 10
@@ -6327,7 +6334,7 @@ L5:
   %v18 = icmp eq ptr %v17, null
   br i1 %v18, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s280)
+  call void @pas_runtime_error(ptr @s281)
   unreachable
 L10:
   %v19 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v17, i32 0, i32 0
@@ -6344,7 +6351,7 @@ L12:
   %v25 = icmp eq ptr %v24, null
   br i1 %v25, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s281)
+  call void @pas_runtime_error(ptr @s282)
   unreachable
 L15:
   %v26 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v24, i32 0, i32 0
@@ -6361,7 +6368,7 @@ L17:
   %v32 = icmp eq ptr %v31, null
   br i1 %v32, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s282)
+  call void @pas_runtime_error(ptr @s283)
   unreachable
 L20:
   %v33 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v31, i32 0, i32 0
@@ -6378,7 +6385,7 @@ L22:
   %v39 = icmp eq ptr %v38, null
   br i1 %v39, label %L24, label %L25
 L24:
-  call void @pas_runtime_error(ptr @s283)
+  call void @pas_runtime_error(ptr @s284)
   unreachable
 L25:
   %v40 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v38, i32 0, i32 0
@@ -6397,7 +6404,7 @@ L26:
   %v51 = or i1 %v49, %v50
   br i1 %v51, label %L29, label %L30
 L29:
-  call void @pas_runtime_error(ptr @s284)
+  call void @pas_runtime_error(ptr @s285)
   unreachable
 L30:
   store i32 %v48, ptr %v43
@@ -6420,7 +6427,7 @@ L6:
   ret i32 %v54
 }
 
-; typelength 3415
+; typelength 3526
 define i32 @p.aptypes.typelength(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6435,7 +6442,7 @@ L1:
   %v7 = icmp eq ptr %v6, null
   br i1 %v7, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s285)
+  call void @pas_runtime_error(ptr @s286)
   unreachable
 L3:
   %v8 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v6, i32 0, i32 10
@@ -6445,7 +6452,7 @@ L3:
   %v12 = icmp eq ptr %v11, null
   br i1 %v12, label %L4, label %L5
 L4:
-  call void @pas_runtime_error(ptr @s286)
+  call void @pas_runtime_error(ptr @s287)
   unreachable
 L5:
   %v13 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v11, i32 0, i32 9
@@ -6457,7 +6464,7 @@ L5:
   %v19 = or i1 %v17, %v18
   br i1 %v19, label %L6, label %L7
 L6:
-  call void @pas_runtime_error(ptr @s287)
+  call void @pas_runtime_error(ptr @s288)
   unreachable
 L7:
   %v20 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v16, i32 1)
@@ -6467,7 +6474,7 @@ L7:
   %v24 = or i1 %v22, %v23
   br i1 %v24, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s288)
+  call void @pas_runtime_error(ptr @s289)
   unreachable
 L9:
   store i32 %v21, ptr %v4
@@ -6476,7 +6483,7 @@ L9:
   ret i32 %v26
 }
 
-; padstofixedstring 3437
+; padstofixedstring 3548
 define i1 @p.aptypes.padstofixedstring(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6514,7 +6521,7 @@ L6:
   %v19 = icmp eq ptr %v18, null
   br i1 %v19, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s289)
+  call void @pas_runtime_error(ptr @s290)
   unreachable
 L9:
   %v20 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v18, i32 0, i32 31
@@ -6530,7 +6537,7 @@ L10:
   %v26 = icmp eq ptr %v25, null
   br i1 %v26, label %L12, label %L13
 L12:
-  call void @pas_runtime_error(ptr @s290)
+  call void @pas_runtime_error(ptr @s291)
   unreachable
 L13:
   %v27 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v25, i32 0, i32 32
@@ -6560,7 +6567,7 @@ L18:
   %v41 = icmp eq ptr %v40, null
   br i1 %v41, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s291)
+  call void @pas_runtime_error(ptr @s292)
   unreachable
 L21:
   %v42 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v40, i32 0, i32 31
@@ -6576,7 +6583,7 @@ L22:
   %v48 = icmp eq ptr %v47, null
   br i1 %v48, label %L24, label %L25
 L24:
-  call void @pas_runtime_error(ptr @s292)
+  call void @pas_runtime_error(ptr @s293)
   unreachable
 L25:
   %v49 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v47, i32 0, i32 32
@@ -6606,7 +6613,7 @@ L17:
   ret i1 %v63
 }
 
-; armatin 3450
+; armatin 3561
 define ptr @p.aptypes.armatin(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6630,7 +6637,7 @@ L3:
   %v11 = icmp eq ptr %v10, null
   br i1 %v11, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s293)
+  call void @pas_runtime_error(ptr @s294)
   unreachable
 L6:
   %v12 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v10, i32 0, i32 11
@@ -6646,7 +6653,7 @@ L6:
   %v21 = or i1 %v19, %v20
   br i1 %v21, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s294)
+  call void @pas_runtime_error(ptr @s295)
   unreachable
 L8:
   store i32 %v18, ptr %v14
@@ -6661,29 +6668,29 @@ L4:
   ret ptr %v26
 }
 
-; findfieldin 3459
-define internal ptr @p83(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
+; findfieldin 3570
+define internal ptr @p84(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame83
-  %v2 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame84
+  %v2 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
   store ptr %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
   store i32 %a1, ptr %v4
-  %v5 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 3
+  %v5 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 3
   store i32 %a2, ptr %v5
-  %v6 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
+  %v6 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
   store ptr null, ptr %v6
   br label %L2
 L2:
-  %v7 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
+  %v7 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
   %v8 = load ptr, ptr %v7
   %v9 = icmp ne ptr %v8, null
   br i1 %v9, label %L5, label %L6
 L5:
-  %v10 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
+  %v10 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
   %v11 = load ptr, ptr %v10
   %v12 = icmp eq ptr %v11, null
   br label %L6
@@ -6691,13 +6698,13 @@ L6:
   %v13 = phi i1 [ false, %L2 ], [ %v12, %L5 ]
   br i1 %v13, label %L3, label %L4
 L3:
-  %v14 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
-  %v15 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
+  %v14 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
+  %v15 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
   %v16 = load ptr, ptr %v15
   %v17 = icmp eq ptr %v16, null
   br i1 %v17, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s295)
+  call void @pas_runtime_error(ptr @s296)
   unreachable
 L8:
   %v18 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v16, i32 0, i32 2
@@ -6705,12 +6712,12 @@ L8:
   store ptr %v19, ptr %v14
   br label %L9
 L9:
-  %v20 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
+  %v20 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
   %v21 = load ptr, ptr %v20
   %v22 = icmp ne ptr %v21, null
   br i1 %v22, label %L12, label %L13
 L12:
-  %v23 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
+  %v23 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
   %v24 = load ptr, ptr %v23
   %v25 = icmp eq ptr %v24, null
   br label %L13
@@ -6718,84 +6725,84 @@ L13:
   %v26 = phi i1 [ false, %L9 ], [ %v25, %L12 ]
   br i1 %v26, label %L10, label %L11
 L10:
-  %v27 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
+  %v27 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
   %v28 = load ptr, ptr %v27
   %v29 = icmp eq ptr %v28, null
   br i1 %v29, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s296)
+  call void @pas_runtime_error(ptr @s297)
   unreachable
 L15:
-  %v30 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v28, i32 0, i32 0
+  %v30 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v28, i32 0, i32 0
   %v31 = load i32, ptr %v30
-  %v32 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
+  %v32 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
   %v33 = load ptr, ptr %v32
   %v34 = icmp eq ptr %v33, null
   br i1 %v34, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s297)
+  call void @pas_runtime_error(ptr @s298)
   unreachable
 L17:
-  %v35 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v33, i32 0, i32 1
+  %v35 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v33, i32 0, i32 1
   %v36 = load i32, ptr %v35
-  %v37 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 2
+  %v37 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
   %v38 = load i32, ptr %v37
-  %v39 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 3
+  %v39 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 3
   %v40 = load i32, ptr %v39
   %v41 = call i1 @p.aptypes.poolsame(ptr @frame.aptypes, i32 %v31, i32 %v36, i32 %v38, i32 %v40)
   br i1 %v41, label %L18, label %L19
 L18:
-  %v42 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
-  %v43 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
+  %v42 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
+  %v43 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
   %v44 = load ptr, ptr %v43
   store ptr %v44, ptr %v42
   br label %L19
 L19:
-  %v45 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
-  %v46 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 5
+  %v45 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
+  %v46 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
   %v47 = load ptr, ptr %v46
   %v48 = icmp eq ptr %v47, null
   br i1 %v48, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s298)
+  call void @pas_runtime_error(ptr @s299)
   unreachable
 L21:
-  %v49 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v47, i32 0, i32 9
+  %v49 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v47, i32 0, i32 10
   %v50 = load ptr, ptr %v49
   store ptr %v50, ptr %v45
   br label %L9
 L11:
-  %v51 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
+  %v51 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
   %v52 = load ptr, ptr %v51
   %v53 = icmp eq ptr %v52, null
   br i1 %v53, label %L22, label %L23
 L22:
-  %v54 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
-  %v55 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
+  %v54 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
+  %v55 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
   %v56 = load ptr, ptr %v55
   %v57 = icmp eq ptr %v56, null
   br i1 %v57, label %L24, label %L25
 L24:
-  call void @pas_runtime_error(ptr @s299)
+  call void @pas_runtime_error(ptr @s300)
   unreachable
 L25:
   %v58 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v56, i32 0, i32 4
   %v59 = load ptr, ptr %v58
-  %v60 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 2
+  %v60 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
   %v61 = load i32, ptr %v60
-  %v62 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 3
+  %v62 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 3
   %v63 = load i32, ptr %v62
-  %v64 = call ptr @p83(ptr @frame.aptypes, ptr %v59, i32 %v61, i32 %v63)
+  %v64 = call ptr @p84(ptr @frame.aptypes, ptr %v59, i32 %v61, i32 %v63)
   store ptr %v64, ptr %v54
   br label %L23
 L23:
-  %v65 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
-  %v66 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 1
+  %v65 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
+  %v66 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
   %v67 = load ptr, ptr %v66
   %v68 = icmp eq ptr %v67, null
   br i1 %v68, label %L26, label %L27
 L26:
-  call void @pas_runtime_error(ptr @s300)
+  call void @pas_runtime_error(ptr @s301)
   unreachable
 L27:
   %v69 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v67, i32 0, i32 11
@@ -6803,16 +6810,16 @@ L27:
   store ptr %v70, ptr %v65
   br label %L2
 L4:
-  %v71 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 4
-  %v72 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 6
+  %v71 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
+  %v72 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 6
   %v73 = load ptr, ptr %v72
   store ptr %v73, ptr %v71
-  %v74 = getelementptr inbounds %frame83, ptr %frame, i32 0, i32 4
+  %v74 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
   %v75 = load ptr, ptr %v74
   ret ptr %v75
 }
 
-; findfield 3475
+; findfield 3586
 define ptr @p.aptypes.findfield(ptr %link, ptr %a0, i32 %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -6833,7 +6840,7 @@ L1:
   %v10 = icmp eq ptr %v9, null
   br i1 %v10, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s301)
+  call void @pas_runtime_error(ptr @s302)
   unreachable
 L3:
   %v11 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v9, i32 0, i32 13
@@ -6859,20 +6866,20 @@ L5:
   %v22 = icmp eq ptr %v21, null
   br i1 %v22, label %L9, label %L10
 L9:
-  call void @pas_runtime_error(ptr @s302)
+  call void @pas_runtime_error(ptr @s303)
   unreachable
 L10:
-  %v23 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v21, i32 0, i32 0
+  %v23 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v21, i32 0, i32 0
   %v24 = load i32, ptr %v23
   %v25 = getelementptr inbounds %frame72, ptr %frame, i32 0, i32 5
   %v26 = load ptr, ptr %v25
   %v27 = icmp eq ptr %v26, null
   br i1 %v27, label %L11, label %L12
 L11:
-  call void @pas_runtime_error(ptr @s303)
+  call void @pas_runtime_error(ptr @s304)
   unreachable
 L12:
-  %v28 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v26, i32 0, i32 1
+  %v28 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v26, i32 0, i32 1
   %v29 = load i32, ptr %v28
   %v30 = getelementptr inbounds %frame72, ptr %frame, i32 0, i32 2
   %v31 = load i32, ptr %v30
@@ -6893,10 +6900,10 @@ L14:
   %v41 = icmp eq ptr %v40, null
   br i1 %v41, label %L15, label %L16
 L15:
-  call void @pas_runtime_error(ptr @s304)
+  call void @pas_runtime_error(ptr @s305)
   unreachable
 L16:
-  %v42 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v40, i32 0, i32 9
+  %v42 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v40, i32 0, i32 10
   %v43 = load ptr, ptr %v42
   store ptr %v43, ptr %v38
   br label %L4
@@ -6912,7 +6919,7 @@ L17:
   %v50 = icmp eq ptr %v49, null
   br i1 %v50, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s305)
+  call void @pas_runtime_error(ptr @s306)
   unreachable
 L20:
   %v51 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v49, i32 0, i32 15
@@ -6921,7 +6928,7 @@ L20:
   %v54 = load i32, ptr %v53
   %v55 = getelementptr inbounds %frame72, ptr %frame, i32 0, i32 3
   %v56 = load i32, ptr %v55
-  %v57 = call ptr @p83(ptr @frame.aptypes, ptr %v52, i32 %v54, i32 %v56)
+  %v57 = call ptr @p84(ptr @frame.aptypes, ptr %v52, i32 %v54, i32 %v56)
   store ptr %v57, ptr %v47
   br label %L18
 L18:
@@ -6934,24 +6941,24 @@ L18:
   ret ptr %v62
 }
 
-; armat 3490
-define internal ptr @p84(ptr %link, ptr %a0, ptr %a1) {
+; armat 3601
+define internal ptr @p85(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame84
-  %v2 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame85
+  %v2 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 1
   store ptr %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
   store ptr %a1, ptr %v4
-  %v5 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
-  %v6 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 1
+  %v5 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 4
+  %v6 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 1
   %v7 = load ptr, ptr %v6
   %v8 = icmp eq ptr %v7, null
   br i1 %v8, label %L2, label %L3
 L2:
-  call void @pas_runtime_error(ptr @s306)
+  call void @pas_runtime_error(ptr @s307)
   unreachable
 L3:
   %v9 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v7, i32 0, i32 15
@@ -6959,23 +6966,23 @@ L3:
   store ptr %v10, ptr %v5
   br label %L4
 L4:
-  %v11 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
+  %v11 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
   %v12 = load ptr, ptr %v11
   %v13 = icmp ne ptr %v12, null
   br i1 %v13, label %L5, label %L6
 L5:
-  %v14 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
+  %v14 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 5
   store i32 0, ptr %v14
   br label %L7
 L7:
-  %v15 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
+  %v15 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 5
   %v16 = load i32, ptr %v15
-  %v17 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
+  %v17 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
   %v18 = load ptr, ptr %v17
   %v19 = icmp eq ptr %v18, null
   br i1 %v19, label %L10, label %L11
 L10:
-  call void @pas_runtime_error(ptr @s307)
+  call void @pas_runtime_error(ptr @s308)
   unreachable
 L11:
   %v20 = getelementptr inbounds { i32, ptr }, ptr %v18, i32 0, i32 0
@@ -6983,20 +6990,20 @@ L11:
   %v22 = icmp slt i32 %v16, %v21
   br i1 %v22, label %L8, label %L9
 L8:
-  %v23 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
-  %v24 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
+  %v23 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 4
+  %v24 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 4
   %v25 = load ptr, ptr %v24
   %v26 = icmp eq ptr %v25, null
   br i1 %v26, label %L12, label %L13
 L12:
-  call void @pas_runtime_error(ptr @s308)
+  call void @pas_runtime_error(ptr @s309)
   unreachable
 L13:
   %v27 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v25, i32 0, i32 11
   %v28 = load ptr, ptr %v27
   store ptr %v28, ptr %v23
-  %v29 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
-  %v30 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 5
+  %v29 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 5
+  %v30 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 5
   %v31 = load i32, ptr %v30
   %v32 = call { i32, i1 } @llvm.sadd.with.overflow.i32(i32 %v31, i32 1)
   %v33 = extractvalue { i32, i1 } %v32, 0
@@ -7005,18 +7012,18 @@ L13:
   %v36 = or i1 %v34, %v35
   br i1 %v36, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s309)
+  call void @pas_runtime_error(ptr @s310)
   unreachable
 L15:
   store i32 %v33, ptr %v29
   br label %L7
 L9:
-  %v37 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
+  %v37 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
   %v38 = load ptr, ptr %v37
   %v39 = icmp eq ptr %v38, null
   br i1 %v39, label %L16, label %L17
 L16:
-  call void @pas_runtime_error(ptr @s310)
+  call void @pas_runtime_error(ptr @s311)
   unreachable
 L17:
   %v40 = getelementptr inbounds { i32, ptr }, ptr %v38, i32 0, i32 1
@@ -7024,13 +7031,13 @@ L17:
   %v42 = icmp ne ptr %v41, null
   br i1 %v42, label %L18, label %L19
 L18:
-  %v43 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
-  %v44 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
+  %v43 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 4
+  %v44 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 4
   %v45 = load ptr, ptr %v44
   %v46 = icmp eq ptr %v45, null
   br i1 %v46, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s311)
+  call void @pas_runtime_error(ptr @s312)
   unreachable
 L21:
   %v47 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v45, i32 0, i32 4
@@ -7038,13 +7045,13 @@ L21:
   store ptr %v48, ptr %v43
   br label %L19
 L19:
-  %v49 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
-  %v50 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 2
+  %v49 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
+  %v50 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
   %v51 = load ptr, ptr %v50
   %v52 = icmp eq ptr %v51, null
   br i1 %v52, label %L22, label %L23
 L22:
-  call void @pas_runtime_error(ptr @s312)
+  call void @pas_runtime_error(ptr @s313)
   unreachable
 L23:
   %v53 = getelementptr inbounds { i32, ptr }, ptr %v51, i32 0, i32 1
@@ -7052,16 +7059,16 @@ L23:
   store ptr %v54, ptr %v49
   br label %L4
 L6:
-  %v55 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 3
-  %v56 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 4
+  %v55 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 3
+  %v56 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 4
   %v57 = load ptr, ptr %v56
   store ptr %v57, ptr %v55
-  %v58 = getelementptr inbounds %frame84, ptr %frame, i32 0, i32 3
+  %v58 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 3
   %v59 = load ptr, ptr %v58
   ret ptr %v59
 }
 
-; armsat 3512
+; armsat 3623
 define ptr @p.aptypes.armsat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7083,7 +7090,7 @@ L2:
   %v11 = icmp eq ptr %v10, null
   br i1 %v11, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s313)
+  call void @pas_runtime_error(ptr @s314)
   unreachable
 L6:
   %v12 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v10, i32 0, i32 15
@@ -7096,7 +7103,7 @@ L3:
   %v16 = load ptr, ptr %v15
   %v17 = getelementptr inbounds %frame73, ptr %frame, i32 0, i32 2
   %v18 = load ptr, ptr %v17
-  %v19 = call ptr @p84(ptr @frame.aptypes, ptr %v16, ptr %v18)
+  %v19 = call ptr @p85(ptr @frame.aptypes, ptr %v16, ptr %v18)
   store ptr %v19, ptr %v14
   %v20 = getelementptr inbounds %frame73, ptr %frame, i32 0, i32 3
   %v21 = getelementptr inbounds %frame73, ptr %frame, i32 0, i32 4
@@ -7104,7 +7111,7 @@ L3:
   %v23 = icmp eq ptr %v22, null
   br i1 %v23, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s314)
+  call void @pas_runtime_error(ptr @s315)
   unreachable
 L8:
   %v24 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v22, i32 0, i32 4
@@ -7117,7 +7124,7 @@ L4:
   ret ptr %v27
 }
 
-; fieldsat 3523
+; fieldsat 3634
 define ptr @p.aptypes.fieldsat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7139,7 +7146,7 @@ L2:
   %v11 = icmp eq ptr %v10, null
   br i1 %v11, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s315)
+  call void @pas_runtime_error(ptr @s316)
   unreachable
 L6:
   %v12 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v10, i32 0, i32 13
@@ -7152,7 +7159,7 @@ L3:
   %v16 = load ptr, ptr %v15
   %v17 = getelementptr inbounds %frame74, ptr %frame, i32 0, i32 2
   %v18 = load ptr, ptr %v17
-  %v19 = call ptr @p84(ptr @frame.aptypes, ptr %v16, ptr %v18)
+  %v19 = call ptr @p85(ptr @frame.aptypes, ptr %v16, ptr %v18)
   store ptr %v19, ptr %v14
   %v20 = getelementptr inbounds %frame74, ptr %frame, i32 0, i32 3
   %v21 = getelementptr inbounds %frame74, ptr %frame, i32 0, i32 4
@@ -7160,7 +7167,7 @@ L3:
   %v23 = icmp eq ptr %v22, null
   br i1 %v23, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s316)
+  call void @pas_runtime_error(ptr @s317)
   unreachable
 L8:
   %v24 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v22, i32 0, i32 2
@@ -7173,7 +7180,7 @@ L4:
   ret ptr %v27
 }
 
-; tagfieldat 3537
+; tagfieldat 3648
 define i32 @p.aptypes.tagfieldat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7195,7 +7202,7 @@ L2:
   %v11 = icmp eq ptr %v10, null
   br i1 %v11, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s317)
+  call void @pas_runtime_error(ptr @s318)
   unreachable
 L6:
   %v12 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v10, i32 0, i32 20
@@ -7208,7 +7215,7 @@ L3:
   %v16 = load ptr, ptr %v15
   %v17 = getelementptr inbounds %frame75, ptr %frame, i32 0, i32 2
   %v18 = load ptr, ptr %v17
-  %v19 = call ptr @p84(ptr @frame.aptypes, ptr %v16, ptr %v18)
+  %v19 = call ptr @p85(ptr @frame.aptypes, ptr %v16, ptr %v18)
   store ptr %v19, ptr %v14
   %v20 = getelementptr inbounds %frame75, ptr %frame, i32 0, i32 3
   %v21 = getelementptr inbounds %frame75, ptr %frame, i32 0, i32 4
@@ -7216,7 +7223,7 @@ L3:
   %v23 = icmp eq ptr %v22, null
   br i1 %v23, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s318)
+  call void @pas_runtime_error(ptr @s319)
   unreachable
 L8:
   %v24 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v22, i32 0, i32 6
@@ -7229,7 +7236,7 @@ L4:
   ret i32 %v27
 }
 
-; tagtypeat 3548
+; tagtypeat 3659
 define ptr @p.aptypes.tagtypeat(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7251,7 +7258,7 @@ L2:
   %v11 = icmp eq ptr %v10, null
   br i1 %v11, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s319)
+  call void @pas_runtime_error(ptr @s320)
   unreachable
 L6:
   %v12 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v10, i32 0, i32 4
@@ -7264,7 +7271,7 @@ L3:
   %v16 = load ptr, ptr %v15
   %v17 = getelementptr inbounds %frame76, ptr %frame, i32 0, i32 2
   %v18 = load ptr, ptr %v17
-  %v19 = call ptr @p84(ptr @frame.aptypes, ptr %v16, ptr %v18)
+  %v19 = call ptr @p85(ptr @frame.aptypes, ptr %v16, ptr %v18)
   store ptr %v19, ptr %v14
   %v20 = getelementptr inbounds %frame76, ptr %frame, i32 0, i32 3
   %v21 = getelementptr inbounds %frame76, ptr %frame, i32 0, i32 4
@@ -7272,7 +7279,7 @@ L3:
   %v23 = icmp eq ptr %v22, null
   br i1 %v23, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s320)
+  call void @pas_runtime_error(ptr @s321)
   unreachable
 L8:
   %v24 = getelementptr inbounds { ptr, i1, ptr, ptr, ptr, ptr, i32, ptr, i1, i32, i32, ptr }, ptr %v22, i32 0, i32 7
@@ -7285,7 +7292,85 @@ L4:
   ret ptr %v27
 }
 
-; writeordinalname 3563
+; fileindexof 3670
+define i32 @p.aptypes.fileindexof(ptr %link, ptr %a0, i32 %a1) {
+L1:
+  %v1 = load i32, ptr @pas_str_at
+  %frame = alloca %frame78
+  %v2 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 0
+  store ptr %link, ptr %v2
+  %v3 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @pas_str_store_var(ptr %v3, i32 255, ptr %a0, i32 %a1)
+  %v4 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  store i32 0, ptr %v4
+  %v5 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v6 = getelementptr inbounds { i32, [255 x i8] }, ptr %v5, i32 0, i32 0
+  %v7 = load i32, ptr %v6
+  %v8 = getelementptr inbounds { i32, [255 x i8] }, ptr %v5, i32 0, i32 1
+  %v9 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 39
+  %v10 = getelementptr inbounds { i32, [255 x i8] }, ptr %v9, i32 0, i32 0
+  %v11 = load i32, ptr %v10
+  %v12 = getelementptr inbounds { i32, [255 x i8] }, ptr %v9, i32 0, i32 1
+  %v13 = call i32 @pas_str_cmp_pad(ptr %v8, i32 %v7, ptr %v12, i32 %v11)
+  %v14 = icmp ne i32 %v13, 0
+  br i1 %v14, label %L2, label %L3
+L2:
+  %v15 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  store i32 1, ptr %v15
+  br label %L4
+L4:
+  %v16 = load i32, ptr %v15
+  %v17 = icmp sle i32 %v16, 32
+  br i1 %v17, label %L5, label %L7
+L5:
+  %v18 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v19 = getelementptr inbounds { i32, [255 x i8] }, ptr %v18, i32 0, i32 0
+  %v20 = load i32, ptr %v19
+  %v21 = getelementptr inbounds { i32, [255 x i8] }, ptr %v18, i32 0, i32 1
+  %v22 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 24
+  %v23 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  %v24 = load i32, ptr %v23
+  %v25 = icmp slt i32 %v24, 1
+  %v26 = icmp sgt i32 %v24, 32
+  %v27 = or i1 %v25, %v26
+  br i1 %v27, label %L9, label %L10
+L9:
+  call void @pas_runtime_error(ptr @s322)
+  unreachable
+L10:
+  %v28 = sub i32 %v24, 1
+  %v29 = getelementptr inbounds [32 x { i32, [255 x i8] }], ptr %v22, i32 0, i32 %v28
+  %v30 = getelementptr inbounds { i32, [255 x i8] }, ptr %v29, i32 0, i32 0
+  %v31 = load i32, ptr %v30
+  %v32 = getelementptr inbounds { i32, [255 x i8] }, ptr %v29, i32 0, i32 1
+  %v33 = call i32 @pas_str_cmp_pad(ptr %v21, i32 %v20, ptr %v32, i32 %v31)
+  %v34 = icmp eq i32 %v33, 0
+  br i1 %v34, label %L11, label %L12
+L11:
+  %v35 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  %v36 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  %v37 = load i32, ptr %v36
+  store i32 %v37, ptr %v35
+  br label %L12
+L12:
+  br label %L8
+L8:
+  %v38 = load i32, ptr %v15
+  %v39 = icmp eq i32 %v38, 32
+  br i1 %v39, label %L7, label %L6
+L6:
+  %v40 = add i32 %v38, 1
+  store i32 %v40, ptr %v15
+  br label %L4
+L7:
+  br label %L3
+L3:
+  %v41 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  %v42 = load i32, ptr %v41
+  ret i32 %v42
+}
+
+; writeordinalname 3687
 define void @p.aptypes.writeordinalname(ptr %link, ptr %a0, i32 %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
@@ -7319,7 +7404,7 @@ L4:
 L5:
   %v16 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
   %v17 = load i32, ptr %v16
-  call void @p81(ptr @frame.aptypes, i32 %v17)
+  call void @p82(ptr @frame.aptypes, i32 %v17)
   br label %L7
 L6:
   %v18 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 3
@@ -7327,7 +7412,7 @@ L6:
   %v20 = icmp eq ptr %v19, null
   br i1 %v20, label %L8, label %L9
 L8:
-  call void @pas_runtime_error(ptr @s321)
+  call void @pas_runtime_error(ptr @s323)
   unreachable
 L9:
   %v21 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v19, i32 0, i32 0
@@ -7356,7 +7441,7 @@ L15:
   %v35 = or i1 %v33, %v34
   br i1 %v35, label %L18, label %L19
 L18:
-  call void @pas_runtime_error(ptr @s322)
+  call void @pas_runtime_error(ptr @s324)
   unreachable
 L19:
   %v36 = trunc i32 %v32 to i8
@@ -7364,10 +7449,10 @@ L19:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 39)
   br label %L17
 L16:
-  call void @p80(ptr @frame.aptypes, ptr @s323)
+  call void @p81(ptr @frame.aptypes, ptr @s325)
   %v37 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
   %v38 = load i32, ptr %v37
-  call void @p81(ptr @frame.aptypes, i32 %v38)
+  call void @p82(ptr @frame.aptypes, i32 %v38)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 41)
   br label %L17
 L17:
@@ -7378,7 +7463,7 @@ L11:
   %v41 = icmp eq ptr %v40, null
   br i1 %v41, label %L20, label %L21
 L20:
-  call void @pas_runtime_error(ptr @s324)
+  call void @pas_runtime_error(ptr @s326)
   unreachable
 L21:
   %v42 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v40, i32 0, i32 0
@@ -7391,10 +7476,10 @@ L22:
   %v47 = icmp ne i32 %v46, 0
   br i1 %v47, label %L25, label %L26
 L25:
-  call void @p80(ptr @frame.aptypes, ptr @s325)
+  call void @p81(ptr @frame.aptypes, ptr @s327)
   br label %L27
 L26:
-  call void @p80(ptr @frame.aptypes, ptr @s326)
+  call void @p81(ptr @frame.aptypes, ptr @s328)
   br label %L27
 L27:
   br label %L24
@@ -7404,7 +7489,7 @@ L23:
   %v50 = icmp eq ptr %v49, null
   br i1 %v50, label %L28, label %L29
 L28:
-  call void @pas_runtime_error(ptr @s327)
+  call void @pas_runtime_error(ptr @s329)
   unreachable
 L29:
   %v51 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v49, i32 0, i32 0
@@ -7437,7 +7522,7 @@ L34:
   %v68 = icmp eq ptr %v67, null
   br i1 %v68, label %L37, label %L38
 L37:
-  call void @pas_runtime_error(ptr @s328)
+  call void @pas_runtime_error(ptr @s330)
   unreachable
 L38:
   %v69 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v67, i32 0, i32 11
@@ -7466,7 +7551,7 @@ L42:
   %v83 = icmp eq ptr %v82, null
   br i1 %v83, label %L45, label %L46
 L45:
-  call void @pas_runtime_error(ptr @s329)
+  call void @pas_runtime_error(ptr @s331)
   unreachable
 L46:
   %v84 = getelementptr inbounds { i32, i32, ptr }, ptr %v82, i32 0, i32 0
@@ -7476,7 +7561,7 @@ L46:
   %v88 = icmp eq ptr %v87, null
   br i1 %v88, label %L47, label %L48
 L47:
-  call void @pas_runtime_error(ptr @s330)
+  call void @pas_runtime_error(ptr @s332)
   unreachable
 L48:
   %v89 = getelementptr inbounds { i32, i32, ptr }, ptr %v87, i32 0, i32 1
@@ -7492,7 +7577,7 @@ L43:
   %v95 = icmp eq ptr %v94, null
   br i1 %v95, label %L49, label %L50
 L49:
-  call void @pas_runtime_error(ptr @s331)
+  call void @pas_runtime_error(ptr @s333)
   unreachable
 L50:
   %v96 = getelementptr inbounds { i32, i32, ptr }, ptr %v94, i32 0, i32 2
@@ -7508,7 +7593,7 @@ L50:
   %v105 = or i1 %v103, %v104
   br i1 %v105, label %L51, label %L52
 L51:
-  call void @pas_runtime_error(ptr @s332)
+  call void @pas_runtime_error(ptr @s334)
   unreachable
 L52:
   store i32 %v102, ptr %v98
@@ -7520,7 +7605,7 @@ L41:
 L35:
   %v106 = getelementptr inbounds %frame77, ptr %frame, i32 0, i32 2
   %v107 = load i32, ptr %v106
-  call void @p81(ptr @frame.aptypes, i32 %v107)
+  call void @p82(ptr @frame.aptypes, i32 %v107)
   br label %L36
 L36:
   br label %L24
@@ -7532,50 +7617,50 @@ L7:
   ret void
 }
 
-; writeboundname 3609
-define internal void @p85(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
+; writeboundname 3733
+define internal void @p86(ptr %link, ptr %a0, ptr %a1, i32 %a2) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame85
-  %v2 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame86
+  %v2 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 1
   store ptr %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 2
   store ptr %a1, ptr %v4
-  %v5 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 3
+  %v5 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 3
   store i32 %a2, ptr %v5
-  %v6 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
+  %v6 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 2
   %v7 = load ptr, ptr %v6
   %v8 = icmp eq ptr %v7, null
   br i1 %v8, label %L2, label %L3
 L2:
-  %v9 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 1
+  %v9 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 1
   %v10 = load ptr, ptr %v9
-  %v11 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 3
+  %v11 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 3
   %v12 = load i32, ptr %v11
   call void @p.aptypes.writeordinalname(ptr @frame.aptypes, ptr %v10, i32 %v12)
   br label %L4
 L3:
-  %v13 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
+  %v13 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 2
   %v14 = load ptr, ptr %v13
   %v15 = icmp eq ptr %v14, null
   br i1 %v15, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s333)
+  call void @pas_runtime_error(ptr @s335)
   unreachable
 L6:
-  %v16 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v14, i32 0, i32 0
+  %v16 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v14, i32 0, i32 0
   %v17 = load i32, ptr %v16
-  %v18 = getelementptr inbounds %frame85, ptr %frame, i32 0, i32 2
+  %v18 = getelementptr inbounds %frame86, ptr %frame, i32 0, i32 2
   %v19 = load ptr, ptr %v18
   %v20 = icmp eq ptr %v19, null
   br i1 %v20, label %L7, label %L8
 L7:
-  call void @pas_runtime_error(ptr @s334)
+  call void @pas_runtime_error(ptr @s336)
   unreachable
 L8:
-  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 1
+  %v21 = getelementptr inbounds { i32, i32, i32, ptr, i32, i32, i32, i32, i32, i32, i8, i1, i32, i32, i1, ptr, i1, i32, i32, i32, ptr, ptr, ptr, ptr, ptr, i32, ptr, ptr, ptr, ptr, ptr, i32, i32, ptr, i1, i1, i1, i32, i32, i1, i1, ptr, ptr, ptr, ptr, i1, i32, ptr, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, ptr, i1, i1, ptr, ptr, ptr, ptr, i32, i32, i1, i1, i1, i1, i1, i32, i32, i1, i1, i1, i1, i1, i1, ptr, ptr, ptr, ptr, i1, i32, i32, i32, i32, i32, i1, i32, ptr }, ptr %v19, i32 0, i32 1
   %v22 = load i32, ptr %v21
   call void @p.aptypes.writepool(ptr @frame.aptypes, i32 %v17, i32 %v22)
   br label %L4
@@ -7583,16 +7668,16 @@ L4:
   ret void
 }
 
-; writetypename 3615
+; writetypename 3739
 define void @p.aptypes.writetypename(ptr %link, ptr %a0) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame78
-  %v2 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame79
+  %v2 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   store ptr %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v4 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v5 = load ptr, ptr %v4
   %v6 = icmp eq ptr %v5, null
   br i1 %v6, label %L2, label %L3
@@ -7600,12 +7685,12 @@ L2:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 63)
   br label %L4
 L3:
-  %v7 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v7 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v8 = load ptr, ptr %v7
   %v9 = icmp eq ptr %v8, null
   br i1 %v9, label %L5, label %L6
 L5:
-  call void @pas_runtime_error(ptr @s335)
+  call void @pas_runtime_error(ptr @s337)
   unreachable
 L6:
   %v10 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v8, i32 0, i32 23
@@ -7613,22 +7698,22 @@ L6:
   %v12 = icmp sgt i32 %v11, 0
   br i1 %v12, label %L7, label %L8
 L7:
-  %v13 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v13 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v14 = load ptr, ptr %v13
   %v15 = icmp eq ptr %v14, null
   br i1 %v15, label %L10, label %L11
 L10:
-  call void @pas_runtime_error(ptr @s336)
+  call void @pas_runtime_error(ptr @s338)
   unreachable
 L11:
   %v16 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v14, i32 0, i32 22
   %v17 = load i32, ptr %v16
-  %v18 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v18 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v19 = load ptr, ptr %v18
   %v20 = icmp eq ptr %v19, null
   br i1 %v20, label %L12, label %L13
 L12:
-  call void @pas_runtime_error(ptr @s337)
+  call void @pas_runtime_error(ptr @s339)
   unreachable
 L13:
   %v21 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v19, i32 0, i32 23
@@ -7636,37 +7721,37 @@ L13:
   call void @p.aptypes.writepool(ptr @frame.aptypes, i32 %v17, i32 %v22)
   br label %L9
 L8:
-  %v23 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v23 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v24 = load ptr, ptr %v23
   %v25 = icmp eq ptr %v24, null
   br i1 %v25, label %L14, label %L15
 L14:
-  call void @pas_runtime_error(ptr @s338)
+  call void @pas_runtime_error(ptr @s340)
   unreachable
 L15:
   %v26 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v24, i32 0, i32 0
   %v27 = load i32, ptr %v26
   switch i32 %v27, label %L37 [ i32 1, label %L16 i32 20, label %L17 i32 2, label %L18 i32 13, label %L19 i32 14, label %L20 i32 18, label %L21 i32 19, label %L22 i32 3, label %L23 i32 4, label %L24 i32 0, label %L25 i32 5, label %L26 i32 6, label %L27 i32 9, label %L28 i32 15, label %L29 i32 16, label %L30 i32 17, label %L31 i32 10, label %L32 i32 11, label %L33 i32 12, label %L34 i32 8, label %L35 i32 7, label %L36 ]
 L16:
-  call void @p80(ptr @frame.aptypes, ptr @s339)
+  call void @p81(ptr @frame.aptypes, ptr @s341)
   br label %L38
 L17:
-  call void @p80(ptr @frame.aptypes, ptr @s340)
+  call void @p81(ptr @frame.aptypes, ptr @s342)
   br label %L38
 L18:
-  call void @p80(ptr @frame.aptypes, ptr @s341)
+  call void @p81(ptr @frame.aptypes, ptr @s343)
   br label %L38
 L19:
-  call void @p80(ptr @frame.aptypes, ptr @s342)
+  call void @p81(ptr @frame.aptypes, ptr @s344)
   br label %L38
 L20:
-  call void @p80(ptr @frame.aptypes, ptr @s343)
-  %v28 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @p81(ptr @frame.aptypes, ptr @s345)
+  %v28 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v29 = load ptr, ptr %v28
   %v30 = icmp eq ptr %v29, null
   br i1 %v30, label %L39, label %L40
 L39:
-  call void @pas_runtime_error(ptr @s344)
+  call void @pas_runtime_error(ptr @s346)
   unreachable
 L40:
   %v31 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v29, i32 0, i32 1
@@ -7674,12 +7759,12 @@ L40:
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v32)
   br label %L38
 L21:
-  %v33 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v33 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v34 = load ptr, ptr %v33
   %v35 = icmp eq ptr %v34, null
   br i1 %v35, label %L41, label %L42
 L41:
-  call void @pas_runtime_error(ptr @s345)
+  call void @pas_runtime_error(ptr @s347)
   unreachable
 L42:
   %v36 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v34, i32 0, i32 10
@@ -7687,32 +7772,32 @@ L42:
   %v38 = icmp slt i32 %v37, 0
   br i1 %v38, label %L43, label %L44
 L43:
-  call void @p80(ptr @frame.aptypes, ptr @s346)
+  call void @p81(ptr @frame.aptypes, ptr @s348)
   br label %L45
 L44:
-  call void @p80(ptr @frame.aptypes, ptr @s347)
-  %v39 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @p81(ptr @frame.aptypes, ptr @s349)
+  %v39 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v40 = load ptr, ptr %v39
   %v41 = icmp eq ptr %v40, null
   br i1 %v41, label %L46, label %L47
 L46:
-  call void @pas_runtime_error(ptr @s348)
+  call void @pas_runtime_error(ptr @s350)
   unreachable
 L47:
   %v42 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v40, i32 0, i32 10
   %v43 = load i32, ptr %v42
-  call void @p81(ptr @frame.aptypes, i32 %v43)
-  call void @p80(ptr @frame.aptypes, ptr @s349)
+  call void @p82(ptr @frame.aptypes, i32 %v43)
+  call void @p81(ptr @frame.aptypes, ptr @s351)
   br label %L45
 L45:
   br label %L38
 L22:
-  %v44 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v44 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v45 = load ptr, ptr %v44
   %v46 = icmp eq ptr %v45, null
   br i1 %v46, label %L48, label %L49
 L48:
-  call void @pas_runtime_error(ptr @s350)
+  call void @pas_runtime_error(ptr @s352)
   unreachable
 L49:
   %v47 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v45, i32 0, i32 10
@@ -7720,96 +7805,96 @@ L49:
   %v49 = icmp sle i32 %v48, 0
   br i1 %v49, label %L50, label %L51
 L50:
-  call void @p80(ptr @frame.aptypes, ptr @s351)
+  call void @p81(ptr @frame.aptypes, ptr @s353)
   br label %L52
 L51:
-  call void @p80(ptr @frame.aptypes, ptr @s352)
-  %v50 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @p81(ptr @frame.aptypes, ptr @s354)
+  %v50 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v51 = load ptr, ptr %v50
   %v52 = icmp eq ptr %v51, null
   br i1 %v52, label %L53, label %L54
 L53:
-  call void @pas_runtime_error(ptr @s353)
+  call void @pas_runtime_error(ptr @s355)
   unreachable
 L54:
   %v53 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v51, i32 0, i32 10
   %v54 = load i32, ptr %v53
-  call void @p81(ptr @frame.aptypes, i32 %v54)
-  call void @p80(ptr @frame.aptypes, ptr @s354)
+  call void @p82(ptr @frame.aptypes, i32 %v54)
+  call void @p81(ptr @frame.aptypes, ptr @s356)
   br label %L52
 L52:
   br label %L38
 L23:
-  call void @p80(ptr @frame.aptypes, ptr @s355)
+  call void @p81(ptr @frame.aptypes, ptr @s357)
   br label %L38
 L24:
-  call void @p80(ptr @frame.aptypes, ptr @s356)
+  call void @p81(ptr @frame.aptypes, ptr @s358)
   br label %L38
 L25:
-  call void @p80(ptr @frame.aptypes, ptr @s357)
+  call void @p81(ptr @frame.aptypes, ptr @s359)
   br label %L38
 L26:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 40)
-  %v55 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
-  %v56 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v55 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v56 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v57 = load ptr, ptr %v56
   %v58 = icmp eq ptr %v57, null
   br i1 %v58, label %L55, label %L56
 L55:
-  call void @pas_runtime_error(ptr @s358)
+  call void @pas_runtime_error(ptr @s360)
   unreachable
 L56:
   %v59 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v57, i32 0, i32 11
   %v60 = load ptr, ptr %v59
   store ptr %v60, ptr %v55
-  %v61 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 4
+  %v61 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
   store i1 true, ptr %v61
   br label %L57
 L57:
-  %v62 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  %v62 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
   %v63 = load ptr, ptr %v62
   %v64 = icmp ne ptr %v63, null
   br i1 %v64, label %L58, label %L59
 L58:
-  %v65 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 4
+  %v65 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
   %v66 = load i1, ptr %v65
   %v67 = xor i1 %v66, true
   br i1 %v67, label %L60, label %L61
 L60:
-  call void @p80(ptr @frame.aptypes, ptr @s359)
+  call void @p81(ptr @frame.aptypes, ptr @s361)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
   br label %L61
 L61:
-  %v68 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  %v68 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
   %v69 = load ptr, ptr %v68
   %v70 = icmp eq ptr %v69, null
   br i1 %v70, label %L62, label %L63
 L62:
-  call void @pas_runtime_error(ptr @s360)
+  call void @pas_runtime_error(ptr @s362)
   unreachable
 L63:
   %v71 = getelementptr inbounds { i32, i32, ptr }, ptr %v69, i32 0, i32 0
   %v72 = load i32, ptr %v71
-  %v73 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  %v73 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
   %v74 = load ptr, ptr %v73
   %v75 = icmp eq ptr %v74, null
   br i1 %v75, label %L64, label %L65
 L64:
-  call void @pas_runtime_error(ptr @s361)
+  call void @pas_runtime_error(ptr @s363)
   unreachable
 L65:
   %v76 = getelementptr inbounds { i32, i32, ptr }, ptr %v74, i32 0, i32 1
   %v77 = load i32, ptr %v76
   call void @p.aptypes.writepool(ptr @frame.aptypes, i32 %v72, i32 %v77)
-  %v78 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 4
+  %v78 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
   store i1 false, ptr %v78
-  %v79 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
-  %v80 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 2
+  %v79 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v80 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
   %v81 = load ptr, ptr %v80
   %v82 = icmp eq ptr %v81, null
   br i1 %v82, label %L66, label %L67
 L66:
-  call void @pas_runtime_error(ptr @s362)
+  call void @pas_runtime_error(ptr @s364)
   unreachable
 L67:
   %v83 = getelementptr inbounds { i32, i32, ptr }, ptr %v81, i32 0, i32 2
@@ -7820,77 +7905,77 @@ L59:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 41)
   br label %L38
 L27:
-  %v85 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v85 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v86 = load ptr, ptr %v85
   %v87 = icmp eq ptr %v86, null
   br i1 %v87, label %L68, label %L69
 L68:
-  call void @pas_runtime_error(ptr @s363)
+  call void @pas_runtime_error(ptr @s365)
   unreachable
 L69:
   %v88 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v86, i32 0, i32 3
   %v89 = load ptr, ptr %v88
-  %v90 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v90 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v91 = load ptr, ptr %v90
   %v92 = icmp eq ptr %v91, null
   br i1 %v92, label %L70, label %L71
 L70:
-  call void @pas_runtime_error(ptr @s364)
+  call void @pas_runtime_error(ptr @s366)
   unreachable
 L71:
   %v93 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v91, i32 0, i32 31
   %v94 = load ptr, ptr %v93
-  %v95 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v95 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v96 = load ptr, ptr %v95
   %v97 = icmp eq ptr %v96, null
   br i1 %v97, label %L72, label %L73
 L72:
-  call void @pas_runtime_error(ptr @s365)
+  call void @pas_runtime_error(ptr @s367)
   unreachable
 L73:
   %v98 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v96, i32 0, i32 9
   %v99 = load i32, ptr %v98
-  call void @p85(ptr @frame.aptypes, ptr %v89, ptr %v94, i32 %v99)
-  call void @p80(ptr @frame.aptypes, ptr @s366)
-  %v100 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @p86(ptr @frame.aptypes, ptr %v89, ptr %v94, i32 %v99)
+  call void @p81(ptr @frame.aptypes, ptr @s368)
+  %v100 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v101 = load ptr, ptr %v100
   %v102 = icmp eq ptr %v101, null
   br i1 %v102, label %L74, label %L75
 L74:
-  call void @pas_runtime_error(ptr @s367)
+  call void @pas_runtime_error(ptr @s369)
   unreachable
 L75:
   %v103 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v101, i32 0, i32 3
   %v104 = load ptr, ptr %v103
-  %v105 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v105 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v106 = load ptr, ptr %v105
   %v107 = icmp eq ptr %v106, null
   br i1 %v107, label %L76, label %L77
 L76:
-  call void @pas_runtime_error(ptr @s368)
+  call void @pas_runtime_error(ptr @s370)
   unreachable
 L77:
   %v108 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v106, i32 0, i32 32
   %v109 = load ptr, ptr %v108
-  %v110 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v110 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v111 = load ptr, ptr %v110
   %v112 = icmp eq ptr %v111, null
   br i1 %v112, label %L78, label %L79
 L78:
-  call void @pas_runtime_error(ptr @s369)
+  call void @pas_runtime_error(ptr @s371)
   unreachable
 L79:
   %v113 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v111, i32 0, i32 10
   %v114 = load i32, ptr %v113
-  call void @p85(ptr @frame.aptypes, ptr %v104, ptr %v109, i32 %v114)
+  call void @p86(ptr @frame.aptypes, ptr %v104, ptr %v109, i32 %v114)
   br label %L38
 L28:
-  %v115 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v115 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v116 = load ptr, ptr %v115
   %v117 = icmp eq ptr %v116, null
   br i1 %v117, label %L80, label %L81
 L80:
-  call void @pas_runtime_error(ptr @s370)
+  call void @pas_runtime_error(ptr @s372)
   unreachable
 L81:
   %v118 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v116, i32 0, i32 1
@@ -7898,29 +7983,29 @@ L81:
   %v120 = icmp ne ptr %v119, null
   br i1 %v120, label %L82, label %L83
 L82:
-  %v121 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v121 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v122 = load ptr, ptr %v121
   %v123 = icmp eq ptr %v122, null
   br i1 %v123, label %L85, label %L86
 L85:
-  call void @pas_runtime_error(ptr @s371)
+  call void @pas_runtime_error(ptr @s373)
   unreachable
 L86:
   %v124 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v122, i32 0, i32 26
   %v125 = load i1, ptr %v124
   br i1 %v125, label %L87, label %L88
 L87:
-  call void @p80(ptr @frame.aptypes, ptr @s372)
+  call void @p81(ptr @frame.aptypes, ptr @s374)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
   br label %L88
 L88:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 94)
-  %v126 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v126 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v127 = load ptr, ptr %v126
   %v128 = icmp eq ptr %v127, null
   br i1 %v128, label %L89, label %L90
 L89:
-  call void @pas_runtime_error(ptr @s373)
+  call void @pas_runtime_error(ptr @s375)
   unreachable
 L90:
   %v129 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v127, i32 0, i32 1
@@ -7928,19 +8013,19 @@ L90:
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v130)
   br label %L84
 L83:
-  call void @p80(ptr @frame.aptypes, ptr @s374)
+  call void @p81(ptr @frame.aptypes, ptr @s376)
   br label %L84
 L84:
   br label %L38
 L29:
-  call void @p80(ptr @frame.aptypes, ptr @s375)
+  call void @p81(ptr @frame.aptypes, ptr @s377)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v131 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v131 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v132 = load ptr, ptr %v131
   %v133 = icmp eq ptr %v132, null
   br i1 %v133, label %L91, label %L92
 L91:
-  call void @pas_runtime_error(ptr @s376)
+  call void @pas_runtime_error(ptr @s378)
   unreachable
 L92:
   %v134 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v132, i32 0, i32 1
@@ -7949,12 +8034,12 @@ L92:
   br label %L38
 L30:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 63)
-  %v136 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v136 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v137 = load ptr, ptr %v136
   %v138 = icmp eq ptr %v137, null
   br i1 %v138, label %L93, label %L94
 L93:
-  call void @pas_runtime_error(ptr @s377)
+  call void @pas_runtime_error(ptr @s379)
   unreachable
 L94:
   %v139 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v137, i32 0, i32 1
@@ -7962,25 +8047,25 @@ L94:
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v140)
   br label %L38
 L31:
-  call void @p80(ptr @frame.aptypes, ptr @s378)
+  call void @p81(ptr @frame.aptypes, ptr @s380)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 39)
-  %v141 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v141 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v142 = load ptr, ptr %v141
   %v143 = icmp eq ptr %v142, null
   br i1 %v143, label %L95, label %L96
 L95:
-  call void @pas_runtime_error(ptr @s379)
+  call void @pas_runtime_error(ptr @s381)
   unreachable
 L96:
   %v144 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v142, i32 0, i32 24
   %v145 = load i32, ptr %v144
-  %v146 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v146 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v147 = load ptr, ptr %v146
   %v148 = icmp eq ptr %v147, null
   br i1 %v148, label %L97, label %L98
 L97:
-  call void @pas_runtime_error(ptr @s380)
+  call void @pas_runtime_error(ptr @s382)
   unreachable
 L98:
   %v149 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v147, i32 0, i32 25
@@ -7989,27 +8074,27 @@ L98:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 39)
   br label %L38
 L32:
-  %v151 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v151 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v152 = load ptr, ptr %v151
   %v153 = icmp eq ptr %v152, null
   br i1 %v153, label %L99, label %L100
 L99:
-  call void @pas_runtime_error(ptr @s381)
+  call void @pas_runtime_error(ptr @s383)
   unreachable
 L100:
   %v154 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v152, i32 0, i32 8
   %v155 = load i1, ptr %v154
   br i1 %v155, label %L101, label %L102
 L101:
-  call void @p80(ptr @frame.aptypes, ptr @s382)
+  call void @p81(ptr @frame.aptypes, ptr @s384)
   br label %L103
 L102:
-  %v156 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v156 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v157 = load ptr, ptr %v156
   %v158 = icmp eq ptr %v157, null
   br i1 %v158, label %L104, label %L105
 L104:
-  call void @pas_runtime_error(ptr @s383)
+  call void @pas_runtime_error(ptr @s385)
   unreachable
 L105:
   %v159 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v157, i32 0, i32 2
@@ -8017,26 +8102,26 @@ L105:
   %v161 = icmp ne ptr %v160, null
   br i1 %v161, label %L106, label %L107
 L106:
-  call void @p80(ptr @frame.aptypes, ptr @s384)
-  %v162 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @p81(ptr @frame.aptypes, ptr @s386)
+  %v162 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v163 = load ptr, ptr %v162
   %v164 = icmp eq ptr %v163, null
   br i1 %v164, label %L109, label %L110
 L109:
-  call void @pas_runtime_error(ptr @s385)
+  call void @pas_runtime_error(ptr @s387)
   unreachable
 L110:
   %v165 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v163, i32 0, i32 2
   %v166 = load ptr, ptr %v165
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v166)
-  call void @p80(ptr @frame.aptypes, ptr @s386)
+  call void @p81(ptr @frame.aptypes, ptr @s388)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v167 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v167 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v168 = load ptr, ptr %v167
   %v169 = icmp eq ptr %v168, null
   br i1 %v169, label %L111, label %L112
 L111:
-  call void @pas_runtime_error(ptr @s387)
+  call void @pas_runtime_error(ptr @s389)
   unreachable
 L112:
   %v170 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v168, i32 0, i32 1
@@ -8044,14 +8129,14 @@ L112:
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v171)
   br label %L108
 L107:
-  call void @p80(ptr @frame.aptypes, ptr @s388)
+  call void @p81(ptr @frame.aptypes, ptr @s390)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v172 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v172 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v173 = load ptr, ptr %v172
   %v174 = icmp eq ptr %v173, null
   br i1 %v174, label %L113, label %L114
 L113:
-  call void @pas_runtime_error(ptr @s389)
+  call void @pas_runtime_error(ptr @s391)
   unreachable
 L114:
   %v175 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v173, i32 0, i32 1
@@ -8063,12 +8148,12 @@ L108:
 L103:
   br label %L38
 L33:
-  %v177 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v177 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v178 = load ptr, ptr %v177
   %v179 = icmp eq ptr %v178, null
   br i1 %v179, label %L115, label %L116
 L115:
-  call void @pas_runtime_error(ptr @s390)
+  call void @pas_runtime_error(ptr @s392)
   unreachable
 L116:
   %v180 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v178, i32 0, i32 1
@@ -8076,34 +8161,34 @@ L116:
   %v182 = icmp eq ptr %v181, null
   br i1 %v182, label %L117, label %L118
 L117:
-  call void @p80(ptr @frame.aptypes, ptr @s391)
+  call void @p81(ptr @frame.aptypes, ptr @s393)
   br label %L119
 L118:
-  %v183 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v183 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v184 = load ptr, ptr %v183
   %v185 = icmp eq ptr %v184, null
   br i1 %v185, label %L120, label %L121
 L120:
-  call void @pas_runtime_error(ptr @s392)
+  call void @pas_runtime_error(ptr @s394)
   unreachable
 L121:
   %v186 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v184, i32 0, i32 6
   %v187 = load i1, ptr %v186
   br i1 %v187, label %L122, label %L123
 L122:
-  call void @p80(ptr @frame.aptypes, ptr @s393)
+  call void @p81(ptr @frame.aptypes, ptr @s395)
   br label %L124
 L123:
-  call void @p80(ptr @frame.aptypes, ptr @s394)
+  call void @p81(ptr @frame.aptypes, ptr @s396)
   br label %L124
 L124:
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v188 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v188 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v189 = load ptr, ptr %v188
   %v190 = icmp eq ptr %v189, null
   br i1 %v190, label %L125, label %L126
 L125:
-  call void @pas_runtime_error(ptr @s395)
+  call void @pas_runtime_error(ptr @s397)
   unreachable
 L126:
   %v191 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v189, i32 0, i32 1
@@ -8113,12 +8198,12 @@ L126:
 L119:
   br label %L38
 L34:
-  %v193 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v193 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v194 = load ptr, ptr %v193
   %v195 = icmp eq ptr %v194, null
   br i1 %v195, label %L127, label %L128
 L127:
-  call void @pas_runtime_error(ptr @s396)
+  call void @pas_runtime_error(ptr @s398)
   unreachable
 L128:
   %v196 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v194, i32 0, i32 1
@@ -8126,19 +8211,19 @@ L128:
   %v198 = icmp eq ptr %v197, null
   br i1 %v198, label %L129, label %L130
 L129:
-  call void @p80(ptr @frame.aptypes, ptr @s397)
+  call void @p81(ptr @frame.aptypes, ptr @s399)
   br label %L131
 L130:
-  call void @p80(ptr @frame.aptypes, ptr @s398)
+  call void @p81(ptr @frame.aptypes, ptr @s400)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  call void @p80(ptr @frame.aptypes, ptr @s399)
+  call void @p81(ptr @frame.aptypes, ptr @s401)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v199 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v199 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v200 = load ptr, ptr %v199
   %v201 = icmp eq ptr %v200, null
   br i1 %v201, label %L132, label %L133
 L132:
-  call void @pas_runtime_error(ptr @s400)
+  call void @pas_runtime_error(ptr @s402)
   unreachable
 L133:
   %v202 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v200, i32 0, i32 1
@@ -8148,37 +8233,37 @@ L133:
 L131:
   br label %L38
 L35:
-  %v204 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v204 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v205 = load ptr, ptr %v204
   %v206 = icmp eq ptr %v205, null
   br i1 %v206, label %L134, label %L135
 L134:
-  call void @pas_runtime_error(ptr @s401)
+  call void @pas_runtime_error(ptr @s403)
   unreachable
 L135:
   %v207 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v205, i32 0, i32 17
   %v208 = load i1, ptr %v207
   br i1 %v208, label %L136, label %L137
 L136:
-  %v209 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v209 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v210 = load ptr, ptr %v209
   %v211 = icmp eq ptr %v210, null
   br i1 %v211, label %L139, label %L140
 L139:
-  call void @pas_runtime_error(ptr @s402)
+  call void @pas_runtime_error(ptr @s404)
   unreachable
 L140:
   %v212 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v210, i32 0, i32 18
   %v213 = load ptr, ptr %v212
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v213)
-  call void @p80(ptr @frame.aptypes, ptr @s403)
+  call void @p81(ptr @frame.aptypes, ptr @s405)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v214 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v214 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v215 = load ptr, ptr %v214
   %v216 = icmp eq ptr %v215, null
   br i1 %v216, label %L141, label %L142
 L141:
-  call void @pas_runtime_error(ptr @s404)
+  call void @pas_runtime_error(ptr @s406)
   unreachable
 L142:
   %v217 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v215, i32 0, i32 19
@@ -8186,169 +8271,169 @@ L142:
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v218)
   br label %L138
 L137:
-  call void @p80(ptr @frame.aptypes, ptr @s405)
+  call void @p81(ptr @frame.aptypes, ptr @s407)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v219 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
-  %v220 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v219 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v220 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v221 = load ptr, ptr %v220
   %v222 = icmp eq ptr %v221, null
   br i1 %v222, label %L143, label %L144
 L143:
-  call void @pas_runtime_error(ptr @s406)
+  call void @pas_runtime_error(ptr @s408)
   unreachable
 L144:
   %v223 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v221, i32 0, i32 13
   %v224 = load ptr, ptr %v223
   store ptr %v224, ptr %v219
-  %v225 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 4
+  %v225 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
   store i1 true, ptr %v225
   br label %L145
 L145:
-  %v226 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  %v226 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
   %v227 = load ptr, ptr %v226
   %v228 = icmp ne ptr %v227, null
   br i1 %v228, label %L146, label %L147
 L146:
-  %v229 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 4
+  %v229 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
   %v230 = load i1, ptr %v229
   %v231 = xor i1 %v230, true
   br i1 %v231, label %L148, label %L149
 L148:
-  call void @p80(ptr @frame.aptypes, ptr @s407)
+  call void @p81(ptr @frame.aptypes, ptr @s409)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
   br label %L149
 L149:
-  %v232 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  %v232 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
   %v233 = load ptr, ptr %v232
   %v234 = icmp eq ptr %v233, null
   br i1 %v234, label %L150, label %L151
 L150:
-  call void @pas_runtime_error(ptr @s408)
+  call void @pas_runtime_error(ptr @s410)
   unreachable
 L151:
-  %v235 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v233, i32 0, i32 0
+  %v235 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v233, i32 0, i32 0
   %v236 = load i32, ptr %v235
-  %v237 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  %v237 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
   %v238 = load ptr, ptr %v237
   %v239 = icmp eq ptr %v238, null
   br i1 %v239, label %L152, label %L153
 L152:
-  call void @pas_runtime_error(ptr @s409)
+  call void @pas_runtime_error(ptr @s411)
   unreachable
 L153:
-  %v240 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v238, i32 0, i32 1
+  %v240 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v238, i32 0, i32 1
   %v241 = load i32, ptr %v240
   call void @p.aptypes.writepool(ptr @frame.aptypes, i32 %v236, i32 %v241)
-  %v242 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 4
+  %v242 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
   store i1 false, ptr %v242
-  %v243 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
-  %v244 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 3
+  %v243 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v244 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
   %v245 = load ptr, ptr %v244
   %v246 = icmp eq ptr %v245, null
   br i1 %v246, label %L154, label %L155
 L154:
-  call void @pas_runtime_error(ptr @s410)
+  call void @pas_runtime_error(ptr @s412)
   unreachable
 L155:
-  %v247 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, ptr }, ptr %v245, i32 0, i32 9
+  %v247 = getelementptr inbounds { i32, i32, ptr, i32, ptr, i1, ptr, i32, i32, i32, ptr }, ptr %v245, i32 0, i32 10
   %v248 = load ptr, ptr %v247
   store ptr %v248, ptr %v243
   br label %L145
 L147:
-  call void @p80(ptr @frame.aptypes, ptr @s411)
+  call void @p81(ptr @frame.aptypes, ptr @s413)
   br label %L138
 L138:
   br label %L38
 L36:
-  %v249 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v249 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v250 = load ptr, ptr %v249
   %v251 = icmp eq ptr %v250, null
   br i1 %v251, label %L156, label %L157
 L156:
-  call void @pas_runtime_error(ptr @s412)
+  call void @pas_runtime_error(ptr @s414)
   unreachable
 L157:
   %v252 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v250, i32 0, i32 6
   %v253 = load i1, ptr %v252
   br i1 %v253, label %L158, label %L159
 L158:
-  call void @p80(ptr @frame.aptypes, ptr @s413)
+  call void @p81(ptr @frame.aptypes, ptr @s415)
   br label %L160
 L159:
-  call void @p80(ptr @frame.aptypes, ptr @s414)
+  call void @p81(ptr @frame.aptypes, ptr @s416)
   br label %L160
 L160:
-  %v254 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v254 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v255 = load ptr, ptr %v254
   %v256 = icmp eq ptr %v255, null
   br i1 %v256, label %L161, label %L162
 L161:
-  call void @pas_runtime_error(ptr @s415)
+  call void @pas_runtime_error(ptr @s417)
   unreachable
 L162:
   %v257 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v255, i32 0, i32 2
   %v258 = load ptr, ptr %v257
-  %v259 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v259 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v260 = load ptr, ptr %v259
   %v261 = icmp eq ptr %v260, null
   br i1 %v261, label %L163, label %L164
 L163:
-  call void @pas_runtime_error(ptr @s416)
+  call void @pas_runtime_error(ptr @s418)
   unreachable
 L164:
   %v262 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v260, i32 0, i32 31
   %v263 = load ptr, ptr %v262
-  %v264 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v264 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v265 = load ptr, ptr %v264
   %v266 = icmp eq ptr %v265, null
   br i1 %v266, label %L165, label %L166
 L165:
-  call void @pas_runtime_error(ptr @s417)
+  call void @pas_runtime_error(ptr @s419)
   unreachable
 L166:
   %v267 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v265, i32 0, i32 9
   %v268 = load i32, ptr %v267
-  call void @p85(ptr @frame.aptypes, ptr %v258, ptr %v263, i32 %v268)
-  call void @p80(ptr @frame.aptypes, ptr @s418)
-  %v269 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  call void @p86(ptr @frame.aptypes, ptr %v258, ptr %v263, i32 %v268)
+  call void @p81(ptr @frame.aptypes, ptr @s420)
+  %v269 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v270 = load ptr, ptr %v269
   %v271 = icmp eq ptr %v270, null
   br i1 %v271, label %L167, label %L168
 L167:
-  call void @pas_runtime_error(ptr @s419)
+  call void @pas_runtime_error(ptr @s421)
   unreachable
 L168:
   %v272 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v270, i32 0, i32 2
   %v273 = load ptr, ptr %v272
-  %v274 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v274 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v275 = load ptr, ptr %v274
   %v276 = icmp eq ptr %v275, null
   br i1 %v276, label %L169, label %L170
 L169:
-  call void @pas_runtime_error(ptr @s420)
+  call void @pas_runtime_error(ptr @s422)
   unreachable
 L170:
   %v277 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v275, i32 0, i32 32
   %v278 = load ptr, ptr %v277
-  %v279 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v279 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v280 = load ptr, ptr %v279
   %v281 = icmp eq ptr %v280, null
   br i1 %v281, label %L171, label %L172
 L171:
-  call void @pas_runtime_error(ptr @s421)
+  call void @pas_runtime_error(ptr @s423)
   unreachable
 L172:
   %v282 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v280, i32 0, i32 10
   %v283 = load i32, ptr %v282
-  call void @p85(ptr @frame.aptypes, ptr %v273, ptr %v278, i32 %v283)
-  call void @p80(ptr @frame.aptypes, ptr @s422)
+  call void @p86(ptr @frame.aptypes, ptr %v273, ptr %v278, i32 %v283)
+  call void @p81(ptr @frame.aptypes, ptr @s424)
   call void @p.aptypes.put(ptr @frame.aptypes, i8 32)
-  %v284 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v284 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v285 = load ptr, ptr %v284
   %v286 = icmp eq ptr %v285, null
   br i1 %v286, label %L173, label %L174
 L173:
-  call void @pas_runtime_error(ptr @s423)
+  call void @pas_runtime_error(ptr @s425)
   unreachable
 L174:
   %v287 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v285, i32 0, i32 1
@@ -8356,12 +8441,12 @@ L174:
   %v289 = icmp ne ptr %v288, null
   br i1 %v289, label %L175, label %L176
 L175:
-  %v290 = getelementptr inbounds %frame78, ptr %frame, i32 0, i32 1
+  %v290 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
   %v291 = load ptr, ptr %v290
   %v292 = icmp eq ptr %v291, null
   br i1 %v292, label %L178, label %L179
 L178:
-  call void @pas_runtime_error(ptr @s424)
+  call void @pas_runtime_error(ptr @s426)
   unreachable
 L179:
   %v293 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v291, i32 0, i32 1
@@ -8374,7 +8459,7 @@ L176:
 L177:
   br label %L38
 L37:
-  call void @pas_runtime_error(ptr @s425)
+  call void @pas_runtime_error(ptr @s427)
   unreachable
 L38:
   br label %L9
@@ -8384,24 +8469,24 @@ L4:
   ret void
 }
 
-; writedistincttypenote 3811
+; writedistincttypenote 3935
 define void @p.aptypes.writedistincttypenote(ptr %link, ptr %a0, ptr %a1) {
 L1:
   %v1 = load i32, ptr @pas_str_at
-  %frame = alloca %frame79
-  %v2 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 0
+  %frame = alloca %frame80
+  %v2 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 0
   store ptr %link, ptr %v2
-  %v3 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
+  %v3 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
   store ptr %a0, ptr %v3
-  %v4 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v4 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
   store ptr %a1, ptr %v4
-  %v5 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
-  %v6 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
+  %v5 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
+  %v6 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
   %v7 = load ptr, ptr %v6
   %v8 = icmp ne ptr %v7, null
   br i1 %v8, label %L2, label %L3
 L2:
-  %v9 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v9 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
   %v10 = load ptr, ptr %v9
   %v11 = icmp ne ptr %v10, null
   br label %L3
@@ -8409,9 +8494,9 @@ L3:
   %v12 = phi i1 [ false, %L1 ], [ %v11, %L2 ]
   br i1 %v12, label %L4, label %L5
 L4:
-  %v13 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
+  %v13 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
   %v14 = load ptr, ptr %v13
-  %v15 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v15 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
   %v16 = load ptr, ptr %v15
   %v17 = icmp ne ptr %v14, %v16
   br label %L5
@@ -8423,27 +8508,27 @@ L6:
   store i1 true, ptr %v19
   %v20 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
   call void @p.aptypes.strclear(ptr @frame.aptypes, ptr %v20)
-  %v21 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
+  %v21 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
   %v22 = load ptr, ptr %v21
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v22)
-  %v23 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v23 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
   %v24 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
   call void @llvm.memcpy.p0.p0.i64(ptr align 4 %v23, ptr align 4 %v24, i64 260, i1 false)
   %v25 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
   call void @p.aptypes.strclear(ptr @frame.aptypes, ptr %v25)
-  %v26 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v26 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
   %v27 = load ptr, ptr %v26
   call void @p.aptypes.writetypename(ptr @frame.aptypes, ptr %v27)
   %v28 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 17
   store i1 false, ptr %v28
-  %v29 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 5
-  %v30 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v29 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 5
+  %v30 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
   %v31 = getelementptr inbounds { i32, [255 x i8] }, ptr %v30, i32 0, i32 0
   %v32 = load i32, ptr %v31
   %v33 = icmp slt i32 %v32, 255
   br i1 %v33, label %L8, label %L9
 L8:
-  %v34 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v34 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
   %v35 = getelementptr inbounds { i32, [255 x i8] }, ptr %v34, i32 0, i32 0
   %v36 = load i32, ptr %v35
   %v37 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
@@ -8454,12 +8539,12 @@ L8:
 L9:
   %v41 = phi i1 [ false, %L6 ], [ %v40, %L8 ]
   store i1 %v41, ptr %v29
-  %v42 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 5
+  %v42 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 5
   %v43 = load i1, ptr %v42
   br i1 %v43, label %L10, label %L11
 L10:
-  %v44 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
-  %v45 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v44 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 4
+  %v45 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
   %v46 = getelementptr inbounds { i32, [255 x i8] }, ptr %v45, i32 0, i32 0
   %v47 = load i32, ptr %v46
   store i32 1, ptr %v44
@@ -8469,16 +8554,16 @@ L12:
   %v49 = icmp sle i32 %v48, %v47
   br i1 %v49, label %L13, label %L15
 L13:
-  %v50 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 3
+  %v50 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 3
   %v51 = getelementptr inbounds { i32, [255 x i8] }, ptr %v50, i32 0, i32 1
-  %v52 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
+  %v52 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 4
   %v53 = load i32, ptr %v52
   %v54 = icmp slt i32 %v53, 1
   %v55 = icmp sgt i32 %v53, 255
   %v56 = or i1 %v54, %v55
   br i1 %v56, label %L17, label %L18
 L17:
-  call void @pas_runtime_error(ptr @s426)
+  call void @pas_runtime_error(ptr @s428)
   unreachable
 L18:
   %v57 = sub i32 %v53, 1
@@ -8486,14 +8571,14 @@ L18:
   %v59 = load i8, ptr %v58
   %v60 = getelementptr inbounds %frame1, ptr @frame.aptypes, i32 0, i32 18
   %v61 = getelementptr inbounds { i32, [255 x i8] }, ptr %v60, i32 0, i32 1
-  %v62 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 4
+  %v62 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 4
   %v63 = load i32, ptr %v62
   %v64 = icmp slt i32 %v63, 1
   %v65 = icmp sgt i32 %v63, 255
   %v66 = or i1 %v64, %v65
   br i1 %v66, label %L19, label %L20
 L19:
-  call void @pas_runtime_error(ptr @s427)
+  call void @pas_runtime_error(ptr @s429)
   unreachable
 L20:
   %v67 = sub i32 %v63, 1
@@ -8502,7 +8587,7 @@ L20:
   %v70 = icmp ne i8 %v59, %v69
   br i1 %v70, label %L21, label %L22
 L21:
-  %v71 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 5
+  %v71 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 5
   store i1 false, ptr %v71
   br label %L22
 L22:
@@ -8518,17 +8603,17 @@ L14:
 L15:
   br label %L11
 L11:
-  %v75 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 5
+  %v75 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 5
   %v76 = load i1, ptr %v75
   br i1 %v76, label %L23, label %L24
 L23:
-  call void @pas_write_str(ptr @pas.output, ptr @s428, i32 33, i32 -1)
-  %v77 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 1
+  call void @pas_write_str(ptr @pas.output, ptr @s430, i32 33, i32 -1)
+  %v77 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 1
   %v78 = load ptr, ptr %v77
   %v79 = icmp eq ptr %v78, null
   br i1 %v79, label %L25, label %L26
 L25:
-  call void @pas_runtime_error(ptr @s429)
+  call void @pas_runtime_error(ptr @s431)
   unreachable
 L26:
   %v80 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v78, i32 0, i32 23
@@ -8536,12 +8621,12 @@ L26:
   %v82 = icmp eq i32 %v81, 0
   br i1 %v82, label %L27, label %L28
 L27:
-  %v83 = getelementptr inbounds %frame79, ptr %frame, i32 0, i32 2
+  %v83 = getelementptr inbounds %frame80, ptr %frame, i32 0, i32 2
   %v84 = load ptr, ptr %v83
   %v85 = icmp eq ptr %v84, null
   br i1 %v85, label %L29, label %L30
 L29:
-  call void @pas_runtime_error(ptr @s430)
+  call void @pas_runtime_error(ptr @s432)
   unreachable
 L30:
   %v86 = getelementptr inbounds { i32, ptr, ptr, ptr, ptr, i1, i1, i1, i1, i32, i32, ptr, ptr, ptr, ptr, ptr, ptr, i1, ptr, ptr, i32, i1, i32, i32, i32, i32, i1, ptr, ptr, ptr, i32, ptr, ptr, i1, i1, ptr, ptr }, ptr %v84, i32 0, i32 23
@@ -8552,13 +8637,13 @@ L28:
   %v89 = phi i1 [ false, %L26 ], [ %v88, %L30 ]
   br i1 %v89, label %L31, label %L32
 L31:
-  call void @pas_write_str(ptr @pas.output, ptr @s431, i32 61, i32 -1)
-  call void @pas_write_str(ptr @pas.output, ptr @s432, i32 60, i32 -1)
-  call void @pas_write_str(ptr @pas.output, ptr @s433, i32 4, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s433, i32 61, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s434, i32 60, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s435, i32 4, i32 -1)
   br label %L33
 L32:
-  call void @pas_write_str(ptr @pas.output, ptr @s434, i32 60, i32 -1)
-  call void @pas_write_str(ptr @pas.output, ptr @s435, i32 14, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s436, i32 60, i32 -1)
+  call void @pas_write_str(ptr @pas.output, ptr @s437, i32 14, i32 -1)
   br label %L33
 L33:
   br label %L24
@@ -8571,181 +8656,181 @@ L7:
 @s1 = private unnamed_addr constant [7 x i8] c"ircode\00"
 @s2 = private unnamed_addr constant [8 x i8] c"imports\00"
 @s3 = private unnamed_addr constant [1 x i8] c"\00"
-@s4 = private unnamed_addr constant [28 x i8] c"value out of range (strlen)\00"
-@s5 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s6 = private unnamed_addr constant [28 x i8] c"value out of range (strlen)\00"
-@s7 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
-@s8 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s9 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s10 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s4 = private unnamed_addr constant [1 x i8] c"\00"
+@s5 = private unnamed_addr constant [28 x i8] c"value out of range (strlen)\00"
+@s6 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s7 = private unnamed_addr constant [28 x i8] c"value out of range (strlen)\00"
+@s8 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
+@s9 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s10 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s11 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s12 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s13 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s14 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s15 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s16 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s17 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s18 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s19 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s20 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s21 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s22 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s23 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s24 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
+@s12 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s13 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s14 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s15 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s16 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s17 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s18 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s19 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s20 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s21 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s22 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s23 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s24 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s25 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
-@s26 = private unnamed_addr constant [8 x i8] c" error \00"
-@s27 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
+@s26 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
+@s27 = private unnamed_addr constant [8 x i8] c" error \00"
 @s28 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
-@s29 = private unnamed_addr constant [10 x i8] c": error: \00"
-@s30 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s31 = private unnamed_addr constant [42 x i8] c"out of string space: this compiler keeps \00"
-@s32 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
-@s33 = private unnamed_addr constant [20 x i8] c" characters of text\00"
-@s34 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s29 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
+@s30 = private unnamed_addr constant [10 x i8] c": error: \00"
+@s31 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s32 = private unnamed_addr constant [42 x i8] c"out of string space: this compiler keeps \00"
+@s33 = private unnamed_addr constant [35 x i8] c"a field width must not be negative\00"
+@s34 = private unnamed_addr constant [20 x i8] c" characters of text\00"
 @s35 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s36 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s37 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
-@s38 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s36 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s37 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s38 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
 @s39 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s40 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s41 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s42 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s43 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s44 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s45 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s46 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s47 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s48 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
-@s49 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s50 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
-@s51 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s52 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s53 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s54 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s55 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
-@s56 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s57 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
-@s58 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s59 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s60 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s61 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s40 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s41 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s42 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s43 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s44 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s45 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s46 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s47 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s48 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s49 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
+@s50 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s51 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
+@s52 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s53 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s54 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s55 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s56 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
+@s57 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s58 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
+@s59 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s60 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s61 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
 @s62 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s63 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s64 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s63 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s64 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s65 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
 @s66 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s67 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s67 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
 @s68 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s69 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s70 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s69 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s70 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s71 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s72 = private unnamed_addr constant [10 x i8] c"frame    \00"
-@s73 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s72 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s73 = private unnamed_addr constant [10 x i8] c"frame    \00"
 @s74 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s75 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s76 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s75 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s76 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s77 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s78 = private unnamed_addr constant [10 x i8] c"ownrel   \00"
-@s79 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s78 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s79 = private unnamed_addr constant [10 x i8] c"ownrel   \00"
 @s80 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s81 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s82 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s81 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s82 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s83 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s84 = private unnamed_addr constant [10 x i8] c"pas_     \00"
-@s85 = private unnamed_addr constant [10 x i8] c"main     \00"
-@s86 = private unnamed_addr constant [10 x i8] c"_setjmp  \00"
-@s87 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s88 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s89 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s90 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s91 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s84 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s85 = private unnamed_addr constant [10 x i8] c"pas_     \00"
+@s86 = private unnamed_addr constant [10 x i8] c"main     \00"
+@s87 = private unnamed_addr constant [10 x i8] c"_setjmp  \00"
+@s88 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s89 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s90 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s91 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
 @s92 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s93 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s94 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
-@s95 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s96 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s97 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
-@s98 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s99 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s100 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s101 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s102 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s103 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s104 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s105 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s106 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s107 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s108 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s109 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
-@s110 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s93 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s94 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
+@s95 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
+@s96 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s97 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s98 = private unnamed_addr constant [33 x i8] c"array index out of bounds (1..9)\00"
+@s99 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s100 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s101 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s102 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s103 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s104 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s105 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s106 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s107 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s108 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
+@s109 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s110 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..16)\00"
 @s111 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s112 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s113 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s114 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
-@s115 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s112 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s113 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s114 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s115 = private unnamed_addr constant [39 x i8] c"array index out of bounds (1..1000000)\00"
 @s116 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s117 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s118 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s119 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s120 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s121 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s122 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s123 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s124 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s125 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s126 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s127 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s118 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s119 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s120 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s121 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s122 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s123 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s124 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s125 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s126 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s127 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s128 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s129 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s130 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s131 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s132 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s133 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s134 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s135 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s136 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s137 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s138 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s129 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s130 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s131 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s132 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s133 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s134 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s135 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s136 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s137 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s138 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s139 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s140 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s141 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s142 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s143 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s144 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s145 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s146 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s147 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s140 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s141 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s142 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s143 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s144 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s145 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s146 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s147 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
 @s148 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s149 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s150 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s151 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s152 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s153 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s154 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s155 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s156 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s157 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s150 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s151 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s152 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s153 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s154 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s155 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s156 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s157 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
 @s158 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s159 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s160 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s161 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s162 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s163 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s164 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s165 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s166 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s167 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s160 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s161 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s162 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s163 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s164 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s165 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s166 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s167 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
 @s168 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s169 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s170 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s171 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
-@s172 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s173 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s174 = private unnamed_addr constant [17 x i8] c"division by zero\00"
-@s175 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
-@s176 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
-@s177 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s178 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s170 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s171 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s172 = private unnamed_addr constant [42 x i8] c"the right operand of mod must be positive\00"
+@s173 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s174 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s175 = private unnamed_addr constant [17 x i8] c"division by zero\00"
+@s176 = private unnamed_addr constant [24 x i8] c"integer overflow in div\00"
+@s177 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..12)\00"
+@s178 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s179 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s180 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s181 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
@@ -8780,8 +8865,8 @@ L7:
 @s210 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s211 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s212 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s213 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s214 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s213 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s214 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s215 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s216 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s217 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
@@ -8840,8 +8925,8 @@ L7:
 @s270 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s271 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s272 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s273 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s274 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s273 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s274 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s275 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s276 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s277 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
@@ -8851,18 +8936,18 @@ L7:
 @s281 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s282 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s283 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s284 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s285 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s284 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s285 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s286 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s287 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s288 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s289 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s287 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s288 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
+@s289 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s290 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s291 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s292 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s293 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s294 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
-@s295 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s294 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s295 = private unnamed_addr constant [22 x i8] c"integer overflow in -\00"
 @s296 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s297 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s298 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
@@ -8876,8 +8961,8 @@ L7:
 @s306 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s307 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s308 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s309 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
-@s310 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s309 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s310 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s311 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s312 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s313 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
@@ -8889,120 +8974,122 @@ L7:
 @s319 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s320 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s321 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s322 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
-@s323 = private unnamed_addr constant [17 x i8] c"chr(            \00"
-@s324 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s325 = private unnamed_addr constant [17 x i8] c"true            \00"
-@s326 = private unnamed_addr constant [17 x i8] c"false           \00"
-@s327 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s328 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s322 = private unnamed_addr constant [34 x i8] c"array index out of bounds (1..32)\00"
+@s323 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s324 = private unnamed_addr constant [41 x i8] c"chr: argument is not a character ordinal\00"
+@s325 = private unnamed_addr constant [17 x i8] c"chr(            \00"
+@s326 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s327 = private unnamed_addr constant [17 x i8] c"true            \00"
+@s328 = private unnamed_addr constant [17 x i8] c"false           \00"
 @s329 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s330 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s331 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s332 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
+@s332 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s333 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s334 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s334 = private unnamed_addr constant [22 x i8] c"integer overflow in +\00"
 @s335 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s336 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s337 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s338 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s339 = private unnamed_addr constant [17 x i8] c"integer         \00"
-@s340 = private unnamed_addr constant [17 x i8] c"int64           \00"
-@s341 = private unnamed_addr constant [17 x i8] c"real            \00"
-@s342 = private unnamed_addr constant [17 x i8] c"complex         \00"
-@s343 = private unnamed_addr constant [17 x i8] c"restricted      \00"
-@s344 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s345 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s346 = private unnamed_addr constant [17 x i8] c"string          \00"
-@s347 = private unnamed_addr constant [17 x i8] c"string(         \00"
-@s348 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s349 = private unnamed_addr constant [17 x i8] c")               \00"
+@s339 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s340 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s341 = private unnamed_addr constant [17 x i8] c"integer         \00"
+@s342 = private unnamed_addr constant [17 x i8] c"int64           \00"
+@s343 = private unnamed_addr constant [17 x i8] c"real            \00"
+@s344 = private unnamed_addr constant [17 x i8] c"complex         \00"
+@s345 = private unnamed_addr constant [17 x i8] c"restricted      \00"
+@s346 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s347 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s348 = private unnamed_addr constant [17 x i8] c"string          \00"
+@s349 = private unnamed_addr constant [17 x i8] c"string(         \00"
 @s350 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s351 = private unnamed_addr constant [17 x i8] c"utf8            \00"
-@s352 = private unnamed_addr constant [17 x i8] c"utf8(           \00"
-@s353 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s354 = private unnamed_addr constant [17 x i8] c")               \00"
-@s355 = private unnamed_addr constant [17 x i8] c"boolean         \00"
-@s356 = private unnamed_addr constant [17 x i8] c"char            \00"
-@s357 = private unnamed_addr constant [17 x i8] c"void            \00"
-@s358 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s359 = private unnamed_addr constant [17 x i8] c",               \00"
+@s351 = private unnamed_addr constant [17 x i8] c")               \00"
+@s352 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s353 = private unnamed_addr constant [17 x i8] c"utf8            \00"
+@s354 = private unnamed_addr constant [17 x i8] c"utf8(           \00"
+@s355 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s356 = private unnamed_addr constant [17 x i8] c")               \00"
+@s357 = private unnamed_addr constant [17 x i8] c"boolean         \00"
+@s358 = private unnamed_addr constant [17 x i8] c"char            \00"
+@s359 = private unnamed_addr constant [17 x i8] c"void            \00"
 @s360 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s361 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s361 = private unnamed_addr constant [17 x i8] c",               \00"
 @s362 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s363 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s364 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s365 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s366 = private unnamed_addr constant [17 x i8] c"..              \00"
+@s366 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s367 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s368 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s368 = private unnamed_addr constant [17 x i8] c"..              \00"
 @s369 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s370 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s371 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s372 = private unnamed_addr constant [17 x i8] c"owned           \00"
+@s372 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s373 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s374 = private unnamed_addr constant [17 x i8] c"nil             \00"
-@s375 = private unnamed_addr constant [17 x i8] c"array of        \00"
-@s376 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s377 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s378 = private unnamed_addr constant [17 x i8] c"handle external \00"
+@s374 = private unnamed_addr constant [17 x i8] c"owned           \00"
+@s375 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s376 = private unnamed_addr constant [17 x i8] c"nil             \00"
+@s377 = private unnamed_addr constant [17 x i8] c"array of        \00"
+@s378 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s379 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s380 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s380 = private unnamed_addr constant [17 x i8] c"handle external \00"
 @s381 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s382 = private unnamed_addr constant [17 x i8] c"text            \00"
+@s382 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s383 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s384 = private unnamed_addr constant [17 x i8] c"file [          \00"
+@s384 = private unnamed_addr constant [17 x i8] c"text            \00"
 @s385 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s386 = private unnamed_addr constant [17 x i8] c"] of            \00"
+@s386 = private unnamed_addr constant [17 x i8] c"file [          \00"
 @s387 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s388 = private unnamed_addr constant [17 x i8] c"file of         \00"
+@s388 = private unnamed_addr constant [17 x i8] c"] of            \00"
 @s389 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s390 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s391 = private unnamed_addr constant [17 x i8] c"[]              \00"
+@s390 = private unnamed_addr constant [17 x i8] c"file of         \00"
+@s391 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s392 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s393 = private unnamed_addr constant [17 x i8] c"packed set of   \00"
-@s394 = private unnamed_addr constant [17 x i8] c"set of          \00"
-@s395 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s396 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s397 = private unnamed_addr constant [17 x i8] c"procedure       \00"
-@s398 = private unnamed_addr constant [17 x i8] c"function        \00"
-@s399 = private unnamed_addr constant [17 x i8] c"returning       \00"
-@s400 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s401 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s393 = private unnamed_addr constant [17 x i8] c"[]              \00"
+@s394 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s395 = private unnamed_addr constant [17 x i8] c"packed set of   \00"
+@s396 = private unnamed_addr constant [17 x i8] c"set of          \00"
+@s397 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s398 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s399 = private unnamed_addr constant [17 x i8] c"procedure       \00"
+@s400 = private unnamed_addr constant [17 x i8] c"function        \00"
+@s401 = private unnamed_addr constant [17 x i8] c"returning       \00"
 @s402 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s403 = private unnamed_addr constant [17 x i8] c" !              \00"
+@s403 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s404 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s405 = private unnamed_addr constant [17 x i8] c"record          \00"
+@s405 = private unnamed_addr constant [17 x i8] c" !              \00"
 @s406 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s407 = private unnamed_addr constant [17 x i8] c",               \00"
+@s407 = private unnamed_addr constant [17 x i8] c"record          \00"
 @s408 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s409 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s409 = private unnamed_addr constant [17 x i8] c",               \00"
 @s410 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s411 = private unnamed_addr constant [17 x i8] c" end            \00"
+@s411 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s412 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s413 = private unnamed_addr constant [17 x i8] c"packed array [  \00"
-@s414 = private unnamed_addr constant [17 x i8] c"array [         \00"
-@s415 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s416 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s413 = private unnamed_addr constant [17 x i8] c" end            \00"
+@s414 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s415 = private unnamed_addr constant [17 x i8] c"packed array [  \00"
+@s416 = private unnamed_addr constant [17 x i8] c"array [         \00"
 @s417 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s418 = private unnamed_addr constant [17 x i8] c"..              \00"
+@s418 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s419 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s420 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s420 = private unnamed_addr constant [17 x i8] c"..              \00"
 @s421 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s422 = private unnamed_addr constant [17 x i8] c"] of            \00"
+@s422 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
 @s423 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s424 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s425 = private unnamed_addr constant [36 x i8] c"case: no label matches the selector\00"
-@s426 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
-@s427 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
-@s428 = private unnamed_addr constant [34 x i8] c"; the two are written alike, but \00"
-@s429 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s430 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
-@s431 = private unnamed_addr constant [62 x i8] c"6.4.1 makes each type-denoter that is not a type name denote \00"
-@s432 = private unnamed_addr constant [61 x i8] c"a type of its own, so declare one named type and give it to \00"
-@s433 = private unnamed_addr constant [5 x i8] c"both\00"
-@s434 = private unnamed_addr constant [61 x i8] c"each was defined separately and 6.4.1 makes the definitions \00"
-@s435 = private unnamed_addr constant [15 x i8] c"distinct types\00"
+@s424 = private unnamed_addr constant [17 x i8] c"] of            \00"
+@s425 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s426 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s427 = private unnamed_addr constant [36 x i8] c"case: no label matches the selector\00"
+@s428 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
+@s429 = private unnamed_addr constant [35 x i8] c"array index out of bounds (1..255)\00"
+@s430 = private unnamed_addr constant [34 x i8] c"; the two are written alike, but \00"
+@s431 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s432 = private unnamed_addr constant [19 x i8] c"dereference of nil\00"
+@s433 = private unnamed_addr constant [62 x i8] c"6.4.1 makes each type-denoter that is not a type name denote \00"
+@s434 = private unnamed_addr constant [61 x i8] c"a type of its own, so declare one named type and give it to \00"
+@s435 = private unnamed_addr constant [5 x i8] c"both\00"
+@s436 = private unnamed_addr constant [61 x i8] c"each was defined separately and 6.4.1 makes the definitions \00"
+@s437 = private unnamed_addr constant [15 x i8] c"distinct types\00"
 @pas.output = external global i8
 
 declare void @pas_runtime_error(ptr)
@@ -9092,6 +9179,7 @@ declare void @pas_bind(ptr, ptr, i32)
 declare void @pas_unbind(ptr)
 declare void @pas_halt(i32)
 declare i32 @pas_binding_bound(ptr)
+declare i32 @pas_binding_writable(ptr)
 declare ptr @pas_binding_name(ptr)
 declare i32 @pas_argcount()
 declare ptr @pas_argument(i32)

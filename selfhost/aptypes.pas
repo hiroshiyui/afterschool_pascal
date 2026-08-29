@@ -182,7 +182,7 @@ const
     which is the same arrangement `fileSize` and PAS_FILE_SIZE have for the
     same reason: two files that cannot include one another, and a disagreement
     that is checked rather than trusted. }
-  apVersion = '3.0.1';
+  apVersion = '3.1.0';
   { How many --import arguments one translation may be given. Bounded because
     an array is, and generous because 6.13 puts no limit on how many
     program-components a program-block has.
