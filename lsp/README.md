@@ -126,13 +126,18 @@ the occurrence worth having is not §6.11.3's rare `M.x` but `import Middle;`,
 which is where a module says where it gets things from. It leads to the
 `export` clause that declared it, in whichever file that is.
 
-Two things it does not answer. A name inside a **schema's own body** is
-resolved only while a type is being produced from it, which happens where the
-type is written and not where the schema is, so reporting it would attribute
-another file's line and column to this one. And a **declaration** answers
-nothing: this reports *applied* occurrences, so a position on a `var` line or
-a procedure heading has no answer over it, where most editors would give you
-the declaration itself.
+A name inside a **schema's own body** is answered
+([ADR-0249](../doc/adr/0249-a-schemas-body-is-read-where-it-was-not-written.md)),
+which took working out: §6.4.7 resolves such a body only while a type is being
+produced from it, and that happens where the type is *written*, so the
+compiler is reading one file's text while it believes it is checking another.
+A schema declared in another component still answers nothing about its body —
+that text is not in this document.
+
+One thing it does not answer. A **declaration** gives nothing back: this
+reports *applied* occurrences, so a position on a `var` line or a procedure
+heading has no answer over it, where most editors would give you the
+declaration itself.
 
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a

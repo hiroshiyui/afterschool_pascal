@@ -3718,10 +3718,8 @@ nothing else. What it would lose, mechanism by mechanism:
   outline reaches that by stopping *before* Sema and a defining-point cannot,
   so it carries on instead. The defect it shipped with was a JSON `null` made and replaced on every
   successful reply — thirteen leaked nodes, every golden green, found by
-  `heap-balance` and by nothing else. What it still does not answer is a name
-  inside a schema's body (§6.4.7 resolves it where the type is *written*, so
-  its line and column belong to another file) and a *defining* occurrence,
-  a declaration not being an applied one.
+  `heap-balance` and by nothing else. What it still does not answer is a
+  *defining* occurrence, a declaration not being an applied one.
 - **A field is the one applied occurrence that resolves to no symbol**
   (ADR-0247). §6.4.3.3 makes a record type a *region* and puts a
   defining-point in it for every field-identifier — so a field is as much an
@@ -3750,6 +3748,22 @@ nothing else. What it would lose, mechanism by mechanism:
   constituent had always behaved that way and the interface now matches it.
   **The occurrence that mattered was not the qualifier of `M.x`** — that form
   is rare — but `import Middle;`, which no code path had taken near `NoteUse`.
+- **A schema's body is read where it was not written** (ADR-0249). §6.4.7
+  keeps a schema's *syntax* and resolves the body again per distinct tuple, at
+  the place the type is written — so `curFile`, the one fact Sema keeps about
+  which source it is checking, names the writer's file while the positions
+  being reported are the schema's. ADR-0246 excluded productions for that and
+  paid with `cap` in `array [1..cap]`, resolved nowhere else. The answer is to
+  ask the **schema** instead: `producingTop` holds the schemas being produced
+  from and a schema is a symbol, so `declFile` on it says whether the body is
+  this document's — a field ADR-0246 created for naming a defining-point in an
+  `--import`, answering a question it could not have asked. A production's
+  bound discriminant also takes the *formal's* defining-point, or `cap` would
+  send a reader to whichever `vec(3)` produced first. Two productions of one
+  schema report the body twice, bounded by the intern table (ADR-0039) to
+  distinct tuples and not to uses; `tests/dumps/uses_module.pas` produces a
+  schema from its component so that the *negative* half — another file's body,
+  reported nowhere — is asserted rather than assumed.
 - **The scratch name carries the server's process id** (ADR-0242), which is
   what keeps two servers on one machine out of each other's file. It is not
   `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file

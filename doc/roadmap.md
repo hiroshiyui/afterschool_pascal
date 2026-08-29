@@ -393,7 +393,7 @@ not already know is exactly the one declared somewhere else.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Twenty entries so far, and **fourteen of them have been acted on** — which is
+Twenty-one entries so far, and **fifteen of them have been acted on** — which is
 the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -407,7 +407,7 @@ a *program* could live inside, and it had to be fixed before the server could
 be compiled at all.
 
 The shape of the whole list is the argument for the chapter. **Five of the
-twenty are bounds** — 8 imports, 24 arguments, a 63-character key, a
+twenty-one are bounds** — 8 imports, 24 arguments, a 63-character key, a
 255-character line, a 16 384-byte capture — and every one of them was chosen by
 counting what the largest thing in the tree needed at the time. The largest
 thing in the tree was a test case. One is not a gap at all: the protocol asked
@@ -421,15 +421,16 @@ module written a year of increments earlier, whose five writers could fail and
 could not say so. A finding this chapter produced was already true everywhere
 else.
 
-**And the last five are all about what the compiler had never been asked.**
+**And the last six are all about what the compiler had never been asked.**
 Two are things it did not keep — where a symbol was declared, and where a
 field-identifier is — each thrown away by code that had the answer in its hand
 and no reason to hold it. One is a fact it *did* keep, for a diagnostic, and
 that answered a second question with nothing added but a file index. One is a
 fact nothing had ever wanted, because the thing it describes is found by
-spelling. The last is not a demand on the language at all: it is a defect this
-program shipped and an oracle caught, and it is here because of *which*
-oracle.
+spelling. One needed no new fact at all: the first of the four had already
+added it, for something else. The last is not a demand on the language at all:
+it is a defect this program shipped and an oracle caught, and it is here
+because of *which* oracle.
 
 **One entry took two records to close and they are not the same kind of
 thing.** *A program cannot make a temporary file, and cannot survive failing
@@ -705,6 +706,25 @@ with it, unfixed and unrecorded.
   site were the whole of it, which is what makes it a finding rather than a
   feature: the fact was already in the hand of the code that discarded it, and
   what it cost to keep was nothing.
+
+- **A schema's body is read where it was not written** — answered
+  (ADR-0249), and it is the one of these four that was not a missing fact at
+  all. §6.4.7 keeps a schema's *syntax* and resolves that body again per
+  distinct tuple, at the place the type is **written** — so the compiler reads
+  line 35 while `curFile`, the one thing it knows about which source it is
+  checking, names the file line 43 is in. For a schema out of `lib/` those are
+  two files, and a position reported from there would send a reader to
+  whatever happens to sit at that line and column of the wrong document.
+
+  What closed it was already in the tree: a schema is a symbol, and a symbol
+  carries a file since the first of these four. So the question becomes *is
+  the schema this document's* rather than *is Sema checking this document*,
+  and the fact answering it was created three increments earlier for naming a
+  defining-point in an import. **The negative half is what needed a case
+  written**: a rule that silently reports nothing and one that correctly
+  reports nothing are indistinguishable from outside, so a component's schema
+  is produced on every run of a dump case and the golden shows no line from
+  its body.
 
 - **An interface was registered by spelling and by nothing else** — answered
   (ADR-0248). `ifaceRec` held a name, an owner and its constituents, and never

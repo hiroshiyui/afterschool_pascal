@@ -66,6 +66,12 @@ appears below in the release where it still existed.
   matters is `import Middle;` — where a module says where it gets things
   from — rather than §6.11.3's rarer `M.x`. It leads to the `export` clause
   §6.11.1 makes the interface's defining-point, in whichever file that is.
+- **A name inside a schema's own body is answered** (ADR-0249). §6.4.7
+  re-resolves such a body once per distinct tuple, *where the type is
+  written*, so the compiler reads one file's text while checking another;
+  what says whether to report it is the schema's own file and not the one
+  being compiled. A schema declared in another component still answers
+  nothing about its body, that text not being in this document.
 - **An `import` can name no file at all.** An interface no `--import` supplied
   is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
   identifier — in the directory the source is in, then in each

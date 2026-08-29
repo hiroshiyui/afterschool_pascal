@@ -883,10 +883,13 @@ here that nobody in this project wrote.
   a `with` answers the field too, not the statement that gave it a nearer
   defining-point. An **interface** answers too (ADR-0248): §6.11.1 makes the
   export-part the defining-point, and the occurrence that mattered turned out
-  to be `import Middle;` rather than the qualifier of `M.x`. What is still
-  unanswered is a name inside a schema's body, and a *defining* occurrence —
-  a position on a declaration has no `use` line over it, so go-to-definition
-  on one answers nothing where an editor would answer the declaration itself.
+  to be `import Middle;` rather than the qualifier of `M.x`. A name inside a **schema's body** answers
+  too (ADR-0249), and the shape of that one is worth carrying: §6.4.7
+  re-resolves a body once per distinct tuple *where the type is written*, so
+  `curFile` is the wrong question there and the schema's own `declFile` is the
+  right one. What is still unanswered is a *defining* occurrence — a position
+  on a declaration has no `use` line over it, so go-to-definition on one
+  answers nothing where an editor would answer the declaration itself.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`
