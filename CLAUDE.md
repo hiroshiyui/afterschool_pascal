@@ -892,9 +892,12 @@ here that nobody in this project wrote.
   declarations are checked, which is one site where the kinds are eight and is
   late enough that a variable has its type. §6.6.1's `forward` and §6.11.1's
   heading are where that is not a no-op: the completing block is the same
-  routine, so the name at the implementation resolves to the interface. Only
-  an interface's own export-part is left, §6.11.1 registering one beside the
-  scope rather than in it.
+  routine, so the name at the implementation resolves to the interface. An **interface**'s own export-part follows
+  (ADR-0251) — §6.11.1 registers one beside the scope rather than in it, so
+  the walk cannot see it and it has a reporter of its own — and a module
+  declares in *two* places, §6.2.2.12 making the heading's defining-points the
+  block's as well, so the walk takes a boundary and reports each name once.
+  Nothing on ADR-0246's list is left.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`

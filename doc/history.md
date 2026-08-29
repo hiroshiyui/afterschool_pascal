@@ -4407,6 +4407,22 @@ with it, unfixed and unrecorded.
   a name not in the file. The golden moved and the moved value was visibly
   wrong; nothing about it was caught by reasoning.
 
+- **No dump case had ever compiled a module** — answered (ADR-0251), and it
+  is the finding that came from writing a *test* rather than from writing or
+  using the feature. Every `--dump-uses` case in `tests/dumps/` was a program,
+  so three answers were covered by a language-server session and by nothing
+  else: an interface's own export-part, a module's own declarations, and the
+  completion of a heading resolving back to it — which is the one answer no
+  program can produce, a program having no heading to complete.
+
+  Writing the case found two defects in the increment before it. §6.11.1
+  registers an interface in a table beside the scope rather than in it, so the
+  walk over block declarations could not see one at all. And a module-heading
+  declares its routines in a loop *after* `CheckDeclarations`, so a walk taken
+  where an ordinary block takes one found every constant, type and variable
+  and no procedure. Both were invisible to reasoning and immediate in a
+  golden.
+
 ## A second transport over one program
 
 The entry below was written in `doc/roadmap.md` before the work was started,

@@ -3718,8 +3718,7 @@ nothing else. What it would lose, mechanism by mechanism:
   outline reaches that by stopping *before* Sema and a defining-point cannot,
   so it carries on instead. The defect it shipped with was a JSON `null` made and replaced on every
   successful reply — thirteen leaked nodes, every golden green, found by
-  `heap-balance` and by nothing else. Only an interface's own export-part is
-  left unanswered, §6.11.1 registering one beside the scope rather than in it.
+  `heap-balance` and by nothing else. Nothing of that list is left.
 - **A field is the one applied occurrence that resolves to no symbol**
   (ADR-0247). §6.4.3.3 makes a record type a *region* and puts a
   defining-point in it for every field-identifier — so a field is as much an
@@ -3778,6 +3777,21 @@ nothing else. What it would lose, mechanism by mechanism:
   constituent's defining-point as an occurrence in the importing document, and
   a hover over `Doubled` came back as `(Double`. ADR-0249's mistake from the
   other side, caught by a session golden and not by reasoning.
+- **An interface declares itself, and a module declares twice** (ADR-0251).
+  Two things a source declares are not on the scope chain the walk above uses.
+  §6.11.1 registers an *interface* in a table of its own, §6.2.2.2 making one
+  not a scope, so it gets a third reporter beside ADR-0247's field. And a
+  module declares in a heading *and* a block, §6.2.2.12 making the heading's
+  defining-points the block's too and the scope *kept* between them so the two
+  can be separate §6.13 components — so the walk takes a boundary, and it is
+  `modRec.savedTop`, already recorded for the restore. The heading also
+  reports after its procedure loop rather than after `CheckDeclarations`,
+  which no reasoning found: a walk in the ordinary place saw every constant,
+  type and variable and no procedure. **No dump case had ever compiled a
+  module**, which is why all of this — and ADR-0250's heading-to-block
+  navigation, the one answer no *program* can produce — was covered by a
+  language-server session and nothing else. `tests/dumps/uses_export.pas` is
+  that case.
 - **The scratch name carries the server's process id** (ADR-0242), which is
   what keeps two servers on one machine out of each other's file. It is not
   `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file

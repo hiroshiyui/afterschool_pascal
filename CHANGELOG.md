@@ -78,6 +78,11 @@ appears below in the release where it still existed.
   §6.6.1's `forward` and §6.11.1's module-heading declare a routine whose body
   arrives later, and the name at the implementation now leads back to the
   interface that promised it.
+- **A module's own declarations and its `export` clause answer** (ADR-0251).
+  §6.11.1 registers an interface beside the scope rather than in it, and puts
+  a module's declarations in a heading whose defining-points §6.2.2.12 makes
+  the block's as well — so each needed handling of its own, and each name is
+  reported once whichever part declared it.
 - **An `import` can name no file at all.** An interface no `--import` supplied
   is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
   identifier — in the directory the source is in, then in each
