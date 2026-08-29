@@ -1316,6 +1316,17 @@ type
     program-block. }
   ifaceRec = record
     at, len: integer;
+    { 6.11.1's export-part is where an interface-identifier's defining-point
+      is, and until ADR-0248 this record held the name and not the place. An
+      interface is found by spelling -- `FindInterface` walks this list
+      comparing the pool -- so nothing in the compiler had ever needed it, and
+      a tool asking where an `import` leads had nothing to be told.
+
+      0 for the two required interfaces, which are built by the compiler and
+      written in no source; `declFile` indexes importName, and is spelled as
+      the symbol's and the field's are rather than as `file`, which §6.1.2
+      reserves. }
+    line, col, declFile: integer;
     owner: symPtr;
     items, itemTail: constitPtr;
     next: ifacePtr

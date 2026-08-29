@@ -18348,6 +18348,11 @@ var i: ifacePtr; c: constitPtr; at, len: integer;
 begin
   new(i);
   InternWide('standardinput   ', i^.at, i^.len);
+  { Built by the compiler and written in no source, so there is nowhere to go
+    -- the same zero a required identifier's symbol carries. }
+  i^.line := 0;
+  i^.col := 0;
+  i^.declFile := 0;
   i^.owner := nil;
   i^.next := nil;
   new(c);
@@ -18361,6 +18366,9 @@ begin
   interfaceTail := i;
   new(i);
   InternWide('standardoutput  ', i^.at, i^.len);
+  i^.line := 0;
+  i^.col := 0;
+  i^.declFile := 0;
   i^.owner := nil;
   i^.next := nil;
   new(c);
@@ -18551,6 +18559,20 @@ begin
       ifaceSym^.at := spec^.isAt;
       ifaceSym^.len := spec^.isLen;
       ifaceSym^.kind := skInterface;
+      { The export-part that declared it, which is in the *supplying* module
+        and so usually in another file (ADR-0248). This symbol is the
+        importing block's own -- 6.11.3 gives the import-clause a
+        defining-point here -- but where a reader wants to be sent is where
+        the interface was exported, exactly as an imported constituent sends
+        them to the module that declared it. }
+      ifaceSym^.declLine := i^.line;
+      ifaceSym^.declCol := i^.col;
+      ifaceSym^.declFile := i^.declFile;
+      { 6.11.2's import-specification names an interface, which is an applied
+        occurrence of the interface-identifier and the one a reader is most
+        likely to be pointing at: `import Middle;` is where a module says
+        where it gets things from. }
+      NoteUse(spec^.line, spec^.col, spec^.isLen, ifaceSym);
 
       { Which constituents are named, and under what spelling. `only` makes
         the list exhaustive; without it the list only renames, and everything
@@ -19718,6 +19740,12 @@ begin
       new(i);
       i^.at := part^.epAt;
       i^.len := part^.epLen;
+      { 6.11.1: the export-part's identifier is the interface's
+        defining-point, and this is the only place a source writes one. }
+      i^.line := part^.line;
+      i^.col := part^.col;
+      if notingUses then i^.declFile := FileIndexOf(curFile)
+      else i^.declFile := 0;
       i^.owner := owner;
       i^.items := nil;
       i^.itemTail := nil;

@@ -1,16 +1,17 @@
 file 0 <source>
 file 1 <dir>/components/usebase.pas
+use 24 8 6 1 7 8 6 interface ?
 use 26 11 7 0 0 0 7 type integer
 use 29 3 4 0 26 5 4 var integer
-use 30 3 6 0 0 0 6 interface ?
+use 30 3 6 1 7 8 6 interface ?
 use 30 3 11 1 20 11 4 procedure ?
 use 30 15 4 0 26 5 4 var integer
-use 34 9 6 0 0 0 6 interface ?
+use 34 9 6 1 7 8 6 interface ?
 use 34 9 13 1 19 3 6 var mark
 use 34 17 4 1 13 5 4 field integer
 use 34 25 4 0 26 5 4 var integer
-use 35 17 6 0 0 0 6 interface ?
+use 35 17 6 1 7 8 6 interface ?
 use 35 17 11 1 18 3 4 var integer
-use 35 30 6 0 0 0 6 interface ?
+use 35 30 6 1 7 8 6 interface ?
 use 35 30 13 1 19 3 6 var mark
 use 35 38 4 1 13 5 4 field integer

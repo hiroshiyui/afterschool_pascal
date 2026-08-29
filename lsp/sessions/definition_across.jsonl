@@ -38,5 +38,23 @@
 
 {"jsonrpc":"2.0","id":6,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/client.pas"},"position":{"line":13,"character":10}}}
 
-{"jsonrpc":"2.0","id":7,"method":"shutdown"}
+# 6.11.2's import-specification names an *interface*, and `import Base;` is
+# where a module says where it gets things from -- the occurrence a reader is
+# most likely to be pointing at. Until ADR-0248 an interface was registered by
+# spelling and by nothing else, so this hovered and jumped nowhere; it now
+# answers the `export Base = (Answer);` in base.pas that declared it.
+{"jsonrpc":"2.0","id":8,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":11,"character":8}}}
+
+{"jsonrpc":"2.0","id":9,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":11,"character":8}}}
+
+# And the *defining* occurrence, on the export-part one line above. It answers
+# `null`, and consistently: this dump reports applied occurrences, so a
+# position on any declaration -- a `var` line, a procedure heading, this --
+# has no `use` line over it. Editors usually answer a declaration with itself
+# and this does not; what it would take is the compiler reporting every
+# defining-point as an occurrence of itself, which is a change to what a `use`
+# line means and not a fix to this one.
+{"jsonrpc":"2.0","id":10,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":9,"character":8}}}
+
+{"jsonrpc":"2.0","id":11,"method":"shutdown"}
 {"jsonrpc":"2.0","method":"exit"}

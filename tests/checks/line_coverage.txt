@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 448
-instrumented 17823
+instrumented 17837
 
 accept 0/4
 accumulate 0/84
@@ -98,12 +98,12 @@ checkedforsubrange 0/52
 checkedfptoint 0/23
 checkedresulttype 0/19
 checkedwidth 0/14
-checkexports 0/23
+checkexports 0/27
 checkexpr 12/263
 checkforeignheading 0/130
 checkgoto 0/9
 checkhandlebirth 0/6
-checkimports 0/82
+checkimports 0/86
 checkinitialstate 0/24
 checklabeled 0/21
 checklabelpart 0/34
@@ -389,7 +389,7 @@ initinitialstates 0/7
 inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
-installrequiredinterfaces 0/28
+installrequiredinterfaces 0/34
 instantiategeneric 0/119
 instantiateheading 0/41
 int64toolarge 0/14
