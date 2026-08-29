@@ -3405,6 +3405,47 @@ lose is the one below.
   the conversion exists to remove. `lsp/sessions/positions_utf16` and
   `positions_utf8` differ in one offer and in one number.
 
+### A program may ask before it writes (`BindingType.writable`)
+
+**The read side of an open had a question and the write side had none**
+(ADR-0240). §6.7.5.6's NOTE 2 offers `binding(f).bound` as the test of a
+binding and E.16 makes it mean *the entity exists*, which serves a program
+about to `reset`. A program about to `rewrite` wants the opposite question, and
+`bound` answers it backwards both ways round: a file about to be created
+reports false, a file that exists and cannot be written reports true. §6.7.5.2
+leaves the activity on the external entity implementation-defined and this
+processor's choice on a failure to create is to stop the program — so the
+failure was unrecoverable, unreportable and unforeseeable.
+
+`BindingType` has a third field, `writable`, and **the feature has no
+spelling**: §6.4.3.4 NOTE 7 is *"a processor may provide additional fields as
+an extension"*, so the standard named the extension point and `binding` is a
+required function already returning a record. Second time a dialect feature has
+needed no position (ADR-0184 was the first) and the first time a standard put
+the door there.
+
+Three things about it are decisions rather than mechanism. It is **a probe and
+not a promise**, exactly as strong as `bound` — a disc that fills between the
+two statements still stops the program, and the specification says so in a
+NOTE. It is **false for a variable bound to nothing**, as `bound` is; an
+unbound `rewrite` goes to a processor-supplied temporary and this says nothing
+about it. And a **directory answers false**, which passes `access(W_OK)` —
+that is permission to create entries *in* it — and stops at `fopen`: asked
+without `struct stat`, because ADR-0186's catalogue holds a function and never
+a type, by appending a slash and asking `access` again, POSIX requiring a
+trailing slash to resolve to a directory.
+
+**The demand was `lib/pasfile.pas` and not the language server.** Four exported
+writers were `procedure`s — routines that could not report failure and could
+fail, killing their caller — and `CopyFile` returned a boolean covering only
+the source. All five report now, which is an API change with eight call sites.
+They became *one routine with two flags* because of a second finding: **a
+bindable file cannot cross a parameter**, §6.4.1 making `bindable` part of a
+variable-declaration rather than of a type-denoter, so `var f: text` compiles
+and `bind(f, b)` inside is refused. The obvious helper was unwritable.
+`tests/dialect/binding_writable.pas` is the case, and it is written to be
+idempotent because `irtest.sh` runs it twice.
+
 ### The language server (`lsp/pasls.pas`)
 
 **The first program in this tree written to be used rather than to be tested**
@@ -3485,6 +3526,14 @@ nothing else. What it would lose, mechanism by mechanism:
   Pascal programs on this runtime whose allocations are not the server's.
   Without the second, the first measurement read 16 324 outstanding variables
   instead of 0.
+- **It survives a scratch path it cannot write** (ADR-0240), which it could
+  not before: `rewrite` on a bound name that cannot be created stops the
+  program, and neither standard gives a program a way to ask first. AP
+  6.4.3.4.7's `writable` is that question and `WriteScratch` is a function
+  now — it says what is wrong and where to fix it, once per document, and the
+  session keeps going. `lsp/sessions/unwritable.jsonl` replays it, with a
+  `name.scratch` sidecar that exists so a session can name a path no work
+  directory would be.
 - **The outline comes from the compiler** (ADR-0239), which is the decision
   behind `textDocument/documentSymbol` and the one that outlived the method:
   the only structured thing this compiler wrote about a program was

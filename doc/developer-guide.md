@@ -359,7 +359,10 @@ not what a compiled program wrote:
   with no `.note` beside it fails. A `name.workspace` marker says the session
   opens files on disk: `%ROOT%` in the input becomes the checkout's path, and
   the golden is compared with the root written back and the counts blanked,
-  neither being a thing that can be written down once. `lsp/README.md` says how to add one; they are
+  neither being a thing that can be written down once. A `name.scratch` sidecar
+  names the scratch path for that session in place of the work directory's,
+  which is what lets a session be about a path the server *cannot* write.
+  `lsp/README.md` says how to add one; they are
   all one `ctest` case, `lsp-server`, because the harness builds the server once
   and ten program-components is most of the cost.
 * **`tests/spec/`** is written against *clauses* rather than against the

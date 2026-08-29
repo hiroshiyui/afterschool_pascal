@@ -376,7 +376,7 @@ here settles it, and the record deliberately does not.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Thirteen entries so far, and **eight of them have been acted on** — which is
+Fifteen entries so far, and **nine of them have been acted on** — which is
 the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -390,7 +390,7 @@ looked generous beside a test case and turned out not to be a limit a
 compiled at all.
 
 The shape of the whole list is the argument for the chapter. **Five of the
-thirteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
+fifteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
 255-character line, a 16 384-byte capture — and every one of them was chosen by
 counting what the largest thing in the tree needed at the time. The largest
 thing in the tree was a test case. The tenth is the only one that is not a gap
@@ -398,8 +398,11 @@ at all: the protocol asked the text model a question it had been designed to
 refuse, and the answer was already exported. The eleventh came from pointing
 the finished program at the repository it was written in, which is not a thing
 the first ten had needed — and the twelfth and thirteenth came from asking the
-compiler a question no gate had ever asked it, which is the shape the next ones
-are likely to have.
+compiler a question no gate had ever asked it. **The fourteenth and fifteenth
+are the pair worth reading last**: one of them changed the language and the
+demand for it turned out not to be this program at all but a library module
+written a year of increments earlier, whose five writers could fail and could
+not say so. A finding this chapter produced was already true everywhere else.
 
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
@@ -491,12 +494,40 @@ are likely to have.
 - **A program cannot make a temporary file, and cannot survive failing to.**
   Two halves. There is no `getpid` anywhere in this tree, no `mkstemp`, and
   nothing in `PasFS` that answers a temporary name, so the scratch path is one
-  fixed name under `TMPDIR` and two servers sharing a `TMPDIR` share the file.
-  Worse: `rewrite` on a bound name that cannot be created is a run-time error
-  and *stops the program*, and neither standard gives a program a way to ask
-  beforehand — so a server cannot survive a bad scratch path however carefully
-  it is written. The first is a library gap with an obvious shape; the second
-  is a language question and the sharper of the two.
+  fixed name under `TMPDIR` and two servers sharing a `TMPDIR` share the file —
+  **still open**, and a library gap with an obvious shape. Worse: `rewrite` on
+  a bound name that cannot be created is a run-time error and *stops the
+  program*, and neither standard gives a program a way to ask beforehand — so a
+  server could not survive a bad scratch path however carefully it was written.
+
+  ~~That second half~~ — **answered, and it is the second finding this chapter
+  produced that changed the language** (AP 6.4.3.4.7, ADR-0240). §6.7.5.6's
+  NOTE 2 offers `bound` to a program about to *read* and the write side had
+  nothing, so `BindingType` gained a third field, `writable`. It needed **no
+  spelling**: §6.4.3.4 NOTE 7 says *"a processor may provide additional fields
+  as an extension"*, so the standard named the extension point and `binding`
+  is a required function that already returns a record. That is the second
+  feature in this dialect to need no position at all, after ADR-0184's, and
+  the first where a standard put the door there.
+
+  **The demand was not the server.** It was `lib/pasfile.pas`, whose four
+  exported writers were *procedures* — routines that could not report failure
+  and could fail, killing their caller — and whose `CopyFile` returned a
+  boolean that covered only the source. Five sites in one module, written long
+  before this chapter existed and never noticed, because nothing had pointed
+  any of them at a path it could not write. One site is an anecdote and this
+  was six.
+
+- **A bindable file cannot cross a parameter**, which came out of fixing the
+  above and is open. §6.4.1 makes `bindable` part of a *variable-declaration*
+  and not of a type-denoter, so no formal parameter accepts one: `var f: text`
+  compiles and `bind(f, b)` inside is then refused, *"only a variable whose
+  type-denoter says 'bindable' can be bound to something outside the
+  program"*. The cost is real and small — a check five routines need must be
+  written once per routine, or the routines must be restructured so that one
+  of them holds the file, which is what `lib/pasfile.pas` now does. What it
+  would take to close is a decision about what a callee may do to a caller's
+  binding, and nothing has asked for it twice.
 - ~~**The protocol counts in a unit nothing here answers in**~~ — **answered,
   and the text model needed no change at all** (ADR-0237). This chapter had
   said the conversion was one nothing in the tree could do, because AP 6.4.15

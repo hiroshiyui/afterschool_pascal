@@ -52,6 +52,14 @@ exists. There is no `getpid` in this tree and no `mkstemp`, so the name is
 fixed and two servers sharing a `TMPDIR` would share it. Point
 `PASLS_SCRATCH` somewhere of your own if you run more than one.
 
+**A path it cannot write is reported and survived**, which it was not until
+AP 6.4.3.4.7 ([ADR-0240](../doc/adr/0240-a-program-may-ask-before-it-writes.md)):
+`rewrite` at a name that cannot be created stops the program, and neither
+standard gave a program a way to ask first. The server asks
+`binding(f).writable`, says once per document what is wrong and where to fix
+it, and keeps the session. `sessions/unwritable.jsonl` is that session, and its
+`.scratch` sidecar is the path.
+
 It negotiates the **position encoding** at `initialize`. LSP counts a
 `Position.character` in UTF-16 code units by default; this compiler counts
 bytes. If your client offers `utf-8` in `general.positionEncodings` the server
@@ -93,13 +101,14 @@ It is one `ctest` case, `lsp-server`.
 lsp/run.sh tools/pascalcc build/bin/pascalc
 ```
 
-A session is up to four files, of which the first two are required:
+A session is up to five files, of which the first two are required:
 
 | | |
 | --- | --- |
 | `sessions/name.jsonl` | one JSON-RPC message per line. A blank line or one beginning with `#` is a comment — the harness computes the `Content-Length` frames, so the session stays readable and the byte counts stay right |
 | `sessions/name.out` | the **exact bytes** the server wrote to standard output, carriage returns and byte counts included. A change to what `JsonRender` or `LspWrite` produces fails here even when the JSON still parses |
 | `sessions/name.note` | what it wrote to standard error. Absent means none, and a session that writes something with no `.note` beside it **fails** — so a new complaint cannot appear unnoticed |
+| `sessions/name.scratch` | the scratch path for this session, one line, in place of the work directory's. It exists for a session that is about a path the server **cannot** write, and so must name one no work directory would be |
 | `sessions/name.workspace` | a marker: this session opens files on disk. `%ROOT%` in the `.jsonl` becomes this checkout's path, and before the diff the harness writes the root back and blanks the `Content-Length`s — an absolute path is as long as somebody's home directory, so neither it nor the count over it can be written down once. Such a session pins the *behaviour*; the sessions that name no file pin the framing |
 
 To add one, write the `.jsonl`, run `run.sh`, and read what it says before

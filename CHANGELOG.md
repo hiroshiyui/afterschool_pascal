@@ -26,6 +26,19 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`BindingType` has a third field, `writable`** — true exactly when the file
+  a variable is bound to could be opened for writing (AP 6.4.3.4.7, ADR-0240).
+  ISO/IEC 10206:1991 §6.4.3.4 NOTE 7 admits additional fields as an extension,
+  so this needs no new syntax at all. It answers the question the language had
+  only half of: `bound` tells a program about to *read* whether the file is
+  there, and a program about to `rewrite` had nothing — a path that cannot be
+  created stopped the program with no way to find out first.
+- **Every writer in `lib/pasfile.pas` answers whether it wrote.**
+  `WriteAllText`, `WriteLine`, `AppendLine` and `AppendText` were procedures
+  that could not report failure and could fail; they are functions returning
+  `boolean` now, and `CopyFile`'s boolean covers the destination as well as the
+  source. **This changes their signatures**: a call that ignored the result no
+  longer compiles.
 - **`pascalc --dump-symbols`**, which writes every name a source declares —
   its kind, the position of the name, its length and how deeply it nests, one
   to a line (ADR-0239). It stops after the parse rather than after Sema, so it

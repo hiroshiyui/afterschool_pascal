@@ -666,6 +666,29 @@ assembled. It is written on every run, which is what keeps the coverage sweep
 exercising the code generator on every file in the corpus even though it reads
 none of it.
 
+**A program may ask before it writes** (AP 6.4.3.4.7, ADR-0240).
+`BindingType` has a third field, `writable`, which ISO/IEC 10206:1991
+§6.4.3.4 NOTE 7 admits as an extension — so the feature has **no spelling**,
+which is the second time none was needed after ADR-0184 and the first where
+the standard itself named the extension point. It exists because `bound`
+answers the read side and the write side had nothing: §6.7.5.2 leaves the
+activity on the external entity implementation-defined and this processor's
+choice on a failure to create is to stop the program, so `rewrite` at a bad
+path was unrecoverable, unreportable and unforeseeable. It is a probe and not
+a promise, exactly as `bound` is. Two things follow that are easy to get
+wrong. It is **false for a variable bound to nothing**, as `bound` is — an
+unbound `rewrite` goes to a processor-supplied temporary and this says nothing
+about that. And a **directory** answers false, which needs asking without
+`struct stat`: POSIX makes a trailing slash require a directory, so a second
+`access` is the whole of it (ADR-0186's catalogue holds a function and never a
+type).
+
+**A bindable file cannot cross a parameter**, and it is worth knowing before
+factoring one out. §6.4.1 makes `bindable` part of a *variable-declaration*
+and not of a type-denoter, so no formal parameter accepts one — `var f: text`
+compiles and `bind(f, b)` inside it is then refused. `lib/pasfile.pas`'s four
+writers are one routine with two flags for exactly that reason.
+
 **How a Pascal program has a command line at all** is the part worth knowing.
 §6.5.1 makes every program-parameter possess "the bindability that is
 bindable", and §6.7.6.8's NOTE 2 makes `binding(f)` report the binding §6.12

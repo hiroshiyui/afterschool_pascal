@@ -932,7 +932,7 @@ standard to satisfy. Eight modules so far:
 | `lib/pasvector.pas` | `IntVec`, a growable sequence: `VecNew`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecReserve`, `VecFill`, `VecSum`, `VecFree` |
 | `lib/pasmap.pas` | `StrMap`, a `string(32)`-keyed dictionary: `MapPut`, `MapGet`, `MapHas`, `MapDelete`, and `MapSlots`/`MapLiveAt` to walk it |
 | `lib/pastext.pas` | `Split`, `Join`, `TrimStart`, `TrimEnd`, `TrimAll`, `CountChar`, `TryParseInt`, `ParseIntOr`, `IntToStr` |
-| `lib/pasfile.pas` | whole files by name: `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`, `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`, `CopyFile` — every reader answers **false** for a file that is not there rather than stopping, which is what ADR-0172's `binding(f).bound` made possible in conforming Pascal |
+| `lib/pasfile.pas` | whole files by name: `FileExists`, `LineCount`, `ReadLine`, `ForEachLine`, `ReadAllText`, `WriteAllText`, `WriteLine`, `AppendLine`, `AppendText`, `CopyFile` — every reader answers **false** for a file that is not there rather than stopping, which is what ADR-0172's `binding(f).bound` made possible in conforming Pascal, and since ADR-0240 every *writer* answers false for a path it cannot create, which is what `binding(f).writable` made possible |
 | `lib/passtrvec.pas` | `StrVec`, a growable sequence of `string(255)`: `PasVector`'s interface under `SVec` names, plus `SVecIndexOf`, `SVecSort`, `SVecJoin` and `SVecSplit`. `PasFile.ForEachLine` with a nested procedure is how a file's lines become one |
 
 **`lib/dialect/` is a second layer** (ADR-0120): its modules use `external`,
@@ -1502,7 +1502,10 @@ binding    var f: bindable text — a variable that may be bound to
            something outside the program. bind(f, b) attaches it to the
            file named by b.name, unbind(f) detaches it, and binding(f)
            reports both the name and whether it took. BindingType is the
-           required record they trade in: a name and a boolean. This is
+           required record they trade in: a name and two booleans —
+           `bound`, which says the file is *there*, and the dialect's
+           `writable`, which says one could be written at that name and
+           is the only question a program has before rewrite. This is
            the only way a program names a file while it is *running* —
            ISO 7185 binds the program parameters before it starts and
            gives it no other way out
