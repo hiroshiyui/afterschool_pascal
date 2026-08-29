@@ -18,7 +18,7 @@ decide about, and the day it is decided it moves there.
 | [The goal](#the-goal-adr-0109) | what this is all for, and the four decisions it forces |
 | [What blocks the library](#what-blocks-the-library) | the one foreign-interface item a practical library still waits on, and what each landed feature left open behind it — two of those are still open |
 | [What a daily program cannot reach for](#what-a-daily-program-still-cannot-reach-for) | the five library gaps still open — JSON was the sixth and is done — and the two deliberate language absences, none of which is a mystery |
-| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, the two library gaps that were in front of it — both now closed, so nothing is — and [a second transport](#mcp-implementation) recorded but not started |
+| [The program that would judge the language](#the-program-that-would-judge-the-language) | the one client big enough to answer a usability question, why it changed shape, the two library gaps that were in front of it — both now closed, so nothing is — and [a second transport](#mcp-implementation--built-adr-0241), built, with what it found against what it was predicted to find |
 | [Where the ideas come from](#where-the-ideas-come-from) | the borrowings from Rust, Swift and Zig, and where each stands |
 | [The open questions](#the-open-questions) | the one structural risk no record can close — and it is now the only entry left |
 | [Version 3](#version-3-what-it-took-and-what-it-left) | what the release took, what dissolved under it, and the one proposal it left open — which has since been taken |
@@ -628,14 +628,15 @@ the product of writing it**, and enumerating it here would be designing
 features without a caller — which is the practice this entry exists to serve
 rather than to break.
 
-### MCP implementation
+### MCP implementation — **built** (ADR-0241)
 
 **A second transport over the same program**, asked about because an agent is
-now a reader of this repository as much as an editor is. It is recorded here
-rather than started: the paragraph above says enumerating what this chapter
-demands would be designing features without a caller, and this is a *transport*
-question with a prerequisite in front of it and an expected finding named in
-advance, which is the form that escapes that objection.
+now a reader of this repository as much as an editor is. It was recorded here
+before it was started, with a prerequisite in front of it and an expected
+finding named in advance, and both of those did their job: the prerequisite was
+ADR-0239 and the prediction was half right in a way worth reading. What follows
+is the entry as it was written, with what actually happened marked where it
+differs.
 
 **What is already shared, and it is most of it.** `lsp/pasls.pas` splits into a
 transport half and a work half, and the split is clean: `ImportsFor`,
@@ -705,8 +706,43 @@ concurrency row names its sentence, because a second surface added without one
 is breadth where this chapter wants depth: *`PasLsp` is a frame reader and not
 a transport, and the second transport is what says so.*
 
-**What it costs** is a second thing to keep green — a second session corpus,
-and an MCP analogue of `lsp/run.sh`'s byte-exact replay.
+**That was right, and it was the smaller of the two.** `LspReader`, `Ready` and
+`NextByte` are shared unchanged; `LspRead` is 40 lines and the pair that
+replaces it 58. The module's name is now narrower than its contents and is kept
+anyway — a third caller wanting the reader and *neither* framing would be the
+reason to rename it.
+
+**The finding the prediction did not have is the one worth carrying.** The
+*work* half was less transport-neutral than the paragraph above claims, and only
+a second caller could say so. `CompilerCommand` had the scratch path baked in
+as the **source**, which is an LSP assumption — a document may never have been
+saved, where MCP's unit is a file on disk. And the tool's `path` has to be made
+absolute, because `ImportsFor` compares against sidecar entries it resolved
+against the sidecar's own directory: a relative path matches none of them and
+`lib/dialect/pasjson.pas` reports its 48 diagnostics again. **That is
+ADR-0238's defect arriving a second time by a different road**, and the LSP
+side never met it because `UriToPath` always yields an absolute path. *A
+routine is not neutral because it has one caller; it is neutral when a second
+one does not have to change it* — which is ADR-0116's two-sites rule applied to
+an interface rather than to a feature, and is the sentence this entry adds to
+the page.
+
+**And one prediction above is wrong**, which is worth leaving visible rather
+than editing away. The tool descriptors were expected to stress `PasJson` and
+turn `JsonLine`'s 255 and `MapKey`'s 63 from recorded findings into blocking
+ones. The whole `tools/list` frame is **931 bytes** and every literal in it is
+under 255. What stressed something was the *outline*: 40 146 characters holding
+1 624 newlines, in a frame of 41 859 bytes and one line, because `JsonRender`
+escapes a newline and the frame therefore holds none — so what it stressed was
+the framing, and `JsonlWrite` refuses a body holding a real newline rather than
+assuming the property.
+
+**What it cost** is what was estimated: a second thing to keep green. It is
+one more session in the same corpus rather than a corpus of its own —
+`lsp/sessions/mcp.jsonl` with a `.mcp` marker that says the framing is one
+message to a line — plus `tests/dialect/lib_lsp_jsonl.pas` for the module half,
+which had to be a second *program* because one program has one standard input
+and the two framings cannot be read from it at once.
 
 One caveat about the reading above, in this page's own spirit: the LSP and
 `lsp/` facts here were taken from the sources, and the MCP-side ones —

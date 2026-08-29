@@ -3446,6 +3446,46 @@ and `bind(f, b)` inside is refused. The obvious helper was unwritable.
 `tests/dialect/binding_writable.pas` is the case, and it is written to be
 idempotent because `irtest.sh` runs it twice.
 
+### A second transport over one program (`pasls --mcp`)
+
+**MCP and LSP are one binary** (ADR-0241), because almost nothing in the
+program is about a protocol: `ImportsFor` reads a build description, `Compile`
+starts a compiler, `DiagnosticsIn` reads what it said. What differs is the
+framing, the method names and who is asking. Two tools, `outline` and
+`diagnostics`, being what the compiler can answer about a program; a shell
+already compiles and reads files better, and offering that would be surface
+without a reason.
+
+**`PasLsp` turned out to be a buffered descriptor reader with a framing over
+it**, which is what the roadmap predicted the second transport would say.
+`LspReader`, `Ready` and `NextByte` are shared unchanged; `LspRead` is 40 lines
+and `JsonlRead`/`JsonlWrite` are 58. The module's name is now narrower than its
+contents and is kept — a third caller wanting the reader and *neither* framing
+would be the reason to rename it.
+
+**The work half was less neutral than it looked, and that is the finding.**
+`CompilerCommand` had the scratch path baked in as the *source* — an LSP
+assumption, a document being a buffer that may never have been saved where
+MCP's unit is a file on disk. And a tool's `path` must be made absolute:
+`ImportsFor` compares against sidecar entries resolved against the sidecar's
+own directory, so a relative path matches none and ADR-0238's 48 diagnostics
+come back by a second road. The LSP side never met it because `UriToPath`
+always yields an absolute path. *A routine is not neutral because it has one
+caller.*
+
+Two smaller asymmetries worth knowing. The MCP side has **no document store
+and no scratch copy**, the unit being a file that is already on disk. And it
+takes its **workspace from the directory it was started in**, MCP's `roots`
+being a client capability reached by a request this server does not issue —
+which is why `lsp/run.sh` runs the server in the checkout and resolves the
+compiler paths it is handed to absolute ones.
+
+**JSON escaping is what makes the newline framing safe.** MCP forbids an
+embedded newline in a frame; an `outline` of `selfhost/apfront.pas` is 40 146
+characters holding 1 624 of them, in one 41 859-byte line, because
+`JsonRender` writes each as `\n`. `JsonlWrite` refuses a body holding a real
+newline rather than assuming that.
+
 ### The language server (`lsp/pasls.pas`)
 
 **The first program in this tree written to be used rather than to be tested**

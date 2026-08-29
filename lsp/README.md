@@ -92,6 +92,34 @@ descriptor write is not, so a program that used both would interleave them
 unpredictably. The program declares no program-parameters, which makes a stray
 `writeln` a compile-time error rather than a corrupted frame.
 
+## The other protocol
+
+`pasls --mcp` speaks the [Model Context Protocol](https://modelcontextprotocol.io)
+over stdio instead ([ADR-0241](../doc/adr/0241-a-second-transport-over-one-program.md)),
+and it is the same program: one import resolver, one compiler invocation, one
+set of answers about a Pascal source. What changes is the framing — one JSON
+message to a line rather than `Content-Length` — the method names, and who is
+asking. LSP serves a person in an editor; MCP serves an **agent working on a
+checkout**, which is why the two tools are the ones a shell cannot do:
+
+| tool | what it answers |
+| --- | --- |
+| `outline` | every name a source declares, with kind, position and nesting, indented. Answers for a file that does not compile, because `--dump-symbols` stops after the parse |
+| `diagnostics` | what the compiler says about a source, one diagnostic to a line, with imports resolved from `.components` |
+
+Both take a `path` to a `.pas` file, absolute or relative to the directory the
+server was started in — MCP has no `rootUri` to be told, so that directory is
+also where a `.components` is looked for. A path that is not there is
+`isError: true` inside a result; an unknown tool or a missing argument is a
+JSON-RPC error, which is the distinction the specification draws and the one
+most easily got backwards.
+
+```sh
+lsp/build.sh tools/pascalcc pasls
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"outline","arguments":{"path":"tests/hello.pas"}}}' \
+  | PASLS_COMPILER=build/bin/pascalc ./pasls --mcp
+```
+
 ## The sessions
 
 `run.sh` builds the server and replays every recorded conversation against it.
@@ -101,13 +129,14 @@ It is one `ctest` case, `lsp-server`.
 lsp/run.sh tools/pascalcc build/bin/pascalc
 ```
 
-A session is up to five files, of which the first two are required:
+A session is up to six files, of which the first two are required:
 
 | | |
 | --- | --- |
 | `sessions/name.jsonl` | one JSON-RPC message per line. A blank line or one beginning with `#` is a comment — the harness computes the `Content-Length` frames, so the session stays readable and the byte counts stay right |
 | `sessions/name.out` | the **exact bytes** the server wrote to standard output, carriage returns and byte counts included. A change to what `JsonRender` or `LspWrite` produces fails here even when the JSON still parses |
 | `sessions/name.note` | what it wrote to standard error. Absent means none, and a session that writes something with no `.note` beside it **fails** — so a new complaint cannot appear unnoticed |
+| `sessions/name.mcp` | a marker: this session is MCP rather than LSP. The server is started with `--mcp` and each line of the `.jsonl` **is** a frame, since that transport delimits by newlines and has no header to compute |
 | `sessions/name.scratch` | the scratch path for this session, one line, in place of the work directory's. It exists for a session that is about a path the server **cannot** write, and so must name one no work directory would be |
 | `sessions/name.workspace` | a marker: this session opens files on disk. `%ROOT%` in the `.jsonl` becomes this checkout's path, and before the diff the harness writes the root back and blanks the `Content-Length`s — an absolute path is as long as somebody's home directory, so neither it nor the count over it can be written down once. Such a session pins the *behaviour*; the sessions that name no file pin the framing |
 

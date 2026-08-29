@@ -26,6 +26,17 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **The language server speaks a second protocol.** `pasls --mcp` answers the
+  Model Context Protocol over standard input and output — the same binary, the
+  same import resolution, the same compiler (ADR-0241). Two tools: `outline`,
+  every name a source declares with its position and nesting, which answers for
+  a file that does not compile; and `diagnostics`, what the compiler says about
+  a source with its imports resolved. It serves an agent working on a checkout
+  where the LSP side serves a person in an editor.
+- **`PasLsp` gained `JsonlRead` and `JsonlWrite`**, the newline-delimited
+  framing that transport uses, over the same reader the `Content-Length` one
+  uses. A body holding a newline is refused rather than written, that framing
+  having nothing else to say where a message ends.
 - **`BindingType` has a third field, `writable`** — true exactly when the file
   a variable is bound to could be opened for writing (AP 6.4.3.4.7, ADR-0240).
   ISO/IEC 10206:1991 §6.4.3.4 NOTE 7 admits additional fields as an extension,

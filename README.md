@@ -182,9 +182,10 @@ tree.
 ### In an editor
 
 `lsp/` holds a Language Server Protocol server, written in this language and
-using this library. Today it does one thing — it publishes the compiler's
-diagnostics for every file you open or edit, without your having to save one —
-and that is enough to be useful in any editor with an LSP client.
+using this library. It publishes the compiler's diagnostics for every file you
+open or edit, without your having to save one, and answers
+`textDocument/documentSymbol` with the outline of a document — including one
+that does not compile yet, which is when an outline is most wanted.
 
 ```sh
 PASCALC=build/bin/pascalc AFTERSCHOOL_PASCAL_RUNTIME=build/lib \
@@ -196,6 +197,21 @@ and output and needs no arguments; `PASLS_COMPILER` says what to invoke if
 `pascalc` is not on `PATH`, and `PASLS_SCRATCH` says where to put the file it
 writes your unsaved buffer into. `lsp/README.md` has the rest, including what
 it does not do yet.
+
+### For an agent
+
+The same binary answers the [Model Context Protocol](https://modelcontextprotocol.io)
+over standard input and output when given `--mcp`, with two tools: `outline`,
+every name a Pascal source declares with its position and nesting, and
+`diagnostics`, what the compiler makes of one with its imports resolved. They
+exist because the questions *where is this declared* and *what does this name
+resolve to* are ones the compiler answers exactly and a regular expression
+answers by accident.
+
+```sh
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"outline","arguments":{"path":"tests/hello.pas"}}}' \
+  | PASLS_COMPILER=build/bin/pascalc ~/bin/pasls --mcp
+```
 
 ## The language
 
@@ -957,7 +973,7 @@ records is which modules a reader can port to another Pascal.
 | `lib/dialect/passtream.pas` | `Stream`, a handle over `fopen` — `OpenRead`, `OpenWrite`, `OpenAppend`, `Close`, `WriteText`, `WriteLine`, `ReadLine`, `Flush`. The file creation `PasIO` could not do, and the first module built on ADR-0174: the stream is closed when its variable dies |
 | `lib/dialect/pascontainer.pas` | `Vec` and `Map` over **whatever element type a program names** — `VecInit`, `VecPush`, `VecPop`, `VecGet`, `VecSet`, `VecLen`, `VecCap`, `VecClear`, `VecReserve`, `VecFree`; `MapInit`, `MapPut`, `MapGet`, `MapHas`, `MapDelete`, `MapCount`, `MapFree` and a slot walk. A client writes one line per element type — `type IntVec = ^Vec(integer);` — and both containers grow. This is what `PasVector`, `PasStrVec` and `PasMap` are, written once; those three stay because they are ordinary Extended Pascal and a program that avoids the dialect layer must still have a vector and a map |
 | `lib/dialect/pasjson.pas` | A **JSON document** read, navigated, built and written back — `JsonParse` and `JsonParseChars` answering a `JsonResult`; `JsonKindOf`, `JsonCount`, `JsonAt`, `JsonMember`, `JsonNameAt`; `JsonNumberOr`, `JsonIntegerOr`, `JsonBooleanOr`, `JsonIsNull`, `JsonTextInto`; the seven `JsonNew*` constructors with `JsonAppend` and `JsonPut`; and `JsonRender`. A string value is **bytes and unbounded** — a growable `JsonChars`, so a whole file fits in one — while a member name is a `string(255)`. It does not normalise: AP 6.4.15's `utf8` would establish normal form C on assignment, and a program that round-trips somebody's source file through this must not edit it |
-| `lib/dialect/paslsp.pas` | The **Language Server Protocol's framing** — `LspOpen`, `LspRead`, `LspWrite` over a descriptor. A message is `Content-Length: N` and then exactly N bytes, so the header is line-oriented and the body is not, and a reader that has just finished a header is usually holding the first bytes of the body: `PasStream` reads lines and cannot hand those back, `PasIO` reads bytes, and an `LspReader` is the buffer between them. It reads the body and does not read the *message* — `PasJson` makes a document of it — because framing and content are two failures with two causes. Lenient about a bare `<LF>`, strict about writing `<CR><LF>` |
+| `lib/dialect/paslsp.pas` | The **Language Server Protocol's framing** — `LspOpen`, `LspRead`, `LspWrite` over a descriptor. A message is `Content-Length: N` and then exactly N bytes, so the header is line-oriented and the body is not, and a reader that has just finished a header is usually holding the first bytes of the body: `PasStream` reads lines and cannot hand those back, `PasIO` reads bytes, and an `LspReader` is the buffer between them. It reads the body and does not read the *message* — `PasJson` makes a document of it — because framing and content are two failures with two causes. Lenient about a bare `<LF>`, strict about writing `<CR><LF>`. It carries a **second framing** beside it — `JsonlRead`/`JsonlWrite`, one JSON message to a line, which is what MCP's stdio transport delimits by — over the same reader; the two framings are 40 and 58 lines against a buffer neither could be written without |
 | `lib/dialect/paslspdiag.pas` | A **compiler diagnostic in the protocol's shape** — `DiagParse` reads `file:line:col: error: message` into a `Diagnostic ! ErrorCode`, `DiagJson` makes the protocol's object of one, and `DiagPublish` the `textDocument/publishDiagnostics` notification. LSP counts lines and characters from zero where the compiler counts from one, and the conversion happens here |
 | `lib/dialect/paslist.pas` | `List`, a chain of `string(255)` the declaring block owns — `ListPush`, `ListPop`, `ListPeek`, `ListEmpty`, `ListLen`, `ListAppend`, `ListGet`, `ListDrop`, `ListClear`, `ListReverse`. **The only container here with no `Free`**, because the head is an `owned ^` and the block disposes the chain (ADR-0181, ADR-0182). O(1) at the front; the rest is O(n) and recursive, an owned pointer admitting no cursor — a program wanting an index wants `PasStrVec` |
 

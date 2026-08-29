@@ -111,7 +111,11 @@ did (ADR-0103). **`lsp/` is a second one**, and further out: `lsp/pasls.pas` is
 a language server written in the dialect, built by `lsp/build.sh` into a binary
 an editor can be pointed at rather than into a temporary directory, and checked
 by `lsp/run.sh` replaying `lsp/sessions/*.jsonl` — a *conversation*, framed by
-the harness and compared byte for byte (ADR-0236). The corpus sweeps reach it
+the harness and compared byte for byte (ADR-0236). **It speaks two protocols**
+(ADR-0241): the same binary answers MCP over stdio when given `--mcp`, one
+message to a line instead of `Content-Length`, with two tools built on
+`--dump-symbols` and on a compilation. A session says which by a `name.mcp`
+marker. The corpus sweeps reach it
 through a second root rather than through the glob: `coverage.py` names it,
 `variant_check.sh` finds it, `build.sh` honours `AFTERSCHOOL_PASCAL_OPT`, and
 `heap-balance` drives `lsp/run.sh` instead of `run_test.sh` — which has to take
