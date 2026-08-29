@@ -47,14 +47,23 @@
 
 {"jsonrpc":"2.0","id":9,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":11,"character":8}}}
 
-# And the *defining* occurrence, on the export-part one line above. It answers
-# `null`, and consistently: this dump reports applied occurrences, so a
-# position on any declaration -- a `var` line, a procedure heading, this --
-# has no `use` line over it. Editors usually answer a declaration with itself
-# and this does not; what it would take is the compiler reporting every
-# defining-point as an occurrence of itself, which is a change to what a `use`
-# line means and not a fix to this one.
+# And the *defining* occurrence, on the export-part one line above. It still
+# answers `null`, and it is now the exception rather than the rule: ADR-0250
+# reports every name a *block* declares as an occurrence of itself, and an
+# interface is not one of those -- 6.11.1 registers it in a table of its own,
+# beside the scope rather than in it. A `var` line or a procedure heading in
+# this file does answer, which the session on the scratch document shows.
 {"jsonrpc":"2.0","id":10,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":9,"character":8}}}
 
-{"jsonrpc":"2.0","id":11,"method":"shutdown"}
+# The one place a defining occurrence is not a no-op. `Doubled` on line 17 is
+# the block *completing* the heading on line 13, and 6.11.1 makes the two the
+# same routine -- so the name written at the implementation resolves to the
+# interface that promised it. That is Pascal's declaration/definition split,
+# and going the other way is not available: a symbol records one
+# defining-point and it is the heading's.
+{"jsonrpc":"2.0","id":11,"method":"textDocument/definition","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":17,"character":9}}}
+
+{"jsonrpc":"2.0","id":12,"method":"textDocument/hover","params":{"textDocument":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas"},"position":{"line":17,"character":9}}}
+
+{"jsonrpc":"2.0","id":13,"method":"shutdown"}
 {"jsonrpc":"2.0","method":"exit"}

@@ -56,5 +56,18 @@
 
 {"jsonrpc":"2.0","id":12,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":14,"character":12}}}
 
-{"jsonrpc":"2.0","id":13,"method":"shutdown"}
+# A *declaration*, which answered nothing until ADR-0250. `Total` on line 6
+# is `var Total: Counter;`, and standing on it now gives its own extent back
+# and a hover with the type -- which is the ordinary question a reader has
+# about a name they are looking straight at.
+{"jsonrpc":"2.0","id":14,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":6,"character":4}}}
+
+{"jsonrpc":"2.0","id":15,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":6,"character":4}}}
+
+# The function's own heading. There is no separate block completing it here,
+# so the answer is itself -- a no-op jump in an editor, and the hover is the
+# point.
+{"jsonrpc":"2.0","id":16,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":8,"character":9}}}
+
+{"jsonrpc":"2.0","id":17,"method":"shutdown"}
 {"jsonrpc":"2.0","method":"exit"}

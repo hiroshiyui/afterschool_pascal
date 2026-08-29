@@ -4,6 +4,10 @@ use 30 10 3 0 0 0 3 required ?
 use 33 10 7 0 0 0 7 type integer
 use 34 9 7 0 0 0 7 type boolean
 use 35 10 7 0 0 0 7 type integer
+use 35 3 5 0 35 3 5 var integer
+use 34 3 4 0 34 3 4 var boolean
+use 33 3 5 0 33 3 5 var integer
+use 30 6 1 0 30 6 1 type integer
 use 38 3 5 0 33 3 5 var integer
 use 39 3 5 0 35 3 5 var integer
 use 39 12 5 0 33 3 5 var integer

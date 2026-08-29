@@ -5038,6 +5038,72 @@ begin
   end
 end;
 
+{ A **defining** occurrence, reported as an occurrence of itself (ADR-0250).
+
+  Every line above this one is an *applied* occurrence, and a position on a
+  declaration had no line over it at all -- so a reader standing on `total` in
+  `var total: Counter` was told nothing, where an editor answers a declaration
+  with itself and a hover there is the most ordinary question there is.
+
+  The defining-point is written as both ends of the line, which is what makes
+  it an occurrence of itself, and the type comes from the symbol -- so this is
+  reported once the declaration is *complete* rather than at `Declare`, where
+  a variable has no type yet. `line > 0` is what excludes the required
+  identifiers: they are declared with no position (6.2.2.10) and a line about
+  line 0 would be an answer about nothing.
+
+  6.6.1's `forward` and 6.11.1's heading are the case where this is not a
+  no-op. Both are the *same routine* as the block completing them, so `Declare`
+  runs once and records the heading; the block's own name is then an
+  occurrence resolving to the heading, which is the navigation Pascal has and
+  C's declaration/definition split made familiar. That is reported where the
+  completion is found and not here. }
+procedure NoteDefining(s: symPtr);
+begin
+  { `declFile` and not `NotingHere`'s answer, because the two are different
+    questions here and only this one is right. An *applied* occurrence is in
+    the text Sema is reading; a defining occurrence is at the defining-point,
+    which for an imported constituent is in the module that declared it --
+    and 6.11.3 binds that symbol into the importing block's scope, so the walk
+    below finds it. Asking which file Sema is checking would report
+    `middle.pas`'s line 14 as an occurrence in `client.pas`, and a caller
+    slicing that document at that position gets a name that is not there.
+    It did, before the goldens were retaken: a hover over `Doubled` sliced
+    `(Double` out of the line. ADR-0249's mistake met from the other side,
+    and caught by a session rather than by reasoning. }
+  if notingUses and (s <> nil) then
+    if (s^.declLine > 0) and (s^.declFile = 0) then begin
+      PutUseNumbers(s^.declLine, s^.declCol, s^.len,
+                    s^.declFile, s^.declLine, s^.declCol, s^.len);
+      PutSymKindWord(s^.kind);
+      write(' ');
+      WriteTypeName(s^.stype);
+      writeln
+    end
+end;
+
+{ Every name a block declared, once its declarations are complete. The scope
+  is a chain and each entry carries the depth it was bound at, so the entries
+  of this block are the ones at the top with this depth -- which is one site
+  where the declaration *kinds* are eight, and needs nothing to be added when
+  a ninth arrives. A hidden variable is never bound into a scope (a function
+  result, a `with` binding) and so is never reported, which is right: no
+  programmer wrote it. }
+procedure NoteBlockDeclarations;
+var e: entryPtr;
+begin
+  if NotingHere then begin
+    e := scopeTop;
+    while e <> nil do begin
+      if e^.depth <> scopeDepth then e := nil
+      else begin
+        NoteDefining(e^.sym);
+        e := e^.prev
+      end
+    end
+  end
+end;
+
 { 6.2.2.4's field-identifier, which is the one applied occurrence in this
   language whose defining-point is not a symbol's. 6.4.3.3 makes a record a
   region and gives every field-identifier a defining-point in it, but nothing
@@ -17879,6 +17945,15 @@ begin
       the module block's, not the interface's. }
     if existing^.isGeneric and (d^.pdBody <> nil) then
       RecordGenericBody(existing, d);
+    { The completion of a heading 6.11.1 wrote or a 6.6.1 `forward`, and the
+      one place a defining occurrence is not a no-op: this is the *same*
+      routine, so `Declare` ran at the heading and recorded it, and the name
+      written here resolves there. That is Pascal's declaration/definition
+      split and it is the navigation a reader most wants across it -- from a
+      module's implementation back to the interface that promised it
+      (ADR-0250). The reverse is not available: a symbol records one
+      defining-point, and it is the heading's. }
+    NoteUse(d^.pdNameLine, d^.pdNameCol, d^.pdLen, existing);
     d^.pdSym := existing
   end
   else begin
@@ -19795,6 +19870,9 @@ begin
     with the other parts by source position, and the program header's parameters
     are bound there too -- both for 6.2.2.9's sake. }
   CheckDeclarations(b, owner, b^.blProcs);
+  { After the declarations and before anything else, so every symbol this
+    block declared has its type by now (ADR-0250). }
+  NoteBlockDeclarations;
 
   d := b^.blProcs;
   while d <> nil do begin

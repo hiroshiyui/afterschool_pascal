@@ -4,6 +4,8 @@ use 24 8 6 1 7 8 6 interface ?
 use 27 9 7 0 0 0 7 type integer
 use 31 9 6 1 7 8 6 interface ?
 use 31 9 10 1 22 3 3 schema ?
+use 31 3 4 0 31 3 4 var run(2)
+use 27 3 4 0 27 3 4 var integer
 use 34 3 4 0 27 3 4 var integer
 use 35 3 6 1 7 8 6 interface ?
 use 35 3 11 1 27 11 4 procedure ?

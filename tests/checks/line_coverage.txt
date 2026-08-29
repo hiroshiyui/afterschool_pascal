@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 448
-instrumented 17846
+instrumented 17861
 
 accept 0/4
 accumulate 0/84
@@ -84,7 +84,7 @@ check 0/1
 checkarguments 6/235
 checkarrayvalue 7/60
 checkbinary 6/165
-checkblock 0/24
+checkblock 0/25
 checkcall 24/273
 checkcase 0/82
 checkcomponentvalue 0/12
@@ -167,7 +167,7 @@ copytype 0/24
 curcol 0/1
 curline 0/1
 declare 0/24
-declareprocheading 0/39
+declareprocheading 0/40
 declareprocs 0/12
 declareschema 9/54
 def 0/5
@@ -506,6 +506,8 @@ newsymbol 0/93
 newtype 0/40
 nonvarying 3/42
 notbindable 3/29
+noteblockdeclarations 0/6
+notedefining 0/7
 notehandlecloser 0/6
 noteuse 0/6
 noteusefield 0/5

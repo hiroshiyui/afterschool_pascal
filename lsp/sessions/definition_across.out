@@ -22,4 +22,8 @@ Content-Length: -
 
 {"jsonrpc":"2.0","id":10,"result":null}Content-Length: -
 
-{"jsonrpc":"2.0","id":11,"result":null}
+{"jsonrpc":"2.0","id":11,"result":{"uri":"file://%ROOT%/lsp/sessions/workspace/middle.pas","range":{"start":{"line":13,"character":9},"end":{"line":13,"character":16}}}}Content-Length: -
+
+{"jsonrpc":"2.0","id":12,"result":{"contents":{"kind":"plaintext","value":"function Doubled: integer"},"range":{"start":{"line":17,"character":9},"end":{"line":17,"character":16}}}}Content-Length: -
+
+{"jsonrpc":"2.0","id":13,"result":null}
