@@ -601,14 +601,29 @@ with it, unfixed and unrecorded.
   `compiler.pas` and gives the two before it, which is the case a second rule
   would have been written for.
 
-  **What this does not close is `README.md`'s gap**, and it is sharper now for
-  being worked around: *there is no install location and no resolution by
-  name.* A module says `import PasError;` in its own source and nothing here
-  turns that into a file. That belongs to the compiler — resolution is
-  transitive and in dependency order, so it means reading module headings
-  recursively, and the compiler is what reads module headings. A server doing
-  it would be a second reader of Pascal in this tree, which is the mistake this
-  chapter has named three times in another form.
+  ~~**What this does not close is `README.md`'s gap**~~ — **closed**
+  (ADR-0244), and by the compiler, exactly where this entry said it belonged.
+  An `import` naming an interface no `--import` supplied is looked for as
+  `<directory>/<name>.pas` in the source's own directory, then in each
+  `--import-path`, then in each entry of `AFTERSCHOOL_PASCAL_PATH`; the search
+  is transitive and post-order, so the list it produces is the activation order
+  §6.2.3.6 requires. `--dump-imports` is the other half — resolution finds an
+  *interface* and something still has to translate the file and link it, and
+  that something is `tools/pascalcc`, which is now the second caller of a dump
+  flag after the language server.
+
+  **The install location went with it.** `cmake --install` lays out
+  `<prefix>/bin`, `<prefix>/lib` and `<prefix>/lib/afterschool`; `pascalcc`
+  looks for its compiler and its runtime beside itself before it looks in a
+  build tree, and adds the installed library to the search path only when the
+  variable says nothing. `install-layout` is the gate and is the first oracle
+  here that runs an *installed* compiler — every other harness drives one out
+  of the build tree, which is exactly the configuration an installed copy does
+  not have.
+
+  The server keeps reading `.components`, and that is not redundant: it needs
+  the imports of a file it is *not* compiling as a program, for a document that
+  may not parse, and the sidecar answers without the compiler having to.
 - ~~**The whole-output buffer was sized for diagnostics**~~ — **answered by
   not having one** (ADR-0239). `CaptureMax` is 16 384 and the outline of
   `selfhost/apfront.pas` is **51 192 bytes**, so `documentSymbol` on the

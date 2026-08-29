@@ -3486,6 +3486,68 @@ characters holding 1 624 of them, in one 41 859-byte line, because
 `JsonRender` writes each as `\n`. `JsonlWrite` refuses a body holding a real
 newline rather than assuming that.
 
+### An import that names no file (ADR-0244)
+
+**An `import` naming an interface no `--import` supplied is looked for on a
+search path**, and the compiler is what looks: `<directory>/<name>.pas`, folded
+as §6.1.2 folds every identifier, in the source's own directory, then in each
+`--import-path`, then in each `:`-separated entry of `AFTERSCHOOL_PASCAL_PATH`.
+The first entry is what makes a checkout compile with no configuration and the
+last is Turbo Pascal's unit directories by another name.
+
+Seven things about it are load-bearing.
+
+- **The compiler resolves and the driver does not.** Working out what a source
+  imports in a shell script would be reading Pascal outside the compiler, which
+  ADR-0229, ADR-0230 and ADR-0239 each moved something off — and resolution is
+  transitive, so it means reading module headings, which is the compiler's job.
+- **The compiler binds `getenv`**, its one foreign name. A program-parameter is
+  a file (§6.5.1), so a compiler that has to be told its library path on every
+  command line has not been installed anywhere; having `pascalcc` translate the
+  variable into flags would leave `pascalc` — which every harness here drives —
+  useless the moment it is installed.
+- **The file is named after the *interface*, not the module.** An import writes
+  an interface name; §6.11.1 lets `module counter` export `counting`, and such
+  a component is reachable by `--import` and not by the search, because nothing
+  opens a directory to read what a file declares.
+  `tests/extended/components/counter.pas` is that case, kept as it is.
+- **A name the search misses is not an error**: it falls through and Sema
+  reports an interface nothing supplies, which is also what keeps
+  `import StandardOutput` — a required interface and not a file — costing one
+  failed lookup and no complaint.
+- **Post-order, and the recursion is the whole of the ordering.** Reading a
+  component parses its file, resolves what *that* file imports, reads those
+  first, and appends its own modules after them — so the list is the order
+  §6.2.3.6 requires activations to commence in.
+  `tests/extended/import_by_name.pas` is a chain of three and its golden is
+  written by two `to begin do` parts.
+- **`ParseComponent` is what resolution cost the parser.** What a source
+  imports is knowable only once it has been parsed, so a component is read
+  *after* the answer about the main source is in the parser's globals, and a
+  bare `ParseProgram` would overwrite the program's heading, parameters and
+  block with a module file's nils. It saves them in locals and puts them back,
+  which makes it nest.
+- **`--dump-imports` is the other half.** Resolution finds an interface;
+  something must translate the file and link the result. The compiler writes
+  the components it read, one to a line in activation order behind the word
+  `component`, and `tools/pascalcc` is the caller — the second caller of a dump
+  flag after `lsp/pasls.pas`, and the whole of the interface between the two
+  halves of this compiler.
+
+**And the install location is `pascalcc`'s to know.** `cmake --install` lays
+out `<prefix>/bin`, `<prefix>/lib` and `<prefix>/lib/afterschool`; the driver
+looks for `pascalc` and `libpasrt.a` beside itself before it looks in a build
+tree, and adds the installed library to the search path only when
+`AFTERSCHOOL_PASCAL_PATH` says nothing — a user who sets that is describing
+their whole path, and appending to it would shadow their module by a rule they
+never wrote. The compiler is deliberately *not* looked for on `PATH`: a
+`pascalcc` and a `pascalc` from different releases would then be paired by
+whatever order a user's `PATH` happens to have, and that pairing is the one
+thing the script is. `install-layout` is the gate, and it is the first oracle
+here that runs an installed compiler at all — every other harness drives one
+out of the build tree, with `PASCALC` saying which tree, which is exactly the
+configuration an installed copy does not have.
+
 ### The language server (`lsp/pasls.pas`)
 
 **The first program in this tree written to be used rather than to be tested**

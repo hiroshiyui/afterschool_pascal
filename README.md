@@ -36,6 +36,21 @@ the seed translates the compiler's three source files — they are separately
 translated program-components, and `selfhost/compiler.components` lists them in
 order; that is `build/bin/pascalc`, and it compiles itself to a fixed point.
 
+It can also be **installed**:
+
+```sh
+cmake --install build --prefix /opt/apascal
+export PATH=/opt/apascal/bin:$PATH
+pascalcc prog.pas -o prog        # imports resolve against the installed library
+```
+
+That puts `pascalc` and `pascalcc` in `bin`, `libpasrt.a` in `lib`, and the
+library's sources in `lib/afterschool` — sources, because a module-heading
+*is* the interface in this language (§6.11.1) and there is no second artefact
+to keep in step. `pascalcc` looks for its compiler and its runtime beside
+itself before anywhere else, and adds the installed library to the search path
+only when `AFTERSCHOOL_PASCAL_PATH` says nothing.
+
 The build produces nothing else. A second front end in C++ was built beside it
 for a while, so that the two could be compared; it was frozen at the
 conformance surface and went with the conformance modes (ADR-0232), and with it
@@ -87,6 +102,28 @@ tools/pascalcc -c counter.pas -o counter.o
 tools/pascalcc prog.pas --import counter.pas counter.o -o prog
 ```
 
+**Or the compiler finds them itself** (ADR-0244). An `import` naming an
+interface no `--import` supplied is looked for as `<directory>/<name>.pas`, in
+the directory the source is in, then in each `--import-path`, then in each
+`:`-separated entry of **`AFTERSCHOOL_PASCAL_PATH`**. The search is transitive
+and in dependency order, and `pascalcc` translates and links whatever the
+compiler found — so a program in a directory with its own modules needs no
+flags at all:
+
+```sh
+tools/pascalcc prog.pas -o prog             # counter.pas is beside prog.pas
+export AFTERSCHOOL_PASCAL_PATH=/opt/apascal/lib
+tools/pascalcc prog.pas -o prog             # ...or wherever the library went
+tools/pascalcc --import-path ./mine prog.pas -o prog   # ...or just this once
+```
+
+The file is named after the **interface**, folded as §6.1.2 folds every
+identifier — `import PasError` finds `paserror.pas`. A module exporting an
+interface under a different name is reachable by `--import` and not by the
+search, since nothing opens a directory to read what a file declares. A name
+the search does not find is reported the way it always was, as an interface
+nothing supplies.
+
 **Every component of one program must be built by the same compiler.** A
 module's two activation functions carry a language tag in their names
 (ADR-0119), so an object left over from a release that still had the
@@ -102,12 +139,16 @@ one half without the other checks a tag the other half never stored and reports
 an unsafe read as safe. That is what the tag is for; there is one language now,
 so what it catches is a stale `.o`.
 
-`-S` is an alias for `--emit-llvm`. Five dump flags write a stage and stop —
-`--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all` for all three, and
+`-S` is an alias for `--emit-llvm`. Six dump flags write a stage and stop —
+`--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all` for all three,
 `--dump-symbols`, which writes every name the source declares with its kind,
-the position of that name and how deeply it nests. That last one stops after
-the *parse* on purpose: it is what a tool asks when it wants a document's
-outline, and an outline is wanted for a file that does not yet compile.
+the position of that name and how deeply it nests, and `--dump-imports`, which
+writes the program-components the source needs in the order they must be
+activated. The last two stop after the *parse* on purpose: the first is what a
+tool asks when it wants a document's outline, and an outline is wanted for a
+file that does not yet compile; the second is what `pascalcc` asks so it knows
+what to translate and link, resolution giving the compiler an interface and not
+an object.
 Four more compile as usual and then answer a question about what was compiled:
 `--dump-limits` writes how full the compiler left its own fixed arrays, which
 is what says how much room a larger program still has; `--dump-layout` writes
@@ -1078,10 +1119,13 @@ pool asked for 9 may return a block of 4, and `p^.cap` then reads 4. What the
 caller gets instead is control over *when* — `VecNew` sets the initial capacity
 and `VecReserve` grows once so that no later push reallocates.
 
-**There is no install location and no resolution by name.** `--import` takes a
-path, so a program outside this checkout names paths into it, and `maxImports`
-bounds one program at 32 components — which is more than the library has, and
-was eight until the first program that needed ten asked for it (ADR-0235). Of the four things that stood here as absent — sockets, locales, threads and
+~~**There is no install location and no resolution by name.**~~ Both are
+answered (ADR-0244): a module is found by its interface's name on a search
+path, and `cmake --install` puts the compiler, the driver, the runtime and the
+library under a prefix that `pascalcc` finds by looking beside itself — so
+`PATH` is the whole of what an installed copy needs. `maxImports` still bounds
+one program at 32 components, which is more than the library has, and was eight
+until the first program that needed ten asked for it (ADR-0235). Of the four things that stood here as absent — sockets, locales, threads and
 containers — **two have since landed**: `lib/dialect/pasnet.pas` gives a socket
 that speaks in a host and a service and serves more than one client
 (ADR-0203, ADR-0205), and `lib/dialect/pascontainer.pas` gives a growable

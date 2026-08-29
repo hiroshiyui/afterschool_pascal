@@ -26,6 +26,26 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **An `import` can name no file at all.** An interface no `--import` supplied
+  is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
+  identifier — in the directory the source is in, then in each
+  `--import-path <dir>`, then in each `:`-separated entry of the new
+  environment variable **`AFTERSCHOOL_PASCAL_PATH`** (ADR-0244). The search is
+  transitive and answers in the order §6.2.3.6 requires activations to
+  commence, and `tools/pascalcc` translates and links whatever the compiler
+  found. A program in a directory with its own modules now needs no flags at
+  all. The file is named after the *interface*: a module exporting one under
+  another name is still reached with `--import`.
+- **`--dump-imports`**, which writes the program-components a translation read,
+  one to a line in activation order. It is how a build tool learns what
+  resolution found, resolution giving the compiler an interface and not an
+  object.
+- **`cmake --install` puts the compiler somewhere.** `pascalc` and `pascalcc`
+  in `<prefix>/bin`, `libpasrt.a` in `<prefix>/lib`, the library's sources in
+  `<prefix>/lib/afterschool`. `pascalcc` looks for its compiler and its runtime
+  beside itself before it looks in a build tree, and adds the installed library
+  to the search path when `AFTERSCHOOL_PASCAL_PATH` says nothing — so `PATH` is
+  the whole of what an installed copy needs.
 - **`PasFS.TemporaryPath(dir, prefix)`** — a path in `dir` that names nothing
   else, with the file created empty so it goes on naming nothing else after
   this process has exited (ADR-0243). Nothing removes it; `Remove` is how it
