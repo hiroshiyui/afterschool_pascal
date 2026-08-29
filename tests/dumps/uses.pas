@@ -43,6 +43,16 @@ var
   three: vec(3);
   box: shape;
 
+{ The schema's body is reported twice, and the golden shows it. 6.4.7
+  produces a type by re-resolving that body once per *distinct* tuple, and
+  two productions of `vec` are demanded below: `three: vec(3)` folds `cap` to
+  a constant, and `widen(var v: vec)` binds it to the discriminant that reads
+  a descriptor. So `cap` and `integer` on the declaration line each carry two
+  `use` lines -- the same position, the same defining-point, and a different
+  word for what the name denotes in that production, which is the honest
+  answer for both. The intern table (ADR-0039) is what bounds it to distinct
+  tuples rather than to uses. }
+
 { A value-parameter, a variable-parameter and a procedural-parameter in one
   heading, so all three of 6.7.3.1's spellings are applied somewhere. }
 function combine(n: integer; var acc: integer;

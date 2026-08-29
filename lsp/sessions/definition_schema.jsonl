@@ -1,0 +1,40 @@
+# A name inside a schema's own body (ADR-0249), which --dump-uses reported
+# nowhere when it landed and for a reason that was about the *file*.
+#
+# 6.4.7 produces a type by re-resolving the schema's body once per distinct
+# tuple, and it does that where the type is **written** -- so while `vec(3)`
+# below is being produced, the compiler is reading text from line 3 with its
+# idea of the current file set to wherever line 5 is. For a schema out of
+# lib/ those are two different files, and reporting the body's line and column
+# as this document's would send a reader to whatever happens to be at 3:33 of
+# the file in front of them.
+#
+# What answers it is the schema's own symbol, which carries a file now: a
+# production reports only when the schema was declared in the document being
+# compiled. So `cap` inside `array [1..cap]` resolves, and a schema imported
+# from another component still reports nothing rather than something wrong.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/sch.pas","languageId":"pascal","version":1,"text":"program sch(output);\n\ntype vec(cap: integer) = array [1..cap] of integer;\n\nvar three: vec(3);\n    i: integer;\n\nbegin\n  for i := 1 to 3 do\n    three[i] := i;\n  writeln(three.cap:1, three[1]:1)\nend.\n"}}}
+
+# `cap` in the body -- the one inside `array [1..cap]`, not the formal in the
+# discriminant-specification before it. It is that formal, on the same line,
+# that answers: not the `vec(3)` on line 5 whose production happened to be the
+# one that resolved this text.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/sch.pas"},"position":{"line":2,"character":35}}}
+
+{"jsonrpc":"2.0","id":3,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/sch.pas"},"position":{"line":2,"character":35}}}
+
+# `integer` in the body: a required identifier, so nowhere to go, reached
+# through the same production.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/sch.pas"},"position":{"line":2,"character":43}}}
+
+# And `cap` selected on a variable of the produced type, which is the folded
+# form -- the tuple gave it a value, so no descriptor is read. It answers the
+# same declaration as the occurrence in the body does.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/sch.pas"},"position":{"line":10,"character":16}}}
+
+{"jsonrpc":"2.0","id":6,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/sch.pas"},"position":{"line":10,"character":16}}}
+
+{"jsonrpc":"2.0","id":7,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

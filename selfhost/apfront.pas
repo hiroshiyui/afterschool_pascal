@@ -4990,24 +4990,32 @@ end;
   *position* and not about what was found there. }
 function NotingHere: boolean;
 begin
-  { `producingTop` is the schemas 6.4.7 is producing a type from right now,
-    and a production re-resolves the schema's *body* -- the same text, once
-    per tuple, with each discriminant bound to that tuple's value.
+  { Which file the text Sema is reading right now belongs to, asked two ways
+    because a schema production reads text from somewhere else.
 
-    Those resolutions are not reported, and the reason is the file and not the
-    noise. A production happens where the type is *written*, so `curFile` is
-    the writer's; the body's line and column belong to wherever the schema was
-    declared, which for `string(80)` or any schema out of lib/ is another file
-    entirely. The test above cannot see that -- it asks which file Sema is
-    checking, and Sema is checking this one -- so a use dumped from here would
-    carry a position a caller would resolve against the wrong text. AP
-    6.7.3.10's instantiation is the same shape and is *not* excluded, because
-    it puts `curFile` to the generic's own file and the test then answers.
+    6.4.7 produces a type by re-resolving the schema's **body**, once per
+    distinct tuple, with each discriminant bound to that tuple's value -- and
+    it happens where the type is *written*. So `curFile` is the writer's while
+    the body's line and column are the schema's, and asking `curFile` there
+    would attribute one file's positions to another. ADR-0246 excluded
+    productions for that reason and reported nothing for `cap` in
+    `array [1..cap]`, which is resolved nowhere else.
 
-    What this costs is a use inside a schema's own body: `cap` in
-    `array [1..cap]` is resolved nowhere else, so nothing is reported for it
-    (ADR-0246). }
-  NotingHere := notingUses and (curFile = mainFile) and (producingTop = nil)
+    `producingTop` holds the schemas being produced from, innermost first, and
+    a schema is a symbol -- so the schema's own `declFile` is exactly the
+    question, and ADR-0249 asks it (ADR-0246 could not: a symbol had no file
+    until that record put one there). AP 6.7.3.10's instantiation needs none
+    of this and never did, because it puts `curFile` to the generic's own file
+    and the first test then answers.
+
+    A body is re-resolved once per *distinct* tuple, the intern table
+    (ADR-0039) answering the rest, so what a repeated production costs is one
+    identical line per tuple and not one per use. }
+  if not notingUses then NotingHere := false
+  else if producingTop <> nil then
+    NotingHere := producingTop^.sym^.declFile = 0
+  else
+    NotingHere := curFile = mainFile
 end;
 
 { The seven numbers a `use` line begins with, written in one place because two
@@ -9869,12 +9877,25 @@ begin
                 disc := Declare(p^.sym^.at, p^.sym^.len, skType, d^.line,
                                 d^.col);
                 disc^.stype := TypeArgument(arg);
+                { The *formal* discriminant's position, not this production's.
+                  `Declare` is handed the actual-discriminant-part's line and
+                  column because that is where its duplicate message points,
+                  and an occurrence of `cap` inside the body was written where
+                  the schema was -- so sending a reader to whichever `vec(3)`
+                  happened to be produced first would be sending them to a
+                  place that says nothing about the name (ADR-0249). }
+                disc^.declLine := p^.sym^.declLine;
+                disc^.declCol := p^.sym^.declCol;
+                disc^.declFile := p^.sym^.declFile;
                 disc^.discBinding := true
               end
               else begin
                 disc := Declare(p^.sym^.at, p^.sym^.len, skConst, d^.line,
                                 d^.col);
                 disc^.stype := p^.sym^.stype;
+                disc^.declLine := p^.sym^.declLine;
+                disc^.declCol := p^.sym^.declCol;
+                disc^.declFile := p^.sym^.declFile;
                 disc^.discBinding := true;
                 disc^.intVal := tv^.value_;
                 disc^.charVal := chr(tv^.value_ mod 256);

@@ -12,7 +12,7 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 448
-instrumented 17837
+instrumented 17846
 
 accept 0/4
 accumulate 0/84
@@ -509,7 +509,7 @@ notbindable 3/29
 notehandlecloser 0/6
 noteuse 0/6
 noteusefield 0/5
-notinghere 0/1
+notinghere 0/4
 offer 0/38
 opglobal 0/4
 opint 0/2
@@ -593,7 +593,7 @@ poolput 0/3
 poolsame 0/8
 poolstarts 0/11
 procactualsym 0/2
-producefromschema 0/186
+producefromschema 0/192
 protectable 1/14
 pushseq 0/3
 pushstmt 0/6

@@ -1,17 +1,22 @@
 file 0 <source>
 file 1 <dir>/components/usebase.pas
 use 24 8 6 1 7 8 6 interface ?
-use 26 11 7 0 0 0 7 type integer
-use 29 3 4 0 26 5 4 var integer
-use 30 3 6 1 7 8 6 interface ?
-use 30 3 11 1 20 11 4 procedure ?
-use 30 15 4 0 26 5 4 var integer
-use 34 9 6 1 7 8 6 interface ?
-use 34 9 13 1 19 3 6 var mark
-use 34 17 4 1 13 5 4 field integer
-use 34 25 4 0 26 5 4 var integer
-use 35 17 6 1 7 8 6 interface ?
-use 35 17 11 1 18 3 4 var integer
-use 35 30 6 1 7 8 6 interface ?
-use 35 30 13 1 19 3 6 var mark
-use 35 38 4 1 13 5 4 field integer
+use 27 9 7 0 0 0 7 type integer
+use 31 9 6 1 7 8 6 interface ?
+use 31 9 10 1 22 3 3 schema ?
+use 34 3 4 0 27 3 4 var integer
+use 35 3 6 1 7 8 6 interface ?
+use 35 3 11 1 27 11 4 procedure ?
+use 35 15 4 0 27 3 4 var integer
+use 39 9 6 1 7 8 6 interface ?
+use 39 9 13 1 26 3 6 var mark
+use 39 17 4 1 13 5 4 field integer
+use 39 25 4 0 27 3 4 var integer
+use 40 3 4 0 31 3 4 var run(2)
+use 40 14 4 0 27 3 4 var integer
+use 41 17 6 1 7 8 6 interface ?
+use 41 17 11 1 25 3 4 var integer
+use 41 30 6 1 7 8 6 interface ?
+use 41 30 13 1 26 3 6 var mark
+use 41 38 4 1 13 5 4 field integer
+use 41 44 4 0 31 3 4 var run(2)

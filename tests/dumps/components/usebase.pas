@@ -4,7 +4,7 @@
   the reason tests/extended/components/ is. }
 module usebase;
 
-export shared = (kept, Keep, mark, marker);
+export shared = (kept, Keep, mark, marker, run);
 
 type
   { A record whose fields are declared *here*, so a selection written in the
@@ -13,6 +13,13 @@ type
     seen: integer;
     tag: char
   end;
+  { A schema declared here and produced *there* -- `run(2)` in
+    uses_module.pas. 6.4.7 re-resolves this body where the type is written, so
+    the occurrence of `size` in it is text of this file being read while the
+    compiler is checking that one. Nothing is reported for it, which is the
+    whole of ADR-0249's negative half: a production reports only when the
+    schema is the document's own. }
+  run(size: integer) = array [1..size] of integer;
 
 var
   kept: integer;

@@ -23,7 +23,12 @@ program uses_module(output);
 
 import shared qualified;
 
-var here: integer;
+var
+  here: integer;
+  { Produces `run` from the component, which re-resolves that schema's body.
+    No `use` line comes out of it: the body is another file's text, and this
+    dump answers about one document (ADR-0249). }
+  path: shared.run(2);
 
 begin
   here := 2;
@@ -32,5 +37,6 @@ begin
     usebase.pas and selected here, so the answer names file 1 (ADR-0247). A
     field is not a symbol, so this is the second shape of `use` line. }
   shared.marker.seen := here;
-  writeln(shared.kept, shared.marker.seen)
+  path[1] := here;
+  writeln(shared.kept, shared.marker.seen, path[1]:3)
 end.
