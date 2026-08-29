@@ -38,7 +38,7 @@
 module PasLsp;
 
 export PasLsp = (LspBufMax, LspHeadMax, LspHeader, LspReader,
-                 LspOpen, LspRead, LspWrite);
+                 LspOpen, LspRead, LspWrite, JsonlRead, JsonlWrite);
 
 import PasError; PasIO; PasJson;
 
@@ -67,6 +67,19 @@ type
   once; nothing is opened and nothing needs closing. }
 procedure LspOpen(var r: LspReader; fd: integer);
 
+{ **Two framings over one reader**, which is what this module turned out to be
+  when a second transport asked (ADR-0241). `LspReader` is a descriptor and a
+  buffer of what the last message did not use; the framing is what is layered
+  over it, and there are two because JSON-RPC is spoken over two protocols
+  here. The reader is the part that could not be written twice -- a reader that
+  has just consumed a header line is usually already holding the first bytes of
+  the body, and that is true of a line-delimited stream too.
+
+  The name is now narrower than the module. It is kept because renaming a
+  module is churn in every component list that names it and the second framing
+  is not a reason on its own; a third caller wanting the reader and neither
+  framing would be. }
+
 { Read one message's body, appending it to `body`. `errAbsent` at the end of
   the input, which is how a server's loop ends and is not a failure;
   `errSyntax` for a frame that is not one -- a missing or unreadable
@@ -76,6 +89,26 @@ function LspRead(var r: LspReader; var body: JsonChars): ErrorCode;
 
 { Write one message: the header, the blank line, and the body's bytes. }
 function LspWrite(fd: integer; var body: JsonChars): ErrorCode;
+
+{ The other framing: MCP's stdio transport, where "messages are delimited by
+  newlines, and MUST NOT contain embedded newlines" and the encoding is UTF-8.
+  One message to a line, and the line is the whole of the frame -- there is no
+  count to agree with, which is why this is the easier of the two and why it
+  says what the harder one was for.
+
+  An empty line is skipped rather than reported. The specification says a
+  client "MUST NOT write anything to the server's stdin that is not a valid MCP
+  message", so a blank line is not one; being generous about what arrives and
+  strict about what is produced is the rule this module already followed for a
+  header it did not recognise. }
+function JsonlRead(var r: LspReader; var body: JsonChars): ErrorCode;
+
+{ `body` and then one newline. **A body holding a newline is refused**
+  (`errSyntax`) rather than written: the framing has nothing else to say where
+  a message ends, so a message containing one would be read back as two and
+  neither would parse. `JsonRender` emits none today and this is what says so
+  on the day it does. }
+function JsonlWrite(fd: integer; var body: JsonChars): ErrorCode;
 
 end;
 
@@ -258,6 +291,64 @@ begin
         e := errSyntax
   end;
   LspRead := e
+end;
+
+function JsonlRead;
+var e: ErrorCode; c: char; going, any: boolean;
+begin
+  e := errNone;
+  going := true;
+  any := false;
+  while going do
+    if not NextByte(r, c, e) then begin
+      going := false;
+      { Nothing at all before the end of the input is the end of the session,
+        which is not a failure. A partial line is one: the sender stopped in
+        the middle of a message. }
+      if e = errNone then
+        if any then e := errSyntax else e := errAbsent
+    end
+    else if c = chr(10) then begin
+      { An empty line is no message. Keep reading rather than answering with
+        one that would not parse. }
+      if any then going := false
+    end
+    else if c <> chr(13) then begin
+      { A carriage return before the newline is not the framing's and is not
+        the message's either: dropped, so a sender that writes CRLF is read
+        the same as one that does not. }
+      JsonCharsAdd(body, c);
+      any := true
+    end;
+  JsonlRead := e
+end;
+
+function JsonlWrite;
+var e: ErrorCode; n, k, m: integer;
+    chunk: array [1..LspBufMax] of char;
+begin
+  n := JsonCharsLen(body);
+  for k := 1 to n do
+    if JsonCharsAt(body, k) = chr(10) then begin
+      JsonlWrite := errSyntax;
+      exit(errSyntax)
+    end;
+  e := errNone;
+  k := 0;
+  while (k < n) and (e = errNone) do begin
+    m := 0;
+    while (k < n) and (m < LspBufMax) do begin
+      k := k + 1;
+      m := m + 1;
+      chunk[m] := JsonCharsAt(body, k)
+    end;
+    e := WriteAll(fd, chunk[1..m])
+  end;
+  if e = errNone then begin
+    chunk[1] := chr(10);
+    e := WriteAll(fd, chunk[1..1])
+  end;
+  JsonlWrite := e
 end;
 
 function LspWrite;

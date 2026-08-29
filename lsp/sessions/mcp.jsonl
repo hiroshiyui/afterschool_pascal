@@ -1,0 +1,54 @@
+# MCP over stdio (ADR-0241), replayed the way the LSP sessions are and framed
+# differently: "Messages are delimited by newlines, and MUST NOT contain
+# embedded newlines", so a line of this file *is* a frame and the harness adds
+# no header. `.mcp` beside this file is what says so.
+#
+# What it pins that the LSP sessions cannot. The lifecycle -- initialize,
+# notifications/initialized, and a version answered whichever one was asked
+# for. The tool descriptors, which are the first JSON Schema this tree has
+# built and the first payload of that shape PasJson has been asked for. And
+# both tools against real sources in this checkout, which is the point: an MCP
+# server has no `rootUri` to be told and takes its workspace from where it was
+# started, so `%ROOT%` here is the same tree the harness is in.
+#
+# The two error kinds are pinned separately because the specification
+# separates them: an unknown tool and a missing argument are *protocol* errors
+# with a JSON-RPC code, and a file that is not there is a tool that ran and
+# could not do the job, which is `isError: true` inside a result.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"probe","version":"0"}}}
+
+# A notification: no id, and the golden is what says nothing came back.
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+
+{"jsonrpc":"2.0","id":2,"method":"ping"}
+
+# The descriptors an agent chooses from.
+{"jsonrpc":"2.0","id":3,"method":"tools/list"}
+
+# A module of the library, which is the case that needs .components: compiled
+# alone it reports 48 diagnostics, two real and 46 cascade (ADR-0238). Named
+# *relatively* on purpose -- the sidecar's entries resolve to absolute paths,
+# so a relative one matches none of them and the answer is those 48 again by a
+# second road. This is the line that fails when PathArg stops resolving.
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"diagnostics","arguments":{"path":"lib/dialect/pasjson.pas"}}}
+
+# And one that does not parse, so the diagnostics are the answer -- an outline
+# would be empty for this one and the two tools differ there on purpose.
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"diagnostics","arguments":{"path":"%ROOT%/selfhost/badparse/after-goto.pas"}}}
+
+# The outline of a source, with the case the programmer wrote recovered from
+# the file -- the compiler's pool holds only the folded spelling (ADR-0239).
+{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"outline","arguments":{"path":"%ROOT%/tests/dumps/symbols_module.pas"}}}
+
+# A relative path, resolved against the directory the server was started in.
+{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"outline","arguments":{"path":"tests/hello.pas"}}}
+
+# A tool that ran and could not do the job.
+{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"outline","arguments":{"path":"%ROOT%/no-such-file.pas"}}}
+
+# And the two protocol errors.
+{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"nosuchtool","arguments":{"path":"x"}}}
+{"jsonrpc":"2.0","id":10,"method":"tools/call","params":{"name":"outline","arguments":{}}}
+
+# A request this server does not implement, answered rather than ignored.
+{"jsonrpc":"2.0","id":11,"method":"resources/list"}

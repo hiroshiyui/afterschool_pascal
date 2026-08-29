@@ -1,0 +1,7 @@
+message 1 bytes=46 id=1
+message 2 bytes=46 id=2
+message 3 bytes=40 id=3
+ended after 3 with not present
+{"jsonrpc":"2.0","id":1,"result":{}}
+write code=no error
+newline in a body: not of the expected form

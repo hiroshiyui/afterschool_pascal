@@ -52,6 +52,12 @@
 #                         of the work directory's. It exists for the sessions
 #                         that are about a path the server *cannot* write, and
 #                         so must name one no work directory would be
+#   sessions/name.mcp     a marker: this session is MCP and not LSP. The server
+#                         is started with --mcp, the framing is one JSON
+#                         message to a line rather than Content-Length, and it
+#                         runs in the checkout -- an MCP client launches its
+#                         server as a subprocess and an agent's subprocess
+#                         starts in the tree it is working on (ADR-0241)
 set -u
 
 if [[ $# -lt 1 ]]; then
@@ -62,6 +68,11 @@ fi
 pascalcc=$1
 pascalc=${2:-${PASCALC:-pascalc}}
 root=$(cd "$(dirname "$0")/.." && pwd)
+# Absolute, because the server is started in the checkout and a relative
+# compiler path would then name nothing. `PASLS_COMPILER` is a *command* and
+# may be a bare name on PATH, which is left alone.
+[[ $pascalcc == */* ]] && pascalcc=$(cd "$(dirname "$pascalcc")" && pwd)/$(basename "$pascalcc")
+[[ $pascalc == */* ]] && pascalc=$(cd "$(dirname "$pascalc")" && pwd)/$(basename "$pascalc")
 here=$(cd "$(dirname "$0")" && pwd)
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
@@ -100,6 +111,21 @@ frame() {
   done
 }
 
+# MCP's stdio framing, which needs no count: "Messages are delimited by
+# newlines, and MUST NOT contain embedded newlines." So a session file's line
+# *is* the frame, and this differs from `frame` only in dropping the header --
+# which is the whole of what the second transport cost (ADR-0241).
+frame_lines() {
+  local LC_ALL=C
+  local line
+  while IFS= read -r line; do
+    [[ -n $line ]] || continue
+    [[ ${line:0:1} != '#' ]] || continue
+    line=${line//%ROOT%/$root}
+    printf '%s\n' "$line"
+  done
+}
+
 failed=0
 checked=0
 for session in "$here"/sessions/*.jsonl; do
@@ -112,7 +138,11 @@ for session in "$here"/sessions/*.jsonl; do
     continue
   fi
   checked=$((checked + 1))
-  frame <"$session" >"$work/$name.in"
+  if [[ -f ${session%.jsonl}.mcp ]]; then
+    frame_lines <"$session" >"$work/$name.in"
+  else
+    frame <"$session" >"$work/$name.in"
+  fi
   # The scratch path is per session and inside the work directory: the default
   # is one fixed name under TMPDIR, which two runs of the suite would share.
   #
@@ -123,10 +153,17 @@ for session in "$here"/sessions/*.jsonl; do
   if [[ -f ${session%.jsonl}.scratch ]]; then
     scratch=$(<"${session%.jsonl}.scratch")
   fi
+  mode=()
+  [[ -f ${session%.jsonl}.mcp ]] && mode=(--mcp)
   ( if [[ -n $heap_balance ]]; then export PASHEAP_BALANCE="$heap_balance"; fi
+    # In the checkout, because an MCP server has no `rootUri` to be told and
+    # takes its workspace from where it was started. An LSP session names no
+    # file it does not spell out, so the directory is nothing to it either way.
+    cd "$root" || exit 1
     PASLS_COMPILER="env -u PASHEAP_BALANCE $pascalc" \
     PASLS_SCRATCH="$scratch" \
-      "$work/pasls" <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note" )
+      "$work/pasls" "${mode[@]+"${mode[@]}"}" \
+      <"$work/$name.in" >"$work/$name.out" 2>"$work/$name.note" )
   status=$?
   if [[ $status -ne 0 ]]; then
     echo "--- $name: the server exited with status $status ---" >&2
