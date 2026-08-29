@@ -1,6 +1,6 @@
-Content-Length: 131
+Content-Length: 161
 
-{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 276
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 276
 
 {"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[{"range":{"start":{"line":2,"character":10},"end":{"line":2,"character":10}},"severity":1,"source":"pascalc","message":"undeclared identifier 'greeting'"}]}}Content-Length: 447
 

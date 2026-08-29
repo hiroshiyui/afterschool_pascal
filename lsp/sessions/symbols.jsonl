@@ -1,0 +1,29 @@
+# textDocument/documentSymbol (ADR-0239): the outline of a document, from
+# --dump-symbols and from nothing else.
+#
+# Three things this session pins that no dumps case can. The names come back
+# with the case the *programmer* wrote -- `Greeting`, not the folded
+# `greeting` the compiler's string pool holds -- because this server slices
+# them out of the document it was handed at the position the compiler gave.
+# The nesting is the protocol's, children hanging off the declaration they
+# were written inside. And the outline of a document that does *not* compile
+# is still the outline: the second request below follows a change that breaks
+# the program, and it answers with every name the file still declares.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+
+# documentSymbolProvider is in the capabilities above; the client may ask.
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/outline.pas","languageId":"pascal","version":1,"text":"program outline(output);\n\nconst Greeting = 'hi';\n\ntype\n  Colour = (Red, Green);\n  Point = record\n    x, y: integer\n  end;\n\nvar Origin: Point;\n\nfunction Twice(k: integer): integer;\nvar Doubled: integer;\nbegin\n  Doubled := k + k;\n  Twice := Doubled\nend;\n\nbegin\n  Origin.x := Twice(1);\n  writeln(Greeting, Origin.x:1)\nend.\n"}}}
+
+{"jsonrpc":"2.0","id":2,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"file:///scratch/outline.pas"}}}
+
+# Broken, and the outline is unchanged: --dump-symbols stops after the
+# parse, so what Sema thinks of `Nowhere` never reaches this answer.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/outline.pas","version":2},"contentChanges":[{"text":"program outline(output);\n\nconst Greeting = 'hi';\n\ntype\n  Colour = (Red, Green);\n  Point = record\n    x, y: integer\n  end;\n\nvar Origin: Point;\n\nfunction Twice(k: integer): integer;\nvar Doubled: integer;\nbegin\n  Doubled := k + k;\n  Twice := Nowhere\nend;\n\nbegin\n  Origin.x := Twice(1);\n  writeln(Greeting, Origin.x:1)\nend.\n"}]}}
+
+{"jsonrpc":"2.0","id":3,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"file:///scratch/outline.pas"}}}
+
+# A document nobody opened: an empty array, not an error and not silence.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/documentSymbol","params":{"textDocument":{"uri":"file:///scratch/never-opened.pas"}}}
+
+{"jsonrpc":"2.0","id":5,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

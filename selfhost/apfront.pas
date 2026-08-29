@@ -51,7 +51,7 @@ export ApFront = (
   source, Tokenize, ParseProgram, AppendSym, IsInvocable, ResultTypeOf,
   IsDesignator, FieldCount, PathAppend, LastField, DynamicExtent,
   IsGeneric, ProcActualSym, IsTimeBuiltin, TransferArgs, Earlier, RunSema,
-  At, DumpTokens, DumpProgram);
+  At, DumpTokens, DumpProgram, DumpSymbols);
 
 import StandardOutput; ApTypes;
 
@@ -152,6 +152,12 @@ procedure DumpTokens;
 
 procedure DumpProgram;
 
+{ Every name this source declares, with its kind, its position and its depth,
+  one symbol to a line. Written after the parse and asking nothing of Sema, so
+  it answers for a source the checker would reject -- which is the state an
+  editor's outline has to survive (ADR-0239). }
+procedure DumpSymbols;
+
 end;
 
 var
@@ -165,6 +171,11 @@ var
   tok: array [1..tokMax] of token;
 
   progAt, progLen: integer;
+  { Where the program name was written. Nothing needed it while the only
+    readers were the two tree dumps, which print the heading without a
+    position; --dump-symbols reports a *position* for every name it
+    reports, and the program's own is one of them (ADR-0239). }
+  progLine, progCol: integer;
   progParams: nodePtr;
   { Every interface of the program-block, and every module, in written order.
     6.2.2.2 makes an interface disjoint from every other, so one list is the
@@ -3907,6 +3918,8 @@ begin
   d^.pdFileIdx := curImportIdx;
   d^.pdAt := 0;
   d^.pdLen := 0;
+  d^.pdNameLine := d^.line;
+  d^.pdNameCol := d^.col;
   d^.pdResAt := 0;
   d^.pdResLen := 0;
   pos := pos + 1;   { 'procedure' / 'function' }
@@ -3922,6 +3935,8 @@ begin
   else begin
     d^.pdAt := tok[pos].at;
     d^.pdLen := tok[pos].len;
+    d^.pdNameLine := tok[pos].line;
+    d^.pdNameCol := tok[pos].col;
     pos := pos + 1
   end;
 
@@ -4391,6 +4406,8 @@ begin
   m^.mdSym := nil;
   m^.mdAt := 0;
   m^.mdLen := 0;
+  m^.mdNameLine := m^.line;
+  m^.mdNameCol := m^.col;
   pos := pos + 1;   { 'module' }
 
   if not Check(tkIdent) then begin
@@ -4401,6 +4418,8 @@ begin
   else begin
     m^.mdAt := tok[pos].at;
     m^.mdLen := tok[pos].len;
+    m^.mdNameLine := tok[pos].line;
+    m^.mdNameCol := tok[pos].col;
     pos := pos + 1
   end;
 
@@ -4485,6 +4504,8 @@ begin
     else begin
       progAt := tok[pos].at;
       progLen := tok[pos].len;
+      progLine := tok[pos].line;
+      progCol := tok[pos].col;
       pos := pos + 1
     end;
 
@@ -4530,6 +4551,8 @@ begin
   progBlock := nil;
   progAt := 0;
   progLen := 0;
+  progLine := 0;
+  progCol := 0;
   progModules := nil;
   progModuleTail := nil;
   progMainIndex := 0;
@@ -18924,6 +18947,8 @@ begin
       decl^.pdExtLen := 0;
       decl^.pdAt := gen^.at;
       decl^.pdLen := gen^.len;
+      decl^.pdNameLine := gen^.genDecl^.pdNameLine;
+      decl^.pdNameCol := gen^.genDecl^.pdNameCol;
       decl^.pdResAt := gen^.genDecl^.pdResAt;
       decl^.pdResLen := gen^.genDecl^.pdResLen;
       decl^.pdParams := gen^.genDecl^.pdParams;
@@ -21993,6 +22018,284 @@ begin
   while m <> nil do begin
     DumpModule(m);
     m := m^.next
+  end
+end;
+
+{ ------------------------------------------------------------ --dump-symbols }
+
+{ ADR-0239. What a *tool* asks this compiler about a program: every name a
+  source declares, which kind of declaration it is, where it was written, and
+  how the declarations nest.
+
+  It exists because `lsp/pasls.pas` has to answer LSP's
+  `textDocument/documentSymbol` and the only structured thing this compiler
+  wrote about a program was `--dump-sema`, which ADR-0085 demoted from a
+  specification to a debugging aid the moment there was no second front end to
+  diff it against. A server reading that would be a second reader of
+  Pascal-shaped output living outside the compiler -- the mistake the language
+  server chapter of doc/roadmap.md has now named four times. `--dump-dispatch`
+  (ADR-0229) and `--dump-layout` (ADR-0185) are the precedent for the other
+  answer: the compiler reports what it already knows, in a line-oriented form
+  a reader that is not a human can take apart.
+
+  Three things about the form are decisions rather than convenience.
+
+  It stops after the **parse**, not after Sema, and that is the whole reason
+  it is useful. An outline is what an editor draws *while the file is wrong* --
+  an undeclared name, a half-typed statement -- and everything Sema reports
+  would take the outline away at exactly the moment a reader wants it. A parse
+  is also all it needs: a declaration's name, kind and position are decided by
+  the parser, and nothing here asks a question only Sema can answer. It
+  follows that a server needs no --import for an outline, so this is the one
+  question about a source that can be asked of the file alone.
+
+  It answers in **Pascal's** vocabulary and not the protocol's. `procedure`,
+  `record`, `value` -- not LSP's SymbolKind numbers. The compiler does not know
+  what a language server is, and a numbering scheme owned by a third party
+  changing under it would be a version of that protocol baked into a Pascal
+  compiler. The server maps the words.
+
+  It reports the **folded** spelling, because that is what the string pool
+  holds -- the lexer case-folds an identifier and nothing keeps the original.
+  So the name here is the compiler's answer and not a display string; the
+  line, column and length beside it are what a caller holding the source uses
+  to recover what the programmer actually typed. Retaining both spellings
+  would be a change to the pool, which is the one array this tree measures the
+  headroom of (ADR-0126).
+
+  The order is the order the declarations were *written*, which is not the
+  order the parts hold them in: ISO/IEC 10206:1991 6.2.1 lets the constant,
+  type, variable and procedure parts interleave, and 6.2.2.9 then makes
+  written order the only correct one (ADR-0069). The walk is the same
+  selection over four lists that checkDeclarations makes, asking `Earlier` --
+  and it holds no list of its own, so this reports a file of any size without
+  adding a bound. Four of the eleven findings the language server has produced
+  so far were bounds chosen by counting what the largest thing in the tree
+  needed at the time, and the largest thing in the tree was a test case. }
+
+procedure SymHead(depth: integer);
+begin
+  write('symbol ', depth:1, ' ')
+end;
+
+{ The three numbers and the name. The length is not redundant with the name:
+  the name is folded and the length is the *source* extent, which is what a
+  caller holding the document slices to recover the written spelling. }
+procedure SymTail(line, col, at, len: integer);
+begin
+  write(' ', line:1, ' ', col:1, ' ', len:1, ' ');
+  WritePool(at, len);
+  writeln
+end;
+
+{ A record-section list: each group's names are fields, one symbol apiece. }
+procedure DumpSymFields(g: nodePtr; depth: integer);
+var n: nodePtr;
+begin
+  while g <> nil do begin
+    n := g^.grNames;
+    while n <> nil do begin
+      SymHead(depth);
+      write('field');
+      SymTail(n^.line, n^.col, n^.dnAt, n^.dnLen);
+      n := n^.next
+    end;
+    g := g^.next
+  end
+end;
+
+procedure DumpSymVariants(v: nodePtr; depth: integer); forward;
+
+{ 6.4.3.3's fixed part, its tag-field where one was named, and its variants --
+  all at one depth, because they are all fields of the one record and the
+  protocol has no name for the nesting a variant part would add. A reader of
+  an outline wants to find `stAt` in the AST node; which arm selects it is a
+  question the source answers and an outline cannot. }
+procedure DumpSymRecord(r: nodePtr; depth: integer);
+begin
+  DumpSymFields(r^.rcFields, depth);
+  if r^.rcTagLen > 0 then begin
+    SymHead(depth);
+    write('field');
+    SymTail(r^.rcTagLine, r^.rcTagCol, r^.rcTagAt, r^.rcTagLen)
+  end;
+  DumpSymVariants(r^.rcVariants, depth)
+end;
+
+procedure DumpSymVariants;
+var a: nodePtr;
+begin
+  a := v;
+  while a <> nil do begin
+    DumpSymFields(a^.vaFields, depth);
+    if a^.vaTagLen > 0 then begin
+      SymHead(depth);
+      write('field');
+      SymTail(a^.vaTagLine, a^.vaTagCol, a^.vaTagAt, a^.vaTagLen)
+    end;
+    DumpSymVariants(a^.vaVariants, depth);
+    a := a^.next
+  end
+end;
+
+{ What a type-denoter contributes below the name it was written under: an
+  enumerated type's constants and a record's fields. Every other denoter
+  contributes nothing -- an array's component type is a type and not a name,
+  so there is no defining-point in it for an outline to hold. }
+procedure DumpSymType(te: nodePtr; depth: integer);
+var n: nodePtr;
+begin
+  if te <> nil then
+    if te^.kind = nkEnum then begin
+      n := te^.enConstants;
+      while n <> nil do begin
+        SymHead(depth);
+        write('value');
+        SymTail(n^.line, n^.col, n^.dnAt, n^.dnLen);
+        n := n^.next
+      end
+    end
+    else if te^.kind = nkRecord then
+      DumpSymRecord(te, depth)
+end;
+
+procedure DumpSymBlock(b: nodePtr; depth: integer); forward;
+
+{ One declaration, and whatever it declares below itself. `nm` is the name
+  within a variable-declaration's group and nil for every other kind, a group
+  being the one declaration here that carries more than one defining-point. }
+procedure DumpSymDecl(d, nm: nodePtr; depth: integer);
+begin
+  if d^.kind = nkConstDecl then begin
+    SymHead(depth);
+    write('const');
+    SymTail(d^.line, d^.col, d^.kdAt, d^.kdLen)
+  end
+  else if d^.kind = nkTypeDecl then begin
+    SymHead(depth);
+    { The denoter's form, because that is what a reader of an outline is
+      looking at. A schema says so first: its formal discriminants are the
+      distinguishing fact about it and its denoter is whatever it produces. }
+    if d^.tdDiscs <> nil then write('schema')
+    else if d^.tdType = nil then write('type')
+    else if d^.tdType^.kind = nkRecord then write('record')
+    else if d^.tdType^.kind = nkEnum then write('enum')
+    else write('type');
+    SymTail(d^.line, d^.col, d^.tdAt, d^.tdLen);
+    DumpSymType(d^.tdType, depth + 1)
+  end
+  else if d^.kind = nkGroup then begin
+    SymHead(depth);
+    write('var');
+    SymTail(nm^.line, nm^.col, nm^.dnAt, nm^.dnLen);
+    { An inline denoter declares names too: `var r: record x: integer end`
+      has a field in it and `var c: (red, green)` two constants. }
+    DumpSymType(d^.grType, depth + 1)
+  end
+  { Named rather than left to a trailing `else`, which is ADR-0221's
+    distinction taken as advice rather than as a gate: a declaration kind this
+    chain has not heard of would be *reported as a procedure* by a default
+    arm, and reporting nothing about it is the better wrong answer. }
+  else if d^.kind = nkProcDecl then begin
+    SymHead(depth);
+    if d^.pdIsFunction then write('function') else write('procedure');
+    SymTail(d^.pdNameLine, d^.pdNameCol, d^.pdAt, d^.pdLen);
+    if d^.pdBody <> nil then DumpSymBlock(d^.pdBody, depth + 1)
+  end
+end;
+
+procedure DumpSymBlock;
+var best, bestNm: nodePtr; bl, bc, lastLine, lastCol: integer;
+    p, g, n: nodePtr; more: boolean;
+
+  { Written-order selection: the earliest declaration this block holds that
+    is later than the one just reported. It rescans, which is quadratic in a
+    block's declarations and needs no storage -- the trade this walk wants,
+    since the alternative is an array sized by guess. }
+  procedure Offer(d, nm: nodePtr; l, c: integer);
+  begin
+    if Earlier(lastLine, lastCol, l, c) and
+       ((best = nil) or Earlier(l, c, bl, bc)) then begin
+      best := d;
+      bestNm := nm;
+      bl := l;
+      bc := c
+    end
+  end;
+
+begin
+  if b <> nil then begin
+    lastLine := 0;
+    lastCol := 0;
+    more := true;
+    while more do begin
+      best := nil;
+      bestNm := nil;
+      bl := 0;
+      bc := 0;
+      p := b^.blConsts;
+      while p <> nil do begin
+        Offer(p, nil, p^.line, p^.col);
+        p := p^.next
+      end;
+      p := b^.blTypes;
+      while p <> nil do begin
+        Offer(p, nil, p^.line, p^.col);
+        p := p^.next
+      end;
+      g := b^.blVars;
+      while g <> nil do begin
+        n := g^.grNames;
+        while n <> nil do begin
+          Offer(g, n, n^.line, n^.col);
+          n := n^.next
+        end;
+        g := g^.next
+      end;
+      p := b^.blProcs;
+      while p <> nil do begin
+        { A heading in a module-heading (6.11.1) and a forward declaration
+          (6.6.1) are each the *same* routine as the block that completes it,
+          and the completion is where its body is. Reporting both would put
+          one name in an outline twice -- 66 times over, in this compiler. }
+        if not (p^.pdInHeading or p^.pdIsForward) then
+          Offer(p, nil, p^.line, p^.col);
+        p := p^.next
+      end;
+      if best = nil then more := false
+      else begin
+        DumpSymDecl(best, bestNm, depth);
+        lastLine := bl;
+        lastCol := bc
+      end
+    end
+  end
+end;
+
+procedure DumpSymbols;
+var m: nodePtr;
+begin
+  m := progModules;
+  while m <> nil do begin
+    { 6.13: this component only. An --import's declarations belong to that
+      file's outline and not to this one, and mdFileIdx is what says which
+      source a module was read from (ADR-0212). }
+    if m^.mdFileIdx = 0 then begin
+      SymHead(0);
+      write('module');
+      SymTail(m^.mdNameLine, m^.mdNameCol, m^.mdAt, m^.mdLen);
+      { 6.2.2.12 makes every defining-point of the heading one of the block's
+        too, so the two are one scope reported at one depth. }
+      if m^.mdHeading <> nil then DumpSymBlock(m^.mdHeading, 1);
+      if m^.mdBlock <> nil then DumpSymBlock(m^.mdBlock, 1)
+    end;
+    m := m^.next
+  end;
+  if progBlock <> nil then begin
+    SymHead(0);
+    write('program');
+    SymTail(progLine, progCol, progAt, progLen);
+    DumpSymBlock(progBlock, 1)
   end
 end;
 

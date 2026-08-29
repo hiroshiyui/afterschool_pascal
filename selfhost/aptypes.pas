@@ -1823,6 +1823,13 @@ type
                      pdParams, pdResult, pdBody: nodePtr;
                      pdIsFunction, pdIsForward, pdInHeading: boolean;
                      pdIsExternal: boolean;
+                     { Where the *name* was written, which the node's own
+                       line and col are not: those are the word-symbol that
+                       opened the declaration, and both tree dumps print them
+                       that way. --dump-symbols reports a position a caller
+                       slices the source at to recover the written spelling,
+                       so it needs the identifier's own (ADR-0239). }
+                     pdNameLine, pdNameCol: integer;
                      pdSym: symPtr);
       { 6.2.1 puts an import-part at the head of a block, before the label,
         constant, type, variable and procedure parts -- in every block, and
@@ -1836,6 +1843,9 @@ type
         record. mdInit and mdFini are the `to begin do` and `to end do` parts,
         each a single *statement*. }
       nkModule:     (mdAt, mdLen: integer;
+                     { The module name's own position, for the reason
+                       pdNameLine gives (ADR-0239). }
+                     mdNameLine, mdNameCol: integer;
                      mdParams, mdExports, mdHeading, mdBlock,
                      mdInit, mdFini: nodePtr;
                      mdHasHeading, mdHasBlock: boolean;

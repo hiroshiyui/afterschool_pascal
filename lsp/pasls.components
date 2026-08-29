@@ -4,6 +4,7 @@
 ../lib/dialect/pasenv.pas
 ../lib/passtrvec.pas
 ../lib/dialect/pasdir.pas
+../lib/dialect/pasparse.pas
 ../lib/dialect/pasprocess.pas
 ../lib/dialect/pascontainer.pas
 ../lib/dialect/pasjson.pas

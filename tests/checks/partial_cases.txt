@@ -356,3 +356,24 @@ CollectTagTests:nodeKind:1 chains 2 of 63
 # C takes one word, and a variable parameter of a type C has no answer for.
 # The other ten symbol kinds cannot appear in a formal-parameter-list.
 CheckForeignHeading:symKind:1 chains 2 of 12
+
+# ADR-0239's outline walker. The two type-denoters that contain a
+# defining-point: an enumerated type's constants and a record's fields are
+# names, and every other denoter contains *types* -- an array's component, a
+# pointer's domain, a set's base -- which have no name for an outline to hold.
+# So the fall-through is the right answer for all 61 of the rest.
+DumpSymType:nodeKind:1 chains 2 of 63
+
+# The four node kinds a block's declaration parts hold, which is the whole
+# domain this walk has: a constant-definition, a type-definition, a
+# variable-declaration's group and a procedure-declaration. Every arm is
+# named and there is no trailing `else` at all, so a fifth kind of declaration
+# would be reported as nothing rather than as a procedure -- the better of the
+# two wrong answers, and the one ADR-0221 says a chain must be written for.
+DumpSymDecl:nodeKind:1 chains 4 of 63
+
+# Which word names a type-definition's denoter. A record and an enumerated
+# type are the two an outline distinguishes, because they are the two with
+# children under them; every other denoter is reported as `type`, which is
+# what the trailing arm says for all 61 of them.
+DumpSymDecl:nodeKind:2 chains 2 of 63

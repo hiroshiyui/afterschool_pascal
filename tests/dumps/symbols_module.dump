@@ -1,0 +1,9 @@
+symbol 0 module 16 8 8 counters
+symbol 1 record 20 6 5 tally
+symbol 2 field 21 3 4 hits
+symbol 2 field 22 3 6 misses
+symbol 1 const 32 7 4 step
+symbol 1 procedure 34 11 4 bump
+symbol 1 procedure 39 11 5 reset
+symbol 0 program 47 9 13 uses_counters
+symbol 1 var 51 5 1 t

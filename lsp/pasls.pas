@@ -70,6 +70,16 @@ import PasError;
          wants from it, and naming that is cheaper than qualifying every use
          of the other two. }
        PasDir only (List);
+       { ADR-0120's ParseInt, for the four numbers on a --dump-symbols line.
+         A second reader of decimal digits written here would be a second
+         reader free to disagree with the one this tree already has -- and
+         the one it has is the one AP 6.5.6's empty substring was found
+         through (ADR-0219).
+
+         `only` for the same reason PasDir has one, which is now a pattern
+         and not an incident: PasParse exports `ResultText` and so does
+         PasError. Four names are the whole of what this program wants. }
+       PasParse only (ParseMax, ParseLine, ParseInt, IntOr);
        PasProcess;
        PasContainer;
        PasJson;
@@ -92,6 +102,29 @@ const
 
   { JSON-RPC's own codes, from the specification's table. }
   MethodNotFound = -32601;
+
+  { LSP's SymbolKind, from the specification's table, for the ten words
+    --dump-symbols answers in (ADR-0239). The compiler answers about *Pascal*
+    and this is where the protocol's numbering lives, which is the whole
+    reason it does not answer in numbers: a table owned by a third party
+    changing under a Pascal compiler would be a version of this protocol
+    baked into it. }
+  SkModule = 2;
+  SkClass = 5;
+  SkField = 8;
+  SkEnum = 10;
+  SkFunction = 12;
+  SkVariable = 13;
+  SkConstant = 14;
+  SkEnumMember = 22;
+  SkStruct = 23;
+
+  { How deeply an outline is followed. Declarations nest through nested
+    procedures and this is far past anything a person writes -- the compiler's
+    own deepest is three -- but it is a bound and so it is *reported* when it
+    is met rather than applied in silence (ADR-0110). Everything past it is
+    attached at this depth, which keeps the answer well-formed. }
+  SymDepthMax = 64;
 
   { How far below the workspace root a `.components` file is looked for. This
     tree is three deep at its deepest (`tests/dialect/components/`); eight is
@@ -582,20 +615,28 @@ end;
   name -- but `tools/pascalcc`, which a user may just as well name in
   `PASLS_COMPILER`, moves them to standard error. Folding the two together is
   what makes either work. }
+function CompilerCommand(flags: CommandLine; imports: CommandLine;
+                        var cmd: CommandLine): boolean;
+begin
+  cmd := '';
+  { Checked rather than concatenated: a variable-string assignment past its
+    capacity is a run-time error, and the pieces here are all a caller's. }
+  if length(compilerCmd) + length(flags) + length(imports)
+     + 2 * length(scratchPath) + 32 > CommandMax then begin
+    Note('the compiler command line would be longer than this program holds');
+    exit(false)
+  end;
+  cmd := compilerCmd + flags + imports + ' ''' + scratchPath + ''' -o '''
+         + scratchPath + '.ll'' 2>&1';
+  CompilerCommand := true
+end;
+
 function Compile(imports: CommandLine; var out: CaptureText): boolean;
 var cmd: CommandLine;
     r: RunResult;
 begin
   out := '';
-  { Checked rather than concatenated: a variable-string assignment past its
-    capacity is a run-time error, and the pieces here are all a caller's. }
-  if length(compilerCmd) + length(imports) + 2 * length(scratchPath) + 32
-     > CommandMax then begin
-    Note('the compiler command line would be longer than this program holds');
-    exit(false)
-  end;
-  cmd := compilerCmd + imports + ' ''' + scratchPath + ''' -o ''' + scratchPath
-         + '.ll'' 2>&1';
+  if not CompilerCommand('', imports, cmd) then exit(false);
   r := Capture(cmd, out);
   if not r.ok then begin
     Note('could not run the compiler: ' + ErrorText(r.cause));
@@ -724,6 +765,9 @@ begin
   result := JsonNewObject;
   caps := JsonNewObject;
   JsonPut(caps, 'textDocumentSync', JsonNewInteger(SyncFull));
+  { ADR-0239. Answered from --dump-symbols, which is the compiler's own
+    account of what a source declares. }
+  JsonPut(caps, 'documentSymbolProvider', JsonNewBoolean(true));
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -819,6 +863,221 @@ begin
   JsonFree(note)
 end;
 
+{ --- the outline ---------------------------------------------------------- }
+
+{ LSP's `textDocument/documentSymbol`, and the decision behind it is not in
+  this file: it is that the compiler answers a *tool's* question about a
+  program in a form of its own (ADR-0239). The only structured thing this
+  compiler wrote about a source was `--dump-sema`, which ADR-0085 demoted from
+  a specification to a debugging aid on the day there was no second front end
+  to diff it against -- so a server reading that would be a second reader of
+  Pascal-shaped output, living outside the compiler and free to drift from it.
+  This reads `--dump-symbols` instead, which is a line and six fields.
+
+  Three consequences worth knowing here.
+
+  **No `--import`, and that is deliberate.** The flag stops after the parse,
+  so an outline never depends on another file being found -- which matters
+  most for the file `ImportsFor` cannot place, where the diagnostics are
+  useless and the outline is still exactly right.
+
+  **The name is read out of the document and not out of the dump.** The
+  compiler's string pool holds the *folded* spelling, the lexer having
+  case-folded it, so `CaseTest` reaches this program as `casetest`. What the
+  dump reports beside it is a position and a length, which is enough: this
+  server holds the document the compiler was handed and slices the spelling
+  the programmer wrote out of it. The folded name is the fallback for a line
+  the store no longer has.
+
+  **The range is the name and not the declaration.** LSP wants `range` to
+  span the whole symbol and `selectionRange` to be the name inside it; the
+  parse tree records where a declaration *starts* and never where it ends, so
+  the honest answer is the extent this compiler can actually name, given
+  twice. An editor's outline, go-to-symbol and breadcrumbs are all right; what
+  degrades is "expand selection to the enclosing declaration", and inventing
+  an end for it would be inventing a claim about the source. }
+
+{ The n'th space-separated field of a line, or the empty string. }
+function SymField(line: StrItem; n: integer): ParseLine;
+var i, k: integer;
+    out: ParseLine;
+begin
+  out := '';
+  k := 0;
+  i := 1;
+  while i <= length(line) do
+    if line[i] = ' ' then i := i + 1
+    else begin
+      k := k + 1;
+      while (i <= length(line)) and (line[i] <> ' ') do begin
+        if (k = n) and (length(out) < ParseMax) then out := out + line[i];
+        i := i + 1
+      end
+    end;
+  SymField := out
+end;
+
+{ Pascal's word for a declaration, as the protocol's number. A kind this
+  program has not heard of is a version skew between it and the compiler it
+  started, so it is reported rather than dropped: an outline missing a name
+  looks like a compiler that lost it. }
+function SymbolKindOf(word: ParseLine): integer;
+begin
+  if (word = 'program') or (word = 'module') then SymbolKindOf := SkModule
+  else if word = 'const' then SymbolKindOf := SkConstant
+  else if word = 'type' then SymbolKindOf := SkClass
+  else if (word = 'record') or (word = 'schema') then SymbolKindOf := SkStruct
+  else if word = 'enum' then SymbolKindOf := SkEnum
+  else if word = 'field' then SymbolKindOf := SkField
+  else if word = 'value' then SymbolKindOf := SkEnumMember
+  else if word = 'var' then SymbolKindOf := SkVariable
+  else if (word = 'procedure') or (word = 'function') then
+    SymbolKindOf := SkFunction
+  else begin
+    Note('a symbol kind this server does not know was reported as a '
+         + 'variable: ' + word);
+    SymbolKindOf := SkVariable
+  end
+end;
+
+{ A byte column of a source line, as a Position.character in the unit this
+  session negotiated -- 0-based, where the compiler counts from one. Under
+  `utf-8` the compiler's column already is the protocol's and converting it
+  would be the defect rather than the fix (ADR-0237). }
+function CharacterAt(line: DiagLine; col: integer): integer;
+begin
+  if encoding = peUtf16 then CharacterAt := Utf16Column(line, col) - 1
+  else CharacterAt := col - 1
+end;
+
+{ The extent of a name, as the protocol's Range. }
+function NameRange(source: DiagLine; line, col, len: integer): JsonPtr;
+var r, a, b: JsonPtr;
+begin
+  a := JsonNewObject;
+  JsonPut(a, 'line', JsonNewInteger(line - 1));
+  JsonPut(a, 'character', JsonNewInteger(CharacterAt(source, col)));
+  b := JsonNewObject;
+  JsonPut(b, 'line', JsonNewInteger(line - 1));
+  JsonPut(b, 'character', JsonNewInteger(CharacterAt(source, col + len)));
+  r := JsonNewObject;
+  JsonPut(r, 'start', a);
+  JsonPut(r, 'end', b);
+  NameRange := r
+end;
+
+{ The document's outline, as the protocol's `DocumentSymbol[]`.
+
+  It is collected a *line* at a time rather than into one buffer, and that is
+  a bound this program then does not have: `CaptureMax` is 16384 and the
+  outline of `selfhost/apfront.pas` is 51 192 bytes, so the answer would have
+  stopped a third of the way through with nothing said. An outline is a list
+  of lines and `CaptureLines` collects one on the heap; the per-line bound
+  that replaces it is `ItemMax`, and a symbol line is six short fields.
+  Four of the twelve findings this program has produced are bounds chosen by
+  counting what the largest thing in the tree needed at the time, and the
+  largest thing in the tree was a test case. }
+procedure Outline(id: JsonPtr; params: JsonPtr);
+var uri: DocUri;
+    at, i, depth, lastDepth, symLine, symCol, symLen: integer;
+    d: Document;
+    lines: StrVecPtr;
+    cmd: CommandLine;
+    r: RunResult;
+    reply, result, obj: JsonPtr;
+    kids, owner: array [0..SymDepthMax] of JsonPtr;
+    text: StrItem;
+    source: DiagLine;
+    name: DiagLine;
+    kind: ParseLine;
+    tooDeep: boolean;
+begin
+  reply := NewResponse(id);
+  { An array, and an empty one where there is nothing to say. `null` is legal
+    and says the same thing less clearly to a client that then has to test
+    for it. }
+  result := JsonNewArray;
+  uri := UriOf(params);
+  at := IndexOf(uri);
+  if at <> 0 then begin
+    d := VecGet(DocVec, Document, docs, at);
+    WriteScratch(d.text);
+    { No imports: the flag stops after the parse and a name is a name whether
+      or not the module it came from was found. }
+    if CompilerCommand(' --dump-symbols', '', cmd) then begin
+      SVecNew(lines, 64);
+      r := CaptureLines(cmd, lines);
+      if not r.ok then
+        Note('could not run the compiler: ' + ErrorText(r.cause))
+      else begin
+        for i := 0 to SymDepthMax do begin
+          kids[i] := nil;
+          owner[i] := nil
+        end;
+        kids[0] := result;
+        lastDepth := -1;
+        tooDeep := false;
+        for i := 1 to SVecLen(lines) do begin
+          text := SVecGet(lines, i);
+          { A line that is not a symbol is skipped and is not an error: a
+            source with a syntax error in it says so on this same stream, and
+            an outline of what parsed is still the best answer available. }
+          if SymField(text, 1) = 'symbol' then begin
+            depth := IntOr(ParseInt(SymField(text, 2)), 0);
+            kind := SymField(text, 3);
+            symLine := IntOr(ParseInt(SymField(text, 4)), 0);
+            symCol := IntOr(ParseInt(SymField(text, 5)), 0);
+            symLen := IntOr(ParseInt(SymField(text, 6)), 0);
+            name := SymField(text, 7);
+            if depth > SymDepthMax then begin
+              tooDeep := true;
+              depth := SymDepthMax
+            end;
+            { A depth that skips a level has no parent to hang from, which
+              cannot happen from this compiler and would be a nil dereference
+              if it did. Clamped to one below the last, so a malformed stream
+              produces a flatter outline and never a stopped server. }
+            if depth > lastDepth + 1 then depth := lastDepth + 1;
+            LineOf(d.text, symLine, source);
+            { The spelling the programmer wrote, which the compiler cannot
+              report: its string pool holds the folded one. }
+            if (symCol >= 1) and (symLen > 0)
+               and (symCol + symLen - 1 <= length(source)) then
+              name := source[symCol..symCol + symLen - 1];
+            obj := JsonNewObject;
+            JsonPut(obj, 'name', JsonNewText(name));
+            JsonPut(obj, 'kind', JsonNewInteger(SymbolKindOf(kind)));
+            JsonPut(obj, 'range',
+                    NameRange(source, symLine, symCol, symLen));
+            JsonPut(obj, 'selectionRange',
+                    NameRange(source, symLine, symCol, symLen));
+            { The array this depth's symbols go in, made when the first of
+              them arrives so that a childless symbol carries no `children`
+              member at all. }
+            if kids[depth] = nil then begin
+              kids[depth] := JsonNewArray;
+              JsonPut(owner[depth - 1], 'children', kids[depth])
+            end;
+            JsonAppend(kids[depth], obj);
+            owner[depth] := obj;
+            { A later sibling starts a children array of its own. Depth grows
+              one level at a time, so clearing the next one is enough. }
+            if depth < SymDepthMax then kids[depth + 1] := nil;
+            lastDepth := depth
+          end
+        end;
+        if tooDeep then
+          Note('declarations nested deeper than this server follows were '
+               + 'reported at its limit')
+      end;
+      SVecFree(lines)
+    end
+  end;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
 { --- the loop ------------------------------------------------------------- }
 
 { One message. The chain below dispatches on a string and so is nobody's
@@ -842,6 +1101,7 @@ begin
   else if method = 'textDocument/didOpen' then DidOpen(params)
   else if method = 'textDocument/didChange' then DidChange(params)
   else if method = 'textDocument/didClose' then DidClose(params)
+  else if method = 'textDocument/documentSymbol' then Outline(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 

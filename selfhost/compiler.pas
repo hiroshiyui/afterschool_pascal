@@ -146,6 +146,12 @@ var
     `file:line:col: error: message`, which is what a person reads and what
     tests/*.err holds. }
   dumpTokensOpt, dumpAstOpt, dumpSemaOpt, dumpAllOpt: boolean;
+  { --dump-symbols: every name this source declares, for a tool rather
+    than for a person (ADR-0239). It stops after the parse, as --dump-ast
+    does, and it is deliberately not a section of --dump-all: an outline
+    is wanted for a source Sema would reject, and --dump-all runs the
+    whole pipeline. }
+  dumpSymbolsOpt: boolean;
   { --dump-limits: how full the two arrays sized for this compiler's own source
     are (ADR-0148). Not a fifth member of the set above and deliberately not a
     section of --dump-all -- those three sections were what
@@ -371,6 +377,8 @@ begin
   writeln('                  compiler''s own fixed arrays were left');
   writeln('  --dump-predicates  what each type predicate answers about');
   writeln('                  a type of each kind');
+  writeln('  --dump-symbols  write every name this source declares, with');
+  writeln('                  its kind, position and nesting, and stop');
   writeln('  --coverage      emit statement counters; the program then');
   writeln('                  writes the lines it ran to PASCOV_LINES');
   writeln('  --version       write the version and stop');
@@ -408,6 +416,7 @@ begin
   dumpLimitsOpt := false;
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
+  dumpSymbolsOpt := false;
   dumpDispatchOpt := false;
   dispatchHead := nil;
   dispatchTail := nil;
@@ -442,6 +451,7 @@ begin
     else if EQ(a, '--dump-limits') then dumpLimitsOpt := true
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
+    else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
     else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     { ADR-0156. Joined to its flag, unlike -o and --import, which take file
@@ -10951,9 +10961,14 @@ begin
       if (not errorSeen) and (dumpAstOpt or dumpAllOpt) then begin
         annotate := false;
         DumpProgram
-      end
+      end;
+      { --dump-symbols asks the parse stage and stops there, which is not an
+        economy: an outline is what an editor draws while the file is *wrong*,
+        so every question Sema could answer is one that would take the answer
+        away at the moment a reader wants it (ADR-0239). }
+      if (not errorSeen) and dumpSymbolsOpt then DumpSymbols
     end;
-    go := not (dumpAstOpt and not whole)
+    go := not ((dumpAstOpt or dumpSymbolsOpt) and not whole)
   end;
 
   { --- check -------------------------------------------------------------- }

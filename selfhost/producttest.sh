@@ -191,7 +191,11 @@ fi
 # the parser both, so it is matched by the prefix they share: `-O0|-O1|-O2|-O3`
 # against `-O`, which the text spells `-O0 .. -O3`. The catch-all arms (`-*`,
 # `*.o`, `*`) name no option and are dropped -- which is also what drops
-# `--std=*`, the arm ADR-0232 left behind to accept and ignore the flag.
+# `--std=*`, the arm ADR-0232 left behind to accept and ignore the flag, and
+# `--dump-*`, which is a family and not a catch-all: it names a real group of
+# options, the help text spells it `--dump-<what>`, and what this check cannot
+# do is compare a pattern against a placeholder. The section below is what
+# asks whether it works instead (ADR-0239).
 driver=$root/tools/pascalcc
 help_text=$("$driver" --help 2>/dev/null)
 checked=$((checked + 1))
@@ -246,6 +250,29 @@ if "$pascalc" --target=aarch64-linux-gnu "$work/target.pas" \
   :
 else
   echo "--- target: --target=aarch64-linux-gnu did not emit that target ---" >&2
+  failed=$((failed + 1))
+fi
+
+# --- and that the driver hands a dump through untouched ---------------------
+#
+# ADR-0239. A --dump flag asks the *compiler* a question and the answer is its
+# standard output, so `tools/pascalcc` has nothing to add: no assembling, no
+# linking, and no folding the answer into stderr the way it folds a
+# diagnostic. Until the language server asked for one the driver had never
+# been handed a dump at all, and it answered `pascalcc: unknown option
+# '--dump-symbols'` -- on stderr, to a caller reading stdout, which is an
+# empty outline and no complaint anywhere.
+#
+# It is checked here rather than by the dump corpus because `tests/dumps` is
+# handed `pascalc` and this is a claim about the *driver*: which is what this
+# harness is for, the build wiring rather than the compiler.
+checked=$((checked + 1))
+dump_out=$(PASCALC=$pascalc "$driver" --dump-symbols "$work/target.pas" \
+             -o "$work/target.ll" 2>"$work/dump.err")
+if [[ $dump_out != "symbol 0 program 1 9 6 target" ]]; then
+  echo "--- dump: pascalcc --dump-symbols did not pass the dump through ---" >&2
+  echo "wrote: $dump_out" >&2
+  cat "$work/dump.err" >&2
   failed=$((failed + 1))
 fi
 
