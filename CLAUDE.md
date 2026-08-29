@@ -875,9 +875,14 @@ here that nobody in this project wrote.
   everything else, and an editor asks where a name is declared exactly while
   the file does not compile. The outline reaches that by stopping *before*
   Sema; a defining-point cannot, so it carries on instead. It needs the
-  `--import`s, unlike the two flags above. What it does not answer is a field
-  selection, an interface's own name and a name inside a schema's body, and
-  each has a reason in the record.
+  `--import`s, unlike the two flags above. A **field** is the one applied
+  occurrence here that resolves to no symbol — §6.4.3.3 makes a record a
+  region and puts a defining-point in it, but a selection is resolved by
+  asking the record's *type* — so `fieldPtr` carries the position itself and
+  there is a second reporter for it (ADR-0247); §6.8.3.10's bare form inside
+  a `with` answers the field too, not the statement that gave it a nearer
+  defining-point. What is still unanswered is an interface's own name and a
+  name inside a schema's body, each with a reason in the record.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`

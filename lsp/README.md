@@ -112,12 +112,19 @@ answers about every name the mistake is not about — which is the state a file
 being edited is in most of the time. The outline reaches the same place by
 stopping *before* Sema; a defining-point cannot, so it carries on instead.
 
-Three things it does not answer. A **field** selection — `r.x` — reports
-nothing, a field not being a symbol with a defining-point; an **interface**
-name hovers but does not jump, `ifaceRec` recording no position; and a name
-inside a **schema's own body** is resolved only while a type is being produced
-from it, which happens where the type is written and not where the schema is,
-so reporting it would attribute another file's line and column to this one.
+A **field** is answered too, and it took a record of its own
+([ADR-0247](../doc/adr/0247-a-field-is-not-a-symbol.md)): it is the one
+applied occurrence in this language that resolves to no symbol, §6.4.3.3
+making a record a *region* with a defining-point in it while a selection is
+resolved by asking the record's type. §6.8.3.10's bare form inside a `with`
+answers the field as well — not the with-statement, which is where the
+*record* was named.
+
+Two things it does not answer. An **interface** name hovers but does not jump,
+`ifaceRec` recording no position; and a name inside a **schema's own body** is
+resolved only while a type is being produced from it, which happens where the
+type is written and not where the schema is, so reporting it would attribute
+another file's line and column to this one.
 
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a

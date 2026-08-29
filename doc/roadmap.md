@@ -393,7 +393,7 @@ not already know is exactly the one declared somewhere else.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Eighteen entries so far, and **twelve of them have been acted on** — which is
+Nineteen entries so far, and **thirteen of them have been acted on** — which is
 the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -407,7 +407,7 @@ a *program* could live inside, and it had to be fixed before the server could
 be compiled at all.
 
 The shape of the whole list is the argument for the chapter. **Five of the
-eighteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
+nineteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
 255-character line, a 16 384-byte capture — and every one of them was chosen by
 counting what the largest thing in the tree needed at the time. The largest
 thing in the tree was a test case. One is not a gap at all: the protocol asked
@@ -421,12 +421,13 @@ module written a year of increments earlier, whose five writers could fail and
 could not say so. A finding this chapter produced was already true everywhere
 else.
 
-**And the last three are all about what the compiler had never been asked.**
+**And the last four are all about what the compiler had never been asked.**
 Two are things it did not keep — where a symbol was declared, and where a
 field-identifier is — each thrown away by code that had the answer in its hand
-and no reason to hold it. The third is not a demand on the language at all: it
-is a defect this program shipped and an oracle caught, and it is here because
-of *which* oracle.
+and no reason to hold it. One is a fact it *did* keep, for a diagnostic, and
+that answered a second question with nothing added but a file index. The last
+is not a demand on the language at all: it is a defect this program shipped
+and an oracle caught, and it is here because of *which* oracle.
 
 **One entry took two records to close and they are not the same kind of
 thing.** *A program cannot make a temporary file, and cannot survive failing
@@ -702,6 +703,23 @@ with it, unfixed and unrecorded.
   site were the whole of it, which is what makes it a finding rather than a
   feature: the fact was already in the hand of the code that discarded it, and
   what it cost to keep was nothing.
+
+- **A record field resolves to nothing a report could name** — answered
+  (ADR-0247), and it is the finding this chapter produced by *reading its own
+  output*. `--dump-uses` answered `v.cap` and not `r.x`: a schema's
+  discriminant is a symbol and a field is a `fieldPtr`, §6.4.3.3 making a
+  record a region with a defining-point in it while nothing about a field is
+  ever looked up in a scope. The two look identical in the source, the
+  asymmetry was visible in the golden, and it was explained nowhere in it.
+
+  It cost **one integer**. `fieldRec` was already keeping `line` and `col` for
+  a diagnostic (ADR-0045); what was missing is which *file*, a record declared
+  in an imported module having fields whose positions are that module's. That
+  is the same shape as the symbol finding below and the opposite conclusion:
+  there the fact was thrown away, here it was kept for one purpose and served
+  another untouched. **A program that uses records writes more field
+  selections than anything else**, so what looked like a corner was most of a
+  file.
 
 - **The parse tree records a field-designator's `.` and not its name** —
   answered, and it is the other half of the extent finding above. A field node

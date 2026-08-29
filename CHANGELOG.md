@@ -56,6 +56,12 @@ appears below in the release where it still existed.
   `textDocument/hover`** out of that flag, with the imports its diagnostics
   path already resolves — so a definition crosses a file, which is what the
   method is worth having for.
+- **A record field is answered too** (ADR-0247), and it is the one applied
+  occurrence in this language that resolves to no symbol: §6.4.3.3 makes a
+  record type a *region* with a defining-point in it for every field, while a
+  selection is resolved by asking the record's type rather than a scope. A
+  field written bare inside §6.8.3.10's `with` answers the field's own
+  declaration as well, not the with-statement.
 - **An `import` can name no file at all.** An interface no `--import` supplied
   is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
   identifier — in the directory the source is in, then in each

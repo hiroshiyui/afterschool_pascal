@@ -3716,13 +3716,28 @@ nothing else. What it would lose, mechanism by mechanism:
   source with three mistakes has resolved everything else, and an editor asks
   where a name is declared exactly while the file does not compile. The
   outline reaches that by stopping *before* Sema and a defining-point cannot,
-  so it carries on instead. What it does not answer: a field selection (a
-  field is not a symbol), an interface's own name (`ifaceRec` records no
-  position) and a name inside a schema's body (§6.4.7 resolves it where the
-  type is *written*, so its line and column belong to another file). The
-  defect it shipped with was a JSON `null` made and replaced on every
+  so it carries on instead. The defect it shipped with was a JSON `null` made and replaced on every
   successful reply — thirteen leaked nodes, every golden green, found by
-  `heap-balance` and by nothing else.
+  `heap-balance` and by nothing else. What it still does not answer is an
+  interface's own name (`ifaceRec` records no position) and a name inside a
+  schema's body (§6.4.7 resolves it where the type is *written*, so its line
+  and column belong to another file).
+- **A field is the one applied occurrence that resolves to no symbol**
+  (ADR-0247). §6.4.3.3 makes a record type a *region* and puts a
+  defining-point in it for every field-identifier — so a field is as much an
+  applied occurrence as a variable is — but nothing about a field is looked up
+  in a scope: `r.x` asks the record's **type** through `FindField` and gets a
+  `fieldPtr`. So the position lives on `fieldRec`, where `line` and `col` were
+  already kept for a diagnostic (ADR-0045) and `declFile` joined them; the
+  field is spelled `declFile` because §6.1.2 reserves `file`, which the
+  compiler said on the first build. `NoteUseField` writes the same line
+  `NoteUse` writes with `field` for the kind, the seven numbers in front
+  coming from one routine both call. §6.8.3.10's **bare** field inside a
+  `with` answers the field and not the with-statement: the clause gives it a
+  nearer defining-point there and the symbol Sema binds is a frame slot
+  holding an address, and neither is what a reader pointing at the name is
+  asking about. `lsp/sessions/definition_field.jsonl` asks the same field both
+  ways and requires the two to agree.
 - **The scratch name carries the server's process id** (ADR-0242), which is
   what keeps two servers on one machine out of each other's file. It is not
   `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file
