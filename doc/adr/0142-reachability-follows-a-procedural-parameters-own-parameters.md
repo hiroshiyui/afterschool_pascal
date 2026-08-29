@@ -4,8 +4,22 @@ Date: 2026-08-20
 
 ## Status
 
-Accepted. Corrects a defect in ADR-0137, found by the specification audit
-recorded in ADR-0144.
+**Deprecated.** It was accepted, correcting a defect in
+[ADR-0137](0137-a-module-is-mode-locked-by-what-it-exports.md) found by the
+specification audit recorded in
+[ADR-0144](0144-the-first-audit-of-the-dialects-specification.md), and
+is retired by [ADR-0232](0232-afterschool-pascal-is-the-language.md) with the
+record it corrected. `SymCarriesTag` and `TypeCarriesTag` are both gone from
+the compiler: the walk existed to decide whether a module's interface could be
+linked by a program in the *other* conformance mode, and there is no other
+mode. The reading below is still true of the language -- a procedural
+parameter's own parameters are part of what its interface reaches -- and
+nothing asks the question any more.
+
+The defect it records is worth keeping for its shape rather than its subject.
+A reachability walk that asked a *type* where it should have asked a *symbol*
+missed everything reachable through a procedural parameter's own parameter
+list, and was found by an audit rather than by a test.
 
 ## Context
 

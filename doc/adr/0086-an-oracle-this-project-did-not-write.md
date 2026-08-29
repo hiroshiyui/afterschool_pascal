@@ -4,7 +4,7 @@ Date: 2026-08-14
 
 ## Status
 
-Accepted, and **retired by
+**Deprecated.** It was accepted, and is retired by
 [ADR-0232](0232-afterschool-pascal-is-the-language.md)**. The suite validates
 ISO 7185, and 25 of its 812 programs use a word-symbol this compiler now
 reserves -- CONF005 exists precisely to check that a conforming processor

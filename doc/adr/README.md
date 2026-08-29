@@ -94,7 +94,7 @@ the alternatives that were rejected and why.
 | [0083](0083-the-compiler-has-a-command-line.md) | The compiler has a command line | Accepted |
 | [0084](0084-halt-takes-an-exit-status.md) | `halt` takes an exit status | Accepted |
 | [0085](0085-stage-0-is-retired.md) | Stage 0 is retired | Accepted; seed-refresh policy has one exception, [0095](0095-the-string-pool-was-the-ceiling.md) |
-| [0086](0086-an-oracle-this-project-did-not-write.md) | An oracle this project did not write | Accepted (retired by 0232) |
+| [0086](0086-an-oracle-this-project-did-not-write.md) | An oracle this project did not write | Deprecated (retired by 0232) |
 | [0087](0087-a-required-procedure-may-be-declared-away.md) | A required procedure may be declared away | Accepted |
 | [0088](0088-a-defining-point-precedes-its-applied-occurrences.md) | A defining-point precedes its applied occurrences | Accepted |
 | [0089](0089-a-for-control-variable-may-not-be-threatened.md) | A `for` control-variable may not be threatened | Accepted |
@@ -116,7 +116,7 @@ the alternatives that were rejected and why.
 | [0105](0105-scenarios-start-from-the-clause.md) | Scenarios start from the clause | Accepted |
 | [0106](0106-the-denominator-is-triaged.md) | The denominator is triaged | Accepted |
 | [0107](0107-what-the-second-independent-reading-found.md) | What the second independent reading found | Accepted |
-| [0108](0108-the-reference-front-end-comes-back.md) | The reference front end comes back | Accepted (retired by 0232) |
+| [0108](0108-the-reference-front-end-comes-back.md) | The reference front end comes back | Deprecated (retired by 0232) |
 | [0109](0109-the-goal-is-a-practical-pascal.md) | The goal is a practical Pascal | Accepted |
 | [0110](0110-a-limit-is-reported-not-applied-in-silence.md) | A limit is reported, not applied in silence | Accepted |
 | [0111](0111-a-string-temporary-lives-for-one-statement.md) | A string temporary lives for one statement | Accepted |
@@ -145,12 +145,12 @@ the alternatives that were rejected and why.
 | [0134](0134-the-register-read-end-to-end.md) | The register, read end to end | Accepted |
 | [0135](0135-the-dialect-gets-a-specification.md) | The dialect gets a specification, and it is written against the standard it amends | Accepted |
 | [0136](0136-a-constant-cannot-have-the-wide-type.md) | A constant cannot have the wide type, and saying so is a diagnostic rather than a crash | Accepted |
-| [0137](0137-a-module-is-mode-locked-by-what-it-exports.md) | A module is mode-locked by what it exports, not by the flag it was translated with | Accepted (retired by 0232) |
+| [0137](0137-a-module-is-mode-locked-by-what-it-exports.md) | A module is mode-locked by what it exports, not by the flag it was translated with | Deprecated (retired by 0232) |
 | [0138](0138-containment-is-witnessed-by-the-corpus.md) | Containment is witnessed by the corpus, not by one program | Accepted (retired by 0232) |
 | [0139](0139-two-slices-are-compatible-and-that-is-not-comparable.md) | Two slices are compatible, and that is not permission to compare them | Accepted |
 | [0140](0140-the-dialect-reserves-no-word-symbol.md) | The dialect reserves no word-symbol, and what it does instead has a name | Accepted (gate retired by 0232, rule stands) |
 | [0141](0141-one-rule-for-saying-a-routine-may-have-failed.md) | One rule for saying a routine may have failed | Accepted |
-| [0142](0142-reachability-follows-a-procedural-parameters-own-parameters.md) | Reachability follows a procedural parameter's own parameters | Accepted |
+| [0142](0142-reachability-follows-a-procedural-parameters-own-parameters.md) | Reachability follows a procedural parameter's own parameters | Deprecated (retired by 0232) |
 | [0143](0143-a-slice-is-not-a-value-and-cannot-be-named.md) | A slice is not a value, and 6.4.9 could name one | Accepted |
 | [0144](0144-the-first-audit-of-the-dialects-specification.md) | The first audit of the dialect's specification | Accepted |
 | [0145](0145-every-enumeration-not-only-the-type-kinds.md) | Every enumeration, not only the type kinds | Accepted |
@@ -174,7 +174,7 @@ the alternatives that were rejected and why.
 | [0163](0163-a-variant-denoter-restricts-more-than-this-compiler-knew.md) | A variant-denoter restricts more than this compiler knew | Accepted |
 | [0164](0164-a-clause-number-is-a-claim-and-nothing-was-checking-it.md) | A clause number is a claim, and nothing was checking it | Accepted |
 | [0165](0165-extended-pascal-is-the-default.md) | Extended Pascal is the default, and ISO 7185 stays reachable | Accepted (retired by 0232) |
-| [0166](0166-a-source-may-name-its-own-standard.md) | A source may name its own standard | Accepted (retired by 0232) |
+| [0166](0166-a-source-may-name-its-own-standard.md) | A source may name its own standard | Deprecated (retired by 0232) |
 | [0167](0167-the-third-audit-found-six-defects-in-the-parameter-and-constant-clauses.md) | The third audit found six defects in the parameter and constant clauses | Accepted |
 | [0168](0168-the-fourth-audit-and-two-defects-fixed-before-the-2-0-0-tag.md) | The fourth audit, and the two defects fixed before the 2.0.0 tag | Accepted |
 | [0169](0169-a-real-is-rounded-away-from-zero-and-the-arithmetic-is-exact.md) | A real is rounded away from zero, and the arithmetic is exact | Accepted |

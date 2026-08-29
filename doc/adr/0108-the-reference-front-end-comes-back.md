@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted, and **retired by
+**Deprecated.** It was accepted, and is retired by
 [ADR-0232](0232-afterschool-pascal-is-the-language.md)**. `src/` answered
 conformance questions -- it was frozen at the conformance surface by ADR-0117
 and skipped every dialect source -- and there is no conformance surface, so

@@ -4,7 +4,7 @@ Date: 2026-08-22
 
 ## Status
 
-Accepted, and **retired by
+**Deprecated.** It was accepted, and is retired by
 [ADR-0232](0232-afterschool-pascal-is-the-language.md)**. `{ @std:iso7185 }`
 is an ordinary comment again, and the 99 lines that read it before the lexer
 ran are deleted, along with the four probes in `tests/checks/stdannot/`.

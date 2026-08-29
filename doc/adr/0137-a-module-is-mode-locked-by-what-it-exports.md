@@ -4,7 +4,7 @@ Date: 2026-08-20
 
 ## Status
 
-Accepted, and **retired by
+**Deprecated.** It was accepted, and is retired by
 [ADR-0232](0232-afterschool-pascal-is-the-language.md)**. The mechanism -- a
 walk over a module's interface deciding whether it could be linked by a
 program in the other mode -- has no other mode to reconcile, and the 140 lines
