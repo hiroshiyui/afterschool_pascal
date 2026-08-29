@@ -28,6 +28,12 @@
 #   name.dump    expected standard output, in full
 #   name.flags   the flag to compile with; --dump-all when absent
 #
+# The case's own directory is rewritten to <dir>/ in what is compared, which
+# tests/run_test.sh does to a diagnostic for the same reason: --dump-imports
+# answers with *paths*, and a path that begins at the checkout cannot be
+# written down once (ADR-0244). No other dump names a file, so this changes
+# nothing for the rest.
+#
 # These exist because tests/checks/coverage.py found that no case in the corpus
 # passed any --dump flag, leaving thirty-one walker procedures entered by
 # nothing while four documented flags claimed to work. Keeping them green is
@@ -80,7 +86,9 @@ fi
 
 # The source path is rewritten so a golden does not depend on where the
 # checkout lives, exactly as tests/run_test.sh does it.
-if ! diff -u "$expected" <(sed -e "s|$source_file|<source>|g" "$work/actual"); then
+if ! diff -u "$expected" <(sed -e "s|$source_file|<source>|g" \
+                               -e "s|$(dirname "$source_file")/|<dir>/|g" \
+                               "$work/actual"); then
   echo "--- $name: dump differs (expected vs actual above) ---" >&2
   exit 1
 fi

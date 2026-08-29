@@ -129,14 +129,15 @@ def sweep(exe, jobs, work):
     work.mkdir(parents=True, exist_ok=True)
 
     def one(idx_job):
-        idx, (src, flags) = idx_job
+        idx, (src, flags, extra) = idx_job
         out = work / f"L{idx}.txt"
         argv = [str(exe), *flags]
         if src is not None:
             argv += [str(src), "-o", str(work / f"o{idx}.ll")]
         try:
             subprocess.run(argv, capture_output=True, timeout=600,
-                           env=dict(os.environ, PASCOV_LINES=str(out)))
+                           env=dict(os.environ, PASCOV_LINES=str(out),
+                                    **extra))
         except subprocess.TimeoutExpired:
             print(f"line-coverage: {src} timed out", file=sys.stderr)
         return out

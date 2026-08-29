@@ -145,6 +145,37 @@ add_custom_command(
 )
 add_custom_target(pascalc ALL DEPENDS ${APASCAL_PASCALC})
 
+# ---- Install ----
+#
+# **The compiler can be put anywhere** (ADR-0244), and what makes that true is
+# the layout below plus two rules `tools/pascalcc` follows: it looks for
+# `pascalc` beside itself before anywhere else, and it adds the two library
+# directories below to the search path when AFTERSCHOOL_PASCAL_PATH says
+# nothing. So an installed tree needs no environment at all, and
+# AFTERSCHOOL_PASCAL_PATH is how a *user's* modules are added to it or an
+# installed one is replaced.
+#
+#   <prefix>/bin/pascalc                 the compiler, which writes IR
+#   <prefix>/bin/pascalcc                the driver, which assembles and links
+#   <prefix>/lib/libpasrt.a              the runtime
+#   <prefix>/lib/afterschool/*.pas       the library
+#   <prefix>/lib/afterschool/dialect/*.pas
+#
+# The library is installed as **source**. There is no compiled interface
+# artefact in this language and 6.11.1 is why: a module-heading is the
+# interface, written in Pascal, so a translation reading one needs nothing
+# else -- which is what ADR-0079 chose and what makes the search path a search
+# for `.pas` files. The objects are built per program by `pascalcc`, which is
+# slower than a library archive would be and is the whole of what is owed for
+# having no second artefact to keep in step.
+install(PROGRAMS ${APASCAL_PASCALC} ${CMAKE_SOURCE_DIR}/tools/pascalcc
+        DESTINATION bin)
+install(TARGETS pasrt ARCHIVE DESTINATION lib)
+file(GLOB APASCAL_LIB ${CMAKE_SOURCE_DIR}/lib/*.pas)
+file(GLOB APASCAL_LIB_DIALECT ${CMAKE_SOURCE_DIR}/lib/dialect/*.pas)
+install(FILES ${APASCAL_LIB} DESTINATION lib/afterschool)
+install(FILES ${APASCAL_LIB_DIALECT} DESTINATION lib/afterschool/dialect)
+
 # ---- Tests ----
 enable_testing()
 
@@ -263,6 +294,18 @@ if(Python3_FOUND)
                    ${CMAKE_BINARY_DIR}/bin/pascalc
                    ${CMAKE_BINARY_DIR}/lib/libpasrt.a)
 
+
+  # ADR-0244: can this compiler be put somewhere and found there? Every other
+  # harness drives it out of the build tree with PASCALC and
+  # AFTERSCHOOL_PASCAL_RUNTIME saying where that tree is, which is exactly the
+  # configuration an installed copy does not have -- so "install it anywhere
+  # and point PATH at it" was a claim no oracle made. This installs to a
+  # prefix, empties the environment of every variable that could point back
+  # here, and compiles a program that imports two library modules from a third
+  # directory.
+  add_test(NAME install-layout
+           COMMAND ${CMAKE_SOURCE_DIR}/tests/checks/install_layout.sh
+                   ${CMAKE_BINARY_DIR})
 
   # ADR-0183: the oracle none of the others can be. Every gate here reads what
   # a program *prints*, and a leak prints nothing -- which is how a handle in

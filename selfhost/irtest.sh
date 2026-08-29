@@ -103,8 +103,27 @@ build() {
   # clause's whole point. They used to reach the Pascal compiler concatenated
   # into a single program parameter, a program that cannot name a file being
   # unable to open several; ADR-0081 gave it names.
-  local objects=() imports=()
+  local objects=() imports=() paths=() resolved=() c k skip resolving=
   n=0
+  [[ -f ${src%.pas}.importpath ]] && resolving=yes
+  # ADR-0244's search path, read exactly as tests/run_test.sh reads it -- one
+  # directory per line, relative to the .pas's own directory. The two harnesses
+  # must read a sidecar the same way or a case means two things.
+  if [[ -f ${src%.pas}.importpath ]]; then
+    while IFS= read -r line; do
+      [[ -n $line ]] || continue
+      paths+=(--import-path "$(dirname "$src")/$line")
+    done <"${src%.pas}.importpath"
+  fi
+  # ...and the same path as an environment, read the way tests/run_test.sh
+  # reads it. `env` in front of the compiler rather than an export, so one
+  # case's configuration is not the next one's.
+  local cenv=()
+  if [[ -f ${src%.pas}.importenv ]]; then
+    cenv=(env "AFTERSCHOOL_PASCAL_PATH=$(sed -e "s|<dir>|$(dirname "$src")|g" \
+                                             "${src%.pas}.importenv" | head -1)")
+    resolving=yes
+  fi
   if [[ -f ${src%.pas}.components ]]; then
     while IFS= read -r line; do
       [[ -n $line ]] || continue
@@ -129,8 +148,38 @@ build() {
       objects+=("$work/c$n.o")
     done <"${src%.pas}.components"
   fi
-  timeout 600 "$cc" "$src" -o "$work/ir.ll" \
-    "${imports[@]+"${imports[@]}"}" \
+  # What the compiler resolved for itself, translated and linked here -- the
+  # half of resolution a compiler cannot do, and the same thing
+  # tools/pascalcc does for every other harness. Asked of the compiler rather
+  # than worked out from the Pascal, which is the whole point of the flag.
+  if [[ -n $resolving ]]; then
+    while IFS= read -r line; do
+      [[ $line == component\ * ]] || continue
+      resolved+=("${line#component }")
+    done < <(timeout 600 "${cenv[@]+"${cenv[@]}"}" "$cc" \
+               "${imports[@]+"${imports[@]}"}" \
+               "${paths[@]+"${paths[@]}"}" --dump-imports "$src" \
+               -o /dev/null 2>/dev/null)
+    for c in "${resolved[@]+"${resolved[@]}"}"; do
+      skip=
+      for k in "${imports[@]+"${imports[@]}"}"; do
+        [[ $k == "$c" ]] && skip=yes
+      done
+      [[ -z $skip ]] || continue
+      n=$((n + 1))
+      rm -f "$work/comp$n.ll"
+      timeout 600 "${cenv[@]+"${cenv[@]}"}" "$cc" \
+          "${paths[@]+"${paths[@]}"}" "$c" \
+          -o "$work/comp$n.ll" >/dev/null 2>"$work/gen.err" || return 1
+      [[ -s $work/comp$n.ll ]] || return 1
+      IR_FILES+=("$work/comp$n.ll")
+      clang -Wno-override-module -fPIC -c "$work/comp$n.ll" -o "$work/c$n.o" \
+          2>"$work/link.err" || return 2
+      objects+=("$work/c$n.o")
+    done
+  fi
+  timeout 600 "${cenv[@]+"${cenv[@]}"}" "$cc" "$src" -o "$work/ir.ll" \
+    "${imports[@]+"${imports[@]}"}" "${paths[@]+"${paths[@]}"}" \
       >/dev/null 2>"$work/gen.err" || return 1
   [[ -s $work/ir.ll ]] || return 1
   IR_FILES+=("$work/ir.ll")

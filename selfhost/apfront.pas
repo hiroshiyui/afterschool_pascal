@@ -51,7 +51,7 @@ export ApFront = (
   source, Tokenize, ParseProgram, AppendSym, IsInvocable, ResultTypeOf,
   IsDesignator, FieldCount, PathAppend, LastField, DynamicExtent,
   IsGeneric, ProcActualSym, IsTimeBuiltin, TransferArgs, Earlier, RunSema,
-  At, DumpTokens, DumpProgram, DumpSymbols);
+  At, DumpTokens, DumpProgram, DumpSymbols, ParseComponent);
 
 import StandardOutput; ApTypes;
 
@@ -71,6 +71,20 @@ procedure Tokenize;
   is not a word-symbol, so this loop runs once and the whole production is the
   one that was here before. }
 procedure ParseProgram;
+
+{ The same, for a program-component that is being read for its *interfaces*
+  and not translated -- and the whole of the difference is that everything
+  ParseProgram would leave about the main source is put back afterwards
+  (ADR-0244).
+
+  It exists because an import name is resolved to a file only once the source
+  has been parsed, there being no other way to know what the source imports.
+  So a component is read *after* the answer about the source is already sitting
+  in these globals, and a bare ParseProgram would overwrite the program's own
+  heading, parameters and block with a module file's nils. The save is local,
+  so this nests: a component read for another component's sake restores that
+  one's answer in turn. }
+procedure ParseComponent(var mods, modTail: nodePtr; var sawProgram: boolean);
 
 procedure AppendSym(var head, tail: symListPtr; s: symPtr);
 
@@ -4598,6 +4612,37 @@ begin
     ErrorAtCur;
     writeln('trailing text after the end of the program')
   end
+end;
+
+procedure ParseComponent;
+var sParams, sBlock, sMods, sTail: nodePtr;
+    sAt, sLen, sLine, sCol, sIx: integer;
+begin
+  sParams := progParams;
+  sBlock := progBlock;
+  sAt := progAt;
+  sLen := progLen;
+  sLine := progLine;
+  sCol := progCol;
+  sMods := progModules;
+  sTail := progModuleTail;
+  sIx := progMainIndex;
+
+  ParseProgram;
+
+  mods := progModules;
+  modTail := progModuleTail;
+  sawProgram := progBlock <> nil;
+
+  progParams := sParams;
+  progBlock := sBlock;
+  progAt := sAt;
+  progLen := sLen;
+  progLine := sLine;
+  progCol := sCol;
+  progModules := sMods;
+  progModuleTail := sTail;
+  progMainIndex := sIx
 end;
 
 { ==========================================================================

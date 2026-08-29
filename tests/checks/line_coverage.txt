@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 446
-instrumented 17331
+uncovered 448
+instrumented 17709
 
 accept 0/4
 accumulate 0/84
@@ -24,6 +24,7 @@ addframevar 0/9
 addglobal 0/9
 addhiddenvar 0/11
 addint 0/3
+addpath 0/7
 addressofsym 0/28
 addsimple 0/1
 addtext 0/3
@@ -41,7 +42,7 @@ appendpool 0/2
 appendprocname 0/5
 appendrange 0/6
 appendsym 0/5
-arg 0/29
+arg 0/77
 arm 0/25
 armat 0/9
 armatin 0/4
@@ -71,6 +72,7 @@ boundschema 0/65
 boundschemafor 0/9
 boundvalue 1/35
 buildformals 7/143
+buildsearchpath 0/26
 calledsym 0/5
 calltakescaret 0/18
 chainarms 0/6
@@ -137,7 +139,7 @@ checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/18
 collecttagtests 0/31
-compile 0/41
+compile 0/46
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -180,6 +182,7 @@ discvalue 6/34
 dumparmlist 0/25
 dumpblock 0/28
 dumpcaselabels 0/11
+dumpcomponentlist 0/10
 dumpdeclparts 0/44
 dumpdispatch 0/93
 dumpexports 0/33
@@ -206,6 +209,12 @@ dumprecordlayout 0/9
 dumpstmt 0/195
 dumpstmtlist 0/4
 dumpstrchild 0/5
+dumpsymbols 0/14
+dumpsymdecl 0/23
+dumpsymfields 0/8
+dumpsymrecord 0/6
+dumpsymtype 0/10
+dumpsymvariants 0/9
 dumptokens 0/27
 dumptypeexpr 2/128
 dumpvariantpart 0/29
@@ -218,8 +227,8 @@ earlier 0/1
 emitaddress 3/191
 emitarrayvalue 0/24
 emitassign 0/65
-emitbinary 6/204
-emitcall 8/503
+emitbinary 4/204
+emitcall 8/522
 emitcase 0/83
 emitcheckedarith 0/45
 emitcomplexbinary 0/63
@@ -230,7 +239,7 @@ emitconst 3/15
 emitconstglobals 0/9
 emitcopy 0/2
 emitcopyat 0/6
-emitdeclares 0/131
+emitdeclares 0/132
 emitdeferrun 0/24
 emitdeferrunner 0/15
 emitexittarget 0/3
@@ -326,6 +335,7 @@ fieldcount 0/5
 fieldnameindenoter 0/5
 fieldofopenrecord 0/7
 fieldsat 0/4
+filethere 0/6
 fillsowndescriptor 0/4
 findfield 0/7
 findfieldin 0/9
@@ -365,6 +375,7 @@ heapheader 0/16
 holdsfile 0/10
 imof 0/4
 importedsymbol 5/14
+importindex 0/4
 initconstants 0/5
 initdefers 0/15
 initdynamicvars 0/51
@@ -376,7 +387,7 @@ inquiryofaccess 0/20
 inquiryrootname 0/8
 installkeywords 0/45
 installrequiredinterfaces 0/28
-instantiategeneric 0/117
+instantiategeneric 0/119
 instantiateheading 0/41
 int64toolarge 0/14
 internbindingname 0/11
@@ -492,6 +503,7 @@ newtype 0/40
 nonvarying 3/42
 notbindable 3/29
 notehandlecloser 0/6
+offer 0/38
 opglobal 0/4
 opint 0/2
 opreg 0/4
@@ -507,12 +519,13 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/104
+parseargs 10/123
 parsearraytype 0/17
 parseblock 0/39
 parseboundident 1/12
 parsecase 0/38
 parsecaselabel 0/8
+parsecomponent 0/22
 parsecomponentvalue 0/3
 parsecompound 0/16
 parseconfarrayschema 1/54
@@ -530,18 +543,18 @@ parseif 0/11
 parseimportpart 0/58
 parselabel 0/16
 parselabelpart 0/6
-parsemainprogram 0/29
-parsemodule 0/67
+parsemainprogram 0/31
+parsemodule 0/71
 parsemoduleblock 0/16
 parsemoduleparts 0/28
 parsenamelist 1/22
 parsepointertypeargs 0/11
 parseprimary 2/115
-parseprocheading 0/44
+parseprocheading 0/48
 parseprocheadingonly 0/3
 parseprocorfunc 0/19
 parseprocparam 0/23
-parseprogram 0/30
+parseprogram 0/32
 parsequalifiedname 0/12
 parseread 0/14
 parserecordtype 0/15
@@ -597,7 +610,10 @@ putslottype 0/4
 putstoragetypeat 1/4
 putstructat 0/12
 reaches 0/6
-readtranslatedcomponents 0/30
+readimportsin 2/15
+readone 0/41
+readresolvedcomponents 0/7
+readtranslatedcomponents 0/6
 realtoolarge 1/32
 recordcomponentof 0/14
 recordgenericbody 0/6
@@ -610,7 +626,7 @@ reof 0/4
 repeateddisc 1/7
 requirearg 0/9
 requiredfunc 0/2
-requiredfuncwide 0/154
+requiredfuncwide 0/166
 requiredtype 0/6
 reservedforeignname 4/16
 resolvearray 0/25
@@ -619,6 +635,7 @@ resolvefile 1/25
 resolvegotos 3/79
 resolvehandle 0/14
 resolveinquiry 1/41
+resolvename 0/12
 resolveoptional 0/20
 resolvependingpointers 0/26
 resolvepointer 0/28
@@ -650,6 +667,7 @@ setuniverse 0/21
 setvaluetypeof 0/13
 skiptriviaandcomments 0/22
 sliceof 0/4
+sourcedir 0/5
 span 0/5
 stampfield 0/16
 standardfileref 0/18
@@ -666,7 +684,10 @@ stringofcapacity 1/23
 stringtype 0/10
 stringvalueformal 0/1
 striswide 0/9
+suppliedby 0/9
 suppliersof 0/23
+symhead 0/1
+symtail 0/3
 tag 0/28
 tagfieldat 0/4
 tagtypeat 0/4
@@ -684,7 +705,7 @@ typeargument 0/6
 typeend 0/4
 typelength 0/1
 underlying 0/1
-usage 0/39
+usage 0/47
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/12
@@ -701,7 +722,7 @@ writekwword 0/3
 writelabelwhat 1/5
 writenocopyreason 0/3
 writeoperator 1/16
-writeopname 3/21
+writeopname 5/21
 writeordinalname 1/25
 writepool 0/2
 writepoolir 0/2

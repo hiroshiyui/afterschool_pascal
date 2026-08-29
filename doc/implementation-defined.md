@@ -157,6 +157,34 @@ component. The consequence a user sees is that a heading's own errors are
 reported again in each component that imports it, and that nothing detects a
 component whose object is older than its heading.
 
+**A component may also be found rather than named** (ADR-0244). An `import`
+naming an interface no `--import` supplied is looked for as
+`<directory>/<interface name>.pas`, with the name folded as §6.1.2 folds every
+identifier, in three places and in this order: the directory the source being
+translated is in, each `--import-path <directory>` in the order written, and
+each entry of the environment variable `AFTERSCHOOL_PASCAL_PATH`, which holds
+directories separated by `:`. An empty entry is skipped rather than taken for
+the working directory. The first directory holding the file wins, and the
+search is transitive — a component found this way has its own imports resolved
+before it, which is what makes the list an activation order for §6.2.3.6.
+
+Three things about it are this processor's and are not obligations of the
+standard. The file is named after the **interface** and not the module, an
+import writing an interface name and nothing else; a module exporting an
+interface under another name is therefore reachable by `--import` and not by
+the search path. A name the search does not find is not an error in itself —
+§6.11.3 reports it as an interface nothing supplies, which is the diagnostic a
+program that meant to pass `--import` wants. And the search path is bounded at
+32 directories, reported rather than silently shortened, as every other bound
+here is; a single directory longer than 255 characters is refused for the same
+reason.
+
+**Resolution finds an interface and not an object.** `--dump-imports` writes
+the components a translation read, one to a line in activation order, so the
+program that assembles and links — `tools/pascalcc` here — can translate them.
+That flag is the whole of the interface between the two halves, and it exists
+so that nothing outside the compiler has to read Pascal to work the list out.
+
 ### 2.6 How a program terminates
 
 Neither standard models a process exit status, so nothing here is required and

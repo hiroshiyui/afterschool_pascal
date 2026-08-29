@@ -70,6 +70,38 @@ program Compile(output,
 
 import ApTypes; ApFront;
 
+const
+  { How many directories an import name may be looked for in (ADR-0244). The
+    source's own directory is the first and is always there, so this is that
+    one plus the --import-path flags plus the AFTERSCHOOL_PASCAL_PATH entries.
+
+    It is *not* derived from argMax the way maxImports is, and the reason is
+    worth writing down: a --import-path costs two words of the command line
+    and shares the budget ADR-0235 sized for imports, but the environment
+    variable costs none at all -- so the flag is the fallback and the variable
+    is the route that scales. Going over is reported here rather than
+    silently dropping a directory (ADR-0110). }
+  maxPaths = 32;
+  { The capacity AFTERSCHOOL_PASCAL_PATH is read into. Not nameStr, which is
+    255 and is the bound on one *path*: a list of them is longer by however
+    many there are, and ADR-0123 makes a value that does not fit the capacity
+    an error -- so reading a list into a name-sized string would turn a long
+    variable into a trap rather than a diagnostic. }
+  envMax = 8192;
+
+type
+  { What getenv answers, or nothing. A C pointer that may be null is an
+    optional (ADR-0123), and the characters are copied at the call site. }
+  envText = string(envMax);
+  optEnvText = ?envText;
+
+{ The one foreign name this compiler binds (ADR-0244). It is ISO C, it is
+  where every operating system keeps what a user configured, and there is no
+  other way for a program to be told where it was installed: a
+  program-parameter is a *file* (6.5.1), and a compiler that must be told its
+  library path on every command line has not been installed anywhere. }
+function ExtGetenv(name: string): optEnvText; external 'getenv';
+
 var
   { The command line. ISO 7185 gives a program no access to it beyond its
     program-parameters, and those are files -- which is what made this compiler
@@ -129,6 +161,28 @@ var
   { The command line, once read. }
   srcName, outName: nameStr;
   importCount: integer;
+  { Where an `import` name is looked for when no --import supplied it
+    (ADR-0244). Three sources, in this order: the directory the source being
+    compiled is in, each --import-path in the order written, and each entry of
+    AFTERSCHOOL_PASCAL_PATH. The first is what makes a checkout work with no
+    configuration at all; the third is Turbo Pascal's unit directories by
+    another name, and is why this compiler reads an environment variable at
+    all -- a compiler that can be put anywhere has to be *told* where its
+    library went, and a flag alone would mean telling it on every line.
+
+    Directories only. A name resolves to `<dir>/<folded name>.pas` and to
+    nothing else, which is the convention every module in this tree already
+    follows and the only thing a search can be built on without opening every
+    file in the directory to see what it declares. }
+  pathCount: integer;
+  pathDir: array [1..maxPaths] of nameStr;
+  { Which entries of importName have been read, so a cycle in the import graph
+    is a diagnostic from Sema rather than a compiler that does not return, and
+    so a component named twice is read once. It is indexed the same way
+    importName is, and resolution *appends* to that array -- a name resolved
+    to a file becomes an import like any other, which is what keeps one path
+    through the reader instead of two. }
+  wasRead: array [1..maxImports] of boolean;
   { Whether there is anything to translate, and whether the command line was
     *wrong* -- which are different questions, because -h answers the first with
     no and the second with no as well. }
@@ -152,6 +206,12 @@ var
     is wanted for a source Sema would reject, and --dump-all runs the
     whole pipeline. }
   dumpSymbolsOpt: boolean;
+  { --dump-imports: the program-components this translation read, in
+    activation order, for the build tool that has to translate and link them
+    (ADR-0244). It stops after the parse, as --dump-symbols does, and for the
+    same kind of reason: what a caller wants is the *list*, and a source Sema
+    would reject still has one. }
+  dumpImportsOpt: boolean;
   { --dump-limits: how full the two arrays sized for this compiler's own source
     are (ADR-0148). Not a fifth member of the set above and deliberately not a
     section of --dump-all -- those three sections were what
@@ -359,6 +419,10 @@ begin
   writeln('                  added to it)');
   writeln('  --import <f>    a program-component already translated; its');
   writeln('                  module-headings supply this one''s interfaces');
+  writeln('  --import-path <d>  where to look for an interface no --import');
+  writeln('                  gave: <d>/<name>.pas, folded. The source''s own');
+  writeln('                  directory is searched first and always, and');
+  writeln('                  AFTERSCHOOL_PASCAL_PATH is searched after these');
   writeln('  --dump-tokens   write the token stream and stop');
   writeln('  --dump-ast      write the parse tree and stop');
   writeln('  --dump-sema     write the tree Sema annotated and stop');
@@ -377,6 +441,8 @@ begin
   writeln('                  compiler''s own fixed arrays were left');
   writeln('  --dump-predicates  what each type predicate answers about');
   writeln('                  a type of each kind');
+  writeln('  --dump-imports  write the program-components this source needs,');
+  writeln('                  in the order they must be activated, and stop');
   writeln('  --dump-symbols  write every name this source declares, with');
   writeln('                  its kind, position and nesting, and stop');
   writeln('  --coverage      emit statement counters; the program then');
@@ -407,6 +473,9 @@ begin
   srcName := '';
   outName := '';
   importCount := 0;
+  pathCount := 0;
+  for k := 1 to maxImports do
+    wasRead[k] := false;
   argsOk := true;
   argsBad := false;
   dumpTokensOpt := false;
@@ -417,6 +486,7 @@ begin
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
   dumpSymbolsOpt := false;
+  dumpImportsOpt := false;
   dumpDispatchOpt := false;
   dispatchHead := nil;
   dispatchTail := nil;
@@ -452,6 +522,7 @@ begin
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
+    else if EQ(a, '--dump-imports') then dumpImportsOpt := true
     else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
     else if EQ(a, '--coverage') then covOpt := true
     { ADR-0156. Joined to its flag, unlike -o and --import, which take file
@@ -491,6 +562,23 @@ begin
         writeln('pascalc: -o needs a file name');
         argsOk := false;
         argsBad := true
+      end
+    end
+    else if EQ(a, '--import-path') then begin
+      k := k + 1;
+      if pathCount >= maxPaths then begin
+        writeln('pascalc: more than ', maxPaths:1, ' import directories');
+        argsOk := false;
+        argsBad := true
+      end
+      else if not Arg(k, a) then begin
+        writeln('pascalc: --import-path needs a directory name');
+        argsOk := false;
+        argsBad := true
+      end
+      else begin
+        pathCount := pathCount + 1;
+        pathDir[pathCount] := a
       end
     end
     else if EQ(a, '--import') then begin
@@ -10383,29 +10471,255 @@ begin
   end
 end;
 
-{ 6.13: the already-translated components, taken in before the source. Their
-  module-headings become this translation's interfaces; nothing else of theirs
-  is kept, and nothing of theirs is dumped -- the dumps are what the C++
-  driver writes for the file it was given, and it was given this one.
+{ --- resolving an interface name to a file -------------------------------- }
 
-  What is left behind is the module list, which ParseProgram then clears for
-  the real source, so it is saved across and put back in front afterwards. }
-procedure ReadTranslatedComponents(var head, tail: nodePtr; var count: integer);
-var m: nodePtr; i: integer;
+{ The directory `srcName` is in, with its separator, or nothing where the name
+  has no separator in it at all -- which means the working directory, and an
+  empty prefix is exactly that. Written out rather than taken from a library:
+  this component imports ApTypes and ApFront and nothing else, and PasFS is
+  not available to a compiler that has to build from the seed. }
+function SourceDir: nameStr;
+var k: integer;
 begin
-  head := nil;
-  tail := nil;
-  count := 0;
-  { Nothing to take in is the ordinary case -- every source in the corpus is a
-    whole program-block. Each --import names one component and is bound in
-    turn, where the four-file interface took them concatenated because a
-    program that cannot name a file cannot open several (ADR-0079, ADR-0081).
-    The modules accumulate across them: two components may each supply an
-    interface this one imports. }
-  for i := 1 to importCount do begin
-    curFile := importName[i];
-    curImportIdx := i;
-    BindTo(imports, importName[i]);
+  k := length(srcName);
+  while (k > 0) and (srcName[k] <> '/') do
+    k := k - 1;
+  if k = 0 then SourceDir := ''
+  else SourceDir := substr(srcName, 1, k)
+end;
+
+{ One directory onto the search path, reported rather than dropped when the
+  path is full (ADR-0110) and skipped when it is empty -- an empty entry in
+  AFTERSCHOOL_PASCAL_PATH would name the working directory, which POSIX says
+  of PATH and which is a surprise nobody wants from a compiler. }
+procedure AddPath(d: nameStr);
+begin
+  if length(d) > 0 then
+    if pathCount >= maxPaths then begin
+      writeln('pascalc: more than ', maxPaths:1,
+              ' import directories; ignoring ', d);
+      errorSeen := true
+    end
+    else begin
+      pathCount := pathCount + 1;
+      { With the separator, always. SourceDir keeps the one it found and a
+        directory written by a person has none, so the one place that can put
+        it right is the one place both arrive at. }
+      if d[length(d)] = '/' then pathDir[pathCount] := d
+      else pathDir[pathCount] := d + '/'
+    end
+end;
+
+{ The search path, once, after the command line has been read.
+
+  The order is the decision (ADR-0244): the source's own directory, then the
+  --import-path flags in the order written, then AFTERSCHOOL_PASCAL_PATH. The
+  first is what makes a checkout compile with no configuration -- every
+  component of a program written in one directory finds its neighbours -- and
+  the last is what makes an installed library reachable from anywhere without
+  a flag. A flag between them is how a caller overrides an installed module
+  with one of its own, which is the only reason the middle exists. }
+procedure BuildSearchPath;
+var flags: array [1..maxPaths] of nameStr;
+    n, i, at: integer; got: optEnvText; list: envText; piece: nameStr;
+begin
+  { The flags were pushed onto pathDir as they were read, because the source
+    name may come after them on the command line and the source's directory
+    has to be first. So they are taken off and put back behind it. }
+  n := pathCount;
+  for i := 1 to n do
+    flags[i] := pathDir[i];
+  pathCount := 0;
+  AddPath(SourceDir);
+  for i := 1 to n do
+    AddPath(flags[i]);
+
+  got := ExtGetenv('AFTERSCHOOL_PASCAL_PATH');
+  if got <> nil then begin
+    list := got^;
+    at := 1;
+    piece := '';
+    while at <= length(list) do begin
+      if list[at] = ':' then begin
+        AddPath(piece);
+        piece := ''
+      end
+      else if length(piece) >= strMax then begin
+        { A single directory longer than a name is refused rather than
+          truncated: a truncated path would name a directory that exists often
+          enough to be worse than an error. }
+        writeln('pascalc: a directory in AFTERSCHOOL_PASCAL_PATH is longer ',
+                'than ', strMax:1, ' characters');
+        errorSeen := true;
+        piece := '';
+        while (at <= length(list)) and (list[at] <> ':') do
+          at := at + 1;
+        at := at - 1
+      end
+      else
+        piece := piece + list[at];
+      at := at + 1
+    end;
+    AddPath(piece)
+  end
+end;
+
+{ Is there a file at `path`? 6.7.5.6's bind is the only way a program can ask,
+  and E.16 makes `bound` mean the name designates something that exists
+  (ADR-0172). Nothing is opened: the file variable is bound, asked and left,
+  and the reader binds it again when it has decided to read.
+
+  `imports` is the variable, which is also what ReadOne reads through --
+  binding is not opening, so asking about a dozen candidates costs nothing and
+  disturbs nothing. }
+function FileThere(path: nameStr): boolean;
+var b: BindingType;
+begin
+  b := binding(imports);
+  if b.bound then unbind(imports);
+  b.name := path;
+  bind(imports, b);
+  FileThere := binding(imports).bound;
+  unbind(imports)
+end;
+
+{ The file that supplies the interface spelled at `at`, `len` in the pool, or
+  false where the search path has none.
+
+  **The name is the file name**, folded, with `.pas` after it. That is a
+  convention and it is stated as one: nothing here opens a directory and reads
+  headings to find out what a file declares, because the compiler would then
+  be parsing every Pascal source in every directory on the path to answer one
+  question. Every module in `lib/` is already spelled this way, and Turbo
+  Pascal's unit search was the same rule with a different extension.
+
+  It is the **interface's** name that is looked for, because that is what an
+  import writes. A module may export an interface under another name -- 6.11.1
+  admits it and `tests/extended/components/counter.pas` does it -- and such a
+  component is reachable by `--import` and not by the search path, which is
+  the price of not opening every file to ask. `--import` is what it is for.
+
+  The pooled spelling is the *folded* one, which is what makes this work at
+  all: a program writing `import PasError` and one writing `import paserror`
+  are the same program (6.1.2), and they must find the same file. }
+function ResolveName(at, len: integer; var path: nameStr): boolean;
+var i, k: integer; base, cand: nameStr; found: boolean;
+begin
+  base := '';
+  for k := at to at + len - 1 do
+    base := base + pool[k];
+  found := false;
+  i := 1;
+  while (i <= pathCount) and not found do begin
+    cand := pathDir[i] + base + '.pas';
+    if FileThere(cand) then begin
+      path := cand;
+      found := true
+    end;
+    i := i + 1
+  end;
+  ResolveName := found
+end;
+
+{ 6.13: the already-translated components, taken in before the source, and
+  whatever the search path had to add to them.
+
+  Their module-headings become this translation's interfaces; nothing else of
+  theirs is kept, and nothing of theirs is dumped -- the dumps are what this
+  driver writes for the file it was given, and it was given the other one.
+
+  **A component is read after everything it imports** (ADR-0244), which is
+  what makes the list an activation order: 6.2.3.6 commences a supplying
+  module before the one that imports it, and Sema hands CodeGen this list in
+  the order the activations must happen. So ReadOne parses its file, resolves
+  what that file imports, reads those *first*, and appends its own modules
+  after them. Post-order, and the recursion is the whole of the ordering. }
+
+{ Is the interface spelled at (at, len) exported by a module in `list`?
+
+  The **interface** and not the module, and the two are different names:
+  6.11.1 lets `module counter` export `counting`, and 6.2.2.2 makes each
+  interface a region of its own -- one module may export several. So an import
+  names an interface, and asking a module for its own spelling would send the
+  search after a file that supplies something already in hand.
+  `tests/extended/components/counter.pas` is the case that is not the same
+  word. }
+function SuppliedBy(list: nodePtr; at, len: integer): boolean;
+var m, part: nodePtr; got: boolean;
+begin
+  got := false;
+  m := list;
+  while m <> nil do begin
+    part := m^.mdExports;
+    while part <> nil do begin
+      if PoolSame(part^.epAt, part^.epLen, at, len) then got := true;
+      part := part^.next
+    end;
+    m := m^.next
+  end;
+  SuppliedBy := got
+end;
+
+{ Where `path` sits in importName, or 0. A file resolved twice -- two modules
+  importing a third -- is read once, and a file the command line already named
+  is not read a second time under another name. }
+function ImportIndex(path: nameStr): integer;
+var i, at: integer;
+begin
+  at := 0;
+  for i := 1 to importCount do
+    if EQ(importName[i], path) then at := i;
+  ImportIndex := at
+end;
+
+procedure ReadOne(idx: integer; var head, tail: nodePtr;
+                  var count: integer); forward;
+
+{ Everything `blk` imports that nothing has supplied yet, read before whatever
+  is importing it. `own` is the module list of the file `blk` belongs to: a
+  file declaring two modules where the second imports the first supplies its
+  own name and must not go looking for a file. }
+procedure ReadImportsIn(blk, own: nodePtr; var head, tail: nodePtr;
+                        var count: integer);
+var spec: nodePtr; path: nameStr; at: integer;
+begin
+  if blk <> nil then begin
+    spec := blk^.blImports;
+    while spec <> nil do begin
+      if not (SuppliedBy(head, spec^.isAt, spec^.isLen)
+              or SuppliedBy(own, spec^.isAt, spec^.isLen)) then
+        if ResolveName(spec^.isAt, spec^.isLen, path) then begin
+          at := ImportIndex(path);
+          if at = 0 then
+            if importCount >= maxImports then begin
+              ErrorAt(spec^.line, spec^.col);
+              writeln('more than ', maxImports:1,
+                      ' program-components in one translation')
+            end
+            else begin
+              importCount := importCount + 1;
+              importName[importCount] := path;
+              at := importCount
+            end;
+          if at > 0 then ReadOne(at, head, tail, count)
+        end;
+        { A name the search path has no file for is left alone. Sema reports
+          it as an interface nothing supplies, which is the diagnostic a
+          program that meant to pass --import wants to see, and it names the
+          interface rather than a file nobody wrote. }
+      spec := spec^.next
+    end
+  end
+end;
+
+procedure ReadOne;
+var mine, mineTail, m: nodePtr; sawProgram: boolean;
+begin
+  if not wasRead[idx] then begin
+    wasRead[idx] := true;
+    curFile := importName[idx];
+    curImportIdx := idx;
+    BindTo(imports, importName[idx]);
     reset(imports);
     readingImports := true;
     { Appended after whatever the previous components left. A generic routine
@@ -10415,30 +10729,115 @@ begin
       that had been overwritten by the next source. }
     pos := tokCount + 1;
     Tokenize;
+    mine := nil;
+    mineTail := nil;
+    sawProgram := false;
     if not errorSeen then begin
-      ParseProgram;
+      ParseComponent(mine, mineTail, sawProgram);
       if not errorSeen then
-        if progBlock <> nil then begin
+        if sawProgram then begin
           ErrorAt(1, 1);
-          writeln('an already-translated component may not declare a program')
-        end
-        else begin
-          if head = nil then head := progModules
-          else tail^.next := progModules;
-          if progModules <> nil then tail := progModuleTail;
-          m := progModules;
-          while m <> nil do begin
-            m^.mdElsewhere := true;
-            count := count + 1;
-            m := m^.next
-          end
+          writeln('an already-translated component may not declare a program');
+          mine := nil;
+          mineTail := nil
         end
     end;
     readingImports := false;
     curFile := srcName;
     curImportIdx := 0;
     depth := 0;
-    aborted := false
+    aborted := false;
+
+    { What this component imports, before this component. }
+    m := mine;
+    while m <> nil do begin
+      ReadImportsIn(m^.mdHeading, mine, head, tail, count);
+      ReadImportsIn(m^.mdBlock, mine, head, tail, count);
+      m := m^.next
+    end;
+
+    m := mine;
+    while m <> nil do begin
+      m^.mdElsewhere := true;
+      count := count + 1;
+      m := m^.next
+    end;
+    if mine <> nil then
+      if head = nil then begin
+        head := mine;
+        tail := mineTail
+      end
+      else begin
+        tail^.next := mine;
+        tail := mineTail
+      end
+  end
+end;
+
+{ Every program-component this translation read, in the order their
+  activations must commence -- one to a line, behind the word `component`
+  (ADR-0244).
+
+  It is `--dump-imports`, and it exists because **resolving a name gives an
+  interface and not an object**. The compiler reads a module's heading to
+  check the program; something still has to translate that module and link the
+  result, and until this there was no way for a build tool to learn what the
+  compiler had found without reading Pascal itself -- which is the mistake
+  ADR-0229, ADR-0230 and ADR-0239 each moved something off. `tools/pascalcc`
+  is the caller, exactly as `lsp/pasls.pas` is `--dump-symbols`'s.
+
+  The order is the module list's, which is dependency order, and a file
+  declaring several modules is written once. The paths are the ones the
+  compiler opened, so a relative `--import-path` yields a relative path and a
+  caller in another directory gets what it can use. }
+procedure DumpComponentList(mods: nodePtr);
+var m: nodePtr; i, last: integer; seen: array [1..maxImports] of boolean;
+begin
+  for i := 1 to maxImports do
+    seen[i] := false;
+  m := mods;
+  while m <> nil do begin
+    last := m^.mdFileIdx;
+    if (last >= 1) and (last <= importCount) then
+      if not seen[last] then begin
+        seen[last] := true;
+        writeln('component ', importName[last])
+      end;
+    m := m^.next
+  end
+end;
+
+{ The components the *command line* named, in the order it named them.
+  Nothing to take in is the ordinary case -- every source in the corpus is a
+  whole program-block. Each --import names one and is bound in turn, where the
+  four-file interface took them concatenated because a program that cannot
+  name a file cannot open several (ADR-0079, ADR-0081). }
+procedure ReadTranslatedComponents(var head, tail: nodePtr;
+                                   var count: integer);
+var i, named: integer;
+begin
+  head := nil;
+  tail := nil;
+  count := 0;
+  named := importCount;
+  for i := 1 to named do
+    ReadOne(i, head, tail, count)
+end;
+
+{ ...and the ones the *source* turned out to need, which cannot be known until
+  it has been parsed. Called after ParseProgram and before Sema, with the
+  source's own modules as what it already supplies. }
+procedure ReadResolvedComponents(var head, tail: nodePtr;
+                                 var count: integer);
+var m, own: nodePtr;
+begin
+  own := progModules;
+  ReadImportsIn(progBlock, own, head, tail, count);
+  m := own;
+  while m <> nil do begin
+    ReadImportsIn(m^.mdHeading, own, head, tail, count);
+    ReadImportsIn(m^.mdBlock, own, head, tail, count);
+    m := m^.next
   end
 end;
 
@@ -10944,8 +11343,7 @@ begin
     the pool as the lexer alone had left it and call that the answer. }
   whole := dumpAllOpt or dumpLimitsOpt or dumpLayoutOpt or dumpPredsOpt or
            dumpDispatchOpt;
-  { Before anything reads a token, and before the components are read: the
-    standard decides the lexis, so it has to be settled first (ADR-0166). }
+  BuildSearchPath;
   ReadTranslatedComponents(earlier, earlierTail, earlierCount);
 
   { --- lex ---------------------------------------------------------------- }
@@ -10973,6 +11371,13 @@ begin
       built from tokens that were never valid. }
     if not errorSeen then begin
       ParseProgram;
+      { What the source imports is knowable only now, so the search path is
+        walked here and whatever it finds joins the components the command
+        line named (ADR-0244). After ParseProgram and before the tree is
+        touched: reading a component parses one, and ParseComponent is what
+        keeps that from overwriting the answer just obtained. }
+      if not errorSeen then
+        ReadResolvedComponents(earlier, earlierTail, earlierCount);
       { In front of this component's own modules, because 6.2.2.9 puts a
         module-heading before everything that imports its interface and a
         separately translated one is earlier still. }
@@ -10990,9 +11395,11 @@ begin
         economy: an outline is what an editor draws while the file is *wrong*,
         so every question Sema could answer is one that would take the answer
         away at the moment a reader wants it (ADR-0239). }
-      if (not errorSeen) and dumpSymbolsOpt then DumpSymbols
+      if (not errorSeen) and dumpSymbolsOpt then DumpSymbols;
+      { After the resolution above, which is where the list comes from. }
+      if (not errorSeen) and dumpImportsOpt then DumpComponentList(earlier)
     end;
-    go := not ((dumpAstOpt or dumpSymbolsOpt) and not whole)
+    go := not ((dumpAstOpt or dumpSymbolsOpt or dumpImportsOpt) and not whole)
   end;
 
   { --- check -------------------------------------------------------------- }

@@ -154,6 +154,38 @@ if [[ -f $components_file ]]; then
   done <"$components_file"
 fi
 
+# ADR-0244's search path, when the case has one: name.importpath lists
+# directories, one per line, relative to the .pas's own directory. It is the
+# other half of name.components and the two are deliberately different
+# questions -- .components names the files and this names the *places*, so a
+# case with one is asserting that the compiler found what it was not told.
+#
+# The harness hands the flag to pascalcc, which hands it to pascalc and then
+# translates and links whatever the compiler reports having resolved. Nothing
+# here reads a heading; the compiler is asked.
+importpath_file="${source_file%.pas}.importpath"
+paths=()
+if [[ -f $importpath_file ]]; then
+  while IFS= read -r line; do
+    [[ -n $line ]] || continue
+    paths+=(--import-path "$(dirname "$source_file")/$line")
+  done <"$importpath_file"
+fi
+
+# ...and the same path as an *environment*: name.importenv holds one line, the
+# value of AFTERSCHOOL_PASCAL_PATH, with <dir> standing for the case's own
+# directory. It is a second sidecar rather than a second line of the first
+# because they are different claims -- a flag is what one command line says and
+# a variable is what a machine was configured with, and only the second can
+# hold an empty entry, a trailing separator or a directory nobody can name on a
+# command line without quoting it.
+importenv_file="${source_file%.pas}.importenv"
+import_env=()
+if [[ -f $importenv_file ]]; then
+  import_env=("AFTERSCHOOL_PASCAL_PATH=$(sed -e "s|<dir>|$(dirname "$source_file")|g" \
+                                             "$importenv_file" | head -1)")
+fi
+
 # Which optimisation level to compile at, most specific first:
 #
 #   name.opt                  this case pins one, because the default hides
@@ -172,8 +204,9 @@ elif [[ -n ${AFTERSCHOOL_PASCAL_OPT:-} ]]; then
   optflag=("$AFTERSCHOOL_PASCAL_OPT")
 fi
 
-"$pascalc" "${optflag[@]+"${optflag[@]}"}" "$source_file" \
-  "${imports[@]+"${imports[@]}"}" \
+env "${import_env[@]+"${import_env[@]}"}" \
+  "$pascalc" "${optflag[@]+"${optflag[@]}"}" "$source_file" \
+  "${imports[@]+"${imports[@]}"}" "${paths[@]+"${paths[@]}"}" \
   "${objects[@]+"${objects[@]}"}" -o "$work/$name" 2>"$work/compile.err"
 compile_status=$?
 

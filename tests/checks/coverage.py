@@ -136,6 +136,21 @@ def corpus(root):
             if not f.exists():
                 continue
             flags = []
+            env = {}
+            # ADR-0244's two sidecars, read the way tests/run_test.sh reads
+            # them. A case with either resolves an import name to a file
+            # *itself*, so the sweep reaches the resolver -- and the second
+            # is an environment rather than a flag, which is the only way the
+            # variable's own parsing is reached at all.
+            paths = f.with_suffix(".importpath")
+            if paths.exists():
+                for rel in paths.read_text().split():
+                    flags += ["--import-path", str(f.parent / rel)]
+            ienv = f.with_suffix(".importenv")
+            if ienv.exists():
+                env["AFTERSCHOOL_PASCAL_PATH"] = (
+                    ienv.read_text().splitlines()[0]
+                    .replace("<dir>", str(f.parent)))
             comps = f.with_suffix(".components")
             if comps.exists():
                 for rel in comps.read_text().split():
@@ -147,7 +162,7 @@ def corpus(root):
                 # first type it cannot see, which reaches no code generator
                 # at all. That is the opposite of why it is in this corpus.
                 flags = components.imports(root, f.name)
-            jobs.append((f, flags))
+            jobs.append((f, flags, env))
 
     # The dump cases carry their own flag, and it is the reason they exist: the
     # dumps are reached by no ordinary case, which is what this harness found.
@@ -175,9 +190,11 @@ def corpus(root):
     # closed for the one harness whose flags this file could mirror -- and the
     # row stays for the shell harnesses that build compilers of their own:
     # irtest.sh, producttest.sh and verify.py are invisible here.
-    for src, flags in list(jobs):
+    for job in list(jobs):
+        src, flags = job[0], job[1]
         if src is not None and not any(f.startswith("--dump") for f in flags):
-            jobs.append((src, flags + ["--dump-all"]))
+            jobs.append((src, flags + ["--dump-all"],
+                         job[2] if len(job) > 2 else {}))
 
     # Two invocations that compile nothing. They are here because this harness
     # can only run what it can enumerate, and the shell harnesses -- irtest.sh,
@@ -241,7 +258,18 @@ def corpus(root):
     jobs.append((None, [hello, "-o"]))       # -o with nothing after it
     jobs.append((None, [hello, "--import"]))  # --import with nothing after it
     jobs.append((None, [hello, str(root / "tests" / "arith.pas")]))
-    return jobs
+    # ADR-0244's two --import-path error arms, which no case can carry: a
+    # search path that is full and a directory longer than a name. Both are
+    # driver messages about a *configuration* and not about a program, so
+    # diagnostic_coverage.py filters them out and only this reaches them.
+    jobs.append((None, [hello] + ["--import-path", "/x"] * 33))
+    jobs.append((None, [hello], {"AFTERSCHOOL_PASCAL_PATH": "/" + "d" * 300}))
+    jobs.append((None, [hello],
+                 {"AFTERSCHOOL_PASCAL_PATH": ":".join(["/x"] * 40)}))
+
+    # Every job is (source, flags, environment), and most carry no environment
+    # of their own -- filled in here rather than at 40 call sites.
+    return [(j[0], j[1], j[2] if len(j) > 2 else {}) for j in jobs]
 
 
 def build_instrumented(root, build, work):
@@ -351,9 +379,9 @@ def sweep(exe, jobs, work):
     Compile failures are expected and ignored: a third of the corpus exists to
     be rejected, and those runs reach error paths nothing else does."""
     def one(idx_job):
-        idx, (src, flags) = idx_job
+        idx, (src, flags, extra) = idx_job
         out = work / f"hit{idx}.txt"
-        env = dict(os.environ, PASCOV_OUT=str(out))
+        env = dict(os.environ, PASCOV_OUT=str(out), **extra)
         if idx == 0:
             env["PASCOV_PCS"] = str(work / "pcs.txt")
         # A job with no source carries its *complete* argument list, so that a

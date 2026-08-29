@@ -36,6 +36,11 @@
 #     --target=<t>    the machine to compile for; handed to both halves, so
 #                     clang needs a cross toolchain and a --sysroot for it
 #     --import <f>    a program-component already translated
+#     --import-path <d>  where `pascalc` looks for an interface no --import
+#                     gave. Whatever it finds is translated and linked here,
+#                     which is the half of resolution a compiler cannot do:
+#                     AFTERSCHOOL_PASCAL_PATH is searched too, and needs no
+#                     flag at all
 #     --coverage      emit statement counters; the compiled program then
 #                     writes the lines it ran to $PASCOV_LINES
 #     --dump-<what>   any of `pascalc`'s dumps. The answer is its standard
@@ -62,10 +67,40 @@ set -u
 self=$(cd "$(dirname "$0")" && pwd)
 root=$(dirname "$self")
 
-# Where the compiler and the runtime are. Both are overridable so a build tree
-# with another name, or an installed copy, can be driven by the same script.
-pascalc=${PASCALC:-$root/build/bin/pascalc}
-runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-$root/build/lib}
+# **Where everything is, when this has been installed somewhere** (ADR-0244).
+# Three places are looked at and the order is the decision: what the
+# environment names, then what is beside this script, then the build tree this
+# script sits in. A checkout is the third and is unaffected -- `tools/pascalc`
+# is not a file -- and an installed copy at <prefix>/bin finds its compiler
+# next to itself with nothing configured, which is what makes `pascalcc` on
+# PATH enough.
+#
+# The compiler is *not* looked for on PATH itself. A pascalcc and a pascalc
+# from different releases would then be paired by whatever order a user's PATH
+# happens to have, and the pairing is the one thing this script is: it hands
+# the IR of one to the clang of the other.
+pascalc=${PASCALC:-}
+if [[ -z $pascalc ]]; then
+  if [[ -x $self/pascalc ]]; then pascalc=$self/pascalc
+  else pascalc=$root/build/bin/pascalc
+  fi
+fi
+runtime=${AFTERSCHOOL_PASCAL_RUNTIME:-}
+if [[ -z $runtime ]]; then
+  if [[ -f $root/lib/libpasrt.a ]]; then runtime=$root/lib
+  else runtime=$root/build/lib
+  fi
+fi
+# ...and where the library went. Only when nothing was said: a user who sets
+# AFTERSCHOOL_PASCAL_PATH is describing their whole search path, and appending
+# to it would make an installed module shadow one of theirs by a rule they
+# never wrote. Two directories because the tree has two, and lib/dialect/ is
+# separate for a reason that is now documentary (ADR-0121 decision 5) rather
+# than a second language.
+installed_lib=
+if [[ -z ${AFTERSCHOOL_PASCAL_PATH:-} && -d $root/lib/afterschool ]]; then
+  installed_lib=$root/lib/afterschool
+fi
 
 die() { echo "pascalcc: $*" >&2; exit 1; }
 
@@ -89,6 +124,7 @@ source_file=
 covflag=()
 dumps=()
 imports=()
+paths=()
 objects=()
 
 while [[ $# -gt 0 ]]; do
@@ -107,6 +143,8 @@ while [[ $# -gt 0 ]]; do
     --target=*)    target=$1; shift ;;
     --import)      [[ $# -ge 2 ]] || die "--import needs a file name"
                    imports+=(--import "$2"); shift 2 ;;
+    --import-path) [[ $# -ge 2 ]] || die "--import-path needs a directory"
+                   paths+=(--import-path "$2"); shift 2 ;;
     --coverage)    covflag=(--coverage); shift ;;
     # ADR-0239's --dump-symbols and the seven flags beside it. Passed through
     # to `pascalc` and nothing else happens: see below.
@@ -122,6 +160,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n $source_file ]] || die "no input file"
+
+# The installed library goes on the end, after whatever --import-path the
+# caller wrote: the search takes the first directory holding the file, so a
+# caller's own copy of a module has to be looked at first or the flag would
+# mean nothing where it matters most.
+if [[ -n $installed_lib ]]; then
+  paths+=(--import-path "$installed_lib" --import-path "$installed_lib/dialect")
+fi
 [[ -x $pascalc ]] || die "$pascalc is not executable -- was it built?"
 
 # A --dump flag asks the *compiler* a question and the answer is its standard
@@ -138,13 +184,66 @@ done
 if [[ ${#dumps[@]} -gt 0 ]]; then
   "$pascalc" ${target:+"$target"} "${dumps[@]}" \
     "${covflag[@]+"${covflag[@]}"}" "$source_file" \
-    "${imports[@]+"${imports[@]}"}" -o "${out:-/dev/null}"
+    "${imports[@]+"${imports[@]}"}" "${paths[@]+"${paths[@]}"}" \
+    -o "${out:-/dev/null}"
   exit $?
 fi
 
 base=$(basename "${source_file%.pas}")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
+
+# **Resolution gives an interface; this gives an object** (ADR-0244). `pascalc`
+# finds the file that supplies an `import` name and reads its heading, and
+# something still has to translate that file and link the result -- which is
+# this script, because it is the half of the compiler that links.
+#
+# `--dump-imports` is how it is told, in the compiler's own words and in
+# activation order. Reading the Pascal here to work it out is the mistake
+# ADR-0229, ADR-0230 and ADR-0239 each moved something off, and it would be a
+# worse one in a shell script.
+#
+# The `grep` is not a reader of Pascal and must not become one: it is a
+# *necessary condition* asked cheaply, since a source with no `import` anywhere
+# in it has no import-part and nothing to resolve. A false positive -- the word
+# in a comment or a string -- costs one parse and nothing else, and a false
+# negative is impossible. Without it every case in a 700-program corpus would
+# pay for a question about a program that imports nothing.
+resolved=()
+if grep -qiw import "$source_file" 2>/dev/null; then
+  while IFS= read -r line; do
+    [[ $line == component\ * ]] || continue
+    resolved+=("${line#component }")
+  done < <("$pascalc" ${target:+"$target"} "$source_file" \
+             "${imports[@]+"${imports[@]}"}" "${paths[@]+"${paths[@]}"}" \
+             --dump-imports -o /dev/null 2>/dev/null)
+fi
+
+# Each of them translated and assembled, in the order given -- which is
+# dependency order, so a component's own interfaces are resolved by the
+# compiler the same way the program's were. A component the caller already
+# named with --import is skipped: its object is the caller's to supply, and
+# tests/run_test.sh supplies one.
+n=0
+for c in "${resolved[@]+"${resolved[@]}"}"; do
+  skip=
+  for k in "${imports[@]+"${imports[@]}"}"; do
+    [[ $k == "$c" ]] && skip=yes
+  done
+  [[ -z $skip ]] || continue
+  n=$((n + 1))
+  if ! "$pascalc" ${target:+"$target"} \
+       "${covflag[@]+"${covflag[@]}"}" "$c" \
+       "${paths[@]+"${paths[@]}"}" \
+       -o "$work/c$n.ll" >"$work/c$n.txt" 2>&1; then
+    cat "$work/c$n.txt" >&2
+    die "component '$c' did not translate"
+  fi
+  cat "$work/c$n.txt" >&2
+  clang ${target:+"$target"} -Wno-override-module "$opt" -fPIC -c \
+    "$work/c$n.ll" -o "$work/c$n.o" || die "component '$c' did not assemble"
+  objects+=("$work/c$n.o")
+done
 
 # The IR first. `pascalc` writes its diagnostics to standard *output* -- no
 # standard Pascal program has a second stream -- so they are passed through to
@@ -153,7 +252,7 @@ trap 'rm -rf "$work"' EXIT
 ir=$work/$base.ll
 if ! "$pascalc" ${target:+"$target"} \
      "${covflag[@]+"${covflag[@]}"}" "$source_file" \
-     "${imports[@]+"${imports[@]}"}" \
+     "${imports[@]+"${imports[@]}"}" "${paths[@]+"${paths[@]}"}" \
      -o "$ir" >"$work/diag.txt" 2>&1; then
   cat "$work/diag.txt" >&2
   exit 1
