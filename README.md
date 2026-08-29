@@ -159,6 +159,14 @@ tool asks when it wants a document's outline, and an outline is wanted for a
 file that does not yet compile; the second is what `pascalcc` asks so it knows
 what to translate and link, resolution giving the compiler an interface and not
 an object.
+One stops after **Sema**: `--dump-uses` writes every applied occurrence in the
+source and the defining-point it resolved to — the file, line and column a name
+was declared at, with the kind and the type — which is what a tool asks for
+go-to-definition and for a hover. Unlike the two above it needs the imports,
+because a name from another program-component resolves to nothing without
+them; unlike every other dump it reports what Sema resolved *whether or not
+Sema was happy*, since Sema accumulates its diagnostics rather than stopping,
+and a name is most worth looking up while the file is being edited into shape.
 Four more compile as usual and then answer a question about what was compiled:
 `--dump-limits` writes how full the compiler left its own fixed arrays, which
 is what says how much room a larger program still has; `--dump-layout` writes
@@ -173,6 +181,11 @@ symbol 0 program 1 9 4 main
 symbol 1 enum 3 3 6 colour
 symbol 2 value 3 13 3 red
 symbol 1 procedure 7 11 4 draw
+
+$ pascalc --dump-uses prog.pas -o /dev/null
+file 0 prog.pas
+use 3 13 3 0 3 13 3 const colour
+use 9 3 4 0 7 11 4 procedure ?
 
 $ pascalc --dump-limits big.pas -o /dev/null
 pool 491964 of 1000000

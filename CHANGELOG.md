@@ -41,6 +41,21 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`--dump-uses`**, which writes every applied occurrence in a source and the
+  defining-point it resolved to — the file, line, column and length the name
+  was declared at, with the kind and the type (ADR-0246). It is what a tool
+  asks for go-to-definition and for a hover, and it is the first dump that
+  runs the compiler through Sema: which declaration a name denotes is
+  §6.2.2's scope rules and a parse cannot say. Unlike every other dump it
+  reports what Sema resolved **whether or not Sema was happy**, because Sema
+  accumulates its diagnostics rather than stopping at the first and a name is
+  most worth looking up while the file is still being edited. A `file <index>
+  <path>` table comes first, so a defining-point in another program-component
+  can be named.
+- **The language server answers `textDocument/definition` and
+  `textDocument/hover`** out of that flag, with the imports its diagnostics
+  path already resolves — so a definition crosses a file, which is what the
+  method is worth having for.
 - **An `import` can name no file at all.** An interface no `--import` supplied
   is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
   identifier — in the directory the source is in, then in each

@@ -367,42 +367,66 @@ not a gate. The flag stops after the *parse* on purpose — an outline is what a
 editor draws while the file is wrong — which also means it needs no `--import`,
 so this is the one question about a source that can be asked of the file alone.
 
-**The next method is the one that will decide whether that surface generalises.**
-Hover and go-to-definition want a *type* and a *defining point*, which are
-Sema's and not the parser's — so neither can inherit the sentence above, and
-each will have to say what it does about a file that does not check. Nothing
-here settles it, and the record deliberately does not.
+~~**The next method is the one that will decide whether that surface
+generalises.**~~ **It does, and the two methods turned out to be one**
+(ADR-0246). Hover and go-to-definition want a *type* and a *defining point*,
+which are Sema's and not the parser's — and Sema knows both at the same
+moment, so `--dump-uses` carries them on one line and answers both. The shape
+is `--dump-symbols`'s unchanged: the compiler in Pascal's words, the server
+holding the protocol's table.
+
+**What each had to say about a file that does not check** is the part the
+record above declined to settle, and the answer is the opposite of the
+outline's. `--dump-symbols` stops *before* Sema, so a wrong file still
+outlines; a defining-point cannot do that, so `--dump-uses` is the one dump
+**not guarded by `errorSeen`** and carries on instead. Sema accumulates its
+diagnostics rather than stopping at the first, so a source with three mistakes
+has resolved everything else correctly — and an editor asks where a name is
+declared exactly while the file is being edited into shape. Two answers, one
+requirement, reached from opposite ends of the pipeline.
+
+**It also crosses a file, which is what the method is worth having for.** A
+`file <index> <path>` table heads the dump, the imports come from the same
+`.components` walk the diagnostics use (ADR-0238), and the name a reader does
+not already know is exactly the one declared somewhere else.
 
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Fifteen entries so far, and **nine of them have been acted on** — which is
+Eighteen entries so far, and **twelve of them have been acted on** — which is
 the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
 
 The first two came from the framing alone, before a single protocol message
 had been dispatched. The next two came from the diagnostics, before a server
-existed to send one. **The last seven came from the program itself**, and the
-first of those is the one worth reading before the others: it is a limit that
-looked generous beside a test case and turned out not to be a limit a
-*program* could live inside, and it had to be fixed before the server could be
-compiled at all.
+existed to send one. **Everything after that came from the program itself**,
+and the first of those is the one worth reading before the others: it is a
+limit that looked generous beside a test case and turned out not to be a limit
+a *program* could live inside, and it had to be fixed before the server could
+be compiled at all.
 
 The shape of the whole list is the argument for the chapter. **Five of the
-fifteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
+eighteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
 255-character line, a 16 384-byte capture — and every one of them was chosen by
 counting what the largest thing in the tree needed at the time. The largest
-thing in the tree was a test case. The tenth is the only one that is not a gap
-at all: the protocol asked the text model a question it had been designed to
-refuse, and the answer was already exported. The eleventh came from pointing
-the finished program at the repository it was written in, which is not a thing
-the first ten had needed — and the twelfth and thirteenth came from asking the
-compiler a question no gate had ever asked it. **The fourteenth and fifteenth
-are the pair worth reading last**: one of them changed the language and the
-demand for it turned out not to be this program at all but a library module
-written a year of increments earlier, whose five writers could fail and could
-not say so. A finding this chapter produced was already true everywhere else.
+thing in the tree was a test case. One is not a gap at all: the protocol asked
+the text model a question it had been designed to refuse, and the answer was
+already exported. One came from pointing the finished program at the
+repository it was written in, which is not a thing the earlier ones had needed
+— and two more came from asking the compiler a question no gate had ever asked
+it. **One pair is worth reading last**: one of them changed the language and
+the demand for it turned out not to be this program at all but a library
+module written a year of increments earlier, whose five writers could fail and
+could not say so. A finding this chapter produced was already true everywhere
+else.
+
+**And the last three are all about what the compiler had never been asked.**
+Two are things it did not keep — where a symbol was declared, and where a
+field-identifier is — each thrown away by code that had the answer in its hand
+and no reason to hold it. The third is not a demand on the language at all: it
+is a defect this program shipped and an oracle caught, and it is here because
+of *which* oracle.
 
 **One entry took two records to close and they are not the same kind of
 thing.** *A program cannot make a temporary file, and cannot survive failing
@@ -664,6 +688,43 @@ with it, unfixed and unrecorded.
   not — which is why `range` and `selectionRange` are both the name. That one
   is a real limitation and is open; what would close it is the parser noting
   where a block ends, which nothing has yet needed.
+- **The compiler did not know where a symbol was declared** — answered, and
+  it is the finding that made go-to-definition possible at all (ADR-0246).
+  Every applied occurrence in this compiler resolves to a `symbol`, and a
+  `symbol` could not say where it came from. `Declare` is *handed* a line and
+  a column — for its own "is already declared in this block" message — and
+  threw them away, at the one site every named declaration passes through.
+
+  Nothing had ever wanted them, and the reason is worth keeping: a diagnostic
+  reports where the **mistake** is, and for thirty-six thousand lines of
+  compiler that was the only question anyone asked about a position. A tool
+  asks the opposite one. Three integers on the record and three lines at the
+  site were the whole of it, which is what makes it a finding rather than a
+  feature: the fact was already in the hand of the code that discarded it, and
+  what it cost to keep was nothing.
+
+- **The parse tree records a field-designator's `.` and not its name** —
+  answered, and it is the other half of the extent finding above. A field node
+  is built when the parser sees the point and before it reads the identifier,
+  so the node's own line and column are the point's; whitespace is legal on
+  either side of one, so `col + 1` is a guess and not a derivation. `nkField`
+  carries `fdLine`/`fdCol` now, which is what lets a schema's discriminant be
+  reported at the name a reader is pointing at. The declaration end is still
+  not recorded and that half stays open.
+
+- **A leak with every golden green, and only one oracle here could see it**
+  (ADR-0246). Both new methods began by making a JSON `null` and replacing it
+  where there was an answer, which abandoned one node per successful request —
+  thirteen over two sessions. Every reply was byte-for-byte correct, because
+  what leaked was a value nobody printed.
+
+  It is not a demand on the language and it is here for **which** oracle
+  caught it: `heap-balance` is the one gate in this tree that reads no output
+  at all (ADR-0183), written after two leaks had each been found by a
+  measurement taken once, by hand, and by nothing afterwards. This is the
+  first program to exercise it since, and it failed on the first run. The
+  chapter's own argument, met from the other side: the value of a client large
+  enough to get tired inside is not only what it demands but what it trips.
 
 - **`binding(f).bound` is not a readiness test, and reads exactly like one.**
   `doc/implementation-defined.md` E.16 binds a variable when the external name

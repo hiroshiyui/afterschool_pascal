@@ -109,7 +109,8 @@ in *storage* is invisible there, LLVM being free to hoist an alloca whose
 address does not escape — see ADR-0102 and the two `-O0` cases it added.
 
 `tests/dumps/` is a corpus apart, with its own harness and its own sidecars
-(`foo.dump`, `foo.flags`) — the `--dump` flags write to standard output, so
+(`foo.dump`, `foo.flags`, and since ADR-0246 `foo.components` and
+`foo.status`) — the `--dump` flags write to standard output, so
 what a case there compares is what the *compiler* wrote and not what a program
 did (ADR-0103). **`lsp/` is a second one**, and further out: `lsp/pasls.pas` is
 a language server written in the dialect, built by `lsp/build.sh` into a binary
@@ -119,7 +120,11 @@ the harness and compared byte for byte (ADR-0236). **It speaks two protocols**
 (ADR-0241): the same binary answers MCP over stdio when given `--mcp`, one
 message to a line instead of `Content-Length`, with two tools built on
 `--dump-symbols` and on a compilation. A session says which by a `name.mcp`
-marker. The corpus sweeps reach it
+marker. It answers four questions about a document — the diagnostics, the
+outline (ADR-0239), and go-to-definition and hover, which are one question
+asked twice and come from one `--dump-uses` (ADR-0246) — and the three do not
+cost the same: the outline stops after the parse and needs no `--import`,
+where the other two run Sema and do. The corpus sweeps reach it
 through a second root rather than through the glob: `coverage.py` names it,
 `variant_check.sh` finds it, `build.sh` honours `AFTERSCHOOL_PASCAL_OPT`, and
 `heap-balance` drives `lsp/run.sh` instead of `run_test.sh` — which has to take
@@ -815,7 +820,7 @@ single cost of the dialect decision, and `unicode-conformance` — Unicode's own
 here that nobody in this project wrote.
 
 - The dumps are **opt-in** — `--dump-tokens`, `--dump-ast`, `--dump-sema`,
-  `--dump-all`, `--dump-symbols`, `--dump-imports` — and each stops at the stage it names. They were unconditional
+  `--dump-all`, `--dump-symbols`, `--dump-imports`, `--dump-uses` — and each stops at the stage it names. They were unconditional
   while there was a second binary to compare them against, which is the reason
   ADR-0025 gave for having no mode to select; it expired with stage 0. Each
   section reports what its own stage found and shows its result only when
@@ -831,9 +836,13 @@ here that nobody in this project wrote.
     documented flags, and no check that they did not crash. A dump case
     compares what the *compiler* writes to standard output, so it needs its own
     harness (`tests/dumps/run.sh`): every case under `tests/` compares what the
-    compiled *program* writes. Sidecars are `name.dump` (the golden) and
-    `name.flags` (the flag, `--dump-all` by default); there was a third,
-    `name.std`, and ADR-0232 removed it with the modes.
+    compiled *program* writes. Sidecars are `name.dump` (the golden),
+    `name.flags` (the flag, `--dump-all` by default), `name.components` (an
+    `--import` per line) and `name.status` (an expected exit status, when it
+    is not 0); there was another, `name.std`, and ADR-0232 removed it with the
+    modes. The last two arrived with ADR-0246 and each answers a shape this
+    corpus had never met — a dump with a **cross-file** answer, and a dump of
+    a program the compiler **rejects**.
 - **`--dump-symbols` is where a *tool* asks about a program**, and the decision
   is bigger than the flag (ADR-0239). `--dump-sema` was the only structured
   thing this compiler wrote about a source, and ADR-0085 demoted it from a
@@ -847,8 +856,28 @@ here that nobody in this project wrote.
   means it needs no `--import`; and the name is the **folded** spelling, the
   position and length beside it being how a caller holding the source recovers
   what was typed. `lsp/pasls.pas` is the caller, and the first one here that is
-  not a gate. The surface is one question wide and a second is not designed —
-  hover wants a type, which is Sema's.
+  not a gate.
+- **`--dump-uses` is the second question, and the surface generalised**
+  (ADR-0246). ADR-0239 closed saying *hover wants a type, which is Sema's*,
+  and it turned out to be two questions with one answer: `use <line> <col>
+  <len> <declfile> <declline> <declcol> <decllen> <kind> <type>`, preceded by
+  a `file <index> <path>` table, serves go-to-definition and hover together
+  because Sema knows a defining-point and a type at the same moment. Three
+  things about it are the ones to know. **Sema records a use where it resolves
+  one** — not a walk over the finished tree, which is ADR-0111's counter
+  argument and ADR-0230's dispatch argument met a third time: a hand-written
+  walker over the AST's variant record can miss a node kind in silence and no
+  gate here can see that. **A `symbol` carries its defining-point** now, three
+  integers set in `Declare` from the numbers it already had for its duplicate
+  message; 0 means there is nowhere to go, which is the answer for a required
+  identifier. And **it is the one dump not guarded by `errorSeen`** — Sema
+  accumulates rather than stopping, so a file with three mistakes has resolved
+  everything else, and an editor asks where a name is declared exactly while
+  the file does not compile. The outline reaches that by stopping *before*
+  Sema; a defining-point cannot, so it carries on instead. It needs the
+  `--import`s, unlike the two flags above. What it does not answer is a field
+  selection, an interface's own name and a name inside a schema's body, and
+  each has a reason in the record.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`

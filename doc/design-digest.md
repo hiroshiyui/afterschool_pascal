@@ -3697,6 +3697,32 @@ nothing else. What it would lose, mechanism by mechanism:
   and not `Capture`, because `CaptureMax` is 16384 and the outline of
   `selfhost/apfront.pas` is 51 192 bytes — an outline is a list of lines, so
   the bound is removed rather than raised.
+- **A defining-point and a type come from one dump** (ADR-0246), which is
+  `textDocument/definition` and `textDocument/hover` at once: what the name
+  under a position denotes and where it was written are the same question
+  asked twice, and Sema knows both at the same moment. `--dump-uses` writes
+  `use <line> <col> <len> <declfile> <declline> <declcol> <decllen> <kind>
+  <type>`, preceded by a `file <index> <path>` table so a defining-point in
+  an `--import` can be named. Three things about it are load-bearing. **Sema
+  records a use where it resolves one** rather than a walk visiting the
+  finished tree — ADR-0111's argument about the arena counter and ADR-0230's
+  about the dispatch dump, met a third time: a walker over a variant record
+  can miss a node kind in silence and `kind-exhaustive` cannot see a
+  hand-written one. **A `symbol` now carries its defining-point**, three
+  integers set in `Declare` from the line and column it was already handed for
+  its duplicate message; zero means there is nowhere to go, which is the true
+  answer for a required identifier (§6.2.2.10). And **it is the one dump not
+  guarded by `errorSeen`** — Sema accumulates rather than stopping, so a
+  source with three mistakes has resolved everything else, and an editor asks
+  where a name is declared exactly while the file does not compile. The
+  outline reaches that by stopping *before* Sema and a defining-point cannot,
+  so it carries on instead. What it does not answer: a field selection (a
+  field is not a symbol), an interface's own name (`ifaceRec` records no
+  position) and a name inside a schema's body (§6.4.7 resolves it where the
+  type is *written*, so its line and column belong to another file). The
+  defect it shipped with was a JSON `null` made and replaced on every
+  successful reply — thirteen leaked nodes, every golden green, found by
+  `heap-balance` and by nothing else.
 - **The scratch name carries the server's process id** (ADR-0242), which is
   what keeps two servers on one machine out of each other's file. It is not
   `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file
