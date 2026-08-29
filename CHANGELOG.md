@@ -26,6 +26,20 @@ appears below in the release where it still existed.
 
 ### Added
 
+- **`pascalc --dump-symbols`**, which writes every name a source declares —
+  its kind, the position of the name, its length and how deeply it nests, one
+  to a line (ADR-0239). It stops after the parse rather than after Sema, so it
+  answers for a source the checker would reject and needs no `--import`, and it
+  answers in Pascal's words rather than any protocol's numbers.
+  `tools/pascalcc` passes any `--dump-` flag through and does nothing else with
+  it; before this it refused them, on a stream a caller reading the answer was
+  not reading.
+- **The language server answers `textDocument/documentSymbol`** out of that
+  flag (ADR-0239) — an editor's outline, with the declarations nested as they
+  were written and the names carrying the case the *programmer* typed, which
+  the server recovers from the document since the compiler's string pool holds
+  only the folded spelling. The outline of a document that no longer compiles
+  is unchanged, which is the point of stopping at the parse.
 - **The language server finds a file's imports** by reading `.components`
   (ADR-0238). Before this the compiler was handed a module on its own and
   reported every name it imported as undeclared — 48 diagnostics for one

@@ -3485,6 +3485,22 @@ nothing else. What it would lose, mechanism by mechanism:
   Pascal programs on this runtime whose allocations are not the server's.
   Without the second, the first measurement read 16 324 outstanding variables
   instead of 0.
+- **The outline comes from the compiler** (ADR-0239), which is the decision
+  behind `textDocument/documentSymbol` and the one that outlived the method:
+  the only structured thing this compiler wrote about a program was
+  `--dump-sema`, demoted by ADR-0085 from a specification to a debugging aid,
+  so a server reading it would be a second reader of Pascal-shaped output
+  living outside the compiler. `--dump-symbols` answers instead —
+  `symbol <depth> <kind> <line> <col> <len> <name>`, in Pascal's words rather
+  than LSP's numbers, the server holding the protocol's table. It stops after
+  the **parse**, which is why an outline survives a file Sema would reject and
+  why no `--import` is passed for one. The names are the *folded* spellings, so
+  the server slices the written one out of the document at the position given;
+  `range` and `selectionRange` are both the name's extent, the parse tree
+  recording where a declaration begins and never where it ends. `CaptureLines`
+  and not `Capture`, because `CaptureMax` is 16384 and the outline of
+  `selfhost/apfront.pas` is 51 192 bytes — an outline is a list of lines, so
+  the bound is removed rather than raised.
 - **The compile is synchronous**, so a `didChange` arriving mid-compile is
   still the sentence no program here has said — the roadmap's concurrency row
   keeps its candidate and does not move.

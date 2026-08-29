@@ -337,7 +337,7 @@ not what a compiled program wrote:
 
 * **`tests/dumps/`** compares what the *compiler* writes to standard output
   under `--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all`,
-  `--dump-layout` and `--dump-predicates`. Sidecars
+  `--dump-layout`, `--dump-predicates` and `--dump-symbols`. Sidecars
   are `name.dump` (the golden) and `name.flags` (which flag, `--dump-all` by
   default). There was a third, `name.std`, pinning the standard against a
   compiler default that had moved once; ADR-0232 removed the modes and the

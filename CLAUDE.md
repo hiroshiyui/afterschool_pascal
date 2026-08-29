@@ -774,7 +774,7 @@ single cost of the dialect decision, and `unicode-conformance` — Unicode's own
 here that nobody in this project wrote.
 
 - The dumps are **opt-in** — `--dump-tokens`, `--dump-ast`, `--dump-sema`,
-  `--dump-all` — and each stops at the stage it names. They were unconditional
+  `--dump-all`, `--dump-symbols` — and each stops at the stage it names. They were unconditional
   while there was a second binary to compare them against, which is the reason
   ADR-0025 gave for having no mode to select; it expired with stage 0. Each
   section reports what its own stage found and shows its result only when
@@ -790,8 +790,24 @@ here that nobody in this project wrote.
     documented flags, and no check that they did not crash. A dump case
     compares what the *compiler* writes to standard output, so it needs its own
     harness (`tests/dumps/run.sh`): every case under `tests/` compares what the
-    compiled *program* writes. Sidecars are `name.dump` (the golden),
-    `name.flags` (the flag, `--dump-all` by default) and `name.std`.
+    compiled *program* writes. Sidecars are `name.dump` (the golden) and
+    `name.flags` (the flag, `--dump-all` by default); there was a third,
+    `name.std`, and ADR-0232 removed it with the modes.
+- **`--dump-symbols` is where a *tool* asks about a program**, and the decision
+  is bigger than the flag (ADR-0239). `--dump-sema` was the only structured
+  thing this compiler wrote about a source, and ADR-0085 demoted it from a
+  specification to a debugging aid the day there was no second front end to
+  diff it against — so a caller reading it would be a second reader of
+  Pascal-shaped output outside the compiler, which is the shape that broke
+  `foreign-reserved` and that ADR-0229 and ADR-0230 moved `kind-exhaustive`
+  off. It writes `symbol <depth> <kind> <line> <col> <len> <name>`, in
+  **Pascal's** words and not any protocol's numbers; it stops after the *parse*
+  because an outline is what an editor draws while a file is wrong, which also
+  means it needs no `--import`; and the name is the **folded** spelling, the
+  position and length beside it being how a caller holding the source recovers
+  what was typed. `lsp/pasls.pas` is the caller, and the first one here that is
+  not a gate. The surface is one question wide and a second is not designed —
+  hover wants a type, which is Sema's.
 - `--dump-ast` runs **before Sema**, so it shows only what the parser decided,
   and prints `@line:col` only where the tree really records a position.
   `--dump-sema` walks the same tree through the same walker with an `annotate`

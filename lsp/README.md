@@ -31,7 +31,7 @@ that sets no environment still works:
 
 | | |
 | --- | --- |
-| `PASLS_COMPILER` | what to invoke to compile a document. Default `pascalc`, so it must be on `PATH`; `tools/pascalcc` works too |
+| `PASLS_COMPILER` | what to invoke to compile a document. Default `pascalc`, so it must be on `PATH`; `tools/pascalcc` works too, and passes a `--dump-` flag through untouched — which it did not until the outline below asked it to |
 | `PASLS_SCRATCH` | the file the current document is written to before it is compiled. Default `$TMPDIR/pasls-scratch.pas`, and `/tmp` where `TMPDIR` is unset |
 
 It finds a file's **imports** by reading `.components`, which is this tree's
@@ -59,6 +59,25 @@ takes it and hands the compiler's own columns straight through; otherwise it
 converts, and either way it says which in `positionEncoding` so nothing is
 guessing. A file holding nothing above U+007F is identical under both.
 
+It answers `textDocument/documentSymbol` out of `pascalc --dump-symbols` and
+out of nothing else ([ADR-0239](../doc/adr/0239-the-compiler-answers-a-tools-question.md)).
+That flag stops after the *parse*, which is why an outline is still drawn for a
+file full of errors and why no `--import` is passed for one — a name is a name
+whether or not the module it came from was found. The compiler answers in
+Pascal's words (`procedure`, `record`, `value`) and this server maps them to
+LSP's `SymbolKind` numbers, so the protocol's table lives here and not in a
+Pascal compiler.
+
+Two things it does that are worth knowing. The names come back with the case
+the **programmer** wrote: the compiler's string pool holds only the folded
+spelling, so what the dump reports is a position and a length, and the server
+slices the written spelling out of the document it is holding. And `range` and
+`selectionRange` are both the extent of the **name** rather than of the whole
+declaration — the parse tree records where a declaration begins and never where
+it ends, so anything wider would be invented. Go-to-symbol, the outline and
+breadcrumbs are unaffected; "expand selection to the enclosing declaration" is
+the one thing that degrades.
+
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a
 descriptor write is not, so a program that used both would interleave them
@@ -74,7 +93,7 @@ It is one `ctest` case, `lsp-server`.
 lsp/run.sh tools/pascalcc build/bin/pascalc
 ```
 
-A session is three files:
+A session is up to four files, of which the first two are required:
 
 | | |
 | --- | --- |

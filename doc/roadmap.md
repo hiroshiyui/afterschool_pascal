@@ -353,31 +353,53 @@ someone can point an editor at, which is what makes the external authority
 above real rather than theoretical; `lsp/build.sh` produces one and
 `lsp/run.sh` replays recorded sessions against it as the `lsp-server` case.
 
+**And the second method is answered, which is where the chapter first reached
+the compiler** (ADR-0239). `textDocument/documentSymbol` is an outline, and
+this compiler had nothing structured to say about a program that was not
+`--dump-sema` — a format ADR-0085 demoted from a specification to a debugging
+aid on the day there was no second front end to diff it against. So the choice
+was between a server that parses Pascal-shaped debugging output and a compiler
+that answers the question, and it is the second: `--dump-symbols` writes every
+name a source declares with its kind, position and depth, in **Pascal's**
+words rather than the protocol's numbers. `--dump-dispatch` (ADR-0229) and
+`--dump-layout` (ADR-0185) are the precedent; what is new is that the caller is
+not a gate. The flag stops after the *parse* on purpose — an outline is what an
+editor draws while the file is wrong — which also means it needs no `--import`,
+so this is the one question about a source that can be asked of the file alone.
+
+**The next method is the one that will decide whether that surface generalises.**
+Hover and go-to-definition want a *type* and a *defining point*, which are
+Sema's and not the parser's — so neither can inherit the sentence above, and
+each will have to say what it does about a file that does not check. Nothing
+here settles it, and the record deliberately does not.
+
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Eleven entries so far, and **six of them have been acted on** — which is the
-discipline this chapter is for: a finding recorded and left is a finding
+Thirteen entries so far, and **eight of them have been acted on** — which is
+the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
 
 The first two came from the framing alone, before a single protocol message
 had been dispatched. The next two came from the diagnostics, before a server
-existed to send one. **The last five came from the program itself**, and the
+existed to send one. **The last seven came from the program itself**, and the
 first of those is the one worth reading before the others: it is a limit that
 looked generous beside a test case and turned out not to be a limit a
 *program* could live inside, and it had to be fixed before the server could be
 compiled at all.
 
-The shape of the whole list is the argument for the chapter. Four of the eleven
-are bounds — 8 imports, 24 arguments, a 63-character key, a 255-character
-line — and every one of them was chosen by counting what the largest thing in
-the tree needed at the time. The largest thing in the tree was a test case.
-The tenth is the only one that is not a gap at all: the protocol asked the text
-model a question it had been designed to refuse, and the answer was already
-exported. The eleventh is the largest of them and came from pointing the
-finished program at the repository it was written in, which is not a thing the
-first ten had needed.
+The shape of the whole list is the argument for the chapter. **Five of the
+thirteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
+255-character line, a 16 384-byte capture — and every one of them was chosen by
+counting what the largest thing in the tree needed at the time. The largest
+thing in the tree was a test case. The tenth is the only one that is not a gap
+at all: the protocol asked the text model a question it had been designed to
+refuse, and the answer was already exported. The eleventh came from pointing
+the finished program at the repository it was written in, which is not a thing
+the first ten had needed — and the twelfth and thirteenth came from asking the
+compiler a question no gate had ever asked it, which is the shape the next ones
+are likely to have.
 
 - ~~**There is no empty substring**~~ — **answered, and it is the first
   finding this chapter produced that changed the language** (AP 6.5.6,
@@ -517,6 +539,44 @@ first ten had needed.
   recursively, and the compiler is what reads module headings. A server doing
   it would be a second reader of Pascal in this tree, which is the mistake this
   chapter has named three times in another form.
+- ~~**The whole-output buffer was sized for diagnostics**~~ — **answered by
+  not having one** (ADR-0239). `CaptureMax` is 16 384 and the outline of
+  `selfhost/apfront.pas` is **51 192 bytes**, so `documentSymbol` on the
+  largest thing in this tree would have stopped a third of the way through and
+  said nothing about it — `Capture` reads and drops the tail, which is right
+  for a diagnostic and wrong for an answer whose length is proportional to the
+  file. The fifth bound on this page, and the first that was *removed* rather
+  than raised: an outline is a **list of lines**, so `CaptureLines` collects it
+  on the heap and what is left is a per-line bound against six short fields.
+  The diagnostics path keeps `Capture` deliberately — a compilation is long
+  only when the file is badly broken, where an outline is long whenever the
+  file is.
+
+- ~~**The driver had never been handed a dump**~~ — **answered** (ADR-0239),
+  and it is the entry on this page that failed most quietly. `PASLS_COMPILER`
+  may name `tools/pascalcc` as readily as `pascalc` — `lsp/README.md` said so —
+  and `pascalcc` knew no `--dump-` flag at all: it wrote `pascalcc: unknown
+  option '--dump-symbols'` to *standard error*, which the server was not
+  reading, and answered an empty outline with no complaint anywhere. Nothing in
+  the tree had ever run a dump through the driver, because every dump case is
+  handed `pascalc` and every ordinary case wants a program. It passes them
+  through now and `producttest.sh` asks; the general shape is that **the two
+  halves of this compiler have a seam and only one side of it is swept**.
+
+- **The compiler does not keep the spelling a programmer wrote.** Not a
+  defect and not a gap — the lexer case-folds an identifier and the string pool
+  holds one copy, which is the whole of what makes `CaseTest` and `casetest`
+  one name. It is here because an outline is the first thing that ever wanted
+  the other spelling back, and the answer shows what a compiler's report is
+  for: `--dump-symbols` gives a position and a length beside the folded name,
+  and the caller holding the document slices the written spelling out of its
+  own copy. Retaining both in the pool would have moved the one array whose
+  headroom this tree measures (ADR-0126) for a display string. **The parse tree
+  has no *extent* either** — a declaration's start is recorded and its end is
+  not — which is why `range` and `selectionRange` are both the name. That one
+  is a real limitation and is open; what would close it is the parser noting
+  where a block ends, which nothing has yet needed.
+
 - **`binding(f).bound` is not a readiness test, and reads exactly like one.**
   `doc/implementation-defined.md` E.16 binds a variable when the external name
   *exists*, so a file about to be created reports `false` and one already
@@ -597,14 +657,17 @@ a tool list is the payload that turns them from recorded into blocking. And a
 second framing over one reader, which is ADR-0116's two-sites test applied to
 `PasLsp` itself.
 
-**The prerequisite, and it decides the ordering.** Nearly every tool worth
+**The prerequisite, and it decided the ordering.** Nearly every tool worth
 exposing needs the compiler to answer a structured question *about a program*,
-and today it cannot: the only route is `--dump-sema`, which ADR-0085 demoted
-from a specification to a debugging aid the moment there was no second front
-end to diff it against. So MCP is gated on the same decision
-`textDocument/documentSymbol` forces, and cannot arrive before it. Do the
-compiler-side query surface first and both transports are cheap — there is then
-no reason to choose between them.
+and when this was written it could not: the only route was `--dump-sema`, which
+ADR-0085 demoted from a specification to a debugging aid the moment there was
+no second front end to diff it against. That is **settled now** — ADR-0239
+gave the compiler `--dump-symbols` and the decision behind it, which is that
+the answer comes from the compiler and not from a second reader of its
+debugging output. One question is answered and the surface is one question
+wide; what the tool list above would need is more of them, and each will ask
+the question ADR-0239 deliberately left open — whether it belongs behind this
+flag, behind another, or behind something that is not a flag.
 
 **The finding it is expected to produce**, named in advance the way the
 concurrency row names its sentence, because a second surface added without one

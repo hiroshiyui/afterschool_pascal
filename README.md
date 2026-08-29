@@ -56,7 +56,12 @@ tools/pascalcc -o greet hello.pas
 tools/pascalcc -S hello.pas            # -> hello.ll, no linking
 tools/pascalcc -c hello.pas            # -> hello.o
 tools/pascalcc -O0 hello.pas           # -O0..-O3, handed to clang
+tools/pascalcc --dump-symbols hello.pas  # any --dump- flag, passed through
 ```
+
+A `--dump-` flag asks the *compiler* a question and the answer is its standard
+output, so the driver adds nothing to one: no assembling, no linking, and the
+answer is not folded into stderr the way a diagnostic is.
 
 `--std=<name>` is accepted and ignored, so a build script written for version 2
 still runs. `pascalc` itself no longer knows the flag.
@@ -97,8 +102,12 @@ one half without the other checks a tag the other half never stored and reports
 an unsafe read as safe. That is what the tag is for; there is one language now,
 so what it catches is a stale `.o`.
 
-`-S` is an alias for `--emit-llvm`. Four dump flags write a stage and stop —
-`--dump-tokens`, `--dump-ast`, `--dump-sema`, and `--dump-all` for all three.
+`-S` is an alias for `--emit-llvm`. Five dump flags write a stage and stop —
+`--dump-tokens`, `--dump-ast`, `--dump-sema`, `--dump-all` for all three, and
+`--dump-symbols`, which writes every name the source declares with its kind,
+the position of that name and how deeply it nests. That last one stops after
+the *parse* on purpose: it is what a tool asks when it wants a document's
+outline, and an outline is wanted for a file that does not yet compile.
 Four more compile as usual and then answer a question about what was compiled:
 `--dump-limits` writes how full the compiler left its own fixed arrays, which
 is what says how much room a larger program still has; `--dump-layout` writes
@@ -108,6 +117,12 @@ writes every case-statement whose selector is an enumeration, with how many of
 that enumeration's constants its labels name and which they miss.
 
 ```
+$ pascalc --dump-symbols prog.pas -o /dev/null
+symbol 0 program 1 9 4 main
+symbol 1 enum 3 3 6 colour
+symbol 2 value 3 13 3 red
+symbol 1 procedure 7 11 4 draw
+
 $ pascalc --dump-limits big.pas -o /dev/null
 pool 491964 of 1000000
 tokens 144756 of 300000
