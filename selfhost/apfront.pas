@@ -4985,7 +4985,10 @@ end;
   AP 6.7.3.10's instantiation does the same across a body re-read from the
   file the generic was declared in. A use dumped from either would carry a
   line and a column a caller would resolve against the wrong text. }
-procedure NoteUse(line, col, len: integer; s: symPtr);
+{ Whether an occurrence in the text Sema is checking right now belongs in the
+  dump at all. Asked by both reporters, because the answer is about the
+  *position* and not about what was found there. }
+function NotingHere: boolean;
 begin
   { `producingTop` is the schemas 6.4.7 is producing a type from right now,
     and a production re-resolves the schema's *body* -- the same text, once
@@ -5004,14 +5007,45 @@ begin
     What this costs is a use inside a schema's own body: `cap` in
     `array [1..cap]` is resolved nowhere else, so nothing is reported for it
     (ADR-0246). }
-  if notingUses and (s <> nil) and (curFile = mainFile) and
-     (producingTop = nil) then begin
-    write('use ', line:1, ' ', col:1, ' ', len:1, ' ');
-    write(s^.declFile:1, ' ', s^.declLine:1, ' ', s^.declCol:1, ' ',
-          s^.len:1, ' ');
+  NotingHere := notingUses and (curFile = mainFile) and (producingTop = nil)
+end;
+
+{ The seven numbers a `use` line begins with, written in one place because two
+  things report one and their answers must be read the same way. }
+procedure PutUseNumbers(line, col, len, dFile, dLine, dCol, dLen: integer);
+begin
+  write('use ', line:1, ' ', col:1, ' ', len:1, ' ',
+        dFile:1, ' ', dLine:1, ' ', dCol:1, ' ', dLen:1, ' ')
+end;
+
+procedure NoteUse(line, col, len: integer; s: symPtr);
+begin
+  if NotingHere and (s <> nil) then begin
+    PutUseNumbers(line, col, len,
+                  s^.declFile, s^.declLine, s^.declCol, s^.len);
     PutSymKindWord(s^.kind);
     write(' ');
     WriteTypeName(s^.stype);
+    writeln
+  end
+end;
+
+{ 6.2.2.4's field-identifier, which is the one applied occurrence in this
+  language whose defining-point is not a symbol's. 6.4.3.3 makes a record a
+  region and gives every field-identifier a defining-point in it, but nothing
+  about a field is ever looked up in a scope -- a field selection is resolved
+  by asking the record's *type* -- so `fieldPtr` carries the position itself
+  and this is the second reporter (ADR-0247).
+
+  The word is `field`, which is --dump-symbols's own word for one, and the
+  reason the two reporters are not one routine is that a field has no
+  `symKind` to write and no scope depth to have come from. }
+procedure NoteUseField(line, col, len: integer; f: fieldPtr);
+begin
+  if NotingHere and (f <> nil) then begin
+    PutUseNumbers(line, col, len, f^.declFile, f^.line, f^.col, f^.len);
+    write('field ');
+    WriteTypeName(f^.ftype);
     writeln
   end
 end;
@@ -8482,6 +8516,9 @@ begin
     f^.variant := variant;
     f^.line := n^.line;
     f^.col := n^.col;
+    { Asked only when something will read it, which is --coverage's
+      discipline (ADR-0104): a compilation not asking pays one boolean test. }
+    if notingUses then f^.declFile := FileIndexOf(curFile) else f^.declFile := 0;
     f^.initValue := init;
     f^.isBindable := isBnd;
     f^.next := nil;
@@ -14295,7 +14332,10 @@ begin
           end
           else begin
             e^.fdResolved := f;
-            e^.ntype := f^.ftype
+            e^.ntype := f^.ftype;
+            { The field-identifier's own position, which is `fdLine`/`fdCol`
+              and not the node's: the node's is the `.` before it (ADR-0246). }
+            NoteUseField(e^.fdLine, e^.fdCol, e^.fdLen, f)
           end
         end
         end
@@ -14333,13 +14373,14 @@ begin
         if binding <> nil then begin
           e^.vrSym := binding;
           e^.ntype := e^.vrField^.ftype;
-          { The `with` binding, whose own defining-point is 0: 6.8.3.10 gives
-            a field-identifier a defining-point in the with-statement, and the
-            record-variable's is where a reader would want to go -- but the
-            binding symbol is a hidden frame variable and knows neither. The
-            field is not a symbol at all (ADR-0246 records that as the one
-            thing this dump does not answer). }
-          NoteUse(e^.line, e^.col, e^.vrLen, binding)
+          { A field-identifier written bare inside a with-statement. 6.8.3.10
+            gives it a defining-point in the with-statement itself, and what a
+            reader wants is the *field* -- the with-statement is where the
+            record was named, not where this name was declared. The binding
+            symbol knows neither: it is a hidden frame variable holding an
+            address. So the field answers, exactly as it does for the
+            selection this is shorthand for (ADR-0247). }
+          NoteUseField(e^.line, e^.col, e^.vrLen, e^.vrField)
         end
         else begin
           { LookupUser, not Lookup: a bare `abs` is not a designator and has no
@@ -19774,6 +19815,7 @@ var s, cap: symPtr; at, len, stampIndex: integer;
     f^.variant := nil;
     f^.line := 0;
     f^.col := 0;
+    f^.declFile := 0;
     f^.initValue := nil;
     { 6.4.3.4: "The bindability of each field of a required record-type
       shall be nonbindable." }

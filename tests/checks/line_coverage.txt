@@ -12,14 +12,14 @@
 # Doing so is a decision to argue for in the commit message.
 
 uncovered 448
-instrumented 17812
+instrumented 17823
 
 accept 0/4
 accumulate 0/84
 activecontrol 0/6
 addconstituent 0/8
 addexportitem 8/82
-addfield 0/24
+addfield 0/25
 addframevar 0/9
 addglobal 0/9
 addhiddenvar 0/11
@@ -99,7 +99,7 @@ checkedfptoint 0/23
 checkedresulttype 0/19
 checkedwidth 0/14
 checkexports 0/23
-checkexpr 12/262
+checkexpr 12/263
 checkforeignheading 0/130
 checkgoto 0/9
 checkhandlebirth 0/6
@@ -118,7 +118,7 @@ checkprocbody 0/45
 checkread 3/71
 checkrecordvalue 0/92
 checkrelease 0/14
-checkresultassign 4/26
+checkresultassign 4/28
 checkschemaarms 0/8
 checkschemabodynames 2/37
 checkschemadomain 0/51
@@ -507,7 +507,9 @@ newtype 0/40
 nonvarying 3/42
 notbindable 3/29
 notehandlecloser 0/6
-noteuse 0/7
+noteuse 0/6
+noteusefield 0/5
+notinghere 0/1
 offer 0/38
 opglobal 0/4
 opint 0/2
@@ -616,6 +618,7 @@ putslottype 0/4
 putstoragetypeat 1/4
 putstructat 0/12
 putsymkindword 0/13
+putusenumbers 0/1
 reaches 0/6
 readimportsin 2/15
 readone 0/41
@@ -676,7 +679,7 @@ skiptriviaandcomments 0/22
 sliceof 0/4
 sourcedir 0/5
 span 0/5
-stampfield 0/16
+stampfield 0/17
 standardfileref 0/18
 startblock 0/2
 startfile 0/5

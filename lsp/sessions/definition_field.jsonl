@@ -1,0 +1,39 @@
+# A record field, which was the one applied occurrence --dump-uses did not
+# answer when it landed (ADR-0247). A field is not a symbol: 6.4.3.3 makes a
+# record a *region* and gives every field-identifier a defining-point in it,
+# but nothing about a field is ever looked up in a scope -- a selection is
+# resolved by asking the record's type. So `fieldPtr` carries the position
+# itself and the dump has a second line shape for it.
+#
+# Two spellings of the same thing are pinned here, and they must agree. A
+# selection names the record and the field; 6.8.3.10's with-statement lets the
+# field be written bare, and gives it a nearer defining-point in the
+# with-statement -- which is not what a reader wants, the with-statement being
+# where the *record* was named. Both answer the field's own declaration.
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{"general":{"positionEncodings":["utf-8"]}}}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/rec.pas","languageId":"pascal","version":1,"text":"program rec(output);\n\ntype point = record\n  x, y: integer\nend;\n\nvar here: point;\n\nbegin\n  here.x := 1;\n  with here do\n    y := x + 1;\n  writeln(here.y)\nend.\n"}}}
+
+# `here` on line 9, for the record itself. The field selection beside it is
+# the next request, and the two answers are different lines of the source.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":9,"character":2}}}
+
+# `x` in `here.x`, which is line 3 of the record's declaration.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":9,"character":7}}}
+
+{"jsonrpc":"2.0","id":4,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":9,"character":7}}}
+
+# `y` written bare inside the with-statement, and `x` beside it. Both answer
+# the field's declaration and not the `with here` that made them writable.
+{"jsonrpc":"2.0","id":5,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":11,"character":4}}}
+
+{"jsonrpc":"2.0","id":6,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":11,"character":9}}}
+
+{"jsonrpc":"2.0","id":7,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":11,"character":4}}}
+
+# And the same field selected again after the with-statement ends, which must
+# give the same answer as the bare form above.
+{"jsonrpc":"2.0","id":8,"method":"textDocument/definition","params":{"textDocument":{"uri":"file:///scratch/rec.pas"},"position":{"line":12,"character":15}}}
+
+{"jsonrpc":"2.0","id":9,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

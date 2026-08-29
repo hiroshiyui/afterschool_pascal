@@ -4,10 +4,19 @@
   the reason tests/extended/components/ is. }
 module usebase;
 
-export shared = (kept, Keep);
+export shared = (kept, Keep, mark, marker);
+
+type
+  { A record whose fields are declared *here*, so a selection written in the
+    importing program has a defining-point in this file (ADR-0247). }
+  mark = record
+    seen: integer;
+    tag: char
+  end;
 
 var
   kept: integer;
+  marker: mark;
 procedure Keep(n: integer);
 end;
 
@@ -17,6 +26,10 @@ begin
 end;
 
 to begin do
-  kept := 0;
+  begin
+    kept := 0;
+    marker.seen := 0;
+    marker.tag := '-'
+  end;
 
 end.

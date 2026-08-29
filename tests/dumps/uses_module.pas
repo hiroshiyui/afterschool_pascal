@@ -28,5 +28,9 @@ var here: integer;
 begin
   here := 2;
   shared.Keep(here);
-  writeln(shared.kept)
+  { A field whose defining-point is in the component: `seen` is declared in
+    usebase.pas and selected here, so the answer names file 1 (ADR-0247). A
+    field is not a symbol, so this is the second shape of `use` line. }
+  shared.marker.seen := here;
+  writeln(shared.kept, shared.marker.seen)
 end.

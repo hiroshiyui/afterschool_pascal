@@ -255,3 +255,4 @@ the alternatives that were rejected and why.
 | [0244](0244-an-import-that-names-no-file.md) | An import that names no file | Accepted |
 | [0245](0245-an-object-older-than-its-heading.md) | An object older than its heading | Accepted |
 | [0246](0246-what-a-name-denotes-and-where-it-was-written.md) | What a name denotes, and where it was written | Accepted |
+| [0247](0247-a-field-is-not-a-symbol.md) | A field is not a symbol, and has a defining-point anyway | Accepted |

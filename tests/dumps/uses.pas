@@ -20,6 +20,18 @@ const limit = 4;
 type
   colour = (red, green, blue);
   point = record x, y: integer end;
+  { A variant part, so a field reached through 6.4.3.3's arm path is reported
+    the same way one in the fixed part is -- the position is the field's own
+    either way. The labels cover the tag-type exactly, which ADR-0096 requires
+    and is why `sides` is a named subrange: 6.4.3.3 makes the tag a
+    *type-identifier*, and `integer` would leave values no arm names. }
+  sides = 1..2;
+  shape = record
+    span: integer;
+    case kind: sides of
+      1: (side: integer);
+      2: (base, high: integer)
+  end;
   vec(cap: integer) = array [1..cap] of integer;
   chooser = ^colour;
 
@@ -29,6 +41,7 @@ var
   shade: colour;
   which: chooser;
   three: vec(3);
+  box: shape;
 
 { A value-parameter, a variable-parameter and a procedural-parameter in one
   heading, so all three of 6.7.3.1's spellings are applied somewhere. }
@@ -74,7 +87,17 @@ begin
     the occurrence denotes the binding that reads the descriptor. The two are
     different symbols and the same defining-point. }
   total := total + three.cap;
+  box.kind := 1;
+  box.side := 4;
+  { 6.8.3.10's with-statement: a field-identifier written bare. The
+    defining-point a reader wants is the *field*, not the with-statement that
+    gave it a nearer one -- the binding is a hidden frame variable holding an
+    address and knows neither position (ADR-0247). }
+  with here do begin
+    x := x + 1;
+    total := total + x + y
+  end;
   total := combine(limit, total, twice);
   show(here, shade);
-  writeln(total, three[1]:4)
+  writeln(total, three[1]:4, box.span:3)
 end.

@@ -815,7 +815,18 @@ type
       0. ISO 7185 6.4.3.3 puts no limit on the nesting, so a single index could
       not say where a field is. }
     variant: numPtr;
-    line, col: integer;
+    { 6.2.2.4's defining-point for a field-identifier: where it was written,
+      and in which source. `line` is 0 for a field of a *required*
+      record-type -- 6.4.3.4's TimeStamp -- which has no defining-point in
+      any source, the same zero a required identifier's symbol carries.
+
+      A field is not a symbol and never has been, which is why this pair sits
+      here rather than being reached through one: 6.4.3.3 makes a record a
+      region and a field's defining-point is in it, but nothing about a field
+      is looked up in a scope. `declFile` indexes importName, 0 being the
+      source being compiled (ADR-0246), and it is spelled as the symbol's is
+      rather than as `file`, which §6.1.2 reserves. }
+    line, col, declFile: integer;
     next: fieldPtr
   end;
 
