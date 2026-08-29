@@ -3718,10 +3718,10 @@ nothing else. What it would lose, mechanism by mechanism:
   outline reaches that by stopping *before* Sema and a defining-point cannot,
   so it carries on instead. The defect it shipped with was a JSON `null` made and replaced on every
   successful reply — thirteen leaked nodes, every golden green, found by
-  `heap-balance` and by nothing else. What it still does not answer is an
-  interface's own name (`ifaceRec` records no position) and a name inside a
-  schema's body (§6.4.7 resolves it where the type is *written*, so its line
-  and column belong to another file).
+  `heap-balance` and by nothing else. What it still does not answer is a name
+  inside a schema's body (§6.4.7 resolves it where the type is *written*, so
+  its line and column belong to another file) and a *defining* occurrence,
+  a declaration not being an applied one.
 - **A field is the one applied occurrence that resolves to no symbol**
   (ADR-0247). §6.4.3.3 makes a record type a *region* and puts a
   defining-point in it for every field-identifier — so a field is as much an
@@ -3738,6 +3738,18 @@ nothing else. What it would lose, mechanism by mechanism:
   holding an address, and neither is what a reader pointing at the name is
   asking about. `lsp/sessions/definition_field.jsonl` asks the same field both
   ways and requires the two to agree.
+- **An interface had a name and no place** (ADR-0248). `ifaceRec` held a name,
+  an owner and its constituents and never a position, because an interface is
+  found by *spelling*: `FindInterface` walks a list comparing the pool, and no
+  question the compiler asks about one needs to know where it was written.
+  Three integers on that record, set in `CheckExports` from the export-part
+  §6.11.1 makes the defining-point — 0 for the two required interfaces, which
+  no source writes. The symbol `CheckImports` makes for the importing block
+  carries the *supplying* module's position, because §6.11.3's defining-point
+  in the importing block is where the reader already is; an imported
+  constituent had always behaved that way and the interface now matches it.
+  **The occurrence that mattered was not the qualifier of `M.x`** — that form
+  is rare — but `import Middle;`, which no code path had taken near `NoteUse`.
 - **The scratch name carries the server's process id** (ADR-0242), which is
   what keeps two servers on one machine out of each other's file. It is not
   `mkstemp`'s guarantee and could not be: §6.7.5.6 binds by *name*, so a file

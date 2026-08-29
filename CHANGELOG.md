@@ -62,6 +62,10 @@ appears below in the release where it still existed.
   selection is resolved by asking the record's type rather than a scope. A
   field written bare inside §6.8.3.10's `with` answers the field's own
   declaration as well, not the with-statement.
+- **An interface name is answered** (ADR-0248), and the occurrence that
+  matters is `import Middle;` — where a module says where it gets things
+  from — rather than §6.11.3's rarer `M.x`. It leads to the `export` clause
+  §6.11.1 makes the interface's defining-point, in whichever file that is.
 - **An `import` can name no file at all.** An interface no `--import` supplied
   is looked for as `<directory>/<name>.pas` — folded as §6.1.2 folds every
   identifier — in the directory the source is in, then in each

@@ -120,11 +120,19 @@ resolved by asking the record's type. §6.8.3.10's bare form inside a `with`
 answers the field as well — not the with-statement, which is where the
 *record* was named.
 
-Two things it does not answer. An **interface** name hovers but does not jump,
-`ifaceRec` recording no position; and a name inside a **schema's own body** is
+An **interface** name is answered as well
+([ADR-0248](../doc/adr/0248-an-interface-had-a-name-and-no-place.md)) — and
+the occurrence worth having is not §6.11.3's rare `M.x` but `import Middle;`,
+which is where a module says where it gets things from. It leads to the
+`export` clause that declared it, in whichever file that is.
+
+Two things it does not answer. A name inside a **schema's own body** is
 resolved only while a type is being produced from it, which happens where the
 type is written and not where the schema is, so reporting it would attribute
-another file's line and column to this one.
+another file's line and column to this one. And a **declaration** answers
+nothing: this reports *applied* occurrences, so a position on a `var` line or
+a procedure heading has no answer over it, where most editors would give you
+the declaration itself.
 
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a

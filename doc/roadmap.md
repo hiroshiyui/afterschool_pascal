@@ -393,7 +393,7 @@ not already know is exactly the one declared somewhere else.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Nineteen entries so far, and **thirteen of them have been acted on** — which is
+Twenty entries so far, and **fourteen of them have been acted on** — which is
 the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -407,7 +407,7 @@ a *program* could live inside, and it had to be fixed before the server could
 be compiled at all.
 
 The shape of the whole list is the argument for the chapter. **Five of the
-nineteen are bounds** — 8 imports, 24 arguments, a 63-character key, a
+twenty are bounds** — 8 imports, 24 arguments, a 63-character key, a
 255-character line, a 16 384-byte capture — and every one of them was chosen by
 counting what the largest thing in the tree needed at the time. The largest
 thing in the tree was a test case. One is not a gap at all: the protocol asked
@@ -421,13 +421,15 @@ module written a year of increments earlier, whose five writers could fail and
 could not say so. A finding this chapter produced was already true everywhere
 else.
 
-**And the last four are all about what the compiler had never been asked.**
+**And the last five are all about what the compiler had never been asked.**
 Two are things it did not keep — where a symbol was declared, and where a
 field-identifier is — each thrown away by code that had the answer in its hand
 and no reason to hold it. One is a fact it *did* keep, for a diagnostic, and
-that answered a second question with nothing added but a file index. The last
-is not a demand on the language at all: it is a defect this program shipped
-and an oracle caught, and it is here because of *which* oracle.
+that answered a second question with nothing added but a file index. One is a
+fact nothing had ever wanted, because the thing it describes is found by
+spelling. The last is not a demand on the language at all: it is a defect this
+program shipped and an oracle caught, and it is here because of *which*
+oracle.
 
 **One entry took two records to close and they are not the same kind of
 thing.** *A program cannot make a temporary file, and cannot survive failing
@@ -703,6 +705,22 @@ with it, unfixed and unrecorded.
   site were the whole of it, which is what makes it a finding rather than a
   feature: the fact was already in the hand of the code that discarded it, and
   what it cost to keep was nothing.
+
+- **An interface was registered by spelling and by nothing else** — answered
+  (ADR-0248). `ifaceRec` held a name, an owner and its constituents, and never
+  where the `export` clause was written: every question the compiler asks
+  about an interface is answered by walking a list and comparing the string
+  pool, so no position had ever been needed. Three integers on that record
+  closed it, at the one site §6.11.1 puts a defining-point.
+
+  **What it changed is which occurrence matters, and the estimate was wrong
+  in the useful direction again.** The row this closes was written about
+  §6.11.3's `M.x` — the qualifier hovered and jumped nowhere — and that form
+  is one most programs never write. The occurrence a reader actually points at
+  is `import Middle;`, which is where a module says where it gets things from,
+  and *no code path had taken it anywhere near the reporter*. The gap was
+  larger than the row describing it, which is the fifth estimate on this page
+  to be wrong that way.
 
 - **A record field resolves to nothing a report could name** — answered
   (ADR-0247), and it is the finding this chapter produced by *reading its own
