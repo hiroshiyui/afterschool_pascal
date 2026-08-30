@@ -270,3 +270,4 @@ the alternatives that were rejected and why.
 | [0259](0259-an-instantiation-says-which-activation-asked-for-it.md) | An instantiation says which activation asked for it | Accepted |
 | [0260](0260-a-map-is-keyed-by-whatever-a-program-names.md) | A map is keyed by whatever a program names, and no constraint was needed | Accepted |
 | [0261](0261-the-runtimes-own-storage-had-no-oracle.md) | The runtime's own storage had no oracle | Accepted |
+| [0262](0262-the-terminal-is-the-runtimes-to-remember.md) | The terminal is the runtime's to remember | Accepted |

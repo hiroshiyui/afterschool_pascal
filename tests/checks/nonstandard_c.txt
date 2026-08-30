@@ -120,3 +120,26 @@ header: <netdb.h>
 # already sitting in the runtime's own buffer is the other half of the
 # question and is answered above it, in C the compiler can see.
 header: <poll.h>
+
+# ADR-0262: `struct termios`, for PasTerm's raw mode. It is the worst subject
+# ADR-0185's fifth decision has met so far -- not merely a layout that differs
+# between systems, but one whose `c_cc` array is 32 elements on Linux and 20 on
+# macOS, and whose flag *bits* differ as well as its offsets. A module carrying
+# it would be one platform's header written out as a constant, and every
+# `tcsetattr` from it on another system would be a terminal put into a state
+# nobody asked for.
+#
+# ISO C reaches none of this at all: <stdio.h> knows about streams and nothing
+# about the device behind one, so whether input is echoed, whether it is
+# assembled into lines, and whether a read waits for a newline have no standard
+# answer. `isatty` is in <unistd.h> above and needs no type.
+header: <termios.h>
+
+# ADR-0262: `TIOCGWINSZ` and `struct winsize`, for the size of the window.
+# **POSIX has no window size** -- this is the one entry here naming something
+# no standard defines, and it is named rather than argued away because the
+# alternatives are worse: the `COLUMNS` environment variable is a shell's
+# opinion recorded before the window was last resized, and there is nothing
+# else. The request and the struct are BSD-derived and are on every Unix this
+# compiler admits a target for.
+header: <sys/ioctl.h>

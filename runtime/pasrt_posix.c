@@ -53,8 +53,10 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <termios.h>
 #include <unistd.h>
 
 /* What a file *is*, for a library module that may not ask C directly.
@@ -538,4 +540,165 @@ int pasx_socket_poll(const int *fds, long long nfds, int *got, long long ngot,
     }
   free(pf);
   return n;
+}
+
+/* --- the terminal, for PasTerm --------------------------------------------
+ *
+ * `struct termios` and `struct winsize` are two more layouts a library module
+ * may not declare (ADR-0185's fifth decision), and they are worse subjects
+ * than `struct stat`: `termios` is five fields and an array whose length is
+ * `NCCS`, which is 32 on Linux and 20 on macOS, and the *bit* each flag names
+ * differs between systems as well as the offset. A module carrying either
+ * would be one platform's header written out as a constant. So the whole of
+ * the terminal is behind `pasx_term_*` and nothing above this line names a
+ * flag.
+ *
+ * Two headers. <termios.h> is POSIX and answers everything but one question;
+ * <sys/ioctl.h> answers that one -- **POSIX has no window size at all**, and
+ * `TIOCGWINSZ` with `struct winsize` is the BSD-derived request every Unix
+ * has instead. It is named here rather than argued away because the
+ * alternative is the `COLUMNS` environment variable, which is a shell's
+ * opinion recorded before the window was last resized.
+ *
+ * **The saved state is the runtime's, and there is one.** A caller cannot
+ * hold it -- that is the whole reason this section exists -- so `pasx_term_raw`
+ * keeps the terminal's original settings here and `pasx_term_restore` puts
+ * them back. One slot and not a table: a second `pasx_term_raw` while one is
+ * outstanding would save the *raw* settings as though they were the original,
+ * and the restore after it would leave the user's terminal in raw mode with
+ * no echo and no interrupt character -- a broken shell and no diagnostic. So
+ * it is refused (3) rather than counted, and a program driving two terminals
+ * at once is a program this does not serve.
+ *
+ * **And it is put back at exit**, by an `atexit` handler registered the first
+ * time raw mode is entered -- `--coverage`'s discipline, so a program that
+ * never asks pays nothing. That is not tidiness: raw mode is a property of
+ * the *terminal* and not of the process, so a program that stops without
+ * restoring hands the user a shell that does not echo, and the user's only
+ * remedy is to type `stty sane` blind. `halt`, a runtime error and a return
+ * from the main program block all reach `exit` and so all reach this;
+ * `_exit`, `abort` and a fatal signal do not, and nothing portable can make
+ * them -- a signal handler that touched this state would have to be
+ * async-signal-safe and would still miss SIGKILL.
+ *
+ * **What raw mode is** is written out below rather than taken from
+ * `cfmakeraw`, which is not POSIX and is invisible under the
+ * `_POSIX_C_SOURCE` this file is compiled with. Every flag cleared is named,
+ * which is also the documentation: no echo, no line discipline, no signal
+ * characters, no flow control, no output post-processing, and a read that
+ * waits for one byte and no longer.
+ */
+
+static struct termios pasx_term_saved;
+static int pasx_term_saved_fd = -1;
+static int pasx_term_atexit_done = 0;
+
+/* Is this descriptor a terminal? 1 or 0, and never an error: `isatty` fails
+ * exactly when the answer is no. */
+int pasx_term_isatty(int fd) {
+  return fd >= 0 && isatty(fd) ? 1 : 0;
+}
+
+/* The window, in character cells. 0 with both, 1 where the descriptor is not
+ * a terminal or is one that does not know its own size, 2 where the system
+ * refused.
+ *
+ * The size is asked of a *descriptor* and not of the process, because the two
+ * can differ: a program whose output is a pipe and whose error stream is
+ * still the terminal has a window size, and only one of its descriptors can
+ * report it.
+ */
+int pasx_term_size(int fd, int *rows, int *cols) {
+  struct winsize ws;
+
+  if (!rows || !cols)
+    return 2;
+  *rows = 0;
+  *cols = 0;
+  if (fd < 0)
+    return 2;
+  if (!isatty(fd))
+    return 1;
+  if (ioctl(fd, TIOCGWINSZ, &ws) != 0)
+    return 2;
+  /* A pseudo-terminal nobody has sized answers zero for both, which is a
+     window size in the same sense an empty answer is a name: not one. */
+  if (ws.ws_row == 0 || ws.ws_col == 0)
+    return 1;
+  *rows = (int)ws.ws_row;
+  *cols = (int)ws.ws_col;
+  return 0;
+}
+
+/* The saved settings, put back. Registered with `atexit` and called by
+ * `pasx_term_restore`; both leave the slot empty, so putting them back twice
+ * is not putting the raw ones back once. */
+static void pasx_term_at_exit(void) {
+  int fd = pasx_term_saved_fd;
+  if (fd >= 0) {
+    pasx_term_saved_fd = -1;
+    tcsetattr(fd, TCSAFLUSH, &pasx_term_saved);
+  }
+}
+
+/* Enter raw mode on `fd`, remembering what it was.
+ *
+ * 0 done, 1 not a terminal, 2 refused, 3 raw mode is already entered and
+ * nothing has been changed.
+ *
+ * `TCSAFLUSH` on the way in discards whatever the user typed while the
+ * program was still line-buffered, which is what stops a stray newline being
+ * delivered as the first "key".
+ */
+int pasx_term_raw(int fd) {
+  struct termios raw;
+
+  if (fd < 0)
+    return 2;
+  if (pasx_term_saved_fd >= 0)
+    return 3;
+  if (!isatty(fd))
+    return 1;
+  if (tcgetattr(fd, &pasx_term_saved) != 0)
+    return 2;
+
+  raw = pasx_term_saved;
+  /* No echo, no line assembly, no INTR/QUIT/SUSP, no ^V literal-next. */
+  raw.c_lflag &= (tcflag_t) ~(ECHO | ICANON | ISIG | IEXTEN);
+  /* No ^S/^Q, no CR-to-NL, no break-as-interrupt, no parity meddling. */
+  raw.c_iflag &= (tcflag_t) ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  /* Nothing added to what the program writes -- a bare newline stays one. */
+  raw.c_oflag &= (tcflag_t) ~OPOST;
+  raw.c_cflag |= (tcflag_t)CS8;
+  /* A read waits for one byte and then answers; a key is not a line. */
+  raw.c_cc[VMIN] = 1;
+  raw.c_cc[VTIME] = 0;
+  if (tcsetattr(fd, TCSAFLUSH, &raw) != 0)
+    return 2;
+
+  pasx_term_saved_fd = fd;
+  if (!pasx_term_atexit_done && atexit(pasx_term_at_exit) == 0)
+    pasx_term_atexit_done = 1;
+  return 0;
+}
+
+/* Leave raw mode, on whichever descriptor entered it.
+ *
+ * It takes no descriptor on purpose: the runtime knows which one it saved,
+ * and a caller passing the wrong one would be asking to write one terminal's
+ * settings onto another. 0 restored, 1 nothing was saved, 2 refused.
+ */
+int pasx_term_restore(void) {
+  int fd = pasx_term_saved_fd;
+
+  if (fd < 0)
+    return 1;
+  pasx_term_saved_fd = -1;
+  return tcsetattr(fd, TCSAFLUSH, &pasx_term_saved) == 0 ? 0 : 2;
+}
+
+/* Is raw mode entered? The one question a caller cannot answer for itself,
+ * the state being here. */
+int pasx_term_raw_active(void) {
+  return pasx_term_saved_fd >= 0 ? 1 : 0;
 }
