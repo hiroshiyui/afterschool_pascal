@@ -11,8 +11,8 @@
 # Regenerate with:  python3 tests/checks/line_coverage.py --write-ratchet
 # Doing so is a decision to argue for in the commit message.
 
-uncovered 445
-instrumented 18091
+uncovered 446
+instrumented 18131
 
 accept 0/4
 accumulate 0/84
@@ -28,7 +28,7 @@ addpath 0/7
 addressofsym 0/28
 addsimple 0/1
 addtext 0/3
-addtoken 3/13
+addtoken 3/14
 advance 0/8
 aftercall 0/1
 append 0/4
@@ -144,7 +144,7 @@ checkwriteargs 0/20
 claimboundsslot 0/7
 closefiles 0/18
 collecttagtests 0/31
-compile 0/49
+compile 0/50
 complexcall 0/19
 computeactivemodules 0/6
 confarraytype 0/28
@@ -514,7 +514,7 @@ needssubrangecheck 0/7
 nestedin 0/8
 nestwith 0/8
 newblock 0/2
-newnode 0/82
+newnode 0/84
 newresultslot 0/7
 newsymbol 0/93
 newtype 0/41
@@ -545,9 +545,9 @@ pad 0/2
 padstofixedstring 0/1
 parameterof 0/6
 parseactualparameters 0/6
-parseargs 10/125
+parseargs 10/127
 parsearraytype 0/17
-parseblock 0/43
+parseblock 0/45
 parseboundident 1/12
 parsecase 0/38
 parsecaselabel 0/8
@@ -587,7 +587,7 @@ parserecordtype 0/15
 parserepeat 1/18
 parseselectors 0/56
 parsesimpleexpr 1/29
-parsestatement 0/30
+parsestatement 0/32
 parsestructuredvalue 0/29
 parseterm 0/22
 parsetypedenoter 6/140
@@ -635,6 +635,7 @@ putop 0/2
 putparamtypes 0/26
 putprocsignature 0/9
 putslottype 0/4
+putstmtword 1/17
 putstoragetypeat 1/4
 putstructat 0/21
 putsymkindword 0/13
@@ -699,6 +700,7 @@ skiptriviaandcomments 0/22
 sliceof 0/4
 sourcedir 0/5
 span 0/5
+stampend 0/10
 stampfield 0/17
 standardfileref 0/18
 startblock 0/2
@@ -736,7 +738,7 @@ typeargument 0/6
 typeend 0/4
 typelength 0/1
 underlying 0/1
-usage 0/49
+usage 0/51
 variantfieldname 1/8
 variantselector 0/8
 variantstorageat 0/13
@@ -747,7 +749,7 @@ writebinding 0/5
 writebinop 0/21
 writeboundname 0/2
 writecontext 7/78
-writedistincttypenote 0/37
+writedistincttypenote 0/38
 writekeyword 0/2
 writekwword 0/3
 writelabelwhat 1/5

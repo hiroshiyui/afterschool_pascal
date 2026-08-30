@@ -1,0 +1,32 @@
+# ADR-0258: where a statement begins and ends, and the two editor gestures it
+# buys -- folding, and expanding a selection outward through nested statements.
+#
+# ADR-0253 gave a *declaration* an extent and closed by naming what was left:
+# "an `if` or a `while` does not [know where it ends], so selection expansion
+# stops at the enclosing declaration and does not step outward through nested
+# statements". This is that half.
+#
+# `--dump-stmts` stops after the parse, so both answers are available for a
+# file that does not compile -- which is when a file is being typed into and
+# when both gestures are used.
+
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+
+{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///scratch/hello.pas","languageId":"pascal","version":1,"text":"program p(output);\nvar i: integer;\nbegin\n  if i = 1 then\n    i := 2\n  else\n    i := 3;\n  while i < 9 do begin\n    i := i + 1;\n    i := i * 2\n  end\nend.\n"}}}
+
+# Two foldable constructs: the program's own compound and the `while` body's,
+# plus the `if` and the `while`. A one-line statement offers no fold.
+{"jsonrpc":"2.0","id":2,"method":"textDocument/foldingRange","params":{"textDocument":{"uri":"file:///scratch/hello.pas"}}}
+
+# Inside the inner assignment on line 9. The chain runs outward: the
+# assignment, the compound it stands in, the `while`, and the program's own
+# compound. That fourth link is what ADR-0253 could not give.
+{"jsonrpc":"2.0","id":3,"method":"textDocument/selectionRange","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"positions":[{"line":8,"character":9}]}}
+
+# And a position on no statement at all -- in the declaration part -- which
+# is `null` rather than an empty chain.
+{"jsonrpc":"2.0","id":4,"method":"textDocument/selectionRange","params":{"textDocument":{"uri":"file:///scratch/hello.pas"},"positions":[{"line":1,"character":4}]}}
+
+{"jsonrpc":"2.0","id":5,"method":"shutdown"}
+{"jsonrpc":"2.0","method":"exit"}

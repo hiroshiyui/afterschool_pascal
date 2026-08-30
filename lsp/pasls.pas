@@ -159,6 +159,18 @@ const
     attached at this depth, which keeps the answer well-formed. }
   SymDepthMax = 64;
 
+  { How many statements of one document this server holds while answering a
+    selection (ADR-0258). A fixed bound in the shape ADR-0012 gives every
+    buffer here, and generous: `selfhost/apfront.pas` is 22 900 lines and
+    reports about 8 000 statements, and a document past this limit loses the
+    outermost ranges of its later statements rather than answering wrongly. }
+  StmtMax = 20000;
+
+  { Lines dominate columns when two statements are compared for size. A line
+    is worth more than any column could be, so an outer statement beginning on
+    the same line as an inner one is still the larger of the two. }
+  StmtLineWeight = 100000;
+
   { How far below the workspace root a `.components` file is looked for. This
     tree is three deep at its deepest (`tests/dialect/components/`); eight is
     room without a checkout of somebody's whole home directory being walked
@@ -890,6 +902,11 @@ begin
     name denotes and where it was declared are the same question. }
   JsonPut(caps, 'definitionProvider', JsonNewBoolean(true));
   JsonPut(caps, 'hoverProvider', JsonNewBoolean(true));
+  { ADR-0258: both come from `--dump-stmts`, which stops after the parse -- so
+    an editor folds and expands a selection in a file that does not compile,
+    which is when it is being typed into and when both gestures are used. }
+  JsonPut(caps, 'foldingRangeProvider', JsonNewBoolean(true));
+  JsonPut(caps, 'selectionRangeProvider', JsonNewBoolean(true));
   { Echoed whichever way it went, so the client is never guessing. }
   JsonPut(caps, 'positionEncoding', JsonNewText(EncodingName));
   JsonPut(result, 'capabilities', caps);
@@ -1927,6 +1944,221 @@ end;
   enumeration: a method this server does not implement is answered when it is
   a request and ignored when it is a notification, which is what the
   specification asks for in each case. }
+{ One `stmt` line of `--dump-stmts` (ADR-0258): where a statement begins, where
+  it ends, and Pascal's word for what kind it is. Taken apart in one place for
+  the reason SymParse is -- two readers of one wire format is one too many. }
+type
+  StmtRow = record
+    line, col, endLine, endCol: integer;
+    word: ParseLine
+  end;
+
+{ Does this statement's extent contain (line, col)? A position on the last
+  character of the last token is inside; one at `endCol` is not, that being
+  one past it. }
+function Spans(q: StmtRow; line, col: integer): boolean;
+begin
+  Spans := ((line > q.line) or ((line = q.line) and (col >= q.col)))
+           and ((line < q.endLine)
+                or ((line = q.endLine) and (col < q.endCol)))
+end;
+
+{ How big a statement is, for comparing two that both contain a position.
+  Lines dominate columns, which is what makes an outer statement beginning on
+  the same line as an inner one still come out larger. }
+function Extent(q: StmtRow): integer;
+begin
+  Extent := (q.endLine - q.line) * StmtLineWeight + q.endCol - q.col
+end;
+
+function StmtParse(text: StrItem; var q: StmtRow): boolean;
+begin
+  if SymField(text, 1) <> 'stmt' then
+    StmtParse := false
+  else begin
+    q.line := IntOr(ParseInt(SymField(text, 2)), 0);
+    q.col := IntOr(ParseInt(SymField(text, 3)), 0);
+    q.endLine := IntOr(ParseInt(SymField(text, 4)), 0);
+    q.endCol := IntOr(ParseInt(SymField(text, 5)), 0);
+    q.word := SymField(text, 6);
+    StmtParse := q.line > 0
+  end
+end;
+
+{ Is this the kind of statement a reader wants to fold away? Every multi-line
+  statement has an extent, and offering to fold a two-line assignment is noise
+  -- what an editor's gutter is for is the constructs that *contain* other
+  statements. The list is 6.9.3's, which is why it reads as one. }
+function Foldable(word: ParseLine): boolean;
+begin
+  Foldable := (word = 'compound') or (word = 'if') or (word = 'while')
+              or (word = 'repeat') or (word = 'for') or (word = 'with')
+              or (word = 'case')
+end;
+
+{ The statements of a document, asked of the compiler. `--dump-stmts` stops
+  after the parse, so it needs no `--import` and answers for a file that does
+  not compile -- which is the property that matters here, an editor drawing
+  folds while the file is being typed into. Not cached, unlike ADR-0252's
+  answer: folding is asked once when a document is opened or changed, where a
+  hover is asked on every cursor pause. }
+function StatementsOf(uri: DocUri; var lines: StrVecPtr): boolean;
+var at: integer; d: Document; cmd: CommandLine; r: RunResult;
+begin
+  StatementsOf := false;
+  at := IndexOf(uri);
+  if at = 0 then exit;
+  d := VecGet(DocVec, Document, docs, at);
+  if not WriteScratch(d.text) then exit;
+  if not CompilerCommand(' --dump-stmts', '', scratchPath, cmd) then exit;
+  SVecNew(lines, 64);
+  r := CaptureLines(cmd, lines);
+  if r.ok then StatementsOf := true
+  else begin
+    Note('could not run the compiler: ' + ErrorText(r.cause));
+    SVecFree(lines)
+  end
+end;
+
+{ 3.17's foldingRange: line numbers only, and 0-based. A one-line construct is
+  not offered, there being nothing to fold. }
+procedure Folding(id: JsonPtr; params: JsonPtr);
+var uri: DocUri; lines: StrVecPtr; i, k, have: integer; q: StmtRow;
+    reply, result, obj: JsonPtr;
+    seen: boolean;
+    fromLine: array [1..StmtMax] of integer;
+    toLine: array [1..StmtMax] of integer;
+begin
+  reply := NewResponse(id);
+  result := JsonNewArray;
+  uri := UriOf(params);
+  have := 0;
+  if StatementsOf(uri, lines) then begin
+    for i := 1 to SVecLen(lines) do
+      if StmtParse(SVecGet(lines, i), q) then
+        if Foldable(q.word) and (q.endLine > q.line) then begin
+          { **Deduplicated by the lines it covers**, which is not tidiness: a
+            `while c do begin ... end` is two foldable statements over exactly
+            the same lines, and so is every other loop or arm whose body is a
+            compound. Offering both puts two identical arrows in a reader's
+            gutter, one of which does nothing visible. The dump is in
+            completion order, so the inner one is seen first and the outer is
+            the duplicate; either would do, the range being the same. }
+          seen := false;
+          for k := 1 to have do
+            if (fromLine[k] = q.line) and (toLine[k] = q.endLine) then
+              seen := true;
+          if (not seen) and (have < StmtMax) then begin
+            have := have + 1;
+            fromLine[have] := q.line;
+            toLine[have] := q.endLine;
+            obj := JsonNewObject;
+            JsonPut(obj, 'startLine', JsonNewInteger(q.line - 1));
+            { 3.17 collapses the lines *after* startLine through endLine, so
+              endLine is the construct's own last line -- the one holding its
+              `end` or its final statement. One less would leave that line
+              showing on its own, which reads as a fold that did not finish. }
+            JsonPut(obj, 'endLine', JsonNewInteger(q.endLine - 1));
+            JsonAppend(result, obj)
+          end
+        end;
+    SVecFree(lines)
+  end;
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
+{ 3.17's selectionRange: for each position asked about, the chain of ranges a
+  reader expands through -- the innermost first, each carrying its `parent`.
+
+  ADR-0253 gave a declaration an extent and said what was still missing:
+  "selection expansion stops at the enclosing declaration and does not step
+  outward through nested statements". This is that half. The chain therefore
+  ends at the outermost *statement*, the declaration above it being what
+  `documentSymbol` already reports and what an editor already holds.
+
+  Built outermost first, because a `parent` has to exist before the child that
+  names it. The scan is quadratic in the number of containing ranges, which is
+  a statement nesting and never more than a handful -- sorting the whole file's
+  statements to save that would cost more than it saves. }
+procedure Selection(id: JsonPtr; params: JsonPtr);
+var uri: DocUri; lines: StrVecPtr;
+    i, k, best, bestSize, size, have, links: integer;
+    positions, pos_, reply, result, chain, obj: JsonPtr;
+    q: StmtRow;
+    pl, pc: integer;
+    at: integer; d: Document;
+    source, endSource: DiagLine;
+    used: array [1..StmtMax] of boolean;
+    rows: array [1..StmtMax] of StmtRow;
+begin
+  reply := NewResponse(id);
+  result := JsonNewArray;
+  uri := UriOf(params);
+  at := IndexOf(uri);
+  positions := JsonMember(params, 'positions');
+  have := 0;
+  if (at <> 0) and StatementsOf(uri, lines) then begin
+    d := VecGet(DocVec, Document, docs, at);
+    for i := 1 to SVecLen(lines) do
+      if StmtParse(SVecGet(lines, i), q) then
+        if have < StmtMax then begin
+          have := have + 1;
+          rows[have] := q
+        end;
+    SVecFree(lines);
+    for k := 1 to JsonCount(positions) do begin
+      pos_ := JsonAt(positions, k);
+      pl := JsonIntegerOr(JsonMember(pos_, 'line'), -1) + 1;
+      LineOf(d.text, pl, source);
+      pc := ByteColumn(source,
+                       JsonIntegerOr(JsonMember(pos_, 'character'), 0));
+      for i := 1 to have do used[i] := false;
+      chain := nil;
+      links := 0;
+      repeat
+        best := 0;
+        bestSize := 0;
+        for i := 1 to have do
+          if not used[i] then
+            if Spans(rows[i], pl, pc) then begin
+              size := Extent(rows[i]);
+              if (best = 0) or (size > bestSize) then begin
+                best := i;
+                bestSize := size
+              end
+            end;
+        if best <> 0 then begin
+          used[best] := true;
+          LineOf(d.text, rows[best].line, source);
+          LineOf(d.text, rows[best].endLine, endSource);
+          obj := JsonNewObject;
+          JsonPut(obj, 'range',
+                  SpanRange(source, rows[best].line, rows[best].col,
+                            endSource, rows[best].endLine,
+                            rows[best].endCol));
+          if chain <> nil then JsonPut(obj, 'parent', chain);
+          chain := obj;
+          links := links + 1
+        end
+      until (best = 0) or (links >= StmtMax);
+      if chain = nil then JsonAppend(result, JsonNewNull)
+      else JsonAppend(result, chain)
+    end
+  end
+  else
+    { A document this server does not hold, or a compiler that would not run.
+      3.17 asks for one answer per position, so `null` per position rather
+      than an empty array -- a client indexes the reply by the position it
+      asked about. }
+    for k := 1 to JsonCount(positions) do
+      JsonAppend(result, JsonNewNull);
+  JsonPut(reply, 'result', result);
+  Send(reply);
+  JsonFree(reply)
+end;
+
 { Which document a `textDocument/didChange` is about, or the empty string for
   any other message. Used to decide whether one change makes an earlier one
   stale (ADR-0257). }
@@ -1959,6 +2191,8 @@ begin
   else if method = 'textDocument/documentSymbol' then Outline(id, params)
   else if method = 'textDocument/definition' then Definition(id, params)
   else if method = 'textDocument/hover' then Hover(id, params)
+  else if method = 'textDocument/foldingRange' then Folding(id, params)
+  else if method = 'textDocument/selectionRange' then Selection(id, params)
   else if id <> nil then Unsupported(id, method)
 end;
 

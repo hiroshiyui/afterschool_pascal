@@ -206,6 +206,7 @@ var
     is wanted for a source Sema would reject, and --dump-all runs the
     whole pipeline. }
   dumpSymbolsOpt: boolean;
+  dumpStmtsOpt: boolean;
   { --dump-imports: the program-components this translation read, in
     activation order, for the build tool that has to translate and link them
     (ADR-0244). It stops after the parse, as --dump-symbols does, and for the
@@ -454,6 +455,8 @@ begin
   writeln('                  in the order they must be activated, and stop');
   writeln('  --dump-symbols  write every name this source declares, with');
   writeln('                  its kind, position and nesting, and stop');
+  writeln('  --dump-stmts    write where every statement of this source');
+  writeln('                  begins and ends, and stop');
   writeln('  --dump-uses     check as usual, then write every name this');
   writeln('                  source uses and where it was declared');
   writeln('  --coverage      emit statement counters; the program then');
@@ -497,6 +500,7 @@ begin
   dumpPredsOpt := false;
   dumpLayoutOpt := false;
   dumpSymbolsOpt := false;
+  dumpStmtsOpt := false;
   dumpImportsOpt := false;
   dumpUsesOpt := false;
   dumpDispatchOpt := false;
@@ -534,6 +538,7 @@ begin
     else if EQ(a, '--dump-predicates') then dumpPredsOpt := true
     else if EQ(a, '--dump-layout') then dumpLayoutOpt := true
     else if EQ(a, '--dump-symbols') then dumpSymbolsOpt := true
+    else if EQ(a, '--dump-stmts') then dumpStmtsOpt := true
     else if EQ(a, '--dump-imports') then dumpImportsOpt := true
     else if EQ(a, '--dump-uses') then dumpUsesOpt := true
     else if EQ(a, '--dump-dispatch') then dumpDispatchOpt := true
@@ -11680,7 +11685,8 @@ begin
       { After the resolution above, which is where the list comes from. }
       if (not errorSeen) and dumpImportsOpt then DumpComponentList(earlier)
     end;
-    go := not ((dumpAstOpt or dumpSymbolsOpt or dumpImportsOpt) and not whole)
+    go := not ((dumpAstOpt or dumpSymbolsOpt or dumpStmtsOpt or
+                dumpImportsOpt) and not whole)
   end;
 
   { --- check -------------------------------------------------------------- }
@@ -11739,6 +11745,7 @@ begin
       anything is read, because a defining-point in an --import is declared
       while curFile names that import. }
     notingUses := dumpUsesOpt;
+    notingStmts := dumpStmtsOpt;
     mainFile := srcName;
     BindTo(source, srcName);
     Compile

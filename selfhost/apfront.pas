@@ -480,6 +480,10 @@ begin
     tok[tokCount].kind := k;
     tok[tokCount].line := l;
     tok[tokCount].col := c;
+    { The lexer has already consumed the token by the time it records it, so
+      `col` is one past its last character -- which is the one number nothing
+      downstream can recompute (ADR-0258). }
+    tok[tokCount].endCol := col;
     tok[tokCount].at := 0;
     tok[tokCount].len := 0;
     tok[tokCount].intVal := 0;
@@ -1420,6 +1424,10 @@ begin
   n^.nsBindable := false;
   n^.nParen := false;
   n^.nChecked := false;
+  { ADR-0258: stamped by the parser for a statement and left alone for
+    everything else, so zero means "not recorded" rather than "column zero". }
+  n^.endLine := 0;
+  n^.endCol := 0;
   { What Sema will fill in. A C++ struct gets these from its member
     initialisers; a variant record has none, and the dump reads them whether or
     not Sema ran, so they are cleared where the node is made. }
@@ -3580,12 +3588,74 @@ begin
   ParseIdentStatement := s
 end;
 
+{ Pascal's word for a statement, in the vocabulary `--dump-symbols` uses for a
+  declaration (ADR-0239): the language's own words and never a protocol's
+  numbers. A kind this chain has not heard of is reported as `statement`
+  rather than dropped -- a caller folding a range does not need to know what
+  the construct is called, and inventing a name for it would be worse than
+  admitting there isn't one. }
+procedure PutStmtWord(k: nodeKind);
+begin
+  case k of
+    nkCompound:  write('compound');
+    nkIf:        write('if');
+    nkWhile:     write('while');
+    nkRepeat:    write('repeat');
+    nkFor:       write('for');
+    nkWith:      write('with');
+    nkCase:      write('case');
+    nkAssign:    write('assign');
+    nkProcCall:  write('call');
+    nkWrite:     write('write');
+    nkRead:      write('read');
+    nkGoto:      write('goto');
+    nkLabeled:   write('labelled');
+    nkDefer:     write('defer');
+    nkEmpty:     write('empty');
+    otherwise    write('statement')
+  end
+end;
+
+{ Where a production that started at `from` has finished: the last token it
+  consumed, and one past that token's last character (ADR-0258). A production
+  that consumed nothing -- 6.8.2.1's empty statement -- is zero-width at its
+  own position, which is not the same as the token before it.
+
+  It reports as well as records when `--dump-stmts` is on, and reports *here*
+  because this is the one moment anything knows a statement is finished. The
+  line is written during the parse and interleaves with diagnostics on the
+  same stream, exactly as `--dump-uses` does (ADR-0246) and for the same
+  reason: an editor asks where a construct ends while the file does not
+  compile, and a reader takes the lines it recognises by their first word.
+  The order is therefore *completion* order -- innermost first -- which costs
+  a caller nothing, containment being decidable from the ranges. }
+procedure StampEnd(n: nodePtr; from: integer);
+begin
+  if n <> nil then begin
+    if pos > from then begin
+      n^.endLine := tok[pos - 1].line;
+      n^.endCol := tok[pos - 1].endCol
+    end
+    else begin
+      n^.endLine := n^.line;
+      n^.endCol := n^.col
+    end;
+    if notingStmts then begin
+      write('stmt ', n^.line:1, ' ', n^.col:1, ' ',
+            n^.endLine:1, ' ', n^.endCol:1, ' ');
+      PutStmtWord(n^.kind);
+      writeln
+    end
+  end
+end;
+
 function ParseStatement;
-var s: nodePtr;
+var s: nodePtr; from: integer;
 begin
   { Every statement-in-statement cycle -- begin/end, if, while, for, with,
     case -- passes through here, so one guard covers them all. }
   EnterLevel;
+  from := pos;
   s := nil;
   if not aborted then begin
     if Check(tkBegin) then s := ParseCompound
@@ -3642,6 +3712,7 @@ begin
     end
   end;
   LeaveLevels(1);
+  StampEnd(s, from);
   ParseStatement := s
 end;
 
@@ -4067,7 +4138,7 @@ end;
   no extra machinery here. }
 function ParseBlock;
 var b, ph, pt, ch, ct, th, tt, vh, vt, lh, lt: nodePtr; done: boolean;
-    part: integer;
+    part, bodyFrom: integer;
 begin
   { A block is a level of the tree, and it is the level Sema's scope stack is
     indexed by. Nothing counted it: a procedure declaration nested a *scope*
@@ -4141,11 +4212,17 @@ begin
   b^.blVars := vh;
   b^.blProcs := ph;
 
+  bodyFrom := pos;
   b^.blBody := ParseCompound;
+  { ADR-0258: a block's own compound never passes through ParseStatement, so
+    it is stamped here or it is the one statement in a file with no extent. }
+  StampEnd(b^.blBody, bodyFrom);
   { Just past the `end` ParseCompound consumed, which is where this block
     stops (ADR-0253). `pos` is the token after it, and its position is where
     a caller's range should end -- an extent that stopped *at* the `end` would
-    exclude the word itself. }
+    exclude the word itself. The compound's own extent above is a *different*
+    number on purpose: a statement ends at its own last token, and a block
+    ends at the token past it. }
   b^.blEndLine := tok[pos].line;
   b^.blEndCol := tok[pos].col;
   LeaveLevels(1);

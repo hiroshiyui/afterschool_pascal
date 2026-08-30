@@ -121,7 +121,7 @@ export ApTypes = (
   layoutHead, programSym, ircode, imports, importName, dumping,
   dumpLayoutOpt, dumpDispatchOpt, dispatchHead, dispatchTail, enumHead,
   enumTail, chainHead, chainTail, tagHead, tagTail, curFile, curImportIdx,
-  mainTokBase, notingUses, mainFile, FileIndexOf, instDeclHead, intType, int64Type, canonTextType,
+  mainTokBase, notingUses, notingStmts, mainFile, FileIndexOf, instDeclHead, intType, int64Type, canonTextType,
   stringSchema, handleClosers, StrClear, StrAppend, Put, PutIrLit,
   ErrorAt, PoolAdd, WritePool, PoolIsWide, PoolIs, ReservedForeignName,
   PoolSame, PoolPut, InternWord, InternWide, InternWide2,
@@ -398,6 +398,13 @@ type
   token = record
     kind: tokenKind;
     line, col: integer;
+    { One past this token's last character, on the same line -- no token here
+      spans one, a string-literal included (6.1.7). It is not derivable from
+      what is beside it, which is the reason it is recorded (ADR-0258): `len`
+      is the length in the string *pool*, which is zero for every token
+      AddSimple builds and differs from the source length for a literal --
+      `'a''b'` is three pool characters and six source ones. }
+    endCol: integer;
     at, len: integer;   { the spelling or value, in the pool }
     intVal: integer;
     { A literal too large for the integer type. The value left behind is an
@@ -1590,6 +1597,20 @@ type
       would grow a slot nothing reads. Set nowhere else and read nowhere
       else. }
     nChecked: boolean;
+    { Where the construct this node is ends: the line of its last token and one
+      past that token's last character (ADR-0258). Zero on a node nothing
+      stamped, which is every node that is not a statement -- the parser knows
+      a statement's extent because it is standing past it when the production
+      returns, and knows nothing of the kind about an expression it built
+      bottom-up.
+
+      **Not the position of the next token**, which is what a block's own end
+      is (ADR-0253) and is right there because a block's `end` is followed by
+      `;` or `.` immediately. After a *statement* the next token is `;`, `end`,
+      `else`, `until` or `otherwise`, routinely on a later line and with
+      comments in between -- and a comment is not a token, so that position
+      would swallow whatever a reader wrote after the statement. }
+    endLine, endCol: integer;
     case kind: nodeKind of
       nkInt:        (intVal: integer);
       { A real literal is kept as its source text and not converted. The
@@ -2159,6 +2180,12 @@ var
     Off by default and read once per lookup, which is --coverage's discipline
     (ADR-0104): a compilation that is not asking pays one boolean test. }
   notingUses: boolean;
+  { ADR-0258: `--dump-stmts` is on, so the parser reports each statement's
+    extent as it finishes one. The same shape `notingUses` has and for the
+    same reason -- the stage that did the work already knows the answer, and a
+    walker over the finished tree would be a second reader of a variant record
+    free to miss a node kind in silence (ADR-0230). }
+  notingStmts: boolean;
   { The source named on the command line, against which `curFile` says whether
     the text Sema is checking belongs to *this* document. It is the one fact
     already maintained for that purpose -- CheckModule sets curFile from the
@@ -4068,6 +4095,7 @@ to begin do
     curFile := '';
     curImportIdx := 0;
     notingUses := false;
+    notingStmts := false;
     mainFile := '';
     instDeclHead := nil;
     stringSchema := nil;

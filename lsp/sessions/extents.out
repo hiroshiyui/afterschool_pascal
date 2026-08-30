@@ -1,0 +1,13 @@
+Content-Length: 266
+
+{"jsonrpc":"2.0","id":1,"result":{"capabilities":{"textDocumentSync":1,"documentSymbolProvider":true,"definitionProvider":true,"hoverProvider":true,"foldingRangeProvider":true,"selectionRangeProvider":true,"positionEncoding":"utf-16"},"serverInfo":{"name":"pasls"}}}Content-Length: 122
+
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/hello.pas","diagnostics":[]}}Content-Length: 121
+
+{"jsonrpc":"2.0","id":2,"result":[{"startLine":3,"endLine":6},{"startLine":7,"endLine":10},{"startLine":2,"endLine":11}]}Content-Length: 371
+
+{"jsonrpc":"2.0","id":3,"result":[{"range":{"start":{"line":8,"character":4},"end":{"line":8,"character":14}},"parent":{"range":{"start":{"line":7,"character":17},"end":{"line":10,"character":5}},"parent":{"range":{"start":{"line":7,"character":2},"end":{"line":10,"character":5}},"parent":{"range":{"start":{"line":2,"character":0},"end":{"line":11,"character":3}}}}}}]}Content-Length: 40
+
+{"jsonrpc":"2.0","id":4,"result":[null]}Content-Length: 38
+
+{"jsonrpc":"2.0","id":5,"result":null}
