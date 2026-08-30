@@ -312,13 +312,17 @@ and both now the shape of a decision rather than an omission:
 ## The program that would judge the language
 
 **A Language Server Protocol implementation, written in Afterschool Pascal and
-for it**: a server over standard input and output that reads `didOpen` and
-`didChange`, compiles what it is handed, and answers `publishDiagnostics` —
-and then, as it grows, the document symbols, the hovers and the
-go-to-definition an editor asks a server for. Written **here**, or it measures
-nothing: a shim in another language wrapped around `pascalc` would be a
-statement about tooling and not about this dialect, and outside ADR-0116's
+for it**, and since v3.1.0 it is *written*: `lsp/pasls.pas` reads `didOpen` and
+`didChange`, compiles what it is handed, and answers `publishDiagnostics`,
+`documentSymbol`, `definition` and `hover` — every occurrence this language
+has, across program-components. It was written **here**, which was the whole
+condition: a shim in another language wrapped around `pascalc` would have been
+a statement about tooling and not about this dialect, and outside ADR-0116's
 discipline entirely.
+
+This chapter is kept in the tense it was written in below, because the
+argument is what a reader needs and it was made before the outcome was known.
+What follows the argument is what actually happened.
 
 It is not proposed as a feature and it is not part of the compiler. It is
 proposed as **the caller**, and the reason is ADR-0116's rule taken as far as
@@ -378,6 +382,27 @@ Three things buy it back.
   objectively. It answers nothing about the *language* — the specification is
   about a protocol — but the program judging the language is then held to
   something this project did not write.
+
+  **That argument went unredeemed for six increments and is redeemed now.**
+  Every session in `lsp/sessions/` is a golden written here, which is the
+  *"a golden agrees with whatever wrote it"* blind spot this project is most
+  careful about everywhere else — so the one thing LSP was chosen for was the
+  one thing not being collected. What redeems it is **Microsoft's own
+  `vscode-jsonrpc`**, the reference implementation of the wire protocol that
+  VS Code itself uses, driving the server as a client: initialize with a real
+  capabilities object, `initialized`, `didOpen`, diagnostics received,
+  `definition`, `hover`, `documentSymbol` with hierarchy, `$/cancelRequest`,
+  pipelined requests, positions past the end of a document and of a line, a
+  method the server does not implement, `shutdown`, `exit`. **Zero connection
+  errors and zero unhandled notifications**, across every probe.
+
+  The sharpest result is ADR-0237's, and it is the one no golden here could
+  have produced. Given a line where an astral pair and an accented letter
+  precede an identifier — byte column 20, UTF-16 column 17 — the server
+  answered **17** under `utf-16` and **20** under `utf-8`, against expectations
+  the *client* computed from the document. A reading this project made about a
+  protocol it does not own is now confirmed by an implementation it did not
+  write. That is what open question §1 asks for and had never had.
 
 ~~**One hazard, and it is the sharpest edge in the idea.**~~ **Answered, and
 the text model came through it** (ADR-0237). LSP positions are **UTF-16 code
@@ -470,7 +495,9 @@ not already know is exactly the one declared somewhere else.
 ### The first findings
 
 The roadmap says the product of writing this is the list of what it demands.
-Twenty-three entries so far, and **seventeen of them have been acted on** — which
+Twenty-six entries so far, and **seventeen of them have been acted on** — three
+of the nine open are the usability findings below, which are recorded rather
+than acted on because each names a design question and not a defect — which
 is the discipline this chapter is for: a finding recorded and left is a finding
 wasted, and the rule that made the first one actionable was this section's own
 — one site is an anecdote, two are a demand (ADR-0116).
@@ -478,10 +505,80 @@ wasted, and the rule that made the first one actionable was this section's own
 **The seventeen that closed are in
 [`doc/history.md`](history.md#the-language-servers-findings-as-they-were-recorded)**,
 each with what closing it found. The shape of that list is the argument for
-the chapter: five of the twenty-three were **bounds** — 8 imports, 24 arguments,
+the chapter: five of the twenty-six were **bounds** — 8 imports, 24 arguments,
 a 63-character key, a 255-character line, a 16 384-byte capture — and every
 one of them was chosen by counting what the largest thing in the tree needed
 at the time. The largest thing in the tree was a test case.
+
+### The usability findings, which took a deliberate pass to get
+
+**Twenty-three findings and not one of them was about *usability*, which is
+what this chapter said it was for.** Every one was a capability finding — a
+bound too small, a routine absent, `getpid` missing, a compiler that did not
+record a position. Those are *X was not there*; this chapter asked *Y was
+unpleasant*, and named four questions: where the boilerplate collects, which
+of the three affine kinds gets in the way, whether `T ! E` and `try` still
+read well at depth, and whether a module's export list is a help or a chore at
+the fortieth import.
+
+The reason is structural rather than flattering. Each increment was
+feature-driven and recorded what **blocked** it, because a block stops you and
+an annoyance does not — so the method this chapter proposed is biased toward
+capability gaps by construction. Getting the other kind took reading the
+finished program as a *reader* rather than as its author, which is a different
+activity and had never been done. Three came out of one pass.
+
+- **The dialect's error-handling constructs are unused by its largest
+  client.** `lsp/pasls.pas` is 1 944 lines and contains **no `T ! E` and no
+  `try`** — not one of either. It is not that the library withholds them:
+  `PasIO.OpenRead`, `ReadInto` and `WriteFrom`, `PasFS.Info`,
+  `WorkingDirectory`, `LinkTarget` and `TemporaryPath`, and `PasJson`'s parse
+  all answer a fallible-type, and the server imports all three modules.
+
+  What it reaches for instead is the **accessor**: `IntOr` sixteen times,
+  `JsonIntegerOr` and `LookupOr` three each, `PathOr` once. Twenty-three calls
+  against zero. The cause is that `try(x)` propagates by *leaving the routine*
+  (AP 6.8.9), which is right for a program that may fail and wrong for a
+  server, which must answer something to every request — so the library grew
+  `…Or(r, whenBad)` and the client uses that. **There are nine such helpers
+  across `lib/`**, one per result type, because a routine generic over the
+  fallible type cannot be written: AP 6.7.3.5 parameterises a *schema* by a
+  type and ADR-0211's row for generic routines is still open. The boilerplate
+  this chapter asked about collects there, and it is nine names wide.
+
+  This is not an argument against `try`. It is the finding that **the shape a
+  server needs is the one the language does not have**, and that the shape it
+  does have has never been exercised at depth by anything here — so the
+  question this chapter asked about `T ! E` reading well at depth is still
+  unanswered, and now for a stated reason.
+
+- **`only` is a collision workaround, not a narrowing tool.** The server
+  imports **twelve** modules — the roadmap said ten, and it grew — against
+  export lists that reach 49 names (`PasJson`), 24 (`PasFS`) and 16
+  (`PasIO`). Both of its §6.11.3 `only` clauses are there because two modules
+  export the same spelling: `PasDir` exports `Close` and `NameMax`, which
+  `PasIO` and `PasJson` also export, and `PasParse` exports `ResultText`, and
+  so does `PasError`. Neither `only` narrows for the sake of narrowing; each
+  enumerates what the client wants from the *colliding* module so the other
+  one's spelling survives.
+
+  At twelve imports that is an annoyance with a workaround. It is worth
+  recording because it **scales the wrong way**: collisions grow with the
+  product of the export lists, `only` is per-import and enumerative, and the
+  alternative the standard offers — `qualified` — makes every use of that
+  module wordier rather than the one that collides. The answer this chapter's
+  own practice suggests is to write the fortieth-import program before
+  designing anything, and there is not one.
+
+- **A comment in the client is the third finding and needs no prose here.**
+  `MapKey` is 63 characters, so the document store is a vector searched
+  linearly; `JsonLine` is 255, so a URI is held as a line. Both are already
+  entries above. What the ergonomic pass adds is that the *reason* they are
+  tolerable is the same reason `…Or` is: the program is small enough that
+  linear search and a per-type helper cost nothing. **None of these three
+  findings would have been found by a program that was merely correct.** They
+  were found by asking what writing it was like, which is what this chapter is
+  for and what it had not done.
 
 The six below are what a program of this size still runs into. Two of them are
 bounds that have not yet cost anything, one is a rule about the language a
@@ -567,7 +664,28 @@ the product of writing it**, and enumerating it here would be designing
 features without a caller — which is the practice this entry exists to serve
 rather than to break.
 
-### MCP implementation — **built** (ADR-0241)
+### MCP implementation — **built** (ADR-0241), and now **in use here**
+
+**A short-term goal, and it is met**: the MCP server runs as this project's own
+development tooling. `.mcp.json` in the checkout declares it, `lsp/mcp.sh` is
+the stable command it names — finding a compiler in the build tree or on
+`PATH`, building the server if the binary is missing or older than its sources,
+and execing it with `--mcp` — and an agent working on this repository can then
+ask `outline` where something is declared and `diagnostics` what the compiler
+makes of a file, without shelling out to either.
+
+It is a launcher and not a CMake target on purpose. `lsp/build.sh` says why a
+server is a script rather than a build product — a server wants a binary a
+*user* can point an editor at, not one buried in a build tree — and that
+decision is worth keeping; what an agent needs is a stable *command*, which is
+a different thing and is what the launcher supplies.
+
+**Why this is a goal and not a convenience.** It closes the loop this chapter
+is about from the other end: the program written to judge the language becomes
+a program the people working on the language use every day, which is the only
+way a tool's own rough edges get found. It is also the first time anything in
+this tree is a *client* of the dialect during development rather than a
+subject of its test suite.
 
 The same binary answers MCP over stdio when given `--mcp`: one JSON message to
 a line instead of `Content-Length`, with two tools built on `--dump-symbols`

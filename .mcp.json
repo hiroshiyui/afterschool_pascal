@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "afterschool-pascal": {
+      "command": "./lsp/mcp.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

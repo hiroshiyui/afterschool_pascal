@@ -147,6 +147,26 @@ An **interface's own export-part** answers too
 registers an interface in a table beside the scope rather than in it, so it
 needed a reporter of its own rather than falling out of the walk.
 
+**It is checked against a client this project did not write.** Every session
+in `sessions/` is a golden written here, so Microsoft's `vscode-jsonrpc` — the
+reference implementation of the wire protocol that VS Code itself uses — was
+driven against the server as an independent client: a real capabilities
+object, `initialized`, diagnostics, `definition`, `hover`, `documentSymbol`
+with hierarchy, `$/cancelRequest`, pipelined requests, out-of-range positions,
+an unimplemented method. Zero connection errors and zero unhandled
+notifications. The sharpest result is the position encoding: on a line where
+an astral pair and an accented letter precede an identifier, the byte column
+is 20 and the UTF-16 column is 17, and the server answered each under the
+encoding that was negotiated.
+
+`lsp/mcp.sh` is the **MCP launcher**, named by `.mcp.json` at the top of the
+checkout so that an agent working on this repository has `outline` and
+`diagnostics` as tools. It finds a compiler in the build tree or on `PATH`,
+builds the server when the binary is missing or older than its sources, and
+execs it with `--mcp`. `build.sh` stays what it is — a server wants a binary a
+user can point an editor at — and this is the stable *command* an agent needs
+beside it.
+
 Anything the server has to say to a person goes to **standard error**. It has
 to: standard output is the protocol, and a Pascal `writeln` is buffered where a
 descriptor write is not, so a program that used both would interleave them
