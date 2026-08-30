@@ -78,9 +78,21 @@ appears below in the release where it still existed.
   chooses is which anchors — the system's, or one PEM file, a self-signed
   certificate being its own anchor. No server side, no client certificate and
   no revocation checking. A program using it links `-lssl -lcrypto`; nothing
-  else here links anything, the runtime included. This closes the last row of
+  else here links anything, the runtime included. Its exported bounds are
+  `Tls`-prefixed (`TlsLineMax` and the rest), as `PasLsp`'s are: `PasHttp` has
+  a `ReasonMax` of its own and `PasNet` three more, so an HTTPS client could
+  not otherwise import what it needs. This closes the last row of
   `doc/roadmap.md`'s *What a daily program still cannot reach for*, and that
   row had said it was blocked for two reasons neither of which was true.
+- **`lib/dialect/pashttps.pas`, HTTP/1.1 over TLS** (ADR-0265), and the
+  `PasHttp` grammar it is built on: `BeginRequest` and `NextPiece` turn a
+  request into the octets to write, and `BeginResponse`, `WantsLine`,
+  `FeedLine` and `FeedEnd` turn a sequence of lines into a response, with no
+  transport under any of them. `PasHttp.Send` and `PasHttp.Receive` are now
+  twelve lines each over that grammar and behave as they did; `PasHttps` is
+  the same twelve over a `PasTls.Connection`. A module that chose between
+  transports would have had to import `PasTls`, and then every program using
+  plain HTTP would link OpenSSL.
 - **`AFTERSCHOOL_PASCAL_LDFLAGS`**, which adds flags to `pascalcc`'s final
   link alone, after the runtime. `AFTERSCHOOL_PASCAL_CFLAGS` reaches every
   `clang` and stays that way for the sanitizers; a library a program *binds*

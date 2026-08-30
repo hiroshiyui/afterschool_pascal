@@ -71,8 +71,8 @@
 
 module PasTls;
 
-export PasTls = (HostMax, ServiceMax, LineMax, ReasonMax, ProtocolMax,
-                 TrustMax, BufMax,
+export PasTls = (TlsHostMax, TlsServiceMax, TlsLineMax, TlsReasonMax,
+                 TlsProtocolMax, TlsTrustMax, TlsBufMax,
                  TlsHost, TlsService, TlsLine, TlsReason, TlsProtocol,
                  TrustPath, Connection,
                  Connect, ConnectTrusting, Close,
@@ -85,28 +85,34 @@ export PasTls = (HostMax, ServiceMax, LineMax, ReasonMax, ProtocolMax,
 import PasError; PasNet qualified;
 
 const
-  { `PasNet`'s two bounds, restated rather than imported: POSIX's
+  { The bounds, each prefixed as `PasLsp`'s are and for the reason this
+    module found: a program speaking HTTPS imports `PasHttp` too, and both
+    modules have something they would call a `ReasonMax`. The types below are
+    `Tls`-prefixed already; a constant that is not is a name a client cannot
+    have back (ADR-0265).
+
+    `PasNet`'s two, restated rather than imported: POSIX's
     HOST_NAME_MAX is 255 and a service is a name or a number written out.
     They are separate types so that a program using this module needs no
     name of `PasNet`'s, the socket underneath being none of its business. }
-  HostMax = 255;
-  ServiceMax = 63;
+  TlsHostMax = 255;
+  TlsServiceMax = 63;
   { What a line may be, and it is `PasNet.LineMax` deliberately: a program
     that reads a socket and a program that reads a TLS connection meet the
     same bound, so moving between them is not a rewrite. }
-  LineMax = 4096;
+  TlsLineMax = 4096;
   { What the read buffer holds. A line longer than this is `errFull` and its
     characters are discarded, there being nowhere to keep them -- the same
     answer `PasNet` gives, from the same shape of buffer. }
-  BufMax = 4096;
+  TlsBufMax = 4096;
   { OpenSSL's `ERR_error_string_n` writes a diagnostic of about this length;
     120 is the number its own documentation names as sufficient, and this is
     room for that and a sentence of this module's. }
-  ReasonMax = 255;
+  TlsReasonMax = 255;
   { `SSL_get_version` answers `TLSv1.3` and its siblings. }
-  ProtocolMax = 15;
+  TlsProtocolMax = 15;
   { A path to a PEM file of trust anchors. }
-  TrustMax = 1023;
+  TlsTrustMax = 1023;
 
   { The two characters a line is terminated by, built with `chr` because
     §6.1.7 gives a character-string no escape (RFC 9112 §2.1's CRLF). }
@@ -114,12 +120,12 @@ const
   LF = chr(10);
 
 type
-  TlsHost = string(HostMax);
-  TlsService = string(ServiceMax);
-  TlsLine = string(LineMax);
-  TlsReason = string(ReasonMax);
-  TlsProtocol = string(ProtocolMax);
-  TrustPath = string(TrustMax);
+  TlsHost = string(TlsHostMax);
+  TlsService = string(TlsServiceMax);
+  TlsLine = string(TlsLineMax);
+  TlsReason = string(TlsReasonMax);
+  TlsProtocol = string(TlsProtocolMax);
+  TrustPath = string(TlsTrustMax);
 
   { The two opaque pointers OpenSSL's client interface is made of, each with
     the function that releases it (AP 6.4.12). Declared here rather than in
@@ -157,7 +163,7 @@ type
     { What has arrived and not been handed out: `buf[head..tail - 1]`. Empty
       when the two are equal, and both are 1 on a fresh connection. }
     head, tail: integer;
-    buf: array [1..BufMax] of char
+    buf: array [1..TlsBufMax] of char
   end;
 
 { Connect to `host` at `service` and complete a TLS handshake, verifying the
@@ -214,7 +220,7 @@ function WriteLine(var c: Connection; text: TlsLine): ErrorCode;
 
   `errNone` and `line` holds it; `errAbsent` when the far end closed and
   nothing was left, which is the ordinary end of a loop; `errFull` for a line
-  longer than `line` can hold or longer than `BufMax`, whose characters are
+  longer than `line` can hold or longer than `TlsBufMax`, whose characters are
   discarded; `errIO` for a refusal. A final line the far end sent without a
   terminator **is** a line.
 
@@ -330,7 +336,7 @@ procedure ErrString(e: int64; var b: array of char);
   refusal was the system's rather than the library's. }
 function Complaint(whenQuiet: TlsReason): TlsReason;
 var
-  b: array [1..ReasonMax + 1] of char;
+  b: array [1..TlsReasonMax + 1] of char;
   e, last: int64;
   i: integer;
   t: TlsReason;
@@ -341,11 +347,11 @@ begin
     if e <> 0 then last := e
   until e = 0;
   if last = 0 then exit(whenQuiet);
-  for i := 1 to ReasonMax + 1 do b[i] := chr(0);
+  for i := 1 to TlsReasonMax + 1 do b[i] := chr(0);
   ErrString(last, b);
   t := '';
   i := 1;
-  while (i <= ReasonMax) and (b[i] <> chr(0)) do begin
+  while (i <= TlsReasonMax) and (b[i] <> chr(0)) do begin
     t := t + b[i];
     i := i + 1
   end;
@@ -566,7 +572,7 @@ begin
     end;
 
     Compact(c);
-    if c.tail > BufMax then begin
+    if c.tail > TlsBufMax then begin
       { Nothing was found in a full buffer, so the line is longer than
         anything this can hold and its characters are gone. }
       c.head := 1;
@@ -575,7 +581,7 @@ begin
       exit(errFull)
     end;
 
-    n := SslRead(c.ss, c.buf[c.tail..BufMax], BufMax - c.tail + 1);
+    n := SslRead(c.ss, c.buf[c.tail..TlsBufMax], TlsBufMax - c.tail + 1);
     if n <= 0 then begin
       count := c.tail - c.head;
       if count > 0 then begin

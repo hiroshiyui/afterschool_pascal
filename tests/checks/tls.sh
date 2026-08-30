@@ -141,6 +141,16 @@ for pair in "good:localhost" "bad:other.example"; do
           >/dev/null 2>&1 || skip "openssl req refused to make a certificate"
 done
 
+# What the good server serves. `-WWW` answers `GET /hello` with this file and
+# nothing else, which is what keeps the goldens below free of anything OpenSSL
+# wrote: `-www`'s status page lists the ciphers the library was built with, and
+# is longer than `PasHttp`'s own `MaxBodyLines`. Three short lines, no
+# Content-Length, so RFC 9112 §6.3 rule 6 frames the body -- the shape only
+# `PasHttp.FeedEnd` completes.
+mkdir -p "$work/www"
+printf 'hello, TLS!\nthis body is framed by the close.\nthree lines is enough.\n' \
+  >"$work/www/hello"
+
 # A free port, asked for rather than assumed: a fixed number is a test that
 # fails on a machine where something else holds it.
 # Sets `port` -- not by writing it to standard output, because a command
@@ -150,9 +160,10 @@ port=
 start_server() {
   local tag=$1 p pid i
   for p in $(seq 24433 24473); do
-    openssl s_server -accept "$p" \
-            -cert "$work/$tag.pem" -key "$work/$tag.key" -www \
-            >"$work/$tag.log" 2>&1 </dev/null &
+    ( cd "$work/www" &&
+      exec openssl s_server -accept "$p" \
+           -cert "$work/$tag.pem" -key "$work/$tag.key" -WWW ) \
+      >"$work/$tag.log" 2>&1 </dev/null &
     pid=$!
     for i in $(seq 1 50); do
       sleep 0.1
@@ -180,17 +191,20 @@ export PASCALC="$pascalc"
 export AFTERSCHOOL_PASCAL_PATH="$root/lib/dialect"
 export AFTERSCHOOL_PASCAL_LDFLAGS="-lssl -lcrypto"
 
-if ! "$pascalcc" "$here/tls_probe.pas" -o "$work/probe" \
-     >"$work/build.txt" 2>&1; then
-  echo "tls: tls_probe.pas did not build" >&2
-  cat "$work/build.txt" >&2
-  exit 1
-fi
+for prog in tls_probe tls_https; do
+  if ! "$pascalcc" "$here/$prog.pas" -o "$work/$prog" \
+       >"$work/build.txt" 2>&1; then
+    echo "tls: $prog.pas did not build" >&2
+    cat "$work/build.txt" >&2
+    exit 1
+  fi
+done
 
 printf '%s\n%s\n%s\n%s\n' "$goodPort" "$badPort" \
        "$work/good.pem" "$work/bad.pem" >"$work/stdin.txt"
+printf '%s\n%s\n' "$goodPort" "$work/good.pem" >"$work/https.txt"
 
-if ! "$work/probe" <"$work/stdin.txt" >"$work/got.txt" 2>"$work/err.txt"; then
+if ! "$work/tls_probe" <"$work/stdin.txt" >"$work/got.txt" 2>"$work/err.txt"; then
   echo "tls: tls_probe exited non-zero" >&2
   cat "$work/err.txt" >&2
   cat "$work/got.txt" >&2
@@ -209,6 +223,27 @@ if ! diff -u "$here/tls_probe.expected" "$work/got.txt" >"$work/diff.txt"; then
   exit 1
 fi
 echo "tls: the probe agrees with its golden"
+
+# --- 3b. and the same grammar over the other transport -------------------
+#
+# `PasHttps` is `PasHttp`'s parser over `PasTls`'s transport (ADR-0265), and
+# this is the only place a second transport is driven at all: everything else
+# here reads a plain socket, so a grammar that had quietly kept a socket in it
+# would pass every other case in the tree.
+if ! "$work/tls_https" <"$work/https.txt" >"$work/https_got.txt" \
+     2>"$work/https_err.txt"; then
+  echo "tls: tls_https exited non-zero" >&2
+  cat "$work/https_err.txt" >&2
+  cat "$work/https_got.txt" >&2
+  exit 1
+fi
+if ! diff -u "$here/tls_https.expected" "$work/https_got.txt" \
+     >"$work/https_diff.txt"; then
+  echo "tls: tls_https did not print what was expected" >&2
+  cat "$work/https_diff.txt" >&2
+  exit 1
+fi
+echo "tls: HTTP/1.1 over TLS agrees with its golden"
 
 # --- 4. and the handles are released -------------------------------------
 #
@@ -230,10 +265,10 @@ if clang -fsanitize=address "$work/san.c" -o "$work/sanprobe" 2>/dev/null; then
      ar rcs "$work/sanlib/libpasrt.a" "$work"/pasrt*.o 2>/dev/null; then
     AFTERSCHOOL_PASCAL_RUNTIME="$work/sanlib" \
     AFTERSCHOOL_PASCAL_CFLAGS="-fsanitize=address" \
-      "$pascalcc" "$here/tls_probe.pas" -o "$work/probe-san" \
+      "$pascalcc" "$here/tls_probe.pas" -o "$work/tls_probe-san" \
       >"$work/sanbuild.txt" 2>&1 || ok=0
     if [[ $ok -eq 1 ]]; then
-      if "$work/probe-san" <"$work/stdin.txt" >/dev/null 2>"$work/san.txt"; then
+      if "$work/tls_probe-san" <"$work/stdin.txt" >/dev/null 2>"$work/san.txt"; then
         if grep -q 'LeakSanitizer\|ERROR: AddressSanitizer' "$work/san.txt"; then
           echo "tls: the sanitizer found something" >&2
           head -40 "$work/san.txt" >&2

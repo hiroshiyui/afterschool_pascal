@@ -1,0 +1,10 @@
+connected     : no error
+exchanged     : no error
+  status      : 200
+  stated      : -1
+  chunked     : FALSE
+  by close    : TRUE
+  body arrived: TRUE
+  content-type: TRUE
+second exchange: not present
+no Host field : not of the expected form

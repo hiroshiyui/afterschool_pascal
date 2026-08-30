@@ -1,6 +1,6 @@
 # `lib/dialect/` — how a routine says it may have failed
 
-These **twenty-two** modules use constructs no standard Pascal has, and
+These **twenty-three** modules use constructs no standard Pascal has, and
 **twelve** of them are the only part of this repository that reaches outside
 the program: the environment, the file system, file descriptors, the terminal,
 `errno`, TLS, and the C functions behind them. Counted by what they *bind* — an
@@ -16,12 +16,15 @@ not in `runtime/pasrt_posix.c` — the runtime links nothing, and a `pasx_` for
 this would make every program in the tree depend on a cryptography library
 (ADR-0264).
 
-The other ten are pure computation over what those hand them, here because
+The other eleven are pure computation over what those hand them, here because
 they are dialect-only for ADR-0119's reason and not because they touch
-anything: `pascontainer`, `paserror`, `pashttp`, `pasjson`, `paslist`,
-`paslsp`, `paslspdiag`, `pasparse`, `pasregex`, `pastime`. `pashttp` is the
-one worth a second look — a network client that binds nothing, because
-`PasNet` is what holds the socket and HTTP is a grammar over it.
+anything: `pascontainer`, `paserror`, `pashttp`, `pashttps`, `pasjson`,
+`paslist`, `paslsp`, `paslspdiag`, `pasparse`, `pasregex`, `pastime`.
+`pashttp` is the one worth a second look — a network client that binds
+nothing, because `PasNet` holds the socket and HTTP is a grammar over it, and
+since ADR-0265 that grammar is *exported* so a transport is a caller of it
+rather than a branch inside it. `pashttps` is that made concrete: the same
+grammar over `PasTls`, twenty-four lines, binding nothing itself.
 
 The rule below is about the eleven.
 

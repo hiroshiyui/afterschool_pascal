@@ -1,0 +1,43 @@
+a GET with one field:
+   1 |GET /th|
+   2 |ings?id|
+   3 |=7 HTTP|
+   4 |/1.1<>H|
+   5 |ost: ex|
+   6 |ample.t|
+   7 |est<>Co|
+   8 |nnectio|
+   9 |n: clos|
+  10 |e<><>|
+  10 writes of at most 7
+a POST with a body, and a Connection the caller chose:
+   1 |POST /t|
+   2 |hings H|
+   3 |TTP/1.1|
+   4 |<>Host:|
+   5 | exampl|
+   6 |e.test<|
+   7 |>Connec|
+   8 |tion: k|
+   9 |eep-ali|
+  10 |ve<>Con|
+  11 |tent-Le|
+  12 |ngth: 3|
+  13 |<><>x=1|
+  13 writes of at most 7
+no Host field:
+  refused: not of the expected form
+framed by Content-Length:
+  no error: 200 stated=12 chunked=FALSE byClose=FALSE lines=2 body=|hello>world|
+framed by chunks:
+  no error: 200 stated=-1 chunked=TRUE byClose=FALSE lines=1 body=|first|
+framed by the close:
+  no error: 200 stated=-1 chunked=FALSE byClose=TRUE lines=1 body=|to the end|
+cut off in the header section:
+  not of the expected form
+nothing at all:
+  not present
+a status-line that is not one:
+  not of the expected form
+a complete message with more behind it:
+  no error: 204 after 2 of 3 lines

@@ -3980,3 +3980,45 @@ The test that fails without the module's own decisions is
 constants gate green and fails the golden at *right chain, wrong name* and
 nowhere else, and `VerifyPeer = 0` fails the constants gate and nothing else.
 Each half catches what the other cannot.
+
+### HTTP's grammar and its transport are two modules (ADR-0265)
+
+`PasHttp` touched a socket at nine sites — one `WriteText` and eight
+`ReadLine`s — and nothing else in it touched anything. So HTTPS was a parser
+away from working, and the question was where the choice of transport goes.
+
+**Not inside `PasHttp`.** A module's activation is commenced before the
+program-block whether the program reaches into it or not (§6.2.3.6), so a
+`PasHttp` importing `PasTls` would make every plain-HTTP program link OpenSSL.
+And not as a parameter: §6.7.3.4's procedural parameter cannot carry a handle,
+and a variant record over the two transports needs both types declared, which
+is the import again.
+
+So the grammar is exported and each transport is a caller. `BeginRequest` and
+`NextPiece` turn a `Request` into octets; `BeginResponse`, `WantsLine`,
+`FeedLine` and `FeedEnd` turn a sequence of lines into a `Response`. A
+transport is twelve lines each way, and `lib/dialect/pashttps.pas` is those
+twenty-four over `PasTls`.
+
+Three things are worth carrying out of it.
+
+- **The two sides are not symmetric**, and which record is moving decides it.
+  The response's state lives in the `Response`, that record being built; the
+  request's lives in a `RequestCursor` of its own, because `Send` takes the
+  request `protected` and state inside it would take that away.
+- **`FeedEnd` is a routine because a close means three things.** Before a
+  status-line it is `errAbsent` — no response, not a bad one; inside the header
+  section or a chunked body it is `errSyntax`; in an uncounted body it is
+  RFC 9112 §6.3 rule 6 working, `errNone` with `byClose`. Those three answers
+  were spread across `Receive`, `ReadCounted` and `ReadChunked`, and the split
+  found them rather than inventing them.
+- **`NextPiece` spans a piece across calls**, so a caller's buffer bounds
+  nothing — and that is the one behaviour the socket transport cannot exercise,
+  its buffer being larger than any piece. `tests/dialect/lib_http_grammar.pas`
+  renders into a `string(7)` for exactly that: making `NextPiece` stop clipping
+  to the room left leaves `lib_http` green and fails that case alone.
+
+The duplication between the two transports is declined rather than removed:
+what they share is a loop shape, and factoring it out needs the interface type
+this language has not got (ADR-0201). Twenty-four lines against nine hundred,
+stated in the module.

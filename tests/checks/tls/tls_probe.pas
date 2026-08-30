@@ -66,9 +66,10 @@ begin
   writeln('  protocol negotiated : ',
           (length(c.protocol) >= 7) and (c.protocol[1..6] = 'TLSv1.'));
 
-  { 3. And it carries data. `-www` answers a status page whose first line is
-       a status-line; everything after it is OpenSSL's and is not printed. }
-  e := WriteLine(c, 'GET / HTTP/1.0');
+  { 3. And it carries data. `s_server -WWW` answers a small file the harness
+       wrote, so the body is this repository's and not OpenSSL's -- which is
+       what lets the two cases below name what they expect. }
+  e := WriteLine(c, 'GET /hello HTTP/1.0');
   Say('  request written    ', e, false);
   e := WriteLine(c, '');
   Say('  request ended      ', e, false);
@@ -77,8 +78,9 @@ begin
   writeln('  status line        : ', line[1..12]);
 
   { 4. A line longer than the caller's variable is `errFull` and not a
-       truncation. The next line of the status page is longer than eight
-       characters, and its characters are gone rather than half-delivered. }
+       truncation. The next line is `Content-type: text/plain`, longer than
+       eight characters, and its characters are gone rather than
+       half-delivered. }
   e := ReadLine(c, short);
   Say('  a line that is long', e, true);
 
