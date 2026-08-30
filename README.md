@@ -860,9 +860,34 @@ instantiated by a program that imports it, for types that component never heard
 of — the instantiation belongs to whoever named the types, so it is emitted in
 the importing program.
 
-The types are written at the call and are not inferred from the other
-arguments — except where the container already knows one, which is what
-**`type of` over a component** is for (ADR-0215):
+**The types need not be written at the call** (ADR-0254). Where the other
+arguments already say what they are, leave them out:
+
+```pascal
+Swap(i, j)                { and not Swap(integer, i, j) }
+writeln(ValueOr(r, 0))    { r is a Fallible(integer), so T is integer }
+```
+
+An activation writes an argument for every parameter, or one for every
+parameter that is not a type — those two counts can never be the same, so
+there is nothing ambiguous about the shorter one. A type parameter is fixed by
+the **first** argument that says what it is; every later argument is then an
+ordinary argument of an ordinary parameter, judged the way every other one is.
+So there is no such thing as two arguments disagreeing: the second is simply
+right or wrong about the type the first chose.
+
+A type parameter that appears only in the **result** is fixed by nothing, and
+has to be written:
+
+```pascal
+x := VecGet(IVec, integer, v, 3)     { the element type is the answer }
+```
+
+The compiler says so rather than guessing — *nothing in this call says what
+'elem' of 'vecget' is*.
+
+The other way a call avoids repeating itself is **`type of` over a
+component** (ADR-0215), where the container already knows the type:
 
 ```pascal
 procedure VecPush(Ptr: type; var v: Ptr; x: type of v^.a[1]);

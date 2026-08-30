@@ -300,12 +300,19 @@ and both now the shape of a decision rather than an omission:
   client not slowing the others, which is the language server's `didChange`
   arriving mid-compile. See the concurrency row in
   [where the ideas come from](#where-the-ideas-come-from).
-- **Generics have no inference and no constraints.** The types are written at
-  the call — `Swap(integer, i, j)` and not `Swap(i, j)` — and a body that adds
-  its `T` values is refused, at the instantiation, for a type that cannot be
-  added. Inference is a separate feature with a question of its own (what
-  happens when two arguments imply different types); constraints are what a
-  generic `PasMap` would need, and what the row above waits on second.
+- **Generics have no constraints**, and inference is **done** (ADR-0254,
+  AP 6.7.3.10.4): `Swap(i, j)` reads as well as `Swap(integer, i, j)` and
+  means the same activation. The question this row carried — *what happens
+  when two arguments imply different types* — turned out to dissolve rather
+  than need an answer: the first determining position binds the parameter and
+  every later actual is an ordinary actual of a formal that now has a type, so
+  §6.4.6 judges it where it judges every other one and **no new diagnostic was
+  needed for the conflict case at all**. `ValueOr(st, 'none')` is the case
+  that decides it, `'none'` being assignment-compatible with the `string(8)`
+  the first argument implied rather than a second opinion about it. What
+  remains is constraints — a body that adds its `T` values is still refused,
+  at the instantiation, for a type that cannot be added — which is what a
+  generic `PasMap` needs and what the row above waits on second.
 
 ---
 

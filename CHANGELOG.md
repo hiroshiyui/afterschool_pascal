@@ -13,6 +13,32 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Added
+
+- **A generic activation need not write its types** (ADR-0254,
+  AP 6.7.3.10.4). `Swap(i, j)` where `Swap(integer, i, j)` was required, and
+  `ValueOr(r, 0)` where `r` already says the type. A call writes an argument
+  for every parameter, or one for every parameter that is not a type; the two
+  counts are never the same, so the shorter form is unambiguous. A type
+  parameter is fixed by the first argument that determines it — through a
+  type-name, a schema production, or a slice's component — and every later
+  argument is an ordinary argument judged as any other. One that no argument
+  determines, such as an element type appearing only in the result, must still
+  be written, and the compiler says which one.
+
+### Fixed
+
+- **A generic call could not put a type parameter after a value parameter.**
+  `procedure P(a, b: integer; T: type; x: T)` matched the type parameter
+  against the second `integer` and reported that an argument nobody meant as a
+  type must name one, so no call to such a routine compiled.
+- **Two type parameters in one group took one type between them.**
+  `procedure P(T, U: type; …)` gave `U` the type of `T`.
+- **The language server's MCP outline reported end-line numbers instead of
+  names** for a declaration it could not read out of the source — a
+  declaration past the 4 096 characters it holds of a line. The LSP outline
+  was unaffected.
+
 ### Changed
 
 - **The language server answers a repeated hover without recompiling**

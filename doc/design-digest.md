@@ -2845,6 +2845,51 @@ is the case; `0211-instantiation-not-cached` does not terminate and
 `0211-heading-not-forgotten` type-checks the second instantiation against the
 first one's types.
 
+**A generic activation need not write its types** (ADR-0254,
+AP 6.7.3.10.4). `Swap(i, j)` is `Swap(integer, i, j)` and the same
+instantiation: an activation writes an actual for every formal or for every
+formal that is not a type parameter, and since there is at least one type
+parameter the two counts are never the same number. One further condition
+separates the shorter form from a written activation that is short of an
+argument — whether the actual standing where the first type parameter would
+stand *names a type* — and it is decidable because an actual denoting a type
+denotes no value. `generic_errors.pas:27` is what forced it and is the only
+case that fails when it is dropped.
+
+**The open question dissolved rather than being answered.** ADR-0211 deferred
+inference over *what happens when two arguments imply different types*, and
+the rule is that the first determining position binds and no later one
+redetermines — so every later actual is an ordinary actual of a formal that
+now has a type, and §6.4.6 refuses it where it refuses everything else. **No
+new diagnostic was needed for the conflict case**, which is the evidence the
+rule is right; `ValueOr(st, 'none')` is legal because `'none'` is
+assignment-compatible with the `string(8)` that `st` implied, and `Swap(i, c)`
+is refused in the words a mismatched `var` parameter has always been refused
+in. One message is new, for a parameter nothing determines — which is
+`VecGet`'s and `MapGet`'s case, their element type standing only in a result
+that §6.7.1 makes a type-name and not an actual.
+
+Three shapes determine, bounded by §6.7.3.1 rather than by choice: a
+type-name, a schema production, and ADR-0125's slice through its component.
+There is no pointer shape because a parameter-form admits no pointer, which
+was established by writing the program. Reading a production backwards needed
+`numRec` to carry the `typePtr` beside the `typeId` — `ProduceFromSchema` had
+recorded that there was no registry to turn an id back into a type — and it
+does not make `typeId` an identity, nothing comparing by id. An actual read by
+inference carries `nChecked` so `CheckArguments` does not read it twice:
+`CheckExpr` writes a `use` line per applied occurrence (ADR-0246) and claims a
+frame slot for a nested call's result, so it is not idempotent.
+`generic_infer` and `generic_infer_errors` are the cases, and three mutations
+are each caught by a different one — the last determining position winning, the
+tie-break dropped, and the old group-wise binding.
+
+**Two latent defects went with it.** The walk matched actuals against
+parameter *groups* rather than formals, which is invisible while every generic
+in the tree writes its type parameters first and one to a group:
+`procedure P(a, b: integer; T: type; x: T)` complained that the second
+`integer` must name a type, and `procedure P(T, U: type; …)` gave `U` the type
+of `T`. Both are pinned now, and `lib_container` catches the second.
+
 **A pointer domain may bind a schema's type discriminants and leave its
 ordinal ones open** (ADR-0213, AP 6.4.4.1). `^Vec(integer)` with `new(p, 8)`
 supplying the rest, and the split is the idea rather than a convenience: the
