@@ -1,0 +1,38 @@
+abc           | abc=TRUE  abd=FALSE  code=6
+a.c           | axc=TRUE  ac=FALSE  code=6
+a*c           | aaac=TRUE  aab=FALSE  code=7
+a+c           | ac=TRUE  c=FALSE  code=6
+a?c           | c=TRUE  aac=FALSE  code=6
+a|bc          | bc=TRUE  b=FALSE  code=8
+(ab)+         | abab=TRUE  aba=FALSE  code=8
+[abc]+        | cab=TRUE  abd=FALSE  code=5
+[a-c1-3]+     | a3b=TRUE  a4b=FALSE  code=5
+[^a-c]+       | xyz=TRUE  xay=FALSE  code=5
+\d+           | 907=TRUE  9o7=FALSE  code=5
+\w+           | a_9=TRUE  a-9=FALSE  code=5
+a\.c          | a.c=TRUE  abc=FALSE  code=6
+a\\c          | a\c=TRUE  abc=FALSE  code=6
+[\d-]+        | 1-2=TRUE  1x2=FALSE  code=5
+^ab       | in abx=TRUE  in xab=FALSE
+ab$       | in xab=TRUE  in abx=FALSE
+^$        | in empty=TRUE  in a=FALSE
+search    | start=3 stop=5
+walk      | 12 345 6
+capture   | groups=2
+          | 1=[width] 2=[1920] 0=[width=1920]
+into tiny | no room left
+untaken   | 1 start=0 code=not present  2 start=1
+a(b       | not of the expected form at 4: a group is not closed
+a)b       | not of the expected form at 2: a group is closed that never opened
+*a        | not of the expected form at 1: a repeat with nothing to repeat
+a[bc      | not of the expected form at 2: a character class is not closed
+a[]b      | not of the expected form at 2: a character class with nothing in it
+a[z-a]    | not of the expected form at 5: a range that runs backwards
+ab\       | not of the expected form at 3: the pattern ends in an escape
+a\qb      | not of the expected form at 2: an escape with no meaning
+(a)\1     | outside the representable range at 4: a back reference has no bounded match
+800 chars | no room left at 769: the pattern needs more instructions than there are
+10 groups | no room left at 28: more groups than can be captured
+refused   | matches=FALSE searches=FALSE
+blowup    | match=FALSE within bound=TRUE
+a?xN      | match=TRUE within bound=TRUE
