@@ -159,6 +159,15 @@ an astral pair and an accented letter precede an identifier, the byte column
 is 20 and the UTF-16 column is 17, and the server answered each under the
 encoding that was negotiated.
 
+**A document owns the last `--dump-uses` taken of it**
+([ADR-0252](../doc/adr/0252-the-answer-is-cached-against-the-document.md)), so
+a hover a reader repeats costs one compilation and not five: on
+`selfhost/apfront.pas` — 22 900 lines — five sequential hovers went from 795 ms
+to 106. The cache is emptied wherever the text is replaced, which is the three
+places a document's text goes away and nowhere else. The outline is
+deliberately not cached: it is asked once per open where a hover is asked
+continuously.
+
 `lsp/mcp.sh` is the **MCP launcher**, named by `.mcp.json` at the top of the
 checkout so that an agent working on this repository has `outline` and
 `diagnostics` as tools. It finds a compiler in the build tree or on `PATH`,

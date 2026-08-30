@@ -260,3 +260,4 @@ the alternatives that were rejected and why.
 | [0249](0249-a-schemas-body-is-read-where-it-was-not-written.md) | A schema's body is read where it was not written | Accepted |
 | [0250](0250-a-declaration-is-an-occurrence-of-itself.md) | A declaration is an occurrence of itself | Accepted |
 | [0251](0251-an-interface-declares-itself.md) | An interface declares itself, and a module declares twice | Accepted |
+| [0252](0252-the-answer-is-cached-against-the-document.md) | The answer is cached against the document | Accepted |

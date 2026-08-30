@@ -32,6 +32,10 @@ Content-Length: 207
 
 {"jsonrpc":"2.0","id":15,"result":{"contents":{"kind":"plaintext","value":"var Total: integer"},"range":{"start":{"line":6,"character":4},"end":{"line":6,"character":9}}}}Content-Length: 177
 
-{"jsonrpc":"2.0","id":16,"result":{"contents":{"kind":"plaintext","value":"function Twice: integer"},"range":{"start":{"line":8,"character":9},"end":{"line":8,"character":14}}}}Content-Length: 39
+{"jsonrpc":"2.0","id":16,"result":{"contents":{"kind":"plaintext","value":"function Twice: integer"},"range":{"start":{"line":8,"character":9},"end":{"line":8,"character":14}}}}Content-Length: 122
 
-{"jsonrpc":"2.0","id":17,"result":null}
+{"jsonrpc":"2.0","method":"textDocument/publishDiagnostics","params":{"uri":"file:///scratch/where.pas","diagnostics":[]}}Content-Length: 172
+
+{"jsonrpc":"2.0","id":18,"result":{"contents":{"kind":"plaintext","value":"var Total: char"},"range":{"start":{"line":14,"character":10},"end":{"line":14,"character":15}}}}Content-Length: 39
+
+{"jsonrpc":"2.0","id":19,"result":null}

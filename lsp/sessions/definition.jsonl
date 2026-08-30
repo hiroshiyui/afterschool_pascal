@@ -69,5 +69,16 @@
 # point.
 {"jsonrpc":"2.0","id":16,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":8,"character":9}}}
 
-{"jsonrpc":"2.0","id":17,"method":"shutdown"}
+# What the compiler last said about a document is cached against that
+# document, so a hover a reader repeats costs one compilation and not five
+# (ADR-0252). This is the step that can only pass if the cache is *dropped*
+# when the text changes: `Counter` becomes `char`, and the hover on `Total`
+# below must say so. Every earlier didChange in this session edits a line
+# whose answers do not move, so a stale cache would have matched those
+# goldens exactly -- which is why this one is here and phrased this way.
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"file:///scratch/where.pas","version":3},"contentChanges":[{"text":"program where(output);\n\nconst Limit = 3;\n\ntype Counter = char;\n\nvar Total: Counter;\n\nfunction Twice(k: integer): integer;\nbegin\n  Twice := k + k\nend;\n\nbegin\n  writeln(Total)\nend.\n"}]}}
+
+{"jsonrpc":"2.0","id":18,"method":"textDocument/hover","params":{"textDocument":{"uri":"file:///scratch/where.pas"},"position":{"line":14,"character":10}}}
+
+{"jsonrpc":"2.0","id":19,"method":"shutdown"}
 {"jsonrpc":"2.0","method":"exit"}

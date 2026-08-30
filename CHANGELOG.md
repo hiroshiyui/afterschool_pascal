@@ -13,6 +13,14 @@ appears below in the release where it still existed.
 
 ## [Unreleased]
 
+### Changed
+
+- **The language server answers a repeated hover without recompiling**
+  (ADR-0252). What `--dump-uses` last said about a document is kept against
+  that document and dropped when its text changes, so five hovers on an
+  unchanged 22 900-line source cost one compilation rather than five — 795 ms
+  to 106. Nothing about an answer changes; only how often one is computed.
+
 ## [3.1.0] — 2026-08-30
 
 The release the **language server** was written for. `lsp/pasls.pas` is a

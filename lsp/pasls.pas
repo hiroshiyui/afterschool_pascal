@@ -182,7 +182,18 @@ type
     because a source file is not a line and has no bound worth naming. }
   Document = record
     uri: DocUri;
-    text: JsonChars
+    text: JsonChars;
+    { The last `--dump-uses` taken of this document, or nil (ADR-0252).
+      Go-to-definition and hover are answered from it, and a reader asks them
+      far more often than they edit: an editor sends a hover on every pause
+      of the pointer, and each one used to be a whole compilation. Five hovers
+      on `selfhost/apfront.pas` cost 795 ms and now cost 159, because four of
+      the five compilations were of text that had not changed.
+
+      It is emptied wherever the text is replaced, which is `Store` and
+      `Forget` and nowhere else — a cache invalidated in two places is a cache
+      whose validity is a property of the record rather than of a caller. }
+    uses_: StrVecPtr
   end;
 
   DocVec = ^Vec(Document);
@@ -334,11 +345,16 @@ begin
   at := IndexOf(uri);
   if at = 0 then begin
     d.uri := uri;
+    d.uses_ := nil;
     CharsOf(text, d.text);
     VecPush(DocVec, docs, d)
   end else begin
     d := VecGet(DocVec, Document, docs, at);
     JsonCharsFree(d.text);
+    { The text is being replaced, so what the compiler last said about it is
+      about a document that no longer exists (ADR-0252). }
+    if d.uses_ <> nil then SVecFree(d.uses_);
+    d.uses_ := nil;
     CharsOf(text, d.text);
     VecSet(DocVec, docs, at, d)
   end
@@ -353,6 +369,7 @@ begin
   if at = 0 then exit;
   d := VecGet(DocVec, Document, docs, at);
   JsonCharsFree(d.text);
+  if d.uses_ <> nil then SVecFree(d.uses_);
   { Close the gap by moving the tail down. Order does not matter to a lookup
     that is linear anyway, but a vector with a hole in it would. }
   for i := at to VecLen(DocVec, docs) - 1 do
@@ -1306,12 +1323,20 @@ begin
   { A list of lines and not one buffer, for ADR-0239's reason met a second
     time: this answer is one line per name in the file and `CaptureMax` was
     sized for diagnostics. }
-  SVecNew(lines, 64);
-  r := CaptureLines(cmd, lines);
-  if not r.ok then begin
-    Note('could not run the compiler: ' + ErrorText(r.cause));
-    SVecFree(lines);
-    exit(false)
+  { ...and kept, because the next question is about the same text (ADR-0252).
+    The document owns the list from here: it is freed where the text is
+    replaced and not at the end of this routine. }
+  if d.uses_ <> nil then lines := d.uses_
+  else begin
+    SVecNew(lines, 64);
+    r := CaptureLines(cmd, lines);
+    if not r.ok then begin
+      Note('could not run the compiler: ' + ErrorText(r.cause));
+      SVecFree(lines);
+      exit(false)
+    end;
+    d.uses_ := lines;
+    VecSet(DocVec, docs, at, d)
   end;
   for i := 1 to SVecLen(lines) do begin
     text := SVecGet(lines, i);
@@ -1346,7 +1371,7 @@ begin
         if IntOr(ParseInt(SymField(text, 2)), -1) = hit.declFile then
           path := SymRest(text, 3)
     end;
-  SVecFree(lines);
+  { Not freed here: the document owns it now (ADR-0252). }
   FindUse := hit.found
 end;
 
@@ -1938,7 +1963,12 @@ begin
     under PASHEAP_BALANCE the way a corpus case does (ADR-0183). }
   for i := 1 to VecLen(DocVec, docs) do begin
     d := VecGet(DocVec, Document, docs, i);
-    JsonCharsFree(d.text)
+    JsonCharsFree(d.text);
+    { And what the compiler last said about it (ADR-0252). A document the
+      client never closed still holds one, and `heap-balance` is what said so:
+      the sessions open documents and end without a didClose, which is what an
+      editor does when it is killed. }
+    if d.uses_ <> nil then SVecFree(d.uses_)
   end;
   VecFree(DocVec, docs)
 end.
